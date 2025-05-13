@@ -1,4 +1,4 @@
-from stewart_little_control.stewart_little_control.stewart_controller_noplot import Stewart_Platform
+from stewart_little_control.stewart_controller_noplot import Stewart_Platform
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 
