@@ -26,16 +26,19 @@ viewer = mujoco.viewer.launch_passive(
 ik_wrapper = IKWrapper()
 
 step = 0
+t0 = time.time()
 while True:
     start_t = time.time()
+    t = time.time() - t0
 
     # print(get_joint_qpos(model, data, "1"))
     print(get_joints(model, data))
     x = 0.02*np.sin(2 * np.pi * time.time())
-    val = np.deg2rad(10)*np.sin(2 * np.pi * time.time())
+
+    val = np.deg2rad(10)*np.sin(2 * np.pi * 1/2.0*t)
     
     pose = get_homogeneous_matrix_from_euler(
-        position=(0.0, 0.0, 0.0),
+        position=(0.0, 0.0, -0.3),
         euler_angles=(val, 0.0, 0.0),
         degrees=False,
     )
