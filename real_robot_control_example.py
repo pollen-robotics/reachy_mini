@@ -1,5 +1,5 @@
 import time
-from stewart_little_control.stewart_little_control.control import StewartLittleControl
+from stewart_little_control import StewartLittleControl
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 

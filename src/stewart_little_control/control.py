@@ -1,8 +1,8 @@
-from stewart_little_control.io_330 import Dxl330IO
+from stewart_little_control import Dxl330IO
 import time
 import numpy as np
 from scipy.spatial.transform import Rotation as R
-from stewart_little_control.ik_wrapper import IKWrapper
+from stewart_little_control import IKWrapper
 
 
 class StewartLittleControl:

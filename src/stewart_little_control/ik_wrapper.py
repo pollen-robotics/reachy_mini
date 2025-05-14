@@ -1,10 +1,10 @@
-from stewart_little_control.stewart_controller_noplot import Stewart_Platform
+from stewart_little_control import Stewart_Platform
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 
+
 class IKWrapper:
     def __init__(self):
-
         r_B = 95.226  # radius of base
         r_P = 46.188  # radius of platform
         lhl = 38  # servo horn length
