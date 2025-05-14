@@ -3,6 +3,7 @@ import mujoco.viewer
 import time
 import os
 from pathlib import Path
+from stewart_little_control.mujoco_utils import get_joint_qpos
 
 ROOT_PATH = Path(os.path.dirname(os.path.abspath(__file__))).parent
 
@@ -20,6 +21,8 @@ viewer = mujoco.viewer.launch_passive(
 step = 0
 while True:
     start_t = time.time()
+
+    print(get_joint_qpos(model, data, "1"))
 
     if step % decimation != 0:
         # Control here

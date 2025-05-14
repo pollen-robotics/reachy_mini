@@ -2,12 +2,12 @@
     "configuration": "default",
     "documentId": "e305b26a84339af20c593973",
     "documentMicroversion": "d993f24ab26d0f0a739b618b",
-    "elementId": "3b230b85818c645108af3629",
+    "elementId": "bad4cc0f54c12e9136416993",
     "fullConfiguration": "default",
-    "id": "MZLGeHvRf7o7rkXs0",
+    "id": "M5BG2g1Eb//J0EI5L",
     "isStandardContent": false,
-    "name": "10mm ball <7>",
-    "partId": "JJD",
+    "name": "small_lens_30mm <1>",
+    "partId": "JKD",
     "suppressed": false,
     "type": "Part"
 }

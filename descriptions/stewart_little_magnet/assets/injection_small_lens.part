@@ -2,12 +2,12 @@
     "configuration": "default",
     "documentId": "e305b26a84339af20c593973",
     "documentMicroversion": "d993f24ab26d0f0a739b618b",
-    "elementId": "3b230b85818c645108af3629",
+    "elementId": "64efab3d33466ae9d9afa21c",
     "fullConfiguration": "default",
-    "id": "MZLGeHvRf7o7rkXs0",
+    "id": "M47nHfNUlK4jQ4Ql1",
     "isStandardContent": false,
-    "name": "10mm ball <7>",
-    "partId": "JJD",
+    "name": "injection_small_lens <1>",
+    "partId": "JND",
     "suppressed": false,
     "type": "Part"
 }
