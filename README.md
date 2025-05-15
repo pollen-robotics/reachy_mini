@@ -13,6 +13,12 @@ pip install -e .
 
 Look at the examples
 
+Dance usage:
+```
+python groove_test.py --mode dance --dance_name head_tilt_roll --duration 20 --bpm 124
+
+```
+
 
 ## Mujoco server client
 
