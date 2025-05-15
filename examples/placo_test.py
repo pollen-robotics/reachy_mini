@@ -10,9 +10,7 @@ from scipy.spatial.transform import Rotation as R
 ROOT_PATH = Path(os.path.dirname(os.path.abspath(__file__))).parent
 
 
-# Loading a robot
 robot = placo.RobotWrapper(f"{ROOT_PATH}/descriptions/stewart_little_magnet")
-# Initializing the kinematics solver
 solver = placo.KinematicsSolver(robot)
 solver.mask_fbase(True)
 
