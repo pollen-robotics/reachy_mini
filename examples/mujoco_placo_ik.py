@@ -37,6 +37,7 @@ while True:
 
         pose = init_pose.copy()
         pose[:3, 3][0] += 0.02 * np.sin(2 * np.pi * 0.5 * t)
+        pose[:3, 3][2] -= 0.02
         angles_rad = placo_ik.ik(pose)
 
         data.ctrl[:] = angles_rad

@@ -55,16 +55,16 @@ while True:
     i += 1
     t = time.time() - start
     head_target = head_starting_pose.copy()
-    # head_target[:3, 3][2] += 0.01 * np.sin(2 * np.pi * 0.5 * t)
+    head_target[:3, 3][0] += 0.01 * np.sin(2 * np.pi * 0.5 * t)
 
-    euler_rot = [
-        0,
-        0,
-        # 0.2 * np.sin(2 * np.pi * 0.5 * t),
-        0.5 * np.sin(2 * np.pi * 0.5 * t + np.pi),
-    ]
-    rot_mat = R.from_euler("xyz", euler_rot, degrees=False).as_matrix()
-    head_target[:3, :3] = rot_mat
+    # euler_rot = [
+    #     0,
+    #     0,
+    #     # 0.2 * np.sin(2 * np.pi * 0.5 * t),
+    #     0.5 * np.sin(2 * np.pi * 0.5 * t + np.pi),
+    # ]
+    # rot_mat = R.from_euler("xyz", euler_rot, degrees=False).as_matrix()
+    # head_target[:3, :3] = rot_mat
 
 
     head_frame.T_world_frame = head_target
