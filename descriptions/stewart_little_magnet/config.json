@@ -8,10 +8,13 @@
     "*": "collision",
     "!base_bot": "collision"
   },
-  "additional_xml": ["additional.xml"],
+  "additional_xml": ["joints_properties.xml", "additional.xml"],
   "joint_properties": {
     "passive*": {
       "actuated": false
+    },
+    "default": {
+      "class": "xc330m288t"
     }
   }
 }
