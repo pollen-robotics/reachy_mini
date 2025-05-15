@@ -5,7 +5,8 @@
   <compiler angle="radian" meshdir="assets" autolimits="true"/>
   <default>
     <default class="stewart">
-      <joint frictionloss="0.1" armature="0.005"/>
+      <!-- <joint frictionloss="0.1" armature="0.005"/>  -->
+      <joint frictionloss="0.01" armature="0.005"/>
       <position kp="50" dampratio="1"/>
       <default class="visual">
         <geom type="mesh" contype="0" conaffinity="0" group="2"/>
