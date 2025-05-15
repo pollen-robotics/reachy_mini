@@ -3,3 +3,4 @@ from stewart_little_control.io_330 import Dxl330IO
 from stewart_little_control.ik_wrapper import IKWrapper
 from stewart_little_control.control import StewartLittleControl
 from stewart_little_control.placo_ik import PlacoIK
+from stewart_little_control.mujoco_client import MujocoClient
