@@ -17,13 +17,33 @@
     </default>
   </default>
   <!-- Additional joints_properties.xml -->
+  <!-- move "chosen_actuator" to the servo you want to use-->
   <default>
+    <default class="perfect_actuator">
+        <geom contype="0" conaffinity="0"/>
+        <joint damping="0.095" frictionloss="0.001" armature="0.001"/>
+        <position kp="10.0" kv="0.0" forcerange="-10.0 10.0"/>
+        <default class="chosen_actuator"></default>
+    </default>
     <default class="xc330m288t">
-      <geom contype="0" conaffinity="0"/>
-      <!-- <joint damping="0.095" frictionloss="0.058" armature="0.0018"/>
-      <position kp="2.54" kv="0.0" forcerange="-0.8 0.8"/> -->
-      <joint damping="0.095" frictionloss="0.001" armature="0.001"/>
-      <position kp="10.0" kv="0.0" forcerange="-10.0 10.0"/>
+        <!-- probably wrong, would need to re-identify -->
+        <geom contype="0" conaffinity="0"/>
+        <joint damping="0.095" frictionloss="0.058" armature="0.0018"/>
+        <position kp="2.54" kv="0.0" forcerange="-0.8 0.8"/>
+    </default>
+    <default class="sts3215_345">
+        <!-- Standard sts3215 with 1/345 gear ratio -->
+        <!-- Confident that this is realistic (mini duck walks with these values) -->
+        <geom contype="0" conaffinity="0"/>
+        <joint damping="0.56" frictionloss="0.068" armature="0.027"/>
+        <position kp="17.11" kv="0.0" forcerange="-3.23 3.23"/>
+    </default>
+    <default class="sts3215_147">
+        <!-- sts3215 with 1/147 gear ratio -->
+        <!-- (Estimation based on the gear ratio difference) -->
+        <geom contype="0" conaffinity="0"/>
+        <joint damping="0.1" frictionloss="0.028" armature="0.011"/>
+        <position kp="17.11" kv="0.0" forcerange="-1.35 1.35"/>
     </default>
   </default>
   <!-- Additional additional.xml -->
@@ -63,7 +83,7 @@
       <!-- Link right_arm -->
       <body name="right_arm" pos="-0.00838143 -0.0495171 0.0434238" quat="0.541232 -0.795681 0.0521517 -0.266906">
         <!-- Joint from simplified_xl330 to right_arm -->
-        <joint axis="0 0 1" name="1" type="hinge" class="xc330m288t"/>
+        <joint axis="0 0 1" name="1" type="hinge" class="chosen_actuator"/>
         <inertial pos="0.0267634 0.0046049 0.00174754" mass="0.00541129" fullinertia="1.47788e-07 1.39835e-06 1.40141e-06 -1.70926e-07 -1.92071e-07 -2.15256e-08"/>
         <!-- Part magnet -->
         <geom type="mesh" class="visual" pos="0.038 3.1225e-17 0.00384958" quat="4.16594e-17 0 0.707107 0.707107" mesh="magnet" material="magnet_material"/>
@@ -72,7 +92,7 @@
         <!-- Link 10mm_ball -->
         <body name="10mm_ball" pos="0.038 2.42861e-17 0.00384958" quat="0.154734 0.186502 0.701596 -0.670103">
           <!-- Joint from right_arm to 10mm_ball -->
-          <joint axis="0 0 1" name="passive_6" type="ball" class="xc330m288t"/>
+          <joint axis="0 0 1" name="passive_6" type="ball" class="chosen_actuator"/>
           <inertial pos="5.28507e-16 1.36264e-18 0.0498006" mass="0.0100726" fullinertia="2.05497e-05 2.05497e-05 9.05619e-08 -3.72778e-21 -2.03122e-19 -3.55679e-22"/>
           <!-- Part rod -->
           <geom type="mesh" class="visual" pos="0.0444954 -0.0426152 0.0352861" quat="0.0310632 -0.224394 0.133559 0.964803" mesh="rod" material="rod_material"/>
@@ -87,7 +107,7 @@
       <!-- Link left_arm -->
       <body name="left_arm" pos="-0.0386923 -0.0320171 0.0434238" quat="0.602174 -0.715156 0.352676 -0.0394686">
         <!-- Joint from simplified_xl330 to left_arm -->
-        <joint axis="0 0 1" name="2" type="hinge" class="xc330m288t"/>
+        <joint axis="0 0 1" name="2" type="hinge" class="chosen_actuator"/>
         <inertial pos="-0.0267634 0.0046049 0.00174754" mass="0.00541129" fullinertia="1.47788e-07 1.39835e-06 1.40141e-06 1.70926e-07 1.92071e-07 -2.15256e-08"/>
         <!-- Part magnet_2 -->
         <geom type="mesh" class="visual" pos="-0.038 6.93889e-17 0.00384958" quat="3.44169e-15 1.47304e-15 0.707107 0.707107" mesh="magnet" material="magnet_material"/>
@@ -96,7 +116,7 @@
         <!-- Link rod -->
         <body name="rod" pos="-0.038 6.93889e-17 0.00384958" quat="1.41553e-15 -3.32027e-15 -0.707107 0.707107">
           <!-- Joint from left_arm to rod -->
-          <joint axis="0 0 1" name="passive_1" type="ball" class="xc330m288t"/>
+          <joint axis="0 0 1" name="passive_1" type="ball" class="chosen_actuator"/>
           <inertial pos="-0.00163493 0.00269119 0.049701" mass="0.0100726" fullinertia="2.05276e-05 2.04899e-05 1.72358e-07 3.62962e-08 6.70317e-07 -1.10338e-06"/>
           <!-- Part rod_2 -->
           <geom type="mesh" class="visual" pos="0.0461199 -0.037426 0.0389005" quat="0.00649387 0.24456 -0.151778 -0.957659" mesh="rod" material="rod_material"/>
@@ -111,7 +131,7 @@
       <!-- Link left_arm_2 -->
       <body name="left_arm_2" pos="-0.00838053 0.0495175 0.0434241" quat="0.266897 -0.0521647 0.795681 -0.541237">
         <!-- Joint from simplified_xl330 to left_arm_2 -->
-        <joint axis="0 0 1" name="3" type="hinge" class="xc330m288t"/>
+        <joint axis="0 0 1" name="3" type="hinge" class="chosen_actuator"/>
         <inertial pos="-0.0267634 0.0046049 0.00174754" mass="0.00541129" fullinertia="1.47788e-07 1.39835e-06 1.40141e-06 1.70926e-07 1.92071e-07 -2.15256e-08"/>
         <!-- Part left_arm_2 -->
         <geom type="mesh" class="visual" pos="0.0175 -0.0120291 0.0464647" quat="0.603466 0.797389 -0 -3.08622e-18" mesh="left_arm" material="left_arm_material"/>
@@ -120,7 +140,7 @@
         <!-- Link 10mm_ball_2 -->
         <body name="10mm_ball_2" pos="-0.038 -1.35308e-16 0.00384958" quat="0.592223 0.612777 0.389356 -0.349539">
           <!-- Joint from left_arm_2 to 10mm_ball_2 -->
-          <joint axis="0 0 1" name="passive_3" type="ball" class="xc330m288t"/>
+          <joint axis="0 0 1" name="passive_3" type="ball" class="chosen_actuator"/>
           <inertial pos="1.32696e-17 6.066e-18 0.0498006" mass="0.0100726" fullinertia="2.05497e-05 2.05497e-05 9.05619e-08 -5.65392e-22 -1.25148e-20 -2.51399e-21"/>
           <!-- Part rod_3 -->
           <geom type="mesh" class="visual" pos="0.0444954 -0.0426152 0.0352861" quat="0.0310632 -0.224394 0.133559 0.964803" mesh="rod" material="rod_material"/>
@@ -131,7 +151,7 @@
           <!-- Link platform -->
           <body name="platform" pos="5.55112e-17 2.77556e-17 0.0996012" quat="0.997913 -0.0273359 -0.0154638 0.0564279">
             <!-- Joint from 10mm_ball_2 to platform -->
-            <joint axis="0 0 1" name="passive_7" type="ball" class="xc330m288t"/>
+            <joint axis="0 0 1" name="passive_7" type="ball" class="chosen_actuator"/>
             <inertial pos="-0.0116867 0.0145692 0.0146036" mass="0.0270567" fullinertia="6.19961e-06 7.694e-06 1.05868e-05 2.44042e-08 -4.18107e-08 -2.56095e-06"/>
             <!-- Part magnet_4 -->
             <geom type="mesh" class="visual" pos="1.38778e-17 -1.38778e-17 -1.38778e-17" quat="1 -1.47214e-17 -1.11022e-16 -2.77556e-17" mesh="magnet" material="magnet_material"/>
@@ -173,7 +193,7 @@
       <!-- Link right_arm_2 -->
       <body name="right_arm_2" pos="-0.0386913 0.0320172 0.0434252" quat="0.0394587 -0.352688 0.71515 -0.602175">
         <!-- Joint from simplified_xl330 to right_arm_2 -->
-        <joint axis="0 0 1" name="4" type="hinge" class="xc330m288t"/>
+        <joint axis="0 0 1" name="4" type="hinge" class="chosen_actuator"/>
         <inertial pos="0.0267634 0.0046049 0.00174754" mass="0.00541129" fullinertia="1.47788e-07 1.39835e-06 1.40141e-06 -1.70926e-07 -1.92071e-07 -2.15256e-08"/>
         <!-- Part magnet_10 -->
         <geom type="mesh" class="visual" pos="0.038 -7.97973e-17 0.00384958" quat="0.5 -0.5 0.5 0.5" mesh="magnet" material="magnet_material"/>
@@ -182,7 +202,7 @@
         <!-- Link 10mm_ball_3 -->
         <body name="10mm_ball_3" pos="0.038 -7.63278e-17 0.00384958" quat="0.597446 0.642237 0.33856 -0.34054">
           <!-- Joint from right_arm_2 to 10mm_ball_3 -->
-          <joint axis="0 0 1" name="passive_2" type="ball" class="xc330m288t"/>
+          <joint axis="0 0 1" name="passive_2" type="ball" class="chosen_actuator"/>
           <inertial pos="2.26806e-16 -8.29583e-18 0.0498006" mass="0.0100726" fullinertia="2.05497e-05 2.05497e-05 9.05619e-08 -9.59961e-21 -9.0591e-20 -6.04758e-21"/>
           <!-- Part rod_4 -->
           <geom type="mesh" class="visual" pos="0.0444954 -0.0426152 0.0352861" quat="0.0310632 -0.224394 0.133559 0.964803" mesh="rod" material="rod_material"/>
@@ -197,7 +217,7 @@
       <!-- Link left_arm_3 -->
       <body name="left_arm_3" pos="0.0470734 -0.017499 0.0434252" quat="0.33526 -0.663012 -0.442995 0.501769">
         <!-- Joint from simplified_xl330 to left_arm_3 -->
-        <joint axis="0 0 1" name="5" type="hinge" class="xc330m288t"/>
+        <joint axis="0 0 1" name="5" type="hinge" class="chosen_actuator"/>
         <inertial pos="-0.0267634 0.0046049 0.00174754" mass="0.00541129" fullinertia="1.47788e-07 1.39835e-06 1.40141e-06 1.70926e-07 1.92071e-07 -2.15256e-08"/>
         <!-- Part magnet_11 -->
         <geom type="mesh" class="visual" pos="-0.038 -2.42861e-17 0.00384958" quat="0.5 -0.5 -0.5 -0.5" mesh="magnet" material="magnet_material"/>
@@ -206,7 +226,7 @@
         <!-- Link 10mm_ball_4 -->
         <body name="10mm_ball_4" pos="-0.038 -6.93889e-18 0.00384958" quat="0.511134 0.555318 -0.467667 0.460055">
           <!-- Joint from left_arm_3 to 10mm_ball_4 -->
-          <joint axis="0 0 1" name="passive_5" type="ball" class="xc330m288t"/>
+          <joint axis="0 0 1" name="passive_5" type="ball" class="chosen_actuator"/>
           <inertial pos="-2.10884e-16 7.68347e-18 0.0498006" mass="0.0100726" fullinertia="2.05497e-05 2.05497e-05 9.05619e-08 2.26763e-21 7.57259e-20 1.20543e-20"/>
           <!-- Part rod_5 -->
           <geom type="mesh" class="visual" pos="0.0444954 -0.0426152 0.0352861" quat="0.0310632 -0.224394 0.133559 0.964803" mesh="rod" material="rod_material"/>
@@ -221,7 +241,7 @@
       <!-- Link right_arm_3 -->
       <body name="right_arm_3" pos="0.0470737 0.017501 0.0434241" quat="0.501758 -0.443016 -0.662997 0.335276">
         <!-- Joint from simplified_xl330 to right_arm_3 -->
-        <joint axis="0 0 1" name="6" type="hinge" class="xc330m288t"/>
+        <joint axis="0 0 1" name="6" type="hinge" class="chosen_actuator"/>
         <inertial pos="0.0267634 0.0046049 0.00174754" mass="0.00541129" fullinertia="1.47788e-07 1.39835e-06 1.40141e-06 -1.70926e-07 -1.92071e-07 -2.15256e-08"/>
         <!-- Part right_arm_3 -->
         <geom type="mesh" class="visual" pos="-0.0175 -0.0120291 0.0464647" quat="0.603466 0.797389 -0 1.0411e-17" mesh="right_arm" material="right_arm_material"/>
@@ -230,7 +250,7 @@
         <!-- Link 10mm_ball_5 -->
         <body name="10mm_ball_5" pos="0.038 -6.245e-17 0.00384958" quat="0.671459 0.703356 -0.179957 0.148485">
           <!-- Joint from right_arm_3 to 10mm_ball_5 -->
-          <joint axis="0 0 1" name="passive_4" type="ball" class="xc330m288t"/>
+          <joint axis="0 0 1" name="passive_4" type="ball" class="chosen_actuator"/>
           <inertial pos="-4.57983e-16 3.71684e-17 0.0498006" mass="0.0100726" fullinertia="2.05497e-05 2.05497e-05 9.05619e-08 -1.58143e-20 1.70754e-19 -1.63497e-20"/>
           <!-- Part 10mm_ball_11 -->
           <geom type="mesh" class="visual" pos="0 0 6.93889e-18" quat="0 1 0 0" mesh="10mm_ball" material="10mm_ball_material"/>
@@ -277,12 +297,12 @@
     <material name="reachy_mini_head_material" rgba="1 1 1 1"/>
   </asset>
   <actuator>
-    <position class="xc330m288t" name="1" joint="1"/>
-    <position class="xc330m288t" name="2" joint="2"/>
-    <position class="xc330m288t" name="3" joint="3"/>
-    <position class="xc330m288t" name="4" joint="4"/>
-    <position class="xc330m288t" name="5" joint="5"/>
-    <position class="xc330m288t" name="6" joint="6"/>
+    <position class="chosen_actuator" name="1" joint="1"/>
+    <position class="chosen_actuator" name="2" joint="2"/>
+    <position class="chosen_actuator" name="3" joint="3"/>
+    <position class="chosen_actuator" name="4" joint="4"/>
+    <position class="chosen_actuator" name="5" joint="5"/>
+    <position class="chosen_actuator" name="6" joint="6"/>
   </actuator>
   <equality>
     <connect site1="closing_1_1" site2="closing_1_2"/>
