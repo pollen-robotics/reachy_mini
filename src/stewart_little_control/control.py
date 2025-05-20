@@ -2,16 +2,22 @@ from stewart_little_control import Dxl330IO
 import time
 import numpy as np
 from scipy.spatial.transform import Rotation as R
-from stewart_little_control import IKWrapper
+from stewart_little_control.placo_ik import PlacoIK
+import os
+from pathlib import Path
+
+ROOT_PATH = Path(os.path.dirname(os.path.abspath(__file__))).parent.parent
 
 
 class StewartLittleControl:
     def __init__(self):
-        self.ik_wrapper = IKWrapper()
-
+        self.placo_ik = PlacoIK(f"{ROOT_PATH}/descriptions/stewart_little_magnet/")
         self.ids = [1, 2, 3, 4, 5, 6]
-        self.sign = [-1, 1, -1, 1, -1, 1]
-        self.offset_deg = -22.5
+        # self.sign = [-1, 1, -1, 1, -1, 1]
+        # self.sign = [-1, 1, -1, 1, -1, 1]
+        self.sign = [1, 1, 1, 1, 1, 1]
+        # self.offset_deg = -22.5
+        self.offset_deg = 0
 
         self.dxl_io = Dxl330IO("/dev/ttyACM0", baudrate=1000000, use_sync_read=True)
 
@@ -29,7 +35,7 @@ class StewartLittleControl:
             self.dxl_io.set_pid_gain({id: [2000, 0, 0]})
 
     def set_pose(self, pose):
-        angles_deg = self.ik_wrapper.ik(pose, degrees=True)
+        angles_deg = np.rad2deg(self.placo_ik.ik(pose))
         target = {}
         for i, id in enumerate(self.ids):
             goal_pos = (angles_deg[i] + self.offset_deg) * self.sign[i]
