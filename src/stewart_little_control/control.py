@@ -29,7 +29,7 @@ class StewartLittleControl:
         time.sleep(2)
 
         for id in self.ids:
-            self.dxl_io.set_pid_gain({id: [500, 0, 0]})
+            self.dxl_io.set_pid_gain({id: [2000, 0, 0]})
 
     def set_pose(self, pose):
         angles_deg = np.rad2deg(self.placo_ik.ik(pose))

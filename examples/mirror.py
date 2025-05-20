@@ -7,11 +7,12 @@ from sixdrepnet import SixDRepNet
 import cv2 as cv
 
 model = SixDRepNet(gpu_id=-1)
-cap = cv.VideoCapture(0)
+cap = cv.VideoCapture(4)
 
 
 def main():
-    client = MujocoClient(ip="10.0.0.33")
+    # client = MujocoClient(ip="10.0.0.33")
+    client = MujocoClient(ip="localhost")
 
     while True:
         t0 = time.time()
@@ -34,7 +35,7 @@ def main():
 
         # roll = 0
         # pitch = 0
-        # yaw = 0
+        yaw = 0
 
         pose = np.eye(4)
         pose[:3, :3] = R.from_euler(
@@ -44,7 +45,7 @@ def main():
 
         print(f"roll: {roll}, pitch: {pitch}, yaw: {yaw}")
         # # pose[:3, 3][2] += 0.01 * np.sin(2 * np.pi * 0.5 * time.time())
-        # client.send_pose(pose)
+        client.send_pose(pose, offset_zero=False)
         # time.sleep(0.02)
 
         cv.imshow("test_window", img)

@@ -5,7 +5,7 @@ import time
 from scipy.spatial.transform import Rotation as R
 
 
-class MujocoClient:
+class Client:
     def __init__(self, ip="127.0.0.1", port=1234):
         self.ip = ip
         self.port = port
@@ -27,7 +27,7 @@ class MujocoClient:
 
 
 if __name__ == "__main__":
-    client = MujocoClient()
+    client = Client()
     while True:
         pose = np.eye(4)
         euler_rot = [
