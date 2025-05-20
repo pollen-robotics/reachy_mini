@@ -1,4 +1,4 @@
-from stewart_little_control import Dxl330IO
+from io_330 import Dxl330IO
 import time
 import numpy as np
 
