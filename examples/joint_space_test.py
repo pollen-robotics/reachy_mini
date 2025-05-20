@@ -2,7 +2,7 @@ from stewart_little_control import Dxl330IO
 import time
 import numpy as np
 
-io = Dxl330IO("/dev/ttyACM0", baudrate=1000000, use_sync_read=True)
+io = Dxl330IO("COM6", baudrate=1000000, use_sync_read=True)
 ids = [1, 2, 3, 4, 5, 6]
 dxl_io.enable_torque(ids)
 
