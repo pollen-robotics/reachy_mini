@@ -4,6 +4,8 @@ import numpy as np
 
 dxl_io = Dxl330IO("COM6", baudrate=1000000, use_sync_read=True)
 ids = [1, 2, 3, 4, 5, 6]
+sign = [-1, 1, -1, 1, -1, 1]
+
 dxl_io.enable_torque(ids)
 
 
@@ -12,7 +14,7 @@ while True:
     target = {}
     angle = 10*np.sin(2*np.pi*0.5*time.time())
     for i, id in enumerate(ids):
-        goal_pos = angle
+        goal_pos = angle * sign[i]
         target[id] = goal_pos
 
     dxl_io.set_goal_position(target)
