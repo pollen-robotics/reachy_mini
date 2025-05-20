@@ -5,8 +5,7 @@
   <compiler angle="radian" meshdir="assets" autolimits="true"/>
   <default>
     <default class="stewart">
-      <!-- <joint frictionloss="0.1" armature="0.005"/>  -->
-      <joint frictionloss="0.01" armature="0.005"/>
+      <joint frictionloss="0.1" armature="0.005"/>
       <position kp="50" dampratio="1"/>
       <default class="visual">
         <geom type="mesh" contype="0" conaffinity="0" group="2"/>
@@ -17,33 +16,32 @@
     </default>
   </default>
   <!-- Additional joints_properties.xml -->
-  <!-- move "chosen_actuator" to the servo you want to use-->
   <default>
     <default class="perfect_actuator">
-        <geom contype="0" conaffinity="0"/>
-        <joint damping="0.095" frictionloss="0.001" armature="0.001"/>
-        <position kp="10.0" kv="0.0" forcerange="-10.0 10.0"/>
-        <default class="chosen_actuator"></default>
+      <geom contype="0" conaffinity="0"/>
+      <joint damping="0.095" frictionloss="0.001" armature="0.001"/>
+      <position kp="10.0" kv="0.0" forcerange="-10.0 10.0"/>
+      <default class="chosen_actuator"/>
     </default>
     <default class="xc330m288t">
-        <!-- probably wrong, would need to re-identify -->
-        <geom contype="0" conaffinity="0"/>
-        <joint damping="0.095" frictionloss="0.058" armature="0.0018"/>
-        <position kp="2.54" kv="0.0" forcerange="-0.8 0.8"/>
+      <!-- probably wrong, would need to re-identify -->
+      <geom contype="0" conaffinity="0"/>
+      <joint damping="0.095" frictionloss="0.058" armature="0.0018"/>
+      <position kp="2.54" kv="0.0" forcerange="-0.8 0.8"/>
     </default>
     <default class="sts3215_345">
-        <!-- Standard sts3215 with 1/345 gear ratio -->
-        <!-- Confident that this is realistic (mini duck walks with these values) -->
-        <geom contype="0" conaffinity="0"/>
-        <joint damping="0.56" frictionloss="0.068" armature="0.027"/>
-        <position kp="17.11" kv="0.0" forcerange="-3.23 3.23"/>
+      <!-- Standard sts3215 with 1/345 gear ratio -->
+      <!-- Confident that this is realistic (mini duck walks with these values) -->
+      <geom contype="0" conaffinity="0"/>
+      <joint damping="0.56" frictionloss="0.068" armature="0.027"/>
+      <position kp="17.11" kv="0.0" forcerange="-3.23 3.23"/>
     </default>
     <default class="sts3215_147">
-        <!-- sts3215 with 1/147 gear ratio -->
-        <!-- (Estimation based on the gear ratio difference) -->
-        <geom contype="0" conaffinity="0"/>
-        <joint damping="0.1" frictionloss="0.028" armature="0.011"/>
-        <position kp="17.11" kv="0.0" forcerange="-1.35 1.35"/>
+      <!-- sts3215 with 1/147 gear ratio -->
+      <!-- (Estimation based on the gear ratio difference) -->
+      <geom contype="0" conaffinity="0"/>
+      <joint damping="0.1" frictionloss="0.028" armature="0.011"/>
+      <position kp="17.11" kv="0.0" forcerange="-1.35 1.35"/>
     </default>
   </default>
   <!-- Additional additional.xml -->
@@ -152,7 +150,7 @@
           <body name="platform" pos="5.55112e-17 2.77556e-17 0.0996012" quat="0.997913 -0.0273359 -0.0154638 0.0564279">
             <!-- Joint from 10mm_ball_2 to platform -->
             <joint axis="0 0 1" name="passive_7" type="ball" class="chosen_actuator"/>
-            <inertial pos="-0.0116867 0.0145692 0.0146036" mass="0.0270567" fullinertia="6.19961e-06 7.694e-06 1.05868e-05 2.44042e-08 -4.18107e-08 -2.56095e-06"/>
+            <inertial pos="-0.014526 -0.0112979 0.0551067" mass="0.207267" fullinertia="0.000679801 0.000569688 0.000624756 8.98905e-05 5.8738e-05 -3.90452e-05"/>
             <!-- Part magnet_4 -->
             <geom type="mesh" class="visual" pos="1.38778e-17 -1.38778e-17 -1.38778e-17" quat="1 -1.47214e-17 -1.11022e-16 -2.77556e-17" mesh="magnet" material="magnet_material"/>
             <!-- Part magnet_5 -->
@@ -187,6 +185,8 @@
             <site group="3" name="closing_4_2" pos="-0.0347355 0.0172732 0.00975103" quat="0.198717 0.0902002 -0.895121 -0.388759"/>
             <!-- Frame closing_5_1 -->
             <site group="3" name="closing_5_1" pos="-0.023093 0 -0.000220061" quat="0.999955 -9.49102e-16 -0.00952892 -7.21645e-16"/>
+            <!-- Frame head -->
+            <site group="3" name="head" pos="-0.0117248 0.0122324 0.0186073" quat="0.25104 0.0720184 0.251006 -0.932088"/>
           </body>
         </body>
       </body>
@@ -265,21 +265,21 @@
     </body>
   </worldbody>
   <asset>
-    <mesh file="simplified_xl330.stl"/>
+    <mesh file="base_top.stl"/>
+    <mesh file="platform.stl"/>
+    <mesh file="large_lens_42mm.stl"/>
+    <mesh file="magnet.stl"/>
+    <mesh file="left_arm.stl"/>
+    <mesh file="right_arm.stl"/>
+    <mesh file="base_side.stl"/>
+    <mesh file="10mm_ball.stl"/>
+    <mesh file="injection_small_lens.stl"/>
     <mesh file="injection_big_lens.stl"/>
+    <mesh file="simplified_xl330.stl"/>
     <mesh file="base_bot.stl"/>
     <mesh file="small_lens_30mm.stl"/>
-    <mesh file="left_arm.stl"/>
-    <mesh file="base_side.stl"/>
-    <mesh file="base_top.stl"/>
     <mesh file="reachy_mini_head.stl"/>
-    <mesh file="right_arm.stl"/>
-    <mesh file="large_lens_42mm.stl"/>
-    <mesh file="10mm_ball.stl"/>
     <mesh file="rod.stl"/>
-    <mesh file="platform.stl"/>
-    <mesh file="magnet.stl"/>
-    <mesh file="injection_small_lens.stl"/>
     <material name="base_side_material" rgba="1 1 1 1"/>
     <material name="base_top_material" rgba="0.615686 0.811765 0.929412 1"/>
     <material name="base_bot_material" rgba="0.85098 0.756863 0.866667 1"/>

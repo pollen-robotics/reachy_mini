@@ -36,9 +36,11 @@ while True:
         # Control here
 
         pose = init_pose.copy()
-        pose[:3, 3][0] += 0.02 * np.sin(2 * np.pi * 0.5 * t)
-        pose[:3, 3][2] -= 0.02
+        pose[:3, 3][0] += 0.01 * np.sin(2 * np.pi * 0.5 * t)
+        # pose[:3, 3][2] -= 0.02
         angles_rad = placo_ik.ik(pose)
+        # print("angles deg", np.rad2deg(angles_rad))
+        print(pose[:3, 3][0])
 
         data.ctrl[:] = angles_rad
 
