@@ -1,8 +1,20 @@
 {
   "url": "https://cad.onshape.com/documents/e305b26a84339af20c593973/w/9fd8829121bfdcf40799413b/e/333e72319d1d07cd9b78e76b",
-  "outputFormat": "urdf",
-  "robot_name": "robot",
-  "output_filename": "robot",
-  "ball_to_euler": true,
-  "ball_to_euler_order": "xyz"
+  "outputFormat": "mujoco",
+  "robot_name": "stewart",
+  "output_filename": "stewart",
+  "simplify_stls": false,
+  "ignore": {
+    "*": "collision",
+    "!base_bot": "collision"
+  },
+  "additional_xml": ["joints_properties.xml", "additional.xml"],
+  "joint_properties": {
+    "passive*": {
+      "actuated": false
+    },
+    "default": {
+      "class": "chosen_actuator"
+    }
+  }
 }
