@@ -1,4 +1,3 @@
-from stewart_little_control.stewart_controller_noplot import Stewart_Platform
 from stewart_little_control.io_330 import Dxl330IO
 from stewart_little_control.control import StewartLittleControl
 from stewart_little_control.placo_ik import PlacoIK
