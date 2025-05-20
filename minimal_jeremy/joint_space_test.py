@@ -10,7 +10,7 @@ dxl_io.enable_torque(ids)
 
 while True:
     target = {}
-    angle = 10*np.sin(2*np.pi*f*time.time())
+    angle = 10*np.sin(2*np.pi*0.5*time.time())
     for i, id in enumerate(ids):
         goal_pos = angle
         target[id] = goal_pos
