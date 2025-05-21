@@ -32,6 +32,7 @@ class MujocoServer:
         self.placo_ik = PlacoIK(f"{ROOT_PATH}/descriptions/stewart_little_magnet/")
         self.current_pose = np.eye(4)
         self.current_pose[:3, 3][2] = 0.155
+        self.current_antennas = np.zeros(2)
 
         self.pose_lock = Lock()
 
@@ -55,10 +56,14 @@ class MujocoServer:
                                 print("Client disconnected")
                                 break
 
-                            pose = pickle.loads(data)
+                            pose_antennas = pickle.loads(data)
+                            pose = pose_antennas["pose"]
+                            antennas = pose_antennas["antennas"]
                             if isinstance(pose, np.ndarray) and pose.shape == (4, 4):
                                 with self.pose_lock:
                                     self.current_pose = pose
+                                    if antennas is not None:
+                                        self.current_antennas = antennas
                             else:
                                 print("Received invalid pose data")
 
@@ -85,11 +90,13 @@ class MujocoServer:
                 if step % self.decimation == 0:
                     with self.pose_lock:
                         pose = self.current_pose.copy()
+                        antennas = self.current_antennas.copy()
 
                     # IK and apply control
                     try:
                         angles_rad = self.placo_ik.ik(pose)
                         self.data.ctrl[:] = angles_rad
+                        self.data.ctrl[5:7] = antennas
                     except Exception as e:
                         print(f"IK error: {e}")
 

@@ -1,0 +1,8 @@
+{
+  "url": "https://cad.onshape.com/documents/e305b26a84339af20c593973/w/695ea941e5d92df9f00ffaef/e/333e72319d1d07cd9b78e76b",
+  "outputFormat": "urdf",
+  "robot_name": "robot",
+  "output_filename": "robot",
+  "ball_to_euler": true,
+  "ball_to_euler_order": "xyz"
+}

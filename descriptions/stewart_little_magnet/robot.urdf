@@ -195,7 +195,7 @@
     </inertial>
     <!-- Part magnet -->
     <visual>
-      <origin xyz="-0.038 6.93889e-17 0.00384958" rpy="1.5708 -4.30224e-17 3.14159"/>
+      <origin xyz="-0.038 6.245e-17 0.00384958" rpy="1.5708 1.10155e-16 3.14159"/>
       <geometry>
         <mesh filename="package://assets/magnet.stl"/>
       </geometry>
@@ -204,14 +204,14 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="-0.038 6.93889e-17 0.00384958" rpy="1.5708 -4.30224e-17 3.14159"/>
+      <origin xyz="-0.038 6.245e-17 0.00384958" rpy="1.5708 1.10155e-16 3.14159"/>
       <geometry>
         <mesh filename="package://assets/magnet.stl"/>
       </geometry>
     </collision>
     <!-- Part left_arm -->
     <visual>
-      <origin xyz="0.0175 -0.0120291 0.0464647" rpy="1.84591 -4.2314e-18 3.79939e-18"/>
+      <origin xyz="0.0175 -0.0120291 0.0464647" rpy="1.84591 -3.55118e-18 -9.19674e-17"/>
       <geometry>
         <mesh filename="package://assets/left_arm.stl"/>
       </geometry>
@@ -220,7 +220,7 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="0.0175 -0.0120291 0.0464647" rpy="1.84591 -4.2314e-18 3.79939e-18"/>
+      <origin xyz="0.0175 -0.0120291 0.0464647" rpy="1.84591 -3.55118e-18 -9.19674e-17"/>
       <geometry>
         <mesh filename="package://assets/left_arm.stl"/>
       </geometry>
@@ -283,7 +283,7 @@
     </collision>
     <!-- Part 10mm_ball_2 -->
     <visual>
-      <origin xyz="-4.16334e-17 -2.08167e-17 1.04083e-17" rpy="3.08536 -0.0290136 0.0701014"/>
+      <origin xyz="0 1.31839e-16 -6.93889e-18" rpy="3.08536 -0.0290136 0.0701014"/>
       <geometry>
         <mesh filename="package://assets/10mm_ball.stl"/>
       </geometry>
@@ -292,7 +292,7 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="-4.16334e-17 -2.08167e-17 1.04083e-17" rpy="3.08536 -0.0290136 0.0701014"/>
+      <origin xyz="0 1.31839e-16 -6.93889e-18" rpy="3.08536 -0.0290136 0.0701014"/>
       <geometry>
         <mesh filename="package://assets/10mm_ball.stl"/>
       </geometry>
@@ -315,7 +315,7 @@
   </joint>
   <!-- Joint from passive_1_link_y to rod -->
   <joint name="passive_1_z" type="revolute">
-    <origin xyz="-1.38778e-17 -6.93889e-18 0" rpy="4.02934e-18 -1.59424e-17 6.78641e-17"/>
+    <origin xyz="1.38778e-17 -6.93889e-18 -3.46945e-18" rpy="-1.91261e-17 3.04674e-17 5.37636e-17"/>
     <parent link="passive_1_link_y"/>
     <child link="rod"/>
     <axis xyz="0 0 1"/>
@@ -323,7 +323,7 @@
   </joint>
   <!-- Joint from passive_1_link_x to passive_1_link_y -->
   <joint name="passive_1_y" type="revolute">
-    <origin xyz="-1.38778e-17 -6.93889e-18 0" rpy="4.02934e-18 -1.59424e-17 6.78641e-17"/>
+    <origin xyz="1.38778e-17 -6.93889e-18 -3.46945e-18" rpy="-1.91261e-17 3.04674e-17 5.37636e-17"/>
     <parent link="passive_1_link_x"/>
     <child link="passive_1_link_y"/>
     <axis xyz="0 1 0"/>
@@ -331,7 +331,7 @@
   </joint>
   <!-- Joint from left_arm to passive_1_link_x -->
   <joint name="passive_1_x" type="revolute">
-    <origin xyz="-0.038 6.93889e-17 0.00384958" rpy="-1.5708 -4.30224e-17 3.14159"/>
+    <origin xyz="-0.038 6.245e-17 0.00384958" rpy="-1.5708 1.10155e-16 3.14159"/>
     <parent link="left_arm"/>
     <child link="passive_1_link_x"/>
     <axis xyz="1 0 0"/>
@@ -354,7 +354,7 @@
     </inertial>
     <!-- Part magnet_2 -->
     <visual>
-      <origin xyz="0.038 3.1225e-17 0.00384958" rpy="1.5708 1.24588e-16 -3.14159"/>
+      <origin xyz="0.038 1.38778e-17 0.00384958" rpy="1.5708 8.51439e-17 -3.14159"/>
       <geometry>
         <mesh filename="package://assets/magnet.stl"/>
       </geometry>
@@ -363,14 +363,14 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="0.038 3.1225e-17 0.00384958" rpy="1.5708 1.24588e-16 -3.14159"/>
+      <origin xyz="0.038 1.38778e-17 0.00384958" rpy="1.5708 8.51439e-17 -3.14159"/>
       <geometry>
         <mesh filename="package://assets/magnet.stl"/>
       </geometry>
     </collision>
     <!-- Part right_arm -->
     <visual>
-      <origin xyz="-0.0175 -0.0120291 0.0464647" rpy="1.84591 -2.98481e-17 1.85617e-17"/>
+      <origin xyz="-0.0175 -0.0120291 0.0464647" rpy="1.84591 9.59615e-18 4.52996e-17"/>
       <geometry>
         <mesh filename="package://assets/right_arm.stl"/>
       </geometry>
@@ -379,7 +379,7 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="-0.0175 -0.0120291 0.0464647" rpy="1.84591 -2.98481e-17 1.85617e-17"/>
+      <origin xyz="-0.0175 -0.0120291 0.0464647" rpy="1.84591 9.59615e-18 4.52996e-17"/>
       <geometry>
         <mesh filename="package://assets/right_arm.stl"/>
       </geometry>
@@ -404,13 +404,13 @@
   <!-- Link 10mm_ball -->
   <link name="10mm_ball">
     <inertial>
-      <origin xyz="5.28507e-16 1.36264e-18 0.0498006" rpy="0 0 0"/>
+      <origin xyz="5.25186e-16 5.58747e-18 0.0498006" rpy="0 0 0"/>
       <mass value="0.0100726"/>
-      <inertia ixx="2.05497e-05" ixy="-3.72778e-21" ixz="-2.03122e-19" iyy="2.05497e-05" iyz="-3.55679e-22" izz="9.05619e-08"/>
+      <inertia ixx="2.05497e-05" ixy="-3.58088e-21" ixz="-2.00486e-19" iyy="2.05497e-05" iyz="-2.62417e-21" izz="9.05619e-08"/>
     </inertial>
     <!-- Part rod_2 -->
     <visual>
-      <origin xyz="0.0444954 -0.0426152 0.0352861" rpy="0.275115 0.457035 3.14159"/>
+      <origin xyz="0.0444954 -0.0426152 0.0352861" rpy="0.275115 0.457035 -3.14159"/>
       <geometry>
         <mesh filename="package://assets/rod.stl"/>
       </geometry>
@@ -419,14 +419,14 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="0.0444954 -0.0426152 0.0352861" rpy="0.275115 0.457035 3.14159"/>
+      <origin xyz="0.0444954 -0.0426152 0.0352861" rpy="0.275115 0.457035 -3.14159"/>
       <geometry>
         <mesh filename="package://assets/rod.stl"/>
       </geometry>
     </collision>
     <!-- Part 10mm_ball_3 -->
     <visual>
-      <origin xyz="0 0 0" rpy="-3.14159 1.67833e-17 -1.5514e-18"/>
+      <origin xyz="0 0 -3.46945e-18" rpy="-3.14159 -2.02993e-17 4.97353e-18"/>
       <geometry>
         <mesh filename="package://assets/10mm_ball.stl"/>
       </geometry>
@@ -435,14 +435,14 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="0 0 0" rpy="-3.14159 1.67833e-17 -1.5514e-18"/>
+      <origin xyz="0 0 -3.46945e-18" rpy="-3.14159 -2.02993e-17 4.97353e-18"/>
       <geometry>
         <mesh filename="package://assets/10mm_ball.stl"/>
       </geometry>
     </collision>
     <!-- Part 10mm_ball_4 -->
     <visual>
-      <origin xyz="1.08941e-15 0 0.0996012" rpy="-4.75183e-15 -4.22036e-16 3.14159"/>
+      <origin xyz="1.07553e-15 1.38778e-17 0.0996012" rpy="-4.68876e-15 -3.84954e-16 3.14159"/>
       <geometry>
         <mesh filename="package://assets/10mm_ball.stl"/>
       </geometry>
@@ -451,7 +451,7 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="1.08941e-15 0 0.0996012" rpy="-4.75183e-15 -4.22036e-16 3.14159"/>
+      <origin xyz="1.07553e-15 1.38778e-17 0.0996012" rpy="-4.68876e-15 -3.84954e-16 3.14159"/>
       <geometry>
         <mesh filename="package://assets/10mm_ball.stl"/>
       </geometry>
@@ -467,14 +467,14 @@
     </inertial>
   </link>
   <joint name="closing_3_2_frame" type="fixed">
-    <origin xyz="1.08941e-15 0 0.0996012" rpy="4.75183e-15 4.22036e-16 -1.23095e-16"/>
+    <origin xyz="1.07553e-15 1.38778e-17 0.0996012" rpy="4.68876e-15 3.84954e-16 -1.1657e-16"/>
     <parent link="10mm_ball"/>
     <child link="closing_3_2"/>
     <axis xyz="0 0 0"/>
   </joint>
   <!-- Joint from passive_6_link_y to 10mm_ball -->
   <joint name="passive_6_z" type="revolute">
-    <origin xyz="0 0 0" rpy="4.33205e-17 1.67833e-17 -1.5514e-18"/>
+    <origin xyz="0 0 -3.46945e-18" rpy="2.96551e-17 -2.02993e-17 4.97353e-18"/>
     <parent link="passive_6_link_y"/>
     <child link="10mm_ball"/>
     <axis xyz="0 0 1"/>
@@ -482,7 +482,7 @@
   </joint>
   <!-- Joint from passive_6_link_x to passive_6_link_y -->
   <joint name="passive_6_y" type="revolute">
-    <origin xyz="0 0 0" rpy="4.33205e-17 1.67833e-17 -1.5514e-18"/>
+    <origin xyz="0 0 -3.46945e-18" rpy="2.96551e-17 -2.02993e-17 4.97353e-18"/>
     <parent link="passive_6_link_x"/>
     <child link="passive_6_link_y"/>
     <axis xyz="0 1 0"/>
@@ -490,7 +490,7 @@
   </joint>
   <!-- Joint from right_arm to passive_6_link_x -->
   <joint name="passive_6_x" type="revolute">
-    <origin xyz="0.038 2.42861e-17 0.00384958" rpy="-1.63195 0.485977 3.08012"/>
+    <origin xyz="0.038 4.51028e-17 0.00384958" rpy="-1.63195 0.485977 3.08012"/>
     <parent link="right_arm"/>
     <child link="passive_6_link_x"/>
     <axis xyz="1 0 0"/>
@@ -513,7 +513,7 @@
     </inertial>
     <!-- Part magnet_3 -->
     <visual>
-      <origin xyz="-0.038 -2.42861e-17 0.00384958" rpy="-1.5708 -1.5708 0"/>
+      <origin xyz="-0.038 -1.04083e-17 0.00384958" rpy="-1.5708 -1.5708 0"/>
       <geometry>
         <mesh filename="package://assets/magnet.stl"/>
       </geometry>
@@ -522,14 +522,14 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="-0.038 -2.42861e-17 0.00384958" rpy="-1.5708 -1.5708 0"/>
+      <origin xyz="-0.038 -1.04083e-17 0.00384958" rpy="-1.5708 -1.5708 0"/>
       <geometry>
         <mesh filename="package://assets/magnet.stl"/>
       </geometry>
     </collision>
     <!-- Part left_arm_2 -->
     <visual>
-      <origin xyz="0.0175 -0.0120291 0.0464647" rpy="1.84591 1.13738e-17 1.78326e-17"/>
+      <origin xyz="0.0175 -0.0120291 0.0464647" rpy="1.84591 1.49967e-17 -1.51216e-17"/>
       <geometry>
         <mesh filename="package://assets/left_arm.stl"/>
       </geometry>
@@ -538,7 +538,7 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="0.0175 -0.0120291 0.0464647" rpy="1.84591 1.13738e-17 1.78326e-17"/>
+      <origin xyz="0.0175 -0.0120291 0.0464647" rpy="1.84591 1.49967e-17 -1.51216e-17"/>
       <geometry>
         <mesh filename="package://assets/left_arm.stl"/>
       </geometry>
@@ -563,9 +563,9 @@
   <!-- Link 10mm_ball_2 -->
   <link name="10mm_ball_2">
     <inertial>
-      <origin xyz="-2.10884e-16 7.68347e-18 0.0498006" rpy="0 0 0"/>
+      <origin xyz="-2.22203e-16 1.38918e-17 0.0498006" rpy="0 0 0"/>
       <mass value="0.0100726"/>
-      <inertia ixx="2.05497e-05" ixy="2.26763e-21" ixz="7.57259e-20" iyy="2.05497e-05" iyz="1.20543e-20" izz="9.05619e-08"/>
+      <inertia ixx="2.05497e-05" ixy="2.30501e-21" ixz="7.71427e-20" iyy="2.05497e-05" iyz="1.09072e-20" izz="9.05619e-08"/>
     </inertial>
     <!-- Part rod_3 -->
     <visual>
@@ -585,7 +585,7 @@
     </collision>
     <!-- Part 10mm_ball_5 -->
     <visual>
-      <origin xyz="0 6.93889e-18 0" rpy="3.14159 -2.05212e-17 -2.0417e-17"/>
+      <origin xyz="-6.93889e-18 6.93889e-18 0" rpy="-3.14159 -2.05212e-17 -1.09212e-17"/>
       <geometry>
         <mesh filename="package://assets/10mm_ball.stl"/>
       </geometry>
@@ -594,14 +594,14 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="0 6.93889e-18 0" rpy="3.14159 -2.05212e-17 -2.0417e-17"/>
+      <origin xyz="-6.93889e-18 6.93889e-18 0" rpy="-3.14159 -2.05212e-17 -1.09212e-17"/>
       <geometry>
         <mesh filename="package://assets/10mm_ball.stl"/>
       </geometry>
     </collision>
     <!-- Part 10mm_ball_6 -->
     <visual>
-      <origin xyz="-4.23273e-16 1.38778e-17 0.0996012" rpy="1.12948e-14 -7.93145e-16 -3.14159"/>
+      <origin xyz="-4.3715e-16 2.08167e-17 0.0996012" rpy="1.14058e-14 -8.209e-16 -3.14159"/>
       <geometry>
         <mesh filename="package://assets/10mm_ball.stl"/>
       </geometry>
@@ -610,7 +610,7 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="-4.23273e-16 1.38778e-17 0.0996012" rpy="1.12948e-14 -7.93145e-16 -3.14159"/>
+      <origin xyz="-4.3715e-16 2.08167e-17 0.0996012" rpy="1.14058e-14 -8.209e-16 -3.14159"/>
       <geometry>
         <mesh filename="package://assets/10mm_ball.stl"/>
       </geometry>
@@ -626,14 +626,14 @@
     </inertial>
   </link>
   <joint name="closing_4_1_frame" type="fixed">
-    <origin xyz="-4.23273e-16 1.38778e-17 0.0996012" rpy="-3.14159 -7.93145e-16 -3.14159"/>
+    <origin xyz="-4.3715e-16 2.08167e-17 0.0996012" rpy="-3.14159 -8.209e-16 -3.14159"/>
     <parent link="10mm_ball_2"/>
     <child link="closing_4_1"/>
     <axis xyz="0 0 0"/>
   </joint>
   <!-- Joint from passive_5_link_y to 10mm_ball_2 -->
   <joint name="passive_5_z" type="revolute">
-    <origin xyz="0 6.93889e-18 0" rpy="-5.28992e-17 -2.05212e-17 -2.0417e-17"/>
+    <origin xyz="-6.93889e-18 6.93889e-18 0" rpy="4.59049e-17 -2.05212e-17 -1.09212e-17"/>
     <parent link="passive_5_link_y"/>
     <child link="10mm_ball_2"/>
     <axis xyz="0 0 1"/>
@@ -641,7 +641,7 @@
   </joint>
   <!-- Joint from passive_5_link_x to passive_5_link_y -->
   <joint name="passive_5_y" type="revolute">
-    <origin xyz="0 6.93889e-18 0" rpy="-5.28992e-17 -2.05212e-17 -2.0417e-17"/>
+    <origin xyz="-6.93889e-18 6.93889e-18 0" rpy="4.59049e-17 -2.05212e-17 -1.09212e-17"/>
     <parent link="passive_5_link_x"/>
     <child link="passive_5_link_y"/>
     <axis xyz="0 1 0"/>
@@ -649,7 +649,7 @@
   </joint>
   <!-- Joint from left_arm_2 to passive_5_link_x -->
   <joint name="passive_5_x" type="revolute">
-    <origin xyz="-0.038 -6.93889e-18 0.00384958" rpy="1.94647 -1.42258 -0.338994"/>
+    <origin xyz="-0.038 -3.46945e-18 0.00384958" rpy="1.94647 -1.42258 -0.338994"/>
     <parent link="left_arm_2"/>
     <child link="passive_5_link_x"/>
     <axis xyz="1 0 0"/>
@@ -672,7 +672,7 @@
     </inertial>
     <!-- Part right_arm_2 -->
     <visual>
-      <origin xyz="-0.0175 -0.0120291 0.0464647" rpy="1.84591 4.44777e-18 7.98258e-17"/>
+      <origin xyz="-0.0175 -0.0120291 0.0464647" rpy="1.84591 -1.24927e-17 2.64147e-17"/>
       <geometry>
         <mesh filename="package://assets/right_arm.stl"/>
       </geometry>
@@ -681,14 +681,14 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="-0.0175 -0.0120291 0.0464647" rpy="1.84591 4.44777e-18 7.98258e-17"/>
+      <origin xyz="-0.0175 -0.0120291 0.0464647" rpy="1.84591 -1.24927e-17 2.64147e-17"/>
       <geometry>
         <mesh filename="package://assets/right_arm.stl"/>
       </geometry>
     </collision>
     <!-- Part magnet_4 -->
     <visual>
-      <origin xyz="0.038 -1.07553e-16 0.00384958" rpy="-1.5708 -1.84989e-17 3.93471e-15"/>
+      <origin xyz="0.038 -1.17961e-16 0.00384958" rpy="-1.5708 7.39625e-18 3.77643e-15"/>
       <geometry>
         <mesh filename="package://assets/magnet.stl"/>
       </geometry>
@@ -697,7 +697,7 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="0.038 -1.07553e-16 0.00384958" rpy="-1.5708 -1.84989e-17 3.93471e-15"/>
+      <origin xyz="0.038 -1.17961e-16 0.00384958" rpy="-1.5708 7.39625e-18 3.77643e-15"/>
       <geometry>
         <mesh filename="package://assets/magnet.stl"/>
       </geometry>
@@ -722,13 +722,13 @@
   <!-- Link 10mm_ball_3 -->
   <link name="10mm_ball_3">
     <inertial>
-      <origin xyz="-4.57983e-16 3.71684e-17 0.0498006" rpy="0 0 0"/>
+      <origin xyz="-4.82459e-16 1.12232e-17 0.0498006" rpy="0 0 0"/>
       <mass value="0.0100726"/>
-      <inertia ixx="2.05497e-05" ixy="-1.58143e-20" ixz="1.70754e-19" iyy="2.05497e-05" iyz="-1.63497e-20" izz="9.05619e-08"/>
+      <inertia ixx="2.05497e-05" ixy="-1.64555e-20" ixz="1.78786e-19" iyy="2.05497e-05" iyz="-1.0978e-20" izz="9.05619e-08"/>
     </inertial>
     <!-- Part 10mm_ball_7 -->
     <visual>
-      <origin xyz="0 0 6.93889e-18" rpy="3.14159 -4.82997e-17 7.8678e-17"/>
+      <origin xyz="0 -1.38778e-17 0" rpy="3.14159 -3.20322e-17 6.66802e-17"/>
       <geometry>
         <mesh filename="package://assets/10mm_ball.stl"/>
       </geometry>
@@ -737,14 +737,14 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="0 0 6.93889e-18" rpy="3.14159 -4.82997e-17 7.8678e-17"/>
+      <origin xyz="0 -1.38778e-17 0" rpy="3.14159 -3.20322e-17 6.66802e-17"/>
       <geometry>
         <mesh filename="package://assets/10mm_ball.stl"/>
       </geometry>
     </collision>
     <!-- Part 10mm_ball_8 -->
     <visual>
-      <origin xyz="-9.22873e-16 9.71445e-17 0.0996012" rpy="-2.72084e-14 1.09948e-15 -1.5708"/>
+      <origin xyz="-9.64506e-16 5.55112e-17 0.0996012" rpy="-2.6558e-14 9.92746e-16 -1.5708"/>
       <geometry>
         <mesh filename="package://assets/10mm_ball.stl"/>
       </geometry>
@@ -753,14 +753,14 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="-9.22873e-16 9.71445e-17 0.0996012" rpy="-2.72084e-14 1.09948e-15 -1.5708"/>
+      <origin xyz="-9.64506e-16 5.55112e-17 0.0996012" rpy="-2.6558e-14 9.92746e-16 -1.5708"/>
       <geometry>
         <mesh filename="package://assets/10mm_ball.stl"/>
       </geometry>
     </collision>
     <!-- Part rod_4 -->
     <visual>
-      <origin xyz="0.0444954 -0.0426152 0.0352861" rpy="0.275115 0.457035 -3.14159"/>
+      <origin xyz="0.0444954 -0.0426152 0.0352861" rpy="0.275115 0.457035 3.14159"/>
       <geometry>
         <mesh filename="package://assets/rod.stl"/>
       </geometry>
@@ -769,7 +769,7 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="0.0444954 -0.0426152 0.0352861" rpy="0.275115 0.457035 -3.14159"/>
+      <origin xyz="0.0444954 -0.0426152 0.0352861" rpy="0.275115 0.457035 3.14159"/>
       <geometry>
         <mesh filename="package://assets/rod.stl"/>
       </geometry>
@@ -785,14 +785,14 @@
     </inertial>
   </link>
   <joint name="closing_5_2_frame" type="fixed">
-    <origin xyz="-9.22873e-16 9.71445e-17 0.0996012" rpy="2.72084e-14 -1.09948e-15 1.5708"/>
+    <origin xyz="-9.64506e-16 5.55112e-17 0.0996012" rpy="2.6558e-14 -9.92746e-16 1.5708"/>
     <parent link="10mm_ball_3"/>
     <child link="closing_5_2"/>
     <axis xyz="0 0 0"/>
   </joint>
   <!-- Joint from passive_4_link_y to 10mm_ball_3 -->
   <joint name="passive_4_z" type="revolute">
-    <origin xyz="0 0 6.93889e-18" rpy="-6.87265e-18 -4.82997e-17 7.8678e-17"/>
+    <origin xyz="0 -1.38778e-17 0" rpy="-5.80953e-17 -3.20322e-17 6.66802e-17"/>
     <parent link="passive_4_link_y"/>
     <child link="10mm_ball_3"/>
     <axis xyz="0 0 1"/>
@@ -800,7 +800,7 @@
   </joint>
   <!-- Joint from passive_4_link_x to passive_4_link_y -->
   <joint name="passive_4_y" type="revolute">
-    <origin xyz="0 0 6.93889e-18" rpy="-6.87265e-18 -4.82997e-17 7.8678e-17"/>
+    <origin xyz="0 -1.38778e-17 0" rpy="-5.80953e-17 -3.20322e-17 6.66802e-17"/>
     <parent link="passive_4_link_x"/>
     <child link="passive_4_link_y"/>
     <axis xyz="0 1 0"/>
@@ -808,7 +808,7 @@
   </joint>
   <!-- Joint from right_arm_2 to passive_4_link_x -->
   <joint name="passive_4_x" type="revolute">
-    <origin xyz="0.038 -6.245e-17 0.00384958" rpy="1.63153 -0.467373 -0.0602377"/>
+    <origin xyz="0.038 -1.14492e-16 0.00384958" rpy="1.63153 -0.467373 -0.0602377"/>
     <parent link="right_arm_2"/>
     <child link="passive_4_link_x"/>
     <axis xyz="1 0 0"/>
@@ -831,7 +831,7 @@
     </inertial>
     <!-- Part left_arm_3 -->
     <visual>
-      <origin xyz="0.0175 -0.0120291 0.0464647" rpy="1.84591 4.46887e-17 1.6587e-17"/>
+      <origin xyz="0.0175 -0.0120291 0.0464647" rpy="1.84591 4.24979e-17 -1.20977e-17"/>
       <geometry>
         <mesh filename="package://assets/left_arm.stl"/>
       </geometry>
@@ -840,14 +840,14 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="0.0175 -0.0120291 0.0464647" rpy="1.84591 4.46887e-17 1.6587e-17"/>
+      <origin xyz="0.0175 -0.0120291 0.0464647" rpy="1.84591 4.24979e-17 -1.20977e-17"/>
       <geometry>
         <mesh filename="package://assets/left_arm.stl"/>
       </geometry>
     </collision>
     <!-- Part magnet_5 -->
     <visual>
-      <origin xyz="-0.038 -1.38778e-16 0.00384958" rpy="-1.5708 1.5708 0"/>
+      <origin xyz="-0.038 -1.249e-16 0.00384958" rpy="-1.5708 1.5708 0"/>
       <geometry>
         <mesh filename="package://assets/magnet.stl"/>
       </geometry>
@@ -856,7 +856,7 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="-0.038 -1.38778e-16 0.00384958" rpy="-1.5708 1.5708 0"/>
+      <origin xyz="-0.038 -1.249e-16 0.00384958" rpy="-1.5708 1.5708 0"/>
       <geometry>
         <mesh filename="package://assets/magnet.stl"/>
       </geometry>
@@ -881,9 +881,9 @@
   <!-- Link 10mm_ball_4 -->
   <link name="10mm_ball_4">
     <inertial>
-      <origin xyz="1.32696e-17 6.066e-18 0.0498006" rpy="0 0 0"/>
+      <origin xyz="2.61999e-17 1.29673e-17 0.0498006" rpy="0 0 0"/>
       <mass value="0.0100726"/>
-      <inertia ixx="2.05497e-05" ixy="-5.65392e-22" ixz="-1.25148e-20" iyy="2.05497e-05" iyz="-2.51399e-21" izz="9.05619e-08"/>
+      <inertia ixx="2.05497e-05" ixy="-3.01926e-22" ixz="-1.572e-20" iyy="2.05497e-05" iyz="-5.02598e-21" izz="9.05619e-08"/>
     </inertial>
     <!-- Part rod_5 -->
     <visual>
@@ -903,7 +903,7 @@
     </collision>
     <!-- Part 10mm_ball_9 -->
     <visual>
-      <origin xyz="-3.46945e-18 0 0" rpy="-3.14159 1.08153e-18 -3.57996e-17"/>
+      <origin xyz="-6.93889e-18 0 0" rpy="-3.14159 -5.53998e-17 3.69236e-17"/>
       <geometry>
         <mesh filename="package://assets/10mm_ball.stl"/>
       </geometry>
@@ -912,14 +912,14 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="-3.46945e-18 0 0" rpy="-3.14159 1.08153e-18 -3.57996e-17"/>
+      <origin xyz="-6.93889e-18 0 0" rpy="-3.14159 -5.53998e-17 3.69236e-17"/>
       <geometry>
         <mesh filename="package://assets/10mm_ball.stl"/>
       </geometry>
     </collision>
     <!-- Part 10mm_ball_10 -->
     <visual>
-      <origin xyz="6.245e-17 1.38778e-17 0.0996012" rpy="1.27679e-15 -2.31776e-17 -3.14159"/>
+      <origin xyz="7.63278e-17 2.77556e-17 0.0996012" rpy="9.49833e-16 5.75899e-17 -3.14159"/>
       <geometry>
         <mesh filename="package://assets/10mm_ball.stl"/>
       </geometry>
@@ -928,7 +928,7 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="6.245e-17 1.38778e-17 0.0996012" rpy="1.27679e-15 -2.31776e-17 -3.14159"/>
+      <origin xyz="7.63278e-17 2.77556e-17 0.0996012" rpy="9.49833e-16 5.75899e-17 -3.14159"/>
       <geometry>
         <mesh filename="package://assets/10mm_ball.stl"/>
       </geometry>
@@ -953,13 +953,13 @@
   <!-- Link platform -->
   <link name="platform">
     <inertial>
-      <origin xyz="-0.014526 -0.0112979 0.0551067" rpy="0 0 0"/>
-      <mass value="0.207267"/>
-      <inertia ixx="0.000679801" ixy="8.98905e-05" ixz="5.8738e-05" iyy="0.000569688" iyz="-3.90452e-05" izz="0.000624756"/>
+      <origin xyz="-0.0210906 -0.0161908 0.0584805" rpy="0 0 0"/>
+      <mass value="0.363548"/>
+      <inertia ixx="0.00100069" ixy="2.3324e-05" ixz="3.70713e-05" iyy="0.00100073" iyz="-4.82971e-05" izz="0.00107943"/>
     </inertial>
     <!-- Part magnet_6 -->
     <visual>
-      <origin xyz="1.38778e-17 -1.38778e-17 -1.38778e-17" rpy="-6.95244e-18 1.4546e-17 -6.26056e-17"/>
+      <origin xyz="3.46945e-18 -1.38778e-17 -1.38778e-17" rpy="-1.3621e-17 -3.08255e-17 -6.96528e-17"/>
       <geometry>
         <mesh filename="package://assets/magnet.stl"/>
       </geometry>
@@ -968,9 +968,25 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="1.38778e-17 -1.38778e-17 -1.38778e-17" rpy="-6.95244e-18 1.4546e-17 -6.26056e-17"/>
+      <origin xyz="3.46945e-18 -1.38778e-17 -1.38778e-17" rpy="-1.3621e-17 -3.08255e-17 -6.96528e-17"/>
       <geometry>
         <mesh filename="package://assets/magnet.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part mp00663_neck_a2 -->
+    <visual>
+      <origin xyz="-0.0614166 -0.0410136 0.0528248" rpy="0.292726 0.446444 -0.977716"/>
+      <geometry>
+        <mesh filename="package://assets/mp00663_neck_a2.stl"/>
+      </geometry>
+      <material name="mp00663_neck_a2_material">
+        <color rgba="0.701961 0.701961 0.701961 1.0"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-0.0614166 -0.0410136 0.0528248" rpy="0.292726 0.446444 -0.977716"/>
+      <geometry>
+        <mesh filename="package://assets/mp00663_neck_a2.stl"/>
       </geometry>
     </collision>
     <!-- Part magnet_7 -->
@@ -1005,9 +1021,25 @@
         <mesh filename="package://assets/magnet.stl"/>
       </geometry>
     </collision>
+    <!-- Part pp00671_monocle_a2 -->
+    <visual>
+      <origin xyz="-0.0598003 -0.0402533 0.0533951" rpy="0.292726 0.446444 -0.977716"/>
+      <geometry>
+        <mesh filename="package://assets/pp00671_monocle_a2.stl"/>
+      </geometry>
+      <material name="pp00671_monocle_a2_material">
+        <color rgba="0.262745 0.282353 0.301961 1.0"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-0.0598003 -0.0402533 0.0533951" rpy="0.292726 0.446444 -0.977716"/>
+      <geometry>
+        <mesh filename="package://assets/pp00671_monocle_a2.stl"/>
+      </geometry>
+    </collision>
     <!-- Part platform -->
     <visual>
-      <origin xyz="-0.0109346 0.0606327 -0.0643152" rpy="-0.528315 0.00952906 -3.14159"/>
+      <origin xyz="-0.0109346 0.0606327 -0.0643152" rpy="-0.528315 0.00952906 3.14159"/>
       <geometry>
         <mesh filename="package://assets/platform.stl"/>
       </geometry>
@@ -1016,9 +1048,25 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="-0.0109346 0.0606327 -0.0643152" rpy="-0.528315 0.00952906 -3.14159"/>
+      <origin xyz="-0.0109346 0.0606327 -0.0643152" rpy="-0.528315 0.00952906 3.14159"/>
       <geometry>
         <mesh filename="package://assets/platform.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part pp00670_front_shell_a2 -->
+    <visual>
+      <origin xyz="-0.0611719 -0.0409392 0.0529817" rpy="0.292726 0.446444 -0.977716"/>
+      <geometry>
+        <mesh filename="package://assets/pp00670_front_shell_a2.stl"/>
+      </geometry>
+      <material name="pp00670_front_shell_a2_material">
+        <color rgba="1 1 1 1.0"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-0.0611719 -0.0409392 0.0529817" rpy="0.292726 0.446444 -0.977716"/>
+      <geometry>
+        <mesh filename="package://assets/pp00670_front_shell_a2.stl"/>
       </geometry>
     </collision>
     <!-- Part magnet_9 -->
@@ -1037,6 +1085,38 @@
         <mesh filename="package://assets/magnet.stl"/>
       </geometry>
     </collision>
+    <!-- Part mp00664_back_sheet_a3 -->
+    <visual>
+      <origin xyz="-0.0614166 -0.0410136 0.0528248" rpy="0.292726 0.446444 -0.977716"/>
+      <geometry>
+        <mesh filename="package://assets/mp00664_back_sheet_a3.stl"/>
+      </geometry>
+      <material name="mp00664_back_sheet_a3_material">
+        <color rgba="0.701961 0.701961 0.701961 1.0"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-0.0614166 -0.0410136 0.0528248" rpy="0.292726 0.446444 -0.977716"/>
+      <geometry>
+        <mesh filename="package://assets/mp00664_back_sheet_a3.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part std00609_ed_lens_m12 -->
+    <visual>
+      <origin xyz="-0.00226359 -0.0764851 0.0327955" rpy="0.292726 0.446444 -0.977716"/>
+      <geometry>
+        <mesh filename="package://assets/std00609_ed_lens_m12.stl"/>
+      </geometry>
+      <material name="std00609_ed_lens_m12_material">
+        <color rgba="0.615686 0.811765 0.929412 1.0"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-0.00226359 -0.0764851 0.0327955" rpy="0.292726 0.446444 -0.977716"/>
+      <geometry>
+        <mesh filename="package://assets/std00609_ed_lens_m12.stl"/>
+      </geometry>
+    </collision>
     <!-- Part magnet_10 -->
     <visual>
       <origin xyz="-0.0232851 0.0345463 0.0199422" rpy="0.854 0.302384 0.339176"/>
@@ -1053,9 +1133,25 @@
         <mesh filename="package://assets/magnet.stl"/>
       </geometry>
     </collision>
+    <!-- Part std00609_ed_lens_m12_2 -->
+    <visual>
+      <origin xyz="-0.0347391 -0.0277217 0.0609484" rpy="0.292726 0.446444 -0.977716"/>
+      <geometry>
+        <mesh filename="package://assets/std00609_ed_lens_m12.stl"/>
+      </geometry>
+      <material name="std00609_ed_lens_m12_2_material">
+        <color rgba="0.615686 0.811765 0.929412 1.0"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-0.0347391 -0.0277217 0.0609484" rpy="0.292726 0.446444 -0.977716"/>
+      <geometry>
+        <mesh filename="package://assets/std00609_ed_lens_m12.stl"/>
+      </geometry>
+    </collision>
     <!-- Part magnet_11 -->
     <visual>
-      <origin xyz="-0.023093 0 -0.000220061" rpy="-3.58553e-15 -0.0190581 7.56579e-17"/>
+      <origin xyz="-0.023093 2.77556e-17 -0.000220061" rpy="-3.5922e-15 -0.0190581 -1.36686e-16"/>
       <geometry>
         <mesh filename="package://assets/magnet.stl"/>
       </geometry>
@@ -1064,89 +1160,9 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="-0.023093 0 -0.000220061" rpy="-3.58553e-15 -0.0190581 7.56579e-17"/>
+      <origin xyz="-0.023093 2.77556e-17 -0.000220061" rpy="-3.5922e-15 -0.0190581 -1.36686e-16"/>
       <geometry>
         <mesh filename="package://assets/magnet.stl"/>
-      </geometry>
-    </collision>
-    <!-- Part injection_small_lens -->
-    <visual>
-      <origin xyz="-0.0347805 -0.0602959 0.0362659" rpy="0.292726 0.446444 -0.977716"/>
-      <geometry>
-        <mesh filename="package://assets/injection_small_lens.stl"/>
-      </geometry>
-      <material name="injection_small_lens_material">
-        <color rgba="0.25098 0.25098 0.25098 1.0"/>
-      </material>
-    </visual>
-    <collision>
-      <origin xyz="-0.0347805 -0.0602959 0.0362659" rpy="0.292726 0.446444 -0.977716"/>
-      <geometry>
-        <mesh filename="package://assets/injection_small_lens.stl"/>
-      </geometry>
-    </collision>
-    <!-- Part small_lens_30mm -->
-    <visual>
-      <origin xyz="-0.0346078 -0.0602096 0.0363179" rpy="1.86352 0.446444 -0.977716"/>
-      <geometry>
-        <mesh filename="package://assets/small_lens_30mm.stl"/>
-      </geometry>
-      <material name="small_lens_30mm_material">
-        <color rgba="0.439216 0.47451 0.501961 1.0"/>
-      </material>
-    </visual>
-    <collision>
-      <origin xyz="-0.0346078 -0.0602096 0.0363179" rpy="1.86352 0.446444 -0.977716"/>
-      <geometry>
-        <mesh filename="package://assets/small_lens_30mm.stl"/>
-      </geometry>
-    </collision>
-    <!-- Part large_lens_42mm -->
-    <visual>
-      <origin xyz="-0.0656467 -0.00572759 0.0678223" rpy="1.86352 0.446444 -0.977716"/>
-      <geometry>
-        <mesh filename="package://assets/large_lens_42mm.stl"/>
-      </geometry>
-      <material name="large_lens_42mm_material">
-        <color rgba="0.439216 0.47451 0.501961 1.0"/>
-      </material>
-    </visual>
-    <collision>
-      <origin xyz="-0.0656467 -0.00572759 0.0678223" rpy="1.86352 0.446444 -0.977716"/>
-      <geometry>
-        <mesh filename="package://assets/large_lens_42mm.stl"/>
-      </geometry>
-    </collision>
-    <!-- Part injection_big_lens -->
-    <visual>
-      <origin xyz="-0.0680648 -0.00693671 0.0670935" rpy="0.292726 0.446444 -0.977716"/>
-      <geometry>
-        <mesh filename="package://assets/injection_big_lens.stl"/>
-      </geometry>
-      <material name="injection_big_lens_material">
-        <color rgba="0.25098 0.25098 0.25098 1.0"/>
-      </material>
-    </visual>
-    <collision>
-      <origin xyz="-0.0680648 -0.00693671 0.0670935" rpy="0.292726 0.446444 -0.977716"/>
-      <geometry>
-        <mesh filename="package://assets/injection_big_lens.stl"/>
-      </geometry>
-    </collision>
-    <!-- Part reachy_mini_head -->
-    <visual>
-      <origin xyz="-0.0121528 -0.0139797 0.0635154" rpy="0.292726 0.446444 -0.977716"/>
-      <geometry>
-        <mesh filename="package://assets/reachy_mini_head.stl"/>
-      </geometry>
-      <material name="reachy_mini_head_material">
-        <color rgba="1 1 1 1.0"/>
-      </material>
-    </visual>
-    <collision>
-      <origin xyz="-0.0121528 -0.0139797 0.0635154" rpy="0.292726 0.446444 -0.977716"/>
-      <geometry>
-        <mesh filename="package://assets/reachy_mini_head.stl"/>
       </geometry>
     </collision>
   </link>
@@ -1220,7 +1236,7 @@
     </inertial>
   </link>
   <joint name="closing_5_1_frame" type="fixed">
-    <origin xyz="-0.023093 0 -0.000220061" rpy="-3.58553e-15 -0.0190581 7.56579e-17"/>
+    <origin xyz="-0.023093 2.77556e-17 -0.000220061" rpy="-3.5922e-15 -0.0190581 -1.36686e-16"/>
     <parent link="platform"/>
     <child link="closing_5_1"/>
     <axis xyz="0 0 0"/>
@@ -1240,9 +1256,105 @@
     <child link="head"/>
     <axis xyz="0 0 0"/>
   </joint>
+  <!-- Link pp00672_antenna_mic_a1 -->
+  <link name="pp00672_antenna_mic_a1">
+    <inertial>
+      <origin xyz="-0.0118437 0.0164131 -0.0243813" rpy="0 0 0"/>
+      <mass value="0.0202419"/>
+      <inertia ixx="3.22006e-05" ixy="1.40013e-05" ixz="-1.0829e-05" iyy="2.29008e-05" iyz="1.50069e-05" izz="3.09616e-05"/>
+    </inertial>
+    <!-- Part pp00673_antenna_sphere_a1 -->
+    <visual>
+      <origin xyz="-0.0798952 0.110719 -0.0971912" rpy="3.14159 -1.01229 2.19587"/>
+      <geometry>
+        <mesh filename="package://assets/pp00673_antenna_sphere_a1.stl"/>
+      </geometry>
+      <material name="pp00673_antenna_sphere_a1_material">
+        <color rgba="0.901961 0.901961 0.901961 1.0"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-0.0798952 0.110719 -0.0971912" rpy="3.14159 -1.01229 2.19587"/>
+      <geometry>
+        <mesh filename="package://assets/pp00673_antenna_sphere_a1.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part pp00672_antenna_mic_a1 -->
+    <visual>
+      <origin xyz="-0.0780354 0.108142 -0.0952052" rpy="3.14159 -1.01229 2.19587"/>
+      <geometry>
+        <mesh filename="package://assets/pp00672_antenna_mic_a1.stl"/>
+      </geometry>
+      <material name="pp00672_antenna_mic_a1_material">
+        <color rgba="0.262745 0.282353 0.301961 1.0"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-0.0780354 0.108142 -0.0952052" rpy="3.14159 -1.01229 2.19587"/>
+      <geometry>
+        <mesh filename="package://assets/pp00672_antenna_mic_a1.stl"/>
+      </geometry>
+    </collision>
+  </link>
+  <!-- Joint from platform to pp00672_antenna_mic_a1 -->
+  <joint name="left_antenna" type="revolute">
+    <origin xyz="0.035159 -0.0622228 0.0749453" rpy="2.08187 1.01498 -1.71429"/>
+    <parent link="platform"/>
+    <child link="pp00672_antenna_mic_a1"/>
+    <axis xyz="0 0 1"/>
+    <limit effort="10" velocity="10" lower="-3.141592653589793" upper="3.141592653589793"/>
+  </joint>
+  <!-- Link pp00672_antenna_mic_a1_2 -->
+  <link name="pp00672_antenna_mic_a1_2">
+    <inertial>
+      <origin xyz="0.0115338 0.0166324 -0.0243813" rpy="0 0 0"/>
+      <mass value="0.0202419"/>
+      <inertia ixx="3.27223e-05" ixy="-1.38171e-05" ixz="1.05456e-05" iyy="2.2379e-05" iyz="1.52073e-05" izz="3.09616e-05"/>
+    </inertial>
+    <!-- Part pp00672_antenna_mic_a1_2 -->
+    <visual>
+      <origin xyz="0.0759936 0.109586 -0.0952052" rpy="3.14159 -1.01229 0.964474"/>
+      <geometry>
+        <mesh filename="package://assets/pp00672_antenna_mic_a1.stl"/>
+      </geometry>
+      <material name="pp00672_antenna_mic_a1_2_material">
+        <color rgba="0.262745 0.282353 0.301961 1.0"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0.0759936 0.109586 -0.0952052" rpy="3.14159 -1.01229 0.964474"/>
+      <geometry>
+        <mesh filename="package://assets/pp00672_antenna_mic_a1.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part pp00673_antenna_sphere_a1_2 -->
+    <visual>
+      <origin xyz="0.0778047 0.112198 -0.0971912" rpy="3.14159 -1.01229 0.964474"/>
+      <geometry>
+        <mesh filename="package://assets/pp00673_antenna_sphere_a1.stl"/>
+      </geometry>
+      <material name="pp00673_antenna_sphere_a1_2_material">
+        <color rgba="0.901961 0.901961 0.901961 1.0"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0.0778047 0.112198 -0.0971912" rpy="3.14159 -1.01229 0.964474"/>
+      <geometry>
+        <mesh filename="package://assets/pp00673_antenna_sphere_a1.stl"/>
+      </geometry>
+    </collision>
+  </link>
+  <!-- Joint from platform to pp00672_antenna_mic_a1_2 -->
+  <joint name="right_antenna" type="revolute">
+    <origin xyz="-0.0202961 0.0200517 0.122439" rpy="2.64924 -0.230354 -0.605094"/>
+    <parent link="platform"/>
+    <child link="pp00672_antenna_mic_a1_2"/>
+    <axis xyz="0 0 1"/>
+    <limit effort="10" velocity="10" lower="-3.141592653589793" upper="3.141592653589793"/>
+  </joint>
   <!-- Joint from passive_7_link_y to platform -->
   <joint name="passive_7_z" type="revolute">
-    <origin xyz="1.38778e-17 -1.38778e-17 -1.38778e-17" rpy="-6.95244e-18 1.4546e-17 -6.26056e-17"/>
+    <origin xyz="3.46945e-18 -1.38778e-17 -1.38778e-17" rpy="-1.3621e-17 -3.08255e-17 -6.96528e-17"/>
     <parent link="passive_7_link_y"/>
     <child link="platform"/>
     <axis xyz="0 0 1"/>
@@ -1250,7 +1362,7 @@
   </joint>
   <!-- Joint from passive_7_link_x to passive_7_link_y -->
   <joint name="passive_7_y" type="revolute">
-    <origin xyz="1.38778e-17 -1.38778e-17 -1.38778e-17" rpy="-6.95244e-18 1.4546e-17 -6.26056e-17"/>
+    <origin xyz="3.46945e-18 -1.38778e-17 -1.38778e-17" rpy="-1.3621e-17 -3.08255e-17 -6.96528e-17"/>
     <parent link="passive_7_link_x"/>
     <child link="passive_7_link_y"/>
     <axis xyz="0 1 0"/>
@@ -1258,7 +1370,7 @@
   </joint>
   <!-- Joint from 10mm_ball_4 to passive_7_link_x -->
   <joint name="passive_7_x" type="revolute">
-    <origin xyz="5.55112e-17 2.77556e-17 0.0996012" rpy="-0.0563544 -0.0277816 0.113755"/>
+    <origin xyz="7.63278e-17 4.16334e-17 0.0996012" rpy="-0.0563544 -0.0277816 0.113755"/>
     <parent link="10mm_ball_4"/>
     <child link="passive_7_link_x"/>
     <axis xyz="1 0 0"/>
@@ -1266,7 +1378,7 @@
   </joint>
   <!-- Joint from passive_3_link_y to 10mm_ball_4 -->
   <joint name="passive_3_z" type="revolute">
-    <origin xyz="-3.46945e-18 0 0" rpy="6.75164e-18 1.08153e-18 -3.57996e-17"/>
+    <origin xyz="-6.93889e-18 0 0" rpy="8.6686e-17 -5.53998e-17 3.69236e-17"/>
     <parent link="passive_3_link_y"/>
     <child link="10mm_ball_4"/>
     <axis xyz="0 0 1"/>
@@ -1274,7 +1386,7 @@
   </joint>
   <!-- Joint from passive_3_link_x to passive_3_link_y -->
   <joint name="passive_3_y" type="revolute">
-    <origin xyz="-3.46945e-18 0 0" rpy="6.75164e-18 1.08153e-18 -3.57996e-17"/>
+    <origin xyz="-6.93889e-18 0 0" rpy="8.6686e-17 -5.53998e-17 3.69236e-17"/>
     <parent link="passive_3_link_x"/>
     <child link="passive_3_link_y"/>
     <axis xyz="0 1 0"/>
@@ -1282,7 +1394,7 @@
   </joint>
   <!-- Joint from left_arm_3 to passive_3_link_x -->
   <joint name="passive_3_x" type="revolute">
-    <origin xyz="-0.038 -1.35308e-16 0.00384958" rpy="1.68969 1.09636 0.138717"/>
+    <origin xyz="-0.038 -1.56125e-16 0.00384958" rpy="1.68969 1.09636 0.138717"/>
     <parent link="left_arm_3"/>
     <child link="passive_3_link_x"/>
     <axis xyz="1 0 0"/>
@@ -1305,7 +1417,7 @@
     </inertial>
     <!-- Part magnet_12 -->
     <visual>
-      <origin xyz="0.038 -7.97973e-17 0.00384958" rpy="-1.5708 1.5708 0"/>
+      <origin xyz="0.038 -6.93889e-17 0.00384958" rpy="-1.5708 1.5708 0"/>
       <geometry>
         <mesh filename="package://assets/magnet.stl"/>
       </geometry>
@@ -1314,14 +1426,14 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="0.038 -7.97973e-17 0.00384958" rpy="-1.5708 1.5708 0"/>
+      <origin xyz="0.038 -6.93889e-17 0.00384958" rpy="-1.5708 1.5708 0"/>
       <geometry>
         <mesh filename="package://assets/magnet.stl"/>
       </geometry>
     </collision>
     <!-- Part right_arm_3 -->
     <visual>
-      <origin xyz="-0.0175 -0.0120291 0.0464647" rpy="1.84591 -6.51344e-17 -3.68239e-17"/>
+      <origin xyz="-0.0175 -0.0120291 0.0464647" rpy="1.84591 -6.01005e-17 -4.86395e-17"/>
       <geometry>
         <mesh filename="package://assets/right_arm.stl"/>
       </geometry>
@@ -1330,7 +1442,7 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="-0.0175 -0.0120291 0.0464647" rpy="1.84591 -6.51344e-17 -3.68239e-17"/>
+      <origin xyz="-0.0175 -0.0120291 0.0464647" rpy="1.84591 -6.01005e-17 -4.86395e-17"/>
       <geometry>
         <mesh filename="package://assets/right_arm.stl"/>
       </geometry>
@@ -1355,9 +1467,9 @@
   <!-- Link 10mm_ball_5 -->
   <link name="10mm_ball_5">
     <inertial>
-      <origin xyz="2.26806e-16 -8.29583e-18 0.0498006" rpy="0 0 0"/>
+      <origin xyz="2.72071e-16 2.11526e-18 0.0498006" rpy="0 0 0"/>
       <mass value="0.0100726"/>
-      <inertia ixx="2.05497e-05" ixy="-9.59961e-21" ixz="-9.0591e-20" iyy="2.05497e-05" iyz="-6.04758e-21" izz="9.05619e-08"/>
+      <inertia ixx="2.05497e-05" ixy="-9.69819e-21" ixz="-9.57583e-20" iyy="2.05497e-05" iyz="-7.15797e-21" izz="9.05619e-08"/>
     </inertial>
     <!-- Part rod_6 -->
     <visual>
@@ -1377,7 +1489,7 @@
     </collision>
     <!-- Part 10mm_ball_11 -->
     <visual>
-      <origin xyz="4.71845e-16 -1.04083e-17 0.0996012" rpy="-1.01844e-14 -8.6843e-16 -3.14159"/>
+      <origin xyz="5.27356e-16 3.46945e-18 0.0996012" rpy="-1.01567e-14 -8.6843e-16 -3.14159"/>
       <geometry>
         <mesh filename="package://assets/10mm_ball.stl"/>
       </geometry>
@@ -1386,14 +1498,14 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="4.71845e-16 -1.04083e-17 0.0996012" rpy="-1.01844e-14 -8.6843e-16 -3.14159"/>
+      <origin xyz="5.27356e-16 3.46945e-18 0.0996012" rpy="-1.01567e-14 -8.6843e-16 -3.14159"/>
       <geometry>
         <mesh filename="package://assets/10mm_ball.stl"/>
       </geometry>
     </collision>
     <!-- Part 10mm_ball_12 -->
     <visual>
-      <origin xyz="-1.38778e-17 -3.46945e-18 0" rpy="-3.14159 1.50798e-17 3.3994e-18"/>
+      <origin xyz="1.38778e-17 3.46945e-18 0" rpy="-3.14159 -4.04313e-17 -1.04784e-17"/>
       <geometry>
         <mesh filename="package://assets/10mm_ball.stl"/>
       </geometry>
@@ -1402,7 +1514,7 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="-1.38778e-17 -3.46945e-18 0" rpy="-3.14159 1.50798e-17 3.3994e-18"/>
+      <origin xyz="1.38778e-17 3.46945e-18 0" rpy="-3.14159 -4.04313e-17 -1.04784e-17"/>
       <geometry>
         <mesh filename="package://assets/10mm_ball.stl"/>
       </geometry>
@@ -1418,14 +1530,14 @@
     </inertial>
   </link>
   <joint name="closing_1_2_frame" type="fixed">
-    <origin xyz="4.71845e-16 -1.04083e-17 0.0996012" rpy="1.01844e-14 8.6843e-16 5.72444e-16"/>
+    <origin xyz="5.27356e-16 3.46945e-18 0.0996012" rpy="1.01567e-14 8.6843e-16 5.16933e-16"/>
     <parent link="10mm_ball_5"/>
     <child link="closing_1_2"/>
     <axis xyz="0 0 0"/>
   </joint>
   <!-- Joint from passive_2_link_y to 10mm_ball_5 -->
   <joint name="passive_2_z" type="revolute">
-    <origin xyz="-1.38778e-17 -3.46945e-18 0" rpy="2.60495e-17 1.50798e-17 3.3994e-18"/>
+    <origin xyz="1.38778e-17 3.46945e-18 0" rpy="2.2995e-17 -4.04313e-17 -1.04784e-17"/>
     <parent link="passive_2_link_y"/>
     <child link="10mm_ball_5"/>
     <axis xyz="0 0 1"/>
@@ -1433,7 +1545,7 @@
   </joint>
   <!-- Joint from passive_2_link_x to passive_2_link_y -->
   <joint name="passive_2_y" type="revolute">
-    <origin xyz="-1.38778e-17 -3.46945e-18 0" rpy="2.60495e-17 1.50798e-17 3.3994e-18"/>
+    <origin xyz="1.38778e-17 3.46945e-18 0" rpy="2.2995e-17 -4.04313e-17 -1.04784e-17"/>
     <parent link="passive_2_link_x"/>
     <child link="passive_2_link_y"/>
     <axis xyz="0 1 0"/>
@@ -1441,7 +1553,7 @@
   </joint>
   <!-- Joint from right_arm_3 to passive_2_link_x -->
   <joint name="passive_2_x" type="revolute">
-    <origin xyz="0.038 -7.63278e-17 0.00384958" rpy="1.67139 1.0009 0.0518494"/>
+    <origin xyz="0.038 -3.19189e-16 0.00384958" rpy="1.67139 1.0009 0.0518494"/>
     <parent link="right_arm_3"/>
     <child link="passive_2_link_x"/>
     <axis xyz="1 0 0"/>

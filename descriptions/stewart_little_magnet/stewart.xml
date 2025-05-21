@@ -52,8 +52,8 @@
     <equality solref="0.002 1" solimp="0.99 0.999 0.0005 0.5 2"/>
   </default>
   <worldbody>
-    <!-- Link simplified_xl330 -->
-    <body name="simplified_xl330" pos="0 0 0" quat="1 0 0 0" childclass="stewart">
+    <!-- Link base_bot -->
+    <body name="base_bot" pos="0 0 0" quat="1 0 0 0" childclass="stewart">
       <inertial pos="1.34605e-07 2.33142e-07 0.0267776" mass="0.180117" fullinertia="0.00016756 0.000167557 0.00025142 -2.21414e-09 -3.40032e-10 -5.88953e-10"/>
       <!-- Part base_side -->
       <geom type="mesh" class="visual" pos="2.77241e-17 6.93302e-18 0.0426353" quat="0.965926 -2.4228e-16 -1.11022e-16 -0.258819" mesh="base_side" material="base_side_material"/>
@@ -80,15 +80,15 @@
       <geom type="mesh" class="visual" pos="0.0239334 -0.0203694 0.0296936" quat="0.663012 0.33526 0.501769 0.442995" mesh="simplified_xl330" material="simplified_xl330_material"/>
       <!-- Link left_arm -->
       <body name="left_arm" pos="-0.0386923 -0.0320171 0.0434238" quat="0.602174 -0.715156 0.352676 -0.0394686">
-        <!-- Joint from simplified_xl330 to left_arm -->
+        <!-- Joint from base_bot to left_arm -->
         <joint axis="0 0 1" name="1" type="hinge" class="chosen_actuator"/>
         <inertial pos="-0.0267634 0.0046049 0.00174754" mass="0.00541129" fullinertia="1.47788e-07 1.39835e-06 1.40141e-06 1.70926e-07 1.92071e-07 -2.15256e-08"/>
         <!-- Part magnet -->
-        <geom type="mesh" class="visual" pos="-0.038 6.93889e-17 0.00384958" quat="3.44169e-15 1.47304e-15 0.707107 0.707107" mesh="magnet" material="magnet_material"/>
+        <geom type="mesh" class="visual" pos="-0.038 5.20417e-17 0.00384958" quat="3.38618e-15 1.40271e-15 0.707107 0.707107" mesh="magnet" material="magnet_material"/>
         <!-- Part left_arm -->
-        <geom type="mesh" class="visual" pos="0.0175 -0.0120291 0.0464647" quat="0.603466 0.797389 -0 6.61709e-18" mesh="left_arm" material="left_arm_material"/>
+        <geom type="mesh" class="visual" pos="0.0175 -0.0120291 0.0464647" quat="0.603466 0.797389 -0 -1.26349e-17" mesh="left_arm" material="left_arm_material"/>
         <!-- Link rod -->
-        <body name="rod" pos="-0.038 6.93889e-17 0.00384958" quat="1.41553e-15 -3.32027e-15 -0.707107 0.707107">
+        <body name="rod" pos="-0.038 5.20417e-17 0.00384958" quat="1.41553e-15 -3.33823e-15 -0.707107 0.707107">
           <!-- Joint from left_arm to rod -->
           <joint axis="0 0 1" name="passive_1" type="ball" class="chosen_actuator"/>
           <inertial pos="-0.00163493 0.00269119 0.049701" mass="0.0100726" fullinertia="2.05276e-05 2.04899e-05 1.72358e-07 3.62962e-08 6.70317e-07 -1.10338e-06"/>
@@ -97,132 +97,136 @@
           <!-- Part 10mm_ball -->
           <geom type="mesh" class="visual" pos="-0.00326986 0.00538239 0.0994019" quat="0.0346184 0.0154768 -0.0275858 -0.9989" mesh="10mm_ball" material="10mm_ball_material"/>
           <!-- Part 10mm_ball_2 -->
-          <geom type="mesh" class="visual" pos="-4.16334e-17 -2.08167e-17 1.04083e-17" quat="0.0275858 0.9989 0.0346184 0.0154768" mesh="10mm_ball" material="10mm_ball_material"/>
+          <geom type="mesh" class="visual" pos="-1.38778e-17 4.02456e-16 7.97973e-17" quat="0.0275858 0.9989 0.0346184 0.0154768" mesh="10mm_ball" material="10mm_ball_material"/>
           <!-- Frame closing_2_1 -->
           <site group="3" name="closing_2_1" pos="-0.00326986 0.00538239 0.0994019" quat="0.0154768 -0.0346184 0.9989 -0.0275858"/>
         </body>
       </body>
       <!-- Link right_arm -->
       <body name="right_arm" pos="-0.00838143 -0.0495171 0.0434238" quat="0.541232 -0.795681 0.0521517 -0.266906">
-        <!-- Joint from simplified_xl330 to right_arm -->
+        <!-- Joint from base_bot to right_arm -->
         <joint axis="0 0 1" name="2" type="hinge" class="chosen_actuator"/>
         <inertial pos="0.0267634 0.0046049 0.00174754" mass="0.00541129" fullinertia="1.47788e-07 1.39835e-06 1.40141e-06 -1.70926e-07 -1.92071e-07 -2.15256e-08"/>
         <!-- Part magnet_2 -->
-        <geom type="mesh" class="visual" pos="0.038 3.1225e-17 0.00384958" quat="4.16594e-17 0 0.707107 0.707107" mesh="magnet" material="magnet_material"/>
+        <geom type="mesh" class="visual" pos="0.038 1.73472e-17 0.00384958" quat="1.11022e-16 -3.33707e-17 -0.707107 -0.707107" mesh="magnet" material="magnet_material"/>
         <!-- Part right_arm -->
-        <geom type="mesh" class="visual" pos="-0.0175 -0.0120291 0.0464647" quat="0.603466 0.797389 -0 1.43229e-17" mesh="right_arm" material="right_arm_material"/>
+        <geom type="mesh" class="visual" pos="-0.0175 -0.0120291 0.0464647" quat="0.603466 0.797389 -0 -1.85044e-17" mesh="right_arm" material="right_arm_material"/>
         <!-- Link 10mm_ball -->
-        <body name="10mm_ball" pos="0.038 2.42861e-17 0.00384958" quat="0.154734 0.186502 0.701596 -0.670103">
+        <body name="10mm_ball" pos="0.038 1.83881e-16 0.00384958" quat="0.154734 0.186502 0.701596 -0.670103">
           <!-- Joint from right_arm to 10mm_ball -->
           <joint axis="0 0 1" name="passive_6" type="ball" class="chosen_actuator"/>
-          <inertial pos="5.28507e-16 1.36264e-18 0.0498006" mass="0.0100726" fullinertia="2.05497e-05 2.05497e-05 9.05619e-08 -3.72778e-21 -2.03122e-19 -3.55679e-22"/>
+          <inertial pos="5.23376e-16 3.77159e-18 0.0498006" mass="0.0100726" fullinertia="2.05497e-05 2.05497e-05 9.05619e-08 -3.57011e-21 -2.00476e-19 -2.62602e-21"/>
           <!-- Part rod_2 -->
           <geom type="mesh" class="visual" pos="0.0444954 -0.0426152 0.0352861" quat="0.0310632 -0.224394 0.133559 0.964803" mesh="rod" material="rod_material"/>
           <!-- Part 10mm_ball_3 -->
-          <geom type="mesh" class="visual" pos="0 0 0" quat="0 1 0 0" mesh="10mm_ball" material="10mm_ball_material"/>
+          <geom type="mesh" class="visual" pos="0 0 -3.46945e-18" quat="0 1 0 0" mesh="10mm_ball" material="10mm_ball_material"/>
           <!-- Part 10mm_ball_4 -->
-          <geom type="mesh" class="visual" pos="1.08941e-15 0 0.0996012" quat="4.996e-16 7.32517e-15 -1.33227e-15 1" mesh="10mm_ball" material="10mm_ball_material"/>
+          <geom type="mesh" class="visual" pos="1.07553e-15 1.38778e-17 0.0996012" quat="5.27356e-16 7.2943e-15 -6.66134e-16 1" mesh="10mm_ball" material="10mm_ball_material"/>
           <!-- Frame closing_3_2 -->
-          <site group="3" name="closing_3_2" pos="1.08941e-15 0 0.0996012" quat="1 1.2042e-15 7.38298e-15 -4.71845e-16"/>
+          <site group="3" name="closing_3_2" pos="1.07553e-15 1.38778e-17 0.0996012" quat="1 1.15678e-15 7.10543e-15 -3.88578e-16"/>
         </body>
       </body>
       <!-- Link left_arm_2 -->
       <body name="left_arm_2" pos="0.0470734 -0.017499 0.0434252" quat="0.33526 -0.663012 -0.442995 0.501769">
-        <!-- Joint from simplified_xl330 to left_arm_2 -->
+        <!-- Joint from base_bot to left_arm_2 -->
         <joint axis="0 0 1" name="3" type="hinge" class="chosen_actuator"/>
         <inertial pos="-0.0267634 0.0046049 0.00174754" mass="0.00541129" fullinertia="1.47788e-07 1.39835e-06 1.40141e-06 1.70926e-07 1.92071e-07 -2.15256e-08"/>
         <!-- Part magnet_3 -->
-        <geom type="mesh" class="visual" pos="-0.038 -2.42861e-17 0.00384958" quat="0.5 -0.5 -0.5 -0.5" mesh="magnet" material="magnet_material"/>
+        <geom type="mesh" class="visual" pos="-0.038 -6.93889e-18 0.00384958" quat="0.5 -0.5 -0.5 -0.5" mesh="magnet" material="magnet_material"/>
         <!-- Part left_arm_2 -->
-        <geom type="mesh" class="visual" pos="0.0175 -0.0120291 0.0464647" quat="0.603466 0.797389 -0 -2.15969e-18" mesh="left_arm" material="left_arm_material"/>
+        <geom type="mesh" class="visual" pos="0.0175 -0.0120291 0.0464647" quat="0.603466 0.797389 -0 -7.0463e-18" mesh="left_arm" material="left_arm_material"/>
         <!-- Link 10mm_ball_2 -->
-        <body name="10mm_ball_2" pos="-0.038 -6.93889e-18 0.00384958" quat="0.511134 0.555318 -0.467667 0.460055">
+        <body name="10mm_ball_2" pos="-0.038 9.02056e-17 0.00384958" quat="0.511134 0.555318 -0.467667 0.460055">
           <!-- Joint from left_arm_2 to 10mm_ball_2 -->
           <joint axis="0 0 1" name="passive_5" type="ball" class="chosen_actuator"/>
-          <inertial pos="-2.10884e-16 7.68347e-18 0.0498006" mass="0.0100726" fullinertia="2.05497e-05 2.05497e-05 9.05619e-08 2.26763e-21 7.57259e-20 1.20543e-20"/>
+          <inertial pos="-2.12708e-16 -2.09509e-18 0.0498006" mass="0.0100726" fullinertia="2.05497e-05 2.05497e-05 9.05619e-08 2.49227e-21 7.57265e-20 1.21604e-20"/>
           <!-- Part rod_3 -->
           <geom type="mesh" class="visual" pos="0.0444954 -0.0426152 0.0352861" quat="0.0310632 -0.224394 0.133559 0.964803" mesh="rod" material="rod_material"/>
           <!-- Part 10mm_ball_5 -->
-          <geom type="mesh" class="visual" pos="0 6.93889e-18 0" quat="0 1 0 0" mesh="10mm_ball" material="10mm_ball_material"/>
+          <geom type="mesh" class="visual" pos="0 -6.93889e-18 -3.46945e-18" quat="0 1 0 0" mesh="10mm_ball" material="10mm_ball_material"/>
           <!-- Part 10mm_ball_6 -->
-          <geom type="mesh" class="visual" pos="-4.23273e-16 1.38778e-17 0.0996012" quat="2.70617e-16 -1.88173e-16 3.03924e-15 1" mesh="10mm_ball" material="10mm_ball_material"/>
+          <geom type="mesh" class="visual" pos="-4.23273e-16 0 0.0996012" quat="2.22045e-16 -2.13671e-16 2.7478e-15 1" mesh="10mm_ball" material="10mm_ball_material"/>
           <!-- Frame closing_4_1 -->
-          <site group="3" name="closing_4_1" pos="-4.23273e-16 1.38778e-17 0.0996012" quat="2.22045e-16 2.45108e-16 1 -2.83107e-15"/>
+          <site group="3" name="closing_4_1" pos="-4.23273e-16 0 0.0996012" quat="3.33067e-16 2.37699e-16 1 -2.7478e-15"/>
         </body>
       </body>
       <!-- Link right_arm_2 -->
       <body name="right_arm_2" pos="0.0470737 0.017501 0.0434241" quat="0.501758 -0.443016 -0.662997 0.335276">
-        <!-- Joint from simplified_xl330 to right_arm_2 -->
+        <!-- Joint from base_bot to right_arm_2 -->
         <joint axis="0 0 1" name="4" type="hinge" class="chosen_actuator"/>
         <inertial pos="0.0267634 0.0046049 0.00174754" mass="0.00541129" fullinertia="1.47788e-07 1.39835e-06 1.40141e-06 -1.70926e-07 -1.92071e-07 -2.15256e-08"/>
         <!-- Part right_arm_2 -->
-        <geom type="mesh" class="visual" pos="-0.0175 -0.0120291 0.0464647" quat="0.603466 0.797389 -0 1.0411e-17" mesh="right_arm" material="right_arm_material"/>
+        <geom type="mesh" class="visual" pos="-0.0175 -0.0120291 0.0464647" quat="0.603466 0.797389 -0 -4.05557e-18" mesh="right_arm" material="right_arm_material"/>
         <!-- Part magnet_4 -->
-        <geom type="mesh" class="visual" pos="0.038 -1.07553e-16 0.00384958" quat="0.707107 -0.707107 -1.33227e-15 -1.11019e-16" mesh="magnet" material="magnet_material"/>
+        <geom type="mesh" class="visual" pos="0.038 -1.14492e-16 0.00384958" quat="0.707107 -0.707107 -1.22125e-15 -5.52875e-17" mesh="magnet" material="magnet_material"/>
         <!-- Link 10mm_ball_3 -->
-        <body name="10mm_ball_3" pos="0.038 -6.245e-17 0.00384958" quat="0.671459 0.703356 -0.179957 0.148485">
+        <body name="10mm_ball_3" pos="0.038 -2.39392e-16 0.00384958" quat="0.671459 0.703356 -0.179957 0.148485">
           <!-- Joint from right_arm_2 to 10mm_ball_3 -->
           <joint axis="0 0 1" name="passive_4" type="ball" class="chosen_actuator"/>
-          <inertial pos="-4.57983e-16 3.71684e-17 0.0498006" mass="0.0100726" fullinertia="2.05497e-05 2.05497e-05 9.05619e-08 -1.58143e-20 1.70754e-19 -1.63497e-20"/>
+          <inertial pos="-4.14762e-16 2.75639e-17 0.0498006" mass="0.0100726" fullinertia="2.05497e-05 2.05497e-05 9.05619e-08 -1.63759e-20 1.47419e-19 -1.62471e-20"/>
           <!-- Part 10mm_ball_7 -->
-          <geom type="mesh" class="visual" pos="0 0 6.93889e-18" quat="0 1 0 0" mesh="10mm_ball" material="10mm_ball_material"/>
+          <geom type="mesh" class="visual" pos="-6.93889e-18 -1.38778e-17 -3.46945e-18" quat="0 1 0 0" mesh="10mm_ball" material="10mm_ball_material"/>
           <!-- Part 10mm_ball_8 -->
-          <geom type="mesh" class="visual" pos="-9.22873e-16 9.71445e-17 0.0996012" quat="0.707107 -6.62345e-15 -6.66134e-16 -0.707107" mesh="10mm_ball" material="10mm_ball_material"/>
+          <geom type="mesh" class="visual" pos="-8.18789e-16 8.32667e-17 0.0996012" quat="0.707107 -7.61047e-15 -5.55112e-16 -0.707107" mesh="10mm_ball" material="10mm_ball_material"/>
           <!-- Part rod_4 -->
           <geom type="mesh" class="visual" pos="0.0444954 -0.0426152 0.0352861" quat="0.0310632 -0.224394 0.133559 0.964803" mesh="rod" material="rod_material"/>
           <!-- Frame closing_5_2 -->
-          <site group="3" name="closing_5_2" pos="-9.22873e-16 9.71445e-17 0.0996012" quat="0.707107 -4.10942e-16 6.6197e-15 0.707107"/>
+          <site group="3" name="closing_5_2" pos="-8.18789e-16 8.32667e-17 0.0996012" quat="0.707107 -8.10385e-16 7.66054e-15 0.707107"/>
         </body>
       </body>
       <!-- Link left_arm_3 -->
       <body name="left_arm_3" pos="-0.00838053 0.0495175 0.0434241" quat="0.266897 -0.0521647 0.795681 -0.541237">
-        <!-- Joint from simplified_xl330 to left_arm_3 -->
+        <!-- Joint from base_bot to left_arm_3 -->
         <joint axis="0 0 1" name="5" type="hinge" class="chosen_actuator"/>
         <inertial pos="-0.0267634 0.0046049 0.00174754" mass="0.00541129" fullinertia="1.47788e-07 1.39835e-06 1.40141e-06 1.70926e-07 1.92071e-07 -2.15256e-08"/>
         <!-- Part left_arm_3 -->
-        <geom type="mesh" class="visual" pos="0.0175 -0.0120291 0.0464647" quat="0.603466 0.797389 -0 -3.08622e-18" mesh="left_arm" material="left_arm_material"/>
+        <geom type="mesh" class="visual" pos="0.0175 -0.0120291 0.0464647" quat="0.603466 0.797389 0 -1.38602e-18" mesh="left_arm" material="left_arm_material"/>
         <!-- Part magnet_5 -->
-        <geom type="mesh" class="visual" pos="-0.038 -1.38778e-16 0.00384958" quat="0.5 -0.5 0.5 0.5" mesh="magnet" material="magnet_material"/>
+        <geom type="mesh" class="visual" pos="-0.038 -1.249e-16 0.00384958" quat="0.5 -0.5 0.5 0.5" mesh="magnet" material="magnet_material"/>
         <!-- Link 10mm_ball_4 -->
-        <body name="10mm_ball_4" pos="-0.038 -1.35308e-16 0.00384958" quat="0.592223 0.612777 0.389356 -0.349539">
+        <body name="10mm_ball_4" pos="-0.038 -1.56125e-16 0.00384958" quat="0.592223 0.612777 0.389356 -0.349539">
           <!-- Joint from left_arm_3 to 10mm_ball_4 -->
           <joint axis="0 0 1" name="passive_3" type="ball" class="chosen_actuator"/>
-          <inertial pos="1.32696e-17 6.066e-18 0.0498006" mass="0.0100726" fullinertia="2.05497e-05 2.05497e-05 9.05619e-08 -5.65392e-22 -1.25148e-20 -2.51399e-21"/>
+          <inertial pos="2.61999e-17 1.29673e-17 0.0498006" mass="0.0100726" fullinertia="2.05497e-05 2.05497e-05 9.05619e-08 -2.75456e-22 -1.572e-20 -5.11742e-21"/>
           <!-- Part rod_5 -->
           <geom type="mesh" class="visual" pos="0.0444954 -0.0426152 0.0352861" quat="0.0310632 -0.224394 0.133559 0.964803" mesh="rod" material="rod_material"/>
           <!-- Part 10mm_ball_9 -->
-          <geom type="mesh" class="visual" pos="-3.46945e-18 0 0" quat="0 1 0 0" mesh="10mm_ball" material="10mm_ball_material"/>
+          <geom type="mesh" class="visual" pos="-6.93889e-18 0 0" quat="0 1 0 0" mesh="10mm_ball" material="10mm_ball_material"/>
           <!-- Part 10mm_ball_10 -->
-          <geom type="mesh" class="visual" pos="6.245e-17 1.38778e-17 0.0996012" quat="9.99201e-16 6.0258e-15 -0 1" mesh="10mm_ball" material="10mm_ball_material"/>
+          <geom type="mesh" class="visual" pos="7.63278e-17 2.77556e-17 0.0996012" quat="9.36751e-16 6.018e-15 1.11022e-16 1" mesh="10mm_ball" material="10mm_ball_material"/>
           <!-- Link platform -->
-          <body name="platform" pos="5.55112e-17 2.77556e-17 0.0996012" quat="0.997913 -0.0273359 -0.0154638 0.0564279">
+          <body name="platform" pos="1.00614e-16 6.93889e-17 0.0996012" quat="0.997913 -0.0273359 -0.0154638 0.0564279">
             <!-- Joint from 10mm_ball_4 to platform -->
             <joint axis="0 0 1" name="passive_7" type="ball" class="chosen_actuator"/>
-            <inertial pos="-0.014526 -0.0112979 0.0551067" mass="0.207267" fullinertia="0.000679801 0.000569688 0.000624756 8.98905e-05 5.8738e-05 -3.90452e-05"/>
+            <inertial pos="-0.0130793 -0.0121918 0.0589915" mass="0.302045" fullinertia="0.000916171 0.00085121 0.00087816 5.60347e-05 3.02249e-05 -2.41709e-05"/>
             <!-- Part magnet_6 -->
-            <geom type="mesh" class="visual" pos="1.38778e-17 -1.38778e-17 -1.38778e-17" quat="1 -1.47214e-17 -1.11022e-16 -2.77556e-17" mesh="magnet" material="magnet_material"/>
+            <geom type="mesh" class="visual" pos="-1.04083e-17 0 0" quat="1 5.50804e-17 0 5.55112e-17" mesh="magnet" material="magnet_material"/>
+            <!-- Part mp00663_neck_a2 -->
+            <geom type="mesh" class="visual" pos="-0.0614166 -0.0410136 0.0528248" quat="0.836598 0.228413 0.126564 -0.481574" mesh="mp00663_neck_a2" material="mp00663_neck_a2_material"/>
             <!-- Part magnet_7 -->
             <geom type="mesh" class="visual" pos="-0.0347355 0.0172732 0.00975103" quat="0.895121 0.388759 0.198717 0.0902002" mesh="magnet" material="magnet_material"/>
+            <!-- Part small_lens_30mm -->
+            <geom type="mesh" class="visual" pos="-0.0417662 -0.0637368 0.0398601" quat="2.39319e-05 0.71001 0.355 -0.608161" mesh="small_lens_30mm" material="small_lens_30mm_material"/>
             <!-- Part magnet_8 -->
             <geom type="mesh" class="visual" pos="0.0114504 0.0172732 0.0101912" quat="0.893187 0.389601 -0.207238 -0.0864916" mesh="magnet" material="magnet_material"/>
             <!-- Part platform -->
             <geom type="mesh" class="visual" pos="-0.0109346 0.0606327 -0.0643152" quat="0.001244 0.00459924 0.261093 -0.965302" mesh="platform" material="platform_material"/>
+            <!-- Part pp00670_front_shell_a2 -->
+            <geom type="mesh" class="visual" pos="-0.0611719 -0.0409392 0.0529817" quat="0.836598 0.228413 0.126564 -0.481574" mesh="pp00670_front_shell_a2" material="pp00670_front_shell_a2_material"/>
             <!-- Part magnet_9 -->
             <geom type="mesh" class="visual" pos="-0.000192133 0.0345463 0.0201622" quat="0.895461 0.38125 -0.212769 -0.0867587" mesh="magnet" material="magnet_material"/>
+            <!-- Part mp00664_back_sheet_a3 -->
+            <geom type="mesh" class="visual" pos="-0.0614166 -0.0410136 0.0528248" quat="0.836598 0.228413 0.126564 -0.481574" mesh="mp00664_back_sheet_a3" material="mp00664_back_sheet_a3_material"/>
+            <!-- Part large_lens_42mm -->
+            <geom type="mesh" class="visual" pos="-0.0705715 -0.0131381 0.0691191" quat="2.39319e-05 0.71001 0.355 -0.608161" mesh="large_lens_42mm" material="large_lens_42mm_material"/>
+            <!-- Part injection_big_lens -->
+            <geom type="mesh" class="visual" pos="-0.0729895 -0.0143472 0.0683904" quat="0.836598 0.228413 0.126564 -0.481574" mesh="injection_big_lens" material="injection_big_lens_material"/>
+            <!-- Part injection_small_lens -->
+            <geom type="mesh" class="visual" pos="-0.0418526 -0.06378 0.039834" quat="0.836598 0.228413 0.126564 -0.481574" mesh="injection_small_lens" material="injection_small_lens_material"/>
             <!-- Part magnet_10 -->
             <geom type="mesh" class="visual" pos="-0.0232851 0.0345463 0.0199422" quat="0.897448 0.380406 0.204226 0.0903877" mesh="magnet" material="magnet_material"/>
             <!-- Part magnet_11 -->
-            <geom type="mesh" class="visual" pos="-0.023093 0 -0.000220061" quat="0.999955 -9.49102e-16 -0.00952892 -7.21645e-16" mesh="magnet" material="magnet_material"/>
-            <!-- Part injection_small_lens -->
-            <geom type="mesh" class="visual" pos="-0.0347805 -0.0602959 0.0362659" quat="0.836598 0.228413 0.126564 -0.481574" mesh="injection_small_lens" material="injection_small_lens_material"/>
-            <!-- Part small_lens_30mm -->
-            <geom type="mesh" class="visual" pos="-0.0346078 -0.0602096 0.0363179" quat="0.430052 0.753076 -0.25103 -0.430018" mesh="small_lens_30mm" material="small_lens_30mm_material"/>
-            <!-- Part large_lens_42mm -->
-            <geom type="mesh" class="visual" pos="-0.0656467 -0.00572759 0.0678223" quat="0.430052 0.753076 -0.25103 -0.430018" mesh="large_lens_42mm" material="large_lens_42mm_material"/>
-            <!-- Part injection_big_lens -->
-            <geom type="mesh" class="visual" pos="-0.0680648 -0.00693671 0.0670935" quat="0.836598 0.228413 0.126564 -0.481574" mesh="injection_big_lens" material="injection_big_lens_material"/>
-            <!-- Part reachy_mini_head -->
-            <geom type="mesh" class="visual" pos="-0.0121528 -0.0139797 0.0635154" quat="0.836598 0.228413 0.126564 -0.481574" mesh="reachy_mini_head" material="reachy_mini_head_material"/>
+            <geom type="mesh" class="visual" pos="-0.023093 1.38778e-17 -0.000220061" quat="0.999955 -8.12988e-16 -0.00952892 -3.05311e-16" mesh="magnet" material="magnet_material"/>
             <!-- Frame closing_1_1 -->
             <site group="3" name="closing_1_1" pos="0.0114504 0.0172732 0.0101912" quat="0.893187 0.389601 -0.207238 -0.0864916"/>
             <!-- Frame closing_2_2 -->
@@ -232,54 +236,78 @@
             <!-- Frame closing_4_2 -->
             <site group="3" name="closing_4_2" pos="-0.0347355 0.0172732 0.00975103" quat="0.198717 0.0902002 -0.895121 -0.388759"/>
             <!-- Frame closing_5_1 -->
-            <site group="3" name="closing_5_1" pos="-0.023093 0 -0.000220061" quat="0.999955 -9.49102e-16 -0.00952892 -7.21645e-16"/>
+            <site group="3" name="closing_5_1" pos="-0.023093 1.38778e-17 -0.000220061" quat="0.999955 -8.12988e-16 -0.00952892 -3.05311e-16"/>
             <!-- Frame head -->
             <site group="3" name="head" pos="-0.0117248 0.0122324 0.0186073" quat="0.25104 0.0720184 0.251006 -0.932088"/>
+            <!-- Link pp00672_antenna_mic_a1 -->
+            <body name="pp00672_antenna_mic_a1" pos="0.035159 -0.0622228 0.0749453" quat="0.0278688 -0.679335 0.409317 0.60843">
+              <!-- Joint from platform to pp00672_antenna_mic_a1 -->
+              <joint axis="0 0 1" name="left_antenna" type="hinge" class="chosen_actuator"/>
+              <inertial pos="-0.0118437 0.0164131 -0.0243813" mass="0.0202419" fullinertia="3.22006e-05 2.29008e-05 3.09616e-05 1.40013e-05 -1.0829e-05 1.50069e-05"/>
+              <!-- Part pp00673_antenna_sphere_a1 -->
+              <geom type="mesh" class="visual" pos="-0.0798952 0.110719 -0.0971912" quat="0.431611 -0.398332 -0.778647 -0.220799" mesh="pp00673_antenna_sphere_a1" material="pp00673_antenna_sphere_a1_material"/>
+              <!-- Part pp00672_antenna_mic_a1 -->
+              <geom type="mesh" class="visual" pos="-0.0780354 0.108142 -0.0952052" quat="0.431611 -0.398332 -0.778647 -0.220799" mesh="pp00672_antenna_mic_a1" material="pp00672_antenna_mic_a1_material"/>
+            </body>
+            <!-- Link pp00672_antenna_mic_a1_2 -->
+            <body name="pp00672_antenna_mic_a1_2" pos="-0.0202961 0.0200517 0.122439" quat="0.264298 0.911323 -0.313789 0.0342661">
+              <!-- Joint from platform to pp00672_antenna_mic_a1_2 -->
+              <joint axis="0 0 1" name="right_antenna" type="hinge" class="chosen_actuator"/>
+              <inertial pos="0.0115338 0.0166324 -0.0243813" mass="0.0202419" fullinertia="3.27223e-05 2.2379e-05 3.09616e-05 -1.38171e-05 1.05456e-05 1.52073e-05"/>
+              <!-- Part pp00672_antenna_mic_a1_2 -->
+              <geom type="mesh" class="visual" pos="0.0759936 0.109586 -0.0952052" quat="0.224836 -0.774878 -0.405616 -0.429522" mesh="pp00672_antenna_mic_a1" material="pp00672_antenna_mic_a1_material"/>
+              <!-- Part pp00673_antenna_sphere_a1_2 -->
+              <geom type="mesh" class="visual" pos="0.0778047 0.112198 -0.0971912" quat="0.224836 -0.774878 -0.405616 -0.429522" mesh="pp00673_antenna_sphere_a1" material="pp00673_antenna_sphere_a1_material"/>
+            </body>
           </body>
         </body>
       </body>
       <!-- Link right_arm_3 -->
       <body name="right_arm_3" pos="-0.0386913 0.0320172 0.0434252" quat="0.0394587 -0.352688 0.71515 -0.602175">
-        <!-- Joint from simplified_xl330 to right_arm_3 -->
+        <!-- Joint from base_bot to right_arm_3 -->
         <joint axis="0 0 1" name="6" type="hinge" class="chosen_actuator"/>
         <inertial pos="0.0267634 0.0046049 0.00174754" mass="0.00541129" fullinertia="1.47788e-07 1.39835e-06 1.40141e-06 -1.70926e-07 -1.92071e-07 -2.15256e-08"/>
         <!-- Part magnet_12 -->
-        <geom type="mesh" class="visual" pos="0.038 -7.97973e-17 0.00384958" quat="0.5 -0.5 0.5 0.5" mesh="magnet" material="magnet_material"/>
+        <geom type="mesh" class="visual" pos="0.038 -6.93889e-17 0.00384958" quat="0.5 -0.5 0.5 0.5" mesh="magnet" material="magnet_material"/>
         <!-- Part right_arm_3 -->
-        <geom type="mesh" class="visual" pos="-0.0175 -0.0120291 0.0464647" quat="0.603466 0.797389 0 9.03577e-18" mesh="right_arm" material="right_arm_material"/>
+        <geom type="mesh" class="visual" pos="-0.0175 -0.0120291 0.0464647" quat="0.603466 0.797389 -1.11022e-16 3.60928e-17" mesh="right_arm" material="right_arm_material"/>
         <!-- Link 10mm_ball_5 -->
-        <body name="10mm_ball_5" pos="0.038 -7.63278e-17 0.00384958" quat="0.597446 0.642237 0.33856 -0.34054">
+        <body name="10mm_ball_5" pos="0.038 -3.19189e-16 0.00384958" quat="0.597446 0.642237 0.33856 -0.34054">
           <!-- Joint from right_arm_3 to 10mm_ball_5 -->
           <joint axis="0 0 1" name="passive_2" type="ball" class="chosen_actuator"/>
-          <inertial pos="2.26806e-16 -8.29583e-18 0.0498006" mass="0.0100726" fullinertia="2.05497e-05 2.05497e-05 9.05619e-08 -9.59961e-21 -9.0591e-20 -6.04758e-21"/>
+          <inertial pos="2.72071e-16 2.11526e-18 0.0498006" mass="0.0100726" fullinertia="2.05497e-05 2.05497e-05 9.05619e-08 -9.70049e-21 -9.58497e-20 -7.24941e-21"/>
           <!-- Part rod_6 -->
           <geom type="mesh" class="visual" pos="0.0444954 -0.0426152 0.0352861" quat="0.0310632 -0.224394 0.133559 0.964803" mesh="rod" material="rod_material"/>
           <!-- Part 10mm_ball_11 -->
-          <geom type="mesh" class="visual" pos="4.71845e-16 -1.04083e-17 0.0996012" quat="1.38778e-15 7.47889e-16 2.44249e-15 -1" mesh="10mm_ball" material="10mm_ball_material"/>
+          <geom type="mesh" class="visual" pos="5.27356e-16 3.46945e-18 0.0996012" quat="1.36002e-15 6.82997e-16 2.44249e-15 -1" mesh="10mm_ball" material="10mm_ball_material"/>
           <!-- Part 10mm_ball_12 -->
-          <geom type="mesh" class="visual" pos="-1.38778e-17 -3.46945e-18 0" quat="0 1 0 0" mesh="10mm_ball" material="10mm_ball_material"/>
+          <geom type="mesh" class="visual" pos="1.38778e-17 3.46945e-18 0" quat="0 1 0 0" mesh="10mm_ball" material="10mm_ball_material"/>
           <!-- Frame closing_1_2 -->
-          <site group="3" name="closing_1_2" pos="4.71845e-16 -1.04083e-17 0.0996012" quat="1 2.53652e-15 -8.88178e-16 1.16573e-15"/>
+          <site group="3" name="closing_1_2" pos="5.27356e-16 3.46945e-18 0.0996012" quat="1 2.52264e-15 -3.33067e-16 1.36002e-15"/>
         </body>
       </body>
     </body>
   </worldbody>
   <asset>
-    <mesh file="right_arm.stl"/>
-    <mesh file="platform.stl"/>
-    <mesh file="reachy_mini_head.stl"/>
-    <mesh file="10mm_ball.stl"/>
-    <mesh file="base_top.stl"/>
-    <mesh file="base_side.stl"/>
-    <mesh file="injection_small_lens.stl"/>
+    <mesh file="pp00673_antenna_sphere_a1.stl"/>
     <mesh file="small_lens_30mm.stl"/>
-    <mesh file="magnet.stl"/>
+    <mesh file="base_side.stl"/>
     <mesh file="large_lens_42mm.stl"/>
-    <mesh file="left_arm.stl"/>
-    <mesh file="base_bot.stl"/>
+    <mesh file="mp00664_back_sheet_a3.stl"/>
     <mesh file="simplified_xl330.stl"/>
+    <mesh file="magnet.stl"/>
+    <mesh file="mp00663_neck_a2.stl"/>
     <mesh file="rod.stl"/>
+    <mesh file="injection_small_lens.stl"/>
     <mesh file="injection_big_lens.stl"/>
+    <mesh file="platform.stl"/>
+    <mesh file="base_bot.stl"/>
+    <mesh file="right_arm.stl"/>
+    <mesh file="pp00670_front_shell_a2.stl"/>
+    <mesh file="base_top.stl"/>
+    <mesh file="left_arm.stl"/>
+    <mesh file="pp00672_antenna_mic_a1.stl"/>
+    <mesh file="10mm_ball.stl"/>
     <material name="base_side_material" rgba="1 1 1 1"/>
     <material name="base_top_material" rgba="0.615686 0.811765 0.929412 1"/>
     <material name="base_bot_material" rgba="0.85098 0.756863 0.866667 1"/>
@@ -289,12 +317,16 @@
     <material name="rod_material" rgba="0.262745 0.282353 0.301961 1"/>
     <material name="10mm_ball_material" rgba="0.713725 0.760784 0.8 1"/>
     <material name="right_arm_material" rgba="1 1 1 1"/>
-    <material name="platform_material" rgba="1 1 1 1"/>
-    <material name="injection_small_lens_material" rgba="0.25098 0.25098 0.25098 1"/>
+    <material name="mp00663_neck_a2_material" rgba="0.701961 0.701961 0.701961 1"/>
     <material name="small_lens_30mm_material" rgba="0.439216 0.47451 0.501961 1"/>
+    <material name="platform_material" rgba="1 1 1 1"/>
+    <material name="pp00670_front_shell_a2_material" rgba="1 1 1 1"/>
+    <material name="mp00664_back_sheet_a3_material" rgba="0.701961 0.701961 0.701961 1"/>
     <material name="large_lens_42mm_material" rgba="0.439216 0.47451 0.501961 1"/>
     <material name="injection_big_lens_material" rgba="0.25098 0.25098 0.25098 1"/>
-    <material name="reachy_mini_head_material" rgba="1 1 1 1"/>
+    <material name="injection_small_lens_material" rgba="0.25098 0.25098 0.25098 1"/>
+    <material name="pp00673_antenna_sphere_a1_material" rgba="0.901961 0.901961 0.901961 1"/>
+    <material name="pp00672_antenna_mic_a1_material" rgba="0.262745 0.282353 0.301961 1"/>
   </asset>
   <actuator>
     <position class="chosen_actuator" name="1" joint="1"/>
@@ -302,6 +334,8 @@
     <position class="chosen_actuator" name="3" joint="3"/>
     <position class="chosen_actuator" name="4" joint="4"/>
     <position class="chosen_actuator" name="5" joint="5"/>
+    <position class="chosen_actuator" name="left_antenna" joint="left_antenna"/>
+    <position class="chosen_actuator" name="right_antenna" joint="right_antenna"/>
     <position class="chosen_actuator" name="6" joint="6"/>
   </actuator>
   <equality>

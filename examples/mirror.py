@@ -2,17 +2,18 @@ import time
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 
-from stewart_little_control.mujoco_client import MujocoClient
+from stewart_little_control import Client
 from sixdrepnet import SixDRepNet
 import cv2 as cv
 
 model = SixDRepNet(gpu_id=-1)
-cap = cv.VideoCapture(4)
+cap = cv.VideoCapture(0)
+# cap = cv.VideoCapture(4)
 
 
 def main():
     # client = MujocoClient(ip="10.0.0.33")
-    client = MujocoClient(ip="localhost")
+    client = Client(ip="localhost")
 
     while True:
         t0 = time.time()

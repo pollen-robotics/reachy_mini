@@ -39,7 +39,7 @@ class PlacoIK:
         self.head_frame.configure("head", "soft", 1.0, 1.0)
 
         self.head_frame.T_world_frame = self.head_starting_pose
-        self.joints_names = ["1", "2", "3", "4", "5", "6"]
+        self.joints_names = ["1", "2", "3", "4", "5", "left_antenna", "right_antenna", "6"]
 
     def ik(self, pose):
         self.head_frame.T_world_frame = pose

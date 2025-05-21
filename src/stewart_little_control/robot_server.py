@@ -43,7 +43,9 @@ class RobotServer:
                                 print("Client disconnected")
                                 break
 
-                            pose = pickle.loads(data)
+                            pose_antennas = pickle.loads(data)
+                            pose = pose_antennas["pose"]
+                            # anennas = pose_antennas["antennas"]
                             if isinstance(pose, np.ndarray) and pose.shape == (4, 4):
                                 with self.pose_lock:
                                     self.current_pose = pose
