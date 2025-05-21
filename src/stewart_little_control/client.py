@@ -13,12 +13,12 @@ class Client:
         self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.client_socket.connect((self.ip, self.port))
 
-    def send_pose(self, pose, antennas=None, offset_zero=False):
+    def send_pose(self, _pose, antennas=None, offset_zero=False):
         """
         offset_zero : True if we consider that the resting position (motor zero) is the zero position of the robot.
                       False if the zero is the world zero
         """
-
+        pose = _pose.copy()
         if offset_zero:
             pose[2, 3] += 0.155
 
