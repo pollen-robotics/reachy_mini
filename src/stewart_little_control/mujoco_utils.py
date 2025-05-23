@@ -26,21 +26,21 @@ def get_joint_qpos(model, data, joint_name):
 
 def get_joints(model, data):
     joints = []
-    for i in range(6):
-        print(i)
-        joints.append(get_joint_qpos(model, data, str(i+1)))
+    joints_names =  ["1", "2", "3", "4", "5", "left_antenna", "right_antenna", "6"]
+    for i in range(8):
+        joints.append(get_joint_qpos(model, data, joints_names[i]))
     return joints
 
 
 
-def get_joints(model, data):
-    """
-    Gets qpos for joints named "1" through "6".
-    Returns a 1D NumPy array.
-    """
-    num_joints_to_get = 6
-    joint_qpos_values = np.empty(num_joints_to_get, dtype=float)
-    for i in range(num_joints_to_get):
-        joint_name = str(i + 1)
-        joint_qpos_values[i] = get_joint_qpos(model, data, joint_name)
-    return joint_qpos_values
+# def get_joints(model, data):
+#     """
+#     Gets qpos for joints named "1" through "6".
+#     Returns a 1D NumPy array.
+#     """
+#     num_joints_to_get = 6
+#     joint_qpos_values = np.empty(num_joints_to_get, dtype=float)
+#     for i in range(num_joints_to_get):
+#         joint_name = str(i + 1)
+#         joint_qpos_values[i] = get_joint_qpos(model, data, joint_name)
+#     return joint_qpos_values

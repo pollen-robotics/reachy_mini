@@ -6,7 +6,7 @@ import mujoco.viewer
 import time
 import os
 from pathlib import Path
-from stewart_little_control.mujoco_utils import get_joint_qpos
+from stewart_little_control.mujoco_utils import get_joint_qpos, get_joints
 import numpy as np
 from threading import Thread, Lock
 
@@ -33,6 +33,9 @@ class MujocoServer:
         self.current_pose = np.eye(4)
         self.current_pose[:3, 3][2] = 0.155
         self.current_antennas = np.zeros(2)
+        self.control_mode = "pose"  # default
+        self.last_received_joints = np.zeros_like(self.data.ctrl)
+
 
         self.pose_lock = Lock()
 
@@ -42,41 +45,57 @@ class MujocoServer:
         # Start the simulation loop
         self.simulation_loop()
 
+    
     def client_handler(self):
         while True:
             print("Waiting for connection on port", self.port)
             try:
                 conn, address = self.server_socket.accept()
                 print(f"Client connected from {address}")
-                with conn:
-                    while True:
-                        try:
-                            data = conn.recv(4096)
-                            if not data:
-                                print("Client disconnected")
-                                break
-
-                            pose_antennas = pickle.loads(data)
-                            pose = pose_antennas["pose"]
-                            antennas = pose_antennas["antennas"]
-                            if isinstance(pose, np.ndarray) and pose.shape == (4, 4):
-                                with self.pose_lock:
-                                    self.current_pose = pose
-                                    if antennas is not None:
-                                        self.current_antennas = antennas
-                            else:
-                                print("Received invalid pose data")
-
-                        except (
-                            ConnectionResetError,
-                            EOFError,
-                            pickle.PickleError,
-                        ) as e:
-                            print(f"Client error: {e}")
-                            break
-
+                Thread(target=self.handle_client, args=(conn,), daemon=True).start()
             except Exception as e:
                 print(f"Server error: {e}")
+
+
+    def handle_client(self, conn):
+        with conn:
+            while True:
+                try:
+                    data = conn.recv(4096)
+                    if not data:
+                        print("Client disconnected")
+                        break
+
+                    message = pickle.loads(data)
+
+                    if message["type"] == "pose":
+                        pose = message["data"]["pose"]
+                        antennas = message["data"].get("antennas", None)
+                        if isinstance(pose, np.ndarray) and pose.shape == (4, 4):
+                            with self.pose_lock:
+                                self.current_pose = pose
+                                if antennas is not None:
+                                    self.current_antennas = antennas
+                                self.control_mode = "pose"
+                        else:
+                            print("Invalid pose format")
+
+                    elif message["type"] == "joints":
+                        joints = message["data"]
+                        if isinstance(joints, (list, np.ndarray)):
+                            with self.pose_lock:
+                                self.last_received_joints = np.array(joints)
+                                self.control_mode = "joints"
+                    elif message["type"] == "get_joints":
+                        # Send back joint positions
+                        print("Sending joint positions")
+                        qpos = get_joints(self.model, self.data)
+                        response = pickle.dumps({"type": "joints", "data": qpos})
+                        conn.sendall(response)
+
+                except (ConnectionResetError, EOFError, pickle.PickleError) as e:
+                    print(f"Client error: {e}")
+                    break
 
     def simulation_loop(self):
         step = 0
@@ -94,11 +113,14 @@ class MujocoServer:
 
                     # IK and apply control
                     try:
-                        angles_rad = self.placo_ik.ik(pose)
-                        self.data.ctrl[:] = angles_rad
-                        self.data.ctrl[5:7] = antennas
+                        if self.control_mode == "pose":
+                            angles_rad = self.placo_ik.ik(pose)
+                            self.data.ctrl[:] = angles_rad
+                            self.data.ctrl[5:7] = antennas
+                        elif self.control_mode == "joints":
+                            self.data.ctrl[:] = self.last_received_joints
                     except Exception as e:
-                        print(f"IK error: {e}")
+                        print(f"Control error: {e}")
 
                 mujoco.mj_step(self.model, self.data)
                 viewer.sync()

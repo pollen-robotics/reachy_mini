@@ -14,16 +14,44 @@ class Client:
         self.client_socket.connect((self.ip, self.port))
 
     def send_pose(self, _pose, antennas=None, offset_zero=False):
-        """
-        offset_zero : True if we consider that the resting position (motor zero) is the zero position of the robot.
-                      False if the zero is the world zero
-        """
         pose = _pose.copy()
         if offset_zero:
             pose[2, 3] += 0.155
 
-        data = pickle.dumps({"pose": pose, "antennas": antennas})
-        self.client_socket.sendall(data)
+        message = {
+            "type": "pose",
+            "data": {
+                "pose": pose,
+                "antennas": antennas
+            }
+        }
+        self.client_socket.sendall(pickle.dumps(message))
+    
+    def get_joint_positions(self):
+        message = {"type": "get_joints"}
+        self.client_socket.sendall(pickle.dumps(message))
+        response = self.client_socket.recv(4096)
+        data = pickle.loads(response)
+        if data["type"] == "joints":
+            # print(data)
+            return data["data"]
+        else:
+            print("Unexpected response from server.")
+            return None
+        
+    def send_joints(self, joints):
+        """
+        Send joint positions to the server.
+
+        Args:
+            joints (np.ndarray or list): Joint positions to send.
+        """
+        message = {
+            "type": "joints",
+            "data": np.array(joints)
+        }
+        self.client_socket.sendall(pickle.dumps(message))
+
 
 
 if __name__ == "__main__":
