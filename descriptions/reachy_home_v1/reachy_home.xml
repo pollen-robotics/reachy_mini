@@ -346,34 +346,34 @@
     </body>
   </worldbody>
   <asset>
-    <mesh file="turning_bowl.stl"/>
-    <mesh file="dc15_a01_case_f_dummy.stl"/>
-    <mesh file="wj_wk00_0123middlecase_56__configuration_simple_axe.stl"/>
-    <mesh file="bottom_body.stl"/>
-    <mesh file="dc15_a01_horn_dummy.stl"/>
-    <mesh file="foot.stl"/>
-    <mesh file="ball.stl"/>
-    <mesh file="wj_wk00_0122topcabinetcase_95__configuration_simple_axe.stl"/>
-    <mesh file="main_plate.stl"/>
     <mesh file="shape.stl"/>
+    <mesh file="bottom_body.stl"/>
+    <mesh file="dc15_a01_case_b_dummy.stl"/>
+    <mesh file="dc15_a01_case_m_dummy.stl"/>
+    <mesh file="head_interface.stl"/>
+    <mesh file="ball.stl"/>
+    <mesh file="rod.stl"/>
+    <mesh file="top_body.stl"/>
+    <mesh file="turning_bowl.stl"/>
+    <mesh file="test_antenna_body.stl"/>
+    <mesh file="head_shell_front.stl"/>
+    <mesh file="wj_wk00_0122topcabinetcase_95__configuration_simple_axe.stl"/>
+    <mesh file="drive_palonier__configuration_simple_axe.stl"/>
+    <mesh file="head_head_back.stl"/>
+    <mesh file="dc15_a01_horn_dummy.stl"/>
+    <mesh file="main_plate.stl"/>
+    <mesh file="foot.stl"/>
     <mesh file="mid_plate.stl"/>
     <mesh file="side_plate.stl"/>
-    <mesh file="rod.stl"/>
-    <mesh file="small_lens.stl"/>
-    <mesh file="head_shell_front.stl"/>
-    <mesh file="top_body.stl"/>
-    <mesh file="eye_support.stl"/>
-    <mesh file="wj_wk00_0124bottomcase_45__configuration_simple_axe.stl"/>
-    <mesh file="drive_palonier__configuration_simple_axe.stl"/>
-    <mesh file="plateform.stl"/>
-    <mesh file="test_antenna.stl"/>
-    <mesh file="head_interface.stl"/>
-    <mesh file="dc15_a01_case_b_dummy.stl"/>
-    <mesh file="test_antenna_body.stl"/>
-    <mesh file="arm.stl"/>
-    <mesh file="dc15_a01_case_m_dummy.stl"/>
     <mesh file="big_lens.stl"/>
-    <mesh file="head_head_back.stl"/>
+    <mesh file="arm.stl"/>
+    <mesh file="small_lens.stl"/>
+    <mesh file="test_antenna.stl"/>
+    <mesh file="dc15_a01_case_f_dummy.stl"/>
+    <mesh file="wj_wk00_0123middlecase_56__configuration_simple_axe.stl"/>
+    <mesh file="wj_wk00_0124bottomcase_45__configuration_simple_axe.stl"/>
+    <mesh file="plateform.stl"/>
+    <mesh file="eye_support.stl"/>
     <material name="turning_bowl_material" rgba="1 1 1 1"/>
     <material name="dc15_a01_case_m_dummy_material" rgba="0.262745 0.282353 0.301961 1"/>
     <material name="main_plate_material" rgba="0.196078 0.196078 0.196078 1"/>
@@ -395,8 +395,8 @@
     <material name="shape_material" rgba="0.901961 0.901961 0.901961 1"/>
     <material name="head_shell_front_material" rgba="1 1 1 1"/>
     <material name="head_head_back_material" rgba="1 1 1 1"/>
-    <material name="big_lens_material" rgba="0.811765 0.858824 0.898039 1"/>
-    <material name="small_lens_material" rgba="0.811765 0.858824 0.898039 1"/>
+    <material name="big_lens_material" rgba="0.439216 0.47451 0.501961 1"/>
+    <material name="small_lens_material" rgba="0.439216 0.47451 0.501961 1"/>
     <material name="head_interface_material" rgba="0.972549 0.529412 0.00392157 1"/>
     <material name="eye_support_material" rgba="0.262745 0.282353 0.301961 1"/>
     <material name="plateform_material" rgba="1 1 1 1"/>
