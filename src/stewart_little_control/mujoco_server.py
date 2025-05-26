@@ -31,7 +31,7 @@ class MujocoServer:
 
         self.placo_ik = PlacoIK(f"{ROOT_PATH}/descriptions/stewart_little_magnet/")
         self.current_pose = np.eye(4)
-        self.current_pose[:3, 3][2] = 0.155
+        self.current_pose[:3, 3][2] = 0.177
         self.current_antennas = np.zeros(2)
 
         self.pose_lock = Lock()

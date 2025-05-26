@@ -1611,7 +1611,7 @@
         <mesh filename="package://assets/big_lens.stl"/>
       </geometry>
       <material name="big_lens_material">
-        <color rgba="0.811765 0.858824 0.898039 1.0"/>
+        <color rgba="0.439216 0.47451 0.501961 1.0"/>
       </material>
     </visual>
     <collision>
@@ -1643,13 +1643,29 @@
         <mesh filename="package://assets/small_lens.stl"/>
       </geometry>
       <material name="small_lens_material">
-        <color rgba="0.811765 0.858824 0.898039 1.0"/>
+        <color rgba="0.439216 0.47451 0.501961 1.0"/>
       </material>
     </visual>
     <collision>
       <origin xyz="0.0381978 -0.0400065 -0.0316926" rpy="-2.44262 1.34723 -2.88418"/>
       <geometry>
         <mesh filename="package://assets/small_lens.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part uc_a37_rev_a_step -->
+    <visual>
+      <origin xyz="0.0349328 -0.0262995 -0.0217693" rpy="-1.42553 -0.170541 2.68759"/>
+      <geometry>
+        <mesh filename="package://assets/uc_a37_rev_a_step.stl"/>
+      </geometry>
+      <material name="uc_a37_rev_a_step_material">
+        <color rgba="0.25098 0.25098 0.25098 1.0"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0.0349328 -0.0262995 -0.0217693" rpy="-1.42553 -0.170541 2.68759"/>
+      <geometry>
+        <mesh filename="package://assets/uc_a37_rev_a_step.stl"/>
       </geometry>
     </collision>
     <!-- Part ball_8 -->
@@ -1854,6 +1870,21 @@
     <origin xyz="0.00603053 0.0104995 0.00473221" rpy="2.95835 0.372577 -2.09215"/>
     <parent link="plateform"/>
     <child link="closing_5_2"/>
+    <axis xyz="0 0 0"/>
+  </joint>
+  <!-- Frame head (dummy link + fixed joint) -->
+  <link name="head">
+    <origin xyz="0 0 0" rpy="0 -0 0"/>
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="1e-9"/>
+      <inertia ixx="0" ixy="0" ixz="0" iyy="0" iyz="0" izz="0"/>
+    </inertial>
+  </link>
+  <joint name="head_frame" type="fixed">
+    <origin xyz="0.00367542 0.0183217 -0.0274783" rpy="-1.74312 -0.143141 -1.99997"/>
+    <parent link="plateform"/>
+    <child link="head"/>
     <axis xyz="0 0 0"/>
   </joint>
   <!-- Link test_antenna_body -->

@@ -293,6 +293,8 @@
               <geom type="mesh" class="visual" pos="0.00603053 0.0104995 0.00473221" quat="0.235842 0.039336 -0.201378 0.949883" mesh="ball" material="ball_material"/>
               <!-- Part small_lens -->
               <geom type="mesh" class="visual" pos="0.0381978 -0.0400065 -0.0316926" quat="0.615608 0.117587 0.755666 -0.190181" mesh="small_lens" material="small_lens_material"/>
+              <!-- Part uc_a37_rev_a_step -->
+              <geom type="mesh" class="visual" pos="0.0349328 -0.0262995 -0.0217693" quat="0.223913 -0.0838549 -0.64934 0.721934" mesh="uc_a37_rev_a_step" material="uc_a37_rev_a_step_material"/>
               <!-- Part ball_8 -->
               <geom type="mesh" class="visual" pos="0.0157039 0.0472846 -0.0384653" quat="0.223913 -0.0838549 -0.64934 0.721934" mesh="ball" material="ball_material"/>
               <!-- Part ball_9 -->
@@ -319,6 +321,8 @@
               <site group="3" name="closing_4_2" pos="0.0184911 0.0480184 -0.0257888" quat="0.352154 0.518447 0.399858 -0.668815"/>
               <!-- Frame closing_5_2 -->
               <site group="3" name="closing_5_2" pos="0.00603053 0.0104995 0.00473221" quat="0.114581 -0.504904 0.838434 0.17021"/>
+              <!-- Frame head -->
+              <site group="3" name="head" pos="0.00367542 0.0183217 -0.0274783" quat="0.300822 -0.45119 0.617483 -0.569779"/>
               <!-- Link test_antenna_body -->
               <body name="test_antenna_body" pos="0.0786202 0.0183429 -0.0976865" quat="0.408879 0.340055 0.269409 -0.80287">
                 <!-- Joint from plateform to test_antenna_body -->
@@ -346,34 +350,35 @@
     </body>
   </worldbody>
   <asset>
-    <mesh file="shape.stl"/>
-    <mesh file="bottom_body.stl"/>
-    <mesh file="dc15_a01_case_b_dummy.stl"/>
-    <mesh file="dc15_a01_case_m_dummy.stl"/>
-    <mesh file="head_interface.stl"/>
-    <mesh file="ball.stl"/>
-    <mesh file="rod.stl"/>
-    <mesh file="top_body.stl"/>
-    <mesh file="turning_bowl.stl"/>
     <mesh file="test_antenna_body.stl"/>
-    <mesh file="head_shell_front.stl"/>
-    <mesh file="wj_wk00_0122topcabinetcase_95__configuration_simple_axe.stl"/>
-    <mesh file="drive_palonier__configuration_simple_axe.stl"/>
-    <mesh file="head_head_back.stl"/>
-    <mesh file="dc15_a01_horn_dummy.stl"/>
-    <mesh file="main_plate.stl"/>
+    <mesh file="turning_bowl.stl"/>
     <mesh file="foot.stl"/>
-    <mesh file="mid_plate.stl"/>
     <mesh file="side_plate.stl"/>
-    <mesh file="big_lens.stl"/>
-    <mesh file="arm.stl"/>
-    <mesh file="small_lens.stl"/>
-    <mesh file="test_antenna.stl"/>
-    <mesh file="dc15_a01_case_f_dummy.stl"/>
+    <mesh file="bottom_body.stl"/>
     <mesh file="wj_wk00_0123middlecase_56__configuration_simple_axe.stl"/>
-    <mesh file="wj_wk00_0124bottomcase_45__configuration_simple_axe.stl"/>
     <mesh file="plateform.stl"/>
+    <mesh file="dc15_a01_case_b_dummy.stl"/>
+    <mesh file="uc_a37_rev_a_step.stl"/>
     <mesh file="eye_support.stl"/>
+    <mesh file="head_interface.stl"/>
+    <mesh file="test_antenna.stl"/>
+    <mesh file="drive_palonier__configuration_simple_axe.stl"/>
+    <mesh file="mid_plate.stl"/>
+    <mesh file="main_plate.stl"/>
+    <mesh file="small_lens.stl"/>
+    <mesh file="wj_wk00_0122topcabinetcase_95__configuration_simple_axe.stl"/>
+    <mesh file="top_body.stl"/>
+    <mesh file="dc15_a01_case_f_dummy.stl"/>
+    <mesh file="ball.stl"/>
+    <mesh file="head_head_back.stl"/>
+    <mesh file="shape.stl"/>
+    <mesh file="head_shell_front.stl"/>
+    <mesh file="wj_wk00_0124bottomcase_45__configuration_simple_axe.stl"/>
+    <mesh file="arm.stl"/>
+    <mesh file="dc15_a01_horn_dummy.stl"/>
+    <mesh file="big_lens.stl"/>
+    <mesh file="dc15_a01_case_m_dummy.stl"/>
+    <mesh file="rod.stl"/>
     <material name="turning_bowl_material" rgba="1 1 1 1"/>
     <material name="dc15_a01_case_m_dummy_material" rgba="0.262745 0.282353 0.301961 1"/>
     <material name="main_plate_material" rgba="0.196078 0.196078 0.196078 1"/>
@@ -397,6 +402,7 @@
     <material name="head_head_back_material" rgba="1 1 1 1"/>
     <material name="big_lens_material" rgba="0.439216 0.47451 0.501961 1"/>
     <material name="small_lens_material" rgba="0.439216 0.47451 0.501961 1"/>
+    <material name="uc_a37_rev_a_step_material" rgba="0.25098 0.25098 0.25098 1"/>
     <material name="head_interface_material" rgba="0.972549 0.529412 0.00392157 1"/>
     <material name="eye_support_material" rgba="0.262745 0.282353 0.301961 1"/>
     <material name="plateform_material" rgba="1 1 1 1"/>

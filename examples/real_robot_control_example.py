@@ -9,7 +9,7 @@ s = time.time()
 while True:
     t = time.time() - s
     pose = np.eye(4)
-    pose[:3, 3][2] = 0.155
+    pose[:3, 3][2] = 0.177
     # pose[:3, 3][0] += 0.015 * np.sin(2 * np.pi * 1.0 * t)
     # pose[:3, 3][1] += 0.015 * np.sin(2 * np.pi * 1.0 * t)
     # pose[:3, 3][2] += 0.015 * np.sin(2 * np.pi * 1.0 * t)

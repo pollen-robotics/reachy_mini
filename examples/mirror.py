@@ -42,7 +42,7 @@ def main():
         pose[:3, :3] = R.from_euler(
             "xyz", [roll, -pitch, -yaw], degrees=True
         ).as_matrix()
-        pose[:3, 3][2] = 0.155
+        pose[:3, 3][2] = 0.177
 
         print(f"roll: {roll}, pitch: {pitch}, yaw: {yaw}")
         # # pose[:3, 3][2] += 0.01 * np.sin(2 * np.pi * 0.5 * time.time())

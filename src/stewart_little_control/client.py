@@ -20,7 +20,7 @@ class Client:
         """
         pose = _pose.copy()
         if offset_zero:
-            pose[2, 3] += 0.155
+            pose[2, 3] += 0.177
 
         data = pickle.dumps({"pose": pose, "antennas": antennas})
         self.client_socket.sendall(data)

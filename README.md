@@ -30,7 +30,7 @@ mujoco-server
 To run the robot server (runs on the real robot):
 
 ```bash
-robot-server
+real-motors-server
 ```
 
 To use the client :

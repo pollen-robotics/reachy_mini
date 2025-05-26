@@ -48,7 +48,7 @@ if __name__ == "__main__":
     while True:
         t = time.time() - s
         pose = np.eye(4)
-        pose[:3, 3][2] = 0.155
+        pose[:3, 3][2] = 0.177
         # euler_rot = [
         #     0,
         #     0,

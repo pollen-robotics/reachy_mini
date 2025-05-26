@@ -23,9 +23,9 @@ class RealMotorsServer:
         self.server_socket.bind((self.host, self.port))
         self.server_socket.listen(1)
 
-        self.placo_ik = PlacoIK(f"{ROOT_PATH}/descriptions/stewart_little_magnet/")
+        self.placo_ik = PlacoIK(f"{ROOT_PATH}/descriptions/reachy_home_v1/")
         self.current_pose = np.eye(4)
-        self.current_pose[:3, 3][2] = 0.155
+        self.current_pose[:3, 3][2] = 0.177
         self.current_antennas = np.zeros(2)
 
         self.pose_lock = Lock()
@@ -84,17 +84,17 @@ class RealMotorsServer:
                 with self.pose_lock:
                     pose = self.current_pose.copy()
                     antennas = self.current_antennas.copy()
-
                 try:
                     angles_rad = self.placo_ik.ik(pose)
-                    # Removes antennas
-                    angles_rad = angles_rad[:5] + angles_rad[-1:]
+                    # Removes antennas and all yaw
+                    angles_rad = angles_rad[:-2][1:]
+                    yaw_angles_rad = angles_rad[0]
                     c.set_stewart_platform_position(angles_rad)
+                    c.set_body_rotation(yaw_angles_rad)
                 except Exception as e:
                     print(f"IK error: {e}")
 
                 c.set_antennas_positions(antennas)
-                # c.set_body_rotation
 
                 took = time.time() - start_t
                 time.sleep(max(0, period - took))

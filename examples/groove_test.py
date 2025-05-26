@@ -86,7 +86,7 @@ def run_oscillation_test_experiment(model, data, viewer, placo_ik,
         if sim_steps % CONTROL_DECIMATION == 0:
             pose_params = {"position": base_pos.copy(), "euler_angles": base_ori.copy()}
             osc_val = np.sin(2 * np.pi * freq_hz * current_motion_time)
-            
+
             if dof_to_test == "X": pose_params["position"][0] += amplitude_pos_x * osc_val
             elif dof_to_test == "Y": pose_params["position"][1] += amplitude_pos_y * osc_val
             elif dof_to_test == "Z": pose_params["position"][2] += amplitude_pos_z * osc_val
@@ -121,7 +121,7 @@ def run_single_dance_move(model, data, viewer, placo_ik, move_name, duration_s, 
         return False # Indicate failure
 
     print(f"\n--- Dancing: {move_name} ({duration_s:.1f}s @ {bpm} BPM) ---")
-    
+
     mujoco.mj_resetData(model, data) # Reset for each dance move segment
     neutral_matrix = get_homogeneous_matrix_from_euler(position=NEUTRAL_POSITION, euler_angles=NEUTRAL_EULER_ANGLES)
     try:
@@ -132,7 +132,7 @@ def run_single_dance_move(model, data, viewer, placo_ik, move_name, duration_s, 
 
     sim_steps = 0
     dance_start_wall_time = time.time()
-    
+
     move_function = AVAILABLE_DANCE_MOVES[move_name]
     move_params_template = get_move_parameters(move_name)
     scaled_move_params = {k: v * amplitude_scale for k, v in move_params_template.items() if isinstance(v, (int, float))}
@@ -168,11 +168,11 @@ def run_single_dance_move(model, data, viewer, placo_ik, move_name, duration_s, 
         elif viewer is None: # Headless dance mode
              pass
         else: # Viewer closed
-            running = False 
+            running = False
 
         elapsed_loop_time = time.time() - loop_start_time
         time.sleep(max(0, SIMULATION_TIMESTEP - elapsed_loop_time))
-    
+
     print(f"Finished dancing: {move_name}")
     return True # Indicate success
 
@@ -260,7 +260,7 @@ def main(args):
             if args.mode == "test_limits":
                 print("Viewer required for test_limits mode visual feedback. Exiting if viewer failed.")
                 return # test_limits really benefits from viewer for observation
-    
+
     if args.mode == "test_limits":
         if not viewer and not args.headless: # Viewer failed, but headless not requested
             print("Viewer launch failed and test_limits mode selected. This mode is best with a viewer.")
@@ -271,7 +271,7 @@ def main(args):
         all_metrics = {}
         for dof in dofs_to_test:
             if viewer and not viewer.is_running(): print("Viewer closed, exiting test_limits."); break
-            
+
             time_vec, cmd_q, act_q = run_oscillation_test_experiment(
                 model, data, viewer, placo_ik, dof, NEUTRAL_POSITION, NEUTRAL_EULER_ANGLES,
                 TEST_MOTION_AMPLITUDE_X, TEST_MOTION_AMPLITUDE_Y, TEST_MOTION_AMPLITUDE_Z, TEST_MOTION_AMPLITUDE_ORI,

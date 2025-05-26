@@ -37,22 +37,23 @@ class PlacoFK:
         self.head_joints_task.configure("joints", "soft", 1.0)
 
         # self.head_starting_pose = np.eye(4)
-        # self.head_starting_pose[:3, 3][2] = 0.155
+        # self.head_starting_pose[:3, 3][2] = 0.177
         # self.head_frame = self.solver.add_frame_task("head", self.head_starting_pose)
         # self.head_frame.configure("head", "soft", 1.0, 1.0)
 
         # self.head_frame.T_world_frame = self.head_starting_pose
-        self.joints_names = ["1", "2", "3", "4", "5", "6"]
+        self.joints_names = ["all_yaw", "1", "2", "3", "4", "5", "6", "left_antenna", "right_antenna"]
 
     def fk(self, joints_angles):
         self.head_joints_task.set_joints(
             {
-                "1": joints_angles[0],
-                "2": joints_angles[1],
-                "3": joints_angles[2],
-                "4": joints_angles[3],
-                "5": joints_angles[4],
-                "6": joints_angles[5],
+                "all_yaw": joints_angles[0],
+                "1": joints_angles[1],
+                "2": joints_angles[2],
+                "3": joints_angles[3],
+                "4": joints_angles[4],
+                "5": joints_angles[5],
+                "6": joints_angles[6],
             }
         )
         self.solver.solve(True)
@@ -65,5 +66,5 @@ if __name__ == "__main__":
     import os
     from pathlib import Path
     ROOT_PATH = Path(os.path.dirname(os.path.abspath(__file__))).parent.parent
-    placo_fk = PlacoFK(f"{ROOT_PATH}/descriptions/stewart_little_magnet/")
-    print(np.around(placo_fk.fk([0, 0, 0, 0, 0, 0]), 3))
+    placo_fk = PlacoFK(f"{ROOT_PATH}/descriptions/reachy_home_v1/")
+    print(np.around(placo_fk.fk([0, 0, 0, 0, 0, 0, 0]), 3))

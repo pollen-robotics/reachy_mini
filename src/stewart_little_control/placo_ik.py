@@ -34,12 +34,12 @@ class PlacoIK:
         closing_task_5.configure("closing_5", "hard", 1.0)
 
         self.head_starting_pose = np.eye(4)
-        self.head_starting_pose[:3, 3][2] = 0.155
+        self.head_starting_pose[:3, 3][2] = 0.177
         self.head_frame = self.solver.add_frame_task("head", self.head_starting_pose)
         self.head_frame.configure("head", "soft", 1.0, 1.0)
 
         self.head_frame.T_world_frame = self.head_starting_pose
-        self.joints_names = ["1", "2", "3", "4", "5", "left_antenna", "right_antenna", "6"]
+        self.joints_names = ["all_yaw", "1", "2", "3", "4", "5", "6", "left_antenna", "right_antenna"]
 
     def ik(self, pose):
         self.head_frame.T_world_frame = pose

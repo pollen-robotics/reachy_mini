@@ -40,7 +40,7 @@ closing_task_5 = solver.add_relative_position_task(
 closing_task_5.configure("closing_5", "hard", 1.0)
 
 head_starting_pose = np.eye(4)
-head_starting_pose[:3, 3][2] = 0.155
+head_starting_pose[:3, 3][2] = 0.177
 head_frame = solver.add_frame_task("head", head_starting_pose)
 head_frame.configure("head", "soft", 1.0, 1.0)
 
