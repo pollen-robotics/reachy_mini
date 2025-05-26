@@ -1,0 +1,13 @@
+{
+    "configuration": "default",
+    "documentId": "e305b26a84339af20c593973",
+    "documentMicroversion": "cc8fecade80c805ff7695feb",
+    "elementId": "63ac215c84389096e60ba3ce",
+    "fullConfiguration": "default",
+    "id": "Mi8EcXTjQgpa5+Nig",
+    "isStandardContent": false,
+    "name": "test_antenna_body <2>",
+    "partId": "RFCD",
+    "suppressed": false,
+    "type": "Part"
+}
