@@ -23,13 +23,13 @@ class MujocoServer:
         self.server_socket.listen(1)
 
         self.model = mujoco.MjModel.from_xml_path(
-            f"{ROOT_PATH}/descriptions/stewart_little_magnet/scene.xml"
+            f"{ROOT_PATH}/descriptions/reachy_home_v1/scene.xml"
         )
         self.data = mujoco.MjData(self.model)
         self.model.opt.timestep = 0.002  # s, simulation timestep, 500hz
         self.decimation = 10  # -> 50hz control loop
 
-        self.placo_ik = PlacoIK(f"{ROOT_PATH}/descriptions/stewart_little_magnet/")
+        self.placo_ik = PlacoIK(f"{ROOT_PATH}/descriptions/reachy_home_v1/")
         self.current_pose = np.eye(4)
         self.current_pose[:3, 3][2] = 0.177
         self.current_antennas = np.zeros(2)
@@ -90,13 +90,11 @@ class MujocoServer:
                 if step % self.decimation == 0:
                     with self.pose_lock:
                         pose = self.current_pose.copy()
-                        antennas = self.current_antennas.copy()
 
                     # IK and apply control
                     try:
                         angles_rad = self.placo_ik.ik(pose)
                         self.data.ctrl[:] = angles_rad
-                        self.data.ctrl[5:7] = antennas
                     except Exception as e:
                         print(f"IK error: {e}")
 
