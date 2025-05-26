@@ -22,8 +22,8 @@ DEFAULT_DANCE_GLOBAL_AMPLITUDE_SCALE = 1.0
 
 # --- Static Configuration ---
 ROOT_PATH = Path(os.path.dirname(os.path.abspath(__file__))).parent
-MODEL_XML_PATH = str(ROOT_PATH / "descriptions" / "stewart_little_magnet" / "scene.xml")
-PLACO_IK_DESCR_PATH = str(ROOT_PATH / "descriptions" / "stewart_little_magnet" / "")
+MODEL_XML_PATH = str(ROOT_PATH / "descriptions" / "reachy_home_v1" / "scene.xml")
+PLACO_IK_DESCR_PATH = str(ROOT_PATH / "descriptions" / "reachy_home_v1" / "")
 OUTPUT_DIR = Path("./experiment_results") # For test_limits mode
 OUTPUT_DIR.mkdir(exist_ok=True)
 
@@ -39,7 +39,7 @@ TEST_MOTION_AMPLITUDE_ORI = np.deg2rad(30)
 TEST_MOTION_FREQUENCY_HZ = 0.5 # Static frequency for test limits
 
 # Common Config
-NEUTRAL_POSITION = np.array([0.0, 0.0, 0.155 - 0.0075])
+NEUTRAL_POSITION = np.array([0.0, 0.0, 0.177 - 0.0075])
 NEUTRAL_EULER_ANGLES = np.array([0.0, 0.0, 0.0])
 ACTUATED_JOINT_NAMES = ["1", "2", "3", "4", "5", "6"]
 

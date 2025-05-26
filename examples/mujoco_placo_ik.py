@@ -37,10 +37,10 @@ while True:
         # Control here
 
         pose = init_pose.copy()
-        # pose[:3, 3][0] += 0.01 * np.sin(2 * np.pi * 0.5 * t)
+        pose[:3, 3][2] += 0.02 * np.sin(2 * np.pi * 0.5 * t)
         euler_rot = [
             0,
-            0,
+            0.2 * np.sin(2 * np.pi * 0.25 * t + np.pi),
             1.0 * np.sin(2 * np.pi * 0.5 * t + np.pi),
         ]
         rot_mat = R.from_euler("xyz", euler_rot, degrees=False).as_matrix()
