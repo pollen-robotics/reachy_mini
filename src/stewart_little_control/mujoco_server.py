@@ -90,11 +90,13 @@ class MujocoServer:
                 if step % self.decimation == 0:
                     with self.pose_lock:
                         pose = self.current_pose.copy()
+                        antennas = self.current_antennas.copy()
 
                     # IK and apply control
                     try:
                         angles_rad = self.placo_ik.ik(pose)
-                        self.data.ctrl[:] = angles_rad
+                        self.data.ctrl[:7] = angles_rad[:-2]
+                        self.data.ctrl[-2:] = antennas
                     except Exception as e:
                         print(f"IK error: {e}")
 
