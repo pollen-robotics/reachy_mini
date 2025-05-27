@@ -7,11 +7,20 @@ from pathlib import Path
 import numpy as np
 from threading import Thread, Lock
 import argparse
+import simpleaudio as sa
 
 from reachy_mini_motor_controller import ReachyMiniMotorController
+from stewart_little_control.utils import minimum_jerk
+from scipy.spatial.transform import Rotation as R
 
 
 ROOT_PATH = Path(os.path.dirname(os.path.abspath(__file__))).parent.parent
+
+wave_obj = sa.WaveObject.from_wave_file(f"{ROOT_PATH}/src/assets/proud2.wav")
+
+
+def play_sound():
+    wave_obj.play()  # Non-blocking
 
 
 class RealMotorsServer:
@@ -27,14 +36,29 @@ class RealMotorsServer:
         self.current_pose = np.eye(4)
         self.current_pose[:3, 3][2] = 0.177
         self.current_antennas = np.zeros(2)
+        self.antennas_offsets = [0.0, -0.45]
 
         self.pose_lock = Lock()
+
+        self.sleep_pose = np.array(
+            [
+                [0.827, -0.005, 0.562, -0.032],
+                [0.02, 1.0, -0.019, 0.008],
+                [-0.562, 0.027, 0.827, 0.129],
+                [0.0, 0.0, 0.0, 1.0],
+            ]
+        )
+
+        self.init_pose = np.eye(4)
+        self.init_pose[:3, 3][2] = 0.177  # Set the height of the head
+
+        self.c = ReachyMiniMotorController(serialport)
 
         # Launch the client handler in a thread
         Thread(target=self.client_handler, daemon=True).start()
 
         # Start the hardware control loop
-        self.run_motor_control_loop(serialport)
+        self.run_motor_control_loop(frequency=300.0)
 
     def client_handler(self):
         while True:
@@ -72,9 +96,105 @@ class RealMotorsServer:
             except Exception as e:
                 print(f"Server error: {e}")
 
-    def run_motor_control_loop(self, serialport: str, frequency: float = 100.0):
-        c = ReachyMiniMotorController(serialport)
-        c.enable_torque()
+    def get_current_positions(self):
+        positions = self.c.read_all_positions()
+        yaw = positions[0]
+        antennas = positions[1:3]
+        dofs = positions[3:]  # All other dofs
+        return [yaw] + list(dofs) + list(antennas)
+
+    def convert_from_placo_to_motor(self, angles_rad):
+        angles_rad = [-a for a in angles_rad]
+
+        yaw_angles_rad = -angles_rad[0]
+        angles_rad = angles_rad[:-2][1:]
+        antennas_rad = angles_rad[-2:]  # Last two are antennas
+
+        return [yaw_angles_rad] + list(angles_rad) + list(antennas_rad)
+
+    def goto_joints(self, present_position_rad, target_position_rad, duration=4):
+        interp = minimum_jerk(
+            np.array(present_position_rad.copy()),
+            np.array(target_position_rad.copy()),
+            duration,
+        )
+        t0 = time.time()
+        while time.time() - t0 < duration:
+            t = time.time() - t0
+            angles_rad = interp(t)
+
+            yaw_rad = angles_rad[0]
+            stewart_rad = angles_rad[1:-2]
+            antennas_rad = angles_rad[-2:]
+
+            self.c.set_body_rotation(yaw_rad)
+            self.c.set_stewart_platform_position(stewart_rad)
+            # c.set_antennas_positions(antennas_rad)
+            time.sleep(0.01)
+
+    def goto_sleep(self):
+        current_positions_rad = self.get_current_positions()
+        init_positions = self.placo_ik.ik(self.init_pose.copy())
+        init_target_positions_rad = self.convert_from_placo_to_motor(init_positions)
+        try:
+            self.goto_joints(
+                current_positions_rad, init_target_positions_rad, duration=2
+            )
+        except KeyboardInterrupt:
+            self.c.disable_torque()
+
+        time.sleep(1.0)
+
+        current_positions_rad = self.get_current_positions()
+        sleep_positions = self.placo_ik.ik(self.sleep_pose)
+        sleep_positions = self.convert_from_placo_to_motor(sleep_positions)
+        try:
+            self.goto_joints(current_positions_rad, sleep_positions, duration=2)
+        except KeyboardInterrupt:
+            self.c.disable_torque()
+
+        self.c.disable_torque()
+
+    def wake_up(self):
+        current_positions_rad = self.get_current_positions()
+        init_positions = self.placo_ik.ik(self.init_pose.copy())
+        init_target_positions_rad = self.convert_from_placo_to_motor(init_positions)
+        try:
+            self.goto_joints(
+                current_positions_rad, init_target_positions_rad, duration=2
+            )
+        except KeyboardInterrupt:
+            self.c.disable_torque()
+
+        time.sleep(0.2)
+
+        target_pose = np.eye(4)
+        target_pose[:3, 3][2] = 0.177  # Set the height of the head
+        euler_rot = [np.deg2rad(20), 0, 0]
+        rot_mat = R.from_euler("xyz", euler_rot, degrees=False).as_matrix()
+        target_pose[:3, :3] = rot_mat
+        target_positions_rad = self.placo_ik.ik(target_pose)
+        target_positions_rad = self.convert_from_placo_to_motor(target_positions_rad)
+
+        play_sound()
+        current_positions_rad = self.get_current_positions()
+        try:
+            self.goto_joints(current_positions_rad, target_positions_rad, duration=0.2)
+        except KeyboardInterrupt:
+            self.c.disable_torque()
+
+        current_positions_rad = self.get_current_positions()
+        try:
+            self.goto_joints(
+                current_positions_rad, init_target_positions_rad, duration=0.2
+            )
+        except KeyboardInterrupt:
+            self.c.disable_torque()
+
+    def run_motor_control_loop(self, frequency: float = 100.0):
+        self.c.enable_torque()
+        self.wake_up()
+
         period = 1.0 / frequency  # Control loop period in seconds
 
         try:
@@ -86,34 +206,40 @@ class RealMotorsServer:
                     antennas = self.current_antennas.copy()
                 try:
                     angles_rad = self.placo_ik.ik(pose)
+                    angles_rad = [
+                        -a for a in angles_rad
+                    ]  # Invert angles for the motors
                     # Removes antennas and all yaw
+                    yaw_angles_rad = -angles_rad[0]
                     angles_rad = angles_rad[:-2][1:]
-                    yaw_angles_rad = angles_rad[0]
-                    c.set_stewart_platform_position(angles_rad)
-                    c.set_body_rotation(yaw_angles_rad)
+                    self.c.set_stewart_platform_position(angles_rad)
+                    self.c.set_body_rotation(yaw_angles_rad)
                 except Exception as e:
                     print(f"IK error: {e}")
 
-                c.set_antennas_positions(antennas)
+                # c.set_antennas_positions(antennas + self.antennas_offsets)
+                self.c.set_antennas_positions([0, 0])
 
                 took = time.time() - start_t
                 time.sleep(max(0, period - took))
         except KeyboardInterrupt:
             print("Stopping motor control loop.")
-            c.disable_torque()
+            self.goto_sleep()
+            # self.c.disable_torque()
 
 
-def main(args: argparse.Namespace):
+def main(args: argparse.Namespace = "/dev/ttyACM0"):
     RealMotorsServer(args.serialport)
 
 
 if __name__ == "__main__":
-
     parser = argparse.ArgumentParser(description="Run the real motors server.")
     parser.add_argument(
-        "serialport",
+        "-s",
+        "--serialport",
         type=str,
         help="The serial port to connect to the motors (e.g., /dev/ttyUSB0).",
+        default="/dev/ttyACM0",
     )
     args = parser.parse_args()
 
