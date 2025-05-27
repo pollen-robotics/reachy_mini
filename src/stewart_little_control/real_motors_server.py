@@ -36,19 +36,31 @@ class RealMotorsServer:
         self.current_pose = np.eye(4)
         self.current_pose[:3, 3][2] = 0.177
         self.current_antennas = np.zeros(2)
-        self.antennas_offsets = [0.0, -0.45]
 
         self.pose_lock = Lock()
 
-        self.sleep_pose = np.array(
+        # self.sleep_pose = np.array(
+        #     [
+        #         [0.751, 0.183, 0.634, -0.029],
+        #         [-0.167, 0.982, -0.086, 0.013],
+        #         [-0.638, -0.041, 0.769, 0.126],
+        #         [0.0, 0.0, 0.0, 1.0],
+        #     ]
+        # )
+        self.sleep_positions = self.convert_from_placo_to_motor(
             [
-                [0.827, -0.005, 0.562, -0.032],
-                [0.02, 1.0, -0.019, 0.008],
-                [-0.562, 0.027, 0.827, 0.129],
-                [0.0, 0.0, 0.0, 1.0],
+                0.0,
+                0.849,
+                -1.292,
+                0.472,
+                0.047,
+                1.31,
+                -0.876,
+                -3.05,
+                3.05,
             ]
         )
-
+        self.sleep_positions[-2:] = [3.05, -3.05]  # Set antennas to sleep position
         self.init_pose = np.eye(4)
         self.init_pose[:3, 3][2] = 0.177  # Set the height of the head
 
@@ -129,13 +141,18 @@ class RealMotorsServer:
 
             self.c.set_body_rotation(yaw_rad)
             self.c.set_stewart_platform_position(stewart_rad)
-            # c.set_antennas_positions(antennas_rad)
+            self.c.set_antennas_positions(antennas_rad)
             time.sleep(0.01)
 
     def goto_sleep(self):
         current_positions_rad = self.get_current_positions()
-        init_positions = self.placo_ik.ik(self.init_pose.copy())
-        init_target_positions_rad = self.convert_from_placo_to_motor(init_positions)
+        # init_positions = self.placo_ik.ik(self.init_pose.copy())
+        # init_target_positions_rad = self.convert_from_placo_to_motor(init_positions)
+        init_target_positions_rad = self.convert_from_placo_to_motor(
+            [-0.0, -0.524, 0.575, -0.551, 0.552, -0.572, 0.527, 0.0, 0.0]
+        )
+
+        # print("aaa", init_target_positions_rad)
         try:
             self.goto_joints(
                 current_positions_rad, init_target_positions_rad, duration=2
@@ -146,10 +163,11 @@ class RealMotorsServer:
         time.sleep(1.0)
 
         current_positions_rad = self.get_current_positions()
-        sleep_positions = self.placo_ik.ik(self.sleep_pose)
-        sleep_positions = self.convert_from_placo_to_motor(sleep_positions)
+        # sleep_positions = self.placo_ik.ik(self.sleep_pose)
+        # sleep_positions = self.convert_from_placo_to_motor(sleep_positions)
+        # self.sleep_positions[-2:] = [3.05, -3.05]  # Set antennas to sleep position
         try:
-            self.goto_joints(current_positions_rad, sleep_positions, duration=2)
+            self.goto_joints(current_positions_rad, self.sleep_positions, duration=2)
         except KeyboardInterrupt:
             self.c.disable_torque()
 
@@ -159,6 +177,7 @@ class RealMotorsServer:
         current_positions_rad = self.get_current_positions()
         init_positions = self.placo_ik.ik(self.init_pose.copy())
         init_target_positions_rad = self.convert_from_placo_to_motor(init_positions)
+        init_target_positions_rad[-2:] = [0, 0]  # Set antennas to sleep position
         try:
             self.goto_joints(
                 current_positions_rad, init_target_positions_rad, duration=2
@@ -217,8 +236,7 @@ class RealMotorsServer:
                 except Exception as e:
                     print(f"IK error: {e}")
 
-                # c.set_antennas_positions(antennas + self.antennas_offsets)
-                self.c.set_antennas_positions([0, 0])
+                self.c.set_antennas_positions(antennas)
 
                 took = time.time() - start_t
                 time.sleep(max(0, period - took))

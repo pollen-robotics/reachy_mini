@@ -3,7 +3,7 @@ import placo
 
 
 class PlacoIK:
-    def __init__(self, urdf_path):
+    def __init__(self, urdf_path, fix_yaw=False):
         self.robot = placo.RobotWrapper(urdf_path)
         self.solver = placo.KinematicsSolver(self.robot)
         self.solver.mask_fbase(True)
@@ -40,6 +40,11 @@ class PlacoIK:
 
         self.head_frame.T_world_frame = self.head_starting_pose
         self.joints_names = ["all_yaw", "1", "2", "3", "4", "5", "6", "left_antenna", "right_antenna"]
+
+        if fix_yaw:
+            self.joint_task = self.solver.add_joints_task()
+            self.joint_task.configure("joints", "soft", 0.01)
+            self.joint_task.set_joints({"all_yaw": 0})
 
     def ik(self, pose):
         self.head_frame.T_world_frame = pose
