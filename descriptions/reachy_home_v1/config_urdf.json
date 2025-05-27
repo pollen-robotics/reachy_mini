@@ -4,5 +4,7 @@
   "robot_name": "robot",
   "output_filename": "robot",
   "ball_to_euler": true,
-  "ball_to_euler_order": "xyz"
+  "ball_to_euler_order": "xyz",
+  "simplify_stls": true,
+  "max_stl_size": 0.1
 }

@@ -3,7 +3,8 @@
   "outputFormat": "mujoco",
   "robot_name": "reachy_home",
   "output_filename": "reachy_home",
-  "simplify_stls": false,
+  "simplify_stls": true,
+  "max_stl_size": 0.1,
   "ignore": {
     "*": "collision",
     "!turning_bowl": "collision"
