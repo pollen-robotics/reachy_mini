@@ -1,8 +1,14 @@
 import cv2
+import time
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 import mediapipe as mp
 from stewart_little_control import Client
+
+from noise import pnoise1
+
+def smooth_movement(t, speed=0.5, scale=0.8):
+    return pnoise1(t * speed) * scale
 
 cap = cv2.VideoCapture(4)
 # cap = cv2.VideoCapture(0)
@@ -51,7 +57,12 @@ pose = np.eye(4)
 pose[:3, 3][2] = 0.177  # Set the height of the head
 euler_rot = np.array([0.0, 0.0, 0.0])
 kp = 0.3
+t0 = time.time()
 while True:
+    t = time.time() - t0
+    left_antenna = smooth_movement(t)
+    right_antenna = smooth_movement(t+200)
+
     success, img = cap.read()
 
     results = face_mesh.process(img)
@@ -114,11 +125,12 @@ while True:
         rot_mat = R.from_euler("xyz", euler_rot, degrees=False).as_matrix()
         pose[:3, :3] = rot_mat
         pose[:3, 3][2] = (
-            error[1] * 0.03 + 0.177
+            error[1] * 0.04 + 0.177
         )  # Adjust height based on vertical error
 
 
-        client.send_pose(pose)
+        antennas = [left_antenna, right_antenna]
+        client.send_pose(pose, antennas=antennas)
 
     cv2.imshow("test_window", img)
     cv2.waitKey(int((1/50)*1000))

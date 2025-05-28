@@ -18,20 +18,23 @@ client = Client()
 # client.send_pose(pose, antennas=[0, 0], offset_zero=False)
 # exit()
 
-# while True:
+while True:
 
-#     pose = np.eye(4)
-#     pose[:3, 3][2] = 0.177  # Set the height of the head
+    pose = np.eye(4)
+    pose[:3, 3][2] = 0.177  # Set the height of the head
 
-#     euler_rot = [
-#         0,
-#         0,
-#         1.0 * np.sin(2 * np.pi * 0.3 * time.time() + np.pi),
-#     ]
-#     rot_mat = R.from_euler("xyz", euler_rot, degrees=False).as_matrix()
-#     pose[:3, :3] = rot_mat
-#     client.send_pose(pose, antennas=[0, 0], offset_zero=False)
-#     time.sleep(0.02)
+    # euler_rot = [
+    #     0,
+    #     0,
+    #     1.0 * np.sin(2 * np.pi * 0.3 * time.time() + np.pi),
+    # ]
+    # rot_mat = R.from_euler("xyz", euler_rot, degrees=False).as_matrix()
+    # pose[:3, :3] = rot_mat
+    antennas = [np.sin(2 * np.pi * 1.0 * time.time()), np.sin(2 * np.pi * 1.0 * time.time())]
+    # antennas[0] = 0
+    # antennas[1] = 0
+    client.send_pose(pose, antennas=antennas, offset_zero=False)
+    time.sleep(0.02)
 
 # # boop
 # pose = np.eye(4)
