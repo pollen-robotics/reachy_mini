@@ -3,46 +3,43 @@ import time
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 import mediapipe as mp
-# from stewart_little_control import Client
 
-from noise import pnoise1
-
-def smooth_movement(t, speed=0.5, scale=0.8):
-    return pnoise1(t * speed) * scale
-
-# cap = cv2.VideoCapture(4)
-# cap = cv2.VideoCapture(0)
-# while True:
-
-#     success, img = cap.read()
-
-#     cv2.imshow("test_window", img)
-#     cv2.waitKey(1)
 
 class HeadTracker:
     def __init__(self):
-
         self.face_mesh = mp.solutions.face_mesh.FaceMesh(
             min_detection_confidence=0.05,
             min_tracking_confidence=0.5,
             max_num_faces=1,
         )
 
+    def get_eyes(self, img):
+        results = self.face_mesh.process(img)
+        if results.multi_face_landmarks:
+            face_landmarks = results.multi_face_landmarks[0]
+
+            left_eye = np.array(
+                (face_landmarks.landmark[33].x, face_landmarks.landmark[33].y)
+            )
+            left_eye = left_eye * 2 - 1
+
+            right_eye = np.array(
+                (face_landmarks.landmark[263].x, face_landmarks.landmark[263].y)
+            )
+            right_eye = right_eye * 2 - 1
+            return left_eye, right_eye
+
+        return None, None
 
     def get_eye_center(self, face_landmarks):
-        left_eye = np.array((face_landmarks.landmark[33].x, face_landmarks.landmark[33].y))
-        left_eye = left_eye * 2 - 1
-
-        right_eye = np.array(
-            (face_landmarks.landmark[263].x, face_landmarks.landmark[263].y)
-        )
-        right_eye = right_eye * 2 - 1
+        left_eye, right_eye = self.get_eyes(face_landmarks)
         eye_center = np.mean([left_eye, right_eye], axis=0)
         return eye_center
 
-
     def get_roll(self, face_landmarks):
-        left_eye = np.array((face_landmarks.landmark[33].x, face_landmarks.landmark[33].y))
+        left_eye = np.array(
+            (face_landmarks.landmark[33].x, face_landmarks.landmark[33].y)
+        )
         left_eye = left_eye * 2 - 1
 
         right_eye = np.array(
@@ -54,7 +51,6 @@ class HeadTracker:
         return roll
 
     def get_head_position(self, img):
-
         results = self.face_mesh.process(img)
         if results.multi_face_landmarks:
             face_landmarks = results.multi_face_landmarks[0]
@@ -64,6 +60,7 @@ class HeadTracker:
             return eye_center, roll
 
         return None, None
+
 
 if __name__ == "__main__":
     # cap = cv2.VideoCapture(4)
