@@ -8,7 +8,7 @@ from stewart_little_control.mujoco_utils import get_joint_qpos
 ROOT_PATH = Path(os.path.dirname(os.path.abspath(__file__))).parent
 
 model = mujoco.MjModel.from_xml_path(
-    f"{ROOT_PATH}/descriptions/stewart_little_magnet/scene.xml"
+    f"{ROOT_PATH}/descriptions/reachy_home_v1/scene.xml"
 )
 data = mujoco.MjData(model)
 model.opt.timestep = 0.002  # s, simulation timestep, 500hz
