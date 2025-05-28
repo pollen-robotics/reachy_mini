@@ -799,7 +799,7 @@
     <parent link="main_plate"/>
     <child link="arm"/>
     <axis xyz="0 0 1"/>
-    <limit effort="10" velocity="10" lower="-3.141592653589793" upper="3.141592653589793"/>
+    <limit effort="10" velocity="10" lower="-1.39626" upper="1.39626"/>
   </joint>
   <!-- Link arm_2 -->
   <link name="arm_2">
@@ -946,7 +946,7 @@
   </joint>
   <!-- Joint from arm_2 to passive_2_link_x -->
   <joint name="passive_2_x" type="revolute">
-    <origin xyz="0.038 3.33067e-16 -0.00768" rpy="-0.186454 -0.0202587 -1.08831"/>
+    <origin xyz="0.038 8.32667e-17 -0.00768" rpy="-0.186454 -0.0202587 -1.08831"/>
     <parent link="arm_2"/>
     <child link="passive_2_link_x"/>
     <axis xyz="1 0 0"/>
@@ -954,11 +954,11 @@
   </joint>
   <!-- Joint from main_plate to arm_2 -->
   <joint name="2" type="revolute">
-    <origin xyz="0.0416206 0.012144 -0.044785" rpy="-1.5708 8.01479e-15 -1.0472"/>
+    <origin xyz="0.0416206 0.012144 -0.044785" rpy="-1.5708 1.45885e-14 -1.0472"/>
     <parent link="main_plate"/>
     <child link="arm_2"/>
     <axis xyz="0 0 1"/>
-    <limit effort="10" velocity="10" lower="-3.141592653589793" upper="3.141592653589793"/>
+    <limit effort="10" velocity="10" lower="-1.39626" upper="1.39626"/>
   </joint>
   <!-- Link arm_3 -->
   <link name="arm_3">
@@ -1025,7 +1025,7 @@
     </inertial>
     <!-- Part rod_3 -->
     <visual>
-      <origin xyz="0.00371031 0.0370326 -0.0564076" rpy="0.01484 -1.08842 1.87556e-17"/>
+      <origin xyz="0.00371031 0.0370326 -0.0564076" rpy="0.01484 -1.08842 1.20162e-17"/>
       <geometry>
         <mesh filename="package://assets/rod.stl"/>
       </geometry>
@@ -1034,14 +1034,14 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="0.00371031 0.0370326 -0.0564076" rpy="0.01484 -1.08842 1.87556e-17"/>
+      <origin xyz="0.00371031 0.0370326 -0.0564076" rpy="0.01484 -1.08842 1.20162e-17"/>
       <geometry>
         <mesh filename="package://assets/rod.stl"/>
       </geometry>
     </collision>
     <!-- Part shape_5 -->
     <visual>
-      <origin xyz="-6.93889e-18 1.38778e-17 0" rpy="1.71657e-17 2.88559e-18 1.79253e-17"/>
+      <origin xyz="6.93889e-18 0 -3.46945e-18" rpy="1.84422e-17 -4.71284e-18 1.5244e-17"/>
       <geometry>
         <mesh filename="package://assets/shape.stl"/>
       </geometry>
@@ -1050,14 +1050,14 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="-6.93889e-18 1.38778e-17 0" rpy="1.71657e-17 2.88559e-18 1.79253e-17"/>
+      <origin xyz="6.93889e-18 0 -3.46945e-18" rpy="1.84422e-17 -4.71284e-18 1.5244e-17"/>
       <geometry>
         <mesh filename="package://assets/shape.stl"/>
       </geometry>
     </collision>
     <!-- Part shape_6 -->
     <visual>
-      <origin xyz="-0.0900003 0 -1.11022e-16" rpy="-1.11647e-16 5.1013e-17 3.14159"/>
+      <origin xyz="-0.0900003 -1.38778e-17 -9.71445e-17" rpy="-1.09454e-16 6.55503e-17 3.14159"/>
       <geometry>
         <mesh filename="package://assets/shape.stl"/>
       </geometry>
@@ -1066,7 +1066,7 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="-0.0900003 0 -1.11022e-16" rpy="-1.11647e-16 5.1013e-17 3.14159"/>
+      <origin xyz="-0.0900003 -1.38778e-17 -9.71445e-17" rpy="-1.09454e-16 6.55503e-17 3.14159"/>
       <geometry>
         <mesh filename="package://assets/shape.stl"/>
       </geometry>
@@ -1082,14 +1082,14 @@
     </inertial>
   </link>
   <joint name="closing_3_1_frame" type="fixed">
-    <origin xyz="-0.0900003 0 -1.11022e-16" rpy="-1.11647e-16 5.1013e-17 3.14159"/>
+    <origin xyz="-0.0900003 -1.38778e-17 -9.71445e-17" rpy="-1.09454e-16 6.55503e-17 3.14159"/>
     <parent link="shape_2"/>
     <child link="closing_3_1"/>
     <axis xyz="0 0 0"/>
   </joint>
   <!-- Joint from passive_3_link_y to shape_2 -->
   <joint name="passive_3_z" type="revolute">
-    <origin xyz="-6.93889e-18 1.38778e-17 0" rpy="1.71657e-17 2.88559e-18 1.79253e-17"/>
+    <origin xyz="6.93889e-18 0 -3.46945e-18" rpy="1.84422e-17 -4.71284e-18 1.5244e-17"/>
     <parent link="passive_3_link_y"/>
     <child link="shape_2"/>
     <axis xyz="0 0 1"/>
@@ -1097,7 +1097,7 @@
   </joint>
   <!-- Joint from passive_3_link_x to passive_3_link_y -->
   <joint name="passive_3_y" type="revolute">
-    <origin xyz="-6.93889e-18 1.38778e-17 0" rpy="1.71657e-17 2.88559e-18 1.79253e-17"/>
+    <origin xyz="6.93889e-18 0 -3.46945e-18" rpy="1.84422e-17 -4.71284e-18 1.5244e-17"/>
     <parent link="passive_3_link_x"/>
     <child link="passive_3_link_y"/>
     <axis xyz="0 1 0"/>
@@ -1105,7 +1105,7 @@
   </joint>
   <!-- Joint from arm_3 to passive_3_link_x -->
   <joint name="passive_3_x" type="revolute">
-    <origin xyz="0.038 4.16334e-17 -0.00768" rpy="2.99943 -0.0202587 1.08831"/>
+    <origin xyz="0.038 -1.38778e-17 -0.00768" rpy="2.99943 -0.0202587 1.08831"/>
     <parent link="arm_3"/>
     <child link="passive_3_link_x"/>
     <axis xyz="1 0 0"/>
@@ -1117,7 +1117,7 @@
     <parent link="main_plate"/>
     <child link="arm_3"/>
     <axis xyz="0 0 1"/>
-    <limit effort="10" velocity="10" lower="-3.141592653589793" upper="3.141592653589793"/>
+    <limit effort="10" velocity="10" lower="-1.39626" upper="1.39626"/>
   </joint>
   <!-- Link ball -->
   <link name="ball">
@@ -1144,7 +1144,7 @@
     </collision>
     <!-- Part arm_4 -->
     <visual>
-      <origin xyz="-0.01025 -0.03 -0.0425915" rpy="-1.5708 2.89121e-16 0"/>
+      <origin xyz="-0.01025 -0.03 -0.0425915" rpy="-1.5708 2.89121e-16 -7.88861e-31"/>
       <geometry>
         <mesh filename="package://assets/arm.stl"/>
       </geometry>
@@ -1153,7 +1153,7 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="-0.01025 -0.03 -0.0425915" rpy="-1.5708 2.89121e-16 0"/>
+      <origin xyz="-0.01025 -0.03 -0.0425915" rpy="-1.5708 2.89121e-16 -7.88861e-31"/>
       <geometry>
         <mesh filename="package://assets/arm.stl"/>
       </geometry>
@@ -1264,7 +1264,7 @@
   </joint>
   <!-- Joint from ball to passive_4_link_x -->
   <joint name="passive_4_x" type="revolute">
-    <origin xyz="0.038 -1.38778e-17 -0.00768" rpy="-2.75098 -0.0202587 -1.08831"/>
+    <origin xyz="0.038 -1.38778e-16 -0.00768" rpy="-2.75098 -0.0202587 -1.08831"/>
     <parent link="ball"/>
     <child link="passive_4_link_x"/>
     <axis xyz="1 0 0"/>
@@ -1272,11 +1272,11 @@
   </joint>
   <!-- Joint from main_plate to ball -->
   <joint name="4" type="revolute">
-    <origin xyz="-0.0102067 -0.0421165 -0.044785" rpy="-1.5708 5.55112e-17 -3.14159"/>
+    <origin xyz="-0.0102067 -0.0421165 -0.044785" rpy="-1.5708 4.43797e-15 -3.14159"/>
     <parent link="main_plate"/>
     <child link="ball"/>
     <axis xyz="0 0 1"/>
-    <limit effort="10" velocity="10" lower="-3.141592653589793" upper="3.141592653589793"/>
+    <limit effort="10" velocity="10" lower="-1.39626" upper="1.39626"/>
   </joint>
   <!-- Link arm_4 -->
   <link name="arm_4">
@@ -1303,7 +1303,7 @@
     </collision>
     <!-- Part arm_5 -->
     <visual>
-      <origin xyz="-0.01025 -0.03 -0.0425915" rpy="-1.5708 2.2603e-16 -5.95037e-33"/>
+      <origin xyz="-0.01025 -0.03 -0.0425915" rpy="-1.5708 2.2603e-16 -4.74694e-32"/>
       <geometry>
         <mesh filename="package://assets/arm.stl"/>
       </geometry>
@@ -1312,7 +1312,7 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="-0.01025 -0.03 -0.0425915" rpy="-1.5708 2.2603e-16 -5.95037e-33"/>
+      <origin xyz="-0.01025 -0.03 -0.0425915" rpy="-1.5708 2.2603e-16 -4.74694e-32"/>
       <geometry>
         <mesh filename="package://assets/arm.stl"/>
       </geometry>
@@ -1343,7 +1343,7 @@
     </inertial>
     <!-- Part shape_9 -->
     <visual>
-      <origin xyz="-0.0900003 -6.93889e-18 1.70697e-15" rpy="-3.97878e-14 -2.23854e-14 -3.14159"/>
+      <origin xyz="-0.0900003 6.93889e-18 1.72085e-15" rpy="-3.97467e-14 -2.23603e-14 -3.14159"/>
       <geometry>
         <mesh filename="package://assets/shape.stl"/>
       </geometry>
@@ -1352,14 +1352,14 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="-0.0900003 -6.93889e-18 1.70697e-15" rpy="-3.97878e-14 -2.23854e-14 -3.14159"/>
+      <origin xyz="-0.0900003 6.93889e-18 1.72085e-15" rpy="-3.97467e-14 -2.23603e-14 -3.14159"/>
       <geometry>
         <mesh filename="package://assets/shape.stl"/>
       </geometry>
     </collision>
     <!-- Part rod_5 -->
     <visual>
-      <origin xyz="0.00371031 0.0370326 -0.0564076" rpy="0.01484 -1.08842 -2.82667e-17"/>
+      <origin xyz="0.00371031 0.0370326 -0.0564076" rpy="0.01484 -1.08842 -4.36661e-17"/>
       <geometry>
         <mesh filename="package://assets/rod.stl"/>
       </geometry>
@@ -1368,14 +1368,14 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="0.00371031 0.0370326 -0.0564076" rpy="0.01484 -1.08842 -2.82667e-17"/>
+      <origin xyz="0.00371031 0.0370326 -0.0564076" rpy="0.01484 -1.08842 -4.36661e-17"/>
       <geometry>
         <mesh filename="package://assets/rod.stl"/>
       </geometry>
     </collision>
     <!-- Part shape_10 -->
     <visual>
-      <origin xyz="6.93889e-18 6.93889e-18 0" rpy="-1.12808e-17 -1.80474e-17 -1.19975e-17"/>
+      <origin xyz="0 1.38778e-17 0" rpy="-3.59448e-17 -1.53626e-17 -3.22246e-17"/>
       <geometry>
         <mesh filename="package://assets/shape.stl"/>
       </geometry>
@@ -1384,7 +1384,7 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="6.93889e-18 6.93889e-18 0" rpy="-1.12808e-17 -1.80474e-17 -1.19975e-17"/>
+      <origin xyz="0 1.38778e-17 0" rpy="-3.59448e-17 -1.53626e-17 -3.22246e-17"/>
       <geometry>
         <mesh filename="package://assets/shape.stl"/>
       </geometry>
@@ -1400,14 +1400,14 @@
     </inertial>
   </link>
   <joint name="closing_5_1_frame" type="fixed">
-    <origin xyz="-0.0900003 -6.93889e-18 1.70697e-15" rpy="-3.97878e-14 -2.23854e-14 -3.14159"/>
+    <origin xyz="-0.0900003 6.93889e-18 1.72085e-15" rpy="-3.97467e-14 -2.23603e-14 -3.14159"/>
     <parent link="shape_4"/>
     <child link="closing_5_1"/>
     <axis xyz="0 0 0"/>
   </joint>
   <!-- Joint from passive_5_link_y to shape_4 -->
   <joint name="passive_5_z" type="revolute">
-    <origin xyz="6.93889e-18 6.93889e-18 0" rpy="-1.12808e-17 -1.80474e-17 -1.19975e-17"/>
+    <origin xyz="0 1.38778e-17 0" rpy="-3.59448e-17 -1.53626e-17 -3.22246e-17"/>
     <parent link="passive_5_link_y"/>
     <child link="shape_4"/>
     <axis xyz="0 0 1"/>
@@ -1415,7 +1415,7 @@
   </joint>
   <!-- Joint from passive_5_link_x to passive_5_link_y -->
   <joint name="passive_5_y" type="revolute">
-    <origin xyz="6.93889e-18 6.93889e-18 0" rpy="-1.12808e-17 -1.80474e-17 -1.19975e-17"/>
+    <origin xyz="0 1.38778e-17 0" rpy="-3.59448e-17 -1.53626e-17 -3.22246e-17"/>
     <parent link="passive_5_link_x"/>
     <child link="passive_5_link_y"/>
     <axis xyz="0 1 0"/>
@@ -1431,11 +1431,11 @@
   </joint>
   <!-- Joint from main_plate to arm_4 -->
   <joint name="5" type="revolute">
-    <origin xyz="-0.041534 0.012144 -0.044785" rpy="1.5708 -9.91031e-16 -2.0944"/>
+    <origin xyz="-0.041534 0.012144 -0.044785" rpy="1.5708 -6.46911e-15 -2.0944"/>
     <parent link="main_plate"/>
     <child link="arm_4"/>
     <axis xyz="0 0 1"/>
-    <limit effort="10" velocity="10" lower="-3.141592653589793" upper="3.141592653589793"/>
+    <limit effort="10" velocity="10" lower="-1.39626" upper="1.39626"/>
   </joint>
   <!-- Link arm_5 -->
   <link name="arm_5">
@@ -1446,7 +1446,7 @@
     </inertial>
     <!-- Part ball_6 -->
     <visual>
-      <origin xyz="0.038 -1.38778e-17 -0.00768" rpy="3.14159 2.19395e-15 -1.5708"/>
+      <origin xyz="0.038 0 -0.00768" rpy="3.14159 2.19395e-15 -1.5708"/>
       <geometry>
         <mesh filename="package://assets/ball.stl"/>
       </geometry>
@@ -1455,7 +1455,7 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="0.038 -1.38778e-17 -0.00768" rpy="3.14159 2.19395e-15 -1.5708"/>
+      <origin xyz="0.038 0 -0.00768" rpy="3.14159 2.19395e-15 -1.5708"/>
       <geometry>
         <mesh filename="package://assets/ball.stl"/>
       </geometry>
@@ -1502,7 +1502,7 @@
     </inertial>
     <!-- Part shape_11 -->
     <visual>
-      <origin xyz="-0.0900003 1.80411e-16 -7.58942e-18" rpy="-2.9286e-17 -3.24387e-17 3.14159"/>
+      <origin xyz="-0.0900003 2.22045e-16 -1.31188e-17" rpy="-1.49802e-17 -5.73288e-17 3.14159"/>
       <geometry>
         <mesh filename="package://assets/shape.stl"/>
       </geometry>
@@ -1511,14 +1511,14 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="-0.0900003 1.80411e-16 -7.58942e-18" rpy="-2.9286e-17 -3.24387e-17 3.14159"/>
+      <origin xyz="-0.0900003 2.22045e-16 -1.31188e-17" rpy="-1.49802e-17 -5.73288e-17 3.14159"/>
       <geometry>
         <mesh filename="package://assets/shape.stl"/>
       </geometry>
     </collision>
     <!-- Part rod_6 -->
     <visual>
-      <origin xyz="0.00371031 0.0370326 -0.0564076" rpy="0.01484 -1.08842 2.32927e-16"/>
+      <origin xyz="0.00371031 0.0370326 -0.0564076" rpy="0.01484 -1.08842 2.39271e-16"/>
       <geometry>
         <mesh filename="package://assets/rod.stl"/>
       </geometry>
@@ -1527,14 +1527,14 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="0.00371031 0.0370326 -0.0564076" rpy="0.01484 -1.08842 2.32927e-16"/>
+      <origin xyz="0.00371031 0.0370326 -0.0564076" rpy="0.01484 -1.08842 2.39271e-16"/>
       <geometry>
         <mesh filename="package://assets/rod.stl"/>
       </geometry>
     </collision>
     <!-- Part shape_12 -->
     <visual>
-      <origin xyz="-6.93889e-18 0 -1.84314e-18" rpy="-9.80843e-18 9.56019e-19 -2.78433e-17"/>
+      <origin xyz="-1.38778e-17 1.38778e-17 2.1684e-19" rpy="-5.18698e-17 -1.9094e-18 4.12252e-17"/>
       <geometry>
         <mesh filename="package://assets/shape.stl"/>
       </geometry>
@@ -1543,7 +1543,7 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="-6.93889e-18 0 -1.84314e-18" rpy="-9.80843e-18 9.56019e-19 -2.78433e-17"/>
+      <origin xyz="-1.38778e-17 1.38778e-17 2.1684e-19" rpy="-5.18698e-17 -1.9094e-18 4.12252e-17"/>
       <geometry>
         <mesh filename="package://assets/shape.stl"/>
       </geometry>
@@ -1766,7 +1766,7 @@
     </collision>
     <!-- Part ball_11 -->
     <visual>
-      <origin xyz="-1.38778e-16 5.55112e-17 2.75387e-17" rpy="-0.378336 -0.170541 2.68759"/>
+      <origin xyz="0 -1.38778e-17 -3.03577e-18" rpy="-0.378336 -0.170541 2.68759"/>
       <geometry>
         <mesh filename="package://assets/ball.stl"/>
       </geometry>
@@ -1775,7 +1775,7 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="-1.38778e-16 5.55112e-17 2.75387e-17" rpy="-0.378336 -0.170541 2.68759"/>
+      <origin xyz="0 -1.38778e-17 -3.03577e-18" rpy="-0.378336 -0.170541 2.68759"/>
       <geometry>
         <mesh filename="package://assets/ball.stl"/>
       </geometry>
@@ -1896,7 +1896,7 @@
     </inertial>
     <!-- Part test_antenna -->
     <visual>
-      <origin xyz="0.0285297 -0.0184653 0.0570171" rpy="-1.67148 -0.521403 3.16937e-17"/>
+      <origin xyz="0.0285297 -0.0184653 0.0570171" rpy="-1.67148 -0.521403 2.81648e-17"/>
       <geometry>
         <mesh filename="package://assets/test_antenna.stl"/>
       </geometry>
@@ -1905,14 +1905,14 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="0.0285297 -0.0184653 0.0570171" rpy="-1.67148 -0.521403 3.16937e-17"/>
+      <origin xyz="0.0285297 -0.0184653 0.0570171" rpy="-1.67148 -0.521403 2.81648e-17"/>
       <geometry>
         <mesh filename="package://assets/test_antenna.stl"/>
       </geometry>
     </collision>
     <!-- Part test_antenna_body -->
     <visual>
-      <origin xyz="0.0285297 -0.0184653 0.0570171" rpy="-1.67148 -0.521403 3.15316e-17"/>
+      <origin xyz="0.0285297 -0.0184653 0.0570171" rpy="-1.67148 -0.521403 1.19983e-17"/>
       <geometry>
         <mesh filename="package://assets/test_antenna_body.stl"/>
       </geometry>
@@ -1921,7 +1921,7 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="0.0285297 -0.0184653 0.0570171" rpy="-1.67148 -0.521403 3.15316e-17"/>
+      <origin xyz="0.0285297 -0.0184653 0.0570171" rpy="-1.67148 -0.521403 1.19983e-17"/>
       <geometry>
         <mesh filename="package://assets/test_antenna_body.stl"/>
       </geometry>
@@ -1944,7 +1944,7 @@
     </inertial>
     <!-- Part test_antenna_body_2 -->
     <visual>
-      <origin xyz="0.0285297 -0.0184653 0.0570171" rpy="-1.67148 -0.521403 1.36556e-17"/>
+      <origin xyz="0.0285297 -0.0184653 0.0570171" rpy="-1.67148 -0.521403 4.73403e-18"/>
       <geometry>
         <mesh filename="package://assets/test_antenna_body.stl"/>
       </geometry>
@@ -1953,14 +1953,14 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="0.0285297 -0.0184653 0.0570171" rpy="-1.67148 -0.521403 1.36556e-17"/>
+      <origin xyz="0.0285297 -0.0184653 0.0570171" rpy="-1.67148 -0.521403 4.73403e-18"/>
       <geometry>
         <mesh filename="package://assets/test_antenna_body.stl"/>
       </geometry>
     </collision>
     <!-- Part test_antenna_2 -->
     <visual>
-      <origin xyz="0.0285297 -0.0184653 0.0570171" rpy="-1.67148 -0.521403 2.38907e-16"/>
+      <origin xyz="0.0285297 -0.0184653 0.0570171" rpy="-1.67148 -0.521403 2.29986e-16"/>
       <geometry>
         <mesh filename="package://assets/test_antenna.stl"/>
       </geometry>
@@ -1969,7 +1969,7 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="0.0285297 -0.0184653 0.0570171" rpy="-1.67148 -0.521403 2.38907e-16"/>
+      <origin xyz="0.0285297 -0.0184653 0.0570171" rpy="-1.67148 -0.521403 2.29986e-16"/>
       <geometry>
         <mesh filename="package://assets/test_antenna.stl"/>
       </geometry>
@@ -1985,7 +1985,7 @@
   </joint>
   <!-- Joint from passive_7_link_y to plateform -->
   <joint name="passive_7_z" type="revolute">
-    <origin xyz="0 1.38778e-17 -2.92735e-18" rpy="1.21162e-17 1.19364e-17 3.40244e-17"/>
+    <origin xyz="0 -1.38778e-17 -3.03577e-18" rpy="4.31179e-18 4.6347e-17 -7.78613e-17"/>
     <parent link="passive_7_link_y"/>
     <child link="plateform"/>
     <axis xyz="0 0 1"/>
@@ -1993,7 +1993,7 @@
   </joint>
   <!-- Joint from passive_7_link_x to passive_7_link_y -->
   <joint name="passive_7_y" type="revolute">
-    <origin xyz="0 1.38778e-17 -2.92735e-18" rpy="1.21162e-17 1.19364e-17 3.40244e-17"/>
+    <origin xyz="0 -1.38778e-17 -3.03577e-18" rpy="4.31179e-18 4.6347e-17 -7.78613e-17"/>
     <parent link="passive_7_link_x"/>
     <child link="passive_7_link_y"/>
     <axis xyz="0 1 0"/>
@@ -2001,7 +2001,7 @@
   </joint>
   <!-- Joint from shape_5 to passive_7_link_x -->
   <joint name="passive_7_x" type="revolute">
-    <origin xyz="-0.0900003 1.80411e-16 -7.58942e-18" rpy="3.14159 -3.24387e-17 3.14159"/>
+    <origin xyz="-0.0900003 2.22045e-16 -1.31188e-17" rpy="3.14159 -5.73288e-17 3.14159"/>
     <parent link="shape_5"/>
     <child link="passive_7_link_x"/>
     <axis xyz="1 0 0"/>
@@ -2009,7 +2009,7 @@
   </joint>
   <!-- Joint from passive_6_link_y to shape_5 -->
   <joint name="passive_6_z" type="revolute">
-    <origin xyz="-6.93889e-18 0 -1.84314e-18" rpy="-9.80843e-18 9.56019e-19 -2.78433e-17"/>
+    <origin xyz="-1.38778e-17 1.38778e-17 1.95156e-18" rpy="-5.18698e-17 -1.9094e-18 4.12252e-17"/>
     <parent link="passive_6_link_y"/>
     <child link="shape_5"/>
     <axis xyz="0 0 1"/>
@@ -2017,7 +2017,7 @@
   </joint>
   <!-- Joint from passive_6_link_x to passive_6_link_y -->
   <joint name="passive_6_y" type="revolute">
-    <origin xyz="-6.93889e-18 0 -1.84314e-18" rpy="-9.80843e-18 9.56019e-19 -2.78433e-17"/>
+    <origin xyz="-1.38778e-17 1.38778e-17 1.95156e-18" rpy="-5.18698e-17 -1.9094e-18 4.12252e-17"/>
     <parent link="passive_6_link_x"/>
     <child link="passive_6_link_y"/>
     <axis xyz="0 1 0"/>
@@ -2025,7 +2025,7 @@
   </joint>
   <!-- Joint from arm_5 to passive_6_link_x -->
   <joint name="passive_6_x" type="revolute">
-    <origin xyz="0.038 9.71445e-17 -0.00768" rpy="-2.72876 -0.0202587 -1.08831"/>
+    <origin xyz="0.038 2.77556e-17 -0.00768" rpy="-2.72876 -0.0202587 -1.08831"/>
     <parent link="arm_5"/>
     <child link="passive_6_link_x"/>
     <axis xyz="1 0 0"/>
@@ -2033,11 +2033,11 @@
   </joint>
   <!-- Joint from main_plate to arm_5 -->
   <joint name="6" type="revolute">
-    <origin xyz="-0.031284 0.0298975 -0.044785" rpy="-1.5708 -1.10323e-14 1.0472"/>
+    <origin xyz="-0.031284 0.0298975 -0.044785" rpy="-1.5708 -1.65104e-14 1.0472"/>
     <parent link="main_plate"/>
     <child link="arm_5"/>
     <axis xyz="0 0 1"/>
-    <limit effort="10" velocity="10" lower="-3.141592653589793" upper="3.141592653589793"/>
+    <limit effort="10" velocity="10" lower="-1.39626" upper="1.39626"/>
   </joint>
   <!-- Joint from turning_bowl to main_plate -->
   <joint name="all_yaw" type="revolute">
@@ -2045,6 +2045,6 @@
     <parent link="turning_bowl"/>
     <child link="main_plate"/>
     <axis xyz="0 0 1"/>
-    <limit effort="10" velocity="10" lower="-3.141592653589793" upper="3.141592653589793"/>
+    <limit effort="10" velocity="10" lower="-2.96706" upper="2.96706"/>
   </joint>
 </robot>

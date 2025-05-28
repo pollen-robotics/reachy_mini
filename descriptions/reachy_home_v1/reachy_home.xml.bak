@@ -54,112 +54,112 @@
   <worldbody>
     <!-- Link turning_bowl -->
     <body name="turning_bowl" pos="0 0 0" quat="1 0 0 0" childclass="reachy_home">
-      <inertial pos="-0.00106243 -2.68048e-09 0.0103778" mass="0.0754554" fullinertia="8.58353e-05 8.14435e-05 0.000153488 -6.44628e-12 5.11417e-07 -6.54697e-13"/>
+      <inertial pos="-0.0011015 3.36586e-09 0.00982937" mass="0.0856525" fullinertia="0.000103778 9.91009e-05 0.000188612 1.62688e-11 5.11021e-07 2.46124e-13"/>
       <!-- Part turning_bowl -->
       <geom type="mesh" class="visual" pos="-0.00198261 3.46945e-18 0.2445" quat="0.707107 0 7.32492e-32 0.707107" mesh="turning_bowl" material="turning_bowl_material"/>
       <!-- Link main_plate -->
       <body name="main_plate" pos="-0.00198261 3.46945e-18 0.0316" quat="5.57809e-31 0.707107 0.707107 1.67343e-30">
         <!-- Joint from turning_bowl to main_plate -->
         <joint axis="0 0 1" name="all_yaw" type="hinge" class="chosen_actuator"/>
-        <inertial pos="6.84889e-05 0.00157052 -0.0411006" mass="0.42461" fullinertia="0.00174771 0.00169917 0.00193868 -3.5708e-07 -1.95679e-07 5.33713e-05"/>
+        <inertial pos="6.84881e-05 0.00157052 -0.0411006" mass="0.42461" fullinertia="0.00174771 0.00169917 0.00193868 -3.57066e-07 -1.95668e-07 5.33713e-05"/>
         <!-- Part dc15_a01_case_m_dummy -->
-        <geom type="mesh" class="visual" pos="0.108746 0.039063 -0.014785" quat="4.85945e-16 0.5 0.866025 -2.4288e-16" mesh="dc15_a01_case_m_dummy" material="dc15_a01_case_m_dummy_material"/>
+        <geom type="mesh" class="visual" pos="0.108746 0.039063 -0.014785" quat="5.75703e-17 0.5 0.866025 -7.99966e-17" mesh="dc15_a01_case_m_dummy" material="dc15_a01_case_m_dummy_material"/>
         <!-- Part main_plate -->
-        <geom type="mesh" class="visual" pos="4.33013e-05 -2.5e-05 -0.014785" quat="7.53749e-16 0.866025 0.5 -9.19126e-17" mesh="main_plate" material="main_plate_material"/>
+        <geom type="mesh" class="visual" pos="4.33013e-05 -2.5e-05 -0.014785" quat="5.39115e-16 0.866025 0.5 -5.8116e-16" mesh="main_plate" material="main_plate_material"/>
         <!-- Part dc15_a01_case_f_dummy -->
-        <geom type="mesh" class="visual" pos="0.000476314 -0.000275 -0.014785" quat="7.54465e-16 0.866025 0.5 -9.06726e-17" mesh="dc15_a01_case_f_dummy" material="dc15_a01_case_f_dummy_material"/>
+        <geom type="mesh" class="visual" pos="0.000476314 -0.000275 -0.014785" quat="8.98556e-17 0.866025 0.5 -4.04939e-17" mesh="dc15_a01_case_f_dummy" material="dc15_a01_case_f_dummy_material"/>
         <!-- Part dc15_a01_horn_dummy -->
-        <geom type="mesh" class="visual" pos="-0.0106397 0.0174785 -0.014785" quat="2.94873e-17 0.866025 -0.5 6.42349e-16" mesh="dc15_a01_horn_dummy" material="dc15_a01_horn_dummy_material"/>
+        <geom type="mesh" class="visual" pos="-0.0106397 0.0174785 -0.014785" quat="7.99966e-17 0.866025 -0.5 5.75703e-17" mesh="dc15_a01_horn_dummy" material="dc15_a01_horn_dummy_material"/>
         <!-- Part dc15_a01_horn_dummy_2 -->
-        <geom type="mesh" class="visual" pos="0.000476314 -0.000275 -0.014785" quat="7.42427e-16 -0.866025 -0.5 -5.0246e-16" mesh="dc15_a01_horn_dummy" material="dc15_a01_horn_dummy_material"/>
+        <geom type="mesh" class="visual" pos="0.000476314 -0.000275 -0.014785" quat="8.98556e-17 0.866025 0.5 -4.04939e-17" mesh="dc15_a01_horn_dummy" material="dc15_a01_horn_dummy_material"/>
         <!-- Part dc15_a01_horn_dummy_3 -->
-        <geom type="mesh" class="visual" pos="-0.00977369 -0.0180285 -0.014785" quat="7.37038e-16 -0.866025 -0.5 -4.24483e-16" mesh="dc15_a01_horn_dummy" material="dc15_a01_horn_dummy_material"/>
+        <geom type="mesh" class="visual" pos="-0.00977369 -0.0180285 -0.014785" quat="8.98556e-17 0.866025 0.5 -4.04939e-17" mesh="dc15_a01_horn_dummy" material="dc15_a01_horn_dummy_material"/>
         <!-- Part dc15_a01_case_b_dummy -->
-        <geom type="mesh" class="visual" pos="0.108746 0.039063 -0.014785" quat="4.65776e-16 0.5 0.866025 -2.24759e-16" mesh="dc15_a01_case_b_dummy" material="dc15_a01_case_b_dummy_material"/>
+        <geom type="mesh" class="visual" pos="0.108746 0.039063 -0.014785" quat="5.75703e-17 0.5 0.866025 -7.99966e-17" mesh="dc15_a01_case_b_dummy" material="dc15_a01_case_b_dummy_material"/>
         <!-- Part dc15_a01_case_b_dummy_2 -->
-        <geom type="mesh" class="visual" pos="-0.00977369 -0.0180285 -0.014785" quat="7.54465e-16 0.866025 0.5 -9.06726e-17" mesh="dc15_a01_case_b_dummy" material="dc15_a01_case_b_dummy_material"/>
+        <geom type="mesh" class="visual" pos="-0.00977369 -0.0180285 -0.014785" quat="8.98556e-17 0.866025 0.5 -4.04939e-17" mesh="dc15_a01_case_b_dummy" material="dc15_a01_case_b_dummy_material"/>
         <!-- Part foot -->
-        <geom type="mesh" class="visual" pos="4.33013e-05 -2.5e-05 -0.014785" quat="2.36762e-16 0.866025 -0.5 4.79959e-16" mesh="foot" material="foot_material"/>
+        <geom type="mesh" class="visual" pos="4.33013e-05 -2.5e-05 -0.014785" quat="7.99966e-17 0.866025 -0.5 5.75703e-17" mesh="foot" material="foot_material"/>
         <!-- Part dc15_a01_case_f_dummy_2 -->
-        <geom type="mesh" class="visual" pos="0.108746 0.039063 -0.014785" quat="4.65001e-16 0.5 0.866025 -2.20656e-16" mesh="dc15_a01_case_f_dummy" material="dc15_a01_case_f_dummy_material"/>
+        <geom type="mesh" class="visual" pos="0.108746 0.039063 -0.014785" quat="5.75703e-17 0.5 0.866025 -7.99966e-17" mesh="dc15_a01_case_f_dummy" material="dc15_a01_case_f_dummy_material"/>
         <!-- Part dc15_a01_horn_dummy_4 -->
-        <geom type="mesh" class="visual" pos="-0.000389711 -0.000275 -0.014785" quat="2.36762e-16 0.866025 -0.5 4.79959e-16" mesh="dc15_a01_horn_dummy" material="dc15_a01_horn_dummy_material"/>
+        <geom type="mesh" class="visual" pos="-0.000389711 -0.000275 -0.014785" quat="7.99966e-17 0.866025 -0.5 5.75703e-17" mesh="dc15_a01_horn_dummy" material="dc15_a01_horn_dummy_material"/>
         <!-- Part drive_palonier__configuration_simple_axe -->
         <geom type="mesh" class="visual" pos="-0.0220836 0.01275 -0.017185" quat="0.183013 0.183013 0.683013 0.683013" mesh="drive_palonier__configuration_simple_axe" material="drive_palonier__configuration_simple_axe_material"/>
         <!-- Part wj_wk00_0124bottomcase_45__configuration_simple_axe -->
         <geom type="mesh" class="visual" pos="-0.0220256 0.012753 -0.017185" quat="0.183013 0.183013 0.683013 0.683013" mesh="wj_wk00_0124bottomcase_45__configuration_simple_axe" material="wj_wk00_0124bottomcase_45__configuration_simple_axe_material"/>
         <!-- Part dc15_a01_case_f_dummy_3 -->
-        <geom type="mesh" class="visual" pos="-0.0106397 0.0174785 -0.014785" quat="2.36762e-16 0.866025 -0.5 4.79959e-16" mesh="dc15_a01_case_f_dummy" material="dc15_a01_case_f_dummy_material"/>
+        <geom type="mesh" class="visual" pos="-0.0106397 0.0174785 -0.014785" quat="7.99966e-17 0.866025 -0.5 5.75703e-17" mesh="dc15_a01_case_f_dummy" material="dc15_a01_case_f_dummy_material"/>
         <!-- Part wj_wk00_0123middlecase_56__configuration_simple_axe -->
         <geom type="mesh" class="visual" pos="-0.0220371 0.0127896 -0.017185" quat="0.183013 0.183013 0.683013 0.683013" mesh="wj_wk00_0123middlecase_56__configuration_simple_axe" material="wj_wk00_0123middlecase_56__configuration_simple_axe_material"/>
         <!-- Part dc15_a01_horn_dummy_5 -->
-        <geom type="mesh" class="visual" pos="0.0205433 0.000475 -0.014785" quat="3.40277e-16 -1.08381e-14 1 -7.08851e-16" mesh="dc15_a01_horn_dummy" material="dc15_a01_horn_dummy_material"/>
+        <geom type="mesh" class="visual" pos="0.0205433 0.000475 -0.014785" quat="5.55112e-17 1.01308e-15 1 -1.17961e-16" mesh="dc15_a01_horn_dummy" material="dc15_a01_horn_dummy_material"/>
         <!-- Part dc15_a01_case_b_dummy_3 -->
-        <geom type="mesh" class="visual" pos="4.33013e-05 0.000475 -0.014785" quat="2.96638e-16 -1.20312e-14 1 -4.4062e-16" mesh="dc15_a01_case_b_dummy" material="dc15_a01_case_b_dummy_material"/>
+        <geom type="mesh" class="visual" pos="4.33013e-05 0.000475 -0.014785" quat="9.62216e-18 9.71445e-16 1 -9.71357e-17" mesh="dc15_a01_case_b_dummy" material="dc15_a01_case_b_dummy_material"/>
         <!-- Part dc15_a01_case_f_dummy_4 -->
-        <geom type="mesh" class="visual" pos="0.0205433 0.000475 -0.014785" quat="4.5248e-16 -1.09536e-14 1 -3.13539e-16" mesh="dc15_a01_case_f_dummy" material="dc15_a01_case_f_dummy_material"/>
+        <geom type="mesh" class="visual" pos="0.0205433 0.000475 -0.014785" quat="9.85907e-18 9.4369e-16 1 -9.80642e-17" mesh="dc15_a01_case_f_dummy" material="dc15_a01_case_f_dummy_material"/>
         <!-- Part side_plate -->
-        <geom type="mesh" class="visual" pos="4.33013e-05 -2.5e-05 -0.014785" quat="3.46618e-16 0.866025 -0.5 4.16534e-16" mesh="side_plate" material="side_plate_material"/>
+        <geom type="mesh" class="visual" pos="4.33013e-05 -2.5e-05 -0.014785" quat="7.99966e-17 0.866025 -0.5 5.75703e-17" mesh="side_plate" material="side_plate_material"/>
         <!-- Part dc15_a01_case_m_dummy_2 -->
-        <geom type="mesh" class="visual" pos="-0.00977369 -0.0180285 -0.014785" quat="7.54465e-16 0.866025 0.5 -9.06726e-17" mesh="dc15_a01_case_m_dummy" material="dc15_a01_case_m_dummy_material"/>
+        <geom type="mesh" class="visual" pos="-0.00977369 -0.0180285 -0.014785" quat="8.98556e-17 0.866025 0.5 -4.04939e-17" mesh="dc15_a01_case_m_dummy" material="dc15_a01_case_m_dummy_material"/>
         <!-- Part dc15_a01_case_m_dummy_3 -->
-        <geom type="mesh" class="visual" pos="4.33013e-05 0.000475 -0.014785" quat="2.98372e-16 -1.17814e-14 1 -4.54498e-16" mesh="dc15_a01_case_m_dummy" material="dc15_a01_case_m_dummy_material"/>
+        <geom type="mesh" class="visual" pos="4.33013e-05 0.000475 -0.014785" quat="9.85907e-18 9.99201e-16 1 -9.80642e-17" mesh="dc15_a01_case_m_dummy" material="dc15_a01_case_m_dummy_material"/>
         <!-- Part side_plate_2 -->
-        <geom type="mesh" class="visual" pos="4.33013e-05 -2.5e-05 -0.014785" quat="2.98372e-16 -1.19479e-14 1 -4.3715e-16" mesh="side_plate" material="side_plate_material"/>
+        <geom type="mesh" class="visual" pos="4.33013e-05 -2.5e-05 -0.014785" quat="1.05474e-17 9.99201e-16 1 -9.67662e-17" mesh="side_plate" material="side_plate_material"/>
         <!-- Part dc15_a01_case_m_dummy_4 -->
-        <geom type="mesh" class="visual" pos="0.0205433 0.000475 -0.014785" quat="4.87446e-16 -1.09536e-14 1 -3.1683e-16" mesh="dc15_a01_case_m_dummy" material="dc15_a01_case_m_dummy_material"/>
+        <geom type="mesh" class="visual" pos="0.0205433 0.000475 -0.014785" quat="9.85907e-18 9.4369e-16 1 -9.80642e-17" mesh="dc15_a01_case_m_dummy" material="dc15_a01_case_m_dummy_material"/>
         <!-- Part dc15_a01_horn_dummy_6 -->
-        <geom type="mesh" class="visual" pos="4.33013e-05 0.000475 -0.014785" quat="1.65146e-15 -1.01577e-14 1 7.63278e-16" mesh="dc15_a01_horn_dummy" material="dc15_a01_horn_dummy_material"/>
+        <geom type="mesh" class="visual" pos="4.33013e-05 0.000475 -0.014785" quat="1.12076e-17 9.71445e-16 1 -9.91555e-17" mesh="dc15_a01_horn_dummy" material="dc15_a01_horn_dummy_material"/>
         <!-- Part side_plate_3 -->
-        <geom type="mesh" class="visual" pos="4.33013e-05 -2.5e-05 -0.014785" quat="7.54465e-16 0.866025 0.5 -9.06726e-17" mesh="side_plate" material="side_plate_material"/>
+        <geom type="mesh" class="visual" pos="4.33013e-05 -2.5e-05 -0.014785" quat="8.98556e-17 0.866025 0.5 -4.04939e-17" mesh="side_plate" material="side_plate_material"/>
         <!-- Part top_body -->
-        <geom type="mesh" class="visual" pos="2.23926e-06 1.6062e-05 -0.212785" quat="3.60246e-14 -1 -1.01788e-14 -2.86689e-16" mesh="top_body" material="top_body_material"/>
+        <geom type="mesh" class="visual" pos="2.23926e-06 1.6062e-05 -0.212785" quat="3.66183e-14 -1 7.77156e-16 -9.85907e-18" mesh="top_body" material="top_body_material"/>
         <!-- Part wj_wk00_0122topcabinetcase_95__configuration_simple_axe -->
         <geom type="mesh" class="visual" pos="-0.0220836 0.01275 -0.017185" quat="0.183013 0.183013 0.683013 0.683013" mesh="wj_wk00_0122topcabinetcase_95__configuration_simple_axe" material="wj_wk00_0122topcabinetcase_95__configuration_simple_axe_material"/>
         <!-- Part dc15_a01_case_m_dummy_5 -->
-        <geom type="mesh" class="visual" pos="-0.0106397 0.0174785 -0.014785" quat="2.36762e-16 0.866025 -0.5 4.79959e-16" mesh="dc15_a01_case_m_dummy" material="dc15_a01_case_m_dummy_material"/>
+        <geom type="mesh" class="visual" pos="-0.0106397 0.0174785 -0.014785" quat="7.99966e-17 0.866025 -0.5 5.75703e-17" mesh="dc15_a01_case_m_dummy" material="dc15_a01_case_m_dummy_material"/>
         <!-- Part bottom_body -->
-        <geom type="mesh" class="visual" pos="4.33013e-05 -2.5e-05 -0.213285" quat="2.84495e-16 -1.01788e-14 1 -6.76542e-16" mesh="bottom_body" material="bottom_body_material"/>
+        <geom type="mesh" class="visual" pos="4.33013e-05 -2.5e-05 -0.213285" quat="1.18421e-17 7.77156e-16 1 -9.58695e-17" mesh="bottom_body" material="bottom_body_material"/>
         <!-- Part foot_2 -->
-        <geom type="mesh" class="visual" pos="4.33013e-05 -2.5e-05 -0.014785" quat="2.94903e-16 -1.16148e-14 1 -4.47559e-16" mesh="foot" material="foot_material"/>
+        <geom type="mesh" class="visual" pos="4.33013e-05 -2.5e-05 -0.014785" quat="1.06525e-17 1.04083e-15 1 -9.67783e-17" mesh="foot" material="foot_material"/>
         <!-- Part dc15_a01_case_f_dummy_5 -->
-        <geom type="mesh" class="visual" pos="-0.00977369 -0.0180285 -0.014785" quat="7.54465e-16 0.866025 0.5 -9.06726e-17" mesh="dc15_a01_case_f_dummy" material="dc15_a01_case_f_dummy_material"/>
+        <geom type="mesh" class="visual" pos="-0.00977369 -0.0180285 -0.014785" quat="8.98556e-17 0.866025 0.5 -4.04939e-17" mesh="dc15_a01_case_f_dummy" material="dc15_a01_case_f_dummy_material"/>
         <!-- Part dc15_a01_case_b_dummy_4 -->
-        <geom type="mesh" class="visual" pos="0.0205433 0.000475 -0.014785" quat="3.00107e-16 -1.02508e-14 1 -4.33681e-16" mesh="dc15_a01_case_b_dummy" material="dc15_a01_case_b_dummy_material"/>
+        <geom type="mesh" class="visual" pos="0.0205433 0.000475 -0.014785" quat="1.06001e-17 1.01308e-15 1 -9.68872e-17" mesh="dc15_a01_case_b_dummy" material="dc15_a01_case_b_dummy_material"/>
         <!-- Part foot_3 -->
-        <geom type="mesh" class="visual" pos="4.33013e-05 -2.5e-05 -0.014785" quat="7.54465e-16 0.866025 0.5 -9.06726e-17" mesh="foot" material="foot_material"/>
+        <geom type="mesh" class="visual" pos="4.33013e-05 -2.5e-05 -0.014785" quat="8.98556e-17 0.866025 0.5 -4.04939e-17" mesh="foot" material="foot_material"/>
         <!-- Part dc15_a01_case_b_dummy_5 -->
-        <geom type="mesh" class="visual" pos="-0.0106397 0.0174785 -0.014785" quat="2.36762e-16 0.866025 -0.5 4.79959e-16" mesh="dc15_a01_case_b_dummy" material="dc15_a01_case_b_dummy_material"/>
+        <geom type="mesh" class="visual" pos="-0.0106397 0.0174785 -0.014785" quat="7.99966e-17 0.866025 -0.5 5.75703e-17" mesh="dc15_a01_case_b_dummy" material="dc15_a01_case_b_dummy_material"/>
         <!-- Part dc15_a01_case_b_dummy_6 -->
-        <geom type="mesh" class="visual" pos="0.000476314 -0.000275 -0.014785" quat="7.54465e-16 0.866025 0.5 -9.06726e-17" mesh="dc15_a01_case_b_dummy" material="dc15_a01_case_b_dummy_material"/>
+        <geom type="mesh" class="visual" pos="0.000476314 -0.000275 -0.014785" quat="8.98556e-17 0.866025 0.5 -4.04939e-17" mesh="dc15_a01_case_b_dummy" material="dc15_a01_case_b_dummy_material"/>
         <!-- Part dc15_a01_case_m_dummy_6 -->
-        <geom type="mesh" class="visual" pos="0.000476314 -0.000275 -0.014785" quat="7.54465e-16 0.866025 0.5 -9.06726e-17" mesh="dc15_a01_case_m_dummy" material="dc15_a01_case_m_dummy_material"/>
+        <geom type="mesh" class="visual" pos="0.000476314 -0.000275 -0.014785" quat="8.98556e-17 0.866025 0.5 -4.04939e-17" mesh="dc15_a01_case_m_dummy" material="dc15_a01_case_m_dummy_material"/>
         <!-- Part mid_plate -->
-        <geom type="mesh" class="visual" pos="4.33013e-05 -2.5e-05 -0.014785" quat="7.54465e-16 0.866025 0.5 -9.19126e-17" mesh="mid_plate" material="mid_plate_material"/>
+        <geom type="mesh" class="visual" pos="4.33013e-05 -2.5e-05 -0.014785" quat="8.98556e-17 0.866025 0.5 -4.04939e-17" mesh="mid_plate" material="mid_plate_material"/>
         <!-- Part dc15_a01_case_f_dummy_6 -->
-        <geom type="mesh" class="visual" pos="4.33013e-05 0.000475 -0.014785" quat="2.96638e-16 -1.15732e-14 1 -4.44089e-16" mesh="dc15_a01_case_f_dummy" material="dc15_a01_case_f_dummy_material"/>
+        <geom type="mesh" class="visual" pos="4.33013e-05 0.000475 -0.014785" quat="1.12228e-17 9.71445e-16 1 -9.57545e-17" mesh="dc15_a01_case_f_dummy" material="dc15_a01_case_f_dummy_material"/>
         <!-- Link arm -->
         <body name="arm" pos="0.0313706 0.0298975 -0.044785" quat="0.353553 0.353553 0.612372 0.612372">
           <!-- Joint from main_plate to arm -->
           <joint axis="0 0 1" name="1" type="hinge" class="chosen_actuator"/>
           <inertial pos="0 0 0" mass="1e-09" fullinertia="1e-09 1e-09 1e-09 0 0 0"/>
           <!-- Part ball -->
-          <geom type="mesh" class="visual" pos="0.038 0 -0.00768" quat="0.707107 -4.89443e-15 -1.74305e-14 0.707107" mesh="ball" material="ball_material"/>
+          <geom type="mesh" class="visual" pos="0.038 -1.38778e-17 -0.00768" quat="0.707107 3.19873e-16 4.85723e-16 0.707107" mesh="ball" material="ball_material"/>
           <!-- Part arm -->
-          <geom type="mesh" class="visual" pos="-0.01025 -0.03 -0.0425915" quat="0.707107 -0.707107 1.11022e-16 7.58752e-17" mesh="arm" material="arm_material"/>
+          <geom type="mesh" class="visual" pos="-0.01025 -0.03 -0.0425915" quat="0.707107 -0.707107 2.22045e-16 1.58716e-16" mesh="arm" material="arm_material"/>
           <!-- Link rod -->
-          <body name="rod" pos="0.038 0 -0.00768" quat="0.852762 -0.0688496 -0.0534551 0.514975">
+          <body name="rod" pos="0.038 -3.19189e-16 -0.00768" quat="0.852762 -0.0688496 -0.0534551 0.514975">
             <!-- Joint from arm to rod -->
             <joint axis="0 0 1" name="passive_1" type="ball" class="chosen_actuator"/>
             <inertial pos="0 0 0" mass="1e-09" fullinertia="1e-09 1e-09 1e-09 0 0 0"/>
             <!-- Part rod -->
             <geom type="mesh" class="visual" pos="0.00371031 0.0370326 -0.0564076" quat="0.855513 0.00634803 -0.517727 0.00384161" mesh="rod" material="rod_material"/>
             <!-- Part shape -->
-            <geom type="mesh" class="visual" pos="2.08167e-17 0 -6.93889e-18" quat="1 6.43964e-19 -7.97973e-17 6.09538e-16" mesh="shape" material="shape_material"/>
+            <geom type="mesh" class="visual" pos="0 1.38778e-17 -6.93889e-18" quat="1 -0 6.93889e-17 -1.8735e-16" mesh="shape" material="shape_material"/>
             <!-- Part shape_2 -->
-            <geom type="mesh" class="visual" pos="-0.0900003 0 -2.77556e-17" quat="1.11022e-16 8.18165e-17 1.11022e-16 -1" mesh="shape" material="shape_material"/>
+            <geom type="mesh" class="visual" pos="-0.0900003 -2.77556e-17 -3.1572e-16" quat="4.71845e-15 5.99444e-15 9.99201e-16 -1" mesh="shape" material="shape_material"/>
             <!-- Frame closing_1_1 -->
-            <site group="3" name="closing_1_1" pos="-0.0900003 0 -2.77556e-17" quat="1.11022e-16 8.18165e-17 1.11022e-16 -1"/>
+            <site group="3" name="closing_1_1" pos="-0.0900003 -2.77556e-17 -3.1572e-16" quat="4.71845e-15 5.99444e-15 9.99201e-16 -1"/>
           </body>
         </body>
         <!-- Link arm_2 -->
@@ -168,70 +168,70 @@
           <joint axis="0 0 1" name="2" type="hinge" class="chosen_actuator"/>
           <inertial pos="0 0 0" mass="1e-09" fullinertia="1e-09 1e-09 1e-09 0 0 0"/>
           <!-- Part ball_2 -->
-          <geom type="mesh" class="visual" pos="0.038 0 -0.00768" quat="0.707107 3.7643e-16 1.11022e-16 -0.707107" mesh="ball" material="ball_material"/>
+          <geom type="mesh" class="visual" pos="0.038 0 -0.00768" quat="0.707107 1.31348e-15 1.83187e-15 -0.707107" mesh="ball" material="ball_material"/>
           <!-- Part arm_2 -->
-          <geom type="mesh" class="visual" pos="-0.01025 -0.03 -0.0425915" quat="0.707107 -0.707107 1.11022e-16 9.49621e-17" mesh="arm" material="arm_material"/>
+          <geom type="mesh" class="visual" pos="-0.01025 -0.03 -0.0425915" quat="0.707107 -0.707107 1.11022e-16 1.14517e-16" mesh="arm" material="arm_material"/>
           <!-- Link shape -->
-          <body name="shape" pos="0.038 -8.32667e-17 -0.00768" quat="0.851318 -0.0848634 0.0395624 -0.516228">
+          <body name="shape" pos="0.038 3.33067e-16 -0.00768" quat="0.851318 -0.0848634 0.0395624 -0.516228">
             <!-- Joint from arm_2 to shape -->
             <joint axis="0 0 1" name="passive_2" type="ball" class="chosen_actuator"/>
             <inertial pos="0 0 0" mass="1e-09" fullinertia="1e-09 1e-09 1e-09 0 0 0"/>
             <!-- Part shape_3 -->
-            <geom type="mesh" class="visual" pos="-0.0900003 -2.77556e-17 -2.08167e-17" quat="1.66533e-16 6.96979e-17 -1.66533e-16 1" mesh="shape" material="shape_material"/>
+            <geom type="mesh" class="visual" pos="-0.0900003 1.38778e-16 -3.46945e-17" quat="2.2482e-15 3.04057e-15 7.32747e-15 1" mesh="shape" material="shape_material"/>
             <!-- Part shape_4 -->
-            <geom type="mesh" class="visual" pos="-6.93889e-18 -1.38778e-17 0" quat="1 -2.05055e-17 4.44089e-16 9.71445e-17" mesh="shape" material="shape_material"/>
+            <geom type="mesh" class="visual" pos="-6.93889e-18 0 0" quat="1 -2.96417e-17 3.33067e-16 2.35922e-16" mesh="shape" material="shape_material"/>
             <!-- Part rod_2 -->
             <geom type="mesh" class="visual" pos="0.00371031 0.0370326 -0.0564076" quat="0.855513 0.00634803 -0.517727 0.00384161" mesh="rod" material="rod_material"/>
             <!-- Frame closing_2_1 -->
-            <site group="3" name="closing_2_1" pos="-0.0900003 -2.77556e-17 -2.08167e-17" quat="1.66533e-16 6.96979e-17 -1.66533e-16 1"/>
+            <site group="3" name="closing_2_1" pos="-0.0900003 1.38778e-16 -3.46945e-17" quat="2.2482e-15 3.04057e-15 7.32747e-15 1"/>
           </body>
         </body>
         <!-- Link arm_3 -->
-        <body name="arm_3" pos="0.0102933 -0.0421165 -0.044785" quat="0.707107 0.707107 8.65974e-15 6.67498e-15">
+        <body name="arm_3" pos="0.0102933 -0.0421165 -0.044785" quat="0.707107 0.707107 -5.55112e-16 -5.32009e-16">
           <!-- Joint from main_plate to arm_3 -->
           <joint axis="0 0 1" name="3" type="hinge" class="chosen_actuator"/>
           <inertial pos="0 0 0" mass="1e-09" fullinertia="1e-09 1e-09 1e-09 0 0 0"/>
           <!-- Part arm_3 -->
           <geom type="mesh" class="visual" pos="-0.01025 -0.03 -0.0425915" quat="0.707107 -0.707107 1.11022e-16 1.0222e-16" mesh="arm" material="arm_material"/>
           <!-- Part ball_3 -->
-          <geom type="mesh" class="visual" pos="0.038 -2.77556e-17 -0.00768" quat="0.707107 -2.15888e-16 -2.22045e-16 0.707107" mesh="ball" material="ball_material"/>
+          <geom type="mesh" class="visual" pos="0.038 2.77556e-17 -0.00768" quat="0.707107 2.21396e-17 2.22045e-16 0.707107" mesh="ball" material="ball_material"/>
           <!-- Link shape_2 -->
-          <body name="shape_2" pos="0.038 -2.77556e-17 -0.00768" quat="0.05553 0.853733 0.515746 0.04541">
+          <body name="shape_2" pos="0.038 4.16334e-17 -0.00768" quat="0.05553 0.853733 0.515746 0.04541">
             <!-- Joint from arm_3 to shape_2 -->
             <joint axis="0 0 1" name="passive_3" type="ball" class="chosen_actuator"/>
             <inertial pos="0 0 0" mass="1e-09" fullinertia="1e-09 1e-09 1e-09 0 0 0"/>
             <!-- Part rod_3 -->
             <geom type="mesh" class="visual" pos="0.00371031 0.0370326 -0.0564076" quat="0.855513 0.00634803 -0.517727 0.00384161" mesh="rod" material="rod_material"/>
             <!-- Part shape_5 -->
-            <geom type="mesh" class="visual" pos="0 0 6.93889e-18" quat="1 -0 -5.55112e-17 -4.09395e-16" mesh="shape" material="shape_material"/>
+            <geom type="mesh" class="visual" pos="-6.93889e-18 1.38778e-17 0" quat="1 3.93667e-18 0 2.35922e-16" mesh="shape" material="shape_material"/>
             <!-- Part shape_6 -->
-            <geom type="mesh" class="visual" pos="-0.0900003 0 -5.3256e-15" quat="5.2458e-15 -5.42193e-15 -6.21725e-15 1" mesh="shape" material="shape_material"/>
+            <geom type="mesh" class="visual" pos="-0.0900003 0 -1.11022e-16" quat="2.77556e-17 1.54774e-17 5.55112e-17 -1" mesh="shape" material="shape_material"/>
             <!-- Frame closing_3_1 -->
-            <site group="3" name="closing_3_1" pos="-0.0900003 0 -5.3256e-15" quat="5.2458e-15 -5.42193e-15 -6.21725e-15 1"/>
+            <site group="3" name="closing_3_1" pos="-0.0900003 0 -1.11022e-16" quat="2.77556e-17 1.54774e-17 5.55112e-17 -1"/>
           </body>
         </body>
         <!-- Link ball -->
-        <body name="ball" pos="-0.0102067 -0.0421165 -0.044785" quat="4.82947e-15 -8.64783e-15 0.707107 -0.707107">
+        <body name="ball" pos="-0.0102067 -0.0421165 -0.044785" quat="5.27356e-16 -5.94345e-16 -0.707107 0.707107">
           <!-- Joint from main_plate to ball -->
           <joint axis="0 0 1" name="4" type="hinge" class="chosen_actuator"/>
           <inertial pos="0 0 0" mass="1e-09" fullinertia="1e-09 1e-09 1e-09 0 0 0"/>
           <!-- Part ball_4 -->
-          <geom type="mesh" class="visual" pos="0.038 1.38778e-17 -0.00768" quat="0.707107 -9.61443e-16 8.32667e-16 -0.707107" mesh="ball" material="ball_material"/>
+          <geom type="mesh" class="visual" pos="0.038 0 -0.00768" quat="0.707107 1.92793e-16 2.22045e-16 -0.707107" mesh="ball" material="ball_material"/>
           <!-- Part arm_4 -->
           <geom type="mesh" class="visual" pos="-0.01025 -0.03 -0.0425915" quat="0.707107 -0.707107 1.11022e-16 1.0222e-16" mesh="arm" material="arm_material"/>
           <!-- Link shape_3 -->
-          <body name="shape_3" pos="0.038 1.38778e-17 -0.00768" quat="0.160884 -0.840274 0.506146 -0.108964">
+          <body name="shape_3" pos="0.038 -1.38778e-17 -0.00768" quat="0.160884 -0.840274 0.506146 -0.108964">
             <!-- Joint from ball to shape_3 -->
             <joint axis="0 0 1" name="passive_4" type="ball" class="chosen_actuator"/>
             <inertial pos="0 0 0" mass="1e-09" fullinertia="1e-09 1e-09 1e-09 0 0 0"/>
             <!-- Part shape_7 -->
-            <geom type="mesh" class="visual" pos="-0.0900003 1.38778e-17 -1.96891e-16" quat="1.38778e-16 -6.52579e-16 -9.99201e-16 1" mesh="shape" material="shape_material"/>
+            <geom type="mesh" class="visual" pos="-0.0900003 1.38778e-17 3.01842e-16" quat="2.78944e-15 1.11259e-15 1.33227e-15 1" mesh="shape" material="shape_material"/>
             <!-- Part rod_4 -->
             <geom type="mesh" class="visual" pos="0.00371031 0.0370326 -0.0564076" quat="0.855513 0.00634803 -0.517727 0.00384161" mesh="rod" material="rod_material"/>
             <!-- Part shape_8 -->
-            <geom type="mesh" class="visual" pos="6.93889e-18 0 -2.60209e-18" quat="1 0 1.11022e-16 -1.11022e-16" mesh="shape" material="shape_material"/>
+            <geom type="mesh" class="visual" pos="-1.38778e-17 0 -4.33681e-18" quat="1 -1.55893e-17 -1.11022e-16 2.77556e-17" mesh="shape" material="shape_material"/>
             <!-- Frame closing_4_1 -->
-            <site group="3" name="closing_4_1" pos="-0.0900003 1.38778e-17 -1.96891e-16" quat="1.38778e-16 -6.52579e-16 -9.99201e-16 1"/>
+            <site group="3" name="closing_4_1" pos="-0.0900003 1.38778e-17 3.01842e-16" quat="2.78944e-15 1.11259e-15 1.33227e-15 1"/>
           </body>
         </body>
         <!-- Link arm_4 -->
@@ -240,22 +240,22 @@
           <joint axis="0 0 1" name="5" type="hinge" class="chosen_actuator"/>
           <inertial pos="0 0 0" mass="1e-09" fullinertia="1e-09 1e-09 1e-09 0 0 0"/>
           <!-- Part ball_5 -->
-          <geom type="mesh" class="visual" pos="0.038 -2.77556e-17 -0.00768" quat="1.10342e-15 -0.707107 -0.707107 -2.10106e-16" mesh="ball" material="ball_material"/>
+          <geom type="mesh" class="visual" pos="0.038 1.38778e-17 -0.00768" quat="2.41995e-15 -0.707107 -0.707107 1.97893e-15" mesh="ball" material="ball_material"/>
           <!-- Part arm_5 -->
-          <geom type="mesh" class="visual" pos="-0.01025 -0.03 -0.0425915" quat="0.707107 -0.707107 1.11022e-16 1.15667e-16" mesh="arm" material="arm_material"/>
+          <geom type="mesh" class="visual" pos="-0.01025 -0.03 -0.0425915" quat="0.707107 -0.707107 1.11022e-16 7.19243e-17" mesh="arm" material="arm_material"/>
           <!-- Link shape_4 -->
-          <body name="shape_4" pos="0.038 0 -0.00768" quat="0.180833 -0.836208 -0.508414 0.0978337">
+          <body name="shape_4" pos="0.038 1.38778e-17 -0.00768" quat="0.180833 -0.836208 -0.508414 0.0978337">
             <!-- Joint from arm_4 to shape_4 -->
             <joint axis="0 0 1" name="passive_5" type="ball" class="chosen_actuator"/>
             <inertial pos="0 0 0" mass="1e-09" fullinertia="1e-09 1e-09 1e-09 0 0 0"/>
             <!-- Part shape_9 -->
-            <geom type="mesh" class="visual" pos="-0.0900003 -2.08167e-17 1.80411e-16" quat="1.94289e-16 -1.22085e-15 -1.11022e-16 -1" mesh="shape" material="shape_material"/>
+            <geom type="mesh" class="visual" pos="-0.0900003 -6.93889e-18 1.70697e-15" quat="7.60503e-15 -6.78187e-15 9.82547e-15 -1" mesh="shape" material="shape_material"/>
             <!-- Part rod_5 -->
             <geom type="mesh" class="visual" pos="0.00371031 0.0370326 -0.0564076" quat="0.855513 0.00634803 -0.517727 0.00384161" mesh="rod" material="rod_material"/>
             <!-- Part shape_10 -->
-            <geom type="mesh" class="visual" pos="6.93889e-18 6.93889e-18 0" quat="1 -0 -5.55112e-17 2.77556e-17" mesh="shape" material="shape_material"/>
+            <geom type="mesh" class="visual" pos="6.93889e-18 6.93889e-18 0" quat="1 -1.53091e-17 1.11022e-16 -1.94289e-16" mesh="shape" material="shape_material"/>
             <!-- Frame closing_5_1 -->
-            <site group="3" name="closing_5_1" pos="-0.0900003 -2.08167e-17 1.80411e-16" quat="1.94289e-16 -1.22085e-15 -1.11022e-16 -1"/>
+            <site group="3" name="closing_5_1" pos="-0.0900003 -6.93889e-18 1.70697e-15" quat="7.60503e-15 -6.78187e-15 9.82547e-15 -1"/>
           </body>
         </body>
         <!-- Link arm_5 -->
@@ -264,25 +264,25 @@
           <joint axis="0 0 1" name="6" type="hinge" class="chosen_actuator"/>
           <inertial pos="0 0 0" mass="1e-09" fullinertia="1e-09 1e-09 1e-09 0 0 0"/>
           <!-- Part ball_6 -->
-          <geom type="mesh" class="visual" pos="0.038 2.77556e-17 -0.00768" quat="2.70559e-16 0.707107 -0.707107 -3.39294e-15" mesh="ball" material="ball_material"/>
+          <geom type="mesh" class="visual" pos="0.038 -1.38778e-17 -0.00768" quat="2.60458e-16 -0.707107 0.707107 5.15221e-16" mesh="ball" material="ball_material"/>
           <!-- Part arm_6 -->
-          <geom type="mesh" class="visual" pos="-0.01025 -0.03 -0.0425915" quat="0.707107 -0.707107 1.11022e-16 1.02372e-16" mesh="arm" material="arm_material"/>
+          <geom type="mesh" class="visual" pos="-0.01025 -0.03 -0.0425915" quat="0.707107 -0.707107 1.11022e-16 9.84488e-17" mesh="arm" material="arm_material"/>
           <!-- Link shape_5 -->
-          <body name="shape_5" pos="0.038 1.38778e-17 -0.00768" quat="0.17021 -0.838434 0.504904 -0.114581">
+          <body name="shape_5" pos="0.038 9.71445e-17 -0.00768" quat="0.17021 -0.838434 0.504904 -0.114581">
             <!-- Joint from arm_5 to shape_5 -->
             <joint axis="0 0 1" name="passive_6" type="ball" class="chosen_actuator"/>
             <inertial pos="0 0 0" mass="1e-09" fullinertia="1e-09 1e-09 1e-09 0 0 0"/>
             <!-- Part shape_11 -->
-            <geom type="mesh" class="visual" pos="-0.0900003 -2.77556e-17 -2.38524e-18" quat="3.63598e-15 -1.09499e-15 -9.99201e-16 -1" mesh="shape" material="shape_material"/>
+            <geom type="mesh" class="visual" pos="-0.0900003 1.80411e-16 -7.58942e-18" quat="4.10783e-15 4.56728e-15 4.32987e-15 1" mesh="shape" material="shape_material"/>
             <!-- Part rod_6 -->
             <geom type="mesh" class="visual" pos="0.00371031 0.0370326 -0.0564076" quat="0.855513 0.00634803 -0.517727 0.00384161" mesh="rod" material="rod_material"/>
             <!-- Part shape_12 -->
-            <geom type="mesh" class="visual" pos="1.38778e-17 0 -4.22839e-18" quat="1 8.51557e-18 1.38778e-17 1.21431e-17" mesh="shape" material="shape_material"/>
+            <geom type="mesh" class="visual" pos="-6.93889e-18 0 -1.84314e-18" quat="1 0 -2.08167e-17 0" mesh="shape" material="shape_material"/>
             <!-- Link plateform -->
-            <body name="plateform" pos="-0.0900003 -2.77556e-17 -2.38524e-18" quat="9.99201e-16 3.71044e-15 -1 1.11022e-15">
+            <body name="plateform" pos="-0.0900003 1.80411e-16 -7.58942e-18" quat="4.66294e-15 -4.02394e-15 -1 4.44089e-15">
               <!-- Joint from shape_5 to plateform -->
               <joint axis="0 0 1" name="passive_7" type="ball" class="chosen_actuator"/>
-              <inertial pos="0.0548285 0.00286309 -0.03817" mass="0.115811" fullinertia="0.000318772 0.000353065 0.000217945 7.12725e-06 -2.45557e-05 -1.13467e-05"/>
+              <inertial pos="0.0548333 0.00287548 -0.0381711" mass="0.115777" fullinertia="0.000318707 0.000353048 0.000217873 7.14935e-06 -2.4557e-05 -1.13518e-05"/>
               <!-- Part head_shell_front -->
               <geom type="mesh" class="visual" pos="0.0574222 0.00200241 -0.0383511" quat="0.615608 0.117587 0.755666 -0.190181" mesh="head_shell_front" material="head_shell_front_material"/>
               <!-- Part head_head_back -->
@@ -308,7 +308,7 @@
               <!-- Part plateform -->
               <geom type="mesh" class="visual" pos="-0.0935013 0.0657437 -0.00885671" quat="0.628223 0.479666 0.595633 0.143102" mesh="plateform" material="plateform_material"/>
               <!-- Part ball_11 -->
-              <geom type="mesh" class="visual" pos="-5.55112e-17 1.38778e-17 6.93889e-18" quat="0.235842 0.039336 -0.201378 0.949883" mesh="ball" material="ball_material"/>
+              <geom type="mesh" class="visual" pos="-1.38778e-16 5.55112e-17 2.75387e-17" quat="0.235842 0.039336 -0.201378 0.949883" mesh="ball" material="ball_material"/>
               <!-- Part ball_12 -->
               <geom type="mesh" class="visual" pos="0.0184911 0.0480184 -0.0257888" quat="0.223913 -0.0838549 -0.64934 0.721934" mesh="ball" material="ball_material"/>
               <!-- Frame closing_1_2 -->
@@ -327,7 +327,7 @@
               <body name="test_antenna_body" pos="0.0786202 0.0183429 -0.0976865" quat="0.408879 0.340055 0.269409 -0.80287">
                 <!-- Joint from plateform to test_antenna_body -->
                 <joint axis="0 0 1" name="left_antenna" type="hinge" class="chosen_actuator"/>
-                <inertial pos="0.00133995 0.0266291 -0.00378396" mass="0.00776818" fullinertia="1.03752e-05 2.25312e-07 1.0396e-05 -5.12035e-07 -3.53673e-08 -7.02858e-07"/>
+                <inertial pos="0.00144486 0.0287138 -0.00297745" mass="0.00463834" fullinertia="1.36882e-05 2.27725e-07 1.36937e-05 -6.79045e-07 -4.92291e-08 -9.78329e-07"/>
                 <!-- Part test_antenna -->
                 <geom type="mesh" class="visual" pos="0.0285297 -0.0184653 0.0570171" quat="0.647969 -0.716727 -0.172861 -0.191203" mesh="test_antenna" material="test_antenna_material"/>
                 <!-- Part test_antenna_body -->
@@ -337,7 +337,7 @@
               <body name="test_antenna" pos="0.101086 0.024257 0.00448913" quat="0.252105 0.720175 0.394041 -0.51237">
                 <!-- Joint from plateform to test_antenna -->
                 <joint axis="0 0 1" name="right_antenna" type="hinge" class="chosen_actuator"/>
-                <inertial pos="0.00133995 0.0266291 -0.00378396" mass="0.00776818" fullinertia="1.03752e-05 2.25312e-07 1.0396e-05 -5.12035e-07 -3.53673e-08 -7.02858e-07"/>
+                <inertial pos="0.00144486 0.0287138 -0.00297745" mass="0.00463834" fullinertia="1.36882e-05 2.27725e-07 1.36937e-05 -6.79045e-07 -4.92291e-08 -9.78329e-07"/>
                 <!-- Part test_antenna_body_2 -->
                 <geom type="mesh" class="visual" pos="0.0285297 -0.0184653 0.0570171" quat="0.647969 -0.716727 -0.172861 -0.191203" mesh="test_antenna_body" material="test_antenna_body_material"/>
                 <!-- Part test_antenna_2 -->
@@ -350,36 +350,36 @@
     </body>
   </worldbody>
   <asset>
-    <mesh file="test_antenna_body.stl"/>
-    <mesh file="turning_bowl.stl"/>
-    <mesh file="foot.stl"/>
-    <mesh file="side_plate.stl"/>
-    <mesh file="bottom_body.stl"/>
-    <mesh file="wj_wk00_0123middlecase_56__configuration_simple_axe.stl"/>
-    <mesh file="plateform.stl"/>
-    <mesh file="dc15_a01_case_b_dummy.stl"/>
-    <mesh file="uc_a37_rev_a_step.stl"/>
-    <mesh file="eye_support.stl"/>
-    <mesh file="head_interface.stl"/>
-    <mesh file="test_antenna.stl"/>
     <mesh file="drive_palonier__configuration_simple_axe.stl"/>
-    <mesh file="mid_plate.stl"/>
-    <mesh file="main_plate.stl"/>
-    <mesh file="small_lens.stl"/>
-    <mesh file="wj_wk00_0122topcabinetcase_95__configuration_simple_axe.stl"/>
+    <mesh file="dc15_a01_case_b_dummy.stl"/>
+    <mesh file="test_antenna_body.stl"/>
     <mesh file="top_body.stl"/>
+    <mesh file="wj_wk00_0123middlecase_56__configuration_simple_axe.stl"/>
+    <mesh file="eye_support.stl"/>
     <mesh file="dc15_a01_case_f_dummy.stl"/>
-    <mesh file="ball.stl"/>
-    <mesh file="head_head_back.stl"/>
-    <mesh file="shape.stl"/>
-    <mesh file="head_shell_front.stl"/>
-    <mesh file="wj_wk00_0124bottomcase_45__configuration_simple_axe.stl"/>
-    <mesh file="arm.stl"/>
+    <mesh file="head_interface.stl"/>
+    <mesh file="small_lens.stl"/>
+    <mesh file="side_plate.stl"/>
     <mesh file="dc15_a01_horn_dummy.stl"/>
-    <mesh file="big_lens.stl"/>
+    <mesh file="plateform.stl"/>
+    <mesh file="main_plate.stl"/>
+    <mesh file="test_antenna.stl"/>
     <mesh file="dc15_a01_case_m_dummy.stl"/>
+    <mesh file="head_shell_front.stl"/>
+    <mesh file="turning_bowl.stl"/>
+    <mesh file="head_head_back.stl"/>
+    <mesh file="bottom_body.stl"/>
+    <mesh file="wj_wk00_0124bottomcase_45__configuration_simple_axe.stl"/>
+    <mesh file="shape.stl"/>
+    <mesh file="foot.stl"/>
+    <mesh file="wj_wk00_0122topcabinetcase_95__configuration_simple_axe.stl"/>
+    <mesh file="arm.stl"/>
+    <mesh file="big_lens.stl"/>
     <mesh file="rod.stl"/>
-    <material name="turning_bowl_material" rgba="1 1 1 1"/>
+    <mesh file="uc_a37_rev_a_step.stl"/>
+    <mesh file="mid_plate.stl"/>
+    <mesh file="ball.stl"/>
+    <material name="turning_bowl_material" rgba="0.34902 0.376471 0.4 1"/>
     <material name="dc15_a01_case_m_dummy_material" rgba="0.262745 0.282353 0.301961 1"/>
     <material name="main_plate_material" rgba="0.196078 0.196078 0.196078 1"/>
     <material name="dc15_a01_case_f_dummy_material" rgba="0.262745 0.282353 0.301961 1"/>

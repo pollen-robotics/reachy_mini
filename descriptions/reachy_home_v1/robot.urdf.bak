@@ -1,13 +1,13 @@
 <?xml version="1.0" ?>
 <!-- Generated using onshape-to-robot -->
 <!-- Onshape https://cad.onshape.com/documents/e305b26a84339af20c593973/w/6750d451f9cbcfe7ac139539/e/251023ea04190ab16854eb80 -->
-<robot name="reachy_home">
+<robot name="robot">
   <!-- Link turning_bowl -->
   <link name="turning_bowl">
     <inertial>
-      <origin xyz="-0.00106243 -2.68048e-09 0.0103778" rpy="0 0 0"/>
-      <mass value="0.0754554"/>
-      <inertia ixx="8.58353e-05" ixy="-6.44628e-12" ixz="5.11417e-07" iyy="8.14435e-05" iyz="-6.54697e-13" izz="0.000153488"/>
+      <origin xyz="-0.0011015 3.36586e-09 0.00982937" rpy="0 0 0"/>
+      <mass value="0.0856525"/>
+      <inertia ixx="0.000103778" ixy="1.62688e-11" ixz="5.11021e-07" iyy="9.91009e-05" iyz="2.46124e-13" izz="0.000188612"/>
     </inertial>
     <!-- Part turning_bowl -->
     <visual>
@@ -16,7 +16,7 @@
         <mesh filename="package://assets/turning_bowl.stl"/>
       </geometry>
       <material name="turning_bowl_material">
-        <color rgba="1 1 1 1.0"/>
+        <color rgba="0.34902 0.376471 0.4 1.0"/>
       </material>
     </visual>
     <collision>
@@ -29,13 +29,13 @@
   <!-- Link main_plate -->
   <link name="main_plate">
     <inertial>
-      <origin xyz="6.84889e-05 0.00157052 -0.0411006" rpy="0 0 0"/>
+      <origin xyz="6.84881e-05 0.00157052 -0.0411006" rpy="0 0 0"/>
       <mass value="0.42461"/>
-      <inertia ixx="0.00174771" ixy="-3.5708e-07" ixz="-1.95679e-07" iyy="0.00169917" iyz="5.33713e-05" izz="0.00193868"/>
+      <inertia ixx="0.00174771" ixy="-3.57066e-07" ixz="-1.95668e-07" iyy="0.00169917" iyz="5.33713e-05" izz="0.00193868"/>
     </inertial>
     <!-- Part dc15_a01_case_m_dummy -->
     <visual>
-      <origin xyz="0.108746 0.039063 -0.014785" rpy="3.14159 1.13866e-15 2.0944"/>
+      <origin xyz="0.108746 0.039063 -0.014785" rpy="-3.14159 1.79711e-16 2.0944"/>
       <geometry>
         <mesh filename="package://assets/dc15_a01_case_m_dummy.stl"/>
       </geometry>
@@ -44,14 +44,14 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="0.108746 0.039063 -0.014785" rpy="3.14159 1.13866e-15 2.0944"/>
+      <origin xyz="0.108746 0.039063 -0.014785" rpy="-3.14159 1.79711e-16 2.0944"/>
       <geometry>
         <mesh filename="package://assets/dc15_a01_case_m_dummy.stl"/>
       </geometry>
     </collision>
     <!-- Part main_plate -->
     <visual>
-      <origin xyz="4.33013e-05 -2.5e-05 -0.014785" rpy="3.14159 4.91573e-16 1.0472"/>
+      <origin xyz="4.33013e-05 -2.5e-05 -0.014785" rpy="3.14159 1.54571e-15 1.0472"/>
       <geometry>
         <mesh filename="package://assets/main_plate.stl"/>
       </geometry>
@@ -60,14 +60,14 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="4.33013e-05 -2.5e-05 -0.014785" rpy="3.14159 4.91573e-16 1.0472"/>
+      <origin xyz="4.33013e-05 -2.5e-05 -0.014785" rpy="3.14159 1.54571e-15 1.0472"/>
       <geometry>
         <mesh filename="package://assets/main_plate.stl"/>
       </geometry>
     </collision>
     <!-- Part dc15_a01_case_f_dummy -->
     <visual>
-      <origin xyz="0.000476314 -0.000275 -0.014785" rpy="3.14159 4.90141e-16 1.0472"/>
+      <origin xyz="0.000476314 -0.000275 -0.014785" rpy="3.14159 1.59993e-16 1.0472"/>
       <geometry>
         <mesh filename="package://assets/dc15_a01_case_f_dummy.stl"/>
       </geometry>
@@ -76,14 +76,14 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="0.000476314 -0.000275 -0.014785" rpy="3.14159 4.90141e-16 1.0472"/>
+      <origin xyz="0.000476314 -0.000275 -0.014785" rpy="3.14159 1.59993e-16 1.0472"/>
       <geometry>
         <mesh filename="package://assets/dc15_a01_case_f_dummy.stl"/>
       </geometry>
     </collision>
     <!-- Part dc15_a01_horn_dummy -->
     <visual>
-      <origin xyz="-0.0106397 0.0174785 -0.014785" rpy="-3.14159 -1.13866e-15 -1.0472"/>
+      <origin xyz="-0.0106397 0.0174785 -0.014785" rpy="-3.14159 -5.68849e-17 -1.0472"/>
       <geometry>
         <mesh filename="package://assets/dc15_a01_horn_dummy.stl"/>
       </geometry>
@@ -92,14 +92,14 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="-0.0106397 0.0174785 -0.014785" rpy="-3.14159 -1.13866e-15 -1.0472"/>
+      <origin xyz="-0.0106397 0.0174785 -0.014785" rpy="-3.14159 -5.68849e-17 -1.0472"/>
       <geometry>
         <mesh filename="package://assets/dc15_a01_horn_dummy.stl"/>
       </geometry>
     </collision>
     <!-- Part dc15_a01_horn_dummy_2 -->
     <visual>
-      <origin xyz="0.000476314 -0.000275 -0.014785" rpy="3.14159 5.21513e-17 1.0472"/>
+      <origin xyz="0.000476314 -0.000275 -0.014785" rpy="3.14159 1.59993e-16 1.0472"/>
       <geometry>
         <mesh filename="package://assets/dc15_a01_horn_dummy.stl"/>
       </geometry>
@@ -108,14 +108,14 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="0.000476314 -0.000275 -0.014785" rpy="3.14159 5.21513e-17 1.0472"/>
+      <origin xyz="0.000476314 -0.000275 -0.014785" rpy="3.14159 1.59993e-16 1.0472"/>
       <geometry>
         <mesh filename="package://assets/dc15_a01_horn_dummy.stl"/>
       </geometry>
     </collision>
     <!-- Part dc15_a01_horn_dummy_3 -->
     <visual>
-      <origin xyz="-0.00977369 -0.0180285 -0.014785" rpy="3.14159 5.21513e-17 1.0472"/>
+      <origin xyz="-0.00977369 -0.0180285 -0.014785" rpy="3.14159 1.59993e-16 1.0472"/>
       <geometry>
         <mesh filename="package://assets/dc15_a01_horn_dummy.stl"/>
       </geometry>
@@ -124,14 +124,14 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="-0.00977369 -0.0180285 -0.014785" rpy="3.14159 5.21513e-17 1.0472"/>
+      <origin xyz="-0.00977369 -0.0180285 -0.014785" rpy="3.14159 1.59993e-16 1.0472"/>
       <geometry>
         <mesh filename="package://assets/dc15_a01_horn_dummy.stl"/>
       </geometry>
     </collision>
     <!-- Part dc15_a01_case_b_dummy -->
     <visual>
-      <origin xyz="0.108746 0.039063 -0.014785" rpy="3.14159 1.13866e-15 2.0944"/>
+      <origin xyz="0.108746 0.039063 -0.014785" rpy="-3.14159 1.79711e-16 2.0944"/>
       <geometry>
         <mesh filename="package://assets/dc15_a01_case_b_dummy.stl"/>
       </geometry>
@@ -140,14 +140,14 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="0.108746 0.039063 -0.014785" rpy="3.14159 1.13866e-15 2.0944"/>
+      <origin xyz="0.108746 0.039063 -0.014785" rpy="-3.14159 1.79711e-16 2.0944"/>
       <geometry>
         <mesh filename="package://assets/dc15_a01_case_b_dummy.stl"/>
       </geometry>
     </collision>
     <!-- Part dc15_a01_case_b_dummy_2 -->
     <visual>
-      <origin xyz="-0.00977369 -0.0180285 -0.014785" rpy="3.14159 4.90141e-16 1.0472"/>
+      <origin xyz="-0.00977369 -0.0180285 -0.014785" rpy="3.14159 1.59993e-16 1.0472"/>
       <geometry>
         <mesh filename="package://assets/dc15_a01_case_b_dummy.stl"/>
       </geometry>
@@ -156,14 +156,14 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="-0.00977369 -0.0180285 -0.014785" rpy="3.14159 4.90141e-16 1.0472"/>
+      <origin xyz="-0.00977369 -0.0180285 -0.014785" rpy="3.14159 1.59993e-16 1.0472"/>
       <geometry>
         <mesh filename="package://assets/dc15_a01_case_b_dummy.stl"/>
       </geometry>
     </collision>
     <!-- Part foot -->
     <visual>
-      <origin xyz="4.33013e-05 -2.5e-05 -0.014785" rpy="-3.14159 -1.13866e-15 -1.0472"/>
+      <origin xyz="4.33013e-05 -2.5e-05 -0.014785" rpy="3.14159 -1.79711e-16 -1.0472"/>
       <geometry>
         <mesh filename="package://assets/foot.stl"/>
       </geometry>
@@ -172,14 +172,14 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="4.33013e-05 -2.5e-05 -0.014785" rpy="-3.14159 -1.13866e-15 -1.0472"/>
+      <origin xyz="4.33013e-05 -2.5e-05 -0.014785" rpy="3.14159 -1.79711e-16 -1.0472"/>
       <geometry>
         <mesh filename="package://assets/foot.stl"/>
       </geometry>
     </collision>
     <!-- Part dc15_a01_case_f_dummy_2 -->
     <visual>
-      <origin xyz="0.108746 0.039063 -0.014785" rpy="3.14159 1.13866e-15 2.0944"/>
+      <origin xyz="0.108746 0.039063 -0.014785" rpy="-3.14159 1.79711e-16 2.0944"/>
       <geometry>
         <mesh filename="package://assets/dc15_a01_case_f_dummy.stl"/>
       </geometry>
@@ -188,14 +188,14 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="0.108746 0.039063 -0.014785" rpy="3.14159 1.13866e-15 2.0944"/>
+      <origin xyz="0.108746 0.039063 -0.014785" rpy="-3.14159 1.79711e-16 2.0944"/>
       <geometry>
         <mesh filename="package://assets/dc15_a01_case_f_dummy.stl"/>
       </geometry>
     </collision>
     <!-- Part dc15_a01_horn_dummy_4 -->
     <visual>
-      <origin xyz="-0.000389711 -0.000275 -0.014785" rpy="-3.14159 -1.13866e-15 -1.0472"/>
+      <origin xyz="-0.000389711 -0.000275 -0.014785" rpy="3.14159 -1.79711e-16 -1.0472"/>
       <geometry>
         <mesh filename="package://assets/dc15_a01_horn_dummy.stl"/>
       </geometry>
@@ -204,14 +204,14 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="-0.000389711 -0.000275 -0.014785" rpy="-3.14159 -1.13866e-15 -1.0472"/>
+      <origin xyz="-0.000389711 -0.000275 -0.014785" rpy="3.14159 -1.79711e-16 -1.0472"/>
       <geometry>
         <mesh filename="package://assets/dc15_a01_horn_dummy.stl"/>
       </geometry>
     </collision>
     <!-- Part drive_palonier__configuration_simple_axe -->
     <visual>
-      <origin xyz="-0.0220836 0.01275 -0.017185" rpy="1.5708 6.4956e-16 2.61799"/>
+      <origin xyz="-0.0220836 0.01275 -0.017185" rpy="1.5708 3.45422e-16 2.61799"/>
       <geometry>
         <mesh filename="package://assets/drive_palonier__configuration_simple_axe.stl"/>
       </geometry>
@@ -220,14 +220,14 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="-0.0220836 0.01275 -0.017185" rpy="1.5708 6.4956e-16 2.61799"/>
+      <origin xyz="-0.0220836 0.01275 -0.017185" rpy="1.5708 3.45422e-16 2.61799"/>
       <geometry>
         <mesh filename="package://assets/drive_palonier__configuration_simple_axe.stl"/>
       </geometry>
     </collision>
     <!-- Part wj_wk00_0124bottomcase_45__configuration_simple_axe -->
     <visual>
-      <origin xyz="-0.0220256 0.012753 -0.017185" rpy="1.5708 6.4956e-16 2.61799"/>
+      <origin xyz="-0.0220256 0.012753 -0.017185" rpy="1.5708 4.6369e-16 2.61799"/>
       <geometry>
         <mesh filename="package://assets/wj_wk00_0124bottomcase_45__configuration_simple_axe.stl"/>
       </geometry>
@@ -236,14 +236,14 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="-0.0220256 0.012753 -0.017185" rpy="1.5708 6.4956e-16 2.61799"/>
+      <origin xyz="-0.0220256 0.012753 -0.017185" rpy="1.5708 4.6369e-16 2.61799"/>
       <geometry>
         <mesh filename="package://assets/wj_wk00_0124bottomcase_45__configuration_simple_axe.stl"/>
       </geometry>
     </collision>
     <!-- Part dc15_a01_case_f_dummy_3 -->
     <visual>
-      <origin xyz="-0.0106397 0.0174785 -0.014785" rpy="-3.14159 -1.13866e-15 -1.0472"/>
+      <origin xyz="-0.0106397 0.0174785 -0.014785" rpy="3.14159 -1.79711e-16 -1.0472"/>
       <geometry>
         <mesh filename="package://assets/dc15_a01_case_f_dummy.stl"/>
       </geometry>
@@ -252,14 +252,14 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="-0.0106397 0.0174785 -0.014785" rpy="-3.14159 -1.13866e-15 -1.0472"/>
+      <origin xyz="-0.0106397 0.0174785 -0.014785" rpy="3.14159 -1.79711e-16 -1.0472"/>
       <geometry>
         <mesh filename="package://assets/dc15_a01_case_f_dummy.stl"/>
       </geometry>
     </collision>
     <!-- Part wj_wk00_0123middlecase_56__configuration_simple_axe -->
     <visual>
-      <origin xyz="-0.0220371 0.0127896 -0.017185" rpy="1.5708 -1.11948e-15 2.61799"/>
+      <origin xyz="-0.0220371 0.0127896 -0.017185" rpy="1.5708 -8.00364e-16 2.61799"/>
       <geometry>
         <mesh filename="package://assets/wj_wk00_0123middlecase_56__configuration_simple_axe.stl"/>
       </geometry>
@@ -268,14 +268,14 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="-0.0220371 0.0127896 -0.017185" rpy="1.5708 -1.11948e-15 2.61799"/>
+      <origin xyz="-0.0220371 0.0127896 -0.017185" rpy="1.5708 -8.00364e-16 2.61799"/>
       <geometry>
         <mesh filename="package://assets/wj_wk00_0123middlecase_56__configuration_simple_axe.stl"/>
       </geometry>
     </collision>
     <!-- Part dc15_a01_horn_dummy_5 -->
     <visual>
-      <origin xyz="0.0205433 0.000475 -0.014785" rpy="-3.14159 6.84126e-16 -3.14159"/>
+      <origin xyz="0.0205433 0.000475 -0.014785" rpy="3.14159 1.42533e-16 3.14159"/>
       <geometry>
         <mesh filename="package://assets/dc15_a01_horn_dummy.stl"/>
       </geometry>
@@ -284,14 +284,14 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="0.0205433 0.000475 -0.014785" rpy="-3.14159 6.84126e-16 -3.14159"/>
+      <origin xyz="0.0205433 0.000475 -0.014785" rpy="3.14159 1.42533e-16 3.14159"/>
       <geometry>
         <mesh filename="package://assets/dc15_a01_horn_dummy.stl"/>
       </geometry>
     </collision>
     <!-- Part dc15_a01_case_b_dummy_3 -->
     <visual>
-      <origin xyz="4.33013e-05 0.000475 -0.014785" rpy="-3.14159 1.08651e-15 -3.14159"/>
+      <origin xyz="4.33013e-05 0.000475 -0.014785" rpy="-3.14159 1.97181e-17 3.14159"/>
       <geometry>
         <mesh filename="package://assets/dc15_a01_case_b_dummy.stl"/>
       </geometry>
@@ -300,14 +300,14 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="4.33013e-05 0.000475 -0.014785" rpy="-3.14159 1.08651e-15 -3.14159"/>
+      <origin xyz="4.33013e-05 0.000475 -0.014785" rpy="-3.14159 1.97181e-17 3.14159"/>
       <geometry>
         <mesh filename="package://assets/dc15_a01_case_b_dummy.stl"/>
       </geometry>
     </collision>
     <!-- Part dc15_a01_case_f_dummy_4 -->
     <visual>
-      <origin xyz="0.0205433 0.000475 -0.014785" rpy="-3.14159 1.08651e-15 -3.14159"/>
+      <origin xyz="0.0205433 0.000475 -0.014785" rpy="-3.14159 1.97181e-17 3.14159"/>
       <geometry>
         <mesh filename="package://assets/dc15_a01_case_f_dummy.stl"/>
       </geometry>
@@ -316,14 +316,14 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="0.0205433 0.000475 -0.014785" rpy="-3.14159 1.08651e-15 -3.14159"/>
+      <origin xyz="0.0205433 0.000475 -0.014785" rpy="-3.14159 1.97181e-17 3.14159"/>
       <geometry>
         <mesh filename="package://assets/dc15_a01_case_f_dummy.stl"/>
       </geometry>
     </collision>
     <!-- Part side_plate -->
     <visual>
-      <origin xyz="4.33013e-05 -2.5e-05 -0.014785" rpy="-3.14159 -1.13866e-15 -1.0472"/>
+      <origin xyz="4.33013e-05 -2.5e-05 -0.014785" rpy="3.14159 -1.79711e-16 -1.0472"/>
       <geometry>
         <mesh filename="package://assets/side_plate.stl"/>
       </geometry>
@@ -332,14 +332,14 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="4.33013e-05 -2.5e-05 -0.014785" rpy="-3.14159 -1.13866e-15 -1.0472"/>
+      <origin xyz="4.33013e-05 -2.5e-05 -0.014785" rpy="3.14159 -1.79711e-16 -1.0472"/>
       <geometry>
         <mesh filename="package://assets/side_plate.stl"/>
       </geometry>
     </collision>
     <!-- Part dc15_a01_case_m_dummy_2 -->
     <visual>
-      <origin xyz="-0.00977369 -0.0180285 -0.014785" rpy="3.14159 4.90141e-16 1.0472"/>
+      <origin xyz="-0.00977369 -0.0180285 -0.014785" rpy="3.14159 1.59993e-16 1.0472"/>
       <geometry>
         <mesh filename="package://assets/dc15_a01_case_m_dummy.stl"/>
       </geometry>
@@ -348,14 +348,14 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="-0.00977369 -0.0180285 -0.014785" rpy="3.14159 4.90141e-16 1.0472"/>
+      <origin xyz="-0.00977369 -0.0180285 -0.014785" rpy="3.14159 1.59993e-16 1.0472"/>
       <geometry>
         <mesh filename="package://assets/dc15_a01_case_m_dummy.stl"/>
       </geometry>
     </collision>
     <!-- Part dc15_a01_case_m_dummy_3 -->
     <visual>
-      <origin xyz="4.33013e-05 0.000475 -0.014785" rpy="-3.14159 1.08651e-15 -3.14159"/>
+      <origin xyz="4.33013e-05 0.000475 -0.014785" rpy="-3.14159 1.97181e-17 3.14159"/>
       <geometry>
         <mesh filename="package://assets/dc15_a01_case_m_dummy.stl"/>
       </geometry>
@@ -364,14 +364,14 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="4.33013e-05 0.000475 -0.014785" rpy="-3.14159 1.08651e-15 -3.14159"/>
+      <origin xyz="4.33013e-05 0.000475 -0.014785" rpy="-3.14159 1.97181e-17 3.14159"/>
       <geometry>
         <mesh filename="package://assets/dc15_a01_case_m_dummy.stl"/>
       </geometry>
     </collision>
     <!-- Part side_plate_2 -->
     <visual>
-      <origin xyz="4.33013e-05 -2.5e-05 -0.014785" rpy="-3.14159 1.08651e-15 -3.14159"/>
+      <origin xyz="4.33013e-05 -2.5e-05 -0.014785" rpy="-3.14159 1.97181e-17 3.14159"/>
       <geometry>
         <mesh filename="package://assets/side_plate.stl"/>
       </geometry>
@@ -380,14 +380,14 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="4.33013e-05 -2.5e-05 -0.014785" rpy="-3.14159 1.08651e-15 -3.14159"/>
+      <origin xyz="4.33013e-05 -2.5e-05 -0.014785" rpy="-3.14159 1.97181e-17 3.14159"/>
       <geometry>
         <mesh filename="package://assets/side_plate.stl"/>
       </geometry>
     </collision>
     <!-- Part dc15_a01_case_m_dummy_4 -->
     <visual>
-      <origin xyz="0.0205433 0.000475 -0.014785" rpy="-3.14159 1.08651e-15 -3.14159"/>
+      <origin xyz="0.0205433 0.000475 -0.014785" rpy="-3.14159 1.97181e-17 3.14159"/>
       <geometry>
         <mesh filename="package://assets/dc15_a01_case_m_dummy.stl"/>
       </geometry>
@@ -396,14 +396,14 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="0.0205433 0.000475 -0.014785" rpy="-3.14159 1.08651e-15 -3.14159"/>
+      <origin xyz="0.0205433 0.000475 -0.014785" rpy="-3.14159 1.97181e-17 3.14159"/>
       <geometry>
         <mesh filename="package://assets/dc15_a01_case_m_dummy.stl"/>
       </geometry>
     </collision>
     <!-- Part dc15_a01_horn_dummy_6 -->
     <visual>
-      <origin xyz="4.33013e-05 0.000475 -0.014785" rpy="-3.14159 1.08651e-15 -3.14159"/>
+      <origin xyz="4.33013e-05 0.000475 -0.014785" rpy="-3.14159 1.97181e-17 3.14159"/>
       <geometry>
         <mesh filename="package://assets/dc15_a01_horn_dummy.stl"/>
       </geometry>
@@ -412,14 +412,14 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="4.33013e-05 0.000475 -0.014785" rpy="-3.14159 1.08651e-15 -3.14159"/>
+      <origin xyz="4.33013e-05 0.000475 -0.014785" rpy="-3.14159 1.97181e-17 3.14159"/>
       <geometry>
         <mesh filename="package://assets/dc15_a01_horn_dummy.stl"/>
       </geometry>
     </collision>
     <!-- Part side_plate_3 -->
     <visual>
-      <origin xyz="4.33013e-05 -2.5e-05 -0.014785" rpy="3.14159 4.90141e-16 1.0472"/>
+      <origin xyz="4.33013e-05 -2.5e-05 -0.014785" rpy="3.14159 1.59993e-16 1.0472"/>
       <geometry>
         <mesh filename="package://assets/side_plate.stl"/>
       </geometry>
@@ -428,14 +428,14 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="4.33013e-05 -2.5e-05 -0.014785" rpy="3.14159 4.90141e-16 1.0472"/>
+      <origin xyz="4.33013e-05 -2.5e-05 -0.014785" rpy="3.14159 1.59993e-16 1.0472"/>
       <geometry>
         <mesh filename="package://assets/side_plate.stl"/>
       </geometry>
     </collision>
     <!-- Part top_body -->
     <visual>
-      <origin xyz="2.23926e-06 1.6062e-05 -0.212785" rpy="-3.14159 -1.06533e-15 2.37894e-14"/>
+      <origin xyz="2.23926e-06 1.6062e-05 -0.212785" rpy="-3.14159 -1.97181e-17 2.22045e-16"/>
       <geometry>
         <mesh filename="package://assets/top_body.stl"/>
       </geometry>
@@ -444,14 +444,14 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="2.23926e-06 1.6062e-05 -0.212785" rpy="-3.14159 -1.06533e-15 2.37894e-14"/>
+      <origin xyz="2.23926e-06 1.6062e-05 -0.212785" rpy="-3.14159 -1.97181e-17 2.22045e-16"/>
       <geometry>
         <mesh filename="package://assets/top_body.stl"/>
       </geometry>
     </collision>
     <!-- Part wj_wk00_0122topcabinetcase_95__configuration_simple_axe -->
     <visual>
-      <origin xyz="-0.0220836 0.01275 -0.017185" rpy="1.5708 6.4956e-16 2.61799"/>
+      <origin xyz="-0.0220836 0.01275 -0.017185" rpy="1.5708 -4.3975e-17 2.61799"/>
       <geometry>
         <mesh filename="package://assets/wj_wk00_0122topcabinetcase_95__configuration_simple_axe.stl"/>
       </geometry>
@@ -460,14 +460,14 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="-0.0220836 0.01275 -0.017185" rpy="1.5708 6.4956e-16 2.61799"/>
+      <origin xyz="-0.0220836 0.01275 -0.017185" rpy="1.5708 -4.3975e-17 2.61799"/>
       <geometry>
         <mesh filename="package://assets/wj_wk00_0122topcabinetcase_95__configuration_simple_axe.stl"/>
       </geometry>
     </collision>
     <!-- Part dc15_a01_case_m_dummy_5 -->
     <visual>
-      <origin xyz="-0.0106397 0.0174785 -0.014785" rpy="-3.14159 -1.13866e-15 -1.0472"/>
+      <origin xyz="-0.0106397 0.0174785 -0.014785" rpy="3.14159 -1.79711e-16 -1.0472"/>
       <geometry>
         <mesh filename="package://assets/dc15_a01_case_m_dummy.stl"/>
       </geometry>
@@ -476,14 +476,14 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="-0.0106397 0.0174785 -0.014785" rpy="-3.14159 -1.13866e-15 -1.0472"/>
+      <origin xyz="-0.0106397 0.0174785 -0.014785" rpy="3.14159 -1.79711e-16 -1.0472"/>
       <geometry>
         <mesh filename="package://assets/dc15_a01_case_m_dummy.stl"/>
       </geometry>
     </collision>
     <!-- Part bottom_body -->
     <visual>
-      <origin xyz="4.33013e-05 -2.5e-05 -0.213285" rpy="-3.14159 1.06533e-15 -3.14159"/>
+      <origin xyz="4.33013e-05 -2.5e-05 -0.213285" rpy="-3.14159 1.97181e-17 -3.14159"/>
       <geometry>
         <mesh filename="package://assets/bottom_body.stl"/>
       </geometry>
@@ -492,14 +492,14 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="4.33013e-05 -2.5e-05 -0.213285" rpy="-3.14159 1.06533e-15 -3.14159"/>
+      <origin xyz="4.33013e-05 -2.5e-05 -0.213285" rpy="-3.14159 1.97181e-17 -3.14159"/>
       <geometry>
         <mesh filename="package://assets/bottom_body.stl"/>
       </geometry>
     </collision>
     <!-- Part foot_2 -->
     <visual>
-      <origin xyz="4.33013e-05 -2.5e-05 -0.014785" rpy="-3.14159 1.08651e-15 -3.14159"/>
+      <origin xyz="4.33013e-05 -2.5e-05 -0.014785" rpy="-3.14159 1.97181e-17 3.14159"/>
       <geometry>
         <mesh filename="package://assets/foot.stl"/>
       </geometry>
@@ -508,14 +508,14 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="4.33013e-05 -2.5e-05 -0.014785" rpy="-3.14159 1.08651e-15 -3.14159"/>
+      <origin xyz="4.33013e-05 -2.5e-05 -0.014785" rpy="-3.14159 1.97181e-17 3.14159"/>
       <geometry>
         <mesh filename="package://assets/foot.stl"/>
       </geometry>
     </collision>
     <!-- Part dc15_a01_case_f_dummy_5 -->
     <visual>
-      <origin xyz="-0.00977369 -0.0180285 -0.014785" rpy="3.14159 4.90141e-16 1.0472"/>
+      <origin xyz="-0.00977369 -0.0180285 -0.014785" rpy="3.14159 1.59993e-16 1.0472"/>
       <geometry>
         <mesh filename="package://assets/dc15_a01_case_f_dummy.stl"/>
       </geometry>
@@ -524,14 +524,14 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="-0.00977369 -0.0180285 -0.014785" rpy="3.14159 4.90141e-16 1.0472"/>
+      <origin xyz="-0.00977369 -0.0180285 -0.014785" rpy="3.14159 1.59993e-16 1.0472"/>
       <geometry>
         <mesh filename="package://assets/dc15_a01_case_f_dummy.stl"/>
       </geometry>
     </collision>
     <!-- Part dc15_a01_case_b_dummy_4 -->
     <visual>
-      <origin xyz="0.0205433 0.000475 -0.014785" rpy="-3.14159 1.08651e-15 -3.14159"/>
+      <origin xyz="0.0205433 0.000475 -0.014785" rpy="-3.14159 1.97181e-17 3.14159"/>
       <geometry>
         <mesh filename="package://assets/dc15_a01_case_b_dummy.stl"/>
       </geometry>
@@ -540,14 +540,14 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="0.0205433 0.000475 -0.014785" rpy="-3.14159 1.08651e-15 -3.14159"/>
+      <origin xyz="0.0205433 0.000475 -0.014785" rpy="-3.14159 1.97181e-17 3.14159"/>
       <geometry>
         <mesh filename="package://assets/dc15_a01_case_b_dummy.stl"/>
       </geometry>
     </collision>
     <!-- Part foot_3 -->
     <visual>
-      <origin xyz="4.33013e-05 -2.5e-05 -0.014785" rpy="3.14159 4.90141e-16 1.0472"/>
+      <origin xyz="4.33013e-05 -2.5e-05 -0.014785" rpy="3.14159 1.59993e-16 1.0472"/>
       <geometry>
         <mesh filename="package://assets/foot.stl"/>
       </geometry>
@@ -556,14 +556,14 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="4.33013e-05 -2.5e-05 -0.014785" rpy="3.14159 4.90141e-16 1.0472"/>
+      <origin xyz="4.33013e-05 -2.5e-05 -0.014785" rpy="3.14159 1.59993e-16 1.0472"/>
       <geometry>
         <mesh filename="package://assets/foot.stl"/>
       </geometry>
     </collision>
     <!-- Part dc15_a01_case_b_dummy_5 -->
     <visual>
-      <origin xyz="-0.0106397 0.0174785 -0.014785" rpy="-3.14159 -1.13866e-15 -1.0472"/>
+      <origin xyz="-0.0106397 0.0174785 -0.014785" rpy="3.14159 -1.79711e-16 -1.0472"/>
       <geometry>
         <mesh filename="package://assets/dc15_a01_case_b_dummy.stl"/>
       </geometry>
@@ -572,14 +572,14 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="-0.0106397 0.0174785 -0.014785" rpy="-3.14159 -1.13866e-15 -1.0472"/>
+      <origin xyz="-0.0106397 0.0174785 -0.014785" rpy="3.14159 -1.79711e-16 -1.0472"/>
       <geometry>
         <mesh filename="package://assets/dc15_a01_case_b_dummy.stl"/>
       </geometry>
     </collision>
     <!-- Part dc15_a01_case_b_dummy_6 -->
     <visual>
-      <origin xyz="0.000476314 -0.000275 -0.014785" rpy="3.14159 4.90141e-16 1.0472"/>
+      <origin xyz="0.000476314 -0.000275 -0.014785" rpy="3.14159 1.59993e-16 1.0472"/>
       <geometry>
         <mesh filename="package://assets/dc15_a01_case_b_dummy.stl"/>
       </geometry>
@@ -588,14 +588,14 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="0.000476314 -0.000275 -0.014785" rpy="3.14159 4.90141e-16 1.0472"/>
+      <origin xyz="0.000476314 -0.000275 -0.014785" rpy="3.14159 1.59993e-16 1.0472"/>
       <geometry>
         <mesh filename="package://assets/dc15_a01_case_b_dummy.stl"/>
       </geometry>
     </collision>
     <!-- Part dc15_a01_case_m_dummy_6 -->
     <visual>
-      <origin xyz="0.000476314 -0.000275 -0.014785" rpy="3.14159 4.90141e-16 1.0472"/>
+      <origin xyz="0.000476314 -0.000275 -0.014785" rpy="3.14159 1.59993e-16 1.0472"/>
       <geometry>
         <mesh filename="package://assets/dc15_a01_case_m_dummy.stl"/>
       </geometry>
@@ -604,14 +604,14 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="0.000476314 -0.000275 -0.014785" rpy="3.14159 4.90141e-16 1.0472"/>
+      <origin xyz="0.000476314 -0.000275 -0.014785" rpy="3.14159 1.59993e-16 1.0472"/>
       <geometry>
         <mesh filename="package://assets/dc15_a01_case_m_dummy.stl"/>
       </geometry>
     </collision>
     <!-- Part mid_plate -->
     <visual>
-      <origin xyz="4.33013e-05 -2.5e-05 -0.014785" rpy="3.14159 4.92289e-16 1.0472"/>
+      <origin xyz="4.33013e-05 -2.5e-05 -0.014785" rpy="3.14159 1.59993e-16 1.0472"/>
       <geometry>
         <mesh filename="package://assets/mid_plate.stl"/>
       </geometry>
@@ -620,14 +620,14 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="4.33013e-05 -2.5e-05 -0.014785" rpy="3.14159 4.92289e-16 1.0472"/>
+      <origin xyz="4.33013e-05 -2.5e-05 -0.014785" rpy="3.14159 1.59993e-16 1.0472"/>
       <geometry>
         <mesh filename="package://assets/mid_plate.stl"/>
       </geometry>
     </collision>
     <!-- Part dc15_a01_case_f_dummy_6 -->
     <visual>
-      <origin xyz="4.33013e-05 0.000475 -0.014785" rpy="-3.14159 1.08651e-15 -3.14159"/>
+      <origin xyz="4.33013e-05 0.000475 -0.014785" rpy="-3.14159 1.97181e-17 3.14159"/>
       <geometry>
         <mesh filename="package://assets/dc15_a01_case_f_dummy.stl"/>
       </geometry>
@@ -636,7 +636,7 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="4.33013e-05 0.000475 -0.014785" rpy="-3.14159 1.08651e-15 -3.14159"/>
+      <origin xyz="4.33013e-05 0.000475 -0.014785" rpy="-3.14159 1.97181e-17 3.14159"/>
       <geometry>
         <mesh filename="package://assets/dc15_a01_case_f_dummy.stl"/>
       </geometry>
@@ -651,7 +651,7 @@
     </inertial>
     <!-- Part ball -->
     <visual>
-      <origin xyz="0.038 0 -0.00768" rpy="-6.29762e-14 -3.51769e-14 1.5708"/>
+      <origin xyz="0.038 -1.38778e-17 -0.00768" rpy="2.10544e-15 3.08206e-16 1.5708"/>
       <geometry>
         <mesh filename="package://assets/ball.stl"/>
       </geometry>
@@ -660,14 +660,14 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="0.038 0 -0.00768" rpy="-6.29762e-14 -3.51769e-14 1.5708"/>
+      <origin xyz="0.038 -1.38778e-17 -0.00768" rpy="2.10544e-15 3.08206e-16 1.5708"/>
       <geometry>
         <mesh filename="package://assets/ball.stl"/>
       </geometry>
     </collision>
     <!-- Part arm -->
     <visual>
-      <origin xyz="-0.01025 -0.03 -0.0425915" rpy="-1.5708 2.0204e-16 7.88861e-31"/>
+      <origin xyz="-0.01025 -0.03 -0.0425915" rpy="-1.5708 2.19947e-16 5.18987e-33"/>
       <geometry>
         <mesh filename="package://assets/arm.stl"/>
       </geometry>
@@ -676,7 +676,7 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="-0.01025 -0.03 -0.0425915" rpy="-1.5708 2.0204e-16 7.88861e-31"/>
+      <origin xyz="-0.01025 -0.03 -0.0425915" rpy="-1.5708 2.19947e-16 5.18987e-33"/>
       <geometry>
         <mesh filename="package://assets/arm.stl"/>
       </geometry>
@@ -707,7 +707,7 @@
     </inertial>
     <!-- Part rod -->
     <visual>
-      <origin xyz="0.00371031 0.0370326 -0.0564076" rpy="0.01484 -1.08842 -2.37192e-17"/>
+      <origin xyz="0.00371031 0.0370326 -0.0564076" rpy="0.01484 -1.08842 -4.16182e-16"/>
       <geometry>
         <mesh filename="package://assets/rod.stl"/>
       </geometry>
@@ -716,14 +716,14 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="0.00371031 0.0370326 -0.0564076" rpy="0.01484 -1.08842 -2.37192e-17"/>
+      <origin xyz="0.00371031 0.0370326 -0.0564076" rpy="0.01484 -1.08842 -4.16182e-16"/>
       <geometry>
         <mesh filename="package://assets/rod.stl"/>
       </geometry>
     </collision>
     <!-- Part shape -->
     <visual>
-      <origin xyz="2.08167e-17 0 -6.93889e-18" rpy="7.26081e-18 1.84617e-17 2.45109e-18"/>
+      <origin xyz="0 1.38778e-17 -6.93889e-18" rpy="-3.1327e-17 -1.84285e-18 4.57538e-18"/>
       <geometry>
         <mesh filename="package://assets/shape.stl"/>
       </geometry>
@@ -732,14 +732,14 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="2.08167e-17 0 -6.93889e-18" rpy="7.26081e-18 1.84617e-17 2.45109e-18"/>
+      <origin xyz="0 1.38778e-17 -6.93889e-18" rpy="-3.1327e-17 -1.84285e-18 4.57538e-18"/>
       <geometry>
         <mesh filename="package://assets/shape.stl"/>
       </geometry>
     </collision>
     <!-- Part shape_2 -->
     <visual>
-      <origin xyz="-0.0900003 0 -2.77556e-17" rpy="-9.40116e-17 3.5618e-16 3.14159"/>
+      <origin xyz="-0.0900003 -2.77556e-17 -3.1572e-16" rpy="-4.33066e-15 2.30363e-14 -3.14159"/>
       <geometry>
         <mesh filename="package://assets/shape.stl"/>
       </geometry>
@@ -748,7 +748,7 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="-0.0900003 0 -2.77556e-17" rpy="-9.40116e-17 3.5618e-16 3.14159"/>
+      <origin xyz="-0.0900003 -2.77556e-17 -3.1572e-16" rpy="-4.33066e-15 2.30363e-14 -3.14159"/>
       <geometry>
         <mesh filename="package://assets/shape.stl"/>
       </geometry>
@@ -764,14 +764,14 @@
     </inertial>
   </link>
   <joint name="closing_1_1_frame" type="fixed">
-    <origin xyz="-0.0900003 0 -2.77556e-17" rpy="-9.40116e-17 3.5618e-16 3.14159"/>
+    <origin xyz="-0.0900003 -2.77556e-17 -3.1572e-16" rpy="-4.33066e-15 2.30363e-14 -3.14159"/>
     <parent link="rod"/>
     <child link="closing_1_1"/>
     <axis xyz="0 0 0"/>
   </joint>
   <!-- Joint from passive_1_link_y to rod -->
   <joint name="passive_1_z" type="revolute">
-    <origin xyz="2.08167e-17 0 -6.93889e-18" rpy="7.26081e-18 1.84617e-17 2.45109e-18"/>
+    <origin xyz="0 1.38778e-17 -6.93889e-18" rpy="-3.1327e-17 -1.84285e-18 4.57538e-18"/>
     <parent link="passive_1_link_y"/>
     <child link="rod"/>
     <axis xyz="0 0 1"/>
@@ -779,7 +779,7 @@
   </joint>
   <!-- Joint from passive_1_link_x to passive_1_link_y -->
   <joint name="passive_1_y" type="revolute">
-    <origin xyz="2.08167e-17 0 -6.93889e-18" rpy="7.26081e-18 1.84617e-17 2.45109e-18"/>
+    <origin xyz="0 1.38778e-17 -6.93889e-18" rpy="-3.1327e-17 -1.84285e-18 4.57538e-18"/>
     <parent link="passive_1_link_x"/>
     <child link="passive_1_link_y"/>
     <axis xyz="0 1 0"/>
@@ -787,7 +787,7 @@
   </joint>
   <!-- Joint from arm to passive_1_link_x -->
   <joint name="passive_1_x" type="revolute">
-    <origin xyz="0.038 0 -0.00768" rpy="-0.173384 -0.0202587 1.08831"/>
+    <origin xyz="0.038 -3.19189e-16 -0.00768" rpy="-0.173384 -0.0202587 1.08831"/>
     <parent link="arm"/>
     <child link="passive_1_link_x"/>
     <axis xyz="1 0 0"/>
@@ -795,7 +795,7 @@
   </joint>
   <!-- Joint from main_plate to arm -->
   <joint name="1" type="revolute">
-    <origin xyz="0.0313706 0.0298975 -0.044785" rpy="1.5708 -4.90256e-15 2.0944"/>
+    <origin xyz="0.0313706 0.0298975 -0.044785" rpy="1.5708 -1.04478e-14 2.0944"/>
     <parent link="main_plate"/>
     <child link="arm"/>
     <axis xyz="0 0 1"/>
@@ -810,7 +810,7 @@
     </inertial>
     <!-- Part ball_2 -->
     <visual>
-      <origin xyz="0.038 0 -0.00768" rpy="6.95805e-16 1.28479e-15 -1.5708"/>
+      <origin xyz="0.038 0 -0.00768" rpy="-1.74899e-15 9.23518e-15 -1.5708"/>
       <geometry>
         <mesh filename="package://assets/ball.stl"/>
       </geometry>
@@ -819,14 +819,14 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="0.038 0 -0.00768" rpy="6.95805e-16 1.28479e-15 -1.5708"/>
+      <origin xyz="0.038 0 -0.00768" rpy="-1.74899e-15 9.23518e-15 -1.5708"/>
       <geometry>
         <mesh filename="package://assets/ball.stl"/>
       </geometry>
     </collision>
     <!-- Part arm_2 -->
     <visual>
-      <origin xyz="-0.01025 -0.03 -0.0425915" rpy="-1.5708 2.68593e-16 1.57635e-31"/>
+      <origin xyz="-0.01025 -0.03 -0.0425915" rpy="-1.5708 2.58696e-16 0"/>
       <geometry>
         <mesh filename="package://assets/arm.stl"/>
       </geometry>
@@ -835,7 +835,7 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="-0.01025 -0.03 -0.0425915" rpy="-1.5708 2.68593e-16 1.57635e-31"/>
+      <origin xyz="-0.01025 -0.03 -0.0425915" rpy="-1.5708 2.58696e-16 0"/>
       <geometry>
         <mesh filename="package://assets/arm.stl"/>
       </geometry>
@@ -866,7 +866,7 @@
     </inertial>
     <!-- Part shape_3 -->
     <visual>
-      <origin xyz="-0.0900003 -2.77556e-17 -2.08167e-17" rpy="-1.47551e-17 -2.41893e-17 3.14159"/>
+      <origin xyz="-0.0900003 1.38778e-16 -3.46945e-17" rpy="-5.45526e-18 1.49021e-17 3.14159"/>
       <geometry>
         <mesh filename="package://assets/shape.stl"/>
       </geometry>
@@ -875,14 +875,14 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="-0.0900003 -2.77556e-17 -2.08167e-17" rpy="-1.47551e-17 -2.41893e-17 3.14159"/>
+      <origin xyz="-0.0900003 1.38778e-16 -3.46945e-17" rpy="-5.45526e-18 1.49021e-17 3.14159"/>
       <geometry>
         <mesh filename="package://assets/shape.stl"/>
       </geometry>
     </collision>
     <!-- Part shape_4 -->
     <visual>
-      <origin xyz="-6.93889e-18 -1.38778e-17 0" rpy="-5.10775e-17 -1.9815e-17 5.43044e-17"/>
+      <origin xyz="-6.93889e-18 0 0" rpy="-4.71327e-17 -1.08554e-17 -5.04809e-17"/>
       <geometry>
         <mesh filename="package://assets/shape.stl"/>
       </geometry>
@@ -891,14 +891,14 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="-6.93889e-18 -1.38778e-17 0" rpy="-5.10775e-17 -1.9815e-17 5.43044e-17"/>
+      <origin xyz="-6.93889e-18 0 0" rpy="-4.71327e-17 -1.08554e-17 -5.04809e-17"/>
       <geometry>
         <mesh filename="package://assets/shape.stl"/>
       </geometry>
     </collision>
     <!-- Part rod_2 -->
     <visual>
-      <origin xyz="0.00371031 0.0370326 -0.0564076" rpy="0.01484 -1.08842 1.09388e-15"/>
+      <origin xyz="0.00371031 0.0370326 -0.0564076" rpy="0.01484 -1.08842 7.37504e-14"/>
       <geometry>
         <mesh filename="package://assets/rod.stl"/>
       </geometry>
@@ -907,7 +907,7 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="0.00371031 0.0370326 -0.0564076" rpy="0.01484 -1.08842 1.09388e-15"/>
+      <origin xyz="0.00371031 0.0370326 -0.0564076" rpy="0.01484 -1.08842 7.37504e-14"/>
       <geometry>
         <mesh filename="package://assets/rod.stl"/>
       </geometry>
@@ -923,14 +923,14 @@
     </inertial>
   </link>
   <joint name="closing_2_1_frame" type="fixed">
-    <origin xyz="-0.0900003 -2.77556e-17 -2.08167e-17" rpy="-1.47551e-17 -2.41893e-17 3.14159"/>
+    <origin xyz="-0.0900003 1.38778e-16 -3.46945e-17" rpy="-5.45526e-18 1.49021e-17 3.14159"/>
     <parent link="shape"/>
     <child link="closing_2_1"/>
     <axis xyz="0 0 0"/>
   </joint>
   <!-- Joint from passive_2_link_y to shape -->
   <joint name="passive_2_z" type="revolute">
-    <origin xyz="-6.93889e-18 -1.38778e-17 0" rpy="-5.10775e-17 -1.9815e-17 5.43044e-17"/>
+    <origin xyz="-6.93889e-18 0 0" rpy="-4.71327e-17 -1.08554e-17 -5.04809e-17"/>
     <parent link="passive_2_link_y"/>
     <child link="shape"/>
     <axis xyz="0 0 1"/>
@@ -938,7 +938,7 @@
   </joint>
   <!-- Joint from passive_2_link_x to passive_2_link_y -->
   <joint name="passive_2_y" type="revolute">
-    <origin xyz="-6.93889e-18 -1.38778e-17 0" rpy="-5.10775e-17 -1.9815e-17 5.43044e-17"/>
+    <origin xyz="-6.93889e-18 0 0" rpy="-4.71327e-17 -1.08554e-17 -5.04809e-17"/>
     <parent link="passive_2_link_x"/>
     <child link="passive_2_link_y"/>
     <axis xyz="0 1 0"/>
@@ -946,7 +946,7 @@
   </joint>
   <!-- Joint from arm_2 to passive_2_link_x -->
   <joint name="passive_2_x" type="revolute">
-    <origin xyz="0.038 -8.32667e-17 -0.00768" rpy="-0.186454 -0.0202587 -1.08831"/>
+    <origin xyz="0.038 3.33067e-16 -0.00768" rpy="-0.186454 -0.0202587 -1.08831"/>
     <parent link="arm_2"/>
     <child link="passive_2_link_x"/>
     <axis xyz="1 0 0"/>
@@ -954,7 +954,7 @@
   </joint>
   <!-- Joint from main_plate to arm_2 -->
   <joint name="2" type="revolute">
-    <origin xyz="0.0416206 0.012144 -0.044785" rpy="-1.5708 4.26264e-15 -1.0472"/>
+    <origin xyz="0.0416206 0.012144 -0.044785" rpy="-1.5708 8.01479e-15 -1.0472"/>
     <parent link="main_plate"/>
     <child link="arm_2"/>
     <axis xyz="0 0 1"/>
@@ -969,7 +969,7 @@
     </inertial>
     <!-- Part arm_3 -->
     <visual>
-      <origin xyz="-0.01025 -0.03 -0.0425915" rpy="-1.5708 2.89121e-16 -9.70097e-31"/>
+      <origin xyz="-0.01025 -0.03 -0.0425915" rpy="-1.5708 2.89121e-16 6.16298e-33"/>
       <geometry>
         <mesh filename="package://assets/arm.stl"/>
       </geometry>
@@ -978,14 +978,14 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="-0.01025 -0.03 -0.0425915" rpy="-1.5708 2.89121e-16 -9.70097e-31"/>
+      <origin xyz="-0.01025 -0.03 -0.0425915" rpy="-1.5708 2.89121e-16 6.16298e-33"/>
       <geometry>
         <mesh filename="package://assets/arm.stl"/>
       </geometry>
     </collision>
     <!-- Part ball_3 -->
     <visual>
-      <origin xyz="0.038 -2.77556e-17 -0.00768" rpy="-1.7777e-16 -1.45681e-15 1.5708"/>
+      <origin xyz="0.038 2.77556e-17 -0.00768" rpy="1.15188e-16 -2.03523e-16 1.5708"/>
       <geometry>
         <mesh filename="package://assets/ball.stl"/>
       </geometry>
@@ -994,7 +994,7 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="0.038 -2.77556e-17 -0.00768" rpy="-1.7777e-16 -1.45681e-15 1.5708"/>
+      <origin xyz="0.038 2.77556e-17 -0.00768" rpy="1.15188e-16 -2.03523e-16 1.5708"/>
       <geometry>
         <mesh filename="package://assets/ball.stl"/>
       </geometry>
@@ -1025,7 +1025,7 @@
     </inertial>
     <!-- Part rod_3 -->
     <visual>
-      <origin xyz="0.00371031 0.0370326 -0.0564076" rpy="0.01484 -1.08842 -1.35797e-16"/>
+      <origin xyz="0.00371031 0.0370326 -0.0564076" rpy="0.01484 -1.08842 1.87556e-17"/>
       <geometry>
         <mesh filename="package://assets/rod.stl"/>
       </geometry>
@@ -1034,14 +1034,14 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="0.00371031 0.0370326 -0.0564076" rpy="0.01484 -1.08842 -1.35797e-16"/>
+      <origin xyz="0.00371031 0.0370326 -0.0564076" rpy="0.01484 -1.08842 1.87556e-17"/>
       <geometry>
         <mesh filename="package://assets/rod.stl"/>
       </geometry>
     </collision>
     <!-- Part shape_5 -->
     <visual>
-      <origin xyz="0 0 6.93889e-18" rpy="-3.17607e-17 8.57048e-18 2.01161e-17"/>
+      <origin xyz="-6.93889e-18 1.38778e-17 0" rpy="1.71657e-17 2.88559e-18 1.79253e-17"/>
       <geometry>
         <mesh filename="package://assets/shape.stl"/>
       </geometry>
@@ -1050,14 +1050,14 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="0 0 6.93889e-18" rpy="-3.17607e-17 8.57048e-18 2.01161e-17"/>
+      <origin xyz="-6.93889e-18 1.38778e-17 0" rpy="1.71657e-17 2.88559e-18 1.79253e-17"/>
       <geometry>
         <mesh filename="package://assets/shape.stl"/>
       </geometry>
     </collision>
     <!-- Part shape_6 -->
     <visual>
-      <origin xyz="-0.0900003 0 -5.3256e-15" rpy="-2.4345e-14 2.16864e-14 3.14159"/>
+      <origin xyz="-0.0900003 0 -1.11022e-16" rpy="-1.11647e-16 5.1013e-17 3.14159"/>
       <geometry>
         <mesh filename="package://assets/shape.stl"/>
       </geometry>
@@ -1066,7 +1066,7 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="-0.0900003 0 -5.3256e-15" rpy="-2.4345e-14 2.16864e-14 3.14159"/>
+      <origin xyz="-0.0900003 0 -1.11022e-16" rpy="-1.11647e-16 5.1013e-17 3.14159"/>
       <geometry>
         <mesh filename="package://assets/shape.stl"/>
       </geometry>
@@ -1082,14 +1082,14 @@
     </inertial>
   </link>
   <joint name="closing_3_1_frame" type="fixed">
-    <origin xyz="-0.0900003 0 -5.3256e-15" rpy="-2.4345e-14 2.16864e-14 3.14159"/>
+    <origin xyz="-0.0900003 0 -1.11022e-16" rpy="-1.11647e-16 5.1013e-17 3.14159"/>
     <parent link="shape_2"/>
     <child link="closing_3_1"/>
     <axis xyz="0 0 0"/>
   </joint>
   <!-- Joint from passive_3_link_y to shape_2 -->
   <joint name="passive_3_z" type="revolute">
-    <origin xyz="0 0 6.93889e-18" rpy="-3.17607e-17 8.57048e-18 2.01161e-17"/>
+    <origin xyz="-6.93889e-18 1.38778e-17 0" rpy="1.71657e-17 2.88559e-18 1.79253e-17"/>
     <parent link="passive_3_link_y"/>
     <child link="shape_2"/>
     <axis xyz="0 0 1"/>
@@ -1097,7 +1097,7 @@
   </joint>
   <!-- Joint from passive_3_link_x to passive_3_link_y -->
   <joint name="passive_3_y" type="revolute">
-    <origin xyz="0 0 6.93889e-18" rpy="-3.17607e-17 8.57048e-18 2.01161e-17"/>
+    <origin xyz="-6.93889e-18 1.38778e-17 0" rpy="1.71657e-17 2.88559e-18 1.79253e-17"/>
     <parent link="passive_3_link_x"/>
     <child link="passive_3_link_y"/>
     <axis xyz="0 1 0"/>
@@ -1105,7 +1105,7 @@
   </joint>
   <!-- Joint from arm_3 to passive_3_link_x -->
   <joint name="passive_3_x" type="revolute">
-    <origin xyz="0.038 -2.77556e-17 -0.00768" rpy="2.99943 -0.0202587 1.08831"/>
+    <origin xyz="0.038 4.16334e-17 -0.00768" rpy="2.99943 -0.0202587 1.08831"/>
     <parent link="arm_3"/>
     <child link="passive_3_link_x"/>
     <axis xyz="1 0 0"/>
@@ -1113,7 +1113,7 @@
   </joint>
   <!-- Joint from main_plate to arm_3 -->
   <joint name="3" type="revolute">
-    <origin xyz="0.0102933 -0.0421165 -0.044785" rpy="1.5708 4.07681e-15 2.28727e-14"/>
+    <origin xyz="0.0102933 -0.0421165 -0.044785" rpy="1.5708 -5.55112e-17 1.58503e-16"/>
     <parent link="main_plate"/>
     <child link="arm_3"/>
     <axis xyz="0 0 1"/>
@@ -1128,7 +1128,7 @@
     </inertial>
     <!-- Part ball_4 -->
     <visual>
-      <origin xyz="0.038 1.38778e-17 -0.00768" rpy="-5.06185e-15 5.37411e-30 -1.5708"/>
+      <origin xyz="0.038 0 -0.00768" rpy="-1.73323e-16 -4.55048e-16 -1.5708"/>
       <geometry>
         <mesh filename="package://assets/ball.stl"/>
       </geometry>
@@ -1137,14 +1137,14 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="0.038 1.38778e-17 -0.00768" rpy="-5.06185e-15 5.37411e-30 -1.5708"/>
+      <origin xyz="0.038 0 -0.00768" rpy="-1.73323e-16 -4.55048e-16 -1.5708"/>
       <geometry>
         <mesh filename="package://assets/ball.stl"/>
       </geometry>
     </collision>
     <!-- Part arm_4 -->
     <visual>
-      <origin xyz="-0.01025 -0.03 -0.0425915" rpy="-1.5708 2.89121e-16 -6.42165e-31"/>
+      <origin xyz="-0.01025 -0.03 -0.0425915" rpy="-1.5708 2.89121e-16 0"/>
       <geometry>
         <mesh filename="package://assets/arm.stl"/>
       </geometry>
@@ -1153,7 +1153,7 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="-0.01025 -0.03 -0.0425915" rpy="-1.5708 2.89121e-16 -6.42165e-31"/>
+      <origin xyz="-0.01025 -0.03 -0.0425915" rpy="-1.5708 2.89121e-16 0"/>
       <geometry>
         <mesh filename="package://assets/arm.stl"/>
       </geometry>
@@ -1184,7 +1184,7 @@
     </inertial>
     <!-- Part shape_7 -->
     <visual>
-      <origin xyz="-0.0900003 1.38778e-17 -1.96891e-16" rpy="-2.14465e-15 1.87305e-15 -3.14159"/>
+      <origin xyz="-0.0900003 1.38778e-17 3.01842e-16" rpy="5.86424e-15 -4.14539e-15 3.14159"/>
       <geometry>
         <mesh filename="package://assets/shape.stl"/>
       </geometry>
@@ -1193,14 +1193,14 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="-0.0900003 1.38778e-17 -1.96891e-16" rpy="-2.14465e-15 1.87305e-15 -3.14159"/>
+      <origin xyz="-0.0900003 1.38778e-17 3.01842e-16" rpy="5.86424e-15 -4.14539e-15 3.14159"/>
       <geometry>
         <mesh filename="package://assets/shape.stl"/>
       </geometry>
     </collision>
     <!-- Part rod_4 -->
     <visual>
-      <origin xyz="0.00371031 0.0370326 -0.0564076" rpy="0.01484 -1.08842 4.0585e-17"/>
+      <origin xyz="0.00371031 0.0370326 -0.0564076" rpy="0.01484 -1.08842 1.25848e-17"/>
       <geometry>
         <mesh filename="package://assets/rod.stl"/>
       </geometry>
@@ -1209,14 +1209,14 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="0.00371031 0.0370326 -0.0564076" rpy="0.01484 -1.08842 4.0585e-17"/>
+      <origin xyz="0.00371031 0.0370326 -0.0564076" rpy="0.01484 -1.08842 1.25848e-17"/>
       <geometry>
         <mesh filename="package://assets/rod.stl"/>
       </geometry>
     </collision>
     <!-- Part shape_8 -->
     <visual>
-      <origin xyz="6.93889e-18 0 -2.60209e-18" rpy="-3.57605e-17 -1.90121e-17 8.12685e-18"/>
+      <origin xyz="-1.38778e-17 0 -4.33681e-18" rpy="2.96221e-17 -6.36981e-17 -1.30539e-16"/>
       <geometry>
         <mesh filename="package://assets/shape.stl"/>
       </geometry>
@@ -1225,7 +1225,7 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="6.93889e-18 0 -2.60209e-18" rpy="-3.57605e-17 -1.90121e-17 8.12685e-18"/>
+      <origin xyz="-1.38778e-17 0 -4.33681e-18" rpy="2.96221e-17 -6.36981e-17 -1.30539e-16"/>
       <geometry>
         <mesh filename="package://assets/shape.stl"/>
       </geometry>
@@ -1241,14 +1241,14 @@
     </inertial>
   </link>
   <joint name="closing_4_1_frame" type="fixed">
-    <origin xyz="-0.0900003 1.38778e-17 -1.96891e-16" rpy="-2.14465e-15 1.87305e-15 -3.14159"/>
+    <origin xyz="-0.0900003 1.38778e-17 3.01842e-16" rpy="5.86424e-15 -4.14539e-15 3.14159"/>
     <parent link="shape_3"/>
     <child link="closing_4_1"/>
     <axis xyz="0 0 0"/>
   </joint>
   <!-- Joint from passive_4_link_y to shape_3 -->
   <joint name="passive_4_z" type="revolute">
-    <origin xyz="6.93889e-18 0 -2.60209e-18" rpy="-3.57605e-17 -1.90121e-17 8.12685e-18"/>
+    <origin xyz="-1.38778e-17 0 -4.33681e-18" rpy="2.96221e-17 -6.36981e-17 -1.30539e-16"/>
     <parent link="passive_4_link_y"/>
     <child link="shape_3"/>
     <axis xyz="0 0 1"/>
@@ -1256,7 +1256,7 @@
   </joint>
   <!-- Joint from passive_4_link_x to passive_4_link_y -->
   <joint name="passive_4_y" type="revolute">
-    <origin xyz="6.93889e-18 0 -2.60209e-18" rpy="-3.57605e-17 -1.90121e-17 8.12685e-18"/>
+    <origin xyz="-1.38778e-17 0 -4.33681e-18" rpy="2.96221e-17 -6.36981e-17 -1.30539e-16"/>
     <parent link="passive_4_link_x"/>
     <child link="passive_4_link_y"/>
     <axis xyz="0 1 0"/>
@@ -1264,7 +1264,7 @@
   </joint>
   <!-- Joint from ball to passive_4_link_x -->
   <joint name="passive_4_x" type="revolute">
-    <origin xyz="0.038 1.38778e-17 -0.00768" rpy="-2.75098 -0.0202587 -1.08831"/>
+    <origin xyz="0.038 -1.38778e-17 -0.00768" rpy="-2.75098 -0.0202587 -1.08831"/>
     <parent link="ball"/>
     <child link="passive_4_link_x"/>
     <axis xyz="1 0 0"/>
@@ -1272,7 +1272,7 @@
   </joint>
   <!-- Joint from main_plate to ball -->
   <joint name="4" type="revolute">
-    <origin xyz="-0.0102067 -0.0421165 -0.044785" rpy="-1.5708 -4.39539e-15 -3.14159"/>
+    <origin xyz="-0.0102067 -0.0421165 -0.044785" rpy="-1.5708 5.55112e-17 -3.14159"/>
     <parent link="main_plate"/>
     <child link="ball"/>
     <axis xyz="0 0 1"/>
@@ -1287,7 +1287,7 @@
     </inertial>
     <!-- Part ball_5 -->
     <visual>
-      <origin xyz="0.038 -2.77556e-17 -0.00768" rpy="-3.14159 -3.71522e-15 1.5708"/>
+      <origin xyz="0.038 1.38778e-17 -0.00768" rpy="-3.14159 -1.24738e-15 1.5708"/>
       <geometry>
         <mesh filename="package://assets/ball.stl"/>
       </geometry>
@@ -1296,14 +1296,14 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="0.038 -2.77556e-17 -0.00768" rpy="-3.14159 -3.71522e-15 1.5708"/>
+      <origin xyz="0.038 1.38778e-17 -0.00768" rpy="-3.14159 -1.24738e-15 1.5708"/>
       <geometry>
         <mesh filename="package://assets/ball.stl"/>
       </geometry>
     </collision>
     <!-- Part arm_5 -->
     <visual>
-      <origin xyz="-0.01025 -0.03 -0.0425915" rpy="-1.5708 3.27155e-16 -3.15978e-32"/>
+      <origin xyz="-0.01025 -0.03 -0.0425915" rpy="-1.5708 2.2603e-16 -5.95037e-33"/>
       <geometry>
         <mesh filename="package://assets/arm.stl"/>
       </geometry>
@@ -1312,7 +1312,7 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="-0.01025 -0.03 -0.0425915" rpy="-1.5708 3.27155e-16 -3.15978e-32"/>
+      <origin xyz="-0.01025 -0.03 -0.0425915" rpy="-1.5708 2.2603e-16 -5.95037e-33"/>
       <geometry>
         <mesh filename="package://assets/arm.stl"/>
       </geometry>
@@ -1343,7 +1343,7 @@
     </inertial>
     <!-- Part shape_9 -->
     <visual>
-      <origin xyz="-0.0900003 -2.08167e-17 1.80411e-16" rpy="-7.9347e-16 -2.59262e-15 -3.14159"/>
+      <origin xyz="-0.0900003 -6.93889e-18 1.70697e-15" rpy="-3.97878e-14 -2.23854e-14 -3.14159"/>
       <geometry>
         <mesh filename="package://assets/shape.stl"/>
       </geometry>
@@ -1352,14 +1352,14 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="-0.0900003 -2.08167e-17 1.80411e-16" rpy="-7.9347e-16 -2.59262e-15 -3.14159"/>
+      <origin xyz="-0.0900003 -6.93889e-18 1.70697e-15" rpy="-3.97878e-14 -2.23854e-14 -3.14159"/>
       <geometry>
         <mesh filename="package://assets/shape.stl"/>
       </geometry>
     </collision>
     <!-- Part rod_5 -->
     <visual>
-      <origin xyz="0.00371031 0.0370326 -0.0564076" rpy="0.01484 -1.08842 1.09276e-16"/>
+      <origin xyz="0.00371031 0.0370326 -0.0564076" rpy="0.01484 -1.08842 -2.82667e-17"/>
       <geometry>
         <mesh filename="package://assets/rod.stl"/>
       </geometry>
@@ -1368,14 +1368,14 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="0.00371031 0.0370326 -0.0564076" rpy="0.01484 -1.08842 1.09276e-16"/>
+      <origin xyz="0.00371031 0.0370326 -0.0564076" rpy="0.01484 -1.08842 -2.82667e-17"/>
       <geometry>
         <mesh filename="package://assets/rod.stl"/>
       </geometry>
     </collision>
     <!-- Part shape_10 -->
     <visual>
-      <origin xyz="6.93889e-18 6.93889e-18 0" rpy="6.41966e-19 -5.78841e-17 7.70519e-18"/>
+      <origin xyz="6.93889e-18 6.93889e-18 0" rpy="-1.12808e-17 -1.80474e-17 -1.19975e-17"/>
       <geometry>
         <mesh filename="package://assets/shape.stl"/>
       </geometry>
@@ -1384,7 +1384,7 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="6.93889e-18 6.93889e-18 0" rpy="6.41966e-19 -5.78841e-17 7.70519e-18"/>
+      <origin xyz="6.93889e-18 6.93889e-18 0" rpy="-1.12808e-17 -1.80474e-17 -1.19975e-17"/>
       <geometry>
         <mesh filename="package://assets/shape.stl"/>
       </geometry>
@@ -1400,14 +1400,14 @@
     </inertial>
   </link>
   <joint name="closing_5_1_frame" type="fixed">
-    <origin xyz="-0.0900003 -2.08167e-17 1.80411e-16" rpy="-7.9347e-16 -2.59262e-15 -3.14159"/>
+    <origin xyz="-0.0900003 -6.93889e-18 1.70697e-15" rpy="-3.97878e-14 -2.23854e-14 -3.14159"/>
     <parent link="shape_4"/>
     <child link="closing_5_1"/>
     <axis xyz="0 0 0"/>
   </joint>
   <!-- Joint from passive_5_link_y to shape_4 -->
   <joint name="passive_5_z" type="revolute">
-    <origin xyz="6.93889e-18 6.93889e-18 0" rpy="6.41966e-19 -5.78841e-17 7.70519e-18"/>
+    <origin xyz="6.93889e-18 6.93889e-18 0" rpy="-1.12808e-17 -1.80474e-17 -1.19975e-17"/>
     <parent link="passive_5_link_y"/>
     <child link="shape_4"/>
     <axis xyz="0 0 1"/>
@@ -1415,7 +1415,7 @@
   </joint>
   <!-- Joint from passive_5_link_x to passive_5_link_y -->
   <joint name="passive_5_y" type="revolute">
-    <origin xyz="6.93889e-18 6.93889e-18 0" rpy="6.41966e-19 -5.78841e-17 7.70519e-18"/>
+    <origin xyz="6.93889e-18 6.93889e-18 0" rpy="-1.12808e-17 -1.80474e-17 -1.19975e-17"/>
     <parent link="passive_5_link_x"/>
     <child link="passive_5_link_y"/>
     <axis xyz="0 1 0"/>
@@ -1423,7 +1423,7 @@
   </joint>
   <!-- Joint from arm_4 to passive_5_link_x -->
   <joint name="passive_5_x" type="revolute">
-    <origin xyz="0.038 0 -0.00768" rpy="-2.7279 -0.0202587 1.08831"/>
+    <origin xyz="0.038 1.38778e-17 -0.00768" rpy="-2.7279 -0.0202587 1.08831"/>
     <parent link="arm_4"/>
     <child link="passive_5_link_x"/>
     <axis xyz="1 0 0"/>
@@ -1431,7 +1431,7 @@
   </joint>
   <!-- Joint from main_plate to arm_4 -->
   <joint name="5" type="revolute">
-    <origin xyz="-0.041534 0.012144 -0.044785" rpy="1.5708 -5.25792e-15 -2.0944"/>
+    <origin xyz="-0.041534 0.012144 -0.044785" rpy="1.5708 -9.91031e-16 -2.0944"/>
     <parent link="main_plate"/>
     <child link="arm_4"/>
     <axis xyz="0 0 1"/>
@@ -1446,7 +1446,7 @@
     </inertial>
     <!-- Part ball_6 -->
     <visual>
-      <origin xyz="0.038 2.77556e-17 -0.00768" rpy="3.14159 8.83142e-15 -1.5708"/>
+      <origin xyz="0.038 -1.38778e-17 -0.00768" rpy="3.14159 2.19395e-15 -1.5708"/>
       <geometry>
         <mesh filename="package://assets/ball.stl"/>
       </geometry>
@@ -1455,14 +1455,14 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="0.038 2.77556e-17 -0.00768" rpy="3.14159 8.83142e-15 -1.5708"/>
+      <origin xyz="0.038 -1.38778e-17 -0.00768" rpy="3.14159 2.19395e-15 -1.5708"/>
       <geometry>
         <mesh filename="package://assets/ball.stl"/>
       </geometry>
     </collision>
     <!-- Part arm_6 -->
     <visual>
-      <origin xyz="-0.01025 -0.03 -0.0425915" rpy="-1.5708 2.89551e-16 2.29204e-30"/>
+      <origin xyz="-0.01025 -0.03 -0.0425915" rpy="-1.5708 2.24962e-16 0"/>
       <geometry>
         <mesh filename="package://assets/arm.stl"/>
       </geometry>
@@ -1471,7 +1471,7 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="-0.01025 -0.03 -0.0425915" rpy="-1.5708 2.89551e-16 2.29204e-30"/>
+      <origin xyz="-0.01025 -0.03 -0.0425915" rpy="-1.5708 2.24962e-16 0"/>
       <geometry>
         <mesh filename="package://assets/arm.stl"/>
       </geometry>
@@ -1502,7 +1502,7 @@
     </inertial>
     <!-- Part shape_11 -->
     <visual>
-      <origin xyz="-0.0900003 -2.77556e-17 -2.38524e-18" rpy="-3.61624e-17 -2.15342e-16 -3.14159"/>
+      <origin xyz="-0.0900003 1.80411e-16 -7.58942e-18" rpy="-2.9286e-17 -3.24387e-17 3.14159"/>
       <geometry>
         <mesh filename="package://assets/shape.stl"/>
       </geometry>
@@ -1511,14 +1511,14 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="-0.0900003 -2.77556e-17 -2.38524e-18" rpy="-3.61624e-17 -2.15342e-16 -3.14159"/>
+      <origin xyz="-0.0900003 1.80411e-16 -7.58942e-18" rpy="-2.9286e-17 -3.24387e-17 3.14159"/>
       <geometry>
         <mesh filename="package://assets/shape.stl"/>
       </geometry>
     </collision>
     <!-- Part rod_6 -->
     <visual>
-      <origin xyz="0.00371031 0.0370326 -0.0564076" rpy="0.01484 -1.08842 6.83754e-15"/>
+      <origin xyz="0.00371031 0.0370326 -0.0564076" rpy="0.01484 -1.08842 2.32927e-16"/>
       <geometry>
         <mesh filename="package://assets/rod.stl"/>
       </geometry>
@@ -1527,14 +1527,14 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="0.00371031 0.0370326 -0.0564076" rpy="0.01484 -1.08842 6.83754e-15"/>
+      <origin xyz="0.00371031 0.0370326 -0.0564076" rpy="0.01484 -1.08842 2.32927e-16"/>
       <geometry>
         <mesh filename="package://assets/rod.stl"/>
       </geometry>
     </collision>
     <!-- Part shape_12 -->
     <visual>
-      <origin xyz="1.38778e-17 0 -4.22839e-18" rpy="1.24049e-17 -1.78639e-17 -1.22576e-16"/>
+      <origin xyz="-6.93889e-18 0 -1.84314e-18" rpy="-9.80843e-18 9.56019e-19 -2.78433e-17"/>
       <geometry>
         <mesh filename="package://assets/shape.stl"/>
       </geometry>
@@ -1543,7 +1543,7 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="1.38778e-17 0 -4.22839e-18" rpy="1.24049e-17 -1.78639e-17 -1.22576e-16"/>
+      <origin xyz="-6.93889e-18 0 -1.84314e-18" rpy="-9.80843e-18 9.56019e-19 -2.78433e-17"/>
       <geometry>
         <mesh filename="package://assets/shape.stl"/>
       </geometry>
@@ -1568,9 +1568,9 @@
   <!-- Link plateform -->
   <link name="plateform">
     <inertial>
-      <origin xyz="0.0548285 0.00286309 -0.03817" rpy="0 0 0"/>
-      <mass value="0.115811"/>
-      <inertia ixx="0.000318772" ixy="7.12725e-06" ixz="-2.45557e-05" iyy="0.000353065" iyz="-1.13467e-05" izz="0.000217945"/>
+      <origin xyz="0.0548333 0.00287548 -0.0381711" rpy="0 0 0"/>
+      <mass value="0.115777"/>
+      <inertia ixx="0.000318707" ixy="7.14935e-06" ixz="-2.4557e-05" iyy="0.000353048" iyz="-1.13518e-05" izz="0.000217873"/>
     </inertial>
     <!-- Part head_shell_front -->
     <visual>
@@ -1766,7 +1766,7 @@
     </collision>
     <!-- Part ball_11 -->
     <visual>
-      <origin xyz="-5.55112e-17 1.38778e-17 6.93889e-18" rpy="-0.378336 -0.170541 2.68759"/>
+      <origin xyz="-1.38778e-16 5.55112e-17 2.75387e-17" rpy="-0.378336 -0.170541 2.68759"/>
       <geometry>
         <mesh filename="package://assets/ball.stl"/>
       </geometry>
@@ -1775,7 +1775,7 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="-5.55112e-17 1.38778e-17 6.93889e-18" rpy="-0.378336 -0.170541 2.68759"/>
+      <origin xyz="-1.38778e-16 5.55112e-17 2.75387e-17" rpy="-0.378336 -0.170541 2.68759"/>
       <geometry>
         <mesh filename="package://assets/ball.stl"/>
       </geometry>
@@ -1890,13 +1890,13 @@
   <!-- Link test_antenna_body -->
   <link name="test_antenna_body">
     <inertial>
-      <origin xyz="0.00133995 0.0266291 -0.00378396" rpy="0 0 0"/>
-      <mass value="0.00776818"/>
-      <inertia ixx="1.03752e-05" ixy="-5.12035e-07" ixz="-3.53673e-08" iyy="2.25312e-07" iyz="-7.02858e-07" izz="1.0396e-05"/>
+      <origin xyz="0.00144486 0.0287138 -0.00297745" rpy="0 0 0"/>
+      <mass value="0.00463834"/>
+      <inertia ixx="1.36882e-05" ixy="-6.79045e-07" ixz="-4.92291e-08" iyy="2.27725e-07" iyz="-9.78329e-07" izz="1.36937e-05"/>
     </inertial>
     <!-- Part test_antenna -->
     <visual>
-      <origin xyz="0.0285297 -0.0184653 0.0570171" rpy="-1.67148 -0.521403 1.63862e-16"/>
+      <origin xyz="0.0285297 -0.0184653 0.0570171" rpy="-1.67148 -0.521403 3.16937e-17"/>
       <geometry>
         <mesh filename="package://assets/test_antenna.stl"/>
       </geometry>
@@ -1905,14 +1905,14 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="0.0285297 -0.0184653 0.0570171" rpy="-1.67148 -0.521403 1.63862e-16"/>
+      <origin xyz="0.0285297 -0.0184653 0.0570171" rpy="-1.67148 -0.521403 3.16937e-17"/>
       <geometry>
         <mesh filename="package://assets/test_antenna.stl"/>
       </geometry>
     </collision>
     <!-- Part test_antenna_body -->
     <visual>
-      <origin xyz="0.0285297 -0.0184653 0.0570171" rpy="-1.67148 -0.521403 1.94974e-17"/>
+      <origin xyz="0.0285297 -0.0184653 0.0570171" rpy="-1.67148 -0.521403 3.15316e-17"/>
       <geometry>
         <mesh filename="package://assets/test_antenna_body.stl"/>
       </geometry>
@@ -1921,7 +1921,7 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="0.0285297 -0.0184653 0.0570171" rpy="-1.67148 -0.521403 1.94974e-17"/>
+      <origin xyz="0.0285297 -0.0184653 0.0570171" rpy="-1.67148 -0.521403 3.15316e-17"/>
       <geometry>
         <mesh filename="package://assets/test_antenna_body.stl"/>
       </geometry>
@@ -1938,13 +1938,13 @@
   <!-- Link test_antenna -->
   <link name="test_antenna">
     <inertial>
-      <origin xyz="0.00133995 0.0266291 -0.00378396" rpy="0 0 0"/>
-      <mass value="0.00776818"/>
-      <inertia ixx="1.03752e-05" ixy="-5.12035e-07" ixz="-3.53673e-08" iyy="2.25312e-07" iyz="-7.02858e-07" izz="1.0396e-05"/>
+      <origin xyz="0.00144486 0.0287138 -0.00297745" rpy="0 0 0"/>
+      <mass value="0.00463834"/>
+      <inertia ixx="1.36882e-05" ixy="-6.79045e-07" ixz="-4.92291e-08" iyy="2.27725e-07" iyz="-9.78329e-07" izz="1.36937e-05"/>
     </inertial>
     <!-- Part test_antenna_body_2 -->
     <visual>
-      <origin xyz="0.0285297 -0.0184653 0.0570171" rpy="-1.67148 -0.521403 3.08476e-17"/>
+      <origin xyz="0.0285297 -0.0184653 0.0570171" rpy="-1.67148 -0.521403 1.36556e-17"/>
       <geometry>
         <mesh filename="package://assets/test_antenna_body.stl"/>
       </geometry>
@@ -1953,14 +1953,14 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="0.0285297 -0.0184653 0.0570171" rpy="-1.67148 -0.521403 3.08476e-17"/>
+      <origin xyz="0.0285297 -0.0184653 0.0570171" rpy="-1.67148 -0.521403 1.36556e-17"/>
       <geometry>
         <mesh filename="package://assets/test_antenna_body.stl"/>
       </geometry>
     </collision>
     <!-- Part test_antenna_2 -->
     <visual>
-      <origin xyz="0.0285297 -0.0184653 0.0570171" rpy="-1.67148 -0.521403 -4.00519e-15"/>
+      <origin xyz="0.0285297 -0.0184653 0.0570171" rpy="-1.67148 -0.521403 2.38907e-16"/>
       <geometry>
         <mesh filename="package://assets/test_antenna.stl"/>
       </geometry>
@@ -1969,7 +1969,7 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="0.0285297 -0.0184653 0.0570171" rpy="-1.67148 -0.521403 -4.00519e-15"/>
+      <origin xyz="0.0285297 -0.0184653 0.0570171" rpy="-1.67148 -0.521403 2.38907e-16"/>
       <geometry>
         <mesh filename="package://assets/test_antenna.stl"/>
       </geometry>
@@ -1985,7 +1985,7 @@
   </joint>
   <!-- Joint from passive_7_link_y to plateform -->
   <joint name="passive_7_z" type="revolute">
-    <origin xyz="-2.77556e-17 0 5.74627e-18" rpy="-1.50004e-17 -1.40562e-17 1.21518e-17"/>
+    <origin xyz="0 1.38778e-17 -2.92735e-18" rpy="1.21162e-17 1.19364e-17 3.40244e-17"/>
     <parent link="passive_7_link_y"/>
     <child link="plateform"/>
     <axis xyz="0 0 1"/>
@@ -1993,7 +1993,7 @@
   </joint>
   <!-- Joint from passive_7_link_x to passive_7_link_y -->
   <joint name="passive_7_y" type="revolute">
-    <origin xyz="-2.77556e-17 0 5.74627e-18" rpy="-1.50004e-17 -1.40562e-17 1.21518e-17"/>
+    <origin xyz="0 1.38778e-17 -2.92735e-18" rpy="1.21162e-17 1.19364e-17 3.40244e-17"/>
     <parent link="passive_7_link_x"/>
     <child link="passive_7_link_y"/>
     <axis xyz="0 1 0"/>
@@ -2001,7 +2001,7 @@
   </joint>
   <!-- Joint from shape_5 to passive_7_link_x -->
   <joint name="passive_7_x" type="revolute">
-    <origin xyz="-0.0900003 -2.77556e-17 -2.38524e-18" rpy="3.14159 -2.15342e-16 -3.14159"/>
+    <origin xyz="-0.0900003 1.80411e-16 -7.58942e-18" rpy="3.14159 -3.24387e-17 3.14159"/>
     <parent link="shape_5"/>
     <child link="passive_7_link_x"/>
     <axis xyz="1 0 0"/>
@@ -2009,7 +2009,7 @@
   </joint>
   <!-- Joint from passive_6_link_y to shape_5 -->
   <joint name="passive_6_z" type="revolute">
-    <origin xyz="1.38778e-17 0 -2.49366e-18" rpy="1.24049e-17 -1.78639e-17 -1.22576e-16"/>
+    <origin xyz="-6.93889e-18 0 -1.84314e-18" rpy="-9.80843e-18 9.56019e-19 -2.78433e-17"/>
     <parent link="passive_6_link_y"/>
     <child link="shape_5"/>
     <axis xyz="0 0 1"/>
@@ -2017,7 +2017,7 @@
   </joint>
   <!-- Joint from passive_6_link_x to passive_6_link_y -->
   <joint name="passive_6_y" type="revolute">
-    <origin xyz="1.38778e-17 0 -2.49366e-18" rpy="1.24049e-17 -1.78639e-17 -1.22576e-16"/>
+    <origin xyz="-6.93889e-18 0 -1.84314e-18" rpy="-9.80843e-18 9.56019e-19 -2.78433e-17"/>
     <parent link="passive_6_link_x"/>
     <child link="passive_6_link_y"/>
     <axis xyz="0 1 0"/>
@@ -2025,7 +2025,7 @@
   </joint>
   <!-- Joint from arm_5 to passive_6_link_x -->
   <joint name="passive_6_x" type="revolute">
-    <origin xyz="0.038 1.38778e-17 -0.00768" rpy="-2.72876 -0.0202587 -1.08831"/>
+    <origin xyz="0.038 9.71445e-17 -0.00768" rpy="-2.72876 -0.0202587 -1.08831"/>
     <parent link="arm_5"/>
     <child link="passive_6_link_x"/>
     <axis xyz="1 0 0"/>
@@ -2033,7 +2033,7 @@
   </joint>
   <!-- Joint from main_plate to arm_5 -->
   <joint name="6" type="revolute">
-    <origin xyz="-0.031284 0.0298975 -0.044785" rpy="-1.5708 2.58501e-14 1.0472"/>
+    <origin xyz="-0.031284 0.0298975 -0.044785" rpy="-1.5708 -1.10323e-14 1.0472"/>
     <parent link="main_plate"/>
     <child link="arm_5"/>
     <axis xyz="0 0 1"/>

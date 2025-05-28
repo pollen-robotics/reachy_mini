@@ -60,7 +60,7 @@
       <!-- Link main_plate -->
       <body name="main_plate" pos="-0.00198261 3.46945e-18 0.0316" quat="5.57809e-31 0.707107 0.707107 1.67343e-30">
         <!-- Joint from turning_bowl to main_plate -->
-        <joint axis="0 0 1" name="all_yaw" type="hinge" class="chosen_actuator"/>
+        <joint axis="0 0 1" name="all_yaw" type="hinge" range="-2.9670597283903604 2.9670597283903604" class="chosen_actuator"/>
         <inertial pos="6.84881e-05 0.00157052 -0.0411006" mass="0.42461" fullinertia="0.00174771 0.00169917 0.00193868 -3.57066e-07 -1.95668e-07 5.33713e-05"/>
         <!-- Part dc15_a01_case_m_dummy -->
         <geom type="mesh" class="visual" pos="0.108746 0.039063 -0.014785" quat="5.75703e-17 0.5 0.866025 -7.99966e-17" mesh="dc15_a01_case_m_dummy" material="dc15_a01_case_m_dummy_material"/>
@@ -141,7 +141,7 @@
         <!-- Link arm -->
         <body name="arm" pos="0.0313706 0.0298975 -0.044785" quat="0.353553 0.353553 0.612372 0.612372">
           <!-- Joint from main_plate to arm -->
-          <joint axis="0 0 1" name="1" type="hinge" class="chosen_actuator"/>
+          <joint axis="0 0 1" name="1" type="hinge" range="-1.396263401595453 1.3962634015954742" class="chosen_actuator"/>
           <inertial pos="0 0 0" mass="1e-09" fullinertia="1e-09 1e-09 1e-09 0 0 0"/>
           <!-- Part ball -->
           <geom type="mesh" class="visual" pos="0.038 -1.38778e-17 -0.00768" quat="0.707107 3.19873e-16 4.85723e-16 0.707107" mesh="ball" material="ball_material"/>
@@ -165,14 +165,14 @@
         <!-- Link arm_2 -->
         <body name="arm_2" pos="0.0416206 0.012144 -0.044785" quat="0.612372 -0.612372 0.353553 -0.353553">
           <!-- Joint from main_plate to arm_2 -->
-          <joint axis="0 0 1" name="2" type="hinge" class="chosen_actuator"/>
+          <joint axis="0 0 1" name="2" type="hinge" range="-1.3962634015954485 1.3962634015954787" class="chosen_actuator"/>
           <inertial pos="0 0 0" mass="1e-09" fullinertia="1e-09 1e-09 1e-09 0 0 0"/>
           <!-- Part ball_2 -->
-          <geom type="mesh" class="visual" pos="0.038 0 -0.00768" quat="0.707107 1.31348e-15 1.83187e-15 -0.707107" mesh="ball" material="ball_material"/>
+          <geom type="mesh" class="visual" pos="0.038 0 -0.00768" quat="0.707107 1.31348e-15 2.05391e-15 -0.707107" mesh="ball" material="ball_material"/>
           <!-- Part arm_2 -->
           <geom type="mesh" class="visual" pos="-0.01025 -0.03 -0.0425915" quat="0.707107 -0.707107 1.11022e-16 1.14517e-16" mesh="arm" material="arm_material"/>
           <!-- Link shape -->
-          <body name="shape" pos="0.038 3.33067e-16 -0.00768" quat="0.851318 -0.0848634 0.0395624 -0.516228">
+          <body name="shape" pos="0.038 8.32667e-17 -0.00768" quat="0.851318 -0.0848634 0.0395624 -0.516228">
             <!-- Joint from arm_2 to shape -->
             <joint axis="0 0 1" name="passive_2" type="ball" class="chosen_actuator"/>
             <inertial pos="0 0 0" mass="1e-09" fullinertia="1e-09 1e-09 1e-09 0 0 0"/>
@@ -189,38 +189,38 @@
         <!-- Link arm_3 -->
         <body name="arm_3" pos="0.0102933 -0.0421165 -0.044785" quat="0.707107 0.707107 -5.55112e-16 -5.32009e-16">
           <!-- Joint from main_plate to arm_3 -->
-          <joint axis="0 0 1" name="3" type="hinge" class="chosen_actuator"/>
+          <joint axis="0 0 1" name="3" type="hinge" range="-1.3962634015954627 1.3962634015954645" class="chosen_actuator"/>
           <inertial pos="0 0 0" mass="1e-09" fullinertia="1e-09 1e-09 1e-09 0 0 0"/>
           <!-- Part arm_3 -->
           <geom type="mesh" class="visual" pos="-0.01025 -0.03 -0.0425915" quat="0.707107 -0.707107 1.11022e-16 1.0222e-16" mesh="arm" material="arm_material"/>
           <!-- Part ball_3 -->
           <geom type="mesh" class="visual" pos="0.038 2.77556e-17 -0.00768" quat="0.707107 2.21396e-17 2.22045e-16 0.707107" mesh="ball" material="ball_material"/>
           <!-- Link shape_2 -->
-          <body name="shape_2" pos="0.038 4.16334e-17 -0.00768" quat="0.05553 0.853733 0.515746 0.04541">
+          <body name="shape_2" pos="0.038 -1.38778e-17 -0.00768" quat="0.05553 0.853733 0.515746 0.04541">
             <!-- Joint from arm_3 to shape_2 -->
             <joint axis="0 0 1" name="passive_3" type="ball" class="chosen_actuator"/>
             <inertial pos="0 0 0" mass="1e-09" fullinertia="1e-09 1e-09 1e-09 0 0 0"/>
             <!-- Part rod_3 -->
             <geom type="mesh" class="visual" pos="0.00371031 0.0370326 -0.0564076" quat="0.855513 0.00634803 -0.517727 0.00384161" mesh="rod" material="rod_material"/>
             <!-- Part shape_5 -->
-            <geom type="mesh" class="visual" pos="-6.93889e-18 1.38778e-17 0" quat="1 3.93667e-18 0 2.35922e-16" mesh="shape" material="shape_material"/>
+            <geom type="mesh" class="visual" pos="6.93889e-18 0 -3.46945e-18" quat="1 0 5.55112e-17 -1.14492e-16" mesh="shape" material="shape_material"/>
             <!-- Part shape_6 -->
-            <geom type="mesh" class="visual" pos="-0.0900003 0 -1.11022e-16" quat="2.77556e-17 1.54774e-17 5.55112e-17 -1" mesh="shape" material="shape_material"/>
+            <geom type="mesh" class="visual" pos="-0.0900003 -1.38778e-17 -9.71445e-17" quat="5.55112e-17 0 -2.22045e-16 -1" mesh="shape" material="shape_material"/>
             <!-- Frame closing_3_1 -->
-            <site group="3" name="closing_3_1" pos="-0.0900003 0 -1.11022e-16" quat="2.77556e-17 1.54774e-17 5.55112e-17 -1"/>
+            <site group="3" name="closing_3_1" pos="-0.0900003 -1.38778e-17 -9.71445e-17" quat="5.55112e-17 0 -2.22045e-16 -1"/>
           </body>
         </body>
         <!-- Link ball -->
-        <body name="ball" pos="-0.0102067 -0.0421165 -0.044785" quat="5.27356e-16 -5.94345e-16 -0.707107 0.707107">
+        <body name="ball" pos="-0.0102067 -0.0421165 -0.044785" quat="1.11022e-15 2.14378e-15 0.707107 -0.707107">
           <!-- Joint from main_plate to ball -->
-          <joint axis="0 0 1" name="4" type="hinge" class="chosen_actuator"/>
+          <joint axis="0 0 1" name="4" type="hinge" range="-1.3962634015954591 1.396263401595468" class="chosen_actuator"/>
           <inertial pos="0 0 0" mass="1e-09" fullinertia="1e-09 1e-09 1e-09 0 0 0"/>
           <!-- Part ball_4 -->
-          <geom type="mesh" class="visual" pos="0.038 0 -0.00768" quat="0.707107 1.92793e-16 2.22045e-16 -0.707107" mesh="ball" material="ball_material"/>
+          <geom type="mesh" class="visual" pos="0.038 0 -0.00768" quat="0.707107 1.92793e-16 3.88578e-16 -0.707107" mesh="ball" material="ball_material"/>
           <!-- Part arm_4 -->
           <geom type="mesh" class="visual" pos="-0.01025 -0.03 -0.0425915" quat="0.707107 -0.707107 1.11022e-16 1.0222e-16" mesh="arm" material="arm_material"/>
           <!-- Link shape_3 -->
-          <body name="shape_3" pos="0.038 -1.38778e-17 -0.00768" quat="0.160884 -0.840274 0.506146 -0.108964">
+          <body name="shape_3" pos="0.038 -1.38778e-16 -0.00768" quat="0.160884 -0.840274 0.506146 -0.108964">
             <!-- Joint from ball to shape_3 -->
             <joint axis="0 0 1" name="passive_4" type="ball" class="chosen_actuator"/>
             <inertial pos="0 0 0" mass="1e-09" fullinertia="1e-09 1e-09 1e-09 0 0 0"/>
@@ -237,49 +237,49 @@
         <!-- Link arm_4 -->
         <body name="arm_4" pos="-0.041534 0.012144 -0.044785" quat="0.353553 0.353553 -0.612372 -0.612372">
           <!-- Joint from main_plate to arm_4 -->
-          <joint axis="0 0 1" name="5" type="hinge" class="chosen_actuator"/>
+          <joint axis="0 0 1" name="5" type="hinge" range="-1.3962634015954494 1.3962634015954778" class="chosen_actuator"/>
           <inertial pos="0 0 0" mass="1e-09" fullinertia="1e-09 1e-09 1e-09 0 0 0"/>
           <!-- Part ball_5 -->
           <geom type="mesh" class="visual" pos="0.038 1.38778e-17 -0.00768" quat="2.41995e-15 -0.707107 -0.707107 1.97893e-15" mesh="ball" material="ball_material"/>
           <!-- Part arm_5 -->
-          <geom type="mesh" class="visual" pos="-0.01025 -0.03 -0.0425915" quat="0.707107 -0.707107 1.11022e-16 7.19243e-17" mesh="arm" material="arm_material"/>
+          <geom type="mesh" class="visual" pos="-0.01025 -0.03 -0.0425915" quat="0.707107 -0.707107 2.22045e-16 6.06849e-17" mesh="arm" material="arm_material"/>
           <!-- Link shape_4 -->
           <body name="shape_4" pos="0.038 1.38778e-17 -0.00768" quat="0.180833 -0.836208 -0.508414 0.0978337">
             <!-- Joint from arm_4 to shape_4 -->
             <joint axis="0 0 1" name="passive_5" type="ball" class="chosen_actuator"/>
             <inertial pos="0 0 0" mass="1e-09" fullinertia="1e-09 1e-09 1e-09 0 0 0"/>
             <!-- Part shape_9 -->
-            <geom type="mesh" class="visual" pos="-0.0900003 -6.93889e-18 1.70697e-15" quat="7.60503e-15 -6.78187e-15 9.82547e-15 -1" mesh="shape" material="shape_material"/>
+            <geom type="mesh" class="visual" pos="-0.0900003 6.93889e-18 1.72085e-15" quat="7.63278e-15 -6.7875e-15 9.88098e-15 -1" mesh="shape" material="shape_material"/>
             <!-- Part rod_5 -->
             <geom type="mesh" class="visual" pos="0.00371031 0.0370326 -0.0564076" quat="0.855513 0.00634803 -0.517727 0.00384161" mesh="rod" material="rod_material"/>
             <!-- Part shape_10 -->
-            <geom type="mesh" class="visual" pos="6.93889e-18 6.93889e-18 0" quat="1 -1.53091e-17 1.11022e-16 -1.94289e-16" mesh="shape" material="shape_material"/>
+            <geom type="mesh" class="visual" pos="0 1.38778e-17 0" quat="1 0 0 1.52656e-16" mesh="shape" material="shape_material"/>
             <!-- Frame closing_5_1 -->
-            <site group="3" name="closing_5_1" pos="-0.0900003 -6.93889e-18 1.70697e-15" quat="7.60503e-15 -6.78187e-15 9.82547e-15 -1"/>
+            <site group="3" name="closing_5_1" pos="-0.0900003 6.93889e-18 1.72085e-15" quat="7.63278e-15 -6.7875e-15 9.88098e-15 -1"/>
           </body>
         </body>
         <!-- Link arm_5 -->
         <body name="arm_5" pos="-0.031284 0.0298975 -0.044785" quat="0.612372 -0.612372 -0.353553 0.353553">
           <!-- Joint from main_plate to arm_5 -->
-          <joint axis="0 0 1" name="6" type="hinge" class="chosen_actuator"/>
+          <joint axis="0 0 1" name="6" type="hinge" range="-1.3962634015954467 1.3962634015954805" class="chosen_actuator"/>
           <inertial pos="0 0 0" mass="1e-09" fullinertia="1e-09 1e-09 1e-09 0 0 0"/>
           <!-- Part ball_6 -->
-          <geom type="mesh" class="visual" pos="0.038 -1.38778e-17 -0.00768" quat="2.60458e-16 -0.707107 0.707107 5.15221e-16" mesh="ball" material="ball_material"/>
+          <geom type="mesh" class="visual" pos="0.038 0 -0.00768" quat="2.60458e-16 -0.707107 0.707107 5.15221e-16" mesh="ball" material="ball_material"/>
           <!-- Part arm_6 -->
-          <geom type="mesh" class="visual" pos="-0.01025 -0.03 -0.0425915" quat="0.707107 -0.707107 1.11022e-16 9.84488e-17" mesh="arm" material="arm_material"/>
+          <geom type="mesh" class="visual" pos="-0.01025 -0.03 -0.0425915" quat="0.707107 -0.707107 1.11022e-16 9.2872e-17" mesh="arm" material="arm_material"/>
           <!-- Link shape_5 -->
-          <body name="shape_5" pos="0.038 9.71445e-17 -0.00768" quat="0.17021 -0.838434 0.504904 -0.114581">
+          <body name="shape_5" pos="0.038 2.77556e-17 -0.00768" quat="0.17021 -0.838434 0.504904 -0.114581">
             <!-- Joint from arm_5 to shape_5 -->
             <joint axis="0 0 1" name="passive_6" type="ball" class="chosen_actuator"/>
             <inertial pos="0 0 0" mass="1e-09" fullinertia="1e-09 1e-09 1e-09 0 0 0"/>
             <!-- Part shape_11 -->
-            <geom type="mesh" class="visual" pos="-0.0900003 1.80411e-16 -7.58942e-18" quat="4.10783e-15 4.56728e-15 4.32987e-15 1" mesh="shape" material="shape_material"/>
+            <geom type="mesh" class="visual" pos="-0.0900003 2.22045e-16 -1.31188e-17" quat="4.08007e-15 4.60392e-15 4.55191e-15 1" mesh="shape" material="shape_material"/>
             <!-- Part rod_6 -->
             <geom type="mesh" class="visual" pos="0.00371031 0.0370326 -0.0564076" quat="0.855513 0.00634803 -0.517727 0.00384161" mesh="rod" material="rod_material"/>
             <!-- Part shape_12 -->
-            <geom type="mesh" class="visual" pos="-6.93889e-18 0 -1.84314e-18" quat="1 0 -2.08167e-17 0" mesh="shape" material="shape_material"/>
+            <geom type="mesh" class="visual" pos="-1.38778e-17 1.38778e-17 2.1684e-19" quat="1 -1.18227e-17 0 -1.04083e-16" mesh="shape" material="shape_material"/>
             <!-- Link plateform -->
-            <body name="plateform" pos="-0.0900003 1.80411e-16 -7.58942e-18" quat="4.66294e-15 -4.02394e-15 -1 4.44089e-15">
+            <body name="plateform" pos="-0.0900003 2.22045e-16 -1.31188e-17" quat="4.66294e-15 -4.01973e-15 -1 4.77396e-15">
               <!-- Joint from shape_5 to plateform -->
               <joint axis="0 0 1" name="passive_7" type="ball" class="chosen_actuator"/>
               <inertial pos="0.0548333 0.00287548 -0.0381711" mass="0.115777" fullinertia="0.000318707 0.000353048 0.000217873 7.14935e-06 -2.4557e-05 -1.13518e-05"/>
@@ -308,7 +308,7 @@
               <!-- Part plateform -->
               <geom type="mesh" class="visual" pos="-0.0935013 0.0657437 -0.00885671" quat="0.628223 0.479666 0.595633 0.143102" mesh="plateform" material="plateform_material"/>
               <!-- Part ball_11 -->
-              <geom type="mesh" class="visual" pos="-1.38778e-16 5.55112e-17 2.75387e-17" quat="0.235842 0.039336 -0.201378 0.949883" mesh="ball" material="ball_material"/>
+              <geom type="mesh" class="visual" pos="0 -1.38778e-17 -3.03577e-18" quat="0.235842 0.039336 -0.201378 0.949883" mesh="ball" material="ball_material"/>
               <!-- Part ball_12 -->
               <geom type="mesh" class="visual" pos="0.0184911 0.0480184 -0.0257888" quat="0.223913 -0.0838549 -0.64934 0.721934" mesh="ball" material="ball_material"/>
               <!-- Frame closing_1_2 -->
@@ -350,35 +350,35 @@
     </body>
   </worldbody>
   <asset>
-    <mesh file="drive_palonier__configuration_simple_axe.stl"/>
+    <mesh file="test_antenna.stl"/>
+    <mesh file="small_lens.stl"/>
+    <mesh file="big_lens.stl"/>
+    <mesh file="arm.stl"/>
     <mesh file="dc15_a01_case_b_dummy.stl"/>
     <mesh file="test_antenna_body.stl"/>
-    <mesh file="top_body.stl"/>
-    <mesh file="wj_wk00_0123middlecase_56__configuration_simple_axe.stl"/>
-    <mesh file="eye_support.stl"/>
-    <mesh file="dc15_a01_case_f_dummy.stl"/>
-    <mesh file="head_interface.stl"/>
-    <mesh file="small_lens.stl"/>
-    <mesh file="side_plate.stl"/>
-    <mesh file="dc15_a01_horn_dummy.stl"/>
-    <mesh file="plateform.stl"/>
-    <mesh file="main_plate.stl"/>
-    <mesh file="test_antenna.stl"/>
-    <mesh file="dc15_a01_case_m_dummy.stl"/>
-    <mesh file="head_shell_front.stl"/>
     <mesh file="turning_bowl.stl"/>
-    <mesh file="head_head_back.stl"/>
-    <mesh file="bottom_body.stl"/>
-    <mesh file="wj_wk00_0124bottomcase_45__configuration_simple_axe.stl"/>
-    <mesh file="shape.stl"/>
     <mesh file="foot.stl"/>
+    <mesh file="shape.stl"/>
     <mesh file="wj_wk00_0122topcabinetcase_95__configuration_simple_axe.stl"/>
-    <mesh file="arm.stl"/>
-    <mesh file="big_lens.stl"/>
+    <mesh file="wj_wk00_0124bottomcase_45__configuration_simple_axe.stl"/>
+    <mesh file="top_body.stl"/>
+    <mesh file="dc15_a01_horn_dummy.stl"/>
+    <mesh file="head_interface.stl"/>
     <mesh file="rod.stl"/>
+    <mesh file="drive_palonier__configuration_simple_axe.stl"/>
+    <mesh file="head_shell_front.stl"/>
     <mesh file="uc_a37_rev_a_step.stl"/>
+    <mesh file="head_head_back.stl"/>
     <mesh file="mid_plate.stl"/>
     <mesh file="ball.stl"/>
+    <mesh file="eye_support.stl"/>
+    <mesh file="wj_wk00_0123middlecase_56__configuration_simple_axe.stl"/>
+    <mesh file="dc15_a01_case_m_dummy.stl"/>
+    <mesh file="bottom_body.stl"/>
+    <mesh file="main_plate.stl"/>
+    <mesh file="dc15_a01_case_f_dummy.stl"/>
+    <mesh file="plateform.stl"/>
+    <mesh file="side_plate.stl"/>
     <material name="turning_bowl_material" rgba="0.34902 0.376471 0.4 1"/>
     <material name="dc15_a01_case_m_dummy_material" rgba="0.262745 0.282353 0.301961 1"/>
     <material name="main_plate_material" rgba="0.196078 0.196078 0.196078 1"/>
@@ -410,13 +410,13 @@
     <material name="test_antenna_body_material" rgba="1 1 1 1"/>
   </asset>
   <actuator>
-    <position class="chosen_actuator" name="all_yaw" joint="all_yaw"/>
-    <position class="chosen_actuator" name="1" joint="1"/>
-    <position class="chosen_actuator" name="2" joint="2"/>
-    <position class="chosen_actuator" name="3" joint="3"/>
-    <position class="chosen_actuator" name="4" joint="4"/>
-    <position class="chosen_actuator" name="5" joint="5"/>
-    <position class="chosen_actuator" name="6" joint="6"/>
+    <position class="chosen_actuator" name="all_yaw" joint="all_yaw" inheritrange="1"/>
+    <position class="chosen_actuator" name="1" joint="1" inheritrange="1"/>
+    <position class="chosen_actuator" name="2" joint="2" inheritrange="1"/>
+    <position class="chosen_actuator" name="3" joint="3" inheritrange="1"/>
+    <position class="chosen_actuator" name="4" joint="4" inheritrange="1"/>
+    <position class="chosen_actuator" name="5" joint="5" inheritrange="1"/>
+    <position class="chosen_actuator" name="6" joint="6" inheritrange="1"/>
     <position class="chosen_actuator" name="left_antenna" joint="left_antenna"/>
     <position class="chosen_actuator" name="right_antenna" joint="right_antenna"/>
   </actuator>
