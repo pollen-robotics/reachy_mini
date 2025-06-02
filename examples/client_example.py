@@ -1,4 +1,4 @@
-from stewart_little_control import Client
+from stewart_little_control.io import Client
 import time
 import numpy as np
 from scipy.spatial.transform import Rotation as R
@@ -6,6 +6,7 @@ from scipy.spatial.transform import Rotation as R
 from stewart_little_control.command import ReachyMiniCommand
 
 client = Client()
+
 while True:
     pose = np.eye(4)
     euler_rot = [

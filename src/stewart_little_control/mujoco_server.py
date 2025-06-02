@@ -55,9 +55,9 @@ class MujocoServer:
 
 
 def main():
-    from stewart_little_control.io.socket_server import SocketServer
+    from stewart_little_control.io import Server
 
-    socket_server = SocketServer()
+    socket_server = Server()
     socket_server.start()
 
     MujocoServer(socket_server)
