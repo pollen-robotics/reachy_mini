@@ -57,10 +57,15 @@ class MujocoServer:
 def main():
     from stewart_little_control.io import Server
 
-    socket_server = Server()
-    socket_server.start()
+    server = Server()
+    server.start()
 
-    MujocoServer(socket_server)
+    try:
+        MujocoServer(server)
+    except KeyboardInterrupt:
+        pass
+
+    server.stop()
 
 
 if __name__ == "__main__":

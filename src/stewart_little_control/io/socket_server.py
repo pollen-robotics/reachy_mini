@@ -25,6 +25,9 @@ class SocketServer(AbstractServer):
             self._running = True
             Thread(target=self._client_handler, daemon=True).start()
 
+    def stop(self):
+        pass
+
     def _client_handler(self):
         while self._running:
             print("SocketServer: Waiting for connection on port", self.port)
