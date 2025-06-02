@@ -1,26 +1,18 @@
-import socket
-import pickle
 from stewart_little_control import PlacoIK
 import mujoco
 import mujoco.viewer
 import time
 import os
 from pathlib import Path
-from stewart_little_control.mujoco_utils import get_joint_qpos
-import numpy as np
-from threading import Thread, Lock
+from stewart_little_control.io.abstract import AbstractServer
+
 
 ROOT_PATH = Path(os.path.dirname(os.path.abspath(__file__))).parent.parent
 
 
 class MujocoServer:
-    def __init__(self):
-        self.host = "0.0.0.0"
-        self.port = 1234
-        self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self.server_socket.bind((self.host, self.port))
-        self.server_socket.listen(1)
+    def __init__(self, server: AbstractServer):
+        self.server = server
 
         self.model = mujoco.MjModel.from_xml_path(
             f"{ROOT_PATH}/descriptions/stewart_little_magnet/scene.xml"
@@ -30,53 +22,9 @@ class MujocoServer:
         self.decimation = 10  # -> 50hz control loop
 
         self.placo_ik = PlacoIK(f"{ROOT_PATH}/descriptions/stewart_little_magnet/")
-        self.current_pose = np.eye(4)
-        self.current_pose[:3, 3][2] = 0.155
-        self.current_antennas = np.zeros(2)
-
-        self.pose_lock = Lock()
-
-        # Launch the client handler in a thread
-        Thread(target=self.client_handler, daemon=True).start()
 
         # Start the simulation loop
         self.simulation_loop()
-
-    def client_handler(self):
-        while True:
-            print("Waiting for connection on port", self.port)
-            try:
-                conn, address = self.server_socket.accept()
-                print(f"Client connected from {address}")
-                with conn:
-                    while True:
-                        try:
-                            data = conn.recv(4096)
-                            if not data:
-                                print("Client disconnected")
-                                break
-
-                            pose_antennas = pickle.loads(data)
-                            pose = pose_antennas["pose"]
-                            antennas = pose_antennas["antennas"]
-                            if isinstance(pose, np.ndarray) and pose.shape == (4, 4):
-                                with self.pose_lock:
-                                    self.current_pose = pose
-                                    if antennas is not None:
-                                        self.current_antennas = antennas
-                            else:
-                                print("Received invalid pose data")
-
-                        except (
-                            ConnectionResetError,
-                            EOFError,
-                            pickle.PickleError,
-                        ) as e:
-                            print(f"Client error: {e}")
-                            break
-
-            except Exception as e:
-                print(f"Server error: {e}")
 
     def simulation_loop(self):
         step = 0
@@ -88,15 +36,13 @@ class MujocoServer:
                 start_t = time.time()
 
                 if step % self.decimation == 0:
-                    with self.pose_lock:
-                        pose = self.current_pose.copy()
-                        antennas = self.current_antennas.copy()
+                    command = self.server.get_latest_command()
 
                     # IK and apply control
                     try:
-                        angles_rad = self.placo_ik.ik(pose)
+                        angles_rad = self.placo_ik.ik(command.head_pose)
                         self.data.ctrl[:] = angles_rad
-                        self.data.ctrl[5:7] = antennas
+                        self.data.ctrl[5:7] = command.antennas_orientation
                     except Exception as e:
                         print(f"IK error: {e}")
 
@@ -109,7 +55,12 @@ class MujocoServer:
 
 
 def main():
-    MujocoServer()
+    from stewart_little_control.io.socket_server import SocketServer
+
+    socket_server = SocketServer()
+    socket_server.start()
+
+    MujocoServer(socket_server)
 
 
 if __name__ == "__main__":

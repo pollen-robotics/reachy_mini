@@ -4,6 +4,7 @@ from scipy.spatial.transform import Rotation as R
 import mediapipe as mp
 
 from stewart_little_control import Client
+from stewart_little_control.command import ReachyMiniCommand
 
 
 class PoseEstimator:
@@ -75,7 +76,13 @@ def main(draw=True):
                     connection_drawing_spec=mp.solutions.drawing_styles.get_default_face_mesh_contours_style(),
                 )
             pose = pose_estimator.predict(face_landmarks, img)
-            client.send_pose(pose, offset_zero=True)
+
+            client.send_command(
+                ReachyMiniCommand(
+                    head_pose=pose,
+                    offset_zero=True,
+                )
+            )
 
         cv.imshow("test_window", img)
         cv.waitKey(1)

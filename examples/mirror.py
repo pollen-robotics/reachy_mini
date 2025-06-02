@@ -6,6 +6,8 @@ from stewart_little_control import Client
 from sixdrepnet import SixDRepNet
 import cv2 as cv
 
+from stewart_little_control.command import ReachyMiniCommand
+
 model = SixDRepNet(gpu_id=-1)
 cap = cv.VideoCapture(0)
 # cap = cv.VideoCapture(4)
@@ -46,7 +48,12 @@ def main():
 
         print(f"roll: {roll}, pitch: {pitch}, yaw: {yaw}")
         # # pose[:3, 3][2] += 0.01 * np.sin(2 * np.pi * 0.5 * time.time())
-        client.send_pose(pose, offset_zero=False)
+        client.send_command(
+            ReachyMiniCommand(
+                head_pose=pose,
+                offset_zero=False,
+            )
+        )
         # time.sleep(0.02)
 
         cv.imshow("test_window", img)
