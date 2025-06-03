@@ -1,4 +1,4 @@
-from stewart_little_control import Client
+from reachy_mini import Client
 from peekaboo import PeekabooDetector
 import cv2
 import numpy as np

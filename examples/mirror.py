@@ -2,7 +2,7 @@ import time
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 
-from stewart_little_control import Client
+from reachy_mini import Client
 from sixdrepnet import SixDRepNet
 import cv2 as cv
 

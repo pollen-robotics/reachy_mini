@@ -2,7 +2,7 @@ from hand_tracker import HandTracker
 import cv2
 import time
 
-from stewart_little_control import Client
+from reachy_mini import Client
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 
@@ -12,12 +12,13 @@ from noise import pnoise1
 def smooth_movement(t, speed=0.5, scale=0.8):
     return pnoise1(t * speed) * scale
 
+
 def draw_debug(img, palm_center):
     h, w, _ = img.shape
-    draw_palm = [(-palm_center[0]+1)/2, (palm_center[1]+1)/2] # [0, 1]
+    draw_palm = [(-palm_center[0] + 1) / 2, (palm_center[1] + 1) / 2]  # [0, 1]
     cv2.circle(
         img,
-        (int(w-draw_palm[0] * w), int(draw_palm[1] * h)),
+        (int(w - draw_palm[0] * w), int(draw_palm[1] * h)),
         radius=5,
         color=(0, 0, 255),
         thickness=-1,
@@ -39,7 +40,6 @@ def draw_debug(img, palm_center):
         color=(0, 255, 0),
         thickness=2,
     )
-
 
 
 cap = cv2.VideoCapture(4)

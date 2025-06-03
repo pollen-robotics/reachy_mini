@@ -1,4 +1,5 @@
-from stewart_little_control import Client
+from reachy_mini import Client
+
 import time
 import numpy as np
 from scipy.spatial.transform import Rotation as R

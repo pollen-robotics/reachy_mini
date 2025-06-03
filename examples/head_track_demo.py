@@ -1,8 +1,7 @@
 from head_tracker import HeadTracker
 import cv2
 import time
-
-from stewart_little_control import Client
+from reachy_mini import Client
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 

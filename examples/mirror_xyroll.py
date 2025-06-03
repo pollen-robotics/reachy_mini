@@ -3,7 +3,7 @@ import numpy as np
 from scipy.spatial.transform import Rotation as R
 import mediapipe as mp
 
-from stewart_little_control import Client
+from reachy_mini import Client
 
 
 class PoseEstimator:

@@ -1,17 +1,16 @@
-from stewart_little_control import PlacoIK
+from reachy_mini import PlacoKinematics
 import mujoco
 import mujoco.viewer
 import time
 import os
 from pathlib import Path
-from stewart_little_control.mujoco_utils import get_joint_qpos
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 
 ROOT_PATH = Path(os.path.dirname(os.path.abspath(__file__))).parent
 
 model = mujoco.MjModel.from_xml_path(
-    f"{ROOT_PATH}/descriptions/reachy_home_v1/scene.xml"
+    f"{ROOT_PATH}/descriptions/reachy_mini/mjcf/scene.xml"
 )
 data = mujoco.MjData(model)
 model.opt.timestep = 0.002  # s, simulation timestep, 500hz
@@ -21,11 +20,13 @@ viewer = mujoco.viewer.launch_passive(
     model, data, show_left_ui=False, show_right_ui=False
 )
 
-placo_ik = PlacoIK(f"{ROOT_PATH}/descriptions/reachy_home_v1/")
+placo_kinematics = PlacoKinematics(
+    f"{ROOT_PATH}/descriptions/reachy_mini/urdf/",
+)
 
 init_pose = np.eye(4)
 init_pose[:3, 3][2] = 0.177
-angles_rad = placo_ik.ik(init_pose)
+angles_rad = placo_kinematics.ik(init_pose)
 step = 0
 t = 0
 all_start_t = time.time()
@@ -45,8 +46,9 @@ while True:
         ]
         rot_mat = R.from_euler("xyz", euler_rot, degrees=False).as_matrix()
         pose[:3, :3] = rot_mat
-        angles_rad = placo_ik.ik(pose)
-
+        angles_rad = placo_kinematics.ik(pose)
+        # fk = placo_kinematics.fk(angles_rad)
+        # print("diff", np.linalg.norm(fk - pose))
         data.ctrl[:] = angles_rad
 
     mujoco.mj_step(model, data)
