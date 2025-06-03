@@ -21,7 +21,7 @@ viewer = mujoco.viewer.launch_passive(
 )
 
 placo_kinematics = PlacoKinematics(
-    f"{ROOT_PATH}/descriptions/reachy_mini/urdf/",
+    f"{ROOT_PATH}/descriptions/reachy_mini/urdf/", sim=True
 )
 
 init_pose = np.eye(4)

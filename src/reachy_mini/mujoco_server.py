@@ -29,7 +29,7 @@ class MujocoServer:
         self.decimation = 10  # -> 50hz control loop
 
         self.placo_kinematics = PlacoKinematics(
-            f"{ROOT_PATH}/descriptions/reachy_mini/urdf/"
+            f"{ROOT_PATH}/descriptions/reachy_mini/urdf/", sim=True
         )
         self.current_pose = np.eye(4)
         self.current_pose[:3, 3][2] = 0.177

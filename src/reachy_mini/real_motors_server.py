@@ -41,27 +41,18 @@ class RealMotorsServer:
 
         self.pose_lock = Lock()
 
-        # self.sleep_pose = np.array(
-        #     [
-        #         [0.751, 0.183, 0.634, -0.029],
-        #         [-0.167, 0.982, -0.086, 0.013],
-        #         [-0.638, -0.041, 0.769, 0.126],
-        #         [0.0, 0.0, 0.0, 1.0],
-        #     ]
-        # )
-        self.sleep_positions = self.convert_from_placo_to_motor(
-            [
-                0.0,
-                0.849,
-                -1.292,
-                0.472,
-                0.047,
-                1.31,
-                -0.876,
-                -3.05,
-                3.05,
-            ]
-        )
+        self.sleep_positions = [
+            0.0,
+            -0.849,
+            1.292,
+            -0.472,
+            -0.047,
+            -1.31,
+            0.876,
+            -3.05,
+            3.05,
+        ]
+
         self.sleep_positions[-2:] = [3.05, -3.05]  # Set antennas to sleep position
         self.init_pose = np.eye(4)
         self.init_pose[:3, 3][2] = 0.177  # Set the height of the head
@@ -117,15 +108,6 @@ class RealMotorsServer:
         dofs = positions[3:]  # All other dofs
         return [yaw] + list(dofs) + list(antennas)
 
-    def convert_from_placo_to_motor(self, angles_rad):
-        angles_rad = [-a for a in angles_rad]
-
-        yaw_angles_rad = -angles_rad[0]
-        angles_rad = angles_rad[:-2][1:]
-        antennas_rad = angles_rad[-2:]  # Last two are antennas
-
-        return [yaw_angles_rad] + list(angles_rad) + list(antennas_rad)
-
     def goto_joints(self, present_position_rad, target_position_rad, duration=4):
         interp = minimum_jerk(
             np.array(present_position_rad.copy()),
@@ -148,13 +130,9 @@ class RealMotorsServer:
 
     def goto_sleep(self):
         current_positions_rad = self.get_current_positions()
-        init_target_positions_rad = self.convert_from_placo_to_motor(
-            [-0.0, -0.524, 0.575, -0.551, 0.552, -0.572, 0.527, 0.0, 0.0]
-        )
+        init_positions_rad = self.placo_kinematics.ik(self.init_pose.copy())
         try:
-            self.goto_joints(
-                current_positions_rad, init_target_positions_rad, duration=2
-            )
+            self.goto_joints(current_positions_rad, init_positions_rad, duration=2)
         except KeyboardInterrupt:
             self.c.disable_torque()
 
@@ -170,15 +148,16 @@ class RealMotorsServer:
 
     def wake_up(self):
         current_positions_rad = self.get_current_positions()
-        init_positions = self.placo_kinematics.ik(self.init_pose.copy())
-        init_target_positions_rad = self.convert_from_placo_to_motor(init_positions)
-        init_target_positions_rad[-2:] = [0, 0]  # Set antennas to sleep position
+        init_positions_rad = self.placo_kinematics.ik(self.init_pose.copy())
+        init_positions_rad[-2:] = [0, 0]  # Set antennas to sleep position
         try:
             self.goto_joints(
-                current_positions_rad, init_target_positions_rad, duration=2
+                current_positions_rad.copy(), init_positions_rad.copy(), duration=2
             )
         except KeyboardInterrupt:
             self.c.disable_torque()
+
+        print(self.placo_kinematics.fk(self.get_current_positions()))
 
         time.sleep(0.2)
 
@@ -188,7 +167,6 @@ class RealMotorsServer:
         rot_mat = R.from_euler("xyz", euler_rot, degrees=False).as_matrix()
         target_pose[:3, :3] = rot_mat
         target_positions_rad = self.placo_kinematics.ik(target_pose)
-        target_positions_rad = self.convert_from_placo_to_motor(target_positions_rad)
 
         play_sound()
         current_positions_rad = self.get_current_positions()
@@ -199,16 +177,15 @@ class RealMotorsServer:
 
         current_positions_rad = self.get_current_positions()
         try:
-            self.goto_joints(
-                current_positions_rad, init_target_positions_rad, duration=0.2
-            )
+            self.goto_joints(current_positions_rad, init_positions_rad, duration=0.2)
         except KeyboardInterrupt:
             self.c.disable_torque()
 
     def run_motor_control_loop(self, frequency: float = 100.0):
+        print(self.current_pose)
         self.c.enable_torque()
         self.wake_up()
-
+        print(self.current_pose)
         period = 1.0 / frequency  # Control loop period in seconds
 
         try:
@@ -220,13 +197,9 @@ class RealMotorsServer:
                     antennas = self.current_antennas.copy()
                 try:
                     angles_rad = self.placo_kinematics.ik(pose)
-                    angles_rad = [
-                        -a for a in angles_rad
-                    ]  # Invert angles for the motors
-                    # Removes antennas and all yaw
-                    yaw_angles_rad = -angles_rad[0]
-                    angles_rad = angles_rad[:-2][1:]
-                    self.c.set_stewart_platform_position(angles_rad)
+                    stewart_angles_rad = angles_rad[1:-2]  # Exclude yaw and antennas
+                    yaw_angles_rad = angles_rad[0]  # First angle is yaw
+                    self.c.set_stewart_platform_position(stewart_angles_rad)
                     self.c.set_body_rotation(yaw_angles_rad)
                 except Exception as e:
                     print(f"IK error: {e}")
