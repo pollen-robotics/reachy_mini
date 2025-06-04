@@ -110,13 +110,14 @@ class PlacoKinematics:
         self.fk_joint_task.set_joints({f"{k}": 0 for k in range(1, 7)})
         self.fk_joint_task.configure("joints", "soft", 1e-5)
 
-        self.fk_solver.enable_velocity_limits(True)
+        # self.fk_solver.enable_velocity_limits(True)
         self.fk_solver.dt = dt
 
     def ik(self, pose):
         self.head_frame.T_world_frame = pose
-        self.ik_solver.solve(True)
-        self.robot.update_kinematics()
+        for _ in range(10):
+            self.ik_solver.solve(True)
+            self.robot.update_kinematics()
 
         joints = []
         for joint_name in self.joints_names:
@@ -143,8 +144,10 @@ class PlacoKinematics:
                 "6": joints_angles[6],
             }
         )
-        self.fk_solver.solve(True)
-        self.robot.update_kinematics()
+
+        for _ in range(10):
+            self.fk_solver.solve(True)
+            self.robot.update_kinematics()
 
         T_world_head = self.robot.get_T_world_frame("head")
         return T_world_head

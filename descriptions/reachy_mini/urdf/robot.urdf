@@ -799,7 +799,7 @@
     <parent link="main_plate"/>
     <child link="arm"/>
     <axis xyz="0 0 1"/>
-    <limit effort="10" velocity="10" lower="-1.39626" upper="1.39626"/>
+    <limit effort="10" velocity="8" lower="-1.39626" upper="1.39626"/>
   </joint>
   <!-- Link arm_2 -->
   <link name="arm_2">
@@ -958,7 +958,7 @@
     <parent link="main_plate"/>
     <child link="arm_2"/>
     <axis xyz="0 0 1"/>
-    <limit effort="10" velocity="10" lower="-1.39626" upper="1.39626"/>
+    <limit effort="10" velocity="8" lower="-1.39626" upper="1.39626"/>
   </joint>
   <!-- Link arm_3 -->
   <link name="arm_3">
@@ -1117,7 +1117,7 @@
     <parent link="main_plate"/>
     <child link="arm_3"/>
     <axis xyz="0 0 1"/>
-    <limit effort="10" velocity="10" lower="-1.39626" upper="1.39626"/>
+    <limit effort="10" velocity="8" lower="-1.39626" upper="1.39626"/>
   </joint>
   <!-- Link ball -->
   <link name="ball">
@@ -1276,7 +1276,7 @@
     <parent link="main_plate"/>
     <child link="ball"/>
     <axis xyz="0 0 1"/>
-    <limit effort="10" velocity="10" lower="-1.39626" upper="1.39626"/>
+    <limit effort="10" velocity="8" lower="-1.39626" upper="1.39626"/>
   </joint>
   <!-- Link arm_4 -->
   <link name="arm_4">
@@ -1435,7 +1435,7 @@
     <parent link="main_plate"/>
     <child link="arm_4"/>
     <axis xyz="0 0 1"/>
-    <limit effort="10" velocity="10" lower="-1.39626" upper="1.39626"/>
+    <limit effort="10" velocity="8" lower="-1.39626" upper="1.39626"/>
   </joint>
   <!-- Link arm_5 -->
   <link name="arm_5">
@@ -1933,7 +1933,7 @@
     <parent link="plateform"/>
     <child link="test_antenna_body"/>
     <axis xyz="0 0 1"/>
-    <limit effort="10" velocity="10" lower="-3.141592653589793" upper="3.141592653589793"/>
+    <limit effort="10" velocity="8" lower="-3.141592653589793" upper="3.141592653589793"/>
   </joint>
   <!-- Link test_antenna -->
   <link name="test_antenna">
@@ -1981,7 +1981,7 @@
     <parent link="plateform"/>
     <child link="test_antenna"/>
     <axis xyz="0 0 1"/>
-    <limit effort="10" velocity="10" lower="-3.141592653589793" upper="3.141592653589793"/>
+    <limit effort="10" velocity="8" lower="-3.141592653589793" upper="3.141592653589793"/>
   </joint>
   <!-- Joint from passive_7_link_y to plateform -->
   <joint name="passive_7_z" type="revolute">
@@ -2037,7 +2037,7 @@
     <parent link="main_plate"/>
     <child link="arm_5"/>
     <axis xyz="0 0 1"/>
-    <limit effort="10" velocity="10" lower="-1.39626" upper="1.39626"/>
+    <limit effort="10" velocity="8" lower="-1.39626" upper="1.39626"/>
   </joint>
   <!-- Joint from turning_bowl to main_plate -->
   <joint name="all_yaw" type="revolute">
@@ -2045,6 +2045,6 @@
     <parent link="turning_bowl"/>
     <child link="main_plate"/>
     <axis xyz="0 0 1"/>
-    <limit effort="10" velocity="10" lower="-2.96706" upper="2.96706"/>
+    <limit effort="10" velocity="8" lower="-2.96706" upper="2.96706"/>
   </joint>
 </robot>
