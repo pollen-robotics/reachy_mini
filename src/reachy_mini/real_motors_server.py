@@ -23,7 +23,7 @@ def play_sound():
 
 
 class RealMotorsServer:
-    def __init__(self, serialport: str, server: AbstractServer):
+    def __init__(self, serialport: str, server: Server):
         self.server = server
 
         self.placo_kinematics = PlacoKinematics(
