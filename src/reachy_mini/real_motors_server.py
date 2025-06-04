@@ -7,6 +7,7 @@ import argparse
 import simpleaudio as sa
 
 from reachy_mini_motor_controller import ReachyMiniMotorController
+from reachy_mini.command import ReachyMiniCommand
 from reachy_mini.utils import minimum_jerk
 from reachy_mini.io import Server
 
@@ -29,9 +30,6 @@ class RealMotorsServer:
         self.placo_kinematics = PlacoKinematics(
             f"{ROOT_PATH}/descriptions/reachy_mini/urdf/"
         )
-        self.current_pose = np.eye(4)
-        self.current_pose[:3, 3][2] = 0.177
-        self.current_antennas = np.zeros(2)
 
         self.sleep_positions = [
             0.0,
@@ -46,8 +44,7 @@ class RealMotorsServer:
         ]
 
         self.sleep_positions[-2:] = [3.05, -3.05]  # Set antennas to sleep position
-        self.init_pose = np.eye(4)
-        self.init_pose[:3, 3][2] = 0.177  # Set the height of the head
+        self.init_pose = ReachyMiniCommand.default().head_pose
 
         self.c = ReachyMiniMotorController(serialport)
 
