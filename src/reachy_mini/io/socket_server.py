@@ -1,5 +1,5 @@
 import socket
-from threading import Thread, Lock
+from threading import Event, Thread, Lock
 
 from reachy_mini.io.abstract import AbstractServer
 from reachy_mini.command import ReachyMiniCommand
@@ -9,6 +9,9 @@ class SocketServer(AbstractServer):
     def __init__(self, host="0.0.0.0", port=1234):
         self.host = host
         self.port = port
+
+        self._cmd_event = Event()
+
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.server_socket.bind((self.host, self.port))
@@ -45,6 +48,7 @@ class SocketServer(AbstractServer):
                                 self._latest_command.update_with(
                                     ReachyMiniCommand.from_json(data),
                                 )
+                            self._cmd_event.set()
 
                         except (
                             ConnectionResetError,
@@ -59,3 +63,7 @@ class SocketServer(AbstractServer):
         with self._lock:
             # Return a copy to avoid race conditions
             return self._latest_command.copy()
+
+    def command_received_event(self) -> Event:
+        """Wait for a new command and return it."""
+        return self._cmd_event

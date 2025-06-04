@@ -23,10 +23,16 @@ class ReachyMiniCommand:
         antennas_orientation: Optional[NDArray[np.float64]] = None,
         offset_zero: bool = False,
     ) -> None:
-        if head_pose is not None and head_pose.shape != (4, 4):
-            raise ValueError("head_pose must be a 4x4 matrix.")
-        if antennas_orientation is not None and antennas_orientation.shape != (2,):
-            raise ValueError("antennas_orientation must be a vector of size 2.")
+        if head_pose is not None:
+            if isinstance(head_pose, list):
+                head_pose = np.array(head_pose, dtype=np.float64)
+            if head_pose.shape != (4, 4):
+                raise ValueError("head_pose must be a 4x4 matrix.")
+        if antennas_orientation is not None:
+            if isinstance(antennas_orientation, list):
+                antennas_orientation = np.array(antennas_orientation, dtype=np.float64)
+            if antennas_orientation.shape != (2,):
+                raise ValueError("antennas_orientation must be a vector of size 2.")
 
         self.head_pose = head_pose.copy() if head_pose is not None else None
 

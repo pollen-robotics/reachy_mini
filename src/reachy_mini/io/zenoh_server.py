@@ -9,6 +9,7 @@ class ZenohServer(AbstractServer):
     def __init__(self):
         self._lock = threading.Lock()
         self._last_command = ReachyMiniCommand.default()
+        self._cmd_event = threading.Event()
 
     def start(self):
         self.session = zenoh.open(zenoh.Config())
@@ -25,8 +26,13 @@ class ZenohServer(AbstractServer):
         with self._lock:
             return self._last_command
 
+    def command_received_event(self) -> threading.Event:
+        """Wait for a new command and return it."""
+        return self._cmd_event
+
     def _handle_command(self, sample: zenoh.Sample):
         data = sample.payload.to_string()
         new_cmd = ReachyMiniCommand.from_json(data)
         with self._lock:
             self._last_command.update_with(new_cmd)
+        self._cmd_event.set()
