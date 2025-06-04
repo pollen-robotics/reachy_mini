@@ -1,0 +1,21 @@
+{
+  "url": "https://cad.onshape.com/documents/e305b26a84339af20c593973/w/6750d451f9cbcfe7ac139539/e/251023ea04190ab16854eb80",
+  "outputFormat": "mujoco",
+  "robot_name": "reachy_mini",
+  "output_filename": "reachy_mini",
+  "simplify_stls": true,
+  "max_stl_size": 0.1,
+  "ignore": {
+    "*": "collision",
+    "!turning_bowl": "collision"
+  },
+  "additional_xml": ["joints_properties.xml", "additional.xml"],
+  "joint_properties": {
+    "passive*": {
+      "actuated": false
+    },
+    "default": {
+      "class": "chosen_actuator"
+    }
+  }
+}

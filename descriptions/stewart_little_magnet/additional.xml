@@ -1,6 +1,0 @@
-<contact>
-    <!-- <exclude name="exclude0" body1="torso" body2="sts32155"/> -->
-</contact>
-<default>
-    <equality solref="0.002 1" solimp="0.99 0.999 0.0005 0.5 2"/>
-</default>

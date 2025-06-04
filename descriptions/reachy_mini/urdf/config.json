@@ -1,0 +1,18 @@
+{
+  "url": "https://cad.onshape.com/documents/e305b26a84339af20c593973/w/6750d451f9cbcfe7ac139539/e/251023ea04190ab16854eb80",
+  "outputFormat": "urdf",
+  "robot_name": "robot",
+  "output_filename": "robot",
+  "ball_to_euler": true,
+  "ball_to_euler_order": "xyz",
+  "simplify_stls": true,
+  "max_stl_size": 0.1,
+  "joint_properties": {
+    "*": {
+      "max_velocity": 8
+    },
+    "passive*": {
+      "max_velocity": 1e8
+    }
+  }
+}

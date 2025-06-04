@@ -3,8 +3,8 @@ import numpy as np
 from scipy.spatial.transform import Rotation as R
 import mediapipe as mp
 
-from stewart_little_control import Client
-from stewart_little_control.command import ReachyMiniCommand
+from reachy_mini import Client
+from reachy_mini.command import ReachyMiniCommand
 
 
 class PoseEstimator:

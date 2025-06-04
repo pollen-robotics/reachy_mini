@@ -1,12 +1,13 @@
-# Stewart little control
-
-IK based on https://github.com/Yeok-c/Stewart_Py
+# Reachy Mini
 
 ## Installation
 
 ```bash
 pip install -e .
 ```
+
+
+> TODO: Outdated. Update the readme
 
 ## Usage
 
@@ -30,7 +31,7 @@ mujoco-server
 To run the robot server (runs on the real robot):
 
 ```bash
-robot-server
+real-motors-server
 ```
 
 To use the client :
