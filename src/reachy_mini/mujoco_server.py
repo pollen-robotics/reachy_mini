@@ -8,7 +8,9 @@ import os
 from pathlib import Path
 import numpy as np
 from threading import Thread, Lock
+import cv2
 
+# os.environ['MUJOCO_GL'] = 'egl'
 ROOT_PATH = Path(os.path.dirname(os.path.abspath(__file__))).parent.parent
 
 
@@ -28,6 +30,14 @@ class MujocoServer:
         self.model.opt.timestep = 0.002  # s, simulation timestep, 500hz
         self.decimation = 10  # -> 50hz control loop
 
+        self.camera_id = mujoco.mj_name2id(
+            self.model, mujoco.mjtObj.mjOBJ_CAMERA, "eye_camera"
+        )
+        self.camera_size = (640, 480)
+        self.offscreen_renderer = mujoco.Renderer(
+            self.model, height=self.camera_size[1], width=self.camera_size[0]
+        )
+
         self.placo_kinematics = PlacoKinematics(
             f"{ROOT_PATH}/descriptions/reachy_mini/urdf/", sim=True
         )
@@ -42,6 +52,12 @@ class MujocoServer:
 
         # Start the simulation loop
         self.simulation_loop()
+
+    def get_camera(self):
+        self.offscreen_renderer.update_scene(self.data, self.camera_id)
+        im = self.offscreen_renderer.render()
+        im = np.array(im)
+        return im
 
     def client_handler(self):
         while True:
@@ -87,6 +103,10 @@ class MujocoServer:
         ) as viewer:
             while True:
                 start_t = time.time()
+
+                im = self.get_camera()
+                cv2.imshow("Camera", im)
+                cv2.waitKey(1)
 
                 if step % self.decimation == 0:
                     with self.pose_lock:

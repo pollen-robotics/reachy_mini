@@ -60,7 +60,7 @@
       <!-- Link main_plate -->
       <body name="main_plate" pos="-0.00198261 3.46945e-18 0.0316" quat="5.57809e-31 0.707107 0.707107 1.67343e-30">
         <!-- Joint from turning_bowl to main_plate -->
-        <joint axis="0 0 1" name="all_yaw" type="hinge" range="-2.9670597283903586 2.967059728390362" class="chosen_actuator"/>
+        <joint axis="0 0 1" name="all_yaw" type="hinge" range="-2.9670597283903577 2.967059728390363" class="chosen_actuator"/>
         <inertial pos="6.84881e-05 0.00157052 -0.0411006" mass="0.42461" fullinertia="0.00174771 0.00169917 0.00193868 -3.57066e-07 -1.95668e-07 5.33713e-05"/>
         <!-- Part dc15_a01_case_m_dummy -->
         <geom type="mesh" class="visual" pos="0.108746 0.039063 -0.014785" quat="3.33067e-16 0.5 0.866025 -4.88087e-15" mesh="dc15_a01_case_m_dummy" material="dc15_a01_case_m_dummy_material"/>
@@ -141,7 +141,7 @@
         <!-- Link arm -->
         <body name="arm" pos="0.0313706 0.0298975 -0.044785" quat="0.612372 -0.612372 0.353553 -0.353553">
           <!-- Joint from main_plate to arm -->
-          <joint axis="0 0 1" name="1" type="hinge" range="-1.39626340159546 1.3962634015954671" class="chosen_actuator"/>
+          <joint axis="0 0 1" name="1" type="hinge" range="-1.3962634015954674 1.3962634015954598" class="chosen_actuator"/>
           <inertial pos="0 0 0" mass="1e-09" fullinertia="1e-09 1e-09 1e-09 0 0 0"/>
           <!-- Part ball -->
           <geom type="mesh" class="visual" pos="-0.038 -1.80411e-16 -0.00768" quat="0.707107 4.24468e-17 -2.22045e-16 -0.707107" mesh="ball" material="ball_material"/>
@@ -165,7 +165,7 @@
         <!-- Link arm_2 -->
         <body name="arm_2" pos="0.0416206 0.012144 -0.044785" quat="0.612372 -0.612372 0.353553 -0.353553">
           <!-- Joint from main_plate to arm_2 -->
-          <joint axis="0 0 1" name="2" type="hinge" range="-1.3962634015954476 1.3962634015954796" class="chosen_actuator"/>
+          <joint axis="0 0 1" name="2" type="hinge" range="-1.396263401595481 1.3962634015954463" class="chosen_actuator"/>
           <inertial pos="0 0 0" mass="1e-09" fullinertia="1e-09 1e-09 1e-09 0 0 0"/>
           <!-- Part ball_2 -->
           <geom type="mesh" class="visual" pos="0.038 6.10623e-16 -0.00768" quat="0.707107 5.29465e-15 7.88258e-15 -0.707107" mesh="ball" material="ball_material"/>
@@ -189,7 +189,7 @@
         <!-- Link arm_3 -->
         <body name="arm_3" pos="0.0102933 -0.0421165 -0.044785" quat="0.707107 0.707107 -1.22125e-15 1.13878e-15">
           <!-- Joint from main_plate to arm_3 -->
-          <joint axis="0 0 1" name="3" type="hinge" range="-1.3962634015954556 1.3962634015954716" class="chosen_actuator"/>
+          <joint axis="0 0 1" name="3" type="hinge" range="-1.39626340159547 1.3962634015954571" class="chosen_actuator"/>
           <inertial pos="0 0 0" mass="1e-09" fullinertia="1e-09 1e-09 1e-09 0 0 0"/>
           <!-- Part arm_3 -->
           <geom type="mesh" class="visual" pos="-0.01025 -0.03 -0.0425915" quat="0.707107 -0.707107 1.11022e-16 1.0222e-16" mesh="arm" material="arm_material"/>
@@ -213,7 +213,7 @@
         <!-- Link ball -->
         <body name="ball" pos="-0.0102067 -0.0421165 -0.044785" quat="6.66134e-16 6.44916e-16 -0.707107 0.707107">
           <!-- Joint from main_plate to ball -->
-          <joint axis="0 0 1" name="4" type="hinge" range="-1.3962634015954627 1.3962634015954645" class="chosen_actuator"/>
+          <joint axis="0 0 1" name="4" type="hinge" range="-1.396263401595462 1.3962634015954651" class="chosen_actuator"/>
           <inertial pos="0 0 0" mass="1e-09" fullinertia="1e-09 1e-09 1e-09 0 0 0"/>
           <!-- Part ball_4 -->
           <geom type="mesh" class="visual" pos="0.038 1.38778e-17 -0.00768" quat="0.707107 1.08136e-15 1.22125e-15 -0.707107" mesh="ball" material="ball_material"/>
@@ -237,7 +237,7 @@
         <!-- Link arm_4 -->
         <body name="arm_4" pos="-0.041534 0.012144 -0.044785" quat="0.612372 -0.612372 -0.353553 0.353553">
           <!-- Joint from main_plate to arm_4 -->
-          <joint axis="0 0 1" name="5" type="hinge" range="-1.3962634015954574 1.3962634015954698" class="chosen_actuator"/>
+          <joint axis="0 0 1" name="5" type="hinge" range="-1.3962634015954585 1.3962634015954687" class="chosen_actuator"/>
           <inertial pos="0 0 0" mass="1e-09" fullinertia="1e-09 1e-09 1e-09 0 0 0"/>
           <!-- Part ball_5 -->
           <geom type="mesh" class="visual" pos="-0.038 2.35922e-16 -0.00768" quat="8.72969e-16 0.707107 -0.707107 1.44544e-15" mesh="ball" material="ball_material"/>
@@ -261,7 +261,7 @@
         <!-- Link arm_5 -->
         <body name="arm_5" pos="-0.031284 0.0298975 -0.044785" quat="0.612372 -0.612372 -0.353553 0.353553">
           <!-- Joint from main_plate to arm_5 -->
-          <joint axis="0 0 1" name="6" type="hinge" range="-1.3962634015954547 1.3962634015954725" class="chosen_actuator"/>
+          <joint axis="0 0 1" name="6" type="hinge" range="-1.3962634015954571 1.39626340159547" class="chosen_actuator"/>
           <inertial pos="0 0 0" mass="1e-09" fullinertia="1e-09 1e-09 1e-09 0 0 0"/>
           <!-- Part ball_6 -->
           <geom type="mesh" class="visual" pos="0.038 -2.77556e-16 -0.00768" quat="4.94832e-16 -0.707107 0.707107 1.52402e-15" mesh="ball" material="ball_material"/>
@@ -323,6 +323,12 @@
               <site group="3" name="closing_5_2" pos="0.00603053 0.0104995 0.00473221" quat="0.114581 -0.504904 0.838434 0.17021"/>
               <!-- Frame head -->
               <site group="3" name="head" pos="0.00367542 0.0183217 -0.0274783" quat="0.300822 -0.45119 0.617483 -0.569779"/>
+                <!-- Frame camera -->
+                <site group="3" name="camera" pos="0.0390941 -0.038048 -0.0320031" quat="0.668815 0.399858 -0.518447 0.352154"/>
+                <camera name="eye_camera"
+                    mode="fixed"
+                    resolution="640 480" />
+
               <!-- Link test_antenna_body -->
               <body name="test_antenna_body" pos="0.0786202 0.0183429 -0.0976865" quat="0.408879 0.340055 0.269409 -0.80287">
                 <!-- Joint from plateform to test_antenna_body -->
@@ -350,35 +356,35 @@
     </body>
   </worldbody>
   <asset>
-    <mesh file="test_antenna_body.stl"/>
-    <mesh file="test_antenna.stl"/>
-    <mesh file="plateform.stl"/>
-    <mesh file="turning_bowl.stl"/>
-    <mesh file="head_head_back.stl"/>
-    <mesh file="head_interface.stl"/>
-    <mesh file="eye_support.stl"/>
-    <mesh file="arm.stl"/>
-    <mesh file="uc_a37_rev_a_step.stl"/>
-    <mesh file="wj_wk00_0122topcabinetcase_95__configuration_simple_axe.stl"/>
-    <mesh file="main_plate.stl"/>
-    <mesh file="wj_wk00_0124bottomcase_45__configuration_simple_axe.stl"/>
-    <mesh file="rod.stl"/>
-    <mesh file="bottom_body.stl"/>
-    <mesh file="big_lens.stl"/>
-    <mesh file="top_body.stl"/>
-    <mesh file="dc15_a01_case_f_dummy.stl"/>
-    <mesh file="dc15_a01_case_m_dummy.stl"/>
-    <mesh file="foot.stl"/>
-    <mesh file="dc15_a01_horn_dummy.stl"/>
-    <mesh file="head_shell_front.stl"/>
-    <mesh file="dc15_a01_case_b_dummy.stl"/>
-    <mesh file="side_plate.stl"/>
     <mesh file="small_lens.stl"/>
     <mesh file="wj_wk00_0123middlecase_56__configuration_simple_axe.stl"/>
-    <mesh file="ball.stl"/>
-    <mesh file="drive_palonier__configuration_simple_axe.stl"/>
-    <mesh file="mid_plate.stl"/>
     <mesh file="shape.stl"/>
+    <mesh file="arm.stl"/>
+    <mesh file="wj_wk00_0122topcabinetcase_95__configuration_simple_axe.stl"/>
+    <mesh file="bottom_body.stl"/>
+    <mesh file="eye_support.stl"/>
+    <mesh file="rod.stl"/>
+    <mesh file="dc15_a01_case_m_dummy.stl"/>
+    <mesh file="wj_wk00_0124bottomcase_45__configuration_simple_axe.stl"/>
+    <mesh file="turning_bowl.stl"/>
+    <mesh file="drive_palonier__configuration_simple_axe.stl"/>
+    <mesh file="uc_a37_rev_a_step.stl"/>
+    <mesh file="big_lens.stl"/>
+    <mesh file="test_antenna_body.stl"/>
+    <mesh file="head_interface.stl"/>
+    <mesh file="head_shell_front.stl"/>
+    <mesh file="dc15_a01_horn_dummy.stl"/>
+    <mesh file="ball.stl"/>
+    <mesh file="dc15_a01_case_f_dummy.stl"/>
+    <mesh file="mid_plate.stl"/>
+    <mesh file="foot.stl"/>
+    <mesh file="dc15_a01_case_b_dummy.stl"/>
+    <mesh file="main_plate.stl"/>
+    <mesh file="head_head_back.stl"/>
+    <mesh file="plateform.stl"/>
+    <mesh file="test_antenna.stl"/>
+    <mesh file="top_body.stl"/>
+    <mesh file="side_plate.stl"/>
     <material name="turning_bowl_material" rgba="0.34902 0.376471 0.4 1"/>
     <material name="dc15_a01_case_m_dummy_material" rgba="0.262745 0.282353 0.301961 1"/>
     <material name="main_plate_material" rgba="0.196078 0.196078 0.196078 1"/>
