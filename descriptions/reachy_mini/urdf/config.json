@@ -10,9 +10,9 @@
   "joint_properties": {
     "*": {
       "max_velocity": 8
+    },
+    "passive*": {
+      "max_velocity": 1e8
     }
-    // "passive*": {
-    //   "max_velocity": 1e8
-    // }
   }
 }

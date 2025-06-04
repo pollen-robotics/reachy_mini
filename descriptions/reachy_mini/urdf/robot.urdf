@@ -775,7 +775,7 @@
     <parent link="passive_1_link_y"/>
     <child link="rod"/>
     <axis xyz="0 0 1"/>
-    <limit effort="10" velocity="10" lower="-3.141592653589793" upper="3.141592653589793"/>
+    <limit effort="10" velocity="1e+08" lower="-3.141592653589793" upper="3.141592653589793"/>
   </joint>
   <!-- Joint from passive_1_link_x to passive_1_link_y -->
   <joint name="passive_1_y" type="revolute">
@@ -783,7 +783,7 @@
     <parent link="passive_1_link_x"/>
     <child link="passive_1_link_y"/>
     <axis xyz="0 1 0"/>
-    <limit effort="10" velocity="10" lower="-3.141592653589793" upper="3.141592653589793"/>
+    <limit effort="10" velocity="1e+08" lower="-3.141592653589793" upper="3.141592653589793"/>
   </joint>
   <!-- Joint from arm to passive_1_link_x -->
   <joint name="passive_1_x" type="revolute">
@@ -791,7 +791,7 @@
     <parent link="arm"/>
     <child link="passive_1_link_x"/>
     <axis xyz="1 0 0"/>
-    <limit effort="10" velocity="10" lower="-3.141592653589793" upper="3.141592653589793"/>
+    <limit effort="10" velocity="1e+08" lower="-3.141592653589793" upper="3.141592653589793"/>
   </joint>
   <!-- Joint from main_plate to arm -->
   <joint name="1" type="revolute">
@@ -934,7 +934,7 @@
     <parent link="passive_2_link_y"/>
     <child link="shape"/>
     <axis xyz="0 0 1"/>
-    <limit effort="10" velocity="10" lower="-3.141592653589793" upper="3.141592653589793"/>
+    <limit effort="10" velocity="1e+08" lower="-3.141592653589793" upper="3.141592653589793"/>
   </joint>
   <!-- Joint from passive_2_link_x to passive_2_link_y -->
   <joint name="passive_2_y" type="revolute">
@@ -942,7 +942,7 @@
     <parent link="passive_2_link_x"/>
     <child link="passive_2_link_y"/>
     <axis xyz="0 1 0"/>
-    <limit effort="10" velocity="10" lower="-3.141592653589793" upper="3.141592653589793"/>
+    <limit effort="10" velocity="1e+08" lower="-3.141592653589793" upper="3.141592653589793"/>
   </joint>
   <!-- Joint from arm_2 to passive_2_link_x -->
   <joint name="passive_2_x" type="revolute">
@@ -950,7 +950,7 @@
     <parent link="arm_2"/>
     <child link="passive_2_link_x"/>
     <axis xyz="1 0 0"/>
-    <limit effort="10" velocity="10" lower="-3.141592653589793" upper="3.141592653589793"/>
+    <limit effort="10" velocity="1e+08" lower="-3.141592653589793" upper="3.141592653589793"/>
   </joint>
   <!-- Joint from main_plate to arm_2 -->
   <joint name="2" type="revolute">
@@ -1093,7 +1093,7 @@
     <parent link="passive_3_link_y"/>
     <child link="shape_2"/>
     <axis xyz="0 0 1"/>
-    <limit effort="10" velocity="10" lower="-3.141592653589793" upper="3.141592653589793"/>
+    <limit effort="10" velocity="1e+08" lower="-3.141592653589793" upper="3.141592653589793"/>
   </joint>
   <!-- Joint from passive_3_link_x to passive_3_link_y -->
   <joint name="passive_3_y" type="revolute">
@@ -1101,7 +1101,7 @@
     <parent link="passive_3_link_x"/>
     <child link="passive_3_link_y"/>
     <axis xyz="0 1 0"/>
-    <limit effort="10" velocity="10" lower="-3.141592653589793" upper="3.141592653589793"/>
+    <limit effort="10" velocity="1e+08" lower="-3.141592653589793" upper="3.141592653589793"/>
   </joint>
   <!-- Joint from arm_3 to passive_3_link_x -->
   <joint name="passive_3_x" type="revolute">
@@ -1109,7 +1109,7 @@
     <parent link="arm_3"/>
     <child link="passive_3_link_x"/>
     <axis xyz="1 0 0"/>
-    <limit effort="10" velocity="10" lower="-3.141592653589793" upper="3.141592653589793"/>
+    <limit effort="10" velocity="1e+08" lower="-3.141592653589793" upper="3.141592653589793"/>
   </joint>
   <!-- Joint from main_plate to arm_3 -->
   <joint name="3" type="revolute">
@@ -1252,7 +1252,7 @@
     <parent link="passive_4_link_y"/>
     <child link="shape_3"/>
     <axis xyz="0 0 1"/>
-    <limit effort="10" velocity="10" lower="-3.141592653589793" upper="3.141592653589793"/>
+    <limit effort="10" velocity="1e+08" lower="-3.141592653589793" upper="3.141592653589793"/>
   </joint>
   <!-- Joint from passive_4_link_x to passive_4_link_y -->
   <joint name="passive_4_y" type="revolute">
@@ -1260,7 +1260,7 @@
     <parent link="passive_4_link_x"/>
     <child link="passive_4_link_y"/>
     <axis xyz="0 1 0"/>
-    <limit effort="10" velocity="10" lower="-3.141592653589793" upper="3.141592653589793"/>
+    <limit effort="10" velocity="1e+08" lower="-3.141592653589793" upper="3.141592653589793"/>
   </joint>
   <!-- Joint from ball to passive_4_link_x -->
   <joint name="passive_4_x" type="revolute">
@@ -1268,7 +1268,7 @@
     <parent link="ball"/>
     <child link="passive_4_link_x"/>
     <axis xyz="1 0 0"/>
-    <limit effort="10" velocity="10" lower="-3.141592653589793" upper="3.141592653589793"/>
+    <limit effort="10" velocity="1e+08" lower="-3.141592653589793" upper="3.141592653589793"/>
   </joint>
   <!-- Joint from main_plate to ball -->
   <joint name="4" type="revolute">
@@ -1411,7 +1411,7 @@
     <parent link="passive_5_link_y"/>
     <child link="shape_4"/>
     <axis xyz="0 0 1"/>
-    <limit effort="10" velocity="10" lower="-3.141592653589793" upper="3.141592653589793"/>
+    <limit effort="10" velocity="1e+08" lower="-3.141592653589793" upper="3.141592653589793"/>
   </joint>
   <!-- Joint from passive_5_link_x to passive_5_link_y -->
   <joint name="passive_5_y" type="revolute">
@@ -1419,7 +1419,7 @@
     <parent link="passive_5_link_x"/>
     <child link="passive_5_link_y"/>
     <axis xyz="0 1 0"/>
-    <limit effort="10" velocity="10" lower="-3.141592653589793" upper="3.141592653589793"/>
+    <limit effort="10" velocity="1e+08" lower="-3.141592653589793" upper="3.141592653589793"/>
   </joint>
   <!-- Joint from arm_4 to passive_5_link_x -->
   <joint name="passive_5_x" type="revolute">
@@ -1427,7 +1427,7 @@
     <parent link="arm_4"/>
     <child link="passive_5_link_x"/>
     <axis xyz="1 0 0"/>
-    <limit effort="10" velocity="10" lower="-3.141592653589793" upper="3.141592653589793"/>
+    <limit effort="10" velocity="1e+08" lower="-3.141592653589793" upper="3.141592653589793"/>
   </joint>
   <!-- Joint from main_plate to arm_4 -->
   <joint name="5" type="revolute">
@@ -1989,7 +1989,7 @@
     <parent link="passive_7_link_y"/>
     <child link="plateform"/>
     <axis xyz="0 0 1"/>
-    <limit effort="10" velocity="10" lower="-3.141592653589793" upper="3.141592653589793"/>
+    <limit effort="10" velocity="1e+08" lower="-3.141592653589793" upper="3.141592653589793"/>
   </joint>
   <!-- Joint from passive_7_link_x to passive_7_link_y -->
   <joint name="passive_7_y" type="revolute">
@@ -1997,7 +1997,7 @@
     <parent link="passive_7_link_x"/>
     <child link="passive_7_link_y"/>
     <axis xyz="0 1 0"/>
-    <limit effort="10" velocity="10" lower="-3.141592653589793" upper="3.141592653589793"/>
+    <limit effort="10" velocity="1e+08" lower="-3.141592653589793" upper="3.141592653589793"/>
   </joint>
   <!-- Joint from shape_5 to passive_7_link_x -->
   <joint name="passive_7_x" type="revolute">
@@ -2005,7 +2005,7 @@
     <parent link="shape_5"/>
     <child link="passive_7_link_x"/>
     <axis xyz="1 0 0"/>
-    <limit effort="10" velocity="10" lower="-3.141592653589793" upper="3.141592653589793"/>
+    <limit effort="10" velocity="1e+08" lower="-3.141592653589793" upper="3.141592653589793"/>
   </joint>
   <!-- Joint from passive_6_link_y to shape_5 -->
   <joint name="passive_6_z" type="revolute">
@@ -2013,7 +2013,7 @@
     <parent link="passive_6_link_y"/>
     <child link="shape_5"/>
     <axis xyz="0 0 1"/>
-    <limit effort="10" velocity="10" lower="-3.141592653589793" upper="3.141592653589793"/>
+    <limit effort="10" velocity="1e+08" lower="-3.141592653589793" upper="3.141592653589793"/>
   </joint>
   <!-- Joint from passive_6_link_x to passive_6_link_y -->
   <joint name="passive_6_y" type="revolute">
@@ -2021,7 +2021,7 @@
     <parent link="passive_6_link_x"/>
     <child link="passive_6_link_y"/>
     <axis xyz="0 1 0"/>
-    <limit effort="10" velocity="10" lower="-3.141592653589793" upper="3.141592653589793"/>
+    <limit effort="10" velocity="1e+08" lower="-3.141592653589793" upper="3.141592653589793"/>
   </joint>
   <!-- Joint from arm_5 to passive_6_link_x -->
   <joint name="passive_6_x" type="revolute">
@@ -2029,7 +2029,7 @@
     <parent link="arm_5"/>
     <child link="passive_6_link_x"/>
     <axis xyz="1 0 0"/>
-    <limit effort="10" velocity="10" lower="-3.141592653589793" upper="3.141592653589793"/>
+    <limit effort="10" velocity="1e+08" lower="-3.141592653589793" upper="3.141592653589793"/>
   </joint>
   <!-- Joint from main_plate to arm_5 -->
   <joint name="6" type="revolute">
