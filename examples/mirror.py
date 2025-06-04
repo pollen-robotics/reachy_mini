@@ -2,11 +2,11 @@ import time
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 
-from reachy_mini import Client
+from reachy_mini.io import Client
 from sixdrepnet import SixDRepNet
 import cv2 as cv
 
-from stewart_little_control.command import ReachyMiniCommand
+from reachy_mini.command import ReachyMiniCommand
 
 model = SixDRepNet(gpu_id=-1)
 cap = cv.VideoCapture(0)
@@ -15,7 +15,7 @@ cap = cv.VideoCapture(0)
 
 def main():
     # client = MujocoClient(ip="10.0.0.33")
-    client = Client(ip="localhost")
+    client = Client()
 
     while True:
         t0 = time.time()

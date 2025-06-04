@@ -3,7 +3,7 @@ import numpy as np
 from scipy.spatial.transform import Rotation as R
 import mediapipe as mp
 
-from reachy_mini import Client
+from reachy_mini.io import Client
 from reachy_mini.command import ReachyMiniCommand
 
 
