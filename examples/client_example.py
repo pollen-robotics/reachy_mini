@@ -1,9 +1,9 @@
-from stewart_little_control.io import Client
+from reachy_mini.io import Client
 import time
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 
-from stewart_little_control.command import ReachyMiniCommand
+from reachy_mini.command import ReachyMiniCommand
 
 client = Client()
 

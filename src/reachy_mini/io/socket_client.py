@@ -1,7 +1,7 @@
 import socket
 
-from stewart_little_control.command import ReachyMiniCommand
-from stewart_little_control.io.abstract import AbstractClient
+from reachy_mini.command import ReachyMiniCommand
+from reachy_mini.io.abstract import AbstractClient
 
 
 class SocketClient(AbstractClient):

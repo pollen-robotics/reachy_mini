@@ -1,9 +1,8 @@
 import socket
-import pickle
 from threading import Thread, Lock
 
-from stewart_little_control.io.abstract import AbstractServer
-from stewart_little_control.command import ReachyMiniCommand
+from reachy_mini.io.abstract import AbstractServer
+from reachy_mini.command import ReachyMiniCommand
 
 
 class SocketServer(AbstractServer):

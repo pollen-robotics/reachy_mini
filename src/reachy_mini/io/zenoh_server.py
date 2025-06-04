@@ -1,8 +1,8 @@
 import threading
 import zenoh
 
-from stewart_little_control.command import ReachyMiniCommand
-from stewart_little_control.io.abstract import AbstractServer
+from reachy_mini.command import ReachyMiniCommand
+from reachy_mini.io.abstract import AbstractServer
 
 
 class ZenohServer(AbstractServer):
@@ -13,7 +13,7 @@ class ZenohServer(AbstractServer):
     def start(self):
         self.session = zenoh.open(zenoh.Config())
         self.sub = self.session.declare_subscriber(
-            "stewart_little/command",
+            "reachy_mini/command",
             self._handle_command,
         )
 

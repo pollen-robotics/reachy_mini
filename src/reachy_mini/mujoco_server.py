@@ -57,7 +57,7 @@ class MujocoServer:
 
 
 def main():
-    from stewart_little_control.io import Server
+    from reachy_mini.io import Server
 
     server = Server()
     server.start()

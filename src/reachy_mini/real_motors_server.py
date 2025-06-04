@@ -172,12 +172,12 @@ class RealMotorsServer:
 
 
 def main(args: argparse.Namespace):
-    from reachy_mini.io.socket_server import SocketServer
+    from reachy_mini.io import Server
 
-    socket_server = SocketServer()
-    socket_server.start()
+    server = Server()
+    server.start()
 
-    RealMotorsServer(args.serialport, socket_server)
+    RealMotorsServer(args.serialport, server)
 
 
 if __name__ == "__main__":
