@@ -56,7 +56,7 @@ class MujocoServer:
     def get_camera(self):
         self.offscreen_renderer.update_scene(self.data, self.camera_id)
         im = self.offscreen_renderer.render()
-        im = np.array(im)
+        im = cv2.cvtColor(np.array(im), cv2.COLOR_RGB2BGR)
         return im
 
     def client_handler(self):
