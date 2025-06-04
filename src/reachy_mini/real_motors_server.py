@@ -113,7 +113,9 @@ class RealMotorsServer:
             np.array(present_position_rad.copy()),
             np.array(target_position_rad.copy()),
             duration,
+
         )
+
         t0 = time.time()
         while time.time() - t0 < duration:
             t = time.time() - t0
@@ -132,11 +134,11 @@ class RealMotorsServer:
         current_positions_rad = self.get_current_positions()
         init_positions_rad = self.placo_kinematics.ik(self.init_pose.copy())
         try:
-            self.goto_joints(current_positions_rad, init_positions_rad, duration=2)
+            self.goto_joints(current_positions_rad, init_positions_rad, duration=1)
         except KeyboardInterrupt:
             self.c.disable_torque()
 
-        time.sleep(1.0)
+        time.sleep(0.2)
 
         current_positions_rad = self.get_current_positions()
         try:
@@ -157,9 +159,7 @@ class RealMotorsServer:
         except KeyboardInterrupt:
             self.c.disable_torque()
 
-        print(self.placo_kinematics.fk(self.get_current_positions()))
-
-        time.sleep(0.2)
+        time.sleep(0.1)
 
         target_pose = np.eye(4)
         target_pose[:3, 3][2] = 0.177  # Set the height of the head
@@ -182,10 +182,8 @@ class RealMotorsServer:
             self.c.disable_torque()
 
     def run_motor_control_loop(self, frequency: float = 100.0):
-        print(self.current_pose)
         self.c.enable_torque()
         self.wake_up()
-        print(self.current_pose)
         period = 1.0 / frequency  # Control loop period in seconds
 
         try:
