@@ -8,6 +8,10 @@ import json
 
 @dataclass
 class ReachyMiniCommand:
+    # Default height of the head in meters
+    # which corresponds to the height when all joints are 0.
+    DEFAULT_HEIGHT: float = 0.177
+
     head_pose: Optional[NDArray[np.float64]] = None  # shape: (4, 4)
     antennas_orientation: Optional[NDArray[np.float64]] = (
         None  # shape: (2,) [left, right]
@@ -24,13 +28,14 @@ class ReachyMiniCommand:
         if antennas_orientation is not None and antennas_orientation.shape != (2,):
             raise ValueError("antennas_orientation must be a vector of size 2.")
 
-        self.head_pose = head_pose
+        self.head_pose = head_pose.copy() if head_pose is not None else None
 
-        if offset_zero and head_pose is not None:
-            # Offset the head pose to have the z-coordinate at 0.155
-            head_pose[2, 3] += 0.155
+        if offset_zero and self.head_pose is not None:
+            self.head_pose[2, 3] += self.DEFAULT_HEIGHT
 
-        self.antennas_orientation = antennas_orientation
+        self.antennas_orientation = (
+            antennas_orientation.copy() if antennas_orientation is not None else None
+        )
 
     def update_with(self, other: "ReachyMiniCommand") -> None:
         """Update this command with another ReachyMiniCommand."""
@@ -54,7 +59,7 @@ class ReachyMiniCommand:
     def default(cls) -> "ReachyMiniCommand":
         """Return a default command with no pose and antennas."""
         default_head_pose = np.eye(4, dtype=np.float64)
-        default_head_pose[:3, 3][2] = 0.155
+        default_head_pose[2, 3] = cls.DEFAULT_HEIGHT
 
         return ReachyMiniCommand(
             head_pose=default_head_pose,
