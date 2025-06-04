@@ -113,7 +113,6 @@ class RealMotorsServer:
             np.array(present_position_rad.copy()),
             np.array(target_position_rad.copy()),
             duration,
-
         )
 
         t0 = time.time()
@@ -133,12 +132,20 @@ class RealMotorsServer:
     def goto_sleep(self):
         current_positions_rad = self.get_current_positions()
         init_positions_rad = self.placo_kinematics.ik(self.init_pose.copy())
-        try:
-            self.goto_joints(current_positions_rad, init_positions_rad, duration=1)
-        except KeyboardInterrupt:
-            self.c.disable_torque()
 
-        time.sleep(0.2)
+        # If current position is far from initial position, move to initial position first
+        if (
+            np.linalg.norm(
+                np.array(current_positions_rad) - np.array(init_positions_rad)
+            )
+            > 0.2
+        ):
+            try:
+                self.goto_joints(current_positions_rad, init_positions_rad, duration=1)
+            except KeyboardInterrupt:
+                self.c.disable_torque()
+
+            time.sleep(0.2)
 
         current_positions_rad = self.get_current_positions()
         try:
