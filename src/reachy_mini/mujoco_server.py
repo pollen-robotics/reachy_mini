@@ -4,14 +4,14 @@ import mujoco.viewer
 import time
 import os
 from pathlib import Path
-from reachy_mini.io.abstract import AbstractServer
+from reachy_mini.io import Server
 
 
 ROOT_PATH = Path(os.path.dirname(os.path.abspath(__file__))).parent.parent
 
 
 class MujocoServer:
-    def __init__(self, server: AbstractServer):
+    def __init__(self, server: Server):
         self.server = server
 
         self.model = mujoco.MjModel.from_xml_path(
@@ -57,8 +57,6 @@ class MujocoServer:
 
 
 def main():
-    from reachy_mini.io import Server
-
     server = Server()
     server.start()
 

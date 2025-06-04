@@ -8,7 +8,7 @@ import simpleaudio as sa
 
 from reachy_mini_motor_controller import ReachyMiniMotorController
 from reachy_mini.utils import minimum_jerk
-from reachy_mini.io.abstract import AbstractServer
+from reachy_mini.io import Server
 
 from scipy.spatial.transform import Rotation as R
 
