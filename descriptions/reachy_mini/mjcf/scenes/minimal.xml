@@ -2,7 +2,6 @@
     <include file="../reachy_mini.xml" />
     <compiler meshdir="../assets" texturedir="../assets" />
     <option>
-        <!-- keep your timestep/integrator settings -->
         <flag multiccd="enable"/>   <!-- multi-contact CCD for convex/mesh pairs -->
     </option>
     <visual>
