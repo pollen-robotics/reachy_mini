@@ -75,7 +75,7 @@ def main():
     server.start()
 
     try:
-        MujocoServer(scene=args.scene)
+        MujocoServer(scene=args.scene, server=server)
     except KeyboardInterrupt:
         pass
 
