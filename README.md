@@ -42,6 +42,27 @@ client = Client(ip)
 pose = np.eye(4)
 client.send_pose(pose)
 ```
+### Video client
+
+MuJoCo publishes the camera stream at this address: "udp://@127.0.0.1:5005".
+OpenCV can directly read this stream, as illustrated in the example below:
+
+```python
+python examples/video_client.py
+```
+Any UDP client should be able to read this stream:
+```bash
+ffplay -fflags nobuffer udp://127.0.0.1:5005
+```
+
+With the real robot, the camera is directly accessible with the USB connection, and can be directly read with OpenCV:
+
+```python
+import cv2
+cap = cv2.VideoCapture(0)
+...
+```
+
 
 ## Credits
 
