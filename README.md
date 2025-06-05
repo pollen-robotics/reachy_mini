@@ -43,12 +43,12 @@ pose = np.eye(4)
 client.send_pose(pose)
 ```
 
-## Credits
+## Simulation options
 
 To choose a different scene:
 
 ```bash
-mujoco-server -s minimal
+reachy-mini-simulation -s minimal
 ```
 
 ### Simulation model used
