@@ -1,7 +1,10 @@
 <mujoco model="scene">
     <include file="../reachy_mini.xml" />
     <compiler meshdir="../assets" texturedir="../assets" />
-
+    <option>
+        <!-- keep your timestep/integrator settings -->
+        <flag multiccd="enable"/>   <!-- multi-contact CCD for convex/mesh pairs -->
+    </option>
     <visual>
         <headlight diffuse="0.6 0.6 0.6" ambient="0.3 0.3 0.3" specular="0 0 0" />
         <rgba haze="0.15 0.25 0.35 1" />
@@ -80,29 +83,38 @@
                 type="mesh"
                 mesh="croissant_mesh"
                 material="croissant_material"
-                mass="0.05"
+                mass="0.07"
                 friction="0.8 0.4 0.1" />
-            <!-- <joint name="croissant_joint" type="free" /> -->
+            <joint name="croissant_joint" type="free" />
         </body>
         <body name="apple" pos="0.6 -0.2 0.03" euler="0 0.78  0.78 ">
             <geom name="apple_geom"
                 type="mesh"
                 mesh="food_apple_01_mesh"
                 material="food_apple_01_material"
-                mass="0.05"
+                mass="0.1"
                 friction="0.8 0.4 0.1" />
-            <!-- <joint name="apple_joint" type="free" /> -->
+            <joint name="apple_joint" type="free" />
         </body>
 
 
         <body name="table" pos="0.35 0 -0.8" euler="1.57 0 0">
             <geom name="table_geom"
+                class="visual"
                 type="mesh"
                 mesh="wooden_table_02_mesh"
                 material="wooden_table_02_material"
                 mass="1.0"
                 friction="0.8 0.4 0.1" />
             <!-- <joint name="table_joint" type="free" /> -->
+            <!-- replace the table top collision with a box -->
+            <geom class="collision"
+                type="box"
+                size="0.56 0.03 0.35"
+                pos="0 0.77 0"
+                friction="1.0 1 1"
+            />
+
         </body>
 
 
@@ -111,9 +123,9 @@
                 type="mesh"
                 mesh="rubber_duck_toy_mesh"
                 material="rubber_duck_toy_material"
-                mass="0.05"
+                mass="0.1"
                 friction="0.8 0.4 0.1" />
-            <!-- <joint name="duck_joint" type="free" /> -->
+            <joint name="duck_joint" type="free" />
         </body>
 
     </worldbody>
