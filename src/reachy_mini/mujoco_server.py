@@ -1,19 +1,22 @@
-import socket
+import argparse
+import os
 import pickle
-from reachy_mini import PlacoKinematics
+import socket
+import time
+from pathlib import Path
+from threading import Lock, Thread
+
 import mujoco
 import mujoco.viewer
-import time
-import os
-from pathlib import Path
 import numpy as np
-from threading import Thread, Lock
+
+from reachy_mini import PlacoKinematics
 
 ROOT_PATH = Path(os.path.dirname(os.path.abspath(__file__))).parent.parent
 
 
 class MujocoServer:
-    def __init__(self):
+    def __init__(self, scene="empty"):
         self.host = "0.0.0.0"
         self.port = 1234
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -22,7 +25,7 @@ class MujocoServer:
         self.server_socket.listen(1)
 
         self.model = mujoco.MjModel.from_xml_path(
-            f"{ROOT_PATH}/descriptions/reachy_mini/mjcf/scene.xml"
+            f"{ROOT_PATH}/descriptions/reachy_mini/mjcf/scenes/{scene}.xml"
         )
         self.data = mujoco.MjData(self.model)
         self.model.opt.timestep = 0.002  # s, simulation timestep, 500hz
@@ -110,7 +113,19 @@ class MujocoServer:
 
 
 def main():
-    MujocoServer()
+    parser = argparse.ArgumentParser(
+        description="Launch the MuJoCo server with an optional scene specification."
+    )
+    parser.add_argument(
+        "--scene",
+        "-s",
+        type=str,
+        default="empty",
+        help="Name of the scene to load (default: empty)",
+    )
+    args = parser.parse_args()
+
+    MujocoServer(scene=args.scene)
 
 
 if __name__ == "__main__":
