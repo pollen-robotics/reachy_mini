@@ -110,6 +110,9 @@ class MujocoServer:
             while True:
                 start_t = time.time()
 
+                im = self.get_camera()
+                self.streamer_udp.send_frame(im)
+
                 if step % self.decimation == 0:
                     with self.pose_lock:
                         pose = self.current_pose.copy()
