@@ -1,15 +1,15 @@
-from reachy_mini import Client
-
+from reachy_mini.io import Client
 import time
 import numpy as np
 from scipy.spatial.transform import Rotation as R
+
+from reachy_mini.command import ReachyMiniCommand
 
 client = Client()
 
 while True:
     pose = np.eye(4)
-    pose[:3, 3][2] = 0.177  # Set the height of the head
-    pose[:3, 3][2] += 0.01 * np.sin(2 * np.pi * 0.3 * time.time() + np.pi)
+    pose[:3, 3][2] = 0.01 * np.sin(2 * np.pi * 0.3 * time.time() + np.pi)
     euler_rot = [
         0,
         0,
@@ -17,9 +17,14 @@ while True:
     ]
     rot_mat = R.from_euler("xyz", euler_rot, degrees=False).as_matrix()
     pose[:3, :3] = rot_mat
-    antennas = [
-        np.sin(2 * np.pi * 1.0 * time.time()),
-        np.sin(2 * np.pi * 1.0 * time.time()),
-    ]
-    client.send_pose(pose, antennas=antennas, offset_zero=False)
+    pose[:3, 3][2] += 0.01 * np.sin(2 * np.pi * 0.5 * time.time())
+    antennas = np.array([1, 1]) * np.sin(2 * np.pi * 1.5 * time.time())
+
+    client.send_command(
+        ReachyMiniCommand(
+            head_pose=pose,
+            antennas_orientation=antennas,
+            offset_zero=True,
+        )
+    )
     time.sleep(0.02)

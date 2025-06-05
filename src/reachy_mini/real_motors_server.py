@@ -1,18 +1,18 @@
 import argparse
-import os
-import pickle
-import socket
 import time
+import os
 from pathlib import Path
-from threading import Lock, Thread
 
 import numpy as np
 import simpleaudio as sa
 from reachy_mini_motor_controller import ReachyMiniMotorController
-from scipy.spatial.transform import Rotation as R
 
 from reachy_mini import PlacoKinematics
+from reachy_mini.command import ReachyMiniCommand
 from reachy_mini.utils import minimum_jerk
+from reachy_mini.io import Server
+
+from scipy.spatial.transform import Rotation as R
 
 ROOT_PATH = Path(os.path.dirname(os.path.abspath(__file__))).parent.parent
 
@@ -24,22 +24,12 @@ def play_sound():
 
 
 class RealMotorsServer:
-    def __init__(self, serialport: str):
-        self.host = "0.0.0.0"
-        self.port = 1234
-        self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self.server_socket.bind((self.host, self.port))
-        self.server_socket.listen(1)
+    def __init__(self, serialport: str, server: Server):
+        self.server = server
 
         self.placo_kinematics = PlacoKinematics(
             f"{ROOT_PATH}/descriptions/reachy_mini/urdf/"
         )
-        self.current_pose = np.eye(4)
-        self.current_pose[:3, 3][2] = 0.177
-        self.current_antennas = np.zeros(2)
-
-        self.pose_lock = Lock()
 
         self.sleep_positions = [
             0.0,
@@ -54,52 +44,12 @@ class RealMotorsServer:
         ]
 
         self.sleep_positions[-2:] = [3.05, -3.05]  # Set antennas to sleep position
-        self.init_pose = np.eye(4)
-        self.init_pose[:3, 3][2] = 0.177  # Set the height of the head
+        self.init_pose = ReachyMiniCommand.default().head_pose
 
         self.c = ReachyMiniMotorController(serialport)
 
-        # Launch the client handler in a thread
-        Thread(target=self.client_handler, daemon=True).start()
-
         # Start the hardware control loop
         self.run_motor_control_loop(frequency=300.0)
-
-    def client_handler(self):
-        while True:
-            print("Waiting for connection on port", self.port)
-            try:
-                conn, address = self.server_socket.accept()
-                print(f"Client connected from {address}")
-                with conn:
-                    while True:
-                        try:
-                            data = conn.recv(4096)
-                            if not data:
-                                print("Client disconnected")
-                                break
-
-                            pose_antennas = pickle.loads(data)
-                            pose = pose_antennas["pose"]
-                            antennas = pose_antennas["antennas"]
-                            if isinstance(pose, np.ndarray) and pose.shape == (4, 4):
-                                with self.pose_lock:
-                                    self.current_pose = pose
-                                    if antennas is not None:
-                                        self.current_antennas = antennas
-                            else:
-                                print("Received invalid pose data")
-
-                        except (
-                            ConnectionResetError,
-                            EOFError,
-                            pickle.PickleError,
-                        ) as e:
-                            print(f"Client error: {e}")
-                            break
-
-            except Exception as e:
-                print(f"Server error: {e}")
 
     def get_current_positions(self):
         positions = self.c.read_all_positions()
@@ -197,11 +147,10 @@ class RealMotorsServer:
             while True:
                 start_t = time.time()
 
-                with self.pose_lock:
-                    pose = self.current_pose.copy()
-                    antennas = self.current_antennas.copy()
+                command = self.server.get_latest_command()
+
                 try:
-                    angles_rad = self.placo_kinematics.ik(pose)
+                    angles_rad = self.placo_kinematics.ik(command.head_pose)
                     stewart_angles_rad = angles_rad[1:-2]  # Exclude yaw and antennas
                     yaw_angles_rad = angles_rad[0]  # First angle is yaw
                     self.c.set_stewart_platform_position(stewart_angles_rad)
@@ -209,7 +158,7 @@ class RealMotorsServer:
                 except Exception as e:
                     print(f"IK error: {e}")
 
-                self.c.set_antennas_positions(antennas)
+                self.c.set_antennas_positions(command.antennas_orientation)
 
                 took = time.time() - start_t
                 time.sleep(max(0, period - took))
@@ -229,7 +178,11 @@ def main():
         default="/dev/ttyACM0",
     )
     args = parser.parse_args()
-    RealMotorsServer(args.serialport)
+
+    server = Server()
+    server.start()
+
+    RealMotorsServer(args.serialport, server)
 
 
 if __name__ == "__main__":
