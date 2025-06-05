@@ -8,11 +8,11 @@ import os
 from pathlib import Path
 import numpy as np
 from threading import Thread, Lock
-import cv2
+from reachy_mini import UDPJPEGFrameSender
+
 
 # os.environ['MUJOCO_GL'] = 'egl'
 ROOT_PATH = Path(os.path.dirname(os.path.abspath(__file__))).parent.parent
-
 
 class MujocoServer:
     def __init__(self):
@@ -47,6 +47,8 @@ class MujocoServer:
 
         self.pose_lock = Lock()
 
+        self.streamer_udp = UDPJPEGFrameSender()
+
         # Launch the client handler in a thread
         Thread(target=self.client_handler, daemon=True).start()
 
@@ -56,7 +58,7 @@ class MujocoServer:
     def get_camera(self):
         self.offscreen_renderer.update_scene(self.data, self.camera_id)
         im = self.offscreen_renderer.render()
-        im = cv2.cvtColor(np.array(im), cv2.COLOR_RGB2BGR)
+        #im = cv2.cvtColor(np.array(im), cv2.COLOR_RGB2BGR)
         return im
 
     def client_handler(self):
@@ -105,8 +107,8 @@ class MujocoServer:
                 start_t = time.time()
 
                 im = self.get_camera()
-                cv2.imshow("Camera", im)
-                cv2.waitKey(1)
+                self.streamer_udp.send_frame(im)
+
 
                 if step % self.decimation == 0:
                     with self.pose_lock:
