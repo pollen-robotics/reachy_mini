@@ -25,13 +25,13 @@ python groove_test.py --mode dance --dance_name head_tilt_roll --duration 20 --b
 To run the mujoco server:
 
 ```bash
-mujoco-server
+reachy-mini-simulation
 ```
 
 To run the robot server (runs on the real robot):
 
 ```bash
-real-motors-server
+reachy-mini
 ```
 
 To use the client :

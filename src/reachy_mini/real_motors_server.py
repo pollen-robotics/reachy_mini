@@ -1,18 +1,18 @@
-import socket
-import pickle
-from reachy_mini import PlacoKinematics
-import time
-import os
-from pathlib import Path
-import numpy as np
-from threading import Thread, Lock
 import argparse
-import simpleaudio as sa
+import os
+import pickle
+import socket
+import time
+from pathlib import Path
+from threading import Lock, Thread
 
+import numpy as np
+import simpleaudio as sa
 from reachy_mini_motor_controller import ReachyMiniMotorController
-from reachy_mini.utils import minimum_jerk
 from scipy.spatial.transform import Rotation as R
 
+from reachy_mini import PlacoKinematics
+from reachy_mini.utils import minimum_jerk
 
 ROOT_PATH = Path(os.path.dirname(os.path.abspath(__file__))).parent.parent
 
@@ -219,11 +219,7 @@ class RealMotorsServer:
             # self.c.disable_torque()
 
 
-def main(args: argparse.Namespace = "/dev/ttyACM0"):
-    RealMotorsServer(args.serialport)
-
-
-if __name__ == "__main__":
+def main():
     parser = argparse.ArgumentParser(description="Run the real motors server.")
     parser.add_argument(
         "-s",
@@ -233,5 +229,8 @@ if __name__ == "__main__":
         default="/dev/ttyACM0",
     )
     args = parser.parse_args()
+    RealMotorsServer(args.serialport)
 
-    main(args)
+
+if __name__ == "__main__":
+    main()
