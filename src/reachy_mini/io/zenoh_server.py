@@ -26,6 +26,9 @@ class ZenohServer(AbstractServer):
                             "multicast": {
                                 "enabled": False,
                             },
+                            "gossip": {
+                                "enabled": False,
+                            },
                         },
                         "connect": {
                             "endpoints": [
