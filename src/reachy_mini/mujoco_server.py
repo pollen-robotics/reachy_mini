@@ -38,6 +38,8 @@ class MujocoServer:
             f"{ROOT_PATH}/descriptions/reachy_mini/urdf/", sim=True
         )
 
+        self.streamer_udp = UDPJPEGFrameSender()
+
         # Start the simulation loop
         self.simulation_loop()
 
