@@ -57,7 +57,7 @@ class MujocoServer:
 
 
 def main():
-    server = Server(localhost_only=True)
+    server = Server()
     server.start()
 
     try:
