@@ -165,6 +165,7 @@ class RealMotorsServer:
         except KeyboardInterrupt:
             print("Stopping motor control loop.")
             self.goto_sleep()
+            self.server.stop()
             # self.c.disable_torque()
 
 
