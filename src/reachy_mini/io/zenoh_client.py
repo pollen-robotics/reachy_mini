@@ -15,7 +15,15 @@ class ZenohClient(AbstractClient):
                             "endpoints": [
                                 "tcp/localhost:7447",
                             ],
-                        }
+                        },
+                        "scouting": {
+                            "multicast": {
+                                "enabled": False,
+                            },
+                        },
+                        "gossip": {
+                            "enabled": False,
+                        },
                     }
                 )
             )
