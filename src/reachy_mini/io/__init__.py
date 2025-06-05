@@ -3,5 +3,5 @@ from .socket_server import SocketServer
 from .zenoh_client import ZenohClient
 from .zenoh_server import ZenohServer
 
-Client = SocketClient
-Server = SocketServer
+Client = ZenohClient
+Server = ZenohServer
