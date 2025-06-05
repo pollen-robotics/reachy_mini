@@ -8,9 +8,13 @@ from threading import Lock, Thread
 
 import mujoco
 import mujoco.viewer
+import time
+import os
+from pathlib import Path
 import numpy as np
 
 from reachy_mini import PlacoKinematics
+from reachy_mini import UDPJPEGFrameSender
 
 ROOT_PATH = Path(os.path.dirname(os.path.abspath(__file__))).parent.parent
 
@@ -31,6 +35,14 @@ class MujocoServer:
         self.model.opt.timestep = 0.002  # s, simulation timestep, 500hz
         self.decimation = 10  # -> 50hz control loop
 
+        self.camera_id = mujoco.mj_name2id(
+            self.model, mujoco.mjtObj.mjOBJ_CAMERA, "eye_camera"
+        )
+        self.camera_size = (1280, 720)
+        self.offscreen_renderer = mujoco.Renderer(
+            self.model, height=self.camera_size[1], width=self.camera_size[0]
+        )
+
         self.placo_kinematics = PlacoKinematics(
             f"{ROOT_PATH}/descriptions/reachy_mini/urdf/", sim=True
         )
@@ -40,11 +52,18 @@ class MujocoServer:
 
         self.pose_lock = Lock()
 
+        self.streamer_udp = UDPJPEGFrameSender()
+
         # Launch the client handler in a thread
         Thread(target=self.client_handler, daemon=True).start()
 
         # Start the simulation loop
         self.simulation_loop()
+
+    def get_camera(self):
+        self.offscreen_renderer.update_scene(self.data, self.camera_id)
+        im = self.offscreen_renderer.render()
+        return im
 
     def client_handler(self):
         while True:
@@ -90,6 +109,9 @@ class MujocoServer:
         ) as viewer:
             while True:
                 start_t = time.time()
+
+                im = self.get_camera()
+                self.streamer_udp.send_frame(im)
 
                 if step % self.decimation == 0:
                     with self.pose_lock:
