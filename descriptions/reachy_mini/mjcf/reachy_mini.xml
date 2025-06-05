@@ -330,7 +330,8 @@
                 <site group="3" name="camera"/>
                 <camera name="eye_camera"
                     mode="fixed"
-                    resolution="640 480"/>
+                    resolution="1280 720"
+                    />
                 </body>
 
 

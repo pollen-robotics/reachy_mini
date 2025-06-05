@@ -33,7 +33,7 @@ class MujocoServer:
         self.camera_id = mujoco.mj_name2id(
             self.model, mujoco.mjtObj.mjOBJ_CAMERA, "eye_camera"
         )
-        self.camera_size = (640, 480)
+        self.camera_size = (1280, 720)
         self.offscreen_renderer = mujoco.Renderer(
             self.model, height=self.camera_size[1], width=self.camera_size[0]
         )

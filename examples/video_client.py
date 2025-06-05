@@ -15,7 +15,7 @@ else:
             break
 
         # Afficher la frame
-        cv2.imshow('UDP stream from Mujoco', frame)
+        cv2.imshow('UDP stream from MuJoCo', frame)
 
         # Press 'q' to exit
         if cv2.waitKey(1) & 0xFF == ord('q'):
