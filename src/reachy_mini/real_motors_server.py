@@ -7,7 +7,7 @@ from pathlib import Path
 from threading import Lock, Thread
 
 import numpy as np
-import simpleaudio as sa
+import pygame
 from reachy_mini_motor_controller import ReachyMiniMotorController
 from scipy.spatial.transform import Rotation as R
 
@@ -16,11 +16,12 @@ from reachy_mini.utils import minimum_jerk
 
 ROOT_PATH = Path(os.path.dirname(os.path.abspath(__file__))).parent.parent
 
-wave_obj = sa.WaveObject.from_wave_file(f"{ROOT_PATH}/src/assets/proud2.wav")
+pygame.mixer.init()
+pygame.mixer.music.load(f"{ROOT_PATH}/src/assets/proud2.wav")
 
 
 def play_sound():
-    wave_obj.play()  # Non-blocking
+    pygame.mixer.music.play()
 
 
 class RealMotorsServer:
