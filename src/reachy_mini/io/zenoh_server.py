@@ -1,3 +1,4 @@
+import json
 import threading
 import zenoh
 
@@ -6,13 +7,38 @@ from reachy_mini.io.abstract import AbstractServer
 
 
 class ZenohServer(AbstractServer):
-    def __init__(self):
+    def __init__(self, localhost_only: bool = True):
+        self.localhost_only = localhost_only
+
         self._lock = threading.Lock()
         self._last_command = ReachyMiniCommand.default()
         self._cmd_event = threading.Event()
 
     def start(self):
-        self.session = zenoh.open(zenoh.Config())
+        if self.localhost_only:
+            c = zenoh.Config.from_json5(
+                json.dumps(
+                    {
+                        "listen": {
+                            "endpoints": ["tcp/localhost:7447"],
+                        },
+                        "scouting": {
+                            "multicast": {
+                                "enabled": False,
+                            },
+                        },
+                        "connect": {
+                            "endpoints": [
+                                "tcp/localhost:7447",
+                            ],
+                        },
+                    }
+                )
+            )
+        else:
+            c = zenoh.Config()
+
+        self.session = zenoh.open(c)
         self.sub = self.session.declare_subscriber(
             "reachy_mini/command",
             self._handle_command,

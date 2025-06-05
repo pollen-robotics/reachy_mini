@@ -12,17 +12,10 @@ class ZenohClient(AbstractClient):
                 json.dumps(
                     {
                         "connect": {
-                            "endpoints": [
-                                "tcp/localhost:7447",
-                            ],
-                        },
-                        "scouting": {
-                            "multicast": {
-                                "enabled": False,
+                            "endpoints": {
+                                "peer": ["tcp/localhost:7447"],
+                                "router": [],
                             },
-                        },
-                        "gossip": {
-                            "enabled": False,
                         },
                     }
                 )
