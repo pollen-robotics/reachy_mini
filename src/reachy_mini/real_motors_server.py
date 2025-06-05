@@ -1,18 +1,18 @@
-from reachy_mini import PlacoKinematics
+import argparse
 import time
 import os
 from pathlib import Path
-import numpy as np
-import argparse
-import simpleaudio as sa
 
+import numpy as np
+import simpleaudio as sa
 from reachy_mini_motor_controller import ReachyMiniMotorController
+
+from reachy_mini import PlacoKinematics
 from reachy_mini.command import ReachyMiniCommand
 from reachy_mini.utils import minimum_jerk
 from reachy_mini.io import Server
 
 from scipy.spatial.transform import Rotation as R
-
 
 ROOT_PATH = Path(os.path.dirname(os.path.abspath(__file__))).parent.parent
 
@@ -168,16 +168,7 @@ class RealMotorsServer:
             # self.c.disable_torque()
 
 
-def main(args: argparse.Namespace):
-    from reachy_mini.io import Server
-
-    server = Server()
-    server.start()
-
-    RealMotorsServer(args.serialport, server)
-
-
-if __name__ == "__main__":
+def main():
     parser = argparse.ArgumentParser(description="Run the real motors server.")
     parser.add_argument(
         "-s",
@@ -188,4 +179,11 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    main(args)
+    server = Server()
+    server.start()
+
+    RealMotorsServer(args.serialport, server)
+
+
+if __name__ == "__main__":
+    main()

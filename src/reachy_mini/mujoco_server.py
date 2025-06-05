@@ -1,21 +1,23 @@
-from reachy_mini import PlacoKinematics
+import argparse
+import os
+import time
+from pathlib import Path
+
 import mujoco
 import mujoco.viewer
-import time
-import os
-from pathlib import Path
-from reachy_mini.io import Server
 
+from reachy_mini import PlacoKinematics
+from reachy_mini.io import Server
 
 ROOT_PATH = Path(os.path.dirname(os.path.abspath(__file__))).parent.parent
 
 
 class MujocoServer:
-    def __init__(self, server: Server):
+    def __init__(self, server: Server, scene="empty"):
         self.server = server
 
         self.model = mujoco.MjModel.from_xml_path(
-            f"{ROOT_PATH}/descriptions/reachy_mini/mjcf/scene.xml"
+            f"{ROOT_PATH}/descriptions/reachy_mini/mjcf/scenes/{scene}.xml"
         )
         self.data = mujoco.MjData(self.model)
         self.model.opt.timestep = 0.002  # s, simulation timestep, 500hz
@@ -57,11 +59,23 @@ class MujocoServer:
 
 
 def main():
+    parser = argparse.ArgumentParser(
+        description="Launch the MuJoCo server with an optional scene specification."
+    )
+    parser.add_argument(
+        "--scene",
+        "-s",
+        type=str,
+        default="empty",
+        help="Name of the scene to load (default: empty)",
+    )
+    args = parser.parse_args()
+
     server = Server()
     server.start()
 
     try:
-        MujocoServer(server)
+        MujocoServer(scene=args.scene)
     except KeyboardInterrupt:
         pass
 

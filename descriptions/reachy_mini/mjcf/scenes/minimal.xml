@@ -1,0 +1,131 @@
+<mujoco model="scene">
+    <include file="../reachy_mini.xml" />
+    <compiler meshdir="../assets" texturedir="../assets" />
+    <option>
+        <flag multiccd="enable"/>   <!-- multi-contact CCD for convex/mesh pairs -->
+    </option>
+    <visual>
+        <headlight diffuse="0.6 0.6 0.6" ambient="0.3 0.3 0.3" specular="0 0 0" />
+        <rgba haze="0.15 0.25 0.35 1" />
+        <global azimuth="160" elevation="-20" />
+    </visual>
+    <asset>
+        <texture type="skybox" builtin="gradient" rgb1="0.3 0.5 0.7" rgb2="0 0 0" width="512"
+            height="3072" />
+        <texture type="2d" name="groundplane" builtin="checker" mark="edge" rgb1="0.2 0.3 0.4"
+            rgb2="0.1 0.2 0.3"
+            markrgb="0.8 0.8 0.8" width="300" height="300" />
+        <material name="groundplane" texture="groundplane" texuniform="true" texrepeat="5 5"
+            reflectance="0.2" />
+
+        <!-- CROISSANT -->
+        <texture type="2d" name="croissant_diff"
+            file="croissant_1k.blend/textures/croissant_diff_1k.png" />
+        <material name="croissant_material"
+            texture="croissant_diff"
+            rgba="1 1 1 1"
+            shininess="0.2"
+            specular="0.1"
+            reflectance="0.05" />
+        <mesh name="croissant_mesh" file="croissant_1k.blend/croissant_1k.obj" scale="1 1 1" />
+
+
+        <!-- APPLE -->
+        <texture type="2d" name="food_apple_01_diff"
+            file="food_apple_01_1k.blend/textures/food_apple_01_diff_1k.png" />
+        <material name="food_apple_01_material"
+            texture="food_apple_01_diff"
+            rgba="1 1 1 1"
+            shininess="0.2"
+            specular="0.1"
+            reflectance="0.05" />
+
+        <mesh name="food_apple_01_mesh" file="food_apple_01_1k.blend/food_apple_01_1k.obj"
+            scale="1 1 1" />
+
+        <!-- TABLE -->
+        <!-- wooden_table_02_1k.blend -->
+        <texture type="2d" name="wooden_table_02_diff"
+            file="wooden_table_02_1k.blend/textures/wooden_table_02_diff_1k.png" />
+        <material name="wooden_table_02_material"
+            texture="wooden_table_02_diff"
+            rgba="1 1 1 1"
+            shininess="0.2"
+            specular="0.1"
+            reflectance="0.05" />
+        <mesh name="wooden_table_02_mesh" file="wooden_table_02_1k.blend/wooden_table_02_1k.obj"
+            scale="1 1 1" />
+
+
+        <!-- DUCK -->
+        <!-- rubber_duck_toy_1k.blend
+          -->
+        <texture type="2d" name="rubber_duck_toy_diff"
+            file="rubber_duck_toy_1k.blend/textures/rubber_duck_toy_diff_1k.png" />
+        <material name="rubber_duck_toy_material"
+            texture="rubber_duck_toy_diff"
+            rgba="1 1 1 1"
+            shininess="0.2"
+            specular="0.1"
+            reflectance="0.05" />
+        <mesh name="rubber_duck_toy_mesh" file="rubber_duck_toy_1k.blend/rubber_duck_toy_1k.obj"
+            scale="0.4 0.4 0.4" />
+
+    </asset>
+
+    <worldbody>
+        <light pos="-0.5 0 3.5" dir="0 0 -1" directional="true" />
+        <geom name="floor" size="0 0 0.05" pos="0 0 -0.8" type="plane" material="groundplane" />
+
+        <body name="croissant" pos="0.6 0.1 0.03" euler="0 0 1.57">
+            <geom name="croissant_geom"
+                type="mesh"
+                mesh="croissant_mesh"
+                material="croissant_material"
+                mass="0.07"
+                friction="0.8 0.4 0.1" />
+            <joint name="croissant_joint" type="free" />
+        </body>
+        <body name="apple" pos="0.6 -0.2 0.03" euler="0 0.78  0.78 ">
+            <geom name="apple_geom"
+                type="mesh"
+                mesh="food_apple_01_mesh"
+                material="food_apple_01_material"
+                mass="0.1"
+                friction="0.8 0.4 0.1" />
+            <joint name="apple_joint" type="free" />
+        </body>
+
+
+        <body name="table" pos="0.35 0 -0.8" euler="1.57 0 0">
+            <geom name="table_geom"
+                class="visual"
+                type="mesh"
+                mesh="wooden_table_02_mesh"
+                material="wooden_table_02_material"
+                mass="1.0"
+                friction="0.8 0.4 0.1" />
+            <!-- <joint name="table_joint" type="free" /> -->
+            <!-- replace the table top collision with a box -->
+            <geom class="collision"
+                type="box"
+                size="0.56 0.03 0.35"
+                pos="0 0.77 0"
+                friction="1.0 1 1"
+            />
+
+        </body>
+
+
+        <body name="duck" pos="0.6 0.3 0.0" euler="1.57 -1.57 0">
+            <geom name="duck_geom"
+                type="mesh"
+                mesh="rubber_duck_toy_mesh"
+                material="rubber_duck_toy_material"
+                mass="0.1"
+                friction="0.8 0.4 0.1" />
+            <joint name="duck_joint" type="free" />
+        </body>
+
+    </worldbody>
+</mujoco>
