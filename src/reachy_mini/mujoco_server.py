@@ -2,6 +2,7 @@ import argparse
 import os
 import time
 from pathlib import Path
+from threading import Thread
 
 import mujoco
 import mujoco.viewer
@@ -25,6 +26,8 @@ class MujocoServer:
         self.data = mujoco.MjData(self.model)
         self.model.opt.timestep = 0.002  # s, simulation timestep, 500hz
         self.decimation = 10  # -> 50hz control loop
+        self.rendering_timestep = 0.04  # s, rendering loop # 25Hz
+
 
         self.camera_id = mujoco.mj_name2id(
             self.model, mujoco.mjtObj.mjOBJ_CAMERA, "eye_camera"
@@ -39,14 +42,20 @@ class MujocoServer:
         )
 
         self.streamer_udp = UDPJPEGFrameSender()
+        Thread(target=self.rendering_loop, daemon=True).start()
 
         # Start the simulation loop
         self.simulation_loop()
 
-    def get_camera(self):
-        self.offscreen_renderer.update_scene(self.data, self.camera_id)
-        im = self.offscreen_renderer.render()
-        return im
+    def rendering_loop(self):
+        while True:
+            start_t = time.time()
+            self.offscreen_renderer.update_scene(self.data, self.camera_id)
+            im = self.offscreen_renderer.render()
+            self.streamer_udp.send_frame(im)
+
+            took = time.time() - start_t
+            time.sleep(max(0, self.rendering_timestep - took))
 
     def simulation_loop(self):
         step = 0
@@ -56,9 +65,6 @@ class MujocoServer:
         ) as viewer:
             while True:
                 start_t = time.time()
-
-                im = self.get_camera()
-                self.streamer_udp.send_frame(im)
 
                 if step % self.decimation == 0:
                     command = self.server.get_latest_command()
