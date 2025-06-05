@@ -2,9 +2,11 @@ import time
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 
-from reachy_mini import Client
+from reachy_mini.io import Client
 from sixdrepnet import SixDRepNet
 import cv2 as cv
+
+from reachy_mini.command import ReachyMiniCommand
 
 model = SixDRepNet(gpu_id=-1)
 cap = cv.VideoCapture(0)
@@ -13,7 +15,7 @@ cap = cv.VideoCapture(0)
 
 def main():
     # client = MujocoClient(ip="10.0.0.33")
-    client = Client(ip="localhost")
+    client = Client()
 
     while True:
         t0 = time.time()
@@ -46,7 +48,12 @@ def main():
 
         print(f"roll: {roll}, pitch: {pitch}, yaw: {yaw}")
         # # pose[:3, 3][2] += 0.01 * np.sin(2 * np.pi * 0.5 * time.time())
-        client.send_pose(pose, offset_zero=False)
+        client.send_command(
+            ReachyMiniCommand(
+                head_pose=pose,
+                offset_zero=False,
+            )
+        )
         # time.sleep(0.02)
 
         cv.imshow("test_window", img)
