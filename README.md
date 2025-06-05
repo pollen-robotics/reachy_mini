@@ -42,3 +42,17 @@ client = Client(ip)
 pose = np.eye(4)
 client.send_pose(pose)
 ```
+
+## Credits
+
+To choose a different scene:
+
+```bash
+mujoco-server -s minimal
+```
+
+### Simulation model used
+https://polyhaven.com/a/food_apple_01
+https://polyhaven.com/a/croissant
+https://polyhaven.com/a/wooden_table_02
+https://polyhaven.com/a/rubber_duck_toy

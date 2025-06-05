@@ -1,5 +1,6 @@
 <mujoco model="scene">
-    <include file="reachy_mini.xml" />
+    <include file="../reachy_mini.xml" />
+    <compiler meshdir="../assets" texturedir="../assets" />
 
     <visual>
         <headlight diffuse="0.6 0.6 0.6" ambient="0.3 0.3 0.3" specular="0 0 0" />
@@ -17,7 +18,7 @@
 
         <!-- CROISSANT -->
         <texture type="2d" name="croissant_diff"
-            file="assets/croissant_1k.blend/textures/croissant_diff_1k.png" />
+            file="croissant_1k.blend/textures/croissant_diff_1k.png" />
         <material name="croissant_material"
             texture="croissant_diff"
             rgba="1 1 1 1"
@@ -29,7 +30,7 @@
 
         <!-- APPLE -->
         <texture type="2d" name="food_apple_01_diff"
-            file="assets/food_apple_01_1k.blend/textures/food_apple_01_diff_1k.png" />
+            file="food_apple_01_1k.blend/textures/food_apple_01_diff_1k.png" />
         <material name="food_apple_01_material"
             texture="food_apple_01_diff"
             rgba="1 1 1 1"
@@ -43,7 +44,7 @@
         <!-- TABLE -->
         <!-- wooden_table_02_1k.blend -->
         <texture type="2d" name="wooden_table_02_diff"
-            file="assets/wooden_table_02_1k.blend/textures/wooden_table_02_diff_1k.png" />
+            file="wooden_table_02_1k.blend/textures/wooden_table_02_diff_1k.png" />
         <material name="wooden_table_02_material"
             texture="wooden_table_02_diff"
             rgba="1 1 1 1"
@@ -58,7 +59,7 @@
         <!-- rubber_duck_toy_1k.blend
           -->
         <texture type="2d" name="rubber_duck_toy_diff"
-            file="assets/rubber_duck_toy_1k.blend/textures/rubber_duck_toy_diff_1k.png" />
+            file="rubber_duck_toy_1k.blend/textures/rubber_duck_toy_diff_1k.png" />
         <material name="rubber_duck_toy_material"
             texture="rubber_duck_toy_diff"
             rgba="1 1 1 1"
