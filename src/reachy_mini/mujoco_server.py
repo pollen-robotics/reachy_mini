@@ -1,4 +1,5 @@
 import argparse
+import multiprocessing.spawn
 import os
 import time
 from pathlib import Path
@@ -80,6 +81,25 @@ class MujocoServer:
 
 
 def main():
+    """Monkey patch to run the main function using the mjpython executable on macOS."""
+    import platform
+
+    if platform.system() != "Darwin":
+        return _main()
+
+    import multiprocessing as mp
+    import sys
+
+    python_exec = sys.executable
+    python_exec = python_exec.removesuffix("python") + "mjpython"
+    mp.set_executable(python_exec)
+
+    p = mp.Process(target=_main)
+    p.start()
+    p.join()
+
+
+def _main():
     parser = argparse.ArgumentParser(
         description="Launch the MuJoCo server with an optional scene specification."
     )
@@ -101,7 +121,3 @@ def main():
         pass
 
     server.stop()
-
-
-if __name__ == "__main__":
-    main()
