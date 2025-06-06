@@ -97,6 +97,7 @@ def main():
     p = mp.Process(target=_main)
     p.start()
     p.join()
+    return p.exitcode
 
 
 def _main():
