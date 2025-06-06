@@ -2,16 +2,13 @@ import argparse
 import os
 import time
 from pathlib import Path
-from threading import Thread
+import asyncio
 
 import mujoco
 import mujoco.viewer
 
-from reachy_mini import PlacoKinematics
-from reachy_mini import UDPJPEGFrameSender
+from reachy_mini import PlacoKinematics, UDPJPEGFrameSender
 from reachy_mini.io import Server
-
-import numpy as np
 
 ROOT_PATH = Path(os.path.dirname(os.path.abspath(__file__))).parent.parent
 
@@ -28,7 +25,6 @@ class MujocoServer:
         self.decimation = 10  # -> 50hz control loop
         self.rendering_timestep = 0.04  # s, rendering loop # 25Hz
 
-
         self.camera_id = mujoco.mj_name2id(
             self.model, mujoco.mjtObj.mjOBJ_CAMERA, "eye_camera"
         )
@@ -42,28 +38,30 @@ class MujocoServer:
         )
 
         self.streamer_udp = UDPJPEGFrameSender()
-        Thread(target=self.rendering_loop, daemon=True).start()
 
-        # Start the simulation loop
-        self.simulation_loop()
+        self.stop_event = asyncio.Event()
 
-    def rendering_loop(self):
-        while True:
+    def stop(self):
+        self.stop_event.set()
+
+    async def rendering_loop(self):
+        while not self.stop_event.is_set():
             start_t = time.time()
             self.offscreen_renderer.update_scene(self.data, self.camera_id)
             im = self.offscreen_renderer.render()
             self.streamer_udp.send_frame(im)
 
             took = time.time() - start_t
-            time.sleep(max(0, self.rendering_timestep - took))
+            await asyncio.sleep(max(0, self.rendering_timestep - took))
 
-    def simulation_loop(self):
+
+    async def simulation_loop(self):
         step = 0
         all_start_t = time.time()
         with mujoco.viewer.launch_passive(
             self.model, self.data, show_left_ui=False, show_right_ui=False
         ) as viewer:
-            while True:
+            while not self.stop_event.is_set():
                 start_t = time.time()
 
                 if step % self.decimation == 0:
@@ -81,11 +79,10 @@ class MujocoServer:
                 viewer.sync()
 
                 took = time.time() - start_t
-                time.sleep(max(0, self.model.opt.timestep - took))
+                await asyncio.sleep(max(0, self.model.opt.timestep - took))
                 step += 1
 
-
-def main():
+async def async_loop():
     parser = argparse.ArgumentParser(
         description="Launch the MuJoCo server with an optional scene specification."
     )
@@ -101,13 +98,24 @@ def main():
     server = Server()
     server.start()
 
+    mujoco_server = MujocoServer(scene=args.scene, server=server)
+
     try:
-        MujocoServer(scene=args.scene, server=server)
+        await asyncio.gather(
+                mujoco_server.rendering_loop(),
+                mujoco_server.simulation_loop()
+            )
     except KeyboardInterrupt:
         pass
+    except asyncio.CancelledError:
+        pass
+    finally:
+        mujoco_server.stop()
 
     server.stop()
 
+def main():
+    asyncio.run(async_loop())
 
 if __name__ == "__main__":
     main()
