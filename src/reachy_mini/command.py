@@ -78,17 +78,13 @@ class ReachyMiniCommand:
 
         parsed = json.loads(data)
 
-        head_pose = (
-            np.array(parsed["head_pose"], dtype=np.float64)
-            if "head_pose" in parsed
-            else None
-        )
+        head_pose = parsed.get("head_pose")
+        if head_pose is not None:
+            head_pose = np.array(head_pose, dtype=np.float64)
 
-        antennas_orientation = (
-            np.array(parsed["antennas_orientation"], dtype=np.float64)
-            if "antennas_orientation" in parsed
-            else None
-        )
+        antennas_orientation = parsed.get("antennas_orientation")
+        if antennas_orientation is not None:
+            antennas_orientation = np.array(antennas_orientation, dtype=np.float64)
 
         return ReachyMiniCommand(
             head_pose=head_pose,
