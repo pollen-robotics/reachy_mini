@@ -14,10 +14,10 @@ class AbstractServer(ABC):
         """Stop the server."""
         pass
 
-    @abstractmethod
-    def get_latest_command(self) -> ReachyMiniCommand:
-        """Return the latest pose and antennas command."""
-        pass
+    # @abstractmethod
+    # def get_latest_command(self) -> ReachyMiniCommand:
+    #     """Return the latest pose and antennas command."""
+    #     pass
 
     @abstractmethod
     def command_received_event(self) -> Event:
