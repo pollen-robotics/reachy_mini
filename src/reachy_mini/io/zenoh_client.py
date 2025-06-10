@@ -26,5 +26,5 @@ class ZenohClient(AbstractClient):
         self.session = zenoh.open(c)
         self.cmd_pub = self.session.declare_publisher("reachy_mini/command")
 
-    def send_command(self, command: ReachyMiniCommand):
-        self.cmd_pub.put(command.to_json().encode("utf-8"))
+    def send_command(self, command: str):
+        self.cmd_pub.put(command.encode("utf-8"))

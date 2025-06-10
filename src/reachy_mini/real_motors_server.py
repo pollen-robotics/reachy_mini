@@ -1,18 +1,17 @@
 import argparse
-import time
 import os
+import time
 from pathlib import Path
 
 import numpy as np
 import pygame
 from reachy_mini_motor_controller import ReachyMiniMotorController
+from scipy.spatial.transform import Rotation as R
 
 from reachy_mini import PlacoKinematics
 from reachy_mini.command import ReachyMiniCommand
-from reachy_mini.utils import minimum_jerk
 from reachy_mini.io import Server
-
-from scipy.spatial.transform import Rotation as R
+from reachy_mini.utils import minimum_jerk
 
 ROOT_PATH = Path(os.path.dirname(os.path.abspath(__file__))).parent.parent
 
