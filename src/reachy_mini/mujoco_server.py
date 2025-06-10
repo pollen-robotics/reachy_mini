@@ -8,7 +8,7 @@ import mujoco
 import mujoco.viewer
 
 from reachy_mini import PlacoKinematics
-from reachy_mini import UDPJPEGFrameSender
+# from reachy_mini import UDPJPEGFrameSender
 from reachy_mini.io import Server
 
 import numpy as np
@@ -39,7 +39,7 @@ class MujocoServer:
             f"{ROOT_PATH}/descriptions/reachy_mini/urdf/", sim=True
         )
 
-        self.streamer_udp = UDPJPEGFrameSender()
+        # self.streamer_udp = UDPJPEGFrameSender()
 
         # Start the simulation loop
         self.simulation_loop()
@@ -58,8 +58,8 @@ class MujocoServer:
             while True:
                 start_t = time.time()
 
-                im = self.get_camera()
-                self.streamer_udp.send_frame(im)
+                # im = self.get_camera()
+                # self.streamer_udp.send_frame(im)
 
                 if step % self.decimation == 0:
                     command = self.server.get_latest_command()
