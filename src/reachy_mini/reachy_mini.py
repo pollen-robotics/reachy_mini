@@ -18,9 +18,9 @@ pygame.mixer.init()
 
 
 class ReachyMini:
-    def __init__(self, spawn_daemon=False, use_sim=True) -> None:
+    def __init__(self, localhost_only: bool = True, spawn_daemon: bool = False, use_sim: bool = True) -> None:
         daemon_check(spawn_daemon, use_sim)
-        self.client = Client()
+        self.client = Client(localhost_only)
         self.client.wait_for_connection()
 
         self.head_kinematics = PlacoKinematics(
@@ -79,44 +79,6 @@ class ReachyMini:
             antennas_joint_positions=antennas,
             duration=duration,
         )
-
-    def _goto_joint_positions(
-        self,
-        head_joint_positions: Optional[
-            List[float]
-        ] = None,  # [yaw, stewart_platform x 6] length 7
-        antennas_joint_positions: Optional[
-            List[float]
-        ] = None,  # [left_angle, right_angle] length 2
-        duration: float = 0.5,  # Duration in seconds for the movement
-    ):
-        cur_head, cur_antennas = self._get_current_joint_positions()
-        current = cur_head + cur_antennas
-
-        target = []
-        if head_joint_positions is not None:
-            target.extend(head_joint_positions)
-        else:
-            target.extend(cur_head)
-        if antennas_joint_positions is not None:
-            target.extend(antennas_joint_positions)
-        else:
-            target.extend(cur_antennas)
-
-        current = np.array(current)
-        target = np.array(target)
-        traj = minimum_jerk(current, target, duration)
-
-        t0 = time.time()
-        while time.time() - t0 < duration:
-            t = time.time() - t0
-            angles = traj(t)
-
-            head_joint = angles[:7]  # First 7 angles for the head
-            antennas_joint = angles[7:]
-
-            self._send_joint_command(head_joint, antennas_joint)
-            time.sleep(0.01)
 
     def set_torque(self, on: bool):
         """
@@ -207,3 +169,41 @@ class ReachyMini:
                 "At least one of head_joint_positions or antennas must be provided."
             )
         self.client.send_command(json.dumps(cmd))
+
+    def _goto_joint_positions(
+        self,
+        head_joint_positions: Optional[
+            List[float]
+        ] = None,  # [yaw, stewart_platform x 6] length 7
+        antennas_joint_positions: Optional[
+            List[float]
+        ] = None,  # [left_angle, right_angle] length 2
+        duration: float = 0.5,  # Duration in seconds for the movement
+    ):
+        cur_head, cur_antennas = self._get_current_joint_positions()
+        current = cur_head + cur_antennas
+
+        target = []
+        if head_joint_positions is not None:
+            target.extend(head_joint_positions)
+        else:
+            target.extend(cur_head)
+        if antennas_joint_positions is not None:
+            target.extend(antennas_joint_positions)
+        else:
+            target.extend(cur_antennas)
+
+        current = np.array(current)
+        target = np.array(target)
+        traj = minimum_jerk(current, target, duration)
+
+        t0 = time.time()
+        while time.time() - t0 < duration:
+            t = time.time() - t0
+            angles = traj(t)
+
+            head_joint = angles[:7]  # First 7 angles for the head
+            antennas_joint = angles[7:]
+
+            self._send_joint_command(head_joint, antennas_joint)
+            time.sleep(0.01)
