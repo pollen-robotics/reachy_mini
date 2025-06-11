@@ -1,3 +1,1 @@
-from reachy_mini.placo_kinematics import PlacoKinematics
-from reachy_mini.video_udp import UDPJPEGFrameSender
-from reachy_mini.mujoco_backend import MujocoBackend
+from reachy_mini.reachy_mini import ReachyMini

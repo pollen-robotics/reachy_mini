@@ -73,8 +73,6 @@ class PlacoKinematics:
             "4",
             "5",
             "6",
-            "left_antenna",
-            "right_antenna",
         ]
 
         # IK head task
