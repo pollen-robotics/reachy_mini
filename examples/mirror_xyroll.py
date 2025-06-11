@@ -2,9 +2,7 @@ import cv2 as cv
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 import mediapipe as mp
-
-from reachy_mini.io import Client
-from reachy_mini.command import ReachyMiniCommand
+from reachy_mini import ReachyMini
 
 
 class PoseEstimator:
@@ -47,7 +45,6 @@ class PoseEstimator:
 
 def main(draw=True):
     cap = cv.VideoCapture(0)
-    client = Client()
 
     face_mesh = mp.solutions.face_mesh.FaceMesh(
         min_detection_confidence=0.5,
@@ -56,36 +53,35 @@ def main(draw=True):
     )
     pose_estimator = PoseEstimator()
 
-    while True:
-        success, img = cap.read()
+    with ReachyMini() as reachy_mini:
+        try:
+            while True:
+                success, img = cap.read()
 
-        if not success:
-            print("Failed to capture image")
-            continue
+                if not success:
+                    print("Failed to capture image")
+                    continue
 
-        results = face_mesh.process(img)
-        if results.multi_face_landmarks:
-            face_landmarks = results.multi_face_landmarks[0]
+                results = face_mesh.process(img)
+                if results.multi_face_landmarks:
+                    face_landmarks = results.multi_face_landmarks[0]
 
-            if draw:
-                mp.solutions.drawing_utils.draw_landmarks(
-                    image=img,
-                    landmark_list=face_landmarks,
-                    connections=mp.solutions.face_mesh.FACEMESH_CONTOURS,
-                    landmark_drawing_spec=None,
-                    connection_drawing_spec=mp.solutions.drawing_styles.get_default_face_mesh_contours_style(),
-                )
-            pose = pose_estimator.predict(face_landmarks, img)
+                    if draw:
+                        mp.solutions.drawing_utils.draw_landmarks(
+                            image=img,
+                            landmark_list=face_landmarks,
+                            connections=mp.solutions.face_mesh.FACEMESH_CONTOURS,
+                            landmark_drawing_spec=None,
+                            connection_drawing_spec=mp.solutions.drawing_styles.get_default_face_mesh_contours_style(),
+                        )
+                    pose = pose_estimator.predict(face_landmarks, img)
+                    pose[:3, 3][2] += 0.177  # Set the height of the head
+                    reachy_mini.set_position(head=pose, antennas=np.array([0, 0]))
 
-            client.send_command(
-                ReachyMiniCommand(
-                    head_pose=pose,
-                    offset_zero=True,
-                )
-            )
-
-        cv.imshow("test_window", img)
-        cv.waitKey(1)
+                cv.imshow("test_window", img)
+                cv.waitKey(1)
+        except KeyboardInterrupt:
+            pass
 
 
 if __name__ == "__main__":
