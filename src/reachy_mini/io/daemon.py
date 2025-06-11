@@ -70,7 +70,7 @@ def _main():
     )
     parser.add_argument(
         "--localhost-only",
-        action="store_true",
+        type=bool,
         default=True,
         help="Restrict the server to localhost only (default: True).",
     )

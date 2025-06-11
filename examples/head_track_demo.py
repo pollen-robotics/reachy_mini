@@ -74,7 +74,6 @@ with ReachyMini() as reachy_mini:
                 draw_debug(img, eye_center, roll)
 
                 target = [0, 0]
-                print(eye_center)
                 error = np.array(target) - eye_center  # [-1, 1] [-1, 1]
                 euler_rot += np.array(
                     [kp * roll * 0.1, -kp * 0.1 * error[1], kp * error[0]]

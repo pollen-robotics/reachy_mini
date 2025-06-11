@@ -1,8 +1,11 @@
-import cv2
-import time
+
+try:
+    import mediapipe as mp
+except ImportError:
+    print("mediapipe is not installed. Install it using 'pip install mediapipe'.")
+    exit()
+
 import numpy as np
-from scipy.spatial.transform import Rotation as R
-import mediapipe as mp
 
 
 class HeadTracker:
@@ -72,27 +75,3 @@ class HeadTracker:
             return eye_center, roll
 
         return None, None
-
-
-if __name__ == "__main__":
-    # cap = cv2.VideoCapture(4)
-    cap = cv2.VideoCapture(0)
-    head_tracker = HeadTracker()
-    while True:
-        success, img = cap.read()
-        if not success:
-            break
-
-        eye_center, roll = head_tracker.get_head_position(img)
-        if eye_center is not None:
-            _eye_center = (eye_center.copy() + 1) / 2  # [0, 1]
-            h, w, _ = img.shape
-            cv2.circle(
-                img,
-                (int(_eye_center[0] * w), int(_eye_center[1] * h)),
-                radius=5,
-                color=(0, 0, 255),
-                thickness=-1,
-            )
-        cv2.imshow("test_window", img)
-        cv2.waitKey(1)

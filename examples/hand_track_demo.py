@@ -64,7 +64,6 @@ with ReachyMini() as reachy_mini:
             palm_center = hands[0]
             if palm_center is not None:
                 palm_center[0] = -palm_center[0]  # Flip x-axis
-                print(palm_center)
                 draw_debug(img, palm_center)
 
                 target = [0, 0]
