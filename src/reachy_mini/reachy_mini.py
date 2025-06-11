@@ -10,7 +10,7 @@ from scipy.spatial.transform import Rotation as R
 
 from reachy_mini.io import Client
 from reachy_mini.placo_kinematics import PlacoKinematics
-from reachy_mini.utils import minimum_jerk
+from reachy_mini.utils import daemon_check, minimum_jerk
 
 ROOT_PATH = Path(os.path.dirname(os.path.abspath(__file__))).parent.parent
 
@@ -18,7 +18,8 @@ pygame.mixer.init()
 
 
 class ReachyMini:
-    def __init__(self, localhost_only: bool = True) -> None:
+    def __init__(self, localhost_only: bool = True, spawn_daemon: bool = False, use_sim: bool = True) -> None:
+        daemon_check(spawn_daemon, use_sim)
         self.client = Client(localhost_only)
         self.client.wait_for_connection()
 
