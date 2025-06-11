@@ -17,6 +17,8 @@ class RobotBackend(Backend):
         self.publish_frequency = 50.0
         self.decimation = int(self.control_loop_frequency / self.publish_frequency)
 
+        self._torque_enabled = False
+
     def run(self):
         # self.c.enable_torque()
         # self.wake_up()
@@ -25,14 +27,16 @@ class RobotBackend(Backend):
 
         while True:
             start_t = time.time()
-            if self.head_joint_positions is not None:
-                self.c.set_stewart_platform_position(
-                    # stewart platform angles are inverted in the real robot
-                    list(-np.array(self.head_joint_positions[1:]))
-                )
-                self.c.set_body_rotation(self.head_joint_positions[0])
-            if self.antenna_joint_positions is not None:
-                self.c.set_antennas_positions(self.antenna_joint_positions)
+
+            if self._torque_enabled:
+                if self.head_joint_positions is not None:
+                    self.c.set_stewart_platform_position(
+                        # stewart platform angles are inverted in the real robot
+                        list(-np.array(self.head_joint_positions[1:]))
+                    )
+                    self.c.set_body_rotation(self.head_joint_positions[0])
+                if self.antenna_joint_positions is not None:
+                    self.c.set_antennas_positions(self.antenna_joint_positions)
 
             if step % self.decimation == 0:
                 if self.joint_positions_publisher is not None:
@@ -67,3 +71,5 @@ class RobotBackend(Backend):
             self.c.enable_torque()
         else:
             self.c.disable_torque()
+
+        self._torque_enabled = enabled
