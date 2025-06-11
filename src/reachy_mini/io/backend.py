@@ -6,6 +6,10 @@ class Backend:
         self.head_joint_positions = None  # [yaw, 0, 1, 2, 3, 4, 5]
         self.antenna_joint_positions = None  # [0, 1]
         self.torque_enabled: bool = False
+        self.joint_positions_publisher = None  # Placeholder for a publisher object
+
+    def set_joint_positions_publisher(self, publisher) -> None:
+        self.joint_positions_publisher = publisher
 
     def set_head_joint_positions(self, positions: List[float]) -> None:
         self.head_joint_positions = positions

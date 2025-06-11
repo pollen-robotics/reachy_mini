@@ -47,6 +47,8 @@ class ZenohServer(AbstractServer):
             "reachy_mini/command",
             self._handle_command,
         )
+        self.pub = self.session.declare_publisher("reachy_mini/joint_positions")
+        self.backend.set_joint_positions_publisher(self.pub)
 
     def stop(self):
         self.session.close()
@@ -68,8 +70,8 @@ class ZenohServer(AbstractServer):
                 self.backend.set_torque(command["torque"])
             if "head_joint_positions" in command:
                 self.backend.set_head_joint_positions(command["head_joint_positions"])
-            if "antennas" in command:
+            if "antennas_joint_positions" in command:
                 self.backend.set_antenna_joint_positions(
-                    command["antennas"]
+                    command["antennas_joint_positions"]
                 )
         self._cmd_event.set()

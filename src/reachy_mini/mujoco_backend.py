@@ -5,6 +5,7 @@ from pathlib import Path
 from reachy_mini import PlacoKinematics
 import mujoco.viewer
 import time
+import json
 
 ROOT_PATH = Path(os.path.dirname(os.path.abspath(__file__))).parent.parent
 
@@ -35,7 +36,6 @@ class MujocoBackend(Backend):
 
     def run(self):
         step = 0
-        all_start_t = time.time()
         with mujoco.viewer.launch_passive(
             self.model, self.data, show_left_ui=False, show_right_ui=False
         ) as viewer:
@@ -50,6 +50,16 @@ class MujocoBackend(Backend):
                         self.data.ctrl[:7] = self.head_joint_positions
                     if self.antenna_joint_positions is not None:
                         self.data.ctrl[-2:] = self.antenna_joint_positions
+
+                    if self.joint_positions_publisher is not None:
+                        self.joint_positions_publisher.put(
+                            json.dumps(
+                                {
+                                    "head_joint_positions": self.get_head_joint_positions(),
+                                    "antennas_joint_positions": self.get_antenna_joint_positions(),
+                                }
+                            ).encode("utf-8")
+                        )
 
                 mujoco.mj_step(self.model, self.data)
                 viewer.sync()
