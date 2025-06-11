@@ -3,8 +3,7 @@ import placo
 
 
 class PlacoKinematics:
-    def __init__(self, urdf_path: str, dt: float = 0.02, sim=False):
-        self.sim = sim
+    def __init__(self, urdf_path: str, dt: float = 0.02):
         self.robot = placo.RobotWrapper(urdf_path, placo.Flags.ignore_collisions)
 
         self.ik_solver = placo.KinematicsSolver(self.robot)
@@ -73,8 +72,6 @@ class PlacoKinematics:
             "4",
             "5",
             "6",
-            "left_antenna",
-            "right_antenna",
         ]
 
         # IK head task
@@ -124,14 +121,9 @@ class PlacoKinematics:
             joint = self.robot.get_joint(joint_name)
             joints.append(joint)
 
-        if not self.sim:
-            joints[1:-2] = list(-np.array(joints[1:-2]))
-
         return joints
 
     def fk(self, joints_angles):
-        if not self.sim:
-            joints_angles[1:-2] = list(-np.array(joints_angles[1:-2]))
 
         self.head_joints_task.set_joints(
             {

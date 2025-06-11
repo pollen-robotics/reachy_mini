@@ -1,8 +1,6 @@
 from abc import ABC, abstractmethod
 from threading import Event
 
-from reachy_mini.command import ReachyMiniCommand
-
 
 class AbstractServer(ABC):
     @abstractmethod
@@ -15,11 +13,6 @@ class AbstractServer(ABC):
         pass
 
     @abstractmethod
-    def get_latest_command(self) -> ReachyMiniCommand:
-        """Return the latest pose and antennas command."""
-        pass
-
-    @abstractmethod
     def command_received_event(self) -> Event:
         """Wait for a new command and return it."""
         pass
@@ -27,9 +20,26 @@ class AbstractServer(ABC):
 
 class AbstractClient(ABC):
     @abstractmethod
-    def send_command(self, command: ReachyMiniCommand):
-        """Send a command to the server.
+    def wait_for_connection(self):
+        """Wait for the client to connect to the server."""
+        pass
 
-        :param command: The command to send, containing head pose and antennas orientation.
-        """
+    @abstractmethod
+    def is_connected(self) -> bool:
+        """Check if the client is connected to the server."""
+        pass
+
+    @abstractmethod
+    def disconnect(self):
+        """Disconnect the client from the server."""
+        pass
+
+    @abstractmethod
+    def send_command(self, command: str):
+        """Send a command to the server."""
+        pass
+
+    @abstractmethod
+    def get_current_joints(self) -> tuple[list[float], list[float]]:
+        """Get the current joint positions."""
         pass
