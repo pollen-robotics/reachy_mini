@@ -20,7 +20,7 @@ pygame.mixer.init()
 
 class ReachyMini:
     def __init__(self) -> None:
-        self.client = Client(localhost_only=False)
+        self.client = Client()
         self.client.wait_for_connection()
 
         self.head_kinematics = PlacoKinematics(

@@ -31,8 +31,20 @@ class HeadTracker:
 
         return None, None
 
+    def get_eyes_from_landmarks(self, face_landmarks):
+        left_eye = np.array(
+            (face_landmarks.landmark[33].x, face_landmarks.landmark[33].y)
+        )
+        left_eye = left_eye * 2 - 1
+
+        right_eye = np.array(
+            (face_landmarks.landmark[263].x, face_landmarks.landmark[263].y)
+        )
+        right_eye = right_eye * 2 - 1
+        return left_eye, right_eye
+
     def get_eye_center(self, face_landmarks):
-        left_eye, right_eye = self.get_eyes(face_landmarks)
+        left_eye, right_eye = self.get_eyes_from_landmarks(face_landmarks)
         eye_center = np.mean([left_eye, right_eye], axis=0)
         return eye_center
 

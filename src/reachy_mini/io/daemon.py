@@ -1,3 +1,4 @@
+from threading import local
 from reachy_mini import MujocoBackend, RobotBackend
 from reachy_mini.io import Server
 import argparse
@@ -5,14 +6,18 @@ import argparse
 
 class Daemon:
     def __init__(
-        self, sim: bool = False, serialport: str = "/dev/ttyACM0", scene: str = "empty"
+        self,
+        sim: bool = False,
+        serialport: str = "/dev/ttyACM0",
+        scene: str = "empty",
+        localhost_only: bool = True,
     ):
         if sim:
             self.backend = MujocoBackend(scene=scene)
         else:
             self.backend = RobotBackend(serialport=serialport)
 
-        self.server = Server(self.backend, localhost_only=False)
+        self.server = Server(self.backend, localhost_only=localhost_only)
         self.server.start()
 
     def run(self):
@@ -63,9 +68,20 @@ def _main():
         default="empty",
         help="Name of the scene to load (default: empty)",
     )
+    parser.add_argument(
+        "--localhost-only",
+        action="store_true",
+        default=True,
+        help="Restrict the server to localhost only (default: True).",
+    )
     args = parser.parse_args()
 
-    d = Daemon(sim=args.sim, serialport=args.serialport, scene=args.scene)
+    d = Daemon(
+        sim=args.sim,
+        serialport=args.serialport,
+        scene=args.scene,
+        localhost_only=args.localhost_only,
+    )
     d.run()
 
 
