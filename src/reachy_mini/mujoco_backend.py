@@ -1,4 +1,5 @@
 from reachy_mini.io import Backend
+from reachy_mini.mujoco_utils import get_actuator_names, get_joint_id_from_name, get_joint_addr_from_name
 import mujoco
 import os
 from pathlib import Path
@@ -7,21 +8,6 @@ import time
 import json
 
 ROOT_PATH = Path(os.path.dirname(os.path.abspath(__file__))).parent.parent
-
-
-def get_joint_id_from_name(model, name: str) -> int:
-    """Return the id of a specified joint"""
-    return mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, name)
-
-
-def get_joint_addr_from_name(model, name: str) -> int:
-    """Return the address of a specified joint"""
-    return model.joint(name).qposadr
-
-
-def get_actuator_names(model):
-    actuator_names = [model.actuator(k).name for k in range(0, model.nu)]
-    return actuator_names
 
 
 class MujocoBackend(Backend):
