@@ -1,7 +1,7 @@
 import json
+import threading
 import zenoh
 
-from reachy_mini.command import ReachyMiniCommand
 from reachy_mini.io.abstract import AbstractClient
 
 
@@ -26,5 +26,48 @@ class ZenohClient(AbstractClient):
         self.session = zenoh.open(c)
         self.cmd_pub = self.session.declare_publisher("reachy_mini/command")
 
-    def send_command(self, command: ReachyMiniCommand):
-        self.cmd_pub.put(command.to_json().encode("utf-8"))
+        self.joint_sub = self.session.declare_subscriber(
+            "reachy_mini/joint_positions",
+            self._handle_joint_positions,
+        )
+        self._last_head_joint_positions = None
+        self._last_antennas_joint_positions = None
+        self.keep_alive_event = threading.Event()
+
+    def wait_for_connection(self):
+        while not self.keep_alive_event.wait(timeout=5.0):
+            print(
+                "Waiting for joint positions from the server. "
+                "This is a keep-alive mechanism to ensure the client is connected."
+            )
+
+    def is_connected(self) -> bool:
+        self.keep_alive_event.clear()
+        return self.keep_alive_event.wait(timeout=1.0)
+
+    def disconnect(self):
+        self.session.close()
+
+    def send_command(self, command: str):
+        self.cmd_pub.put(command.encode("utf-8"))
+
+    def _handle_joint_positions(self, sample):
+        """Handle incoming joint positions."""
+        if sample.payload:
+            positions = json.loads(sample.payload.to_string())
+            self._last_head_joint_positions = positions.get("head_joint_positions")
+            self._last_antennas_joint_positions = positions.get(
+                "antennas_joint_positions"
+            )
+            self.keep_alive_event.set()
+
+    def get_current_joints(self) -> tuple[list[float], list[float]]:
+        """Get the current joint positions."""
+        assert (
+            self._last_head_joint_positions is not None
+            and self._last_antennas_joint_positions is not None
+        ), "No joint positions received yet. Wait for the client to connect."
+        return (
+            self._last_head_joint_positions,
+            self._last_antennas_joint_positions,
+        )

@@ -17,30 +17,23 @@ def get_joint_qpos(model, data, joint_name):
     joint_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, joint_name)
     if joint_id == -1:
         raise ValueError(f"Joint '{joint_name}' not found.")
-    
+
     # Get the address of the joint's qpos in the qpos array
     qpos_addr = model.jnt_qposadr[joint_id]
-    
+
     # Get the qpos value
     return data.qpos[qpos_addr]
 
-def get_joints(model, data):
-    joints = []
-    for i in range(6):
-        print(i)
-        joints.append(get_joint_qpos(model, data, str(i+1)))
-    return joints
+def get_joint_id_from_name(model, name: str) -> int:
+    """Return the id of a specified joint"""
+    return mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, name)
 
 
+def get_joint_addr_from_name(model, name: str) -> int:
+    """Return the address of a specified joint"""
+    return model.joint(name).qposadr
 
-def get_joints(model, data):
-    """
-    Gets qpos for joints named "1" through "6".
-    Returns a 1D NumPy array.
-    """
-    num_joints_to_get = 6
-    joint_qpos_values = np.empty(num_joints_to_get, dtype=float)
-    for i in range(num_joints_to_get):
-        joint_name = str(i + 1)
-        joint_qpos_values[i] = get_joint_qpos(model, data, joint_name)
-    return joint_qpos_values
+
+def get_actuator_names(model):
+    actuator_names = [model.actuator(k).name for k in range(0, model.nu)]
+    return actuator_names
