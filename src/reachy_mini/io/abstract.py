@@ -30,6 +30,11 @@ class AbstractClient(ABC):
         pass
 
     @abstractmethod
+    def disconnect(self):
+        """Disconnect the client from the server."""
+        pass
+
+    @abstractmethod
     def send_command(self, command: str):
         """Send a command to the server."""
         pass
