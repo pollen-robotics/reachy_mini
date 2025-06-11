@@ -21,7 +21,11 @@ class Daemon:
         self.server.start()
 
     def run(self):
-        self.backend.run()
+        try:
+            self.backend.run()
+        except:
+            self.server.stop()
+            raise
 
 
 def main():
