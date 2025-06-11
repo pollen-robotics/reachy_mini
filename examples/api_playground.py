@@ -11,6 +11,10 @@ def main():
         t0 = time.time()
         while True:
             t = time.time() - t0
+
+            if t > 10:
+                break
+
             target = np.deg2rad(30) * np.sin(2 * np.pi * 0.5 * t)
 
             yaw = target
