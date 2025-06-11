@@ -5,7 +5,6 @@ class Backend:
     def __init__(self):
         self.head_joint_positions = None  # [yaw, 0, 1, 2, 3, 4, 5]
         self.antenna_joint_positions = None  # [0, 1]
-        self.torque_enabled: bool = False
         self.joint_positions_publisher = None  # Placeholder for a publisher object
 
     def set_joint_positions_publisher(self, publisher) -> None:
@@ -18,7 +17,7 @@ class Backend:
         self.antenna_joint_positions = positions
 
     def set_torque(self, enabled: bool) -> None:
-        self.torque_enabled = enabled
+        raise NotImplementedError("This method should be overridden by subclasses.")
 
     def get_head_joint_positions(self) -> List[float]:
         """

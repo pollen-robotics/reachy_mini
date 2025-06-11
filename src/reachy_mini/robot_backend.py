@@ -61,3 +61,9 @@ class RobotBackend(Backend):
         positions = self.c.read_all_positions()
         antennas = positions[1:3]
         return list(antennas)
+
+    def set_torque(self, enabled: bool) -> None:
+        if enabled:
+            self.c.enable_torque()
+        else:
+            self.c.disable_torque()

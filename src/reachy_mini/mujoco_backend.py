@@ -92,3 +92,6 @@ class MujocoBackend(Backend):
 
     def get_antenna_joint_positions(self):
         return self.data.qpos[self.joint_qpos_addr[-2:]].flatten().tolist()
+
+    def set_torque(self, enabled: bool) -> None:
+        pass
