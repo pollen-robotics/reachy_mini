@@ -1,6 +1,7 @@
 from reachy_mini import MujocoBackend
 from reachy_mini.io import Server
 
+
 class Daemon:
     def __init__(self, sim=False):
         # TODO handle scene selection for mujoco backend
@@ -14,7 +15,6 @@ class Daemon:
 
     def run(self):
         self.backend.run()
-
 
 
 if __name__ == "__main__":
