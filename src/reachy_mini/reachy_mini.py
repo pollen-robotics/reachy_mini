@@ -36,6 +36,7 @@ class ReachyMini:
     def __exit__(self, exc_type, exc_value, traceback):
         self.goto_sleep()
         self.set_torque(on=False)
+        self.client.disconnect()
 
     def set_position(
         self,

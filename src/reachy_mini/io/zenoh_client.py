@@ -45,6 +45,9 @@ class ZenohClient(AbstractClient):
         self.keep_alive_event.clear()
         return self.keep_alive_event.wait(timeout=1.0)
 
+    def disconnect(self):
+        self.session.close()
+
     def send_command(self, command: str):
         self.cmd_pub.put(command.encode("utf-8"))
 
