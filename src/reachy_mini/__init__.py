@@ -1,1 +1,3 @@
 from reachy_mini.reachy_mini import ReachyMini
+from reachy_mini.robot_backend import RobotBackend
+from reachy_mini.mujoco_backend import MujocoBackend

@@ -2,12 +2,26 @@ from reachy_mini.io import Backend
 import mujoco
 import os
 from pathlib import Path
-from reachy_mini import PlacoKinematics
 import mujoco.viewer
 import time
 import json
 
 ROOT_PATH = Path(os.path.dirname(os.path.abspath(__file__))).parent.parent
+
+
+def get_joint_id_from_name(model, name: str) -> int:
+    """Return the id of a specified joint"""
+    return mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, name)
+
+
+def get_joint_addr_from_name(model, name: str) -> int:
+    """Return the address of a specified joint"""
+    return model.joint(name).qposadr
+
+
+def get_actuator_names(model):
+    actuator_names = [model.actuator(k).name for k in range(0, model.nu)]
+    return actuator_names
 
 
 class MujocoBackend(Backend):
@@ -28,9 +42,14 @@ class MujocoBackend(Backend):
             self.model, height=self.camera_size[1], width=self.camera_size[0]
         )
 
-        self.placo_kinematics = PlacoKinematics(
-            f"{ROOT_PATH}/descriptions/reachy_mini/urdf/", sim=True
-        )
+        self.joint_names = get_actuator_names(self.model)
+
+        self.joint_ids = [
+            get_joint_id_from_name(self.model, n) for n in self.joint_names
+        ]
+        self.joint_qpos_addr = [
+            get_joint_addr_from_name(self.model, n) for n in self.joint_names
+        ]
 
         # self.streamer_udp = UDPJPEGFrameSender()
 
@@ -69,7 +88,7 @@ class MujocoBackend(Backend):
                 step += 1
 
     def get_head_joint_positions(self):
-        return self.data.qpos[:7].tolist()
+        return self.data.qpos[self.joint_qpos_addr[:7]].flatten().tolist()
 
     def get_antenna_joint_positions(self):
-        return self.data.qpos[-2:].tolist()
+        return self.data.qpos[self.joint_qpos_addr[-2:]].flatten().tolist()
