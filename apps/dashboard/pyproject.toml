@@ -1,0 +1,24 @@
+[project]
+name = "robot-dashboard"
+version = "0.1.0"
+description = "A dashboard to manage and run robot apps dynamically"
+authors = [
+    { name = "Your Name", email = "your@email.com" }
+]
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "fastapi",
+    "uvicorn[standard]",
+    "jinja2"
+]
+
+[project.scripts]
+reachy-mini-dashboard = "dashboard_api:app"
+
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]

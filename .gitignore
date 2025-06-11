@@ -1,2 +1,3 @@
 __pycache__/
 reachy_mini.egg-info/
+*.egg-info/

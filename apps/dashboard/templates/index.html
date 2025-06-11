@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Robot App Dashboard</title>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+</head>
+<body class="bg-gray-100 text-gray-900">
+  <div class="max-w-3xl mx-auto p-6">
+    <h1 class="text-3xl font-bold mb-6">🤖 Robot App Dashboard</h1>
+
+    <div id="app-list" class="space-y-4">
+      <!-- App entries will be injected here -->
+    </div>
+  </div>
+
+  <script>
+    async function fetchStatus() {
+      const res = await fetch('/api/status');
+      const data = await res.json();
+      console.log('Fetched status:', data);
+
+      renderApps(data.available_apps, data.current);
+    }
+
+    function renderApps(apps, current) {
+      const container = document.getElementById('app-list');
+      container.innerHTML = '';
+      if (apps.length === 0) {
+        container.innerHTML = '<p class="text-gray-600">No apps found.</p>';
+        return;
+      }
+
+      apps.forEach(name => {
+        const isRunning = name === current;
+        console.log(`Rendering app: ${name}, current ${current} isRunning: ${isRunning}`);
+        const item = document.createElement('div');
+        item.className = 'bg-white rounded-lg shadow p-4 flex items-center justify-between';
+
+        const label = document.createElement('span');
+        label.className = 'text-lg font-medium';
+        label.textContent = name;
+        item.appendChild(label);
+
+        if (isRunning) {
+          const status = document.createElement('span');
+          status.className = 'text-green-600 font-semibold mr-4';
+          status.textContent = 'Running';
+          item.appendChild(status);
+
+          const form = document.createElement('form');
+          form.method = 'POST';
+          form.action = '/stop';
+          const button = document.createElement('button');
+          button.type = 'submit';
+          button.className = 'bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded';
+          button.textContent = 'Stop';
+          form.appendChild(button);
+          item.appendChild(form);
+        } else {
+          const form = document.createElement('form');
+          form.method = 'POST';
+          form.action = `/start/${name}`;
+          const button = document.createElement('button');
+          button.type = 'submit';
+          button.className = 'bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded';
+          button.textContent = 'Start';
+          form.appendChild(button);
+          item.appendChild(form);
+        }
+
+        container.appendChild(item);
+      });
+    }
+
+    fetchStatus();
+    setInterval(fetchStatus, 2000);
+  </script>
+</body>
+</html>
