@@ -22,9 +22,9 @@ reachy-mini-daemon --sim
 
 Additional arguments:
 
-````bash
+```bash
 --scene <empty|minimal> : (Default empty). Choose between a basic empty scene, or a scene with a table and some objects.
-``
+```
 
 ### On the real robot
 
