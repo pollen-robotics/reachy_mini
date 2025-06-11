@@ -1,7 +1,7 @@
 import json
 import os
-from pathlib import Path
 import time
+from pathlib import Path
 from typing import List, Optional
 
 import numpy as np
@@ -12,15 +12,14 @@ from reachy_mini.io import Client
 from reachy_mini.placo_kinematics import PlacoKinematics
 from reachy_mini.utils import minimum_jerk
 
-
 ROOT_PATH = Path(os.path.dirname(os.path.abspath(__file__))).parent.parent
 
 pygame.mixer.init()
 
 
 class ReachyMini:
-    def __init__(self) -> None:
-        self.client = Client()
+    def __init__(self, localhost_only: bool = True) -> None:
+        self.client = Client(localhost_only)
         self.client.wait_for_connection()
 
         self.head_kinematics = PlacoKinematics(
@@ -55,9 +54,9 @@ class ReachyMini:
             head_joint_positions = None
 
         if antennas is not None:
-            assert antennas.shape == (2,), (
-                "Antennas must be a 1D array with two elements."
-            )
+            assert antennas.shape == (
+                2,
+            ), "Antennas must be a 1D array with two elements."
             antenna_joint_positions = antennas.tolist()
         else:
             antenna_joint_positions = None
@@ -155,9 +154,9 @@ class ReachyMini:
         cmd = {}
 
         if head_joint_positions is not None:
-            assert len(head_joint_positions) == 7, (
-                f"Head joint positions must have length 7, got {head_joint_positions}."
-            )
+            assert (
+                len(head_joint_positions) == 7
+            ), f"Head joint positions must have length 7, got {head_joint_positions}."
             cmd["head_joint_positions"] = list(head_joint_positions)
 
         if antennas_joint_positions is not None:
