@@ -45,7 +45,7 @@ for motor in motors:
     motor["T_world_motor"] = T_world_motor
     motor["branch_position"] = T_head_branch[:3, 3]
 
-
+# See compute_analytical_kinematics.py 
 def ik_branch(px, py, pz):
     rs = servo_arm_length
     rp = branch_length
