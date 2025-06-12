@@ -4,6 +4,8 @@ import time
 from pathlib import Path
 from typing import List, Optional
 
+os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "hide"
+
 import numpy as np
 import pygame
 from scipy.spatial.transform import Rotation as R
