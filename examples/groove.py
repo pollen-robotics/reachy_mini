@@ -65,14 +65,10 @@ def run_dance_move(reachy_mini: ReachyMini, move_name: str, duration_s: float, b
 
         pos_offset = offsets.get("position_offset", np.zeros(3))
         orient_offset_euler = offsets.get("orientation_offset", np.zeros(3))
+        antennas_command = offsets.get("antennas_offset", np.zeros(2))
 
         # Calculate target pose
         head_pose = create_head_pose(NEUTRAL_HEAD_POSITION + pos_offset, NEUTRAL_HEAD_EULER_ANGLES + orient_offset_euler)
-
-        # Simple antenna movement (example: make them wiggle in opposition)
-        # Antenna values are in rads
-        antenna_val_rad = np.sin(np.pi * musical_beat_time) # Wiggle once per two beats
-        antennas_command = np.array([antenna_val_rad, -antenna_val_rad]) * 0.7 # Scale
         
         reachy_mini.set_position(head=head_pose, antennas=antennas_command)
         
@@ -116,33 +112,27 @@ def parse_arguments():
 # --- Main Script ---
 def main():
     args = parse_arguments()
+    reachy_mini = None
+    neutral_matrix = create_head_pose(NEUTRAL_HEAD_POSITION, NEUTRAL_HEAD_EULER_ANGLES)
 
-    print("Attempting to connect to Reachy Mini...")
     try:
-        with ReachyMini() as reachy_mini:
-            print("Successfully connected to Reachy Mini.")
+        print("Attempting to connect to Reachy Mini...")
+        reachy_mini = ReachyMini()
+        print("Successfully connected to Reachy Mini.")
 
-            # Go to a neutral pose first
-            neutral_matrix = np.eye(4)
-            neutral_matrix[:3, 3] = NEUTRAL_HEAD_POSITION
-            neutral_rot_matrix = R.from_euler('xyz', NEUTRAL_HEAD_EULER_ANGLES, degrees=False).as_matrix()
-            neutral_matrix[:3, :3] = neutral_rot_matrix
+        print("Moving to neutral pose...")
+        reachy_mini.set_position(head=neutral_matrix, antennas=np.array([0.0, 0.0]))
+        time.sleep(0.5)
 
-            print("Moving to neutral pose...")
-            reachy_mini.set_position(head=neutral_matrix, antennas=np.array([0.0, 0.0]))
-            time.sleep(0.5) # Give time to settle
+        if args.all_dances:
+            print(f"Performing all {len(AVAILABLE_DANCE_MOVES)} dances, each for {args.duration:.1f}s.")
+            dance_names = list(AVAILABLE_DANCE_MOVES.keys())
+            for i, move_name in enumerate(dance_names):
+                run_dance_move(reachy_mini, move_name, args.duration, args.bpm, perfect_ending=True)
+        elif args.dance_name:
+            run_dance_move(reachy_mini, args.dance_name, args.duration, args.bpm)
 
-            if args.all_dances:
-                print(f"Performing all {len(AVAILABLE_DANCE_MOVES)} dances, each for {args.duration:.1f}s.")
-                dance_names = list(AVAILABLE_DANCE_MOVES.keys()) # Get a fixed list
-                for i, move_name in enumerate(dance_names):
-                    run_dance_move(reachy_mini, move_name, args.duration, args.bpm, perfect_ending=True)
-            elif args.dance_name:
-                run_dance_move(reachy_mini, args.dance_name, args.duration, args.bpm)
-
-            print("\nDance sequence finished. Returning to neutral pose.")
-            reachy_mini.set_position(head=neutral_matrix, antennas=np.array([0.0, 0.0]))
-            time.sleep(1)
+        print("\nDance sequence finished.")
 
     except KeyboardInterrupt:
         print("\nDance interrupted by user. Exiting.")
@@ -151,8 +141,11 @@ def main():
         import traceback
         traceback.print_exc()
     finally:
-        print("Program ended, moving back to neutral pose...")
-        reachy_mini.set_position(head=neutral_matrix, antennas=np.array([0.0, 0.0]))
+        if reachy_mini is not None:
+            print("Program ended, returning to neutral pose...")
+            reachy_mini.set_position(head=neutral_matrix, antennas=np.array([0.0, 0.0]))
+            time.sleep(1)
+
 
 if __name__ == "__main__":
     main()
