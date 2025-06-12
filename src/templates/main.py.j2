@@ -1,0 +1,31 @@
+import threading
+
+from reachy_mini import ReachyMini, ReachyMiniApp
+
+
+class {{ class_name }}(ReachyMiniApp):
+    def run(self, reachy_mini: ReachyMini, stop_event: threading.Event):
+        # Write your code here
+        # ReachyMini is already initialized and connected
+        # Check the stop_event to gracefully exit the loop
+        # Example:
+        # import time
+        # import numpy as np
+        # from scipy.spatial.transform import Rotation as R
+        #
+        # t0 = time.time()
+        #
+        # while not stop_event.is_set():
+        #     t = time.time() - t0
+        #
+        #     target = np.deg2rad(30) * np.sin(2 * np.pi * 0.5 * t)
+        #
+        #     yaw = target
+        #     head_pose = np.eye(4)
+        #     head_pose[:3, 3] = [0, 0, 0.177]
+        #     head_pose[:3, :3] = R.from_euler("xyz", [0, 0, yaw], degrees=False).as_matrix()
+        #
+        #     reachy_mini.set_position(head=head_pose)
+        #
+        #     time.sleep(0.01)
+        print("Running '{{ app_name }}' a ReachyMiniApp...")
