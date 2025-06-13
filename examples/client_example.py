@@ -1,10 +1,11 @@
 import time
+
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 
 from reachy_mini import ReachyMini
 
-with ReachyMini() as reachy_mini:
+with ReachyMini(spawn_daemon=True, use_sim=False) as reachy_mini:
     try:
         while True:
             pose = np.eye(4)
