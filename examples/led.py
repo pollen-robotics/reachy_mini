@@ -5,7 +5,7 @@ from scipy.spatial.transform import Rotation as R
 
 from reachy_mini import ReachyMini
 
-with ReachyMini("/dev/ttyUSB0") as reachy_mini:
+with ReachyMini(led_ring_port="/dev/ttyUSB0") as reachy_mini:
     try:
         while True:
 
