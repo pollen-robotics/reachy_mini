@@ -1,5 +1,10 @@
-import numpy as np
+import os
+import subprocess
+import time
 from typing import Callable, Optional
+
+import numpy as np
+import psutil
 
 InterpolationFunc = Callable[[float], np.ndarray]
 
@@ -47,3 +52,44 @@ def minimum_jerk(
         return np.sum([c * t**i for i, c in enumerate(coeffs)], axis=0)
 
     return f
+
+
+def daemon_check(spawn_daemon, use_sim):
+    def is_python_script_running(script_name):
+        """Check if a specific Python script is running"""
+        found_script = False
+        simluation_enabled = False
+        for proc in psutil.process_iter(["pid", "name", "cmdline"]):
+            try:
+                for cmd in proc.info["cmdline"]:
+                    if script_name in cmd:
+                        found_script = True
+                    if "--sim" in cmd:
+                        simluation_enabled = True
+                if found_script:
+                    return True, proc.pid, simluation_enabled
+            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                continue
+        return False, None, None
+
+    if spawn_daemon:
+        daemon_is_running, pid, sim = is_python_script_running("reachy-mini-daemon")
+        if daemon_is_running and sim == use_sim:
+            print(
+                f"Reachy Mini daemon is already running (PID: {pid}). "
+                "No need to spawn a new one."
+            )
+            return
+        elif daemon_is_running and sim != use_sim:
+            print(
+                f"Reachy Mini daemon is already running (PID: {pid}) with a different configuration. "
+            )
+            print("Killing the existing daemon...")
+            os.kill(pid, 9)
+            time.sleep(1)
+
+        print("Starting a new daemon...")
+        subprocess.Popen(
+            ["reachy-mini-daemon", "--sim"] if use_sim else ["reachy-mini-daemon"],
+            start_new_session=True,
+        )

@@ -4,13 +4,16 @@ import time
 from pathlib import Path
 from typing import List, Optional
 
+os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "hide"
+
 import numpy as np
 import pygame
 from scipy.spatial.transform import Rotation as R
 
 from reachy_mini.io import Client, NeoPixelRing
 from reachy_mini.placo_kinematics import PlacoKinematics
-from reachy_mini.utils import minimum_jerk
+from reachy_mini.utils import daemon_check, minimum_jerk
+
 
 ROOT_PATH = Path(os.path.dirname(os.path.abspath(__file__))).parent.parent
 
@@ -18,8 +21,10 @@ pygame.mixer.init()
 
 
 class ReachyMini:
-    def __init__(self, led_ring_port=None) -> None:
-        self.client = Client()
+    def __init__(self, localhost_only: bool = True, spawn_daemon: bool = False, use_sim: bool = True, led_ring_port=None) -> None:
+        daemon_check(spawn_daemon, use_sim)
+        self.client = Client(localhost_only)
+
         self.client.wait_for_connection()
 
         if led_ring_port is not None:
