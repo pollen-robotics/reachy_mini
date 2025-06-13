@@ -8,10 +8,8 @@ name = "hello_app"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.12"
-dependencies = [
-    "reachy-mini"
-]
+requires-python = ">=3.10"
+dependencies = ["reachy-mini"]
 
 [project.entry-points."reachy_mini_apps"]
 hello_app = "hello_app.main:HelloApp"
