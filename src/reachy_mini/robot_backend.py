@@ -20,12 +20,10 @@ class RobotBackend(Backend):
         self._torque_enabled = False
 
     def run(self):
-        # self.c.enable_torque()
-        # self.wake_up()
         period = 1.0 / self.control_loop_frequency  # Control loop period in seconds
         step = 0
 
-        while True:
+        while not self.should_stop.is_set():
             start_t = time.time()
 
             if self._torque_enabled:

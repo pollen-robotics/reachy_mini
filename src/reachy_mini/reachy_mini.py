@@ -30,14 +30,9 @@ class ReachyMini:
         )
 
     def __enter__(self):
-        self.set_torque(on=True)
-        self.wake_up()
-
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
-        self.goto_sleep()
-        self.set_torque(on=False)
         self.client.disconnect()
 
     def set_position(

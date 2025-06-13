@@ -44,7 +44,7 @@ class MujocoBackend(Backend):
         with mujoco.viewer.launch_passive(
             self.model, self.data, show_left_ui=False, show_right_ui=False
         ) as viewer:
-            while True:
+            while not self.should_stop.is_set():
                 start_t = time.time()
 
                 # im = self.get_camera()
