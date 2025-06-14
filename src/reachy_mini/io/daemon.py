@@ -1,7 +1,10 @@
-from threading import local
-from reachy_mini import MujocoBackend, RobotBackend
-from reachy_mini.io import Server
+from threading import Thread
+
 import argparse
+import time
+
+from reachy_mini import MujocoBackend, RobotBackend, ReachyMini
+from reachy_mini.io import Server
 
 
 class Daemon:
@@ -11,21 +14,51 @@ class Daemon:
         serialport: str = "/dev/ttyACM0",
         scene: str = "empty",
         localhost_only: bool = True,
+        wake_up_on_start: bool = True,
+        goto_sleep_on_stop: bool = True,
     ):
         if sim:
             self.backend = MujocoBackend(scene=scene)
         else:
             self.backend = RobotBackend(serialport=serialport)
 
+        self.wake_up_on_start = wake_up_on_start
+        self.goto_sleep_on_stop = goto_sleep_on_stop
+
         self.server = Server(self.backend, localhost_only=localhost_only)
         self.server.start()
 
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.server.stop()
+
     def run(self):
+        """Run the daemon."""
+        print("Starting Reachy Mini daemon...")
+        backend_run_thread = Thread(target=self.backend.run)
+        backend_run_thread.start()
+
+        if self.wake_up_on_start:
+            print("Waking up Reachy Mini...")
+            with ReachyMini() as mini:
+                mini.set_torque(on=True)
+                mini.wake_up()
+
         try:
-            self.backend.run()
-        except:
-            self.server.stop()
-            raise
+            while True:
+                time.sleep(1)  # Keep the daemon running
+        except KeyboardInterrupt:
+            print("Daemon interrupted by user.")
+
+        if self.goto_sleep_on_stop:
+            print("Putting Reachy Mini to sleep...")
+            with ReachyMini() as mini:
+                mini.goto_sleep()
+
+        self.backend.should_stop.set()
+        backend_run_thread.join()
+
+        self.server.stop()
+        print("Daemon stopped.")
 
 
 def main():
