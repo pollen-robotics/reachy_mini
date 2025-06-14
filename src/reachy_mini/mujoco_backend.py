@@ -44,6 +44,17 @@ class MujocoBackend(Backend):
         with mujoco.viewer.launch_passive(
             self.model, self.data, show_left_ui=False, show_right_ui=False
         ) as viewer:
+            with viewer.lock():
+                viewer.cam.type      = mujoco.mjtCamera.mjCAMERA_FREE
+                viewer.cam.distance  = 0.8          # ≃ ||pos - lookat||
+                viewer.cam.azimuth   = 160         # degrees
+                viewer.cam.elevation =  -20        # degrees
+                viewer.cam.lookat[:] = [0, 0, 0.15]
+            
+                # force one render with your new camera
+                mujoco.mj_step(self.model, self.data)
+                viewer.sync()
+
             while not self.should_stop.is_set():
                 start_t = time.time()
 
