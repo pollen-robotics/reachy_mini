@@ -34,7 +34,7 @@ class RobotBackend(Backend):
                     )
                     self.c.set_body_rotation(self.head_joint_positions[0])
                 if self.antenna_joint_positions is not None:
-                    self.c.set_antennas_positions(self.antenna_joint_positions)
+                    self.c.set_antennas_positions(list(-np.array(self.antenna_joint_positions)))
 
             if step % self.decimation == 0:
                 if self.joint_positions_publisher is not None:
