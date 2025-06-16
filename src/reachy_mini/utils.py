@@ -154,8 +154,10 @@ def time_trajectory(t:float, method='default'):
                 return ( ((2 * t - 2) ** 2 * ( (c2 + 1) * (2 * t - 2) + c2 ) ) + 2 ) / 2
 
         case _:
-            raise ValueError("Unknown interpolation method")
-        
+            raise ValueError(
+                f"Unknown interpolation method: {method} (possible values: linear, minjerk, ease, cartoon)"
+            )
+
 
 def create_pose(x=0, y=0, z=0, roll=0, pitch=0, yaw=0, mm=False, degrees=True):
     pose = np.eye(4)
