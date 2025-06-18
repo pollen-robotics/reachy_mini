@@ -26,7 +26,9 @@ class NeoPixelRing:
         self.is_connected = threading.Event()
         self.com_thread = threading.Thread(target=self.com_routine, daemon=True)
         self.com_thread.start()
-        self.commands = deque(maxlen=1)  # Buffer for commands
+        self.commands = deque(
+            maxlen=500
+        )  # Buffer for commands -> create threaded animation
         self.commands_lock = threading.Lock()
 
     def wait_for_connection(self):
@@ -34,49 +36,49 @@ class NeoPixelRing:
             print("Waiting for Arduino ring leds to be ready. ")
 
     def com_routine(self):
-        while (
-            True
-        ):  # TODO useless for now, but will handle reconnection with this later
 
-            # Wait for Arduino ready signal
-            while True:
-                if self.serial.in_waiting:
-                    response = self.serial.readline().decode().strip()
-                    if response == "READY":
-                        break
+        # Wait for Arduino ready signal
+        while True:
+            if self.serial.in_waiting:
+                response = self.serial.readline().decode().strip()
+                if response == "READY":
+                    break
 
-            print(f"NeoPixel ring connected on {self.port}")
-            self.is_connected.set()
-            self._running = True
+        print(f"NeoPixel ring connected on {self.port}")
+        self.is_connected.set()
+        self._running = True
 
-            while self._running:
-                # Process commands from queue
-                command_data = None
-                with self.commands_lock:
-                    if self.commands:
-                        command_data = self.commands.popleft()
+        while self._running:
+            # Process commands from queue
+            command_data = None
+            with self.commands_lock:
+                if self.commands:
+                    command_data = self.commands.popleft()
 
-                if command_data:
-                    cmd_type, args = command_data
+            if command_data:
+                cmd_type, args = command_data
 
-                    # Execute the appropriate command
-                    if cmd_type == "set_led_colors":
-                        self._set_led_colors(args)
-                    elif cmd_type == "clear":
-                        self._clear()
-                    elif cmd_type == "get_status":
-                        # For get_status, we might want to store result somewhere
-                        # but for now just execute it
-                        self._get_status()
-                else:
-                    # Shouldnt end up here
-                    time.sleep(0.01)
+                # Execute the appropriate command
+                if cmd_type == "set_led_colors":
+                    self._set_led_colors(*args)
+                elif cmd_type == "clear":
+                    self._clear()
+                elif cmd_type == "get_status":
+                    # For get_status, we might want to store result somewhere
+                    # but for now just execute it
+                    self._get_status()
+            else:
+                # Shouldnt end up here
+                time.sleep(0.01)
+
+            # self.commands_lock.acquire()
 
     def _set_led_colors(
         self,
         colors: Union[
             List[Optional[Tuple[int, int, int]]], Dict[int, Tuple[int, int, int]]
         ],
+        duration: Optional[float] = None,
     ):
         """
         Set LED colors. LEDs with None values keep their previous state.
@@ -97,6 +99,7 @@ class NeoPixelRing:
         if isinstance(colors, dict):
             # Dict format: {led_id: (r,g,b)}
             for led_id, color in colors.items():
+                led_id = int(led_id)  # Ensure led_id is an integer
                 if 0 <= led_id < self.num_pixels and color is not None:
                     r, g, b = color
                     command_parts.append(f"{led_id},{r},{g},{b}")
@@ -116,6 +119,11 @@ class NeoPixelRing:
 
             # Wait for confirmation
             response = self.serial.readline().decode().strip()
+
+            if duration is not None:
+                # If duration is specified, wait for the command to complete
+                time.sleep(duration)
+
             return response == "OK"
 
         return True
@@ -126,29 +134,29 @@ class NeoPixelRing:
         response = self.serial.readline().decode().strip()
         return response == "OK"
 
-    def _get_status(self) -> Dict[int, Tuple[int, int, int]]:
-        """Get current state of all LEDs"""
-        self.serial.write(b"STATUS\n")
-        response = self.serial.readline().decode().strip()
+    # # def _get_status(self) -> Dict[int, Tuple[int, int, int]]:
+    # #     """Get current state of all LEDs"""
+    # #     self.serial.write(b"STATUS\n")
+    # #     response = self.serial.readline().decode().strip()
 
-        if response.startswith("STATUS:"):
-            status_data = response[7:]  # Remove "STATUS:"
-            led_states = {}
+    # #     if response.startswith("STATUS:"):
+    # #         status_data = response[7:]  # Remove "STATUS:"
+    # #         led_states = {}
 
-            for led_info in status_data.split(";"):
-                parts = led_info.split(",")
-                if len(parts) == 4:
-                    led_id = int(parts[0])
-                    r, g, b = int(parts[1]), int(parts[2]), int(parts[3])
-                    led_states[led_id] = (r, g, b)
+    # #         for led_info in status_data.split(";"):
+    # #             parts = led_info.split(",")
+    # #             if len(parts) == 4:
+    # #                 led_id = int(parts[0])
+    # #                 r, g, b = int(parts[1]), int(parts[2]), int(parts[3])
+    # #                 led_states[led_id] = (r, g, b)
 
-            return led_states
+    # #         return led_states
 
-        return {}
+    # #     return {}
 
-    def _close(self):
-        """Close serial connection"""
-        self.serial.close()
+    # def _close(self):
+    #     """Close serial connection"""
+    #     self.serial.close()
 
     # Exposed commands
     def set_led_colors(
@@ -156,22 +164,23 @@ class NeoPixelRing:
         colors: Union[
             List[Optional[Tuple[int, int, int]]], Dict[int, Tuple[int, int, int]]
         ],
+        duration: Optional[float] = None,
     ):
         """Queue a set_led_colors command (non-blocking)"""
         with self.commands_lock:
-            self.commands.append(("set_led_colors", colors))
+            self.commands.append(("set_led_colors", (colors, duration)))
 
     def clear(self):
         """Queue a clear command (non-blocking)"""
         with self.commands_lock:
             self.commands.append(("clear", None))
 
-    def get_status(self):
-        """Queue a get_status command (non-blocking)"""
-        # with self.commands_lock:
-        #     self.commands.append(("get_status", None))
-        # TODO async status or matintain buffer of current status ?
-        return self._get_status()  # Directly return status for now
+    # # def get_status(self):
+    # #     """Queue a get_status command (non-blocking)"""
+    # #     # with self.commands_lock:
+    # #     #     self.commands.append(("get_status", None))
+    # #     # TODO async status or matintain buffer of current status ?
+    # #     return self._get_status()  # Directly return status for now
 
     def close(self):
         """Close serial connection and stop thread"""

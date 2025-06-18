@@ -1,9 +1,8 @@
-from threading import Thread
-
 import argparse
 import time
+from threading import Thread
 
-from reachy_mini import MujocoBackend, RobotBackend, ReachyMini
+from reachy_mini import MujocoBackend, ReachyMini, RobotBackend
 from reachy_mini.io import Server
 
 
@@ -16,11 +15,14 @@ class Daemon:
         localhost_only: bool = True,
         wake_up_on_start: bool = True,
         goto_sleep_on_stop: bool = True,
+        led_ring_port: str = "/dev/ttyUSB0",
     ):
         if sim:
             self.backend = MujocoBackend(scene=scene)
         else:
-            self.backend = RobotBackend(serialport=serialport)
+            self.backend = RobotBackend(
+                serialport=serialport, led_ring_port=led_ring_port
+            )
 
         self.wake_up_on_start = wake_up_on_start
         self.goto_sleep_on_stop = goto_sleep_on_stop
@@ -41,6 +43,7 @@ class Daemon:
             print("Waking up Reachy Mini...")
             with ReachyMini() as mini:
                 mini.set_torque(on=True)
+                # time.sleep(3)  # Allow some time for the motors to wake up
                 mini.wake_up()
 
         try:

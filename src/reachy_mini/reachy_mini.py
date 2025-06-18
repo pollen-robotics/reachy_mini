@@ -2,7 +2,7 @@ import json
 import os
 import time
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional, Tuple, Union
 
 os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "hide"
 
@@ -13,7 +13,6 @@ from scipy.spatial.transform import Rotation as R
 from reachy_mini.io import Client, NeoPixelRing
 from reachy_mini.placo_kinematics import PlacoKinematics
 from reachy_mini.utils import daemon_check, minimum_jerk
-
 
 ROOT_PATH = Path(os.path.dirname(os.path.abspath(__file__))).parent.parent
 
@@ -36,16 +35,16 @@ SLEEP_ANTENNAS_JOINT_POSITIONS = [3.05, -3.05]
 
 
 class ReachyMini:
-    def __init__(self, localhost_only: bool = True, spawn_daemon: bool = False, use_sim: bool = True, led_ring_port=None) -> None:
+    def __init__(
+        self,
+        localhost_only: bool = True,
+        spawn_daemon: bool = False,
+        use_sim: bool = True,
+    ) -> None:
         daemon_check(spawn_daemon, use_sim)
         self.client = Client(localhost_only)
 
         self.client.wait_for_connection()
-
-        if led_ring_port is not None:
-            self.led = NeoPixelRing(led_ring_port)
-        else:
-            self.led = False
 
         self.head_kinematics = PlacoKinematics(
             f"{ROOT_PATH}/descriptions/reachy_mini/urdf/",
@@ -107,11 +106,27 @@ class ReachyMini:
         self.client.send_command(json.dumps({"torque": on}))
 
     def wake_up(self):
+        # Lights up
+        sequence = [0, 1, 11, 2, 10, 3, 9, 4, 8, 5, 7, 6]
+        for i, led in enumerate(sequence):
+            # Blue to white transition as we go
+            intensity = int(50 + (i * 17))  # 50 to 255
+            blue_component = max(100, 255 - i * 15)
+
+            self.set_led_colors(
+                {led: (intensity, intensity, blue_component)}, duration=0.15
+            )
+
+        # Final bright white flash
+        self.set_led_colors({i: (255, 255, 255) for i in range(12)}, duration=0.5)
+
         self.goto_position(INIT_HEAD_POSE, antennas=[0.0, 0.0], duration=2)
         time.sleep(0.1)
 
         # Toudoum
         self.play_sound("proud2.wav")
+
+        self.clear_led()
 
         # Roll 20° to the left
         pose = INIT_HEAD_POSE.copy()
@@ -211,3 +226,33 @@ class ReachyMini:
 
             self._send_joint_command(head_joint, antennas_joint)
             time.sleep(0.01)
+
+    def set_led_colors(
+        self,
+        colors: Union[
+            List[Optional[Tuple[int, int, int]]], Dict[int, Tuple[int, int, int]]
+        ],
+        duration: Optional[float] = None,
+    ):
+        """
+        Set the colors of the LEDs.
+        Args:
+            colors: Either a list of (r,g,b) tuples with None for unchanged LEDs,
+                    or a dict with LED index as key and (r,g,b) tuple as value
+        """
+        cmd = {
+            "set_led_colors": (colors, duration),
+        }
+
+        self.client.send_command(json.dumps(cmd))
+
+    def clear_led(self):
+        """
+        Clear the LED colors.
+        This will set all LEDs to off.
+        """
+        cmd = {
+            "clear_led": None,
+        }
+
+        self.client.send_command(json.dumps(cmd))
