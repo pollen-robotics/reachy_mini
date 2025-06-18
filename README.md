@@ -6,53 +6,53 @@
 pip install -e .
 ```
 
+## Run the reachy mini daemon
 
-> TODO: Outdated. Update the readme
-
-## Usage
-
-Look at the examples
-
-Dance usage:
-
-```
-python groove_test.py --mode dance --dance_name head_tilt_roll --duration 20 --bpm 124
-
-```
-
-## Client / server
-
-To run the mujoco server:
+Additional argument for both simulation and real robot:
 
 ```bash
-reachy-mini-simulation
+--localhost-only : (Default True). If set, the server will only accept connections from localhost. This is useful for debugging.
 ```
 
-To run the robot server (runs on the real robot):
+### In simulation (MuJoCo)
 
 ```bash
-reachy-mini
+reachy-mini-daemon --sim
 ```
 
-To use the client :
+Additional arguments:
+
+```bash
+--scene <empty|minimal> : (Default empty). Choose between a basic empty scene, or a scene with a table and some objects.
+```
+
+### On the real robot
+
+```bash
+reachy-mini-daemon -p <serial_port>
+````
+
+## Run the examples
+
+Once the daemon is running, you can run the examples:
+
+```bash
+python examples/client_example.py
+python examples/sequence.py
+python examples/mirror_xyroll.py
+python examples/head_track_demo.py
+python examples/hand_track_demo.py
+```
+
+## To use the client :
 
 ```python
-from stewart_little_control import Client
-client = Client(ip)
-pose = np.eye(4)
-client.send_pose(pose)
-```
-### Video client
+from reachy_mini import ReachyMini
 
-MuJoCo publishes the camera stream at this address: "udp://@127.0.0.1:5005".
-OpenCV can directly read this stream, as illustrated in the example below:
-
-```python
-python examples/video_client.py
-```
-Any UDP client should be able to read this stream:
-```bash
-ffplay -fflags nobuffer udp://127.0.0.1:5005
+with ReachyMini() as reachy_mini:
+    ...
+    ...
+    reachy_mini.set_position(head=pose, antennas=antennas)s
 ```
 
 With the real robot, the camera is directly accessible with the USB connection, and can be directly read with OpenCV:
@@ -63,16 +63,25 @@ cap = cv2.VideoCapture(0)
 ...
 ```
 
+---------
 
-## Simulation options
+### Video client (TODO (removed from this release for performance reasons))
 
-To choose a different scene:
+MuJoCo publishes the camera stream at this address: "udp://@127.0.0.1:5005".
+OpenCV can directly read this stream, as illustrated in the example below:
+
+```python
+python examples/video_client.py
+```
+
+Any UDP client should be able to read this stream:
 
 ```bash
-reachy-mini-simulation -s minimal
+ffplay -fflags nobuffer udp://127.0.0.1:5005
 ```
 
 ### Simulation model used
+
 https://polyhaven.com/a/food_apple_01
 https://polyhaven.com/a/croissant
 https://polyhaven.com/a/wooden_table_02

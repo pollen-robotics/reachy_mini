@@ -2,16 +2,17 @@ import json
 import threading
 import zenoh
 
-from reachy_mini.command import ReachyMiniCommand
 from reachy_mini.io.abstract import AbstractServer
+from reachy_mini.io import Backend
 
 
 class ZenohServer(AbstractServer):
-    def __init__(self, localhost_only: bool = True):
+    def __init__(self, backend: Backend, localhost_only: bool = True):
         self.localhost_only = localhost_only
+        self.backend = backend
 
         self._lock = threading.Lock()
-        self._last_command = ReachyMiniCommand.default()
+        # self._last_command = ReachyMiniCommand.default()
         self._cmd_event = threading.Event()
 
     def start(self):
@@ -46,14 +47,16 @@ class ZenohServer(AbstractServer):
             "reachy_mini/command",
             self._handle_command,
         )
+        self.pub = self.session.declare_publisher("reachy_mini/joint_positions")
+        self.backend.set_joint_positions_publisher(self.pub)
 
     def stop(self):
         self.session.close()
 
-    def get_latest_command(self) -> ReachyMiniCommand:
-        """Return the latest pose and antennas command."""
-        with self._lock:
-            return self._last_command
+    # def get_latest_command(self) -> ReachyMiniCommand:
+    #     """Return the latest pose and antennas command."""
+    #     with self._lock:
+    #         return self._last_command
 
     def command_received_event(self) -> threading.Event:
         """Wait for a new command and return it."""
@@ -61,7 +64,14 @@ class ZenohServer(AbstractServer):
 
     def _handle_command(self, sample: zenoh.Sample):
         data = sample.payload.to_string()
-        new_cmd = ReachyMiniCommand.from_json(data)
+        command = json.loads(data)
         with self._lock:
-            self._last_command.update_with(new_cmd)
+            if "torque" in command:
+                self.backend.set_torque(command["torque"])
+            if "head_joint_positions" in command:
+                self.backend.set_head_joint_positions(command["head_joint_positions"])
+            if "antennas_joint_positions" in command:
+                self.backend.set_antenna_joint_positions(
+                    command["antennas_joint_positions"]
+                )
         self._cmd_event.set()

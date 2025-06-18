@@ -8,7 +8,7 @@ from reachy_mini.mujoco_utils import get_joint_qpos
 ROOT_PATH = Path(os.path.dirname(os.path.abspath(__file__))).parent
 
 model = mujoco.MjModel.from_xml_path(
-    f"{ROOT_PATH}/descriptions/reachy_mini/mjcf/scene.xml"
+    f"{ROOT_PATH}/descriptions/reachy_mini/mjcf/scenes/empty.xml"
 )
 data = mujoco.MjData(model)
 model.opt.timestep = 0.002  # s, simulation timestep, 500hz

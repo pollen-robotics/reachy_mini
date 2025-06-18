@@ -1,8 +1,7 @@
 from hand_tracker import HandTracker
 import cv2
 import time
-
-from reachy_mini import Client
+from reachy_mini import ReachyMini
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 
@@ -45,39 +44,42 @@ def draw_debug(img, palm_center):
 cap = cv2.VideoCapture(4)
 # cap = cv2.VideoCapture(0)
 
-client = Client()
 hand_tracker = HandTracker()
 pose = np.eye(4)
-pose[:3, 3][2] = 0.177  # Set the height of the head
 euler_rot = np.array([0.0, 0.0, 0.0])
 kp = 0.3
 t0 = time.time()
-while True:
-    t = time.time() - t0
-    left_antenna = smooth_movement(t)
-    right_antenna = smooth_movement(t + 200)
+with ReachyMini() as reachy_mini:
+    try:
+        while True:
+            t = time.time() - t0
+            left_antenna = smooth_movement(t)
+            right_antenna = smooth_movement(t + 200)
 
-    success, img = cap.read()
+            success, img = cap.read()
+            hands = hand_tracker.get_hands_positions(img)
+            if hands is None:
+                continue
+            palm_center = hands[0]
+            if palm_center is not None:
+                palm_center[0] = -palm_center[0]  # Flip x-axis
+                draw_debug(img, palm_center)
 
-    palm_center = hand_tracker.get_hand_position(img)
-    if palm_center is not None:
-        palm_center[0] = -palm_center[0]  # Flip x-axis
-        print(palm_center)
-        draw_debug(img, palm_center)
+                target = [0, 0]
+                error = np.array(target) - palm_center  # [-1, 1] [-1, 1]
+                euler_rot += np.array([0.0, -kp * 0.1 * error[1], kp * error[0]])
 
-        target = [0, 0]
-        error = np.array(target) - palm_center  # [-1, 1] [-1, 1]
-        euler_rot += np.array([0.0, -kp * 0.1 * error[1], kp * error[0]])
+                rot_mat = R.from_euler("xyz", euler_rot, degrees=False).as_matrix()
+                pose[:3, :3] = rot_mat
+                pose[:3, 3][2] = (
+                    error[1] * 0.04
+                )  # Adjust height based on vertical error
 
-        rot_mat = R.from_euler("xyz", euler_rot, degrees=False).as_matrix()
-        pose[:3, :3] = rot_mat
-        pose[:3, 3][2] = (
-            error[1] * 0.04 + 0.177
-        )  # Adjust height based on vertical error
+                # antennas = [left_antenna, right_antenna]
+                antennas = np.array([0, 0])
+                reachy_mini.set_position(head=pose, antennas=antennas)
+            cv2.imshow("test_window", img)
 
-        # antennas = [left_antenna, right_antenna]
-        antennas = [0, 0]
-        client.send_pose(pose, antennas=antennas)
-    cv2.imshow("test_window", img)
-
-    cv2.waitKey(1)
+            cv2.waitKey(1)
+    except KeyboardInterrupt:
+        pass
