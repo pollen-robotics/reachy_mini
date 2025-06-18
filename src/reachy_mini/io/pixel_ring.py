@@ -154,10 +154,6 @@ class NeoPixelRing:
 
     # #     return {}
 
-    # def _close(self):
-    #     """Close serial connection"""
-    #     self.serial.close()
-
     # Exposed commands
     def set_led_colors(
         self,
@@ -187,6 +183,7 @@ class NeoPixelRing:
         self._running = False
         if self.com_thread.is_alive():
             self.com_thread.join(timeout=2.0)
+        self._clear()  # Clear LEDs before closing
         self.serial.close()
 
 
