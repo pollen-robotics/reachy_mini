@@ -74,9 +74,11 @@ class PlacoKinematics:
             "6",
         ]
 
+        self.head_z_offset = 0.177  # offset for the head height
+
         # IK head task
         self.head_starting_pose = np.eye(4)
-        self.head_starting_pose[:3, 3][2] = 0.177
+        self.head_starting_pose[:3, 3][2] = self.head_z_offset
         self.head_frame = self.ik_solver.add_frame_task("head", self.head_starting_pose)
         self.head_frame.configure("head", "soft", 1.0, 1.0)
 
@@ -111,7 +113,9 @@ class PlacoKinematics:
         self.fk_solver.dt = dt
 
     def ik(self, pose):
-        self.head_frame.T_world_frame = pose
+        _pose = pose.copy()
+        _pose[:3, 3][2] += self.head_z_offset  # offset the height of the head
+        self.head_frame.T_world_frame = _pose
         for _ in range(10):
             self.ik_solver.solve(True)
             self.robot.update_kinematics()
@@ -124,7 +128,6 @@ class PlacoKinematics:
         return joints
 
     def fk(self, joints_angles):
-
         self.head_joints_task.set_joints(
             {
                 "all_yaw": joints_angles[0],
@@ -142,4 +145,5 @@ class PlacoKinematics:
             self.robot.update_kinematics()
 
         T_world_head = self.robot.get_T_world_frame("head")
+        T_world_head[:3, 3][2] -= self.head_z_offset  # offset the height of the head
         return T_world_head

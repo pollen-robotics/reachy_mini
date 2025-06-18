@@ -20,7 +20,6 @@ pygame.mixer.init()
 
 # Behavior definitions
 INIT_HEAD_POSE = np.eye(4)
-INIT_HEAD_POSE[2, 3] = 0.177
 
 SLEEP_HEAD_JOINT_POSITIONS = [
     0.0,

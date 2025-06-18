@@ -56,7 +56,6 @@ cap = cv2.VideoCapture(4)
 
 head_tracker = HeadTracker()
 pose = np.eye(4)
-pose[:3, 3][2] = 0.177  # Set the height of the head
 euler_rot = np.array([0.0, 0.0, 0.0])
 kp = 0.3
 t0 = time.time()
@@ -82,7 +81,7 @@ with ReachyMini() as reachy_mini:
                 rot_mat = R.from_euler("xyz", euler_rot, degrees=False).as_matrix()
                 pose[:3, :3] = rot_mat
                 pose[:3, 3][2] = (
-                    error[1] * 0.04 + 0.177
+                    error[1] * 0.04
                 )  # Adjust height based on vertical error
 
                 antennas = [left_antenna, right_antenna]
