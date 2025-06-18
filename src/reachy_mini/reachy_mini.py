@@ -90,12 +90,12 @@ class ReachyMini:
 
     sleep_head_joint_positions = [
         0.0,
-        0.849,
-        -1.292,
-        0.472,
-        0.047,
-        1.31,
-        -0.876,
+        -0.849,
+        1.292,
+        -0.472,
+        -0.047,
+        -1.31,
+        0.876,
     ]
     sleep_antennas_joint_positions = [3.05, -3.05]
 

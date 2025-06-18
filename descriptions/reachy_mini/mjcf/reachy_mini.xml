@@ -135,19 +135,19 @@
         <!-- Part pp01065_stewart_side_plate_3 -->
         <geom type="mesh" class="visual" pos="-6.20587e-17 -1.04083e-17 -0.00705" quat="5.09617e-17 0.866025 -0.5 9.50505e-17" mesh="pp01065_stewart_side_plate" material="pp01065_stewart_side_plate_material"/>
         <!-- Link pp01062_stewart_arm -->
-        <body name="pp01062_stewart_arm" pos="0.0317603 0.0301725 -0.03705" quat="0.353553 0.353553 0.612372 0.612372">
+        <body name="pp01062_stewart_arm" pos="0.0317603 0.0301725 -0.03705" quat="0.353553 -0.353553 -0.612372 0.612372">
           <!-- Joint from dc15_a01_case_b_dummy to pp01062_stewart_arm -->
-          <joint axis="0 0 1" name="1" type="hinge" range="-1.3962634015954627 1.3962634015954645" class="chosen_actuator"/>
-          <inertial pos="0.0181787 -2.77556e-17 -0.00350559" mass="0.00272417" fullinertia="4.89963e-08 6.75761e-07 6.91798e-07 2.63422e-25 7.04811e-08 2.66043e-25"/>
+          <joint axis="0 0 1" name="1" type="hinge" range="-1.3962634015954645 1.3962634015954627" class="chosen_actuator"/>
+          <inertial pos="0.0181787 2.77556e-17 0.00350559" mass="0.00272417" fullinertia="4.89963e-08 6.75761e-07 6.91798e-07 -2.63422e-25 -7.04811e-08 2.66043e-25"/>
           <!-- Part ball -->
-          <geom type="mesh" class="visual" pos="0.038 -2.77556e-17 -0.00768" quat="1 2.98492e-17 5.55112e-17 1.94289e-16" mesh="ball" material="ball_material"/>
+          <geom type="mesh" class="visual" pos="0.038 2.77556e-17 0.00768" quat="0 1 0 0" mesh="ball" material="ball_material"/>
           <!-- Part pp01062_stewart_arm -->
-          <geom type="mesh" class="visual" pos="-0.01025 -0.03 -0.0425915" quat="0.707107 -0.707107 1.11022e-16 8.49837e-17" mesh="pp01062_stewart_arm" material="pp01062_stewart_arm_material"/>
+          <geom type="mesh" class="visual" pos="-0.01025 0.03 0.0425915" quat="0.707107 0.707107 -1.11022e-16 8.49837e-17" mesh="pp01062_stewart_arm" material="pp01062_stewart_arm_material"/>
           <!-- Link shape -->
-          <body name="shape" pos="0.038 -2.77556e-17 -0.00768" quat="0.855096 0.0274567 0.00153082 0.517739">
+          <body name="shape" pos="0.038 2.77556e-17 0.00768" quat="0.0274567 -0.855096 0.517739 -0.00153082">
             <!-- Joint from pp01062_stewart_arm to shape -->
             <joint axis="0 0 1" name="passive_1" type="ball" class="chosen_actuator"/>
-            <inertial pos="-0.0450002 -2.61583e-17 -4.42687e-17" mass="0.00355525" fullinertia="1.7732e-08 3.06049e-06 3.0658e-06 3.77366e-22 -8.93106e-21 -1.00365e-21"/>
+            <inertial pos="-0.0450002 -2.17877e-17 -4.85069e-17" mass="0.00355525" fullinertia="1.7732e-08 3.06049e-06 3.0658e-06 3.75919e-22 -8.93073e-21 -1.00288e-21"/>
             <!-- Part shape -->
             <geom type="mesh" class="visual" pos="6.93889e-18 -1.38778e-17 0" quat="1 1.53003e-17 -1.11022e-16 -1.249e-16" mesh="shape" material="shape_material"/>
             <!-- Part pp00xxx_stewart_rod -->
@@ -159,19 +159,19 @@
           </body>
         </body>
         <!-- Link pp01062_stewart_arm_2 -->
-        <body name="pp01062_stewart_arm_2" pos="0.0420103 0.012419 -0.03705" quat="0.612372 -0.612372 0.353553 -0.353553">
+        <body name="pp01062_stewart_arm_2" pos="0.0420103 0.012419 -0.03705" quat="0.612372 0.612372 -0.353553 -0.353553">
           <!-- Joint from dc15_a01_case_b_dummy to pp01062_stewart_arm_2 -->
-          <joint axis="0 0 1" name="2" type="hinge" range="-1.396263401595461 1.3962634015954662" class="chosen_actuator"/>
-          <inertial pos="0.0181787 -2.34834e-18 -0.00350559" mass="0.00272417" fullinertia="4.89963e-08 6.75761e-07 6.91798e-07 -2.48336e-22 7.04811e-08 5.24015e-23"/>
+          <joint axis="0 0 1" name="2" type="hinge" range="-1.3962634015954662 1.396263401595461" class="chosen_actuator"/>
+          <inertial pos="0.0181787 2.34834e-18 0.00350559" mass="0.00272417" fullinertia="4.89963e-08 6.75761e-07 6.91798e-07 2.48336e-22 -7.04811e-08 5.24015e-23"/>
           <!-- Part ball_2 -->
-          <geom type="mesh" class="visual" pos="0.038 1.38778e-17 -0.00768" quat="6.245e-17 1.49487e-17 -2.22045e-16 -1" mesh="ball" material="ball_material"/>
+          <geom type="mesh" class="visual" pos="0.038 -1.38778e-17 0.00768" quat="1.66533e-16 -2.4037e-17 -1 -1.11022e-16" mesh="ball" material="ball_material"/>
           <!-- Part pp01062_stewart_arm_2 -->
-          <geom type="mesh" class="visual" pos="-0.01025 -0.03 -0.0425915" quat="0.707107 -0.707107 1.11022e-16 8.24487e-17" mesh="pp01062_stewart_arm" material="pp01062_stewart_arm_material"/>
+          <geom type="mesh" class="visual" pos="-0.01025 0.03 0.0425915" quat="0.707107 0.707107 -1.11022e-16 8.24487e-17" mesh="pp01062_stewart_arm" material="pp01062_stewart_arm_material"/>
           <!-- Link shape_2 -->
-          <body name="shape_2" pos="0.038 8.32667e-17 -0.00768" quat="0.855436 0.0131699 -0.0230506 -0.517228">
+          <body name="shape_2" pos="0.038 -8.32667e-17 0.00768" quat="0.0131699 -0.855436 -0.517228 0.0230506">
             <!-- Joint from pp01062_stewart_arm_2 to shape_2 -->
             <joint axis="0 0 1" name="passive_2" type="ball" class="chosen_actuator"/>
-            <inertial pos="-0.0450002 -1.44119e-17 -4.32219e-18" mass="0.00355525" fullinertia="1.7732e-08 3.06049e-06 3.0658e-06 9.05575e-21 -9.31158e-21 -1.13252e-20"/>
+            <inertial pos="-0.0450002 -1.00413e-17 -8.56034e-18" mass="0.00355525" fullinertia="1.7732e-08 3.06049e-06 3.0658e-06 9.05427e-21 -9.31125e-21 -1.13245e-20"/>
             <!-- Part shape_3 -->
             <geom type="mesh" class="visual" pos="-0.0900003 -2.77556e-17 2.08167e-17" quat="2.22045e-16 2.94872e-15 1 3.85803e-15" mesh="shape" material="shape_material"/>
             <!-- Part shape_4 -->
@@ -183,19 +183,19 @@
           </body>
         </body>
         <!-- Link pp01062_stewart_arm_3 -->
-        <body name="pp01062_stewart_arm_3" pos="0.01025 -0.0425915 -0.03705" quat="0.707107 0.707107 -1.11022e-16 2.1494e-16">
+        <body name="pp01062_stewart_arm_3" pos="0.01025 -0.0425915 -0.03705" quat="0.707107 -0.707107 -1.11022e-16 1.84877e-17">
           <!-- Joint from dc15_a01_case_b_dummy to pp01062_stewart_arm_3 -->
-          <joint axis="0 0 1" name="3" type="hinge" range="-1.3962634015954627 1.3962634015954645" class="chosen_actuator"/>
-          <inertial pos="0.0181787 1.87132e-19 -0.00350559" mass="0.00272417" fullinertia="4.89963e-08 6.75761e-07 6.91798e-07 -9.85709e-24 7.04811e-08 -1.47314e-24"/>
+          <joint axis="0 0 1" name="3" type="hinge" range="-1.3962634015954645 1.3962634015954627" class="chosen_actuator"/>
+          <inertial pos="0.0181787 -1.87132e-19 0.00350559" mass="0.00272417" fullinertia="4.89963e-08 6.75761e-07 6.91798e-07 9.85709e-24 -7.04811e-08 -1.47314e-24"/>
           <!-- Part pp01062_stewart_arm_3 -->
-          <geom type="mesh" class="visual" pos="-0.01025 -0.03 -0.0425915" quat="0.707107 -0.707107 1.11022e-16 1.0222e-16" mesh="pp01062_stewart_arm" material="pp01062_stewart_arm_material"/>
+          <geom type="mesh" class="visual" pos="-0.01025 0.03 0.0425915" quat="0.707107 0.707107 -1.11022e-16 1.0222e-16" mesh="pp01062_stewart_arm" material="pp01062_stewart_arm_material"/>
           <!-- Part ball_3 -->
-          <geom type="mesh" class="visual" pos="0.038 0 -0.00768" quat="0.707107 9.35637e-17 -2.77556e-17 0.707107" mesh="ball" material="ball_material"/>
+          <geom type="mesh" class="visual" pos="0.038 0 0.00768" quat="1.45894e-16 -0.707107 0.707107 5.21114e-18" mesh="ball" material="ball_material"/>
           <!-- Link shape_3 -->
-          <body name="shape_3" pos="0.038 -4.16334e-17 -0.00768" quat="0.027647 0.85509 0.516764 0.0318018">
+          <body name="shape_3" pos="0.038 4.16334e-17 0.00768" quat="0.85509 -0.027647 0.0318018 -0.516764">
             <!-- Joint from pp01062_stewart_arm_3 to shape_3 -->
             <joint axis="0 0 1" name="passive_3" type="ball" class="chosen_actuator"/>
-            <inertial pos="-0.0450002 -9.16259e-18 4.54167e-17" mass="0.00355525" fullinertia="1.7732e-08 3.06049e-06 3.0658e-06 9.82292e-22 -7.34956e-21 1.45064e-21"/>
+            <inertial pos="-0.0450002 -4.79199e-18 4.11785e-17" mass="0.00355525" fullinertia="1.7732e-08 3.06049e-06 3.0658e-06 9.80819e-22 -7.34923e-21 1.45141e-21"/>
             <!-- Part shape_5 -->
             <geom type="mesh" class="visual" pos="-0.0900003 0 1.31839e-16" quat="4.16334e-16 4.4964e-17 1 -2.22045e-16" mesh="shape" material="shape_material"/>
             <!-- Part shape_6 -->
@@ -207,19 +207,19 @@
           </body>
         </body>
         <!-- Link pp01062_stewart_arm_4 -->
-        <body name="pp01062_stewart_arm_4" pos="-0.01025 -0.0425915 -0.03705" quat="1.55431e-15 5.56229e-16 -0.707107 0.707107">
+        <body name="pp01062_stewart_arm_4" pos="-0.01025 -0.0425915 -0.03705" quat="4.44089e-16 -1.5721e-15 -0.707107 -0.707107">
           <!-- Joint from dc15_a01_case_b_dummy to pp01062_stewart_arm_4 -->
-          <joint axis="0 0 1" name="4" type="hinge" range="-1.396263401595444 1.3962634015954831" class="chosen_actuator"/>
-          <inertial pos="0.0181787 5.24899e-19 -0.00350559" mass="0.00272417" fullinertia="4.89963e-08 6.75761e-07 6.91798e-07 -4.36416e-22 7.04811e-08 3.66848e-23"/>
+          <joint axis="0 0 1" name="4" type="hinge" range="-1.3962634015954831 1.396263401595444" class="chosen_actuator"/>
+          <inertial pos="0.0181787 -5.24899e-19 0.00350559" mass="0.00272417" fullinertia="4.89963e-08 6.75761e-07 6.91798e-07 4.36416e-22 -7.04811e-08 3.66848e-23"/>
           <!-- Part ball_4 -->
-          <geom type="mesh" class="visual" pos="0.038 2.77556e-17 -0.00768" quat="0.707107 4.55571e-15 9.99201e-16 -0.707107" mesh="ball" material="ball_material"/>
+          <geom type="mesh" class="visual" pos="0.038 -2.77556e-17 0.00768" quat="4.51946e-15 -0.707107 -0.707107 -1.08859e-15" mesh="ball" material="ball_material"/>
           <!-- Part pp01062_stewart_arm_4 -->
-          <geom type="mesh" class="visual" pos="-0.01025 -0.03 -0.0425915" quat="0.707107 -0.707107 1.11022e-16 1.0222e-16" mesh="pp01062_stewart_arm" material="pp01062_stewart_arm_material"/>
+          <geom type="mesh" class="visual" pos="-0.01025 0.03 0.0425915" quat="0.707107 0.707107 -1.11022e-16 1.0222e-16" mesh="pp01062_stewart_arm" material="pp01062_stewart_arm_material"/>
           <!-- Link shape_4 -->
-          <body name="shape_4" pos="0.038 2.77556e-17 -0.00768" quat="0.0439152 -0.854409 0.516065 -0.0416306">
+          <body name="shape_4" pos="0.038 -2.77556e-17 0.00768" quat="0.854409 0.0439152 0.0416306 0.516065">
             <!-- Joint from pp01062_stewart_arm_4 to shape_4 -->
             <joint axis="0 0 1" name="passive_4" type="ball" class="chosen_actuator"/>
-            <inertial pos="-0.0450002 1.00076e-16 -7.12286e-18" mass="0.00355525" fullinertia="1.7732e-08 3.06049e-06 3.0658e-06 6.31902e-21 -5.9445e-21 1.35897e-20"/>
+            <inertial pos="-0.0450002 1.04447e-16 -1.1361e-17" mass="0.00355525" fullinertia="1.7732e-08 3.06049e-06 3.0658e-06 6.31755e-21 -5.94417e-21 1.35905e-20"/>
             <!-- Part shape_7 -->
             <geom type="mesh" class="visual" pos="-0.0900003 2.08167e-16 3.46945e-18" quat="3.33067e-16 0 -1 1.66533e-16" mesh="shape" material="shape_material"/>
             <!-- Part pp00xxx_stewart_rod_4 -->
@@ -231,19 +231,19 @@
           </body>
         </body>
         <!-- Link pp01062_stewart_arm_5 -->
-        <body name="pp01062_stewart_arm_5" pos="-0.0420103 0.012419 -0.03705" quat="0.353553 0.353553 -0.612372 -0.612372">
+        <body name="pp01062_stewart_arm_5" pos="-0.0420103 0.012419 -0.03705" quat="0.353553 -0.353553 0.612372 -0.612372">
           <!-- Joint from dc15_a01_case_b_dummy to pp01062_stewart_arm_5 -->
-          <joint axis="0 0 1" name="5" type="hinge" range="-1.396263401595461 1.3962634015954662" class="chosen_actuator"/>
-          <inertial pos="0.0181787 -3.11301e-35 -0.00350559" mass="0.00272417" fullinertia="4.89963e-08 6.75761e-07 6.91798e-07 4.49492e-25 7.04811e-08 -1.26741e-25"/>
+          <joint axis="0 0 1" name="5" type="hinge" range="-1.3962634015954662 1.396263401595461" class="chosen_actuator"/>
+          <inertial pos="0.0181787 3.11301e-35 0.00350559" mass="0.00272417" fullinertia="4.89963e-08 6.75761e-07 6.91798e-07 -4.49492e-25 -7.04811e-08 -1.26741e-25"/>
           <!-- Part pp01062_stewart_arm_5 -->
-          <geom type="mesh" class="visual" pos="-0.01025 -0.03 -0.0425915" quat="0.707107 -0.707107 1.11022e-16 9.55014e-17" mesh="pp01062_stewart_arm" material="pp01062_stewart_arm_material"/>
+          <geom type="mesh" class="visual" pos="-0.01025 0.03 0.0425915" quat="0.707107 0.707107 -1.11022e-16 9.55014e-17" mesh="pp01062_stewart_arm" material="pp01062_stewart_arm_material"/>
           <!-- Part ball_5 -->
-          <geom type="mesh" class="visual" pos="0.038 0 -0.00768" quat="5.5728e-17 0 4.51028e-17 -1" mesh="ball" material="ball_material"/>
+          <geom type="mesh" class="visual" pos="0.038 0 0.00768" quat="1.38778e-17 5.55459e-17 1 3.33067e-16" mesh="ball" material="ball_material"/>
           <!-- Link pp00xxx_stewart_rod -->
-          <body name="pp00xxx_stewart_rod" pos="0.038 -1.38778e-17 -0.00768" quat="0.850701 0.0908372 0.0399478 0.516198">
+          <body name="pp00xxx_stewart_rod" pos="0.038 1.38778e-17 0.00768" quat="0.0908372 -0.850701 0.516198 -0.0399478">
             <!-- Joint from pp01062_stewart_arm_5 to pp00xxx_stewart_rod -->
             <joint axis="0 0 1" name="passive_5" type="ball" class="chosen_actuator"/>
-            <inertial pos="-0.0450002 7.00961e-17 -1.14016e-17" mass="0.00355525" fullinertia="1.7732e-08 3.06049e-06 3.0658e-06 4.55615e-21 -4.43854e-21 1.23006e-21"/>
+            <inertial pos="-0.0450002 7.44667e-17 -1.14016e-17" mass="0.00355525" fullinertia="1.7732e-08 3.06049e-06 3.0658e-06 4.55471e-21 -4.43821e-21 1.23083e-21"/>
             <!-- Part shape_9 -->
             <geom type="mesh" class="visual" pos="0 0 0" quat="1 0 -2.22045e-16 0" mesh="shape" material="shape_material"/>
             <!-- Part pp00xxx_stewart_rod_5 -->
@@ -255,19 +255,19 @@
           </body>
         </body>
         <!-- Link pp01062_stewart_arm_6 -->
-        <body name="pp01062_stewart_arm_6" pos="-0.0317603 0.0301725 -0.03705" quat="0.612372 -0.612372 -0.353553 0.353553">
+        <body name="pp01062_stewart_arm_6" pos="-0.0317603 0.0301725 -0.03705" quat="0.612372 0.612372 0.353553 0.353553">
           <!-- Joint from dc15_a01_case_b_dummy to pp01062_stewart_arm_6 -->
           <joint axis="0 0 1" name="6" type="hinge" range="-1.3962634015954636 1.3962634015954636" class="chosen_actuator"/>
-          <inertial pos="0.0181787 1.69382e-17 -0.00350559" mass="0.00272417" fullinertia="4.89963e-08 6.75761e-07 6.91798e-07 -1.6528e-22 7.04811e-08 3.48685e-23"/>
+          <inertial pos="0.0181787 -1.69382e-17 0.00350559" mass="0.00272417" fullinertia="4.89963e-08 6.75761e-07 6.91798e-07 1.6528e-22 -7.04811e-08 3.48685e-23"/>
           <!-- Part pp01062_stewart_arm_6 -->
-          <geom type="mesh" class="visual" pos="-0.01025 -0.03 -0.0425915" quat="0.707107 -0.707107 1.11022e-16 1.00194e-16" mesh="pp01062_stewart_arm" material="pp01062_stewart_arm_material"/>
+          <geom type="mesh" class="visual" pos="-0.01025 0.03 0.0425915" quat="0.707107 0.707107 -1.11022e-16 1.00194e-16" mesh="pp01062_stewart_arm" material="pp01062_stewart_arm_material"/>
           <!-- Part ball_6 -->
-          <geom type="mesh" class="visual" pos="0.038 2.77556e-17 -0.00768" quat="1 0 1.11022e-16 -1.11022e-16" mesh="ball" material="ball_material"/>
+          <geom type="mesh" class="visual" pos="0.038 -2.77556e-17 0.00768" quat="0 1 0 0" mesh="ball" material="ball_material"/>
           <!-- Link shape_5 -->
-          <body name="shape_5" pos="0.038 2.77556e-17 -0.00768" quat="0.855436 0.0131438 -0.0230347 -0.517229">
+          <body name="shape_5" pos="0.038 -2.77556e-17 0.00768" quat="0.0131438 -0.855436 -0.517229 0.0230347">
             <!-- Joint from pp01062_stewart_arm_6 to shape_5 -->
             <joint axis="0 0 1" name="passive_6" type="ball" class="chosen_actuator"/>
-            <inertial pos="-0.0450002 7.90811e-16 -7.11274e-18" mass="0.00355525" fullinertia="1.7732e-08 3.06049e-06 3.0658e-06 4.846e-20 -8.92825e-21 -1.86225e-20"/>
+            <inertial pos="-0.0450002 7.95049e-16 -1.5589e-17" mass="0.00355525" fullinertia="1.7732e-08 3.06049e-06 3.0658e-06 4.84585e-20 -8.92792e-21 -1.86218e-20"/>
             <!-- Part shape_11 -->
             <geom type="mesh" class="visual" pos="-0.0900003 1.83187e-15 6.93889e-18" quat="1.77636e-15 6.61483e-15 1 6.27276e-15" mesh="shape" material="shape_material"/>
             <!-- Part shape_12 -->
@@ -329,25 +329,25 @@
               <site group="3" name="camera" pos="0.0244171 -0.0524 0.0147383" quat="0.683013 0.683013 0.183013 -0.183013"/>
               <!-- Frame camera_optical -->
               <site group="3" name="camera_optical" pos="0.0244171 -0.0524 0.0147383" quat="0.5 0 0.866025 -2.22045e-16"/>
-              <!-- Link test_antenna -->
-              <body name="test_antenna" pos="-0.0697422 -0.0744 0.00716666" quat="0.0909539 -0.706492 0.0294913 -0.701233">
-                <!-- Joint from pp01063_stewart_plateform to test_antenna -->
-                <joint axis="0 0 1" name="right_antenna" type="hinge" class="chosen_actuator"/>
-                <inertial pos="0.00147983 0.0294086 -0.00298611" mass="0.00456766" fullinertia="1.38179e-05 2.28739e-07 1.38227e-05 -6.85535e-07 -5.01796e-08 -9.97217e-07"/>
-                <!-- Part test_antenna -->
-                <geom type="mesh" class="visual" pos="0.0285777 -0.0175124 0.0571006" quat="0.647969 -0.716727 -0.172861 -0.191203" mesh="test_antenna" material="test_antenna_material"/>
-                <!-- Part test_antenna_body -->
-                <geom type="mesh" class="visual" pos="0.0285297 -0.0184653 0.0570171" quat="0.647969 -0.716727 -0.172861 -0.191203" mesh="test_antenna_body" material="test_antenna_body_material"/>
-              </body>
               <!-- Link test_antenna_body -->
-              <body name="test_antenna_body" pos="-0.0161053 -0.0744 0.100068" quat="0.0356203 -0.964418 -0.0355422 -0.25955">
+              <body name="test_antenna_body" pos="-0.0161053 -0.0744 0.100068" quat="0.964418 0.0356203 -0.25955 0.0355422">
                 <!-- Joint from pp01063_stewart_plateform to test_antenna_body -->
                 <joint axis="0 0 1" name="left_antenna" type="hinge" class="chosen_actuator"/>
-                <inertial pos="0.00147983 0.0294086 -0.00298611" mass="0.00456766" fullinertia="1.38179e-05 2.28739e-07 1.38227e-05 -6.85535e-07 -5.01796e-08 -9.97217e-07"/>
+                <inertial pos="0.00147983 -0.0294086 0.00298611" mass="0.00456766" fullinertia="1.38179e-05 2.28739e-07 1.38227e-05 6.85535e-07 5.01796e-08 -9.97217e-07"/>
+                <!-- Part test_antenna -->
+                <geom type="mesh" class="visual" pos="0.0285777 0.0175124 -0.0571006" quat="0.716727 0.647969 0.191203 -0.172861" mesh="test_antenna" material="test_antenna_material"/>
+                <!-- Part test_antenna_body -->
+                <geom type="mesh" class="visual" pos="0.0285297 0.0184653 -0.0570171" quat="0.716727 0.647969 0.191203 -0.172861" mesh="test_antenna_body" material="test_antenna_body_material"/>
+              </body>
+              <!-- Link test_antenna -->
+              <body name="test_antenna" pos="-0.0697422 -0.0744 0.00716666" quat="0.706492 0.0909539 -0.701233 -0.0294913">
+                <!-- Joint from pp01063_stewart_plateform to test_antenna -->
+                <joint axis="0 0 1" name="right_antenna" type="hinge" class="chosen_actuator"/>
+                <inertial pos="0.00147983 -0.0294086 0.00298611" mass="0.00456766" fullinertia="1.38179e-05 2.28739e-07 1.38227e-05 6.85535e-07 5.01796e-08 -9.97217e-07"/>
                 <!-- Part test_antenna_2 -->
-                <geom type="mesh" class="visual" pos="0.0285777 -0.0175124 0.0571006" quat="0.647969 -0.716727 -0.172861 -0.191203" mesh="test_antenna" material="test_antenna_material"/>
+                <geom type="mesh" class="visual" pos="0.0285777 0.0175124 -0.0571006" quat="0.716727 0.647969 0.191203 -0.172861" mesh="test_antenna" material="test_antenna_material"/>
                 <!-- Part test_antenna_body_2 -->
-                <geom type="mesh" class="visual" pos="0.0285297 -0.0184653 0.0570171" quat="0.647969 -0.716727 -0.172861 -0.191203" mesh="test_antenna_body" material="test_antenna_body_material"/>
+                <geom type="mesh" class="visual" pos="0.0285297 0.0184653 -0.0570171" quat="0.716727 0.647969 0.191203 -0.172861" mesh="test_antenna_body" material="test_antenna_body_material"/>
               </body>
             </body>
           </body>
@@ -356,37 +356,37 @@
     </body>
   </worldbody>
   <asset>
-    <mesh file="pp01071_turning_bowl.stl"/>
-    <mesh file="wj_wk00_0124bottomcase_45__configuration_default.stl"/>
-    <mesh file="pp01070_head_head_back.stl"/>
-    <mesh file="big_lens.stl"/>
-    <mesh file="m12_lens.stl"/>
     <mesh file="dc15_a01_case_b_dummy.stl"/>
-    <mesh file="dc15_a01_case_m_dummy.stl"/>
-    <mesh file="wj_wk00_0122topcabinetcase_95__configuration_default.stl"/>
-    <mesh file="pp01066_stewart_mid_plate.stl"/>
+    <mesh file="pp01078_glasses.stl"/>
+    <mesh file="big_lens.stl"/>
+    <mesh file="test_antenna_body.stl"/>
+    <mesh file="pp01065_stewart_side_plate.stl"/>
+    <mesh file="small_lens.stl"/>
+    <mesh file="pp01080_back_small_eye.stl"/>
+    <mesh file="pp01064_stewart_main_plate.stl"/>
+    <mesh file="shape.stl"/>
     <mesh file="pp00xxx_stewart_rod.stl"/>
     <mesh file="pp01079_back_big_eye.stl"/>
-    <mesh file="uc_a37_rev_a_step.stl"/>
-    <mesh file="small_lens.stl"/>
-    <mesh file="test_antenna_body.stl"/>
+    <mesh file="ball.stl"/>
     <mesh file="wj_wk00_0123middlecase_56__configuration_default.stl"/>
-    <mesh file="pp01065_stewart_side_plate.stl"/>
-    <mesh file="shape.stl"/>
-    <mesh file="pp01080_back_small_eye.stl"/>
-    <mesh file="pp01068_top_body.stl"/>
+    <mesh file="test_antenna.stl"/>
+    <mesh file="pp01070_head_head_back.stl"/>
+    <mesh file="dc15_a01_case_f_dummy.stl"/>
     <mesh file="drive_palonier__configuration_default.stl"/>
-    <mesh file="pp01072_turning_end.stl"/>
-    <mesh file="pp01067_bottom_body.stl"/>
+    <mesh file="dc15_a01_horn_dummy.stl"/>
+    <mesh file="wj_wk00_0122topcabinetcase_95__configuration_default.stl"/>
+    <mesh file="pp01071_turning_bowl.stl"/>
+    <mesh file="pp01068_top_body.stl"/>
+    <mesh file="wj_wk00_0124bottomcase_45__configuration_default.stl"/>
+    <mesh file="uc_a37_rev_a_step.stl"/>
+    <mesh file="dc15_a01_case_m_dummy.stl"/>
     <mesh file="pp01062_stewart_arm.stl"/>
+    <mesh file="pp01072_turning_end.stl"/>
+    <mesh file="m12_lens.stl"/>
     <mesh file="pp01069_head_shell_front.stl"/>
     <mesh file="pp01063_stewart_plateform.stl"/>
-    <mesh file="pp01064_stewart_main_plate.stl"/>
-    <mesh file="dc15_a01_horn_dummy.stl"/>
-    <mesh file="pp01078_glasses.stl"/>
-    <mesh file="ball.stl"/>
-    <mesh file="test_antenna.stl"/>
-    <mesh file="dc15_a01_case_f_dummy.stl"/>
+    <mesh file="pp01066_stewart_mid_plate.stl"/>
+    <mesh file="pp01067_bottom_body.stl"/>
     <material name="pp01071_turning_bowl_material" rgba="0.34902 0.376471 0.4 1"/>
     <material name="pp01072_turning_end_material" rgba="0.262745 0.282353 0.301961 1"/>
     <material name="pp01065_stewart_side_plate_material" rgba="0.196078 0.196078 0.196078 1"/>
@@ -427,8 +427,8 @@
     <position class="chosen_actuator" name="4" joint="4" inheritrange="1"/>
     <position class="chosen_actuator" name="5" joint="5" inheritrange="1"/>
     <position class="chosen_actuator" name="6" joint="6" inheritrange="1"/>
-    <position class="chosen_actuator" name="right_antenna" joint="right_antenna"/>
     <position class="chosen_actuator" name="left_antenna" joint="left_antenna"/>
+    <position class="chosen_actuator" name="right_antenna" joint="right_antenna"/>
   </actuator>
   <equality>
     <connect site1="closing_1_1" site2="closing_1_2"/>
