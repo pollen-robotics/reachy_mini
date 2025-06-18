@@ -75,7 +75,6 @@ def main(draw=True):
                             connection_drawing_spec=mp.solutions.drawing_styles.get_default_face_mesh_contours_style(),
                         )
                     pose = pose_estimator.predict(face_landmarks, img)
-                    pose[:3, 3][2] += 0.177  # Set the height of the head
                     reachy_mini.set_position(head=pose, antennas=np.array([0, 0]))
 
                 cv.imshow("test_window", img)
