@@ -10,6 +10,7 @@ import numpy as np
 import pygame
 from scipy.spatial.transform import Rotation as R
 
+import reachy_mini.led_animations
 from reachy_mini.io import Client, NeoPixelRing
 from reachy_mini.placo_kinematics import PlacoKinematics
 from reachy_mini.utils import daemon_check, minimum_jerk
@@ -106,19 +107,9 @@ class ReachyMini:
         self.client.send_command(json.dumps({"torque": on}))
 
     def wake_up(self):
+
         # Lights up
-        sequence = [0, 1, 11, 2, 10, 3, 9, 4, 8, 5, 7, 6]
-        for i, led in enumerate(sequence):
-            # Blue to white transition as we go
-            intensity = int(50 + (i * 17))  # 50 to 255
-            blue_component = max(100, 255 - i * 15)
-
-            self.set_led_colors(
-                {led: (intensity, intensity, blue_component)}, duration=0.15
-            )
-
-        # Final bright white flash
-        self.set_led_colors({i: (255, 255, 255) for i in range(12)}, duration=0.5)
+        self.play_led_animation(reachy_mini.led_animations.wake_spiral)
 
         self.goto_position(INIT_HEAD_POSE, antennas=[0.0, 0.0], duration=2)
         time.sleep(0.1)
@@ -137,6 +128,10 @@ class ReachyMini:
         self.goto_position(INIT_HEAD_POSE, duration=0.2)
 
     def goto_sleep(self):
+
+        # Lights off
+        self.play_led_animation(reachy_mini.led_animations.sleep_heartbeat)
+
         # Check if we are too far from the initial position
         # Move to the initial position if necessary
         current_positions, _ = self._get_current_joint_positions()
@@ -256,3 +251,14 @@ class ReachyMini:
         }
 
         self.client.send_command(json.dumps(cmd))
+
+    def play_led_animation(self, animation):
+        """
+        Play a LED animation.
+        Args:
+            animation: the animation array, which is a list of tuples
+                       where each tuple contains RGB values for each LED and duration.
+        """
+
+        for step in animation:
+            self.set_led_colors(*step)
