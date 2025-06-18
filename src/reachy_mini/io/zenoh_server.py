@@ -12,7 +12,6 @@ class ZenohServer(AbstractServer):
         self.backend = backend
 
         self._lock = threading.Lock()
-        # self._last_command = ReachyMiniCommand.default()
         self._cmd_event = threading.Event()
 
     def start(self):
