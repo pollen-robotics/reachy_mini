@@ -68,6 +68,6 @@ class ZenohClient(AbstractClient):
             and self._last_antennas_joint_positions is not None
         ), "No joint positions received yet. Wait for the client to connect."
         return (
-            self._last_head_joint_positions,
-            self._last_antennas_joint_positions,
+            self._last_head_joint_positions.copy(),
+            self._last_antennas_joint_positions.copy(),
         )
