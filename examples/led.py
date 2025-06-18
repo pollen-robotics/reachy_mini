@@ -13,7 +13,7 @@ with ReachyMini(led_ring_port="/dev/ttyUSB0") as reachy_mini:
 
             # Example 1: Set specific LEDs using dict
             print("Setting LEDs 0, 4, 8 to different colors...")
-            reachy_mini.led.set_colors(
+            reachy_mini.led.set_led_colors(
                 {0: (255, 0, 0), 4: (0, 255, 0), 8: (0, 0, 255)}  # Red  # Green  # Blue
             )
             time.sleep(2)
@@ -25,7 +25,7 @@ with ReachyMini(led_ring_port="/dev/ttyUSB0") as reachy_mini:
             colors[6] = (255, 0, 255)  # Magenta
             colors[10] = (0, 255, 255)  # Cyan
 
-            reachy_mini.led.set_colors(colors)
+            reachy_mini.led.set_led_colors(colors)
             time.sleep(2)
 
             # Example 3: Get current status

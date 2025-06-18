@@ -1,6 +1,7 @@
 import platform
 import threading
 import time
+from collections import deque
 from typing import Dict, List, Optional, Tuple, Union
 
 import serial
@@ -19,10 +20,23 @@ class NeoPixelRing:
             num_pixels: Number of LEDs in ring (default: 12)
         """
 
-        def __init_routine__(self):
-            self.num_pixels = self.num_pixels
-            self.serial = serial.Serial(self.port, self.baudrate, timeout=2)
-            time.sleep(2)  # Wait for Arduino to initialize
+        self.num_pixels = num_pixels
+        self.port = port
+        self.serial = serial.Serial(port, baudrate, timeout=2)
+        self.is_connected = threading.Event()
+        self.com_thread = threading.Thread(target=self.com_routine, daemon=True)
+        self.com_thread.start()
+        self.commands = deque(maxlen=1)  # Buffer for commands
+        self.commands_lock = threading.Lock()
+
+    def wait_for_connection(self):
+        while not self.is_connected.wait(timeout=5.0):
+            print("Waiting for Arduino ring leds to be ready. ")
+
+    def com_routine(self):
+        while (
+            True
+        ):  # TODO useless for now, but will handle reconnection with this later
 
             # Wait for Arduino ready signal
             while True:
@@ -32,15 +46,33 @@ class NeoPixelRing:
                         break
 
             print(f"NeoPixel ring connected on {self.port}")
+            self.is_connected.set()
+            self._running = True
 
-        self.num_pixels = num_pixels
-        self.serial = None
-        self.baudrate = baudrate
-        self.port = port
-        self.thread = threading.Thread(target=__init_routine__)
-        self.thread.start()
+            while self._running:
+                # Process commands from queue
+                command_data = None
+                with self.commands_lock:
+                    if self.commands:
+                        command_data = self.commands.popleft()
 
-    def set_colors(
+                if command_data:
+                    cmd_type, args = command_data
+
+                    # Execute the appropriate command
+                    if cmd_type == "set_led_colors":
+                        self._set_led_colors(args)
+                    elif cmd_type == "clear":
+                        self._clear()
+                    elif cmd_type == "get_status":
+                        # For get_status, we might want to store result somewhere
+                        # but for now just execute it
+                        self._get_status()
+                else:
+                    # Shouldnt end up here
+                    time.sleep(0.01)
+
+    def _set_led_colors(
         self,
         colors: Union[
             List[Optional[Tuple[int, int, int]]], Dict[int, Tuple[int, int, int]]
@@ -88,13 +120,13 @@ class NeoPixelRing:
 
         return True
 
-    def clear(self):
+    def _clear(self):
         """Turn off all LEDs"""
         self.serial.write(b"CLEAR\n")
         response = self.serial.readline().decode().strip()
         return response == "OK"
 
-    def get_status(self) -> Dict[int, Tuple[int, int, int]]:
+    def _get_status(self) -> Dict[int, Tuple[int, int, int]]:
         """Get current state of all LEDs"""
         self.serial.write(b"STATUS\n")
         response = self.serial.readline().decode().strip()
@@ -114,8 +146,38 @@ class NeoPixelRing:
 
         return {}
 
-    def close(self):
+    def _close(self):
         """Close serial connection"""
+        self.serial.close()
+
+    # Exposed commands
+    def set_led_colors(
+        self,
+        colors: Union[
+            List[Optional[Tuple[int, int, int]]], Dict[int, Tuple[int, int, int]]
+        ],
+    ):
+        """Queue a set_led_colors command (non-blocking)"""
+        with self.commands_lock:
+            self.commands.append(("set_led_colors", colors))
+
+    def clear(self):
+        """Queue a clear command (non-blocking)"""
+        with self.commands_lock:
+            self.commands.append(("clear", None))
+
+    def get_status(self):
+        """Queue a get_status command (non-blocking)"""
+        # with self.commands_lock:
+        #     self.commands.append(("get_status", None))
+        # TODO async status or matintain buffer of current status ?
+        return self._get_status()  # Directly return status for now
+
+    def close(self):
+        """Close serial connection and stop thread"""
+        self._running = False
+        if self.com_thread.is_alive():
+            self.com_thread.join(timeout=2.0)
         self.serial.close()
 
 
