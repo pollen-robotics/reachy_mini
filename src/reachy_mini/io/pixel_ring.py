@@ -51,27 +51,27 @@ class NeoPixelRing:
         while self._running:
             # Process commands from queue
             command_data = None
-            with self.commands_lock:
-                if self.commands:
-                    command_data = self.commands.popleft()
+            self.commands_lock.acquire()  # Double lock to avoid active waiting
 
-            if command_data:
-                cmd_type, args = command_data
+            while self.commands:
+                command_data = self.commands.popleft()
+                if command_data:
+                    cmd_type, args = command_data
 
-                # Execute the appropriate command
-                if cmd_type == "set_led_colors":
-                    self._set_led_colors(*args)
-                elif cmd_type == "clear":
-                    self._clear()
-                elif cmd_type == "get_status":
-                    # For get_status, we might want to store result somewhere
-                    # but for now just execute it
-                    self._get_status()
-            else:
-                # Shouldnt end up here
-                time.sleep(0.01)
+                    # Execute the appropriate command
+                    if cmd_type == "set_led_colors":
+                        self._set_led_colors(*args)
+                    elif cmd_type == "clear":
+                        self._clear()
+                    elif cmd_type == "get_status":
+                        # For get_status, we might want to store result somewhere
+                        # but for now just execute it
+                        self._get_status()
+                else:
+                    # Shouldnt end up here
+                    time.sleep(0.01)
 
-            # self.commands_lock.acquire()
+            self.commands_lock.acquire()  # Double lock to avoid active waiting
 
     def _set_led_colors(
         self,
@@ -163,13 +163,23 @@ class NeoPixelRing:
         duration: Optional[float] = None,
     ):
         """Queue a set_led_colors command (non-blocking)"""
-        with self.commands_lock:
-            self.commands.append(("set_led_colors", (colors, duration)))
+        # with self.commands_lock:
+        self.commands.append(("set_led_colors", (colors, duration)))
+        try:
+            self.commands_lock.release()
+        except RuntimeError:
+            # If lock was not acquired, ignore
+            pass
 
     def clear(self):
         """Queue a clear command (non-blocking)"""
-        with self.commands_lock:
-            self.commands.append(("clear", None))
+        # with self.commands_lock:
+        self.commands.append(("clear", None))
+        try:
+            self.commands_lock.release()
+        except RuntimeError:
+            # If lock was not acquired, ignore
+            pass
 
     # # def get_status(self):
     # #     """Queue a get_status command (non-blocking)"""
