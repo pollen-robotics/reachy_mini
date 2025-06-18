@@ -4,6 +4,7 @@ from threading import Thread
 
 from reachy_mini import MujocoBackend, ReachyMini, RobotBackend
 from reachy_mini.io import Server
+from reachy_mini.utils import find_arduino_nano_ch340g
 
 
 class Daemon:
@@ -15,8 +16,20 @@ class Daemon:
         localhost_only: bool = True,
         wake_up_on_start: bool = True,
         goto_sleep_on_stop: bool = True,
-        led_ring_port: str = "/dev/ttyUSB0",
+        led_ring_port: str = None,
     ):
+        # Try ardunio discovery
+        if led_ring_port is None:
+            led_ring_port = find_arduino_nano_ch340g()
+
+        # if led_ring_port is None:
+        #     print(
+        #         "No NeoPixel ring found. "
+        #         "You can specify the port with --led-ring-port."
+        #     )
+        # else:
+        #     print(f"NeoPixel ring found on port: {led_ring_port}")
+
         if sim:
             self.backend = MujocoBackend(scene=scene)
         else:
@@ -110,6 +123,13 @@ def _main():
         default=True,
         help="Restrict the server to localhost only (default: True).",
     )
+    parser.add_argument(
+        "--led-ring-port",
+        type=str,
+        default=None,
+        help="Serial port for the NeoPixel ring (default: None, auto-detect).",
+    )
+
     args = parser.parse_args()
 
     d = Daemon(
