@@ -4,7 +4,6 @@ from pathlib import Path
 from reachy_mini_motor_controller import ReachyMiniMotorController
 import time
 import json
-import numpy as np
 
 ROOT_PATH = Path(os.path.dirname(os.path.abspath(__file__))).parent.parent
 
@@ -28,10 +27,7 @@ class RobotBackend(Backend):
 
             if self._torque_enabled:
                 if self.head_joint_positions is not None:
-                    self.c.set_stewart_platform_position(
-                        # stewart platform angles are inverted in the real robot
-                        list(-np.array(self.head_joint_positions[1:]))
-                    )
+                    self.c.set_stewart_platform_position(self.head_joint_positions[1:])
                     self.c.set_body_rotation(self.head_joint_positions[0])
                 if self.antenna_joint_positions is not None:
                     self.c.set_antennas_positions(self.antenna_joint_positions)
@@ -55,9 +51,7 @@ class RobotBackend(Backend):
         positions = self.c.read_all_positions()
         yaw = positions[0]
         dofs = positions[3:]  # All other dofs
-        return [yaw] + list(
-            -np.array(dofs)
-        )  # stewart platform angles are inverted in the real robot
+        return [yaw] + list(dofs)
 
     def get_antenna_joint_positions(self):
         positions = self.c.read_all_positions()
