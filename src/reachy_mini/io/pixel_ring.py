@@ -1,4 +1,5 @@
 import platform
+import threading
 import time
 from typing import Dict, List, Optional, Tuple, Union
 
@@ -7,6 +8,7 @@ import serial.tools.list_ports
 
 
 class NeoPixelRing:
+
     def __init__(self, port: str = None, baudrate: int = 9600, num_pixels: int = 12):
         """
         Initialize NeoPixel ring controller
@@ -16,18 +18,27 @@ class NeoPixelRing:
             baudrate: Serial communication speed (default: 9600)
             num_pixels: Number of LEDs in ring (default: 12)
         """
+
+        def __init_routine__(self):
+            self.num_pixels = self.num_pixels
+            self.serial = serial.Serial(self.port, self.baudrate, timeout=2)
+            time.sleep(2)  # Wait for Arduino to initialize
+
+            # Wait for Arduino ready signal
+            while True:
+                if self.serial.in_waiting:
+                    response = self.serial.readline().decode().strip()
+                    if response == "READY":
+                        break
+
+            print(f"NeoPixel ring connected on {self.port}")
+
         self.num_pixels = num_pixels
-        self.serial = serial.Serial(port, baudrate, timeout=2)
-        time.sleep(2)  # Wait for Arduino to initialize
-
-        # Wait for Arduino ready signal
-        while True:
-            if self.serial.in_waiting:
-                response = self.serial.readline().decode().strip()
-                if response == "READY":
-                    break
-
-        print(f"NeoPixel ring connected on {port}")
+        self.serial = None
+        self.baudrate = baudrate
+        self.port = port
+        self.thread = threading.Thread(target=__init_routine__)
+        self.thread.start()
 
     def set_colors(
         self,
