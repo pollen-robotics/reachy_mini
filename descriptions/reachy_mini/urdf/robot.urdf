@@ -45,9 +45,9 @@
   <!-- Link dc15_a01_case_b_dummy -->
   <link name="dc15_a01_case_b_dummy">
     <inertial>
-      <origin xyz="-1.92777e-06 0.00145003 -0.0349726" rpy="0 0 0"/>
-      <mass value="0.391334"/>
-      <inertia ixx="0.00151916" ixy="2.81448e-07" ixz="2.01085e-07" iyy="0.00147292" iyz="4.30853e-05" izz="0.0017898"/>
+      <origin xyz="-1.60377e-06 0.00140187 -0.0329593" rpy="0 0 0"/>
+      <mass value="0.443795"/>
+      <inertia ixx="0.00159333" ixy="2.80397e-07" ixz="1.98452e-07" iyy="0.0015483" iyz="4.26838e-05" izz="0.00187065"/>
     </inertial>
     <!-- Part pp01065_stewart_side_plate -->
     <visual>
@@ -613,9 +613,9 @@
   <!-- Link pp01062_stewart_arm -->
   <link name="pp01062_stewart_arm">
     <inertial>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
-      <mass value="1e-09"/>
-      <inertia ixx="1e-09" ixy="0" ixz="0" iyy="1e-09" iyz="0" izz="1e-09"/>
+      <origin xyz="0.0181787 -2.77556e-17 -0.00350559" rpy="0 0 0"/>
+      <mass value="0.00272417"/>
+      <inertia ixx="4.89963e-08" ixy="2.63422e-25" ixz="7.04811e-08" iyy="6.75761e-07" iyz="2.66043e-25" izz="6.91798e-07"/>
     </inertial>
     <!-- Part ball -->
     <visual>
@@ -669,9 +669,9 @@
   <!-- Link shape -->
   <link name="shape">
     <inertial>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
-      <mass value="1e-09"/>
-      <inertia ixx="1e-09" ixy="0" ixz="0" iyy="1e-09" iyz="0" izz="1e-09"/>
+      <origin xyz="-0.0450002 -2.61583e-17 -4.42687e-17" rpy="0 0 0"/>
+      <mass value="0.00355525"/>
+      <inertia ixx="1.7732e-08" ixy="3.77366e-22" ixz="-8.93106e-21" iyy="3.06049e-06" iyz="-1.00365e-21" izz="3.0658e-06"/>
     </inertial>
     <!-- Part shape -->
     <visual>
@@ -772,9 +772,9 @@
   <!-- Link pp01062_stewart_arm_2 -->
   <link name="pp01062_stewart_arm_2">
     <inertial>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
-      <mass value="1e-09"/>
-      <inertia ixx="1e-09" ixy="0" ixz="0" iyy="1e-09" iyz="0" izz="1e-09"/>
+      <origin xyz="0.0181787 -2.34834e-18 -0.00350559" rpy="0 0 0"/>
+      <mass value="0.00272417"/>
+      <inertia ixx="4.89963e-08" ixy="-2.48336e-22" ixz="7.04811e-08" iyy="6.75761e-07" iyz="5.24015e-23" izz="6.91798e-07"/>
     </inertial>
     <!-- Part ball_2 -->
     <visual>
@@ -828,9 +828,9 @@
   <!-- Link shape_2 -->
   <link name="shape_2">
     <inertial>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
-      <mass value="1e-09"/>
-      <inertia ixx="1e-09" ixy="0" ixz="0" iyy="1e-09" iyz="0" izz="1e-09"/>
+      <origin xyz="-0.0450002 -1.44119e-17 -4.32219e-18" rpy="0 0 0"/>
+      <mass value="0.00355525"/>
+      <inertia ixx="1.7732e-08" ixy="9.05575e-21" ixz="-9.31158e-21" iyy="3.06049e-06" iyz="-1.13252e-20" izz="3.0658e-06"/>
     </inertial>
     <!-- Part shape_3 -->
     <visual>
@@ -931,9 +931,9 @@
   <!-- Link pp01062_stewart_arm_3 -->
   <link name="pp01062_stewart_arm_3">
     <inertial>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
-      <mass value="1e-09"/>
-      <inertia ixx="1e-09" ixy="0" ixz="0" iyy="1e-09" iyz="0" izz="1e-09"/>
+      <origin xyz="0.0181787 1.87132e-19 -0.00350559" rpy="0 0 0"/>
+      <mass value="0.00272417"/>
+      <inertia ixx="4.89963e-08" ixy="-9.85709e-24" ixz="7.04811e-08" iyy="6.75761e-07" iyz="-1.47314e-24" izz="6.91798e-07"/>
     </inertial>
     <!-- Part pp01062_stewart_arm_3 -->
     <visual>
@@ -987,9 +987,9 @@
   <!-- Link shape_3 -->
   <link name="shape_3">
     <inertial>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
-      <mass value="1e-09"/>
-      <inertia ixx="1e-09" ixy="0" ixz="0" iyy="1e-09" iyz="0" izz="1e-09"/>
+      <origin xyz="-0.0450002 -9.16259e-18 4.54167e-17" rpy="0 0 0"/>
+      <mass value="0.00355525"/>
+      <inertia ixx="1.7732e-08" ixy="9.82292e-22" ixz="-7.34956e-21" iyy="3.06049e-06" iyz="1.45064e-21" izz="3.0658e-06"/>
     </inertial>
     <!-- Part shape_5 -->
     <visual>
@@ -1090,9 +1090,9 @@
   <!-- Link pp01062_stewart_arm_4 -->
   <link name="pp01062_stewart_arm_4">
     <inertial>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
-      <mass value="1e-09"/>
-      <inertia ixx="1e-09" ixy="0" ixz="0" iyy="1e-09" iyz="0" izz="1e-09"/>
+      <origin xyz="0.0181787 5.24899e-19 -0.00350559" rpy="0 0 0"/>
+      <mass value="0.00272417"/>
+      <inertia ixx="4.89963e-08" ixy="-4.36416e-22" ixz="7.04811e-08" iyy="6.75761e-07" iyz="3.66848e-23" izz="6.91798e-07"/>
     </inertial>
     <!-- Part ball_4 -->
     <visual>
@@ -1146,9 +1146,9 @@
   <!-- Link shape_4 -->
   <link name="shape_4">
     <inertial>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
-      <mass value="1e-09"/>
-      <inertia ixx="1e-09" ixy="0" ixz="0" iyy="1e-09" iyz="0" izz="1e-09"/>
+      <origin xyz="-0.0450002 1.00076e-16 -7.12286e-18" rpy="0 0 0"/>
+      <mass value="0.00355525"/>
+      <inertia ixx="1.7732e-08" ixy="6.31902e-21" ixz="-5.9445e-21" iyy="3.06049e-06" iyz="1.35897e-20" izz="3.0658e-06"/>
     </inertial>
     <!-- Part shape_7 -->
     <visual>
@@ -1249,9 +1249,9 @@
   <!-- Link pp01062_stewart_arm_5 -->
   <link name="pp01062_stewart_arm_5">
     <inertial>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
-      <mass value="1e-09"/>
-      <inertia ixx="1e-09" ixy="0" ixz="0" iyy="1e-09" iyz="0" izz="1e-09"/>
+      <origin xyz="0.0181787 -3.11301e-35 -0.00350559" rpy="0 0 0"/>
+      <mass value="0.00272417"/>
+      <inertia ixx="4.89963e-08" ixy="4.49492e-25" ixz="7.04811e-08" iyy="6.75761e-07" iyz="-1.26741e-25" izz="6.91798e-07"/>
     </inertial>
     <!-- Part pp01062_stewart_arm_5 -->
     <visual>
@@ -1305,9 +1305,9 @@
   <!-- Link pp00xxx_stewart_rod -->
   <link name="pp00xxx_stewart_rod">
     <inertial>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
-      <mass value="1e-09"/>
-      <inertia ixx="1e-09" ixy="0" ixz="0" iyy="1e-09" iyz="0" izz="1e-09"/>
+      <origin xyz="-0.0450002 7.00961e-17 -1.14016e-17" rpy="0 0 0"/>
+      <mass value="0.00355525"/>
+      <inertia ixx="1.7732e-08" ixy="4.55615e-21" ixz="-4.43854e-21" iyy="3.06049e-06" iyz="1.23006e-21" izz="3.0658e-06"/>
     </inertial>
     <!-- Part shape_9 -->
     <visual>
@@ -1408,9 +1408,9 @@
   <!-- Link pp01062_stewart_arm_6 -->
   <link name="pp01062_stewart_arm_6">
     <inertial>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
-      <mass value="1e-09"/>
-      <inertia ixx="1e-09" ixy="0" ixz="0" iyy="1e-09" iyz="0" izz="1e-09"/>
+      <origin xyz="0.0181787 1.69382e-17 -0.00350559" rpy="0 0 0"/>
+      <mass value="0.00272417"/>
+      <inertia ixx="4.89963e-08" ixy="-1.6528e-22" ixz="7.04811e-08" iyy="6.75761e-07" iyz="3.48685e-23" izz="6.91798e-07"/>
     </inertial>
     <!-- Part pp01062_stewart_arm_6 -->
     <visual>
@@ -1464,9 +1464,9 @@
   <!-- Link shape_5 -->
   <link name="shape_5">
     <inertial>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
-      <mass value="1e-09"/>
-      <inertia ixx="1e-09" ixy="0" ixz="0" iyy="1e-09" iyz="0" izz="1e-09"/>
+      <origin xyz="-0.0450002 7.90811e-16 -7.11274e-18" rpy="0 0 0"/>
+      <mass value="0.00355525"/>
+      <inertia ixx="1.7732e-08" ixy="4.846e-20" ixz="-8.92825e-21" iyy="3.06049e-06" iyz="-1.86225e-20" izz="3.0658e-06"/>
     </inertial>
     <!-- Part shape_11 -->
     <visual>
@@ -1536,9 +1536,9 @@
   <!-- Link pp01063_stewart_plateform -->
   <link name="pp01063_stewart_plateform">
     <inertial>
-      <origin xyz="-0.0134844 -0.0525072 0.0370255" rpy="0 0 0"/>
-      <mass value="0.109232"/>
-      <inertia ixx="0.000302213" ixy="-3.72654e-06" ixz="-6.44378e-05" iyy="0.000318362" iyz="2.17078e-06" izz="0.000231614"/>
+      <origin xyz="-0.00488914 -0.0469134 0.0291732" rpy="0 0 0"/>
+      <mass value="0.168092"/>
+      <inertia ixx="0.000413571" ixy="-2.28564e-06" ixz="-5.24367e-05" iyy="0.000428808" iyz="-9.58295e-07" izz="0.000324749"/>
     </inertial>
     <!-- Part small_lens -->
     <visual>

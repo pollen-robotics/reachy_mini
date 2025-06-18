@@ -6,7 +6,7 @@
   "ball_to_euler": true,
   "ball_to_euler_order": "xyz",
   "simplify_stls": true,
-  "max_stl_size": 0.5,
+  "max_stl_size": 0.3,
   "joint_properties": {
     "*": {
       "max_velocity": 8

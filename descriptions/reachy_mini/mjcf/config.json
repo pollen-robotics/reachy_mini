@@ -4,7 +4,7 @@
   "robot_name": "reachy_mini",
   "output_filename": "reachy_mini",
   "simplify_stls": true,
-  "max_stl_size": 0.5,
+  "max_stl_size": 0.3,
   "ignore": {
     "*": "collision",
     "!turning_bowl": "collision"
