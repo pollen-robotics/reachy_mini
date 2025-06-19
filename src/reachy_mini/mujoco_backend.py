@@ -1,13 +1,22 @@
-from reachy_mini.io import Backend
-from reachy_mini.mujoco_utils import get_actuator_names, get_joint_id_from_name, get_joint_addr_from_name
-import mujoco
-import os
-from pathlib import Path
-import mujoco.viewer
-import time
 import json
+import os
+import time
+from pathlib import Path
+from threading import Thread
+
+import mujoco
+import mujoco.viewer
 import numpy as np
-from .reachy_mini import SLEEP_HEAD_JOINT_POSITIONS, SLEEP_ANTENNAS_JOINT_POSITIONS
+
+from reachy_mini.io import Backend
+from reachy_mini.mujoco_utils import (
+    get_actuator_names,
+    get_joint_addr_from_name,
+    get_joint_id_from_name,
+)
+from reachy_mini.video_udp import UDPJPEGFrameSender
+
+from .reachy_mini import SLEEP_ANTENNAS_JOINT_POSITIONS, SLEEP_HEAD_JOINT_POSITIONS
 
 ROOT_PATH = Path(os.path.dirname(os.path.abspath(__file__))).parent.parent
 
@@ -21,14 +30,11 @@ class MujocoBackend(Backend):
         self.data = mujoco.MjData(self.model)
         self.model.opt.timestep = 0.002  # s, simulation timestep, 500hz
         self.decimation = 10  # -> 50hz control loop
+        self.rendering_timestep = 0.04  # s, rendering loop # 25Hz
 
         self.camera_id = mujoco.mj_name2id(
             self.model, mujoco.mjtObj.mjOBJ_CAMERA, "eye_camera"
         )
-        # self.camera_size = (1280, 720)
-        # self.offscreen_renderer = mujoco.Renderer(
-        #     self.model, height=self.camera_size[1], width=self.camera_size[0]
-        # )
 
         self.joint_names = get_actuator_names(self.model)
 
@@ -39,7 +45,20 @@ class MujocoBackend(Backend):
             get_joint_addr_from_name(self.model, n) for n in self.joint_names
         ]
 
-        # self.streamer_udp = UDPJPEGFrameSender()
+    def rendering_loop(self):
+        streamer_udp = UDPJPEGFrameSender()
+        camera_size = (1280, 720)
+        offscreen_renderer = mujoco.Renderer(
+            self.model, height=camera_size[1], width=camera_size[0]
+        )
+        while not self.should_stop.is_set():
+            start_t = time.time()
+            offscreen_renderer.update_scene(self.data, self.camera_id)
+            im = offscreen_renderer.render()
+            streamer_udp.send_frame(im)
+
+            took = time.time() - start_t
+            time.sleep(max(0, self.rendering_timestep - took))
 
     def run(self):
         step = 1
@@ -47,21 +66,20 @@ class MujocoBackend(Backend):
             self.model, self.data, show_left_ui=False, show_right_ui=False
         ) as viewer:
             with viewer.lock():
-                viewer.cam.type      = mujoco.mjtCamera.mjCAMERA_FREE
-                viewer.cam.distance  = 0.8          # ≃ ||pos - lookat||
-                viewer.cam.azimuth   = 160         # degrees
-                viewer.cam.elevation =  -20        # degrees
+                viewer.cam.type = mujoco.mjtCamera.mjCAMERA_FREE
+                viewer.cam.distance = 0.8  # ≃ ||pos - lookat||
+                viewer.cam.azimuth = 160  # degrees
+                viewer.cam.elevation = -20  # degrees
                 viewer.cam.lookat[:] = [0, 0, 0.15]
-            
+
                 # force one render with your new camera
                 mujoco.mj_step(self.model, self.data)
                 viewer.sync()
 
-
-                # im = self.get_camera()
-                # self.streamer_udp.send_frame(im)
             with viewer.lock():
-                self.data.qpos[self.joint_qpos_addr] = np.array(SLEEP_HEAD_JOINT_POSITIONS + SLEEP_ANTENNAS_JOINT_POSITIONS).reshape(-1, 1)
+                self.data.qpos[self.joint_qpos_addr] = np.array(
+                    SLEEP_HEAD_JOINT_POSITIONS + SLEEP_ANTENNAS_JOINT_POSITIONS
+                ).reshape(-1, 1)
                 self.data.ctrl[:] = np.array(
                     SLEEP_HEAD_JOINT_POSITIONS + SLEEP_ANTENNAS_JOINT_POSITIONS
                 )
@@ -72,6 +90,9 @@ class MujocoBackend(Backend):
             # one more frame so the viewer shows your startup pose
             mujoco.mj_step(self.model, self.data)
             viewer.sync()
+
+            rendering_thread = Thread(target=self.rendering_loop, daemon=True)
+            rendering_thread.start()
 
             # 3) now enter your normal loop
             while not self.should_stop.is_set():
