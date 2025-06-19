@@ -15,6 +15,7 @@ class RobotBackend(Backend):
         self.control_loop_frequency = 300.0
         self.publish_frequency = 50.0
         self.decimation = int(self.control_loop_frequency / self.publish_frequency)
+        self.last_alive = time.time()
 
         self._torque_enabled = False
 
@@ -48,8 +49,13 @@ class RobotBackend(Backend):
                                 }
                             )
                         )
+                        self.last_alive = time.time()
                     except RuntimeError as e:
                         print(f"Error reading positions: {e}")
+
+                        if self.last_alive + 2 < time.time():
+                            print("No response from the robot for 2 seconds, stopping.")
+                            raise e
 
             took = time.time() - start_t
             time.sleep(max(0, period - took))
