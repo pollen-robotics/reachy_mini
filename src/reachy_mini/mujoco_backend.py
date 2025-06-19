@@ -116,3 +116,4 @@ class MujocoBackend(Backend):
 
     def set_torque(self, enabled: bool) -> None:
         pass
+        pass

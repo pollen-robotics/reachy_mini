@@ -89,14 +89,14 @@ https://polyhaven.com/a/rubber_duck_toy
 
 ## Contribute
 
-The development tools are available in the optional dependencies.
+Development tools are available in the optional dependencies.
 
 ```bash
 pip install -e .[dev]
 pre-commit install
 ```
 
-Run this before any git commit
+Your files will be checked before any commit. Checks may also be manually run with
 
 ```bash
 pre-commit run --all-files
