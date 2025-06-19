@@ -1,6 +1,8 @@
 from threading import Thread
 
 import argparse
+from typing import Optional
+import serial.tools.list_ports
 import time
 
 from reachy_mini import MujocoBackend, RobotBackend, ReachyMini
@@ -11,7 +13,7 @@ class Daemon:
     def __init__(
         self,
         sim: bool = False,
-        serialport: str = "/dev/ttyACM0",
+        serialport: str = "auto",
         scene: str = "empty",
         localhost_only: bool = True,
         wake_up_on_start: bool = True,
@@ -20,6 +22,25 @@ class Daemon:
         if sim:
             self.backend = MujocoBackend(scene=scene)
         else:
+            if serialport == "auto":
+                print("Searching for Reachy Mini serial port...")
+                ports = find_serial_port()
+                print(f"Found Reachy Mini serial ports: {ports}")
+
+                if len(ports) == 0:
+                    raise RuntimeError(
+                        "No Reachy Mini serial port found. "
+                        "Check USB connection and permissions."
+                        "Or directly specify the serial port using --serialport."
+                    )
+                elif len(ports) > 1:
+                    raise RuntimeError(
+                        "Multiple Reachy Mini serial ports found. "
+                        "Please specify the serial port using --serialport."
+                    )
+
+                serialport = ports[0]
+
             self.backend = RobotBackend(serialport=serialport)
 
         self.wake_up_on_start = wake_up_on_start
@@ -61,6 +82,15 @@ class Daemon:
         print("Daemon stopped.")
 
 
+def find_serial_port(vid: str = "1a86", pid: str = "55d3") -> list[str]:
+    ports = serial.tools.list_ports.comports()
+
+    vid = vid.upper()
+    pid = pid.upper()
+
+    return [p.device for p in ports if f"USB VID:PID={vid}:{pid}" in p.hwid]
+
+
 def main():
     """Monkey patch to run the main function using the mjpython executable on macOS."""
     import platform
@@ -92,8 +122,8 @@ def _main():
         "-p",
         "--serialport",
         type=str,
-        default="/dev/ttyACM0",
-        help="Serial port for real motors (default: /dev/ttyACM0).",
+        default="auto",
+        help="Serial port for real motors (default: will try to automatically find the port).",
     )
     parser.add_argument(
         "--scene",
