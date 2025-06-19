@@ -89,10 +89,17 @@ https://polyhaven.com/a/rubber_duck_toy
 
 ## Contribute
 
-Plase use ruff to format and check your code before any contribution.
-
 The development tools are available in the optional dependencies.
 
 ```bash
 pip install -e .[dev]
+pre-commit install
 ```
+
+Run this before any git commit
+
+```bash
+pre-commit run --all-files
+```
+
+Checks are performed by Ruff. You may want to [configure your IDE to support it](https://docs.astral.sh/ruff/editors/setup/).
