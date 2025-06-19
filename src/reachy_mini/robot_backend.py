@@ -34,29 +34,25 @@ class RobotBackend(Backend):
 
             if step % self.decimation == 0:
                 if self.joint_positions_publisher is not None:
-                    self.joint_positions_publisher.put(
-                        json.dumps(
-                            {
-                                "head_joint_positions": self.get_head_joint_positions(),
-                                "antennas_joint_positions": self.get_antenna_joint_positions(),
-                            }
+                    try:
+                        positions = self.c.read_all_positions()
+                        yaw = positions[0]
+                        antennas = positions[1:3]
+                        dofs = positions[3:]
+
+                        self.joint_positions_publisher.put(
+                            json.dumps(
+                                {
+                                    "head_joint_positions": [yaw] + list(dofs),
+                                    "antennas_joint_positions": list(antennas),
+                                }
+                            )
                         )
-                    )
+                    except RuntimeError as e:
+                        print(f"Error reading positions: {e}")
 
             took = time.time() - start_t
             time.sleep(max(0, period - took))
-
-    # TODO don't read two times all positions
-    def get_head_joint_positions(self):
-        positions = self.c.read_all_positions()
-        yaw = positions[0]
-        dofs = positions[3:]  # All other dofs
-        return [yaw] + list(dofs)
-
-    def get_antenna_joint_positions(self):
-        positions = self.c.read_all_positions()
-        antennas = positions[1:3]
-        return list(antennas)
 
     def set_torque(self, enabled: bool) -> None:
         if enabled:

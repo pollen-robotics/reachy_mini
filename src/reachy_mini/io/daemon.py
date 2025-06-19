@@ -53,20 +53,25 @@ class Daemon:
         if ok:
             try:
                 print("Daemon is running. Press Ctrl+C to stop.")
-                while True:
+                while backend_run_thread.is_alive():
+                    time.sleep(0.5)
+                else:
+                    print("Backend thread has stopped unexpectedly.")
+                    ok = False
+
                     time.sleep(0.5)  # Wait for the backend to be ready
             except KeyboardInterrupt:
                 print("Daemon interrupted by user.")
 
-            if self.goto_sleep_on_stop:
-                try:
-                    print("Putting Reachy Mini to sleep...")
-                    with ReachyMini() as mini:
-                        mini.goto_sleep()
-                except Exception as e:
-                    print(f"Error while putting Reachy Mini to sleep: {e}")
-                except KeyboardInterrupt:
-                    pass
+        if self.goto_sleep_on_stop and ok:
+            try:
+                print("Putting Reachy Mini to sleep...")
+                with ReachyMini() as mini:
+                    mini.goto_sleep()
+            except Exception as e:
+                print(f"Error while putting Reachy Mini to sleep: {e}")
+            except KeyboardInterrupt:
+                pass
 
         self.backend.should_stop.set()
         backend_run_thread.join()
