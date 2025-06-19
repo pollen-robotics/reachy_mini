@@ -208,7 +208,7 @@ def example_usage():
     try:
         # Example 1: Set specific LEDs using dict
         print("Setting LEDs 0, 4, 8 to different colors...")
-        ring.set_colors(
+        ring._set_led_colors(
             {0: (255, 0, 0), 4: (0, 255, 0), 8: (0, 0, 255)}  # Red  # Green  # Blue
         )
         time.sleep(2)
@@ -220,15 +220,15 @@ def example_usage():
         colors[6] = (255, 0, 255)  # Magenta
         colors[10] = (0, 255, 255)  # Cyan
 
-        ring.set_colors(colors)
+        ring._set_led_colors(colors)
         time.sleep(2)
 
-        # Example 3: Get current status
-        print("Current LED states:")
-        status = ring.get_status()
-        for led_id, (r, g, b) in status.items():
-            if r > 0 or g > 0 or b > 0:  # Only show active LEDs
-                print(f"  LED {led_id}: RGB({r}, {g}, {b})")
+        # # # # Example 3: Get current status
+        # # # print("Current LED states:")
+        # # # status = ring.get_status()
+        # # # for led_id, (r, g, b) in status.items():
+        # # #     if r > 0 or g > 0 or b > 0:  # Only show active LEDs
+        # # #         print(f"  LED {led_id}: RGB({r}, {g}, {b})")
 
         # Example 4: Clear all
         print("Clearing all LEDs...")
