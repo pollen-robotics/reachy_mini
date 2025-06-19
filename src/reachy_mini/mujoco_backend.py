@@ -1,17 +1,20 @@
+import json
+import os
+import time
+from pathlib import Path
+
+import mujoco
+import mujoco.viewer
+import numpy as np
+
 from reachy_mini.io import Backend
 from reachy_mini.mujoco_utils import (
     get_actuator_names,
-    get_joint_id_from_name,
     get_joint_addr_from_name,
+    get_joint_id_from_name,
 )
-import mujoco
-import os
-from pathlib import Path
-import mujoco.viewer
-import time
-import json
-import numpy as np
-from .reachy_mini import SLEEP_HEAD_JOINT_POSITIONS, SLEEP_ANTENNAS_JOINT_POSITIONS
+
+from .reachy_mini import SLEEP_ANTENNAS_JOINT_POSITIONS, SLEEP_HEAD_JOINT_POSITIONS
 
 ROOT_PATH = Path(os.path.dirname(os.path.abspath(__file__))).parent.parent
 

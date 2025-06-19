@@ -86,3 +86,13 @@ https://polyhaven.com/a/food_apple_01
 https://polyhaven.com/a/croissant
 https://polyhaven.com/a/wooden_table_02
 https://polyhaven.com/a/rubber_duck_toy
+
+## Contribute
+
+Plase use ruff to format and check your code before any contribution.
+
+The development tools are available in the optional dependencies.
+
+```bash
+pip install -e .[dev]
+```
