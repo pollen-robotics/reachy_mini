@@ -8,13 +8,12 @@ import mujoco.viewer
 import numpy as np
 
 from reachy_mini.io import Backend
-from reachy_mini.mujoco_utils import (
-    get_actuator_names,
-    get_joint_addr_from_name,
-    get_joint_id_from_name,
-)
+from reachy_mini.mujoco_utils import (get_actuator_names,
+                                      get_joint_addr_from_name,
+                                      get_joint_id_from_name)
 
-from .reachy_mini import SLEEP_ANTENNAS_JOINT_POSITIONS, SLEEP_HEAD_JOINT_POSITIONS
+from .reachy_mini import (SLEEP_ANTENNAS_JOINT_POSITIONS,
+                          SLEEP_HEAD_JOINT_POSITIONS)
 
 ROOT_PATH = Path(os.path.dirname(os.path.abspath(__file__))).parent.parent
 
@@ -68,8 +67,7 @@ class MujocoBackend(Backend):
                 # self.streamer_udp.send_frame(im)
             with viewer.lock():
                 self.data.qpos[self.joint_qpos_addr] = np.array(
-                    SLEEP_HEAD_JOINT_POSITIONS + SLEEP_ANTENNAS_JOINT_POSITIONS
-                ).reshape(-1, 1)
+                    SLEEP_HEAD_JOINT_POSITIONS + SLEEP_ANTENNAS_JOINT_POSITIONS).reshape(-1, 1)
                 self.data.ctrl[:] = np.array(
                     SLEEP_HEAD_JOINT_POSITIONS + SLEEP_ANTENNAS_JOINT_POSITIONS
                 )
