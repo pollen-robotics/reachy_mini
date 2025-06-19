@@ -1,13 +1,20 @@
-from reachy_mini.io import Backend
-from reachy_mini.mujoco_utils import get_actuator_names, get_joint_id_from_name, get_joint_addr_from_name
-import mujoco
-import os
-from pathlib import Path
-import mujoco.viewer
-import time
 import json
+import os
+import time
+from pathlib import Path
+
+import mujoco
+import mujoco.viewer
 import numpy as np
-from .reachy_mini import SLEEP_HEAD_JOINT_POSITIONS, SLEEP_ANTENNAS_JOINT_POSITIONS
+
+from reachy_mini.io import Backend
+from reachy_mini.mujoco_utils import (
+    get_actuator_names,
+    get_joint_addr_from_name,
+    get_joint_id_from_name,
+)
+
+from .reachy_mini import SLEEP_ANTENNAS_JOINT_POSITIONS, SLEEP_HEAD_JOINT_POSITIONS
 
 ROOT_PATH = Path(os.path.dirname(os.path.abspath(__file__))).parent.parent
 
@@ -47,21 +54,22 @@ class MujocoBackend(Backend):
             self.model, self.data, show_left_ui=False, show_right_ui=False
         ) as viewer:
             with viewer.lock():
-                viewer.cam.type      = mujoco.mjtCamera.mjCAMERA_FREE
-                viewer.cam.distance  = 0.8          # ≃ ||pos - lookat||
-                viewer.cam.azimuth   = 160         # degrees
-                viewer.cam.elevation =  -20        # degrees
+                viewer.cam.type = mujoco.mjtCamera.mjCAMERA_FREE
+                viewer.cam.distance = 0.8  # ≃ ||pos - lookat||
+                viewer.cam.azimuth = 160  # degrees
+                viewer.cam.elevation = -20  # degrees
                 viewer.cam.lookat[:] = [0, 0, 0.15]
-            
+
                 # force one render with your new camera
                 mujoco.mj_step(self.model, self.data)
                 viewer.sync()
 
-
                 # im = self.get_camera()
                 # self.streamer_udp.send_frame(im)
             with viewer.lock():
-                self.data.qpos[self.joint_qpos_addr] = np.array(SLEEP_HEAD_JOINT_POSITIONS + SLEEP_ANTENNAS_JOINT_POSITIONS).reshape(-1, 1)
+                self.data.qpos[self.joint_qpos_addr] = np.array(
+                    SLEEP_HEAD_JOINT_POSITIONS + SLEEP_ANTENNAS_JOINT_POSITIONS
+                ).reshape(-1, 1)
                 self.data.ctrl[:] = np.array(
                     SLEEP_HEAD_JOINT_POSITIONS + SLEEP_ANTENNAS_JOINT_POSITIONS
                 )
@@ -107,4 +115,5 @@ class MujocoBackend(Backend):
         return self.data.qpos[self.joint_qpos_addr[-2:]].flatten().tolist()
 
     def set_torque(self, enabled: bool) -> None:
+        pass
         pass

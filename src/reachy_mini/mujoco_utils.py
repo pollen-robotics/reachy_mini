@@ -2,15 +2,19 @@ import mujoco
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 
+
 def get_homogeneous_matrix_from_euler(
     position: tuple = (0, 0, 0),  # (x, y, z)
     euler_angles: tuple = (0, 0, 0),  # (roll, pitch, yaw)
     degrees: bool = False,
 ):
     homogeneous_matrix = np.eye(4)
-    homogeneous_matrix[:3, :3] = R.from_euler("xyz", euler_angles, degrees=degrees).as_matrix()
+    homogeneous_matrix[:3, :3] = R.from_euler(
+        "xyz", euler_angles, degrees=degrees
+    ).as_matrix()
     homogeneous_matrix[:3, 3] = position
     return homogeneous_matrix
+
 
 def get_joint_qpos(model, data, joint_name):
     # Get the joint id
@@ -23,6 +27,7 @@ def get_joint_qpos(model, data, joint_name):
 
     # Get the qpos value
     return data.qpos[qpos_addr]
+
 
 def get_joint_id_from_name(model, name: str) -> int:
     """Return the id of a specified joint"""
