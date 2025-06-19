@@ -75,16 +75,6 @@ class Daemon:
         print("Daemon stopped.")
 
 
-def run_daemon(args: argparse.Namespace):
-    d = Daemon(
-        sim=args.sim,
-        serialport=args.serialport,
-        scene=args.scene,
-        localhost_only=args.localhost_only,
-    )
-    d.run()
-
-
 def main():
     parser = argparse.ArgumentParser(description="Run the Reachy Mini daemon.")
     parser.add_argument(
@@ -113,29 +103,13 @@ def main():
     )
     args = parser.parse_args()
 
-    # Monkey patch to run the main function using the mjpython executable on macOS
-    import multiprocessing as mp
-    import platform
-    import sys
-
-    python_exec = sys.executable
-
-    if platform.system() == "Darwin" and args.sim and "mjpython" not in python_exec:
-        mjpython_exec = python_exec.removesuffix("python") + "mjpython"
-        mp.set_executable(mjpython_exec)
-
-        print(f"Running Reachy Mini daemon with mjpython... {mjpython_exec}")
-        p = mp.Process(target=run_daemon, args=(args,))
-        p.start()
-        try:
-            p.join()
-        except KeyboardInterrupt:
-            p.terminate()
-        return p.exitcode
-
-    else:
-        print(f"Running Reachy Mini daemon with {python_exec}...")
-        run_daemon(args)
+    d = Daemon(
+        sim=args.sim,
+        serialport=args.serialport,
+        scene=args.scene,
+        localhost_only=args.localhost_only,
+    )
+    d.run()
 
 
 if __name__ == "__main__":
