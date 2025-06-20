@@ -22,6 +22,8 @@ dependencies = [
     "opencv-python<=5.0",
     "psutil",
     "jinja2",
+    "uvicorn",
+    "fastapi",
 ]
 
 [project.scripts]
