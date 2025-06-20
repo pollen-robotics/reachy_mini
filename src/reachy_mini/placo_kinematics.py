@@ -117,8 +117,15 @@ class PlacoKinematics:
         _pose[:3, 3][2] += self.head_z_offset  # offset the height of the head
         self.head_frame.T_world_frame = _pose
         for _ in range(10):
-            self.ik_solver.solve(True)
-            self.robot.update_kinematics()
+            try:
+                self.ik_solver.solve(True)
+                self.robot.update_kinematics()
+
+            except RuntimeError as e:
+                print(e)
+                self.robot.reset()
+                self.robot.update_kinematics()
+                break
 
         joints = []
         for joint_name in self.joints_names:
@@ -141,8 +148,15 @@ class PlacoKinematics:
         )
 
         for _ in range(10):
-            self.fk_solver.solve(True)
-            self.robot.update_kinematics()
+            try:
+                self.fk_solver.solve(True)
+                self.robot.update_kinematics()
+
+            except RuntimeError as e:
+                print(e)
+                self.robot.reset()
+                self.robot.update_kinematics()
+                break
 
         T_world_head = self.robot.get_T_world_frame("head")
         T_world_head[:3, 3][2] -= self.head_z_offset  # offset the height of the head
