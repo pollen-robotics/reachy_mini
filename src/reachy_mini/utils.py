@@ -108,10 +108,12 @@ def daemon_check(spawn_daemon, use_sim):
         )
 
 
-def linear_pose_interpolation(start_pose:np.ndarray, target_pose:np.ndarray, t:float):
+def linear_pose_interpolation(
+    start_pose: np.ndarray, target_pose: np.ndarray, t: float
+):
     # Extract rotations
     rot_start = R.from_matrix(start_pose[:3, :3])
-    rot_end   = R.from_matrix(target_pose[:3, :3])
+    rot_end = R.from_matrix(target_pose[:3, :3])
 
     # Compute relative rotation q_rel such that rot_start * q_rel = rot_end
     q_rel = rot_start.inv() * rot_end
@@ -122,48 +124,47 @@ def linear_pose_interpolation(start_pose:np.ndarray, target_pose:np.ndarray, t:f
 
     # Extract translations
     pos_start = start_pose[:3, 3]
-    pos_end   = target_pose[:3, 3]
+    pos_end = target_pose[:3, 3]
     # Linear interpolation/extrapolation on translation
     pos_interp = pos_start + (pos_end - pos_start) * t
 
     # Compose homogeneous transformation
     interp_pose = np.eye(4)
     interp_pose[:3, :3] = rot_interp
-    interp_pose[:3, 3]  = pos_interp
+    interp_pose[:3, 3] = pos_interp
 
     return interp_pose
 
 
-def time_trajectory(t:float, method='default'):
+def time_trajectory(t: float, method="default"):
+    method = "minjerk" if method == "default" else method
 
-    method = 'minjerk' if method == 'default' else method
-
-    if t<0 or t>1:
-        raise ValueError('time value is out of range [0,1]')
+    if t < 0 or t > 1:
+        raise ValueError("time value is out of range [0,1]")
 
     match method:
-        case 'linear':
+        case "linear":
             return t
 
-        case 'minjerk':
-            return 10*t**3 - 15*t**4 + 6*t**5
+        case "minjerk":
+            return 10 * t**3 - 15 * t**4 + 6 * t**5
 
-        case 'ease':
+        case "ease":
             if t < 0.5:
                 return 2 * t * t
             else:
                 return 1 - ((-2 * t + 2) ** 2) / 2
 
-        case 'cartoon':
+        case "cartoon":
             c1 = 1.70158
             c2 = c1 * 1.525
 
             if t < 0.5:
                 # phase in
-                return ( (2 * t) ** 2 * ( (c2 + 1) * 2 * t - c2 ) ) / 2
+                return ((2 * t) ** 2 * ((c2 + 1) * 2 * t - c2)) / 2
             else:
                 # phase out
-                return ( ((2 * t - 2) ** 2 * ( (c2 + 1) * (2 * t - 2) + c2 ) ) + 2 ) / 2
+                return (((2 * t - 2) ** 2 * ((c2 + 1) * (2 * t - 2) + c2)) + 2) / 2
 
         case _:
             raise ValueError(
@@ -179,5 +180,5 @@ def create_pose(x=0, y=0, z=0, roll=0, pitch=0, yaw=0, mm=False, degrees=True):
     if mm:
         pose[:3, 3] /= 1000
 
-    pose[2, 3] += 0.177 # :(
+    pose[2, 3] += 0.177  # :(
     return pose
