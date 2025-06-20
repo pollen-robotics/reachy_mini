@@ -16,7 +16,11 @@ from reachy_mini.utils import daemon_check, minimum_jerk
 
 ROOT_PATH = Path(os.path.dirname(os.path.abspath(__file__))).parent.parent
 
-pygame.mixer.init()
+try:
+    pygame.mixer.init()
+except pygame.error as e:
+    print(f"Failed to initialize pygame mixer: {e}")
+    pygame.mixer = None
 
 # Behavior definitions
 INIT_HEAD_POSE = np.eye(4)
@@ -137,6 +141,9 @@ class ReachyMini:
 
     # Multimedia methods
     def play_sound(self, sound_file: str):
+        if pygame.mixer is None:
+            print("Pygame mixer is not initialized. Cannot play sound.")
+            return
         pygame.mixer.music.load(f"{ROOT_PATH}/src/assets/{sound_file}")
         pygame.mixer.music.play()
 
