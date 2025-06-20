@@ -12,7 +12,12 @@ from scipy.spatial.transform import Rotation as R
 
 from reachy_mini.io import Client
 from reachy_mini.placo_kinematics import PlacoKinematics
-from reachy_mini.utils import daemon_check, minimum_jerk, time_trajectory, linear_pose_interpolation
+from reachy_mini.utils import (
+    daemon_check,
+    minimum_jerk,
+    time_trajectory,
+    linear_pose_interpolation,
+)
 
 ROOT_PATH = Path(os.path.dirname(os.path.abspath(__file__))).parent.parent
 
@@ -31,6 +36,14 @@ SLEEP_HEAD_JOINT_POSITIONS = [
     0.876,
 ]
 SLEEP_ANTENNAS_JOINT_POSITIONS = [3.05, -3.05]
+SLEEP_HEAD_POSE = np.array(
+    [
+        [0.90372763, 0.178507, 0.38911647, -0.02445368],
+        [-0.14148051, 0.98238491, -0.12207846, 0.01309389],
+        [-0.40405401, 0.05527328, 0.91306365, -0.04571049],
+        [0.0, 0.0, 0.0, 1.0],
+    ]
+)
 
 
 class ReachyMini:
@@ -87,13 +100,12 @@ class ReachyMini:
         head: Optional[np.ndarray] = None,  # 4x4 pose matrix
         antennas: Optional[np.ndarray] = None,  # [left_angle, right_angle] (in rads)
         duration: float = 0.5,  # Duration in seconds for the movement
-        method='default'
+        method="default",
     ):
-
         self._goto_task_positions(
-            target_head_pose=head,  
+            target_head_pose=head,
             antennas_joint_positions=antennas,
-            duration= duration, 
+            duration=duration,
             method=method,
         )
 
@@ -135,6 +147,7 @@ class ReachyMini:
             antennas_joint_positions=SLEEP_ANTENNAS_JOINT_POSITIONS,
             duration=2,
         )
+        self._last_head_pose = SLEEP_HEAD_POSE
 
     # Multimedia methods
     def play_sound(self, sound_file: str):
@@ -172,33 +185,48 @@ class ReachyMini:
             )
         self.client.send_command(json.dumps(cmd))
 
-    def _goto_task_positions(self, target_head_pose,  antennas_joint_positions: Optional[
-            List[float]] = None, duration: float = 0.5, method='default'):
-        
+    def _goto_task_positions(
+        self,
+        target_head_pose,
+        antennas_joint_positions: Optional[List[float]] = None,
+        duration: float = 0.5,
+        method="default",
+    ):
         cur_head_joints, cur_antennas_joints = self._get_current_joint_positions()
-        
+
         if self._last_head_pose is None:
             start_head_pose = self.head_kinematics.fk(cur_head_joints)
         else:
             start_head_pose = self._last_head_pose
 
-        target_head_pose = self.head_kinematics.fk(cur_head_joints) if target_head_pose is None else target_head_pose
-        
+        target_head_pose = (
+            self.head_kinematics.fk(cur_head_joints)
+            if target_head_pose is None
+            else target_head_pose
+        )
+
         start_antennas = np.array(cur_antennas_joints)
-        target_antennas = start_antennas if antennas_joint_positions is None else np.array(antennas_joint_positions)
+        target_antennas = (
+            start_antennas
+            if antennas_joint_positions is None
+            else np.array(antennas_joint_positions)
+        )
 
         t0 = time.time()
         while time.time() - t0 < duration:
             t = time.time() - t0
-            
-            interp_time = time_trajectory(t/duration, method=method)
-            interp_head_pose = linear_pose_interpolation(start_head_pose, target_head_pose, interp_time)
-            interp_antennas_joint = start_antennas + (target_antennas - start_antennas) * interp_time
+
+            interp_time = time_trajectory(t / duration, method=method)
+            interp_head_pose = linear_pose_interpolation(
+                start_head_pose, target_head_pose, interp_time
+            )
+            interp_antennas_joint = (
+                start_antennas + (target_antennas - start_antennas) * interp_time
+            )
 
             self.set_position(interp_head_pose, interp_antennas_joint)
 
             time.sleep(0.01)
-
 
     def _goto_joint_positions(
         self,
