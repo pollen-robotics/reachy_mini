@@ -24,6 +24,7 @@ dependencies = [
     "jinja2",
     "uvicorn",
     "fastapi",
+    "pyserial",
 ]
 
 [project.scripts]
