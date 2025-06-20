@@ -34,7 +34,9 @@ Additional arguments:
 
 ### On the real robot
 
-```bash reachy-mini-daemon```
+```bash
+reachy-mini-daemon
+```
 
 This should automatically detect the serial port of the robot. If it does not, you can specify it manually with the `-p` option:
 
