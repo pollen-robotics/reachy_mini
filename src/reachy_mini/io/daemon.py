@@ -131,9 +131,15 @@ def main():
     )
     parser.add_argument(
         "--localhost-only",
-        type=bool,
+        action="store_true",
         default=True,
         help="Restrict the server to localhost only (default: True).",
+    )
+    parser.add_argument(
+        "--no-localhost-only",
+        action="store_false",
+        dest="localhost_only",
+        help="Allow the server to listen on all interfaces (default: False).",
     )
     args = parser.parse_args()
 
