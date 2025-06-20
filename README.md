@@ -11,7 +11,13 @@ pip install -e .
 Additional argument for both simulation and real robot:
 
 ```bash
---localhost-only : (Default True). If set, the server will only accept connections from localhost. This is useful for debugging.
+--localhost-only: (default behavior). The server will only accept connections from localhost.
+```
+
+or 
+
+```bash
+--no-localhost-only: If set, the server will accept connections from any connection on the local network.
 ```
 
 ### In simulation (MuJoCo)
