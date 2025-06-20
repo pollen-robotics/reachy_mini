@@ -106,3 +106,79 @@ def daemon_check(spawn_daemon, use_sim):
             ["reachy-mini-daemon", "--sim"] if use_sim else ["reachy-mini-daemon"],
             start_new_session=True,
         )
+
+
+def linear_pose_interpolation(
+    start_pose: np.ndarray, target_pose: np.ndarray, t: float
+):
+    # Extract rotations
+    rot_start = R.from_matrix(start_pose[:3, :3])
+    rot_end = R.from_matrix(target_pose[:3, :3])
+
+    # Compute relative rotation q_rel such that rot_start * q_rel = rot_end
+    q_rel = rot_start.inv() * rot_end
+    # Convert to rotation vector (axis-angle)
+    rotvec_rel = q_rel.as_rotvec()
+    # Scale the rotation vector by t (allows t<0 or >1 for overshoot)
+    rot_interp = (rot_start * R.from_rotvec(rotvec_rel * t)).as_matrix()
+
+    # Extract translations
+    pos_start = start_pose[:3, 3]
+    pos_end = target_pose[:3, 3]
+    # Linear interpolation/extrapolation on translation
+    pos_interp = pos_start + (pos_end - pos_start) * t
+
+    # Compose homogeneous transformation
+    interp_pose = np.eye(4)
+    interp_pose[:3, :3] = rot_interp
+    interp_pose[:3, 3] = pos_interp
+
+    return interp_pose
+
+
+def time_trajectory(t: float, method="default"):
+    method = "minjerk" if method == "default" else method
+
+    if t < 0 or t > 1:
+        raise ValueError("time value is out of range [0,1]")
+
+    match method:
+        case "linear":
+            return t
+
+        case "minjerk":
+            return 10 * t**3 - 15 * t**4 + 6 * t**5
+
+        case "ease":
+            if t < 0.5:
+                return 2 * t * t
+            else:
+                return 1 - ((-2 * t + 2) ** 2) / 2
+
+        case "cartoon":
+            c1 = 1.70158
+            c2 = c1 * 1.525
+
+            if t < 0.5:
+                # phase in
+                return ((2 * t) ** 2 * ((c2 + 1) * 2 * t - c2)) / 2
+            else:
+                # phase out
+                return (((2 * t - 2) ** 2 * ((c2 + 1) * (2 * t - 2) + c2)) + 2) / 2
+
+        case _:
+            raise ValueError(
+                f"Unknown interpolation method: {method} (possible values: linear, minjerk, ease, cartoon)"
+            )
+
+
+def create_pose(x=0, y=0, z=0, roll=0, pitch=0, yaw=0, mm=False, degrees=True):
+    pose = np.eye(4)
+    rot = R.from_euler("xyz", [roll, pitch, yaw], degrees=degrees).as_matrix()
+    pose[:3, :3] = rot
+    pose[:, 3] = [x, y, z, 0]
+    if mm:
+        pose[:3, 3] /= 1000
+
+    pose[2, 3] += 0.177  # :(
+    return pose
