@@ -20,11 +20,13 @@ dependencies = [
     "pygame==2.6.1",
     "eclipse-zenoh>=1.4.0",
     "opencv-python<=5.0",
-    "psutil"
+    "psutil",
+    "jinja2",
 ]
 
 [project.scripts]
 reachy-mini-daemon = "reachy_mini.io.daemon:main"
+reachy-mini-make-app = "reachy_mini.app:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
