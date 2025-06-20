@@ -1,11 +1,10 @@
+import argparse
+import time
 from threading import Thread
 
-import argparse
-from typing import Optional
 import serial.tools.list_ports
-import time
 
-from reachy_mini import MujocoBackend, RobotBackend, ReachyMini
+from reachy_mini import MujocoBackend, ReachyMini, RobotBackend
 from reachy_mini.io import Server
 
 
