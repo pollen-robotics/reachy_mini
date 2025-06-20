@@ -39,7 +39,7 @@ TEST_MOTION_AMPLITUDE_ORI = np.deg2rad(30)
 TEST_MOTION_FREQUENCY_HZ = 0.5 # Static frequency for test limits
 
 # Common Config
-NEUTRAL_POSITION = np.array([0.0, 0.0, 0.177 - 0.0075])
+NEUTRAL_POSITION = np.array([0.0, 0.0, -0.0075])
 NEUTRAL_EULER_ANGLES = np.array([0.0, 0.0, 0.0])
 ACTUATED_JOINT_NAMES = ["1", "2", "3", "4", "5", "6"]
 

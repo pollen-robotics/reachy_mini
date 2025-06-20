@@ -1,7 +1,10 @@
-from threading import local
-from reachy_mini import MujocoBackend, RobotBackend
-from reachy_mini.io import Server
+from threading import Thread
+
 import argparse
+import time
+
+from reachy_mini import MujocoBackend, RobotBackend, ReachyMini
+from reachy_mini.io import Server
 
 
 class Daemon:
@@ -11,44 +14,73 @@ class Daemon:
         serialport: str = "/dev/ttyACM0",
         scene: str = "empty",
         localhost_only: bool = True,
+        wake_up_on_start: bool = True,
+        goto_sleep_on_stop: bool = True,
     ):
         if sim:
             self.backend = MujocoBackend(scene=scene)
         else:
             self.backend = RobotBackend(serialport=serialport)
 
+        self.wake_up_on_start = wake_up_on_start
+        self.goto_sleep_on_stop = goto_sleep_on_stop
+
         self.server = Server(self.backend, localhost_only=localhost_only)
         self.server.start()
 
     def run(self):
-        try:
-            self.backend.run()
-        except:
-            self.server.stop()
-            raise
+        """Run the daemon."""
+
+        print("Starting Reachy Mini daemon...")
+        backend_run_thread = Thread(target=self.backend.run)
+        backend_run_thread.start()
+
+        ok = True
+
+        if self.wake_up_on_start:
+            try:
+                print("Waking up Reachy Mini...")
+                with ReachyMini() as mini:
+                    mini.set_torque(on=True)
+                    mini.wake_up()
+            except Exception as e:
+                print(f"Error while waking up Reachy Mini: {e}")
+                ok = False
+            except KeyboardInterrupt:
+                print("Daemon interrupted by user.")
+                ok = False
+
+        if ok:
+            try:
+                print("Daemon is running. Press Ctrl+C to stop.")
+                while backend_run_thread.is_alive():
+                    time.sleep(0.5)
+                else:
+                    print("Backend thread has stopped unexpectedly.")
+                    ok = False
+
+                    time.sleep(0.5)  # Wait for the backend to be ready
+            except KeyboardInterrupt:
+                print("Daemon interrupted by user.")
+
+        if self.goto_sleep_on_stop and ok:
+            try:
+                print("Putting Reachy Mini to sleep...")
+                with ReachyMini() as mini:
+                    mini.goto_sleep()
+            except Exception as e:
+                print(f"Error while putting Reachy Mini to sleep: {e}")
+            except KeyboardInterrupt:
+                pass
+
+        self.backend.should_stop.set()
+        backend_run_thread.join()
+
+        self.server.stop()
+        print("Daemon stopped.")
 
 
 def main():
-    """Monkey patch to run the main function using the mjpython executable on macOS."""
-    import platform
-
-    if platform.system() != "Darwin":
-        return _main()
-
-    import multiprocessing as mp
-    import sys
-
-    python_exec = sys.executable
-    python_exec = python_exec.removesuffix("python") + "mjpython"
-    mp.set_executable(python_exec)
-
-    p = mp.Process(target=_main)
-    p.start()
-    p.join()
-    return p.exitcode
-
-
-def _main():
     parser = argparse.ArgumentParser(description="Run the Reachy Mini daemon.")
     parser.add_argument(
         "--sim",
