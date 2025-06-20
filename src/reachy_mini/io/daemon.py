@@ -88,6 +88,7 @@ class Daemon:
                 print("Putting Reachy Mini to sleep...")
                 with ReachyMini() as mini:
                     mini.goto_sleep()
+                    mini.set_torque(on=False)
             except Exception as e:
                 print(f"Error while putting Reachy Mini to sleep: {e}")
             except KeyboardInterrupt:
