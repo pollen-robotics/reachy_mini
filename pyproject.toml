@@ -1,3 +1,40 @@
 [build-system]
 requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
+
+[project]
+name = "reachy_mini"
+version = "0.1.0"
+authors = [
+    { name = "Pollen Robotics", email = "contact@pollen-robotics.com" }
+]
+description = ""
+readme = "README.md"
+dependencies = [
+    "numpy==2.2.5",
+    "scipy==1.15.3",
+    "mujoco==3.3.0",
+    "onshape-to-robot==1.7.6",
+    "placo==0.9.4",
+    "reachy_mini_motor_controller",
+    "pygame==2.6.1",
+    "eclipse-zenoh>=1.4.0",
+    "opencv-python<=5.0",
+    "psutil",
+    "jinja2",
+    "uvicorn",
+    "fastapi",
+]
+
+[project.scripts]
+reachy-mini-daemon = "reachy_mini.io.daemon:main"
+reachy-mini-make-app = "reachy_mini.app:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+exclude = ["examples/remi_outdated/*.py", "src/reachy_mini/__init__.py", "build/*"]

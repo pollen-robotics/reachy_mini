@@ -34,7 +34,12 @@ SLEEP_ANTENNAS_JOINT_POSITIONS = [3.05, -3.05]
 
 
 class ReachyMini:
-    def __init__(self, localhost_only: bool = True, spawn_daemon: bool = False, use_sim: bool = True) -> None:
+    def __init__(
+        self,
+        localhost_only: bool = True,
+        spawn_daemon: bool = False,
+        use_sim: bool = True,
+    ) -> None:
         daemon_check(spawn_daemon, use_sim)
         self.client = Client(localhost_only)
         self.client.wait_for_connection()
@@ -66,9 +71,9 @@ class ReachyMini:
             head_joint_positions = None
 
         if antennas is not None:
-            assert antennas.shape == (
-                2,
-            ), "Antennas must be a 1D array with two elements."
+            assert antennas.shape == (2,), (
+                "Antennas must be a 1D array with two elements."
+            )
             antenna_joint_positions = antennas.tolist()
         else:
             antenna_joint_positions = None
@@ -151,9 +156,9 @@ class ReachyMini:
         cmd = {}
 
         if head_joint_positions is not None:
-            assert (
-                len(head_joint_positions) == 7
-            ), f"Head joint positions must have length 7, got {head_joint_positions}."
+            assert len(head_joint_positions) == 7, (
+                f"Head joint positions must have length 7, got {head_joint_positions}."
+            )
             cmd["head_joint_positions"] = list(head_joint_positions)
 
         if antennas_joint_positions is not None:

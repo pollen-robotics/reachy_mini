@@ -86,3 +86,20 @@ https://polyhaven.com/a/food_apple_01
 https://polyhaven.com/a/croissant
 https://polyhaven.com/a/wooden_table_02
 https://polyhaven.com/a/rubber_duck_toy
+
+## Contribute
+
+Development tools are available in the optional dependencies.
+
+```bash
+pip install -e .[dev]
+pre-commit install
+```
+
+Your files will be checked before any commit. Checks may also be manually run with
+
+```bash
+pre-commit run --all-files
+```
+
+Checks are performed by Ruff. You may want to [configure your IDE to support it](https://docs.astral.sh/ruff/editors/setup/).
