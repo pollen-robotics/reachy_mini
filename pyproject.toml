@@ -31,3 +31,6 @@ package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.ruff]
+exclude = ["examples/remi_outdated/*.py", "src/reachy_mini/__init__.py", "build/*"]

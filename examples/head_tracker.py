@@ -1,4 +1,3 @@
-
 try:
     import mediapipe as mp
 except ImportError:
