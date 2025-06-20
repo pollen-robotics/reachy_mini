@@ -18,9 +18,28 @@ ROOT_PATH = Path(os.path.dirname(os.path.abspath(__file__))).parent.parent
 
 pygame.mixer.init()
 
+# Behavior definitions
+INIT_HEAD_POSE = np.eye(4)
+
+SLEEP_HEAD_JOINT_POSITIONS = [
+    0.0,
+    -0.849,
+    1.292,
+    -0.472,
+    -0.047,
+    -1.31,
+    0.876,
+]
+SLEEP_ANTENNAS_JOINT_POSITIONS = [3.05, -3.05]
+
 
 class ReachyMini:
-    def __init__(self, localhost_only: bool = True, spawn_daemon: bool = False, use_sim: bool = True) -> None:
+    def __init__(
+        self,
+        localhost_only: bool = True,
+        spawn_daemon: bool = False,
+        use_sim: bool = True,
+    ) -> None:
         daemon_check(spawn_daemon, use_sim)
         self.client = Client(localhost_only)
         self.client.wait_for_connection()
@@ -53,9 +72,9 @@ class ReachyMini:
             head_joint_positions = None
 
         if antennas is not None:
-            assert antennas.shape == (
-                2,
-            ), "Antennas must be a 1D array with two elements."
+            assert antennas.shape == (2,), (
+                "Antennas must be a 1D array with two elements."
+            )
             antenna_joint_positions = antennas.tolist()
         else:
             antenna_joint_positions = None
@@ -85,50 +104,35 @@ class ReachyMini:
         """
         self.client.send_command(json.dumps({"torque": on}))
 
-    # Behavior definitions
-    init_head_pose = np.eye(4)
-    init_head_pose[2, 3] = 0.177
-
-    sleep_head_joint_positions = [
-        0.0,
-        0.849,
-        -1.292,
-        0.472,
-        0.047,
-        1.31,
-        -0.876,
-    ]
-    sleep_antennas_joint_positions = [3.05, -3.05]
-
     def wake_up(self):
-        self.goto_position(self.init_head_pose, antennas=[0.0, 0.0], duration=2)
+        self.goto_position(INIT_HEAD_POSE, antennas=[0.0, 0.0], duration=2)
         time.sleep(0.1)
 
         # Toudoum
         self.play_sound("proud2.wav")
 
         # Roll 20° to the left
-        pose = self.init_head_pose.copy()
+        pose = INIT_HEAD_POSE.copy()
         pose[:3, :3] = R.from_euler("xyz", [20, 0, 0], degrees=True).as_matrix()
         self.goto_position(pose, duration=0.2)
 
         # Go back to the initial position
-        self.goto_position(self.init_head_pose, duration=0.2)
+        self.goto_position(INIT_HEAD_POSE, duration=0.2)
 
     def goto_sleep(self):
         # Check if we are too far from the initial position
         # Move to the initial position if necessary
         current_positions, _ = self._get_current_joint_positions()
-        init_positions = self.head_kinematics.ik(self.init_head_pose)
+        init_positions = self.head_kinematics.ik(INIT_HEAD_POSE)
         dist = np.linalg.norm(np.array(current_positions) - np.array(init_positions))
         if dist > 0.2:
-            self.goto_position(self.init_head_pose, antennas=[0.0, 0.0], duration=1)
+            self.goto_position(INIT_HEAD_POSE, antennas=[0.0, 0.0], duration=1)
             time.sleep(0.2)
 
         # Move to the sleep position
         self._goto_joint_positions(
-            head_joint_positions=self.sleep_head_joint_positions,
-            antennas_joint_positions=self.sleep_antennas_joint_positions,
+            head_joint_positions=SLEEP_HEAD_JOINT_POSITIONS,
+            antennas_joint_positions=SLEEP_ANTENNAS_JOINT_POSITIONS,
             duration=2,
         )
 
@@ -153,9 +157,9 @@ class ReachyMini:
         cmd = {}
 
         if head_joint_positions is not None:
-            assert (
-                len(head_joint_positions) == 7
-            ), f"Head joint positions must have length 7, got {head_joint_positions}."
+            assert len(head_joint_positions) == 7, (
+                f"Head joint positions must have length 7, got {head_joint_positions}."
+            )
             cmd["head_joint_positions"] = list(head_joint_positions)
 
         if antennas_joint_positions is not None:

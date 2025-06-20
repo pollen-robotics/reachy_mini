@@ -9,9 +9,7 @@ with ReachyMini(spawn_daemon=True, use_sim=False) as reachy_mini:
     try:
         while True:
             pose = np.eye(4)
-            pose[:3, 3][2] = 0.177 + 0.005 * np.sin(
-                2 * np.pi * 0.3 * time.time() + np.pi
-            )
+            pose[:3, 3][2] = 0.005 * np.sin(2 * np.pi * 0.3 * time.time() + np.pi)
             euler_rot = [
                 0,
                 0,

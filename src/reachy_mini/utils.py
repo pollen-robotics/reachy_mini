@@ -7,6 +7,18 @@ import numpy as np
 import psutil
 from scipy.spatial.transform import Rotation as R
 
+
+def create_head_pose(x=0, y=0, z=0, roll=0, pitch=0, yaw=0, mm=False, degrees=True):
+    pose = np.eye(4)
+    rot = R.from_euler("xyz", [roll, pitch, yaw], degrees=degrees).as_matrix()
+    pose[:3, :3] = rot
+    pose[:, 3] = [x, y, z, 0]
+    if mm:
+        pose[:3, 3] /= 1000
+
+    return pose
+
+
 InterpolationFunc = Callable[[float], np.ndarray]
 
 
@@ -118,7 +130,7 @@ def linear_pose_interpolation(start_pose:np.ndarray, target_pose:np.ndarray, t:f
     interp_pose = np.eye(4)
     interp_pose[:3, :3] = rot_interp
     interp_pose[:3, 3]  = pos_interp
-    
+
     return interp_pose
 
 
@@ -132,7 +144,7 @@ def time_trajectory(t:float, method='default'):
     match method:
         case 'linear':
             return t
-        
+
         case 'minjerk':
             return 10*t**3 - 15*t**4 + 6*t**5
 
@@ -141,11 +153,11 @@ def time_trajectory(t:float, method='default'):
                 return 2 * t * t
             else:
                 return 1 - ((-2 * t + 2) ** 2) / 2
-        
+
         case 'cartoon':
             c1 = 1.70158
             c2 = c1 * 1.525
-            
+
             if t < 0.5:
                 # phase in
                 return ( (2 * t) ** 2 * ( (c2 + 1) * 2 * t - c2 ) ) / 2
@@ -168,16 +180,4 @@ def create_pose(x=0, y=0, z=0, roll=0, pitch=0, yaw=0, mm=False, degrees=True):
         pose[:3, 3] /= 1000
 
     pose[2, 3] += 0.177 # :(
-    return pose
-
-
-def create_head_pose(x=0, y=0, z=0, roll=0, pitch=0, yaw=0, mm=False, degrees=True):
-    pose = np.eye(4)
-    rot = R.from_euler("xyz", [roll, pitch, yaw], degrees=degrees).as_matrix()
-    pose[:3, :3] = rot
-    pose[:, 3] = [x, y, z, 0]
-    if mm:
-        pose[:3, 3] /= 1000
-
-    pose[2, 3] += 0.177
     return pose

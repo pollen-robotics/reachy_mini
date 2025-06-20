@@ -1,11 +1,20 @@
-from reachy_mini.io import Backend
-from reachy_mini.mujoco_utils import get_actuator_names, get_joint_id_from_name, get_joint_addr_from_name
-import mujoco
-import os
-from pathlib import Path
-import mujoco.viewer
-import time
 import json
+import os
+import time
+from pathlib import Path
+
+import mujoco
+import mujoco.viewer
+import numpy as np
+
+from reachy_mini.io import Backend
+from reachy_mini.mujoco_utils import (
+    get_actuator_names,
+    get_joint_addr_from_name,
+    get_joint_id_from_name,
+)
+
+from .reachy_mini import SLEEP_ANTENNAS_JOINT_POSITIONS, SLEEP_HEAD_JOINT_POSITIONS
 
 ROOT_PATH = Path(os.path.dirname(os.path.abspath(__file__))).parent.parent
 
@@ -40,15 +49,41 @@ class MujocoBackend(Backend):
         # self.streamer_udp = UDPJPEGFrameSender()
 
     def run(self):
-        step = 0
+        step = 1
         with mujoco.viewer.launch_passive(
             self.model, self.data, show_left_ui=False, show_right_ui=False
         ) as viewer:
-            while not self.should_stop.is_set():
-                start_t = time.time()
+            with viewer.lock():
+                viewer.cam.type = mujoco.mjtCamera.mjCAMERA_FREE
+                viewer.cam.distance = 0.8  # ≃ ||pos - lookat||
+                viewer.cam.azimuth = 160  # degrees
+                viewer.cam.elevation = -20  # degrees
+                viewer.cam.lookat[:] = [0, 0, 0.15]
+
+                # force one render with your new camera
+                mujoco.mj_step(self.model, self.data)
+                viewer.sync()
 
                 # im = self.get_camera()
                 # self.streamer_udp.send_frame(im)
+            with viewer.lock():
+                self.data.qpos[self.joint_qpos_addr] = np.array(
+                    SLEEP_HEAD_JOINT_POSITIONS + SLEEP_ANTENNAS_JOINT_POSITIONS
+                ).reshape(-1, 1)
+                self.data.ctrl[:] = np.array(
+                    SLEEP_HEAD_JOINT_POSITIONS + SLEEP_ANTENNAS_JOINT_POSITIONS
+                )
+
+                # recompute all kinematics, collisions, etc.
+                mujoco.mj_forward(self.model, self.data)
+
+            # one more frame so the viewer shows your startup pose
+            mujoco.mj_step(self.model, self.data)
+            viewer.sync()
+
+            # 3) now enter your normal loop
+            while not self.should_stop.is_set():
+                start_t = time.time()
 
                 if step % self.decimation == 0:
                     if self.head_joint_positions is not None:
@@ -80,4 +115,5 @@ class MujocoBackend(Backend):
         return self.data.qpos[self.joint_qpos_addr[-2:]].flatten().tolist()
 
     def set_torque(self, enabled: bool) -> None:
+        pass
         pass

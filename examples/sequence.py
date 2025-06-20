@@ -7,7 +7,6 @@ with ReachyMini() as reachy_mini:
     try:
         while True:
             pose = np.eye(4)
-            pose[:3, 3][2] = 0.177  # Set the height of the head
 
             t = 0
             t0 = time.time()
@@ -44,7 +43,6 @@ with ReachyMini() as reachy_mini:
             while time.time() - s < 2.0:
                 t = time.time() - t0
                 pose = np.eye(4)
-                pose[:3, 3][2] = 0.177
                 pose[:3, 3][2] += 0.025 * np.sin(2 * np.pi * 0.5 * t)
                 reachy_mini.set_position(head=pose, antennas=np.array([0, 0]))
                 time.sleep(0.01)
@@ -65,22 +63,22 @@ with ReachyMini() as reachy_mini:
                 pose[:3, 3] = [
                     0.015 * np.sin(2 * np.pi * 1.0 * t),
                     0.015 * np.sin(2 * np.pi * 1.0 * t + np.pi / 2),
-                    0.177,
+                    0.0,
                 ]
                 reachy_mini.set_position(head=pose, antennas=np.array([0, 0]))
                 time.sleep(0.01)
 
-            pose[:3, 3] = [0, 0, 0.177]
+            pose[:3, 3] = [0, 0, 0.0]
             reachy_mini.set_position(head=pose, antennas=np.array([0, 0]))
 
             time.sleep(0.5)
 
-            pose[:3, 3] = [0.02, 0.02, 0.177]
+            pose[:3, 3] = [0.02, 0.02, 0.0]
             reachy_mini.set_position(head=pose, antennas=np.array([0, 0]))
 
             time.sleep(0.5)
 
-            pose[:3, 3] = [0.00, 0.02, 0.177]
+            pose[:3, 3] = [0.00, 0.02, 0.0]
             euler_rot = np.array([0, 0, 0.5])
             rot_mat = R.from_euler("xyz", euler_rot, degrees=False).as_matrix()
             pose[:3, :3] = rot_mat
@@ -88,7 +86,7 @@ with ReachyMini() as reachy_mini:
 
             time.sleep(0.5)
 
-            pose[:3, 3] = [0.00, -0.02, 0.177]
+            pose[:3, 3] = [0.00, -0.02, 0.0]
             euler_rot = np.array([0, 0, -0.5])
             rot_mat = R.from_euler("xyz", euler_rot, degrees=False).as_matrix()
             pose[:3, :3] = rot_mat
@@ -96,7 +94,7 @@ with ReachyMini() as reachy_mini:
 
             time.sleep(0.5)
 
-            pose[:3, 3] = [0, 0, 0.177]
+            pose[:3, 3] = [0, 0, 0.0]
             reachy_mini.set_position(head=pose, antennas=np.array([0, 0]))
 
             time.sleep(2)
