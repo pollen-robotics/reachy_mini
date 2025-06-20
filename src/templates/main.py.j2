@@ -10,22 +10,42 @@ class {{ class_name }}(ReachyMiniApp):
         # Check the stop_event to gracefully exit the loop
         # Example:
         # import time
+        # 
         # import numpy as np
         # from scipy.spatial.transform import Rotation as R
-        #
+        # 
         # t0 = time.time()
-        #
+        # 
         # while not stop_event.is_set():
         #     t = time.time() - t0
-        #
-        #     target = np.deg2rad(30) * np.sin(2 * np.pi * 0.5 * t)
-        #
-        #     yaw = target
+        # 
+        #     yaw = np.deg2rad(30) * np.sin(2 * np.pi * 0.5 * t)
+        # 
         #     head_pose = np.eye(4)
-        #     head_pose[:3, 3] = [0, 0, 0.177]
-        #     head_pose[:3, :3] = R.from_euler("xyz", [0, 0, yaw], degrees=False).as_matrix()
-        #
+        #     head_pose[:3, :3] = R.from_euler(
+        #         "xyz", [0, 0, yaw], degrees=False
+        #     ).as_matrix()
+        # 
         #     reachy_mini.set_position(head=head_pose)
-        #
+        # 
         #     time.sleep(0.01)
-        print("Running '{{ app_name }}' a ReachyMiniApp...")
+
+        print("This is a placeholder for your app logic.")
+
+
+if __name__ == "__main__":
+    # You can run the app directly from this script
+    with ReachyMini() as mini:
+        app = {{ class_name }}()
+        
+        stop = threading.Event()
+
+        try:
+            print("Running '{{ app_name }}' a ReachyMiniApp...")
+            print("Press Ctrl+C to stop the app.")
+            app.run(mini, stop)
+            print("App has stopped.")
+
+        except KeyboardInterrupt:
+            print("Stopping the app...")
+            stop.set()
