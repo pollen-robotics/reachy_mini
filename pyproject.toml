@@ -27,6 +27,11 @@ dependencies = [
     "pyserial",
 ]
 
+[project.optional-dependencies]
+dev = [
+    "pytest",
+]
+
 [project.scripts]
 reachy-mini-daemon = "reachy_mini.io.daemon:main"
 reachy-mini-make-app = "reachy_mini.app:main"
