@@ -5,12 +5,6 @@ from reachy_mini import ReachyMini
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 
-from noise import pnoise1
-
-
-def smooth_movement(t, speed=0.5, scale=0.8):
-    return pnoise1(t * speed) * scale
-
 
 def draw_debug(img, palm_center):
     h, w, _ = img.shape
@@ -47,14 +41,12 @@ cap = cv2.VideoCapture(4)
 hand_tracker = HandTracker()
 pose = np.eye(4)
 euler_rot = np.array([0.0, 0.0, 0.0])
-kp = 0.3
+kp = 0.2
 t0 = time.time()
 with ReachyMini() as reachy_mini:
     try:
         while True:
             t = time.time() - t0
-            left_antenna = smooth_movement(t)
-            right_antenna = smooth_movement(t + 200)
 
             success, img = cap.read()
             hands = hand_tracker.get_hands_positions(img)
@@ -74,10 +66,11 @@ with ReachyMini() as reachy_mini:
                 pose[:3, 3][2] = (
                     error[1] * 0.04
                 )  # Adjust height based on vertical error
+                pose[:3, 3][1] = (
+                    error[0] * 0.02
+                )  # Adjust height based on vertical error
 
-                # antennas = [left_antenna, right_antenna]
-                antennas = np.array([0, 0])
-                reachy_mini.set_position(head=pose, antennas=antennas)
+                reachy_mini.set_position(head=pose)
             cv2.imshow("test_window", img)
 
             cv2.waitKey(1)

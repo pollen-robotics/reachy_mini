@@ -5,12 +5,6 @@ from reachy_mini import ReachyMini
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 
-from noise import pnoise1
-
-
-def smooth_movement(t, speed=0.5, scale=0.8):
-    return pnoise1(t * speed) * scale
-
 
 def draw_debug(img, eye_center, roll):
     _eye_center = (eye_center.copy() + 1) / 2  # [0, 1]
@@ -63,8 +57,6 @@ with ReachyMini() as reachy_mini:
     try:
         while True:
             t = time.time() - t0
-            left_antenna = smooth_movement(t)
-            right_antenna = smooth_movement(t + 200)
 
             success, img = cap.read()
 
@@ -84,8 +76,7 @@ with ReachyMini() as reachy_mini:
                     error[1] * 0.04
                 )  # Adjust height based on vertical error
 
-                antennas = [left_antenna, right_antenna]
-                reachy_mini.set_position(head=pose, antennas=np.array(antennas))
+                reachy_mini.set_position(head=pose)
             cv2.imshow("test_window", img)
 
             cv2.waitKey(1)
