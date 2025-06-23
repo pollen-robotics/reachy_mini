@@ -67,6 +67,8 @@ with ReachyMini() as reachy_mini:
             right_antenna = smooth_movement(t + 200)
 
             success, img = cap.read()
+            if not success:
+                continue
 
             eye_center, roll = head_tracker.get_head_position(img)
             if eye_center is not None:

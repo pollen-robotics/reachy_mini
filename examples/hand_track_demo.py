@@ -57,6 +57,9 @@ with ReachyMini() as reachy_mini:
             right_antenna = smooth_movement(t + 200)
 
             success, img = cap.read()
+            if not success:
+                continue
+
             hands = hand_tracker.get_hands_positions(img)
             if hands is None:
                 continue
