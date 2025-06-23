@@ -57,7 +57,8 @@ class ReachyMini:
     def set_position(
         self,
         head: Optional[np.ndarray],  # 4x4 pose matrix
-        antennas: Optional[np.ndarray] = None,  # [left_angle, right_angle] (in rads)
+        antennas: Optional[np.ndarray] = None,  # [left_angle, right_angle] (in rads),
+        check_collision: bool = False,  # Check for collisions before setting the position
     ):
         """
         Set the position of the head and/or antennas.
@@ -66,7 +67,7 @@ class ReachyMini:
         """
         if head is not None:
             assert head.shape == (4, 4), "Head pose must be a 4x4 matrix."
-            head_joint_positions = self.head_kinematics.ik(head)
+            head_joint_positions = self.head_kinematics.ik(head, check_collision=check_collision)
         else:
             head_joint_positions = None
 
@@ -79,16 +80,17 @@ class ReachyMini:
             antenna_joint_positions = None
 
         self._send_joint_command(head_joint_positions, antenna_joint_positions)
-
+    
     def goto_position(
         self,
         head: Optional[np.ndarray] = None,  # 4x4 pose matrix
         antennas: Optional[np.ndarray] = None,  # [left_angle, right_angle] (in rads)
-        duration: float = 0.5,  # Duration in seconds for the movement
+        duration: float = 0.5,  # Duration in seconds for the movement,
+        check_collision: bool = False,  # Check for collisions before moving
     ):
         head_joint_positions = None
         if head is not None:
-            head_joint_positions = self.head_kinematics.ik(head)
+            head_joint_positions = self.head_kinematics.ik(head, check_collision=check_collision)
 
         self._goto_joint_positions(
             head_joint_positions=head_joint_positions,
@@ -152,6 +154,7 @@ class ReachyMini:
         antennas_joint_positions: Optional[
             List[float]
         ],  # [left_angle, right_angle] length 2
+        check_collision: bool = False,  # Check for collisions before sending the command
     ):
         cmd = {}
 
@@ -160,7 +163,15 @@ class ReachyMini:
                 f"Head joint positions must have length 7, got {head_joint_positions}."
             )
             cmd["head_joint_positions"] = list(head_joint_positions)
-
+            if check_collision:
+                pose = self.head_kinematics.fk(
+                    head_joint_positions, check_collision=check_collision
+                )
+                if pose is None:
+                    raise ValueError(
+                        "The head joint positions lead to a collision. "
+                        "Please adjust the positions."
+                    )
         if antennas_joint_positions is not None:
             assert len(antennas_joint_positions) == 2, "Antennas must have length 2."
             cmd["antennas_joint_positions"] = list(antennas_joint_positions)
