@@ -1,4 +1,5 @@
 import argparse
+import signal
 import time
 from threading import Thread
 
@@ -6,6 +7,11 @@ import serial.tools.list_ports
 
 from reachy_mini import MujocoBackend, ReachyMini, RobotBackend
 from reachy_mini.io import Server
+
+
+def signal_handler(signum, frame):
+    """Handle termination signals"""
+    print("Daemon already  stopping...")
 
 
 class Daemon:
@@ -82,6 +88,9 @@ class Daemon:
                     time.sleep(0.5)  # Wait for the backend to be ready
             except KeyboardInterrupt:
                 print("Daemon interrupted by user.")
+                signal.signal(
+                    signal.SIGINT, signal_handler
+                )  # catch Ctrl+C to avoid interrupting the proper shutdown
 
         if self.goto_sleep_on_stop and ok:
             try:
