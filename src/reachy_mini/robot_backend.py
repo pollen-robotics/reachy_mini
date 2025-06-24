@@ -3,21 +3,25 @@ import os
 import time
 from pathlib import Path
 
+from typing import Dict, List, Optional, Tuple, Union
+
 from reachy_mini_motor_controller import ReachyMiniMotorController
 
-from reachy_mini.io import Backend
+from reachy_mini.io import Backend, NeoPixelRing
 
 ROOT_PATH = Path(os.path.dirname(os.path.abspath(__file__))).parent.parent
 
 
 class RobotBackend(Backend):
-    def __init__(self, serialport: str):
+    def __init__(self, serialport: str, led_ring_port: str = None):
         super().__init__()
         self.c = ReachyMiniMotorController(serialport)
         self.control_loop_frequency = 200.0
         self.publish_frequency = 100.0
         self.decimation = int(self.control_loop_frequency / self.publish_frequency)
         self.last_alive = time.time()
+
+        self.led = NeoPixelRing(led_ring_port)
 
         self._torque_enabled = False
 
@@ -69,3 +73,21 @@ class RobotBackend(Backend):
             self.c.disable_torque()
 
         self._torque_enabled = enabled
+
+    def set_led_colors(
+        self,
+        colors: Union[
+            List[Optional[Tuple[int, int, int]]], Dict[int, Tuple[int, int, int]]
+        ],
+        duration: Optional[float] = None,
+    ):
+        if self.led is not None:
+            self.led.set_led_colors(colors, duration)
+
+    def clear_led(self):
+        if self.led is not None:
+            self.led.clear()
+
+    def close(self):
+        if self.led is not None:
+            self.led.close()

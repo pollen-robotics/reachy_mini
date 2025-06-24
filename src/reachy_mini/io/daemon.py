@@ -5,8 +5,10 @@ from threading import Thread
 
 import serial.tools.list_ports
 
+
 from reachy_mini import MujocoBackend, ReachyMini, RobotBackend
 from reachy_mini.io import Server
+from reachy_mini.utils import find_arduino_nano_ch340g
 
 
 def signal_handler(signum, frame):
@@ -23,7 +25,20 @@ class Daemon:
         localhost_only: bool = True,
         wake_up_on_start: bool = True,
         goto_sleep_on_stop: bool = True,
+        led_ring_port: str = None,
     ):
+        # Try ardunio discovery
+        if led_ring_port is None:
+            led_ring_port = find_arduino_nano_ch340g()
+
+        # if led_ring_port is None:
+        #     print(
+        #         "No NeoPixel ring found. "
+        #         "You can specify the port with --led-ring-port."
+        #     )
+        # else:
+        #     print(f"NeoPixel ring found on port: {led_ring_port}")
+
         if sim:
             self.backend = MujocoBackend(scene=scene)
         else:
@@ -45,8 +60,9 @@ class Daemon:
                     )
 
                 serialport = ports[0]
-
-            self.backend = RobotBackend(serialport=serialport)
+            self.backend = RobotBackend(
+                serialport=serialport, led_ring_port=led_ring_port
+            )
 
         self.wake_up_on_start = wake_up_on_start
         self.goto_sleep_on_stop = goto_sleep_on_stop
@@ -103,6 +119,7 @@ class Daemon:
             except KeyboardInterrupt:
                 pass
 
+
         self.backend.should_stop.set()
         backend_run_thread.join()
 
@@ -151,6 +168,14 @@ def main():
         dest="localhost_only",
         help="Allow the server to listen on all interfaces (default: False).",
     )
+    parser.add_argument(
+
+        "--led-ring-port",
+        type=str,
+        default=None,
+        help="Serial port for the NeoPixel ring (default: None, auto-detect).",
+    )
+
     args = parser.parse_args()
 
     d = Daemon(

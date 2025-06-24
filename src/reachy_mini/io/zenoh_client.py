@@ -1,5 +1,6 @@
 import json
 import threading
+
 import zenoh
 
 from reachy_mini.io.abstract import AbstractClient

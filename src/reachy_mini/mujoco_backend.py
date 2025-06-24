@@ -3,6 +3,8 @@ import os
 import time
 from pathlib import Path
 
+from typing import Dict, List, Optional, Tuple, Union
+
 import mujoco
 import mujoco.viewer
 import numpy as np
@@ -116,4 +118,19 @@ class MujocoBackend(Backend):
 
     def set_torque(self, enabled: bool) -> None:
         pass
+
+
+    def set_led_colors(
+        self,
+        colors: Union[
+            List[Optional[Tuple[int, int, int]]], Dict[int, Tuple[int, int, int]]
+        ],
+        duration: Optional[float] = None,
+    ):
+        pass
+
+    def clear_led(self):
+        pass
+
+    def close(self):
         pass

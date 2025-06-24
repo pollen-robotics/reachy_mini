@@ -1,9 +1,10 @@
 import json
 import threading
+
 import zenoh
 
-from reachy_mini.io.abstract import AbstractServer
 from reachy_mini.io import Backend
+from reachy_mini.io.abstract import AbstractServer
 
 
 class ZenohServer(AbstractServer):
@@ -50,6 +51,7 @@ class ZenohServer(AbstractServer):
         self.backend.set_joint_positions_publisher(self.pub)
 
     def stop(self):
+        self.backend.close()
         self.session.close()
 
     # def get_latest_command(self) -> ReachyMiniCommand:
@@ -65,6 +67,7 @@ class ZenohServer(AbstractServer):
         data = sample.payload.to_string()
         command = json.loads(data)
         with self._lock:
+
             if "torque" in command:
                 self.backend.set_torque(command["torque"])
             if "head_joint_positions" in command:
@@ -73,4 +76,10 @@ class ZenohServer(AbstractServer):
                 self.backend.set_antenna_joint_positions(
                     command["antennas_joint_positions"]
                 )
+            if "set_led_colors" in command:
+                self.backend.set_led_colors(*command["set_led_colors"])
+            if "clear_led" in command:
+                self.backend.clear_led()
+            if "close_led" in command:
+                self.backend.close_led()
         self._cmd_event.set()

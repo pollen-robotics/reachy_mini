@@ -1,10 +1,12 @@
 import os
 import subprocess
+import sys
 import time
 from typing import Callable, Optional
 
 import numpy as np
 import psutil
+import serial.tools.list_ports
 from scipy.spatial.transform import Rotation as R
 
 
@@ -182,3 +184,22 @@ def create_pose(x=0, y=0, z=0, roll=0, pitch=0, yaw=0, mm=False, degrees=True):
 
     pose[2, 3] += 0.177  # :(
     return pose
+
+  def find_arduino_nano_ch340g() -> Optional[str]:
+    """
+    Simple, efficient detector for Arduino Nano with CH340G.
+    Returns port path or None.
+    """
+    # CH340G identifiers
+    CH340_VID = 0x1A86
+    CH340_PIDS = [0x7523, 0x5523]
+
+    try:
+        for port in serial.tools.list_ports.comports():
+            # Direct comparison - most efficient
+            if port.vid == CH340_VID and port.pid in CH340_PIDS:
+                return port.device
+    except:
+        pass
+
+    return None

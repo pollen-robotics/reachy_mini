@@ -2,7 +2,7 @@ import json
 import os
 import time
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional, Tuple, Union
 
 os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "hide"
 
@@ -10,7 +10,8 @@ import numpy as np
 import pygame
 from scipy.spatial.transform import Rotation as R
 
-from reachy_mini.io import Client
+import reachy_mini.led_animations
+from reachy_mini.io import Client, NeoPixelRing
 from reachy_mini.placo_kinematics import PlacoKinematics
 from reachy_mini.utils import (
     daemon_check,
@@ -61,6 +62,7 @@ class ReachyMini:
     ) -> None:
         daemon_check(spawn_daemon, use_sim)
         self.client = Client(localhost_only)
+
         self.client.wait_for_connection()
         self._last_head_pose = None
 
@@ -123,11 +125,17 @@ class ReachyMini:
         self.client.send_command(json.dumps({"torque": on}))
 
     def wake_up(self):
+
+        # Lights up
+        self.play_led_animation(reachy_mini.led_animations.wake_spiral)
+
         self.goto_position(INIT_HEAD_POSE, antennas=[0.0, 0.0], duration=2)
         time.sleep(0.1)
 
         # Toudoum
         self.play_sound("proud2.wav")
+
+        self.clear_led()
 
         # Roll 20° to the left
         pose = INIT_HEAD_POSE.copy()
@@ -138,6 +146,10 @@ class ReachyMini:
         self.goto_position(INIT_HEAD_POSE, duration=0.2)
 
     def goto_sleep(self):
+
+        # Lights off
+        self.play_led_animation(reachy_mini.led_animations.sleep_heartbeat)
+
         # Check if we are too far from the initial position
         # Move to the initial position if necessary
         current_positions, _ = self._get_current_joint_positions()
@@ -274,3 +286,44 @@ class ReachyMini:
 
             self._send_joint_command(head_joint, antennas_joint)
             time.sleep(0.01)
+
+    def set_led_colors(
+        self,
+        colors: Union[
+            List[Optional[Tuple[int, int, int]]], Dict[int, Tuple[int, int, int]]
+        ],
+        duration: Optional[float] = None,
+    ):
+        """
+        Set the colors of the LEDs.
+        Args:
+            colors: Either a list of (r,g,b) tuples with None for unchanged LEDs,
+                    or a dict with LED index as key and (r,g,b) tuple as value
+        """
+        cmd = {
+            "set_led_colors": (colors, duration),
+        }
+
+        self.client.send_command(json.dumps(cmd))
+
+    def clear_led(self):
+        """
+        Clear the LED colors.
+        This will set all LEDs to off.
+        """
+        cmd = {
+            "clear_led": None,
+        }
+
+        self.client.send_command(json.dumps(cmd))
+
+    def play_led_animation(self, animation):
+        """
+        Play a LED animation.
+        Args:
+            animation: the animation array, which is a list of tuples
+                       where each tuple contains RGB values for each LED and duration.
+        """
+
+        for step in animation:
+            self.set_led_colors(*step)
