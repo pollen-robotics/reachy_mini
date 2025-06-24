@@ -1,13 +1,8 @@
 import json
-import os
 import time
-from pathlib import Path
 
 from reachy_mini_motor_controller import ReachyMiniMotorController
-
 from reachy_mini.io import Backend
-
-ROOT_PATH = Path(os.path.dirname(os.path.abspath(__file__))).parent.parent
 
 
 class RobotBackend(Backend):

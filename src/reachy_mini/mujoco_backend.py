@@ -1,11 +1,11 @@
 import json
-import os
 import time
-from pathlib import Path
 
 import mujoco
 import mujoco.viewer
 import numpy as np
+from importlib.resources import files
+import reachy_mini
 
 from reachy_mini.io import Backend
 from reachy_mini.mujoco_utils import (
@@ -16,14 +16,16 @@ from reachy_mini.mujoco_utils import (
 
 from .reachy_mini import SLEEP_ANTENNAS_JOINT_POSITIONS, SLEEP_HEAD_JOINT_POSITIONS
 
-ROOT_PATH = Path(os.path.dirname(os.path.abspath(__file__))).parent.parent
-
 
 class MujocoBackend(Backend):
     def __init__(self, scene="empty"):
         super().__init__()
+
+        mjcf_root_path = str(
+            files(reachy_mini).joinpath("descriptions/reachy_mini/mjcf/")
+        )
         self.model = mujoco.MjModel.from_xml_path(
-            f"{ROOT_PATH}/descriptions/reachy_mini/mjcf/scenes/{scene}.xml"
+            f"{mjcf_root_path}/scenes/{scene}.xml"
         )
         self.data = mujoco.MjData(self.model)
         self.model.opt.timestep = 0.002  # s, simulation timestep, 500hz
