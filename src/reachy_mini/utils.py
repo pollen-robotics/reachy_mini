@@ -185,7 +185,8 @@ def create_pose(x=0, y=0, z=0, roll=0, pitch=0, yaw=0, mm=False, degrees=True):
     pose[2, 3] += 0.177  # :(
     return pose
 
-  def find_arduino_nano_ch340g() -> Optional[str]:
+
+def find_arduino_nano_ch340g() -> Optional[str]:
     """
     Simple, efficient detector for Arduino Nano with CH340G.
     Returns port path or None.
