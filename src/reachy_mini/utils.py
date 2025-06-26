@@ -142,34 +142,35 @@ def time_trajectory(t: float, method="default"):
     if t < 0 or t > 1:
         raise ValueError("time value is out of range [0,1]")
 
-    match method:
-        case "linear":
-            return t
+    if method == "linear":
+        return t
 
-        case "minjerk":
-            return 10 * t**3 - 15 * t**4 + 6 * t**5
+    elif method == "minjerk":
+        return 10 * t**3 - 15 * t**4 + 6 * t**5
 
-        case "ease":
-            if t < 0.5:
-                return 2 * t * t
-            else:
-                return 1 - ((-2 * t + 2) ** 2) / 2
+    elif method == "ease":
+        if t < 0.5:
+            return 2 * t * t
+        else:
+            return 1 - ((-2 * t + 2) ** 2) / 2
 
-        case "cartoon":
-            c1 = 1.70158
-            c2 = c1 * 1.525
+    elif method == "cartoon":
+        c1 = 1.70158
+        c2 = c1 * 1.525
 
-            if t < 0.5:
-                # phase in
-                return ((2 * t) ** 2 * ((c2 + 1) * 2 * t - c2)) / 2
-            else:
-                # phase out
-                return (((2 * t - 2) ** 2 * ((c2 + 1) * (2 * t - 2) + c2)) + 2) / 2
+        if t < 0.5:
+            # phase in
+            return ((2 * t) ** 2 * ((c2 + 1) * 2 * t - c2)) / 2
+        else:
+            # phase out
+            return (((2 * t - 2) ** 2 * ((c2 + 1) * (2 * t - 2) + c2)) + 2) / 2
 
-        case _:
-            raise ValueError(
-                f"Unknown interpolation method: {method} (possible values: linear, minjerk, ease, cartoon)"
+    else:
+        raise ValueError(
+            "Unknown interpolation method: {} (possible values: linear, minjerk, ease, cartoon)".format(
+                method
             )
+        )
 
 
 def create_pose(x=0, y=0, z=0, roll=0, pitch=0, yaw=0, mm=False, degrees=True):
