@@ -25,6 +25,7 @@ dependencies = [
     "uvicorn",
     "fastapi",
     "pyserial",
+    "pyobjc-framework-AVFoundation; sys_platform == 'darwin'"
 ]
 
 [project.optional-dependencies]

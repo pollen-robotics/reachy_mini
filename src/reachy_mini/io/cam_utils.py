@@ -29,49 +29,41 @@ def find_camera_opencv_id(vid="0C45", pid="636D") -> list[int]:
     return cameras
 
 
-def _macos_enumerate_cameras():
+def _macos_enumerate_cameras() -> list[CameraInfo]:
     import re
-    import subprocess
 
-    CAMERA_HEADER_RE = re.compile(r"\n\s*\n(?=\s{4}\S)")  # same splitter as before
-    NAME_RE = re.compile(r"^\s{4}(.+?):", re.MULTILINE)  # 4-space indent + colon
-    VENDOR_RE = re.compile(r"VendorID_(\d+)\b")
-    PRODUCT_RE = re.compile(r"ProductID_(\d+)\b")
+    import AVFoundation
 
-    text = subprocess.check_output(
-        ["system_profiler", "-detailLevel", "mini", "SPCameraDataType"],
-        text=True,
-        timeout=2,
+    _VID_RE = re.compile(r"VendorID_(\d+)")
+    _PID_RE = re.compile(r"ProductID_(\d+)")
+
+    cams: list[CameraInfo] = []
+
+    devs = AVFoundation.AVCaptureDevice.devicesWithMediaType_(
+        AVFoundation.AVMediaTypeVideo
     )
+    devs = sorted(devs, key=lambda d: str(d.uniqueID()))
 
-    blocks = CAMERA_HEADER_RE.split(text.strip())[1:]  # drop the "Camera:" header
-    cameras = []
-
-    for index, blk in enumerate(blocks):
-        name = NAME_RE.search(blk)
-        vendor = VENDOR_RE.search(blk)
-        prod = PRODUCT_RE.search(blk)
-
-        name = name.group(1) if name else ""
-        vendor = int(vendor.group(1)) if vendor else None
-        prod = int(prod.group(1)) if prod else None
-
-        cameras.append(
+    for idx, d in enumerate(devs):
+        model = str(d.modelID())
+        vid_m = _VID_RE.search(model)
+        pid_m = _PID_RE.search(model)
+        cams.append(
             CameraInfo(
-                index=index,
-                name=name,
-                path=None,
-                vid=vendor,
-                pid=prod,
+                index=idx,
+                name=str(d.localizedName()),
+                path=None,  # macOS does not provide a path
+                vid=int(vid_m.group(1)) if vid_m else None,
+                pid=int(pid_m.group(1)) if pid_m else None,
                 backend=cv.CAP_AVFOUNDATION,
             )
         )
-
-    return cameras
+    return cams
 
 
 def main():
     ids = find_camera_opencv_id()
+
     if not ids:
         print("No camera found with the specified VID and PID.")
         return
