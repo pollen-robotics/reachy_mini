@@ -6,6 +6,10 @@ from reachy_mini.io import Backend
 
 
 class RobotBackend(Backend):
+    """
+    Real robot backend for Reachy Mini.
+    """
+
     def __init__(self, serialport: str):
         super().__init__()
         self.c = ReachyMiniMotorController(serialport)
