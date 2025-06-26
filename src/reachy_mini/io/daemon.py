@@ -15,6 +15,12 @@ def signal_handler(signum, frame):
 
 
 class Daemon:
+    """
+    Daemon for simulated or real Reachy Mini robot.
+
+    Runs the server with the appropriate backend (Mujoco for simulation or RobotBackend for real hardware).
+    """
+
     def __init__(
         self,
         sim: bool = False,
@@ -23,7 +29,19 @@ class Daemon:
         localhost_only: bool = True,
         wake_up_on_start: bool = True,
         goto_sleep_on_stop: bool = True,
-    ):
+    ) -> None:
+        """
+        Initialize the Reachy Mini daemon.
+
+        Args:
+            sim (bool): If True, run in simulation mode using Mujoco. Defaults to False.
+            serialport (str): Serial port for real motors. Defaults to "auto", which will try to find the port automatically.
+            scene (str): Name of the scene to load in simulation mode ("empty" or "minimal"). Defaults to "empty".
+            localhost_only (bool): If True, restrict the server to localhost only clients. Defaults to True.
+            wake_up_on_start (bool): If True, wake up Reachy Mini on start. Defaults to True.
+            goto_sleep_on_stop (bool): If True, put Reachy Mini to sleep on stop. Defaults to True.
+        """
+
         if sim:
             self.backend = MujocoBackend(scene=scene)
         else:
@@ -54,7 +72,7 @@ class Daemon:
         self.server = Server(self.backend, localhost_only=localhost_only)
         self.server.start()
 
-    def run(self):
+    def run(self) -> None:
         """Run the daemon."""
 
         print("Starting Reachy Mini daemon...")
