@@ -4,10 +4,14 @@ from scipy.spatial.transform import Rotation as R
 
 
 def get_homogeneous_matrix_from_euler(
-    position: tuple = (0, 0, 0),  # (x, y, z)
+    position: tuple = (0, 0, 0),  # (x, y, z) meters
     euler_angles: tuple = (0, 0, 0),  # (roll, pitch, yaw)
     degrees: bool = False,
 ):
+    """
+    Returns a homogeneous transformation matrix from position and Euler angles.
+    """
+
     homogeneous_matrix = np.eye(4)
     homogeneous_matrix[:3, :3] = R.from_euler(
         "xyz", euler_angles, degrees=degrees
@@ -16,9 +20,11 @@ def get_homogeneous_matrix_from_euler(
     return homogeneous_matrix
 
 
-def get_joint_qpos(model, data, joint_name):
+def get_joint_qpos(model, data, joint_name) -> float:
+    """Returns the qpos (rad) of a specified joint in the model."""
+
     # Get the joint id
-    joint_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, joint_name)
+    joint_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, joint_name)  # type: ignore
     if joint_id == -1:
         raise ValueError(f"Joint '{joint_name}' not found.")
 
@@ -31,7 +37,7 @@ def get_joint_qpos(model, data, joint_name):
 
 def get_joint_id_from_name(model, name: str) -> int:
     """Return the id of a specified joint"""
-    return mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, name)
+    return mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, name)  # type: ignore
 
 
 def get_joint_addr_from_name(model, name: str) -> int:
@@ -40,5 +46,8 @@ def get_joint_addr_from_name(model, name: str) -> int:
 
 
 def get_actuator_names(model):
+    """
+    Returns the list of the actuators names from the MuJoCo model.
+    """
     actuator_names = [model.actuator(k).name for k in range(0, model.nu)]
     return actuator_names
