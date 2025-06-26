@@ -1,5 +1,6 @@
 import json
 import time
+from threading import Event
 
 from reachy_mini_motor_controller import ReachyMiniMotorController
 
@@ -14,6 +15,7 @@ class RobotBackend(Backend):
         self.publish_frequency = 100.0
         self.decimation = int(self.control_loop_frequency / self.publish_frequency)
         self.last_alive = None
+        self.ready = Event()
 
         self._torque_enabled = False
 
@@ -49,6 +51,7 @@ class RobotBackend(Backend):
                             )
                         )
                         self.last_alive = time.time()
+                        self.ready.set()  # Mark the backend as ready
                     except RuntimeError as e:
                         # If we never received a position, we retry a few times
                         # But most likely the robot is not powered on or connected
