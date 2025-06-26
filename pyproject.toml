@@ -5,9 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "reachy_mini"
 version = "0.1.0"
-authors = [
-    { name = "Pollen Robotics", email = "contact@pollen-robotics.com" }
-]
+authors = [{ name = "Pollen Robotics", email = "contact@pollen-robotics.com" }]
 description = ""
 readme = "README.md"
 dependencies = [
@@ -28,19 +26,27 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = [
-    "pytest",
-]
+dev = ["pytest"]
 
 [project.scripts]
 reachy-mini-daemon = "reachy_mini.io.daemon:main"
 reachy-mini-make-app = "reachy_mini.app:main"
 
 [tool.setuptools]
-package-dir = {"" = "src"}
+package-dir = { "" = "src" }
+include-package-data = true
+
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
+
+[tool.setuptools.package-data]
+reachy_mini = ["**/*"] # Inclut tous les fichiers non .py
+
 [tool.ruff]
-exclude = ["examples/remi_outdated/*.py", "src/reachy_mini/__init__.py", "build/*"]
+exclude = [
+    "examples/remi_outdated/*.py",
+    "src/reachy_mini/__init__.py",
+    "build/*",
+]

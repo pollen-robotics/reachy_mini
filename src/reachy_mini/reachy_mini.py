@@ -1,25 +1,25 @@
 import json
 import os
 import time
-from pathlib import Path
 from typing import List, Optional
 
 os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "hide"
+
+from importlib.resources import files
 
 import numpy as np
 import pygame
 from scipy.spatial.transform import Rotation as R
 
+import reachy_mini
 from reachy_mini.io import Client
 from reachy_mini.placo_kinematics import PlacoKinematics
 from reachy_mini.utils import (
     daemon_check,
+    linear_pose_interpolation,
     minimum_jerk,
     time_trajectory,
-    linear_pose_interpolation,
 )
-
-ROOT_PATH = Path(os.path.dirname(os.path.abspath(__file__))).parent.parent
 
 try:
     pygame.mixer.init()
@@ -53,6 +53,11 @@ SLEEP_HEAD_POSE = np.array(
 
 
 class ReachyMini:
+    urdf_root_path: str = str(
+        files(reachy_mini).joinpath("descriptions/reachy_mini/urdf")
+    )
+    assets_root_path: str = str(files(reachy_mini).joinpath("assets/"))
+
     def __init__(
         self,
         localhost_only: bool = True,
@@ -64,9 +69,7 @@ class ReachyMini:
         self.client.wait_for_connection()
         self._last_head_pose = None
 
-        self.head_kinematics = PlacoKinematics(
-            f"{ROOT_PATH}/descriptions/reachy_mini/urdf/",
-        )
+        self.head_kinematics = PlacoKinematics(self.urdf_root_path)
 
     def __enter__(self):
         return self
@@ -160,7 +163,7 @@ class ReachyMini:
         if pygame.mixer is None:
             print("Pygame mixer is not initialized. Cannot play sound.")
             return
-        pygame.mixer.music.load(f"{ROOT_PATH}/src/assets/{sound_file}")
+        pygame.mixer.music.load(f"{self.assets_root_path}/{sound_file}")
         pygame.mixer.music.play()
 
     # Low-level joints methods
