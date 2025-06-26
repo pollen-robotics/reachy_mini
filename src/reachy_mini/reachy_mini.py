@@ -20,6 +20,7 @@ from reachy_mini.utils import (
     minimum_jerk,
     time_trajectory,
 )
+import cv2
 
 try:
     pygame.mixer.init()
@@ -70,6 +71,20 @@ class ReachyMini:
         self._last_head_pose = None
 
         self.head_kinematics = PlacoKinematics(self.urdf_root_path)
+
+        self.K = np.array(
+            [[550.3564, 0.0, 638.0112], [0.0, 549.1653, 364.589], [0.0, 0.0, 1.0]]
+        )
+        self.D = np.array([-0.0694, 0.1565, -0.0004, 0.0003, -0.0983])
+        self.T_head_cam = np.eye(4)
+        self.T_head_cam[:3, 3][:] = [0.0437, 0, 0.0512]
+        self.T_head_cam[:3, :3] = np.array(
+            [
+                [0, 0, 1],
+                [-1, 0, 0],
+                [0, -1, 0],
+            ]
+        )
 
     def __enter__(self):
         return self
@@ -157,6 +172,63 @@ class ReachyMini:
             duration=2,
         )
         self._last_head_pose = SLEEP_HEAD_POSE
+
+    def look_at_image(self, u: int, v: int, duration: float = 1.0):
+        """
+        Make the robot head look through pixel (u,v).
+        :param u : horizontal coordinate in image frame
+        :param v : vertical coordinate in image frame
+        :param duration: Duration of the movement in seconds. If 0, the head will snap to the position immediately.
+        """
+
+        x_n, y_n = cv2.undistortPoints(np.float32([[[u, v]]]), self.K, self.D)[0, 0]
+
+        ray_cam = np.array([x_n, y_n, 1.0])
+        ray_cam /= np.linalg.norm(ray_cam)
+
+        cur_head_joints, _ = self._get_current_joint_positions()
+        T_world_head = self.head_kinematics.fk(cur_head_joints)
+        T_world_cam = T_world_head @ self.T_head_cam
+
+        R_wc = T_world_cam[:3, :3]
+        t_wc = T_world_cam[:3, 3]
+
+        ray_world = R_wc @ ray_cam
+
+        P_world = t_wc + ray_world
+
+        self.look_at_world(*P_world, duration=duration)
+
+    def look_at_world(self, x: float, y: float, z: float, duration: float = 1.0):
+        """
+        Look at a specific point in 3D space.
+        :param x: X coordinate in meters.
+        :param y: Y coordinate in meters.
+        :param z: Z coordinate in meters.
+        :param duration: Duration of the movement in seconds. If 0, the head will snap to the position immediately.
+        """
+
+        # Head is at the origin, so vector from head to target position is directly the target position
+        target_position = np.array([x, y, z])
+        target_vector = target_position / np.linalg.norm(
+            target_position
+        )  # normalize the vector
+
+        # head_pointing straight vector :
+        straight_head_vector = np.array([1, 0, 0])
+
+        # Calculate the rotation needed to align the head with the target vector
+        rotation_vector = np.cross(straight_head_vector, target_vector)
+        rot_mat = R.from_rotvec(rotation_vector).as_matrix()
+        target_head_pose = np.eye(4)
+        target_head_pose[:3, :3] = rot_mat
+
+        # If duration is specified, use the goto_position method to move smoothly
+        # Otherwise, set the position immediately
+        if duration > 0:
+            self.goto_position(target_head_pose, duration=duration)
+        else:
+            self.set_position(target_head_pose)
 
     # Multimedia methods
     def play_sound(self, sound_file: str):
