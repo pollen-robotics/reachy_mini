@@ -7,7 +7,7 @@ class Backend:
     Base class for robot backends, simulated or real
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.should_stop = threading.Event()
 
         self.head_joint_positions = None  # [yaw, 0, 1, 2, 3, 4, 5]
