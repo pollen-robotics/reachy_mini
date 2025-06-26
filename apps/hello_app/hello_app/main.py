@@ -20,6 +20,6 @@ class HelloApp(ReachyMiniApp):
             head = np.eye(4)
             head[:3, :3] = R.from_euler("xyz", [0, 0, yaw], degrees=False).as_matrix()
 
-            reachy_mini.set_position(head=head, antennas=np.array([target, -target]))
+            reachy_mini.set_target(head=head, antennas=[target, -target])
 
             time.sleep(0.01)

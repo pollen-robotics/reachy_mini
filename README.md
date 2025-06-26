@@ -16,7 +16,7 @@ Additional argument for both simulation and real robot:
 --localhost-only: (default behavior). The server will only accept connections from localhost.
 ```
 
-or 
+or
 
 ```bash
 --no-localhost-only: If set, the server will accept connections from any connection on the local network.
@@ -66,7 +66,7 @@ from reachy_mini import ReachyMini
 with ReachyMini() as reachy_mini:
     ...
     ...
-    reachy_mini.set_position(head=pose, antennas=antennas)s
+    reachy_mini.set_target(head=pose, antennas=antennas)s
 ```
 
 With the real robot, the camera is directly accessible with the USB connection, and can be directly read with OpenCV:

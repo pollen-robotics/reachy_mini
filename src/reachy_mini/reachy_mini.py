@@ -257,7 +257,7 @@ class ReachyMini:
         target_head_pose = np.eye(4)
         target_head_pose[:3, :3] = rot_mat
 
-        # If duration is specified, use the goto_position method to move smoothly
+        # If duration is specified, use the goto_target method to move smoothly
         # Otherwise, set the position immediately
         if duration > 0:
             self.goto_target(target_head_pose, duration=duration)

@@ -2,7 +2,7 @@ from reachy_mini import ReachyMini
 import cv2
 import numpy as np
 
-cap = cv2.VideoCapture(4)
+cap = cv2.VideoCapture(0)
 
 
 def click(event, x, y, flags, param):
