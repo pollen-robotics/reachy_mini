@@ -193,7 +193,6 @@ class ReachyMini:
         ray_world = R_wc @ ray_cam
 
         P_world = t_wc + ray_world
-        print(P_world)
 
         self.look_at_world(*P_world, duration=duration)
 
