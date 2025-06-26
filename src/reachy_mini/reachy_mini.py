@@ -5,20 +5,20 @@ from typing import List, Optional
 
 os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "hide"
 
+from importlib.resources import files
+
 import numpy as np
 import pygame
 from scipy.spatial.transform import Rotation as R
 
-from importlib.resources import files
 import reachy_mini
-
 from reachy_mini.io import Client
 from reachy_mini.placo_kinematics import PlacoKinematics
 from reachy_mini.utils import (
     daemon_check,
+    linear_pose_interpolation,
     minimum_jerk,
     time_trajectory,
-    linear_pose_interpolation,
 )
 
 try:
@@ -53,6 +53,11 @@ SLEEP_HEAD_POSE = np.array(
 
 
 class ReachyMini:
+    urdf_root_path: str = str(
+        files(reachy_mini).joinpath("descriptions/reachy_mini/urdf")
+    )
+    assets_root_path: str = str(files(reachy_mini).joinpath("assets/"))
+
     def __init__(
         self,
         localhost_only: bool = True,
@@ -63,11 +68,6 @@ class ReachyMini:
         self.client = Client(localhost_only)
         self.client.wait_for_connection()
         self._last_head_pose = None
-
-        self.urdf_root_path = str(
-            files(reachy_mini).joinpath("descriptions/reachy_mini/urdf")
-        )
-        self.assets_root_path = str(files(reachy_mini).joinpath("assets/"))
 
         self.head_kinematics = PlacoKinematics(self.urdf_root_path)
 
