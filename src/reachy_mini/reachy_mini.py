@@ -52,8 +52,19 @@ SLEEP_HEAD_POSE = np.array(
     ]
 )
 
+IMAGE_SIZE = (1280, 720)  # Width, Height in pixels
+
 
 class ReachyMini:
+    """
+    Reachy Mini class for controlling a simulated or real Reachy Mini robot.
+
+    Args:
+        localhost_only (bool): If True, will only connect to localhost daemons, defaults to True.
+        spawn_daemon (bool): If True, will spawn a daemon to control the robot, defaults to False.
+        use_sim (bool): If True and spawn_daemon is True, will spawn a simulated robot, defaults to True.
+    """
+
     urdf_root_path: str = str(
         files(reachy_mini).joinpath("descriptions/reachy_mini/urdf")
     )
@@ -76,6 +87,7 @@ class ReachyMini:
             [[550.3564, 0.0, 638.0112], [0.0, 549.1653, 364.589], [0.0, 0.0, 1.0]]
         )
         self.D = np.array([-0.0694, 0.1565, -0.0004, 0.0003, -0.0983])
+
         self.T_head_cam = np.eye(4)
         self.T_head_cam[:3, 3][:] = [0.0437, 0, 0.0512]
         self.T_head_cam[:3, :3] = np.array(
@@ -86,22 +98,32 @@ class ReachyMini:
             ]
         )
 
-    def __enter__(self):
+    def __enter__(self) -> "ReachyMini":
         return self
 
-    def __exit__(self, exc_type, exc_value, traceback):
+    def __exit__(self, exc_type, exc_value, traceback) -> None:
         self.client.disconnect()
 
-    def set_position(
+    def set_target(
         self,
-        head: Optional[np.ndarray],  # 4x4 pose matrix
-        antennas: Optional[np.ndarray] = None,  # [left_angle, right_angle] (in rads)
-    ):
+        head: Optional[np.ndarray] = None,  # 4x4 pose matrix
+        antennas: Optional[List[float]] = None,  # [left_angle, right_angle] (in rads)
+    ) -> None:
         """
-        Set the position of the head and/or antennas.
-        :param head: 4x4 pose matrix representing the head pose.
-        :param antennas: Optional 1D array with two elements representing the angles of the antennas in radians.
+        Set the target pose of the head and/or the target position of the antennas.
+
+        Args:
+            head (Optional[np.ndarray]): 4x4 pose matrix representing the head pose.
+            antennas (Optional[List[float]]): 1D array with two elements representing the angles of the antennas in radians.
+
+        Raises:
+            ValueError: If neither head nor antennas are provided.
+            AssertionError: If the shape of head is not (4, 4) or if antennas is not a 1D array with two elements.
         """
+
+        if head is None and antennas is None:
+            raise ValueError("At least one of head or antennas must be provided.")
+
         if head is not None:
             assert head.shape == (4, 4), "Head pose must be a 4x4 matrix."
             head_joint_positions = self.head_kinematics.ik(head)
@@ -109,39 +131,32 @@ class ReachyMini:
             head_joint_positions = None
 
         if antennas is not None:
-            assert antennas.shape == (2,), (
-                "Antennas must be a 1D array with two elements."
+            antennas = list(antennas)
+            assert len(antennas) == 2, (
+                "Antennas must be a list or 1D np array with two elements."
             )
-            antenna_joint_positions = antennas.tolist()
+            antenna_joint_positions = list(antennas)
         else:
             antenna_joint_positions = None
 
-        self._send_joint_command(head_joint_positions, antenna_joint_positions)
+        self._set_joint_positions(head_joint_positions, antenna_joint_positions)
         self._last_head_pose = head
-
-    def goto_position(
-        self,
-        head: Optional[np.ndarray] = None,  # 4x4 pose matrix
-        antennas: Optional[np.ndarray] = None,  # [left_angle, right_angle] (in rads)
-        duration: float = 0.5,  # Duration in seconds for the movement
-        method="default",
-    ):
-        self._goto_task_positions(
-            target_head_pose=head,
-            antennas_joint_positions=antennas,
-            duration=duration,
-            method=method,
-        )
 
     def set_torque(self, on: bool):
         """
         Set the torque state of the motors.
-        :param on: If True, enables torque; if False, disables it.
+
+        Args:
+            on (bool): If True, enables torque; if False, disables it.
         """
         self.client.send_command(json.dumps({"torque": on}))
 
-    def wake_up(self):
-        self.goto_position(INIT_HEAD_POSE, antennas=[0.0, 0.0], duration=2)
+    def wake_up(self) -> None:
+        """
+        Wake up the robot. Go to the initial head position and play the wake up emote and sound
+        """
+
+        self.goto_target(INIT_HEAD_POSE, antennas=[0.0, 0.0], duration=2)
         time.sleep(0.1)
 
         # Toudoum
@@ -150,19 +165,23 @@ class ReachyMini:
         # Roll 20° to the left
         pose = INIT_HEAD_POSE.copy()
         pose[:3, :3] = R.from_euler("xyz", [20, 0, 0], degrees=True).as_matrix()
-        self.goto_position(pose, duration=0.2)
+        self.goto_target(pose, duration=0.2)
 
         # Go back to the initial position
-        self.goto_position(INIT_HEAD_POSE, duration=0.2)
+        self.goto_target(INIT_HEAD_POSE, duration=0.2)
 
-    def goto_sleep(self):
+    def goto_sleep(self) -> None:
+        """
+        Put the robot to sleep by moving the head and antennas to a predefined sleep position.
+        """
+
         # Check if we are too far from the initial position
         # Move to the initial position if necessary
         current_positions, _ = self._get_current_joint_positions()
         init_positions = self.head_kinematics.ik(INIT_HEAD_POSE)
         dist = np.linalg.norm(np.array(current_positions) - np.array(init_positions))
         if dist > 0.2:
-            self.goto_position(INIT_HEAD_POSE, antennas=[0.0, 0.0], duration=1)
+            self.goto_target(INIT_HEAD_POSE, antennas=[0.0, 0.0], duration=1)
             time.sleep(0.2)
 
         # Move to the sleep position
@@ -173,15 +192,23 @@ class ReachyMini:
         )
         self._last_head_pose = SLEEP_HEAD_POSE
 
-    def look_at_image(self, u: int, v: int, duration: float = 1.0):
+    def look_at_image(self, u: int, v: int, duration: float = 1.0) -> None:
         """
-        Make the robot head look through pixel (u,v).
-        :param u : horizontal coordinate in image frame
-        :param v : vertical coordinate in image frame
-        :param duration: Duration of the movement in seconds. If 0, the head will snap to the position immediately.
+        Make the robot head look at a point defined by a pixel position (u,v).
+
+        # TODO image of reachy mini coordinate system
+
+        Args:
+            u (int): Horizontal coordinate in image frame.
+            v (int): Vertical coordinate in image frame.
+            duration (float): Duration of the movement in seconds. If 0, the head will snap to the position immediately.
         """
 
-        x_n, y_n = cv2.undistortPoints(np.float32([[[u, v]]]), self.K, self.D)[0, 0]
+        assert 0 < u < IMAGE_SIZE[0], f"u must be in [0, {IMAGE_SIZE[0]}], got {u}."
+        assert 0 < v < IMAGE_SIZE[1], f"v must be in [0, {IMAGE_SIZE[1]}], got {v}."
+        assert duration >= 0, "Duration must be non-negative."
+
+        x_n, y_n = cv2.undistortPoints(np.float32([[[u, v]]]), self.K, self.D)[0, 0]  # type: ignore
 
         ray_cam = np.array([x_n, y_n, 1.0])
         ray_cam /= np.linalg.norm(ray_cam)
@@ -201,20 +228,27 @@ class ReachyMini:
 
     def look_at_world(self, x: float, y: float, z: float, duration: float = 1.0):
         """
-        Look at a specific point in 3D space.
-        :param x: X coordinate in meters.
-        :param y: Y coordinate in meters.
-        :param z: Z coordinate in meters.
-        :param duration: Duration of the movement in seconds. If 0, the head will snap to the position immediately.
+        Look at a specific point in 3D space in Reachy Mini's reference frame.
+
+        TODO include image of reachy mini coordinate system
+
+        Args:
+            x (float): X coordinate in meters.
+            y (float): Y coordinate in meters.
+            z (float): Z coordinate in meters.
+            duration (float): Duration of the movement in seconds. If 0, the head will snap to the position immediately.
         """
 
+        assert duration >= 0, "Duration must be non-negative."
+
         # Head is at the origin, so vector from head to target position is directly the target position
+        # TODO FIX : Actually, the head frame is not the origin frame wrt the kinematics. Close enough for now.
         target_position = np.array([x, y, z])
         target_vector = target_position / np.linalg.norm(
             target_position
         )  # normalize the vector
 
-        # head_pointing straight vector :
+        # head_pointing straight vector
         straight_head_vector = np.array([1, 0, 0])
 
         # Calculate the rotation needed to align the head with the target vector
@@ -226,56 +260,48 @@ class ReachyMini:
         # If duration is specified, use the goto_position method to move smoothly
         # Otherwise, set the position immediately
         if duration > 0:
-            self.goto_position(target_head_pose, duration=duration)
+            self.goto_target(target_head_pose, duration=duration)
         else:
-            self.set_position(target_head_pose)
+            self.set_target(target_head_pose)
 
     # Multimedia methods
-    def play_sound(self, sound_file: str):
+    def play_sound(self, sound_file: str) -> None:
+        """
+        Play a sound file from the assets directory.
+
+        Args:
+            sound_file (str): The name of the sound file to play (e.g., "proud2.wav").
+        """
         if pygame.mixer is None:
             print("Pygame mixer is not initialized. Cannot play sound.")
             return
         pygame.mixer.music.load(f"{self.assets_root_path}/{sound_file}")
         pygame.mixer.music.play()
 
-    # Low-level joints methods
-    def _get_current_joint_positions(self) -> tuple[list[float], list[float]]:
-        return self.client.get_current_joints()
-
-    def _send_joint_command(
+    def goto_target(
         self,
-        head_joint_positions: Optional[
-            List[float]
-        ],  # [yaw, stewart_platform x 6] length 7
-        antennas_joint_positions: Optional[
-            List[float]
-        ],  # [left_angle, right_angle] length 2
+        head: Optional[np.ndarray] = None,  # 4x4 pose matrix
+        antennas: Optional[List[float]] = None,  # [left_angle, right_angle] (in rads)
+        duration: float = 0.5,  # Duration in seconds for the movement, default is 0.5 seconds.
+        method="default",  # can be "linear", "minjerk", "ease" or "cartoon", default is "default" (-> "linear")
     ):
-        cmd = {}
+        """
+        Go to a target head pose and/or antennas position using task space interpolation, in "duration" seconds.
 
-        if head_joint_positions is not None:
-            assert len(head_joint_positions) == 7, (
-                f"Head joint positions must have length 7, got {head_joint_positions}."
-            )
-            cmd["head_joint_positions"] = list(head_joint_positions)
+        Args:
+            head (Optional[np.ndarray]): 4x4 pose matrix representing the target head pose.
+            antennas (Optional[np.ndarray]): 1D array with two elements representing the angles of the antennas in radians.
+            duration (float): Duration of the movement in seconds.
+            method (str): Interpolation method to use ("linear", "minjerk", "ease", "cartoon"). Default is "linear.
+        """
 
-        if antennas_joint_positions is not None:
-            assert len(antennas_joint_positions) == 2, "Antennas must have length 2."
-            cmd["antennas_joint_positions"] = list(antennas_joint_positions)
+        if head is None and antennas is None:
+            raise ValueError("At least one of head or antennas must be provided.")
 
-        if not cmd:
-            raise ValueError(
-                "At least one of head_joint_positions or antennas must be provided."
-            )
-        self.client.send_command(json.dumps(cmd))
+        assert duration > 0.0, (
+            "Duration must be positive and non-zero. Use set_target() for immediate position setting."
+        )
 
-    def _goto_task_positions(
-        self,
-        target_head_pose,
-        antennas_joint_positions: Optional[List[float]] = None,
-        duration: float = 0.5,
-        method="default",
-    ):
         cur_head_joints, cur_antennas_joints = self._get_current_joint_positions()
 
         if self._last_head_pose is None:
@@ -284,17 +310,11 @@ class ReachyMini:
             start_head_pose = self._last_head_pose
 
         target_head_pose = (
-            self.head_kinematics.fk(cur_head_joints)
-            if target_head_pose is None
-            else target_head_pose
+            self.head_kinematics.fk(cur_head_joints) if head is None else head
         )
 
         start_antennas = np.array(cur_antennas_joints)
-        target_antennas = (
-            start_antennas
-            if antennas_joint_positions is None
-            else np.array(antennas_joint_positions)
-        )
+        target_antennas = start_antennas if antennas is None else np.array(antennas)
 
         t0 = time.time()
         while time.time() - t0 < duration:
@@ -308,7 +328,7 @@ class ReachyMini:
                 start_antennas + (target_antennas - start_antennas) * interp_time
             )
 
-            self.set_position(interp_head_pose, interp_antennas_joint)
+            self.set_target(interp_head_pose, list(interp_antennas_joint))
 
             time.sleep(0.01)
 
@@ -321,7 +341,20 @@ class ReachyMini:
             List[float]
         ] = None,  # [left_angle, right_angle] length 2
         duration: float = 0.5,  # Duration in seconds for the movement
-    ):
+    ) -> None:
+        """
+        [Internal] Go to a target head joint positions and/or antennas joint positions using joint space interpolation, in "duration" seconds.
+
+        Args:
+            head_joint_positions (Optional[List[float]]): List of head joint positions in radians (length 7).
+            antennas_joint_positions (Optional[List[float]]): List of antennas joint positions in radians (length 2).
+            duration (float): Duration of the movement in seconds. Default is 0.5 seconds.
+        """
+
+        assert duration > 0.0, (
+            "Duration must be positive and non-zero. Use set_joint_positions() for immediate position setting."
+        )
+
         cur_head, cur_antennas = self._get_current_joint_positions()
         current = cur_head + cur_antennas
 
@@ -347,5 +380,53 @@ class ReachyMini:
             head_joint = angles[:7]  # First 7 angles for the head
             antennas_joint = angles[7:]
 
-            self._send_joint_command(head_joint, antennas_joint)
+            self._set_joint_positions(list(head_joint), list(antennas_joint))
             time.sleep(0.01)
+
+    def _get_current_joint_positions(self) -> tuple[list[float], list[float]]:
+        """
+        [Internal] Get the current joint positions of the head and antennas (in rad)
+
+        Returns:
+            tuple: A tuple containing two lists:
+                - List of head joint positions (rad) (length 7).
+                - List of antennas joint positions (rad) (length 2).
+        """
+
+        return self.client.get_current_joints()
+
+    def _set_joint_positions(
+        self,
+        head_joint_positions: Optional[
+            List[float]
+        ],  # [yaw, stewart_platform x 6] length 7
+        antennas_joint_positions: Optional[
+            List[float]
+        ],  # [left_angle, right_angle] length 2
+    ):
+        """
+        [Internal] Set the joint positions of the head and/or antennas.
+
+        Args:
+            head_joint_positions (Optional[List[float]]): List of head joint positions in radians (length 7).
+            antennas_joint_positions (Optional[List[float]]): List of antennas joint positions in radians (length 2).
+        """
+
+        cmd = {}
+
+        if head_joint_positions is not None:
+            assert len(head_joint_positions) == 7, (
+                f"Head joint positions must have length 7, got {head_joint_positions}."
+            )
+            cmd["head_joint_positions"] = list(head_joint_positions)
+
+        if antennas_joint_positions is not None:
+            assert len(antennas_joint_positions) == 2, "Antennas must have length 2."
+            cmd["antennas_joint_positions"] = list(antennas_joint_positions)
+
+        if not cmd:
+            raise ValueError(
+                "At least one of head_joint_positions or antennas must be provided."
+            )
+
+        self.client.send_command(json.dumps(cmd))
