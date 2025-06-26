@@ -6,6 +6,8 @@
 pip install -e .
 ```
 
+It requires Python 3.8 or later.
+
 ## Run the reachy mini daemon
 
 Additional argument for both simulation and real robot:
