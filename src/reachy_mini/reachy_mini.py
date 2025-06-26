@@ -175,7 +175,7 @@ class ReachyMini:
         Make the robot head look through pixel (u,v).
         :param u : horizontal coordinate in image frame
         :param v : vertical coordinate in image frame
-        :param duration : duration of the move
+        :param duration: Duration of the movement in seconds. If 0, the head will snap to the position immediately.
         """
 
         x_n, y_n = cv2.undistortPoints(np.float32([[[u, v]]]), self.K, self.D)[0, 0]
@@ -203,6 +203,7 @@ class ReachyMini:
         :param x: X coordinate in meters.
         :param y: Y coordinate in meters.
         :param z: Z coordinate in meters.
+        :param duration: Duration of the movement in seconds. If 0, the head will snap to the position immediately.
         """
 
         # Head is at the origin, so vector from head to target position is directly the target position
