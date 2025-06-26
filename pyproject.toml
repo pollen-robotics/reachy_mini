@@ -19,6 +19,7 @@ dependencies = [
     "pygame==2.6.1",
     "eclipse-zenoh>=1.4.0",
     "opencv-python<=5.0",
+    "cv2_enumerate_cameras",
     "psutil",
     "jinja2",
     "uvicorn",
