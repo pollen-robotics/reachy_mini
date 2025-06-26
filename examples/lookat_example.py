@@ -24,6 +24,7 @@ with ReachyMini() as reachy_mini:
     while True:
         ret, frame = cap.read()
         if not ret:
+            print("Failed to grab frame.")
             continue
 
         cv2.imshow("Frame", frame)
