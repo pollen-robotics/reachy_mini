@@ -69,6 +69,20 @@ class ReachyMini:
             f"{ROOT_PATH}/descriptions/reachy_mini/urdf/",
         )
 
+        self.K = np.array(
+            [[550.3564, 0.0, 638.0112], [0.0, 549.1653, 364.589], [0.0, 0.0, 1.0]]
+        )
+        self.D = np.array([-0.0694, 0.1565, -0.0004, 0.0003, -0.0983])
+        self.T_head_cam = np.eye(4)
+        self.T_head_cam[:3, 3][:] = [0.0437, 0, 0.0512]
+        self.T_head_cam[:3, :3] = np.array(
+            [
+                [0, 0, 1],
+                [-1, 0, 0],
+                [0, -1, 0],
+            ]
+        )
+
     def __enter__(self):
         return self
 
@@ -156,35 +170,22 @@ class ReachyMini:
         )
         self._last_head_pose = SLEEP_HEAD_POSE
 
-    def im_look_at(self, u: int, v: int, duration: float = 1.0):
+    def look_at_image(self, u: int, v: int, duration: float = 1.0):
         """
         Make the robot head look through pixel (u,v).
         :param u : horizontal coordinate in image frame
         :param v : vertical coordinate in image frame
         :param duration : duration of the move
         """
-        K = np.array(
-            [[550.3564, 0.0, 638.0112], [0.0, 549.1653, 364.589], [0.0, 0.0, 1.0]]
-        )
-        D = np.array([-0.0694, 0.1565, -0.0004, 0.0003, -0.0983])
 
-        x_n, y_n = cv2.undistortPoints(np.float32([[[u, v]]]), K, D)[0, 0]
+        x_n, y_n = cv2.undistortPoints(np.float32([[[u, v]]]), self.K, self.D)[0, 0]
 
         ray_cam = np.array([x_n, y_n, 1.0])
         ray_cam /= np.linalg.norm(ray_cam)
 
         cur_head_joints, _ = self._get_current_joint_positions()
         T_world_head = self.head_kinematics.fk(cur_head_joints)
-        T_head_cam = np.eye(4)
-        T_head_cam[:3, 3][:] = [0.0437, 0, 0.0512]
-        T_head_cam[:3, :3] = np.array(
-            [
-                [0, 0, 1],
-                [-1, 0, 0],
-                [0, -1, 0],
-            ]
-        )
-        T_world_cam = T_world_head @ T_head_cam
+        T_world_cam = T_world_head @ self.T_head_cam
 
         R_wc = T_world_cam[:3, :3]
         t_wc = T_world_cam[:3, 3]
@@ -194,9 +195,9 @@ class ReachyMini:
         P_world = t_wc + ray_world
         print(P_world)
 
-        self.look_at(*P_world, duration=duration)
+        self.look_at_world(*P_world, duration=duration)
 
-    def look_at(self, x: float, y: float, z: float, duration: float = 1.0):
+    def look_at_world(self, x: float, y: float, z: float, duration: float = 1.0):
         """
         Look at a specific point in 3D space.
         :param x: X coordinate in meters.

@@ -16,7 +16,6 @@ with ReachyMini() as reachy_mini:
                     eye_center = (eye_center + 1) / 2
                     eye_center[0] *= w
                     eye_center[1] *= h
-                    print(f"Eye center in pixels: {eye_center}")
                     cv2.circle(
                         img,
                         center=(int(eye_center[0]), int(eye_center[1])),
@@ -24,9 +23,9 @@ with ReachyMini() as reachy_mini:
                         color=(0, 255, 0),
                         thickness=2,
                     )
-                    reachy_mini.im_look_at(*eye_center, duration=0.0)
+                    reachy_mini.look_at_image(*eye_center, duration=0.0)
 
-            cv2.imshow("test_window", img)
+            cv2.imshow("image", img)
 
             cv2.waitKey(1)
     except KeyboardInterrupt:

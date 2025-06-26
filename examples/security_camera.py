@@ -3,6 +3,12 @@ import cv2
 import numpy as np
 import time
 
+"""
+Detect motion by comparing two consecutive frames from a video feed.
+Look at the center of the detected motion bounding box.
+(Doesn't work very well for now :) )
+"""
+
 cap = cv2.VideoCapture(4)
 
 
@@ -76,7 +82,7 @@ with ReachyMini() as reachy_mini:
                     frame, center=(u, v), radius=50, color=(0, 255, 0), thickness=2
                 )
                 if time.time() - last_move > 2.0:
-                    reachy_mini.im_look_at(u, v, duration=0.5)
+                    reachy_mini.look_at_image(u, v, duration=0.5)
                     last_move = time.time()
                     prev_frame = None
 

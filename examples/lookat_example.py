@@ -19,7 +19,7 @@ frame = np.zeros((1280, 720, 3))
 cv2.namedWindow("Frame")
 cv2.setMouseCallback("Frame", click)
 
-
+print("Click on the image to make ReachyMini look at that point.")
 with ReachyMini() as reachy_mini:
     while True:
         ret, frame = cap.read()
@@ -30,5 +30,5 @@ with ReachyMini() as reachy_mini:
         cv2.waitKey(1)
 
         if just_clicked:
-            reachy_mini.im_look_at(click_x, click_y, duration=0.3)
+            reachy_mini.look_at_image(click_x, click_y, duration=0.3)
             just_clicked = False
