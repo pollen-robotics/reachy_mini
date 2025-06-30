@@ -1,19 +1,16 @@
-from reachy_mini.io import Backend
-import os
-from pathlib import Path
-from reachy_mini_motor_controller import ReachyMiniMotorController
-import time
 import json
+import time
 
-ROOT_PATH = Path(os.path.dirname(os.path.abspath(__file__))).parent.parent
+from reachy_mini_motor_controller import ReachyMiniMotorController
+from reachy_mini.io import Backend
 
 
 class RobotBackend(Backend):
     def __init__(self, serialport: str):
         super().__init__()
         self.c = ReachyMiniMotorController(serialport)
-        self.control_loop_frequency = 300.0
-        self.publish_frequency = 50.0
+        self.control_loop_frequency = 200.0
+        self.publish_frequency = 100.0
         self.decimation = int(self.control_loop_frequency / self.publish_frequency)
         self.last_alive = time.time()
 

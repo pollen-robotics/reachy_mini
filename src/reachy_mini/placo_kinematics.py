@@ -187,6 +187,7 @@ class PlacoKinematics:
 
         q = self.robot.state.q.copy()
         for _ in range(10):
+<<<<<<< HEAD
             self.fk_solver.solve(True)
             self.robot.update_kinematics()
         
@@ -196,6 +197,17 @@ class PlacoKinematics:
             self.robot.state.q = q  # revert to the previous state
             return None
             
+=======
+            try:
+                self.fk_solver.solve(True)
+                self.robot.update_kinematics()
+
+            except RuntimeError as e:
+                print(e)
+                self.robot.reset()
+                self.robot.update_kinematics()
+                break
+>>>>>>> origin/develop
 
         T_world_head = self.robot.get_T_world_frame("head")
         T_world_head[:3, 3][2] -= self.head_z_offset  # offset the height of the head

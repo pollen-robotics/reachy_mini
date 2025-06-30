@@ -6,12 +6,20 @@
 pip install -e .
 ```
 
+It requires Python 3.8 or later.
+
 ## Run the reachy mini daemon
 
 Additional argument for both simulation and real robot:
 
 ```bash
---localhost-only : (Default True). If set, the server will only accept connections from localhost. This is useful for debugging.
+--localhost-only: (default behavior). The server will only accept connections from localhost.
+```
+
+or 
+
+```bash
+--no-localhost-only: If set, the server will accept connections from any connection on the local network.
 ```
 
 ### In simulation (MuJoCo)
@@ -29,8 +37,14 @@ Additional arguments:
 ### On the real robot
 
 ```bash
+reachy-mini-daemon
+```
+
+This should automatically detect the serial port of the robot. If it does not, you can specify it manually with the `-p` option:
+
+```bash
 reachy-mini-daemon -p <serial_port>
-````
+```
 
 ## Run the examples
 
