@@ -1,7 +1,7 @@
 import json
 import time
-from threading import Event
 
+import numpy as np
 from reachy_mini_motor_controller import ReachyMiniMotorController
 
 from reachy_mini.io import Backend
@@ -15,14 +15,24 @@ class RobotBackend(Backend):
         self.publish_frequency = 100.0
         self.decimation = int(self.control_loop_frequency / self.publish_frequency)
         self.last_alive = None
-        self.ready = Event()
 
         self._torque_enabled = False
 
+        self._stats_record_period = 1.0  # seconds
+        self._stats = {
+            "timestamps": [],
+            "nb_error": 0,
+            "record_period": self._stats_record_period,
+        }
+
     def run(self):
+        assert self.c is not None, "Motor controller not initialized or already closed."
+
         period = 1.0 / self.control_loop_frequency  # Control loop period in seconds
         step = 0
         retries = 5
+
+        stats_record_t0 = time.time()
 
         while not self.should_stop.is_set():
             start_t = time.time()
@@ -51,8 +61,12 @@ class RobotBackend(Backend):
                             )
                         )
                         self.last_alive = time.time()
+                        self._stats["timestamps"].append(self.last_alive)
+
                         self.ready.set()  # Mark the backend as ready
                     except RuntimeError as e:
+                        self._stats["nb_error"] += 1
+
                         # If we never received a position, we retry a few times
                         # But most likely the robot is not powered on or connected
                         if self.last_alive is None:
@@ -71,13 +85,39 @@ class RobotBackend(Backend):
                             print("No response from the robot for 2 seconds, stopping.")
                             raise e
 
+            step += 1
+
+            if time.time() - stats_record_t0 > self._stats_record_period:
+                dt = np.diff(self._stats["timestamps"])
+                if len(dt) > 1:
+                    self._last_stats = {
+                        "mean_control_loop_frequency": float(np.mean(1.0 / dt)),
+                        "max_control_loop_interval": float(np.max(dt)),
+                        "nb_error": self._stats["nb_error"],
+                    }
+
+                self._stats["timestamps"].clear()
+                self._stats["nb_error"] = 0
+                stats_record_t0 = time.time()
+
             took = time.time() - start_t
             time.sleep(max(0, period - took))
 
     def set_torque(self, enabled: bool) -> None:
+        assert self.c is not None, "Motor controller not initialized or already closed."
+
         if enabled:
             self.c.enable_torque()
         else:
             self.c.disable_torque()
 
         self._torque_enabled = enabled
+
+    def close(self) -> None:
+        self.c = None
+
+    def get_stats(self) -> dict:
+        if not hasattr(self, "_last_stats"):
+            return {}
+
+        return self._last_stats

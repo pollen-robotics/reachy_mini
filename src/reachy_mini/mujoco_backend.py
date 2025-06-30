@@ -1,7 +1,6 @@
 import json
 import time
 from importlib.resources import files
-from threading import Event
 
 import mujoco
 import mujoco.viewer
@@ -50,8 +49,6 @@ class MujocoBackend(Backend):
         ]
 
         # self.streamer_udp = UDPJPEGFrameSender()
-
-        self.ready = Event()
 
     def run(self):
         step = 1
@@ -122,4 +119,9 @@ class MujocoBackend(Backend):
 
     def set_torque(self, enabled: bool) -> None:
         pass
+
+    def close(self) -> None:
         pass
+
+    def get_stats(self) -> dict:
+        return {}
