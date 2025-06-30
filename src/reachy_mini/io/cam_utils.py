@@ -9,8 +9,8 @@ def find_camera(
     pid: int = 0x636D,
     apiPreference: int = cv2.CAP_ANY,
 ) -> cv2.VideoCapture | None:
-    if platform.system() == 'Linux':
-        apiPreference = cv2.CAP_V4L2        
+    if platform.system() == "Linux":
+        apiPreference = cv2.CAP_V4L2
 
     for c in enumerate_cameras(apiPreference):
         if c.vid == vid and c.pid == pid:
