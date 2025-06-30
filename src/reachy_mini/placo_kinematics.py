@@ -200,7 +200,6 @@ class PlacoKinematics:
         return T_world_head
 
     def config_collision_model(self):
-        model = self.robot.model
         geom_model = self.robot.collision_model
         
         # name_torso_collider = "dc15_a01_case_b_dummy_10"
@@ -219,7 +218,6 @@ class PlacoKinematics:
         :return: True if there is a collision, False otherwise.
         """
         collision_data = self.robot.collision_model.createData()
-        model = self.robot.model
         data = self.robot.model.createData()
         # pin.forwardKinematics(model, data, self.robot.state.q)
         # pin.updateFramePlacements(model, data)
