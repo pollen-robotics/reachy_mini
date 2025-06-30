@@ -105,7 +105,9 @@ class ReachyMini:
         """
         if head is not None:
             assert head.shape == (4, 4), "Head pose must be a 4x4 matrix."
-            head_joint_positions = self.head_kinematics.ik(head, check_collision=check_collision)
+            head_joint_positions = self.head_kinematics.ik(
+                head, check_collision=check_collision
+            )
         else:
             head_joint_positions = None
 

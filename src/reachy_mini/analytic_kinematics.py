@@ -1,5 +1,4 @@
 import numpy as np
-import pinocchio as pin
 from .placo_kinematics import PlacoKinematics
 import placo
 from placo_utils.tf import tf
@@ -7,7 +6,6 @@ from placo_utils.tf import tf
 
 class ReachyMiniAnalyticKinematics:
     def __init__(self, urdf_path=None, robot=None):
-
         if urdf_path is None and robot is None:
             raise ValueError("Either urdf_path or robot must be provided.")
         if robot is not None:
@@ -129,7 +127,7 @@ class ReachyMiniAnalyticKinematics:
     def jacobian_motor_to_branch(self, branch_attachment_platform, solution=0):
         """
         Calculates the Jacobian matrix for the platform branch attachment point in the motor frame.
-        
+
         Args:
             branch_attachment_platform (tuple): A tuple of three floats representing the
                 x, y, z coordinates of the branch attachment platform in the head frame.
