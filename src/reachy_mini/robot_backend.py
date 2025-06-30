@@ -1,6 +1,9 @@
 import json
 import time
 
+# It seems to be more accurate than threading.Event
+from multiprocessing import Event
+
 import numpy as np
 from reachy_mini_motor_controller import ReachyMiniMotorController
 
@@ -12,8 +15,6 @@ class RobotBackend(Backend):
         super().__init__()
         self.c = ReachyMiniMotorController(serialport)
         self.control_loop_frequency = 200.0
-        self.publish_frequency = 100.0
-        self.decimation = int(self.control_loop_frequency / self.publish_frequency)
         self.last_alive = None
 
         self._torque_enabled = False
@@ -29,65 +30,75 @@ class RobotBackend(Backend):
         assert self.c is not None, "Motor controller not initialized or already closed."
 
         period = 1.0 / self.control_loop_frequency  # Control loop period in seconds
-        step = 0
-        retries = 5
 
-        stats_record_t0 = time.time()
+        self.retries = 5
+        self.stats_record_t0 = time.time()
+
+        next_call_event = Event()
 
         while not self.should_stop.is_set():
             start_t = time.time()
+            self.update()
+            took = time.time() - start_t
 
-            if self._torque_enabled:
-                if self.head_joint_positions is not None:
-                    self.c.set_stewart_platform_position(self.head_joint_positions[1:])
-                    self.c.set_body_rotation(self.head_joint_positions[0])
-                if self.antenna_joint_positions is not None:
-                    self.c.set_antennas_positions(self.antenna_joint_positions)
+            # time.sleep(max(0, period - took))
+            sleep_time = max(0, period - took)
+            if sleep_time > 0:
+                next_call_event.clear()
+                next_call_event.wait(sleep_time)
 
-            if step % self.decimation == 0:
-                if self.joint_positions_publisher is not None:
-                    try:
-                        positions = self.c.read_all_positions()
-                        yaw = positions[0]
-                        antennas = positions[1:3]
-                        dofs = positions[3:]
+    def update(self):
+        assert self.c is not None, "Motor controller not initialized or already closed."
 
-                        self.joint_positions_publisher.put(
-                            json.dumps(
-                                {
-                                    "head_joint_positions": [yaw] + list(dofs),
-                                    "antennas_joint_positions": list(antennas),
-                                }
-                            )
+        if self._torque_enabled:
+            if self.head_joint_positions is not None:
+                self.c.set_stewart_platform_position(self.head_joint_positions[1:])
+                self.c.set_body_rotation(self.head_joint_positions[0])
+            if self.antenna_joint_positions is not None:
+                self.c.set_antennas_positions(self.antenna_joint_positions)
+
+        if self.joint_positions_publisher is not None:
+            try:
+                positions = self.c.read_all_positions()
+                yaw = positions[0]
+                antennas = positions[1:3]
+                dofs = positions[3:]
+
+                self.joint_positions_publisher.put(
+                    json.dumps(
+                        {
+                            "head_joint_positions": [yaw] + list(dofs),
+                            "antennas_joint_positions": list(antennas),
+                        }
+                    )
+                )
+                self.last_alive = time.time()
+                self._stats["timestamps"].append(self.last_alive)
+
+                self.ready.set()  # Mark the backend as ready
+            except RuntimeError as e:
+                self._stats["nb_error"] += 1
+
+                # If we never received a position, we retry a few times
+                # But most likely the robot is not powered on or connected
+                if self.last_alive is None:
+                    if self.retries > 0:
+                        print(
+                            f"Error reading positions, retrying ({self.retries} left): {e}"
                         )
-                        self.last_alive = time.time()
-                        self._stats["timestamps"].append(self.last_alive)
+                        self.retries -= 1
+                        time.sleep(0.1)
+                        return
+                    print("No response from the robot, stopping.")
+                    print("Make sure the robot is powered on and connected.")
+                    self.should_stop.set()
+                    return
 
-                        self.ready.set()  # Mark the backend as ready
-                    except RuntimeError as e:
-                        self._stats["nb_error"] += 1
+                if self.last_alive + 2 < time.time():
+                    print("No response from the robot for 2 seconds, stopping.")
+                    raise e
 
-                        # If we never received a position, we retry a few times
-                        # But most likely the robot is not powered on or connected
-                        if self.last_alive is None:
-                            if retries > 0:
-                                print(
-                                    f"Error reading positions, retrying ({retries} left): {e}"
-                                )
-                                retries -= 1
-                                time.sleep(0.1)
-                                continue
-                            print("No response from the robot, stopping.")
-                            print("Make sure the robot is powered on and connected.")
-                            break
-
-                        if self.last_alive + 2 < time.time():
-                            print("No response from the robot for 2 seconds, stopping.")
-                            raise e
-
-            step += 1
-
-            if time.time() - stats_record_t0 > self._stats_record_period:
+            if time.time() - self.stats_record_t0 > self._stats_record_period:
                 dt = np.diff(self._stats["timestamps"])
                 if len(dt) > 1:
                     self._last_stats = {
@@ -98,10 +109,7 @@ class RobotBackend(Backend):
 
                 self._stats["timestamps"].clear()
                 self._stats["nb_error"] = 0
-                stats_record_t0 = time.time()
-
-            took = time.time() - start_t
-            time.sleep(max(0, period - took))
+                self.stats_record_t0 = time.time()
 
     def set_torque(self, enabled: bool) -> None:
         assert self.c is not None, "Motor controller not initialized or already closed."
