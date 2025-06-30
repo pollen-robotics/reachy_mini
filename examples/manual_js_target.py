@@ -34,7 +34,7 @@ def main():
                 tk.Scale(root, variable=var_1, from_=-90, to=90, orient=tk.HORIZONTAL).grid(row=1, column=1)
                 tk.Label(root, text="2 (deg):").grid(row=2, column=0)
                 tk.Scale(root, variable=var_2, from_=-90, to=90, orient=tk.HORIZONTAL).grid(row=2, column=1)
-                tk.Label(root, text="13 (deg):").grid(row=3, column=0)
+                tk.Label(root, text="3 (deg):").grid(row=3, column=0)
                 tk.Scale(root, variable=var_3, from_=-90, to=90, orient=tk.HORIZONTAL).grid(row=3, column=1)
                 tk.Label(root, text="4 (deg):").grid(row=4, column=0)
                 tk.Scale(root, variable=var_4, from_=-90, to=90, orient=tk.HORIZONTAL).grid(row=4, column=1)
@@ -43,6 +43,10 @@ def main():
                 tk.Label(root, text="6 (deg):").grid(row=6, column=0)
                 tk.Scale(root, variable=var_6, from_=-90, to=90, orient=tk.HORIZONTAL).grid(row=6, column=1)
                 
+                # add a checkbox to enable/disable collision checking
+                collision_check_var = tk.BooleanVar(value=False)
+                tk.Checkbutton(root, text="Check Collision", variable=collision_check_var).grid(row=7, column=1)
+                
                     
                 # Run the GUI in a non-blocking way
                 root.update()
@@ -50,21 +54,23 @@ def main():
         
             root.update()
             
-            s = time.time()
-            mini._send_joint_command(
-                head_joint_positions=[
-                    np.deg2rad(all_yaw_var.get()),
-                    np.deg2rad(var_1.get()),
-                    np.deg2rad(var_2.get()),
-                    np.deg2rad(var_3.get()),
-                    np.deg2rad(var_4.get()),
-                    np.deg2rad(var_5.get()),
-                    np.deg2rad(var_6.get()),
-                ],
-                antennas_joint_positions=[target, target],
-                check_collision=True,
-            )
-            print("Time:" + str(time.time() - s))
+            try:
+                mini._send_joint_command(
+                    head_joint_positions=[
+                        np.deg2rad(all_yaw_var.get()),
+                        np.deg2rad(var_1.get()),
+                        np.deg2rad(var_2.get()),
+                        np.deg2rad(var_3.get()),
+                        np.deg2rad(var_4.get()),
+                        np.deg2rad(var_5.get()),
+                        np.deg2rad(var_6.get()),
+                    ],
+                    antennas_joint_positions=[target, target],
+                    check_collision=collision_check_var.get(),
+                )
+            except ValueError as e:
+                print(f"Error: {e}")
+                continue
 
             # print(mini.get_manip())
             #print(mini.get_collision())
