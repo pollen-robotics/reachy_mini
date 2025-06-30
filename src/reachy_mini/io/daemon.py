@@ -61,6 +61,14 @@ class Daemon:
         backend_run_thread = Thread(target=self.backend.run)
         backend_run_thread.start()
 
+        if not self.backend.ready.wait(timeout=2.0):
+            print("Backend is not ready after 2 seconds. Stopping daemon.")
+            if backend_run_thread.is_alive():
+                self.backend.should_stop.set()
+                backend_run_thread.join(timeout=1.0)
+            self.server.stop()
+            return
+
         ok = True
 
         if self.wake_up_on_start:

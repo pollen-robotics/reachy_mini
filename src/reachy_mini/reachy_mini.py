@@ -7,6 +7,7 @@ os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "hide"
 
 from importlib.resources import files
 
+import cv2
 import numpy as np
 import pygame
 from scipy.spatial.transform import Rotation as R
@@ -20,7 +21,6 @@ from reachy_mini.utils import (
     minimum_jerk,
     time_trajectory,
 )
-import cv2
 
 try:
     pygame.mixer.init()
@@ -64,10 +64,11 @@ class ReachyMini:
         localhost_only: bool = True,
         spawn_daemon: bool = False,
         use_sim: bool = True,
+        timeout: float = 5.0,
     ) -> None:
         daemon_check(spawn_daemon, use_sim)
         self.client = Client(localhost_only)
-        self.client.wait_for_connection()
+        self.client.wait_for_connection(timeout=timeout)
         self._last_head_pose = None
 
         self.head_kinematics = PlacoKinematics(self.urdf_root_path)
