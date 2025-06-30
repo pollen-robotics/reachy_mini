@@ -19,7 +19,7 @@ dependencies = [
     "pygame==2.6.1",
     "eclipse-zenoh>=1.4.0",
     "opencv-python<=5.0",
-    "cv2_enumerate_cameras@git+https://github.com/pierre-rouanet/cv2_enumerate_cameras",
+    "cv2_enumerate_cameras==1.2.1",
     "psutil",
     "jinja2",
     "uvicorn",
