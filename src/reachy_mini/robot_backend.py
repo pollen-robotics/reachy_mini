@@ -41,7 +41,6 @@ class RobotBackend(Backend):
             self.update()
             took = time.time() - start_t
 
-            # time.sleep(max(0, period - took))
             sleep_time = max(0, period - took)
             if sleep_time > 0:
                 next_call_event.clear()
