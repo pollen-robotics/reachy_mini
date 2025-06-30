@@ -66,7 +66,7 @@ from reachy_mini import ReachyMini
 with ReachyMini() as reachy_mini:
     ...
     ...
-    reachy_mini.set_target(head=pose, antennas=antennas)s
+    reachy_mini.set_target(head=pose, antennas=antennas)
 ```
 
 With the real robot, the camera is directly accessible with the USB connection, and can be directly read with OpenCV:

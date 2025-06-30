@@ -18,7 +18,7 @@ def main():
                 )
                 mini.goto_target(
                     pose,
-                    antennas=list(np.deg2rad([-20, 20])),
+                    antennas=np.deg2rad([-20, 20]),
                     duration=1.0,
                     method=method,
                 )
@@ -28,7 +28,7 @@ def main():
                 )
                 mini.goto_target(
                     pose,
-                    antennas=list(np.deg2rad([20, -20])),
+                    antennas=np.deg2rad([20, -20]),
                     duration=1.0,
                     method=method,
                 )

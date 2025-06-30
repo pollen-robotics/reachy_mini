@@ -1,7 +1,7 @@
 import json
 import os
 import time
-from typing import List, Optional
+from typing import List, Optional, Union
 
 os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "hide"
 
@@ -107,14 +107,16 @@ class ReachyMini:
     def set_target(
         self,
         head: Optional[np.ndarray] = None,  # 4x4 pose matrix
-        antennas: Optional[List[float]] = None,  # [left_angle, right_angle] (in rads)
+        antennas: Optional[
+            Union[np.ndarray, List[float]]
+        ] = None,  # [left_angle, right_angle] (in rads)
     ) -> None:
         """
         Set the target pose of the head and/or the target position of the antennas.
 
         Args:
             head (Optional[np.ndarray]): 4x4 pose matrix representing the head pose.
-            antennas (Optional[List[float]]): 1D array with two elements representing the angles of the antennas in radians.
+            antennas (Optional[Union[np.ndarray, List[float]]]): 1D array with two elements representing the angles of the antennas in radians.
 
         Raises:
             ValueError: If neither head nor antennas are provided.
@@ -281,7 +283,9 @@ class ReachyMini:
     def goto_target(
         self,
         head: Optional[np.ndarray] = None,  # 4x4 pose matrix
-        antennas: Optional[List[float]] = None,  # [left_angle, right_angle] (in rads)
+        antennas: Optional[
+            Union[np.ndarray, List[float]]
+        ] = None,  # [left_angle, right_angle] (in rads)
         duration: float = 0.5,  # Duration in seconds for the movement, default is 0.5 seconds.
         method="default",  # can be "linear", "minjerk", "ease" or "cartoon", default is "default" (-> "linear")
     ):
@@ -290,17 +294,21 @@ class ReachyMini:
 
         Args:
             head (Optional[np.ndarray]): 4x4 pose matrix representing the target head pose.
-            antennas (Optional[np.ndarray]): 1D array with two elements representing the angles of the antennas in radians.
+            antennas (Optional[Union[np.ndarray, List[float]]]): 1D array with two elements representing the angles of the antennas in radians.
             duration (float): Duration of the movement in seconds.
             method (str): Interpolation method to use ("linear", "minjerk", "ease", "cartoon"). Default is "linear.
+
+        Raises:
+            ValueError: If neither head nor antennas are provided, or if duration is not positive.
         """
 
         if head is None and antennas is None:
             raise ValueError("At least one of head or antennas must be provided.")
 
-        assert duration > 0.0, (
-            "Duration must be positive and non-zero. Use set_target() for immediate position setting."
-        )
+        if duration <= 0.0:
+            raise ValueError(
+                "Duration must be positive and non-zero. Use set_target() for immediate position setting."
+            )
 
         cur_head_joints, cur_antennas_joints = self._get_current_joint_positions()
 
@@ -349,11 +357,15 @@ class ReachyMini:
             head_joint_positions (Optional[List[float]]): List of head joint positions in radians (length 7).
             antennas_joint_positions (Optional[List[float]]): List of antennas joint positions in radians (length 2).
             duration (float): Duration of the movement in seconds. Default is 0.5 seconds.
+
+        Raises:
+            ValueError: If neither head_joint_positions nor antennas_joint_positions are provided, or if duration is not positive.
         """
 
-        assert duration > 0.0, (
-            "Duration must be positive and non-zero. Use set_joint_positions() for immediate position setting."
-        )
+        if duration <= 0.0:
+            raise ValueError(
+                "Duration must be positive and non-zero. Use set_target() for immediate position setting."
+            )
 
         cur_head, cur_antennas = self._get_current_joint_positions()
         current = cur_head + cur_antennas
