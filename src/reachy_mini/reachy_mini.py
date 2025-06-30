@@ -359,6 +359,3 @@ class ReachyMini:
 
             self._send_joint_command(head_joint, antennas_joint)
             time.sleep(0.01)
-            
-    def get_manip(self) -> np.ndarray:
-        return self.head_kinematics.manipulability()

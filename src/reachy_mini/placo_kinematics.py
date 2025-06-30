@@ -187,27 +187,13 @@ class PlacoKinematics:
 
         q = self.robot.state.q.copy()
         for _ in range(10):
-<<<<<<< HEAD
             self.fk_solver.solve(True)
             self.robot.update_kinematics()
-        
 
         if check_collision and self.compute_collision():
-            print("Collision detected, stopping ik...")
+            print("Collision detected, stopping FK...")
             self.robot.state.q = q  # revert to the previous state
             return None
-            
-=======
-            try:
-                self.fk_solver.solve(True)
-                self.robot.update_kinematics()
-
-            except RuntimeError as e:
-                print(e)
-                self.robot.reset()
-                self.robot.update_kinematics()
-                break
->>>>>>> origin/develop
 
         T_world_head = self.robot.get_T_world_frame("head")
         T_world_head[:3, 3][2] -= self.head_z_offset  # offset the height of the head
@@ -217,9 +203,8 @@ class PlacoKinematics:
         model = self.robot.model
         geom_model = self.robot.collision_model
         
-        name_torso_collider = "dc15_a01_case_b_dummy_10"
-        names_head_colliders = ["pp01063_stewart_plateform_7", "pp01063_stewart_plateform_11"]
-        
+        # name_torso_collider = "dc15_a01_case_b_dummy_10"
+        # names_head_colliders = ["pp01063_stewart_plateform_7", "pp01063_stewart_plateform_11"]
         
         id_torso_collider = 12# geom_model.getGeometryObjectId(name_torso_collider)
         id_head_colliders = [74, 78]#[geom_model.getGeometryObjectId(name) for name in names_head_colliders]
@@ -239,41 +224,3 @@ class PlacoKinematics:
         # pin.forwardKinematics(model, data, self.robot.state.q)
         # pin.updateFramePlacements(model, data)
         return pin.computeCollisions(self.robot.model, data, self.robot.collision_model, collision_data, self.robot.state.q)
-        
-    def manipulability(self):
-        """
-        Compute the manipulability of the robot.
-        :return: The manipulability of the robot.
-        """
-        #jac = self.robot.frame_jacobian("head", "local_world_aligned")
-        joint_ids = [self.robot.model.getJointId(joint_name)+4 for joint_name in self.joints_names]
-        jac = self.robot.frame_jacobian("passive_7_link_y", "local_world_aligned")
-        #print joint names
-        # jid = []
-        # for j in self.robot.model.frames:
-        #     if self.robot.model.getJointId(j.name) <= self.robot.model.nq: # and j.name in self.joints_names:
-        #         print(j.name, ":", self.robot.model.getJointId(j.name))
-        #         #jid.append(self.robot.model.getJointId(j.name))
-
-        # print all joint names and their IDs
-        for j in self.robot.model.joints:
-            if j.id <= self.robot.model.nq:
-                print(self.robot.model.names[j.id], ":", j.id)
-        
-    
-        # column_idx = 0
-        # print("Joint-to-Jacobian Column Mapping:")
-        # for joint_id in range(1, self.robot.model.njoints):  # Skip universe joint (ID=0)
-        #     joint_name = self.robot.model.names[joint_id]
-        #     nv = self.robot.model.joints[joint_id].nv
-        #     print(f"Joint ID: {joint_id}, Name: {joint_name}, Jacobian columns: {column_idx} to {column_idx + nv - 1}")
-        #     column_idx += nv
-            
-        # print("Joint IDs:", jid)
-        #joint_ids = [self.robot.model.getJointId(joint_name) for joint_name in ["6"]]
-        print("Joint IDs:", joint_ids)
-        jac = jac  # Select only the joints of the head
-        print("Jacobian matrix:\n", np.round(jac[:,joint_ids],2))
-        jacobian_matrix1 = jac[:3, joint_ids].copy()  # Take only the position
-        jacobian_matrix2 = jac[3:, joint_ids].copy()  # Take only the rotation
-        return np.linalg.svd(jacobian_matrix1, compute_uv=False), np.linalg.svd(jacobian_matrix2, compute_uv=False)
