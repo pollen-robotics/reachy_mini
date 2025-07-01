@@ -5,6 +5,7 @@ from reachy_mini import ReachyMini
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 
+from reachy_mini.io.cam_utils import find_camera
 
 def draw_debug(img, palm_center):
     h, w, _ = img.shape
@@ -35,8 +36,7 @@ def draw_debug(img, palm_center):
     )
 
 
-cap = cv2.VideoCapture(4)
-# cap = cv2.VideoCapture(0)
+cap = find_camera()
 
 hand_tracker = HandTracker()
 pose = np.eye(4)
