@@ -1,5 +1,6 @@
 import json
 import time
+from dataclasses import dataclass
 from importlib.resources import files
 
 import mujoco
@@ -125,3 +126,8 @@ class MujocoBackend(Backend):
 
     def get_stats(self) -> dict:
         return {}
+
+
+@dataclass
+class MujocoBackendStatus:
+    pass

@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from enum import Enum
 from threading import Thread
+from typing import Optional
 
 import serial.tools.list_ports
 
@@ -122,7 +123,9 @@ class Daemon:
     def status(self) -> "DaemonStatus":
         return DaemonStatus(
             state=self.state,
-            backend_stats=self.backend.get_stats() if hasattr(self, "backend") else {},
+            backend_status=self.backend.get_status()
+            if hasattr(self, "backend")
+            else None,
         )
 
     def run4ever(
@@ -146,6 +149,7 @@ class Daemon:
             try:
                 print("Daemon is running. Press Ctrl+C to stop.")
                 while self.backend_run_thread.is_alive():
+                    print(f"Daemon status: {self.status()}")
                     self.backend_run_thread.join(timeout=1.0)
                 else:
                     print("Backend thread has stopped unexpectedly.")
@@ -175,10 +179,10 @@ class DaemonState(Enum):
 @dataclass
 class DaemonStatus:
     state: DaemonState
-    backend_stats: dict
+    backend_status: Optional[RobotBackendStatus | MujocoBackendStatus]
 
 
-def setup_backend(sim, serialport, scene) -> "Backend":
+def setup_backend(sim, serialport, scene) -> "RobotBackend | MujocoBackend":
     if sim:
         return MujocoBackend(scene=scene)
     else:

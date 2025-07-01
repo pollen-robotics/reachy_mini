@@ -1,8 +1,8 @@
 import json
 import time
-
-# It seems to be more accurate than threading.Event
-from multiprocessing import Event
+from dataclasses import dataclass
+from multiprocessing import Event  # It seems to be more accurate than threading.Event
+from typing import Optional
 
 import numpy as np
 from reachy_mini_motor_controller import ReachyMiniMotorController
@@ -19,6 +19,11 @@ class RobotBackend(Backend):
 
         self._torque_enabled = False
 
+        self._status = RobotBackendStatus(
+            ready=False,
+            last_alive=None,
+            control_loop_stats={},
+        )
         self._stats_record_period = 1.0  # seconds
         self._stats = {
             "timestamps": [],
@@ -100,11 +105,15 @@ class RobotBackend(Backend):
             if time.time() - self.stats_record_t0 > self._stats_record_period:
                 dt = np.diff(self._stats["timestamps"])
                 if len(dt) > 1:
-                    self._last_stats = {
-                        "mean_control_loop_frequency": float(np.mean(1.0 / dt)),
-                        "max_control_loop_interval": float(np.max(dt)),
-                        "nb_error": self._stats["nb_error"],
-                    }
+                    self._status.control_loop_stats["mean_control_loop_frequency"] = (
+                        float(np.mean(1.0 / dt))
+                    )
+                    self._status.control_loop_stats["max_control_loop_interval"] = (
+                        float(np.max(dt))
+                    )
+                    self._status.control_loop_stats["nb_error"] = self._stats[
+                        "nb_error"
+                    ]
 
                 self._stats["timestamps"].clear()
                 self._stats["nb_error"] = 0
@@ -123,8 +132,12 @@ class RobotBackend(Backend):
     def close(self) -> None:
         self.c = None
 
-    def get_stats(self) -> dict:
-        if not hasattr(self, "_last_stats"):
-            return {}
+    def get_status(self) -> "RobotBackendStatus":
+        return self._status
 
-        return self._last_stats
+
+@dataclass
+class RobotBackendStatus:
+    ready: bool
+    last_alive: Optional[float]
+    control_loop_stats: dict
