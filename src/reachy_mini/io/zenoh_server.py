@@ -1,9 +1,10 @@
 import json
 import threading
+
 import zenoh
 
 from reachy_mini.io.abstract import AbstractServer
-from reachy_mini.io import Backend
+from reachy_mini.io.backend import Backend
 
 
 class ZenohServer(AbstractServer):

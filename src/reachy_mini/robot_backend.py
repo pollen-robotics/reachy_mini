@@ -7,7 +7,7 @@ from multiprocessing import Event
 import numpy as np
 from reachy_mini_motor_controller import ReachyMiniMotorController
 
-from reachy_mini.io import Backend
+from reachy_mini.io.backend import Backend
 
 
 class RobotBackend(Backend):

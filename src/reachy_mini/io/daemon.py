@@ -6,9 +6,8 @@ import serial.tools.list_ports
 
 from reachy_mini import ReachyMini
 from reachy_mini.io import Server
-from reachy_mini.io.backend import Backend
-from reachy_mini.mujoco_backend import MujocoBackend
-from reachy_mini.robot_backend import RobotBackend
+from reachy_mini.mujoco_backend import MujocoBackend, MujocoBackendStatus
+from reachy_mini.robot_backend import RobotBackend, RobotBackendStatus
 
 
 class Daemon:
