@@ -481,11 +481,12 @@ async def update_app(app_name: str, request: Request):
 async def remove_app(app_name: str):
     """Remove a venv app"""
     try:
-        venv_app_names = [app["name"] for app in app_manager.list_installed_apps()]
-        if app_name not in venv_app_names:
-            return JSONResponse(
-                status_code=404, content={"detail": f"App '{app_name}' not found"}
-            )
+        # TODO stopped cheking for now, will come back later
+        # venv_app_names = [app["name"] for app in app_manager.list_installed_apps()]
+        # if app_name not in venv_app_names:
+        #     return JSONResponse(
+        #         status_code=404, content={"detail": f"App '{app_name}' not found"}
+        #     )
 
         removal_id = str(uuid.uuid4())
         asyncio.create_task(

@@ -412,6 +412,12 @@
 
     async function fetchStatus() {
       try {
+        // if last fetch status is less than 1 seconds ago, skip fetching
+        if (Date.now() - (window.lastFetchTime || 0) < 1000) {
+          console.log('Skipping fetchStatus due to rate limit');
+          return;
+        }
+        window.lastFetchTime = Date.now();
         // Use the full status endpoint to get detailed app information
         const res = await fetch('/api/status/full');
         const data = await res.json();
@@ -540,7 +546,7 @@
           }
 
           // Add Update and Remove buttons for venv apps
-          if (isVenvApp || venvDetails) {
+          if (isVenvApp || venvDetails || true) {
             console.log(`Adding Update/Remove buttons for ${name}`);
 
             const updateBtn = document.createElement('button');
