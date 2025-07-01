@@ -5,7 +5,7 @@ from threading import Thread
 
 import serial.tools.list_ports
 
-from reachy_mini import MujocoBackend, ReachyMini, RobotBackend
+from reachy_mini import MujocoBackend, ReachyMini, Rerun, RobotBackend
 from reachy_mini.io import Server
 
 
@@ -23,6 +23,8 @@ class Daemon:
         localhost_only: bool = True,
         wake_up_on_start: bool = True,
         goto_sleep_on_stop: bool = True,
+        # urdf: str = "reachy_mini.urdf",
+        rerun: bool = False,
     ):
         if sim:
             self.backend = MujocoBackend(scene=scene)
@@ -51,6 +53,10 @@ class Daemon:
         self.wake_up_on_start = wake_up_on_start
         self.goto_sleep_on_stop = goto_sleep_on_stop
 
+        self.rerun = None
+        if rerun:
+            self.rerun = Rerun(self.backend, app_id="reachy_mini_daemon", spawn=True)
+
         self.server = Server(self.backend, localhost_only=localhost_only)
         self.server.start()
 
@@ -60,6 +66,10 @@ class Daemon:
         print("Starting Reachy Mini daemon...")
         backend_run_thread = Thread(target=self.backend.run)
         backend_run_thread.start()
+
+        if self.rerun:
+            print("Starting Rerun logging...")
+            self.rerun.start()
 
         if not self.backend.ready.wait(timeout=2.0):
             print("Backend is not ready after 2 seconds. Stopping daemon.")
@@ -111,6 +121,10 @@ class Daemon:
             except KeyboardInterrupt:
                 pass
 
+        if self.rerun:
+            print("Stoppping Rerun logging...")
+            self.rerun.stop()
+
         self.backend.should_stop.set()
         backend_run_thread.join()
 
@@ -159,6 +173,14 @@ def main():
         dest="localhost_only",
         help="Allow the server to listen on all interfaces (default: False).",
     )
+    # parser.add_argument("--urdf", type=str, required=False, help="reachy_mini.urdf")
+    parser.add_argument(
+        "--rerun",
+        action="store_true",
+        default=False,
+        help="Enable Rerun logging (default: False).",
+    )
+
     args = parser.parse_args()
 
     d = Daemon(
@@ -166,6 +188,8 @@ def main():
         serialport=args.serialport,
         scene=args.scene,
         localhost_only=args.localhost_only,
+        # urdf=args.urdf,
+        rerun=args.rerun,
     )
     d.run()
 
