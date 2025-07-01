@@ -172,6 +172,14 @@ class Daemon:
         goto_sleep_on_stop: Optional[bool] = None,
     ) -> "DaemonState":
         """Restart the Reachy Mini daemon.
+        Args:
+            sim (bool): If True, run in simulation mode using Mujoco. Defaults to None (uses the previous value).
+            serialport (str): Serial port for real motors. Defaults to None (uses the previous value).
+            scene (str): Name of the scene to load in simulation mode ("empty" or "minimal"). Defaults to None (uses the previous value).
+            localhost_only (bool): If True, restrict the server to localhost only clients. Defaults to None (uses the previous value).
+            wake_up_on_start (bool): If True, wake up Reachy Mini on start. Defaults to None (don't wake up).
+            goto_sleep_on_stop (bool): If True, put Reachy Mini to sleep on stop. Defaults to None (don't go to sleep).
+
         Returns:
             DaemonState: The current state of the daemon after attempting to restart it.
         """
