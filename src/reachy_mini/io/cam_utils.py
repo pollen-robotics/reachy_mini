@@ -12,17 +12,18 @@ def find_camera(
     if platform.system() == "Linux":
         apiPreference = cv2.CAP_V4L2
 
-    cam = None
+    selected_cap = None
     for c in enumerate_cameras(apiPreference):
         if c.vid == vid and c.pid == pid:
             # the Arducam camera create two /dev/videoX devices
             # that enumerate_cameras cannot differentiate
             try:
-                cam = cv2.VideoCapture(c.index, c.backend)
+                cap = cv2.VideoCapture(c.index, c.backend)
+                if cap.isOpened():
+                    selected_cap = cap
             except Exception as e:
                 print(f"Error opening camera {c.index}: {e}")
-                cam = None
-    return cam
+    return selected_cap
 
 
 if __name__ == "__main__":
