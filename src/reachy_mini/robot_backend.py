@@ -14,6 +14,10 @@ logger = logging.getLogger(__name__)
 
 
 class RobotBackend(Backend):
+    """
+    Real robot backend for Reachy Mini.
+    """
+
     def __init__(self, serialport: str, log_level: str = "INFO"):
         super().__init__()
 

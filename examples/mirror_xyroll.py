@@ -76,7 +76,7 @@ def main(draw=True):
                             connection_drawing_spec=mp.solutions.drawing_styles.get_default_face_mesh_contours_style(),
                         )
                     pose = pose_estimator.predict(face_landmarks, img)
-                    reachy_mini.set_position(head=pose, antennas=np.array([0, 0]))
+                    reachy_mini.set_target(head=pose, antennas=[0, 0])
 
                 cv.imshow("test_window", img)
                 cv.waitKey(1)

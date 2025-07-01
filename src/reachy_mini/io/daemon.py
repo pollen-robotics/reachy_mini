@@ -13,6 +13,12 @@ from reachy_mini.robot_backend import RobotBackend, RobotBackendStatus
 
 
 class Daemon:
+    """
+    Daemon for simulated or real Reachy Mini robot.
+
+    Runs the server with the appropriate backend (Mujoco for simulation or RobotBackend for real hardware).
+    """
+
     def __init__(self, log_level: str = "INFO"):
         self.log_level = log_level
         self.logger = logging.getLogger(__name__)
@@ -32,6 +38,17 @@ class Daemon:
         localhost_only: bool = True,
         wake_up_on_start: bool = True,
     ) -> "DaemonState":
+        """
+        Initialize the Reachy Mini daemon.
+
+        Args:
+            sim (bool): If True, run in simulation mode using Mujoco. Defaults to False.
+            serialport (str): Serial port for real motors. Defaults to "auto", which will try to find the port automatically.
+            scene (str): Name of the scene to load in simulation mode ("empty" or "minimal"). Defaults to "empty".
+            localhost_only (bool): If True, restrict the server to localhost only clients. Defaults to True.
+            wake_up_on_start (bool): If True, wake up Reachy Mini on start. Defaults to True.
+            goto_sleep_on_stop (bool): If True, put Reachy Mini to sleep on stop. Defaults to True.
+        """
         if self._status.state == DaemonState.RUNNING:
             self.logger.warning("Daemon is already running.")
             return self._status.state

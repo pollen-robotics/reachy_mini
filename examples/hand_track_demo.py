@@ -70,7 +70,7 @@ with ReachyMini() as reachy_mini:
                     error[0] * 0.02
                 )  # Adjust height based on vertical error
 
-                reachy_mini.set_position(head=pose)
+                reachy_mini.set_target(head=pose)
             cv2.imshow("test_window", img)
 
             cv2.waitKey(1)
