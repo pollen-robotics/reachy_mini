@@ -2,10 +2,13 @@ import asyncio
 import json
 import shutil
 import subprocess
+import sys
 import time
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List
+
+from utils import SubprocessHelper, run_subprocess
 
 # Shared state
 active_installations: Dict[str, dict] = {}
@@ -58,72 +61,72 @@ async def install_app_async(
         await broadcast_installation_status(installation_id, status)
         print(f"Starting installation for {app_name}...")
 
-        # Stage 1: Create virtual environment
-        status.update(
-            {
-                "stage": "creating_venv",
-                "progress": 20,
-                "message": f"Creating virtual environment for {app_name}...",
-            }
-        )
-        active_installations[installation_id] = status
-        await broadcast_installation_status(installation_id, status)
+        # # # # # # # # Stage 1: Create virtual environment
+        # # # # # # # status.update(
+        # # # # # # #     {
+        # # # # # # #         "stage": "creating_venv",
+        # # # # # # #         "progress": 20,
+        # # # # # # #         "message": f"Creating virtual environment for {app_name}...",
+        # # # # # # #     }
+        # # # # # # # )
+        # # # # # # # active_installations[installation_id] = status
+        # # # # # # # await broadcast_installation_status(installation_id, status)
 
-        print("creating venv")
-        venv_path = app_manager.create_venv(app_name)
-        app_dir = venv_path.parent
+        # # # # # # # # # # print("creating venv")
+        # # # # # # # # # # venv_path = app_manager.create_venv(app_name)
+        # # # # # # # # # # app_dir = venv_path.parent
 
-        # Stage 2: Get pip path and verify it exists
-        print(f"Virtual environment created at {venv_path}")
-        pip_path = app_manager.get_venv_pip(app_name)
-        if not pip_path.exists():
-            raise Exception(f"Pip not found in virtual environment: {pip_path}")
+        # # # # # # Stage 2: Get pip path and verify it exists
+        # # # # # print(f"Virtual environment created at {venv_path}")
+        # # # # # pip_path = app_manager.get_venv_pip(app_name)
+        # # # # # if not pip_path.exists():
+        # # # # #     raise Exception(f"Pip not found in virtual environment: {pip_path}")
 
-        # Stage 3: Install app from URL
-        print(f"Installing {app_name} from {app_url}...")
-        status.update(
-            {
-                "stage": "installing",
-                "progress": 40,
-                "message": f"Installing {app_name} from repository...",
-            }
-        )
-        active_installations[installation_id] = status
-        await broadcast_installation_status(installation_id, status)
+        # # # # # # Stage 3: Install app from URL
+        # # # # # print(f"Installing {app_name} from {app_url}...")
+        # # # # # status.update(
+        # # # # #     {
+        # # # # #         "stage": "installing",
+        # # # # #         "progress": 40,
+        # # # # #         "message": f"Installing {app_name} from repository...",
+        # # # # #     }
+        # # # # # )
+        # # # # # active_installations[installation_id] = status
+        # # # # # await broadcast_installation_status(installation_id, status)
 
-        # Upgrade pip first with fallback
-        print("Upgrading pip...")
-        try:
-            run_subprocess([str(pip_path), "install", "--upgrade", "pip"], timeout=60)
-        except Exception as e:
-            print(f"Pip upgrade failed, trying alternative method: {e}")
-            try:
-                # Try with --user flag or without upgrade
-                run_subprocess(
-                    [str(pip_path), "install", "--upgrade", "pip", "--user"], timeout=60
-                )
-            except Exception as e2:
-                print(f"Alternative pip upgrade also failed: {e2}")
-                print("Continuing without pip upgrade...")
+        # # # # # # Upgrade pip first with fallback
+        # # # # # print("Upgrading pip...")
+        # # # # # try:
+        # # # # #     run_subprocess(
+        # # # # #         [str(pip_path), "install", "--upgrade", "pip"],
+        # # # # #         timeout=60,
+        # # # # #         process_id=f"install_{installation_id}_pip",
+        # # # # #         description=f"Upgrading pip for {app_name}",
+        # # # # #     )
+        # # # # # except Exception as e:
+        # # # # #     print(f"Pip upgrade failed, trying alternative method: {e}")
+        # # # # #     try:
+        # # # # #         # Try with --user flag or without upgrade
+        # # # # #         run_subprocess(
+        # # # # #             [str(pip_path), "install", "--upgrade", "pip", "--user"],
+        # # # # #             timeout=60,
+        # # # # #             process_id=f"install_{installation_id}_pip_alt",
+        # # # # #             description=f"Alternative pip upgrade for {app_name}",
+        # # # # #         )
+        # # # # #     except Exception as e2:
+        # # # # #         print(f"Alternative pip upgrade also failed: {e2}")
+        # # # # #         print("Continuing without pip upgrade...")
 
         # Direct pip install
         app_url = convert_hf_spaces_url(app_url)  # Convert HF Spaces URL if needed
         print(f"Installing {app_name} from {app_url}...")
-        run_subprocess([str(pip_path), "install", f"git+{app_url}"])
-
-        # # Stage 4: Install dependencies
-        # status.update(
-        #     {
-        #         "stage": "dependencies",
-        #         "progress": 70,
-        #         "message": "Installing dependencies...",
-        #     }
-        # )
-        # active_installations[installation_id] = status
-        # await broadcast_installation_status(installation_id, status)
-
-        # # Look for requirements.txt
-        # install_requirements(app_dir, app_name, pip_path)
+        current_python = sys.executable
+        print(f"Current Python: {current_python}")
+        run_subprocess(
+            [current_python, "-m", "pip", "install", f"git+{app_url}"],
+            process_id=f"install_{installation_id}_main",
+            description=f"Installing {app_name} from {app_url}",
+        )
 
         # Stage 5: Complete
         status.update(
@@ -167,57 +170,6 @@ async def install_app_async(
         await handle_installation_error(installation_id, app_name, app_url, str(e))
 
 
-async def install_from_git(
-    app_url: str, app_name: str, app_dir: Path, pip_path: Path, dashboard_dir: Path
-):
-    """Install app from git repository"""
-    git_url = app_url if app_url.endswith(".git") else f"{app_url}.git"
-
-    clone_dir = app_dir / "src"
-    clone_dir.mkdir(exist_ok=True)
-
-    package_name = get_package_name_from_url(app_url, app_name)
-    repo_path = clone_dir / package_name
-
-    # Clone repository
-    run_subprocess(["git", "clone", git_url, str(repo_path)], cwd=str(dashboard_dir))
-
-    # Check installation method
-    has_pyproject = (repo_path / "pyproject.toml").exists()
-    has_setup_py = (repo_path / "setup.py").exists()
-
-    if has_pyproject or has_setup_py:
-        # Install as editable package
-        try:
-            run_subprocess([str(pip_path), "install", "-e", str(repo_path)])
-        except Exception:
-            # Fallback to regular install
-            run_subprocess([str(pip_path), "install", str(repo_path)])
-    else:
-        # Install requirements if available
-        req_file = repo_path / "requirements.txt"
-        if req_file.exists():
-            run_subprocess([str(pip_path), "install", "-r", str(req_file)])
-
-
-def install_requirements(app_dir: Path, app_name: str, pip_path: Path):
-    """Install requirements from various possible locations"""
-    possible_req_paths = [
-        app_dir / "requirements.txt",
-        app_dir / "src" / "requirements.txt",
-        app_dir / "src" / app_name / "requirements.txt",
-        app_dir / "requirements" / "base.txt",
-    ]
-
-    for requirements_file in possible_req_paths:
-        if requirements_file.exists():
-            try:
-                run_subprocess([str(pip_path), "install", "-r", str(requirements_file)])
-                break
-            except Exception:
-                continue  # Try next requirements file
-
-
 def convert_hf_spaces_url(app_url: str) -> str:
     """Convert HF Spaces static URL to git repository URL"""
     if ".static.hf.space" in app_url:
@@ -255,37 +207,6 @@ def get_package_name_from_url(app_url: str, app_name: str) -> str:
         if len(url_parts) >= 2:
             return url_parts[-1].replace(".git", "")
     return app_name
-
-
-def run_subprocess(cmd: List[str], cwd: str = None, timeout: int = 300):
-    """Run subprocess and raise exception on failure"""
-    print(f"Running command: {' '.join(cmd)}")
-    if cwd:
-        print(f"Working directory: {cwd}")
-
-    try:
-        result = subprocess.run(
-            cmd, cwd=cwd, capture_output=True, text=True, timeout=timeout
-        )
-
-        print(f"Command completed with exit code: {result.returncode}")
-        if result.stdout:
-            print(f"STDOUT:\n{result.stdout}")
-        if result.stderr:
-            print(f"STDERR:\n{result.stderr}")
-
-        if result.returncode != 0:
-            error_msg = f"Exit code: {result.returncode}\nSTDOUT: {result.stdout}\nSTDERR: {result.stderr}"
-            raise Exception(f"Command failed: {' '.join(cmd)}\n{error_msg}")
-
-        return result
-
-    except subprocess.TimeoutExpired:
-        print(f"Command timed out after {timeout}s: {' '.join(cmd)}")
-        raise Exception(f"Command timed out after {timeout}s: {' '.join(cmd)}")
-    except Exception as e:
-        print(f"Command execution failed: {e}")
-        raise
 
 
 async def handle_installation_error(
@@ -355,7 +276,12 @@ async def update_app_async(
         await broadcast_installation_status(installation_id, status)
 
         try:
-            run_subprocess([str(pip_path), "install", "--upgrade", "pip"], timeout=60)
+            run_subprocess(
+                [str(pip_path), "install", "--upgrade", "pip"],
+                timeout=60,
+                process_id=f"update_{installation_id}_pip",
+                description=f"Updating pip for {app_name}",
+            )
         except Exception as e:
             print(f"Pip upgrade failed during update: {e}")
             print("Continuing without pip upgrade...")
@@ -378,10 +304,17 @@ async def update_app_async(
             repo_dir = app_dir / "src" / package_name
             if repo_dir.exists() and (repo_dir / ".git").exists():
                 # Pull latest changes
-                run_subprocess(["git", "pull"], cwd=str(repo_dir))
+                run_subprocess(
+                    ["git", "pull"],
+                    cwd=str(repo_dir),
+                    process_id=f"update_{installation_id}_git_pull",
+                    description=f"Pulling latest changes for {app_name}",
+                )
                 # Reinstall
                 run_subprocess(
-                    [str(pip_path), "install", "-e", str(repo_dir), "--upgrade"]
+                    [str(pip_path), "install", "-e", str(repo_dir), "--upgrade"],
+                    process_id=f"update_{installation_id}_reinstall",
+                    description=f"Reinstalling {app_name}",
                 )
             else:
                 # Re-install from git
@@ -393,10 +326,16 @@ async def update_app_async(
                         "--upgrade",
                         "--force-reinstall",
                         f"git+{git_url}",
-                    ]
+                    ],
+                    process_id=f"update_{installation_id}_reinstall_git",
+                    description=f"Reinstalling {app_name} from git",
                 )
         else:
-            run_subprocess([str(pip_path), "install", "--upgrade", app_url])
+            run_subprocess(
+                [str(pip_path), "install", "--upgrade", app_url],
+                process_id=f"update_{installation_id}_upgrade",
+                description=f"Upgrading {app_name}",
+            )
 
         # Complete
         status.update(
@@ -505,9 +444,18 @@ async def remove_app_async(
         active_installations[removal_id] = status
         await broadcast_installation_status(removal_id, status)
 
-        success = app_manager.remove_app_completely(app_name)
-        if not success:
-            raise Exception("Failed to remove app directory")
+        package_name = app_manager.get_app_metadata(app_name).get(
+            "package_name", app_name
+        )
+        run_subprocess(
+            [sys.executable, "-m", "pip", "uninstall", package_name, "-y"],
+            process_id=f"remove_{removal_id}_pip",
+            description=f"Uninstalling {app_name}",
+        )
+
+        # success = app_manager.remove_app_completely(app_name)
+        # if not success:
+        # raise Exception("Failed to remove app directory")
 
         # Complete
         status.update(

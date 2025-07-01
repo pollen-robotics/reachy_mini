@@ -24,7 +24,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from utils import get_platform_info
+from utils import (
+    SubprocessHelper,
+    clear_process_logs,
+    get_platform_info,
+    get_process_logs,
+    register_log_callback,
+    unregister_log_callback,
+)
 from venv_app import VenvAppManager
 
 app = FastAPI()
@@ -43,6 +50,7 @@ current_app = None
 current_app_name = None
 app_thread = None
 app_process = None
+app_subprocess_helper: Optional[SubprocessHelper] = None
 
 # Directories
 DASHBOARD_DIR = Path(__file__).parent.absolute()
@@ -62,6 +70,40 @@ if templates_dir.exists():
     templates = Jinja2Templates(directory=str(templates_dir))
 else:
     templates = None
+
+
+# Log broadcasting
+async def broadcast_log_message(process_id: str, log_entry: dict):
+    """Broadcast log messages to WebSocket clients"""
+    if not connected_clients:
+        return
+
+    message = {"type": "log_update", "process_id": process_id, "log_entry": log_entry}
+
+    disconnected_clients = []
+    for client in connected_clients:
+        try:
+            await client.send_text(json.dumps(message))
+        except Exception:
+            disconnected_clients.append(client)
+
+    for client in disconnected_clients:
+        connected_clients.remove(client)
+
+
+def log_callback_wrapper(process_id: str, log_entry: dict):
+    """Wrapper to convert sync log callback to async"""
+    # Create a task to broadcast the log message
+    try:
+        loop = asyncio.get_event_loop()
+        loop.create_task(broadcast_log_message(process_id, log_entry))
+    except RuntimeError:
+        # No event loop running, skip broadcasting
+        pass
+
+
+# Register log callback
+register_log_callback(log_callback_wrapper)
 
 
 def list_apps():
@@ -92,7 +134,7 @@ def get_detailed_apps_info():
 
 
 def start_app_by_name(name):
-    global current_app, current_app_name, app_thread, app_process
+    global current_app, current_app_name, app_thread, app_process, app_subprocess_helper
 
     stop_app()
     current_app_name = name
@@ -101,7 +143,10 @@ def start_app_by_name(name):
     venv_app_names = [app["name"] for app in app_manager.list_installed_apps()]
     if name in venv_app_names:
         try:
-            app_process = app_manager.run_app_in_venv(name)
+            # Use the enhanced subprocess helper for venv apps
+            app_process, app_subprocess_helper = (
+                app_manager.run_app_in_venv_with_logging(name)
+            )
             return
         except Exception as e:
             print(f"Failed to start venv app {name}: {e}")
@@ -133,9 +178,13 @@ def start_app_by_name(name):
 
 
 def stop_app():
-    global current_app, current_app_name, app_thread, app_process
+    global current_app, current_app_name, app_thread, app_process, app_subprocess_helper
 
     # Stop venv app process
+    if app_subprocess_helper:
+        app_subprocess_helper.terminate()
+        app_subprocess_helper = None
+
     if app_process:
         try:
             app_process.terminate()
@@ -165,7 +214,7 @@ def stop_app():
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
-    """WebSocket endpoint for real-time installation updates"""
+    """WebSocket endpoint for real-time installation updates and logs"""
     await websocket.accept()
     connected_clients.append(websocket)
 
@@ -186,7 +235,25 @@ async def websocket_endpoint(websocket: WebSocket):
         # Keep connection alive with ping/pong
         while True:
             try:
-                await asyncio.wait_for(websocket.receive_text(), timeout=30)
+                message = await asyncio.wait_for(websocket.receive_text(), timeout=30)
+                # Handle client messages if needed
+                try:
+                    data = json.loads(message)
+                    if data.get("type") == "request_logs" and "process_id" in data:
+                        # Send existing logs for the requested process
+                        logs = get_process_logs(data["process_id"])
+                        for log_entry in logs:
+                            await websocket.send_text(
+                                json.dumps(
+                                    {
+                                        "type": "log_update",
+                                        "process_id": data["process_id"],
+                                        "log_entry": log_entry,
+                                    }
+                                )
+                            )
+                except json.JSONDecodeError:
+                    pass
             except asyncio.TimeoutError:
                 # Send a ping to keep connection alive
                 await websocket.send_text(json.dumps({"type": "ping"}))
@@ -227,6 +294,7 @@ async def start(name: str):
             content={
                 "message": f"App '{name}' started successfully",
                 "status": "running",
+                "process_id": f"app_{name}" if current_app_name == name else None,
             }
         )
     except Exception as e:
@@ -252,6 +320,7 @@ async def status():
             "available_apps": list_apps(),
             "active_installations_count": len(active_installations),
             "has_active_installations": len(active_installations) > 0,
+            "app_process_id": f"app_{current_app_name}" if current_app_name else None,
             # Only send full details if there are active installations
             "active_installations": active_installations
             if active_installations
@@ -275,8 +344,23 @@ async def status_full():
             ],
             "active_installations": active_installations,
             "installation_history": installation_history[-10:],
+            "app_process_id": f"app_{current_app_name}" if current_app_name else None,
         }
     )
+
+
+@app.get("/api/logs/{process_id}")
+async def get_logs(process_id: str):
+    """Get logs for a specific process"""
+    logs = get_process_logs(process_id)
+    return JSONResponse({"process_id": process_id, "logs": logs})
+
+
+@app.delete("/api/logs/{process_id}")
+async def clear_logs(process_id: str):
+    """Clear logs for a specific process"""
+    clear_process_logs(process_id)
+    return JSONResponse({"message": f"Logs cleared for process {process_id}"})
 
 
 @app.post("/api/install")
@@ -350,6 +434,7 @@ async def install_app(request: Request):
                 "app_name": app_name,
                 "app_url": app_url,
                 "status": "started",
+                "process_id": f"install_{installation_id}",
             }
         )
 
@@ -382,6 +467,7 @@ async def update_app(app_name: str, request: Request):
                 "update_id": update_id,
                 "app_name": app_name,
                 "status": "started",
+                "process_id": f"update_{update_id}",
             }
         )
 
@@ -414,6 +500,7 @@ async def remove_app(app_name: str):
                 "removal_id": removal_id,
                 "app_name": app_name,
                 "status": "started",
+                "process_id": f"remove_{removal_id}",
             }
         )
 
@@ -450,13 +537,6 @@ async def get_installations():
     )
 
 
-# External endpoint for installation
-# @app.post("/api/install/external")
-# async def install_app_external(request: Request):
-#     """External endpoint to trigger app installation"""
-#     return await install_app(request)
-
-
 if __name__ == "__main__":
     import uvicorn
 
@@ -470,6 +550,7 @@ if __name__ == "__main__":
     print("📡 CORS enabled for cross-origin requests")
     print("🔧 Installation endpoints ready")
     print("📊 Real-time updates via WebSocket at /ws")
+    print("📋 Live logging enabled for all subprocess operations")
     print("-" * 60)
 
     uvicorn.run(app, host="0.0.0.0", port=8000)

@@ -5,9 +5,16 @@ import subprocess
 import sys
 import venv
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
-from utils import IS_LINUX, IS_MACOS, IS_WINDOWS
+from utils import (
+    IS_LINUX,
+    IS_MACOS,
+    IS_WINDOWS,
+    SubprocessHelper,
+    get_package_entrypoints,
+    run_subprocess_async,
+)
 
 
 class VenvAppManager:
@@ -55,6 +62,9 @@ class VenvAppManager:
         """Get path to python executable in the app's venv"""
         venv_path = self.apps_dir / app_name / "venv"
         return self.get_venv_python_from_path(venv_path)
+
+    def get_entrypoint(self, app_name: str) -> Optional[Path]:
+        return self.apps_dir / app_name / "venv" / "bin" / app_name
 
     def get_venv_pip(self, app_name: str) -> Path:
         """Get path to pip executable in the app's venv"""
@@ -126,9 +136,35 @@ class VenvAppManager:
 
         return not path.exists()
 
-    def run_app_in_venv(self, app_name: str) -> subprocess.Popen:
-        print("ok lets try to run app")
-        """Run an app in its virtual environment"""
+    # def run_app_in_venv(self, app_name: str) -> subprocess.Popen:
+    #     """Run an app in its virtual environment (legacy method)"""
+    #     print("Running app with legacy method")
+    #     python_path = self.get_venv_python(app_name)
+    #     app_dir = (self.apps_dir / app_name).absolute()
+
+    #     if not python_path.exists():
+    #         raise Exception(f"Python executable not found: {python_path}")
+
+    #     metadata = self.get_app_metadata(app_name)
+    #     package_name = metadata.get("package_name", app_name)
+    #     print(f"Running {app_name} with package name {package_name}")
+    #     print(f"App directory: {app_dir}")
+
+    #     app_entrypoint = (
+    #         self.get_package_location(python_path, package_name) / "main.py"
+    #     )
+
+    #     return subprocess.Popen(
+    #         [str(python_path), str(app_entrypoint)],
+    #         cwd=str(app_dir),
+    #         env=self._get_app_env(app_name),
+    #     )
+
+    def run_app_in_venv_with_logging(
+        self, app_name: str
+    ) -> Tuple[subprocess.Popen, SubprocessHelper]:
+        """Run an app in its virtual environment with live logging"""
+        print("Running app with enhanced logging")
         python_path = self.get_venv_python(app_name)
         app_dir = (self.apps_dir / app_name).absolute()
 
@@ -140,15 +176,31 @@ class VenvAppManager:
         print(f"Running {app_name} with package name {package_name}")
         print(f"App directory: {app_dir}")
 
-        app_entrypoint = (
-            self.get_package_location(python_path, package_name) / "main.py"
-        )
+        # app_entrypoint = (
+        #     self.get_package_location(python_path, package_name) / f"{package_name}"
+        # )
 
-        return subprocess.Popen(
-            [str(python_path), str(app_entrypoint)],
+        # if not app_entrypoint.exists():
+        #     raise Exception(f"App entrypoint not found: {app_entrypoint}")
+        app_entrypoint = self.get_entrypoint(app_name)
+        print(f"App entrypoint: {app_entrypoint}")
+
+        # Use the enhanced subprocess helper
+        process_id = f"app_{app_name}"
+        description = f"Running {app_name}"
+        # print(get_package_entrypoints(package_name))
+        print(f"Entrypoint: {app_entrypoint}")
+        print("xxx")
+
+        process, helper = run_subprocess_async(
+            cmd=[str(app_entrypoint)],
             cwd=str(app_dir),
             env=self._get_app_env(app_name),
+            process_id=process_id,
+            description=description,
         )
+
+        return process, helper
 
     def _get_app_env(self, app_name: str) -> dict:
         """Get environment variables for running the app"""
