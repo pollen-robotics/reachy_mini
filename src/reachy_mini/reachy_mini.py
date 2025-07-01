@@ -119,24 +119,26 @@ class ReachyMini:
             antennas (Optional[Union[np.ndarray, List[float]]]): 1D array with two elements representing the angles of the antennas in radians.
 
         Raises:
-            ValueError: If neither head nor antennas are provided.
-            AssertionError: If the shape of head is not (4, 4) or if antennas is not a 1D array with two elements.
+            ValueError: If neither head nor antennas are provided, or if the shape of head is not (4, 4), or if antennas is not a 1D array with two elements.
         """
 
         if head is None and antennas is None:
             raise ValueError("At least one of head or antennas must be provided.")
 
         if head is not None:
-            assert head.shape == (4, 4), "Head pose must be a 4x4 matrix."
+            if not head.shape == (4, 4):
+                raise ValueError(
+                    f"Head pose must be a 4x4 matrix, got shape {head.shape}."
+                )
             head_joint_positions = self.head_kinematics.ik(head)
         else:
             head_joint_positions = None
 
         if antennas is not None:
-            antennas = list(antennas)
-            assert len(antennas) == 2, (
-                "Antennas must be a list or 1D np array with two elements."
-            )
+            if not len(antennas) == 2:
+                raise ValueError(
+                    "Antennas must be a list or 1D np array with two elements."
+                )
             antenna_joint_positions = list(antennas)
         else:
             antenna_joint_positions = None
@@ -204,11 +206,16 @@ class ReachyMini:
             u (int): Horizontal coordinate in image frame.
             v (int): Vertical coordinate in image frame.
             duration (float): Duration of the movement in seconds. If 0, the head will snap to the position immediately.
+
+        Raises:
+            ValueError: If duration is negative.
         """
 
         assert 0 < u < IMAGE_SIZE[0], f"u must be in [0, {IMAGE_SIZE[0]}], got {u}."
         assert 0 < v < IMAGE_SIZE[1], f"v must be in [0, {IMAGE_SIZE[1]}], got {v}."
-        assert duration >= 0, "Duration must be non-negative."
+
+        if duration < 0:
+            raise ValueError("Duration can't be negative.")
 
         x_n, y_n = cv2.undistortPoints(np.float32([[[u, v]]]), self.K, self.D)[0, 0]  # type: ignore
 
@@ -239,9 +246,13 @@ class ReachyMini:
             y (float): Y coordinate in meters.
             z (float): Z coordinate in meters.
             duration (float): Duration of the movement in seconds. If 0, the head will snap to the position immediately.
+
+        Raises:
+            ValueError: If duration is negative.
         """
 
-        assert duration >= 0, "Duration must be non-negative."
+        if duration < 0:
+            raise ValueError("Duration can't be negative.")
 
         # Head is at the origin, so vector from head to target position is directly the target position
         # TODO FIX : Actually, the head frame is not the origin frame wrt the kinematics. Close enough for now.
