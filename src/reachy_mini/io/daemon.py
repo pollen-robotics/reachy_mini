@@ -39,7 +39,7 @@ class Daemon:
         wake_up_on_start: bool = True,
     ) -> "DaemonState":
         """
-        Initialize the Reachy Mini daemon.
+        Start the Reachy Mini daemon.
 
         Args:
             sim (bool): If True, run in simulation mode using Mujoco. Defaults to False.
@@ -47,7 +47,9 @@ class Daemon:
             scene (str): Name of the scene to load in simulation mode ("empty" or "minimal"). Defaults to "empty".
             localhost_only (bool): If True, restrict the server to localhost only clients. Defaults to True.
             wake_up_on_start (bool): If True, wake up Reachy Mini on start. Defaults to True.
-            goto_sleep_on_stop (bool): If True, put Reachy Mini to sleep on stop. Defaults to True.
+
+        Returns:
+            DaemonState: The current state of the daemon after attempting to start it.
         """
         if self._status.state == DaemonState.RUNNING:
             self.logger.warning("Daemon is already running.")
@@ -56,7 +58,7 @@ class Daemon:
         self.logger.info("Starting Reachy Mini daemon...")
 
         try:
-            self.backend = self.setup_backend(
+            self.backend = self._setup_backend(
                 sim=sim,
                 serialport=serialport,
                 scene=scene,
@@ -99,10 +101,17 @@ class Daemon:
         self._status.state = DaemonState.RUNNING
         return self._status.state
 
-    def stop(self, goto_sleep_on_stop: bool = True):
+    def stop(self, goto_sleep_on_stop: bool = True) -> "DaemonState":
+        """
+        Stop the Reachy Mini daemon.
+        Args:
+            goto_sleep_on_stop (bool): If True, put Reachy Mini to sleep on stop. Defaults to True.
+        Returns:
+            DaemonState: The current state of the daemon after attempting to stop it.
+        """
         if self._status.state == DaemonState.STOPPED:
             self.logger.warning("Daemon is already stopped.")
-            return
+            return self._status.state
 
         try:
             if self._status.state in (DaemonState.STOPPING, DaemonState.ERROR):
@@ -143,9 +152,14 @@ class Daemon:
             self._status.error = str(e)
         except KeyboardInterrupt:
             self.logger.warning("Daemon already stopping...")
-            pass
 
-    def restart(self):
+        return self._status.state
+
+    def restart(self) -> "DaemonState":
+        """Restart the Reachy Mini daemon.
+        Returns:
+            DaemonState: The current state of the daemon after attempting to restart it.
+        """
         if self._status.state == DaemonState.STOPPED:
             self.logger.warning("Daemon is not running.")
             return self._status.state
@@ -154,9 +168,14 @@ class Daemon:
             self.logger.info("Restarting Reachy Mini daemon...")
             self.stop(goto_sleep_on_stop=False)
             # TODO: Re-use the existing parameters for start
-            self.start(wake_up_on_start=False)
+            return self.start(wake_up_on_start=False)
+
+        raise NotImplementedError(
+            "Restarting is only supported when the daemon is in RUNNING or ERROR state."
+        )
 
     def status(self) -> "DaemonStatus":
+        """Get the current status of the Reachy Mini daemon."""
         if hasattr(self, "backend"):
             self._status.backend_status = self.backend.get_status()
 
@@ -171,6 +190,18 @@ class Daemon:
         wake_up_on_start: bool = True,
         goto_sleep_on_stop: bool = True,
     ):
+        """
+        Run the Reachy Mini daemon indefinitely. First, it starts the daemon, then it keeps checking the status
+        and allows for graceful shutdown on user interrupt (Ctrl+C).
+
+        Args:
+            sim (bool): If True, run in simulation mode using Mujoco. Defaults to False.
+            serialport (str): Serial port for real motors. Defaults to "auto", which will try to find the port automatically.
+            scene (str): Name of the scene to load in simulation mode ("empty" or "minimal"). Defaults to "empty".
+            localhost_only (bool): If True, restrict the server to localhost only clients. Defaults to True.
+            wake_up_on_start (bool): If True, wake up Reachy Mini on start. Defaults to True.
+            goto_sleep_on_stop (bool): If True, put Reachy Mini to sleep on stop. Defaults to True
+        """
         self.start(
             sim=sim,
             serialport=serialport,
@@ -197,7 +228,7 @@ class Daemon:
 
         self.stop(goto_sleep_on_stop)
 
-    def setup_backend(self, sim, serialport, scene) -> "RobotBackend | MujocoBackend":
+    def _setup_backend(self, sim, serialport, scene) -> "RobotBackend | MujocoBackend":
         if sim:
             return MujocoBackend(scene=scene)
         else:
@@ -236,12 +267,22 @@ class DaemonState(Enum):
 
 @dataclass
 class DaemonStatus:
+    """
+    Dataclass representing the status of the Reachy Mini daemon.
+    """
+
     state: DaemonState
     backend_status: Optional[RobotBackendStatus | MujocoBackendStatus]
     error: Optional[str] = None
 
 
 def find_serial_port(vid: str = "1a86", pid: str = "55d3") -> list[str]:
+    """
+    Find the serial port for Reachy Mini based on VID and PID.
+    Args:
+        vid (str): Vendor ID of the device. (eg. "1a86").
+        pid (str): Product ID of the device. (eg. "55d3").
+    """
     ports = serial.tools.list_ports.comports()
 
     vid = vid.upper()
@@ -251,6 +292,7 @@ def find_serial_port(vid: str = "1a86", pid: str = "55d3") -> list[str]:
 
 
 def main():
+    """Cli entry point for the Reachy Mini daemon."""
     import argparse
 
     parser = argparse.ArgumentParser(description="Run the Reachy Mini daemon.")
