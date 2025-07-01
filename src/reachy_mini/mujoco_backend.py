@@ -1,12 +1,13 @@
 import json
 import time
+from importlib.resources import files
+from threading import Event
 
 import mujoco
 import mujoco.viewer
 import numpy as np
-from importlib.resources import files
-import reachy_mini
 
+import reachy_mini
 from reachy_mini.io import Backend
 from reachy_mini.mujoco_utils import (
     get_actuator_names,
@@ -55,6 +56,8 @@ class MujocoBackend(Backend):
         ]
 
         # self.streamer_udp = UDPJPEGFrameSender()
+
+        self.ready = Event()
 
     def run(self):
         step = 1
@@ -115,6 +118,7 @@ class MujocoBackend(Backend):
                 took = time.time() - start_t
                 time.sleep(max(0, self.model.opt.timestep - took))
                 step += 1
+                self.ready.set()
 
     def get_head_joint_positions(self):
         return self.data.qpos[self.joint_qpos_addr[:7]].flatten().tolist()

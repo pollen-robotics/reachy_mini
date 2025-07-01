@@ -3,6 +3,7 @@ import numpy as np
 from scipy.spatial.transform import Rotation as R
 import mediapipe as mp
 from reachy_mini import ReachyMini
+from reachy_mini.io.cam_utils import find_camera
 
 
 class PoseEstimator:
@@ -44,7 +45,7 @@ class PoseEstimator:
 
 
 def main(draw=True):
-    cap = cv.VideoCapture(0)
+    cap = find_camera()
 
     face_mesh = mp.solutions.face_mesh.FaceMesh(
         min_detection_confidence=0.5,

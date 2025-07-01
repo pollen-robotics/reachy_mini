@@ -2,8 +2,9 @@ from reachy_mini import ReachyMini
 import cv2
 import numpy as np
 
-cap = cv2.VideoCapture(0)
+from reachy_mini.io.cam_utils import find_camera
 
+cap = find_camera()
 
 def click(event, x, y, flags, param):
     global click_x, click_y, just_clicked
