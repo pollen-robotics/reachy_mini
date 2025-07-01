@@ -1,3 +1,4 @@
+import logging
 from dataclasses import dataclass
 from enum import Enum
 from threading import Thread
@@ -12,7 +13,11 @@ from reachy_mini.robot_backend import RobotBackend, RobotBackendStatus
 
 
 class Daemon:
-    def __init__(self):
+    def __init__(self, log_level: str = "INFO"):
+        self.log_level = log_level
+        self.logger = logging.getLogger(__name__)
+        self.logger.setLevel(self.log_level)
+
         self._status = DaemonStatus(
             state=DaemonState.STOPPED,
             backend_status=None,
@@ -28,13 +33,13 @@ class Daemon:
         wake_up_on_start: bool = True,
     ) -> "DaemonState":
         if self._status.state == DaemonState.RUNNING:
-            print("Daemon is already running.")
+            self.logger.warning("Daemon is already running.")
             return self._status.state
 
-        print("Starting Reachy Mini daemon...")
+        self.logger.info("Starting Reachy Mini daemon...")
 
         try:
-            self.backend = setup_backend(
+            self.backend = self.setup_backend(
                 sim=sim,
                 serialport=serialport,
                 scene=scene,
@@ -51,83 +56,85 @@ class Daemon:
         self.backend_run_thread.start()
 
         if not self.backend.ready.wait(timeout=2.0):
-            print("Backend is not ready after 2 seconds. Some error occurred.")
+            self.logger.error(
+                "Backend is not ready after 2 seconds. Some error occurred."
+            )
             self._status.state = DaemonState.ERROR
             return self._status.state
 
         if wake_up_on_start:
             try:
-                print("Waking up Reachy Mini...")
+                self.logger.info("Waking up Reachy Mini...")
                 with ReachyMini() as mini:
                     mini.set_torque(on=True)
                     mini.wake_up()
             except Exception as e:
-                print(f"Error while waking up Reachy Mini: {e}")
+                self.logger.error(f"Error while waking up Reachy Mini: {e}")
                 self._status.state = DaemonState.ERROR
                 self._status.error = str(e)
                 return self._status.state
             except KeyboardInterrupt:
-                print("Wake up interrupted by user.")
+                self.logger.warning("Wake up interrupted by user.")
                 self._status.state = DaemonState.STOPPING
                 return self._status.state
 
-        print("Daemon started successfully.")
+        self.logger.info("Daemon started successfully.")
         self._status.state = DaemonState.RUNNING
         return self._status.state
 
     def stop(self, goto_sleep_on_stop: bool = True):
         if self._status.state == DaemonState.STOPPED:
-            print("Daemon is already stopped.")
+            self.logger.warning("Daemon is already stopped.")
             return
 
         try:
             if self._status.state in (DaemonState.STOPPING, DaemonState.ERROR):
                 goto_sleep_on_stop = False
 
-            print("Stopping Reachy Mini daemon...")
+            self.logger.info("Stopping Reachy Mini daemon...")
             self._status.state = DaemonState.STOPPING
 
             if goto_sleep_on_stop:
                 try:
-                    print("Putting Reachy Mini to sleep...")
+                    self.logger.info("Putting Reachy Mini to sleep...")
                     with ReachyMini() as mini:
                         mini.goto_sleep()
                         mini.set_torque(on=False)
                 except Exception as e:
-                    print(f"Error while putting Reachy Mini to sleep: {e}")
+                    self.logger.error(f"Error while putting Reachy Mini to sleep: {e}")
                     self._status.state = DaemonState.ERROR
                     self._status.error = str(e)
                 except KeyboardInterrupt:
-                    print("Sleep interrupted by user.")
+                    self.logger.warning("Sleep interrupted by user.")
                     self._status.state = DaemonState.STOPPING
 
             self.backend.should_stop.set()
             self.backend_run_thread.join(timeout=5.0)
             if self.backend_run_thread.is_alive():
-                print("Backend did not stop in time, forcing shutdown.")
+                self.logger.warning("Backend did not stop in time, forcing shutdown.")
                 self._status.state = DaemonState.ERROR
 
             self.backend.close()
             self.server.stop()
 
             if self._status.state != DaemonState.ERROR:
-                print("Daemon stopped successfully.")
+                self.logger.info("Daemon stopped successfully.")
                 self._status.state = DaemonState.STOPPED
         except Exception as e:
-            print(f"Error while stopping the daemon: {e}")
+            self.logger.error(f"Error while stopping the daemon: {e}")
             self._status.state = DaemonState.ERROR
             self._status.error = str(e)
         except KeyboardInterrupt:
-            print("Daemon already stopping...")
+            self.logger.warning("Daemon already stopping...")
             pass
 
     def restart(self):
         if self._status.state == DaemonState.STOPPED:
-            print("Daemon is not running.")
+            self.logger.warning("Daemon is not running.")
             return self._status.state
 
         if self._status.state in (DaemonState.RUNNING, DaemonState.ERROR):
-            print("Restarting Reachy Mini daemon...")
+            self.logger.info("Restarting Reachy Mini daemon...")
             self.stop(goto_sleep_on_stop=False)
             # TODO: Re-use the existing parameters for start
             self.start(wake_up_on_start=False)
@@ -157,21 +164,45 @@ class Daemon:
 
         if self._status.state == DaemonState.RUNNING:
             try:
-                print("Daemon is running. Press Ctrl+C to stop.")
+                self.logger.info("Daemon is running. Press Ctrl+C to stop.")
                 while self.backend_run_thread.is_alive():
-                    print(f"Daemon status: {self.status()}")
+                    self.logger.debug(f"Daemon status: {self.status()}")
                     self.backend_run_thread.join(timeout=1.0)
                 else:
-                    print("Backend thread has stopped unexpectedly.")
+                    self.logger.error("Backend thread has stopped unexpectedly.")
                     self._status.state = DaemonState.ERROR
             except KeyboardInterrupt:
-                print("Daemon interrupted by user.")
+                self.logger.warning("Daemon interrupted by user.")
             except Exception as e:
-                print(f"An error occurred: {e}")
+                self.logger.error(f"An error occurred: {e}")
                 self._status.state = DaemonState.ERROR
                 self._status.error = str(e)
 
         self.stop(goto_sleep_on_stop)
+
+    def setup_backend(self, sim, serialport, scene) -> "RobotBackend | MujocoBackend":
+        if sim:
+            return MujocoBackend(scene=scene)
+        else:
+            if serialport == "auto":
+                ports = find_serial_port()
+
+                if len(ports) == 0:
+                    raise RuntimeError(
+                        "No Reachy Mini serial port found. "
+                        "Check USB connection and permissions."
+                        "Or directly specify the serial port using --serialport."
+                    )
+                elif len(ports) > 1:
+                    raise RuntimeError(
+                        f"Multiple Reachy Mini serial ports found {ports}."
+                        "Please specify the serial port using --serialport."
+                    )
+
+                serialport = ports[0]
+                self.logger.info(f"Found Reachy Mini serial port: {serialport}")
+
+            return RobotBackend(serialport=serialport, log_level=self.log_level)
 
 
 class DaemonState(Enum):
@@ -191,31 +222,6 @@ class DaemonStatus:
     state: DaemonState
     backend_status: Optional[RobotBackendStatus | MujocoBackendStatus]
     error: Optional[str] = None
-
-
-def setup_backend(sim, serialport, scene) -> "RobotBackend | MujocoBackend":
-    if sim:
-        return MujocoBackend(scene=scene)
-    else:
-        if serialport == "auto":
-            ports = find_serial_port()
-
-            if len(ports) == 0:
-                raise RuntimeError(
-                    "No Reachy Mini serial port found. "
-                    "Check USB connection and permissions."
-                    "Or directly specify the serial port using --serialport."
-                )
-            elif len(ports) > 1:
-                raise RuntimeError(
-                    "Multiple Reachy Mini serial ports found. "
-                    "Please specify the serial port using --serialport."
-                )
-
-            serialport = ports[0]
-            print(f"Found Reachy Mini serial port: {serialport}")
-
-        return RobotBackend(serialport=serialport)
 
 
 def find_serial_port(vid: str = "1a86", pid: str = "55d3") -> list[str]:
@@ -261,9 +267,21 @@ def main():
         dest="localhost_only",
         help="Allow the server to listen on all interfaces (default: False).",
     )
+    parser.add_argument(
+        "--log-level",
+        type=str,
+        default="INFO",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+        help="Set the logging level (default: INFO).",
+    )
     args = parser.parse_args()
 
-    Daemon().run4ever(
+    logging.basicConfig(
+        level=logging.WARNING,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    )
+
+    Daemon(log_level=args.log_level).run4ever(
         sim=args.sim,
         serialport=args.serialport,
         scene=args.scene,

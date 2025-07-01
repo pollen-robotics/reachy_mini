@@ -1,4 +1,5 @@
 import json
+import logging
 import time
 from dataclasses import dataclass
 from multiprocessing import Event  # It seems to be more accurate than threading.Event
@@ -9,10 +10,16 @@ from reachy_mini_motor_controller import ReachyMiniMotorController
 
 from reachy_mini.io.backend import Backend
 
+logger = logging.getLogger(__name__)
+
 
 class RobotBackend(Backend):
-    def __init__(self, serialport: str):
+    def __init__(self, serialport: str, log_level: str = "INFO"):
         super().__init__()
+
+        self.logger = logging.getLogger(__name__)
+        self.logger.setLevel(log_level)
+
         self.c = ReachyMiniMotorController(serialport)
         self.control_loop_frequency = 200.0
         self.last_alive = None
@@ -82,19 +89,22 @@ class RobotBackend(Backend):
                 self.ready.set()  # Mark the backend as ready
             except RuntimeError as e:
                 self._stats["nb_error"] += 1
+                self.logger.warning(f"Error reading positions: {e}")
 
                 # If we never received a position, we retry a few times
                 # But most likely the robot is not powered on or connected
                 if self.last_alive is None:
                     if self.retries > 0:
-                        print(
+                        self.logger.error(
                             f"Error reading positions, retrying ({self.retries} left): {e}"
                         )
                         self.retries -= 1
                         time.sleep(0.1)
                         return
-                    print("No response from the robot, stopping.")
-                    print("Make sure the robot is powered on and connected.")
+                    self.logger.error("No response from the robot, stopping.")
+                    self.logger.error(
+                        "Make sure the robot is powered on and connected."
+                    )
                     self._status.error = "Motors are not powered on or connected."
                     self.should_stop.set()
                     return
@@ -104,7 +114,9 @@ class RobotBackend(Backend):
                         "No response from the robot's motor for the last 2 seconds."
                     )
 
-                    print("No response from the robot for 2 seconds, stopping.")
+                    self.logger.error(
+                        "No response from the robot for 2 seconds, stopping."
+                    )
                     raise e
 
             if time.time() - self.stats_record_t0 > self._stats_record_period:
