@@ -131,15 +131,11 @@ class PlacoKinematics:
 
     def ik(self, pose, check_collision: bool = False):
         _pose = pose.copy()
+        
+        # set the head pose
         _pose[:3, 3][2] += self.head_z_offset  # offset the height of the head
         self.head_frame.T_world_frame = _pose
-
-        # diminue the softness of the all_yaw joint if the head is below the torso
-        # 0 at -1cm and 5e-5 at 0cm
-        z_coord = _pose[:3, 3][2] - 0.177
-        weight = 5e-5 * (0.01 + z_coord) / 0.01 if z_coord >= -0.01 else 0.0
-        self.ik_yaw_joint_task.configure("joints", "soft", weight)
-
+        
         q = self.robot.state.q.copy()
         for _ in range(10):
             try:

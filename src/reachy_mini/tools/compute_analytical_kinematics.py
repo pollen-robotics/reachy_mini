@@ -52,7 +52,6 @@ platform_point = p + R * a
 T_b = MatrixSymbol("T_b", 4, 4)
 
 leg_vector = T_b * Matrix([platform_point[0], platform_point[1], platform_point[2], 1])
-# leg_vector = platform_point
 
 print("leg_vector", simplify(leg_vector))
 
