@@ -95,10 +95,15 @@ class RobotBackend(Backend):
                         return
                     print("No response from the robot, stopping.")
                     print("Make sure the robot is powered on and connected.")
+                    self._status.error = "Motors are not powered on or connected."
                     self.should_stop.set()
                     return
 
                 if self.last_alive + 2 < time.time():
+                    self._status.error = (
+                        "No response from the robot's motor for the last 2 seconds."
+                    )
+
                     print("No response from the robot for 2 seconds, stopping.")
                     raise e
 
@@ -141,3 +146,4 @@ class RobotBackendStatus:
     ready: bool
     last_alive: Optional[float]
     control_loop_stats: dict
+    error: Optional[str] = None
