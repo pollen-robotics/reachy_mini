@@ -55,6 +55,13 @@ class Daemon:
             self.logger.warning("Daemon is already running.")
             return self._status.state
 
+        self._start_params = {
+            "sim": sim,
+            "serialport": serialport,
+            "scene": scene,
+            "localhost_only": localhost_only,
+        }
+
         self.logger.info("Starting Reachy Mini daemon...")
 
         try:
@@ -155,7 +162,15 @@ class Daemon:
 
         return self._status.state
 
-    def restart(self) -> "DaemonState":
+    def restart(
+        self,
+        sim: Optional[bool] = None,
+        serialport: Optional[str] = None,
+        scene: Optional[str] = None,
+        localhost_only: Optional[bool] = None,
+        wake_up_on_start: Optional[bool] = None,
+        goto_sleep_on_stop: Optional[bool] = None,
+    ) -> "DaemonState":
         """Restart the Reachy Mini daemon.
         Returns:
             DaemonState: The current state of the daemon after attempting to restart it.
@@ -166,9 +181,28 @@ class Daemon:
 
         if self._status.state in (DaemonState.RUNNING, DaemonState.ERROR):
             self.logger.info("Restarting Reachy Mini daemon...")
-            self.stop(goto_sleep_on_stop=False)
-            # TODO: Re-use the existing parameters for start
-            return self.start(wake_up_on_start=False)
+
+            self.stop(
+                goto_sleep_on_stop=goto_sleep_on_stop
+                if goto_sleep_on_stop is not None
+                else False
+            )
+            params = {
+                "sim": sim if sim is not None else self._start_params["sim"],
+                "serialport": serialport
+                if serialport is not None
+                else self._start_params["serialport"],
+                "scene": scene if scene is not None else self._start_params["scene"],
+                "localhost_only": localhost_only
+                if localhost_only is not None
+                else self._start_params["localhost_only"],
+                "wake_up_on_start": wake_up_on_start
+                if wake_up_on_start is not None
+                else False,
+            }
+
+            print("Restarting with parameters:", params)
+            return self.start(**params)
 
         raise NotImplementedError(
             "Restarting is only supported when the daemon is in RUNNING or ERROR state."
