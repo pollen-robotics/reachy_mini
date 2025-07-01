@@ -27,7 +27,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest"]
+dev = ["pytest", "pre_commit==4.2.0"]
+rerun = ["rerun-sdk==0.23.4",
+         "rerun-loader-urdf @ git+https://github.com/rerun-io/rerun-loader-python-example-urdf.git",
+]
 
 [project.scripts]
 reachy-mini-daemon = "reachy_mini.io.daemon:main"
