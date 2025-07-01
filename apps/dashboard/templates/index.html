@@ -1,81 +1,504 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Robot App Dashboard</title>
   <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+  <style>
+    .installation-progress {
+      transition: width 0.3s ease-in-out;
+    }
+
+    .pulse-dot {
+      animation: pulse 1.5s infinite;
+    }
+
+    @keyframes pulse {
+
+      0%,
+      100% {
+        transform: scale(1);
+        opacity: 1;
+      }
+
+      50% {
+        transform: scale(1.1);
+        opacity: 0.7;
+      }
+    }
+
+    .removing {
+      opacity: 0.5;
+      pointer-events: none;
+    }
+  </style>
 </head>
+
 <body class="bg-gray-100 text-gray-900">
-  <div class="max-w-3xl mx-auto p-6">
+  <div class="max-w-4xl mx-auto p-6">
     <h1 class="text-3xl font-bold mb-6">🤖 Robot App Dashboard</h1>
 
-    <div id="app-list" class="space-y-4">
-      <!-- App entries will be injected here -->
+    <!-- Active Installations Section -->
+    <div id="active-installations" class="mb-6" style="display: none;">
+      <h2 class="text-xl font-semibold mb-3">📥 Active Operations</h2>
+      <div id="installation-list" class="space-y-3">
+        <!-- Active installations will be shown here -->
+      </div>
+    </div>
+
+    <!-- App List Section -->
+    <div class="mb-6">
+      <h2 class="text-xl font-semibold mb-3">📱 Available Apps</h2>
+      <div id="app-list" class="space-y-4">
+        <!-- App entries will be injected here -->
+      </div>
+    </div>
+
+    <!-- Install New App Button -->
+    <div class="mb-6">
+      <button onclick="showInstallDialog()"
+        class="bg-purple-500 hover:bg-purple-600 text-white px-6 py-3 rounded-lg font-semibold transition-colors">
+        🚀 Browse & Install Apps
+      </button>
+      <p class="text-sm text-gray-600 mt-2">Opens Hugging Face Spaces with available Reachy Mini apps</p>
+    </div>
+
+    <!-- Installation History -->
+    <div class="mb-6">
+      <h3 class="text-lg font-semibold mb-3">📚 Recent Activity</h3>
+      <div id="installation-history" class="space-y-2 max-h-40 overflow-y-auto">
+        <!-- Installation history will be shown here -->
+      </div>
     </div>
   </div>
 
   <script>
-    async function fetchStatus() {
-      const res = await fetch('/api/status');
-      const data = await res.json();
-      console.log('Fetched status:', data);
+    let ws = null;
+    let activeOperations = new Set();
 
-      renderApps(data.available_apps, data.current);
+    function connectWebSocket() {
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${protocol}//${window.location.host}/ws`;
+
+      ws = new WebSocket(wsUrl);
+
+      ws.onopen = function () {
+        console.log('WebSocket connected');
+      };
+
+      ws.onmessage = function (event) {
+        const data = JSON.parse(event.data);
+        if (data.type === 'installation_update') {
+          updateInstallationProgress(data.installation_id, data.status);
+        }
+      };
+
+      ws.onclose = function () {
+        console.log('WebSocket disconnected, retrying in 3 seconds...');
+        setTimeout(connectWebSocket, 3000);
+      };
+
+      ws.onerror = function (error) {
+        console.error('WebSocket error:', error);
+      };
     }
 
-    function renderApps(apps, current) {
+    function updateInstallationProgress(installationId, status) {
+      const container = document.getElementById('installation-list');
+      const activeSection = document.getElementById('active-installations');
+
+      let installDiv = document.getElementById(`install-${installationId}`);
+
+      // Handle completion
+      if (status.stage === 'complete' || status.stage === 'error') {
+        activeOperations.delete(status.app_name);
+
+        if (installDiv) {
+          // Show completion status briefly
+          const progressColor = status.stage === 'error' ? 'bg-red-500' : 'bg-green-500';
+          const statusIcon = status.stage === 'error' ? '❌' : '✅';
+
+          installDiv.innerHTML = `
+            <div class="flex items-center justify-between">
+              <div class="flex items-center space-x-2">
+                <span class="text-lg">${statusIcon}</span>
+                <span class="font-semibold">${status.message}</span>
+              </div>
+            </div>
+          `;
+
+          setTimeout(() => {
+            installDiv.remove();
+            if (container.children.length === 0) {
+              activeSection.style.display = 'none';
+            }
+            // Force refresh after removal completes
+            if (status.operation === 'remove' && status.stage === 'complete') {
+              console.log('Removal completed, refreshing status...');
+              setTimeout(fetchStatus, 500);
+            }
+          }, 3000);
+        }
+
+        // Always refresh status on completion
+        fetchStatus();
+        return;
+      }
+
+      // Track active operations
+      activeOperations.add(status.app_name);
+
+      if (!installDiv) {
+        activeSection.style.display = 'block';
+        installDiv = document.createElement('div');
+        installDiv.id = `install-${installationId}`;
+        installDiv.className = 'bg-white rounded-lg shadow p-4';
+        container.appendChild(installDiv);
+      }
+
+      const progressColor = status.stage === 'error' ? 'bg-red-500' :
+        status.operation === 'update' ? 'bg-green-500' :
+          status.operation === 'remove' ? 'bg-orange-500' : 'bg-blue-500';
+
+      const statusIcon = getStatusIcon(status.stage, status.operation);
+      const operationText = status.operation === 'update' ? 'Updating' :
+        status.operation === 'remove' ? 'Removing' : 'Installing';
+
+      installDiv.innerHTML = `
+        <div class="flex items-center justify-between mb-2">
+          <div class="flex items-center space-x-2">
+            <span class="text-lg">${statusIcon}</span>
+            <span class="font-semibold">${operationText} ${status.app_name}</span>
+          </div>
+          <span class="text-sm text-gray-500">${status.progress}%</span>
+        </div>
+        <div class="mb-2">
+          <div class="bg-gray-200 rounded-full h-2">
+            <div class="installation-progress ${progressColor} h-2 rounded-full" style="width: ${status.progress}%"></div>
+          </div>
+        </div>
+        <p class="text-sm text-gray-600">${status.message}</p>
+      `;
+    }
+
+    function getStatusIcon(stage, operation = 'install') {
+      const icons = {
+        'starting': '🚀',
+        'creating_venv': '🐍',
+        'installing': '📦',
+        'dependencies': '🔧',
+        'finalizing': '🎯',
+        'complete': '✅',
+        'error': '❌',
+        'backup': '💾',
+        'updating_pip': '⬆️',
+        'updating_app': '🔄',
+        'stopping': '⏹️',
+        'clearing_venv': '🧹',
+        'removing_files': '🗑️'
+      };
+      return icons[stage] || (operation === 'remove' ? '🗑️' : '⏳');
+    }
+
+    async function fetchStatus() {
+      try {
+        // Use the full status endpoint to get detailed app information
+        const res = await fetch('/api/status/full');
+        const data = await res.json();
+        console.log('Fetched full status:', data);
+
+        renderApps(data.available_apps, data.current, data.venv_apps || [], data.venv_apps_detailed || []);
+        renderInstallationHistory(data.installation_history || []);
+
+        const activeInstalls = data.active_installations || {};
+        const container = document.getElementById('installation-list');
+        const activeSection = document.getElementById('active-installations');
+
+        if (Object.keys(activeInstalls).length > 0) {
+          activeSection.style.display = 'block';
+          for (const [id, status] of Object.entries(activeInstalls)) {
+            updateInstallationProgress(id, status);
+          }
+        } else {
+          activeSection.style.display = 'none';
+          container.innerHTML = '';
+        }
+
+      } catch (error) {
+        console.error('Failed to fetch status:', error);
+        // Fallback to basic status if full status fails
+        try {
+          const res = await fetch('/api/status');
+          const data = await res.json();
+          renderApps(data.available_apps, data.current, [], []);
+        } catch (fallbackError) {
+          console.error('Failed to fetch basic status:', fallbackError);
+        }
+      }
+    }
+
+    function renderApps(apps, current, venvApps, venvAppsDetailed = []) {
       const container = document.getElementById('app-list');
       container.innerHTML = '';
+
       if (apps.length === 0) {
         container.innerHTML = '<p class="text-gray-600">No apps found.</p>';
         return;
       }
 
+      // Create a map of venv app details
+      const venvDetailsMap = {};
+      venvAppsDetailed.forEach(app => {
+        venvDetailsMap[app.name] = app;
+      });
+
+      console.log('VenvApps:', venvApps);
+      console.log('VenvAppsDetailed:', venvAppsDetailed);
+      console.log('VenvDetailsMap:', venvDetailsMap);
+
       apps.forEach(name => {
         const isRunning = name === current;
-        console.log(`Rendering app: ${name}, current ${current} isRunning: ${isRunning}`);
+        const isVenvApp = venvApps.includes(name);
+        const venvDetails = venvDetailsMap[name];
+        const isBeingRemoved = activeOperations.has(name);
+
+        console.log(`App: ${name}, isVenvApp: ${isVenvApp}, hasVenvDetails: ${!!venvDetails}, isBeingRemoved: ${isBeingRemoved}`);
+
         const item = document.createElement('div');
-        item.className = 'bg-white rounded-lg shadow p-4 flex items-center justify-between';
+        item.className = `bg-white rounded-lg shadow p-4 flex items-center justify-between ${isBeingRemoved ? 'removing' : ''}`;
+        item.id = `app-item-${name}`;
+
+        const leftSection = document.createElement('div');
+        leftSection.className = 'flex items-center space-x-3';
+
+        const labelSection = document.createElement('div');
+        labelSection.className = 'flex flex-col';
 
         const label = document.createElement('span');
         label.className = 'text-lg font-medium';
         label.textContent = name;
-        item.appendChild(label);
+        labelSection.appendChild(label);
 
-        if (isRunning) {
-          const status = document.createElement('span');
-          status.className = 'text-green-600 font-semibold mr-4';
-          status.textContent = 'Running';
-          item.appendChild(status);
+        // Show VENV badge if it's a venv app
+        if (isVenvApp || venvDetails) {
+          const badge = document.createElement('span');
+          badge.className = 'bg-purple-100 text-purple-800 text-xs font-semibold px-2 py-1 rounded mt-1 w-fit';
+          badge.textContent = 'VENV';
+          labelSection.appendChild(badge);
 
-          const form = document.createElement('form');
-          form.method = 'POST';
-          form.action = '/stop';
-          const button = document.createElement('button');
-          button.type = 'submit';
-          button.className = 'bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded';
-          button.textContent = 'Stop';
-          form.appendChild(button);
-          item.appendChild(form);
-        } else {
-          const form = document.createElement('form');
-          form.method = 'POST';
-          form.action = `/start/${name}`;
-          const button = document.createElement('button');
-          button.type = 'submit';
-          button.className = 'bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded';
-          button.textContent = 'Start';
-          form.appendChild(button);
-          item.appendChild(form);
+          if (venvDetails && venvDetails.last_updated) {
+            const updateInfo = document.createElement('span');
+            updateInfo.className = 'text-xs text-gray-500 mt-1';
+            updateInfo.textContent = `Updated: ${new Date(venvDetails.last_updated).toLocaleDateString()}`;
+            labelSection.appendChild(updateInfo);
+          }
         }
+
+        leftSection.appendChild(labelSection);
+
+        const rightSection = document.createElement('div');
+        rightSection.className = 'flex items-center space-x-3';
+
+        if (!isBeingRemoved) {
+          if (isRunning) {
+            const status = document.createElement('span');
+            status.className = 'text-green-600 font-semibold mr-4';
+            status.textContent = 'Running';
+            rightSection.appendChild(status);
+
+            const stopBtn = document.createElement('button');
+            stopBtn.className = 'bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded transition-colors';
+            stopBtn.textContent = 'Stop';
+            stopBtn.onclick = () => stopApp();
+            rightSection.appendChild(stopBtn);
+          } else {
+            const startBtn = document.createElement('button');
+            startBtn.className = 'bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded transition-colors';
+            startBtn.textContent = 'Start';
+            startBtn.onclick = () => startApp(name);
+            rightSection.appendChild(startBtn);
+          }
+
+          // Add Update and Remove buttons for venv apps
+          if (isVenvApp || venvDetails) {
+            console.log(`Adding Update/Remove buttons for ${name}`);
+
+            const updateBtn = document.createElement('button');
+            updateBtn.className = 'bg-green-500 hover:bg-green-600 text-white px-3 py-2 rounded text-sm transition-colors';
+            updateBtn.textContent = '🔄 Update';
+            updateBtn.onclick = () => updateApp(name);
+            rightSection.appendChild(updateBtn);
+
+            const removeBtn = document.createElement('button');
+            removeBtn.className = 'bg-red-500 hover:bg-red-600 text-white px-3 py-2 rounded text-sm transition-colors';
+            removeBtn.textContent = '🗑️ Remove';
+            removeBtn.onclick = () => removeApp(name);
+            rightSection.appendChild(removeBtn);
+          } else {
+            console.log(`No Update/Remove buttons for ${name} (not a venv app)`);
+          }
+        } else {
+          const removingText = document.createElement('span');
+          removingText.className = 'text-orange-600 font-semibold';
+          removingText.textContent = 'Removing...';
+          rightSection.appendChild(removingText);
+        }
+
+        item.appendChild(leftSection);
+        item.appendChild(rightSection);
+        container.appendChild(item);
+      });
+    }
+
+    function renderInstallationHistory(history) {
+      const container = document.getElementById('installation-history');
+      container.innerHTML = '';
+
+      if (history.length === 0) {
+        container.innerHTML = '<p class="text-gray-500 text-sm">No recent activity.</p>';
+        return;
+      }
+
+      history.slice(-5).reverse().forEach(install => {
+        const item = document.createElement('div');
+        item.className = 'bg-white rounded p-3 text-sm';
+
+        let statusIcon = '✅';
+        let statusText = install.status;
+        let timestamp = new Date(install.installed_at || install.updated_at || install.removed_at || install.failed_at).toLocaleString();
+
+        switch (install.status) {
+          case 'completed':
+            statusIcon = '✅';
+            statusText = 'Installed';
+            break;
+          case 'updated':
+            statusIcon = '🔄';
+            statusText = 'Updated';
+            break;
+          case 'removed':
+            statusIcon = '🗑️';
+            statusText = 'Removed';
+            break;
+          case 'failed':
+          case 'update_failed':
+          case 'removal_failed':
+            statusIcon = '❌';
+            statusText = 'Failed';
+            break;
+        }
+
+        item.innerHTML = `
+          <div class="flex items-center justify-between">
+            <span>${statusIcon} <strong>${install.app_name}</strong> - ${statusText}</span>
+            <span class="text-gray-500">${timestamp}</span>
+          </div>
+          ${install.error ? `<p class="text-red-600 text-xs mt-1">${install.error}</p>` : ''}
+        `;
 
         container.appendChild(item);
       });
     }
 
+    async function startApp(name) {
+      try {
+        const response = await fetch(`/start/${name}`, { method: 'POST' });
+        if (response.ok) {
+          setTimeout(fetchStatus, 1000);
+        }
+      } catch (error) {
+        console.error('Failed to start app:', error);
+      }
+    }
+
+    async function stopApp() {
+      try {
+        const response = await fetch('/stop', { method: 'POST' });
+        if (response.ok) {
+          setTimeout(fetchStatus, 1000);
+        }
+      } catch (error) {
+        console.error('Failed to stop app:', error);
+      }
+    }
+
+    async function updateApp(appName) {
+      if (!confirm(`Update "${appName}" to the latest version?`)) {
+        return;
+      }
+
+      try {
+        const response = await fetch(`/api/apps/${appName}/update`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({})
+        });
+        const result = await response.json();
+
+        if (!response.ok) {
+          alert(`Failed to start update: ${result.detail}`);
+        }
+      } catch (error) {
+        console.error('Failed to update app:', error);
+        alert(`Failed to update app: ${error.message}`);
+      }
+    }
+
+    async function removeApp(appName) {
+      if (!confirm(`Are you sure you want to remove "${appName}"? This will permanently delete the app and its virtual environment.`)) {
+        return;
+      }
+
+      // Mark app as being removed
+      activeOperations.add(appName);
+
+      // Update UI immediately to show removing status
+      const appItem = document.getElementById(`app-item-${appName}`);
+      if (appItem) {
+        appItem.classList.add('removing');
+      }
+
+      try {
+        const response = await fetch(`/api/apps/${appName}`, { method: 'DELETE' });
+        const result = await response.json();
+
+        if (!response.ok) {
+          alert(`Failed to start removal: ${result.detail}`);
+          activeOperations.delete(appName);
+          if (appItem) {
+            appItem.classList.remove('removing');
+          }
+        }
+      } catch (error) {
+        console.error('Failed to remove app:', error);
+        alert(`Failed to remove app: ${error.message}`);
+        activeOperations.delete(appName);
+        if (appItem) {
+          appItem.classList.remove('removing');
+        }
+      }
+    }
+
+    function showInstallDialog() {
+      // Redirect to HF Spaces instead of showing modal
+      window.open('https://huggingface.co/spaces/pollen-robotics/Reachy_Mini_Apps', '_blank');
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // Initialize
+    connectWebSocket();
     fetchStatus();
-    setInterval(fetchStatus, 2000);
+    setInterval(fetchStatus, 10000);
   </script>
 </body>
+
 </html>
