@@ -51,5 +51,10 @@ exclude = [
     "examples/remi_outdated/*.py",
     "src/reachy_mini/__init__.py",
     "build/*",
+    "conftest.py",
 ]
-extend-select = ["I", "D"]
+lint.extend-select = ["I", "D"]
+lint.ignore = [
+    "D203",  # Incompatible with D211
+    "D213",  # Incompatible with D212
+]
