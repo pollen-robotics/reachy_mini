@@ -175,6 +175,84 @@
       font-size: 0.75rem;
       font-weight: 500;
     }
+
+    /* HF Spaces styles */
+    .spaces-card {
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(20px);
+      border-radius: 15px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      transition: all 0.3s ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .spaces-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, #667eea, #764ba2);
+      transform: scaleX(0);
+      transition: transform 0.3s ease;
+    }
+
+    .spaces-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 12px 25px rgba(0, 0, 0, 0.15);
+    }
+
+    .spaces-card:hover::before {
+      transform: scaleX(1);
+    }
+
+    .space-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: bold;
+      font-size: 18px;
+      flex-shrink: 0;
+    }
+
+    .space-loading {
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      0% {
+        transform: rotate(0deg);
+      }
+
+      100% {
+        transform: rotate(360deg);
+      }
+    }
+
+    .tab-button {
+      transition: all 0.3s ease;
+    }
+
+    .tab-button.active {
+      background: white;
+      color: #667eea;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .tab-content {
+      display: none;
+    }
+
+    .tab-content.active {
+      display: block;
+    }
   </style>
 </head>
 
@@ -232,7 +310,6 @@
       </div>
     </div>
 
-
     <!-- Log Viewer Section (Initially Hidden) -->
     <div id="log-viewer-section" class="mb-6" style="display: none;">
       <div class="bg-white rounded-lg shadow">
@@ -272,21 +349,51 @@
       </div>
     </div>
 
-    <!-- App List Section -->
+    <!-- Installed Apps Section -->
     <div class="mb-6">
-      <h2 class="text-xl font-semibold mb-3">📱 Available Apps</h2>
+      <h2 class="text-xl font-semibold mb-3">📱 Installed Apps</h2>
       <div id="app-list" class="space-y-4">
         <!-- App entries will be injected here -->
       </div>
     </div>
 
-    <!-- Install New App Button -->
+    <!-- Browse & Install Apps Section -->
     <div class="mb-6">
-      <button onclick="showInstallDialog()"
-        class="bg-purple-500 hover:bg-purple-600 text-white px-6 py-3 rounded-lg font-semibold transition-colors">
-        🚀 Browse & Install Apps
-      </button>
-      <p class="text-sm text-gray-600 mt-2">Opens Hugging Face Spaces with available Reachy Mini apps</p>
+      <div class="bg-white rounded-lg shadow-lg p-6">
+        <div class="flex items-center justify-between mb-6">
+          <div>
+            <h2 class="text-xl font-semibold text-gray-800">🚀 Browse & Install Apps</h2>
+            <p class="text-gray-600 mt-1">Discover amazing Reachy Mini applications and demos</p>
+          </div>
+          <div id="spaces-stats" class="text-sm text-gray-500">
+            <div class="space-loading inline-block w-4 h-4 border-2 border-gray-300 border-t-blue-500 rounded-full">
+            </div>
+            Loading spaces...
+          </div>
+        </div>
+
+        <!-- Search and Sort Controls -->
+        <div class="flex flex-col sm:flex-row gap-4 mb-6">
+          <div class="flex-1">
+            <input type="text" id="spaces-search" placeholder="Search spaces..."
+              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+          </div>
+          <div class="flex gap-2">
+            <button
+              class="sort-btn px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors active"
+              data-sort="likes">❤️ Likes</button>
+            <button class="sort-btn px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+              data-sort="created">🕒 Recent</button>
+            <button class="sort-btn px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+              data-sort="name">🔤 A-Z</button>
+          </div>
+        </div>
+
+        <!-- Spaces Grid -->
+        <div id="spaces-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <!-- Spaces will be loaded here -->
+        </div>
+      </div>
     </div>
 
     <!-- Installation History -->
@@ -303,34 +410,34 @@
     let activeOperations = new Set();
     let currentLogProcessId = null;
     let autoScroll = true;
-    let logBuffer = new Map(); // Store logs per process
+    let logBuffer = new Map();
     let simulationEnabled = false;
-
     let daemonStatus = null;
+    let spacesStore = null;
 
+    // Initialize spaces store on page load
+    function initializeSpacesStore() {
+      spacesStore = new SpacesStore();
+      spacesStore.init();
+    }
 
+    // Simulation functions
     async function toggleSimulation() {
       const toggle = document.getElementById('simulation-toggle');
       const originalState = toggle.checked;
 
       try {
-        // Disable toggle during request
         toggle.disabled = true;
-
         const response = await fetch('/api/simulation/toggle', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          }
+          headers: { 'Content-Type': 'application/json' }
         });
 
         const result = await response.json();
-
         if (response.ok) {
           simulationEnabled = result.simulation_enabled;
           updateSimulationUI();
 
-          // Show feedback message
           const indicator = document.getElementById('simulation-mode-indicator');
           const originalText = indicator.textContent;
           indicator.textContent = `🎮 SIMULATION ${simulationEnabled ? 'ENABLED' : 'DISABLED'}`;
@@ -342,14 +449,11 @@
           }, 2000);
 
           console.log(`Simulation mode ${simulationEnabled ? 'enabled' : 'disabled'}`);
-
         } else {
           throw new Error(result.detail || 'Failed to toggle simulation');
         }
-
       } catch (error) {
         console.error('Failed to toggle simulation:', error);
-        // Revert toggle state on error
         toggle.checked = !originalState;
         simulationEnabled = !simulationEnabled;
         updateSimulationUI();
@@ -373,18 +477,17 @@
     function updateSimulationUI() {
       const toggle = document.getElementById('simulation-toggle');
       const indicator = document.getElementById('simulation-mode-indicator');
-
       toggle.checked = simulationEnabled;
       indicator.style.display = simulationEnabled ? 'block' : 'none';
     }
+
+    // Daemon functions
     async function fetchDaemonStatus() {
       try {
         const response = await fetch('/daemon_status');
         const data = await response.json();
-
         daemonStatus = data;
         updateDaemonStatusUI(data);
-
       } catch (error) {
         console.error('Failed to fetch daemon status:', error);
         updateDaemonStatusUI({
@@ -404,7 +507,6 @@
       const stopBtn = document.getElementById('daemon-stop-btn');
       const restartBtn = document.getElementById('daemon-restart-btn');
 
-      // Update status indicator and text
       indicator.className = 'status-indicator';
 
       if (status.running === true) {
@@ -427,13 +529,12 @@
         restartBtn.disabled = false;
       }
 
-      // Show additional robot info if available
       if (status.robot_info) {
         robotDetails.innerHTML = `
-        <div>Model: ${status.robot_info.model || 'Unknown'}</div>
-        <div>Version: ${status.robot_info.version || 'Unknown'}</div>
-        ${status.robot_info.uptime ? `<div>Uptime: ${status.robot_info.uptime}</div>` : ''}
-      `;
+          <div>Model: ${status.robot_info.model || 'Unknown'}</div>
+          <div>Version: ${status.robot_info.version || 'Unknown'}</div>
+          ${status.robot_info.uptime ? `<div>Uptime: ${status.robot_info.uptime}</div>` : ''}
+        `;
         robotInfo.style.display = 'block';
       } else {
         robotInfo.style.display = 'none';
@@ -443,47 +544,29 @@
     async function controlDaemon(action) {
       const button = document.getElementById(`daemon-${action}-btn`);
       const originalText = button.innerHTML;
-
-      // Show loading state
       button.disabled = true;
       button.innerHTML = '⏳ Working...';
 
       try {
         const response = await fetch(`/daemon_${action}`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          }
+          headers: { 'Content-Type': 'application/json' }
         });
 
         const result = await response.json();
-
         if (response.ok) {
-          // Success - refresh status after a short delay
-          setTimeout(() => {
-            fetchDaemonStatus();
-          }, 1000);
-
-          // Show success feedback
+          setTimeout(() => fetchDaemonStatus(), 1000);
           button.innerHTML = '✅ Done';
-          setTimeout(() => {
-            button.innerHTML = originalText;
-          }, 2000);
+          setTimeout(() => button.innerHTML = originalText, 2000);
         } else {
           throw new Error(result.detail || `Failed to ${action} daemon`);
         }
-
       } catch (error) {
         console.error(`Failed to ${action} daemon:`, error);
         alert(`Failed to ${action} daemon: ${error.message}`);
-
-        // Show error feedback
         button.innerHTML = '❌ Error';
-        setTimeout(() => {
-          button.innerHTML = originalText;
-        }, 2000);
+        setTimeout(() => button.innerHTML = originalText, 2000);
       } finally {
-        // Re-enable button
         setTimeout(() => {
           button.disabled = false;
           if (button.innerHTML === '⏳ Working...' || button.innerHTML === '✅ Done' || button.innerHTML === '❌ Error') {
@@ -493,24 +576,14 @@
       }
     }
 
-    // Add daemon status fetching to your existing initialization
-    // Modify your existing initialization section to include:
-
-    // Initialize (add this to your existing initialization)
-    fetchDaemonStatus();
-
-    // Add daemon status to your existing interval (modify your existing setInterval or add a new one)
-    setInterval(fetchDaemonStatus, 15000); // Check daemon status every 15 seconds
-
+    // WebSocket and logging functions
     function connectWebSocket() {
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const wsUrl = `${protocol}//${window.location.host}/ws`;
-
       ws = new WebSocket(wsUrl);
 
       ws.onopen = function () {
         console.log('WebSocket connected');
-        // Request logs for current process if viewing
         if (currentLogProcessId) {
           ws.send(JSON.stringify({
             type: 'request_logs',
@@ -539,19 +612,16 @@
     }
 
     function handleLogUpdate(processId, logEntry) {
-      // Store in buffer
       if (!logBuffer.has(processId)) {
         logBuffer.set(processId, []);
       }
       logBuffer.get(processId).push(logEntry);
 
-      // Keep only last 500 entries per process
       const logs = logBuffer.get(processId);
       if (logs.length > 500) {
         logBuffer.set(processId, logs.slice(-500));
       }
 
-      // Update display if this is the current process
       if (currentLogProcessId === processId) {
         appendLogEntry(logEntry);
       }
@@ -566,20 +636,14 @@
       processName.textContent = description || processId;
       logContent.innerHTML = '';
 
-      // Load existing logs from buffer
       const logs = logBuffer.get(processId) || [];
       logs.forEach(logEntry => {
-        appendLogEntry(logEntry, false); // Don't auto-scroll on initial load
+        appendLogEntry(logEntry, false);
       });
 
       logSection.style.display = 'block';
+      setTimeout(() => scrollToBottom(), 100);
 
-      // Scroll to bottom after loading
-      setTimeout(() => {
-        scrollToBottom();
-      }, 100);
-
-      // Request any logs from server
       if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({
           type: 'request_logs',
@@ -595,21 +659,16 @@
 
     function appendLogEntry(logEntry, shouldAutoScroll = true) {
       const logContent = document.getElementById('log-content');
-      const logViewer = document.getElementById('log-viewer');
-
       const entry = document.createElement('div');
       entry.className = `log-entry ${logEntry.level} ${logEntry.stream}`;
 
       const timestamp = new Date(logEntry.timestamp).toLocaleTimeString();
-
       entry.innerHTML = `
         <span class="log-timestamp">[${timestamp}]</span>
         <span class="log-message">${escapeHtml(logEntry.message)}</span>
       `;
 
       logContent.appendChild(entry);
-
-      // Auto-scroll if enabled and user hasn't scrolled up
       if (autoScroll && shouldAutoScroll) {
         scrollToBottom();
       }
@@ -624,8 +683,6 @@
       if (currentLogProcessId) {
         logBuffer.delete(currentLogProcessId);
         document.getElementById('log-content').innerHTML = '';
-
-        // Also clear on server
         fetch(`/api/logs/${currentLogProcessId}`, { method: 'DELETE' })
           .catch(err => console.error('Failed to clear logs on server:', err));
       }
@@ -643,15 +700,12 @@
     function updateInstallationProgress(installationId, status) {
       const container = document.getElementById('installation-list');
       const activeSection = document.getElementById('active-installations');
-
       let installDiv = document.getElementById(`install-${installationId}`);
 
-      // Handle completion
       if (status.stage === 'complete' || status.stage === 'error') {
         activeOperations.delete(status.app_name);
 
         if (installDiv) {
-          // Show completion status briefly
           const progressColor = status.stage === 'error' ? 'bg-red-500' : 'bg-green-500';
           const statusIcon = status.stage === 'error' ? '❌' : '✅';
 
@@ -669,7 +723,6 @@
             if (container.children.length === 0) {
               activeSection.style.display = 'none';
             }
-            // Force refresh after removal completes
             if (status.operation === 'remove' && status.stage === 'complete') {
               console.log('Removal completed, refreshing status...');
               setTimeout(fetchStatus, 500);
@@ -677,12 +730,10 @@
           }, 3000);
         }
 
-        // Always refresh status on completion
         fetchStatus();
         return;
       }
 
-      // Track active operations
       activeOperations.add(status.app_name);
 
       if (!installDiv) {
@@ -726,38 +777,33 @@
 
     function getStatusIcon(stage, operation = 'install') {
       const icons = {
-        'starting': '🚀',
-        'creating_venv': '🐍',
-        'installing': '📦',
-        'dependencies': '🔧',
-        'finalizing': '🎯',
-        'complete': '✅',
-        'error': '❌',
-        'backup': '💾',
-        'updating_pip': '⬆️',
-        'updating_app': '🔄',
-        'stopping': '⏹️',
-        'clearing_venv': '🧹',
-        'removing_files': '🗑️'
+        'starting': '🚀', 'creating_venv': '🐍', 'installing': '📦', 'dependencies': '🔧',
+        'finalizing': '🎯', 'complete': '✅', 'error': '❌', 'backup': '💾',
+        'updating_pip': '⬆️', 'updating_app': '🔄', 'stopping': '⏹️',
+        'clearing_venv': '🧹', 'removing_files': '🗑️'
       };
       return icons[stage] || (operation === 'remove' ? '🗑️' : '⏳');
     }
 
     async function fetchStatus() {
       try {
-        // if last fetch status is less than 1 seconds ago, skip fetching
         if (Date.now() - (window.lastFetchTime || 0) < 1000) {
           console.log('Skipping fetchStatus due to rate limit');
           return;
         }
         window.lastFetchTime = Date.now();
-        // Use the full status endpoint to get detailed app information
+
         const res = await fetch('/api/status/full');
         const data = await res.json();
         console.log('Fetched full status:', data);
 
         renderApps(data.available_apps, data.current, data.venv_apps || [], data.venv_apps_detailed || [], data.app_process_id);
         renderInstallationHistory(data.installation_history || []);
+
+        if (data.simulation_enabled !== undefined) {
+          simulationEnabled = data.simulation_enabled;
+          updateSimulationUI();
+        }
 
         const activeInstalls = data.active_installations || {};
         const container = document.getElementById('installation-list');
@@ -775,11 +821,15 @@
 
       } catch (error) {
         console.error('Failed to fetch status:', error);
-        // Fallback to basic status if full status fails
         try {
           const res = await fetch('/api/status');
           const data = await res.json();
           renderApps(data.available_apps, data.current, [], [], data.app_process_id);
+
+          if (data.simulation_enabled !== undefined) {
+            simulationEnabled = data.simulation_enabled;
+            updateSimulationUI();
+          }
         } catch (fallbackError) {
           console.error('Failed to fetch basic status:', fallbackError);
         }
@@ -795,24 +845,16 @@
         return;
       }
 
-      // Create a map of venv app details
       const venvDetailsMap = {};
       venvAppsDetailed.forEach(app => {
         venvDetailsMap[app.name] = app;
       });
-
-      console.log('VenvApps:', venvApps);
-      console.log('VenvAppsDetailed:', venvAppsDetailed);
-      console.log('VenvDetailsMap:', venvDetailsMap);
-      console.log('AppProcessId:', appProcessId);
 
       apps.forEach(name => {
         const isRunning = name === current;
         const isVenvApp = venvApps.includes(name);
         const venvDetails = venvDetailsMap[name];
         const isBeingRemoved = activeOperations.has(name);
-
-        console.log(`App: ${name}, isVenvApp: ${isVenvApp}, hasVenvDetails: ${!!venvDetails}, isBeingRemoved: ${isBeingRemoved}`);
 
         const item = document.createElement('div');
         item.className = `bg-white rounded-lg shadow p-4 flex items-center justify-between ${isBeingRemoved ? 'removing' : ''}`;
@@ -829,7 +871,6 @@
         label.textContent = name;
         labelSection.appendChild(label);
 
-        // Show VENV badge if it's a venv app
         if (isVenvApp || venvDetails) {
           const badge = document.createElement('span');
           badge.className = 'bg-purple-100 text-purple-800 text-xs font-semibold px-2 py-1 rounded mt-1 w-fit';
@@ -856,7 +897,6 @@
             status.textContent = 'Running';
             rightSection.appendChild(status);
 
-            // Add logs button for running app
             if (appProcessId) {
               const logsBtn = document.createElement('button');
               logsBtn.className = 'bg-gray-500 hover:bg-gray-600 text-white px-3 py-2 rounded text-sm transition-colors';
@@ -878,10 +918,7 @@
             rightSection.appendChild(startBtn);
           }
 
-          // Add Update and Remove buttons for venv apps
           if (isVenvApp || venvDetails || true) {
-            console.log(`Adding Update/Remove buttons for ${name}`);
-
             const updateBtn = document.createElement('button');
             updateBtn.className = 'bg-green-500 hover:bg-green-600 text-white px-3 py-2 rounded text-sm transition-colors';
             updateBtn.textContent = '🔄 Update';
@@ -893,8 +930,6 @@
             removeBtn.textContent = '🗑️ Remove';
             removeBtn.onclick = () => removeApp(name);
             rightSection.appendChild(removeBtn);
-          } else {
-            console.log(`No Update/Remove buttons for ${name} (not a venv app)`);
           }
         } else {
           const removingText = document.createElement('span');
@@ -965,7 +1000,6 @@
         const result = await response.json();
         if (response.ok) {
           setTimeout(fetchStatus, 1000);
-          // Auto-show logs for venv apps
           if (result.process_id) {
             setTimeout(() => {
               showLogViewer(result.process_id, `Running ${name}`);
@@ -982,7 +1016,6 @@
         const response = await fetch('/stop', { method: 'POST' });
         if (response.ok) {
           setTimeout(fetchStatus, 1000);
-          // Hide logs when app stops
           hideLogViewer();
         }
       } catch (error) {
@@ -998,9 +1031,7 @@
       try {
         const response = await fetch(`/api/apps/${appName}/update`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({})
         });
         const result = await response.json();
@@ -1019,10 +1050,7 @@
         return;
       }
 
-      // Mark app as being removed
       activeOperations.add(appName);
-
-      // Update UI immediately to show removing status
       const appItem = document.getElementById(`app-item-${appName}`);
       if (appItem) {
         appItem.classList.add('removing');
@@ -1049,15 +1077,206 @@
       }
     }
 
-    function showInstallDialog() {
-      // Redirect to HF Spaces instead of showing modal
-      window.open('https://huggingface.co/spaces/pollen-robotics/Reachy_Mini_Apps', '_blank');
-    }
-
     function escapeHtml(text) {
       const div = document.createElement('div');
       div.textContent = text;
       return div.innerHTML;
+    }
+
+    // HF Spaces Store functionality
+    class SpacesStore {
+      constructor() {
+        this.spaces = [];
+        this.filteredSpaces = [];
+        this.currentSort = 'likes';
+        this.searchTerm = '';
+      }
+
+      async init() {
+        await this.loadSpaces();
+        this.setupEventListeners();
+        this.renderSpaces();
+      }
+
+      async loadSpaces() {
+        try {
+          // Search for spaces with the reachy_mini tag
+          const response = await fetch('https://huggingface.co/api/spaces?filter=reachy_mini&sort=likes&direction=-1&limit=50');
+          const data = await response.json();
+
+          this.spaces = data.map(space => ({
+            id: space.id,
+            title: space.id.split('/').pop().replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+            author: space.author,
+            description: space.cardData?.short_description || 'No description available',
+            likes: space.likes || 0,
+            created: new Date(space.createdAt).getTime(),
+            url: `https://huggingface.co/spaces/${space.id}`,
+            installUrl: `https://huggingface.co/spaces/${space.id}`,
+            tags: space.tags || []
+          }));
+
+          this.filteredSpaces = [...this.spaces];
+          this.updateStats();
+        } catch (error) {
+          console.error('Error loading spaces:', error);
+          this.showError();
+        }
+      }
+
+      setupEventListeners() {
+        const searchInput = document.getElementById('spaces-search');
+        searchInput.addEventListener('input', (e) => {
+          this.searchTerm = e.target.value.toLowerCase();
+          this.filterSpaces();
+        });
+
+        const sortButtons = document.querySelectorAll('.sort-btn');
+        sortButtons.forEach(btn => {
+          btn.addEventListener('click', (e) => {
+            sortButtons.forEach(b => {
+              b.classList.remove('active', 'bg-blue-500', 'text-white');
+              b.classList.add('bg-gray-200', 'text-gray-700');
+            });
+            e.target.classList.remove('bg-gray-200', 'text-gray-700');
+            e.target.classList.add('active', 'bg-blue-500', 'text-white');
+            this.currentSort = e.target.dataset.sort;
+            this.sortSpaces();
+          });
+        });
+      }
+
+      filterSpaces() {
+        this.filteredSpaces = this.spaces.filter(space =>
+          space.title.toLowerCase().includes(this.searchTerm) ||
+          space.author.toLowerCase().includes(this.searchTerm) ||
+          space.description.toLowerCase().includes(this.searchTerm)
+        );
+        this.sortSpaces();
+      }
+
+      sortSpaces() {
+        switch (this.currentSort) {
+          case 'likes':
+            this.filteredSpaces.sort((a, b) => b.likes - a.likes);
+            break;
+          case 'created':
+            this.filteredSpaces.sort((a, b) => b.created - a.created);
+            break;
+          case 'name':
+            this.filteredSpaces.sort((a, b) => a.title.localeCompare(b.title));
+            break;
+        }
+        this.renderSpaces();
+      }
+
+      updateStats() {
+        const statsEl = document.getElementById('spaces-stats');
+        const total = this.spaces.length;
+        const totalLikes = this.spaces.reduce((sum, space) => sum + space.likes, 0);
+        statsEl.innerHTML = `Found ${total} spaces with ${totalLikes.toLocaleString()} total likes`;
+      }
+
+      renderSpaces() {
+        const grid = document.getElementById('spaces-grid');
+
+        if (this.filteredSpaces.length === 0) {
+          grid.innerHTML = '<div class="col-span-full text-center text-gray-500 py-8">No spaces found matching your criteria</div>';
+          return;
+        }
+
+        grid.innerHTML = this.filteredSpaces.map(space => `
+          <div class="spaces-card p-4 cursor-pointer">
+            <div class="flex items-start space-x-3 mb-3">
+              <div class="space-icon">
+                ${space.title.charAt(0)}
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="font-semibold text-gray-800 truncate">${space.title}</div>
+                <div class="text-sm text-gray-600">by ${space.author}</div>
+              </div>
+            </div>
+            <div class="text-sm text-gray-700 mb-4 line-clamp-3">${space.description}</div>
+            <div class="flex items-center justify-between">
+              <div class="flex items-center space-x-4 text-sm text-gray-500">
+                <div class="flex items-center space-x-1">
+                  <span>❤️</span>
+                  <span>${space.likes}</span>
+                </div>
+                <div class="flex items-center space-x-1">
+                  <span>📅</span>
+                  <span>${this.formatDate(space.created)}</span>
+                </div>
+              </div>
+              <button onclick="installFromSpace('${space.installUrl}', '${space.title}')" 
+                      class="bg-purple-500 hover:bg-purple-600 text-white px-3 py-1 rounded text-sm transition-colors">
+                📥 Install
+              </button>
+            </div>
+          </div>
+        `).join('');
+      }
+
+      formatDate(timestamp) {
+        const date = new Date(timestamp);
+        const now = new Date();
+        const diffInDays = Math.floor((now - date) / (1000 * 60 * 60 * 24));
+
+        if (diffInDays === 0) return 'Today';
+        if (diffInDays === 1) return 'Yesterday';
+        if (diffInDays < 30) return `${diffInDays}d ago`;
+        if (diffInDays < 365) return `${Math.floor(diffInDays / 30)}mo ago`;
+        return `${Math.floor(diffInDays / 365)}y ago`;
+      }
+
+      showError() {
+        const grid = document.getElementById('spaces-grid');
+        const stats = document.getElementById('spaces-stats');
+
+        stats.innerHTML = 'Unable to load spaces';
+        grid.innerHTML = `
+          <div class="col-span-full text-center text-gray-500 py-8">
+            <h3 class="font-semibold mb-2">Unable to load Hugging Face Spaces</h3>
+            <p class="text-sm">This might be due to CORS restrictions. In a production environment, you'd use a backend API to fetch the data.</p>
+          </div>
+        `;
+      }
+    }
+
+    function initializeSpacesStore() {
+      spacesStore = new SpacesStore();
+      spacesStore.init();
+    }
+
+    async function installFromSpace(spaceUrl, spaceName) {
+      const sanitizedName = spaceName.replace(/[^a-zA-Z0-9-_]/g, '_').toLowerCase();
+
+      if (!confirm(`Install "${spaceName}" from Hugging Face Space?`)) {
+        return;
+      }
+
+      try {
+        const response = await fetch('/api/install', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            url: spaceUrl,
+            name: sanitizedName
+          })
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+          // Scroll to top to see installation progress
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        } else {
+          alert(`Failed to start installation: ${result.detail}`);
+        }
+      } catch (error) {
+        console.error('Failed to install from space:', error);
+        alert(`Failed to install: ${error.message}`);
+      }
     }
 
     // Event listeners for log viewer controls
@@ -1065,10 +1284,14 @@
     document.getElementById('clear-logs-btn').addEventListener('click', clearCurrentLogs);
     document.getElementById('close-logs-btn').addEventListener('click', hideLogViewer);
 
-    // Initialize
+    // Initialize everything
     connectWebSocket();
     fetchStatus();
+    fetchSimulationStatus();
+    fetchDaemonStatus();
+    initializeSpacesStore(); // Load spaces on page load
     setInterval(fetchStatus, 10000);
+    setInterval(fetchDaemonStatus, 15000);
   </script>
 </body>
 
