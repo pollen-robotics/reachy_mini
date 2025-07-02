@@ -21,19 +21,19 @@ def start_daemon(
         localhost_only=localhost_only,
         wake_up_on_start=wake_up_on_start,
     )
-    return {"state": daemon.state}
+    return {"state": daemon._status.state}
 
 
 @app.post("/stop")
 def stop_daemon(goto_sleep_on_stop: bool = True) -> dict:
     daemon.stop(goto_sleep_on_stop=goto_sleep_on_stop)
-    return {"state": daemon.state}
+    return {"state": daemon._status.state}
 
 
 @app.post("/restart")
 def restart_daemon() -> dict:
     daemon.restart()
-    return {"state": daemon.state}
+    return {"state": daemon._status.state}
 
 
 @app.get("/status")
