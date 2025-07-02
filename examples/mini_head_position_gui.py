@@ -6,8 +6,6 @@ from scipy.spatial.transform import Rotation as R
 from reachy_mini import ReachyMini
 import tkinter as tk
 
-from placo_utils.visualization import robot_viz
-
 def main():
     with ReachyMini() as mini:
         t0 = time.time()
@@ -76,7 +74,7 @@ def main():
 
         while True:
             t = time.time() - t0
-            target = np.deg2rad(30) * np.sin(2 * np.pi * 0.5)# * t)
+            target = np.deg2rad(30) * np.sin(2 * np.pi * 0.5 * t)
 
             head = np.eye(4)
             head[:3, 3] = [0, 0, 0.0]

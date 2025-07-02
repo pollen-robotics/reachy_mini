@@ -1,10 +1,7 @@
 import numpy as np
 import placo
-<<<<<<< HEAD
-import pinocchio as pin
-=======
 from typing import List
->>>>>>> origin/develop
+import pinocchio as pin
 
 
 class PlacoKinematics:
