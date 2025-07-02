@@ -139,9 +139,11 @@ class ReachyMini:
         Args:
             head (Optional[np.ndarray]): 4x4 pose matrix representing the head pose.
             antennas (Optional[Union[np.ndarray, List[float]]]): 1D array with two elements representing the angles of the antennas in radians.
+            check_collision (bool): If True, checks for collisions before setting the position.
 
         Raises:
             ValueError: If neither head nor antennas are provided, or if the shape of head is not (4, 4), or if antennas is not a 1D array with two elements.
+
         """
         if head is None and antennas is None:
             raise ValueError("At least one of head or antennas must be provided.")
@@ -327,6 +329,7 @@ class ReachyMini:
             antennas (Optional[Union[np.ndarray, List[float]]]): 1D array with two elements representing the angles of the antennas in radians.
             duration (float): Duration of the movement in seconds.
             method (str): Interpolation method to use ("linear", "minjerk", "ease", "cartoon"). Default is "linear.
+            check_collision (bool): If True, checks for collisions before setting the position.
 
         Raises:
             ValueError: If neither head nor antennas are provided, or if duration is not positive.
