@@ -132,7 +132,7 @@ class MujocoBackend(Backend):
         # TODO Do something in mujoco here ?
         pass
 
-    def get_stats(self) -> dict:
+    def get_status(self) -> dict:
         return {}
 
 
