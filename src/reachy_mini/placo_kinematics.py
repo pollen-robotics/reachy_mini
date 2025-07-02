@@ -1,3 +1,8 @@
+"""Placo Kinematics for Reachy Mini.
+
+This module provides the PlacoKinematics class for performing inverse and forward kinematics based on the Reachy Mini robot URDF using the Placo library.
+"""
+
 from typing import List
 
 import numpy as np
@@ -5,7 +10,19 @@ import placo
 
 
 class PlacoKinematics:
+    """Placo Kinematics class for Reachy Mini.
+
+    This class provides methods for inverse and forward kinematics using the Placo library and a URDF model of the Reachy Mini robot.
+    """
+
     def __init__(self, urdf_path: str, dt: float = 0.02) -> None:
+        """Initialize the PlacoKinematics class.
+
+        Args:
+            urdf_path (str): Path to the URDF file of the Reachy Mini robot.
+            dt (float): Time step for the kinematics solver. Default is 0.02 seconds.
+
+        """
         self.robot = placo.RobotWrapper(urdf_path, placo.Flags.ignore_collisions)
 
         self.ik_solver = placo.KinematicsSolver(self.robot)
@@ -81,16 +98,15 @@ class PlacoKinematics:
         self.fk_solver.dt = dt
 
     def ik(self, pose: np.ndarray) -> List[float]:
-        """
-        Computes the inverse kinematics for the head for a given pose.
+        """Compute the inverse kinematics for the head for a given pose.
 
         Args:
             pose (np.ndarray): A 4x4 homogeneous transformation matrix
 
         Returns:
             List[float]: A list of joint angles for the head.
-        """
 
+        """
         _pose = pose.copy()
         _pose[:3, 3][2] += self.head_z_offset  # offset the height of the head
         self.head_frame.T_world_frame = _pose
@@ -113,16 +129,15 @@ class PlacoKinematics:
         return joints
 
     def fk(self, joints_angles: List[float]) -> np.ndarray:
-        """
-        Computes the forward kinematics for the head given joint angles.
+        """Compute the forward kinematics for the head given joint angles.
 
         Args:
             joints_angles (List[float]): A list of joint angles for the head.
 
         Returns:
             np.ndarray: A 4x4 homogeneous transformation matrix
-        """
 
+        """
         self.head_joints_task.set_joints(
             {
                 "all_yaw": joints_angles[0],

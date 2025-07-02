@@ -1,3 +1,5 @@
+"""Basic MuJoCo Example with Reachy Mini."""
+
 import time
 from importlib.resources import files
 

@@ -1,3 +1,5 @@
+"""Reachy Mini Dashboard API."""
+
 import threading
 from importlib.metadata import entry_points
 
@@ -17,10 +19,12 @@ app_thread = None
 
 
 def list_apps():
+    """List all available Reachy Mini apps."""
     return list(entry_points(group="reachy_mini_apps"))
 
 
 def start_app_by_name(name):
+    """Start a Reachy Mini app by its name."""
     global current_app, current_app_name, app_thread
     apps = list_apps()
     for ep in apps:
@@ -35,6 +39,7 @@ def start_app_by_name(name):
 
 
 def stop_app():
+    """Stop the currently running Reachy Mini app."""
     global current_app, current_app_name, app_thread
     if current_app:
         current_app.stop()
@@ -47,6 +52,7 @@ def stop_app():
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
+    """Render the main dashboard page with the list of apps."""
     apps = list_apps()
     return templates.TemplateResponse(
         "index.html", {"request": request, "apps": apps, "current": current_app_name}
@@ -55,18 +61,21 @@ async def index(request: Request):
 
 @app.post("/start/{name}")
 async def start(name: str):
+    """Start a Reachy Mini app by its name."""
     start_app_by_name(name)
     return RedirectResponse(url="/", status_code=303)
 
 
 @app.post("/stop")
 async def stop():
+    """Stop the currently running Reachy Mini app."""
     stop_app()
     return RedirectResponse(url="/", status_code=303)
 
 
 @app.get("/api/status")
 async def status():
+    """Get the status of the currently running Reachy Mini app."""
     apps = list_apps()
     return JSONResponse(
         {"current": current_app_name, "available_apps": [ep.name for ep in apps]}

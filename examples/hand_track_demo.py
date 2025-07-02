@@ -1,3 +1,5 @@
+"""Hand tracking demo for Reachy Mini."""
+
 import time
 
 import cv2
@@ -10,6 +12,7 @@ from reachy_mini.io.cam_utils import find_camera
 
 
 def draw_debug(img, palm_center):
+    """Draw debug information on the image."""
     h, w, _ = img.shape
     draw_palm = [(-palm_center[0] + 1) / 2, (palm_center[1] + 1) / 2]  # [0, 1]
     cv2.circle(

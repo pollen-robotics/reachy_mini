@@ -1,3 +1,5 @@
+"""Reachy Mini Motion Sequence Example."""
+
 import time
 
 import numpy as np

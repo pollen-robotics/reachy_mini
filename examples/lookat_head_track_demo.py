@@ -1,3 +1,5 @@
+"""Reachy Mini Look At Head Tracking Example."""
+
 import cv2
 from head_tracker import HeadTracker
 

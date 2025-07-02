@@ -1,3 +1,10 @@
+"""Demonstrate how to make Reachy Mini look at a point in an image.
+
+When you click on the image, Reachy Mini will look at the point you clicked on.
+It uses OpenCV to capture video from a camera and display it, and Reachy Mini's
+look_at_image method to make the robot look at the specified point.
+"""
+
 import cv2
 import numpy as np
 
@@ -6,7 +13,9 @@ from reachy_mini.io.cam_utils import find_camera
 
 cap = find_camera()
 
+
 def click(event, x, y, flags, param):
+    """Handle mouse click events to get the coordinates of the click."""
     global click_x, click_y, just_clicked
 
     if event == cv2.EVENT_LBUTTONDOWN:

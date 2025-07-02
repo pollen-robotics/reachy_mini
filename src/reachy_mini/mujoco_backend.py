@@ -1,3 +1,11 @@
+"""Mujoco Backend for Reachy Mini.
+
+This module provides the MujocoBackend class for simulating the Reachy Mini robot using the MuJoCo physics engine.
+
+It includes methods for running the simulation, getting joint positions, and controlling the robot's joints.
+
+"""
+
 import json
 import time
 from dataclasses import dataclass
@@ -19,11 +27,15 @@ from .reachy_mini import SLEEP_ANTENNAS_JOINT_POSITIONS, SLEEP_HEAD_JOINT_POSITI
 
 
 class MujocoBackend(Backend):
-    """
-    Simulated Reachy Mini using MuJoCo.
-    """
+    """Simulated Reachy Mini using MuJoCo."""
 
     def __init__(self, scene="empty"):
+        """Initialize the MujocoBackend with a specified scene.
+
+        Args:
+            scene (str): The name of the scene to load. Default is "empty".
+
+        """
         super().__init__()
 
         mjcf_root_path = str(
@@ -58,6 +70,11 @@ class MujocoBackend(Backend):
         # self.streamer_udp = UDPJPEGFrameSender()
 
     def run(self):
+        """Run the Mujoco simulation with a viewer.
+
+        This method initializes the viewer and enters the main simulation loop.
+        It updates the joint positions at a rate and publishes the joint positions.
+        """
         step = 1
         with mujoco.viewer.launch_passive(
             self.model, self.data, show_left_ui=False, show_right_ui=False
@@ -119,23 +136,45 @@ class MujocoBackend(Backend):
                 self.ready.set()
 
     def get_head_joint_positions(self):
+        """Get the current joint positions of the head."""
         return self.data.qpos[self.joint_qpos_addr[:7]].flatten().tolist()
 
     def get_antenna_joint_positions(self):
+        """Get the current joint positions of the antennas."""
         return self.data.qpos[self.joint_qpos_addr[-2:]].flatten().tolist()
 
     def set_torque(self, enabled: bool) -> None:
+        """Enable or disable torque control for the joints.
+
+        Args:
+            enabled (bool): If True, enable torque control; if False, disable it.
+
+        Does nothing in the Mujoco backend as it does not support torque control directly.
+
+        """
         # TODO Do something in mujoco here ?
         pass
 
     def close(self) -> None:
+        """Close the Mujoco backend."""
         # TODO Do something in mujoco here ?
         pass
 
     def get_status(self) -> dict:
+        """Get the status of the Mujoco backend.
+
+        Returns:
+            dict: An empty dictionary as the Mujoco backend does not have a specific status to report.
+
+        """
         return {}
 
 
 @dataclass
 class MujocoBackendStatus:
+    """Dataclass to represent the status of the Mujoco backend.
+
+    Empty for now, as the Mujoco backend does not have a specific status to report.
+    """
+
     pass
