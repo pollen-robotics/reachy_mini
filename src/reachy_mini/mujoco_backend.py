@@ -1,14 +1,14 @@
 import json
 import time
+from dataclasses import dataclass
 from importlib.resources import files
-from threading import Event
 
 import mujoco
 import mujoco.viewer
 import numpy as np
 
 import reachy_mini
-from reachy_mini.io import Backend
+from reachy_mini.io.backend import Backend
 from reachy_mini.mujoco_utils import (
     get_actuator_names,
     get_joint_addr_from_name,
@@ -56,8 +56,6 @@ class MujocoBackend(Backend):
         ]
 
         # self.streamer_udp = UDPJPEGFrameSender()
-
-        self.ready = Event()
 
     def run(self):
         step = 1
@@ -129,3 +127,15 @@ class MujocoBackend(Backend):
     def set_torque(self, enabled: bool) -> None:
         # TODO Do something in mujoco here ?
         pass
+
+    def close(self) -> None:
+        # TODO Do something in mujoco here ?
+        pass
+
+    def get_status(self) -> dict:
+        return {}
+
+
+@dataclass
+class MujocoBackendStatus:
+    pass
