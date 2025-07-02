@@ -52,3 +52,4 @@ exclude = [
     "src/reachy_mini/__init__.py",
     "build/*",
 ]
+extend-select = ["I", "D"]
