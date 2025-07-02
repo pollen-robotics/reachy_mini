@@ -7,6 +7,7 @@ from scipy.spatial.transform import Rotation as R
 
 from reachy_mini.io.cam_utils import find_camera
 
+
 def draw_debug(img, palm_center):
     h, w, _ = img.shape
     draw_palm = [(-palm_center[0] + 1) / 2, (palm_center[1] + 1) / 2]  # [0, 1]
@@ -59,14 +60,14 @@ with ReachyMini() as reachy_mini:
                     target = [0, 0]
                     error = np.array(target) - palm_center  # [-1, 1] [-1, 1]
                     # print(error)
-                    error = np.clip(error, -0.3, 0.2)
+                    error = np.clip(error, -0.3, 0.3)
                     euler_rot += np.array([0.0, -kp * 0.1 * error[1], kp * error[0]])
 
                     rot_mat = R.from_euler("xyz", euler_rot, degrees=False).as_matrix()
                     pose[:3, :3] = rot_mat
                     pose[:3, 3][2] = (
                         error[1] * 0.04
-                )  # Adjust height based on vertical error
+                    )  # Adjust height based on vertical error
                     reachy_mini.set_target(head=pose, check_collision=True)
             cv2.imshow("test_window", img)
 
