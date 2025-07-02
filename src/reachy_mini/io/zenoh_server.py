@@ -1,13 +1,14 @@
 import json
 import threading
+
 import zenoh
 
 from reachy_mini.io.abstract import AbstractServer
-from reachy_mini.io import Backend
+from reachy_mini.io.backend import Backend
 
 
 class ZenohServer(AbstractServer):
-    def __init__(self, backend: Backend, localhost_only: bool = True):
+    def __init__(self, backend: Backend, localhost_only: bool = True):  # type: ignore
         self.localhost_only = localhost_only
         self.backend = backend
 
@@ -51,11 +52,6 @@ class ZenohServer(AbstractServer):
 
     def stop(self):
         self.session.close()
-
-    # def get_latest_command(self) -> ReachyMiniCommand:
-    #     """Return the latest pose and antennas command."""
-    #     with self._lock:
-    #         return self._last_command
 
     def command_received_event(self) -> threading.Event:
         """Wait for a new command and return it."""

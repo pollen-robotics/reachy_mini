@@ -1,9 +1,10 @@
 import numpy as np
 import placo
+from typing import List
 
 
 class PlacoKinematics:
-    def __init__(self, urdf_path: str, dt: float = 0.02):
+    def __init__(self, urdf_path: str, dt: float = 0.02) -> None:
         self.robot = placo.RobotWrapper(urdf_path, placo.Flags.ignore_collisions)
 
         self.ik_solver = placo.KinematicsSolver(self.robot)
@@ -13,56 +14,22 @@ class PlacoKinematics:
         self.fk_solver.mask_fbase(True)
 
         # IK closing tasks
-        ik_closing_task_1 = self.ik_solver.add_relative_position_task(
-            "closing_1_1", "closing_1_2", np.zeros(3)
-        )
-        ik_closing_task_1.configure("closing_1", "hard", 1.0)
-
-        ik_closing_task_2 = self.ik_solver.add_relative_position_task(
-            "closing_2_1", "closing_2_2", np.zeros(3)
-        )
-        ik_closing_task_2.configure("closing_2", "hard", 1.0)
-
-        ik_closing_task_3 = self.ik_solver.add_relative_position_task(
-            "closing_3_1", "closing_3_2", np.zeros(3)
-        )
-        ik_closing_task_3.configure("closing_3", "hard", 1.0)
-
-        ik_closing_task_4 = self.ik_solver.add_relative_position_task(
-            "closing_4_1", "closing_4_2", np.zeros(3)
-        )
-        ik_closing_task_4.configure("closing_4", "hard", 1.0)
-
-        ik_closing_task_5 = self.ik_solver.add_relative_position_task(
-            "closing_5_1", "closing_5_2", np.zeros(3)
-        )
-        ik_closing_task_5.configure("closing_5", "hard", 1.0)
+        ik_closing_tasks = []
+        for i in range(1, 6):
+            ik_closing_task = self.ik_solver.add_relative_position_task(
+                f"closing_{i}_1", f"closing_{i}_2", np.zeros(3)
+            )
+            ik_closing_task.configure(f"closing_{i}", "hard", 1.0)
+            ik_closing_tasks.append(ik_closing_task)
 
         # FK closing tasks
-        fk_closing_task_1 = self.fk_solver.add_relative_position_task(
-            "closing_1_1", "closing_1_2", np.zeros(3)
-        )
-        fk_closing_task_1.configure("closing_1", "hard", 1.0)
-
-        fk_closing_task_2 = self.fk_solver.add_relative_position_task(
-            "closing_2_1", "closing_2_2", np.zeros(3)
-        )
-        fk_closing_task_2.configure("closing_2", "hard", 1.0)
-
-        fk_closing_task_3 = self.fk_solver.add_relative_position_task(
-            "closing_3_1", "closing_3_2", np.zeros(3)
-        )
-        fk_closing_task_3.configure("closing_3", "hard", 1.0)
-
-        fk_closing_task_4 = self.fk_solver.add_relative_position_task(
-            "closing_4_1", "closing_4_2", np.zeros(3)
-        )
-        fk_closing_task_4.configure("closing_4", "hard", 1.0)
-
-        fk_closing_task_5 = self.fk_solver.add_relative_position_task(
-            "closing_5_1", "closing_5_2", np.zeros(3)
-        )
-        fk_closing_task_5.configure("closing_5", "hard", 1.0)
+        fk_closing_tasks = []
+        for i in range(1, 6):
+            fk_closing_task = self.fk_solver.add_relative_position_task(
+                f"closing_{i}_1", f"closing_{i}_2", np.zeros(3)
+            )
+            fk_closing_task.configure(f"closing_{i}", "hard", 1.0)
+            fk_closing_tasks.append(fk_closing_task)
 
         self.joints_names = [
             "all_yaw",
@@ -112,7 +79,17 @@ class PlacoKinematics:
         # self.fk_solver.enable_velocity_limits(True)
         self.fk_solver.dt = dt
 
-    def ik(self, pose):
+    def ik(self, pose: np.ndarray) -> List[float]:
+        """
+        Computes the inverse kinematics for the head for a given pose.
+
+        Args:
+            pose (np.ndarray): A 4x4 homogeneous transformation matrix
+
+        Returns:
+            List[float]: A list of joint angles for the head.
+        """
+
         _pose = pose.copy()
         _pose[:3, 3][2] += self.head_z_offset  # offset the height of the head
         self.head_frame.T_world_frame = _pose
@@ -134,7 +111,17 @@ class PlacoKinematics:
 
         return joints
 
-    def fk(self, joints_angles):
+    def fk(self, joints_angles: List[float]) -> np.ndarray:
+        """
+        Computes the forward kinematics for the head given joint angles.
+
+        Args:
+            joints_angles (List[float]): A list of joint angles for the head.
+
+        Returns:
+            np.ndarray: A 4x4 homogeneous transformation matrix
+        """
+
         self.head_joints_task.set_joints(
             {
                 "all_yaw": joints_angles[0],
