@@ -59,7 +59,7 @@ with ReachyMini() as reachy_mini:
                     target = [0, 0]
                     error = np.array(target) - palm_center  # [-1, 1] [-1, 1]
                     # print(error)
-                    error = np.clip(error, -0.3, 0.3)
+                    error = np.clip(error, -0.3, 0.2)
                     euler_rot += np.array([0.0, -kp * 0.1 * error[1], kp * error[0]])
 
                     rot_mat = R.from_euler("xyz", euler_rot, degrees=False).as_matrix()
