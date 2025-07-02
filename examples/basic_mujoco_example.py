@@ -1,10 +1,13 @@
+"""Basic MuJoCo Example with Reachy Mini."""
+
+import time
+from importlib.resources import files
+
 import mujoco
 import mujoco.viewer
-import time
-from reachy_mini.mujoco_utils import get_joint_qpos
-from importlib.resources import files
-import reachy_mini
 
+import reachy_mini
+from reachy_mini.mujoco_utils import get_joint_qpos
 
 model = mujoco.MjModel.from_xml_path(
     str(files(reachy_mini).joinpath("descriptions/reachy_mini/mjcf/scenes/empty.xml"))

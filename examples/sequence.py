@@ -1,7 +1,11 @@
-from reachy_mini import ReachyMini
+"""Reachy Mini Motion Sequence Example."""
+
 import time
+
 import numpy as np
 from scipy.spatial.transform import Rotation as R
+
+from reachy_mini import ReachyMini
 
 with ReachyMini() as reachy_mini:
     try:

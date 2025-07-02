@@ -1,3 +1,5 @@
+"""Head Tracker using MediaPipe Face Mesh to estimate head pose."""
+
 try:
     import mediapipe as mp
 except ImportError:
@@ -8,7 +10,10 @@ import numpy as np
 
 
 class HeadTracker:
+    """Head Tracker using MediaPipe Face Mesh to estimate head pose."""
+
     def __init__(self):
+        """Initialize the Head Tracker."""
         self.face_mesh = mp.solutions.face_mesh.FaceMesh(
             min_detection_confidence=0.05,
             min_tracking_confidence=0.5,
@@ -16,6 +21,7 @@ class HeadTracker:
         )
 
     def get_eyes(self, img):
+        """Get the coordinates of the eyes from the image."""
         results = self.face_mesh.process(img)
         if results.multi_face_landmarks:
             face_landmarks = results.multi_face_landmarks[0]
@@ -34,6 +40,7 @@ class HeadTracker:
         return None, None
 
     def get_eyes_from_landmarks(self, face_landmarks):
+        """Get the coordinates of the eyes from face landmarks."""
         left_eye = np.array(
             (face_landmarks.landmark[33].x, face_landmarks.landmark[33].y)
         )
@@ -46,11 +53,13 @@ class HeadTracker:
         return left_eye, right_eye
 
     def get_eye_center(self, face_landmarks):
+        """Get the center of the eyes from face landmarks."""
         left_eye, right_eye = self.get_eyes_from_landmarks(face_landmarks)
         eye_center = np.mean([left_eye, right_eye], axis=0)
         return eye_center
 
     def get_roll(self, face_landmarks):
+        """Calculate the roll of the head based on eye positions."""
         left_eye = np.array(
             (face_landmarks.landmark[33].x, face_landmarks.landmark[33].y)
         )
@@ -65,6 +74,7 @@ class HeadTracker:
         return roll
 
     def get_head_position(self, img):
+        """Get the head position and roll from the image."""
         results = self.face_mesh.process(img)
         if results.multi_face_landmarks:
             face_landmarks = results.multi_face_landmarks[0]

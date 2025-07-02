@@ -1,3 +1,12 @@
+"""Zenoh server for Reachy Mini.
+
+This module implements a Zenoh server that allows communication with the Reachy Mini
+robot. It handles commands for joint positions and torque settings, and publishes joint positions updates.
+
+It uses the Zenoh protocol for efficient data exchange and can be configured to run
+either on localhost only or to accept connections from other hosts.
+"""
+
 import json
 import threading
 
@@ -8,7 +17,10 @@ from reachy_mini.io.backend import Backend
 
 
 class ZenohServer(AbstractServer):
+    """Zenoh server for Reachy Mini."""
+
     def __init__(self, backend: Backend, localhost_only: bool = True):  # type: ignore
+        """Initialize the Zenoh server."""
         self.localhost_only = localhost_only
         self.backend = backend
 
@@ -16,6 +28,7 @@ class ZenohServer(AbstractServer):
         self._cmd_event = threading.Event()
 
     def start(self):
+        """Start the Zenoh server."""
         if self.localhost_only:
             c = zenoh.Config.from_json5(
                 json.dumps(
@@ -51,6 +64,7 @@ class ZenohServer(AbstractServer):
         self.backend.set_joint_positions_publisher(self.pub)
 
     def stop(self):
+        """Stop the Zenoh server."""
         self.session.close()
 
     def command_received_event(self) -> threading.Event:

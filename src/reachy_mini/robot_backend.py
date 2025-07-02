@@ -1,3 +1,10 @@
+"""Robot Backend for Reachy Mini.
+
+This module provides the `RobotBackend` class, which interfaces with the Reachy Mini motor controller to control the robot's movements and manage its status.
+It handles the control loop, joint positions, torque enabling/disabling, and provides a status report of the robot's backend.
+It uses the `ReachyMiniMotorController` to communicate with the robot's motors.
+"""
+
 import json
 import logging
 import time
@@ -14,11 +21,18 @@ logger = logging.getLogger(__name__)
 
 
 class RobotBackend(Backend):
-    """
-    Real robot backend for Reachy Mini.
-    """
+    """Real robot backend for Reachy Mini."""
 
     def __init__(self, serialport: str, log_level: str = "INFO"):
+        """Initialize the RobotBackend.
+
+        Args:
+            serialport (str): The serial port to which the Reachy Mini is connected.
+            log_level (str): The logging level for the backend. Default is "INFO".
+
+        Tries to connect to the Reachy Mini motor controller and initializes the control loop.
+
+        """
         super().__init__()
 
         self.logger = logging.getLogger(__name__)
@@ -43,6 +57,12 @@ class RobotBackend(Backend):
         }
 
     def run(self):
+        """Run the control loop for the robot backend.
+
+        This method continuously updates the motor controller at a specified frequency.
+        It reads the joint positions, updates the motor controller, and publishes the joint positions.
+        It also handles errors and retries if the motor controller is not responding.
+        """
         assert self.c is not None, "Motor controller not initialized or already closed."
 
         period = 1.0 / self.control_loop_frequency  # Control loop period in seconds
@@ -54,7 +74,7 @@ class RobotBackend(Backend):
 
         while not self.should_stop.is_set():
             start_t = time.time()
-            self.update()
+            self._update()
             took = time.time() - start_t
 
             sleep_time = max(0, period - took)
@@ -62,7 +82,7 @@ class RobotBackend(Backend):
                 next_call_event.clear()
                 next_call_event.wait(sleep_time)
 
-    def update(self):
+    def _update(self):
         assert self.c is not None, "Motor controller not initialized or already closed."
 
         if self._torque_enabled:
@@ -141,6 +161,7 @@ class RobotBackend(Backend):
                 self.stats_record_t0 = time.time()
 
     def set_torque(self, enabled: bool) -> None:
+        """Enable or disable the torque on the motors."""
         assert self.c is not None, "Motor controller not initialized or already closed."
 
         if enabled:
@@ -151,14 +172,18 @@ class RobotBackend(Backend):
         self._torque_enabled = enabled
 
     def close(self) -> None:
+        """Close the motor controller connection."""
         self.c = None
 
     def get_status(self) -> "RobotBackendStatus":
+        """Get the current status of the robot backend."""
         return self._status
 
 
 @dataclass
 class RobotBackendStatus:
+    """Status of the Robot Backend."""
+
     ready: bool
     last_alive: Optional[float]
     control_loop_stats: dict

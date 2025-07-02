@@ -1,3 +1,5 @@
+"""Reachy Mini Dashboard API."""
+
 import asyncio
 import json
 import os
@@ -5,14 +7,12 @@ import shutil
 import sys
 import threading
 import uuid
-from datetime import datetime
 from importlib.metadata import entry_points
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Optional
 
 from app_install import (
     active_installations,
-    broadcast_installation_status,
     connected_clients,
     install_app_async,
     installation_history,
@@ -30,7 +30,6 @@ from utils import (
     get_platform_info,
     get_process_logs,
     register_log_callback,
-    unregister_log_callback,
 )
 from venv_app import VenvAppManager
 
@@ -305,6 +304,7 @@ async def start(name: str):
 
 @app.post("/stop")
 async def stop():
+    """Stop the currently running Reachy Mini app."""
     stop_app()
     return JSONResponse(
         content={"message": "App stopped successfully", "status": "stopped"}

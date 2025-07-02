@@ -1,3 +1,10 @@
+"""Placo Kinematics for Reachy Mini.
+
+This module provides the PlacoKinematics class for performing inverse and forward kinematics based on the Reachy Mini robot URDF using the Placo library.
+"""
+
+from typing import List
+
 import numpy as np
 import placo
 from typing import List, Optional
@@ -5,7 +12,19 @@ import pinocchio as pin
 
 
 class PlacoKinematics:
+    """Placo Kinematics class for Reachy Mini.
+
+    This class provides methods for inverse and forward kinematics using the Placo library and a URDF model of the Reachy Mini robot.
+    """
+
     def __init__(self, urdf_path: str, dt: float = 0.02) -> None:
+        """Initialize the PlacoKinematics class.
+
+        Args:
+            urdf_path (str): Path to the URDF file of the Reachy Mini robot.
+            dt (float): Time step for the kinematics solver. Default is 0.02 seconds.
+
+        """
         self.robot = placo.RobotWrapper(urdf_path, placo.Flags.ignore_collisions)
 
         self.ik_solver = placo.KinematicsSolver(self.robot)
@@ -101,8 +120,8 @@ class PlacoKinematics:
 
         Returns:
             List[float]: A list of joint angles for the head.
-        """
 
+        """
         _pose = pose.copy()
 
         # set the head pose
@@ -142,8 +161,8 @@ class PlacoKinematics:
 
         Returns:
             np.ndarray: A 4x4 homogeneous transformation matrix
-        """
 
+        """
         self.head_joints_task.set_joints(
             {
                 "all_yaw": joints_angles[0],

@@ -1,3 +1,10 @@
+"""Daemon for Reachy Mini robot.
+
+This module provides a daemon that runs a backend for either a simulated Reachy Mini using Mujoco or a real Reachy Mini robot using a serial connection.
+It includes methods to start, stop, and restart the daemon, as well as to check its status.
+It also provides a command-line interface for easy interaction.
+"""
+
 import logging
 from dataclasses import dataclass
 from enum import Enum
@@ -13,13 +20,13 @@ from reachy_mini.robot_backend import RobotBackend, RobotBackendStatus
 
 
 class Daemon:
-    """
-    Daemon for simulated or real Reachy Mini robot.
+    """Daemon for simulated or real Reachy Mini robot.
 
     Runs the server with the appropriate backend (Mujoco for simulation or RobotBackend for real hardware).
     """
 
     def __init__(self, log_level: str = "INFO"):
+        """Initialize the Reachy Mini daemon."""
         self.log_level = log_level
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(self.log_level)
@@ -38,8 +45,7 @@ class Daemon:
         localhost_only: bool = True,
         wake_up_on_start: bool = True,
     ) -> "DaemonState":
-        """
-        Start the Reachy Mini daemon.
+        """Start the Reachy Mini daemon.
 
         Args:
             sim (bool): If True, run in simulation mode using Mujoco. Defaults to False.
@@ -50,6 +56,7 @@ class Daemon:
 
         Returns:
             DaemonState: The current state of the daemon after attempting to start it.
+
         """
         if self._status.state == DaemonState.RUNNING:
             self.logger.warning("Daemon is already running.")
@@ -109,12 +116,14 @@ class Daemon:
         return self._status.state
 
     def stop(self, goto_sleep_on_stop: bool = True) -> "DaemonState":
-        """
-        Stop the Reachy Mini daemon.
+        """Stop the Reachy Mini daemon.
+
         Args:
             goto_sleep_on_stop (bool): If True, put Reachy Mini to sleep on stop. Defaults to True.
+
         Returns:
             DaemonState: The current state of the daemon after attempting to stop it.
+
         """
         if self._status.state == DaemonState.STOPPED:
             self.logger.warning("Daemon is already stopped.")
@@ -172,6 +181,7 @@ class Daemon:
         goto_sleep_on_stop: Optional[bool] = None,
     ) -> "DaemonState":
         """Restart the Reachy Mini daemon.
+
         Args:
             sim (bool): If True, run in simulation mode using Mujoco. Defaults to None (uses the previous value).
             serialport (str): Serial port for real motors. Defaults to None (uses the previous value).
@@ -182,6 +192,7 @@ class Daemon:
 
         Returns:
             DaemonState: The current state of the daemon after attempting to restart it.
+
         """
         if self._status.state == DaemonState.STOPPED:
             self.logger.warning("Daemon is not running.")
@@ -232,9 +243,9 @@ class Daemon:
         wake_up_on_start: bool = True,
         goto_sleep_on_stop: bool = True,
     ):
-        """
-        Run the Reachy Mini daemon indefinitely. First, it starts the daemon, then it keeps checking the status
-        and allows for graceful shutdown on user interrupt (Ctrl+C).
+        """Run the Reachy Mini daemon indefinitely.
+
+        First, it starts the daemon, then it keeps checking the status and allows for graceful shutdown on user interrupt (Ctrl+C).
 
         Args:
             sim (bool): If True, run in simulation mode using Mujoco. Defaults to False.
@@ -243,6 +254,7 @@ class Daemon:
             localhost_only (bool): If True, restrict the server to localhost only clients. Defaults to True.
             wake_up_on_start (bool): If True, wake up Reachy Mini on start. Defaults to True.
             goto_sleep_on_stop (bool): If True, put Reachy Mini to sleep on stop. Defaults to True
+
         """
         self.start(
             sim=sim,
@@ -296,9 +308,7 @@ class Daemon:
 
 
 class DaemonState(Enum):
-    """
-    Enum representing the state of the Reachy Mini daemon.
-    """
+    """Enum representing the state of the Reachy Mini daemon."""
 
     INITIALIZING = "initializing"
     RUNNING = "running"
@@ -309,9 +319,7 @@ class DaemonState(Enum):
 
 @dataclass
 class DaemonStatus:
-    """
-    Dataclass representing the status of the Reachy Mini daemon.
-    """
+    """Dataclass representing the status of the Reachy Mini daemon."""
 
     state: DaemonState
     backend_status: Optional[RobotBackendStatus | MujocoBackendStatus]
@@ -319,11 +327,12 @@ class DaemonStatus:
 
 
 def find_serial_port(vid: str = "1a86", pid: str = "55d3") -> list[str]:
-    """
-    Find the serial port for Reachy Mini based on VID and PID.
+    """Find the serial port for Reachy Mini based on VID and PID.
+
     Args:
         vid (str): Vendor ID of the device. (eg. "1a86").
         pid (str): Product ID of the device. (eg. "55d3").
+
     """
     ports = serial.tools.list_ports.comports()
 
