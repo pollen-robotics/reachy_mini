@@ -169,6 +169,11 @@ class PlacoKinematics:
         return T_world_head
 
     def config_collision_model(self):
+        """
+        Configures the collision model for the robot by adding collision pairs
+        between the torso and the head colliders.
+           
+        """
         geom_model = self.robot.collision_model
 
         # name_torso_collider = "dc15_a01_case_b_dummy_10"
@@ -185,19 +190,31 @@ class PlacoKinematics:
                 pin.CollisionPair(id_torso_collider, i)
             )  # torso with head colliders
 
-    def compute_collision(self):
+    def compute_collision(self, margin=0.005):
         """
         Compute the collision between the robot and the environment.
-        :return: True if there is a collision, False otherwise.
+
+        Args:
+            margin (float): The margin to consider for collision detection (default: 5mm).
+        Returns:
+            True if there is a collision, False otherwise.
+
         """
         collision_data = self.robot.collision_model.createData()
         data = self.robot.model.createData()
-        # pin.forwardKinematics(model, data, self.robot.state.q)
-        # pin.updateFramePlacements(model, data)
-        return pin.computeCollisions(
+        
+        #pin.computeCollisions(
+        pin.computeDistances(
             self.robot.model,
             data,
             self.robot.collision_model,
             collision_data,
             self.robot.state.q,
         )
+        
+        # Iterate over all collision pairs
+        for distance_result in collision_data.distanceResults:
+            if distance_result.min_distance <= margin:
+                return True  # Something is too close or colliding!
+
+        return False  # Safe
