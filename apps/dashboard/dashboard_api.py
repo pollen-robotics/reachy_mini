@@ -34,7 +34,10 @@ from utils import (
 )
 from venv_app import VenvAppManager
 
+from reachy_mini.io.daemon import Daemon, DaemonStatus
+
 app = FastAPI()
+daemon = Daemon()
 
 # Add CORS middleware
 app.add_middleware(
@@ -536,6 +539,41 @@ async def get_installations():
             "platform": get_platform_info(),
         }
     )
+
+
+@app.post("/daemon_start")
+def start_daemon(
+    sim: bool = False,
+    serialport: str = "auto",
+    scene: str = "empty",
+    localhost_only: bool = True,
+    wake_up_on_start: bool = True,
+) -> dict:
+    daemon.start(
+        sim=sim,
+        serialport=serialport,
+        scene=scene,
+        localhost_only=localhost_only,
+        wake_up_on_start=wake_up_on_start,
+    )
+    return {"state": daemon._status.state}
+
+
+@app.post("/daemon_stop")
+def stop_daemon(goto_sleep_on_stop: bool = True) -> dict:
+    daemon.stop(goto_sleep_on_stop=goto_sleep_on_stop)
+    return {"state": daemon._status.state}
+
+
+@app.post("/daemon_restart")
+def restart_daemon() -> dict:
+    daemon.restart()
+    return {"state": daemon._status.state}
+
+
+@app.get("/daemon_status")
+def status_daemon() -> "DaemonStatus":
+    return daemon.status()
 
 
 if __name__ == "__main__":

@@ -7,6 +7,34 @@
   <title>Robot App Dashboard</title>
   <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
   <style>
+    .robot-status {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+
+    .status-indicator {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      display: inline-block;
+      margin-right: 8px;
+    }
+
+    .status-running {
+      background-color: #10b981;
+      box-shadow: 0 0 8px rgba(16, 185, 129, 0.6);
+    }
+
+    .status-stopped {
+      background-color: #ef4444;
+      box-shadow: 0 0 8px rgba(239, 68, 68, 0.6);
+    }
+
+    .status-unknown {
+      background-color: #f59e0b;
+      box-shadow: 0 0 8px rgba(245, 158, 11, 0.6);
+    }
+
     .installation-progress {
       transition: width 0.3s ease-in-out;
     }
@@ -97,6 +125,44 @@
   <div class="max-w-6xl mx-auto p-6">
     <h1 class="text-3xl font-bold mb-6">🤖 Robot App Dashboard</h1>
 
+    <!-- Robot Status Section -->
+    <div class="robot-status rounded-lg shadow-lg p-4 mb-6">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center space-x-4">
+          <div class="flex items-center">
+            <span id="daemon-status-indicator" class="status-indicator status-unknown"></span>
+            <div>
+              <h2 class="text-lg font-semibold">🤖 Robot Daemon</h2>
+              <p id="daemon-status-text" class="text-sm opacity-90">Checking status...</p>
+            </div>
+          </div>
+          <div id="robot-info" class="text-sm opacity-75" style="display: none;">
+            <div id="robot-details"></div>
+          </div>
+        </div>
+
+        <div class="flex items-center space-x-2">
+          <button id="daemon-start-btn" onclick="controlDaemon('start')"
+            class="bg-green-500 hover:bg-green-600 text-white px-3 py-2 rounded text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+            ▶️ Start
+          </button>
+          <button id="daemon-stop-btn" onclick="controlDaemon('stop')"
+            class="bg-red-500 hover:bg-red-600 text-white px-3 py-2 rounded text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+            ⏹️ Stop
+          </button>
+          <button id="daemon-restart-btn" onclick="controlDaemon('restart')"
+            class="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-2 rounded text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+            🔄 Restart
+          </button>
+          <button onclick="fetchDaemonStatus()"
+            class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-2 rounded text-sm transition-colors">
+            🔍 Refresh
+          </button>
+        </div>
+      </div>
+    </div>
+
+
     <!-- Log Viewer Section (Initially Hidden) -->
     <div id="log-viewer-section" class="mb-6" style="display: none;">
       <div class="bg-white rounded-lg shadow">
@@ -168,6 +234,134 @@
     let currentLogProcessId = null;
     let autoScroll = true;
     let logBuffer = new Map(); // Store logs per process
+
+
+    let daemonStatus = null;
+
+    async function fetchDaemonStatus() {
+      try {
+        const response = await fetch('/daemon_status');
+        const data = await response.json();
+
+        daemonStatus = data;
+        updateDaemonStatusUI(data);
+
+      } catch (error) {
+        console.error('Failed to fetch daemon status:', error);
+        updateDaemonStatusUI({
+          status: 'error',
+          message: 'Failed to connect to daemon',
+          running: false
+        });
+      }
+    }
+
+    function updateDaemonStatusUI(status) {
+      const indicator = document.getElementById('daemon-status-indicator');
+      const statusText = document.getElementById('daemon-status-text');
+      const robotInfo = document.getElementById('robot-info');
+      const robotDetails = document.getElementById('robot-details');
+      const startBtn = document.getElementById('daemon-start-btn');
+      const stopBtn = document.getElementById('daemon-stop-btn');
+      const restartBtn = document.getElementById('daemon-restart-btn');
+
+      // Update status indicator and text
+      indicator.className = 'status-indicator';
+
+      if (status.running === true) {
+        indicator.classList.add('status-running');
+        statusText.textContent = status.message || 'Daemon is running';
+        startBtn.disabled = true;
+        stopBtn.disabled = false;
+        restartBtn.disabled = false;
+      } else if (status.running === false) {
+        indicator.classList.add('status-stopped');
+        statusText.textContent = status.message || 'Daemon is stopped';
+        startBtn.disabled = false;
+        stopBtn.disabled = true;
+        restartBtn.disabled = true;
+      } else {
+        indicator.classList.add('status-unknown');
+        statusText.textContent = status.message || 'Status unknown';
+        startBtn.disabled = false;
+        stopBtn.disabled = false;
+        restartBtn.disabled = false;
+      }
+
+      // Show additional robot info if available
+      if (status.robot_info) {
+        robotDetails.innerHTML = `
+        <div>Model: ${status.robot_info.model || 'Unknown'}</div>
+        <div>Version: ${status.robot_info.version || 'Unknown'}</div>
+        ${status.robot_info.uptime ? `<div>Uptime: ${status.robot_info.uptime}</div>` : ''}
+      `;
+        robotInfo.style.display = 'block';
+      } else {
+        robotInfo.style.display = 'none';
+      }
+    }
+
+    async function controlDaemon(action) {
+      const button = document.getElementById(`daemon-${action}-btn`);
+      const originalText = button.innerHTML;
+
+      // Show loading state
+      button.disabled = true;
+      button.innerHTML = '⏳ Working...';
+
+      try {
+        const response = await fetch(`/daemon_${action}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          }
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+          // Success - refresh status after a short delay
+          setTimeout(() => {
+            fetchDaemonStatus();
+          }, 1000);
+
+          // Show success feedback
+          button.innerHTML = '✅ Done';
+          setTimeout(() => {
+            button.innerHTML = originalText;
+          }, 2000);
+        } else {
+          throw new Error(result.detail || `Failed to ${action} daemon`);
+        }
+
+      } catch (error) {
+        console.error(`Failed to ${action} daemon:`, error);
+        alert(`Failed to ${action} daemon: ${error.message}`);
+
+        // Show error feedback
+        button.innerHTML = '❌ Error';
+        setTimeout(() => {
+          button.innerHTML = originalText;
+        }, 2000);
+      } finally {
+        // Re-enable button
+        setTimeout(() => {
+          button.disabled = false;
+          if (button.innerHTML === '⏳ Working...' || button.innerHTML === '✅ Done' || button.innerHTML === '❌ Error') {
+            button.innerHTML = originalText;
+          }
+        }, 2000);
+      }
+    }
+
+    // Add daemon status fetching to your existing initialization
+    // Modify your existing initialization section to include:
+
+    // Initialize (add this to your existing initialization)
+    fetchDaemonStatus();
+
+    // Add daemon status to your existing interval (modify your existing setInterval or add a new one)
+    setInterval(fetchDaemonStatus, 15000); // Check daemon status every 15 seconds
 
     function connectWebSocket() {
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
