@@ -118,6 +118,63 @@
       background: #f3f4f6;
       border-bottom: 1px solid #e5e7eb;
     }
+
+    /* Simulation toggle styles */
+    .simulation-toggle {
+      position: relative;
+      display: inline-block;
+      width: 50px;
+      height: 24px;
+      margin-right: 8px;
+    }
+
+    .simulation-toggle input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .simulation-slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: #ccc;
+      transition: 0.3s;
+      border-radius: 24px;
+    }
+
+    .simulation-slider:before {
+      position: absolute;
+      content: "";
+      height: 18px;
+      width: 18px;
+      left: 3px;
+      bottom: 3px;
+      background-color: white;
+      transition: 0.3s;
+      border-radius: 50%;
+    }
+
+    input:checked+.simulation-slider {
+      background-color: #8b5cf6;
+    }
+
+    input:checked+.simulation-slider:before {
+      transform: translateX(26px);
+    }
+
+    .simulation-indicator {
+      background: rgba(139, 92, 246, 0.1);
+      border: 1px solid #8b5cf6;
+      color: #8b5cf6;
+      padding: 4px 8px;
+      border-radius: 12px;
+      font-size: 0.75rem;
+      font-weight: 500;
+    }
   </style>
 </head>
 
@@ -139,9 +196,22 @@
           <div id="robot-info" class="text-sm opacity-75" style="display: none;">
             <div id="robot-details"></div>
           </div>
+          <!-- Simulation Mode Indicator -->
+          <div id="simulation-mode-indicator" class="simulation-indicator" style="display: none;">
+            🎮 SIMULATION MODE
+          </div>
         </div>
 
         <div class="flex items-center space-x-2">
+          <!-- Simulation Toggle -->
+          <div class="flex items-center space-x-2 mr-2">
+            <label class="simulation-toggle">
+              <input type="checkbox" id="simulation-toggle" onchange="toggleSimulation()">
+              <span class="simulation-slider"></span>
+            </label>
+            <span class="text-sm opacity-90">Simulation</span>
+          </div>
+
           <button id="daemon-start-btn" onclick="controlDaemon('start')"
             class="bg-green-500 hover:bg-green-600 text-white px-3 py-2 rounded text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
             ▶️ Start
@@ -234,10 +304,79 @@
     let currentLogProcessId = null;
     let autoScroll = true;
     let logBuffer = new Map(); // Store logs per process
-
+    let simulationEnabled = false;
 
     let daemonStatus = null;
 
+
+    async function toggleSimulation() {
+      const toggle = document.getElementById('simulation-toggle');
+      const originalState = toggle.checked;
+
+      try {
+        // Disable toggle during request
+        toggle.disabled = true;
+
+        const response = await fetch('/api/simulation/toggle', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          }
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+          simulationEnabled = result.simulation_enabled;
+          updateSimulationUI();
+
+          // Show feedback message
+          const indicator = document.getElementById('simulation-mode-indicator');
+          const originalText = indicator.textContent;
+          indicator.textContent = `🎮 SIMULATION ${simulationEnabled ? 'ENABLED' : 'DISABLED'}`;
+
+          setTimeout(() => {
+            if (simulationEnabled) {
+              indicator.textContent = originalText;
+            }
+          }, 2000);
+
+          console.log(`Simulation mode ${simulationEnabled ? 'enabled' : 'disabled'}`);
+
+        } else {
+          throw new Error(result.detail || 'Failed to toggle simulation');
+        }
+
+      } catch (error) {
+        console.error('Failed to toggle simulation:', error);
+        // Revert toggle state on error
+        toggle.checked = !originalState;
+        simulationEnabled = !simulationEnabled;
+        updateSimulationUI();
+        alert(`Failed to toggle simulation: ${error.message}`);
+      } finally {
+        toggle.disabled = false;
+      }
+    }
+
+    async function fetchSimulationStatus() {
+      try {
+        const response = await fetch('/api/simulation/status');
+        const data = await response.json();
+        simulationEnabled = data.simulation_enabled;
+        updateSimulationUI();
+      } catch (error) {
+        console.error('Failed to fetch simulation status:', error);
+      }
+    }
+
+    function updateSimulationUI() {
+      const toggle = document.getElementById('simulation-toggle');
+      const indicator = document.getElementById('simulation-mode-indicator');
+
+      toggle.checked = simulationEnabled;
+      indicator.style.display = simulationEnabled ? 'block' : 'none';
+    }
     async function fetchDaemonStatus() {
       try {
         const response = await fetch('/daemon_status');

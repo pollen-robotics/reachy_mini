@@ -55,6 +55,9 @@ app_thread = None
 app_process = None
 app_subprocess_helper: Optional[SubprocessHelper] = None
 
+# Simulation state
+simulation_enabled = False
+
 # Directories
 DASHBOARD_DIR = Path(__file__).parent.absolute()
 APPS_DIR = DASHBOARD_DIR / "installed_apps"
@@ -285,6 +288,7 @@ async def index(request: Request):
             "current": current_app_name,
             "active_installations": active_installations,
             "venv_apps": app_manager.list_installed_apps(),
+            "simulation_enabled": simulation_enabled,
         },
     )
 
@@ -298,6 +302,7 @@ async def start(name: str):
                 "message": f"App '{name}' started successfully",
                 "status": "running",
                 "process_id": f"app_{name}" if current_app_name == name else None,
+                "simulation_enabled": simulation_enabled,
             }
         )
     except Exception as e:
@@ -324,6 +329,7 @@ async def status():
             "active_installations_count": len(active_installations),
             "has_active_installations": len(active_installations) > 0,
             "app_process_id": f"app_{current_app_name}" if current_app_name else None,
+            "simulation_enabled": simulation_enabled,
             # Only send full details if there are active installations
             "active_installations": active_installations
             if active_installations
@@ -348,6 +354,7 @@ async def status_full():
             "active_installations": active_installations,
             "installation_history": installation_history[-10:],
             "app_process_id": f"app_{current_app_name}" if current_app_name else None,
+            "simulation_enabled": simulation_enabled,
         }
     )
 
@@ -364,6 +371,30 @@ async def clear_logs(process_id: str):
     """Clear logs for a specific process"""
     clear_process_logs(process_id)
     return JSONResponse({"message": f"Logs cleared for process {process_id}"})
+
+
+@app.post("/api/simulation/toggle")
+async def toggle_simulation():
+    """Toggle simulation mode"""
+    global simulation_enabled
+    simulation_enabled = not simulation_enabled
+    print(f"Simulation mode {'enabled' if simulation_enabled else 'disabled'}")
+    return JSONResponse(
+        content={
+            "simulation_enabled": simulation_enabled,
+            "message": f"Simulation mode {'enabled' if simulation_enabled else 'disabled'}",
+        }
+    )
+
+
+@app.get("/api/simulation/status")
+async def get_simulation_status():
+    """Get current simulation status"""
+    return JSONResponse(
+        content={
+            "simulation_enabled": simulation_enabled,
+        }
+    )
 
 
 @app.post("/api/install")
@@ -524,6 +555,7 @@ async def platform_info():
             "python_executable": sys.executable,
             "git_available": shutil.which("git") is not None,
             "pip_available": shutil.which("pip") is not None,
+            "simulation_enabled": simulation_enabled,
         }
     )
     return JSONResponse(info)
@@ -537,18 +569,25 @@ async def get_installations():
             "active_installations": active_installations,
             "installation_history": installation_history,
             "platform": get_platform_info(),
+            "simulation_enabled": simulation_enabled,
         }
     )
 
 
 @app.post("/daemon_start")
 def start_daemon(
-    sim: bool = False,
+    sim: bool = None,  # Changed to None to use global simulation state
     serialport: str = "auto",
     scene: str = "empty",
     localhost_only: bool = True,
     wake_up_on_start: bool = True,
 ) -> dict:
+    # Use global simulation state if not explicitly provided
+    if sim is None:
+        sim = simulation_enabled
+    print(
+        f"Starting daemon with simulation={sim}, serialport={serialport}, scene={scene}, localhost_only={localhost_only}, wake_up_on_start={wake_up_on_start}"
+    )
     daemon.start(
         sim=sim,
         serialport=serialport,
@@ -556,7 +595,7 @@ def start_daemon(
         localhost_only=localhost_only,
         wake_up_on_start=wake_up_on_start,
     )
-    return {"state": daemon._status.state}
+    return {"state": daemon._status.state, "simulation_enabled": sim}
 
 
 @app.post("/daemon_stop")
@@ -590,6 +629,7 @@ if __name__ == "__main__":
     print("🔧 Installation endpoints ready")
     print("📊 Real-time updates via WebSocket at /ws")
     print("📋 Live logging enabled for all subprocess operations")
+    print("🎮 Simulation mode available")
     print("-" * 60)
 
     uvicorn.run(app, host="0.0.0.0", port=8000)
