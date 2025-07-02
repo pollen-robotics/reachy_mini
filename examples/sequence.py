@@ -96,6 +96,6 @@ with ReachyMini() as reachy_mini:
             pose[:3, 3] = [0, 0, 0.0]
             reachy_mini.set_target(head=pose, antennas=[0, 0])
             time.sleep(2)
-            
+
     except KeyboardInterrupt:
         pass
