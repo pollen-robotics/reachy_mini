@@ -1,6 +1,7 @@
-import reachy_mini.analytic_kinematics as ak
 import numpy as np
 from placo_utils.tf import tf
+
+import reachy_mini.analytic_kinematics as ak
 
 
 def test_analytic_kinematics():

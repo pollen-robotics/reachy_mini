@@ -3,12 +3,11 @@
 This module provides the PlacoKinematics class for performing inverse and forward kinematics based on the Reachy Mini robot URDF using the Placo library.
 """
 
-from typing import List
+from typing import List, Optional
 
 import numpy as np
-import placo
-from typing import List, Optional
 import pinocchio as pin
+import placo
 
 
 class PlacoKinematics:
