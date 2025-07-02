@@ -1,6 +1,6 @@
 import numpy as np
 import placo
-from typing import List
+from typing import List, Optional
 import pinocchio as pin
 
 
@@ -87,7 +87,9 @@ class PlacoKinematics:
         # setup the collision model
         self.config_collision_model()
 
-    def ik(self, pose: np.ndarray, check_collision: bool = False) -> List[float]:
+    def ik(
+        self, pose: np.ndarray, check_collision: bool = False
+    ) -> Optional[List[float]]:
         """
         Computes the inverse kinematics for the head for a given pose.
 
@@ -95,18 +97,18 @@ class PlacoKinematics:
             pose (np.ndarray): A 4x4 homogeneous transformation matrix
                 representing the desired position and orientation of the head.
             check_collision (bool): If True, checks for collisions after solving IK. (default: False)
-            
+
 
         Returns:
             List[float]: A list of joint angles for the head.
         """
 
         _pose = pose.copy()
-        
+
         # set the head pose
         _pose[:3, 3][2] += self.head_z_offset  # offset the height of the head
         self.head_frame.T_world_frame = _pose
-        
+
         q = self.robot.state.q.copy()
         for _ in range(10):
             try:
@@ -172,7 +174,7 @@ class PlacoKinematics:
         """
         Configures the collision model for the robot by adding collision pairs
         between the torso and the head colliders.
-           
+
         """
         geom_model = self.robot.collision_model
 
@@ -202,8 +204,8 @@ class PlacoKinematics:
         """
         collision_data = self.robot.collision_model.createData()
         data = self.robot.model.createData()
-        
-        #pin.computeCollisions(
+
+        # pin.computeCollisions(
         pin.computeDistances(
             self.robot.model,
             data,
@@ -211,7 +213,7 @@ class PlacoKinematics:
             collision_data,
             self.robot.state.q,
         )
-        
+
         # Iterate over all collision pairs
         for distance_result in collision_data.distanceResults:
             if distance_result.min_distance <= margin:

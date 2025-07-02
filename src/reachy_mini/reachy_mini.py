@@ -123,7 +123,6 @@ class ReachyMini:
         Raises:
             ValueError: If neither head nor antennas are provided, or if the shape of head is not (4, 4), or if antennas is not a 1D array with two elements.
         """
-
         if head is None and antennas is None:
             raise ValueError("At least one of head or antennas must be provided.")
 
@@ -135,6 +134,10 @@ class ReachyMini:
             head_joint_positions = self.head_kinematics.ik(
                 head, check_collision=check_collision
             )
+
+            # This means that a collision was detected
+            if head_joint_positions is None:
+                return
         else:
             head_joint_positions = None
 
@@ -334,7 +337,9 @@ class ReachyMini:
             start_head_pose = self._last_head_pose
 
         target_head_pose = (
-            self.head_kinematics.fk(cur_head_joints, check_collision=check_collision) if head is None else head
+            self.head_kinematics.fk(cur_head_joints, check_collision=check_collision)
+            if head is None
+            else head
         )
 
         start_antennas = np.array(cur_antennas_joints)
