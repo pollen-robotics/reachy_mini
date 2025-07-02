@@ -1,3 +1,5 @@
+"""Reachy Mini Head and Antennas Control Example."""
+
 import time
 
 import numpy as np
@@ -7,6 +9,7 @@ from reachy_mini import ReachyMini
 
 
 def main():
+    """Control the head and antennas of Reachy Mini."""
     with ReachyMini() as mini:
         t0 = time.time()
         while True:

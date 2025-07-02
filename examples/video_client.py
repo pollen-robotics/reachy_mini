@@ -1,3 +1,5 @@
+"""Video client to receive and display a video stream over UDP."""
+
 import cv2
 
 rtp_url = "udp://@127.0.0.1:5005"

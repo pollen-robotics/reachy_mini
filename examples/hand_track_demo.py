@@ -1,13 +1,18 @@
-from hand_tracker import HandTracker
-import cv2
+"""Hand tracking demo for Reachy Mini."""
+
 import time
-from reachy_mini import ReachyMini
+
+import cv2
 import numpy as np
+from hand_tracker import HandTracker
 from scipy.spatial.transform import Rotation as R
 
+from reachy_mini import ReachyMini
 from reachy_mini.io.cam_utils import find_camera
 
+
 def draw_debug(img, palm_center):
+    """Draw debug information on the image."""
     h, w, _ = img.shape
     draw_palm = [(-palm_center[0] + 1) / 2, (palm_center[1] + 1) / 2]  # [0, 1]
     cv2.circle(

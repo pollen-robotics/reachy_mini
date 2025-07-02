@@ -1,13 +1,22 @@
+"""Base class for robot backends, simulated or real.
+
+This module defines the `Backend` class, which serves as a base for implementing
+different types of robot backends, whether they are simulated (like Mujoco) or real
+(connected via serial port). The class provides methods for managing joint positions,
+torque control, and other backend-specific functionalities.
+It is designed to be extended by subclasses that implement the specific behavior for
+each type of backend.
+"""
+
 import threading
 from typing import List
 
 
 class Backend:
-    """
-    Base class for robot backends, simulated or real
-    """
+    """Base class for robot backends, simulated or real."""
 
     def __init__(self) -> None:
+        """Initialize the backend."""
         self.should_stop = threading.Event()
         self.ready = threading.Event()
 
@@ -16,11 +25,15 @@ class Backend:
         self.joint_positions_publisher = None  # Placeholder for a publisher object
 
     def run(self):
+        """Run the backend.
+
+        This method is a placeholder and should be overridden by subclasses.
+        """
         raise NotImplementedError("The method run should be overridden by subclasses.")
 
     def close(self) -> None:
-        """
-        Close the backend.
+        """Close the backend.
+
         This method is a placeholder and should be overridden by subclasses.
         """
         raise NotImplementedError(
@@ -28,32 +41,62 @@ class Backend:
         )
 
     def set_joint_positions_publisher(self, publisher) -> None:
+        """Set the publisher for joint positions.
+
+        Args:
+            publisher: A publisher object that will be used to publish joint positions.
+
+        """
         self.joint_positions_publisher = publisher
 
     def set_head_joint_positions(self, positions: List[float]) -> None:
+        """Set the head joint positions.
+
+        Args:
+            positions (List[float]): A list of joint positions for the head.
+
+        """
         self.head_joint_positions = positions
 
     def set_antenna_joint_positions(self, positions: List[float]) -> None:
+        """Set the antenna joint positions.
+
+        Args:
+            positions (List[float]): A list of joint positions for the antenna.
+
+        """
         self.antenna_joint_positions = positions
 
     def set_torque(self, enabled: bool) -> None:
+        """Enable or disable torque control.
+
+        This method is a placeholder and should be overridden by subclasses.
+        """
         raise NotImplementedError(
             "The method set_torque should be overridden by subclasses."
         )
 
     def get_head_joint_positions(self) -> List[float]:
+        """Return the current head joint positions.
+
+        This method is a placeholder and should be overridden by subclasses.
+        """
         raise NotImplementedError(
             "The method get_head_joint_positions should be overridden by subclasses."
         )
 
     def get_antenna_joint_positions(self) -> List[float]:
+        """Return the current antenna joint positions.
+
+        This method is a placeholder and should be overridden by subclasses.
+        """
         raise NotImplementedError(
             "The method get_antenna_joint_positions should be overridden by subclasses."
         )
 
     def get_status(self):
-        """
-        Returns backend statistics.
+        """Return backend statistics.
+
         This method is a placeholder and should be overridden by subclasses.
         """
         raise NotImplementedError(
