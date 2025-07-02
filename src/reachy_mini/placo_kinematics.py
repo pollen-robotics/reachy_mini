@@ -1,10 +1,14 @@
 import numpy as np
 import placo
+<<<<<<< HEAD
 import pinocchio as pin
+=======
+from typing import List
+>>>>>>> origin/develop
 
 
 class PlacoKinematics:
-    def __init__(self, urdf_path: str, dt: float = 0.02):
+    def __init__(self, urdf_path: str, dt: float = 0.02) -> None:
         self.robot = placo.RobotWrapper(urdf_path, placo.Flags.ignore_collisions)
 
         self.ik_solver = placo.KinematicsSolver(self.robot)
@@ -18,56 +22,22 @@ class PlacoKinematics:
         constrant_type = "soft"  # "hard" or "soft"
 
         # IK closing tasks
-        ik_closing_task_1 = self.ik_solver.add_relative_position_task(
-            "closing_1_1", "closing_1_2", np.zeros(3)
-        )
-        ik_closing_task_1.configure("closing_1", constrant_type, 1.0)
-
-        ik_closing_task_2 = self.ik_solver.add_relative_position_task(
-            "closing_2_1", "closing_2_2", np.zeros(3)
-        )
-        ik_closing_task_2.configure("closing_2", constrant_type, 1.0)
-
-        ik_closing_task_3 = self.ik_solver.add_relative_position_task(
-            "closing_3_1", "closing_3_2", np.zeros(3)
-        )
-        ik_closing_task_3.configure("closing_3", constrant_type, 1.0)
-
-        ik_closing_task_4 = self.ik_solver.add_relative_position_task(
-            "closing_4_1", "closing_4_2", np.zeros(3)
-        )
-        ik_closing_task_4.configure("closing_4", constrant_type, 1.0)
-
-        ik_closing_task_5 = self.ik_solver.add_relative_position_task(
-            "closing_5_1", "closing_5_2", np.zeros(3)
-        )
-        ik_closing_task_5.configure("closing_5", constrant_type, 1.0)
+        ik_closing_tasks = []
+        for i in range(1, 6):
+            ik_closing_task = self.ik_solver.add_relative_position_task(
+                f"closing_{i}_1", f"closing_{i}_2", np.zeros(3)
+            )
+            ik_closing_task.configure(f"closing_{i}", constrant_type, 1.0)
+            ik_closing_tasks.append(ik_closing_task)
 
         # FK closing tasks
-        fk_closing_task_1 = self.fk_solver.add_relative_position_task(
-            "closing_1_1", "closing_1_2", np.zeros(3)
-        )
-        fk_closing_task_1.configure("closing_1", constrant_type, 1.0)
-
-        fk_closing_task_2 = self.fk_solver.add_relative_position_task(
-            "closing_2_1", "closing_2_2", np.zeros(3)
-        )
-        fk_closing_task_2.configure("closing_2", constrant_type, 1.0)
-
-        fk_closing_task_3 = self.fk_solver.add_relative_position_task(
-            "closing_3_1", "closing_3_2", np.zeros(3)
-        )
-        fk_closing_task_3.configure("closing_3", constrant_type, 1.0)
-
-        fk_closing_task_4 = self.fk_solver.add_relative_position_task(
-            "closing_4_1", "closing_4_2", np.zeros(3)
-        )
-        fk_closing_task_4.configure("closing_4", constrant_type, 1.0)
-
-        fk_closing_task_5 = self.fk_solver.add_relative_position_task(
-            "closing_5_1", "closing_5_2", np.zeros(3)
-        )
-        fk_closing_task_5.configure("closing_5", constrant_type, 1.0)
+        fk_closing_tasks = []
+        for i in range(1, 6):
+            fk_closing_task = self.fk_solver.add_relative_position_task(
+                f"closing_{i}_1", f"closing_{i}_2", np.zeros(3)
+            )
+            fk_closing_task.configure(f"closing_{i}", constrant_type, 1.0)
+            fk_closing_tasks.append(fk_closing_task)
 
         self.joints_names = [
             "all_yaw",
@@ -120,16 +90,20 @@ class PlacoKinematics:
         # setup the collision model
         self.config_collision_model()
 
-    """
-    Inverse Kinematics (IK) for the head of the robot.
-    
-    :param pose: 4x4 pose matrix representing the desired position and orientation of the head.
-    :param check_collision: If True, checks for collisions after solving IK. (default: False)
-    
-    :return: A list of joints corresponding to the head's position and orientation, or None if a collision is detected.
-    """
+    def ik(self, pose: np.ndarray, check_collision: bool = False) -> List[float]:
+        """
+        Computes the inverse kinematics for the head for a given pose.
 
-    def ik(self, pose, check_collision: bool = False):
+        Args:
+            pose (np.ndarray): A 4x4 homogeneous transformation matrix
+                representing the desired position and orientation of the head.
+            check_collision (bool): If True, checks for collisions after solving IK. (default: False)
+            
+
+        Returns:
+            List[float]: A list of joint angles for the head.
+        """
+
         _pose = pose.copy()
         
         # set the head pose
@@ -159,16 +133,18 @@ class PlacoKinematics:
 
         return joints
 
-    """
-    Forward Kinematics (FK) for the head of the robot.
-    
-    :param joints_angles: A list of joint angles corresponding to the head's position and orientation.
-    :param check_collision: If True, checks for collisions after solving FK. (default: False)
-    
-    :return: A 4x4 transformation matrix representing the head's position and orientation in the world frame, or None if a collision is detected.
-    """
+    def fk(self, joints_angles: List[float], check_collision=False) -> np.ndarray:
+        """
+        Computes the forward kinematics for the head given joint angles.
 
-    def fk(self, joints_angles, check_collision=False):
+        Args:
+            joints_angles (List[float]): A list of joint angles for the head.
+            check_collision (bool): If True, checks for collisions after solving FK. (default: False)
+
+        Returns:
+            np.ndarray: A 4x4 homogeneous transformation matrix
+        """
+
         self.head_joints_task.set_joints(
             {
                 "all_yaw": joints_angles[0],

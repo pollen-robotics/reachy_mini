@@ -3,7 +3,11 @@ from typing import List
 
 
 class Backend:
-    def __init__(self):
+    """
+    Base class for robot backends, simulated or real
+    """
+
+    def __init__(self) -> None:
         self.should_stop = threading.Event()
 
         self.head_joint_positions = None  # [yaw, 0, 1, 2, 3, 4, 5]
@@ -23,16 +27,7 @@ class Backend:
         raise NotImplementedError("This method should be overridden by subclasses.")
 
     def get_head_joint_positions(self) -> List[float]:
-        """
-        Returns head joints positions
-        This method is a placeholder and should be overridden by subclasses.
-        """
-
         raise NotImplementedError("This method should be overridden by subclasses.")
 
     def get_antenna_joint_positions(self) -> List[float]:
-        """
-        Returns antenna joints positions
-        This method is a placeholder and should be overridden by subclasses.
-        """
         raise NotImplementedError("This method should be overridden by subclasses.")

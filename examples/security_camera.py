@@ -2,6 +2,7 @@ from reachy_mini import ReachyMini
 import cv2
 import numpy as np
 import time
+from reachy_mini.io.cam_utils import find_camera
 
 """
 Detect motion by comparing two consecutive frames from a video feed.
@@ -9,7 +10,7 @@ Look at the center of the detected motion bounding box.
 (Doesn't work very well for now :) )
 """
 
-cap = cv2.VideoCapture(4)
+cap = find_camera()
 
 
 def detect_motion(
