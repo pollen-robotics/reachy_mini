@@ -54,7 +54,7 @@ exclude = [
     "conftest.py",
     "apps/dashboard",
 ]
-lint.extend-select = ["I", "D"]
+lint.extend-select = ["I"]
 lint.ignore = [
     "D203",  # Incompatible with D211
     "D213",  # Incompatible with D212
