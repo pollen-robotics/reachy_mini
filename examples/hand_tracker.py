@@ -4,8 +4,8 @@ except ImportError:
     print("mediapipe is not installed. Install it using 'pip install mediapipe'.")
     exit()
 
-import numpy as np
 import cv2
+import numpy as np
 
 mp_drawing = mp.solutions.drawing_utils
 mp_drawing_styles = mp.solutions.drawing_styles

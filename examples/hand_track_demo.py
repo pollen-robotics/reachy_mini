@@ -1,11 +1,13 @@
-from hand_tracker import HandTracker
-import cv2
 import time
-from reachy_mini import ReachyMini
+
+import cv2
 import numpy as np
+from hand_tracker import HandTracker
 from scipy.spatial.transform import Rotation as R
 
+from reachy_mini import ReachyMini
 from reachy_mini.io.cam_utils import find_camera
+
 
 def draw_debug(img, palm_center):
     h, w, _ = img.shape

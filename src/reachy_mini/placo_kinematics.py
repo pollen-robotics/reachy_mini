@@ -1,6 +1,7 @@
+from typing import List
+
 import numpy as np
 import placo
-from typing import List
 
 
 class PlacoKinematics:

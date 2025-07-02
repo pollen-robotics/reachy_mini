@@ -1,11 +1,13 @@
-from head_tracker import HeadTracker
-import cv2
 import time
-from reachy_mini import ReachyMini
+
+import cv2
 import numpy as np
+from head_tracker import HeadTracker
 from scipy.spatial.transform import Rotation as R
 
+from reachy_mini import ReachyMini
 from reachy_mini.io.cam_utils import find_camera
+
 
 def draw_debug(img, eye_center, roll):
     _eye_center = (eye_center.copy() + 1) / 2  # [0, 1]

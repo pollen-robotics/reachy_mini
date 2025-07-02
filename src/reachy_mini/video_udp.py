@@ -1,7 +1,8 @@
-import numpy as np
 import socket
 import struct
+
 import cv2
+import numpy as np
 
 
 class UDPJPEGFrameSender:

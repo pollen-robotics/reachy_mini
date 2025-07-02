@@ -1,7 +1,9 @@
-from reachy_mini import ReachyMini
+import time
+
 import cv2
 import numpy as np
-import time
+
+from reachy_mini import ReachyMini
 from reachy_mini.io.cam_utils import find_camera
 
 """

@@ -1,6 +1,7 @@
-from head_tracker import HeadTracker
-from reachy_mini import ReachyMini
 import cv2
+from head_tracker import HeadTracker
+
+from reachy_mini import ReachyMini
 from reachy_mini.io.cam_utils import find_camera
 
 cap = find_camera()

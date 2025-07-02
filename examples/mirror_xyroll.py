@@ -1,7 +1,8 @@
 import cv2 as cv
+import mediapipe as mp
 import numpy as np
 from scipy.spatial.transform import Rotation as R
-import mediapipe as mp
+
 from reachy_mini import ReachyMini
 from reachy_mini.io.cam_utils import find_camera
 
