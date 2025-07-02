@@ -92,7 +92,7 @@ def main():
 
             root.update()
 
-            mini.set_position(
+            mini.set_target(
                 head=head,
                 antennas=np.array([target, -target]),
                 check_collision=collision_check_var.get(),
