@@ -23,6 +23,15 @@ class Backend:
         self.head_joint_positions = None  # [yaw, 0, 1, 2, 3, 4, 5]
         self.antenna_joint_positions = None  # [0, 1]
         self.joint_positions_publisher = None  # Placeholder for a publisher object
+        self.error = None  # To store any error that occurs during execution
+
+    def wrapped_run(self):
+        try:
+            self.run()
+        except Exception as e:
+            self.error = str(e)
+            self.close()
+            raise e
 
     def run(self):
         """Run the backend.

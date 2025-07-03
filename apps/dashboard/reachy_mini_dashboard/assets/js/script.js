@@ -13,65 +13,6 @@ function initializeSpacesStore() {
     spacesStore.init();
 }
 
-// Simulation functions
-async function toggleSimulation() {
-    const toggle = document.getElementById('simulation-toggle');
-    const originalState = toggle.checked;
-
-    try {
-        toggle.disabled = true;
-        const response = await fetch('/api/simulation/toggle', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' }
-        });
-
-        const result = await response.json();
-        if (response.ok) {
-            simulationEnabled = result.simulation_enabled;
-            updateSimulationUI();
-
-            const indicator = document.getElementById('simulation-mode-indicator');
-            const originalText = indicator.textContent;
-            indicator.textContent = `🎮 SIMULATION ${simulationEnabled ? 'ENABLED' : 'DISABLED'}`;
-
-            setTimeout(() => {
-                if (simulationEnabled) {
-                    indicator.textContent = originalText;
-                }
-            }, 2000);
-
-            console.log(`Simulation mode ${simulationEnabled ? 'enabled' : 'disabled'}`);
-        } else {
-            throw new Error(result.detail || 'Failed to toggle simulation');
-        }
-    } catch (error) {
-        console.error('Failed to toggle simulation:', error);
-        toggle.checked = !originalState;
-        simulationEnabled = !simulationEnabled;
-        updateSimulationUI();
-        alert(`Failed to toggle simulation: ${error.message}`);
-    } finally {
-        toggle.disabled = false;
-    }
-}
-
-async function fetchSimulationStatus() {
-    try {
-        const response = await fetch('/api/simulation/status');
-        const data = await response.json();
-        simulationEnabled = data.simulation_enabled;
-        updateSimulationUI();
-    } catch (error) {
-        console.error('Failed to fetch simulation status:', error);
-    }
-}
-
-function updateSimulationUI() {
-    const toggle = document.getElementById('simulation-toggle');
-    const indicator = document.getElementById('simulation-mode-indicator');
-    toggle.checked = simulationEnabled;
-    indicator.style.display = simulationEnabled ? 'block' : 'none';
-}
 
 // WebSocket and logging functions
 function connectWebSocket() {
@@ -784,6 +725,5 @@ document.getElementById('close-logs-btn').addEventListener('click', hideLogViewe
 // Initialize everything
 connectWebSocket();
 fetchStatus();
-fetchSimulationStatus();
 initializeSpacesStore(); // Load spaces on page load
 setInterval(fetchStatus, 10000);

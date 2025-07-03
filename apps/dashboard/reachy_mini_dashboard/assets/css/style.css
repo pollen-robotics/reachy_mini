@@ -26,6 +26,11 @@
     box-shadow: 0 0 8px rgba(245, 158, 11, 0.6);
 }
 
+.status-error {
+    background-color: #dc2626;
+    box-shadow: 0 0 8px rgba(220, 38, 38, 0.6);
+}
+
 .installation-progress {
     transition: width 0.3s ease-in-out;
 }
@@ -278,6 +283,11 @@ input:checked+.simulation-slider:before {
 .daemon_button.stop {
     background-color: #ef4444;
     /* red-500 */
+}
+
+.daemon_button.restart {
+    background-color: #f59e0b;
+    /* yellow-500 */
 }
 
 .daemon_button.stop:hover:not(:disabled) {

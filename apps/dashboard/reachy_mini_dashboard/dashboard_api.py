@@ -592,13 +592,17 @@ def start_daemon(
     print(
         f"Starting daemon with simulation={sim}, serialport={serialport}, scene={scene}, localhost_only={localhost_only}, wake_up_on_start={wake_up_on_start}"
     )
-    daemon.start(
-        sim=sim,
-        serialport=serialport,
-        scene=scene,
-        localhost_only=localhost_only,
-        wake_up_on_start=wake_up_on_start,
-    )
+    try:
+        daemon.start(
+            sim=sim,
+            serialport=serialport,
+            scene=scene,
+            localhost_only=localhost_only,
+            wake_up_on_start=wake_up_on_start,
+        )
+    except Exception:
+        # We will get the error from the daemon status
+        pass
     return {"state": daemon._status.state, "simulation_enabled": sim}
 
 
@@ -611,6 +615,13 @@ def stop_daemon(goto_sleep_on_stop: bool = True) -> dict:
 @app.post("/daemon_restart")
 def restart_daemon() -> dict:
     daemon.restart()
+    return {"state": daemon._status.state}
+
+
+@app.post("/daemon_reset")
+def reset_daemon() -> dict:
+    """Reset the daemon status."""
+    daemon.reset()
     return {"state": daemon._status.state}
 
 
