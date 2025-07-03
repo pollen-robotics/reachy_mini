@@ -31,7 +31,7 @@ def main():
     # these values are based on the URDF and the robot's design
     # Center of mass and weight of the head
     com_head = np.array([0.0, 0.0, 0.03])  # Center of mass of the head
-    weight_head = 0.08 * 9.81 # Weight of the head in N
+    weight_head = 0.07 * 9.81 # Weight of the head in N
     
     
     try:
@@ -50,11 +50,11 @@ def main():
             torque_world = np.cross(r, g)
             # Express torque in head frame
             torque_head = T_world_head[:3, :3].T @ torque_world
-            torque_roll, torque_pitch = torque_head[0], torque_head[1]
+            torque_roll, torque_pitch, torque_yaw = torque_head[0], torque_head[1], torque_head[2]
 
             #torque = np.linalg.pinv(jac.T) @ np.array([0.0, 0.0, 9.81*0.07, 0.0, 0.0, 0.0]) # head weight is 0.1 kg
-            torque = np.linalg.pinv(jac).T @ np.array([0.0, 0.0, weight_head, torque_roll, torque_pitch, 0.0]) # head weight is 0.1 kg
-            
+            torque = np.linalg.pinv(jac).T @ np.array([0.0, 0.0, weight_head, torque_roll, torque_pitch, torque_yaw]) # head weight is 0.1 kg
+
             current = torque * k_Nm_to_mA / efficiency#mA
             controller.set_stewart_platform_goal_current(np.round(current, 0).astype(int).tolist())
             viz.display(robot.state.q)
