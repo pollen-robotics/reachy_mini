@@ -2,17 +2,13 @@ import json
 import os
 import shutil
 import subprocess
-import sys
 import venv
 from pathlib import Path
 from typing import List, Optional, Tuple
 
-from utils import (
-    IS_LINUX,
-    IS_MACOS,
+from reachy_mini_dashboard.utils import (
     IS_WINDOWS,
     SubprocessHelper,
-    get_package_entrypoints,
     run_subprocess_async,
 )
 

@@ -1,14 +1,11 @@
 import asyncio
 import json
-import shutil
-import subprocess
 import sys
-import time
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List
 
-from utils import SubprocessHelper, run_subprocess
+from reachy_mini_dashboard.utils import run_subprocess
 
 # Shared state
 active_installations: Dict[str, dict] = {}
