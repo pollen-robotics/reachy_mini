@@ -131,6 +131,8 @@ function updateDaemonStatusUI(status) {
 }
 
 async function controlDaemon(action) {
+
+
     const button = document.getElementById(`daemon-${action}-btn`);
     // const originalText = button.innerHTML;
     button.disabled = true;
@@ -140,6 +142,15 @@ async function controlDaemon(action) {
     toggle.disabled = true;
 
     try {
+        if (action === 'start') {
+            const startBtn = document.getElementById('daemon-start-btn');
+            if (startBtn.classList.contains('restart')) {
+                console.log("CLICKED RESTART");
+                action = 'restart';
+            }
+
+        }
+
         const response = await fetch(`/daemon_${action}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' }
