@@ -44,21 +44,11 @@
             <span class="text-sm opacity-90">Simulation</span>
           </div>
 
-          <button id="daemon-start-btn" onclick="controlDaemon('start')"
-            class="bg-green-500 hover:bg-green-600 text-white px-3 py-2 rounded text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+          <button id="daemon-start-btn" onclick="controlDaemon('start')" class="daemon_button start">
             ▶️ Start
           </button>
-          <button id="daemon-stop-btn" onclick="controlDaemon('stop')"
-            class="bg-red-500 hover:bg-red-600 text-white px-3 py-2 rounded text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+          <button id="daemon-stop-btn" onclick="controlDaemon('stop')" class="daemon_button stop" disabled>
             ⏹️ Stop
-          </button>
-          <button id="daemon-restart-btn" onclick="controlDaemon('restart')"
-            class="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-2 rounded text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-            🔄 Restart
-          </button>
-          <button onclick="fetchDaemonStatus()"
-            class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-2 rounded text-sm transition-colors">
-            🔍 Refresh
           </button>
         </div>
       </div>
