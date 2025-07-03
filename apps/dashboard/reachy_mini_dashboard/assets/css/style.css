@@ -1,0 +1,246 @@
+.robot-status {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+}
+
+.status-indicator {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    display: inline-block;
+    margin-right: 8px;
+}
+
+.status-running {
+    background-color: #10b981;
+    box-shadow: 0 0 8px rgba(16, 185, 129, 0.6);
+}
+
+.status-stopped {
+    background-color: #ef4444;
+    box-shadow: 0 0 8px rgba(239, 68, 68, 0.6);
+}
+
+.status-unknown {
+    background-color: #f59e0b;
+    box-shadow: 0 0 8px rgba(245, 158, 11, 0.6);
+}
+
+.installation-progress {
+    transition: width 0.3s ease-in-out;
+}
+
+.pulse-dot {
+    animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+
+    0%,
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+
+    50% {
+        transform: scale(1.1);
+        opacity: 0.7;
+    }
+}
+
+.removing {
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+.log-container {
+    transition: max-height 0.3s ease-in-out;
+    max-height: 0;
+    overflow: hidden;
+}
+
+.log-container.expanded {
+    max-height: 400px;
+}
+
+.log-entry {
+    font-family: 'Courier New', monospace;
+    font-size: 0.875rem;
+    line-height: 1.2;
+}
+
+.log-entry.stdout {
+    color: #1f2937;
+}
+
+.log-entry.stderr {
+    color: #dc2626;
+}
+
+.log-entry.info {
+    color: #059669;
+}
+
+.log-entry.error {
+    color: #dc2626;
+    font-weight: bold;
+}
+
+.log-entry.warning {
+    color: #d97706;
+}
+
+.log-timestamp {
+    color: #6b7280;
+    font-size: 0.75rem;
+}
+
+.log-viewer {
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+}
+
+.auto-scroll {
+    overflow-y: auto;
+    scroll-behavior: smooth;
+}
+
+.log-controls {
+    background: #f3f4f6;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+/* Simulation toggle styles */
+.simulation-toggle {
+    position: relative;
+    display: inline-block;
+    width: 50px;
+    height: 24px;
+    margin-right: 8px;
+}
+
+.simulation-toggle input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.simulation-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #ccc;
+    transition: 0.3s;
+    border-radius: 24px;
+}
+
+.simulation-slider:before {
+    position: absolute;
+    content: "";
+    height: 18px;
+    width: 18px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    transition: 0.3s;
+    border-radius: 50%;
+}
+
+input:checked+.simulation-slider {
+    background-color: #8b5cf6;
+}
+
+input:checked+.simulation-slider:before {
+    transform: translateX(26px);
+}
+
+.simulation-indicator {
+    background: rgba(139, 92, 246, 0.1);
+    border: 1px solid #8b5cf6;
+    color: #8b5cf6;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+/* HF Spaces styles */
+.spaces-card {
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(20px);
+    border-radius: 15px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.spaces-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, #667eea, #764ba2);
+    transform: scaleX(0);
+    transition: transform 0.3s ease;
+}
+
+.spaces-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 25px rgba(0, 0, 0, 0.15);
+}
+
+.spaces-card:hover::before {
+    transform: scaleX(1);
+}
+
+.space-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: bold;
+    font-size: 18px;
+    flex-shrink: 0;
+}
+
+.space-loading {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% {
+        transform: rotate(0deg);
+    }
+
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+.tab-button {
+    transition: all 0.3s ease;
+}
+
+.tab-button.active {
+    background: white;
+    color: #667eea;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.tab-content {
+    display: none;
+}
+
+.tab-content.active {
+    display: block;
+}
