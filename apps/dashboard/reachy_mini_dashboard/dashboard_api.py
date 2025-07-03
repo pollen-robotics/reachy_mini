@@ -9,7 +9,14 @@ from importlib.metadata import entry_points
 from pathlib import Path
 from typing import Optional
 
-from app_install import (
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+
+from reachy_mini.io.daemon import Daemon, DaemonStatus
+from reachy_mini_dashboard.app_install import (
     active_installations,
     connected_clients,
     install_app_async,
@@ -17,21 +24,14 @@ from app_install import (
     remove_app_async,
     update_app_async,
 )
-from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse
-from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
-from utils import (
+from reachy_mini_dashboard.utils import (
     SubprocessHelper,
     clear_process_logs,
     get_platform_info,
     get_process_logs,
     register_log_callback,
 )
-from venv_app import VenvAppManager
-
-from reachy_mini.io.daemon import Daemon, DaemonStatus
+from reachy_mini_dashboard.venv_app import VenvAppManager
 
 app = FastAPI()
 daemon = Daemon()
@@ -65,6 +65,9 @@ app_manager = VenvAppManager(APPS_DIR)
 # Mount static files and templates
 static_dir = DASHBOARD_DIR / "static"
 templates_dir = DASHBOARD_DIR / "templates"
+
+print(f"Static directory: {static_dir}")
+print(f"Templates directory: {templates_dir}")
 
 if static_dir.exists():
     app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
@@ -612,7 +615,8 @@ def status_daemon() -> "DaemonStatus":
     return daemon.status()
 
 
-if __name__ == "__main__":
+def main():
+    """Main entry point to start the FastAPI dashboard server."""
     import uvicorn
 
     platform_info = get_platform_info()
@@ -630,3 +634,7 @@ if __name__ == "__main__":
     print("-" * 60)
 
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
+
+if __name__ == "__main__":
+    main()

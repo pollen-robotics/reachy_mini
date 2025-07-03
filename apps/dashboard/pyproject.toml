@@ -1,5 +1,5 @@
 [project]
-name = "robot-dashboard"
+name = "reachy-mini-dashboard"
 version = "0.1.0"
 description = "A dashboard to manage and run robot apps dynamically"
 authors = [
@@ -14,7 +14,7 @@ dependencies = [
 ]
 
 [project.scripts]
-reachy-mini-dashboard = "dashboard_api:app"
+reachy-mini-dashboard = "reachy_mini_dashboard.dashboard_api:main"
 
 [build-system]
 requires = ["setuptools>=61", "wheel"]

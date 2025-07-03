@@ -6,7 +6,7 @@ import venv
 from pathlib import Path
 from typing import List, Optional, Tuple
 
-from utils import (
+from reachy_mini_dashboard.utils import (
     IS_WINDOWS,
     SubprocessHelper,
     run_subprocess_async,
