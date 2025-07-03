@@ -26,6 +26,7 @@ class Backend:
         self.error = None  # To store any error that occurs during execution
 
     def wrapped_run(self):
+        """Run the backend in a try-except block to store errors."""
         try:
             self.run()
         except Exception as e:
