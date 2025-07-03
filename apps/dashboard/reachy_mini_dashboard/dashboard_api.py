@@ -64,13 +64,13 @@ APPS_DIR.mkdir(exist_ok=True)
 
 app_manager = VenvAppManager(APPS_DIR)
 
+assets_dir = DASHBOARD_DIR / "assets"
+
 # Mount static files and templates
 static_dir = DASHBOARD_DIR / "static"
 templates_dir = DASHBOARD_DIR / "templates"
 
-print(f"Static directory: {static_dir}")
-print(f"Templates directory: {templates_dir}")
-app.mount("/assets", StaticFiles(directory="assets"), name="assets")
+app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
 
 if static_dir.exists():
     app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
