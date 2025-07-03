@@ -7,6 +7,7 @@ from scipy.spatial.transform import Rotation as R
 
 from reachy_mini.io.cam_utils import find_camera
 
+
 def draw_debug(img, eye_center, roll):
     _eye_center = (eye_center.copy() + 1) / 2  # [0, 1]
     h, w, _ = img.shape

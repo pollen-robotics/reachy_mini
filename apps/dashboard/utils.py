@@ -1,4 +1,3 @@
-import asyncio
 import platform
 import subprocess
 import sys
@@ -187,7 +186,7 @@ class SubprocessHelper:
                 error_msg = f"Command failed with exit code {exit_code}: {cmd_str}"
                 self._log("error", error_msg)
                 # Create a mock CompletedProcess for compatibility
-                result = subprocess.CompletedProcess(
+                _result = subprocess.CompletedProcess(
                     args=cmd, returncode=exit_code, stdout="", stderr=""
                 )
                 raise subprocess.CalledProcessError(exit_code, cmd_str)

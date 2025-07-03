@@ -6,6 +6,7 @@ from reachy_mini.io.cam_utils import find_camera
 
 cap = find_camera()
 
+
 def click(event, x, y, flags, param):
     global click_x, click_y, just_clicked
 
