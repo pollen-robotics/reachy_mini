@@ -580,7 +580,7 @@ async def get_installations():
 
 @app.post("/daemon_start")
 def start_daemon(
-    sim: bool = None,  # Changed to None to use global simulation state
+    sim: Optional[bool] = None,  # Changed to None to use global simulation state
     serialport: str = "auto",
     scene: str = "empty",
     localhost_only: bool = True,

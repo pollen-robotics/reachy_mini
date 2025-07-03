@@ -70,6 +70,7 @@ class Daemon:
         }
 
         self.logger.info("Starting Reachy Mini daemon...")
+        self._status.state = DaemonState.STARTING
 
         try:
             self.backend = self._setup_backend(
@@ -220,7 +221,6 @@ class Daemon:
                 else False,
             }
 
-            print("Restarting with parameters:", params)
             return self.start(**params)
 
         raise NotImplementedError(
@@ -310,7 +310,7 @@ class Daemon:
 class DaemonState(Enum):
     """Enum representing the state of the Reachy Mini daemon."""
 
-    INITIALIZING = "initializing"
+    STARTING = "starting"
     RUNNING = "running"
     STOPPING = "stopping"
     STOPPED = "stopped"
