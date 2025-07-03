@@ -161,3 +161,6 @@ class PlacoKinematics:
         T_world_head = self.robot.get_T_world_frame("head")
         T_world_head[:3, 3][2] -= self.head_z_offset  # offset the height of the head
         return T_world_head
+
+    def get_joint(self, joint_name):
+        return self.robot.get_joint(joint_name)
