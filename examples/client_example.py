@@ -1,3 +1,5 @@
+"""Reachy Mini Client Example."""
+
 import time
 
 import numpy as np

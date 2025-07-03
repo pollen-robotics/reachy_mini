@@ -1,3 +1,5 @@
+"""Reachy Mini Dashboard API."""
+
 import asyncio
 import json
 import os
@@ -313,6 +315,7 @@ async def start(name: str):
 
 @app.post("/stop")
 async def stop():
+    """Stop the currently running Reachy Mini app."""
     stop_app()
     return JSONResponse(
         content={"message": "App stopped successfully", "status": "stopped"}

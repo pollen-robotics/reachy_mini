@@ -1,3 +1,9 @@
+"""Mujoco utilities for Reachy Mini.
+
+This module provides utility functions for working with MuJoCo models, including
+homogeneous transformation matrices, joint positions, and actuator names.
+"""
+
 import mujoco
 import numpy as np
 from scipy.spatial.transform import Rotation as R
@@ -8,10 +14,7 @@ def get_homogeneous_matrix_from_euler(
     euler_angles: tuple = (0, 0, 0),  # (roll, pitch, yaw)
     degrees: bool = False,
 ):
-    """
-    Returns a homogeneous transformation matrix from position and Euler angles.
-    """
-
+    """Return a homogeneous transformation matrix from position and Euler angles."""
     homogeneous_matrix = np.eye(4)
     homogeneous_matrix[:3, :3] = R.from_euler(
         "xyz", euler_angles, degrees=degrees
@@ -21,8 +24,7 @@ def get_homogeneous_matrix_from_euler(
 
 
 def get_joint_qpos(model, data, joint_name) -> float:
-    """Returns the qpos (rad) of a specified joint in the model."""
-
+    """Return the qpos (rad) of a specified joint in the model."""
     # Get the joint id
     joint_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, joint_name)  # type: ignore
     if joint_id == -1:
@@ -36,18 +38,16 @@ def get_joint_qpos(model, data, joint_name) -> float:
 
 
 def get_joint_id_from_name(model, name: str) -> int:
-    """Return the id of a specified joint"""
+    """Return the id of a specified joint."""
     return mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, name)  # type: ignore
 
 
 def get_joint_addr_from_name(model, name: str) -> int:
-    """Return the address of a specified joint"""
+    """Return the address of a specified joint."""
     return model.joint(name).qposadr
 
 
 def get_actuator_names(model):
-    """
-    Returns the list of the actuators names from the MuJoCo model.
-    """
+    """Return the list of the actuators names from the MuJoCo model."""
     actuator_names = [model.actuator(k).name for k in range(0, model.nu)]
     return actuator_names

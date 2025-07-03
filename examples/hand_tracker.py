@@ -1,11 +1,13 @@
+"""Hand Tracker using MediaPipe to detect hand positions in images."""
+
 try:
     import mediapipe as mp
 except ImportError:
     print("mediapipe is not installed. Install it using 'pip install mediapipe'.")
     exit()
 
-import numpy as np
 import cv2
+import numpy as np
 
 mp_drawing = mp.solutions.drawing_utils
 mp_drawing_styles = mp.solutions.drawing_styles
@@ -13,12 +15,16 @@ mp_hands = mp.solutions.hands
 
 
 class HandTracker:
+    """Hand Tracker using MediaPipe Hands to detect hand positions."""
+
     def __init__(self, nb_hands=1):
+        """Initialize the Hand Tracker."""
         self.hands = mp_hands.Hands(
             static_image_mode=True, max_num_hands=nb_hands, min_detection_confidence=0.5
         )
 
     def get_hands_positions(self, img):
+        """Get the positions of the hands in the image."""
         img = cv2.flip(img, 1)
 
         results = self.hands.process(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))

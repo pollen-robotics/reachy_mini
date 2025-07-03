@@ -1,3 +1,11 @@
+"""Reachy Mini Goto Target Interpolation Playground.
+
+This example demonstrates the different interpolation methods available in Reachy Mini
+for moving the head to a target pose. It tests various methods such as linear,
+minjerk, ease, and cartoon, allowing the user to observe how each method affects the
+motion of the head and antennas.
+"""
+
 import numpy as np
 
 from reachy_mini import ReachyMini
@@ -5,6 +13,7 @@ from reachy_mini.utils import create_head_pose
 
 
 def main():
+    """Run the different interpolation methods."""
     with ReachyMini() as mini:
         for method in ["linear", "minjerk", "ease", "cartoon"]:
             print(f"Testing method: {method}")
