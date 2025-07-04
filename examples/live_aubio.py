@@ -28,7 +28,7 @@ STOP_DANCING_CONFIDENCE = 0.08
 PRINT_INTERVAL = 0.25
 
 # --- Static Configurations ---
-NEUTRAL_HEAD_POSITION = np.array([0.0, 0.0, 0.177 - 0.0075])
+NEUTRAL_HEAD_POSITION = np.array([0.0, 0.0, 0.0])
 NEUTRAL_HEAD_EULER_ANGLES = np.array([0.0, 0.0, 0.0])
 AUDIO_RATE = 44100
 
@@ -127,7 +127,7 @@ def main():
         print("Connecting to Reachy Mini...")
         with ReachyMini() as reachy_mini:
             print("Connected. Moving to neutral pose.")
-            reachy_mini.set_position(head=neutral_pose, antennas=np.array([0.0, 0.0]))
+            reachy_mini.set_target(head=neutral_pose, antennas=np.array([0.0, 0.0]))
             time.sleep(1)
             print("\nRobot is ready. Start playing music!")
             print("\n" * 7) # Adjusted for new print block size
@@ -177,7 +177,7 @@ def main():
                         NEUTRAL_HEAD_POSITION + pos_offset,
                         NEUTRAL_HEAD_EULER_ANGLES + orient_offset_euler
                     )
-                    reachy_mini.set_position(head=target_pose, antennas=antennas_command)
+                    reachy_mini.set_target(head=target_pose, antennas=antennas_command)
                 
                 # --- Always print status for continuous feedback ---
                 if (loop_start_time - last_print_time) > PRINT_INTERVAL:

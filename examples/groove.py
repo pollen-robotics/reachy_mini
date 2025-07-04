@@ -19,7 +19,7 @@ DEFAULT_DANCE_BPM = 120.0
 CONTROL_TIMESTEP = 0.01  # control loop period in seconds
 
 # --- Robot Configuration ---
-NEUTRAL_HEAD_POSITION = np.array([0.0, 0.0, 0.177 - 0.0075]) # Neutral head position in meters (x, y, z
+NEUTRAL_HEAD_POSITION = np.array([0.0, 0.0, 0.0])  # Neutral head position in meters (x, y, z)
 
 NEUTRAL_HEAD_EULER_ANGLES = np.array([0.0, 0.0, 0.0]) # Roll, Pitch, Yaw in radians
 
@@ -70,7 +70,7 @@ def run_dance_move(reachy_mini: ReachyMini, move_name: str, duration_s: float, b
         # Calculate target pose
         head_pose = create_head_pose(NEUTRAL_HEAD_POSITION + pos_offset, NEUTRAL_HEAD_EULER_ANGLES + orient_offset_euler)
         
-        reachy_mini.set_position(head=head_pose, antennas=antennas_command)
+        reachy_mini.set_target(head=head_pose, antennas=antennas_command)
         
         # Maintain control loop frequency
         elapsed_loop_time = time.time() - loop_start_time
@@ -121,7 +121,7 @@ def main():
         print("Successfully connected to Reachy Mini.")
 
         print("Moving to neutral pose...")
-        reachy_mini.set_position(head=neutral_matrix, antennas=np.array([0.0, 0.0]))
+        reachy_mini.set_target(head=neutral_matrix, antennas=np.array([0.0, 0.0]))
         time.sleep(0.5)
 
         if args.all_dances:
@@ -143,7 +143,7 @@ def main():
     finally:
         if reachy_mini is not None:
             print("Program ended, returning to neutral pose...")
-            reachy_mini.set_position(head=neutral_matrix, antennas=np.array([0.0, 0.0]))
+            reachy_mini.set_target(head=neutral_matrix, antennas=np.array([0.0, 0.0]))
             time.sleep(1)
 
 
