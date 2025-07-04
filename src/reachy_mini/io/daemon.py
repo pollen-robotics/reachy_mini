@@ -33,6 +33,7 @@ class Daemon:
 
         self._status = DaemonStatus(
             state=DaemonState.NOT_INITIALIZED,
+            simulation_enabled=None,
             backend_status=None,
             error=None,
         )
@@ -61,6 +62,8 @@ class Daemon:
         if self._status.state == DaemonState.RUNNING:
             self.logger.warning("Daemon is already running.")
             return self._status.state
+
+        self._status.simulation_enabled = sim
 
         self._start_params = {
             "sim": sim,
@@ -253,6 +256,7 @@ class Daemon:
 
         self._status = DaemonStatus(
             state=DaemonState.NOT_INITIALIZED,
+            simulation_enabled=None,
             backend_status=None,
             error=None,
         )
@@ -347,6 +351,7 @@ class DaemonStatus:
     """Dataclass representing the status of the Reachy Mini daemon."""
 
     state: DaemonState
+    simulation_enabled: Optional[bool]
     backend_status: Optional[RobotBackendStatus | MujocoBackendStatus]
     error: Optional[str] = None
 

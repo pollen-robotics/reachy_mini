@@ -96,7 +96,7 @@
 
     <!-- Installed Apps Section -->
     <div class="mb-6">
-      <h2 class="text-xl font-semibold mb-3">📱 Installed Apps</h2>
+      <h2 class="text-xl font-semibold mb-3">Installed Spaces</h2>
       <div id="app-list" class="space-y-4">
         <!-- App entries will be injected here -->
       </div>
@@ -107,8 +107,8 @@
       <div class="bg-white rounded-lg shadow-lg p-6">
         <div class="flex items-center justify-between mb-6">
           <div>
-            <h2 class="text-xl font-semibold text-gray-800">🚀 Browse & Install Apps</h2>
-            <p class="text-gray-600 mt-1">Discover amazing Reachy Mini applications and demos</p>
+            <h2 class="text-xl font-semibold text-gray-800">Discover new Reachy Mini' Spaces</h2>
+            <!-- <p class="text-gray-600 mt-1">Discover amazing Reachy Mini applications and demos</p> -->
           </div>
           <div id="spaces-stats" class="text-sm text-gray-500">
             <div class="space-loading inline-block w-4 h-4 border-2 border-gray-300 border-t-blue-500 rounded-full">
@@ -120,22 +120,23 @@
         <!-- Search and Sort Controls -->
         <div class="flex flex-col sm:flex-row gap-4 mb-6">
           <div class="flex-1">
-            <input type="text" id="spaces-search" placeholder="Search spaces..."
+            <input type="text" id="spaces-search" placeholder="✨ Ask anything you want to do with Reachy Mini"
               class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
           </div>
           <div class="flex gap-2">
-            <button
+            <button>Sort: Relevance</button>
+            <!-- <button
               class="sort-btn px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors active"
-              data-sort="likes">❤️ Likes</button>
-            <button class="sort-btn px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
-              data-sort="created">🕒 Recent</button>
-            <button class="sort-btn px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
-              data-sort="name">🔤 A-Z</button>
+              data-sort="likes">❤️ Likes</button> -->
+            <!-- <button class="sort-btn px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+              data-sort="created">🕒 Recent</button> -->
+            <!-- <button class="sort-btn px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+              data-sort="name">🔤 A-Z</button> -->
           </div>
         </div>
 
         <!-- Spaces Grid -->
-        <div id="spaces-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div id="spaces-grid">
           <!-- Spaces will be loaded here -->
         </div>
       </div>
@@ -151,6 +152,7 @@
   </div>
   <script src="/assets/js/script.js"></script>
   <script src="/assets/js/daemon.js"></script>
+  <script src="/assets/js/space_store.js"></script>
 
   <script>
   </script>
