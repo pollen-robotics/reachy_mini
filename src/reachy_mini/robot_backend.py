@@ -129,12 +129,12 @@ class RobotBackend(Backend):
                     self.logger.error(
                         "Make sure the robot is powered on and connected."
                     )
-                    self._status.error = "Motors are not powered on or connected."
+                    self.error = "Motors are not powered on or connected."
                     self.should_stop.set()
                     return
 
                 if self.last_alive + 2 < time.time():
-                    self._status.error = (
+                    self.error = (
                         "No response from the robot's motor for the last 2 seconds."
                     )
 
@@ -177,6 +177,7 @@ class RobotBackend(Backend):
 
     def get_status(self) -> "RobotBackendStatus":
         """Get the current status of the robot backend."""
+        self._status.error = self.error
         return self._status
 
 

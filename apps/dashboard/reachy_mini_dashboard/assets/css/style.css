@@ -26,6 +26,11 @@
     box-shadow: 0 0 8px rgba(245, 158, 11, 0.6);
 }
 
+.status-error {
+    background-color: #dc2626;
+    box-shadow: 0 0 8px rgba(220, 38, 38, 0.6);
+}
+
 .installation-progress {
     transition: width 0.3s ease-in-out;
 }
@@ -243,4 +248,54 @@ input:checked+.simulation-slider:before {
 
 .tab-content.active {
     display: block;
+}
+
+.daemon_button {
+    color: #fff;
+    padding: 0.5rem 0.75rem;
+    border-radius: 0.375rem;
+    font-size: 0.875rem;
+    transition: background-color 0.2s;
+    border: none;
+    cursor: pointer;
+}
+
+.daemon_button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.daemon_button.start {
+    background-color: #22c55e;
+    /* green-500 */
+}
+
+.daemon_button.start:hover:not(:disabled) {
+    background-color: #16a34a;
+    /* green-600 */
+}
+
+.daemon_button.starting {
+    background-color: #f59e0b;
+    /* yellow-500 */
+}
+
+.daemon_button.stop {
+    background-color: #ef4444;
+    /* red-500 */
+}
+
+.daemon_button.restart {
+    background-color: #f59e0b;
+    /* yellow-500 */
+}
+
+.daemon_button.stop:hover:not(:disabled) {
+    background-color: #b91c1c;
+    /* red-700 */
+}
+
+.daemon_button.stopping {
+    background-color: #f59e0b;
+    /* yellow-500 */
 }

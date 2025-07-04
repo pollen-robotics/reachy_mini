@@ -19,46 +19,37 @@
       <div class="flex items-center justify-between">
         <div class="flex items-center space-x-4">
           <div class="flex items-center">
-            <span id="daemon-status-indicator" class="status-indicator status-unknown"></span>
+            <span id="daemon-status-indicator" class="status-indicator"></span>
             <div>
               <h2 class="text-lg font-semibold">🤖 Robot Daemon</h2>
               <p id="daemon-status-text" class="text-sm opacity-90">Checking status...</p>
+              <p id="daemon-status-detail-text" class="text-sm opacity-90 italic"></p>
             </div>
           </div>
           <div id="robot-info" class="text-sm opacity-75" style="display: none;">
             <div id="robot-details"></div>
           </div>
           <!-- Simulation Mode Indicator -->
-          <div id="simulation-mode-indicator" class="simulation-indicator" style="display: none;">
+          <!-- <div id="simulation-mode-indicator" class="simulation-indicator" style="display: none;">
             🎮 SIMULATION MODE
-          </div>
+          </div> -->
         </div>
 
         <div class="flex items-center space-x-2">
           <!-- Simulation Toggle -->
-          <div class="flex items-center space-x-2 mr-2">
+          <div class="flex items-center flex-col space-y-2 mr-2 ">
+            <span class="text-sm opacity-90">Simulation</span>
             <label class="simulation-toggle">
               <input type="checkbox" id="simulation-toggle" onchange="toggleSimulation()">
               <span class="simulation-slider"></span>
             </label>
-            <span class="text-sm opacity-90">Simulation</span>
           </div>
 
-          <button id="daemon-start-btn" onclick="controlDaemon('start')"
-            class="bg-green-500 hover:bg-green-600 text-white px-3 py-2 rounded text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+          <button id="daemon-start-btn" onclick="controlDaemon('start')" class="daemon_button start">
             ▶️ Start
           </button>
-          <button id="daemon-stop-btn" onclick="controlDaemon('stop')"
-            class="bg-red-500 hover:bg-red-600 text-white px-3 py-2 rounded text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+          <button id="daemon-stop-btn" onclick="controlDaemon('stop')" class="daemon_button stop" disabled>
             ⏹️ Stop
-          </button>
-          <button id="daemon-restart-btn" onclick="controlDaemon('restart')"
-            class="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-2 rounded text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-            🔄 Restart
-          </button>
-          <button onclick="fetchDaemonStatus()"
-            class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-2 rounded text-sm transition-colors">
-            🔍 Refresh
           </button>
         </div>
       </div>
@@ -159,6 +150,7 @@
     </div>
   </div>
   <script src="/assets/js/script.js"></script>
+  <script src="/assets/js/daemon.js"></script>
 
   <script>
   </script>

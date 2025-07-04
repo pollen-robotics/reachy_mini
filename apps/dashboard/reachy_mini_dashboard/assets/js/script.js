@@ -5,7 +5,6 @@ let currentLogProcessId = null;
 let autoScroll = true;
 let logBuffer = new Map();
 let simulationEnabled = false;
-let daemonStatus = null;
 let spacesStore = null;
 
 // Initialize spaces store on page load
@@ -14,160 +13,6 @@ function initializeSpacesStore() {
     spacesStore.init();
 }
 
-// Simulation functions
-async function toggleSimulation() {
-    const toggle = document.getElementById('simulation-toggle');
-    const originalState = toggle.checked;
-
-    try {
-        toggle.disabled = true;
-        const response = await fetch('/api/simulation/toggle', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' }
-        });
-
-        const result = await response.json();
-        if (response.ok) {
-            simulationEnabled = result.simulation_enabled;
-            updateSimulationUI();
-
-            const indicator = document.getElementById('simulation-mode-indicator');
-            const originalText = indicator.textContent;
-            indicator.textContent = `🎮 SIMULATION ${simulationEnabled ? 'ENABLED' : 'DISABLED'}`;
-
-            setTimeout(() => {
-                if (simulationEnabled) {
-                    indicator.textContent = originalText;
-                }
-            }, 2000);
-
-            console.log(`Simulation mode ${simulationEnabled ? 'enabled' : 'disabled'}`);
-        } else {
-            throw new Error(result.detail || 'Failed to toggle simulation');
-        }
-    } catch (error) {
-        console.error('Failed to toggle simulation:', error);
-        toggle.checked = !originalState;
-        simulationEnabled = !simulationEnabled;
-        updateSimulationUI();
-        alert(`Failed to toggle simulation: ${error.message}`);
-    } finally {
-        toggle.disabled = false;
-    }
-}
-
-async function fetchSimulationStatus() {
-    try {
-        const response = await fetch('/api/simulation/status');
-        const data = await response.json();
-        simulationEnabled = data.simulation_enabled;
-        updateSimulationUI();
-    } catch (error) {
-        console.error('Failed to fetch simulation status:', error);
-    }
-}
-
-function updateSimulationUI() {
-    const toggle = document.getElementById('simulation-toggle');
-    const indicator = document.getElementById('simulation-mode-indicator');
-    toggle.checked = simulationEnabled;
-    indicator.style.display = simulationEnabled ? 'block' : 'none';
-}
-
-// Daemon functions
-async function fetchDaemonStatus() {
-    try {
-        const response = await fetch('/daemon_status');
-        const data = await response.json();
-        daemonStatus = data;
-        updateDaemonStatusUI(data);
-    } catch (error) {
-        console.error('Failed to fetch daemon status:', error);
-        updateDaemonStatusUI({
-            status: 'error',
-            message: 'Failed to connect to daemon',
-            running: false
-        });
-    }
-}
-
-function updateDaemonStatusUI(status) {
-    const indicator = document.getElementById('daemon-status-indicator');
-    const statusText = document.getElementById('daemon-status-text');
-    const robotInfo = document.getElementById('robot-info');
-    const robotDetails = document.getElementById('robot-details');
-    const startBtn = document.getElementById('daemon-start-btn');
-    const stopBtn = document.getElementById('daemon-stop-btn');
-    const restartBtn = document.getElementById('daemon-restart-btn');
-
-    indicator.className = 'status-indicator';
-
-    if (status.running === true) {
-        indicator.classList.add('status-running');
-        statusText.textContent = status.message || 'Daemon is running';
-        startBtn.disabled = true;
-        stopBtn.disabled = false;
-        restartBtn.disabled = false;
-    } else if (status.running === false) {
-        indicator.classList.add('status-stopped');
-        statusText.textContent = status.message || 'Daemon is stopped';
-        startBtn.disabled = false;
-        stopBtn.disabled = true;
-        restartBtn.disabled = true;
-    } else {
-        indicator.classList.add('status-unknown');
-        statusText.textContent = status.message || 'Status unknown';
-        startBtn.disabled = false;
-        stopBtn.disabled = false;
-        restartBtn.disabled = false;
-    }
-
-    if (status.robot_info) {
-        robotDetails.innerHTML = `
-          <div>Model: ${status.robot_info.model || 'Unknown'}</div>
-          <div>Version: ${status.robot_info.version || 'Unknown'}</div>
-          ${status.robot_info.uptime ? `<div>Uptime: ${status.robot_info.uptime}</div>` : ''}
-        `;
-        robotInfo.style.display = 'block';
-    } else {
-        robotInfo.style.display = 'none';
-    }
-}
-
-async function controlDaemon(action) {
-    const button = document.getElementById(`daemon-${action}-btn`);
-    const originalText = button.innerHTML;
-    button.disabled = true;
-    button.innerHTML = '⏳ Working...';
-
-    try {
-        const response = await fetch(`/daemon_${action}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' }
-        });
-
-        const result = await response.json();
-        if (response.ok) {
-            setTimeout(() => fetchDaemonStatus(), 1000);
-            button.innerHTML = '✅ Done';
-            setTimeout(() => button.innerHTML = originalText, 2000);
-        } else {
-            throw new Error(result.detail || `Failed to ${action} daemon`);
-        }
-    } catch (error) {
-        console.error(`Failed to ${action} daemon:`, error);
-        alert(`Failed to ${action} daemon: ${error.message}`);
-        button.innerHTML = '❌ Error';
-        setTimeout(() => button.innerHTML = originalText, 2000);
-    } finally {
-        setTimeout(() => {
-            button.disabled = false;
-            if (button.innerHTML === '⏳ Working...' || button.innerHTML === '✅ Done' || button.innerHTML === '❌ Error') {
-                button.innerHTML = originalText;
-            }
-        }, 2000);
-    }
-}
 
 // WebSocket and logging functions
 function connectWebSocket() {
@@ -388,7 +233,7 @@ async function fetchStatus() {
 
         const res = await fetch('/api/status/full');
         const data = await res.json();
-        console.log('Fetched full status:', data);
+        // console.log('Fetched full status:', data);
 
         renderApps(data.available_apps, data.current, data.venv_apps || [], data.venv_apps_detailed || [], data.app_process_id);
         renderInstallationHistory(data.installation_history || []);
@@ -880,8 +725,5 @@ document.getElementById('close-logs-btn').addEventListener('click', hideLogViewe
 // Initialize everything
 connectWebSocket();
 fetchStatus();
-fetchSimulationStatus();
-fetchDaemonStatus();
 initializeSpacesStore(); // Load spaces on page load
 setInterval(fetchStatus, 10000);
-setInterval(fetchDaemonStatus, 15000);

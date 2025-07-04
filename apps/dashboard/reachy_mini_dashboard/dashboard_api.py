@@ -67,8 +67,8 @@ app_manager = VenvAppManager(APPS_DIR)
 assets_dir = DASHBOARD_DIR / "assets"
 
 # Mount static files and templates
-static_dir = DASHBOARD_DIR / "static"
-templates_dir = DASHBOARD_DIR / "templates"
+static_dir = assets_dir / "static"
+templates_dir = assets_dir / "templates"
 
 app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
 
@@ -580,7 +580,7 @@ async def get_installations():
 
 @app.post("/daemon_start")
 def start_daemon(
-    sim: bool = None,  # Changed to None to use global simulation state
+    sim: Optional[bool] = None,  # Changed to None to use global simulation state
     serialport: str = "auto",
     scene: str = "empty",
     localhost_only: bool = True,
@@ -590,27 +590,45 @@ def start_daemon(
     if sim is None:
         sim = simulation_enabled
     print(
-        f"Starting daemon with simulation={sim}, serialport={serialport}, scene={scene}, localhost_only={localhost_only}, wake_up_on_start={wake_up_on_start}"
+        f"*** Starting daemon with simulation={sim}, serialport={serialport}, scene={scene}, localhost_only={localhost_only}, wake_up_on_start={wake_up_on_start}"
     )
-    daemon.start(
-        sim=sim,
-        serialport=serialport,
-        scene=scene,
-        localhost_only=localhost_only,
-        wake_up_on_start=wake_up_on_start,
-    )
+    try:
+        daemon.start(
+            sim=sim,
+            serialport=serialport,
+            scene=scene,
+            localhost_only=localhost_only,
+            wake_up_on_start=wake_up_on_start,
+        )
+    except Exception:
+        # We will get the error from the daemon status
+        pass
     return {"state": daemon._status.state, "simulation_enabled": sim}
 
 
 @app.post("/daemon_stop")
 def stop_daemon(goto_sleep_on_stop: bool = True) -> dict:
+    print(f"*** Stopping daemon, goto_sleep_on_stop={goto_sleep_on_stop}")
     daemon.stop(goto_sleep_on_stop=goto_sleep_on_stop)
     return {"state": daemon._status.state}
 
 
 @app.post("/daemon_restart")
 def restart_daemon() -> dict:
-    daemon.restart()
+    print("*** Restarting daemon")
+    try:
+        daemon.restart()
+    except Exception:
+        # We will get the error from the daemon status
+        pass
+    return {"state": daemon._status.state}
+
+
+@app.post("/daemon_reset")
+def reset_daemon() -> dict:
+    """Reset the daemon status."""
+    print("*** Resetting daemon")
+    daemon.reset()
     return {"state": daemon._status.state}
 
 

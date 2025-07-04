@@ -32,7 +32,7 @@ class Daemon:
         self.logger.setLevel(self.log_level)
 
         self._status = DaemonStatus(
-            state=DaemonState.STOPPED,
+            state=DaemonState.NOT_INITIALIZED,
             backend_status=None,
             error=None,
         )
@@ -70,6 +70,7 @@ class Daemon:
         }
 
         self.logger.info("Starting Reachy Mini daemon...")
+        self._status.state = DaemonState.STARTING
 
         try:
             self.backend = self._setup_backend(
@@ -85,7 +86,7 @@ class Daemon:
         self.server = Server(self.backend, localhost_only=localhost_only)
         self.server.start()
 
-        self.backend_run_thread = Thread(target=self.backend.run)
+        self.backend_run_thread = Thread(target=self.backend.wrapped_run)
         self.backend_run_thread.start()
 
         if not self.backend.ready.wait(timeout=2.0):
@@ -93,6 +94,7 @@ class Daemon:
                 "Backend is not ready after 2 seconds. Some error occurred."
             )
             self._status.state = DaemonState.ERROR
+            self._status.error = self.backend.error
             return self._status.state
 
         if wake_up_on_start:
@@ -135,6 +137,10 @@ class Daemon:
 
             self.logger.info("Stopping Reachy Mini daemon...")
             self._status.state = DaemonState.STOPPING
+
+            if not hasattr(self, "backend"):
+                self._status.state = DaemonState.STOPPED
+                return self._status.state
 
             if goto_sleep_on_stop:
                 try:
@@ -220,7 +226,6 @@ class Daemon:
                 else False,
             }
 
-            print("Restarting with parameters:", params)
             return self.start(**params)
 
         raise NotImplementedError(
@@ -232,7 +237,26 @@ class Daemon:
         if hasattr(self, "backend"):
             self._status.backend_status = self.backend.get_status()
 
+            assert self._status.backend_status is not None, (
+                "Backend status should not be None after backend initialization."
+            )
+
+            if self._status.backend_status.error:
+                self._status.state = DaemonState.ERROR
+                self._status.error = self._status.backend_status.error
+
         return self._status
+
+    def reset(self):
+        """Reset the daemon status to NOT_INITIALIZED."""
+        self.stop(goto_sleep_on_stop=False)
+
+        self._status = DaemonStatus(
+            state=DaemonState.NOT_INITIALIZED,
+            backend_status=None,
+            error=None,
+        )
+        self.logger.info("Daemon status reset to NOT_INITIALIZED.")
 
     def run4ever(
         self,
@@ -292,7 +316,7 @@ class Daemon:
                 if len(ports) == 0:
                     raise RuntimeError(
                         "No Reachy Mini serial port found. "
-                        "Check USB connection and permissions."
+                        "Check USB connection and permissions. "
                         "Or directly specify the serial port using --serialport."
                     )
                 elif len(ports) > 1:
@@ -310,7 +334,8 @@ class Daemon:
 class DaemonState(Enum):
     """Enum representing the state of the Reachy Mini daemon."""
 
-    INITIALIZING = "initializing"
+    NOT_INITIALIZED = "not_initialized"
+    STARTING = "starting"
     RUNNING = "running"
     STOPPING = "stopping"
     STOPPED = "stopped"
