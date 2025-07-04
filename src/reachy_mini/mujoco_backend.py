@@ -10,6 +10,7 @@ import json
 import time
 from dataclasses import dataclass
 from importlib.resources import files
+from typing import Optional
 
 import mujoco
 import mujoco.viewer
@@ -177,4 +178,4 @@ class MujocoBackendStatus:
     Empty for now, as the Mujoco backend does not have a specific status to report.
     """
 
-    pass
+    error: Optional[str] = None

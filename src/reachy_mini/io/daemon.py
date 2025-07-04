@@ -237,6 +237,14 @@ class Daemon:
         if hasattr(self, "backend"):
             self._status.backend_status = self.backend.get_status()
 
+            assert self._status.backend_status is not None, (
+                "Backend status should not be None after backend initialization."
+            )
+
+            if self._status.backend_status.error:
+                self._status.state = DaemonState.ERROR
+                self._status.error = self._status.backend_status.error
+
         return self._status
 
     def reset(self):

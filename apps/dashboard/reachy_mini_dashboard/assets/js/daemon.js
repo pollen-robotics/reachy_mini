@@ -100,7 +100,7 @@ function updateDaemonStatusUI(status) {
         toggle.disabled = false;
     } else if (status.state === "error") {
         indicator.classList.add('status-error');
-        statusText.textContent = 'Error: Daemon could not start!';
+        statusText.textContent = 'Error: Daemon crashed!';
         statusDetailText.textContent = (status.error || 'Unknown error');
 
         startBtn.classList.remove('start');
