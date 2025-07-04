@@ -281,7 +281,7 @@ function renderApps(apps, current, venvApps, venvAppsDetailed = [], appProcessId
     container.innerHTML = '';
 
     if (apps.length === 0) {
-        container.innerHTML = '<p class="text-gray-600">No spaces found.</p>';
+        container.innerHTML = '<p class="text-gray-600">No installed spaces found.</p>';
         return;
     }
 
