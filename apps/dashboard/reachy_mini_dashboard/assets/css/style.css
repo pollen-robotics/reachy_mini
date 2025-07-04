@@ -16,6 +16,12 @@
     box-shadow: 0 0 8px rgba(16, 185, 129, 0.6);
 }
 
+.status-stopping,
+.status-starting {
+    background-color: #f59e0b;
+    box-shadow: 0 0 8px rgba(245, 158, 11, 0.6);
+}
+
 .status-stopped {
     background-color: #ef4444;
     box-shadow: 0 0 8px rgba(239, 68, 68, 0.6);

@@ -12,7 +12,7 @@ async function fetchDaemonStatus() {
         console.error('Failed to fetch daemon status:', error);
         updateDaemonStatusUI({
             status: 'error',
-            message: 'Failed to connect to daemon',
+            message: 'Failed to connect to Reachy Mini',
             running: false
         });
     }
@@ -41,7 +41,8 @@ function updateDaemonStatusUI(status) {
 
     if (status.state === "running") {
         indicator.classList.add('status-running');
-        statusText.textContent = status.message || 'Daemon is running';
+        // statusText.textContent = status.message || 'Reachy Mini is ready';
+        statusText.textContent = '';
 
         startBtn.disabled = true;
         startBtn.classList.remove('starting');
@@ -52,7 +53,7 @@ function updateDaemonStatusUI(status) {
 
     } else if (status.state === "not_initialized") {
         indicator.classList.add('status-not-initialized');
-        statusText.textContent = status.message || 'Daemon is not initialized';
+        statusText.textContent = status.message || 'Reachy Mini is not initialized.';
 
         startBtn.disabled = false;
         startBtn.classList.remove('starting', 'restart');
@@ -66,7 +67,7 @@ function updateDaemonStatusUI(status) {
 
     else if (status.state === "starting") {
         indicator.classList.add('status-starting');
-        statusText.textContent = status.message || 'Starting daemon...';
+        // statusText.textContent = status.message || 'Starting Reachy Mini...';
 
         startBtn.disabled = true;
         startBtn.classList.remove('start');
@@ -77,7 +78,7 @@ function updateDaemonStatusUI(status) {
 
     } else if (status.state === "stopping") {
         indicator.classList.add('status-stopping');
-        statusText.textContent = status.message || 'Stopping daemon...';
+        // statusText.textContent = status.message || 'Stopping Reachy Mini...';
 
         startBtn.disabled = true;
 
@@ -88,7 +89,8 @@ function updateDaemonStatusUI(status) {
 
     } else if (status.state === "stopped") {
         indicator.classList.add('status-stopped');
-        statusText.textContent = status.message || 'Daemon is stopped';
+        // statusText.textContent = status.message || 'Reachy Mini is stopped';
+        statusText.textContent = '';
 
         startBtn.disabled = false;
 
@@ -100,7 +102,7 @@ function updateDaemonStatusUI(status) {
         toggle.disabled = false;
     } else if (status.state === "error") {
         indicator.classList.add('status-error');
-        statusText.textContent = 'Error: Daemon crashed!';
+        statusText.textContent = 'Error: Reachy Mini crashed!';
         statusDetailText.textContent = (status.error || 'Unknown error');
 
         startBtn.classList.remove('start');
@@ -145,7 +147,6 @@ async function controlDaemon(action) {
         if (action === 'start') {
             const startBtn = document.getElementById('daemon-start-btn');
             if (startBtn.classList.contains('restart')) {
-                console.log("CLICKED RESTART");
                 action = 'restart';
             }
 
@@ -253,5 +254,5 @@ function updateSimulationUI() {
 
 
 fetchDaemonStatus();
-setInterval(fetchDaemonStatus, 100);
+setInterval(fetchDaemonStatus, 1000);
 fetchSimulationStatus();
