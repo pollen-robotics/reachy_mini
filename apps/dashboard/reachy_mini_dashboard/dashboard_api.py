@@ -67,8 +67,8 @@ app_manager = VenvAppManager(APPS_DIR)
 assets_dir = DASHBOARD_DIR / "assets"
 
 # Mount static files and templates
-static_dir = DASHBOARD_DIR / "static"
-templates_dir = DASHBOARD_DIR / "templates"
+static_dir = assets_dir / "static"
+templates_dir = assets_dir / "templates"
 
 app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
 
