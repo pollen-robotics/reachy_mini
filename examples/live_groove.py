@@ -1,8 +1,17 @@
 #!/usr/bin/env python3
-# reachy_rhythm_controller.py  – v3.2 (GUI Exit Fix)
+# reachy_rhythm_controller.py  – v5.2 (Final)
 """
-Fixes the "main thread is not in main loop" crash by moving final
-GUI operations (savefig, show) into the UI thread.
+Real-time robot rhythm synchronization using a decoupled architecture.
+
+This script synchronizes a Reachy Mini robot's movements to music detected
+from a microphone. It features:
+- A high-frequency (100 Hz), stable control loop.
+- A separate thread for audio processing using Librosa to detect beat candidates.
+- A live beat filtering algorithm to reject spurious detections.
+- A robust BPM calculation based on the median of recent filtered beat intervals.
+- A Phase-Locked Loop (PLL) to dynamically correct the robot's phase against
+  the filtered beats, ensuring tight, long-term synchronization.
+- A non-blocking UI thread for live plotting and statistics.
 """
 
 from __future__ import annotations
@@ -26,191 +35,213 @@ from scipy.spatial.transform import Rotation as R
 from reachy_mini import ReachyMini
 from dance_moves import AVAILABLE_DANCE_MOVES, MOVE_SPECIFIC_PARAMS
 
-# ... (CLI and Constants are unchanged) ...
-parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-parser.add_argument('--dance', default='head_bob_z')
-parser.add_argument('--live-plot', action='store_true', help='Show rolling 5 s plot')
-parser.add_argument('--save-dir', default='.', help='Folder for PNG on Ctrl-C')
-args = parser.parse_args()
-CONTROL_TS = 0.01; AUDIO_WIN = 2.0; BUF_LEN = int(44100 * AUDIO_WIN); BPM_BUF = 4
-BPM_STD_TH = 3.0; UNSTABLE_TMO = 5.0; SILENCE_TMO = 2.0; USE_PLL_CORRECTION = False
-UI_UPDATE_RATE = 2; LIVE_WIN = 5.0; NEUTRAL_POS = np.zeros(3); NEUTRAL_EUL = np.zeros(3)
+# ───────────────────────────── Configuration ──────────────────────────────
+@dataclass
+class Config:
+    """A single object to hold all tunable parameters and constants."""
+    # --- CLI Arguments ---
+    dance_move: str = 'head_bob_z'
+    live_plot: bool = False
+    save_dir: str = '.'
 
-# ... (Helper math, State objects, and audio_thread are unchanged) ...
-def mod_diff(a: float, b: float) -> float: return ((a - b + 0.5) % 1.0) - 0.5
+    # --- Core ---
+    control_ts: float = 0.01  # Target control loop period (0.01s = 100 Hz).
+
+    # --- Audio Processing ---
+    audio_win: float = 2.0  # Duration (in seconds) of the audio buffer for beat analysis.
+    audio_rate: int = 44100
+    audio_chunk_size: int = 2048
+    bpm_stability_buffer: int = 4  # Number of Librosa BPM estimates for stability check.
+    bpm_stability_threshold: float = 3.0 # Std dev threshold to consider BPM 'Locked'.
+    silence_tmo: float = 2.0 # Seconds of no audio event before stopping.
+
+    # --- Beat Filtering & BPM Calculation ---
+    beat_buffer_size: int = 20 # Number of recent accepted beats for BPM calculation.
+    min_interval_factor: float = 0.5 # A beat is "too close" if interval is < this * expected.
+
+    # --- Synchronization & PLL ---
+    use_pll: bool = True # Master switch for the Phase-Locked Loop.
+    pll_kp: float = 0.8  # Proportional gain for the PLL (faster correction).
+    pll_max_rate: float = 0.15 # Max rate change (15%) to prevent jerky moves.
+    pll_hold_threshold: float = 0.45 # If phase error > this, freeze correction.
+    beat_time_offset: float = 0.0 # Manual offset (s) to add to beat timestamps for latency.
+
+    # --- UI & Logging ---
+    ui_update_rate: float = 2.0 # How many times per second to update UI.
+    plot_window_duration: float = 5.0 # Duration (s) of the rolling plot.
+    
+    # --- Static ---
+    neutral_pos: np.ndarray = field(default_factory=lambda: np.zeros(3))
+    neutral_eul: np.ndarray = field(default_factory=lambda: np.zeros(3))
+    audio_buffer_len: int = field(init=False)
+
+    def __post_init__(self):
+        self.audio_buffer_len = int(self.audio_rate * self.audio_win)
+
+
+# ───────────────────── Helper Classes and Functions ──────────────────────────
 def head_pose(pos: np.ndarray, eul: np.ndarray) -> np.ndarray:
     m=np.eye(4); m[:3,3]=pos; m[:3,:3]=R.from_euler('xyz',eul).as_matrix(); return m
+
 class MusicState:
+    """Thread-safe state object for data from the audio thread."""
     def __init__(self) -> None:
-        self.lock=threading.Lock(); self.goal_bpm=0.0; self.last_beat_time=0.0;
-        self.raw_bpm=np.nan; self.state='Init'; self.beats:collections.deque[float]=collections.deque(maxlen=512)
+        self.lock=threading.Lock(); self.librosa_bpm=0.0; self.last_event_time=0.0
+        self.state='Init'; self.beats:collections.deque[float]=collections.deque(maxlen=512)
+
 class PLL:
-    def __init__(self) -> None: self.phase = 0.0; self.rate  = 1.0
-    def step(self, dt: float, bpm: float, last_beat: float, now: float) -> tuple[float, float, float]:
+    """A Phase-Locked Loop to synchronize an internal oscillator to external beats."""
+    def __init__(self) -> None:
+        self.phase=0.0; self.rate=1.0
+
+    def step(self, dt: float, bpm: float, last_beat_time: float, now: float, config: Config) -> tuple[float, float, float]:
         if bpm == 0.0: return self.phase, 0.0, 1.0
-        if not USE_PLL_CORRECTION:
+        if not config.use_pll or last_beat_time == 0.0:
             self.phase = (self.phase + dt * (bpm / 60.0)) % 1.0; return self.phase, 0.0, 1.0
-        if last_beat == 0.0: return self.phase, 0.0, self.rate
-        period=60.0/bpm; expected_phase=((now-last_beat)/period)%1.0; err=mod_diff(expected_phase, self.phase)
-        self.rate=1.0+np.clip(PHASE_KP*err, -MAX_RATE, MAX_RATE)
-        if abs(err)>HOLD: return self.phase, err, 0.0
-        self.phase=(self.phase+dt*(bpm/60.0)*self.rate)%1.0; return self.phase, err, self.rate
-def audio_thread(state: MusicState) -> None:
-    pa=pyaudio.PyAudio(); stream=pa.open(format=pyaudio.paFloat32,channels=1,rate=44100,input=True,frames_per_buffer=2048)
-    buf=np.empty(0,dtype=np.float32); bpm_hist=collections.deque(maxlen=BPM_BUF)
-    while True:
-        buf=np.append(buf, np.frombuffer(stream.read(2048,exception_on_overflow=False),dtype=np.float32))
-        if len(buf)<BUF_LEN: continue
-        tempo,beat_frames=librosa.beat.beat_track(y=buf,sr=44100,units='frames',tightness=100); now=time.time()
-        tempo_val = tempo[0] if isinstance(tempo, np.ndarray) and tempo.size > 0 else tempo
-        with state.lock: state.raw_bpm=np.nan if tempo_val<40 else float(tempo_val)
-        if tempo_val>40: bpm_hist.append(float(tempo_val))
-        sr=44100; win_dur=len(buf)/sr; abs_times=[now-(win_dur-librosa.frames_to_time(f,sr=sr)) for f in beat_frames]
+        period = 60.0 / bpm
+        expected_phase = ((now - last_beat_time) / period) % 1.0
+        err = ((expected_phase - self.phase + 0.5) % 1.0) - 0.5
+        self.rate = 1.0 + np.clip(config.pll_kp * err, -config.pll_max_rate, config.pll_max_rate)
+        if abs(err) > config.pll_hold_threshold: return self.phase, err, 0.0
+        self.phase = (self.phase + dt * (bpm / 60.0) * self.rate) % 1.0
+        return self.phase, err, self.rate
+
+# ───────────────────────────── Worker Threads ──────────────────────────────
+def audio_thread(state: MusicState, config: Config, stop_event: threading.Event) -> None:
+    """Dedicated thread to read audio and run Librosa's beat tracking."""
+    pa = pyaudio.PyAudio(); stream = pa.open(format=pyaudio.paFloat32, channels=1, rate=config.audio_rate, input=True, frames_per_buffer=config.audio_chunk_size)
+    buf=np.empty(0,dtype=np.float32); bpm_hist=collections.deque(maxlen=config.bpm_stability_buffer)
+    while not stop_event.is_set():
+        try: buf=np.append(buf, np.frombuffer(stream.read(config.audio_chunk_size,exception_on_overflow=False),dtype=np.float32))
+        except (IOError, ValueError): continue
+        if len(buf) < config.audio_buffer_len: continue
+        tempo,beat_frames=librosa.beat.beat_track(y=buf,sr=config.audio_rate,units='frames',tightness=100); now=time.time()
+        tempo_val=tempo[0] if isinstance(tempo,np.ndarray) and tempo.size>0 else tempo
         with state.lock:
+            state.last_event_time=now
+            if tempo_val>40: bpm_hist.append(float(tempo_val)); state.librosa_bpm=float(np.mean(bpm_hist))
+            win_dur=len(buf)/config.audio_rate; abs_times=[now-(win_dur-librosa.frames_to_time(f,sr=config.audio_rate)) for f in beat_frames]
             for t in abs_times:
-                if not state.beats or t-state.beats[-1]>0.05: state.beats.append(t)
-            if len(bpm_hist)<BPM_BUF: state.state=f'Gathering {len(bpm_hist)}/{BPM_BUF}'
-            elif np.std(bpm_hist)<BPM_STD_TH:
-                state.goal_bpm=float(np.mean(bpm_hist)); state.state='Locked'; state.last_beat_time=now
+                if not state.beats or t-state.beats[-1]>0.05: state.beats.append(t+config.beat_time_offset)
+            if len(bpm_hist)<config.bpm_stability_buffer: state.state='Gathering'
+            elif np.std(bpm_hist)<config.bpm_stability_threshold: state.state='Locked'
             else: state.state='Unstable'
-        buf=buf[-int(44100*1.5):]
-@dataclass
-class LogEntry: t:float; raw:float; stable:float; err:float; rate:float; phase:float
-@dataclass
-class Logger:
-    entries: list[LogEntry] = field(default_factory=list)
-    def add(self, **kw) -> None: self.entries.append(LogEntry(**kw))
-    def arrays(self) -> dict[str, np.ndarray]:
-        return {k: np.array([getattr(e,k) for e in self.entries]) for k in LogEntry.__annotations__}
+        buf=buf[-int(config.audio_rate*1.5):]
+    stream.stop_stream(); stream.close(); pa.terminate()
 
-# ───────────────────── Analysis & UI Thread ───────────────────
-@dataclass
-class UIData:
-    loop_dt: float
-    state: str; raw_bpm: float; active_bpm: float
-    log_entry: LogEntry; new_beats: list[float]
-
-def analyze_beats_on_exit(raw_beats: list[float], final_bpm: float):
-    # This function is unchanged.
-    def _print_analysis(beat_list: list[float], name: str):
-        if len(beat_list) < 2: print(f"\n--- Analysis for '{name}' (Not enough data) ---"); return
-        print(f"\n--- Analysis for '{name}' ({len(beat_list)} beats) ---")
-        intervals = np.diff(beat_list)
-        mean_interval = np.mean(intervals)
-        mean_bpm = 60.0 / mean_interval if mean_interval > 0 else 0
-        print(f"Intervals (s): {intervals}"); print(f"Mean Interval: {mean_interval:.4f} s")
-        print(f"Mean BPM from Intervals: {mean_bpm:.2f} BPM")
-    _print_analysis(raw_beats, "Raw Beats")
-    if final_bpm == 0 or len(raw_beats) < 2: print("\nSkipping filtered analysis."); return
-    expected_interval = 60.0 / final_bpm; min_interval_threshold = expected_interval * 0.5
-    filtered_beats = [raw_beats[0]]; i = 1
-    while i < len(raw_beats):
-        current_beat = raw_beats[i]; last_accepted_beat = filtered_beats[-1]
-        if i + 1 < len(raw_beats) and (raw_beats[i+1] - current_beat) < min_interval_threshold:
-            competitor_beat = raw_beats[i+1]
-            error_current = abs((current_beat - last_accepted_beat) - expected_interval)
-            error_competitor = abs((competitor_beat - last_accepted_beat) - expected_interval)
-            if error_current <= error_competitor: filtered_beats.append(current_beat); i += 2
-            else: i += 1
-        else:
-            if (current_beat - last_accepted_beat) > min_interval_threshold: filtered_beats.append(current_beat)
-            i += 1
-    _print_analysis(filtered_beats, "Filtered Beats")
-
-def ui_thread(data_queue: Queue, stop_event: threading.Event, live_win: float):
-    # ... (function body is mostly the same until the end) ...
-    logger = Logger(); accepted_beats: list[float] = []; loop_dts: list[float] = []
-    fig = None
-    if args.live_plot:
-        plt.ion(); fig,ax=plt.subplots(2,1,sharex=True,figsize=(10,6)); raw_line,=ax[0].plot([],[],'o',ms=3,label='Raw',alpha=0.6)
-        act_line,=ax[0].plot([],[],'-',label='Active'); ax[0].set_ylabel('BPM'); ax[0].legend(); sin_line,=ax[1].plot([],[],'-',label='sin phase')
-        acc_up,=ax[1].plot([],[],'^',color='green',ms=5,label='beat detected'); acc_dn,=ax[1].plot([],[],'v',color='green',ms=5)
-        ax[1].set_ylabel('amp'); ax[1].set_xlabel('s'); ax[1].legend(); fig.tight_layout(); lines=(raw_line,act_line,sin_line,acc_up,acc_dn)
-    last_ui_print_time = time.time(); last_data = None
+def ui_thread(data_queue: Queue, config: Config, stop_event: threading.Event):
+    """Dedicated thread for all slow UI operations."""
+    fig=None
+    if config.live_plot:
+        plt.ion(); fig,ax=plt.subplots(2,1,sharex=True,figsize=(10,6),constrained_layout=True)
+        librosa_line,=ax[0].plot([],[],'o',ms=3,label='Librosa BPM',alpha=0.6); calc_line,=ax[0].plot([],[],'-',label='Calculated BPM')
+        ax[0].set_ylabel('BPM'); ax[0].legend(); phase_line,=ax[1].plot([],[],'-',label='PLL Phase')
+        ax[1].plot([],[],color='g',linestyle='-',label='Accepted Beat'); ax[1].plot([],[],color='r',linestyle='--',label='Rejected Beat')
+        ax[1].set_ylabel('Phase/Beat'); ax[1].set_xlabel('Time (s)'); ax[1].legend()
+    loop_dts,log_entries,last_ui_print_time,last_data=[],[],time.time(),None
     while not stop_event.is_set():
         try:
             while True:
-                data_point = data_queue.get_nowait(); loop_dts.append(data_point.loop_dt)
-                logger.add(**data_point.log_entry.__dict__); accepted_beats.extend(data_point.new_beats)
-                last_data = data_point
+                data=data_queue.get_nowait(); loop_dts.append(data['loop_dt']); log_entries.append(data); last_data=data
         except Empty: pass
-        now = time.time()
-        if not last_data or now - last_ui_print_time < (1.0 / UI_UPDATE_RATE): time.sleep(0.1); continue
-        last_ui_print_time = now
-        if sys.stdout.isatty(): sys.stdout.write('\033[6F\033[J')
-        dts_ms=np.array(loop_dts)*1000; mean_dt=np.mean(dts_ms); var_dt=np.var(dts_ms); max_dt=np.max(dts_ms)
-        print(f'--- Reachy Rhythm UI ---\nControl Loop (stats for last {len(dts_ms)} loops):\n'
-              f'  Mean: {mean_dt:.1f}ms | Var: {var_dt:.2f} | Max: {max_dt:.1f}ms ({1000/max_dt if max_dt>0 else 0:.0f} Hz min)\n'
-              f'State: {last_data.state} [PLL Correction: {"ON" if USE_PLL_CORRECTION else "OFF"}]\n'
-              f'Raw BPM: {"--" if np.isnan(last_data.raw_bpm) else f"{last_data.raw_bpm:6.1f}"}\n'
-              f'Stable BPM: {last_data.active_bpm:6.1f}'); sys.stdout.flush(); loop_dts.clear()
-        if args.live_plot:
-            arr=logger.arrays(); tvals=arr['t']-arr['t'][0]
-            mask=tvals>=tvals[-1]-live_win if len(tvals)>0 else np.array([],dtype=bool)
-            if np.any(mask):
-                amp_vals=np.sin(2*np.pi*arr['phase']); acc_x=np.array([bt-arr['t'][0] for bt in accepted_beats if bt>=arr['t'][0]+tvals[mask][0]])
-                rl,al,sl,au,ad=lines; rl.set_data(tvals[mask],arr['raw'][mask]); al.set_data(tvals[mask],arr['stable'][mask]); sl.set_data(tvals[mask],amp_vals[mask])
-                au.set_data(acc_x,np.ones_like(acc_x)); ad.set_data(acc_x,-np.ones_like(acc_x));
-                for a in ax: a.relim(); a.autoscale_view()
-                y_min,y_max=ax[0].get_ylim(); ax[0].set_ylim(0,y_max*1.05); plt.pause(0.001)
-    
-    # --- FIXED: GUI operations must be done in the same thread that created the plot ---
-    print("\nUI thread stopped. Performing final analysis...")
-    if last_data:
-        analyze_beats_on_exit(accepted_beats, last_data.active_bpm)
-    if args.live_plot and fig:
-        save_live_png(fig) # Pass the figure object
-        plt.ioff() # Turn off interactive mode
-        plt.show() # Now this will block until the window is closed
-    print("Analysis complete.")
+        now=time.time()
+        if not last_data or now-last_ui_print_time<(1.0/config.ui_update_rate): time.sleep(0.1); continue
+        last_ui_print_time=now;
+        if loop_dts:
+            dts_ms=np.array(loop_dts)*1000
+            stats={'mean':np.mean(dts_ms),'var':np.var(dts_ms),'max':np.max(dts_ms),'num':len(dts_ms)}
+        else:
+            stats={'mean':0,'var':0,'max':0,'num':0}
+        if sys.stdout.isatty(): sys.stdout.write('\033[7F\033[J')
+        print(f"--- Reachy Rhythm Controller ---\n"
+              f"Control Loop (last {stats['num']} loops):\n  Mean: {stats['mean']:.1f}ms | Var: {stats['var']:.2f} | Max: {stats['max']:.1f}ms\n"
+              f"State: {last_data['state']:<10} [PLL: {'ON' if config.use_pll else 'OFF'}]\n"
+              f"Librosa BPM: {last_data['librosa_bpm']:6.1f}\nCalc. BPM:   {last_data['calculated_bpm']:6.1f}"); sys.stdout.flush(); loop_dts.clear()
+        if config.live_plot and fig:
+            t=np.array([e['t'] for e in log_entries]);
+            if len(t)<2: continue
+            start_time=t[0]; t-=start_time; mask=t>=t[-1]-config.plot_window_duration
+            if not np.any(mask): continue
+            librosa_bpm=np.array([e['librosa_bpm'] for e in log_entries]); calc_bpm=np.array([e['calculated_bpm'] for e in log_entries]); phase=np.sin(2*np.pi*np.array([e['phase'] for e in log_entries]))
+            librosa_line.set_data(t[mask],librosa_bpm[mask]); calc_line.set_data(t[mask],calc_bpm[mask]); phase_line.set_data(t[mask],phase[mask])
+            
+            # FIXED: Correctly remove old vlines by iterating through the collections list.
+            for collection in ax[1].collections[:]:
+                collection.remove()
 
-def main() -> None:
-    data_queue=Queue(); stop_event=threading.Event(); music=MusicState()
-    threading.Thread(target=audio_thread, args=(music,), daemon=True).start()
-    ui=threading.Thread(target=ui_thread,args=(data_queue, stop_event, LIVE_WIN), daemon=True)
-    ui.start()
-    pll=PLL(); neutral=head_pose(NEUTRAL_POS,NEUTRAL_EUL); move_fn=AVAILABLE_DANCE_MOVES[args.dance]
-    params=MOVE_SPECIFIC_PARAMS.get(args.dance,{}); phase_offset=1.0/(4*params.get('frequency_factor',1.0))
-    last_loop=time.time(); active_bpm=0.0; processed_beats=0
+            acc_beats=np.array([b for e in log_entries for b in e['accepted_beats']])-start_time; rej_beats=np.array([b for e in log_entries for b in e['rejected_beats']])-start_time
+            ax[1].vlines(acc_beats[acc_beats > t[mask][0]],-1,1,colors='g',linestyles='solid'); ax[1].vlines(rej_beats[rej_beats > t[mask][0]],-1,1,colors='r',linestyles='dashed')
+            for a in ax: a.relim(); a.autoscale_view()
+            y_min,y_max=ax[0].get_ylim(); ax[0].set_ylim(0,y_max*1.05); ax[1].set_ylim(-1.1,1.1); plt.pause(0.001)
+    print("\nUI thread stopped.")
+    if config.live_plot and fig:
+        os.makedirs(config.save_dir,exist_ok=True); fname=f'reachy_live_{datetime.datetime.now():%Y%m%d_%H%M%S}.png'
+        path=os.path.join(config.save_dir,fname); fig.savefig(path,dpi=150); print(f"Plot saved to {path}"); plt.ioff(); plt.show()
 
+# ───────────────────────────── Main Control Loop ─────────────────────────────
+def main(config: Config) -> None:
+    data_queue, stop_event, music = Queue(), threading.Event(), MusicState()
+    threading.Thread(target=audio_thread, args=(music, config, stop_event), daemon=True).start()
+    ui=threading.Thread(target=ui_thread, args=(data_queue, config, stop_event), daemon=True); ui.start()
+    pll=PLL(); neutral=head_pose(config.neutral_pos, config.neutral_eul); move_fn=AVAILABLE_DANCE_MOVES[config.dance_move]
+    params=MOVE_SPECIFIC_PARAMS.get(config.dance_move,{}); phase_offset=1.0/(4*params.get('frequency_factor',1.0))
+    last_loop=time.time(); processed_beats, active_bpm = 0, 0.0
+    filtered_beat_times=collections.deque(maxlen=config.beat_buffer_size)
     print('Connecting to Reachy Mini…')
     with ReachyMini() as bot:
-        bot.set_target(head=neutral, antennas=np.zeros(2)); time.sleep(1)
-        print('Robot ready — play music!\n')
+        bot.set_target(head=neutral,antennas=np.zeros(2)); time.sleep(1); print('Robot ready — play music!\n')
         try:
             while True:
-                now=time.time(); dt=now-last_loop; last_loop=now
+                now,dt=time.time(),time.time()-last_loop; last_loop=now
                 with music.lock:
-                    goal_bpm,raw_bpm,state,last_beat=music.goal_bpm,music.raw_bpm,music.state,music.last_beat_time
+                    librosa_bpm,state,last_event_time=music.librosa_bpm,music.state,music.last_event_time
                     new_beats=list(music.beats)[processed_beats:]
                 processed_beats+=len(new_beats)
-                if state=='Locked':
-                    if active_bpm!=goal_bpm:
-                        print(f"\n--- [CONTROL] BPM updated to: {goal_bpm:.1f} ---\n"); active_bpm=goal_bpm; pll.phase=0.0
-                if now-last_beat>SILENCE_TMO: active_bpm=0.0
+                accepted_this_frame,rejected_this_frame=[],[]
+                if new_beats:
+                    ref_bpm=active_bpm if active_bpm>0 else librosa_bpm
+                    if ref_bpm>0:
+                        expected_interval,min_interval=60.0/ref_bpm, (60.0/ref_bpm)*config.min_interval_factor; i=0
+                        while i<len(new_beats):
+                            last_beat=filtered_beat_times[-1] if filtered_beat_times else new_beats[i]-expected_interval
+                            current_beat=new_beats[i]
+                            if i+1<len(new_beats) and (new_beats[i+1]-current_beat)<min_interval:
+                                competitor=new_beats[i+1]; err_current=abs((current_beat-last_beat)-expected_interval); err_competitor=abs((competitor-last_beat)-expected_interval)
+                                if err_current<=err_competitor: accepted_this_frame.append(current_beat); rejected_this_frame.append(competitor)
+                                else: rejected_this_frame.append(current_beat); accepted_this_frame.append(competitor)
+                                i+=2
+                            else:
+                                if (current_beat-last_beat)>min_interval: accepted_this_frame.append(current_beat)
+                                else: rejected_this_frame.append(current_beat)
+                                i+=1
+                    else: accepted_this_frame.extend(new_beats)
+                filtered_beat_times.extend(accepted_this_frame)
+                calculated_bpm=0.0
+                if len(filtered_beat_times)>5:
+                    intervals=np.diff(filtered_beat_times); median_interval=np.median(intervals)
+                    if median_interval>0: calculated_bpm=60.0/median_interval
+                if state=='Locked' or calculated_bpm>0: active_bpm=calculated_bpm if calculated_bpm>0 else librosa_bpm
+                if now-last_event_time>config.silence_tmo: active_bpm=0.0
                 if active_bpm==0.0: bot.set_target(head=neutral,antennas=np.zeros(2)); phase,err,rate=pll.phase,0.0,1.0
                 else:
-                    phase,err,rate=pll.step(dt,active_bpm,last_beat,now); beat_phase=(phase+phase_offset)%1.0
-                    offs=move_fn(beat_phase,**params)
-                    bot.set_target(head=head_pose(NEUTRAL_POS+offs.get('position_offset',np.zeros(3)),NEUTRAL_EUL+offs.get('orientation_offset',np.zeros(3))),antennas=offs.get('antennas_offset',np.zeros(2)))
-                log_entry=LogEntry(t=now,raw=raw_bpm,stable=active_bpm,err=err,rate=rate*100.0,phase=phase)
-                ui_data=UIData(loop_dt=dt,state=state,raw_bpm=raw_bpm,active_bpm=active_bpm,log_entry=log_entry,new_beats=new_beats)
-                data_queue.put(ui_data)
-                time.sleep(max(0,CONTROL_TS-(time.time()-now)))
-        except KeyboardInterrupt:
-            print("\nCtrl-C received, shutting down...")
-        finally:
-            # FIXED: The main thread's only job is to signal and wait.
-            stop_event.set()
-            ui.join(timeout=3) # Wait for UI thread to finish its work
-            print("Shutdown complete.")
-
-def save_live_png(fig: plt.Figure) -> None: # MODIFIED to accept figure
-    if not args.live_plot: return
-    os.makedirs(args.save_dir, exist_ok=True); fname=f'reachy_live_{datetime.datetime.now():%Y%m%d_%H%M%S}.png'
-    path=os.path.join(args.save_dir, fname);
-    fig.savefig(path, dpi=150) # Use the passed figure object
-    print(f'PNG saved to {path}')
+                    last_good_beat=filtered_beat_times[-1] if filtered_beat_times else 0
+                    phase,err,rate=pll.step(dt,active_bpm,last_good_beat,now,config); beat_phase=(phase+phase_offset)%1.0
+                    offs=move_fn(beat_phase,**params); bot.set_target(head=head_pose(config.neutral_pos+offs.get('position_offset',np.zeros(3)),config.neutral_eul+offs.get('orientation_offset',np.zeros(3))),antennas=offs.get('antennas_offset',np.zeros(2)))
+                data_queue.put({'t':now,'loop_dt':dt,'state':state,'librosa_bpm':librosa_bpm,'calculated_bpm':active_bpm,'phase':phase,'accepted_beats':accepted_this_frame,'rejected_beats':rejected_this_frame})
+                time.sleep(max(0,config.control_ts-(time.time()-now)))
+        except KeyboardInterrupt: print("\nCtrl-C received, shutting down...")
+        finally: stop_event.set(); ui.join(timeout=3); print("Shutdown complete.")
 
 if __name__ == '__main__':
-    main()
+    parser = argparse.ArgumentParser(description="Reachy Rhythm Controller", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument('--dance', default='head_bob_z', choices=AVAILABLE_DANCE_MOVES.keys())
+    parser.add_argument('--live-plot', action='store_true', help='Show rolling 5s plot')
+    parser.add_argument('--save-dir', default='.', help='Folder for PNG on Ctrl-C')
+    cli_args = parser.parse_args()
+
+    config = Config(
+        dance_move=cli_args.dance,
+        live_plot=cli_args.live_plot,
+        save_dir=cli_args.save_dir
+    )
+    main(config)
