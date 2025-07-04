@@ -161,14 +161,14 @@ class MujocoBackend(Backend):
         # TODO Do something in mujoco here ?
         pass
 
-    def get_status(self) -> dict:
+    def get_status(self) -> "MujocoBackendStatus":
         """Get the status of the Mujoco backend.
 
         Returns:
             dict: An empty dictionary as the Mujoco backend does not have a specific status to report.
 
         """
-        return {}
+        return MujocoBackendStatus()
 
 
 @dataclass
