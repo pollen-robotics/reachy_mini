@@ -1,75 +1,190 @@
-from reachy_mini.io import Backend
-import os
-from pathlib import Path
-from reachy_mini_motor_controller import ReachyMiniMotorController
-import time
-import json
-import numpy as np
+"""Robot Backend for Reachy Mini.
 
-ROOT_PATH = Path(os.path.dirname(os.path.abspath(__file__))).parent.parent
+This module provides the `RobotBackend` class, which interfaces with the Reachy Mini motor controller to control the robot's movements and manage its status.
+It handles the control loop, joint positions, torque enabling/disabling, and provides a status report of the robot's backend.
+It uses the `ReachyMiniMotorController` to communicate with the robot's motors.
+"""
+
+import json
+import logging
+import time
+from dataclasses import dataclass
+from multiprocessing import Event  # It seems to be more accurate than threading.Event
+from typing import Optional
+
+import numpy as np
+from reachy_mini_motor_controller import ReachyMiniMotorController
+
+from reachy_mini.io.backend import Backend
+
+logger = logging.getLogger(__name__)
 
 
 class RobotBackend(Backend):
-    def __init__(self, serialport: str):
+    """Real robot backend for Reachy Mini."""
+
+    def __init__(self, serialport: str, log_level: str = "INFO"):
+        """Initialize the RobotBackend.
+
+        Args:
+            serialport (str): The serial port to which the Reachy Mini is connected.
+            log_level (str): The logging level for the backend. Default is "INFO".
+
+        Tries to connect to the Reachy Mini motor controller and initializes the control loop.
+
+        """
         super().__init__()
+
+        self.logger = logging.getLogger(__name__)
+        self.logger.setLevel(log_level)
+
         self.c = ReachyMiniMotorController(serialport)
-        self.control_loop_frequency = 300.0
-        self.publish_frequency = 50.0
-        self.decimation = int(self.control_loop_frequency / self.publish_frequency)
+        self.control_loop_frequency = 200.0
+        self.last_alive = None
 
         self._torque_enabled = False
 
+        self._status = RobotBackendStatus(
+            ready=False,
+            last_alive=None,
+            control_loop_stats={},
+        )
+        self._stats_record_period = 1.0  # seconds
+        self._stats = {
+            "timestamps": [],
+            "nb_error": 0,
+            "record_period": self._stats_record_period,
+        }
+
     def run(self):
-        # self.c.enable_torque()
-        # self.wake_up()
+        """Run the control loop for the robot backend.
+
+        This method continuously updates the motor controller at a specified frequency.
+        It reads the joint positions, updates the motor controller, and publishes the joint positions.
+        It also handles errors and retries if the motor controller is not responding.
+        """
+        assert self.c is not None, "Motor controller not initialized or already closed."
+
         period = 1.0 / self.control_loop_frequency  # Control loop period in seconds
-        step = 0
 
-        while True:
+        self.retries = 5
+        self.stats_record_t0 = time.time()
+
+        next_call_event = Event()
+
+        while not self.should_stop.is_set():
             start_t = time.time()
-
-            if self._torque_enabled:
-                if self.head_joint_positions is not None:
-                    self.c.set_stewart_platform_position(
-                        # stewart platform angles are inverted in the real robot
-                        list(-np.array(self.head_joint_positions[1:]))
-                    )
-                    self.c.set_body_rotation(self.head_joint_positions[0])
-                if self.antenna_joint_positions is not None:
-                    self.c.set_antennas_positions(self.antenna_joint_positions)
-
-            if step % self.decimation == 0:
-                if self.joint_positions_publisher is not None:
-                    self.joint_positions_publisher.put(
-                        json.dumps(
-                            {
-                                "head_joint_positions": self.get_head_joint_positions(),
-                                "antennas_joint_positions": self.get_antenna_joint_positions(),
-                            }
-                        )
-                    )
-
+            self._update()
             took = time.time() - start_t
-            time.sleep(max(0, period - took))
 
-    # TODO don't read two times all positions
-    def get_head_joint_positions(self):
-        positions = self.c.read_all_positions()
-        yaw = positions[0]
-        dofs = positions[3:]  # All other dofs
-        return [yaw] + list(
-            -np.array(dofs)
-        )  # stewart platform angles are inverted in the real robot
+            sleep_time = max(0, period - took)
+            if sleep_time > 0:
+                next_call_event.clear()
+                next_call_event.wait(sleep_time)
 
-    def get_antenna_joint_positions(self):
-        positions = self.c.read_all_positions()
-        antennas = positions[1:3]
-        return list(antennas)
+    def _update(self):
+        assert self.c is not None, "Motor controller not initialized or already closed."
+
+        if self._torque_enabled:
+            if self.head_joint_positions is not None:
+                self.c.set_stewart_platform_position(self.head_joint_positions[1:])
+                self.c.set_body_rotation(self.head_joint_positions[0])
+            if self.antenna_joint_positions is not None:
+                self.c.set_antennas_positions(self.antenna_joint_positions)
+
+        if self.joint_positions_publisher is not None:
+            try:
+                positions = self.c.read_all_positions()
+                yaw = positions[0]
+                antennas = positions[1:3]
+                dofs = positions[3:]
+
+                self.joint_positions_publisher.put(
+                    json.dumps(
+                        {
+                            "head_joint_positions": [yaw] + list(dofs),
+                            "antennas_joint_positions": list(antennas),
+                        }
+                    )
+                )
+                self.last_alive = time.time()
+                self._stats["timestamps"].append(self.last_alive)
+
+                self.ready.set()  # Mark the backend as ready
+            except RuntimeError as e:
+                self._stats["nb_error"] += 1
+                self.logger.warning(f"Error reading positions: {e}")
+
+                # If we never received a position, we retry a few times
+                # But most likely the robot is not powered on or connected
+                if self.last_alive is None:
+                    if self.retries > 0:
+                        self.logger.error(
+                            f"Error reading positions, retrying ({self.retries} left): {e}"
+                        )
+                        self.retries -= 1
+                        time.sleep(0.1)
+                        return
+                    self.logger.error("No response from the robot, stopping.")
+                    self.logger.error(
+                        "Make sure the robot is powered on and connected."
+                    )
+                    self._status.error = "Motors are not powered on or connected."
+                    self.should_stop.set()
+                    return
+
+                if self.last_alive + 2 < time.time():
+                    self._status.error = (
+                        "No response from the robot's motor for the last 2 seconds."
+                    )
+
+                    self.logger.error(
+                        "No response from the robot for 2 seconds, stopping."
+                    )
+                    raise e
+
+            if time.time() - self.stats_record_t0 > self._stats_record_period:
+                dt = np.diff(self._stats["timestamps"])
+                if len(dt) > 1:
+                    self._status.control_loop_stats["mean_control_loop_frequency"] = (
+                        float(np.mean(1.0 / dt))
+                    )
+                    self._status.control_loop_stats["max_control_loop_interval"] = (
+                        float(np.max(dt))
+                    )
+                    self._status.control_loop_stats["nb_error"] = self._stats[
+                        "nb_error"
+                    ]
+
+                self._stats["timestamps"].clear()
+                self._stats["nb_error"] = 0
+                self.stats_record_t0 = time.time()
 
     def set_torque(self, enabled: bool) -> None:
+        """Enable or disable the torque on the motors."""
+        assert self.c is not None, "Motor controller not initialized or already closed."
+
         if enabled:
             self.c.enable_torque()
         else:
             self.c.disable_torque()
 
         self._torque_enabled = enabled
+
+    def close(self) -> None:
+        """Close the motor controller connection."""
+        self.c = None
+
+    def get_status(self) -> "RobotBackendStatus":
+        """Get the current status of the robot backend."""
+        return self._status
+
+
+@dataclass
+class RobotBackendStatus:
+    """Status of the Robot Backend."""
+
+    ready: bool
+    last_alive: Optional[float]
+    control_loop_stats: dict
+    error: Optional[str] = None

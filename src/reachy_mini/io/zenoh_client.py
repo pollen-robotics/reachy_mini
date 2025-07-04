@@ -1,12 +1,23 @@
+"""Zenoh client for Reachy Mini.
+
+This module implements a Zenoh client that allows communication with the Reachy Mini
+robot. It subscribes to joint positions updates and allows sending commands to the robot.
+"""
+
 import json
 import threading
+import time
+
 import zenoh
 
 from reachy_mini.io.abstract import AbstractClient
 
 
 class ZenohClient(AbstractClient):
+    """Zenoh client for Reachy Mini."""
+
     def __init__(self, localhost_only: bool = True):
+        """Initialize the Zenoh client."""
         if localhost_only:
             c = zenoh.Config.from_json5(
                 json.dumps(
@@ -34,21 +45,36 @@ class ZenohClient(AbstractClient):
         self._last_antennas_joint_positions = None
         self.keep_alive_event = threading.Event()
 
-    def wait_for_connection(self):
-        while not self.keep_alive_event.wait(timeout=5.0):
-            print(
-                "Waiting for joint positions from the server. "
-                "This is a keep-alive mechanism to ensure the client is connected."
-            )
+    def wait_for_connection(self, timeout: float = 5.0):
+        """Wait for the client to connect to the server.
+
+        Args:
+            timeout (float): Maximum time to wait for the connection in seconds.
+
+        Raises:
+            TimeoutError: If the connection is not established within the timeout period.
+
+        """
+        start = time.time()
+        while not self.keep_alive_event.wait(timeout=1.0):
+            if time.time() - start > timeout:
+                self.disconnect()
+                raise TimeoutError(
+                    "Timeout while waiting for connection with the server."
+                )
+            print("Waiting for connection with the server...")
 
     def is_connected(self) -> bool:
+        """Check if the client is connected to the server."""
         self.keep_alive_event.clear()
         return self.keep_alive_event.wait(timeout=1.0)
 
     def disconnect(self):
+        """Disconnect the client from the server."""
         self.session.close()
 
     def send_command(self, command: str):
+        """Send a command to the server."""
         self.cmd_pub.put(command.encode("utf-8"))
 
     def _handle_joint_positions(self, sample):
@@ -68,6 +94,6 @@ class ZenohClient(AbstractClient):
             and self._last_antennas_joint_positions is not None
         ), "No joint positions received yet. Wait for the client to connect."
         return (
-            self._last_head_joint_positions,
-            self._last_antennas_joint_positions,
+            self._last_head_joint_positions.copy(),
+            self._last_antennas_joint_positions.copy(),
         )

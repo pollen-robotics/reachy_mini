@@ -1,3 +1,61 @@
 [build-system]
 requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
+
+[project]
+name = "reachy_mini"
+version = "0.1.0"
+authors = [{ name = "Pollen Robotics", email = "contact@pollen-robotics.com" }]
+description = ""
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "numpy==2.2.5",
+    "scipy==1.15.3",
+    "mujoco==3.3.0",
+    "onshape-to-robot==1.7.6",
+    "placo==0.9.4",
+    "reachy_mini_motor_controller",
+    "pygame==2.6.1",
+    "eclipse-zenoh>=1.4.0",
+    "opencv-python<=5.0",
+    "cv2_enumerate_cameras==1.2.1",
+    "psutil",
+    "jinja2",
+    "uvicorn",
+    "fastapi",
+    "pyserial",
+]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[project.scripts]
+reachy-mini-daemon = "reachy_mini.io.daemon:main"
+reachy-mini-make-app = "reachy_mini.app:main"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+include-package-data = true
+
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+
+[tool.setuptools.package-data]
+reachy_mini = ["**/*"] # Inclut tous les fichiers non .py
+
+[tool.ruff]
+exclude = [
+    "examples/remi_outdated/*.py",
+    "src/reachy_mini/__init__.py",
+    "build/*",
+    "conftest.py",
+    "apps/dashboard",
+]
+lint.extend-select = ["I", "D"]
+lint.ignore = [
+    "D203",  # Incompatible with D211
+    "D213",  # Incompatible with D212
+]

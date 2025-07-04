@@ -1,18 +1,18 @@
-from head_tracker import HeadTracker
-import cv2
+"""Head tracking demo for Reachy Mini."""
+
 import time
-from reachy_mini import ReachyMini
+
+import cv2
 import numpy as np
+from head_tracker import HeadTracker
 from scipy.spatial.transform import Rotation as R
 
-from noise import pnoise1
-
-
-def smooth_movement(t, speed=0.5, scale=0.8):
-    return pnoise1(t * speed) * scale
+from reachy_mini import ReachyMini
+from reachy_mini.io.cam_utils import find_camera
 
 
 def draw_debug(img, eye_center, roll):
+    """Draw debug information on the image."""
     _eye_center = (eye_center.copy() + 1) / 2  # [0, 1]
     h, w, _ = img.shape
     cv2.circle(
@@ -51,12 +51,10 @@ def draw_debug(img, eye_center, roll):
     )
 
 
-cap = cv2.VideoCapture(4)
-# cap = cv2.VideoCapture(0)
+cap = find_camera()
 
 head_tracker = HeadTracker()
 pose = np.eye(4)
-pose[:3, 3][2] = 0.177  # Set the height of the head
 euler_rot = np.array([0.0, 0.0, 0.0])
 kp = 0.3
 t0 = time.time()
@@ -64,8 +62,6 @@ with ReachyMini() as reachy_mini:
     try:
         while True:
             t = time.time() - t0
-            left_antenna = smooth_movement(t)
-            right_antenna = smooth_movement(t + 200)
 
             success, img = cap.read()
 
@@ -82,11 +78,10 @@ with ReachyMini() as reachy_mini:
                 rot_mat = R.from_euler("xyz", euler_rot, degrees=False).as_matrix()
                 pose[:3, :3] = rot_mat
                 pose[:3, 3][2] = (
-                    error[1] * 0.04 + 0.177
+                    error[1] * 0.04
                 )  # Adjust height based on vertical error
 
-                antennas = [left_antenna, right_antenna]
-                reachy_mini.set_position(head=pose, antennas=np.array(antennas))
+                reachy_mini.set_target(head=pose)
             cv2.imshow("test_window", img)
 
             cv2.waitKey(1)

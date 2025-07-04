@@ -1,0 +1,13 @@
+{
+    "configuration": "default",
+    "documentId": "e305b26a84339af20c593973",
+    "documentMicroversion": "4913859d0d2ce0a13b3adb26",
+    "elementId": "63ac215c84389096e60ba3ce",
+    "fullConfiguration": "default",
+    "id": "MoUkZchlIKO7O02cZ",
+    "isStandardContent": false,
+    "name": "test_antenna <1>",
+    "partId": "RMCD",
+    "suppressed": false,
+    "type": "Part"
+}

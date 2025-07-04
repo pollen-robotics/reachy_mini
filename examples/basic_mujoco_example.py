@@ -1,14 +1,16 @@
+"""Basic MuJoCo Example with Reachy Mini."""
+
+import time
+from importlib.resources import files
+
 import mujoco
 import mujoco.viewer
-import time
-import os
-from pathlib import Path
+
+import reachy_mini
 from reachy_mini.mujoco_utils import get_joint_qpos
 
-ROOT_PATH = Path(os.path.dirname(os.path.abspath(__file__))).parent
-
 model = mujoco.MjModel.from_xml_path(
-    f"{ROOT_PATH}/descriptions/reachy_mini/mjcf/scenes/empty.xml"
+    str(files(reachy_mini).joinpath("descriptions/reachy_mini/mjcf/scenes/empty.xml"))
 )
 data = mujoco.MjData(model)
 model.opt.timestep = 0.002  # s, simulation timestep, 500hz

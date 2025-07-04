@@ -1,3 +1,5 @@
+"""Reachy Mini Head and Antennas Control Example."""
+
 import time
 
 import numpy as np
@@ -7,6 +9,7 @@ from reachy_mini import ReachyMini
 
 
 def main():
+    """Control the head and antennas of Reachy Mini."""
     with ReachyMini() as mini:
         t0 = time.time()
         while True:
@@ -19,10 +22,9 @@ def main():
 
             yaw = target
             head = np.eye(4)
-            head[:3, 3] = [0, 0, 0.177]
             head[:3, :3] = R.from_euler("xyz", [0, 0, yaw], degrees=False).as_matrix()
 
-            mini.set_position(head=head, antennas=np.array([target, -target]))
+            mini.set_target(head=head, antennas=[target, -target])
 
             time.sleep(0.01)
 

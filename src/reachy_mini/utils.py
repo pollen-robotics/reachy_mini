@@ -1,3 +1,10 @@
+"""Utility functions for Reachy Mini.
+
+These functions provide various utilities such as creating head poses, performing minimum jerk interpolation,
+checking if the Reachy Mini daemon is running, and performing linear pose interpolation.
+
+"""
+
 import os
 import subprocess
 import time
@@ -5,6 +12,44 @@ from typing import Callable, Optional
 
 import numpy as np
 import psutil
+from scipy.spatial.transform import Rotation as R
+
+
+def create_head_pose(
+    x: float = 0,
+    y: float = 0,
+    z: float = 0,
+    roll: float = 0,
+    pitch: float = 0,
+    yaw: float = 0,
+    mm: bool = False,
+    degrees: bool = True,
+) -> np.ndarray:
+    """Create a homogeneous transformation matrix representing a pose in 6D space (position and orientation).
+
+    Args:
+        x (float): X coordinate of the position.
+        y (float): Y coordinate of the position.
+        z (float): Z coordinate of the position.
+        roll (float): Roll angle
+        pitch (float): Pitch angle
+        yaw (float): Yaw angle
+        mm (bool): If True, convert position from millimeters to meters.
+        degrees (bool): If True, interpret roll, pitch, and yaw as degrees; otherwise as radians.
+
+    Returns:
+        np.ndarray: A 4x4 homogeneous transformation matrix representing the pose.
+
+    """
+    pose = np.eye(4)
+    rot = R.from_euler("xyz", [roll, pitch, yaw], degrees=degrees).as_matrix()
+    pose[:3, :3] = rot
+    pose[:, 3] = [x, y, z, 0]
+    if mm:
+        pose[:3, 3] /= 1000
+
+    return pose
+
 
 InterpolationFunc = Callable[[float], np.ndarray]
 
@@ -55,8 +100,10 @@ def minimum_jerk(
 
 
 def daemon_check(spawn_daemon, use_sim):
+    """Check if the Reachy Mini daemon is running and spawn it if necessary."""
+
     def is_python_script_running(script_name):
-        """Check if a specific Python script is running"""
+        """Check if a specific Python script is running."""
         found_script = False
         simluation_enabled = False
         for proc in psutil.process_iter(["pid", "name", "cmdline"]):
@@ -85,6 +132,7 @@ def daemon_check(spawn_daemon, use_sim):
                 f"Reachy Mini daemon is already running (PID: {pid}) with a different configuration. "
             )
             print("Killing the existing daemon...")
+            assert pid is not None, "PID should not be None if daemon is running"
             os.kill(pid, 9)
             time.sleep(1)
 
@@ -92,4 +140,71 @@ def daemon_check(spawn_daemon, use_sim):
         subprocess.Popen(
             ["reachy-mini-daemon", "--sim"] if use_sim else ["reachy-mini-daemon"],
             start_new_session=True,
+        )
+
+
+def linear_pose_interpolation(
+    start_pose: np.ndarray, target_pose: np.ndarray, t: float
+):
+    """Linearly interpolate between two poses in 6D space."""
+    # Extract rotations
+    rot_start = R.from_matrix(start_pose[:3, :3])
+    rot_end = R.from_matrix(target_pose[:3, :3])
+
+    # Compute relative rotation q_rel such that rot_start * q_rel = rot_end
+    q_rel = rot_start.inv() * rot_end
+    # Convert to rotation vector (axis-angle)
+    rotvec_rel = q_rel.as_rotvec()
+    # Scale the rotation vector by t (allows t<0 or >1 for overshoot)
+    rot_interp = (rot_start * R.from_rotvec(rotvec_rel * t)).as_matrix()
+
+    # Extract translations
+    pos_start = start_pose[:3, 3]
+    pos_end = target_pose[:3, 3]
+    # Linear interpolation/extrapolation on translation
+    pos_interp = pos_start + (pos_end - pos_start) * t
+
+    # Compose homogeneous transformation
+    interp_pose = np.eye(4)
+    interp_pose[:3, :3] = rot_interp
+    interp_pose[:3, 3] = pos_interp
+
+    return interp_pose
+
+
+def time_trajectory(t: float, method="default"):
+    """Compute the time trajectory value based on the specified interpolation method."""
+    method = "minjerk" if method == "default" else method
+
+    if t < 0 or t > 1:
+        raise ValueError("time value is out of range [0,1]")
+
+    if method == "linear":
+        return t
+
+    elif method == "minjerk":
+        return 10 * t**3 - 15 * t**4 + 6 * t**5
+
+    elif method == "ease":
+        if t < 0.5:
+            return 2 * t * t
+        else:
+            return 1 - ((-2 * t + 2) ** 2) / 2
+
+    elif method == "cartoon":
+        c1 = 1.70158
+        c2 = c1 * 1.525
+
+        if t < 0.5:
+            # phase in
+            return ((2 * t) ** 2 * ((c2 + 1) * 2 * t - c2)) / 2
+        else:
+            # phase out
+            return (((2 * t - 2) ** 2 * ((c2 + 1) * (2 * t - 2) + c2)) + 2) / 2
+
+    else:
+        raise ValueError(
+            "Unknown interpolation method: {} (possible values: linear, minjerk, ease, cartoon)".format(
+                method
+            )
         )

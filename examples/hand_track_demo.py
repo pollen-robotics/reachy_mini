@@ -1,18 +1,18 @@
-from hand_tracker import HandTracker
-import cv2
+"""Hand tracking demo for Reachy Mini."""
+
 import time
-from reachy_mini import ReachyMini
+
+import cv2
 import numpy as np
+from hand_tracker import HandTracker
 from scipy.spatial.transform import Rotation as R
 
-from noise import pnoise1
-
-
-def smooth_movement(t, speed=0.5, scale=0.8):
-    return pnoise1(t * speed) * scale
+from reachy_mini import ReachyMini
+from reachy_mini.io.cam_utils import find_camera
 
 
 def draw_debug(img, palm_center):
+    """Draw debug information on the image."""
     h, w, _ = img.shape
     draw_palm = [(-palm_center[0] + 1) / 2, (palm_center[1] + 1) / 2]  # [0, 1]
     cv2.circle(
@@ -41,21 +41,17 @@ def draw_debug(img, palm_center):
     )
 
 
-cap = cv2.VideoCapture(4)
-# cap = cv2.VideoCapture(0)
+cap = find_camera()
 
 hand_tracker = HandTracker()
 pose = np.eye(4)
-pose[:3, 3][2] = 0.177  # Set the height of the head
 euler_rot = np.array([0.0, 0.0, 0.0])
-kp = 0.3
+kp = 0.2
 t0 = time.time()
 with ReachyMini() as reachy_mini:
     try:
         while True:
             t = time.time() - t0
-            left_antenna = smooth_movement(t)
-            right_antenna = smooth_movement(t + 200)
 
             success, img = cap.read()
             hands = hand_tracker.get_hands_positions(img)
@@ -73,12 +69,13 @@ with ReachyMini() as reachy_mini:
                 rot_mat = R.from_euler("xyz", euler_rot, degrees=False).as_matrix()
                 pose[:3, :3] = rot_mat
                 pose[:3, 3][2] = (
-                    error[1] * 0.04 + 0.177
+                    error[1] * 0.04
+                )  # Adjust height based on vertical error
+                pose[:3, 3][1] = (
+                    error[0] * 0.02
                 )  # Adjust height based on vertical error
 
-                # antennas = [left_antenna, right_antenna]
-                antennas = np.array([0, 0])
-                reachy_mini.set_position(head=pose, antennas=antennas)
+                reachy_mini.set_target(head=pose)
             cv2.imshow("test_window", img)
 
             cv2.waitKey(1)

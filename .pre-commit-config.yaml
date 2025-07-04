@@ -1,0 +1,10 @@
+repos:
+- repo: https://github.com/astral-sh/ruff-pre-commit
+  # Ruff version. Make sure it matches the version in .github/workflows/lint.yml.
+  rev: v0.12.0
+  hooks:
+    # Run the linter.
+    - id: ruff-check
+      args: ["--select", "I", "--select", "D", "--ignore", "D203", "--ignore", "D213"]
+    # Run the formatter.
+    - id: ruff-format

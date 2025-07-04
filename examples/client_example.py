@@ -1,3 +1,5 @@
+"""Reachy Mini Client Example."""
+
 import time
 
 import numpy as np
@@ -9,9 +11,7 @@ with ReachyMini(spawn_daemon=True, use_sim=False) as reachy_mini:
     try:
         while True:
             pose = np.eye(4)
-            pose[:3, 3][2] = 0.177 + 0.005 * np.sin(
-                2 * np.pi * 0.3 * time.time() + np.pi
-            )
+            pose[:3, 3][2] = 0.005 * np.sin(2 * np.pi * 0.3 * time.time() + np.pi)
             euler_rot = [
                 0,
                 0,
@@ -22,7 +22,7 @@ with ReachyMini(spawn_daemon=True, use_sim=False) as reachy_mini:
             pose[:3, 3][2] += 0.01 * np.sin(2 * np.pi * 0.5 * time.time())
             antennas = np.array([1, 1]) * np.sin(2 * np.pi * 0.5 * time.time())
 
-            reachy_mini.set_position(head=pose, antennas=antennas)
+            reachy_mini.set_target(head=pose, antennas=antennas)
 
             time.sleep(0.02)
     except KeyboardInterrupt:
