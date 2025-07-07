@@ -81,3 +81,9 @@ class RobotBackend(Backend):
             self.c.disable_torque()
 
         self._torque_enabled = enabled
+
+    def get_head_joint_positions(self):
+        return self.head_joint_positions
+
+    def get_antenna_joint_positions(self):
+        return self.antenna_joint_positions
