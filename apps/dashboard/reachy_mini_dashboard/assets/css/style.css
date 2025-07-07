@@ -164,6 +164,11 @@
     border-radius: 24px;
 }
 
+.simulation-slider.disabled {
+    background-color: #e5e7eb;
+    cursor: not-allowed;
+}
+
 .simulation-slider:before {
     position: absolute;
     content: "";
