@@ -319,9 +319,19 @@ input:checked+.simulation-slider:before {
     /* blue-500 */
 }
 
+.space-card-installing-btn {
+    background: #f59e0b;
+    /* yellow-500 */
+}
+
 .space-card-installed-btn {
     background: #22c55e;
     /* green-500 */
+}
+
+.space-card-removing-btn {
+    background: #ef4444;
+    /* red-500 */
 }
 
 /* @keyframes spin {

@@ -49,7 +49,6 @@ class SpacesStore {
             this.filteredSpaces = [...this.spaces];
             this.updateStats();
         } catch (error) {
-            console.error('Error loading spaces:', error);
             this.showError();
         }
     }
@@ -139,10 +138,31 @@ class SpacesStore {
     }
 
     renderInstallUpdateButton(space, dashboardStatus) {
+
+        if (Object.keys(dashboardStatus.active_installations).length !== 0) {
+            for (const [id, value] of Object.entries(dashboardStatus.active_installations)) {
+                if (value.operation === 'install' && value.app_name === space.id) {
+                    return `
+                        <button class="space-card-btn space-card-installing-btn disabled">
+                            Installing
+                        </button>
+                    `;
+
+                }
+                else if (value.operation === 'remove' && value.app_name === space.id) {
+                    return `
+                        <button class="space-card-btn space-card-removing-btn disabled">
+                            Removing
+                        </button>
+                    `;
+                }
+            }
+        }
+
         if (dashboardStatus.available_apps.includes(space.id)) {
             return `
             <button class="space-card-btn space-card-installed-btn disabled">
-                Already Installed
+                Installed
             </button>
         `;
         }
@@ -205,4 +225,5 @@ const formatDate = (timestamp) => {
 };
 
 initializeSpacesStore(); // Load spaces on page load
+setInterval(refreshSpacesStore, 500); // Refresh every minute
 
