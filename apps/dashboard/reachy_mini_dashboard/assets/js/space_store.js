@@ -100,11 +100,6 @@ class SpacesStore {
         statsEl.innerHTML = '';
     }
 
-
-    //     
-    // 
-
-
     renderSpaceCard(space) {
         const title = space.cardData?.title + ' ' + space.cardData?.emoji || space.id;
         const description = space.cardData?.short_description || '';
@@ -114,7 +109,8 @@ class SpacesStore {
         const colorGradient = `bg-gradient-to-br from-${colorFromName}-700 to-${colorToName}-700`;
 
         return `
-            <a class="space-card ${colorGradient}" href="${space.installUrl}" target="_blank" rel="noopener noreferrer">
+            <a class="space-card ${colorGradient}" href="${space.installUrl}" target="_blank" rel="noopener noreferrer"
+                onclick="event.preventDefault(); if(event.target.classList.contains('space-install-btn')) return; window.open('${space.installUrl}', '_blank');">
                 <div class="space-card-header">
                     <div class="space-likes-bg">
                         <div class="space-likes-label">♥️ ${space.likes}</div>
@@ -124,7 +120,7 @@ class SpacesStore {
                 <div class="space-title">${title}</div>
                 <div class="space-description">${description}</div>
 
-                <button class="space-install-btn" onclick="installFromSpace('${space.installUrl}', '${space.cardData?.title}')">Install</button>
+                <button class="space-install-btn" onclick="event.stopPropagation(); installFromSpace('${space.installUrl}', '${space.cardData?.title}'); return false;">Install</button>
 
                 <div class="space-meta">
                     <span class="space-by">${space.author}</span>
