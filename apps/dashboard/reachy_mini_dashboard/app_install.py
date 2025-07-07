@@ -53,6 +53,7 @@ async def install_app_async(
             "message": "Starting installation...",
             "app_name": app_name,
             "app_url": app_url,
+            "operation": "install",
         }
         active_installations[installation_id] = status
         await broadcast_installation_status(installation_id, status)
