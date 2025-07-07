@@ -6,6 +6,12 @@ function initializeSpacesStore() {
     spacesStore.init();
 }
 
+function refreshSpacesStore() {
+    if (spacesStore) {
+        spacesStore.renderSpaces();
+    }
+}
+
 // HF Spaces Store functionality
 class SpacesStore {
     constructor() {
@@ -158,7 +164,7 @@ class SpacesStore {
             return this.renderSpaceCard(space, dashboardStatus);
         }).join('');
 
-        grid.innerHTML += `
+        grid.innerHTML = `
             <div class="grid grid-cols-3 md:grid-cols-3 gap-4">
                 ${spacesCards}
             </div>
@@ -199,3 +205,4 @@ const formatDate = (timestamp) => {
 };
 
 initializeSpacesStore(); // Load spaces on page load
+
