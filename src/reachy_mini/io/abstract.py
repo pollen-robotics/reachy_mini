@@ -1,10 +1,20 @@
+"""Base classes for server and client implementations.
+
+These abstract classes define the interface for server and client components
+in the Reachy Mini project. They provide methods for starting and stopping
+the server, handling commands, and managing client connections.
+"""
+
 from abc import ABC, abstractmethod
 from threading import Event
 
 
 class AbstractServer(ABC):
+    """Base class for server implementations."""
+
     @abstractmethod
     def start(self):
+        """Start the server."""
         pass
 
     @abstractmethod
@@ -19,6 +29,8 @@ class AbstractServer(ABC):
 
 
 class AbstractClient(ABC):
+    """Base class for client implementations."""
+
     @abstractmethod
     def wait_for_connection(self):
         """Wait for the client to connect to the server."""

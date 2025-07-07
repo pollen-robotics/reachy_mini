@@ -1,12 +1,38 @@
+"""Reachy Mini Face Tracking Example.
+
+When running this example, the Reachy Mini will track your face and react to your head movements.
+It will look at the center of your face and adjust its head and antennas accordingly.
+
+This example uses MediaPipe to detect face landmarks and estimate the head pose.
+The estimated pose is then used to control the Reachy Mini's head and antennas.
+"""
+
 import cv2 as cv
+import mediapipe as mp
 import numpy as np
 from scipy.spatial.transform import Rotation as R
-import mediapipe as mp
+
 from reachy_mini import ReachyMini
+from reachy_mini.io.cam_utils import find_camera
 
 
 class PoseEstimator:
+    """Estimate the head pose from face landmarks detected by MediaPipe."""
+
     def predict(self, face_landmarks, image, max_x=0.1, max_y=0.1):
+        """Estimate the head pose from face landmarks.
+
+        Args:
+            face_landmarks: The face landmarks detected by MediaPipe.
+            image: The input image from which the landmarks were detected.
+            max_x: Maximum x-coordinate for the head pose.
+            max_y: Maximum y-coordinate for the head pose.
+
+        Returns:
+            pose: A 4x4 numpy array representing the head pose in the Reachy Mini
+            coordinate system.
+
+        """
         h, w, _ = image.shape
 
         left_eye = np.array(
@@ -36,6 +62,7 @@ class PoseEstimator:
         return pose
 
     def get_landmark_coords(self, face_landmark, img_h, img_w):
+        """Get the coordinates of a face landmark in pixel space."""
         return [
             int(face_landmark.x * img_w),
             int(face_landmark.y * img_h),
@@ -44,7 +71,8 @@ class PoseEstimator:
 
 
 def main(draw=True):
-    cap = cv.VideoCapture(0)
+    """Run the Reachy Mini face tracking example."""
+    cap = find_camera()
 
     face_mesh = mp.solutions.face_mesh.FaceMesh(
         min_detection_confidence=0.5,
@@ -75,7 +103,7 @@ def main(draw=True):
                             connection_drawing_spec=mp.solutions.drawing_styles.get_default_face_mesh_contours_style(),
                         )
                     pose = pose_estimator.predict(face_landmarks, img)
-                    reachy_mini.set_position(head=pose, antennas=np.array([0, 0]))
+                    reachy_mini.set_target(head=pose, antennas=[0, 0])
 
                 cv.imshow("test_window", img)
                 cv.waitKey(1)

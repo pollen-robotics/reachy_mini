@@ -19,6 +19,7 @@ dependencies = [
     "pygame==2.6.1",
     "eclipse-zenoh>=1.4.0",
     "opencv-python<=5.0",
+    "cv2_enumerate_cameras>=1.2.1",
     "psutil",
     "jinja2",
     "uvicorn",
@@ -53,4 +54,11 @@ exclude = [
     "examples/remi_outdated/*.py",
     "src/reachy_mini/__init__.py",
     "build/*",
+    "conftest.py",
+    "apps/dashboard",
+]
+lint.extend-select = ["I", "D"]
+lint.ignore = [
+    "D203",  # Incompatible with D211
+    "D213",  # Incompatible with D212
 ]

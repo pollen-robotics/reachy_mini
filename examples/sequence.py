@@ -1,7 +1,11 @@
-from reachy_mini import ReachyMini
+"""Reachy Mini Motion Sequence Example."""
+
 import time
+
 import numpy as np
 from scipy.spatial.transform import Rotation as R
+
+from reachy_mini import ReachyMini
 
 with ReachyMini() as reachy_mini:
     try:
@@ -17,7 +21,7 @@ with ReachyMini() as reachy_mini:
                 rot_mat = R.from_euler("xyz", euler_rot, degrees=False).as_matrix()
                 pose[:3, :3] = rot_mat
 
-                reachy_mini.set_position(head=pose, antennas=np.array([0, 0]))
+                reachy_mini.set_target(head=pose, antennas=[0, 0])
 
                 time.sleep(0.01)
 
@@ -27,7 +31,7 @@ with ReachyMini() as reachy_mini:
                 euler_rot = np.array([0, 0.3 * np.sin(2 * np.pi * 0.5 * t), 0])
                 rot_mat = R.from_euler("xyz", euler_rot, degrees=False).as_matrix()
                 pose[:3, :3] = rot_mat
-                reachy_mini.set_position(head=pose, antennas=np.array([0, 0]))
+                reachy_mini.set_target(head=pose, antennas=[0, 0])
                 time.sleep(0.01)
 
             s = time.time()
@@ -36,7 +40,7 @@ with ReachyMini() as reachy_mini:
                 euler_rot = np.array([0.3 * np.sin(2 * np.pi * 0.5 * t), 0, 0])
                 rot_mat = R.from_euler("xyz", euler_rot, degrees=False).as_matrix()
                 pose[:3, :3] = rot_mat
-                reachy_mini.set_position(head=pose, antennas=np.array([0, 0]))
+                reachy_mini.set_target(head=pose, antennas=[0, 0])
                 time.sleep(0.01)
 
             s = time.time()
@@ -44,7 +48,7 @@ with ReachyMini() as reachy_mini:
                 t = time.time() - t0
                 pose = np.eye(4)
                 pose[:3, 3][2] += 0.025 * np.sin(2 * np.pi * 0.5 * t)
-                reachy_mini.set_position(head=pose, antennas=np.array([0, 0]))
+                reachy_mini.set_target(head=pose, antennas=[0, 0])
                 time.sleep(0.01)
 
             s = time.time()
@@ -54,7 +58,7 @@ with ReachyMini() as reachy_mini:
                     0.5 * np.sin(2 * np.pi * 0.5 * t),
                     -0.5 * np.sin(2 * np.pi * 0.5 * t),
                 ]
-                reachy_mini.set_position(head=pose, antennas=np.array(antennas))
+                reachy_mini.set_target(head=pose, antennas=antennas)
                 time.sleep(0.01)
 
             s = time.time()
@@ -65,16 +69,16 @@ with ReachyMini() as reachy_mini:
                     0.015 * np.sin(2 * np.pi * 1.0 * t + np.pi / 2),
                     0.0,
                 ]
-                reachy_mini.set_position(head=pose, antennas=np.array([0, 0]))
+                reachy_mini.set_target(head=pose, antennas=[0, 0])
                 time.sleep(0.01)
 
             pose[:3, 3] = [0, 0, 0.0]
-            reachy_mini.set_position(head=pose, antennas=np.array([0, 0]))
+            reachy_mini.set_target(head=pose, antennas=[0, 0])
 
             time.sleep(0.5)
 
             pose[:3, 3] = [0.02, 0.02, 0.0]
-            reachy_mini.set_position(head=pose, antennas=np.array([0, 0]))
+            reachy_mini.set_target(head=pose, antennas=[0, 0])
 
             time.sleep(0.5)
 
@@ -82,7 +86,7 @@ with ReachyMini() as reachy_mini:
             euler_rot = np.array([0, 0, 0.5])
             rot_mat = R.from_euler("xyz", euler_rot, degrees=False).as_matrix()
             pose[:3, :3] = rot_mat
-            reachy_mini.set_position(head=pose, antennas=np.array([0, 0]))
+            reachy_mini.set_target(head=pose, antennas=[0, 0])
 
             time.sleep(0.5)
 
@@ -90,12 +94,12 @@ with ReachyMini() as reachy_mini:
             euler_rot = np.array([0, 0, -0.5])
             rot_mat = R.from_euler("xyz", euler_rot, degrees=False).as_matrix()
             pose[:3, :3] = rot_mat
-            reachy_mini.set_position(head=pose, antennas=np.array([0, 0]))
+            reachy_mini.set_target(head=pose, antennas=[0, 0])
 
             time.sleep(0.5)
 
             pose[:3, 3] = [0, 0, 0.0]
-            reachy_mini.set_position(head=pose, antennas=np.array([0, 0]))
+            reachy_mini.set_target(head=pose, antennas=[0, 0])
 
             time.sleep(2)
     except KeyboardInterrupt:

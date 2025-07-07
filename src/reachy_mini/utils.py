@@ -1,3 +1,10 @@
+"""Utility functions for Reachy Mini.
+
+These functions provide various utilities such as creating head poses, performing minimum jerk interpolation,
+checking if the Reachy Mini daemon is running, and performing linear pose interpolation.
+
+"""
+
 import os
 import subprocess
 import time
@@ -8,7 +15,32 @@ import psutil
 from scipy.spatial.transform import Rotation as R
 
 
-def create_head_pose(x=0, y=0, z=0, roll=0, pitch=0, yaw=0, mm=False, degrees=True):
+def create_head_pose(
+    x: float = 0,
+    y: float = 0,
+    z: float = 0,
+    roll: float = 0,
+    pitch: float = 0,
+    yaw: float = 0,
+    mm: bool = False,
+    degrees: bool = True,
+) -> np.ndarray:
+    """Create a homogeneous transformation matrix representing a pose in 6D space (position and orientation).
+
+    Args:
+        x (float): X coordinate of the position.
+        y (float): Y coordinate of the position.
+        z (float): Z coordinate of the position.
+        roll (float): Roll angle
+        pitch (float): Pitch angle
+        yaw (float): Yaw angle
+        mm (bool): If True, convert position from millimeters to meters.
+        degrees (bool): If True, interpret roll, pitch, and yaw as degrees; otherwise as radians.
+
+    Returns:
+        np.ndarray: A 4x4 homogeneous transformation matrix representing the pose.
+
+    """
     pose = np.eye(4)
     rot = R.from_euler("xyz", [roll, pitch, yaw], degrees=degrees).as_matrix()
     pose[:3, :3] = rot
@@ -68,8 +100,10 @@ def minimum_jerk(
 
 
 def daemon_check(spawn_daemon, use_sim):
+    """Check if the Reachy Mini daemon is running and spawn it if necessary."""
+
     def is_python_script_running(script_name):
-        """Check if a specific Python script is running"""
+        """Check if a specific Python script is running."""
         found_script = False
         simluation_enabled = False
         for proc in psutil.process_iter(["pid", "name", "cmdline"]):
@@ -98,6 +132,7 @@ def daemon_check(spawn_daemon, use_sim):
                 f"Reachy Mini daemon is already running (PID: {pid}) with a different configuration. "
             )
             print("Killing the existing daemon...")
+            assert pid is not None, "PID should not be None if daemon is running"
             os.kill(pid, 9)
             time.sleep(1)
 
@@ -111,6 +146,7 @@ def daemon_check(spawn_daemon, use_sim):
 def linear_pose_interpolation(
     start_pose: np.ndarray, target_pose: np.ndarray, t: float
 ):
+    """Linearly interpolate between two poses in 6D space."""
     # Extract rotations
     rot_start = R.from_matrix(start_pose[:3, :3])
     rot_end = R.from_matrix(target_pose[:3, :3])
@@ -137,6 +173,7 @@ def linear_pose_interpolation(
 
 
 def time_trajectory(t: float, method="default"):
+    """Compute the time trajectory value based on the specified interpolation method."""
     method = "minjerk" if method == "default" else method
 
     if t < 0 or t > 1:
@@ -171,15 +208,3 @@ def time_trajectory(t: float, method="default"):
                 method
             )
         )
-
-
-def create_pose(x=0, y=0, z=0, roll=0, pitch=0, yaw=0, mm=False, degrees=True):
-    pose = np.eye(4)
-    rot = R.from_euler("xyz", [roll, pitch, yaw], degrees=degrees).as_matrix()
-    pose[:3, :3] = rot
-    pose[:, 3] = [x, y, z, 0]
-    if mm:
-        pose[:3, 3] /= 1000
-
-    pose[2, 3] += 0.177  # :(
-    return pose

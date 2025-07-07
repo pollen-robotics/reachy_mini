@@ -1,12 +1,18 @@
-from head_tracker import HeadTracker
-import cv2
+"""Head tracking demo for Reachy Mini."""
+
 import time
-from reachy_mini import ReachyMini
+
+import cv2
 import numpy as np
+from head_tracker import HeadTracker
 from scipy.spatial.transform import Rotation as R
+
+from reachy_mini import ReachyMini
+from reachy_mini.io.cam_utils import find_camera
 
 
 def draw_debug(img, eye_center, roll):
+    """Draw debug information on the image."""
     _eye_center = (eye_center.copy() + 1) / 2  # [0, 1]
     h, w, _ = img.shape
     cv2.circle(
@@ -45,8 +51,7 @@ def draw_debug(img, eye_center, roll):
     )
 
 
-cap = cv2.VideoCapture(4)
-# cap = cv2.VideoCapture(0)
+cap = find_camera()
 
 head_tracker = HeadTracker()
 pose = np.eye(4)
@@ -76,7 +81,7 @@ with ReachyMini() as reachy_mini:
                     error[1] * 0.04
                 )  # Adjust height based on vertical error
 
-                reachy_mini.set_position(head=pose)
+                reachy_mini.set_target(head=pose)
             cv2.imshow("test_window", img)
 
             cv2.waitKey(1)

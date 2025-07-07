@@ -1,3 +1,11 @@
+"""Rerun logging for Reachy Mini.
+
+This module provides functionality to log the state of the Reachy Mini robot to Rerun,
+ a tool for visualizing and debugging robotic systems.
+
+It includes methods to log joint positions, camera images, and other relevant data.
+"""
+
 import os
 import tempfile
 import time
@@ -9,11 +17,13 @@ import rerun as rr
 from rerun_loader_urdf import URDFLogger
 from urdf_parser_py import urdf
 
-from reachy_mini.io import Backend
+from reachy_mini.io.backend import Backend
 from reachy_mini.placo_kinematics import PlacoKinematics
 
 
 class Rerun:
+    """Rerun logging for Reachy Mini."""
+
     def __init__(
         self,
         backend: Backend,
@@ -21,6 +31,15 @@ class Rerun:
         spawn: bool = True,
         video: bool = False,
     ):
+        """Initialize the Rerun logging for Reachy Mini.
+
+        Args:
+            backend (Backend): The backend to use for communication with the robot.
+            app_id (str): The application ID for Rerun. Defaults to reachy_mini_daemon.
+            spawn (bool): If True, spawn the Rerun server. Defaults to True.
+            video (bool): If True, enable video capture from the camera. Defaults to False.
+
+        """
         rr.init(app_id, spawn=spawn)
         self.app_id = app_id
         self.backend = backend
@@ -47,9 +66,7 @@ class Rerun:
         self.thread_log_mouvement = Thread(target=self.log_movement, daemon=True)
 
     def set_absolute_path_to_urdf(self, urdf_path: str, abs_path: str):
-        """
-        Set the absolute paths in the URDF file. Rerun cannot read the "package://" paths,
-        """
+        """Set the absolute paths in the URDF file. Rerun cannot read the "package://" paths."""
         with open(urdf_path, "r") as f:
             urdf_content = f.read()
         urdf_content_mod = urdf_content.replace("package://", f"file://{abs_path}/")
@@ -59,9 +76,11 @@ class Rerun:
             return tmp_file.name
 
     def start(self):
+        """Start the Rerun logging thread."""
         self.thread_log_mouvement.start()
 
     def stop(self):
+        """Stop the Rerun logging thread."""
         self.running.set()
 
     def _get_joints(self, joint_name: str) -> urdf.Joint:
@@ -80,9 +99,7 @@ class Rerun:
         self.urdf_logger.log_joint(joint_path, joint=joint, recording=self.recording)
 
     def log_movement(self):
-        """
-        Log the movement data to Rerun.
-        """
+        """Log the movement data to Rerun."""
         antenna_left = self._get_joints("left_antenna")
         antenna_left_joint = self.urdf_logger.joint_entity_path(antenna_left)
         antenna_right = self._get_joints("right_antenna")

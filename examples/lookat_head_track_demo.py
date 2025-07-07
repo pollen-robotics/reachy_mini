@@ -1,8 +1,12 @@
-from head_tracker import HeadTracker
-from reachy_mini import ReachyMini
-import cv2
+"""Reachy Mini Look At Head Tracking Example."""
 
-cap = cv2.VideoCapture(4)
+import cv2
+from head_tracker import HeadTracker
+
+from reachy_mini import ReachyMini
+from reachy_mini.io.cam_utils import find_camera
+
+cap = find_camera()
 head_tracker = HeadTracker()
 
 with ReachyMini() as reachy_mini:

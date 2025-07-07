@@ -1,15 +1,19 @@
-from reachy_mini import ReachyMini
-import cv2
-import numpy as np
-import time
+"""Security Camera Example.
 
-"""
 Detect motion by comparing two consecutive frames from a video feed.
 Look at the center of the detected motion bounding box.
 (Doesn't work very well for now :) )
 """
 
-cap = cv2.VideoCapture(4)
+import time
+
+import cv2
+import numpy as np
+
+from reachy_mini import ReachyMini
+from reachy_mini.io.cam_utils import find_camera
+
+cap = find_camera()
 
 
 def detect_motion(
@@ -20,6 +24,7 @@ def detect_motion(
     threshold_value: int = 200,
     min_blob_area: int = 100,
 ):
+    """Detect motion between two images."""
     blur1 = cv2.GaussianBlur(img1, gaussian_kernel, 0)
     blur2 = cv2.GaussianBlur(img2, gaussian_kernel, 0)
     gray1 = cv2.cvtColor(blur1, cv2.COLOR_BGR2GRAY)
@@ -49,6 +54,7 @@ def detect_motion(
 
 
 def im_diff(prev, current):
+    """Compute the difference between two images."""
     prev_gray = cv2.cvtColor(prev, cv2.COLOR_BGR2GRAY)
     current_gray = cv2.cvtColor(current, cv2.COLOR_BGR2GRAY)
 
