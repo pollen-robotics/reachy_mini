@@ -393,6 +393,8 @@ function renderApps(apps, current, venvApps, venvAppsDetailed = [], appProcessId
         item.appendChild(rightSection);
         container.appendChild(item);
     });
+
+    refreshSpacesStore();
 }
 
 function renderInstallationHistory(history) {

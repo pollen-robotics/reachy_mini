@@ -164,6 +164,11 @@
     border-radius: 24px;
 }
 
+.simulation-slider.disabled {
+    background-color: #e5e7eb;
+    cursor: not-allowed;
+}
+
 .simulation-slider:before {
     position: absolute;
     content: "";
@@ -294,10 +299,9 @@ input:checked+.simulation-slider:before {
     animation: spin 1s linear infinite;
 } */
 
-.space-install-btn {
+.space-card-btn {
     display: block;
     margin: 0.25rem auto 0.25rem auto;
-    background: #667eea;
     color: white;
     padding: 0.25rem 1.25rem;
     border-radius: 9999px;
@@ -308,6 +312,16 @@ input:checked+.simulation-slider:before {
     width: fit-content;
     min-width: 0;
     text-align: center;
+}
+
+.space-card-install-btn {
+    background: #667eea;
+    /* blue-500 */
+}
+
+.space-card-installed-btn {
+    background: #22c55e;
+    /* green-500 */
 }
 
 /* @keyframes spin {

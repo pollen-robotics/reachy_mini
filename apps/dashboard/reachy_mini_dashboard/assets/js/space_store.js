@@ -6,6 +6,12 @@ function initializeSpacesStore() {
     spacesStore.init();
 }
 
+function refreshSpacesStore() {
+    if (spacesStore) {
+        spacesStore.renderSpaces();
+    }
+}
+
 // HF Spaces Store functionality
 class SpacesStore {
     constructor() {
@@ -30,7 +36,9 @@ class SpacesStore {
             this.spaces = data.map(space => ({
                 author: space.author,
                 created: new Date(space.createdAt).getTime(),
-                // id: space.id,
+                // TODO: Keep the full URL for the space
+                // But at the moment, only the last part is kept by the installed packages
+                id: space.id.split('/').pop(), // Extract the space ID from the URL
                 cardData: space.cardData || {},
                 likes: space.likes || 0,
                 // url: `https://huggingface.co/spaces/${space.id}`,
@@ -100,12 +108,7 @@ class SpacesStore {
         statsEl.innerHTML = '';
     }
 
-
-    //     
-    // 
-
-
-    renderSpaceCard(space) {
+    renderSpaceCard(space, dashboardStatus) {
         const title = space.cardData?.title + ' ' + space.cardData?.emoji || space.id;
         const description = space.cardData?.short_description || '';
 
@@ -114,7 +117,8 @@ class SpacesStore {
         const colorGradient = `bg-gradient-to-br from-${colorFromName}-700 to-${colorToName}-700`;
 
         return `
-            <a class="space-card ${colorGradient}" href="${space.installUrl}" target="_blank" rel="noopener noreferrer">
+            <a class="space-card ${colorGradient}" href="${space.installUrl}" target="_blank" rel="noopener noreferrer"
+                onclick="event.preventDefault(); if(event.target.classList.contains('space-install-btn')) return; window.open('${space.installUrl}', '_blank');">
                 <div class="space-card-header">
                     <div class="space-likes-bg">
                         <div class="space-likes-label">♥️ ${space.likes}</div>
@@ -124,7 +128,7 @@ class SpacesStore {
                 <div class="space-title">${title}</div>
                 <div class="space-description">${description}</div>
 
-                <button class="space-install-btn" onclick="installFromSpace('${space.installUrl}', '${space.cardData?.title}')">Install</button>
+                ${this.renderInstallUpdateButton(space, dashboardStatus)}
 
                 <div class="space-meta">
                     <span class="space-by">${space.author}</span>
@@ -134,14 +138,33 @@ class SpacesStore {
         `;
     }
 
-    renderSpaces() {
+    renderInstallUpdateButton(space, dashboardStatus) {
+        if (dashboardStatus.available_apps.includes(space.id)) {
+            return `
+            <button class="space-card-btn space-card-installed-btn disabled">
+                Already Installed
+            </button>
+        `;
+        }
+        else {
+            return `
+            <button class="space-card-btn space-card-install-btn" onclick="event.stopPropagation(); installFromSpace('${space.installUrl}', '${space.cardData?.title}'); return false;">
+                Install
+            </button>
+        `;
+        }
+    }
+
+    async renderSpaces() {
+        const dashboardStatus = await (await fetch('/api/status/full')).json();
+
         const grid = document.getElementById('spaces-grid');
 
         let spacesCards = this.filteredSpaces.map((space) => {
-            return this.renderSpaceCard(space);
+            return this.renderSpaceCard(space, dashboardStatus);
         }).join('');
 
-        grid.innerHTML += `
+        grid.innerHTML = `
             <div class="grid grid-cols-3 md:grid-cols-3 gap-4">
                 ${spacesCards}
             </div>
@@ -182,3 +205,4 @@ const formatDate = (timestamp) => {
 };
 
 initializeSpacesStore(); // Load spaces on page load
+
