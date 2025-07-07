@@ -23,6 +23,7 @@ async function updateDaemonStatusUI(status) {
     }
 
     const toggle = document.getElementById('simulation-toggle');
+    const toggleSlider = document.getElementById('simulation-slider');
     if (status.simulation_enabled !== undefined) {
         toggle.checked = status.simulation_enabled;
     } else {
@@ -52,6 +53,8 @@ async function updateDaemonStatusUI(status) {
         startBtn.innerHTML = "▶️ Start";
 
         stopBtn.disabled = false;
+        toggle.disabled = true;
+        toggleSlider.classList.add("disabled");
 
     } else if (status.state === "not_initialized") {
         indicator.classList.add('status-not-initialized');
@@ -65,6 +68,7 @@ async function updateDaemonStatusUI(status) {
         stopBtn.disabled = true;
 
         toggle.disabled = false;
+        toggleSlider.classList.remove("disabled");
     }
 
     else if (status.state === "starting") {
@@ -78,6 +82,9 @@ async function updateDaemonStatusUI(status) {
 
         stopBtn.disabled = true;
 
+        toggle.disabled = true;
+        toggleSlider.classList.add("disabled");
+
     } else if (status.state === "stopping") {
         indicator.classList.add('status-stopping');
         // statusText.textContent = status.message || 'Stopping Reachy Mini...';
@@ -88,6 +95,9 @@ async function updateDaemonStatusUI(status) {
         stopBtn.classList.remove('stop');
         stopBtn.classList.add('stopping');
         stopBtn.innerHTML = "⏳ Stopping...";
+
+        toggle.disabled = true;
+        toggleSlider.classList.add("disabled");
 
     } else if (status.state === "stopped") {
         indicator.classList.add('status-stopped');
@@ -102,6 +112,7 @@ async function updateDaemonStatusUI(status) {
         stopBtn.innerHTML = "⏹️ Stop";
 
         toggle.disabled = false;
+        toggleSlider.classList.remove("disabled");
     } else if (status.state === "error") {
         indicator.classList.add('status-error');
         statusText.textContent = 'Error: Reachy Mini crashed!';
@@ -113,6 +124,7 @@ async function updateDaemonStatusUI(status) {
         startBtn.disabled = false;
 
         toggle.disabled = false;
+        toggleSlider.classList.remove("disabled");
     }
 
     else {
