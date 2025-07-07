@@ -67,18 +67,16 @@ def get_move_parameters(move_name: str) -> dict:
     return MOVE_SPECIFIC_PARAMS.get(move_name, {})
 
 # --- Antenna-only Move Functions ---
+# (This section is unchanged)
 def move_antenna_wiggle(t_beats: float, amplitude_rad: float = 0.7, cycles_per_beat: float = 0.5) -> np.ndarray:
-    """Antennas wiggle in opposition. One full cycle every 2 beats."""
     val = oscillation_motion(t_beats, amplitude_rad, cycles_per_beat)
     return np.array([val, -val])
 
 def move_antenna_both_forward_back(t_beats: float, amplitude_rad: float = 0.6, cycles_per_beat: float = 1.0) -> np.ndarray:
-    """Both antennas move forward and back together."""
     val = oscillation_motion(t_beats, amplitude_rad, cycles_per_beat)
     return np.array([val, val])
 
 def move_antenna_none(t_beats: float) -> np.ndarray:
-    """No antenna movement."""
     return np.zeros(2)
 
 AVAILABLE_ANTENNA_MOVES: dict[str, Callable] = {
@@ -88,68 +86,93 @@ AVAILABLE_ANTENNA_MOVES: dict[str, Callable] = {
 }
 
 # --- Core Dance Moves ---
+# (Simple moves are unchanged)
 def move_simple_nod(t_beats: float, amplitude_rad: float = np.deg2rad(15), cycles_per_beat: float = 1.0, phase_offset: float = 0.0, waveform: str = 'sin', antenna_move_name: str = 'wiggle') -> MoveOffsets:
-    """A simple up-and-down nod on the pitch axis."""
     pitch = oscillation_motion(t_beats, amplitude_rad, cycles_per_beat, phase_offset, waveform)
     antennas = AVAILABLE_ANTENNA_MOVES.get(antenna_move_name, move_antenna_none)(t_beats)
     return MoveOffsets(np.zeros(3), np.array([0.0, pitch, 0.0]), antennas)
 
 def move_head_bob_z(t_beats: float, amplitude_m: float = 0.02, cycles_per_beat: float = 1.0, phase_offset: float = 0.0, waveform: str = 'sin', antenna_move_name: str = 'wiggle') -> MoveOffsets:
-    """A smooth up-and-down bobbing motion on the Z axis."""
     z_offset = oscillation_motion(t_beats, amplitude_m, cycles_per_beat, phase_offset, waveform)
     antennas = AVAILABLE_ANTENNA_MOVES.get(antenna_move_name, move_antenna_none)(t_beats)
     return MoveOffsets(np.array([0.0, 0.0, z_offset]), np.zeros(3), antennas)
 
 def move_side_to_side_sway(t_beats: float, amplitude_m: float = 0.03, cycles_per_beat: float = 1.0, phase_offset: float = 0.0, waveform: str = 'sin', antenna_move_name: str = 'wiggle') -> MoveOffsets:
-    """A smooth sway from side-to-side on the Y axis."""
     y_offset = oscillation_motion(t_beats, amplitude_m, cycles_per_beat, phase_offset, waveform)
     antennas = AVAILABLE_ANTENNA_MOVES.get(antenna_move_name, move_antenna_none)(t_beats)
     return MoveOffsets(np.array([0.0, y_offset, 0.0]), np.zeros(3), antennas)
 
 def move_head_tilt_roll(t_beats: float, amplitude_rad: float = np.deg2rad(20), cycles_per_beat: float = 1.0, phase_offset: float = 0.0, waveform: str = 'sin', antenna_move_name: str = 'wiggle') -> MoveOffsets:
-    """Tilts the head side-to-side on the roll axis."""
     roll = oscillation_motion(t_beats, amplitude_rad, cycles_per_beat, phase_offset, waveform)
     antennas = AVAILABLE_ANTENNA_MOVES.get(antenna_move_name, move_antenna_none)(t_beats)
     return MoveOffsets(np.zeros(3), np.array([roll, 0.0, 0.0]), antennas)
 
 def move_look_around_yaw(t_beats: float, amplitude_rad: float = np.deg2rad(25), cycles_per_beat: float = 1.0, phase_offset: float = 0.0, waveform: str = 'sin', antenna_move_name: str = 'wiggle') -> MoveOffsets:
-    """Turns the head side-to-side on the yaw axis, as if looking around."""
     yaw = oscillation_motion(t_beats, amplitude_rad, cycles_per_beat, phase_offset, waveform)
     antennas = AVAILABLE_ANTENNA_MOVES.get(antenna_move_name, move_antenna_none)(t_beats)
     return MoveOffsets(np.zeros(3), np.array([0.0, 0.0, yaw]), antennas)
 
-def move_circular_head_roll(t_beats: float, pitch_amplitude_rad: float = np.deg2rad(10), roll_amplitude_rad: float = np.deg2rad(10), cycles_per_beat: float = 1.0, antenna_move_name: str = 'wiggle') -> MoveOffsets:
-    """Rolls the head in a circular path using pitch and roll."""
-    pitch = oscillation_motion(t_beats, pitch_amplitude_rad, cycles_per_beat, waveform='cos')
-    roll = oscillation_motion(t_beats, roll_amplitude_rad, cycles_per_beat, waveform='sin')
-    antennas = AVAILABLE_ANTENNA_MOVES.get(antenna_move_name, move_antenna_none)(t_beats)
-    return MoveOffsets(np.zeros(3), np.array([roll, pitch, 0.0]), antennas)
+# --- REFACTORED COMPLEX MOVES ---
+
+def move_circular_head_roll(
+    t_beats: float,
+    pitch_amplitude_rad: float = np.deg2rad(10),
+    roll_amplitude_rad: float = np.deg2rad(10),
+    cycles_per_beat: float = 1.0,
+    phase_offset: float = 0.0,
+    waveform: str = 'sin',
+    antenna_move_name: str = 'wiggle'
+) -> MoveOffsets:
+    """
+    Rolls the head in a circular path using any waveform.
+    This is achieved by applying a 90-degree (0.25 cycle) phase shift
+    between the pitch and roll components.
+    """
+    # For a circular motion, one axis must lag the other by a quarter cycle.
+    # We apply the user-selected waveform to both, but shift the phase of one.
+    # sin(t) and cos(t) are equivalent to sin(t) and sin(t + pi/2).
+    roll_offset = oscillation_motion(t_beats, roll_amplitude_rad, cycles_per_beat, phase_offset, waveform)
+    pitch_offset = oscillation_motion(t_beats, pitch_amplitude_rad, cycles_per_beat, phase_offset + 0.25, waveform)
+
+    antennas_offset = AVAILABLE_ANTENNA_MOVES.get(antenna_move_name, move_antenna_none)(t_beats)
+    return MoveOffsets(np.zeros(3), np.array([roll_offset, pitch_offset, 0.0]), antennas_offset)
 
 def move_robot_z_bounce(t_beats: float, amplitude_m: float = 0.03, cycles_per_beat: float = 1.0, phase_offset: float = 0.0, waveform: str = 'sin', antenna_move_name: str = 'wiggle') -> MoveOffsets:
-    """A smooth up-and-down bounce of the whole body on the Z axis."""
     z_offset = oscillation_motion(t_beats, amplitude_m, cycles_per_beat, phase_offset, waveform)
     antennas = AVAILABLE_ANTENNA_MOVES.get(antenna_move_name, move_antenna_none)(t_beats)
     return MoveOffsets(np.array([0.0, 0.0, z_offset]), np.zeros(3), antennas)
 
 def move_floating_x_glide(t_beats: float, amplitude_m: float = 0.04, cycles_per_beat: float = 1.0, phase_offset: float = 0.0, waveform: str = 'sin', antenna_move_name: str = 'wiggle') -> MoveOffsets:
-    """A smooth forward-and-back glide on the X axis."""
     x_offset = oscillation_motion(t_beats, amplitude_m, cycles_per_beat, phase_offset, waveform)
     antennas = AVAILABLE_ANTENNA_MOVES.get(antenna_move_name, move_antenna_none)(t_beats)
     return MoveOffsets(np.array([x_offset, 0.0, 0.0]), np.zeros(3), antennas)
 
 def move_side_to_side_head_bob_what_is_love(t_beats: float, roll_amplitude_rad: float = np.deg2rad(40), cycles_per_beat: float = 1.0, phase_offset: float = 0.0, waveform: str = 'sin', antenna_move_name: str = 'wiggle') -> MoveOffsets:
-    """A sharp, wide side-to-side head tilt on the roll axis."""
     roll = oscillation_motion(t_beats, roll_amplitude_rad, cycles_per_beat, phase_offset, waveform)
     antennas = AVAILABLE_ANTENNA_MOVES.get(antenna_move_name, move_antenna_none)(t_beats)
     return MoveOffsets(np.zeros(3), np.array([roll, 0.0, 0.0]), antennas)
 
-def move_figure_eight(t_beats: float, yaw_amplitude_rad: float = np.deg2rad(20), pitch_amplitude_rad: float = np.deg2rad(15), cycles_per_beat: float = 0.25, antenna_move_name: str = 'wiggle') -> MoveOffsets:
-    """Moves the head in a horizontal figure-eight pattern using yaw and pitch."""
-    # Yaw moves at the base frequency, pitch moves at double the frequency
-    yaw = oscillation_motion(t_beats, yaw_amplitude_rad, cycles_per_beat, waveform='sin')
-    pitch = oscillation_motion(t_beats, pitch_amplitude_rad, cycles_per_beat * 2, waveform='sin')
-    antennas = AVAILABLE_ANTENNA_MOVES.get(antenna_move_name, move_antenna_none)(t_beats)
-    return MoveOffsets(np.zeros(3), np.array([0.0, pitch, yaw]), antennas)
+def move_figure_eight(
+    t_beats: float,
+    yaw_amplitude_rad: float = np.deg2rad(20),
+    pitch_amplitude_rad: float = np.deg2rad(15),
+    cycles_per_beat: float = 0.25,
+    phase_offset: float = 0.0,
+    waveform: str = 'sin',
+    antenna_move_name: str = 'wiggle'
+) -> MoveOffsets:
+    """
+    Moves the head in a horizontal figure-eight pattern (Lissajous curve).
+    This is achieved with a 1:2 frequency ratio between yaw and pitch.
+    The user-selected waveform is applied to both components.
+    """
+    # Yaw moves at the base frequency, pitch moves at double the frequency.
+    yaw_offset = oscillation_motion(t_beats, yaw_amplitude_rad, cycles_per_beat, phase_offset, waveform)
+    pitch_offset = oscillation_motion(t_beats, pitch_amplitude_rad, cycles_per_beat * 2, phase_offset, waveform)
+
+    antennas_offset = AVAILABLE_ANTENNA_MOVES.get(antenna_move_name, move_antenna_none)(t_beats)
+    return MoveOffsets(np.zeros(3), np.array([0.0, pitch_offset, yaw_offset]), antennas_offset)
+
 
 # --- Library of Available Moves ---
 AVAILABLE_DANCE_MOVES: dict[str, Callable] = {
@@ -166,6 +189,7 @@ AVAILABLE_DANCE_MOVES: dict[str, Callable] = {
 }
 
 # --- Utility Functions ---
+# (This section is unchanged)
 def combine_offsets(*offsets: MoveOffsets) -> MoveOffsets:
     """Combines multiple MoveOffsets by summing their components."""
     if not offsets:

@@ -203,6 +203,7 @@ def main(config: Config) -> None:
         print('Robot ready — play music! (P to toggle smart correction, Left/Right Arrows for manual offset)\n')
         
         try:
+            t0 = time.time()
             while True:
                 loop_start_time = time.time()
                 dt = loop_start_time - last_loop
