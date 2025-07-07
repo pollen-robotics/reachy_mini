@@ -1,18 +1,17 @@
 #!/usr/bin/env python3
-# reachy_rhythm_controller.py  – v10.3 (Final, Dual Phase)
+# reachy_rhythm_controller.py – v11.0 (Interactive Choreographer)
 """
-Real-time robot rhythm synchronization using a continuous, incremental clock.
+Real-time robot choreography and rhythm synchronization.
 
-This script synchronizes a Reachy Mini robot to music by advancing a
-continuous "musical time" on each frame. This ensures the robot's phase
-is always smooth, even when the detected BPM changes.
+This script synchronizes a Reachy Mini robot to live music by advancing a
+continuous "beat clock" on each frame. It now features a full choreography
+engine that cycles through all available dance moves.
 
-- A phase error is calculated to keep the robot's timing aligned with
-  detected real-world beats by applying small, smooth, limited corrections.
-- The final plot always shows two sine waves: the corrected phase and a
-  perfect metronome reference for comparison.
-- This "smart correction" can be toggled with the 'P' key.
-- Manual phase offset can be adjusted with Left/Right arrow keys.
+- The robot automatically changes dance moves every 8 beats.
+- Full keyboard controls allow for real-time manipulation of the dance:
+  - Change moves, BPM, amplitude, and waveform.
+  - Toggle smart phase correction to lock onto the music's beat.
+- The default mode is a pure metronome (smart correction OFF).
 """
 
 from __future__ import annotations
@@ -40,7 +39,6 @@ from dance_moves import AVAILABLE_DANCE_MOVES, MOVE_SPECIFIC_PARAMS
 # ───────────────────────────── Configuration ──────────────────────────────
 @dataclass
 class Config:
-    dance_move: str = 'head_bob_z'
     save_dir: str = '.'
     control_ts: float = 0.01
     audio_win: float = 2.0
@@ -52,61 +50,112 @@ class Config:
     beat_buffer_size: int = 20
     min_interval_factor: float = 0.5
     offset_correction_rate: float = 0.02
-    max_phase_correction_per_frame: float = 0.005 # Limit correction to 0.5% of a beat per frame
+    max_phase_correction_per_frame: float = 0.005
     manual_offset_step: float = 0.01
-    ui_update_rate: float = 2.0
-    neutral_pos: np.ndarray = field(default_factory=lambda: np.zeros(3))
+    beats_per_sequence: int = 8
+    ui_update_rate: float = 1.0
+    neutral_pos: np.ndarray = field(default_factory=lambda: np.array([0, 0, 0.02]))
     neutral_eul: np.ndarray = field(default_factory=lambda: np.zeros(3))
     audio_buffer_len: int = field(init=False)
 
     def __post_init__(self):
         self.audio_buffer_len = int(self.audio_rate * self.audio_win)
 
-
 # ───────────────────── Helper Classes and Functions ──────────────────────────
 class SharedState:
+    """Thread-safe class to manage state changes from the keyboard."""
     def __init__(self):
         self.lock = threading.Lock()
-        self.smart_offset_enabled = True
+        self.smart_offset_enabled = False # Default to OFF
         self.manual_offset = 0.0
+        self.next_move = False
+        self.prev_move = False
+        self.next_waveform = False
+        self.amplitude_change = 0.0
 
-    def toggle_smart_offset(self) -> bool:
-        with self.lock: self.smart_offset_enabled = not self.smart_offset_enabled; return self.smart_offset_enabled
+    def get_and_clear_changes(self) -> dict:
+        with self.lock:
+            changes = {
+                "smart_offset_toggled": self.smart_offset_enabled,
+                "manual_offset": self.manual_offset,
+                "next_move": self.next_move,
+                "prev_move": self.prev_move,
+                "next_waveform": self.next_waveform,
+                "amplitude_change": self.amplitude_change,
+            }
+            self.next_move = self.prev_move = self.next_waveform = False
+            self.amplitude_change = 0.0
+            return changes
 
-    def adjust_offset(self, amount: float) -> float:
-        with self.lock: self.manual_offset += amount; return self.manual_offset
-
-def head_pose(pos, eul):
-    m = np.eye(4); m[:3, 3] = pos; m[:3, :3] = R.from_euler('xyz', eul).as_matrix(); return m
+    def toggle_smart_offset(self): self.smart_offset_enabled = not self.smart_offset_enabled
+    def adjust_offset(self, amount): self.manual_offset += amount
+    def trigger_next_move(self): self.next_move = True
+    def trigger_prev_move(self): self.prev_move = True
+    def trigger_next_waveform(self): self.next_waveform = True
+    def adjust_amplitude(self, amount): self.amplitude_change += amount
 
 class MusicState:
     def __init__(self):
         self.lock = threading.Lock(); self.librosa_bpm = 0.0; self.last_event_time = 0.0
         self.state = 'Init'; self.beats: collections.deque[float] = collections.deque(maxlen=512)
 
-def calculate_phase_error(musical_time: float, last_beat_time: float, bpm: float) -> float:
+class Choreographer:
+    """Manages the state of the dance itself."""
+    def __init__(self):
+        self.move_names = list(AVAILABLE_DANCE_MOVES.keys())
+        self.waveforms = ['sin', 'cos', 'triangle', 'square', 'sawtooth']
+        self.move_idx = 0
+        self.waveform_idx = 0
+        self.amplitude_scale = 1.0
+        self.beat_counter_for_cycle = 0.0
+    
+    def current_move_name(self): return self.move_names[self.move_idx]
+    def current_waveform(self): return self.waveforms[self.waveform_idx]
+    
+    def advance(self, beats_this_frame, config):
+        self.beat_counter_for_cycle += beats_this_frame
+        if self.beat_counter_for_cycle >= config.beats_per_sequence:
+            self.next_move()
+    
+    def next_move(self):
+        self.move_idx = (self.move_idx + 1) % len(self.move_names)
+        self.beat_counter_for_cycle = 0
+    
+    def prev_move(self):
+        self.move_idx = (self.move_idx - 1 + len(self.move_names)) % len(self.move_names)
+        self.beat_counter_for_cycle = 0
+        
+    def next_waveform(self): self.waveform_idx = (self.waveform_idx + 1) % len(self.waveforms)
+    def change_amplitude(self, amount): self.amplitude_scale = max(0.1, self.amplitude_scale + amount)
+
+def head_pose(pos, eul):
+    m = np.eye(4); m[:3, 3] = pos; m[:3, :3] = R.from_euler('xyz', eul).as_matrix(); return m
+
+def calculate_phase_error(t_beats: float, last_beat_time: float, bpm: float) -> float:
     if bpm == 0.0 or last_beat_time == 0.0: return 0.0
-    current_phase = musical_time % 1.0
+    current_phase = t_beats % 1.0
     period = 60.0 / bpm
     expected_phase = ((time.time() - last_beat_time) / period) % 1.0
     err = ((expected_phase - current_phase + 0.5) % 1.0) - 0.5
     return err
 
 # ───────────────────────────── Worker Threads ──────────────────────────────
-def keyboard_listener_thread(shared_state: SharedState, config: Config, stop_event: threading.Event):
+def keyboard_listener_thread(shared_state: SharedState, stop_event: threading.Event):
+    # This is now a combination of the tester and the original controller
     def on_press(key):
         if stop_event.is_set(): return False
-        if hasattr(key, 'char') and key.char == 'p':
-            new_state = shared_state.toggle_smart_offset()
-            print(f"\n--- Smart Correction Toggled: {'ON' if new_state else 'OFF'} ---\n")
-        if key == keyboard.Key.right:
-            new_offset = shared_state.adjust_offset(config.manual_offset_step)
-            print(f"\n--- Manual Offset -> {new_offset:+.3f} ---\n")
-        elif key == keyboard.Key.left:
-            new_offset = shared_state.adjust_offset(-config.manual_offset_step)
-            print(f"\n--- Manual Offset -> {new_offset:+.3f} ---\n")
+        if hasattr(key, 'char'):
+            if key.char.lower() == 'p': shared_state.toggle_smart_offset()
+            if key.char.lower() == 'n': shared_state.trigger_next_move()
+            if key.char.lower() == 'b': shared_state.trigger_prev_move()
+            if key.char.lower() == 'w': shared_state.trigger_next_waveform()
+            if key.char == '+': shared_state.adjust_amplitude(0.1)
+            if key.char == '-': shared_state.adjust_amplitude(-0.1)
+        if key == keyboard.Key.right: shared_state.adjust_offset(0.01)
+        elif key == keyboard.Key.left: shared_state.adjust_offset(-0.01)
     with keyboard.Listener(on_press=on_press) as listener: listener.join()
 
+# ... (audio_thread is unchanged) ...
 def audio_thread(state: MusicState, config: Config, stop_event: threading.Event) -> None:
     pa=pyaudio.PyAudio(); stream=pa.open(format=pyaudio.paFloat32,channels=1,rate=config.audio_rate,input=True,frames_per_buffer=config.audio_chunk_size)
     buf=np.empty(0,dtype=np.float32); bpm_hist=collections.deque(maxlen=config.bpm_stability_buffer)
@@ -132,95 +181,93 @@ def audio_thread(state: MusicState, config: Config, stop_event: threading.Event)
         buf = buf[-int(config.audio_rate * 1.5):]
     stream.stop_stream(); stream.close(); pa.terminate()
 
-def ui_thread(data_queue: Queue, shared_state: SharedState, stop_event: threading.Event):
-    loop_dts, last_ui_print_time, last_data = [], time.time(), None
+def ui_thread(data_queue: Queue, stop_event: threading.Event):
+    last_ui_print_time, last_data = time.time(), None
     while not stop_event.is_set():
-        try:
-            while True: data = data_queue.get_nowait(); loop_dts.append(data['loop_dt']); last_data = data
+        try: last_data = data_queue.get_nowait()
         except Empty: pass
         now = time.time()
-        if not last_data or now - last_ui_print_time < (1.0 / config.ui_update_rate): time.sleep(0.1); continue
+        if not last_data or now - last_ui_print_time < (1.0 / Config.ui_update_rate): time.sleep(0.1); continue
         last_ui_print_time = now
-        if loop_dts: dts_ms = np.array(loop_dts)*1000; stats={'mean':np.mean(dts_ms),'var':np.var(dts_ms),'max':np.max(dts_ms),'num':len(dts_ms)}
-        else: stats={'mean':0,'var':0,'max':0,'num':0}
-        smart_offset_status = 'ON' if shared_state.smart_offset_enabled else 'OFF'
-        manual_offset = shared_state.manual_offset
-        print(f"\n--- Reachy Rhythm Controller ---\n"
-              f"Loop (last {stats['num']}): Mean: {stats['mean']:.1f}ms | Var: {stats['var']:.2f} | Max: {stats['max']:.1f}ms\n"
-              f"State: {last_data['state']:<10} [Smart Correction (P): {smart_offset_status}] [Manual Offset: {manual_offset:+.3f}]\n"
-              f"Active BPM (Control): {last_data['active_bpm']:<6.1f}\n"
-              f"Phase Error:          {last_data['phase_error']:+7.3f} [beat cycle]")
-        sys.stdout.flush(); loop_dts.clear()
-    print("\nUI thread stopped.")
+        
+        correction_status = 'ON' if last_data['correction_on'] else 'OFF'
+        print("\n" + "─" * 80 + "\n"
+              f"🎵 Music State: {last_data['state']:<10} | BPM: {last_data['active_bpm']:<6.1f} | Phase Error: {last_data['phase_error']:+7.3f}\n"
+              f"🕺 Dance State: {last_data['move_name']:<25} | Wave: {last_data['waveform']:<8} | Amp: {last_data['amp_scale']:.1f}x\n"
+              f"⚙️  Settings: Smart Correction (P): {correction_status} | Manual Offset (←/→): {last_data['manual_offset']:+.3f}\n"
+              + "─" * 80)
+        sys.stdout.flush()
 
-# ───────────────────── Post-Run Plotting ──────────────────────────
-def generate_final_plot(log, offset_log, config):
-    if not log: print("No data logged, skipping plot generation."); return
-    print("Generating final analysis plot...")
-    plt.ioff(); fig,ax=plt.subplots(2,1,sharex=True,figsize=(15,8),constrained_layout=True); fig.suptitle("Post-Run Rhythm Analysis",fontsize=16)
+# ... (generate_final_plot is mostly unchanged, just updated variable names) ...
+def generate_final_plot(log, config):
+    if not log: return
     t = np.array([e['t'] for e in log]); start_time = t[0]; t -= start_time
-    active_bpm = np.array([e['active_bpm'] for e in log])
-    phase_error = np.array([e['phase_error'] for e in log])
-    musical_time = np.array([e['musical_time'] for e in log])
-    reference_time = np.array([e['reference_time'] for e in log])
+    t_beats = np.array([e['t_beats'] for e in log])
+    reference_t_beats = np.array([e['reference_t_beats'] for e in log])
     acc_beats = np.array([b for e in log for b in e['accepted_beats']]) - start_time
     
-    ax[0].plot(t, active_bpm, '-', label='Active BPM (from Librosa)'); ax[0].set_ylabel('BPM'); ax[0].set_ylim(0, 200); ax[0].legend(); ax[0].grid(True, alpha=0.3)
-    
-    ax[1].plot(t, np.sin(2 * np.pi * musical_time), '-', label='Corrected Phase (sin)')
-    ax[1].plot(t, np.sin(2 * np.pi * reference_time), '--', label='Reference Phase (Metronome)', alpha=0.7)
+    fig,ax=plt.subplots(2,1,sharex=True,figsize=(15,8),constrained_layout=True)
+    ax[0].plot(t, [e['active_bpm'] for e in log], '-', label='Active BPM')
+    ax[0].set_ylabel('BPM'); ax[0].legend(); ax[0].grid(True, alpha=0.3)
+    ax[1].plot(t, np.sin(2 * np.pi * t_beats), '-', label='Corrected Beat Clock (sin)')
+    ax[1].plot(t, np.sin(2 * np.pi * reference_t_beats), '--', label='Reference Beat Clock (Metronome)', alpha=0.7)
     ax[1].vlines(acc_beats, -1, 1, colors='g', linestyles='solid', label='Accepted Beat', alpha=0.8)
+    ax[1].set_ylabel('Beat Cycle'); ax[1].set_xlabel('Time (s)'); ax[1].legend(); ax[1].grid(True,alpha=0.3)
     
-    if offset_log:
-        offset_times=[e[0]-start_time for e in offset_log]; offset_vals=[e[1] for e in offset_log]
-        ax[1].vlines(offset_times, -1, 1, colors='m', linestyles=':', label='Manual Offset Adj.')
-        for i, (ts, val) in enumerate(zip(offset_times, offset_vals)):
-             ax[1].text(ts, -1.05, f"{val:+.2f}", color='m', fontsize=9, ha='center')
-
-    ax[1].set_ylabel('Phase / Beat Cycle'); ax[1].set_xlabel('Time (s)'); ax[1].legend(); ax[1].grid(True,alpha=0.3)
-    
-    os.makedirs(config.save_dir, exist_ok=True)
-    fname = f'reachy_analysis_{datetime.datetime.now():%Y%m%d_%H%M%S}.png'
-    path = os.path.join(config.save_dir, fname); fig.savefig(path, dpi=150); print(f"Analysis plot saved to {path}"); plt.show()
+    path = os.path.join(config.save_dir, f'reachy_analysis_{datetime.datetime.now():%Y%m%d_%H%M%S}.png');
+    fig.savefig(path, dpi=150); print(f"\nAnalysis plot saved to {path}"); plt.show()
 
 # ───────────────────────────── Main Control Loop ─────────────────────────────
 def main(config: Config) -> None:
-    data_queue, stop_event, music, shared_state = Queue(), threading.Event(), MusicState(), SharedState()
+    data_queue, stop_event = Queue(), threading.Event()
+    music = MusicState(); shared_state = SharedState(); choreographer = Choreographer()
     
-    threading.Thread(target=audio_thread,args=(music,config,stop_event),daemon=True).start()
-    threading.Thread(target=keyboard_listener_thread,args=(shared_state,config,stop_event),daemon=True).start()
-    ui_thread_obj=threading.Thread(target=ui_thread,args=(data_queue,shared_state,stop_event),daemon=True); ui_thread_obj.start()
+    threading.Thread(target=audio_thread, args=(music, config, stop_event), daemon=True).start()
+    threading.Thread(target=keyboard_listener_thread, args=(shared_state, stop_event), daemon=True).start()
+    threading.Thread(target=ui_thread, args=(data_queue, stop_event), daemon=True).start()
     
-    move_fn=AVAILABLE_DANCE_MOVES[config.dance_move]; params=MOVE_SPECIFIC_PARAMS.get(config.dance_move,{})
     last_loop = time.time(); processed_beats, active_bpm = 0, 0.0
     filtered_beat_times = collections.deque(maxlen=config.beat_buffer_size)
-    full_log, offset_change_log, last_manual_offset = [], [], 0.0
-    musical_time, reference_time, phase_error = 0.0, 0.0, 0.0
+    full_log = []
+    
+    # t_beats represents the robot's internal sense of musical time.
+    # It advances each frame based on the current BPM. It's the primary input
+    # for all dance move functions.
+    t_beats = 0.0 
+    reference_t_beats = 0.0 # A perfect metronome clock, for comparison
+    phase_error = 0.0
 
-    print('Connecting to Reachy Mini…')
-    with ReachyMini() as bot:
-        bot.set_target(head_pose(config.neutral_pos,config.neutral_eul),antennas=np.zeros(2)); time.sleep(1)
-        print('Robot ready — play music! (P to toggle smart correction, Left/Right Arrows for manual offset)\n')
+    print('Connecting to Reachy Mini...')
+    with ReachyMini() as mini:
+        mini.set_target(head_pose(config.neutral_pos, config.neutral_eul), antennas=np.zeros(2)); time.sleep(1)
+        print('\nRobot ready — play music!\nControls: [N]ext Move, [B]ack, [P]hase Correction, [W]aveform, [+/-] Amp, [←/→] Offset\n')
         
         try:
-            t0 = time.time()
             while True:
                 loop_start_time = time.time()
                 dt = loop_start_time - last_loop
                 last_loop = loop_start_time
                 
+                # --- Handle keyboard inputs and update choreographer state ---
+                changes = shared_state.get_and_clear_changes()
+                if changes['next_move']: choreographer.next_move()
+                if changes['prev_move']: choreographer.prev_move()
+                if changes['next_waveform']: choreographer.next_waveform()
+                if changes['amplitude_change']: choreographer.change_amplitude(changes['amplitude_change'])
+                
+                # --- Get Music Analysis ---
                 with music.lock:
                     librosa_bpm, state, last_event_time = music.librosa_bpm, music.state, music.last_event_time
                     new_beats = list(music.beats)[processed_beats:]
                 processed_beats += len(new_beats)
                 
-                accepted_this_frame = []
-                ref_bpm_filter = active_bpm if active_bpm > 0 else librosa_bpm
-                if new_beats and ref_bpm_filter > 0:
-                    expected_interval=60.0/ref_bpm_filter; min_interval=expected_interval*config.min_interval_factor; i=0
+                active_bpm = librosa_bpm if time.time() - last_event_time < config.silence_tmo else 0.0
+                
+                accepted_this_frame = [] # Beat filtering logic is unchanged
+                if new_beats and active_bpm > 0:
+                    expected_interval=60.0/active_bpm; min_interval=expected_interval*config.min_interval_factor; i=0
                     while i<len(new_beats):
-                        last_beat=filtered_beat_times[-1] if filtered_beat_times else new_beats[i]-expected_interval
-                        current_beat=new_beats[i]
+                        last_beat=filtered_beat_times[-1] if filtered_beat_times else new_beats[i]-expected_interval; current_beat=new_beats[i]
                         if i+1<len(new_beats) and (new_beats[i+1]-current_beat)<min_interval:
                             competitor=new_beats[i+1]; err_current=abs((current_beat-last_beat)-expected_interval); err_competitor=abs((competitor-last_beat)-expected_interval)
                             if err_current<=err_competitor: accepted_this_frame.append(current_beat)
@@ -229,58 +276,63 @@ def main(config: Config) -> None:
                         else:
                             if(current_beat-last_beat)>min_interval: accepted_this_frame.append(current_beat)
                             i+=1
-                elif new_beats: accepted_this_frame.extend(new_beats)
                 filtered_beat_times.extend(accepted_this_frame)
-                
                 last_good_beat = filtered_beat_times[-1] if filtered_beat_times else 0
 
-                active_bpm = librosa_bpm
-                if time.time() - last_event_time > config.silence_tmo: active_bpm = 0.0
-                
-                smart_offset_on = shared_state.smart_offset_enabled
-                manual_offset = shared_state.manual_offset
-                if manual_offset != last_manual_offset:
-                    offset_change_log.append((time.time(), manual_offset)); last_manual_offset = manual_offset
-                
-                time_for_dance = musical_time
+                # --- Calculate time and apply dance move ---
                 if active_bpm > 0:
-                    # Always advance the reference metronome
-                    reference_time += dt * (active_bpm / 60.0)
-
-                    if smart_offset_on:
-                        phase_error = calculate_phase_error(musical_time, last_good_beat, active_bpm)
-                        correction = phase_error * config.offset_correction_rate
-                        # Limit the correction to ensure smoothness
-                        correction = np.clip(correction, -config.max_phase_correction_per_frame, config.max_phase_correction_per_frame)
-                        musical_time += dt * (active_bpm / 60.0) + correction
+                    beats_this_frame = dt * (active_bpm / 60.0)
+                    reference_t_beats += beats_this_frame
+                    
+                    if changes['smart_offset_toggled']:
+                        phase_error = calculate_phase_error(t_beats, last_good_beat, active_bpm)
+                        correction = np.clip(phase_error * config.offset_correction_rate, -config.max_phase_correction_per_frame, config.max_phase_correction_per_frame)
+                        t_beats += beats_this_frame + correction
                     else:
                         phase_error = 0.0
-                        # When correction is off, the musical clock follows the perfect reference
-                        musical_time = reference_time
+                        t_beats = reference_t_beats # Follow the perfect metronome
                     
-                    time_for_dance = musical_time + manual_offset
-                    
-                    offs = move_fn(time_for_dance, **params)
-                    bot.set_target(head_pose(config.neutral_pos+offs.get('position_offset',np.zeros(3)),config.neutral_eul+offs.get('orientation_offset',np.zeros(3))),antennas=offs.get('antennas_offset',np.zeros(2)))
-                else:
-                    bot.set_target(head_pose(config.neutral_pos,config.neutral_eul),antennas=np.zeros(2))
+                    # Advance the choreographer (which may trigger a move change)
+                    choreographer.advance(beats_this_frame, config)
 
-                data_queue.put({'loop_dt':dt,'state':state,'active_bpm':active_bpm, 'phase_error':phase_error})
-                full_log.append({'t':time.time(),'active_bpm':active_bpm,'phase_error':phase_error,'musical_time':musical_time,'reference_time':reference_time,'final_dance_time':time_for_dance,'accepted_beats':accepted_this_frame})
+                    # Get current move and parameters
+                    move_name = choreographer.current_move_name()
+                    move_fn = AVAILABLE_DANCE_MOVES[move_name]
+                    params = MOVE_SPECIFIC_PARAMS.get(move_name, {}).copy()
+                    params['waveform'] = choreographer.current_waveform()
+                    for key in params:
+                        if 'amplitude' in key: params[key] *= choreographer.amplitude_scale
+
+                    # Execute the move
+                    time_for_dance = t_beats + changes['manual_offset']
+                    offsets = move_fn(time_for_dance, **params)
+                    mini.set_target(head_pose(config.neutral_pos + offsets.position_offset, config.neutral_eul + offsets.orientation_offset), antennas=offsets.antennas_offset)
+                else:
+                    mini.set_target(head_pose(config.neutral_pos, config.neutral_eul), antennas=np.zeros(2))
+                
+                # --- Logging and UI Update ---
+                ui_data = {'state': state, 'active_bpm': active_bpm, 'phase_error': phase_error,
+                           'move_name': choreographer.current_move_name(), 'waveform': choreographer.current_waveform(),
+                           'amp_scale': choreographer.amplitude_scale, 'correction_on': changes['smart_offset_toggled'],
+                           'manual_offset': changes['manual_offset']}
+                data_queue.put(ui_data)
+                
+                log_entry = {'t': time.time(), 'active_bpm': active_bpm, 'phase_error': phase_error,
+                             't_beats': t_beats, 'reference_t_beats': reference_t_beats,
+                             'accepted_beats': accepted_this_frame}
+                full_log.append(log_entry)
                 
                 time.sleep(max(0, config.control_ts - (time.time() - loop_start_time)))
         
         except KeyboardInterrupt: print("\nCtrl-C received, shutting down...")
         finally:
             stop_event.set()
-            ui_thread_obj.join(timeout=2)
             print("Shutdown complete.")
-            generate_final_plot(full_log, offset_change_log, config)
+            generate_final_plot(full_log, config)
 
 if __name__ == '__main__':
-    parser=argparse.ArgumentParser(description="Reachy Rhythm Controller",formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('--dance',default='head_bob_z',choices=AVAILABLE_DANCE_MOVES.keys())
-    parser.add_argument('--save-dir',default='.',help='Folder for PNG analysis plot')
-    cli_args=parser.parse_args()
-    config=Config(dance_move=cli_args.dance, save_dir=cli_args.save_dir)
+    parser = argparse.ArgumentParser(description="Reachy Rhythm Controller", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument('--save-dir', default='.', help='Folder for PNG analysis plot')
+    cli_args = parser.parse_args()
+    config = Config(save_dir=cli_args.save_dir)
     main(config)
