@@ -3,6 +3,8 @@ import tempfile
 import time
 from threading import Event, Thread
 
+import cv2
+import numpy as np
 import rerun as rr
 from rerun_loader_urdf import URDFLogger
 from urdf_parser_py import urdf
@@ -13,23 +15,15 @@ from reachy_mini.placo_kinematics import PlacoKinematics
 
 class Rerun:
     def __init__(
-        self, backend: Backend, app_id: str = "reachy_mini_daemon", spawn: bool = True
+        self,
+        backend: Backend,
+        app_id: str = "reachy_mini_daemon",
+        spawn: bool = True,
+        video: bool = False,
     ):
         rr.init(app_id, spawn=spawn)
         self.app_id = app_id
         self.backend = backend
-        # self.backend.get_joint_positions()
-
-        rr.log(
-            "world", rr.ViewCoordinates.RIGHT_HAND_Z_UP, static=True
-        )  # Set an up-axis
-        rr.log(
-            "world/xyz",
-            rr.Arrows3D(
-                vectors=[[1, 0, 0], [0, 1, 0], [0, 0, 1]],
-                colors=[[255, 0, 0], [0, 255, 0], [0, 0, 255]],
-            ),
-        )
 
         self.recording = rr.get_global_data_recording()
 
@@ -41,17 +35,20 @@ class Rerun:
         fixed_urdf = self.set_absolute_path_to_urdf(urdf_path, asset_path)
 
         self.head_kinematics = PlacoKinematics(fixed_urdf)
-        # self.head_kinematics.print_joints_names()
 
         self.urdf_logger = URDFLogger(fixed_urdf, "ReachyMini")
         self.urdf_logger.log(recording=self.recording)
+
+        self.cam = None
+        if video:
+            self.cam = cv2.VideoCapture(2)
 
         self.running = Event()
         self.thread_log_mouvement = Thread(target=self.log_movement, daemon=True)
 
     def set_absolute_path_to_urdf(self, urdf_path: str, abs_path: str):
         """
-        Set the absolute path to the URDF file.
+        Set the absolute paths in the URDF file. Rerun cannot read the "package://" paths,
         """
         with open(urdf_path, "r") as f:
             urdf_content = f.read()
@@ -155,246 +152,291 @@ class Rerun:
         passive_7_z = self._get_joints("passive_7_z")
         passive_7_z_joint = self.urdf_logger.joint_entity_path(passive_7_z)
 
+        cam_name = self._get_joints("camera_optical_frame")
+        cam_joint = self.urdf_logger.joint_entity_path(cam_name)
+        K = np.eye(3, dtype=float)
+        K[0, 0] = 1000.0
+        K[1, 1] = 1000.0
+        K[0, 2] = 1280 / 2
+        K[1, 2] = 720 / 2
+
         while not self.running.is_set():
+            rr.set_time("deamon", timestamp=time.time(), recording=self.recording)
+
             # hard coded numbers are from the URDF file
             antennas = self.backend.get_antenna_joint_positions()
-            antenna_left.origin.rotation = [
-                -0.0581863,
-                -0.527253,
-                -0.0579647 + antennas[0],
-            ]
-
-            self.urdf_logger.log_joint(
-                antenna_left_joint, joint=antenna_left, recording=self.recording
-            )
-            antenna_right.origin.rotation = [1.5708, -1.40009 - antennas[1], -1.48353]
-            self.urdf_logger.log_joint(
-                antenna_right_joint, joint=antenna_right, recording=self.recording
-            )
+            if antennas is not None:
+                antenna_left.origin.rotation = [
+                    -0.0581863,
+                    -0.527253,
+                    -0.0579647 + antennas[0],
+                ]
+                self.urdf_logger.log_joint(
+                    antenna_left_joint, joint=antenna_left, recording=self.recording
+                )
+                antenna_right.origin.rotation = [
+                    1.5708,
+                    -1.40009 - antennas[1],
+                    -1.48353,
+                ]
+                self.urdf_logger.log_joint(
+                    antenna_right_joint, joint=antenna_right, recording=self.recording
+                )
 
             head = self.backend.get_head_joint_positions()
+            if head is not None:
+                motor_1.origin.rotation = [
+                    -1.5708,
+                    7.95539e-16 + head[1],
+                    2.0944,
+                ]
+                self.urdf_logger.log_joint(
+                    motor_1_joint, joint=motor_1, recording=self.recording
+                )
 
-            motor_1.origin.rotation = [
-                -1.5708,
-                7.95539e-16 + head[1],
-                2.0944,
-            ]
-            self.urdf_logger.log_joint(
-                motor_1_joint, joint=motor_1, recording=self.recording
-            )
+                motor_2.origin.rotation = [
+                    1.5708,
+                    -1.05471e-15 - head[2],
+                    -1.0472,
+                ]
+                self.urdf_logger.log_joint(
+                    motor_2_joint, joint=motor_2, recording=self.recording
+                )
 
-            motor_2.origin.rotation = [
-                1.5708,
-                -1.05471e-15 - head[2],
-                -1.0472,
-            ]
-            self.urdf_logger.log_joint(
-                motor_2_joint, joint=motor_2, recording=self.recording
-            )
+                motor_3.origin.rotation = [
+                    -1.5708,
+                    -2.77556e-16 + head[3],
+                    3.14916e-16,
+                ]
+                self.urdf_logger.log_joint(
+                    motor_3_joint, joint=motor_3, recording=self.recording
+                )
+                motor_4.origin.rotation = [
+                    1.5708,
+                    4.44377e-15 - head[4],
+                    3.14159,
+                ]
+                self.urdf_logger.log_joint(
+                    motor_4_joint, joint=motor_4, recording=self.recording
+                )
+                motor_5.origin.rotation = [
+                    -1.5708,
+                    4.85252e-16 + head[5],
+                    -2.0944,
+                ]
+                self.urdf_logger.log_joint(
+                    motor_5_joint, joint=motor_5, recording=self.recording
+                )
+                motor_6.origin.rotation = [
+                    1.5708,
+                    1.05471e-15 - head[6],
+                    1.0472,
+                ]
+                self.urdf_logger.log_joint(
+                    motor_6_joint, joint=motor_6, recording=self.recording
+                )
 
-            motor_3.origin.rotation = [
-                -1.5708,
-                -2.77556e-16 + head[3],
-                3.14916e-16,
-            ]
-            self.urdf_logger.log_joint(
-                motor_3_joint, joint=motor_3, recording=self.recording
-            )
-            motor_4.origin.rotation = [
-                1.5708,
-                4.44377e-15 - head[4],
-                3.14159,
-            ]
-            self.urdf_logger.log_joint(
-                motor_4_joint, joint=motor_4, recording=self.recording
-            )
-            motor_5.origin.rotation = [
-                -1.5708,
-                4.85252e-16 + head[5],
-                -2.0944,
-            ]
-            self.urdf_logger.log_joint(
-                motor_5_joint, joint=motor_5, recording=self.recording
-            )
-            motor_6.origin.rotation = [
-                1.5708,
-                1.05471e-15 - head[6],
-                1.0472,
-            ]
-            self.urdf_logger.log_joint(
-                motor_6_joint, joint=motor_6, recording=self.recording
-            )
+                motor_yaw.origin.rotation = [3.14159, -2.22045e-16, 1.5708 - head[0]]
+                self.urdf_logger.log_joint(
+                    motor_yaw_joint, joint=motor_yaw, recording=self.recording
+                )
 
-            motor_yaw.origin.rotation = [3.14159, -2.22045e-16, 1.5708 - head[0]]
-            self.urdf_logger.log_joint(
-                motor_yaw_joint, joint=motor_yaw, recording=self.recording
-            )
+                # updating kinematic chains with placo
+                self.head_kinematics.fk(head)
 
-            # updating kinematic chains with placo
-            self.head_kinematics.fk(head)
+                self._set_rod_rotation(
+                    "passive_1_x",
+                    passive_1_x,
+                    passive_1_x_joint,
+                    [-3.09302, 0.0258157, -1.08824],
+                    0,
+                )
+                self._set_rod_rotation(
+                    "passive_1_y",
+                    passive_1_y,
+                    passive_1_y_joint,
+                    [6.20901e-17, 1.31226e-17, -3.8231e-17],
+                    1,
+                )
+                self._set_rod_rotation(
+                    "passive_1_z",
+                    passive_1_z,
+                    passive_1_z_joint,
+                    [6.20901e-17, 1.31226e-17, -3.8231e-17],
+                    2,
+                )
 
-            self._set_rod_rotation(
-                "passive_1_x",
-                passive_1_x,
-                passive_1_x_joint,
-                [-3.09302, 0.0258157, -1.08824],
-                0,
-            )
-            self._set_rod_rotation(
-                "passive_1_y",
-                passive_1_y,
-                passive_1_y_joint,
-                [6.20901e-17, 1.31226e-17, -3.8231e-17],
-                1,
-            )
-            self._set_rod_rotation(
-                "passive_1_z",
-                passive_1_z,
-                passive_1_z_joint,
-                [6.20901e-17, 1.31226e-17, -3.8231e-17],
-                2,
-            )
+                self._set_rod_rotation(
+                    "passive_2_x",
+                    passive_2_x,
+                    passive_2_x_joint,
+                    [-3.09518, 0.0258157, 1.08824],
+                    0,
+                )
 
-            self._set_rod_rotation(
-                "passive_2_x",
-                passive_2_x,
-                passive_2_x_joint,
-                [-3.09518, 0.0258157, 1.08824],
-                0,
-            )
+                self._set_rod_rotation(
+                    "passive_2_y",
+                    passive_2_y,
+                    passive_2_y_joint,
+                    [1.03529e-16, -2.76081e-18, 1.06701e-17],
+                    1,
+                )
+                self._set_rod_rotation(
+                    "passive_2_z",
+                    passive_2_z,
+                    passive_2_z_joint,
+                    [1.03529e-16, -2.76081e-18, 1.06701e-17],
+                    2,
+                )
 
-            self._set_rod_rotation(
-                "passive_2_y",
-                passive_2_y,
-                passive_2_y_joint,
-                [1.03529e-16, -2.76081e-18, 1.06701e-17],
-                1,
-            )
-            self._set_rod_rotation(
-                "passive_2_z",
-                passive_2_z,
-                passive_2_z_joint,
-                [1.03529e-16, -2.76081e-18, 1.06701e-17],
-                2,
-            )
+                self._set_rod_rotation(
+                    "passive_3_x",
+                    passive_3_x,
+                    passive_3_x_joint,
+                    [-0.0802622, 0.0258157, -1.08824],
+                    0,
+                )
+                self._set_rod_rotation(
+                    "passive_3_y",
+                    passive_3_y,
+                    passive_3_y_joint,
+                    [-1.00225e-17, 4.94486e-18, 1.68244e-17],
+                    1,
+                )
+                self._set_rod_rotation(
+                    "passive_3_z",
+                    passive_3_z,
+                    passive_3_z_joint,
+                    [-1.00225e-17, 4.94486e-18, 1.68244e-17],
+                    2,
+                )
 
-            self._set_rod_rotation(
-                "passive_3_x",
-                passive_3_x,
-                passive_3_x_joint,
-                [-0.0802622, 0.0258157, -1.08824],
-                0,
-            )
-            self._set_rod_rotation(
-                "passive_3_y",
-                passive_3_y,
-                passive_3_y_joint,
-                [-1.00225e-17, 4.94486e-18, 1.68244e-17],
-                1,
-            )
-            self._set_rod_rotation(
-                "passive_3_z",
-                passive_3_z,
-                passive_3_z_joint,
-                [-1.00225e-17, 4.94486e-18, 1.68244e-17],
-                2,
-            )
+                self._set_rod_rotation(
+                    "passive_4_x",
+                    passive_4_x,
+                    passive_4_x_joint,
+                    [0.118327, 0.0258157, 1.08824],
+                    0,
+                )
 
-            self._set_rod_rotation(
-                "passive_4_x",
-                passive_4_x,
-                passive_4_x_joint,
-                [0.118327, 0.0258157, 1.08824],
-                0,
-            )
+                self._set_rod_rotation(
+                    "passive_4_y",
+                    passive_4_y,
+                    passive_4_y_joint,
+                    [-5.32364e-18, 3.35739e-18, 2.46433e-17],
+                    1,
+                )
 
-            self._set_rod_rotation(
-                "passive_4_y",
-                passive_4_y,
-                passive_4_y_joint,
-                [-5.32364e-18, 3.35739e-18, 2.46433e-17],
-                1,
-            )
+                self._set_rod_rotation(
+                    "passive_4_z",
+                    passive_4_z,
+                    passive_4_z_joint,
+                    [-5.32364e-18, 3.35739e-18, 2.46433e-17],
+                    2,
+                )
 
-            self._set_rod_rotation(
-                "passive_4_z",
-                passive_4_z,
-                passive_4_z_joint,
-                [-5.32364e-18, 3.35739e-18, 2.46433e-17],
-                2,
-            )
+                self._set_rod_rotation(
+                    "passive_5_x",
+                    passive_5_x,
+                    passive_5_x_joint,
+                    [-2.94446, 0.0258157, -1.08824],
+                    0,
+                )
 
-            self._set_rod_rotation(
-                "passive_5_x",
-                passive_5_x,
-                passive_5_x_joint,
-                [-2.94446, 0.0258157, -1.08824],
-                0,
-            )
+                self._set_rod_rotation(
+                    "passive_5_y",
+                    passive_5_y,
+                    passive_5_y_joint,
+                    [-3.08493e-17, 2.79333e-17, 5.24089e-17],
+                    1,
+                )
 
-            self._set_rod_rotation(
-                "passive_5_y",
-                passive_5_y,
-                passive_5_y_joint,
-                [-3.08493e-17, 2.79333e-17, 5.24089e-17],
-                1,
-            )
+                self._set_rod_rotation(
+                    "passive_5_z",
+                    passive_5_z,
+                    passive_5_z_joint,
+                    [-3.08493e-17, 2.79333e-17, 5.24089e-17],
+                    2,
+                )
 
-            self._set_rod_rotation(
-                "passive_5_z",
-                passive_5_z,
-                passive_5_z_joint,
-                [-3.08493e-17, 2.79333e-17, 5.24089e-17],
-                2,
-            )
+                self._set_rod_rotation(
+                    "passive_6_x",
+                    passive_6_x,
+                    passive_6_x_joint,
+                    [-3.09524, 0.0258157, 1.08824],
+                    0,
+                )
 
-            self._set_rod_rotation(
-                "passive_6_x",
-                passive_6_x,
-                passive_6_x_joint,
-                [-3.09524, 0.0258157, 1.08824],
-                0,
-            )
+                self._set_rod_rotation(
+                    "passive_6_y",
+                    passive_6_y,
+                    passive_6_y_joint,
+                    [9.77399e-17, 3.28422e-18, 1.01949e-16],
+                    1,
+                )
 
-            self._set_rod_rotation(
-                "passive_6_y",
-                passive_6_y,
-                passive_6_y_joint,
-                [9.77399e-17, 3.28422e-18, 1.01949e-16],
-                1,
-            )
+                self._set_rod_rotation(
+                    "passive_6_z",
+                    passive_6_z,
+                    passive_6_z_joint,
+                    [9.77399e-17, 3.28422e-18, 1.01949e-16],
+                    2,
+                )
 
-            self._set_rod_rotation(
-                "passive_6_z",
-                passive_6_z,
-                passive_6_z_joint,
-                [9.77399e-17, 3.28422e-18, 1.01949e-16],
-                2,
-            )
+                self._set_rod_rotation(
+                    "passive_7_x",
+                    passive_7_x,
+                    passive_7_x_joint,
+                    [-3.14025, 0.0530311, 1.08768],
+                    0,
+                )
 
-            self._set_rod_rotation(
-                "passive_7_x",
-                passive_7_x,
-                passive_7_x_joint,
-                [-3.14025, 0.0530311, 1.08768],
-                0,
-            )
+                self._set_rod_rotation(
+                    "passive_7_y",
+                    passive_7_y,
+                    passive_7_y_joint,
+                    [-1.00928e-30, 6.45118e-17, -2.11395e-31],
+                    1,
+                )
 
-            self._set_rod_rotation(
-                "passive_7_y",
-                passive_7_y,
-                passive_7_y_joint,
-                [-1.00928e-30, 6.45118e-17, -2.11395e-31],
-                1,
-            )
+                self._set_rod_rotation(
+                    "passive_7_z",
+                    passive_7_z,
+                    passive_7_z_joint,
+                    [-1.00928e-30, 6.45118e-17, -2.11395e-31],
+                    2,
+                )
 
-            self._set_rod_rotation(
-                "passive_7_z",
-                passive_7_z,
-                passive_7_z_joint,
-                [-1.00928e-30, 6.45118e-17, -2.11395e-31],
-                2,
-            )
+            if self.cam is not None:
+                ret, frame = self.cam.read()
 
-            time.sleep(0.05)
+                rr.log(
+                    f"{cam_joint}/image",
+                    rr.Pinhole(
+                        image_from_camera=rr.datatypes.Mat3x3(K),
+                        width=1280,  # frame.shape[1],
+                        height=720,  # frame.shape[0],
+                        image_plane_distance=0.8,
+                        camera_xyz=rr.ViewCoordinates.RDF,
+                    ),
+                )
+
+                if ret:
+                    # ToDo: this is suboptimal since the camera outputs a MJPEG stream
+                    # use alternative to opencv
+                    ret, encoded_image = cv2.imencode(".jpg", frame)
+                    if ret:
+                        rr.log(
+                            f"{cam_joint}/image",
+                            rr.ImageEncoded(
+                                contents=encoded_image, format=rr.ImageFormat.JPEG
+                            ),
+                        )
+                    else:
+                        print("Failed to encode frame to JPEG.")
+
+                else:
+                    print("Failed to grab frame from camera.")
+
+            time.sleep(0.1)
         print("Rerun logging stopped.")

@@ -55,7 +55,9 @@ class Daemon:
 
         self.rerun = None
         if rerun:
-            self.rerun = Rerun(self.backend, app_id="reachy_mini_daemon", spawn=True)
+            self.rerun = Rerun(
+                self.backend, app_id="reachy_mini_daemon", spawn=True, video=not sim
+            )
 
         self.server = Server(self.backend, localhost_only=localhost_only)
         self.server.start()
