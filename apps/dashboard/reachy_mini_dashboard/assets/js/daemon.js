@@ -52,6 +52,7 @@ async function updateDaemonStatusUI(status) {
         startBtn.innerHTML = "▶️ Start";
 
         stopBtn.disabled = false;
+        toggle.disabled = true;
 
     } else if (status.state === "not_initialized") {
         indicator.classList.add('status-not-initialized');
@@ -78,6 +79,8 @@ async function updateDaemonStatusUI(status) {
 
         stopBtn.disabled = true;
 
+        toggle.disabled = true;
+
     } else if (status.state === "stopping") {
         indicator.classList.add('status-stopping');
         // statusText.textContent = status.message || 'Stopping Reachy Mini...';
@@ -88,6 +91,8 @@ async function updateDaemonStatusUI(status) {
         stopBtn.classList.remove('stop');
         stopBtn.classList.add('stopping');
         stopBtn.innerHTML = "⏳ Stopping...";
+
+        toggle.disabled = true;
 
     } else if (status.state === "stopped") {
         indicator.classList.add('status-stopped');
