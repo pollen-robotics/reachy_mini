@@ -1,17 +1,56 @@
 """
-Dance Motion Library (v4.3 - The "Feels Right" Bugfix Edition)
----------------------------------------------------------------
-This version fixes two critical bugs from v4.1/v4.2:
-1.  The speed of `dizzy_spin` and `interwoven_spirals` has been restored
-    to its original, correct value.
-2.  All moves based on the `transient_motion` primitive (like `yeah_nod`) have been rebuilt to work correctly.
+Dance Motion Library (v4.3)
+---------------------------
+A rich, compositional library for creating life-like, expressive, and rhythmic
+motion for robotic characters. It provides a toolbox of beat-synchronized
+motion functions, from simple building blocks to complex, named choreographies.
+
+Core Philosophy
+---------------
+This library is built on a compositional pattern:
+1.  **Motion Primitives:** Low-level functions like `oscillation_motion` (for
+    continuous loops) and `transient_motion` (for one-shot, eased actions)
+    form the mathematical foundation.
+2.  **Atomic Moves:** Simple wrappers around primitives that control a single
+    axis or function (e.g., `atomic_pitch`, `atomic_antenna_wiggle`). These
+    are the fundamental building blocks.
+3.  **Choreographed Moves:** The main library of named moves, created by
+    combining multiple atomic moves using the `combine_offsets` utility.
+
+Key Parameters
+--------------
+All move functions are driven by `t_beats` and a set of keyword arguments:
+- `t_beats` (float): Elapsed time in **musical beats**. The primary input.
+- `amplitude` / `amplitude_rad` / `amplitude_m` (float): The main scale of
+  the motion, in radians or meters.
+- `cycles_per_beat` (float): The speed of the motion. 1.0 = one full
+  cycle per beat.
+- `phase_offset` (float): A time delay for the motion, in cycles (0.0-1.0).
+- `waveform` (str): The shape of the oscillation (e.g., 'sin', 'square').
+- `antenna_move_name` (str): The style of antenna motion ('wiggle', 'both').
+- `antenna_amplitude_rad` (float): The scale of the antenna motion.
+- `duration_beats` / `repeat_every` (float): Parameters for transient,
+  one-shot moves.
+
+Usage Example
+-------------
+```python
+# 1. Get the move function and its default parameters
+move_fn = AVAILABLE_DANCE_MOVES['simple_nod']
+params = MOVE_SPECIFIC_PARAMS['simple_nod']
+
+# 2. At each time step, call the function with the current beat time
+t_beats = 2.5 
+offsets = move_fn(t_beats, **params)
+
+# 3. Apply the resulting offsets to the robot
+robot.set_pose(base_pose + offsets.position_offset, ...)
 """
 
 import numpy as np
 from dataclasses import dataclass
 from typing import Callable
 
-# ... (The MoveOffsets class and motion primitives are unchanged) ...
 @dataclass
 class MoveOffsets:
     position_offset: np.ndarray

@@ -20,7 +20,6 @@ import numpy as np
 from pynput import keyboard
 from scipy.spatial.transform import Rotation as R
 
-# Assuming the robot library and your dance moves are accessible
 from reachy_mini import ReachyMini
 from dance_moves import (
     AVAILABLE_DANCE_MOVES,
@@ -34,7 +33,7 @@ class Config:
     """Configuration for the dance tester."""
     bpm: float = 120.0
     control_ts: float = 0.01  # 100 Hz control loop
-    beats_per_sequence: int = 8  # Switch move every 16 beats
+    beats_per_sequence: int = 8  # Switch move every 8 beats
     start_move: str = 'simple_nod'
     amplitude_scale: float = 1.0
     neutral_pos: np.ndarray = field(default_factory=lambda: np.array([0, 0, 0.02]))
@@ -65,7 +64,6 @@ ORB_HELP_LINES = [
 
 # --- Shared State for Thread Communication ---
 class SharedState:
-    # This class remains unchanged
     def __init__(self):
         self.lock = threading.Lock()
         self.running = True
@@ -98,7 +96,6 @@ class SharedState:
 
 
 # --- Robot Interaction & Utilities ---
-# These functions remain unchanged
 def head_pose(pos: np.ndarray, eul: np.ndarray) -> np.ndarray:
     m = np.eye(4); m[:3, 3] = pos; m[:3, :3] = R.from_euler('xyz', eul).as_matrix(); return m
 
