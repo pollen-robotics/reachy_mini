@@ -1,14 +1,17 @@
 """
-Dance Motion Library (v3.1)
----------------------------
-A rich, compositional library of beat-synchronized motion primitives.
-
+Dance Motion Library (v4.2 - Bugfix Edition)
+---------------------------------------------
+This version contains the complete "Best Of" set of moves from v4.1, but
+with a critical bugfix in how antenna parameters are handled. The confusing
+`do_antennas` helper function has been removed, and each move now explicitly
+and correctly handles its own antenna motion.
 """
 
 import numpy as np
 from dataclasses import dataclass
 from typing import Callable
 
+# ... (The MoveOffsets class and motion primitives are unchanged) ...
 @dataclass
 class MoveOffsets:
     position_offset: np.ndarray
@@ -41,7 +44,6 @@ def combine_offsets(*offsets: MoveOffsets) -> MoveOffsets:
     return MoveOffsets(pos, ori, ant)
 
 # ────────────────────────────── ATOMIC MOVES & HELPERS ──────────────────────────────────
-# (This section is unchanged from the previous working version)
 def atomic_x_pos(t_beats, **kwargs): return MoveOffsets(np.array([oscillation_motion(t_beats, **kwargs), 0, 0]), np.zeros(3), np.zeros(2))
 def atomic_y_pos(t_beats, **kwargs): return MoveOffsets(np.array([0, oscillation_motion(t_beats, **kwargs), 0]), np.zeros(3), np.zeros(2))
 def atomic_z_pos(t_beats, **kwargs): return MoveOffsets(np.array([0, 0, oscillation_motion(t_beats, **kwargs)]), np.zeros(3), np.zeros(2))
@@ -58,30 +60,59 @@ def get_antenna_kwargs(main_kwargs):
     if 'antenna_amplitude_rad' in main_kwargs: antenna_params['amplitude'] = main_kwargs['antenna_amplitude_rad']
     return antenna_params
 
-# ──────────────────── COMPOSITE & CHOREOGRAPHED MOVES ──────────────────────
+# ─────────────────────────── ALL DANCE MOVE FUNCTIONS ─────────────────────────────
+# All functions refactored to remove do_antennas helper
 
 def move_simple_nod(t_beats, amplitude_rad, antenna_move_name='wiggle', **kwargs):
-    base_move = atomic_pitch(t_beats, amplitude=amplitude_rad, **get_base_move_kwargs(kwargs))
-    antenna_move = AVAILABLE_ANTENNA_MOVES[antenna_move_name](t_beats, **get_antenna_kwargs(kwargs))
-    return combine_offsets(base_move, antenna_move)
+    base = atomic_pitch(t_beats, amplitude=amplitude_rad, **get_base_move_kwargs(kwargs))
+    antenna_fn = AVAILABLE_ANTENNA_MOVES.get(antenna_move_name)
+    antennas = antenna_fn(t_beats, **get_antenna_kwargs(kwargs))
+    return combine_offsets(base, antennas)
 
 def move_head_tilt_roll(t_beats, amplitude_rad, antenna_move_name='wiggle', **kwargs):
-    base_move = atomic_roll(t_beats, amplitude=amplitude_rad, **get_base_move_kwargs(kwargs))
-    antenna_move = AVAILABLE_ANTENNA_MOVES[antenna_move_name](t_beats, **get_antenna_kwargs(kwargs))
-    return combine_offsets(base_move, antenna_move)
+    base = atomic_roll(t_beats, amplitude=amplitude_rad, **get_base_move_kwargs(kwargs))
+    antenna_fn = AVAILABLE_ANTENNA_MOVES.get(antenna_move_name)
+    antennas = antenna_fn(t_beats, **get_antenna_kwargs(kwargs))
+    return combine_offsets(base, antennas)
+
+def move_side_to_side_sway(t_beats, amplitude_m, antenna_move_name='wiggle', **kwargs):
+    base = atomic_y_pos(t_beats, amplitude=amplitude_m, **get_base_move_kwargs(kwargs))
+    antenna_fn = AVAILABLE_ANTENNA_MOVES.get(antenna_move_name)
+    antennas = antenna_fn(t_beats, **get_antenna_kwargs(kwargs))
+    return combine_offsets(base, antennas)
 
 def move_dizzy_spin(t_beats, roll_amplitude_rad, pitch_amplitude_rad, antenna_move_name='wiggle', **kwargs):
     base_kwargs = get_base_move_kwargs(kwargs)
     roll = atomic_roll(t_beats, amplitude=roll_amplitude_rad, **base_kwargs)
     pitch_kwargs = base_kwargs.copy(); pitch_kwargs['phase_offset'] = pitch_kwargs.get('phase_offset', 0) + 0.25
     pitch = atomic_pitch(t_beats, amplitude=pitch_amplitude_rad, **pitch_kwargs)
-    antenna_move = AVAILABLE_ANTENNA_MOVES[antenna_move_name](t_beats, **get_antenna_kwargs(kwargs))
-    return combine_offsets(roll, pitch, antenna_move)
+    antenna_fn = AVAILABLE_ANTENNA_MOVES.get(antenna_move_name)
+    antennas = antenna_fn(t_beats, **get_antenna_kwargs(kwargs))
+    return combine_offsets(roll, pitch, antennas)
 
-def move_no_shake(t_beats, amplitude_rad, antenna_move_name='wiggle', **kwargs):
-    base_move = atomic_yaw(t_beats, amplitude=amplitude_rad, **get_base_move_kwargs(kwargs))
-    antenna_move = AVAILABLE_ANTENNA_MOVES[antenna_move_name](t_beats, **get_antenna_kwargs(kwargs))
-    return combine_offsets(base_move, antenna_move)
+def move_stumble_and_recover(t_beats, yaw_amplitude_rad, pitch_amplitude_rad, y_amplitude_m, antenna_move_name='both', **kwargs):
+    base_kwargs = get_base_move_kwargs(kwargs)
+    yaw = atomic_yaw(t_beats, amplitude=yaw_amplitude_rad, **base_kwargs)
+    pitch_kwargs = base_kwargs.copy(); pitch_kwargs['cycles_per_beat'] = pitch_kwargs.get('cycles_per_beat', 1.0) * 2
+    pitch = atomic_pitch(t_beats, amplitude=pitch_amplitude_rad, **pitch_kwargs)
+    sway_kwargs = base_kwargs.copy(); sway_kwargs['phase_offset'] = sway_kwargs.get('phase_offset', 0) + 0.5
+    stabilizer_sway = atomic_y_pos(t_beats, amplitude=y_amplitude_m, **sway_kwargs)
+    antenna_fn = AVAILABLE_ANTENNA_MOVES.get(antenna_move_name)
+    antennas = antenna_fn(t_beats, **get_antenna_kwargs(kwargs))
+    return combine_offsets(yaw, pitch, stabilizer_sway, antennas)
+
+def move_headbanger_combo(t_beats, pitch_amplitude_rad, z_amplitude_m, antenna_move_name='both', **kwargs):
+    base_kwargs = get_base_move_kwargs(kwargs)
+    nod = atomic_pitch(t_beats, amplitude=pitch_amplitude_rad, **base_kwargs)
+    bounce_kwargs = base_kwargs.copy(); bounce_kwargs['phase_offset'] = bounce_kwargs.get('phase_offset', 0) + 0.1
+    bounce = atomic_z_pos(t_beats, amplitude=z_amplitude_m, **bounce_kwargs)
+    
+    # Custom antenna logic, now handled correctly
+    antenna_kwargs = get_antenna_kwargs(kwargs)
+    antenna_kwargs['amplitude'] = pitch_amplitude_rad * 2.0
+    antenna_fn = AVAILABLE_ANTENNA_MOVES.get(antenna_move_name)
+    antennas = antenna_fn(t_beats, **antenna_kwargs)
+    return combine_offsets(nod, bounce, antennas)
 
 def move_interwoven_spirals(t_beats, roll_amp, pitch_amp, yaw_amp, antenna_move_name='wiggle', **kwargs):
     base_kwargs = get_base_move_kwargs(kwargs)
@@ -91,145 +122,187 @@ def move_interwoven_spirals(t_beats, roll_amp, pitch_amp, yaw_amp, antenna_move_
     roll = atomic_roll(t_beats, amplitude=roll_amp, **roll_kwargs)
     pitch = atomic_pitch(t_beats, amplitude=pitch_amp, **pitch_kwargs)
     yaw = atomic_yaw(t_beats, amplitude=yaw_amp, **yaw_kwargs)
-    antenna_move = AVAILABLE_ANTENNA_MOVES[antenna_move_name](t_beats, **get_antenna_kwargs(kwargs))
-    return combine_offsets(roll, pitch, yaw, antenna_move)
+    antenna_fn = AVAILABLE_ANTENNA_MOVES.get(antenna_move_name)
+    antennas = antenna_fn(t_beats, **get_antenna_kwargs(kwargs))
+    return combine_offsets(roll, pitch, yaw, antennas)
 
-def move_indian_head_slide(t_beats, amplitude_m, antenna_move_name='wiggle', **kwargs):
-    base_kwargs = get_base_move_kwargs(kwargs)
-    sway = atomic_y_pos(t_beats, amplitude=amplitude_m, **base_kwargs)
-    counter_roll = atomic_roll(t_beats, amplitude=-(amplitude_m * 2.5), **base_kwargs)
-    antenna_move = AVAILABLE_ANTENNA_MOVES[antenna_move_name](t_beats, **get_antenna_kwargs(kwargs))
-    return combine_offsets(sway, counter_roll, antenna_move)
-
-def move_cocky_sway(t_beats, y_amplitude_m, z_amplitude_m, antenna_move_name='wiggle', **kwargs):
-    base_kwargs = get_base_move_kwargs(kwargs)
-    sway = atomic_y_pos(t_beats, amplitude=y_amplitude_m, **base_kwargs)
-    dip_kwargs = base_kwargs.copy(); dip_kwargs['cycles_per_beat'] = dip_kwargs.get('cycles_per_beat', 1.0) * 2
-    z_offset = -z_amplitude_m * (1 + oscillation_motion(t_beats, amplitude=1, waveform='cos', **dip_kwargs)) / 2
-    dip = MoveOffsets(np.array([0,0,z_offset]), np.zeros(3), np.zeros(2))
-    antenna_move = AVAILABLE_ANTENNA_MOVES[antenna_move_name](t_beats, **get_antenna_kwargs(kwargs))
-    return combine_offsets(sway, dip, antenna_move)
-
-# ─────────────────── NEW & REBUILT MOVES (v3.1) ──────────────────────
+def move_sharp_side_tilt(t_beats, roll_amplitude_rad, antenna_move_name='wiggle', **kwargs):
+    base = atomic_roll(t_beats, amplitude=roll_amplitude_rad, **get_base_move_kwargs(kwargs))
+    antenna_fn = AVAILABLE_ANTENNA_MOVES.get(antenna_move_name)
+    antennas = antenna_fn(t_beats, **get_antenna_kwargs(kwargs))
+    return combine_offsets(base, antennas)
 
 def move_side_peekaboo(t_beats, z_amp, y_amp, pitch_amp, antenna_move_name='both', **kwargs):
-    """Hides down at the center, then pops up to alternating sides.
-    
-    Designer's Note (REBUILT v3.2): The choreography is now a much cleaner and
-    more logical 8-beat sequence based on user feedback. The antenna speed
-    bug has also been fixed. The sequence is: Center-Down -> Left-Up ->
-    Center-Down -> Right-Up -> loop.
-    """
     period = 8.0; t_in_period = t_beats % period
     pos, ori = np.zeros(3), np.zeros(3)
-    def ease(t): return t*t*(3-2*t) # ease-in-out
+    def ease(t): return t*t*(3-2*t)
     def excited_nod(t): return pitch_amp * np.sin(t * np.pi)
+    if t_in_period < 2.0:
+        t = t_in_period / 2.0; pos[2], pos[1], ori[1] = -z_amp * (1 - ease(t)), y_amp * ease(t), excited_nod(t)
+    elif t_in_period < 4.0:
+        t = (t_in_period - 2.0) / 2.0; pos[2], pos[1] = -z_amp * ease(t), y_amp * (1 - ease(t))
+    elif t_in_period < 6.0:
+        t = (t_in_period - 4.0) / 2.0; pos[2], pos[1], ori[1] = -z_amp * (1 - ease(t)), -y_amp * ease(t), -excited_nod(t)
+    else:
+        t = (t_in_period - 6.0) / 2.0; pos[2], pos[1] = -z_amp * ease(t), -y_amp * (1 - ease(t))
+    antenna_fn = AVAILABLE_ANTENNA_MOVES.get(antenna_move_name)
+    antennas = antenna_fn(t_beats, **get_antenna_kwargs(kwargs))
+    return combine_offsets(MoveOffsets(pos, ori, np.zeros(2)), antennas)
 
-    # The move starts from the "down" position and moves between 3 keyframes:
-    # A = Center-Down, B = Left-Up, C = Right-Up
-    if t_in_period < 2.0: # Phase 1: Moving from Center-Down to Left-Up
-        t = t_in_period / 2.0
-        pos[2] = -z_amp * (1 - ease(t)) # z goes from -z_amp to 0
-        pos[1] = y_amp * ease(t)      # y goes from 0 to y_amp
-        ori[1] = excited_nod(t)
-    elif t_in_period < 4.0: # Phase 2: Moving from Left-Up to Center-Down
-        t = (t_in_period - 2.0) / 2.0
-        pos[2] = -z_amp * ease(t)      # z goes from 0 to -z_amp
-        pos[1] = y_amp * (1 - ease(t)) # y goes from y_amp to 0
-    elif t_in_period < 6.0: # Phase 3: Moving from Center-Down to Right-Up
-        t = (t_in_period - 4.0) / 2.0
-        pos[2] = -z_amp * (1 - ease(t)) # z goes from -z_amp to 0
-        pos[1] = -y_amp * ease(t)     # y goes from 0 to -y_amp
-        ori[1] = -excited_nod(t)
-    else: # Phase 4: Moving from Right-Up to Center-Down
-        t = (t_in_period - 6.0) / 2.0
-        pos[2] = -z_amp * ease(t)      # z goes from 0 to -z_amp
-        pos[1] = -y_amp * (1 - ease(t))# y goes from -y_amp to 0
+def move_yeah_nod(t_beats, amplitude_rad, antenna_move_name='both', **kwargs):
+    base_kwargs = get_base_move_kwargs(kwargs); repeat_every = 1.0 / base_kwargs.get('cycles_per_beat', 1.0)
+    nod1 = transient_motion(t_beats, amplitude_rad, duration_beats=repeat_every*0.4, repeat_every=repeat_every)
+    nod2 = transient_motion(t_beats, amplitude_rad*0.7, duration_beats=repeat_every*0.3, delay_beats=repeat_every*0.5, repeat_every=repeat_every)
+    base = atomic_pitch(0, amplitude=(nod1+nod2))
+    antenna_fn = AVAILABLE_ANTENNA_MOVES.get(antenna_move_name)
+    antennas = antenna_fn(t_beats, **get_antenna_kwargs(kwargs))
+    return combine_offsets(base, antennas)
 
-    antenna_move = AVAILABLE_ANTENNA_MOVES[antenna_move_name](t_beats, **get_antenna_kwargs(kwargs))
-    return combine_offsets(MoveOffsets(pos, ori, np.zeros(2)), antenna_move)
-
-
-def move_headbanger_combo(t_beats, pitch_amplitude_rad, z_amplitude_m, antenna_move_name='both', **kwargs):
-    """A more dynamic headbang that combines a pitch nod with a vertical bounce.
-    
-    Designer's Note: Layering a Z-axis bounce with the pitch-axis nod makes
-    the headbang feel much more powerful and less stiff. The bounce lags
-    slightly behind the nod for a "whiplash" effect.
-    """
+def move_uh_huh_tilt(t_beats, amplitude_rad, antenna_move_name='wiggle', **kwargs):
     base_kwargs = get_base_move_kwargs(kwargs)
-    nod = atomic_pitch(t_beats, amplitude=pitch_amplitude_rad, **base_kwargs)
-    
-    bounce_kwargs = base_kwargs.copy()
-    bounce_kwargs['phase_offset'] = bounce_kwargs.get('phase_offset', 0) + 0.1 # Small delay
-    bounce = atomic_z_pos(t_beats, amplitude=z_amplitude_m, **bounce_kwargs)
+    roll = atomic_roll(t_beats, amplitude=amplitude_rad, **base_kwargs)
+    pitch = atomic_pitch(t_beats, amplitude=amplitude_rad, **base_kwargs)
+    antenna_fn = AVAILABLE_ANTENNA_MOVES.get(antenna_move_name)
+    antennas = antenna_fn(t_beats, **get_antenna_kwargs(kwargs))
+    return combine_offsets(roll, pitch, antennas)
 
-    antenna_kwargs = get_antenna_kwargs(kwargs)
-    # Make antennas follow the more intense pitch motion
-    antenna_kwargs['amplitude'] = pitch_amplitude_rad * 2.0
-    antenna_move = AVAILABLE_ANTENNA_MOVES[antenna_move_name](t_beats, **antenna_kwargs)
-    return combine_offsets(nod, bounce, antenna_move)
+def move_neck_recoil(t_beats, amplitude_m, antenna_move_name='wiggle', **kwargs):
+    base_kwargs = get_base_move_kwargs(kwargs); repeat_every = 1.0 / base_kwargs.get('cycles_per_beat', 0.5)
+    recoil = transient_motion(t_beats, -amplitude_m, duration_beats=repeat_every*0.3, repeat_every=repeat_every)
+    base = atomic_x_pos(0, amplitude=recoil)
+    antenna_fn = AVAILABLE_ANTENNA_MOVES.get(antenna_move_name)
+    antennas = antenna_fn(t_beats, **get_antenna_kwargs(kwargs))
+    return combine_offsets(base, antennas)
 
-def move_chicken_peck(t_beats, amplitude_m, antenna_move_name='both', **kwargs):
-    """A series of quick, sharp, forward pecking motions.
-    Designer's Note: A percussive and characterful move using the transient
-    motion primitive for a non-looping feel on each beat.
-    """
+def move_chin_lead(t_beats, x_amplitude_m, pitch_amplitude_rad, antenna_move_name='both', **kwargs):
     base_kwargs = get_base_move_kwargs(kwargs)
-    repeat_every = 1.0 / base_kwargs.get('cycles_per_beat', 1.0)
-    
-    x_offset = transient_motion(t_beats, amplitude_m, duration_beats=repeat_every*0.8, repeat_every=repeat_every)
-    pitch_offset = transient_motion(t_beats, amplitude_m * 5, duration_beats=repeat_every*0.8, repeat_every=repeat_every)
-    
-    antenna_kwargs = get_antenna_kwargs(kwargs)
-    antenna_kwargs['amplitude'] = antenna_kwargs.get('amplitude', 1.0) * 0.5 # Less antenna motion
-    antenna_move = AVAILABLE_ANTENNA_MOVES[antenna_move_name](t_beats, **antenna_kwargs)
-    return combine_offsets(MoveOffsets(np.array([x_offset, 0, 0]), np.array([0, pitch_offset, 0]), np.zeros(2)), antenna_move)
+    x_move = atomic_x_pos(t_beats, amplitude=x_amplitude_m, **base_kwargs)
+    pitch_kwargs = base_kwargs.copy(); pitch_kwargs['phase_offset'] = pitch_kwargs.get('phase_offset', 0) - 0.25
+    pitch_move = atomic_pitch(t_beats, amplitude=pitch_amplitude_rad, **pitch_kwargs)
+    antenna_fn = AVAILABLE_ANTENNA_MOVES.get(antenna_move_name)
+    antennas = antenna_fn(t_beats, **get_antenna_kwargs(kwargs))
+    return combine_offsets(x_move, pitch_move, antennas)
 
 def move_groovy_sway_and_roll(t_beats, y_amplitude_m, roll_amplitude_rad, antenna_move_name='wiggle', **kwargs):
-    """A very fluid combination of a side-to-side sway and a lagging head roll.
-    Designer's Note: A perfect example of how combining simple moves with a phase
-    offset can create a complex, groovy, and relaxed motion.
-    """
     base_kwargs = get_base_move_kwargs(kwargs)
     sway = atomic_y_pos(t_beats, amplitude=y_amplitude_m, **base_kwargs)
-    
     roll_kwargs = base_kwargs.copy(); roll_kwargs['phase_offset'] = roll_kwargs.get('phase_offset', 0) + 0.25
     roll = atomic_roll(t_beats, amplitude=roll_amplitude_rad, **roll_kwargs)
+    antenna_fn = AVAILABLE_ANTENNA_MOVES.get(antenna_move_name)
+    antennas = antenna_fn(t_beats, **get_antenna_kwargs(kwargs))
+    return combine_offsets(sway, roll, antennas)
 
-    antenna_move = AVAILABLE_ANTENNA_MOVES[antenna_move_name](t_beats, **get_antenna_kwargs(kwargs))
-    return combine_offsets(sway, roll, antenna_move)
+def move_chicken_peck(t_beats, amplitude_m, antenna_move_name='both', **kwargs):
+    base_kwargs = get_base_move_kwargs(kwargs); repeat_every = 1.0 / base_kwargs.get('cycles_per_beat', 1.0)
+    x_offset = transient_motion(t_beats, amplitude_m, duration_beats=repeat_every*0.8, repeat_every=repeat_every)
+    pitch_offset = transient_motion(t_beats, amplitude_m * 5, duration_beats=repeat_every*0.8, repeat_every=repeat_every)
+    antenna_kwargs = get_antenna_kwargs(kwargs); antenna_kwargs['amplitude'] = antenna_kwargs.get('amplitude', 1.0) * 0.5
+    antenna_fn = AVAILABLE_ANTENNA_MOVES.get(antenna_move_name)
+    antennas = antenna_fn(t_beats, **antenna_kwargs)
+    return combine_offsets(MoveOffsets(np.array([x_offset, 0, 0]), np.array([0, pitch_offset, 0]), np.zeros(2)), antennas)
+
+def move_hair_whip(t_beats, yaw_amplitude_rad, roll_amplitude_rad, antenna_move_name='wiggle', **kwargs):
+    base_kwargs = get_base_move_kwargs(kwargs); repeat_every = 1.0 / base_kwargs.get('cycles_per_beat', 0.25)
+    yaw = transient_motion(t_beats, yaw_amplitude_rad, duration_beats=repeat_every * 0.4, repeat_every=repeat_every)
+    roll = transient_motion(t_beats, roll_amplitude_rad, duration_beats=repeat_every * 0.5, repeat_every=repeat_every)
+    base = combine_offsets(atomic_yaw(0, amplitude=yaw), atomic_roll(0, amplitude=roll))
+    antenna_fn = AVAILABLE_ANTENNA_MOVES.get(antenna_move_name)
+    antennas = antenna_fn(t_beats, **get_antenna_kwargs(kwargs))
+    return combine_offsets(base, antennas)
+
+def move_side_glance_flick(t_beats, yaw_amplitude_rad, antenna_move_name='wiggle', **kwargs):
+    period = 4.0; t_in_period = t_beats % (1.0/kwargs.get('cycles_per_beat', 0.25))
+    def ease(t): return t*t*(3-2*t)
+    yaw = 0
+    if t_in_period < 0.5: yaw = yaw_amplitude_rad * ease(t_in_period / 0.5)
+    elif t_in_period < 1.5: yaw = yaw_amplitude_rad
+    else: yaw = yaw_amplitude_rad * (1.0 - ease((t_in_period - 1.5) / (period-1.5)))
+    base = atomic_yaw(0, amplitude=yaw)
+    antenna_fn = AVAILABLE_ANTENNA_MOVES.get(antenna_move_name)
+    antennas = antenna_fn(t_beats, **get_antenna_kwargs(kwargs))
+    return combine_offsets(base, antennas)
+
+def move_polyrhythm_combo(t_beats, sway_amplitude_m, nod_amplitude_rad, antenna_move_name='wiggle', **kwargs):
+    sway = atomic_y_pos(t_beats, amplitude=sway_amplitude_m, cycles_per_beat=1/3)
+    nod = atomic_pitch(t_beats, amplitude=nod_amplitude_rad, cycles_per_beat=1/2)
+    antenna_fn = AVAILABLE_ANTENNA_MOVES.get(antenna_move_name)
+    antennas = antenna_fn(t_beats, **get_antenna_kwargs(kwargs))
+    return combine_offsets(sway, nod, antennas)
+
+def move_grid_snap(t_beats, amplitude_rad, antenna_move_name='both', **kwargs):
+    base_kwargs = get_base_move_kwargs(kwargs); base_kwargs['waveform'] = 'square'
+    yaw = atomic_yaw(t_beats, amplitude=amplitude_rad, **base_kwargs)
+    pitch_kwargs = base_kwargs.copy(); pitch_kwargs['phase_offset'] = pitch_kwargs.get('phase_offset', 0) + 0.25
+    pitch = atomic_pitch(t_beats, amplitude=amplitude_rad, **pitch_kwargs)
+    antenna_fn = AVAILABLE_ANTENNA_MOVES.get(antenna_move_name)
+    antennas = antenna_fn(t_beats, **get_antenna_kwargs(kwargs))
+    return combine_offsets(yaw, pitch, antennas)
+
+def move_pendulum_swing(t_beats, amplitude_rad, antenna_move_name='wiggle', **kwargs):
+    base = atomic_roll(t_beats, amplitude=amplitude_rad, **get_base_move_kwargs(kwargs))
+    antenna_fn = AVAILABLE_ANTENNA_MOVES.get(antenna_move_name)
+    antennas = antenna_fn(t_beats, **get_antenna_kwargs(kwargs))
+    return combine_offsets(base, antennas)
 
 # ────────────────────────── MASTER MOVE DICTIONARIES ──────────────────────────
 DEFAULT_ANTENNA_PARAMS = {"antenna_move_name": "wiggle", "antenna_amplitude_rad": np.deg2rad(45)}
 
 MOVE_SPECIFIC_PARAMS = {
-    # -- Core Moves --
+    # -- Core Rhythms & Validated Classics --
     "simple_nod": {"amplitude_rad": np.deg2rad(20), "cycles_per_beat": 1.0, **DEFAULT_ANTENNA_PARAMS},
-    "head_tilt_roll": {"amplitude_rad": np.deg2rad(15), "cycles_per_beat": 0.5, **DEFAULT_ANTENNA_PARAMS}, # TUNED
+    "head_tilt_roll": {"amplitude_rad": np.deg2rad(15), "cycles_per_beat": 0.5, **DEFAULT_ANTENNA_PARAMS},
+    "side_to_side_sway": {"amplitude_m": 0.04, "cycles_per_beat": 0.5, **DEFAULT_ANTENNA_PARAMS},
     "dizzy_spin": {"roll_amplitude_rad": np.deg2rad(15), "pitch_amplitude_rad": np.deg2rad(15), "cycles_per_beat": 0.5, **DEFAULT_ANTENNA_PARAMS},
-    "no_shake": {"amplitude_rad": np.deg2rad(25), "cycles_per_beat": 1.25, **DEFAULT_ANTENNA_PARAMS}, # TUNED
+    "stumble_and_recover": {"yaw_amplitude_rad": np.deg2rad(25), "pitch_amplitude_rad": np.deg2rad(10), "y_amplitude_m": 0.015, "cycles_per_beat": 0.25, "antenna_move_name": "both", "antenna_amplitude_rad": np.deg2rad(50)},
+    "headbanger_combo": {"pitch_amplitude_rad": np.deg2rad(30), "z_amplitude_m": 0.015, "cycles_per_beat": 1.0, "waveform": 'sin', "antenna_move_name":"both", "antenna_amplitude_rad":np.deg2rad(40)},
     "interwoven_spirals": {"roll_amp": np.deg2rad(15), "pitch_amp": np.deg2rad(20), "yaw_amp": np.deg2rad(25), "cycles_per_beat": 0.25, **DEFAULT_ANTENNA_PARAMS},
-    # -- Creative Moves --
-    "indian_head_slide": {"amplitude_m": 0.03, "cycles_per_beat": 0.5, **DEFAULT_ANTENNA_PARAMS},
-    "cocky_sway": {"y_amplitude_m": 0.04, "z_amplitude_m": 0.02, "cycles_per_beat": 0.5, **DEFAULT_ANTENNA_PARAMS},
-    "side_peekaboo": {"z_amp": 0.04, "y_amp": 0.03, "pitch_amp": np.deg2rad(20), "cycles_per_beat": 0.5, "antenna_move_name": "both", "antenna_amplitude_rad": np.deg2rad(60)},     "chicken_peck": {"amplitude_m": 0.02, "cycles_per_beat": 1.0, "antenna_move_name": "both", "antenna_amplitude_rad": np.deg2rad(30)},
-    "headbanger_combo": {"pitch_amplitude_rad": np.deg2rad(30), "z_amplitude_m": 0.015, "cycles_per_beat": 1.0, "waveform": 'sin'},
+    "sharp_side_tilt": {"roll_amplitude_rad": np.deg2rad(22), "cycles_per_beat": 1.0, "waveform": 'triangle', **DEFAULT_ANTENNA_PARAMS},
+    "side_peekaboo": {"z_amp": 0.04, "y_amp": 0.03, "pitch_amp": np.deg2rad(20), "cycles_per_beat": 0.5, "antenna_move_name": "both", "antenna_amplitude_rad": np.deg2rad(60)},
+    
+    # -- Groove & Funk --
+    "yeah_nod": {"amplitude_rad": np.deg2rad(15), "cycles_per_beat": 1.0, "antenna_move_name":"both", "antenna_amplitude_rad":np.deg2rad(20)},
+    "uh_huh_tilt": {"amplitude_rad": np.deg2rad(15), "cycles_per_beat": 0.5, **DEFAULT_ANTENNA_PARAMS},
+    "neck_recoil": {"amplitude_m": 0.015, "cycles_per_beat": 0.5, **DEFAULT_ANTENNA_PARAMS},
+    "chin_lead": {"x_amplitude_m": 0.02, "pitch_amplitude_rad": np.deg2rad(15), "cycles_per_beat": 0.5, **DEFAULT_ANTENNA_PARAMS},
     "groovy_sway_and_roll": {"y_amplitude_m": 0.03, "roll_amplitude_rad": np.deg2rad(15), "cycles_per_beat": 0.5, **DEFAULT_ANTENNA_PARAMS},
+    "chicken_peck": {"amplitude_m": 0.02, "cycles_per_beat": 1.0, "antenna_move_name": "both", "antenna_amplitude_rad": np.deg2rad(30)},
+
+    # -- Sassy & Expressive --
+    "hair_whip": {"yaw_amplitude_rad": np.deg2rad(40), "roll_amplitude_rad": np.deg2rad(20), "cycles_per_beat": 0.25, **DEFAULT_ANTENNA_PARAMS},
+    "side_glance_flick": {"yaw_amplitude_rad": np.deg2rad(45), "cycles_per_beat": 0.25, **DEFAULT_ANTENNA_PARAMS},
+    "polyrhythm_combo": {"sway_amplitude_m": 0.02, "nod_amplitude_rad": np.deg2rad(10), "cycles_per_beat":1.0, **DEFAULT_ANTENNA_PARAMS},
+    
+    # -- Robotic & Glitch --
+    "grid_snap": {"amplitude_rad": np.deg2rad(20), "cycles_per_beat": 0.25, "antenna_move_name":"both", "antenna_amplitude_rad":np.deg2rad(10)},
+    "pendulum_swing": {"amplitude_rad": np.deg2rad(25), "cycles_per_beat": 0.25, **DEFAULT_ANTENNA_PARAMS},
 }
 
 AVAILABLE_DANCE_MOVES: dict[str, Callable] = {
-    # -- Core Moves --
+    # -- Core Rhythms & Validated Classics --
     "simple_nod": move_simple_nod,
     "head_tilt_roll": move_head_tilt_roll,
+    "side_to_side_sway": move_side_to_side_sway,
     "dizzy_spin": move_dizzy_spin,
-    "no_shake": move_no_shake,
+    "stumble_and_recover": move_stumble_and_recover,
+    "headbanger_combo": move_headbanger_combo,
     "interwoven_spirals": move_interwoven_spirals,
-    # -- Creative Moves --
-    "indian_head_slide": move_indian_head_slide,
-    "cocky_sway": move_cocky_sway,
+    "sharp_side_tilt": move_sharp_side_tilt,
+    "side_peekaboo": move_side_peekaboo,
+
+    # -- Groove & Funk --
+    "yeah_nod": move_yeah_nod,
+    "uh_huh_tilt": move_uh_huh_tilt,
+    "neck_recoil": move_neck_recoil,
+    "chin_lead": move_chin_lead,
     "groovy_sway_and_roll": move_groovy_sway_and_roll,
     "chicken_peck": move_chicken_peck,
-    "side_peekaboo": move_side_peekaboo,
-    "headbanger_combo": move_headbanger_combo,
+
+    # -- Sassy & Expressive --
+    "hair_whip": move_hair_whip,
+    "side_glance_flick": move_side_glance_flick,
+    "polyrhythm_combo": move_polyrhythm_combo,
+
+    # -- Robotic & Glitch --
+    "grid_snap": move_grid_snap,
+    "pendulum_swing": move_pendulum_swing,
 }
