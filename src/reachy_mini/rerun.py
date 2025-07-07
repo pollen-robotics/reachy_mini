@@ -6,6 +6,7 @@ This module provides functionality to log the state of the Reachy Mini robot to 
 It includes methods to log joint positions, camera images, and other relevant data.
 """
 
+import logging
 import os
 import tempfile
 import time
@@ -40,6 +41,7 @@ class Rerun:
             video (bool): If True, enable video capture from the camera. Defaults to False.
 
         """
+        self.logger = logging.getLogger(__name__)
         rr.init(app_id, spawn=spawn)
         self.app_id = app_id
         self.backend = backend
@@ -450,10 +452,9 @@ class Rerun:
                             ),
                         )
                     else:
-                        print("Failed to encode frame to JPEG.")
+                        self.logger.error("Failed to encode frame to JPEG.")
 
                 else:
-                    print("Failed to grab frame from camera.")
+                    self.logger.error("Failed to grab frame from camera.")
 
             time.sleep(0.1)
-        print("Rerun logging stopped.")
