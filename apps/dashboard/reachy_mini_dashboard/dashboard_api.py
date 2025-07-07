@@ -382,7 +382,7 @@ async def toggle_simulation():
     """Toggle simulation mode"""
     global simulation_enabled
     simulation_enabled = not simulation_enabled
-    print(f"Simulation mode {'enabled' if simulation_enabled else 'disabled'}")
+    # print(f"Simulation mode {'enabled' if simulation_enabled else 'disabled'}")
     return JSONResponse(
         content={
             "simulation_enabled": simulation_enabled,

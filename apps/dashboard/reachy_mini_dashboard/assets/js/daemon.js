@@ -1,4 +1,3 @@
-let daemonStatus = null;
 let currentState = null;
 
 
@@ -6,25 +5,29 @@ async function fetchDaemonStatus() {
     try {
         const response = await fetch('/daemon_status');
         const data = await response.json();
-        daemonStatus = data;
         updateDaemonStatusUI(data);
     } catch (error) {
         console.error('Failed to fetch daemon status:', error);
         updateDaemonStatusUI({
             status: 'error',
-            message: 'Failed to connect to daemon',
+            message: 'Failed to connect to Reachy Mini',
             running: false
         });
     }
 }
 
-function updateDaemonStatusUI(status) {
+async function updateDaemonStatusUI(status) {
     if (status.state === currentState && status.state !== "error") {
         // No change in state, no need to update UI
         return;
     }
 
-    console.log('Updating daemon status UI:', status);
+    const toggle = document.getElementById('simulation-toggle');
+    if (status.simulation_enabled !== undefined) {
+        toggle.checked = status.simulation_enabled;
+    } else {
+        toggle.checked = await fetchSimulationStatus();
+    }
 
     const indicator = document.getElementById('daemon-status-indicator');
     indicator.className = 'status-indicator';
@@ -37,11 +40,11 @@ function updateDaemonStatusUI(status) {
     const startBtn = document.getElementById('daemon-start-btn');
     const stopBtn = document.getElementById('daemon-stop-btn');
     // const restartBtn = document.getElementById('daemon-restart-btn');
-    const toggle = document.getElementById('simulation-toggle');
 
     if (status.state === "running") {
         indicator.classList.add('status-running');
-        statusText.textContent = status.message || 'Daemon is running';
+        // statusText.textContent = status.message || 'Reachy Mini is ready';
+        statusText.textContent = '';
 
         startBtn.disabled = true;
         startBtn.classList.remove('starting');
@@ -52,7 +55,7 @@ function updateDaemonStatusUI(status) {
 
     } else if (status.state === "not_initialized") {
         indicator.classList.add('status-not-initialized');
-        statusText.textContent = status.message || 'Daemon is not initialized';
+        statusText.textContent = status.message || 'Reachy Mini is not initialized.';
 
         startBtn.disabled = false;
         startBtn.classList.remove('starting', 'restart');
@@ -66,7 +69,7 @@ function updateDaemonStatusUI(status) {
 
     else if (status.state === "starting") {
         indicator.classList.add('status-starting');
-        statusText.textContent = status.message || 'Starting daemon...';
+        // statusText.textContent = status.message || 'Starting Reachy Mini...';
 
         startBtn.disabled = true;
         startBtn.classList.remove('start');
@@ -77,7 +80,7 @@ function updateDaemonStatusUI(status) {
 
     } else if (status.state === "stopping") {
         indicator.classList.add('status-stopping');
-        statusText.textContent = status.message || 'Stopping daemon...';
+        // statusText.textContent = status.message || 'Stopping Reachy Mini...';
 
         startBtn.disabled = true;
 
@@ -88,7 +91,8 @@ function updateDaemonStatusUI(status) {
 
     } else if (status.state === "stopped") {
         indicator.classList.add('status-stopped');
-        statusText.textContent = status.message || 'Daemon is stopped';
+        // statusText.textContent = status.message || 'Reachy Mini is stopped';
+        statusText.textContent = '';
 
         startBtn.disabled = false;
 
@@ -100,7 +104,7 @@ function updateDaemonStatusUI(status) {
         toggle.disabled = false;
     } else if (status.state === "error") {
         indicator.classList.add('status-error');
-        statusText.textContent = 'Error: Daemon crashed!';
+        statusText.textContent = 'Error: Reachy Mini crashed!';
         statusDetailText.textContent = (status.error || 'Unknown error');
 
         startBtn.classList.remove('start');
@@ -145,7 +149,6 @@ async function controlDaemon(action) {
         if (action === 'start') {
             const startBtn = document.getElementById('daemon-start-btn');
             if (startBtn.classList.contains('restart')) {
-                console.log("CLICKED RESTART");
                 action = 'restart';
             }
 
@@ -183,7 +186,6 @@ async function controlDaemon(action) {
 // Simulation functions
 async function toggleSimulation() {
     const toggle = document.getElementById('simulation-toggle');
-    const originalState = toggle.checked;
 
     try {
         toggle.disabled = true;
@@ -194,7 +196,7 @@ async function toggleSimulation() {
 
         const result = await response.json();
         if (response.ok) {
-            simulationEnabled = result.simulation_enabled;
+            // simulationEnabled = result.simulation_enabled;
 
             currentState = null;
             const resetResponse = await fetch('/daemon_reset', {
@@ -206,8 +208,8 @@ async function toggleSimulation() {
                 throw new Error(resetResult.detail || 'Failed to reset daemon');
             }
 
-            updateSimulationUI();
-            fetchSimulationStatus();
+            // updateSimulationUI();
+            // fetchSimulationStatus();
 
             // const indicator = document.getElementById('simulation-mode-indicator');
             // const originalText = indicator.textContent;
@@ -218,15 +220,14 @@ async function toggleSimulation() {
             //     }
             // }, 2000);
 
-            console.log(`Simulation mode ${simulationEnabled ? 'enabled' : 'disabled'}`);
         } else {
             throw new Error(result.detail || 'Failed to toggle simulation');
         }
     } catch (error) {
         console.error('Failed to toggle simulation:', error);
-        toggle.checked = !originalState;
-        simulationEnabled = !simulationEnabled;
-        updateSimulationUI();
+        // toggle.checked = !originalState;
+        // simulationEnabled = !simulationEnabled;
+        // updateSimulationUI();
         alert(`Failed to toggle simulation: ${error.message}`);
     } finally {
         toggle.disabled = false;
@@ -237,21 +238,11 @@ async function fetchSimulationStatus() {
     try {
         const response = await fetch('/api/simulation/status');
         const data = await response.json();
-        simulationEnabled = data.simulation_enabled;
-        updateSimulationUI();
+        return data.simulation_enabled;
     } catch (error) {
         console.error('Failed to fetch simulation status:', error);
     }
 }
 
-function updateSimulationUI() {
-    // const toggle = document.getElementById('simulation-toggle');
-    // const indicator = document.getElementById('simulation-mode-indicator');
-    // toggle.checked = simulationEnabled;
-    // indicator.style.display = simulationEnabled ? 'block' : 'none';
-}
-
-
 fetchDaemonStatus();
-setInterval(fetchDaemonStatus, 100);
-fetchSimulationStatus();
+setInterval(fetchDaemonStatus, 1000);

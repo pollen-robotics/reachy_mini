@@ -1,3 +1,19 @@
+/* Space card header with rounded border and semi-opaque background */
+.space-card-header {
+    /* border-radius: 1.25rem; */
+    /* background: rgba(255, 255, 255, 0.1); */
+    /* padding: 0.25rem 1rem 1rem 1rem; */
+    /* margin-bottom: 1.25rem; */
+    /* display: flex; */
+    /* align-items: center; */
+    /* justify-content: flex-end; */
+    /* box-shadow: 0 2px 8px 0 rgba(0, 0, 0, 0.04); */
+    margin: 0.25rem;
+    margin-left: auto;
+    max-width: fit-content;
+    float: right;
+}
+
 .robot-status {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     color: white;
@@ -14,6 +30,12 @@
 .status-running {
     background-color: #10b981;
     box-shadow: 0 0 8px rgba(16, 185, 129, 0.6);
+}
+
+.status-stopping,
+.status-starting {
+    background-color: #f59e0b;
+    box-shadow: 0 0 8px rgba(245, 158, 11, 0.6);
 }
 
 .status-stopped {
@@ -173,38 +195,88 @@ input:checked+.simulation-slider:before {
 }
 
 /* HF Spaces styles */
-.spaces-card {
-    background: rgba(255, 255, 255, 0.95);
-    backdrop-filter: blur(20px);
-    border-radius: 15px;
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    transition: all 0.3s ease;
+
+/* Hugging Face Spaces-like card styles */
+
+.space-card {
+    display: flex;
+    flex-direction: column;
+    border-radius: 1.25rem;
+    border: 1px solid #e5e7eb;
+    box-shadow: 0 4px 24px 0 rgba(0, 0, 0, 0.07);
+    padding: 0.5rem 0.5rem 0.5rem 0.5rem;
+    transition: box-shadow 0.2s, transform 0.2s, background 0.3s;
     position: relative;
     overflow: hidden;
+    backdrop-filter: blur(20px);
+
+    aspect-ratio: 2 / 1;
+    /* min-width: 250px; */
+    min-height: 150px;
 }
 
-.spaces-card::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 3px;
-    background: linear-gradient(90deg, #667eea, #764ba2);
-    transform: scaleX(0);
-    transition: transform 0.3s ease;
+.space-card:hover {
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.13);
+    transform: translateY(-2px) scale(1.01);
 }
 
-.spaces-card:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 12px 25px rgba(0, 0, 0, 0.15);
+.space-likes-bg {
+    align-content: center;
+    width: 3rem;
+    height: 1.5rem;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.20));
+    border-radius: 5px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
 }
 
-.spaces-card:hover::before {
-    transform: scaleX(1);
+.space-likes-label {
+    text-align: center;
+    color: #fff;
+    font-size: 1rem;
+    font-family: 'Source Sans Pro', sans-serif;
+    font-weight: 400;
 }
 
-.space-icon {
+.space-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #ffffffe5;
+    margin-bottom: 0rem;
+    margin-top: 0.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-family: 'Source Sans Pro', sans-serif;
+}
+
+.space-description {
+    font-size: 0.9rem;
+    color: #ffffff86;
+    margin-bottom: 0.25rem;
+    font-weight: 400;
+    flex: 1 1 auto;
+    font-family: 'Source Sans Pro', sans-serif;
+
+}
+
+.space-meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 5px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    margin: 0.25rem 0.25rem 0.25rem 0.25rem;
+    font-weight: 350;
+    font-size: small;
+    color: #fefefec7;
+    font-family: 'Source Sans Pro', sans-serif;
+}
+
+
+
+
+/* .space-icon {
     width: 48px;
     height: 48px;
     border-radius: 12px;
@@ -216,13 +288,29 @@ input:checked+.simulation-slider:before {
     font-weight: bold;
     font-size: 18px;
     flex-shrink: 0;
-}
+} */
 
-.space-loading {
+/* .space-loading {
     animation: spin 1s linear infinite;
+} */
+
+.space-install-btn {
+    display: block;
+    margin: 0.25rem auto 0.25rem auto;
+    background: #667eea;
+    color: white;
+    padding: 0.25rem 1.25rem;
+    border-radius: 9999px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    text-decoration: none;
+    transition: background-color 0.2s ease, transform 0.2s ease;
+    width: fit-content;
+    min-width: 0;
+    text-align: center;
 }
 
-@keyframes spin {
+/* @keyframes spin {
     0% {
         transform: rotate(0deg);
     }
@@ -230,7 +318,7 @@ input:checked+.simulation-slider:before {
     100% {
         transform: rotate(360deg);
     }
-}
+} */
 
 .tab-button {
     transition: all 0.3s ease;
