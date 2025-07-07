@@ -3,16 +3,12 @@ Dance Motion Library (v3.1)
 ---------------------------
 A rich, compositional library of beat-synchronized motion primitives.
 
-This version introduces a completely rebuilt 'side_peekaboo' with a full
-left-and-right sequence, and adds new characterful moves like the 'chicken_peck'
-and the compositional 'groovy_sway_and_roll'.
 """
 
 import numpy as np
 from dataclasses import dataclass
 from typing import Callable
 
-# ... (The MoveOffsets class and motion primitives are unchanged) ...
 @dataclass
 class MoveOffsets:
     position_offset: np.ndarray
@@ -117,43 +113,62 @@ def move_cocky_sway(t_beats, y_amplitude_m, z_amplitude_m, antenna_move_name='wi
 # ─────────────────── NEW & REBUILT MOVES (v3.1) ──────────────────────
 
 def move_side_peekaboo(t_beats, z_amp, y_amp, pitch_amp, antenna_move_name='both', **kwargs):
-    """Hides down, pops up left, hides, pops up right, hides, repeat.
-    Designer's Note (REBUILT): A full 16-beat sequence. Y-amplitude is tuned
-    down. This is now a complete and very endearing signature move.
+    """Hides down at the center, then pops up to alternating sides.
+    
+    Designer's Note (REBUILT v3.2): The choreography is now a much cleaner and
+    more logical 8-beat sequence based on user feedback. The antenna speed
+    bug has also been fixed. The sequence is: Center-Down -> Left-Up ->
+    Center-Down -> Right-Up -> loop.
     """
-    period = 16.0; t_in_period = t_beats % period
+    period = 8.0; t_in_period = t_beats % period
     pos, ori = np.zeros(3), np.zeros(3)
     def ease(t): return t*t*(3-2*t) # ease-in-out
     def excited_nod(t): return pitch_amp * np.sin(t * np.pi)
 
-    if t_in_period < 2.0: # 1. Tuck down at center
-        pos[2] = -z_amp * ease(t_in_period / 2.0)
-    elif t_in_period < 4.0: # 2. Pop up and slide left
+    # The move starts from the "down" position and moves between 3 keyframes:
+    # A = Center-Down, B = Left-Up, C = Right-Up
+    if t_in_period < 2.0: # Phase 1: Moving from Center-Down to Left-Up
+        t = t_in_period / 2.0
+        pos[2] = -z_amp * (1 - ease(t)) # z goes from -z_amp to 0
+        pos[1] = y_amp * ease(t)      # y goes from 0 to y_amp
+        ori[1] = excited_nod(t)
+    elif t_in_period < 4.0: # Phase 2: Moving from Left-Up to Center-Down
         t = (t_in_period - 2.0) / 2.0
-        pos[2], pos[1], ori[1] = -z_amp * (1-ease(t)), y_amp * ease(t), excited_nod(t)
-    elif t_in_period < 6.0: # 3. Tuck down on left
+        pos[2] = -z_amp * ease(t)      # z goes from 0 to -z_amp
+        pos[1] = y_amp * (1 - ease(t)) # y goes from y_amp to 0
+    elif t_in_period < 6.0: # Phase 3: Moving from Center-Down to Right-Up
         t = (t_in_period - 4.0) / 2.0
-        pos[2], pos[1] = -z_amp * ease(t), y_amp
-    elif t_in_period < 8.0: # 4. Pop up and return to center
+        pos[2] = -z_amp * (1 - ease(t)) # z goes from -z_amp to 0
+        pos[1] = -y_amp * ease(t)     # y goes from 0 to -y_amp
+        ori[1] = -excited_nod(t)
+    else: # Phase 4: Moving from Right-Up to Center-Down
         t = (t_in_period - 6.0) / 2.0
-        pos[2], pos[1] = -z_amp * (1-ease(t)), y_amp * (1-ease(t))
-    elif t_in_period < 10.0: # 5. Tuck down at center again
-        t = (t_in_period - 8.0) / 2.0
-        pos[2] = -z_amp * ease(t)
-    elif t_in_period < 12.0: # 6. Pop up and slide right
-        t = (t_in_period - 10.0) / 2.0
-        pos[2], pos[1], ori[1] = -z_amp * (1-ease(t)), -y_amp * ease(t), -excited_nod(t)
-    elif t_in_period < 14.0: # 7. Tuck down on right
-        t = (t_in_period - 12.0) / 2.0
-        pos[2], pos[1] = -z_amp * ease(t), -y_amp
-    else: # 8. Pop up and return to center
-        t = (t_in_period - 14.0) / 2.0
-        pos[2], pos[1] = -z_amp * (1-ease(t)), -y_amp * (1-ease(t))
+        pos[2] = -z_amp * ease(t)      # z goes from 0 to -z_amp
+        pos[1] = -y_amp * (1 - ease(t))# y goes from -y_amp to 0
+
+    antenna_move = AVAILABLE_ANTENNA_MOVES[antenna_move_name](t_beats, **get_antenna_kwargs(kwargs))
+    return combine_offsets(MoveOffsets(pos, ori, np.zeros(2)), antenna_move)
+
+
+def move_headbanger_combo(t_beats, pitch_amplitude_rad, z_amplitude_m, antenna_move_name='both', **kwargs):
+    """A more dynamic headbang that combines a pitch nod with a vertical bounce.
+    
+    Designer's Note: Layering a Z-axis bounce with the pitch-axis nod makes
+    the headbang feel much more powerful and less stiff. The bounce lags
+    slightly behind the nod for a "whiplash" effect.
+    """
+    base_kwargs = get_base_move_kwargs(kwargs)
+    nod = atomic_pitch(t_beats, amplitude=pitch_amplitude_rad, **base_kwargs)
+    
+    bounce_kwargs = base_kwargs.copy()
+    bounce_kwargs['phase_offset'] = bounce_kwargs.get('phase_offset', 0) + 0.1 # Small delay
+    bounce = atomic_z_pos(t_beats, amplitude=z_amplitude_m, **bounce_kwargs)
 
     antenna_kwargs = get_antenna_kwargs(kwargs)
-    antenna_kwargs['cycles_per_beat'] = 4.0 # Make antennas extra lively for this move
+    # Make antennas follow the more intense pitch motion
+    antenna_kwargs['amplitude'] = pitch_amplitude_rad * 2.0
     antenna_move = AVAILABLE_ANTENNA_MOVES[antenna_move_name](t_beats, **antenna_kwargs)
-    return combine_offsets(MoveOffsets(pos, ori, np.zeros(2)), antenna_move)
+    return combine_offsets(nod, bounce, antenna_move)
 
 def move_chicken_peck(t_beats, amplitude_m, antenna_move_name='both', **kwargs):
     """A series of quick, sharp, forward pecking motions.
@@ -198,8 +213,8 @@ MOVE_SPECIFIC_PARAMS = {
     # -- Creative Moves --
     "indian_head_slide": {"amplitude_m": 0.03, "cycles_per_beat": 0.5, **DEFAULT_ANTENNA_PARAMS},
     "cocky_sway": {"y_amplitude_m": 0.04, "z_amplitude_m": 0.02, "cycles_per_beat": 0.5, **DEFAULT_ANTENNA_PARAMS},
-    "side_peekaboo": {"z_amp": 0.05, "y_amp": 0.03, "pitch_amp": np.deg2rad(15), "antenna_move_name": "both", "antenna_amplitude_rad": np.deg2rad(60)}, # TUNED
-    "chicken_peck": {"amplitude_m": 0.02, "cycles_per_beat": 1.0, "antenna_move_name": "both", "antenna_amplitude_rad": np.deg2rad(30)},
+    "side_peekaboo": {"z_amp": 0.04, "y_amp": 0.03, "pitch_amp": np.deg2rad(20), "cycles_per_beat": 0.5, "antenna_move_name": "both", "antenna_amplitude_rad": np.deg2rad(60)},     "chicken_peck": {"amplitude_m": 0.02, "cycles_per_beat": 1.0, "antenna_move_name": "both", "antenna_amplitude_rad": np.deg2rad(30)},
+    "headbanger_combo": {"pitch_amplitude_rad": np.deg2rad(30), "z_amplitude_m": 0.015, "cycles_per_beat": 1.0, "waveform": 'sin'},
     "groovy_sway_and_roll": {"y_amplitude_m": 0.03, "roll_amplitude_rad": np.deg2rad(15), "cycles_per_beat": 0.5, **DEFAULT_ANTENNA_PARAMS},
 }
 
@@ -216,4 +231,5 @@ AVAILABLE_DANCE_MOVES: dict[str, Callable] = {
     "groovy_sway_and_roll": move_groovy_sway_and_roll,
     "chicken_peck": move_chicken_peck,
     "side_peekaboo": move_side_peekaboo,
+    "headbanger_combo": move_headbanger_combo,
 }
