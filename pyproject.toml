@@ -54,7 +54,6 @@ reachy_mini = ["**/*"] # Inclut tous les fichiers non .py
 
 [tool.ruff]
 exclude = [
-    "examples/remi_outdated/*.py",
     "src/reachy_mini/__init__.py",
     "build/*",
     "conftest.py",
