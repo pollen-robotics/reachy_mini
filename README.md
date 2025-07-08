@@ -46,6 +46,18 @@ This should automatically detect the serial port of the robot. If it does not, y
 reachy-mini-daemon -p <serial_port>
 ```
 
+## Log with rerun
+
+For both simulation and real robot, events can be logged with rerun. With the following command, rerun viewer will automaticall popup:
+
+```bash
+reachy-mini-daemon --rerun-mode [none|all|no-video]
+```
+Note that *all* locks the access to the camera which cannot be used by a client.
+
+rerun needs to be installed: `pip install -e .[rerun]`
+
+
 ## Run the examples
 
 Once the daemon is running, you can run the examples:
@@ -55,6 +67,7 @@ python examples/client_example.py
 python examples/sequence.py
 python examples/mirror_xyroll.py
 python examples/head_track_demo.py
+python examples/head_track_demo_rerun.py # reachy-mini-daemon --rerun-mode no-video
 python examples/hand_track_demo.py
 ```
 
