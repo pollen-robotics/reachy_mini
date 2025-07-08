@@ -24,7 +24,8 @@ async function updateDaemonStatusUI(status) {
 
     const toggle = document.getElementById('simulation-toggle');
     const toggleSlider = document.getElementById('simulation-slider');
-    if (status.simulation_enabled !== undefined) {
+
+    if (status.simulation_enabled !== null && status?.simulation_enabled !== undefined) {
         toggle.checked = status.simulation_enabled;
     } else {
         toggle.checked = await fetchSimulationStatus();
