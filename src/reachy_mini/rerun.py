@@ -198,12 +198,13 @@ class Rerun:
                 cam_name = self._get_joint("camera_optical_frame")
                 cam_joint = self.urdf_logger.joint_entity_path(cam_name)
 
-                # Generic instrinsic camera matrix
-                K = np.eye(3, dtype=float)
-                K[0, 0] = 1000.0
-                K[1, 1] = 1000.0
-                K[0, 2] = frame.shape[1] / 2
-                K[1, 2] = frame.shape[0] / 2
+                K = np.array(
+                    [
+                        [550.3564, 0.0, 638.0112],
+                        [0.0, 549.1653, 364.589],
+                        [0.0, 0.0, 1.0],
+                    ]
+                )
 
         while not self.running.is_set():
             rr.set_time("deamon", timestamp=time.time(), recording=self.recording)
