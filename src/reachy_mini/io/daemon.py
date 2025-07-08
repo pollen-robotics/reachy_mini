@@ -46,7 +46,7 @@ class Daemon:
         scene: str = "empty",
         localhost_only: bool = True,
         wake_up_on_start: bool = True,
-        rerun: bool = False,
+        rerun: str = "none",
     ) -> "DaemonState":
         """Start the Reachy Mini daemon.
 
@@ -56,7 +56,7 @@ class Daemon:
             scene (str): Name of the scene to load in simulation mode ("empty" or "minimal"). Defaults to "empty".
             localhost_only (bool): If True, restrict the server to localhost only clients. Defaults to True.
             wake_up_on_start (bool): If True, wake up Reachy Mini on start. Defaults to True.
-            rerun (bool): If True, enable Rerun logging. Defaults to False.
+            rerun (str): If all, enable Rerun logging. If no-video, disable logging of video (i.e. access needed by client). Defaults to none.
 
         Returns:
             DaemonState: The current state of the daemon after attempting to start it.
@@ -97,9 +97,10 @@ class Daemon:
         self.backend_run_thread = Thread(target=self.backend.wrapped_run)
         self.backend_run_thread.start()
 
-        if rerun:
+        if rerun != "none":
+            video = False if rerun == "no-video" else True
             self.rerun = Rerun(
-                self.backend, app_id="reachy_mini_daemon", spawn=True, video=not sim
+                self.backend, app_id="reachy_mini_daemon", spawn=True, video=video
             )
             self.rerun.start()
 
@@ -433,10 +434,10 @@ def main():
         help="Set the logging level (default: INFO).",
     )
     parser.add_argument(
-        "--rerun",
-        action="store_true",
-        default=False,
-        help="Enable Rerun logging (default: False).",
+        "--rerun-mode",
+        choices=["none", "all", "no-video"],
+        default="none",
+        help="Rerun logging mode: 'none' (default), 'all' (with video), 'no-video' (without video).",
     )
     args = parser.parse_args()
 
@@ -450,7 +451,7 @@ def main():
         serialport=args.serialport,
         scene=args.scene,
         localhost_only=args.localhost_only,
-        rerun=args.rerun,
+        rerun=args.rerun_mode,
     )
 
 

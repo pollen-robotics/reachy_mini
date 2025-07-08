@@ -35,6 +35,8 @@ class ZenohClient(AbstractClient):
             c = zenoh.Config()
 
         self.session = zenoh.open(c)
+
+        self.keep_alive_event = threading.Event()
         self.cmd_pub = self.session.declare_publisher("reachy_mini/command")
 
         self.joint_sub = self.session.declare_subscriber(
@@ -43,7 +45,12 @@ class ZenohClient(AbstractClient):
         )
         self._last_head_joint_positions = None
         self._last_antennas_joint_positions = None
-        self.keep_alive_event = threading.Event()
+
+        self.rerun_sub = self.session.declare_subscriber(
+            "reachy_mini/rerun_ids",
+            self._handle_rerun_ids,
+        )
+        self._last_rerun_ids = None
 
     def wait_for_connection(self, timeout: float = 5.0):
         """Wait for the client to connect to the server.
@@ -97,3 +104,16 @@ class ZenohClient(AbstractClient):
             self._last_head_joint_positions.copy(),
             self._last_antennas_joint_positions.copy(),
         )
+
+    def _handle_rerun_ids(self, sample):
+        """Handle incoming rerun recording IDs."""
+        if sample.payload:
+            rerun_ids = json.loads(sample.payload.to_string())
+            self._last_rerun_ids = rerun_ids
+
+    def get_rerun_ids(self) -> tuple[str, str]:
+        """Get the last received rerun recording IDs [app_id, recording_id]."""
+        assert self._last_rerun_ids is not None, "No rerun IDs received yet."
+        return self._last_rerun_ids["application_id"], self._last_rerun_ids[
+            "recording_id"
+        ]

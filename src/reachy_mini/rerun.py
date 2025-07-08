@@ -6,6 +6,7 @@ This module provides functionality to log the state of the Reachy Mini robot to 
 It includes methods to log joint positions, camera images, and other relevant data.
 """
 
+import json
 import logging
 import os
 import tempfile
@@ -70,6 +71,7 @@ class Rerun:
             self.cam = find_camera()
 
         self.running = Event()
+        self.thread_log_rerun_info = Thread(target=self.log_rerun_info, daemon=True)
         self.thread_log_mouvement = Thread(target=self.log_movement, daemon=True)
 
     def set_absolute_path_to_urdf(self, urdf_path: str, abs_path: str):
@@ -84,6 +86,7 @@ class Rerun:
 
     def start(self):
         """Start the Rerun logging thread."""
+        self.thread_log_rerun_info.start()
         self.thread_log_mouvement.start()
 
     def stop(self):
@@ -104,6 +107,19 @@ class Rerun:
         joint.origin.rotation = urdf_offset
 
         self.urdf_logger.log_joint(joint_path, joint=joint, recording=self.recording)
+
+    def log_rerun_info(self):
+        """Log the Rerun application and recording IDs."""
+        while not self.running.is_set():
+            self.backend.rerun_ids_publisher.put(
+                json.dumps(
+                    {
+                        "recording_id": self.recording.get_recording_id(),
+                        "application_id": self.app_id,
+                    }
+                )
+            )
+            time.sleep(1)
 
     def log_movement(self):
         """Log the movement data to Rerun."""
@@ -463,8 +479,8 @@ class Rerun:
                     if ret:
                         rr.log(
                             f"{cam_joint}/image",
-                            rr.ImageEncoded(
-                                contents=encoded_image, format=rr.ImageFormat.JPEG
+                            rr.EncodedImage(
+                                contents=encoded_image, media_type="image/jpeg"
                             ),
                         )
                     else:

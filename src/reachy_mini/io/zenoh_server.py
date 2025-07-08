@@ -62,6 +62,8 @@ class ZenohServer(AbstractServer):
         )
         self.pub = self.session.declare_publisher("reachy_mini/joint_positions")
         self.backend.set_joint_positions_publisher(self.pub)
+        self.pub_recording_ids = self.session.declare_publisher("reachy_mini/rerun_ids")
+        self.backend.set_rerun_recording_id_publisher(self.pub_recording_ids)
 
     def stop(self):
         """Stop the Zenoh server."""

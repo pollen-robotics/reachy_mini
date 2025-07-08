@@ -23,6 +23,10 @@ class Backend:
         self.head_joint_positions = None  # [yaw, 0, 1, 2, 3, 4, 5]
         self.antenna_joint_positions = None  # [0, 1]
         self.joint_positions_publisher = None  # Placeholder for a publisher object
+        self.rerun_ids_publisher = (
+            None  # Placeholder for a rerun recording ID publisher
+        )
+
         self.error = None  # To store any error that occurs during execution
 
     def wrapped_run(self):
@@ -58,6 +62,15 @@ class Backend:
 
         """
         self.joint_positions_publisher = publisher
+
+    def set_rerun_recording_id_publisher(self, publisher) -> None:
+        """Set the publisher for rerun recording IDs.
+
+        Args:
+            publisher: A publisher object that will be used to publish rerun recording IDs.
+
+        """
+        self.rerun_ids_publisher = publisher
 
     def set_head_joint_positions(self, positions: List[float]) -> None:
         """Set the head joint positions.

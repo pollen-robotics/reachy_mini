@@ -472,3 +472,15 @@ class ReachyMini:
             )
 
         self.client.send_command(json.dumps(cmd))
+
+    def get_rerun_ids(self) -> tuple[str, str]:
+        """Get the last received rerun recording IDs.
+
+        Returns:
+            tuple: A tuple containing the recording ID and application ID of the last received rerun recording.
+
+        Raises:
+            AssertionError: If no rerun IDs have been received yet.
+
+        """
+        return self.client.get_rerun_ids()
