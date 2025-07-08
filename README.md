@@ -71,7 +71,9 @@ or
 --no-localhost-only: If set, the server will accept connections from any connection on the local network.
 ```
 
-### In simulation (MuJoCo)
+### In simulation ([MuJoCo](https://mujoco.org))
+
+![Reachy Mini in MuJoCo](https://www.pollen-robotics.com/wp-content/uploads/2025/06/Reachy_mini_simulation.gif)
 
 ```bash
 reachy-mini-daemon --sim
@@ -173,8 +175,11 @@ ffplay -fflags nobuffer udp://127.0.0.1:5005
 ### Simulation model used
 
 https://polyhaven.com/a/food_apple_01
+
 https://polyhaven.com/a/croissant
+
 https://polyhaven.com/a/wooden_table_02
+
 https://polyhaven.com/a/rubber_duck_toy
 
 ## Contribute
