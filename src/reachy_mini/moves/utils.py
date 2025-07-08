@@ -33,39 +33,44 @@ class MoveOffsets:
     antennas_offset: np.ndarray  # Shape: (2,) - left, right in radians
 
 
+@dataclass
+class OscillationParams:
+    """Parameters for oscillation motion."""
+
+    amplitude: float  # float: Maximum amplitude of the oscillation.
+    subcycles_per_beat: float = 1.0  # float: Number of oscillation subcycles per beat.
+    phase_offset: float = 0.0  # float: Phase offset in cycles, to shift the waveform.
+    waveform: str = "sin"  # str: Type of waveform to generate ('sin', 'cos', 'square', 'triangle', 'sawtooth').
+
+
 def oscillation_motion(
     t_beats: float,
-    amplitude: float,
-    subcycles_per_beat: float = 1.0,
-    phase_offset: float = 0.0,
-    waveform: str = "sin",
+    params: OscillationParams,
 ) -> float:
     """Generate an oscillatory motion based on the specified parameters.
 
     Args:
         t_beats (float): Time in beats at which to evaluate the motion (this is expected to increase by 1 one each beat). Beware that this is not the same as time in seconds but in beats (dimensionless).
-        amplitude (float): Maximum amplitude of the oscillation.
-        subcycles_per_beat (float): Number of oscillation subcycles per beat.
-        phase_offset (float): Phase offset in cycles, to shift the waveform.
-        waveform (str): Type of waveform to generate ('sin', 'cos', 'square', 'triangle', 'sawtooth').
+        params (OscillationParams): Parameters for the oscillation motion.
 
     Returns:
         float: The value of the oscillation at time `t_beats`.
 
     """
-    phase = 2 * np.pi * (subcycles_per_beat * t_beats + phase_offset)
-    if waveform == "sin":
-        return amplitude * np.sin(phase)
-    elif waveform == "cos":
-        return amplitude * np.cos(phase)
-    elif waveform == "square":
-        return amplitude * np.sign(np.sin(phase))
-    elif waveform == "triangle":
-        return amplitude * (2 / np.pi) * np.arcsin(np.sin(phase))
-    elif waveform == "sawtooth":
-        return amplitude * (2 * ((phase / (2 * np.pi)) % 1) - 1)
-    else:
-        raise ValueError(f"Unsupported waveform type: {waveform}")
+    phase = 2 * np.pi * (params.subcycles_per_beat * t_beats + params.phase_offset)
+
+    if params.waveform == "sin":
+        return params.amplitude * np.sin(phase)
+    elif params.waveform == "cos":
+        return params.amplitude * np.cos(phase)
+    elif params.waveform == "square":
+        return params.amplitude * np.sign(np.sin(phase))
+    elif params.waveform == "triangle":
+        return params.amplitude * (2 / np.pi) * np.arcsin(np.sin(phase))
+    elif params.waveform == "sawtooth":
+        return params.amplitude * (2 * ((phase / (2 * np.pi)) % 1) - 1)
+
+    raise ValueError(f"Unsupported waveform type: {params.waveform}")
 
 
 def transient_motion(
