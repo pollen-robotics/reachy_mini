@@ -1,22 +1,5 @@
 """Dance Motion Library (v4.3).
 
----------------------------
-A rich, compositional library for creating life-like, expressive, and rhythmic
-motion for robotic characters. It provides a toolbox of beat-synchronized
-motion functions, from simple building blocks to complex, named choreographies.
-
-Core Philosophy
----------------
-This library is built on a compositional pattern:
-1.  **Motion Primitives:** Low-level functions like `oscillation_motion` (for
-    continuous loops) and `transient_motion` (for one-shot, eased actions)
-    form the mathematical foundation.
-2.  **Atomic Moves:** Simple wrappers around primitives that control a single
-    axis or function (e.g., `atomic_pitch`, `atomic_antenna_wiggle`). These
-    are the fundamental building blocks.
-3.  **Choreographed Moves:** The main library of named moves, created by
-    combining multiple atomic moves using the `combine_offsets` utility.
-
 Key Parameters
 --------------
 All move functions are driven by `t_beats` and a set of keyword arguments:
