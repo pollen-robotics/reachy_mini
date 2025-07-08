@@ -19,6 +19,7 @@ from rerun_loader_urdf import URDFLogger
 from urdf_parser_py import urdf
 
 from reachy_mini.io.backend import Backend
+from reachy_mini.io.cam_utils import find_camera
 from reachy_mini.placo_kinematics import PlacoKinematics
 
 
@@ -41,10 +42,11 @@ class Rerun:
             video (bool): If True, enable video capture from the camera. Defaults to False.
 
         """
-        self.logger = logging.getLogger(__name__)
         rr.init(app_id, spawn=spawn)
         self.app_id = app_id
         self.backend = backend
+        self.logger = logging.getLogger(__name__)
+        self.logger.setLevel(self.backend.logger.getEffectiveLevel())
 
         self.recording = rr.get_global_data_recording()
 
@@ -54,6 +56,9 @@ class Rerun:
         asset_path = os.path.join(script_dir, "descriptions/reachy_mini/urdf")
 
         fixed_urdf = self.set_absolute_path_to_urdf(urdf_path, asset_path)
+        self.logger.debug(
+            f"Using URDF file: {fixed_urdf} with absolute paths for Rerun."
+        )
 
         self.head_kinematics = PlacoKinematics(fixed_urdf)
 
@@ -62,7 +67,7 @@ class Rerun:
 
         self.cam = None
         if video:
-            self.cam = cv2.VideoCapture(2)
+            self.cam = find_camera()
 
         self.running = Event()
         self.thread_log_mouvement = Thread(target=self.log_movement, daemon=True)
@@ -85,7 +90,7 @@ class Rerun:
         """Stop the Rerun logging thread."""
         self.running.set()
 
-    def _get_joints(self, joint_name: str) -> urdf.Joint:
+    def _get_joint(self, joint_name: str) -> urdf.Joint:
         for j in self.urdf_logger.urdf.joints:
             if j.name == joint_name:
                 return j
@@ -102,82 +107,87 @@ class Rerun:
 
     def log_movement(self):
         """Log the movement data to Rerun."""
-        antenna_left = self._get_joints("left_antenna")
+        antenna_left = self._get_joint("left_antenna")
         antenna_left_joint = self.urdf_logger.joint_entity_path(antenna_left)
-        antenna_right = self._get_joints("right_antenna")
+        antenna_right = self._get_joint("right_antenna")
         antenna_right_joint = self.urdf_logger.joint_entity_path(antenna_right)
 
-        motor_1 = self._get_joints("1")
+        motor_1 = self._get_joint("1")
         motor_1_joint = self.urdf_logger.joint_entity_path(motor_1)
-        motor_2 = self._get_joints("2")
+        motor_2 = self._get_joint("2")
         motor_2_joint = self.urdf_logger.joint_entity_path(motor_2)
-        motor_3 = self._get_joints("3")
+        motor_3 = self._get_joint("3")
         motor_3_joint = self.urdf_logger.joint_entity_path(motor_3)
-        motor_4 = self._get_joints("4")
+        motor_4 = self._get_joint("4")
         motor_4_joint = self.urdf_logger.joint_entity_path(motor_4)
-        motor_5 = self._get_joints("5")
+        motor_5 = self._get_joint("5")
         motor_5_joint = self.urdf_logger.joint_entity_path(motor_5)
-        motor_6 = self._get_joints("6")
+        motor_6 = self._get_joint("6")
         motor_6_joint = self.urdf_logger.joint_entity_path(motor_6)
-        motor_yaw = self._get_joints("all_yaw")
+        motor_yaw = self._get_joint("all_yaw")
         motor_yaw_joint = self.urdf_logger.joint_entity_path(motor_yaw)
 
-        passive_1_x = self._get_joints("passive_1_x")
+        passive_1_x = self._get_joint("passive_1_x")
         passive_1_x_joint = self.urdf_logger.joint_entity_path(passive_1_x)
-        passive_1_y = self._get_joints("passive_1_y")
+        passive_1_y = self._get_joint("passive_1_y")
         passive_1_y_joint = self.urdf_logger.joint_entity_path(passive_1_y)
-        passive_1_z = self._get_joints("passive_1_z")
+        passive_1_z = self._get_joint("passive_1_z")
         passive_1_z_joint = self.urdf_logger.joint_entity_path(passive_1_z)
 
-        passive_2_x = self._get_joints("passive_2_x")
+        passive_2_x = self._get_joint("passive_2_x")
         passive_2_x_joint = self.urdf_logger.joint_entity_path(passive_2_x)
-        passive_2_y = self._get_joints("passive_2_y")
+        passive_2_y = self._get_joint("passive_2_y")
         passive_2_y_joint = self.urdf_logger.joint_entity_path(passive_2_y)
-        passive_2_z = self._get_joints("passive_2_z")
+        passive_2_z = self._get_joint("passive_2_z")
         passive_2_z_joint = self.urdf_logger.joint_entity_path(passive_2_z)
 
-        passive_3_x = self._get_joints("passive_3_x")
+        passive_3_x = self._get_joint("passive_3_x")
         passive_3_x_joint = self.urdf_logger.joint_entity_path(passive_3_x)
-        passive_3_y = self._get_joints("passive_3_y")
+        passive_3_y = self._get_joint("passive_3_y")
         passive_3_y_joint = self.urdf_logger.joint_entity_path(passive_3_y)
-        passive_3_z = self._get_joints("passive_3_z")
+        passive_3_z = self._get_joint("passive_3_z")
         passive_3_z_joint = self.urdf_logger.joint_entity_path(passive_3_z)
 
-        passive_4_x = self._get_joints("passive_4_x")
+        passive_4_x = self._get_joint("passive_4_x")
         passive_4_x_joint = self.urdf_logger.joint_entity_path(passive_4_x)
-        passive_4_y = self._get_joints("passive_4_y")
+        passive_4_y = self._get_joint("passive_4_y")
         passive_4_y_joint = self.urdf_logger.joint_entity_path(passive_4_y)
-        passive_4_z = self._get_joints("passive_4_z")
+        passive_4_z = self._get_joint("passive_4_z")
         passive_4_z_joint = self.urdf_logger.joint_entity_path(passive_4_z)
 
-        passive_5_x = self._get_joints("passive_5_x")
+        passive_5_x = self._get_joint("passive_5_x")
         passive_5_x_joint = self.urdf_logger.joint_entity_path(passive_5_x)
-        passive_5_y = self._get_joints("passive_5_y")
+        passive_5_y = self._get_joint("passive_5_y")
         passive_5_y_joint = self.urdf_logger.joint_entity_path(passive_5_y)
-        passive_5_z = self._get_joints("passive_5_z")
+        passive_5_z = self._get_joint("passive_5_z")
         passive_5_z_joint = self.urdf_logger.joint_entity_path(passive_5_z)
 
-        passive_6_x = self._get_joints("passive_6_x")
+        passive_6_x = self._get_joint("passive_6_x")
         passive_6_x_joint = self.urdf_logger.joint_entity_path(passive_6_x)
-        passive_6_y = self._get_joints("passive_6_y")
+        passive_6_y = self._get_joint("passive_6_y")
         passive_6_y_joint = self.urdf_logger.joint_entity_path(passive_6_y)
-        passive_6_z = self._get_joints("passive_6_z")
+        passive_6_z = self._get_joint("passive_6_z")
         passive_6_z_joint = self.urdf_logger.joint_entity_path(passive_6_z)
 
-        passive_7_x = self._get_joints("passive_7_x")
+        passive_7_x = self._get_joint("passive_7_x")
         passive_7_x_joint = self.urdf_logger.joint_entity_path(passive_7_x)
-        passive_7_y = self._get_joints("passive_7_y")
+        passive_7_y = self._get_joint("passive_7_y")
         passive_7_y_joint = self.urdf_logger.joint_entity_path(passive_7_y)
-        passive_7_z = self._get_joints("passive_7_z")
+        passive_7_z = self._get_joint("passive_7_z")
         passive_7_z_joint = self.urdf_logger.joint_entity_path(passive_7_z)
 
-        cam_name = self._get_joints("camera_optical_frame")
-        cam_joint = self.urdf_logger.joint_entity_path(cam_name)
-        K = np.eye(3, dtype=float)
-        K[0, 0] = 1000.0
-        K[1, 1] = 1000.0
-        K[0, 2] = 1280 / 2
-        K[1, 2] = 720 / 2
+        if self.cam is not None:
+            ret, frame = self.cam.read()
+            if ret:
+                cam_name = self._get_joint("camera_optical_frame")
+                cam_joint = self.urdf_logger.joint_entity_path(cam_name)
+
+                # Generic instrinsic camera matrix
+                K = np.eye(3, dtype=float)
+                K[0, 0] = 1000.0
+                K[1, 1] = 1000.0
+                K[0, 2] = frame.shape[1] / 2
+                K[1, 2] = frame.shape[0] / 2
 
         while not self.running.is_set():
             rr.set_time("deamon", timestamp=time.time(), recording=self.recording)
@@ -427,20 +437,26 @@ class Rerun:
                 )
 
             if self.cam is not None:
-                ret, frame = self.cam.read()
-
-                rr.log(
-                    f"{cam_joint}/image",
-                    rr.Pinhole(
-                        image_from_camera=rr.datatypes.Mat3x3(K),
-                        width=1280,  # frame.shape[1],
-                        height=720,  # frame.shape[0],
-                        image_plane_distance=0.8,
-                        camera_xyz=rr.ViewCoordinates.RDF,
-                    ),
+                cam_name.origin.rotation = [3.14159, 1.0472, 3.14159]
+                cam_name.origin.position = [0.0244171, -0.0524, 0.0147383]
+                self.urdf_logger.log_joint(
+                    cam_joint, joint=cam_name, recording=self.recording
                 )
 
+                ret, frame = self.cam.read()
+
                 if ret:
+                    rr.log(
+                        f"{cam_joint}/image",
+                        rr.Pinhole(
+                            image_from_camera=rr.datatypes.Mat3x3(K),
+                            width=frame.shape[1],
+                            height=frame.shape[0],
+                            image_plane_distance=0.8,
+                            camera_xyz=rr.ViewCoordinates.RDF,
+                        ),
+                    )
+
                     # ToDo: this is suboptimal since the camera outputs a MJPEG stream
                     # use alternative to opencv
                     ret, encoded_image = cv2.imencode(".jpg", frame)
