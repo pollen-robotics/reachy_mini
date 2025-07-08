@@ -27,8 +27,14 @@ dependencies = [
     "pyserial",
 ]
 
+
+
 [project.optional-dependencies]
 dev = ["pytest"]
+examples = [
+    "librosa",
+    "pynput",
+]
 
 [project.scripts]
 reachy-mini-daemon = "reachy_mini.io.daemon:main"
