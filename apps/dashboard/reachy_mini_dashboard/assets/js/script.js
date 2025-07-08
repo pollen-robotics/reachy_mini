@@ -154,12 +154,14 @@ function updateInstallationProgress(installationId, status) {
                 }
                 if (status.operation === 'remove' && status.stage === 'complete') {
                     console.log('Removal completed, refreshing status...');
-                    setTimeout(fetchStatus, 500);
+                    refreshSpacesStore();
+                    // setTimeout(fetchStatus, 500);
+
                 }
             }, 3000);
         }
 
-        fetchStatus();
+        // fetchStatus();
         return;
     }
 
@@ -216,7 +218,7 @@ function getStatusIcon(stage, operation = 'install') {
 
 async function fetchStatus() {
     try {
-        if (Date.now() - (window.lastFetchTime || 0) < 1000) {
+        if (Date.now() - (window.lastFetchTime || 0) < 150) {
             console.log('Skipping fetchStatus due to rate limit');
             return;
         }
@@ -393,8 +395,6 @@ function renderApps(apps, current, venvApps, venvAppsDetailed = [], appProcessId
         item.appendChild(rightSection);
         container.appendChild(item);
     });
-
-    refreshSpacesStore();
 }
 
 function renderInstallationHistory(history) {
@@ -452,7 +452,7 @@ async function startApp(name) {
         const response = await fetch(`/start/${name}`, { method: 'POST' });
         const result = await response.json();
         if (response.ok) {
-            setTimeout(fetchStatus, 1000);
+            // setTimeout(fetchStatus, 1000);
             if (result.process_id) {
                 setTimeout(() => {
                     showLogViewer(result.process_id, `Running ${name}`);
@@ -468,7 +468,7 @@ async function stopApp() {
     try {
         const response = await fetch('/stop', { method: 'POST' });
         if (response.ok) {
-            setTimeout(fetchStatus, 1000);
+            // setTimeout(fetchStatus, 1000);
             hideLogViewer();
         }
     } catch (error) {
@@ -574,5 +574,5 @@ document.getElementById('close-logs-btn').addEventListener('click', hideLogViewe
 
 // Initialize everything
 connectWebSocket();
-fetchStatus();
-setInterval(fetchStatus, 10000);
+// fetchStatus();
+setInterval(fetchStatus, 500);
