@@ -4,170 +4,7 @@ let activeOperations = new Set();
 let currentLogProcessId = null;
 let autoScroll = true;
 let logBuffer = new Map();
-let simulationEnabled = false;
-let daemonStatus = null;
-let spacesStore = null;
 
-// Initialize spaces store on page load
-function initializeSpacesStore() {
-    spacesStore = new SpacesStore();
-    spacesStore.init();
-}
-
-// Simulation functions
-async function toggleSimulation() {
-    const toggle = document.getElementById('simulation-toggle');
-    const originalState = toggle.checked;
-
-    try {
-        toggle.disabled = true;
-        const response = await fetch('/api/simulation/toggle', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' }
-        });
-
-        const result = await response.json();
-        if (response.ok) {
-            simulationEnabled = result.simulation_enabled;
-            updateSimulationUI();
-
-            const indicator = document.getElementById('simulation-mode-indicator');
-            const originalText = indicator.textContent;
-            indicator.textContent = `🎮 SIMULATION ${simulationEnabled ? 'ENABLED' : 'DISABLED'}`;
-
-            setTimeout(() => {
-                if (simulationEnabled) {
-                    indicator.textContent = originalText;
-                }
-            }, 2000);
-
-            console.log(`Simulation mode ${simulationEnabled ? 'enabled' : 'disabled'}`);
-        } else {
-            throw new Error(result.detail || 'Failed to toggle simulation');
-        }
-    } catch (error) {
-        console.error('Failed to toggle simulation:', error);
-        toggle.checked = !originalState;
-        simulationEnabled = !simulationEnabled;
-        updateSimulationUI();
-        alert(`Failed to toggle simulation: ${error.message}`);
-    } finally {
-        toggle.disabled = false;
-    }
-}
-
-async function fetchSimulationStatus() {
-    try {
-        const response = await fetch('/api/simulation/status');
-        const data = await response.json();
-        simulationEnabled = data.simulation_enabled;
-        updateSimulationUI();
-    } catch (error) {
-        console.error('Failed to fetch simulation status:', error);
-    }
-}
-
-function updateSimulationUI() {
-    const toggle = document.getElementById('simulation-toggle');
-    const indicator = document.getElementById('simulation-mode-indicator');
-    toggle.checked = simulationEnabled;
-    indicator.style.display = simulationEnabled ? 'block' : 'none';
-}
-
-// Daemon functions
-async function fetchDaemonStatus() {
-    try {
-        const response = await fetch('/daemon_status');
-        const data = await response.json();
-        daemonStatus = data;
-        updateDaemonStatusUI(data);
-    } catch (error) {
-        console.error('Failed to fetch daemon status:', error);
-        updateDaemonStatusUI({
-            status: 'error',
-            message: 'Failed to connect to daemon',
-            running: false
-        });
-    }
-}
-
-function updateDaemonStatusUI(status) {
-    const indicator = document.getElementById('daemon-status-indicator');
-    const statusText = document.getElementById('daemon-status-text');
-    const robotInfo = document.getElementById('robot-info');
-    const robotDetails = document.getElementById('robot-details');
-    const startBtn = document.getElementById('daemon-start-btn');
-    const stopBtn = document.getElementById('daemon-stop-btn');
-    const restartBtn = document.getElementById('daemon-restart-btn');
-
-    indicator.className = 'status-indicator';
-
-    if (status.running === true) {
-        indicator.classList.add('status-running');
-        statusText.textContent = status.message || 'Daemon is running';
-        startBtn.disabled = true;
-        stopBtn.disabled = false;
-        restartBtn.disabled = false;
-    } else if (status.running === false) {
-        indicator.classList.add('status-stopped');
-        statusText.textContent = status.message || 'Daemon is stopped';
-        startBtn.disabled = false;
-        stopBtn.disabled = true;
-        restartBtn.disabled = true;
-    } else {
-        indicator.classList.add('status-unknown');
-        statusText.textContent = status.message || 'Status unknown';
-        startBtn.disabled = false;
-        stopBtn.disabled = false;
-        restartBtn.disabled = false;
-    }
-
-    if (status.robot_info) {
-        robotDetails.innerHTML = `
-          <div>Model: ${status.robot_info.model || 'Unknown'}</div>
-          <div>Version: ${status.robot_info.version || 'Unknown'}</div>
-          ${status.robot_info.uptime ? `<div>Uptime: ${status.robot_info.uptime}</div>` : ''}
-        `;
-        robotInfo.style.display = 'block';
-    } else {
-        robotInfo.style.display = 'none';
-    }
-}
-
-async function controlDaemon(action) {
-    const button = document.getElementById(`daemon-${action}-btn`);
-    const originalText = button.innerHTML;
-    button.disabled = true;
-    button.innerHTML = '⏳ Working...';
-
-    try {
-        const response = await fetch(`/daemon_${action}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' }
-        });
-
-        const result = await response.json();
-        if (response.ok) {
-            setTimeout(() => fetchDaemonStatus(), 1000);
-            button.innerHTML = '✅ Done';
-            setTimeout(() => button.innerHTML = originalText, 2000);
-        } else {
-            throw new Error(result.detail || `Failed to ${action} daemon`);
-        }
-    } catch (error) {
-        console.error(`Failed to ${action} daemon:`, error);
-        alert(`Failed to ${action} daemon: ${error.message}`);
-        button.innerHTML = '❌ Error';
-        setTimeout(() => button.innerHTML = originalText, 2000);
-    } finally {
-        setTimeout(() => {
-            button.disabled = false;
-            if (button.innerHTML === '⏳ Working...' || button.innerHTML === '✅ Done' || button.innerHTML === '❌ Error') {
-                button.innerHTML = originalText;
-            }
-        }, 2000);
-    }
-}
 
 // WebSocket and logging functions
 function connectWebSocket() {
@@ -176,7 +13,6 @@ function connectWebSocket() {
     ws = new WebSocket(wsUrl);
 
     ws.onopen = function () {
-        console.log('WebSocket connected');
         if (currentLogProcessId) {
             ws.send(JSON.stringify({
                 type: 'request_logs',
@@ -195,7 +31,7 @@ function connectWebSocket() {
     };
 
     ws.onclose = function () {
-        console.log('WebSocket disconnected, retrying in 3 seconds...');
+        console.error('WebSocket disconnected, retrying in 3 seconds...');
         setTimeout(connectWebSocket, 3000);
     };
 
@@ -318,12 +154,14 @@ function updateInstallationProgress(installationId, status) {
                 }
                 if (status.operation === 'remove' && status.stage === 'complete') {
                     console.log('Removal completed, refreshing status...');
-                    setTimeout(fetchStatus, 500);
+                    refreshSpacesStore();
+                    // setTimeout(fetchStatus, 500);
+
                 }
             }, 3000);
         }
 
-        fetchStatus();
+        // fetchStatus();
         return;
     }
 
@@ -380,7 +218,7 @@ function getStatusIcon(stage, operation = 'install') {
 
 async function fetchStatus() {
     try {
-        if (Date.now() - (window.lastFetchTime || 0) < 1000) {
+        if (Date.now() - (window.lastFetchTime || 0) < 150) {
             console.log('Skipping fetchStatus due to rate limit');
             return;
         }
@@ -388,45 +226,56 @@ async function fetchStatus() {
 
         const res = await fetch('/api/status/full');
         const data = await res.json();
-        console.log('Fetched full status:', data);
 
         renderApps(data.available_apps, data.current, data.venv_apps || [], data.venv_apps_detailed || [], data.app_process_id);
-        renderInstallationHistory(data.installation_history || []);
+        // renderInstallationHistory(data.installation_history || []);
 
         if (data.simulation_enabled !== undefined) {
-            simulationEnabled = data.simulation_enabled;
-            updateSimulationUI();
+            updateSimulationUI(data.simulation_enabled);
         }
 
-        const activeInstalls = data.active_installations || {};
-        const container = document.getElementById('installation-list');
-        const activeSection = document.getElementById('active-installations');
+        // const activeInstalls = data.active_installations || {};
+        // const container = document.getElementById('installation-list');
+        // const activeSection = document.getElementById('active-installations');
 
-        if (Object.keys(activeInstalls).length > 0) {
-            activeSection.style.display = 'block';
-            for (const [id, status] of Object.entries(activeInstalls)) {
-                updateInstallationProgress(id, status);
-            }
-        } else {
-            activeSection.style.display = 'none';
-            container.innerHTML = '';
-        }
+        // if (Object.keys(activeInstalls).length > 0) {
+        //     activeSection.style.display = 'block';
+        //     for (const [id, status] of Object.entries(activeInstalls)) {
+        //         updateInstallationProgress(id, status);
+        //     }
+        // } else {
+        //     activeSection.style.display = 'none';
+        //     container.innerHTML = '';
+        // }
 
     } catch (error) {
-        console.error('Failed to fetch status:', error);
-        try {
-            const res = await fetch('/api/status');
-            const data = await res.json();
-            renderApps(data.available_apps, data.current, [], [], data.app_process_id);
+        // console.error('Failed to fetch status:', error);
+        // try {
+        //     const res = await fetch('/api/status');
+        //     const data = await res.json();
+        //     renderApps(data.available_apps, data.current, [], [], data.app_process_id);
 
-            if (data.simulation_enabled !== undefined) {
-                simulationEnabled = data.simulation_enabled;
-                updateSimulationUI();
-            }
-        } catch (fallbackError) {
-            console.error('Failed to fetch basic status:', fallbackError);
-        }
+        //     if (data.simulation_enabled !== undefined) {
+        //         simulationEnabled = data.simulation_enabled;
+        //         updateSimulationUI();
+        //     }
+        // } catch (fallbackError) {
+        //     console.error('Failed to fetch basic status:', fallbackError);
+        // }
     }
+}
+
+function renderInstalledSpace(name) {
+    return `
+        <div class="installed-space-card">
+            <div class="installed-space-title">TITRE</div>
+
+            <button class="start-space-btn" onclick="">Start</button>
+            <button class="start-update-btn" onclick="">Update</button>
+            <button class="start-remove-btn" onclick="">Remove</button>
+
+        </div>
+    `;
 }
 
 function renderApps(apps, current, venvApps, venvAppsDetailed = [], appProcessId = null) {
@@ -434,7 +283,7 @@ function renderApps(apps, current, venvApps, venvAppsDetailed = [], appProcessId
     container.innerHTML = '';
 
     if (apps.length === 0) {
-        container.innerHTML = '<p class="text-gray-600">No apps found.</p>';
+        container.innerHTML = '<p class="text-gray-600">No installed spaces found.</p>';
         return;
     }
 
@@ -442,6 +291,17 @@ function renderApps(apps, current, venvApps, venvAppsDetailed = [], appProcessId
     venvAppsDetailed.forEach(app => {
         venvDetailsMap[app.name] = app;
     });
+
+    // const installedSpaces = apps.map((name) => {
+    //     return renderInstalledSpace(name);
+    // }).join('');
+
+    // container.innerHTML += `
+    //     <div class="grid grid-cols-1 md:grid-cols-1 gap-4">
+    //         ${installedSpaces}
+    //     </div>
+    // `;
+    // return;
 
     apps.forEach(name => {
         const isRunning = name === current;
@@ -592,7 +452,7 @@ async function startApp(name) {
         const response = await fetch(`/start/${name}`, { method: 'POST' });
         const result = await response.json();
         if (response.ok) {
-            setTimeout(fetchStatus, 1000);
+            // setTimeout(fetchStatus, 1000);
             if (result.process_id) {
                 setTimeout(() => {
                     showLogViewer(result.process_id, `Running ${name}`);
@@ -608,7 +468,7 @@ async function stopApp() {
     try {
         const response = await fetch('/stop', { method: 'POST' });
         if (response.ok) {
-            setTimeout(fetchStatus, 1000);
+            // setTimeout(fetchStatus, 1000);
             hideLogViewer();
         }
     } catch (error) {
@@ -676,171 +536,6 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
-// HF Spaces Store functionality
-class SpacesStore {
-    constructor() {
-        this.spaces = [];
-        this.filteredSpaces = [];
-        this.currentSort = 'likes';
-        this.searchTerm = '';
-    }
-
-    async init() {
-        await this.loadSpaces();
-        this.setupEventListeners();
-        this.renderSpaces();
-    }
-
-    async loadSpaces() {
-        try {
-            // Search for spaces with the reachy_mini tag
-            const response = await fetch('https://huggingface.co/api/spaces?filter=reachy_mini&sort=likes&direction=-1&limit=50');
-            const data = await response.json();
-
-            this.spaces = data.map(space => ({
-                id: space.id,
-                title: space.id.split('/').pop().replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
-                author: space.author,
-                description: space.cardData?.short_description || 'No description available',
-                likes: space.likes || 0,
-                created: new Date(space.createdAt).getTime(),
-                url: `https://huggingface.co/spaces/${space.id}`,
-                installUrl: `https://huggingface.co/spaces/${space.id}`,
-                tags: space.tags || []
-            }));
-
-            this.filteredSpaces = [...this.spaces];
-            this.updateStats();
-        } catch (error) {
-            console.error('Error loading spaces:', error);
-            this.showError();
-        }
-    }
-
-    setupEventListeners() {
-        const searchInput = document.getElementById('spaces-search');
-        searchInput.addEventListener('input', (e) => {
-            this.searchTerm = e.target.value.toLowerCase();
-            this.filterSpaces();
-        });
-
-        const sortButtons = document.querySelectorAll('.sort-btn');
-        sortButtons.forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                sortButtons.forEach(b => {
-                    b.classList.remove('active', 'bg-blue-500', 'text-white');
-                    b.classList.add('bg-gray-200', 'text-gray-700');
-                });
-                e.target.classList.remove('bg-gray-200', 'text-gray-700');
-                e.target.classList.add('active', 'bg-blue-500', 'text-white');
-                this.currentSort = e.target.dataset.sort;
-                this.sortSpaces();
-            });
-        });
-    }
-
-    filterSpaces() {
-        this.filteredSpaces = this.spaces.filter(space =>
-            space.title.toLowerCase().includes(this.searchTerm) ||
-            space.author.toLowerCase().includes(this.searchTerm) ||
-            space.description.toLowerCase().includes(this.searchTerm)
-        );
-        this.sortSpaces();
-    }
-
-    sortSpaces() {
-        switch (this.currentSort) {
-            case 'likes':
-                this.filteredSpaces.sort((a, b) => b.likes - a.likes);
-                break;
-            case 'created':
-                this.filteredSpaces.sort((a, b) => b.created - a.created);
-                break;
-            case 'name':
-                this.filteredSpaces.sort((a, b) => a.title.localeCompare(b.title));
-                break;
-        }
-        this.renderSpaces();
-    }
-
-    updateStats() {
-        const statsEl = document.getElementById('spaces-stats');
-        const total = this.spaces.length;
-        const totalLikes = this.spaces.reduce((sum, space) => sum + space.likes, 0);
-        statsEl.innerHTML = `Found ${total} spaces with ${totalLikes.toLocaleString()} total likes`;
-    }
-
-    renderSpaces() {
-        const grid = document.getElementById('spaces-grid');
-
-        if (this.filteredSpaces.length === 0) {
-            grid.innerHTML = '<div class="col-span-full text-center text-gray-500 py-8">No spaces found matching your criteria</div>';
-            return;
-        }
-
-        grid.innerHTML = this.filteredSpaces.map(space => `
-          <div class="spaces-card p-4 cursor-pointer">
-            <div class="flex items-start space-x-3 mb-3">
-              <div class="space-icon">
-                ${space.title.charAt(0)}
-              </div>
-              <div class="flex-1 min-w-0">
-                <div class="font-semibold text-gray-800 truncate">${space.title}</div>
-                <div class="text-sm text-gray-600">by ${space.author}</div>
-              </div>
-            </div>
-            <div class="text-sm text-gray-700 mb-4 line-clamp-3">${space.description}</div>
-            <div class="flex items-center justify-between">
-              <div class="flex items-center space-x-4 text-sm text-gray-500">
-                <div class="flex items-center space-x-1">
-                  <span>❤️</span>
-                  <span>${space.likes}</span>
-                </div>
-                <div class="flex items-center space-x-1">
-                  <span>📅</span>
-                  <span>${this.formatDate(space.created)}</span>
-                </div>
-              </div>
-              <button onclick="installFromSpace('${space.installUrl}', '${space.title}')" 
-                      class="bg-purple-500 hover:bg-purple-600 text-white px-3 py-1 rounded text-sm transition-colors">
-                📥 Install
-              </button>
-            </div>
-          </div>
-        `).join('');
-    }
-
-    formatDate(timestamp) {
-        const date = new Date(timestamp);
-        const now = new Date();
-        const diffInDays = Math.floor((now - date) / (1000 * 60 * 60 * 24));
-
-        if (diffInDays === 0) return 'Today';
-        if (diffInDays === 1) return 'Yesterday';
-        if (diffInDays < 30) return `${diffInDays}d ago`;
-        if (diffInDays < 365) return `${Math.floor(diffInDays / 30)}mo ago`;
-        return `${Math.floor(diffInDays / 365)}y ago`;
-    }
-
-    showError() {
-        const grid = document.getElementById('spaces-grid');
-        const stats = document.getElementById('spaces-stats');
-
-        stats.innerHTML = 'Unable to load spaces';
-        grid.innerHTML = `
-          <div class="col-span-full text-center text-gray-500 py-8">
-            <h3 class="font-semibold mb-2">Unable to load Hugging Face Spaces</h3>
-            <p class="text-sm">This might be due to CORS restrictions. In a production environment, you'd use a backend API to fetch the data.</p>
-          </div>
-        `;
-    }
-}
-
-function initializeSpacesStore() {
-    spacesStore = new SpacesStore();
-    spacesStore.init();
-}
-
 async function installFromSpace(spaceUrl, spaceName) {
     const sanitizedName = spaceName.replace(/[^a-zA-Z0-9-_]/g, '_').toLowerCase();
 
@@ -879,9 +574,5 @@ document.getElementById('close-logs-btn').addEventListener('click', hideLogViewe
 
 // Initialize everything
 connectWebSocket();
-fetchStatus();
-fetchSimulationStatus();
-fetchDaemonStatus();
-initializeSpacesStore(); // Load spaces on page load
-setInterval(fetchStatus, 10000);
-setInterval(fetchDaemonStatus, 15000);
+// fetchStatus();
+setInterval(fetchStatus, 500);
