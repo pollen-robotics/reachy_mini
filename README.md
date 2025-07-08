@@ -93,7 +93,7 @@ It should automatically detect the serial port of the robot. If it does not, you
 reachy-mini-daemon -p <serial_port>
 ```
 
-## Log with rerun
+### Log with rerun
 
 For both simulation and real robot, events can be logged with rerun. With the following command, rerun viewer will automaticall popup:
 
@@ -125,6 +125,12 @@ Once the daemon is running, you can run the examples.
     ```bash
     python examples/goto_interpolation_playground.py
     ```
+* To track a face and log everyting to rerun, you can run:
+
+    ```bash
+    python examples/head_tracker_demo_rerun.py
+    ```
+    Note that the deamon should be started as `reachy-mini-daemon --rerun-mode no-video`
 
 ## To use the API:
 
