@@ -1,21 +1,4 @@
-"""Dance Motion Library (v4.3).
-
----------------------------
-A rich, compositional library for creating life-like, expressive, and rhythmic
-motion for robotic characters. It provides a toolbox of beat-synchronized
-motion functions, from simple building blocks to complex, named choreographies.
-
-Core Philosophy
----------------
-This library is built on a compositional pattern:
-1.  **Motion Primitives:** Low-level functions like `oscillation_motion` (for
-    continuous loops) and `transient_motion` (for one-shot, eased actions)
-    form the mathematical foundation.
-2.  **Atomic Moves:** Simple wrappers around primitives that control a single
-    axis or function (e.g., `atomic_pitch`, `atomic_antenna_wiggle`). These
-    are the fundamental building blocks.
-3.  **Choreographed Moves:** The main library of named moves, created by
-    combining multiple atomic moves using the `combine_offsets` utility.
+"""Dance Motion.
 
 Key Parameters
 --------------
@@ -34,6 +17,7 @@ All move functions are driven by `t_beats` and a set of keyword arguments:
 
 Usage Example
 -------------
+
 ```python
 # 1. Get the move function and its default parameters
 move_fn = AVAILABLE_DANCE_MOVES['simple_nod']
@@ -45,6 +29,7 @@ offsets = move_fn(t_beats, **params)
 
 # 3. Apply the resulting offsets to the robot
 robot.set_pose(base_pose + offsets.position_offset, ...)
+```
 """
 
 from typing import Callable
@@ -53,6 +38,7 @@ import numpy as np
 
 from reachy_mini.moves.utils import (
     MoveOffsets,
+    OscillationParams,
     combine_offsets,
     oscillation_motion,
     transient_motion,
@@ -60,34 +46,80 @@ from reachy_mini.moves.utils import (
 
 
 # ────────────────────────────── ATOMIC MOVES & HELPERS ──────────────────────────────────
-def atomic_x_pos(t_beats, **kwargs):
+def atomic_x_pos(t_beats: float, params: OscillationParams) -> "MoveOffsets":
+    """Generate an oscillatory motion offset for the x-axis position.
+
+    Args:
+        t_beats (float): Time in beats at which to evaluate the motion. Beware that this is not the same as time in seconds but in beats (dimensionless).
+        params (OscillationParams): Parameters for the oscillation motion.
+
+    Returns:
+        MoveOffsets: An object containing the x-axis position offset and zero offsets for other axes and orientations.
+
+    """
     return MoveOffsets(
-        np.array([oscillation_motion(t_beats, **kwargs), 0, 0]),
+        np.array(
+            [
+                oscillation_motion(t_beats, params),
+                0,
+                0,
+            ]
+        ),
         np.zeros(3),
         np.zeros(2),
     )
 
 
-def atomic_y_pos(t_beats, **kwargs):
+def atomic_y_pos(t_beats: float, params: OscillationParams) -> "MoveOffsets":
+    """Generate an oscillatory motion offset for the y-axis position.
+
+    Args:
+        t_beats (float): Time in beats at which to evaluate the motion. Beware that this is not the same as time in seconds but in beats (dimensionless).
+        params (OscillationParams): Parameters for the oscillation motion.
+
+    Returns:
+        MoveOffsets: An object containing the y-axis position offset and zero offsets for other axes and orientations.
+
+    """
     return MoveOffsets(
-        np.array([0, oscillation_motion(t_beats, **kwargs), 0]),
+        np.array([0, oscillation_motion(t_beats, params), 0]),
         np.zeros(3),
         np.zeros(2),
     )
 
 
-def atomic_z_pos(t_beats, **kwargs):
+def atomic_z_pos(t_beats: float, params: OscillationParams) -> "MoveOffsets":
+    """Generate an oscillatory motion offset for the z-axis position.
+
+    Args:
+        t_beats (float): Time in beats at which to evaluate the motion.
+        params (OscillationParams, optional): Parameters for the oscillation motion.
+
+    Returns:
+        MoveOffsets: An object containing the z-axis position offset and zero offsets for other axes and orientations.
+
+    """
     return MoveOffsets(
-        np.array([0, 0, oscillation_motion(t_beats, **kwargs)]),
+        np.array([0, 0, oscillation_motion(t_beats, params)]),
         np.zeros(3),
         np.zeros(2),
     )
 
 
-def atomic_roll(t_beats, **kwargs):
+def atomic_roll(t_beats: float, params: OscillationParams) -> "MoveOffsets":
+    """Generate an oscillatory motion offset for the roll orientation.
+
+    Args:
+        t_beats (float): Time in beats at which to evaluate the motion.
+        params (OscillationParams, optional): Parameters for the oscillation motion.
+
+    Returns:
+        MoveOffsets: An object containing the roll orientation offset and zero offsets for other axes and orientations.
+
+    """
     return MoveOffsets(
         np.zeros(3),
-        np.array([oscillation_motion(t_beats, **kwargs), 0, 0]),
+        np.array([oscillation_motion(t_beats, params), 0, 0]),
         np.zeros(2),
     )
 
