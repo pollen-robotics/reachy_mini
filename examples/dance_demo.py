@@ -181,7 +181,7 @@ def main(config: Config):
 
     print("Connecting to Reachy Mini...")
     try:
-        with ReachyMini() as mini:  # Changed from 'bot' to 'mini'
+        with ReachyMini() as mini:
             print("Robot connected. Starting dance test...")
             mini.set_target(
                 head_pose(config.neutral_pos, config.neutral_eul), antennas=np.zeros(2)
@@ -218,7 +218,7 @@ def main(config: Config):
                     mini.set_target(
                         head_pose(config.neutral_pos, config.neutral_eul),
                         antennas=np.zeros(2),
-                    )  # Changed to 'mini'
+                    )
                     time.sleep(config.control_ts)
                     continue
 
@@ -252,7 +252,7 @@ def main(config: Config):
                     head_pose(final_pos, final_eul), antennas=final_ant
                 )  # Changed to 'mini'
 
-                # --- UI Update (Console and Orb) ---
+                # --- UI Update (Console) ---
                 if loop_start_time - last_status_print_time > 1.0:
                     sys.stdout.write("\r" + " " * 80 + "\r")
                     status = "RUNNING" if shared_state.running else "PAUSED "
@@ -264,7 +264,7 @@ def main(config: Config):
                     sys.stdout.flush()
                     last_status_print_time = loop_start_time
 
-                if loop_start_time - last_help_print_time > 20.0:
+                if loop_start_time - last_help_print_time > 10.0:
                     print(f"\n{HELP_MESSAGE}")  # Reprint help message periodically
                     last_help_print_time = loop_start_time
 
