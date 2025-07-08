@@ -10,6 +10,16 @@ It requires Python 3.8 or later.
 
 ## Run the reachy mini daemon
 
+```bash
+reachy-mini-daemon
+```
+
+or run it via the Python module:
+
+```bash
+python -m reachy_mini.io.daemon
+```
+
 Additional argument for both simulation and real robot:
 
 ```bash
@@ -36,11 +46,7 @@ Additional arguments:
 
 ### On the real robot
 
-```bash
-reachy-mini-daemon
-```
-
-This should automatically detect the serial port of the robot. If it does not, you can specify it manually with the `-p` option:
+It should automatically detect the serial port of the robot. If it does not, you can specify it manually with the `-p` option:
 
 ```bash
 reachy-mini-daemon -p <serial_port>
@@ -58,22 +64,41 @@ python examples/head_track_demo.py
 python examples/hand_track_demo.py
 ```
 
-## To use the client :
+## To use the API:
 
 ```python
 from reachy_mini import ReachyMini
+from reachy_mini.utils import create_head_pose
 
 with ReachyMini() as reachy_mini:
-    ...
-    ...
-    reachy_mini.set_target(head=pose, antennas=antennas)
+    # Move the head up (10mm on z-axis) and roll it 15 degrees
+    pose = create_head_pose(z=10, roll=15, degrees=True, mm=True)
+    reachy_mini.goto_target(head=pose, duration=2.0)
+
+    # Reset to default pose
+    pose = create_head_pose() 
+    reachy_mini.goto_target(head=pose, duration=2.0)
 ```
 
 With the real robot, the camera is directly accessible with the USB connection, and can be directly read with OpenCV:
 
 ```python
 import cv2
-cap = cv2.VideoCapture(0)
+
+from reachy_mini.io.cam_utils import find_camera
+
+cap = find_camera()
+while True:
+    ret, frame = cap.read()
+    ...
+```
+
+If you know the camera id on OpenCV, you can also directly use it:
+
+```python
+import cv2
+
+cap = cv2.VideoCapture(0)  # Replace 0 with your camera ID
 ...
 ```
 
