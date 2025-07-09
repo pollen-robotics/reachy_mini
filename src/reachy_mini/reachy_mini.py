@@ -167,6 +167,65 @@ class ReachyMini:
         self._set_joint_positions(head_joint_positions, antenna_joint_positions)
         self._last_head_pose = head
 
+    def goto_target(
+        self,
+        head: Optional[np.ndarray] = None,  # 4x4 pose matrix
+        antennas: Optional[
+            Union[np.ndarray, List[float]]
+        ] = None,  # [left_angle, right_angle] (in rads)
+        duration: float = 0.5,  # Duration in seconds for the movement, default is 0.5 seconds.
+        method="default",  # can be "linear", "minjerk", "ease" or "cartoon", default is "default" (-> "minjerk" interpolation)
+    ):
+        """Go to a target head pose and/or antennas position using task space interpolation, in "duration" seconds.
+
+        Args:
+            head (Optional[np.ndarray]): 4x4 pose matrix representing the target head pose.
+            antennas (Optional[Union[np.ndarray, List[float]]]): 1D array with two elements representing the angles of the antennas in radians.
+            duration (float): Duration of the movement in seconds.
+            method (str): Interpolation method to use ("linear", "minjerk", "ease", "cartoon"). Default is "minjerk".
+
+        Raises:
+            ValueError: If neither head nor antennas are provided, or if duration is not positive.
+
+        """
+        if head is None and antennas is None:
+            raise ValueError("At least one of head or antennas must be provided.")
+
+        if duration <= 0.0:
+            raise ValueError(
+                "Duration must be positive and non-zero. Use set_target() for immediate position setting."
+            )
+
+        cur_head_joints, cur_antennas_joints = self._get_current_joint_positions()
+
+        if self._last_head_pose is None:
+            start_head_pose = self.head_kinematics.fk(cur_head_joints)
+        else:
+            start_head_pose = self._last_head_pose
+
+        target_head_pose = (
+            self.head_kinematics.fk(cur_head_joints) if head is None else head
+        )
+
+        start_antennas = np.array(cur_antennas_joints)
+        target_antennas = start_antennas if antennas is None else np.array(antennas)
+
+        t0 = time.time()
+        while time.time() - t0 < duration:
+            t = time.time() - t0
+
+            interp_time = time_trajectory(t / duration, method=method)
+            interp_head_pose = linear_pose_interpolation(
+                start_head_pose, target_head_pose, interp_time
+            )
+            interp_antennas_joint = (
+                start_antennas + (target_antennas - start_antennas) * interp_time
+            )
+
+            self.set_target(interp_head_pose, list(interp_antennas_joint))
+
+            time.sleep(0.01)
+
     def set_torque(self, on: bool):
         """Set the torque state of the motors.
 
@@ -307,65 +366,6 @@ class ReachyMini:
             return
         pygame.mixer.music.load(f"{self.assets_root_path}/{sound_file}")
         pygame.mixer.music.play()
-
-    def goto_target(
-        self,
-        head: Optional[np.ndarray] = None,  # 4x4 pose matrix
-        antennas: Optional[
-            Union[np.ndarray, List[float]]
-        ] = None,  # [left_angle, right_angle] (in rads)
-        duration: float = 0.5,  # Duration in seconds for the movement, default is 0.5 seconds.
-        method="default",  # can be "linear", "minjerk", "ease" or "cartoon", default is "default" (-> "linear")
-    ):
-        """Go to a target head pose and/or antennas position using task space interpolation, in "duration" seconds.
-
-        Args:
-            head (Optional[np.ndarray]): 4x4 pose matrix representing the target head pose.
-            antennas (Optional[Union[np.ndarray, List[float]]]): 1D array with two elements representing the angles of the antennas in radians.
-            duration (float): Duration of the movement in seconds.
-            method (str): Interpolation method to use ("linear", "minjerk", "ease", "cartoon"). Default is "linear.
-
-        Raises:
-            ValueError: If neither head nor antennas are provided, or if duration is not positive.
-
-        """
-        if head is None and antennas is None:
-            raise ValueError("At least one of head or antennas must be provided.")
-
-        if duration <= 0.0:
-            raise ValueError(
-                "Duration must be positive and non-zero. Use set_target() for immediate position setting."
-            )
-
-        cur_head_joints, cur_antennas_joints = self._get_current_joint_positions()
-
-        if self._last_head_pose is None:
-            start_head_pose = self.head_kinematics.fk(cur_head_joints)
-        else:
-            start_head_pose = self._last_head_pose
-
-        target_head_pose = (
-            self.head_kinematics.fk(cur_head_joints) if head is None else head
-        )
-
-        start_antennas = np.array(cur_antennas_joints)
-        target_antennas = start_antennas if antennas is None else np.array(antennas)
-
-        t0 = time.time()
-        while time.time() - t0 < duration:
-            t = time.time() - t0
-
-            interp_time = time_trajectory(t / duration, method=method)
-            interp_head_pose = linear_pose_interpolation(
-                start_head_pose, target_head_pose, interp_time
-            )
-            interp_antennas_joint = (
-                start_antennas + (target_antennas - start_antennas) * interp_time
-            )
-
-            self.set_target(interp_head_pose, list(interp_antennas_joint))
-
-            time.sleep(0.01)
 
     def _goto_joint_positions(
         self,
