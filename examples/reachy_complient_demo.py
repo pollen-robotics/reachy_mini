@@ -1,9 +1,5 @@
-"""Reachy Mini Client Example."""
-
-import time
-
-import numpy as np
 from reachy_mini import ReachyMini
+import time
 
 with ReachyMini() as mini:
     try:
@@ -15,7 +11,7 @@ with ReachyMini() as mini:
             # compensate the gravity of the robot platform
             # this is useful to avoid the robot to fall down when it is compliant
             mini.compensate_gravity()
-            
+
             time.sleep(0.02)
     except KeyboardInterrupt:
         mini.make_compliant(head=False, antennas=False)

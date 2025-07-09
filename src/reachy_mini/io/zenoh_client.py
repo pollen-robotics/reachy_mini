@@ -106,7 +106,7 @@ class ZenohClient(AbstractClient):
             current = json.loads(sample.payload.to_string())
             self._last_head_joint_current = current.get("head_joint_current")
             self.keep_alive_event.set()
-        
+
     def _handle_head_operation_mode(self, sample):
         """Handle incoming head operation mode."""
         if sample.payload:
