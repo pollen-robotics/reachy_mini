@@ -1,7 +1,11 @@
-from reachy_mini import ReachyMini
+"""Reachy Mini Motion Sequence Example."""
+
 import time
+
 import numpy as np
 from scipy.spatial.transform import Rotation as R
+
+from reachy_mini import ReachyMini
 
 with ReachyMini() as reachy_mini:
     try:
@@ -92,6 +96,6 @@ with ReachyMini() as reachy_mini:
             pose[:3, 3] = [0, 0, 0.0]
             reachy_mini.set_target(head=pose, antennas=[0, 0])
             time.sleep(2)
-            
+
     except KeyboardInterrupt:
         pass

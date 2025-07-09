@@ -1,15 +1,16 @@
 import time
+import tkinter as tk
 
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 
 from reachy_mini import ReachyMini
-import tkinter as tk
+
 
 def main():
     with ReachyMini() as mini:
         t0 = time.time()
-    
+
         root = tk.Tk()
         root.title("Set Head Euler Angles")
 
@@ -95,6 +96,7 @@ def main():
                 antennas=np.array([target, -target]),
                 check_collision=collision_check_var.get(),
             )
+
 
 if __name__ == "__main__":
     main()

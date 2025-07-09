@@ -1,13 +1,17 @@
-import numpy as np
+"""UDP JPEG Frame Sender.
+
+This module provides a class to send JPEG frames over UDP. It encodes the frames as JPEG images and splits them into chunks to fit within the maximum packet size for UDP transmission.
+"""
+
 import socket
 import struct
+
 import cv2
+import numpy as np
 
 
 class UDPJPEGFrameSender:
-    """
-    A class to send JPEG frames over UDP.
-    """
+    """A class to send JPEG frames over UDP."""
 
     def __init__(
         self,
@@ -15,24 +19,24 @@ class UDPJPEGFrameSender:
         dest_port: int = 5005,
         max_packet_size: int = 1400,
     ) -> None:
-        """
-        Initialize the UDPJPEGFrameSender.
+        """Initialize the UDPJPEGFrameSender.
+
         Args:
             dest_ip (str): Destination IP address.
             dest_port (int): Destination port number.
             max_packet_size (int): Maximum size of each UDP packet.
-        """
 
+        """
         self.addr = (dest_ip, dest_port)
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.max_packet_size = max_packet_size
 
     def send_frame(self, frame: np.ndarray) -> None:
-        """
-        Send a frame as a JPEG image over UDP.
+        """Send a frame as a JPEG image over UDP.
 
         Args:
             frame (np.ndarray): The frame to be sent, in RGB format.
+
         """
         frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
         ret, jpeg_bytes = cv2.imencode(

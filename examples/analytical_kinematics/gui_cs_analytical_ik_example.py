@@ -1,7 +1,8 @@
 import time
+import tkinter as tk
+
 from placo_utils.tf import tf
 
-import tkinter as tk
 from reachy_mini import ReachyMini
 from reachy_mini.analytic_kinematics import ReachyMiniAnalyticKinematics
 

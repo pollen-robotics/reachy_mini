@@ -1,3 +1,11 @@
+"""Reachy Mini class for controlling a simulated or real Reachy Mini robot.
+
+This class provides methods to control the head and antennas of the Reachy Mini robot,
+set their target positions, and perform various behaviors such as waking up and going to sleep.
+
+It also includes methods for multimedia interactions like playing sounds and looking at specific points in the image frame or world coordinates.
+"""
+
 import json
 import os
 import time
@@ -56,13 +64,13 @@ IMAGE_SIZE = (1280, 720)  # Width, Height in pixels
 
 
 class ReachyMini:
-    """
-    Reachy Mini class for controlling a simulated or real Reachy Mini robot.
+    """Reachy Mini class for controlling a simulated or real Reachy Mini robot.
 
     Args:
         localhost_only (bool): If True, will only connect to localhost daemons, defaults to True.
         spawn_daemon (bool): If True, will spawn a daemon to control the robot, defaults to False.
         use_sim (bool): If True and spawn_daemon is True, will spawn a simulated robot, defaults to True.
+
     """
 
     urdf_root_path: str = str(
@@ -77,6 +85,17 @@ class ReachyMini:
         use_sim: bool = True,
         timeout: float = 5.0,
     ) -> None:
+        """Initialize the Reachy Mini robot.
+
+        Args:
+            localhost_only (bool): If True, will only connect to localhost daemons, defaults to True.
+            spawn_daemon (bool): If True, will spawn a daemon to control the robot, defaults to False.
+            use_sim (bool): If True and spawn_daemon is True, will spawn a simulated robot, defaults to True.
+            timeout (float): Timeout for the client connection, defaults to 5.0 seconds.
+
+        It will try to connect to the daemon, and if it fails, it will raise an exception.
+
+        """
         daemon_check(spawn_daemon, use_sim)
         self.client = Client(localhost_only)
         self.client.wait_for_connection(timeout=timeout)
@@ -100,9 +119,11 @@ class ReachyMini:
         )
 
     def __enter__(self) -> "ReachyMini":
+        """Context manager entry point for Reachy Mini."""
         return self
 
     def __exit__(self, exc_type, exc_value, traceback) -> None:
+        """Context manager exit point for Reachy Mini."""
         self.client.disconnect()
 
     def set_target(
@@ -113,17 +134,17 @@ class ReachyMini:
         ] = None,  # [left_angle, right_angle] (in rads)
         check_collision: bool = False,  # Check for collisions before setting the position
     ) -> None:
-        """
-        Set the target pose of the head and/or the target position of the antennas.
+        """Set the target pose of the head and/or the target position of the antennas.
 
         Args:
             head (Optional[np.ndarray]): 4x4 pose matrix representing the head pose.
             antennas (Optional[Union[np.ndarray, List[float]]]): 1D array with two elements representing the angles of the antennas in radians.
+            check_collision (bool): If True, checks for collisions before setting the position.
 
         Raises:
             ValueError: If neither head nor antennas are provided, or if the shape of head is not (4, 4), or if antennas is not a 1D array with two elements.
-        """
 
+        """
         if head is None and antennas is None:
             raise ValueError("At least one of head or antennas must be provided.")
 
@@ -135,6 +156,10 @@ class ReachyMini:
             head_joint_positions = self.head_kinematics.ik(
                 head, check_collision=check_collision
             )
+
+            # This means that a collision was detected
+            if head_joint_positions is None:
+                return
         else:
             head_joint_positions = None
 
@@ -151,19 +176,16 @@ class ReachyMini:
         self._last_head_pose = head
 
     def set_torque(self, on: bool):
-        """
-        Set the torque state of the motors.
+        """Set the torque state of the motors.
 
         Args:
             on (bool): If True, enables torque; if False, disables it.
+
         """
         self.client.send_command(json.dumps({"torque": on}))
 
     def wake_up(self) -> None:
-        """
-        Wake up the robot. Go to the initial head position and play the wake up emote and sound
-        """
-
+        """Wake up the robot - go to the initial head position and play the wake up emote and sound."""
         self.goto_target(INIT_HEAD_POSE, antennas=[0.0, 0.0], duration=2)
         time.sleep(0.1)
 
@@ -179,10 +201,7 @@ class ReachyMini:
         self.goto_target(INIT_HEAD_POSE, duration=0.2)
 
     def goto_sleep(self) -> None:
-        """
-        Put the robot to sleep by moving the head and antennas to a predefined sleep position.
-        """
-
+        """Put the robot to sleep by moving the head and antennas to a predefined sleep position."""
         # Check if we are too far from the initial position
         # Move to the initial position if necessary
         current_positions, _ = self._get_current_joint_positions()
@@ -201,8 +220,7 @@ class ReachyMini:
         self._last_head_pose = SLEEP_HEAD_POSE
 
     def look_at_image(self, u: int, v: int, duration: float = 1.0) -> None:
-        """
-        Make the robot head look at a point defined by a pixel position (u,v).
+        """Make the robot head look at a point defined by a pixel position (u,v).
 
         # TODO image of reachy mini coordinate system
 
@@ -213,8 +231,8 @@ class ReachyMini:
 
         Raises:
             ValueError: If duration is negative.
-        """
 
+        """
         assert 0 < u < IMAGE_SIZE[0], f"u must be in [0, {IMAGE_SIZE[0]}], got {u}."
         assert 0 < v < IMAGE_SIZE[1], f"v must be in [0, {IMAGE_SIZE[1]}], got {v}."
 
@@ -240,8 +258,7 @@ class ReachyMini:
         self.look_at_world(*P_world, duration=duration)
 
     def look_at_world(self, x: float, y: float, z: float, duration: float = 1.0):
-        """
-        Look at a specific point in 3D space in Reachy Mini's reference frame.
+        """Look at a specific point in 3D space in Reachy Mini's reference frame.
 
         TODO include image of reachy mini coordinate system
 
@@ -253,8 +270,8 @@ class ReachyMini:
 
         Raises:
             ValueError: If duration is negative.
-        """
 
+        """
         if duration < 0:
             raise ValueError("Duration can't be negative.")
 
@@ -283,11 +300,11 @@ class ReachyMini:
 
     # Multimedia methods
     def play_sound(self, sound_file: str) -> None:
-        """
-        Play a sound file from the assets directory.
+        """Play a sound file from the assets directory.
 
         Args:
             sound_file (str): The name of the sound file to play (e.g., "proud2.wav").
+
         """
         if pygame.mixer is None:
             print("Pygame mixer is not initialized. Cannot play sound.")
@@ -305,19 +322,19 @@ class ReachyMini:
         method="default",  # can be "linear", "minjerk", "ease" or "cartoon", default is "default" (-> "linear")
         check_collision: bool = False,  # Check for collisions before sending the command
     ):
-        """
-        Go to a target head pose and/or antennas position using task space interpolation, in "duration" seconds.
+        """Go to a target head pose and/or antennas position using task space interpolation, in "duration" seconds.
 
         Args:
             head (Optional[np.ndarray]): 4x4 pose matrix representing the target head pose.
             antennas (Optional[Union[np.ndarray, List[float]]]): 1D array with two elements representing the angles of the antennas in radians.
             duration (float): Duration of the movement in seconds.
             method (str): Interpolation method to use ("linear", "minjerk", "ease", "cartoon"). Default is "linear.
+            check_collision (bool): If True, checks for collisions before setting the position.
 
         Raises:
             ValueError: If neither head nor antennas are provided, or if duration is not positive.
-        """
 
+        """
         if head is None and antennas is None:
             raise ValueError("At least one of head or antennas must be provided.")
 
@@ -334,7 +351,9 @@ class ReachyMini:
             start_head_pose = self._last_head_pose
 
         target_head_pose = (
-            self.head_kinematics.fk(cur_head_joints, check_collision=check_collision) if head is None else head
+            self.head_kinematics.fk(cur_head_joints, check_collision=check_collision)
+            if head is None
+            else head
         )
 
         start_antennas = np.array(cur_antennas_joints)
@@ -366,7 +385,8 @@ class ReachyMini:
         ] = None,  # [left_angle, right_angle] length 2
         duration: float = 0.5,  # Duration in seconds for the movement
     ) -> None:
-        """
+        """Go to a target head joint positions and/or antennas joint positions using joint space interpolation, in "duration" seconds.
+
         [Internal] Go to a target head joint positions and/or antennas joint positions using joint space interpolation, in "duration" seconds.
 
         Args:
@@ -376,8 +396,8 @@ class ReachyMini:
 
         Raises:
             ValueError: If neither head_joint_positions nor antennas_joint_positions are provided, or if duration is not positive.
-        """
 
+        """
         if duration <= 0.0:
             raise ValueError(
                 "Duration must be positive and non-zero. Use set_target() for immediate position setting."
@@ -412,15 +432,16 @@ class ReachyMini:
             time.sleep(0.01)
 
     def _get_current_joint_positions(self) -> tuple[list[float], list[float]]:
-        """
+        """Get the current joint positions of the head and antennas.
+
         [Internal] Get the current joint positions of the head and antennas (in rad)
 
         Returns:
             tuple: A tuple containing two lists:
                 - List of head joint positions (rad) (length 7).
                 - List of antennas joint positions (rad) (length 2).
-        """
 
+        """
         return self.client.get_current_joints()
 
     def _set_joint_positions(
@@ -432,14 +453,15 @@ class ReachyMini:
             List[float]
         ],  # [left_angle, right_angle] length 2
     ):
-        """
+        """Set the joint positions of the head and/or antennas.
+
         [Internal] Set the joint positions of the head and/or antennas.
 
         Args:
             head_joint_positions (Optional[List[float]]): List of head joint positions in radians (length 7).
             antennas_joint_positions (Optional[List[float]]): List of antennas joint positions in radians (length 2).
-        """
 
+        """
         cmd = {}
 
         if head_joint_positions is not None:

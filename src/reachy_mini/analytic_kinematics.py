@@ -1,7 +1,8 @@
 import numpy as np
-from .placo_kinematics import PlacoKinematics
 import placo
 from placo_utils.tf import tf
+
+from .placo_kinematics import PlacoKinematics
 
 
 class ReachyMiniAnalyticKinematics:

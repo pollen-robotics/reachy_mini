@@ -1,4 +1,4 @@
-from sympy import symbols, cos, sin, Matrix, MatrixSymbol, Eq, solve, simplify
+from sympy import Eq, Matrix, MatrixSymbol, cos, simplify, sin, solve, symbols
 
 # motor angle
 q = symbols("q")

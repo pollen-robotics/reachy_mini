@@ -1,3 +1,5 @@
+"""Camera utility for Reachy Mini."""
+
 import platform
 
 import cv2
@@ -9,6 +11,17 @@ def find_camera(
     pid: int = 0x636D,
     apiPreference: int = cv2.CAP_ANY,
 ) -> cv2.VideoCapture | None:
+    """Find and return a camera with the specified VID and PID.
+
+    Args:
+        vid (int): Vendor ID of the camera. Default is 0x0C45 (Arducam).
+        pid (int): Product ID of the camera. Default is 0x636D (Arducam).
+        apiPreference (int): Preferred API backend for the camera. Default is cv2.CAP_ANY.
+
+    Returns:
+        cv2.VideoCapture | None: A VideoCapture object if the camera is found and opened successfully, otherwise None.
+
+    """
     if platform.system() == "Linux":
         apiPreference = cv2.CAP_V4L2
 

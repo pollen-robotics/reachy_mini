@@ -1,10 +1,11 @@
 import time
+import tkinter as tk
+
+import numpy as np
 from placo_utils.tf import tf
 
-import tkinter as tk
 from reachy_mini import ReachyMini
 from reachy_mini.analytic_kinematics import ReachyMiniAnalyticKinematics
-import numpy as np
 
 
 def main():
@@ -45,18 +46,21 @@ def main():
                 @ tf.translation_matrix((px, py, pz))
                 @ tf.euler_matrix(roll, pitch, yaw)
             )
-            
+
             T_world_head = analytic_solver.robot.get_T_world_frame("head")
-    
+
             jacobian = analytic_solver.jacobian(T_world_head)
 
-            dM = np.linalg.inv(T_world_head)@T_world_target
+            dM = np.linalg.inv(T_world_head) @ T_world_target
             error_p = dM[:3, 3]
-            error_rpy = np.array(tf.euler_from_matrix(dM[:3, :3], axes='sxyz'))
+            error_rpy = np.array(tf.euler_from_matrix(dM[:3, :3], axes="sxyz"))
             dq = jacobian @ np.concatenate((error_p, error_rpy))
 
             joints_dq = dq * 0.1
-            joints = {name: value + joints_dq[i] for i, (name, value) in enumerate(joints.items())}
+            joints = {
+                name: value + joints_dq[i]
+                for i, (name, value) in enumerate(joints.items())
+            }
 
             if len(joints) != 6:
                 print("joints IK failed for some motors, skipping iteration")
@@ -83,9 +87,9 @@ def main():
             except ValueError as e:
                 print(f"Error: {e}")
                 continue
-            
+
             mini.head_kinematics.fk([0.0] + list(joints.values()))
-            
+
             time.sleep(0.02)
 
 
