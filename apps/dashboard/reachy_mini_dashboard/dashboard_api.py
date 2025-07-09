@@ -11,7 +11,14 @@ from importlib.metadata import entry_points
 from pathlib import Path
 from typing import Optional
 
-from app_install import (
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+
+from reachy_mini.io.daemon import Daemon, DaemonStatus
+from reachy_mini_dashboard.app_install import (
     active_installations,
     connected_clients,
     install_app_async,
@@ -19,21 +26,17 @@ from app_install import (
     remove_app_async,
     update_app_async,
 )
-from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse
-from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
-from utils import (
+from reachy_mini_dashboard.utils import (
     SubprocessHelper,
     clear_process_logs,
     get_platform_info,
     get_process_logs,
     register_log_callback,
 )
-from venv_app import VenvAppManager
+from reachy_mini_dashboard.venv_app import VenvAppManager
 
 app = FastAPI()
+daemon = Daemon()
 
 # Add CORS middleware
 app.add_middleware(
@@ -51,6 +54,9 @@ app_thread = None
 app_process = None
 app_subprocess_helper: Optional[SubprocessHelper] = None
 
+# Simulation state
+simulation_enabled = False
+
 # Directories
 DASHBOARD_DIR = Path(__file__).parent.absolute()
 APPS_DIR = DASHBOARD_DIR / "installed_apps"
@@ -58,9 +64,13 @@ APPS_DIR.mkdir(exist_ok=True)
 
 app_manager = VenvAppManager(APPS_DIR)
 
+assets_dir = DASHBOARD_DIR / "assets"
+
 # Mount static files and templates
-static_dir = DASHBOARD_DIR / "static"
-templates_dir = DASHBOARD_DIR / "templates"
+static_dir = assets_dir / "static"
+templates_dir = assets_dir / "templates"
+
+app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
 
 if static_dir.exists():
     app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
@@ -281,6 +291,7 @@ async def index(request: Request):
             "current": current_app_name,
             "active_installations": active_installations,
             "venv_apps": app_manager.list_installed_apps(),
+            "simulation_enabled": simulation_enabled,
         },
     )
 
@@ -294,6 +305,7 @@ async def start(name: str):
                 "message": f"App '{name}' started successfully",
                 "status": "running",
                 "process_id": f"app_{name}" if current_app_name == name else None,
+                "simulation_enabled": simulation_enabled,
             }
         )
     except Exception as e:
@@ -321,6 +333,7 @@ async def status():
             "active_installations_count": len(active_installations),
             "has_active_installations": len(active_installations) > 0,
             "app_process_id": f"app_{current_app_name}" if current_app_name else None,
+            "simulation_enabled": simulation_enabled,
             # Only send full details if there are active installations
             "active_installations": active_installations
             if active_installations
@@ -345,6 +358,7 @@ async def status_full():
             "active_installations": active_installations,
             "installation_history": installation_history[-10:],
             "app_process_id": f"app_{current_app_name}" if current_app_name else None,
+            "simulation_enabled": simulation_enabled,
         }
     )
 
@@ -361,6 +375,30 @@ async def clear_logs(process_id: str):
     """Clear logs for a specific process"""
     clear_process_logs(process_id)
     return JSONResponse({"message": f"Logs cleared for process {process_id}"})
+
+
+@app.post("/api/simulation/toggle")
+async def toggle_simulation():
+    """Toggle simulation mode"""
+    global simulation_enabled
+    simulation_enabled = not simulation_enabled
+    # print(f"Simulation mode {'enabled' if simulation_enabled else 'disabled'}")
+    return JSONResponse(
+        content={
+            "simulation_enabled": simulation_enabled,
+            "message": f"Simulation mode {'enabled' if simulation_enabled else 'disabled'}",
+        }
+    )
+
+
+@app.get("/api/simulation/status")
+async def get_simulation_status():
+    """Get current simulation status"""
+    return JSONResponse(
+        content={
+            "simulation_enabled": simulation_enabled,
+        }
+    )
 
 
 @app.post("/api/install")
@@ -521,6 +559,7 @@ async def platform_info():
             "python_executable": sys.executable,
             "git_available": shutil.which("git") is not None,
             "pip_available": shutil.which("pip") is not None,
+            "simulation_enabled": simulation_enabled,
         }
     )
     return JSONResponse(info)
@@ -534,11 +573,72 @@ async def get_installations():
             "active_installations": active_installations,
             "installation_history": installation_history,
             "platform": get_platform_info(),
+            "simulation_enabled": simulation_enabled,
         }
     )
 
 
-if __name__ == "__main__":
+@app.post("/daemon_start")
+def start_daemon(
+    sim: Optional[bool] = None,  # Changed to None to use global simulation state
+    serialport: str = "auto",
+    scene: str = "empty",
+    localhost_only: bool = True,
+    wake_up_on_start: bool = True,
+) -> dict:
+    # Use global simulation state if not explicitly provided
+    if sim is None:
+        sim = simulation_enabled
+    print(
+        f"*** Starting daemon with simulation={sim}, serialport={serialport}, scene={scene}, localhost_only={localhost_only}, wake_up_on_start={wake_up_on_start}"
+    )
+    try:
+        daemon.start(
+            sim=sim,
+            serialport=serialport,
+            scene=scene,
+            localhost_only=localhost_only,
+            wake_up_on_start=wake_up_on_start,
+        )
+    except Exception:
+        # We will get the error from the daemon status
+        pass
+    return {"state": daemon._status.state, "simulation_enabled": sim}
+
+
+@app.post("/daemon_stop")
+def stop_daemon(goto_sleep_on_stop: bool = True) -> dict:
+    print(f"*** Stopping daemon, goto_sleep_on_stop={goto_sleep_on_stop}")
+    daemon.stop(goto_sleep_on_stop=goto_sleep_on_stop)
+    return {"state": daemon._status.state}
+
+
+@app.post("/daemon_restart")
+def restart_daemon() -> dict:
+    print("*** Restarting daemon")
+    try:
+        daemon.restart()
+    except Exception:
+        # We will get the error from the daemon status
+        pass
+    return {"state": daemon._status.state}
+
+
+@app.post("/daemon_reset")
+def reset_daemon() -> dict:
+    """Reset the daemon status."""
+    print("*** Resetting daemon")
+    daemon.reset()
+    return {"state": daemon._status.state}
+
+
+@app.get("/daemon_status")
+def status_daemon() -> "DaemonStatus":
+    return daemon.status()
+
+
+def main():
+    """Main entry point to start the FastAPI dashboard server."""
     import uvicorn
 
     platform_info = get_platform_info()
@@ -552,6 +652,11 @@ if __name__ == "__main__":
     print("🔧 Installation endpoints ready")
     print("📊 Real-time updates via WebSocket at /ws")
     print("📋 Live logging enabled for all subprocess operations")
+    print("🎮 Simulation mode available")
     print("-" * 60)
 
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
+
+if __name__ == "__main__":
+    main()

@@ -1,14 +1,11 @@
 import asyncio
 import json
-import shutil
-import subprocess
 import sys
-import time
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List
 
-from utils import SubprocessHelper, run_subprocess
+from reachy_mini_dashboard.utils import run_subprocess
 
 # Shared state
 active_installations: Dict[str, dict] = {}
@@ -56,6 +53,7 @@ async def install_app_async(
             "message": "Starting installation...",
             "app_name": app_name,
             "app_url": app_url,
+            "operation": "install",
         }
         active_installations[installation_id] = status
         await broadcast_installation_status(installation_id, status)
@@ -122,11 +120,13 @@ async def install_app_async(
         print(f"Installing {app_name} from {app_url}...")
         current_python = sys.executable
         print(f"Current Python: {current_python}")
-        run_subprocess(
+
+        await asyncio.to_thread(run_subprocess,
             [current_python, "-m", "pip", "install", f"git+{app_url}"],
             process_id=f"install_{installation_id}_main",
             description=f"Installing {app_name} from {app_url}",
         )
+        
 
         # Stage 5: Complete
         status.update(

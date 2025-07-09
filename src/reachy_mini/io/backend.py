@@ -23,6 +23,16 @@ class Backend:
         self.head_joint_positions = None  # [yaw, 0, 1, 2, 3, 4, 5]
         self.antenna_joint_positions = None  # [0, 1]
         self.joint_positions_publisher = None  # Placeholder for a publisher object
+        self.error = None  # To store any error that occurs during execution
+
+    def wrapped_run(self):
+        """Run the backend in a try-except block to store errors."""
+        try:
+            self.run()
+        except Exception as e:
+            self.error = str(e)
+            self.close()
+            raise e
 
         self.head_joint_current = None  # Placeholder for head joint torque
         self.head_operation_mode = None  # Placeholder for head operation mode

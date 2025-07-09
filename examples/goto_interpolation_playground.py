@@ -1,7 +1,7 @@
 """Reachy Mini Goto Target Interpolation Playground.
 
 This example demonstrates the different interpolation methods available in Reachy Mini
-for moving the head to a target pose. It tests various methods such as linear,
+for moving the head and/or antennas to a target pose. It tests various methods such as linear,
 minjerk, ease, and cartoon, allowing the user to observe how each method affects the
 motion of the head and antennas.
 """

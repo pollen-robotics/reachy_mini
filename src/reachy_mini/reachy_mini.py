@@ -211,6 +211,9 @@ class ReachyMini:
             self.goto_target(INIT_HEAD_POSE, antennas=[0.0, 0.0], duration=1)
             time.sleep(0.2)
 
+        # Pfiou
+        self.play_sound("go_sleep.wav")
+
         # Move to the sleep position
         self._goto_joint_positions(
             head_joint_positions=SLEEP_HEAD_JOINT_POSITIONS,
@@ -218,6 +221,7 @@ class ReachyMini:
             duration=2,
         )
         self._last_head_pose = SLEEP_HEAD_POSE
+        time.sleep(2)
 
     def look_at_image(self, u: int, v: int, duration: float = 1.0) -> None:
         """Make the robot head look at a point defined by a pixel position (u,v).
