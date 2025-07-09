@@ -82,7 +82,7 @@ Additional arguments:
 --scene <empty|minimal> : (Default empty). Choose between a basic empty scene, or a scene with a table and some objects.
 ```
 
-<img src="https://www.pollen-robotics.com/wp-content/uploads/2025/06/Reachy_mini_simulation.gif" height="250" alt="Reachy Mini in MuJoCo">
+<img src="https://www.pollen-robotics.com/wp-content/uploads/2025/06/Reachy_mini_simulation.gif" width="250" alt="Reachy Mini in MuJoCo">
 
 
 ### On the real robot
