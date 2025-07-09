@@ -139,34 +139,8 @@ with ReachyMini() as reachy_mini:
     reachy_mini.goto_target(head=pose, duration=2.0)
 ```
 
-For a full description of the API, please refer to the [API documentation](./docs/API.md).
+For a full description of the SDK, please refer to the [documentation](./docs/API.md).
 
----------
-
-### Video client (TODO (removed from this release for performance reasons))
-
-MuJoCo publishes the camera stream at this address: "udp://@127.0.0.1:5005".
-OpenCV can directly read this stream, as illustrated in the example below:
-
-```python
-python examples/video_client.py
-```
-
-Any UDP client should be able to read this stream:
-
-```bash
-ffplay -fflags nobuffer udp://127.0.0.1:5005
-```
-
-### Simulation model used
-
-https://polyhaven.com/a/food_apple_01
-
-https://polyhaven.com/a/croissant
-
-https://polyhaven.com/a/wooden_table_02
-
-https://polyhaven.com/a/rubber_duck_toy
 
 ## Contribute
 
@@ -184,3 +158,11 @@ pre-commit run --all-files
 ```
 
 Checks are performed by Ruff. You may want to [configure your IDE to support it](https://docs.astral.sh/ruff/editors/setup/).
+
+### Simulation model used
+
+- https://polyhaven.com/a/food_apple_01
+- https://polyhaven.com/a/croissant
+- https://polyhaven.com/a/wooden_table_02
+- https://polyhaven.com/a/rubber_duck_toy
+
