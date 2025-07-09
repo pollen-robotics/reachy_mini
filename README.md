@@ -25,6 +25,8 @@ with ReachyMini() as reachy_mini:
     reachy_mini.goto_target(head=pose, duration=2.0)
 ```
 
+We support and test on Linux and macOS. We are working on Windows support, but it is not yet available. Any Python 3.8+ environment should work.
+
 ## Installation
 
 You can install Reachy Mini from the source code or from PyPI.
