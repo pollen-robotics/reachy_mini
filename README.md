@@ -55,7 +55,7 @@ reachy-mini-daemon
 or run it via the Python module:
 
 ```bash
-python -m reachy_mini.io.daemon
+python -m reachy_mini.daemon.cli
 ```
 
 Additional argument for both simulation and real robot:
