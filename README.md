@@ -1,9 +1,8 @@
 # Reachy Mini
 
-[Reachy Mini](https://www.pollen-robotics.com/reachy-mini/) is the first open-source desktop robot designed to explore human-robot interaction and creative custom applications. We made it to be affordable, easy to use, hackable and cute, so that you can focus on your application.
+[Reachy Mini](https://www.pollen-robotics.com/reachy-mini/) is the first open-source desktop robot designed to explore human-robot interaction and creative custom applications. We made it to be affordable, easy to use, hackable and cute, so that you can focus on build cool AI applications!
 
 [![Reachy Mini Hello](/docs/assets/reachy_mini_hello.gif)](https://www.pollen-robotics.com/reachy-mini/)
-
 
 This repository provides everything you need to control Reachy Mini, both in simulation and on the real robot. It consists of two main parts:
 
@@ -73,8 +72,6 @@ or
 
 ### In simulation ([MuJoCo](https://mujoco.org))
 
-![Reachy Mini in MuJoCo](https://www.pollen-robotics.com/wp-content/uploads/2025/06/Reachy_mini_simulation.gif)
-
 ```bash
 reachy-mini-daemon --sim
 ```
@@ -84,6 +81,9 @@ Additional arguments:
 ```bash
 --scene <empty|minimal> : (Default empty). Choose between a basic empty scene, or a scene with a table and some objects.
 ```
+
+<img src="https://www.pollen-robotics.com/wp-content/uploads/2025/06/Reachy_mini_simulation.gif" height="250" alt="Reachy Mini in MuJoCo">
+
 
 ### On the real robot
 
