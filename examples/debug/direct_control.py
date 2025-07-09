@@ -20,6 +20,7 @@ def main():
     # Initialize the motor controller (adjust port if needed)
     controller = ReachyMiniMotorController(serialport='/dev/ttyACM0')
     
+    
     # Details found here in the Specifications table
     # https://emanual.robotis.com/docs/en/dxl/x/xl330-m288/#Specifications
     k_Nm_to_mA = 1.47 / 0.52 * 1000  # Conversion factor from Nm to mA for the Stewart platform motors
@@ -53,7 +54,7 @@ def main():
             torque_roll, torque_pitch, torque_yaw = torque_head[0], torque_head[1], torque_head[2]
 
             #torque = np.linalg.pinv(jac.T) @ np.array([0.0, 0.0, 9.81*0.07, 0.0, 0.0, 0.0]) # head weight is 0.1 kg
-            torque = np.linalg.pinv(jac).T @ np.array([0.0, 0.0, weight_head, torque_roll, torque_pitch, torque_yaw]) # head weight is 0.1 kg
+            torque = np.linalg.pinv(jac.T) @ np.array([0.0, 0.0, weight_head, torque_roll, torque_pitch, torque_yaw]) # head weight is 0.1 kg
 
             current = torque * k_Nm_to_mA / efficiency#mA
             controller.set_stewart_platform_goal_current(np.round(current, 0).astype(int).tolist())

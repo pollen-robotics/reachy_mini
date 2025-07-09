@@ -83,4 +83,12 @@ class ZenohServer(AbstractServer):
                 self.backend.set_antenna_joint_positions(
                     command["antennas_joint_positions"]
                 )
+            if "head_joint_current" in command:
+                self.backend.set_head_joint_current(command["head_joint_current"])
+            if "head_operation_mode" in command:
+                self.backend.set_head_operation_mode(command["head_operation_mode"])
+            if "antennas_operation_mode" in command:
+                self.backend.set_antennas_operation_mode(
+                    command["antennas_operation_mode"]
+                )
         self._cmd_event.set()

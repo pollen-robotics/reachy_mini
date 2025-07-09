@@ -1,0 +1,22 @@
+"""Reachy Mini Client Example."""
+
+import time
+
+import numpy as np
+from reachy_mini import ReachyMini
+
+with ReachyMini() as mini:
+    try:
+        # set torque control mode
+        mini.make_compliant(head=True, antennas=True)
+
+        print("Reachy Mini is now compliant. Press Ctrl+C to exit.")
+        while True:
+            # compensate the gravity of the robot platform
+            # this is useful to avoid the robot to fall down when it is compliant
+            mini.compensate_gravity()
+            
+            time.sleep(0.02)
+    except KeyboardInterrupt:
+        mini.make_compliant(head=False, antennas=False)
+        print("Exiting... Reachy Mini is stiff again.")

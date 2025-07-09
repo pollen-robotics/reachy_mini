@@ -54,16 +54,8 @@ class PlacoKinematics:
             fk_closing_task.configure(f"closing_{i}", constrant_type, 1.0)
             fk_closing_tasks.append(fk_closing_task)
 
-        self.joints_names = [
-            "all_yaw",
-            "1",
-            "2",
-            "3",
-            "4",
-            "5",
-            "6",
-        ]
-
+        # Z offset for the head to make it easier to compute the IK and FK
+        # This is the height of the head from the base of the robot
         self.head_z_offset = 0.177  # offset for the head height
 
         # IK head task
@@ -101,6 +93,46 @@ class PlacoKinematics:
 
         # self.fk_solver.enable_velocity_limits(True)
         self.fk_solver.dt = dt
+        
+        
+        # Actuated DoFs
+        self.joints_names = [
+            "all_yaw",
+            "1",
+            "2",
+            "3",
+            "4",
+            "5",
+            "6",
+        ]
+
+        # Passive DoFs to eliminate with constraint jacobian
+        self.passive_joints_names = [
+                "passive_1_x",
+                "passive_1_y",
+                "passive_2_x",
+                "passive_2_y",
+                "passive_3_x",
+                "passive_3_y",
+                "passive_4_x",
+                "passive_4_y",
+                "passive_5_x",
+                "passive_5_y",
+                "passive_6_x",
+                "passive_6_y",
+                "passive_7_x",
+                "passive_7_y",
+                "passive_7_z",
+            ]
+
+                
+        # Retrieving indexes in the jacobian
+        self.passives_idx = [self.robot.get_joint_v_offset(dof) for dof in self.passive_joints_names]
+        self.actives_idx = [self.robot.get_joint_v_offset(dof) for dof in self.robot.joint_names() if dof not in self.passive_joints_names]
+        self.actuated_idx = [self.robot.get_joint_v_offset(dof) for dof in self.robot.joint_names() if dof in self.joints_names]
+
+        # actuated dof indexes in active dofs
+        self.actuated_idx_in_active = [i for i, idx in enumerate(self.actives_idx) if idx in self.actuated_idx]
 
         # setup the collision model
         self.config_collision_model()
@@ -238,3 +270,89 @@ class PlacoKinematics:
                 return True  # Something is too close or colliding!
 
         return False  # Safe
+    
+    def compute_jacobian(self, q: np.ndarray = None) -> np.ndarray:
+        """
+        Computes the Jacobian of the head frame with respect to the actuated DoFs.
+        The jacobian in local world aligned
+
+        Args:
+            q (np.ndarray, optional): Joint angles of the robot. If None, uses the current state of the robot. (default: None)
+
+        Returns:
+            np.ndarray: The Jacobian matrix.
+        """
+        
+        # If q is provided, use it to compute the forward kinematics
+        if q is not None:
+            self.fk(q)
+            
+        # Computing the platform Jacobian
+        # dx = Jp.dq
+        Jp = self.robot.frame_jacobian("head", "local_world_aligned")
+
+        # Computing the constraints Jacobian
+        # 0 = Jc.dq
+        constraints = []
+        for i in range(1, 6):
+            Jc = self.robot.relative_position_jacobian(f"closing_{i}_1", f"closing_{i}_2")
+            constraints.append(Jc)
+        Jc = np.vstack(constraints)
+
+        # Splitting jacobians as 
+        # Jp_a.dq_a + Jp_p.dq_p = dx
+        Jp_a = Jp[:, self.actives_idx]
+        Jp_p = Jp[:, self.passives_idx]
+        # Jc_a.dq_a + Jc_p.dq_p = 0
+        Jc_a = Jc[:, self.actives_idx]
+        Jc_p = Jc[:, self.passives_idx]
+
+        # Computing effector jacobian under constraints
+        # Because constraint equation 
+        #       Jc_a.dq_a + Jc_p.dq_p = 0
+        # can be written as: 
+        #       dq_p = - (Jc_p)^(⁻1) @ Jc_a @ dq_a
+        # Then we can substitute dq_p in the first equation and get 
+        # This new jacobian
+        J = (Jp_a - Jp_p @ np.linalg.inv(Jc_p) @ Jc_a)
+                                                 
+        return J[:, self.actuated_idx_in_active]
+    
+    def compute_gravity_torque(self, q: np.ndarray = None) -> np.ndarray:
+        """
+        Computes the gravity torque vector for the actuated joints of the robot.
+        This method uses the static gravity compensation torques from the robot's dictionary
+
+        Args:
+            q (np.ndarray, optional): Joint angles of the robot. If None, uses the current state of the robot. (default: None)
+
+        Returns:
+            np.ndarray: The gravity torque vector.
+        """
+        
+        # If q is provided, use it to compute the forward kinematics
+        if q is not None:
+            self.fk(q)
+                        
+        # Get the static gravity compensation torques for all joints
+        # except the mobile base 6dofs
+        grav_torque_all_joints = np.array(list(self.robot.static_gravity_compensation_torques_dict("pp01071_turning_bowl").values()))   
+
+        # See the paper for more info (equations 4-9):
+        #   https://hal.science/hal-03379538/file/BriotKhalil_SpringerEncyclRob_bookchapterPKMDyn.pdf#page=4
+        # 
+        # Basically to compute the actuated torques necessary to compensate the gravity, we need to compute the
+        # the equivalent wrench in the head frame that would be created if all the joints were actuated.
+        #       wrench_eq = np.linalg.pinv(J_all_joints.T) @ torque_all_joints
+        # And then we can compute the actuated torques as:
+        #       torque_actuated = J_actuated.T @ wrench_eq
+        J_all_joints = self.robot.frame_jacobian("head", "local_world_aligned")[:,6:] # all joints except the mobile base 6dofs
+        J_actuated = self.compute_jacobian()
+        # using a single matrix G to compute the actuated torques
+        G =  J_actuated.T @ np.linalg.pinv(J_all_joints.T)
+        
+        # torques of actuated joints
+        grav_torque_actuated = G @ grav_torque_all_joints
+           
+        # Compute the gravity torque
+        return grav_torque_actuated

@@ -43,6 +43,8 @@ class ZenohClient(AbstractClient):
         )
         self._last_head_joint_positions = None
         self._last_antennas_joint_positions = None
+        self._last_head_joint_current = None
+        self._last_head_operation_mode = None
         self.keep_alive_event = threading.Event()
 
     def wait_for_connection(self, timeout: float = 5.0):
@@ -97,3 +99,17 @@ class ZenohClient(AbstractClient):
             self._last_head_joint_positions.copy(),
             self._last_antennas_joint_positions.copy(),
         )
+
+    def _handle_joint_current(self, sample):
+        """Handle incoming joint current."""
+        if sample.payload:
+            current = json.loads(sample.payload.to_string())
+            self._last_head_joint_current = current.get("head_joint_current")
+            self.keep_alive_event.set()
+        
+    def _handle_head_operation_mode(self, sample):
+        """Handle incoming head operation mode."""
+        if sample.payload:
+            mode = json.loads(sample.payload.to_string())
+            self._last_head_operation_mode = mode.get("head_operation_mode")
+            self.keep_alive_event.set()

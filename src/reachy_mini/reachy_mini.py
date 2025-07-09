@@ -62,7 +62,6 @@ SLEEP_HEAD_POSE = np.array(
 
 IMAGE_SIZE = (1280, 720)  # Width, Height in pixels
 
-
 class ReachyMini:
     """Reachy Mini class for controlling a simulated or real Reachy Mini robot.
 
@@ -480,3 +479,72 @@ class ReachyMini:
             )
 
         self.client.send_command(json.dumps(cmd))
+
+    def _set_head_operation_mode(self, mode: int) -> None:
+        """
+        Set the operation mode for the head motors.
+
+        Args:
+            mode (int): The desired operation mode.
+        """
+        self.client.send_command(json.dumps({"head_operation_mode": mode}))
+
+    def _set_antennas_operation_mode(self, mode: int) -> None:
+        """
+        Set the operation mode for the antennas motors.
+
+        Args:
+            mode (int): The desired operation mode.
+        """
+        self.client.send_command(json.dumps({"antennas_operation_mode": mode}))
+
+    def make_compliant(self, head: bool = True, antennas: bool = True) -> None:
+        """Set the head and/or antennas to compliant mode.
+
+        Args:
+            head (bool): If True, set the head to compliant mode.
+            antennas (bool): If True, set the antennas to compliant mode.
+
+        """
+        if head:
+            self._set_head_operation_mode(0)  # 0 is compliant mode
+        else: 
+            self._set_head_operation_mode(3)
+        
+        if antennas:
+            self._set_antennas_operation_mode(0)
+        else:
+            self._set_antennas_operation_mode(3)
+
+
+    def _set_head_joint_current(self, current: List[int]) -> None:
+        """Set the head joint current (torque) in milliamperes (mA).
+
+        Args:
+            current (List[int]): A list of joint currents for the head.
+
+        """
+        assert len(current) == 7, (
+            f"Head joint current must have length 7, got {current}."
+        )
+        self.client.send_command(json.dumps({"head_joint_current": list(current)}))
+        
+    def compensate_gravity(self) -> None:
+        """Enable or disable gravity compensation for the head motors.
+
+        """
+        # Even though in their docs dynamixes says that 1 count is 1 mA, in practice I've found it to be 3mA. 
+        # I am not sure why this happens
+        # Another explanation is that our model is bad and the current is overestimated 3x (but I have not had these issues with other robots)
+        # So I am using a magic number to compensate for this.
+        magic_number = 1.0 / 3.0 
+        from_Nm_to_mA = 1.47 / 0.52 * 1000 * magic_number
+        # Get the current head joint positions
+        head_joints = self._get_current_joint_positions()[0]   
+        gravity_torque = self.head_kinematics.compute_gravity_torque(head_joints)
+        # Convert the torque from Nm to mA
+        current = gravity_torque * from_Nm_to_mA
+        # Set the head joint current
+        self._set_head_joint_current(current)
+        
+        

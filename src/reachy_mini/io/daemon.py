@@ -99,6 +99,7 @@ class Daemon:
             try:
                 self.logger.info("Waking up Reachy Mini...")
                 with ReachyMini() as mini:
+                    mini.make_compliant(head=False, antennas=False)
                     mini.set_torque(on=True)
                     mini.wake_up()
             except Exception as e:
@@ -140,6 +141,7 @@ class Daemon:
                 try:
                     self.logger.info("Putting Reachy Mini to sleep...")
                     with ReachyMini() as mini:
+                        mini.make_compliant(head=False, antennas=False)
                         mini.goto_sleep()
                         mini.set_torque(on=False)
                 except Exception as e:
