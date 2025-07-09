@@ -17,7 +17,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from reachy_mini.io.daemon import Daemon, DaemonStatus
+from reachy_mini.daemon.daemon import Daemon, DaemonStatus
 from reachy_mini_dashboard.app_install import (
     active_installations,
     connected_clients,

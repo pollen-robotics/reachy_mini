@@ -15,7 +15,7 @@ from typing import Optional
 import numpy as np
 from reachy_mini_motor_controller import ReachyMiniMotorController
 
-from reachy_mini.io.backend import Backend
+from reachy_mini.daemon.backend.abstract import Backend
 
 logger = logging.getLogger(__name__)
 

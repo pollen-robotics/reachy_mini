@@ -12,8 +12,8 @@ import threading
 
 import zenoh
 
+from reachy_mini.daemon.backend.abstract import Backend
 from reachy_mini.io.abstract import AbstractServer
-from reachy_mini.io.backend import Backend
 
 
 class ZenohServer(AbstractServer):

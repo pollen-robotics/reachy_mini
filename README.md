@@ -55,7 +55,7 @@ reachy-mini-daemon
 or run it via the Python module:
 
 ```bash
-python -m reachy_mini.io.daemon
+python -m reachy_mini.daemon.cli
 ```
 
 Additional argument for both simulation and real robot:
@@ -84,6 +84,12 @@ Additional arguments:
 
 <img src="https://www.pollen-robotics.com/wp-content/uploads/2025/06/Reachy_mini_simulation.gif" width="250" alt="Reachy Mini in MuJoCo">
 
+
+*Note: On OSX in order to run mujoco, you need to use mjpython (see [here](https://mujoco.readthedocs.io/en/stable/python.html#passive-viewer)). So, you should run the daemon with:*
+
+```bash
+ mjpython -m reachy_mini.daemon.cli --sim
+ ```
 
 ### On the real robot
 
@@ -136,7 +142,7 @@ With the real robot, the camera is directly accessible with the USB connection, 
 ```python
 import cv2
 
-from reachy_mini.io.cam_utils import find_camera
+from reachy_mini.utils.camera import find_camera
 
 cap = find_camera()
 while True:
