@@ -85,6 +85,12 @@ Additional arguments:
 <img src="https://www.pollen-robotics.com/wp-content/uploads/2025/06/Reachy_mini_simulation.gif" width="250" alt="Reachy Mini in MuJoCo">
 
 
+*Note: On OSX in order to run mujoco, you need to use mjpython (see [here](https://mujoco.readthedocs.io/en/stable/python.html#passive-viewer)). So, you should run the daemon with:*
+
+```bash
+ mjpython -m reachy_mini.daemon.cli --sim
+ ```
+
 ### On the real robot
 
 It should automatically detect the serial port of the robot. If it does not, you can specify it manually with the `-p` option:

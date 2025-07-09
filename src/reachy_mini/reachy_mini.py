@@ -21,10 +21,10 @@ import pygame
 from scipy.spatial.transform import Rotation as R
 
 import reachy_mini
+from reachy_mini.daemon.utils import daemon_check
 from reachy_mini.io import Client
 from reachy_mini.placo_kinematics import PlacoKinematics
-from reachy_mini.utils import (
-    daemon_check,
+from reachy_mini.utils.interpolation import (
     linear_pose_interpolation,
     minimum_jerk,
     time_trajectory,

@@ -4,9 +4,13 @@ import cv2
 from head_tracker import HeadTracker
 
 from reachy_mini import ReachyMini
-from reachy_mini.io.cam_utils import find_camera
+from reachy_mini.utils.camera import find_camera
 
 cap = find_camera()
+assert cap is not None, (
+    "Could not find a camera. Please specify the camera index with --camera-opencv-id"
+)
+
 head_tracker = HeadTracker()
 
 with ReachyMini() as reachy_mini:

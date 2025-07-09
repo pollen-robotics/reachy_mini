@@ -31,7 +31,7 @@ dependencies = [
 dev = ["pytest"]
 
 [project.scripts]
-reachy-mini-daemon = "reachy_mini.io.daemon:main"
+reachy-mini-daemon = "reachy_mini.daemon.cli:main"
 reachy-mini-make-app = "reachy_mini.app:main"
 
 [tool.setuptools]
@@ -49,7 +49,6 @@ reachy_mini = ["**/*"] # Inclut tous les fichiers non .py
 [tool.ruff]
 exclude = [
     "examples/remi_outdated/*.py",
-    "src/reachy_mini/__init__.py",
     "build/*",
     "conftest.py",
     "apps/dashboard",

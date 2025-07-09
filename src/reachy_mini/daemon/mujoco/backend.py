@@ -17,14 +17,12 @@ import mujoco.viewer
 import numpy as np
 
 import reachy_mini
-from reachy_mini.io.backend import Backend
-from reachy_mini.mujoco_utils import (
+from reachy_mini.daemon.backend import Backend
+from reachy_mini.daemon.mujoco.utils import (
     get_actuator_names,
     get_joint_addr_from_name,
     get_joint_id_from_name,
 )
-
-from .reachy_mini import SLEEP_ANTENNAS_JOINT_POSITIONS, SLEEP_HEAD_JOINT_POSITIONS
 
 
 class MujocoBackend(Backend):
@@ -38,6 +36,14 @@ class MujocoBackend(Backend):
 
         """
         super().__init__()
+
+        from reachy_mini.reachy_mini import (
+            SLEEP_ANTENNAS_JOINT_POSITIONS,
+            SLEEP_HEAD_JOINT_POSITIONS,
+        )
+
+        self._SLEEP_ANTENNAS_JOINT_POSITIONS = SLEEP_ANTENNAS_JOINT_POSITIONS
+        self._SLEEP_HEAD_JOINT_POSITIONS = SLEEP_HEAD_JOINT_POSITIONS
 
         mjcf_root_path = str(
             files(reachy_mini).joinpath("descriptions/reachy_mini/mjcf/")
@@ -95,10 +101,12 @@ class MujocoBackend(Backend):
                 # self.streamer_udp.send_frame(im)
             with viewer.lock():
                 self.data.qpos[self.joint_qpos_addr] = np.array(
-                    SLEEP_HEAD_JOINT_POSITIONS + SLEEP_ANTENNAS_JOINT_POSITIONS
+                    self._SLEEP_HEAD_JOINT_POSITIONS
+                    + self._SLEEP_ANTENNAS_JOINT_POSITIONS
                 ).reshape(-1, 1)
                 self.data.ctrl[:] = np.array(
-                    SLEEP_HEAD_JOINT_POSITIONS + SLEEP_ANTENNAS_JOINT_POSITIONS
+                    self._SLEEP_HEAD_JOINT_POSITIONS
+                    + self._SLEEP_ANTENNAS_JOINT_POSITIONS
                 )
 
                 # recompute all kinematics, collisions, etc.

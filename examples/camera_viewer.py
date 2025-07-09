@@ -16,7 +16,7 @@ Usage:
 
 import cv2
 
-from reachy_mini.io.cam_utils import find_camera
+from reachy_mini.utils.camera import find_camera
 
 
 def main():

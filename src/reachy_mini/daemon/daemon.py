@@ -13,10 +13,9 @@ from typing import Optional
 
 import serial.tools.list_ports
 
-from reachy_mini import ReachyMini
+from reachy_mini.daemon.mujoco.backend import MujocoBackend, MujocoBackendStatus
+from reachy_mini.daemon.robot_backend import RobotBackend, RobotBackendStatus
 from reachy_mini.io import Server
-from reachy_mini.mujoco_backend import MujocoBackend, MujocoBackendStatus
-from reachy_mini.robot_backend import RobotBackend, RobotBackendStatus
 
 
 class Daemon:
@@ -101,6 +100,8 @@ class Daemon:
             return self._status.state
 
         if wake_up_on_start:
+            from reachy_mini.reachy_mini import ReachyMini
+
             try:
                 self.logger.info("Waking up Reachy Mini...")
                 with ReachyMini() as mini:
@@ -146,6 +147,8 @@ class Daemon:
                 return self._status.state
 
             if goto_sleep_on_stop:
+                from reachy_mini.reachy_mini import ReachyMini
+
                 try:
                     self.logger.info("Putting Reachy Mini to sleep...")
                     with ReachyMini() as mini:
@@ -370,64 +373,3 @@ def find_serial_port(vid: str = "1a86", pid: str = "55d3") -> list[str]:
     pid = pid.upper()
 
     return [p.device for p in ports if f"USB VID:PID={vid}:{pid}" in p.hwid]
-
-
-def main():
-    """Cli entry point for the Reachy Mini daemon."""
-    import argparse
-
-    parser = argparse.ArgumentParser(description="Run the Reachy Mini daemon.")
-    parser.add_argument(
-        "--sim",
-        action="store_true",
-        help="Run in simulation mode using Mujoco.",
-    )
-    parser.add_argument(
-        "-p",
-        "--serialport",
-        type=str,
-        default="auto",
-        help="Serial port for real motors (default: will try to automatically find the port).",
-    )
-    parser.add_argument(
-        "--scene",
-        type=str,
-        default="empty",
-        help="Name of the scene to load (default: empty)",
-    )
-    parser.add_argument(
-        "--localhost-only",
-        action="store_true",
-        default=True,
-        help="Restrict the server to localhost only (default: True).",
-    )
-    parser.add_argument(
-        "--no-localhost-only",
-        action="store_false",
-        dest="localhost_only",
-        help="Allow the server to listen on all interfaces (default: False).",
-    )
-    parser.add_argument(
-        "--log-level",
-        type=str,
-        default="INFO",
-        choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
-        help="Set the logging level (default: INFO).",
-    )
-    args = parser.parse_args()
-
-    logging.basicConfig(
-        level=logging.WARNING,
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    )
-
-    Daemon(log_level=args.log_level).run4ever(
-        sim=args.sim,
-        serialport=args.serialport,
-        scene=args.scene,
-        localhost_only=args.localhost_only,
-    )
-
-
-if __name__ == "__main__":
-    main()

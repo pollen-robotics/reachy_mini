@@ -10,7 +10,7 @@ Note: The daemon must be running before executing this script.
 import cv2
 
 from reachy_mini import ReachyMini
-from reachy_mini.io.cam_utils import find_camera
+from reachy_mini.utils.camera import find_camera
 
 click_x, click_y = 0, 0
 just_clicked = False
