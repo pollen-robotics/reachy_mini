@@ -10,6 +10,7 @@ with ReachyMini() as mini:
         while True:
             # compensate the gravity of the robot platform
             # this is useful to avoid the robot to fall down when it is compliant
+            # > it is optional, but it is recommended to use it so that the robot does not fall down
             mini.compensate_gravity()
 
             time.sleep(0.02)
