@@ -121,7 +121,9 @@ Once the daemon is running, you can run the examples.
     python examples/goto_interpolation_playground.py
     ```
 
-## To use the API:
+## Reachy Mini's API
+
+The API is designed to be simple and intuitive. You can control the robot's features such as the head, antennas, camera, speakers, and microphone. For instance, to move the head of the robot, you can use the `goto_target` method as shown in the example below:
 
 ```python
 from reachy_mini import ReachyMini
@@ -137,29 +139,7 @@ with ReachyMini() as reachy_mini:
     reachy_mini.goto_target(head=pose, duration=2.0)
 ```
 
-With the real robot, the camera is directly accessible with the USB connection, and can be directly read with OpenCV:
-
-```python
-import cv2
-
-from reachy_mini.utils.camera import find_camera
-
-cap = find_camera()
-while True:
-    success, frame = cap.read()
-    if success:
-        cv2.imshow("Reachy Mini Camera", frame)
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
-```
-
-If you know the camera id on OpenCV, you can also directly use it:
-
-```python
-import cv2
-
-cap = cv2.VideoCapture(0)  # Replace 0 with your camera ID
-```
+For a full description of the API, please refer to the [API documentation](./docs/API.md).
 
 ---------
 
