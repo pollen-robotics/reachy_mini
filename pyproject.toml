@@ -51,7 +51,7 @@ exclude = [
     "examples/remi_outdated/*.py",
     "build/*",
     "conftest.py",
-    "apps/dashboard",
+    "dashboard/",
 ]
 lint.extend-select = ["I", "D"]
 lint.ignore = [

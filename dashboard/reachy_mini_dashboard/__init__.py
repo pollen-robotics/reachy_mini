@@ -1,6 +1,4 @@
-# apps/dashboard/__init__.py
-"""
-Robot Dashboard Package
+"""Robot Dashboard Package.
 
 This package provides a web-based dashboard for managing robot applications.
 """
