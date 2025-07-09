@@ -142,7 +142,7 @@ With the real robot, the camera is directly accessible with the USB connection, 
 ```python
 import cv2
 
-from reachy_mini.io.cam_utils import find_camera
+from reachy_mini.utils.camera import find_camera
 
 cap = find_camera()
 while True:
