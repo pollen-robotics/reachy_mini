@@ -12,7 +12,7 @@ import threading
 
 import zenoh
 
-from reachy_mini.daemon.backend import Backend
+from reachy_mini.daemon.backend.abstract import Backend
 from reachy_mini.io.abstract import AbstractServer
 
 

@@ -13,8 +13,8 @@ from typing import Optional
 
 import serial.tools.list_ports
 
-from reachy_mini.daemon.mujoco.backend import MujocoBackend, MujocoBackendStatus
-from reachy_mini.daemon.robot_backend import RobotBackend, RobotBackendStatus
+from reachy_mini.daemon.backend.mujoco import MujocoBackend, MujocoBackendStatus
+from reachy_mini.daemon.backend.robot import RobotBackend, RobotBackendStatus
 from reachy_mini.io import Server
 
 

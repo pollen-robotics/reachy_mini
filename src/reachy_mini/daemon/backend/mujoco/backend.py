@@ -17,8 +17,8 @@ import mujoco.viewer
 import numpy as np
 
 import reachy_mini
-from reachy_mini.daemon.backend import Backend
-from reachy_mini.daemon.mujoco.utils import (
+from reachy_mini.daemon.backend.abstract import Backend
+from reachy_mini.daemon.backend.mujoco.utils import (
     get_actuator_names,
     get_joint_addr_from_name,
     get_joint_id_from_name,
