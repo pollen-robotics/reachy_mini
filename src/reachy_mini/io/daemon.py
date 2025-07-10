@@ -104,6 +104,7 @@ class Daemon:
             try:
                 self.logger.info("Waking up Reachy Mini...")
                 with ReachyMini() as mini:
+                    mini.set_torque(on=False)
                     mini.make_compliant(head=False, antennas=False)
                     mini.set_torque(on=True)
                     mini.wake_up()

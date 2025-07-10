@@ -18,12 +18,14 @@ def main():
 
     # Details found here in the Specifications table
     # https://emanual.robotis.com/docs/en/dxl/x/xl330-m288/#Specifications
+    # the torque constant seems to be nonlinear and is not constant!!!!
     k_Nm_to_mA = (
         1.47 / 0.52 * 1000
     )  # Conversion factor from Nm to mA for the Stewart platform motors
     efficiency = 1.0  # Efficiency of the motors
-    magic_number = (
-        3.0  # TODO : This is a magic number that should be determined experimentally
+    # torque constant correction factor
+    correction_factor = (
+        3.0 # This number is valid for currents under 30mA 
     )
 
     t0 = time.time()
@@ -44,7 +46,7 @@ def main():
             # compute the gravity torque
             gravity_torque = solver.compute_gravity_torque(head_pos)
             # the target motor current
-            current = gravity_torque * k_Nm_to_mA / efficiency / magic_number  # mA
+            current = gravity_torque * k_Nm_to_mA / efficiency / correction_factor  # mA
             # set the current to the motors
             controller.set_stewart_platform_goal_current(
                 np.round(current[1:], 0).astype(int).tolist()

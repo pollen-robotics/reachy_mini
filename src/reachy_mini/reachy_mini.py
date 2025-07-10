@@ -539,12 +539,17 @@ class ReachyMini:
         # I am not sure why this happens
         # Another explanation is that our model is bad and the current is overestimated 3x (but I have not had these issues with other robots)
         # So I am using a magic number to compensate for this.
-        magic_number = 1.0 / 3.0
-        from_Nm_to_mA = 1.47 / 0.52 * 1000 * magic_number
+        # for currents under 30mA the constant is around 1
+        from_Nm_to_mA = 1.47 / 0.52 * 1000  # Conversion factor from Nm to mA for the Stewart platform motors
+        # The torque constant is not linear, so we need to use a correction factor
+        # This is a magic number that should be determined experimentally
+        # For currents under 30mA, the constant is around 3
+        # Then it drops to 1.0 for currents above 1.5A
+        correction_factor = 3.0
         # Get the current head joint positions
         head_joints = self._get_current_joint_positions()[0]
         gravity_torque = self.head_kinematics.compute_gravity_torque(head_joints)
         # Convert the torque from Nm to mA
-        current = gravity_torque * from_Nm_to_mA
+        current = gravity_torque * from_Nm_to_mA / correction_factor
         # Set the head joint current
         self._set_head_joint_current(current)
