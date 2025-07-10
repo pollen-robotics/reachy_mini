@@ -83,7 +83,7 @@ else:
 
 # Log broadcasting
 async def broadcast_log_message(process_id: str, log_entry: dict):
-    """Broadcast log messages to WebSocket clients"""
+    """Broadcast log messages to WebSocket clients."""
     if not connected_clients:
         return
 
