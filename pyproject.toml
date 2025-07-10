@@ -48,12 +48,7 @@ where = ["src"]
 reachy_mini = ["**/*"] # Inclut tous les fichiers non .py
 
 [tool.ruff]
-exclude = [
-    "examples/remi_outdated/*.py",
-    "build/*",
-    "conftest.py",
-    "dashboard/",
-]
+exclude = ["examples/remi_outdated/*.py", "build/*", "conftest.py"]
 lint.extend-select = ["I", "D"]
 lint.ignore = [
     "D203", # Incompatible with D211
