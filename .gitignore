@@ -3,4 +3,4 @@ reachy_mini.egg-info/
 *.egg-info/
 build/*
 dist/*
-apps/dashboard/installed_apps/*
+src/reachy_mini_dashboard/installed_apps/*

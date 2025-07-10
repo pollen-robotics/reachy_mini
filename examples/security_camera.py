@@ -11,7 +11,7 @@ import cv2
 import numpy as np
 
 from reachy_mini import ReachyMini
-from reachy_mini.io.cam_utils import find_camera
+from reachy_mini.utils.camera import find_camera
 
 cap = find_camera()
 
