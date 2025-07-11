@@ -341,8 +341,26 @@ class ReachyMini:
         straight_head_vector = np.array([1, 0, 0])
 
         # Calculate the rotation needed to align the head with the target vector
-        rotation_vector = np.cross(straight_head_vector, target_vector)
-        rot_mat = R.from_rotvec(rotation_vector).as_matrix()
+        v1 = straight_head_vector
+        v2 = target_vector
+        axis = np.cross(v1, v2)
+        axis_norm = np.linalg.norm(axis)
+        if axis_norm < 1e-8:
+            # Vectors are (almost) parallel
+            if np.dot(v1, v2) > 0:
+                rot_mat = np.eye(3)
+            else:
+                # Opposite direction: rotate 180° around any perpendicular axis
+                perp = np.array([0, 1, 0]) if abs(v1[0]) < 0.9 else np.array([0, 0, 1])
+                axis = np.cross(v1, perp)
+                axis /= np.linalg.norm(axis)
+                rot_mat = R.from_rotvec(np.pi * axis).as_matrix()
+        else:
+            axis = axis / axis_norm
+            angle = np.arccos(np.clip(np.dot(v1, v2), -1.0, 1.0))
+            rotation_vector = angle * axis
+            rot_mat = R.from_rotvec(rotation_vector).as_matrix()
+
         target_head_pose = np.eye(4)
         target_head_pose[:3, :3] = rot_mat
 
