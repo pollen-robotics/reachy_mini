@@ -92,15 +92,14 @@ class TransientParams:
     )
 
 
-def oscillation_motion(
-    t_beats: float,
-    params: OscillationParams,
-) -> float:
+def oscillation_motion(t_beats: float, params: OscillationParams) -> float:
     """Generate an oscillatory motion based on the specified parameters.
 
     Args:
-        t_beats (float): Continuous time in beats at which to evaluate the motion, increases by 1 every beat. t_beats [dimensionless] = time_in_seconds [seconds] * frequency [hertz].
-        params (OscillationParams): Parameters for the oscillation motion.
+        t_beats (float): Continuous time in beats at which to evaluate the motion,
+            increases by 1 every beat. t_beats [dimensionless] =
+            time_in_seconds [seconds] * frequency [hertz].
+        params (OscillationParams): An object containing parameters for the oscillation motion.
 
     Returns:
         float: The value of the oscillation at time `t_beats`.
@@ -184,101 +183,141 @@ def atomic_x_pos(t_beats: float, params: OscillationParams) -> MoveOffsets:
     """Generate an oscillatory motion offset for the x-axis position.
 
     Args:
-        t_beats (float): Time in beats at which to evaluate the motion. Beware that this is not the same as time in seconds but in beats (dimensionless).
+        t_beats (float): Continuous time in beats at which to evaluate the motion,
+            increases by 1 every beat. t_beats [dimensionless] =
+            time_in_seconds [seconds] * frequency [hertz].
         params (OscillationParams): Parameters for the oscillation motion.
 
     Returns:
-        MoveOffsets: An object containing the x-axis position offset and zero offsets for other axes and orientations.
+        MoveOffsets: An object containing the x-axis position offset.
 
     """
-    return MoveOffsets(
-        np.array(
-            [
-                oscillation_motion(t_beats, params),
-                0,
-                0,
-            ]
-        ),
-        np.zeros(3),
-        np.zeros(2),
-    )
+    val = oscillation_motion(t_beats, params)
+    return MoveOffsets(np.array([val, 0, 0]), np.zeros(3), np.zeros(2))
 
 
 def atomic_y_pos(t_beats: float, params: OscillationParams) -> MoveOffsets:
     """Generate an oscillatory motion offset for the y-axis position.
 
     Args:
-        t_beats (float): Time in beats at which to evaluate the motion. Beware that this is not the same as time in seconds but in beats (dimensionless).
+        t_beats (float): Continuous time in beats at which to evaluate the motion,
+            increases by 1 every beat. t_beats [dimensionless] =
+            time_in_seconds [seconds] * frequency [hertz].
         params (OscillationParams): Parameters for the oscillation motion.
 
     Returns:
-        MoveOffsets: An object containing the y-axis position offset and zero offsets for other axes and orientations.
+        MoveOffsets: An object containing the y-axis position offset.
 
     """
-    return MoveOffsets(
-        np.array([0, oscillation_motion(t_beats, params), 0]),
-        np.zeros(3),
-        np.zeros(2),
-    )
+    val = oscillation_motion(t_beats, params)
+    return MoveOffsets(np.array([0, val, 0]), np.zeros(3), np.zeros(2))
 
 
 def atomic_z_pos(t_beats: float, params: OscillationParams) -> MoveOffsets:
     """Generate an oscillatory motion offset for the z-axis position.
 
     Args:
-        t_beats (float): Time in beats at which to evaluate the motion.
-        params (OscillationParams, optional): Parameters for the oscillation motion.
+        t_beats (float): Continuous time in beats at which to evaluate the motion,
+            increases by 1 every beat. t_beats [dimensionless] =
+            time_in_seconds [seconds] * frequency [hertz].
+        params (OscillationParams): Parameters for the oscillation motion.
 
     Returns:
-        MoveOffsets: An object containing the z-axis position offset and zero offsets for other axes and orientations.
+        MoveOffsets: An object containing the z-axis position offset.
 
     """
-    return MoveOffsets(
-        np.array([0, 0, oscillation_motion(t_beats, params)]),
-        np.zeros(3),
-        np.zeros(2),
-    )
+    val = oscillation_motion(t_beats, params)
+    return MoveOffsets(np.array([0, 0, val]), np.zeros(3), np.zeros(2))
 
 
 def atomic_roll(t_beats: float, params: OscillationParams) -> MoveOffsets:
     """Generate an oscillatory motion offset for the roll orientation.
 
     Args:
-        t_beats (float): Time in beats at which to evaluate the motion.
-        params (OscillationParams, optional): Parameters for the oscillation motion.
+        t_beats (float): Continuous time in beats at which to evaluate the motion,
+            increases by 1 every beat. t_beats [dimensionless] =
+            time_in_seconds [seconds] * frequency [hertz].
+        params (OscillationParams): Parameters for the oscillation motion.
 
     Returns:
-        MoveOffsets: An object containing the roll orientation offset and zero offsets for other axes and orientations.
+        MoveOffsets: An object containing the roll orientation offset.
 
     """
-    return MoveOffsets(
-        np.zeros(3),
-        np.array([oscillation_motion(t_beats, params), 0, 0]),
-        np.zeros(2),
-    )
+    val = oscillation_motion(t_beats, params)
+    return MoveOffsets(np.zeros(3), np.array([val, 0, 0]), np.zeros(2))
 
 
 def atomic_pitch(t_beats: float, params: OscillationParams) -> MoveOffsets:
+    """Generate an oscillatory motion offset for the pitch orientation.
+
+    Args:
+        t_beats (float): Continuous time in beats at which to evaluate the motion,
+            increases by 1 every beat. t_beats [dimensionless] =
+            time_in_seconds [seconds] * frequency [hertz].
+        params (OscillationParams): Parameters for the oscillation motion.
+
+    Returns:
+        MoveOffsets: An object containing the pitch orientation offset.
+
+    """
     val = oscillation_motion(t_beats, params)
     return MoveOffsets(np.zeros(3), np.array([0, val, 0]), np.zeros(2))
 
 
 def atomic_yaw(t_beats: float, params: OscillationParams) -> MoveOffsets:
+    """Generate an oscillatory motion offset for the yaw orientation.
+
+    Args:
+        t_beats (float): Continuous time in beats at which to evaluate the motion,
+            increases by 1 every beat. t_beats [dimensionless] =
+            time_in_seconds [seconds] * frequency [hertz].
+        params (OscillationParams): Parameters for the oscillation motion.
+
+    Returns:
+        MoveOffsets: An object containing the yaw orientation offset.
+
+    """
     val = oscillation_motion(t_beats, params)
     return MoveOffsets(np.zeros(3), np.array([0, 0, val]), np.zeros(2))
 
 
 def atomic_antenna_wiggle(t_beats: float, params: OscillationParams) -> MoveOffsets:
+    """Generate an opposing wiggle motion for the antennas.
+
+    Args:
+        t_beats (float): Continuous time in beats at which to evaluate the motion,
+            increases by 1 every beat. t_beats [dimensionless] =
+            time_in_seconds [seconds] * frequency [hertz].
+        params (OscillationParams): Parameters for the oscillation motion.
+
+    Returns:
+        MoveOffsets: An object containing the antenna offsets.
+
+    """
     val = oscillation_motion(t_beats, params)
     return MoveOffsets(np.zeros(3), np.zeros(3), np.array([val, -val]))
 
 
 def atomic_antenna_both(t_beats: float, params: OscillationParams) -> MoveOffsets:
+    """Generate a synchronized motion for both antennas.
+
+    Args:
+        t_beats (float): Continuous time in beats at which to evaluate the motion,
+            increases by 1 every beat. t_beats [dimensionless] =
+            time_in_seconds [seconds] * frequency [hertz].
+        params (OscillationParams): Parameters for the oscillation motion.
+
+    Returns:
+        MoveOffsets: An object containing the antenna offsets.
+
+    """
     val = oscillation_motion(t_beats, params)
     return MoveOffsets(np.zeros(3), np.zeros(3), np.array([val, val]))
 
 
-AVAILABLE_ANTENNA_MOVES = {"wiggle": atomic_antenna_wiggle, "both": atomic_antenna_both}
+AVAILABLE_ANTENNA_MOVES: dict[
+    str, Callable[[float, OscillationParams], MoveOffsets]
+] = {"wiggle": atomic_antenna_wiggle, "both": atomic_antenna_both}
 
 # ─────────────────────────── ALL DANCE MOVE FUNCTIONS ─────────────────────────────
 
