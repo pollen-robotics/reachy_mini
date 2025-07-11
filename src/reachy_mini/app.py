@@ -57,7 +57,7 @@ def make_app_project(app_name: str, path: Path) -> None:
         path (Path): The directory where the app project will be created.
 
     """
-    TEMPLATE_DIR = Path(__file__).parent.parent / "templates"
+    TEMPLATE_DIR = Path(__file__).parent / "templates"
     env = Environment(loader=FileSystemLoader(TEMPLATE_DIR))
 
     def render_template(filename, context):
@@ -104,8 +104,9 @@ def main():
     )
     parser.add_argument("app_name", type=str, help="Name of the app to create.")
     parser.add_argument(
-        "path",
+        "--path",
         type=Path,
+        default=Path.cwd(),
         help="Path where the app project will be created.",
     )
 
