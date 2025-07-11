@@ -21,7 +21,8 @@ from pynput import keyboard
 from scipy.spatial.transform import Rotation as R
 
 from reachy_mini import ReachyMini
-from reachy_mini.moves.dance_moves import (
+
+from reachy_mini.utils.rhythmic_motion import (
     AVAILABLE_DANCE_MOVES,
     MOVE_SPECIFIC_PARAMS,
 )
@@ -183,10 +184,7 @@ def main(config: Config):
     try:
         with ReachyMini() as mini:
             print("Robot connected. Starting dance test...")
-            mini.set_target(
-                head_pose(config.neutral_pos, config.neutral_eul), antennas=np.zeros(2)
-            )
-            time.sleep(1.0)
+            mini.wake_up()
 
             print(HELP_MESSAGE)  # Print controls at the start
             last_help_print_time = time.time()
@@ -235,12 +233,16 @@ def main(config: Config):
                 move_fn = AVAILABLE_DANCE_MOVES[move_name]
                 base_params = MOVE_SPECIFIC_PARAMS.get(move_name, {})
                 current_params = base_params.copy()
-                if "waveform" in move_fn.__code__.co_varnames:
+
+                if "waveform" in base_params:
                     current_params["waveform"] = waveform
+
+                # Apply amplitude scaling to all amplitude-related parameters.
                 for key in current_params:
-                    if "amplitude" in key:
+                    if "amplitude" in key or "_amp" in key:
                         current_params[key] *= amplitude_scale
 
+                # The `**` operator unpacks the dictionary into named arguments,
                 offsets = move_fn(t_beats, **current_params)
 
                 final_pos, final_eul, final_ant = (
@@ -250,7 +252,7 @@ def main(config: Config):
                 )
                 mini.set_target(
                     head_pose(final_pos, final_eul), antennas=final_ant
-                )  # Changed to 'mini'
+                )
 
                 # --- UI Update (Console) ---
                 if loop_start_time - last_status_print_time > 1.0:
@@ -302,7 +304,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--start-move",
         default="simple_nod",
-        choices=AVAILABLE_DANCE_MOVES.keys(),
+        choices=list(AVAILABLE_DANCE_MOVES.keys()), # Ensure choices are up-to-date
         help="Which dance move to start with.",
     )
     parser.add_argument(
@@ -317,4 +319,5 @@ if __name__ == "__main__":
         start_move=cli_args.start_move,
         beats_per_sequence=cli_args.beats_per_sequence,
     )
+    
     main(app_config)
