@@ -1317,7 +1317,7 @@ MOVE_SPECIFIC_PARAMS: dict[str, dict[str, Any]] = {
     },
     "jackson_square": {
         "square_amp_m": 0.035,
-        "twitch_amplitude_rad": np.deg2rad(30),
+        "twitch_amplitude_rad": np.deg2rad(20),
         "subcycles_per_beat": 0.125,
         **DEFAULT_ANTENNA_PARAMS,
     },
