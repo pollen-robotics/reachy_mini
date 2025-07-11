@@ -231,7 +231,7 @@ def main(config: Config) -> None:
     current_waveform_idx = 0
 
     t_beats, sequence_beat_counter = 0.0, 0.0
-    choreography_step_idx, move_cycle_counter = 0, 0.0
+    choreography_step_idx, step_beat_counter = 0, 0.0
     last_status_print_time, last_help_print_time = 0.0, 0.0
     bpm, amplitude_scale = config.bpm, config.amplitude_scale
 
@@ -248,8 +248,6 @@ def main(config: Config) -> None:
                 CHOREO_HELP_MESSAGE if choreography_mode else INTERACTIVE_HELP_MESSAGE
             )
             last_help_print_time = time.time()
-
-            # This prevents the first dt from including all the setup time.
             last_loop_time = time.time()
 
             while not stop_event.is_set():
@@ -272,12 +270,12 @@ def main(config: Config) -> None:
                         choreography_step_idx = (choreography_step_idx + 1) % len(
                             choreography
                         )
-                        move_cycle_counter = 0.0
+                        step_beat_counter = 0.0
                     if changes["prev_move"]:
                         choreography_step_idx = (
                             choreography_step_idx - 1 + len(choreography)
                         ) % len(choreography)
-                        move_cycle_counter = 0.0
+                        step_beat_counter = 0.0
                 else:
                     if changes["next_move"]:
                         current_move_idx = (current_move_idx + 1) % len(move_names)
@@ -300,21 +298,30 @@ def main(config: Config) -> None:
 
                 if choreography_mode:
                     current_step = choreography[choreography_step_idx]
-                    target_cycles = current_step["cycles"]
-                    move_cycle_counter += beats_this_frame
+                    move_name = current_step["move"]
+                    params = MOVE_SPECIFIC_PARAMS.get(move_name, {})
 
-                    if move_cycle_counter >= target_cycles:
+                    target_cycles = current_step["cycles"]
+                    subcycles_per_beat = params.get("subcycles_per_beat", 1.0)
+                    target_beats = (
+                        target_cycles / subcycles_per_beat
+                        if subcycles_per_beat > 0
+                        else target_cycles
+                    )
+
+                    step_beat_counter += beats_this_frame
+                    if step_beat_counter >= target_beats:
                         if choreography_step_idx == len(choreography) - 1:
-                            print("\nChoreography complete. Exiting.")
-                            break
+                            print(
+                                "\nChoreography complete. Going back to the first move!"
+                            )
+                            choreography_step_idx = 0
                         choreography_step_idx += 1
-                        move_cycle_counter = 0.0
-                        # Re-fetch the current step in case we just advanced
+                        step_beat_counter = 0.0
                         current_step = choreography[choreography_step_idx]
 
-                    move_name = current_step["move"]
                     step_amplitude_modifier = current_step.get("amplitude", 1.0)
-                    t_motion = move_cycle_counter
+                    t_motion = step_beat_counter
                 else:
                     sequence_beat_counter += beats_this_frame
                     if sequence_beat_counter >= config.beats_per_sequence:
@@ -351,11 +358,13 @@ def main(config: Config) -> None:
                     status = "RUNNING" if shared_state.running else "PAUSED "
 
                     if choreography_mode:
-                        target_cycles_display = choreography[choreography_step_idx][
+                        target_beats_display = choreography[choreography_step_idx][
                             "cycles"
-                        ]
+                        ] / MOVE_SPECIFIC_PARAMS.get(move_name, {}).get(
+                            "subcycles_per_beat", 1.0
+                        )
                         progress_pct = (
-                            f"{(move_cycle_counter / target_cycles_display * 100):.0f}%"
+                            f"{(step_beat_counter / target_beats_display * 100):.0f}%"
                         )
                         status_line = (
                             f"[{status}] Step {choreography_step_idx + 1}/{len(choreography)}: {move_name:<20} ({progress_pct:>4}) | "

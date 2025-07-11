@@ -32,6 +32,6 @@
     },
     {
         "move": "jackson_square",
-        "cycles": 8
+        "cycles": 2
     }
 ]
