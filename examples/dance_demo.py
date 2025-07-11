@@ -316,7 +316,8 @@ def main(config: Config) -> None:
                                 "\nChoreography complete. Going back to the first move!"
                             )
                             choreography_step_idx = 0
-                        choreography_step_idx += 1
+                        else:
+                            choreography_step_idx += 1
                         step_beat_counter = 0.0
                         current_step = choreography[choreography_step_idx]
 
