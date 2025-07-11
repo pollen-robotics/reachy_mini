@@ -6,11 +6,11 @@ This script allows for real-time testing of dance moves and can also play
 pre-defined choreographies from JSON files.
 
 interactive Mode (default):
-    python dance_tester.py
+    python dance_demo.py
     - Cycles through all available moves.
 
 Player Mode:
-    python dance_tester.py --choreography choreographies/my_choreo.json
+    python dance_demo.py --choreography choreographies/my_choreo.json
     - Plays a specific, ordered sequence of moves from a file.
 """
 
@@ -29,6 +29,7 @@ from scipy.spatial.transform import Rotation as R
 
 from reachy_mini import ReachyMini
 
+# Correct import path as specified.
 from reachy_mini.utils.rhythmic_motion import (
     AVAILABLE_DANCE_MOVES,
     MOVE_SPECIFIC_PARAMS,
@@ -187,7 +188,6 @@ def load_choreography(file_path: str) -> Optional[List[Dict[str, Any]]]:
     try:
         with open(path) as f:
             choreography = json.load(f)
-        # Validate that all moves in the choreography exist
         for step in choreography:
             if step.get("move") not in AVAILABLE_DANCE_MOVES:
                 print(
@@ -211,7 +211,7 @@ def main(config: Config) -> None:
     if config.choreography_path:
         choreography = load_choreography(config.choreography_path)
         if choreography is None:
-            return  # Exit if choreography failed to load
+            return
         choreography_mode = True
 
     threading.Thread(
@@ -232,7 +232,6 @@ def main(config: Config) -> None:
 
     t_beats, sequence_beat_counter = 0.0, 0.0
     choreography_step_idx, move_cycle_counter = 0, 0.0
-    last_loop_time = time.time()
     last_status_print_time, last_help_print_time = 0.0, 0.0
     bpm, amplitude_scale = config.bpm, config.amplitude_scale
 
@@ -249,6 +248,9 @@ def main(config: Config) -> None:
                 CHOREO_HELP_MESSAGE if choreography_mode else INTERACTIVE_HELP_MESSAGE
             )
             last_help_print_time = time.time()
+
+            # This prevents the first dt from including all the setup time.
+            last_loop_time = time.time()
 
             while not stop_event.is_set():
                 loop_start_time = time.time()
@@ -296,7 +298,6 @@ def main(config: Config) -> None:
 
                 beats_this_frame = dt * (bpm / 60.0)
 
-                # --- Motion Logic: Depends on Mode ---
                 if choreography_mode:
                     current_step = choreography[choreography_step_idx]
                     target_cycles = current_step["cycles"]
@@ -308,14 +309,13 @@ def main(config: Config) -> None:
                             break
                         choreography_step_idx += 1
                         move_cycle_counter = 0.0
+                        # Re-fetch the current step in case we just advanced
+                        current_step = choreography[choreography_step_idx]
 
                     move_name = current_step["move"]
                     step_amplitude_modifier = current_step.get("amplitude", 1.0)
-                    t_motion = (
-                        move_cycle_counter  # Use cycle counter for consistent progress
-                    )
-
-                else:  # Interactive Mode
+                    t_motion = move_cycle_counter
+                else:
                     sequence_beat_counter += beats_this_frame
                     if sequence_beat_counter >= config.beats_per_sequence:
                         current_move_idx = (current_move_idx + 1) % len(move_names)
@@ -323,12 +323,9 @@ def main(config: Config) -> None:
 
                     move_name = move_names[current_move_idx]
                     step_amplitude_modifier = 1.0
-                    t_beats += (
-                        beats_this_frame  # Use continuous time for interactive mode
-                    )
+                    t_beats += beats_this_frame
                     t_motion = t_beats
 
-                # --- Parameter Calculation (Common to both modes) ---
                 waveform = waveforms[current_waveform_idx]
                 move_fn = AVAILABLE_DANCE_MOVES[move_name]
                 base_params = MOVE_SPECIFIC_PARAMS.get(move_name, {}).copy()
@@ -349,21 +346,25 @@ def main(config: Config) -> None:
                 final_ant = offsets.antennas_offset
                 mini.set_target(head_pose(final_pos, final_eul), antennas=final_ant)
 
-                # --- UI Update (Console) ---
                 if loop_start_time - last_status_print_time > 1.0:
                     sys.stdout.write("\r" + " " * 80 + "\r")
                     status = "RUNNING" if shared_state.running else "PAUSED "
-                    wave_status = waveform if "waveform" in current_params else "N/A"
 
                     if choreography_mode:
+                        target_cycles_display = choreography[choreography_step_idx][
+                            "cycles"
+                        ]
                         progress_pct = (
-                            f"{(move_cycle_counter / target_cycles * 100):.0f}%"
+                            f"{(move_cycle_counter / target_cycles_display * 100):.0f}%"
                         )
                         status_line = (
                             f"[{status}] Step {choreography_step_idx + 1}/{len(choreography)}: {move_name:<20} ({progress_pct:>4}) | "
                             f"BPM: {bpm:<5.1f} | Amp: {final_amplitude_scale:.1f}x"
                         )
                     else:
+                        wave_status = (
+                            waveform if "waveform" in current_params else "N/A"
+                        )
                         status_line = f"[{status}] Move: {move_name:<35} | BPM: {bpm:<5.1f} | Wave: {wave_status:<8} | Amp: {amplitude_scale:.1f}x"
                     print(status_line, end="")
                     sys.stdout.flush()
