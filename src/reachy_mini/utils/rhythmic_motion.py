@@ -23,7 +23,7 @@ All move functions are driven by `t_beats` and a set of keyword arguments:
   the motion, in radians or meters.
 - `subcycles_per_beat` (float): Drives the number of oscillations per beat. 1.0 = one full
   subcycle per beat.
-- `phase_offset` (float): A normalized time delay for the motion (0.5 offsets half a period).
+- `phase_offset` (float): A normalized phase offset for the motion as a fraction of a cycle. 0.5 shifts by half a period.
 - `waveform` (str): The shape of the oscillation (e.g., 'sin', 'square').
 - `antenna_move_name` (str): The style of antenna motion ('wiggle', 'both').
 - `antenna_amplitude_rad` (float): The scale of the antenna motion.
@@ -74,7 +74,7 @@ class OscillationParams:
 
     amplitude: float  # float: Maximum amplitude of the oscillation.
     subcycles_per_beat: float = 1.0  # float: Number of oscillation subcycles per beat.
-    phase_offset: float = 0.0  # float: Phase offset in cycles, to shift the waveform.
+    phase_offset: float = 0.0  # float: A normalized phase offset for the motion as a fraction of a cycle. 0.5 shifts by half a period.
     waveform: str = "sin"  # str: Type of waveform to generate ('sin', 'cos', 'square', 'triangle', 'sawtooth').
 
 
@@ -323,14 +323,32 @@ AVAILABLE_ANTENNA_MOVES: dict[
 
 
 def move_simple_nod(
-    t_beats,
-    amplitude_rad,
-    antenna_amplitude_rad,
-    subcycles_per_beat,
-    antenna_move_name="wiggle",
-    phase_offset=0.0,
-    waveform="sin",
-):
+    t_beats: float,
+    amplitude_rad: float,
+    antenna_amplitude_rad: float,
+    subcycles_per_beat: float,
+    antenna_move_name: str = "wiggle",
+    phase_offset: float = 0.0,
+    waveform: str = "sin",
+) -> MoveOffsets:
+    """Generate a simple, continuous nodding motion.
+
+    Args:
+        t_beats (float): Continuous time in beats at which to evaluate the motion,
+            increases by 1 every beat. t_beats [dimensionless] =
+            time_in_seconds [seconds] * frequency [hertz].
+        amplitude_rad (float): The primary amplitude of the nod in radians.
+        antenna_amplitude_rad (float): The amplitude of the antenna motion in radians.
+        subcycles_per_beat (float): Number of movement oscillations per beat.
+        antenna_move_name (str): The style of antenna motion (e.g. 'wiggle' or 'both').
+        phase_offset (float): A normalized phase offset for the motion as a fraction of a cycle.
+            0.5 shifts by half a period.
+        waveform (str): The shape of the oscillation.
+
+    Returns:
+        MoveOffsets: The calculated motion offsets.
+
+    """
     base_params = OscillationParams(
         amplitude_rad, subcycles_per_beat, phase_offset, waveform
     )
@@ -343,14 +361,32 @@ def move_simple_nod(
 
 
 def move_head_tilt_roll(
-    t_beats,
-    amplitude_rad,
-    antenna_amplitude_rad,
-    subcycles_per_beat,
-    antenna_move_name="wiggle",
-    phase_offset=0.0,
-    waveform="sin",
-):
+    t_beats: float,
+    amplitude_rad: float,
+    antenna_amplitude_rad: float,
+    subcycles_per_beat: float,
+    antenna_move_name: str = "wiggle",
+    phase_offset: float = 0.0,
+    waveform: str = "sin",
+) -> MoveOffsets:
+    """Generate a continuous side-to-side head roll.
+
+    Args:
+        t_beats (float): Continuous time in beats at which to evaluate the motion,
+            increases by 1 every beat. t_beats [dimensionless] =
+            time_in_seconds [seconds] * frequency [hertz].
+        amplitude_rad (float): The primary amplitude of the roll in radians.
+        antenna_amplitude_rad (float): The amplitude of the antenna motion in radians.
+        subcycles_per_beat (float): Number of movement oscillations per beat.
+        antenna_move_name (str): The style of antenna motion (e.g. 'wiggle' or 'both').
+        phase_offset (float): A normalized phase offset for the motion as a fraction of a cycle.
+            0.5 shifts by half a period.
+        waveform (str): The shape of the oscillation.
+
+    Returns:
+        MoveOffsets: The calculated motion offsets.
+
+    """
     base_params = OscillationParams(
         amplitude_rad, subcycles_per_beat, phase_offset, waveform
     )
@@ -363,14 +399,32 @@ def move_head_tilt_roll(
 
 
 def move_side_to_side_sway(
-    t_beats,
-    amplitude_m,
-    antenna_amplitude_rad,
-    subcycles_per_beat,
-    antenna_move_name="wiggle",
-    phase_offset=0.0,
-    waveform="sin",
-):
+    t_beats: float,
+    amplitude_m: float,
+    antenna_amplitude_rad: float,
+    subcycles_per_beat: float,
+    antenna_move_name: str = "wiggle",
+    phase_offset: float = 0.0,
+    waveform: str = "sin",
+) -> MoveOffsets:
+    """Generate a continuous, side-to-side sway of the body.
+
+    Args:
+        t_beats (float): Continuous time in beats at which to evaluate the motion,
+            increases by 1 every beat. t_beats [dimensionless] =
+            time_in_seconds [seconds] * frequency [hertz].
+        amplitude_m (float): The primary amplitude of the sway in meters.
+        antenna_amplitude_rad (float): The amplitude of the antenna motion in radians.
+        subcycles_per_beat (float): Number of movement oscillations per beat.
+        antenna_move_name (str): The style of antenna motion (e.g. 'wiggle' or 'both').
+        phase_offset (float): A normalized phase offset for the motion as a fraction of a cycle.
+            0.5 shifts by half a period.
+        waveform (str): The shape of the oscillation.
+
+    Returns:
+        MoveOffsets: The calculated motion offsets.
+
+    """
     base_params = OscillationParams(
         amplitude_m, subcycles_per_beat, phase_offset, waveform
     )
@@ -383,15 +437,34 @@ def move_side_to_side_sway(
 
 
 def move_dizzy_spin(
-    t_beats,
-    roll_amplitude_rad,
-    pitch_amplitude_rad,
-    antenna_amplitude_rad,
-    subcycles_per_beat,
-    antenna_move_name="wiggle",
-    phase_offset=0.0,
-    waveform="sin",
-):
+    t_beats: float,
+    roll_amplitude_rad: float,
+    pitch_amplitude_rad: float,
+    antenna_amplitude_rad: float,
+    subcycles_per_beat: float,
+    antenna_move_name: str = "wiggle",
+    phase_offset: float = 0.0,
+    waveform: str = "sin",
+) -> MoveOffsets:
+    """Create a circular, dizzying head motion by combining roll and pitch.
+
+    Args:
+        t_beats (float): Continuous time in beats at which to evaluate the motion,
+            increases by 1 every beat. t_beats [dimensionless] =
+            time_in_seconds [seconds] * frequency [hertz].
+        roll_amplitude_rad (float): The amplitude of the roll component.
+        pitch_amplitude_rad (float): The amplitude of the pitch component.
+        antenna_amplitude_rad (float): The amplitude of the antenna motion in radians.
+        subcycles_per_beat (float): Number of movement oscillations per beat.
+        antenna_move_name (str): The style of antenna motion (e.g. 'wiggle' or 'both').
+        phase_offset (float): A normalized phase offset for the motion as a fraction of a cycle.
+            0.5 shifts by half a period.
+        waveform (str): The shape of the oscillation.
+
+    Returns:
+        MoveOffsets: The calculated motion offsets.
+
+    """
     base_params = OscillationParams(
         0, subcycles_per_beat, phase_offset, waveform
     )  # Amplitude is placeholder
@@ -409,16 +482,36 @@ def move_dizzy_spin(
 
 
 def move_stumble_and_recover(
-    t_beats,
-    yaw_amplitude_rad,
-    pitch_amplitude_rad,
-    y_amplitude_m,
-    antenna_amplitude_rad,
-    subcycles_per_beat,
-    antenna_move_name="both",
-    phase_offset=0.0,
-    waveform="sin",
-):
+    t_beats: float,
+    yaw_amplitude_rad: float,
+    pitch_amplitude_rad: float,
+    y_amplitude_m: float,
+    antenna_amplitude_rad: float,
+    subcycles_per_beat: float,
+    antenna_move_name: str = "both",
+    phase_offset: float = 0.0,
+    waveform: str = "sin",
+) -> MoveOffsets:
+    """Simulate a stumble and recovery with yaw, fast pitch, and stabilizing sway.
+
+    Args:
+        t_beats (float): Continuous time in beats at which to evaluate the motion,
+            increases by 1 every beat. t_beats [dimensionless] =
+            time_in_seconds [seconds] * frequency [hertz].
+        yaw_amplitude_rad (float): The amplitude of the main yaw stumble.
+        pitch_amplitude_rad (float): The amplitude of the faster pitch correction.
+        y_amplitude_m (float): The amplitude of the stabilizing side sway.
+        antenna_amplitude_rad (float): The amplitude of the antenna motion in radians.
+        subcycles_per_beat (float): Number of movement oscillations per beat.
+        antenna_move_name (str): The style of antenna motion (e.g. 'wiggle' or 'both').
+        phase_offset (float): A normalized phase offset for the motion as a fraction of a cycle.
+            0.5 shifts by half a period.
+        waveform (str): The shape of the oscillation.
+
+    Returns:
+        MoveOffsets: The calculated motion offsets.
+
+    """
     base_params = OscillationParams(0, subcycles_per_beat, phase_offset, waveform)
     yaw_params = replace(base_params, amplitude=yaw_amplitude_rad)
     pitch_params = replace(
@@ -440,15 +533,34 @@ def move_stumble_and_recover(
 
 
 def move_headbanger_combo(
-    t_beats,
-    pitch_amplitude_rad,
-    z_amplitude_m,
-    antenna_amplitude_rad,
-    subcycles_per_beat,
-    antenna_move_name="both",
-    phase_offset=0.0,
-    waveform="sin",
-):
+    t_beats: float,
+    pitch_amplitude_rad: float,
+    z_amplitude_m: float,
+    antenna_amplitude_rad: float,
+    subcycles_per_beat: float,
+    antenna_move_name: str = "both",
+    phase_offset: float = 0.0,
+    waveform: str = "sin",
+) -> MoveOffsets:
+    """Combine a strong pitch nod with a vertical bounce for a headbanging effect.
+
+    Args:
+        t_beats (float): Continuous time in beats at which to evaluate the motion,
+            increases by 1 every beat. t_beats [dimensionless] =
+            time_in_seconds [seconds] * frequency [hertz].
+        pitch_amplitude_rad (float): The amplitude of the primary head nod.
+        z_amplitude_m (float): The amplitude of the vertical body bounce.
+        antenna_amplitude_rad (float): The amplitude of the antenna motion in radians.
+        subcycles_per_beat (float): Number of movement oscillations per beat.
+        antenna_move_name (str): The style of antenna motion (e.g. 'wiggle' or 'both').
+        phase_offset (float): A normalized phase offset for the motion as a fraction of a cycle.
+            0.5 shifts by half a period.
+        waveform (str): The shape of the oscillation.
+
+    Returns:
+        MoveOffsets: The calculated motion offsets.
+
+    """
     base_params = OscillationParams(0, subcycles_per_beat, phase_offset, waveform)
     nod_params = replace(base_params, amplitude=pitch_amplitude_rad)
     bounce_params = replace(
@@ -464,16 +576,36 @@ def move_headbanger_combo(
 
 
 def move_interwoven_spirals(
-    t_beats,
-    roll_amp,
-    pitch_amp,
-    yaw_amp,
-    antenna_amplitude_rad,
-    subcycles_per_beat,
-    antenna_move_name="wiggle",
-    phase_offset=0.0,
-    waveform="sin",
-):
+    t_beats: float,
+    roll_amp: float,
+    pitch_amp: float,
+    yaw_amp: float,
+    antenna_amplitude_rad: float,
+    subcycles_per_beat: float,
+    antenna_move_name: str = "wiggle",
+    phase_offset: float = 0.0,
+    waveform: str = "sin",
+) -> MoveOffsets:
+    """Create a complex spiral motion by combining axes at different frequencies.
+
+    Args:
+        t_beats (float): Continuous time in beats at which to evaluate the motion,
+            increases by 1 every beat. t_beats [dimensionless] =
+            time_in_seconds [seconds] * frequency [hertz].
+        roll_amp (float): The amplitude of the roll component.
+        pitch_amp (float): The amplitude of the pitch component.
+        yaw_amp (float): The amplitude of the yaw component.
+        antenna_amplitude_rad (float): The amplitude of the antenna motion in radians.
+        subcycles_per_beat (float): Number of movement oscillations per beat (for antennas).
+        antenna_move_name (str): The style of antenna motion (e.g. 'wiggle' or 'both').
+        phase_offset (float): A normalized phase offset for the motion as a fraction of a cycle.
+            0.5 shifts by half a period.
+        waveform (str): The shape of the oscillation.
+
+    Returns:
+        MoveOffsets: The calculated motion offsets.
+
+    """
     base_params = OscillationParams(0, subcycles_per_beat, phase_offset, waveform)
     roll_params = replace(base_params, amplitude=roll_amp, subcycles_per_beat=0.125)
     pitch_params = replace(
@@ -497,14 +629,32 @@ def move_interwoven_spirals(
 
 
 def move_sharp_side_tilt(
-    t_beats,
-    roll_amplitude_rad,
-    antenna_amplitude_rad,
-    subcycles_per_beat,
-    antenna_move_name="wiggle",
-    phase_offset=0.0,
-    waveform="triangle",
-):
+    t_beats: float,
+    roll_amplitude_rad: float,
+    antenna_amplitude_rad: float,
+    subcycles_per_beat: float,
+    antenna_move_name: str = "wiggle",
+    phase_offset: float = 0.0,
+    waveform: str = "triangle",
+) -> MoveOffsets:
+    """Perform a sharp, quick side-to-side tilt using a triangle waveform.
+
+    Args:
+        t_beats (float): Continuous time in beats at which to evaluate the motion,
+            increases by 1 every beat. t_beats [dimensionless] =
+            time_in_seconds [seconds] * frequency [hertz].
+        roll_amplitude_rad (float): The primary amplitude of the tilt in radians.
+        antenna_amplitude_rad (float): The amplitude of the antenna motion in radians.
+        subcycles_per_beat (float): Number of movement oscillations per beat.
+        antenna_move_name (str): The style of antenna motion (e.g. 'wiggle' or 'both').
+        phase_offset (float): A normalized phase offset for the motion as a fraction of a cycle.
+            0.5 shifts by half a period.
+        waveform (str): The shape of the oscillation (defaults to 'triangle').
+
+    Returns:
+        MoveOffsets: The calculated motion offsets.
+
+    """
     base_params = OscillationParams(
         roll_amplitude_rad, subcycles_per_beat, phase_offset, waveform
     )
@@ -517,23 +667,40 @@ def move_sharp_side_tilt(
 
 
 def move_side_peekaboo(
-    t_beats,
-    z_amp,
-    y_amp,
-    pitch_amp,
-    antenna_amplitude_rad,
-    antenna_move_name="both",
-    subcycles_per_beat=0.5,
-):
+    t_beats: float,
+    z_amp: float,
+    y_amp: float,
+    pitch_amp: float,
+    antenna_amplitude_rad: float,
+    antenna_move_name: str = "both",
+    subcycles_per_beat: float = 0.5,
+) -> MoveOffsets:
+    """Perform a complete peekaboo 'performance' with a start, middle, and end.
+
+    Args:
+        t_beats (float): Continuous time in beats at which to evaluate the motion,
+            increases by 1 every beat. t_beats [dimensionless] =
+            time_in_seconds [seconds] * frequency [hertz].
+        z_amp (float): The amplitude of the vertical (hide/unhide) motion in meters.
+        y_amp (float): The amplitude of the horizontal (peek) motion in meters.
+        pitch_amp (float): The amplitude of the 'excited nod' in radians.
+        antenna_amplitude_rad (float): The amplitude of the antenna motion in radians.
+        antenna_move_name (str): The style of antenna motion (e.g. 'wiggle' or 'both').
+        subcycles_per_beat (float): Number of movement oscillations per beat (for antennas).
+
+    Returns:
+        MoveOffsets: The calculated motion offsets.
+
+    """
     period = 10.0
     t_in_period = t_beats % period
     pos, ori = np.zeros(3), np.zeros(3)
 
-    def ease(t):
+    def ease(t: float) -> float:
         t_clipped = np.clip(t, 0.0, 1.0)
         return t_clipped * t_clipped * (3 - 2 * t_clipped)
 
-    def excited_nod(t):
+    def excited_nod(t: float) -> float:
         return pitch_amp * np.sin(np.clip(t, 0.0, 1.0) * np.pi)
 
     if t_in_period < 1.0:
@@ -566,12 +733,27 @@ def move_side_peekaboo(
 
 
 def move_yeah_nod(
-    t_beats,
-    amplitude_rad,
-    antenna_amplitude_rad,
-    subcycles_per_beat,
-    antenna_move_name="both",
-):
+    t_beats: float,
+    amplitude_rad: float,
+    antenna_amplitude_rad: float,
+    subcycles_per_beat: float,
+    antenna_move_name: str = "both",
+) -> MoveOffsets:
+    """Generate an emphatic two-part 'yeah' nod using transient motions.
+
+    Args:
+        t_beats (float): Continuous time in beats at which to evaluate the motion,
+            increases by 1 every beat. t_beats [dimensionless] =
+            time_in_seconds [seconds] * frequency [hertz].
+        amplitude_rad (float): The primary amplitude of the main nod.
+        antenna_amplitude_rad (float): The amplitude of the antenna motion in radians.
+        subcycles_per_beat (float): Number of movement oscillations per beat.
+        antenna_move_name (str): The style of antenna motion (e.g. 'wiggle' or 'both').
+
+    Returns:
+        MoveOffsets: The calculated motion offsets.
+
+    """
     repeat_every = 1.0 / subcycles_per_beat
     nod1_params = TransientParams(
         amplitude_rad, duration_in_beats=repeat_every * 0.4, repeat_every=repeat_every
@@ -591,14 +773,32 @@ def move_yeah_nod(
 
 
 def move_uh_huh_tilt(
-    t_beats,
-    amplitude_rad,
-    antenna_amplitude_rad,
-    subcycles_per_beat,
-    antenna_move_name="wiggle",
-    phase_offset=0.0,
-    waveform="sin",
-):
+    t_beats: float,
+    amplitude_rad: float,
+    antenna_amplitude_rad: float,
+    subcycles_per_beat: float,
+    antenna_move_name: str = "wiggle",
+    phase_offset: float = 0.0,
+    waveform: str = "sin",
+) -> MoveOffsets:
+    """Create a combined roll-and-pitch 'uh-huh' gesture.
+
+    Args:
+        t_beats (float): Continuous time in beats at which to evaluate the motion,
+            increases by 1 every beat. t_beats [dimensionless] =
+            time_in_seconds [seconds] * frequency [hertz].
+        amplitude_rad (float): The primary amplitude for both roll and pitch.
+        antenna_amplitude_rad (float): The amplitude of the antenna motion in radians.
+        subcycles_per_beat (float): Number of movement oscillations per beat.
+        antenna_move_name (str): The style of antenna motion (e.g. 'wiggle' or 'both').
+        phase_offset (float): A normalized phase offset for the motion as a fraction of a cycle.
+            0.5 shifts by half a period.
+        waveform (str): The shape of the oscillation.
+
+    Returns:
+        MoveOffsets: The calculated motion offsets.
+
+    """
     base_params = OscillationParams(
         amplitude_rad, subcycles_per_beat, phase_offset, waveform
     )
@@ -612,12 +812,27 @@ def move_uh_huh_tilt(
 
 
 def move_neck_recoil(
-    t_beats,
-    amplitude_m,
-    antenna_amplitude_rad,
-    subcycles_per_beat,
-    antenna_move_name="wiggle",
-):
+    t_beats: float,
+    amplitude_m: float,
+    antenna_amplitude_rad: float,
+    subcycles_per_beat: float,
+    antenna_move_name: str = "wiggle",
+) -> MoveOffsets:
+    """Simulate a quick, transient backward recoil of the neck.
+
+    Args:
+        t_beats (float): Continuous time in beats at which to evaluate the motion,
+            increases by 1 every beat. t_beats [dimensionless] =
+            time_in_seconds [seconds] * frequency [hertz].
+        amplitude_m (float): The amplitude of the recoil in meters.
+        antenna_amplitude_rad (float): The amplitude of the antenna motion in radians.
+        subcycles_per_beat (float): Number of movement oscillations per beat.
+        antenna_move_name (str): The style of antenna motion (e.g. 'wiggle' or 'both').
+
+    Returns:
+        MoveOffsets: The calculated motion offsets.
+
+    """
     repeat_every = 1.0 / subcycles_per_beat
     recoil_params = TransientParams(
         -amplitude_m, duration_in_beats=repeat_every * 0.3, repeat_every=repeat_every
@@ -630,15 +845,34 @@ def move_neck_recoil(
 
 
 def move_chin_lead(
-    t_beats,
-    x_amplitude_m,
-    pitch_amplitude_rad,
-    antenna_amplitude_rad,
-    subcycles_per_beat,
-    antenna_move_name="both",
-    phase_offset=0.0,
-    waveform="sin",
-):
+    t_beats: float,
+    x_amplitude_m: float,
+    pitch_amplitude_rad: float,
+    antenna_amplitude_rad: float,
+    subcycles_per_beat: float,
+    antenna_move_name: str = "both",
+    phase_offset: float = 0.0,
+    waveform: str = "sin",
+) -> MoveOffsets:
+    """Create a forward motion led by the chin, combining x-translation and pitch.
+
+    Args:
+        t_beats (float): Continuous time in beats at which to evaluate the motion,
+            increases by 1 every beat. t_beats [dimensionless] =
+            time_in_seconds [seconds] * frequency [hertz].
+        x_amplitude_m (float): The amplitude of the forward (X-axis) motion.
+        pitch_amplitude_rad (float): The amplitude of the accompanying pitch.
+        antenna_amplitude_rad (float): The amplitude of the antenna motion in radians.
+        subcycles_per_beat (float): Number of movement oscillations per beat.
+        antenna_move_name (str): The style of antenna motion (e.g. 'wiggle' or 'both').
+        phase_offset (float): A normalized phase offset for the motion as a fraction of a cycle.
+            0.5 shifts by half a period.
+        waveform (str): The shape of the oscillation.
+
+    Returns:
+        MoveOffsets: The calculated motion offsets.
+
+    """
     base_params = OscillationParams(0, subcycles_per_beat, phase_offset, waveform)
     x_move_params = replace(base_params, amplitude=x_amplitude_m)
     pitch_move_params = replace(
@@ -654,15 +888,34 @@ def move_chin_lead(
 
 
 def move_groovy_sway_and_roll(
-    t_beats,
-    y_amplitude_m,
-    roll_amplitude_rad,
-    antenna_amplitude_rad,
-    subcycles_per_beat,
-    antenna_move_name="wiggle",
-    phase_offset=0.0,
-    waveform="sin",
-):
+    t_beats: float,
+    y_amplitude_m: float,
+    roll_amplitude_rad: float,
+    antenna_amplitude_rad: float,
+    subcycles_per_beat: float,
+    antenna_move_name: str = "wiggle",
+    phase_offset: float = 0.0,
+    waveform: str = "sin",
+) -> MoveOffsets:
+    """Combine a side-to-side sway with a corresponding roll for a groovy effect.
+
+    Args:
+        t_beats (float): Continuous time in beats at which to evaluate the motion,
+            increases by 1 every beat. t_beats [dimensionless] =
+            time_in_seconds [seconds] * frequency [hertz].
+        y_amplitude_m (float): The amplitude of the side-to-side (Y-axis) sway.
+        roll_amplitude_rad (float): The amplitude of the accompanying roll.
+        antenna_amplitude_rad (float): The amplitude of the antenna motion in radians.
+        subcycles_per_beat (float): Number of movement oscillations per beat.
+        antenna_move_name (str): The style of antenna motion (e.g. 'wiggle' or 'both').
+        phase_offset (float): A normalized phase offset for the motion as a fraction of a cycle.
+            0.5 shifts by half a period.
+        waveform (str): The shape of the oscillation.
+
+    Returns:
+        MoveOffsets: The calculated motion offsets.
+
+    """
     base_params = OscillationParams(0, subcycles_per_beat, phase_offset, waveform)
     sway_params = replace(base_params, amplitude=y_amplitude_m)
     roll_params = replace(
@@ -678,12 +931,27 @@ def move_groovy_sway_and_roll(
 
 
 def move_chicken_peck(
-    t_beats,
-    amplitude_m,
-    antenna_amplitude_rad,
-    subcycles_per_beat,
-    antenna_move_name="both",
-):
+    t_beats: float,
+    amplitude_m: float,
+    antenna_amplitude_rad: float,
+    subcycles_per_beat: float,
+    antenna_move_name: str = "both",
+) -> MoveOffsets:
+    """Simulate a chicken-like pecking motion.
+
+    Args:
+        t_beats (float): Continuous time in beats at which to evaluate the motion,
+            increases by 1 every beat. t_beats [dimensionless] =
+            time_in_seconds [seconds] * frequency [hertz].
+        amplitude_m (float): The base amplitude for the forward peck.
+        antenna_amplitude_rad (float): The amplitude of the antenna motion in radians.
+        subcycles_per_beat (float): Number of movement oscillations per beat.
+        antenna_move_name (str): The style of antenna motion (e.g. 'wiggle' or 'both').
+
+    Returns:
+        MoveOffsets: The calculated motion offsets.
+
+    """
     repeat_every = 1.0 / subcycles_per_beat
     x_offset = transient_motion(
         t_beats,
@@ -708,16 +976,31 @@ def move_chicken_peck(
 
 
 def move_side_glance_flick(
-    t_beats,
-    yaw_amplitude_rad,
-    antenna_amplitude_rad,
-    subcycles_per_beat,
-    antenna_move_name="wiggle",
-):
+    t_beats: float,
+    yaw_amplitude_rad: float,
+    antenna_amplitude_rad: float,
+    subcycles_per_beat: float,
+    antenna_move_name: str = "wiggle",
+) -> MoveOffsets:
+    """Perform a quick, sharp glance to the side that holds and then returns.
+
+    Args:
+        t_beats (float): Continuous time in beats at which to evaluate the motion,
+            increases by 1 every beat. t_beats [dimensionless] =
+            time_in_seconds [seconds] * frequency [hertz].
+        yaw_amplitude_rad (float): The amplitude of the glance in radians.
+        antenna_amplitude_rad (float): The amplitude of the antenna motion in radians.
+        subcycles_per_beat (float): Number of movement oscillations per beat.
+        antenna_move_name (str): The style of antenna motion (e.g. 'wiggle' or 'both').
+
+    Returns:
+        MoveOffsets: The calculated motion offsets.
+
+    """
     period = 1.0 / subcycles_per_beat
     t_in_period = t_beats % period
 
-    def ease(t):
+    def ease(t: float) -> float:
         return t * t * (3 - 2 * t)
 
     yaw_offset = 0
@@ -736,12 +1019,27 @@ def move_side_glance_flick(
 
 
 def move_polyrhythm_combo(
-    t_beats,
-    sway_amplitude_m,
-    nod_amplitude_rad,
-    antenna_amplitude_rad,
-    antenna_move_name="wiggle",
-):
+    t_beats: float,
+    sway_amplitude_m: float,
+    nod_amplitude_rad: float,
+    antenna_amplitude_rad: float,
+    antenna_move_name: str = "wiggle",
+) -> MoveOffsets:
+    """Combine a 3-beat sway and a 2-beat nod to create a polyrhythmic feel.
+
+    Args:
+        t_beats (float): Continuous time in beats at which to evaluate the motion,
+            increases by 1 every beat. t_beats [dimensionless] =
+            time_in_seconds [seconds] * frequency [hertz].
+        sway_amplitude_m (float): The amplitude of the 3-beat sway motion.
+        nod_amplitude_rad (float): The amplitude of the 2-beat nod motion.
+        antenna_amplitude_rad (float): The amplitude of the antenna motion in radians.
+        antenna_move_name (str): The style of antenna motion (e.g. 'wiggle' or 'both').
+
+    Returns:
+        MoveOffsets: The calculated motion offsets.
+
+    """
     sway_params = OscillationParams(sway_amplitude_m, subcycles_per_beat=1 / 3)
     nod_params = OscillationParams(nod_amplitude_rad, subcycles_per_beat=1 / 2)
     antenna_params = OscillationParams(
@@ -754,13 +1052,30 @@ def move_polyrhythm_combo(
 
 
 def move_grid_snap(
-    t_beats,
-    amplitude_rad,
-    antenna_amplitude_rad,
-    subcycles_per_beat,
-    antenna_move_name="both",
-    phase_offset=0.0,
-):
+    t_beats: float,
+    amplitude_rad: float,
+    antenna_amplitude_rad: float,
+    subcycles_per_beat: float,
+    antenna_move_name: str = "both",
+    phase_offset: float = 0.0,
+) -> MoveOffsets:
+    """Create a robotic, grid-snapping motion using square waveforms.
+
+    Args:
+        t_beats (float): Continuous time in beats at which to evaluate the motion,
+            increases by 1 every beat. t_beats [dimensionless] =
+            time_in_seconds [seconds] * frequency [hertz].
+        amplitude_rad (float): The primary amplitude for both yaw and pitch.
+        antenna_amplitude_rad (float): The amplitude of the antenna motion in radians.
+        subcycles_per_beat (float): Number of movement oscillations per beat.
+        antenna_move_name (str): The style of antenna motion (e.g. 'wiggle' or 'both').
+        phase_offset (float): A normalized phase offset for the motion as a fraction of a cycle.
+            0.5 shifts by half a period.
+
+    Returns:
+        MoveOffsets: The calculated motion offsets.
+
+    """
     base_params = OscillationParams(
         amplitude_rad, subcycles_per_beat, phase_offset, waveform="square"
     )
@@ -775,14 +1090,32 @@ def move_grid_snap(
 
 
 def move_pendulum_swing(
-    t_beats,
-    amplitude_rad,
-    antenna_amplitude_rad,
-    subcycles_per_beat,
-    antenna_move_name="wiggle",
-    phase_offset=0.0,
-    waveform="sin",
-):
+    t_beats: float,
+    amplitude_rad: float,
+    antenna_amplitude_rad: float,
+    subcycles_per_beat: float,
+    antenna_move_name: str = "wiggle",
+    phase_offset: float = 0.0,
+    waveform: str = "sin",
+) -> MoveOffsets:
+    """Simulate a simple, smooth pendulum swing using a roll motion.
+
+    Args:
+        t_beats (float): Continuous time in beats at which to evaluate the motion,
+            increases by 1 every beat. t_beats [dimensionless] =
+            time_in_seconds [seconds] * frequency [hertz].
+        amplitude_rad (float): The primary amplitude of the swing in radians.
+        antenna_amplitude_rad (float): The amplitude of the antenna motion in radians.
+        subcycles_per_beat (float): Number of movement oscillations per beat.
+        antenna_move_name (str): The style of antenna motion (e.g. 'wiggle' or 'both').
+        phase_offset (float): A normalized phase offset for the motion as a fraction of a cycle.
+            0.5 shifts by half a period.
+        waveform (str): The shape of the oscillation.
+
+    Returns:
+        MoveOffsets: The calculated motion offsets.
+
+    """
     base_params = OscillationParams(
         amplitude_rad, subcycles_per_beat, phase_offset, waveform
     )
@@ -795,18 +1128,34 @@ def move_pendulum_swing(
 
 
 def move_jackson_square(
-    t_beats,
-    square_amp_m,
-    twitch_amplitude_rad,
-    antenna_amplitude_rad,
-    subcycles_per_beat,
-    antenna_move_name="wiggle",
-):
+    t_beats: float,
+    square_amp_m: float,
+    twitch_amplitude_rad: float,
+    antenna_amplitude_rad: float,
+    subcycles_per_beat: float,
+    antenna_move_name: str = "wiggle",
+) -> MoveOffsets:
+    """Trace a square in the Y-Z plane with sharp roll twitches at each corner.
+
+    Args:
+        t_beats (float): Continuous time in beats at which to evaluate the motion,
+            increases by 1 every beat. t_beats [dimensionless] =
+            time_in_seconds [seconds] * frequency [hertz].
+        square_amp_m (float): The half-width of the square path in meters.
+        twitch_amplitude_rad (float): The amplitude of the roll twitch in radians.
+        antenna_amplitude_rad (float): The amplitude of the antenna motion in radians.
+        subcycles_per_beat (float): Number of movement oscillations per beat (for antennas).
+        antenna_move_name (str): The style of antenna motion (e.g. 'wiggle' or 'both').
+
+    Returns:
+        MoveOffsets: The calculated motion offsets.
+
+    """
     period = 8.0
     t_in_period = t_beats % period
     pos, ori = np.zeros(3), np.zeros(3)
 
-    def ease(t):
+    def ease(t: float) -> float:
         t_clipped = np.clip(t, 0.0, 1.0)
         return t_clipped * t_clipped * (3 - 2 * t_clipped)
 
