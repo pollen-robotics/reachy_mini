@@ -1,9 +1,8 @@
 # Reachy Mini
 
-[Reachy Mini](https://www.pollen-robotics.com/reachy-mini/) is the first open-source desktop robot designed to explore human-robot interaction and creative custom applications. We made it to be affordable, easy to use, hackable and cute, so that you can focus on your application.
+[Reachy Mini](https://www.pollen-robotics.com/reachy-mini/) is the first open-source desktop robot designed to explore human-robot interaction and creative custom applications. We made it to be affordable, easy to use, hackable and cute, so that you can focus on build cool AI applications!
 
 [![Reachy Mini Hello](/docs/assets/reachy_mini_hello.gif)](https://www.pollen-robotics.com/reachy-mini/)
-
 
 This repository provides everything you need to control Reachy Mini, both in simulation and on the real robot. It consists of two main parts:
 
@@ -25,6 +24,8 @@ with ReachyMini() as reachy_mini:
     pose = create_head_pose() 
     reachy_mini.goto_target(head=pose, duration=2.0)
 ```
+
+We support and test on Linux and macOS. We are working on Windows support, but it is not yet available. Any Python 3.8+ environment should work.
 
 ## Installation
 
@@ -56,7 +57,7 @@ reachy-mini-daemon
 or run it via the Python module:
 
 ```bash
-python -m reachy_mini.io.daemon
+python -m reachy_mini.daemon.cli
 ```
 
 Additional argument for both simulation and real robot:
@@ -73,8 +74,6 @@ or
 
 ### In simulation ([MuJoCo](https://mujoco.org))
 
-![Reachy Mini in MuJoCo](https://www.pollen-robotics.com/wp-content/uploads/2025/06/Reachy_mini_simulation.gif)
-
 ```bash
 reachy-mini-daemon --sim
 ```
@@ -84,6 +83,15 @@ Additional arguments:
 ```bash
 --scene <empty|minimal> : (Default empty). Choose between a basic empty scene, or a scene with a table and some objects.
 ```
+
+<img src="https://www.pollen-robotics.com/wp-content/uploads/2025/06/Reachy_mini_simulation.gif" width="250" alt="Reachy Mini in MuJoCo">
+
+
+*Note: On OSX in order to run mujoco, you need to use mjpython (see [here](https://mujoco.readthedocs.io/en/stable/python.html#passive-viewer)). So, you should run the daemon with:*
+
+```bash
+ mjpython -m reachy_mini.daemon.cli --sim
+ ```
 
 ### On the real robot
 
@@ -115,7 +123,9 @@ Once the daemon is running, you can run the examples.
     python examples/goto_interpolation_playground.py
     ```
 
-## To use the API:
+## Reachy Mini's API
+
+The API is designed to be simple and intuitive. You can control the robot's features such as the head, antennas, camera, speakers, and microphone. For instance, to move the head of the robot, you can use the `goto_target` method as shown in the example below:
 
 ```python
 from reachy_mini import ReachyMini
@@ -131,56 +141,8 @@ with ReachyMini() as reachy_mini:
     reachy_mini.goto_target(head=pose, duration=2.0)
 ```
 
-With the real robot, the camera is directly accessible with the USB connection, and can be directly read with OpenCV:
+For a full description of the SDK, please refer to the [documentation](./docs/API.md).
 
-```python
-import cv2
-
-from reachy_mini.io.cam_utils import find_camera
-
-cap = find_camera()
-while True:
-    success, frame = cap.read()
-    if success:
-        cv2.imshow("Reachy Mini Camera", frame)
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
-```
-
-If you know the camera id on OpenCV, you can also directly use it:
-
-```python
-import cv2
-
-cap = cv2.VideoCapture(0)  # Replace 0 with your camera ID
-```
-
----------
-
-### Video client (TODO (removed from this release for performance reasons))
-
-MuJoCo publishes the camera stream at this address: "udp://@127.0.0.1:5005".
-OpenCV can directly read this stream, as illustrated in the example below:
-
-```python
-python examples/video_client.py
-```
-
-Any UDP client should be able to read this stream:
-
-```bash
-ffplay -fflags nobuffer udp://127.0.0.1:5005
-```
-
-### Simulation model used
-
-https://polyhaven.com/a/food_apple_01
-
-https://polyhaven.com/a/croissant
-
-https://polyhaven.com/a/wooden_table_02
-
-https://polyhaven.com/a/rubber_duck_toy
 
 ## Contribute
 
@@ -198,3 +160,11 @@ pre-commit run --all-files
 ```
 
 Checks are performed by Ruff. You may want to [configure your IDE to support it](https://docs.astral.sh/ruff/editors/setup/).
+
+### Simulation model used
+
+- https://polyhaven.com/a/food_apple_01
+- https://polyhaven.com/a/croissant
+- https://polyhaven.com/a/wooden_table_02
+- https://polyhaven.com/a/rubber_duck_toy
+

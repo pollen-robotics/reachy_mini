@@ -17,7 +17,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from reachy_mini.io.daemon import Daemon, DaemonStatus
+from reachy_mini.daemon.daemon import Daemon, DaemonStatus
 from reachy_mini_dashboard.app_install import (
     active_installations,
     connected_clients,
@@ -83,7 +83,7 @@ else:
 
 # Log broadcasting
 async def broadcast_log_message(process_id: str, log_entry: dict):
-    """Broadcast log messages to WebSocket clients"""
+    """Broadcast log messages to WebSocket clients."""
     if not connected_clients:
         return
 

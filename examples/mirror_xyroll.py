@@ -13,7 +13,7 @@ import numpy as np
 from scipy.spatial.transform import Rotation as R
 
 from reachy_mini import ReachyMini
-from reachy_mini.io.cam_utils import find_camera
+from reachy_mini.utils.camera import find_camera
 
 
 class PoseEstimator:
