@@ -1,13 +1,9 @@
 #!/usr/bin/env python3
-# dance_tester.py
 """Interactive Dance Move Tester for Reachy Mini.
 
 ---------------------------------------------
 This script allows for real-time testing and exploration of dance moves from
-the `dance_moves` library on a Reachy Mini robot. It simulates a constant BPM,
-allowing you to focus on the motion itself.
-
-Controls are displayed on-screen and on the robot's orb display.
+the `rhythmic_motion` library on a Reachy Mini robot.
 """
 
 import argparse
@@ -15,23 +11,24 @@ import sys
 import threading
 import time
 from dataclasses import dataclass, field
+from typing import Any, Dict, List, Optional
 
 import numpy as np
-from pynput import keyboard
-from scipy.spatial.transform import Rotation as R
-
-from reachy_mini import ReachyMini
 
 from reachy_mini.utils.rhythmic_motion import (
     AVAILABLE_DANCE_MOVES,
     MOVE_SPECIFIC_PARAMS,
 )
+from pynput import keyboard
+from scipy.spatial.transform import Rotation as R
+
+from reachy_mini import ReachyMini
 
 
 # --- Configuration ---
 @dataclass
 class Config:
-    """Configuration for the dance tester."""
+    """Store configuration for the dance tester."""
 
     bpm: float = 120.0
     control_ts: float = 0.01  # 100 Hz control loop
@@ -53,54 +50,54 @@ HELP_MESSAGE = """
 └──────────────────────────────────┴─────────────────────────────────────────┘
 """
 
-ORB_HELP_LINES = [
-    "Controls:",
-    "Arrows -> Next Move",
-    "Up/Down -> BPM",
-    "W -> Waveform",
-    "+ / - -> Amplitude",
-    "Space/P -> Pause",
-    "Q -> Quit",
-]
-
 
 # --- Shared State for Thread Communication ---
 class SharedState:
-    def __init__(self):
-        self.lock = threading.Lock()
-        self.running = True
-        self.next_move = False
-        self.prev_move = False
-        self.next_waveform = False
-        self.bpm_change = 0.0
-        self.amplitude_change = 0.0
+    """Manage state shared between the main loop and keyboard listener thread."""
 
-    def toggle_pause(self):
+    def __init__(self) -> None:
+        """Initialize the shared state."""
+        self.lock = threading.Lock()
+        self.running: bool = True
+        self.next_move: bool = False
+        self.prev_move: bool = False
+        self.next_waveform: bool = False
+        self.bpm_change: float = 0.0
+        self.amplitude_change: float = 0.0
+
+    def toggle_pause(self) -> bool:
+        """Toggle the running state and return the new state."""
         with self.lock:
             self.running = not self.running
         return self.running
 
-    def trigger_next_move(self):
+    def trigger_next_move(self) -> None:
+        """Set a flag to switch to the next move."""
         with self.lock:
             self.next_move = True
 
-    def trigger_prev_move(self):
+    def trigger_prev_move(self) -> None:
+        """Set a flag to switch to the previous move."""
         with self.lock:
             self.prev_move = True
 
-    def trigger_next_waveform(self):
+    def trigger_next_waveform(self) -> None:
+        """Set a flag to cycle to the next waveform."""
         with self.lock:
             self.next_waveform = True
 
-    def adjust_bpm(self, amount: float):
+    def adjust_bpm(self, amount: float) -> None:
+        """Adjust the BPM by a given amount."""
         with self.lock:
             self.bpm_change += amount
 
-    def adjust_amplitude(self, amount: float):
+    def adjust_amplitude(self, amount: float) -> None:
+        """Adjust the amplitude scale by a given amount."""
         with self.lock:
             self.amplitude_change += amount
 
-    def get_and_clear_changes(self) -> dict:
+    def get_and_clear_changes(self) -> Dict[str, Any]:
+        """Atomically retrieve all changes and reset them."""
         with self.lock:
             changes = {
                 "next_move": self.next_move,
@@ -116,14 +113,35 @@ class SharedState:
 
 # --- Robot Interaction & Utilities ---
 def head_pose(pos: np.ndarray, eul: np.ndarray) -> np.ndarray:
+    """Create a 4x4 homogenous transformation matrix for the head.
+
+    Args:
+        pos (np.ndarray): The 3D position vector [x, y, z].
+        eul (np.ndarray): The 3D Euler angles vector [roll, pitch, yaw].
+
+    Returns:
+        np.ndarray: The corresponding 4x4 transformation matrix.
+
+    """
     m = np.eye(4)
     m[:3, 3] = pos
     m[:3, :3] = R.from_euler("xyz", eul).as_matrix()
     return m
 
 
-def keyboard_listener_thread(shared_state: SharedState, stop_event: threading.Event):
-    def on_press(key):
+def keyboard_listener_thread(
+    shared_state: SharedState, stop_event: threading.Event
+) -> None:
+    """Listen for keyboard input and update the shared state.
+
+    Args:
+        shared_state (SharedState): The thread-safe state object to update.
+        stop_event (threading.Event): The event to signal when to stop listening.
+
+    """
+
+    def on_press(key: Any) -> Optional[bool]:
+        """Handle a key press event."""
         if stop_event.is_set():
             return False
         if hasattr(key, "char"):
@@ -148,14 +166,20 @@ def keyboard_listener_thread(shared_state: SharedState, stop_event: threading.Ev
             shared_state.adjust_bpm(5.0)
         elif key == keyboard.Key.down:
             shared_state.adjust_bpm(-5.0)
+        return None
 
     with keyboard.Listener(on_press=on_press) as listener:
         listener.join()
 
 
 # --- Main Application Logic ---
-def main(config: Config):
-    """Main function to run the dance tester."""
+def main(config: Config) -> None:
+    """Run the main application loop for the dance tester.
+
+    Args:
+        config (Config): The application configuration object.
+
+    """
     shared_state = SharedState()
     stop_event = threading.Event()
 
@@ -163,8 +187,8 @@ def main(config: Config):
         target=keyboard_listener_thread, args=(shared_state, stop_event), daemon=True
     ).start()
 
-    move_names = list(AVAILABLE_DANCE_MOVES.keys())
-    waveforms = ["sin", "cos", "triangle", "square", "sawtooth"]
+    move_names: List[str] = list(AVAILABLE_DANCE_MOVES.keys())
+    waveforms: List[str] = ["sin", "cos", "triangle", "square", "sawtooth"]
 
     try:
         current_move_idx = move_names.index(config.start_move)
@@ -176,9 +200,8 @@ def main(config: Config):
     current_waveform_idx = 0
 
     t_beats, sequence_beat_counter, last_loop_time = 0.0, 0.0, time.time()
-    last_status_print_time, last_help_print_time, last_orb_update_time = 0.0, 0.0, 0.0
+    last_status_print_time, last_help_print_time = 0.0, 0.0
     bpm, amplitude_scale = config.bpm, config.amplitude_scale
-    current_orb_line_idx = 0
 
     print("Connecting to Reachy Mini...")
     try:
@@ -213,6 +236,7 @@ def main(config: Config):
                     current_waveform_idx = (current_waveform_idx + 1) % len(waveforms)
 
                 if not shared_state.running:
+                    # While paused, ensure robot is at a neutral, safe pose.
                     mini.set_target(
                         head_pose(config.neutral_pos, config.neutral_eul),
                         antennas=np.zeros(2),
@@ -245,14 +269,11 @@ def main(config: Config):
                 # The `**` operator unpacks the dictionary into named arguments,
                 offsets = move_fn(t_beats, **current_params)
 
-                final_pos, final_eul, final_ant = (
-                    config.neutral_pos + offsets.position_offset,
-                    config.neutral_eul + offsets.orientation_offset,
-                    offsets.antennas_offset,
-                )
-                mini.set_target(
-                    head_pose(final_pos, final_eul), antennas=final_ant
-                )
+                final_pos = config.neutral_pos + offsets.position_offset
+                final_eul = config.neutral_eul + offsets.orientation_offset
+                final_ant = offsets.antennas_offset
+
+                mini.set_target(head_pose(final_pos, final_eul), antennas=final_ant)
 
                 # --- UI Update (Console) ---
                 if loop_start_time - last_status_print_time > 1.0:
@@ -269,12 +290,6 @@ def main(config: Config):
                 if loop_start_time - last_help_print_time > 10.0:
                     print(f"\n{HELP_MESSAGE}")  # Reprint help message periodically
                     last_help_print_time = loop_start_time
-
-                if loop_start_time - last_orb_update_time > 4.0:
-                    current_orb_line_idx = (current_orb_line_idx + 1) % len(
-                        ORB_HELP_LINES
-                    )
-                    last_orb_update_time = loop_start_time
 
                 time.sleep(max(0, config.control_ts - (time.time() - loop_start_time)))
 
@@ -304,7 +319,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--start-move",
         default="simple_nod",
-        choices=list(AVAILABLE_DANCE_MOVES.keys()), # Ensure choices are up-to-date
+        choices=list(AVAILABLE_DANCE_MOVES.keys()),  # Ensure choices are up-to-date
         help="Which dance move to start with.",
     )
     parser.add_argument(
@@ -319,5 +334,5 @@ if __name__ == "__main__":
         start_move=cli_args.start_move,
         beats_per_sequence=cli_args.beats_per_sequence,
     )
-    
+
     main(app_config)
