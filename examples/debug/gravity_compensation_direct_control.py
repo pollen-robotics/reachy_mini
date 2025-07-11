@@ -1,9 +1,10 @@
-from reachy_mini_motor_controller import ReachyMiniMotorController
-from reachy_mini.placo_kinematics import PlacoKinematics
-from reachy_mini.analytic_kinematics import ReachyMiniAnalyticKinematics
-from placo_utils.visualization import robot_viz
-import numpy as np
 import time
+
+import numpy as np
+from placo_utils.visualization import robot_viz
+from reachy_mini_motor_controller import ReachyMiniMotorController
+
+from reachy_mini.placo_kinematics import PlacoKinematics
 
 
 def main():

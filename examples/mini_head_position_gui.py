@@ -1,8 +1,10 @@
-import numpy as np
-from reachy_mini import ReachyMini
-from scipy.spatial.transform import Rotation as R
 import time
 import tkinter as tk
+
+import numpy as np
+from scipy.spatial.transform import Rotation as R
+
+from reachy_mini import ReachyMini
 
 
 def main():

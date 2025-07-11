@@ -1,5 +1,6 @@
-from reachy_mini import ReachyMini
 import time
+
+from reachy_mini import ReachyMini
 
 with ReachyMini() as mini:
     try:
