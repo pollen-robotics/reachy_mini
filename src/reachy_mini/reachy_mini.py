@@ -540,7 +540,9 @@ class ReachyMini:
         # Another explanation is that our model is bad and the current is overestimated 3x (but I have not had these issues with other robots)
         # So I am using a magic number to compensate for this.
         # for currents under 30mA the constant is around 1
-        from_Nm_to_mA = 1.47 / 0.52 * 1000  # Conversion factor from Nm to mA for the Stewart platform motors
+        from_Nm_to_mA = (
+            1.47 / 0.52 * 1000
+        )  # Conversion factor from Nm to mA for the Stewart platform motors
         # The torque constant is not linear, so we need to use a correction factor
         # This is a magic number that should be determined experimentally
         # For currents under 30mA, the constant is around 3

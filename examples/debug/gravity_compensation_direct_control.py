@@ -24,9 +24,7 @@ def main():
     )  # Conversion factor from Nm to mA for the Stewart platform motors
     efficiency = 1.0  # Efficiency of the motors
     # torque constant correction factor
-    correction_factor = (
-        3.0 # This number is valid for currents under 30mA 
-    )
+    correction_factor = 3.0  # This number is valid for currents under 30mA
 
     t0 = time.time()
     controller.disable_torque()  # Disable torque for the Stewart platform motors
