@@ -54,9 +54,9 @@ robot.set_pose(base_pose + offsets.position_offset, ...)
 """
 
 from dataclasses import dataclass, replace
-from typing import List
+from typing import Any, Callable, List
+
 import numpy as np
-from typing import Callable
 
 
 @dataclass
@@ -1188,12 +1188,14 @@ def move_jackson_square(
 
 
 # ────────────────────────── MASTER MOVE DICTIONARIES ──────────────────────────
-DEFAULT_ANTENNA_PARAMS = {
+# A dictionary containing the default parameters for antenna motion.
+DEFAULT_ANTENNA_PARAMS: dict[str, Any] = {
     "antenna_move_name": "wiggle",
     "antenna_amplitude_rad": np.deg2rad(45),
 }
 
-MOVE_SPECIFIC_PARAMS = {
+# A dictionary mapping each move's name to its set of default parameters.
+MOVE_SPECIFIC_PARAMS: dict[str, dict[str, Any]] = {
     # -- Core Rhythms & Validated Classics --
     "simple_nod": {
         "amplitude_rad": np.deg2rad(20),
@@ -1321,7 +1323,8 @@ MOVE_SPECIFIC_PARAMS = {
     },
 }
 
-AVAILABLE_DANCE_MOVES: dict[str, Callable] = {
+# A dictionary mapping move names to their corresponding functions.
+AVAILABLE_DANCE_MOVES: dict[str, Callable[..., MoveOffsets]] = {
     # -- Core Rhythms & Validated Classics --
     "simple_nod": move_simple_nod,
     "head_tilt_roll": move_head_tilt_roll,
@@ -1349,7 +1352,7 @@ AVAILABLE_DANCE_MOVES: dict[str, Callable] = {
 }
 
 
-def _test_transient_motion():
+def _test_transient_motion() -> None:
     """Run a few examples of transient_motion and print the output."""
     print("=" * 50)
     print(" DEMONSTRATION OF transient_motion() ".center(50, "="))
