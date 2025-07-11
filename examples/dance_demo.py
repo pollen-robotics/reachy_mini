@@ -1,28 +1,38 @@
 #!/usr/bin/env python3
-"""Interactive Dance Move Tester for Reachy Mini.
+"""Interactive Dance Move Tester and Choreography Player for Reachy Mini.
 
 ---------------------------------------------
-This script allows for real-time testing and exploration of dance moves from
-the `rhythmic_motion` library on a Reachy Mini robot.
+This script allows for real-time testing of dance moves and can also play
+pre-defined choreographies from JSON files.
+
+interactive Mode (default):
+    python dance_tester.py
+    - Cycles through all available moves.
+
+Player Mode:
+    python dance_tester.py --choreography choreographies/my_choreo.json
+    - Plays a specific, ordered sequence of moves from a file.
 """
 
 import argparse
+import json
 import sys
 import threading
 import time
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import numpy as np
+from pynput import keyboard
+from scipy.spatial.transform import Rotation as R
+
+from reachy_mini import ReachyMini
 
 from reachy_mini.utils.rhythmic_motion import (
     AVAILABLE_DANCE_MOVES,
     MOVE_SPECIFIC_PARAMS,
 )
-from pynput import keyboard
-from scipy.spatial.transform import Rotation as R
-
-from reachy_mini import ReachyMini
 
 
 # --- Configuration ---
@@ -37,15 +47,26 @@ class Config:
     amplitude_scale: float = 1.0
     neutral_pos: np.ndarray = field(default_factory=lambda: np.array([0, 0, 0.02]))
     neutral_eul: np.ndarray = field(default_factory=lambda: np.zeros(3))
+    choreography_path: Optional[str] = None
 
 
 # --- Constants for UI ---
-HELP_MESSAGE = """
+INTERACTIVE_HELP_MESSAGE = """
 ┌────────────────────────────────────────────────────────────────────────────┐
-│                              CONTROLS                                      │
+│                           INTERACTIVE CONTROLS                             │
 ├──────────────────────────────────┬─────────────────────────────────────────┤
 │ Q / Ctrl+C : Quit Application    │ P / Space : Pause / Resume Motion       │
 │ Left/Right : Previous/Next Move  │ Up/Down   : Decrease / Increase BPM     │
+│ W          : Cycle Waveform      │ + / -     : Increase / Decrease Amplitude │
+└──────────────────────────────────┴─────────────────────────────────────────┘
+"""
+
+CHOREO_HELP_MESSAGE = """
+┌────────────────────────────────────────────────────────────────────────────┐
+│                         CHOREOGRAPHY CONTROLS                              │
+├──────────────────────────────────┬─────────────────────────────────────────┤
+│ Q / Ctrl+C : Quit Application    │ P / Space : Pause / Resume Motion       │
+│ Left/Right : Prev/Next Choreo Step │ Up/Down   : Decrease / Increase BPM   │
 │ W          : Cycle Waveform      │ + / -     : Increase / Decrease Amplitude │
 └──────────────────────────────────┴─────────────────────────────────────────┘
 """
@@ -72,12 +93,12 @@ class SharedState:
         return self.running
 
     def trigger_next_move(self) -> None:
-        """Set a flag to switch to the next move."""
+        """Set a flag to switch to the next move/step."""
         with self.lock:
             self.next_move = True
 
     def trigger_prev_move(self) -> None:
-        """Set a flag to switch to the previous move."""
+        """Set a flag to switch to the previous move/step."""
         with self.lock:
             self.prev_move = True
 
@@ -113,16 +134,7 @@ class SharedState:
 
 # --- Robot Interaction & Utilities ---
 def head_pose(pos: np.ndarray, eul: np.ndarray) -> np.ndarray:
-    """Create a 4x4 homogenous transformation matrix for the head.
-
-    Args:
-        pos (np.ndarray): The 3D position vector [x, y, z].
-        eul (np.ndarray): The 3D Euler angles vector [roll, pitch, yaw].
-
-    Returns:
-        np.ndarray: The corresponding 4x4 transformation matrix.
-
-    """
+    """Create a 4x4 homogenous transformation matrix for the head."""
     m = np.eye(4)
     m[:3, 3] = pos
     m[:3, :3] = R.from_euler("xyz", eul).as_matrix()
@@ -132,13 +144,7 @@ def head_pose(pos: np.ndarray, eul: np.ndarray) -> np.ndarray:
 def keyboard_listener_thread(
     shared_state: SharedState, stop_event: threading.Event
 ) -> None:
-    """Listen for keyboard input and update the shared state.
-
-    Args:
-        shared_state (SharedState): The thread-safe state object to update.
-        stop_event (threading.Event): The event to signal when to stop listening.
-
-    """
+    """Listen for keyboard input and update the shared state."""
 
     def on_press(key: Any) -> Optional[bool]:
         """Handle a key press event."""
@@ -172,16 +178,41 @@ def keyboard_listener_thread(
         listener.join()
 
 
+def load_choreography(file_path: str) -> Optional[List[Dict[str, Any]]]:
+    """Load a choreography from a JSON file."""
+    path = Path(file_path)
+    if not path.exists():
+        print(f"Error: Choreography file not found at '{file_path}'")
+        return None
+    try:
+        with open(path) as f:
+            choreography = json.load(f)
+        # Validate that all moves in the choreography exist
+        for step in choreography:
+            if step.get("move") not in AVAILABLE_DANCE_MOVES:
+                print(
+                    f"Error: Move '{step.get('move')}' in choreography is not a valid move."
+                )
+                return None
+        return choreography
+    except json.JSONDecodeError:
+        print(f"Error: Could not decode JSON from '{file_path}'")
+        return None
+
+
 # --- Main Application Logic ---
 def main(config: Config) -> None:
-    """Run the main application loop for the dance tester.
-
-    Args:
-        config (Config): The application configuration object.
-
-    """
+    """Run the main application loop for the dance tester."""
     shared_state = SharedState()
     stop_event = threading.Event()
+
+    choreography = None
+    choreography_mode = False
+    if config.choreography_path:
+        choreography = load_choreography(config.choreography_path)
+        if choreography is None:
+            return  # Exit if choreography failed to load
+        choreography_mode = True
 
     threading.Thread(
         target=keyboard_listener_thread, args=(shared_state, stop_event), daemon=True
@@ -199,17 +230,24 @@ def main(config: Config) -> None:
         current_move_idx = 0
     current_waveform_idx = 0
 
-    t_beats, sequence_beat_counter, last_loop_time = 0.0, 0.0, time.time()
+    t_beats, sequence_beat_counter = 0.0, 0.0
+    choreography_step_idx, move_cycle_counter = 0, 0.0
+    last_loop_time = time.time()
     last_status_print_time, last_help_print_time = 0.0, 0.0
     bpm, amplitude_scale = config.bpm, config.amplitude_scale
 
     print("Connecting to Reachy Mini...")
     try:
         with ReachyMini() as mini:
-            print("Robot connected. Starting dance test...")
+            mode_text = (
+                "Choreography Player" if choreography_mode else "Interactive Tester"
+            )
+            print(f"Robot connected. Starting {mode_text}...")
             mini.wake_up()
 
-            print(HELP_MESSAGE)  # Print controls at the start
+            print(
+                CHOREO_HELP_MESSAGE if choreography_mode else INTERACTIVE_HELP_MESSAGE
+            )
             last_help_print_time = time.time()
 
             while not stop_event.is_set():
@@ -224,19 +262,31 @@ def main(config: Config) -> None:
                     amplitude_scale = max(
                         0.1, amplitude_scale + changes["amplitude_change"]
                     )
-                if changes["next_move"]:
-                    current_move_idx = (current_move_idx + 1) % len(move_names)
-                    sequence_beat_counter = 0
-                if changes["prev_move"]:
-                    current_move_idx = (current_move_idx - 1 + len(move_names)) % len(
-                        move_names
-                    )
-                    sequence_beat_counter = 0
                 if changes["next_waveform"]:
                     current_waveform_idx = (current_waveform_idx + 1) % len(waveforms)
 
+                if choreography_mode:
+                    if changes["next_move"]:
+                        choreography_step_idx = (choreography_step_idx + 1) % len(
+                            choreography
+                        )
+                        move_cycle_counter = 0.0
+                    if changes["prev_move"]:
+                        choreography_step_idx = (
+                            choreography_step_idx - 1 + len(choreography)
+                        ) % len(choreography)
+                        move_cycle_counter = 0.0
+                else:
+                    if changes["next_move"]:
+                        current_move_idx = (current_move_idx + 1) % len(move_names)
+                        sequence_beat_counter = 0
+                    if changes["prev_move"]:
+                        current_move_idx = (
+                            current_move_idx - 1 + len(move_names)
+                        ) % len(move_names)
+                        sequence_beat_counter = 0
+
                 if not shared_state.running:
-                    # While paused, ensure robot is at a neutral, safe pose.
                     mini.set_target(
                         head_pose(config.neutral_pos, config.neutral_eul),
                         antennas=np.zeros(2),
@@ -245,34 +295,58 @@ def main(config: Config) -> None:
                     continue
 
                 beats_this_frame = dt * (bpm / 60.0)
-                t_beats += beats_this_frame
-                sequence_beat_counter += beats_this_frame
 
-                if sequence_beat_counter >= config.beats_per_sequence:
-                    current_move_idx = (current_move_idx + 1) % len(move_names)
-                    sequence_beat_counter = 0
+                # --- Motion Logic: Depends on Mode ---
+                if choreography_mode:
+                    current_step = choreography[choreography_step_idx]
+                    target_cycles = current_step["cycles"]
+                    move_cycle_counter += beats_this_frame
 
-                move_name = move_names[current_move_idx]
+                    if move_cycle_counter >= target_cycles:
+                        if choreography_step_idx == len(choreography) - 1:
+                            print("\nChoreography complete. Exiting.")
+                            break
+                        choreography_step_idx += 1
+                        move_cycle_counter = 0.0
+
+                    move_name = current_step["move"]
+                    step_amplitude_modifier = current_step.get("amplitude", 1.0)
+                    t_motion = (
+                        move_cycle_counter  # Use cycle counter for consistent progress
+                    )
+
+                else:  # Interactive Mode
+                    sequence_beat_counter += beats_this_frame
+                    if sequence_beat_counter >= config.beats_per_sequence:
+                        current_move_idx = (current_move_idx + 1) % len(move_names)
+                        sequence_beat_counter = 0
+
+                    move_name = move_names[current_move_idx]
+                    step_amplitude_modifier = 1.0
+                    t_beats += (
+                        beats_this_frame  # Use continuous time for interactive mode
+                    )
+                    t_motion = t_beats
+
+                # --- Parameter Calculation (Common to both modes) ---
                 waveform = waveforms[current_waveform_idx]
                 move_fn = AVAILABLE_DANCE_MOVES[move_name]
-                base_params = MOVE_SPECIFIC_PARAMS.get(move_name, {})
-                current_params = base_params.copy()
+                base_params = MOVE_SPECIFIC_PARAMS.get(move_name, {}).copy()
+                current_params = base_params
 
                 if "waveform" in base_params:
                     current_params["waveform"] = waveform
 
-                # Apply amplitude scaling to all amplitude-related parameters.
+                final_amplitude_scale = amplitude_scale * step_amplitude_modifier
                 for key in current_params:
                     if "amplitude" in key or "_amp" in key:
-                        current_params[key] *= amplitude_scale
+                        current_params[key] *= final_amplitude_scale
 
-                # The `**` operator unpacks the dictionary into named arguments,
-                offsets = move_fn(t_beats, **current_params)
+                offsets = move_fn(t_motion, **current_params)
 
                 final_pos = config.neutral_pos + offsets.position_offset
                 final_eul = config.neutral_eul + offsets.orientation_offset
                 final_ant = offsets.antennas_offset
-
                 mini.set_target(head_pose(final_pos, final_eul), antennas=final_ant)
 
                 # --- UI Update (Console) ---
@@ -280,15 +354,25 @@ def main(config: Config) -> None:
                     sys.stdout.write("\r" + " " * 80 + "\r")
                     status = "RUNNING" if shared_state.running else "PAUSED "
                     wave_status = waveform if "waveform" in current_params else "N/A"
-                    print(
-                        f"[{status}] Move: {move_name:<35} | BPM: {bpm:<5.1f} | Wave: {wave_status:<8} | Amp: {amplitude_scale:.1f}x",
-                        end="",
-                    )
+
+                    if choreography_mode:
+                        progress_pct = (
+                            f"{(move_cycle_counter / target_cycles * 100):.0f}%"
+                        )
+                        status_line = (
+                            f"[{status}] Step {choreography_step_idx + 1}/{len(choreography)}: {move_name:<20} ({progress_pct:>4}) | "
+                            f"BPM: {bpm:<5.1f} | Amp: {final_amplitude_scale:.1f}x"
+                        )
+                    else:
+                        status_line = f"[{status}] Move: {move_name:<35} | BPM: {bpm:<5.1f} | Wave: {wave_status:<8} | Amp: {amplitude_scale:.1f}x"
+                    print(status_line, end="")
                     sys.stdout.flush()
                     last_status_print_time = loop_start_time
 
-                if loop_start_time - last_help_print_time > 10.0:
-                    print(f"\n{HELP_MESSAGE}")  # Reprint help message periodically
+                if loop_start_time - last_help_print_time > 30.0:
+                    print(
+                        f"\n{CHOREO_HELP_MESSAGE if choreography_mode else INTERACTIVE_HELP_MESSAGE}"
+                    )
                     last_help_print_time = loop_start_time
 
                 time.sleep(max(0, config.control_ts - (time.time() - loop_start_time)))
@@ -310,29 +394,35 @@ def main(config: Config) -> None:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="Interactive Dance Move Tester for Reachy Mini.",
+        description="Interactive Dance Move Tester and Choreography Player for Reachy Mini.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    parser.add_argument(
-        "--bpm", type=float, default=120.0, help="Starting BPM for the simulation."
-    )
+    parser.add_argument("--bpm", type=float, default=120.0, help="Starting BPM.")
     parser.add_argument(
         "--start-move",
         default="simple_nod",
-        choices=list(AVAILABLE_DANCE_MOVES.keys()),  # Ensure choices are up-to-date
-        help="Which dance move to start with.",
+        choices=list(AVAILABLE_DANCE_MOVES.keys()),
+        help="Which dance move to start with in interactive mode.",
     )
     parser.add_argument(
         "--beats-per-sequence",
         type=int,
         default=16,
-        help="Automatically change move after this many beats.",
+        help="In interactive mode, automatically change move after this many beats.",
     )
+    parser.add_argument(
+        "--choreography",
+        type=str,
+        default=None,
+        help="Path to a JSON choreography file to play. Overrides interactive mode.",
+    )
+
     cli_args = parser.parse_args()
     app_config = Config(
         bpm=cli_args.bpm,
         start_move=cli_args.start_move,
         beats_per_sequence=cli_args.beats_per_sequence,
+        choreography_path=cli_args.choreography,
     )
 
     main(app_config)
