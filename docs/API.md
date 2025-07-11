@@ -224,4 +224,50 @@ TODO
 
 ## Writing an App
 
-TODO
+We provide a simple way to wrap your in an application that can be run as a standalone script. This is useful to properly manage the start/stop of the app and to add discovery/install mechanisms to allow users to easily run your app. We are also working on a dashboard to manage the apps and their installation.
+
+To write you app, you simply needs to define a class that inherits from `ReachyMiniApp` and implement the `run` method. This method will be called when the app is started, and you can use it to interact with the robot.
+
+```python
+import threading
+
+from reachy_mini.app import ReachyMiniApp
+from reachy_mini import ReachyMini
+
+
+class MyApp(ReachyMiniApp):
+    def run(self, reachy_mini: ReachyMini, stop_event: threading.Event):
+        # Write your code here
+        ...
+```
+
+The `stop_event` is a threading event that you should check periodically to know if the app should stop. You can use it to gracefully stop the app when the user wants to stop it.
+
+We also provide a script to make all the basic boilerplate for you. You can run the following command to create a new app:
+
+```bash
+reachy-mini-make-app my_app_name
+```
+
+This will create a new directory called `my_app_name` with the following structure:
+
+```
+my_app_name/
+├── pyproject.toml
+├── README.md
+├── my_app_name/
+│   ├── __init__.py
+│   └── main.py
+```
+
+You can run your app directly as a script:
+
+```bash
+python my_app_name/main.py
+```
+
+or install it as a package:
+
+```bash
+pip install -e my_app_name/
+```
