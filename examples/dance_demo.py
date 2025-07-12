@@ -27,7 +27,7 @@ import numpy as np
 from pynput import keyboard
 
 from reachy_mini import ReachyMini, utils
-from reachy_mini.utils.rhythmic_motion import AVAILABLE_MOVES
+from reachy_mini.utils.moves import AVAILABLE_MOVES
 
 
 # --- Configuration ---
