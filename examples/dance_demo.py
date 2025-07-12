@@ -25,11 +25,8 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 from pynput import keyboard
-from scipy.spatial.transform import Rotation as R
 
-from reachy_mini import ReachyMini
-
-# Correct import path as specified.
+from reachy_mini import ReachyMini, utils
 from reachy_mini.utils.rhythmic_motion import AVAILABLE_MOVES
 
 
@@ -121,12 +118,6 @@ class SharedState:
 
 
 # --- Robot Interaction & Utilities ---
-def head_pose(pos: np.ndarray, eul: np.ndarray) -> np.ndarray:
-    """Create a 4x4 homogenous transformation matrix for the head."""
-    m = np.eye(4)
-    m[:3, 3] = pos
-    m[:3, :3] = R.from_euler("xyz", eul).as_matrix()
-    return m
 
 
 def keyboard_listener_thread(
@@ -298,8 +289,11 @@ def main(config: Config) -> None:
                         sequence_beat_counter = 0
 
                 if not shared_state.running:
+                    # While paused, ensure robot is at a neutral, safe pose.
                     mini.set_target(
-                        head_pose(config.neutral_pos, config.neutral_eul),
+                        utils.create_head_pose(
+                            *config.neutral_pos, *config.neutral_eul, degrees=False
+                        ),
                         antennas=np.zeros(2),
                     )
                     time.sleep(config.control_ts)
@@ -357,7 +351,11 @@ def main(config: Config) -> None:
                 final_pos = config.neutral_pos + offsets.position_offset
                 final_eul = config.neutral_eul + offsets.orientation_offset
                 final_ant = offsets.antennas_offset
-                mini.set_target(head_pose(final_pos, final_eul), antennas=final_ant)
+
+                mini.set_target(
+                    utils.create_head_pose(*final_pos, *final_eul, degrees=False),
+                    antennas=final_ant,
+                )
 
                 if loop_start_time - last_status_print_time > 1.0:
                     sys.stdout.write("\r" + " " * 80 + "\r")
