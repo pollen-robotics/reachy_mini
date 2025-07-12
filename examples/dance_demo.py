@@ -21,7 +21,7 @@ import threading
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 from pynput import keyboard
@@ -29,7 +29,7 @@ from scipy.spatial.transform import Rotation as R
 
 from reachy_mini import ReachyMini
 
-# Correct import path as specified, now using the single fused dictionary.
+# Correct import path as specified.
 from reachy_mini.utils.rhythmic_motion import AVAILABLE_MOVES
 
 
@@ -176,22 +176,46 @@ def keyboard_listener_thread(
         listener.join()
 
 
-def load_choreography(file_path: str) -> Optional[List[Dict[str, Any]]]:
-    """Load a choreography from a JSON file."""
+# --- Logic updated to only handle the new, standardized format ---
+def load_choreography(
+    file_path: str,
+) -> Optional[Tuple[List[Dict[str, Any]], Optional[float]]]:
+    """Load a choreography from a JSON file.
+
+    The file must be a JSON object with a 'bpm' key and a 'sequence' key.
+    """
     path = Path(file_path)
     if not path.exists():
         print(f"Error: Choreography file not found at '{file_path}'")
         return None
     try:
         with open(path) as f:
-            choreography = json.load(f)
-        for step in choreography:
+            data = json.load(f)
+
+        if not isinstance(data, dict):
+            print(
+                f"Error: Choreography file '{file_path}' has an invalid format. It must be a JSON object containing 'bpm' and 'sequence' keys."
+            )
+            return None
+
+        sequence = data.get("sequence")
+        bpm_from_file = data.get("bpm")
+
+        if not isinstance(sequence, list):
+            print(
+                f"Error: Choreography file '{file_path}' is missing a 'sequence' list."
+            )
+            return None
+
+        for step in sequence:
             if step.get("move") not in AVAILABLE_MOVES:
                 print(
                     f"Error: Move '{step.get('move')}' in choreography is not a valid move."
                 )
                 return None
-        return choreography
+
+        return sequence, bpm_from_file
+
     except json.JSONDecodeError:
         print(f"Error: Could not decode JSON from '{file_path}'")
         return None
@@ -206,10 +230,12 @@ def main(config: Config) -> None:
     choreography = None
     choreography_mode = False
     if config.choreography_path:
-        choreography = load_choreography(config.choreography_path)
-        if choreography is None:
+        result = load_choreography(config.choreography_path)
+        if result:
+            choreography, _ = result
+            choreography_mode = True
+        else:
             return
-        choreography_mode = True
 
     threading.Thread(
         target=keyboard_listener_thread, args=(shared_state, stop_event), daemon=True
@@ -396,7 +422,6 @@ def main(config: Config) -> None:
         print("\nPutting robot to sleep and cleaning up...")
         with ReachyMini() as mini:
             mini.goto_sleep()
-
         print("Shutdown complete.")
 
 
@@ -405,7 +430,12 @@ if __name__ == "__main__":
         description="Interactive Dance Move Tester and Choreography Player for Reachy Mini.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    parser.add_argument("--bpm", type=float, default=120.0, help="Starting BPM.")
+    parser.add_argument(
+        "--bpm",
+        type=float,
+        default=None,
+        help="Starting BPM. Overrides file BPM. Default is 120.",
+    )
     parser.add_argument(
         "--start-move",
         default="simple_nod",
@@ -426,8 +456,23 @@ if __name__ == "__main__":
     )
 
     cli_args = parser.parse_args()
+
+    bpm_from_file = None
+    if cli_args.choreography:
+        result = load_choreography(cli_args.choreography)
+        if result:
+            _, bpm_from_file = result
+
+    # Priority: CLI > File > Script Default (120)
+    if cli_args.bpm is not None:
+        bpm_to_use = cli_args.bpm
+    elif bpm_from_file is not None:
+        bpm_to_use = bpm_from_file
+    else:
+        bpm_to_use = 120.0
+
     app_config = Config(
-        bpm=cli_args.bpm,
+        bpm=bpm_to_use,
         start_move=cli_args.start_move,
         beats_per_sequence=cli_args.beats_per_sequence,
         choreography_path=cli_args.choreography,
