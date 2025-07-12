@@ -51,21 +51,11 @@ class Config:
 # --- Constants for UI ---
 INTERACTIVE_HELP_MESSAGE = """
 ┌────────────────────────────────────────────────────────────────────────────┐
-│                           INTERACTIVE CONTROLS                             │
+│                           CONTROLS                                         │
 ├──────────────────────────────────┬─────────────────────────────────────────┤
 │ Q / Ctrl+C : Quit Application    │ P / Space : Pause / Resume Motion       │
-│ Left/Right : Previous/Next Move  │ Up/Down   : Decrease / Increase BPM     │
-│ W          : Cycle Waveform      │ + / -     : Increase / Decrease Amplitude │
-└──────────────────────────────────┴─────────────────────────────────────────┘
-"""
-
-CHOREO_HELP_MESSAGE = """
-┌────────────────────────────────────────────────────────────────────────────┐
-│                         CHOREOGRAPHY CONTROLS                              │
-├──────────────────────────────────┬─────────────────────────────────────────┤
-│ Q / Ctrl+C : Quit Application    │ P / Space : Pause / Resume Motion       │
-│ Left/Right : Prev/Next Choreo Step │ Up/Down   : Decrease / Increase BPM   │
-│ W          : Cycle Waveform      │ + / -     : Increase / Decrease Amplitude │
+│ Left/Right : Previous/Next Move  │ Up/Down   : Tune BPM                    │
+│ W          : Cycle Waveform      │ + / -     : Tune Amplitude              │
 └──────────────────────────────────┴─────────────────────────────────────────┘
 """
 
@@ -88,7 +78,7 @@ class SharedState:
         """Toggle the running state and return the new state."""
         with self.lock:
             self.running = not self.running
-        return self.running
+            return self.running
 
     def trigger_next_move(self) -> None:
         """Set a flag to switch to the next move/step."""
@@ -267,9 +257,7 @@ def main(config: Config) -> None:
             print(f"Robot connected. Starting {mode_text}...")
             mini.wake_up()
 
-            print(
-                CHOREO_HELP_MESSAGE if choreography_mode else INTERACTIVE_HELP_MESSAGE
-            )
+            print(INTERACTIVE_HELP_MESSAGE)
             last_help_print_time = time.time()
             last_loop_time = time.time()
 
@@ -403,20 +391,13 @@ def main(config: Config) -> None:
                     last_status_print_time = loop_start_time
 
                 if loop_start_time - last_help_print_time > 30.0:
-                    print(
-                        f"\n{CHOREO_HELP_MESSAGE if choreography_mode else INTERACTIVE_HELP_MESSAGE}"
-                    )
+                    print(f"\n{INTERACTIVE_HELP_MESSAGE}")
                     last_help_print_time = loop_start_time
 
                 time.sleep(max(0, config.control_ts - (time.time() - loop_start_time)))
 
     except KeyboardInterrupt:
         print("\nCtrl-C received. Shutting down...")
-    except Exception as e:
-        import traceback
-
-        print(f"\nAn error occurred: {e}")
-        traceback.print_exc()
     finally:
         stop_event.set()
         print("\nPutting robot to sleep and cleaning up...")
