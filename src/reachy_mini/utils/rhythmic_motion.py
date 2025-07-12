@@ -1365,190 +1365,220 @@ def move_crescent_walk(
 
 
 # ────────────────────────── MASTER MOVE DICTIONARIES ──────────────────────────
+# ────────────────────────── MASTER MOVE DICTIONARY ──────────────────────────
 # A dictionary containing the default parameters for antenna motion.
 DEFAULT_ANTENNA_PARAMS: dict[str, Any] = {
     "antenna_move_name": "wiggle",
     "antenna_amplitude_rad": np.deg2rad(45),
 }
 
-# A dictionary mapping each move's name to its set of default parameters.
-MOVE_SPECIFIC_PARAMS: dict[str, dict[str, Any]] = {
-    # -- Core Rhythms & Validated Classics --
-    "simple_nod": {
-        "amplitude_rad": np.deg2rad(20),
-        "subcycles_per_beat": 1.0,
-        **DEFAULT_ANTENNA_PARAMS,
-    },
-    "head_tilt_roll": {
-        "amplitude_rad": np.deg2rad(15),
-        "subcycles_per_beat": 0.5,
-        **DEFAULT_ANTENNA_PARAMS,
-    },
-    "side_to_side_sway": {
-        "amplitude_m": 0.04,
-        "subcycles_per_beat": 0.5,
-        **DEFAULT_ANTENNA_PARAMS,
-    },
-    "dizzy_spin": {
-        "roll_amplitude_rad": np.deg2rad(15),
-        "pitch_amplitude_rad": np.deg2rad(15),
-        "subcycles_per_beat": 0.25,
-        **DEFAULT_ANTENNA_PARAMS,
-    },
-    "stumble_and_recover": {
-        "yaw_amplitude_rad": np.deg2rad(25),
-        "pitch_amplitude_rad": np.deg2rad(10),
-        "y_amplitude_m": 0.015,
-        "subcycles_per_beat": 0.25,
-        "antenna_move_name": "both",
-        "antenna_amplitude_rad": np.deg2rad(50),
-    },
-    "headbanger_combo": {
-        "pitch_amplitude_rad": np.deg2rad(30),
-        "z_amplitude_m": 0.015,
-        "subcycles_per_beat": 1.0,
-        "waveform": "sin",
-        "antenna_move_name": "both",
-        "antenna_amplitude_rad": np.deg2rad(40),
-    },
-    "interwoven_spirals": {
-        "roll_amp": np.deg2rad(15),
-        "pitch_amp": np.deg2rad(20),
-        "yaw_amp": np.deg2rad(25),
-        "subcycles_per_beat": 0.125,
-        **DEFAULT_ANTENNA_PARAMS,
-    },
-    "sharp_side_tilt": {
-        "roll_amplitude_rad": np.deg2rad(22),
-        "subcycles_per_beat": 1.0,
-        "waveform": "triangle",
-        **DEFAULT_ANTENNA_PARAMS,
-    },
-    "side_peekaboo": {
-        "z_amp": 0.04,
-        "y_amp": 0.03,
-        "pitch_amp": np.deg2rad(20),
-        "subcycles_per_beat": 0.5,
-        "antenna_move_name": "both",
-        "antenna_amplitude_rad": np.deg2rad(60),
-    },
-    # -- Groove & Funk --
-    "yeah_nod": {
-        "amplitude_rad": np.deg2rad(15),
-        "subcycles_per_beat": 1.0,
-        "antenna_move_name": "both",
-        "antenna_amplitude_rad": np.deg2rad(20),
-    },
-    "uh_huh_tilt": {
-        "amplitude_rad": np.deg2rad(15),
-        "subcycles_per_beat": 0.5,
-        **DEFAULT_ANTENNA_PARAMS,
-    },
-    "neck_recoil": {
-        "amplitude_m": 0.015,
-        "subcycles_per_beat": 0.5,
-        **DEFAULT_ANTENNA_PARAMS,
-    },
-    "chin_lead": {
-        "x_amplitude_m": 0.02,
-        "pitch_amplitude_rad": np.deg2rad(15),
-        "subcycles_per_beat": 0.5,
-        "antenna_move_name": "both",
-        **DEFAULT_ANTENNA_PARAMS,
-    },
-    "groovy_sway_and_roll": {
-        "y_amplitude_m": 0.03,
-        "roll_amplitude_rad": np.deg2rad(15),
-        "subcycles_per_beat": 0.5,
-        **DEFAULT_ANTENNA_PARAMS,
-    },
-    "chicken_peck": {
-        "amplitude_m": 0.02,
-        "subcycles_per_beat": 1.0,
-        "antenna_move_name": "both",
-        "antenna_amplitude_rad": np.deg2rad(30),
-    },
-    # -- Sassy & Expressive --
-    "side_glance_flick": {
-        "yaw_amplitude_rad": np.deg2rad(45),
-        "subcycles_per_beat": 0.25,
-        **DEFAULT_ANTENNA_PARAMS,
-    },
-    "polyrhythm_combo": {
-        "sway_amplitude_m": 0.02,
-        "nod_amplitude_rad": np.deg2rad(10),
-        "antenna_amplitude_rad": np.deg2rad(45),
-        "antenna_move_name": "wiggle",
-    },
-    # -- Robotic & Glitch --
-    "grid_snap": {
-        "amplitude_rad": np.deg2rad(20),
-        "subcycles_per_beat": 0.25,
-        "antenna_move_name": "both",
-        "antenna_amplitude_rad": np.deg2rad(10),
-    },
-    "pendulum_swing": {
-        "amplitude_rad": np.deg2rad(25),
-        "subcycles_per_beat": 0.25,
-        **DEFAULT_ANTENNA_PARAMS,
-    },
-    "jackson_square": {
-        "square_amp_m": 0.035,
-        "twitch_amplitude_rad": np.deg2rad(20),
-        "subcycles_per_beat": 0.125,
-        **DEFAULT_ANTENNA_PARAMS,
-    },
-    "critical_frequency_sweep": {
-        "roll_amplitude_rad": np.deg2rad(40),  # A large, risky tilt
-        "start_subcycles": 0.5,  # Start slow
-        "end_subcycles": 4.0,  # Go very fast
-        "num_steps": 10,  # 10 steps in the sweep
-        "step_duration_beats": 16,  # Hold each speed for 16 beats
-        **DEFAULT_ANTENNA_PARAMS,
-    },
-    "ellipse_walk": {
-        "x_amplitude_m": 0.01,
-        "y_amplitude_m": 0.025,
-        "subcycles_per_beat": 1.55,  # The frequency found from the sweep test
-        **DEFAULT_ANTENNA_PARAMS,
-    },
-    "crescent_walk": {
-        "x_amplitude_m": 0.03,
-        "y_amplitude_m": 0.03,
-        "subcycles_per_beat": 1.55,  # Use same successful frequency
-        **DEFAULT_ANTENNA_PARAMS,
-    },
-}
-
-# A dictionary mapping move names to their corresponding functions.
-AVAILABLE_DANCE_MOVES: dict[str, Callable[..., MoveOffsets]] = {
-    # -- Core Rhythms & Validated Classics --
-    "simple_nod": move_simple_nod,
-    "head_tilt_roll": move_head_tilt_roll,
-    "side_to_side_sway": move_side_to_side_sway,
-    "dizzy_spin": move_dizzy_spin,
-    "stumble_and_recover": move_stumble_and_recover,
-    "headbanger_combo": move_headbanger_combo,
-    "interwoven_spirals": move_interwoven_spirals,
-    "sharp_side_tilt": move_sharp_side_tilt,
-    "side_peekaboo": move_side_peekaboo,
-    # -- Groove & Funk --
-    "yeah_nod": move_yeah_nod,
-    "uh_huh_tilt": move_uh_huh_tilt,
-    "neck_recoil": move_neck_recoil,
-    "chin_lead": move_chin_lead,
-    "groovy_sway_and_roll": move_groovy_sway_and_roll,
-    "chicken_peck": move_chicken_peck,
-    # -- Sassy & Expressive --
-    "side_glance_flick": move_side_glance_flick,
-    "polyrhythm_combo": move_polyrhythm_combo,
-    # -- Robotic & Glitch --
-    "grid_snap": move_grid_snap,
-    "pendulum_swing": move_pendulum_swing,
-    "jackson_square": move_jackson_square,
-    "critical_frequency_sweep": move_critical_frequency_sweep,
-    "ellipse_walk": move_ellipse_walk,
-    "crescent_walk": move_crescent_walk,
+# This single dictionary is now the main entry point for all moves.
+# It maps a move name to a tuple containing:
+# 1. The callable move function.
+# 2. A dictionary of its default parameters.
+AVAILABLE_MOVES: dict[str, tuple[Callable[..., MoveOffsets], dict[str, Any]]] = {
+    "simple_nod": (
+        move_simple_nod,
+        {
+            "amplitude_rad": np.deg2rad(20),
+            "subcycles_per_beat": 1.0,
+            **DEFAULT_ANTENNA_PARAMS,
+        },
+    ),
+    "head_tilt_roll": (
+        move_head_tilt_roll,
+        {
+            "amplitude_rad": np.deg2rad(15),
+            "subcycles_per_beat": 0.5,
+            **DEFAULT_ANTENNA_PARAMS,
+        },
+    ),
+    "side_to_side_sway": (
+        move_side_to_side_sway,
+        {"amplitude_m": 0.04, "subcycles_per_beat": 0.5, **DEFAULT_ANTENNA_PARAMS},
+    ),
+    "dizzy_spin": (
+        move_dizzy_spin,
+        {
+            "roll_amplitude_rad": np.deg2rad(15),
+            "pitch_amplitude_rad": np.deg2rad(15),
+            "subcycles_per_beat": 0.25,
+            **DEFAULT_ANTENNA_PARAMS,
+        },
+    ),
+    "stumble_and_recover": (
+        move_stumble_and_recover,
+        {
+            "yaw_amplitude_rad": np.deg2rad(25),
+            "pitch_amplitude_rad": np.deg2rad(10),
+            "y_amplitude_m": 0.015,
+            "subcycles_per_beat": 0.25,
+            "antenna_move_name": "both",
+            "antenna_amplitude_rad": np.deg2rad(50),
+        },
+    ),
+    "headbanger_combo": (
+        move_headbanger_combo,
+        {
+            "pitch_amplitude_rad": np.deg2rad(30),
+            "z_amplitude_m": 0.015,
+            "subcycles_per_beat": 1.0,
+            "waveform": "sin",
+            "antenna_move_name": "both",
+            "antenna_amplitude_rad": np.deg2rad(40),
+        },
+    ),
+    "interwoven_spirals": (
+        move_interwoven_spirals,
+        {
+            "roll_amp": np.deg2rad(15),
+            "pitch_amp": np.deg2rad(20),
+            "yaw_amp": np.deg2rad(25),
+            "subcycles_per_beat": 0.125,
+            **DEFAULT_ANTENNA_PARAMS,
+        },
+    ),
+    "sharp_side_tilt": (
+        move_sharp_side_tilt,
+        {
+            "roll_amplitude_rad": np.deg2rad(22),
+            "subcycles_per_beat": 1.0,
+            "waveform": "triangle",
+            **DEFAULT_ANTENNA_PARAMS,
+        },
+    ),
+    "side_peekaboo": (
+        move_side_peekaboo,
+        {
+            "z_amp": 0.04,
+            "y_amp": 0.03,
+            "pitch_amp": np.deg2rad(20),
+            "subcycles_per_beat": 0.5,
+            "antenna_move_name": "both",
+            "antenna_amplitude_rad": np.deg2rad(60),
+        },
+    ),
+    "yeah_nod": (
+        move_yeah_nod,
+        {
+            "amplitude_rad": np.deg2rad(15),
+            "subcycles_per_beat": 1.0,
+            "antenna_move_name": "both",
+            "antenna_amplitude_rad": np.deg2rad(20),
+        },
+    ),
+    "uh_huh_tilt": (
+        move_uh_huh_tilt,
+        {
+            "amplitude_rad": np.deg2rad(15),
+            "subcycles_per_beat": 0.5,
+            **DEFAULT_ANTENNA_PARAMS,
+        },
+    ),
+    "neck_recoil": (
+        move_neck_recoil,
+        {"amplitude_m": 0.015, "subcycles_per_beat": 0.5, **DEFAULT_ANTENNA_PARAMS},
+    ),
+    "chin_lead": (
+        move_chin_lead,
+        {
+            "x_amplitude_m": 0.02,
+            "pitch_amplitude_rad": np.deg2rad(15),
+            "subcycles_per_beat": 0.5,
+            "antenna_move_name": "both",
+            **DEFAULT_ANTENNA_PARAMS,
+        },
+    ),
+    "groovy_sway_and_roll": (
+        move_groovy_sway_and_roll,
+        {
+            "y_amplitude_m": 0.03,
+            "roll_amplitude_rad": np.deg2rad(15),
+            "subcycles_per_beat": 0.5,
+            **DEFAULT_ANTENNA_PARAMS,
+        },
+    ),
+    "chicken_peck": (
+        move_chicken_peck,
+        {
+            "amplitude_m": 0.02,
+            "subcycles_per_beat": 1.0,
+            "antenna_move_name": "both",
+            "antenna_amplitude_rad": np.deg2rad(30),
+        },
+    ),
+    "side_glance_flick": (
+        move_side_glance_flick,
+        {
+            "yaw_amplitude_rad": np.deg2rad(45),
+            "subcycles_per_beat": 0.25,
+            **DEFAULT_ANTENNA_PARAMS,
+        },
+    ),
+    "polyrhythm_combo": (
+        move_polyrhythm_combo,
+        {
+            "sway_amplitude_m": 0.02,
+            "nod_amplitude_rad": np.deg2rad(10),
+            "antenna_amplitude_rad": np.deg2rad(45),
+            "antenna_move_name": "wiggle",
+        },
+    ),
+    "grid_snap": (
+        move_grid_snap,
+        {
+            "amplitude_rad": np.deg2rad(20),
+            "subcycles_per_beat": 0.25,
+            "antenna_move_name": "both",
+            "antenna_amplitude_rad": np.deg2rad(10),
+        },
+    ),
+    "pendulum_swing": (
+        move_pendulum_swing,
+        {
+            "amplitude_rad": np.deg2rad(25),
+            "subcycles_per_beat": 0.25,
+            **DEFAULT_ANTENNA_PARAMS,
+        },
+    ),
+    "jackson_square": (
+        move_jackson_square,
+        {
+            "square_amp_m": 0.035,
+            "twitch_amplitude_rad": np.deg2rad(20),
+            "subcycles_per_beat": 0.125,
+            **DEFAULT_ANTENNA_PARAMS,
+        },
+    ),
+    "critical_frequency_sweep": (
+        move_critical_frequency_sweep,
+        {
+            "roll_amplitude_rad": np.deg2rad(40),
+            "start_subcycles": 0.5,
+            "end_subcycles": 4.0,
+            "num_steps": 10,
+            "step_duration_beats": 16,
+            **DEFAULT_ANTENNA_PARAMS,
+        },
+    ),
+    "ellipse_walk": (
+        move_ellipse_walk,
+        {
+            "x_amplitude_m": 0.01,
+            "y_amplitude_m": 0.025,
+            "subcycles_per_beat": 1.55,
+            **DEFAULT_ANTENNA_PARAMS,
+        },
+    ),
+    "crescent_walk": (
+        move_crescent_walk,
+        {
+            "x_amplitude_m": 0.03,
+            "y_amplitude_m": 0.03,
+            "subcycles_per_beat": 1.55,
+            **DEFAULT_ANTENNA_PARAMS,
+        },
+    ),
 }
 
 

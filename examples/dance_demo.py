@@ -29,11 +29,8 @@ from scipy.spatial.transform import Rotation as R
 
 from reachy_mini import ReachyMini
 
-# Correct import path as specified.
-from reachy_mini.utils.rhythmic_motion import (
-    AVAILABLE_DANCE_MOVES,
-    MOVE_SPECIFIC_PARAMS,
-)
+# Correct import path as specified, now using the single fused dictionary.
+from reachy_mini.utils.rhythmic_motion import AVAILABLE_MOVES
 
 
 # --- Configuration ---
@@ -189,7 +186,7 @@ def load_choreography(file_path: str) -> Optional[List[Dict[str, Any]]]:
         with open(path) as f:
             choreography = json.load(f)
         for step in choreography:
-            if step.get("move") not in AVAILABLE_DANCE_MOVES:
+            if step.get("move") not in AVAILABLE_MOVES:
                 print(
                     f"Error: Move '{step.get('move')}' in choreography is not a valid move."
                 )
@@ -218,7 +215,7 @@ def main(config: Config) -> None:
         target=keyboard_listener_thread, args=(shared_state, stop_event), daemon=True
     ).start()
 
-    move_names: List[str] = list(AVAILABLE_DANCE_MOVES.keys())
+    move_names: List[str] = list(AVAILABLE_MOVES.keys())
     waveforms: List[str] = ["sin", "cos", "triangle", "square", "sawtooth"]
 
     try:
@@ -299,7 +296,7 @@ def main(config: Config) -> None:
                 if choreography_mode:
                     current_step = choreography[choreography_step_idx]
                     move_name = current_step["move"]
-                    params = MOVE_SPECIFIC_PARAMS.get(move_name, {})
+                    _, params = AVAILABLE_MOVES[move_name]
 
                     target_cycles = current_step["cycles"]
                     subcycles_per_beat = params.get("subcycles_per_beat", 1.0)
@@ -311,15 +308,10 @@ def main(config: Config) -> None:
 
                     step_beat_counter += beats_this_frame
                     if step_beat_counter >= target_beats:
-                        if choreography_step_idx == len(choreography) - 1:
-                            print(
-                                "\nChoreography complete. Going back to the first move!"
-                            )
-                            choreography_step_idx = 0
-                        else:
-                            choreography_step_idx += 1
                         step_beat_counter = 0.0
-                        current_step = choreography[choreography_step_idx]
+                        choreography_step_idx = (choreography_step_idx + 1) % len(
+                            choreography
+                        )
 
                     step_amplitude_modifier = current_step.get("amplitude", 1.0)
                     t_motion = step_beat_counter
@@ -335,9 +327,8 @@ def main(config: Config) -> None:
                     t_motion = t_beats
 
                 waveform = waveforms[current_waveform_idx]
-                move_fn = AVAILABLE_DANCE_MOVES[move_name]
-                base_params = MOVE_SPECIFIC_PARAMS.get(move_name, {}).copy()
-                current_params = base_params
+                move_fn, base_params = AVAILABLE_MOVES[move_name]
+                current_params = base_params.copy()
 
                 if "waveform" in base_params:
                     current_params["waveform"] = waveform
@@ -359,13 +350,18 @@ def main(config: Config) -> None:
                     status = "RUNNING" if shared_state.running else "PAUSED "
 
                     if choreography_mode:
-                        target_beats_display = choreography[choreography_step_idx][
-                            "cycles"
-                        ] / MOVE_SPECIFIC_PARAMS.get(move_name, {}).get(
-                            "subcycles_per_beat", 1.0
+                        _, params_for_ui = AVAILABLE_MOVES[move_name]
+                        subcycles_for_ui = params_for_ui.get("subcycles_per_beat", 1.0)
+                        target_beats_display = (
+                            choreography[choreography_step_idx]["cycles"]
+                            / subcycles_for_ui
+                            if subcycles_for_ui > 0
+                            else 0
                         )
                         progress_pct = (
                             f"{(step_beat_counter / target_beats_display * 100):.0f}%"
+                            if target_beats_display > 0
+                            else "N/A"
                         )
                         status_line = (
                             f"[{status}] Step {choreography_step_idx + 1}/{len(choreography)}: {move_name:<20} ({progress_pct:>4}) | "
@@ -400,6 +396,7 @@ def main(config: Config) -> None:
         print("\nPutting robot to sleep and cleaning up...")
         with ReachyMini() as mini:
             mini.goto_sleep()
+
         print("Shutdown complete.")
 
 
@@ -412,7 +409,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--start-move",
         default="simple_nod",
-        choices=list(AVAILABLE_DANCE_MOVES.keys()),
+        choices=list(AVAILABLE_MOVES.keys()),
         help="Which dance move to start with in interactive mode.",
     )
     parser.add_argument(
