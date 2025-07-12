@@ -239,167 +239,162 @@ def main(config: Config) -> None:
     last_status_print_time, last_help_print_time = 0.0, 0.0
     bpm, amplitude_scale = config.bpm, config.amplitude_scale
 
-    print("Connecting to Reachy Mini...")
+    mini: Optional[ReachyMini] = None
     try:
-        with ReachyMini() as mini:
-            mode_text = (
-                "Choreography Player" if choreography_mode else "Interactive Tester"
-            )
-            print(f"Robot connected. Starting {mode_text}...")
-            mini.wake_up()
+        print("Connecting to Reachy Mini...")
+        mini = ReachyMini()
 
-            print(INTERACTIVE_HELP_MESSAGE)
-            last_help_print_time = time.time()
-            last_loop_time = time.time()
+        mode_text = "Choreography Player" if choreography_mode else "Interactive Tester"
+        print(f"Robot connected. Starting {mode_text}...")
+        mini.wake_up()
 
-            while not stop_event.is_set():
-                loop_start_time = time.time()
-                dt = loop_start_time - last_loop_time
-                last_loop_time = loop_start_time
+        print(INTERACTIVE_HELP_MESSAGE)
+        last_help_print_time = time.time()
+        last_loop_time = time.time()
 
-                changes = shared_state.get_and_clear_changes()
-                if changes["bpm_change"]:
-                    bpm = max(20.0, bpm + changes["bpm_change"])
-                if changes["amplitude_change"]:
-                    amplitude_scale = max(
-                        0.1, amplitude_scale + changes["amplitude_change"]
+        while not stop_event.is_set():
+            loop_start_time = time.time()
+            dt = loop_start_time - last_loop_time
+            last_loop_time = loop_start_time
+
+            changes = shared_state.get_and_clear_changes()
+            if changes["bpm_change"]:
+                bpm = max(20.0, bpm + changes["bpm_change"])
+            if changes["amplitude_change"]:
+                amplitude_scale = max(
+                    0.1, amplitude_scale + changes["amplitude_change"]
+                )
+            if changes["next_waveform"]:
+                current_waveform_idx = (current_waveform_idx + 1) % len(waveforms)
+
+            if choreography_mode:
+                if changes["next_move"]:
+                    choreography_step_idx = (choreography_step_idx + 1) % len(
+                        choreography
                     )
-                if changes["next_waveform"]:
-                    current_waveform_idx = (current_waveform_idx + 1) % len(waveforms)
-
-                if choreography_mode:
-                    if changes["next_move"]:
-                        choreography_step_idx = (choreography_step_idx + 1) % len(
-                            choreography
-                        )
-                        step_beat_counter = 0.0
-                    if changes["prev_move"]:
-                        choreography_step_idx = (
-                            choreography_step_idx - 1 + len(choreography)
-                        ) % len(choreography)
-                        step_beat_counter = 0.0
-                else:
-                    if changes["next_move"]:
-                        current_move_idx = (current_move_idx + 1) % len(move_names)
-                        sequence_beat_counter = 0
-                    if changes["prev_move"]:
-                        current_move_idx = (
-                            current_move_idx - 1 + len(move_names)
-                        ) % len(move_names)
-                        sequence_beat_counter = 0
-
-                if not shared_state.running:
-                    # While paused, ensure robot is at a neutral, safe pose.
-                    mini.set_target(
-                        utils.create_head_pose(
-                            *config.neutral_pos, *config.neutral_eul, degrees=False
-                        ),
-                        antennas=np.zeros(2),
+                    step_beat_counter = 0.0
+                if changes["prev_move"]:
+                    choreography_step_idx = (
+                        choreography_step_idx - 1 + len(choreography)
+                    ) % len(choreography)
+                    step_beat_counter = 0.0
+            else:
+                if changes["next_move"]:
+                    current_move_idx = (current_move_idx + 1) % len(move_names)
+                    sequence_beat_counter = 0
+                if changes["prev_move"]:
+                    current_move_idx = (current_move_idx - 1 + len(move_names)) % len(
+                        move_names
                     )
-                    time.sleep(config.control_ts)
-                    continue
+                    sequence_beat_counter = 0
 
-                beats_this_frame = dt * (bpm / 60.0)
-
-                if choreography_mode:
-                    current_step = choreography[choreography_step_idx]
-                    move_name = current_step["move"]
-                    _, params = AVAILABLE_MOVES[move_name]
-
-                    target_cycles = current_step["cycles"]
-                    subcycles_per_beat = params.get("subcycles_per_beat", 1.0)
-                    target_beats = (
-                        target_cycles / subcycles_per_beat
-                        if subcycles_per_beat > 0
-                        else target_cycles
-                    )
-
-                    step_beat_counter += beats_this_frame
-                    if step_beat_counter >= target_beats:
-                        step_beat_counter = 0.0
-                        choreography_step_idx = (choreography_step_idx + 1) % len(
-                            choreography
-                        )
-
-                    step_amplitude_modifier = current_step.get("amplitude", 1.0)
-                    t_motion = step_beat_counter
-                else:
-                    sequence_beat_counter += beats_this_frame
-                    if sequence_beat_counter >= config.beats_per_sequence:
-                        current_move_idx = (current_move_idx + 1) % len(move_names)
-                        sequence_beat_counter = 0
-
-                    move_name = move_names[current_move_idx]
-                    step_amplitude_modifier = 1.0
-                    t_beats += beats_this_frame
-                    t_motion = t_beats
-
-                waveform = waveforms[current_waveform_idx]
-                move_fn, base_params = AVAILABLE_MOVES[move_name]
-                current_params = base_params.copy()
-
-                if "waveform" in base_params:
-                    current_params["waveform"] = waveform
-
-                final_amplitude_scale = amplitude_scale * step_amplitude_modifier
-                for key in current_params:
-                    if "amplitude" in key or "_amp" in key:
-                        current_params[key] *= final_amplitude_scale
-
-                offsets = move_fn(t_motion, **current_params)
-
-                final_pos = config.neutral_pos + offsets.position_offset
-                final_eul = config.neutral_eul + offsets.orientation_offset
-                final_ant = offsets.antennas_offset
-
+            if not shared_state.running:
                 mini.set_target(
-                    utils.create_head_pose(*final_pos, *final_eul, degrees=False),
-                    antennas=final_ant,
+                    utils.create_head_pose(
+                        *config.neutral_pos, *config.neutral_eul, degrees=False
+                    ),
+                    antennas=np.zeros(2),
+                )
+                time.sleep(config.control_ts)
+                continue
+
+            beats_this_frame = dt * (bpm / 60.0)
+
+            if choreography_mode:
+                current_step = choreography[choreography_step_idx]
+                move_name = current_step["move"]
+                _, params = AVAILABLE_MOVES[move_name]
+
+                target_cycles = current_step["cycles"]
+                subcycles_per_beat = params.get("subcycles_per_beat", 1.0)
+                target_beats = (
+                    target_cycles / subcycles_per_beat
+                    if subcycles_per_beat > 0
+                    else target_cycles
                 )
 
-                if loop_start_time - last_status_print_time > 1.0:
-                    sys.stdout.write("\r" + " " * 80 + "\r")
-                    status = "RUNNING" if shared_state.running else "PAUSED "
+                step_beat_counter += beats_this_frame
+                if step_beat_counter >= target_beats:
+                    step_beat_counter = 0.0
+                    choreography_step_idx = (choreography_step_idx + 1) % len(
+                        choreography
+                    )
 
-                    if choreography_mode:
-                        _, params_for_ui = AVAILABLE_MOVES[move_name]
-                        subcycles_for_ui = params_for_ui.get("subcycles_per_beat", 1.0)
-                        target_beats_display = (
-                            choreography[choreography_step_idx]["cycles"]
-                            / subcycles_for_ui
-                            if subcycles_for_ui > 0
-                            else 0
-                        )
-                        progress_pct = (
-                            f"{(step_beat_counter / target_beats_display * 100):.0f}%"
-                            if target_beats_display > 0
-                            else "N/A"
-                        )
-                        status_line = (
-                            f"[{status}] Step {choreography_step_idx + 1}/{len(choreography)}: {move_name:<20} ({progress_pct:>4}) | "
-                            f"BPM: {bpm:<5.1f} | Amp: {final_amplitude_scale:.1f}x"
-                        )
-                    else:
-                        wave_status = (
-                            waveform if "waveform" in current_params else "N/A"
-                        )
-                        status_line = f"[{status}] Move: {move_name:<35} | BPM: {bpm:<5.1f} | Wave: {wave_status:<8} | Amp: {amplitude_scale:.1f}x"
-                    print(status_line, end="")
-                    sys.stdout.flush()
-                    last_status_print_time = loop_start_time
+                step_amplitude_modifier = current_step.get("amplitude", 1.0)
+                t_motion = step_beat_counter
+            else:
+                sequence_beat_counter += beats_this_frame
+                if sequence_beat_counter >= config.beats_per_sequence:
+                    current_move_idx = (current_move_idx + 1) % len(move_names)
+                    sequence_beat_counter = 0
 
-                if loop_start_time - last_help_print_time > 30.0:
-                    print(f"\n{INTERACTIVE_HELP_MESSAGE}")
-                    last_help_print_time = loop_start_time
+                move_name = move_names[current_move_idx]
+                step_amplitude_modifier = 1.0
+                t_beats += beats_this_frame
+                t_motion = t_beats
 
-                time.sleep(max(0, config.control_ts - (time.time() - loop_start_time)))
+            waveform = waveforms[current_waveform_idx]
+            move_fn, base_params = AVAILABLE_MOVES[move_name]
+            current_params = base_params.copy()
+
+            if "waveform" in base_params:
+                current_params["waveform"] = waveform
+
+            final_amplitude_scale = amplitude_scale * step_amplitude_modifier
+            for key in current_params:
+                if "amplitude" in key or "_amp" in key:
+                    current_params[key] *= final_amplitude_scale
+
+            offsets = move_fn(t_motion, **current_params)
+
+            final_pos = config.neutral_pos + offsets.position_offset
+            final_eul = config.neutral_eul + offsets.orientation_offset
+            final_ant = offsets.antennas_offset
+            mini.set_target(
+                utils.create_head_pose(*final_pos, *final_eul, degrees=False),
+                antennas=final_ant,
+            )
+
+            if loop_start_time - last_status_print_time > 1.0:
+                sys.stdout.write("\r" + " " * 80 + "\r")
+                status = "RUNNING" if shared_state.running else "PAUSED "
+
+                if choreography_mode:
+                    _, params_for_ui = AVAILABLE_MOVES[move_name]
+                    subcycles_for_ui = params_for_ui.get("subcycles_per_beat", 1.0)
+                    target_beats_display = (
+                        choreography[choreography_step_idx]["cycles"] / subcycles_for_ui
+                        if subcycles_for_ui > 0
+                        else 0
+                    )
+                    progress_pct = (
+                        f"{(step_beat_counter / target_beats_display * 100):.0f}%"
+                        if target_beats_display > 0
+                        else "N/A"
+                    )
+                    status_line = (
+                        f"[{status}] Step {choreography_step_idx + 1}/{len(choreography)}: {move_name:<20} ({progress_pct:>4}) | "
+                        f"BPM: {bpm:<5.1f} | Amp: {final_amplitude_scale:.1f}x"
+                    )
+                else:
+                    wave_status = waveform if "waveform" in current_params else "N/A"
+                    status_line = f"[{status}] Move: {move_name:<35} | BPM: {bpm:<5.1f} | Wave: {wave_status:<8} | Amp: {amplitude_scale:.1f}x"
+                print(status_line, end="")
+                sys.stdout.flush()
+                last_status_print_time = loop_start_time
+
+            if loop_start_time - last_help_print_time > 30.0:
+                print(f"\n{INTERACTIVE_HELP_MESSAGE}")
+                last_help_print_time = loop_start_time
+
+            time.sleep(max(0, config.control_ts - (time.time() - loop_start_time)))
 
     except KeyboardInterrupt:
         print("\nCtrl-C received. Shutting down...")
     finally:
         stop_event.set()
         print("\nPutting robot to sleep and cleaning up...")
-        with ReachyMini() as mini:
+        if mini is not None:
             mini.goto_sleep()
         print("Shutdown complete.")
 
