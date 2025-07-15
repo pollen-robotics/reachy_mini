@@ -26,6 +26,40 @@ class Move(ABC):
 
         """
 
+    def play_on(
+        self,
+        reachy_mini: ReachyMini,
+        repeat: int = 1,
+        frequency: float = 100.0,
+    ):
+        """Play the move on the ReachyMini robot.
+
+        Args:
+            reachy_mini: The ReachyMini instance to control.
+            repeat: Number of times to repeat the move.
+            frequency: Frequency of updates in Hz.
+
+        """
+        timer = Event()
+        dt = 1.0 / frequency
+
+        for _ in range(repeat):
+            t0 = time.time()
+
+            while True:
+                t = time.time() - t0
+
+                if t > self.duration:
+                    break
+
+                head, antennas = self.evaluate(t)
+                reachy_mini.set_target(head=head, antennas=antennas)
+
+                loop_duration = time.time() - t
+                sleep_duration = max(0, dt - loop_duration)
+                if sleep_duration > 0:
+                    timer.wait(sleep_duration)
+
 
 class DanceMove(Move):
     """A specific type of Move that represents a dance move."""
@@ -73,39 +107,59 @@ class DanceMove(Move):
         return head_pose, offsets.antennas_offset
 
 
-class MovePlayer:
-    def play(
-        self,
-        reachy_mini: ReachyMini,
-        move: Move,
-        repeat: int = 1,
-        frequency: float = 100.0,
-    ):
-        timer = Event()
-        dt = 1.0 / frequency
+class Choreography(Move):
+    def __init__(self, choreography_file: str):
+        """Initialize a choreography from a file."""
+        import json
 
-        t0 = time.time()
+        with open(choreography_file, "r") as f:
+            choreography = json.load(f)
 
-        while True:
-            t = time.time() - t0
+        self.bpm = choreography.get("bpm", DanceMove.default_bpm)
 
-            if t > move.duration:
-                break
+        self.moves = []
+        self.cycles = []
 
-            head, antennas = move.evaluate(t)
-            reachy_mini.set_target(head=head, antennas=antennas)
+        for move in choreography["sequence"]:
+            move_name = move["move"]
 
-            loop_duration = time.time() - t
-            sleep_duration = max(0, dt - loop_duration)
-            if sleep_duration > 0:
-                timer.wait(sleep_duration)
+            move_params = move.copy()
+            move_params.pop("move", None)
+
+            self.cycles.append(move_params.pop("cycles", 1))
+            self.moves.append(DanceMove(move_name, **move_params))
+
+    @property
+    def duration(self) -> float:
+        """Calculate the total duration of the choreography."""
+        return sum(move.duration for move in self.moves)
+
+    def evaluate(self, t: float) -> tuple[np.ndarray, np.ndarray]:
+        """Evaluate the choreography at time t.
+
+        This method iterates through the moves and evaluates them based on the
+        current time, returning the head and antennas positions.
+
+        Args:
+            t: The current time in seconds.
+
+        Returns:
+            A tuple containing the head position and antennas positions.
+
+        """
+        raise NotImplementedError("Choreography evaluation is not implemented yet.")
+
+    def play_on(self, reachy_mini: ReachyMini, repeat: int = 1, frequency: float = 100):
+        for _ in range(repeat):
+            for move, cycle in zip(self.moves, self.cycles):
+                move.play_on(reachy_mini, repeat=cycle, frequency=frequency)
 
 
 if __name__ == "__main__":
     import numpy as np
 
     from reachy_mini import ReachyMini
-    from reachy_mini.utils.move_player import DanceMove, MovePlayer
+    from reachy_mini.utils.move_player import DanceMove
 
     possible_moves = list(AVAILABLE_MOVES.keys())
 
@@ -114,4 +168,4 @@ if __name__ == "__main__":
             move = DanceMove(np.random.choice(possible_moves))
             print(move.move_metadata["description"])
 
-            MovePlayer().play(reachy, move)
+            move.play_on(reachy, repeat=1)
