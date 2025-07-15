@@ -197,7 +197,7 @@ class RobotBackend(Backend):
             3: position control
             5: current-based position control
 
-            IMPORTANT:
+        Important:
             This method does not work well with the current feetech motors (body rotation), as they do not support torque control.
             So the method disables the antennas when in torque control mode.
             The dynamixel motors used for the head do support torque control, so this method works as expected.
@@ -205,6 +205,7 @@ class RobotBackend(Backend):
         Args:
             mode (int): The operation mode for the head motors.
                         This could be a specific mode like position control, velocity control, or torque control.
+
         """
         assert self.c is not None, "Motor controller not initialized or already closed."
         assert mode in [0, 3, 5], (
@@ -241,13 +242,14 @@ class RobotBackend(Backend):
             3: position control
             5: current-based position control
 
-            IMPORTANT:
+        Important:
             This method does not work well with the current feetech motors, as they do not support torque control.
             So the method disables the antennas when in torque control mode.
 
         Args:
             mode (int): The operation mode for the antennas motors.
                         This could be a specific mode like position control, velocity control, or torque control.
+
         """
         assert self.c is not None, "Motor controller not initialized or already closed."
         assert mode in [0, 3, 5], (

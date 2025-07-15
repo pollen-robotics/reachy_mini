@@ -55,8 +55,7 @@ class ReachyMiniAnalyticKinematics:
             motor["branch_position"] = T_head_branch[:3, 3]
 
     def ik_motor_to_branch(self, branch_attachment_platform, solution=0):
-        """
-        Inverse kinematics for the branch attachment platform to the motor angles.
+        """Inverse kinematics for the branch attachment platform to the motor angles.
         This function computes the inverse kinematics for the branch attachment platform
         to the motor angles based on the branch attachment platform position and the
         servo arm and branch lengths.
@@ -66,11 +65,12 @@ class ReachyMiniAnalyticKinematics:
                 x, y, z coordinates of the branch attachment platform in the head frame.
             solution (int): The solution index for the inverse kinematics. It can be either
                 0 or 1, representing the two possible solutions for the inverse kinematics.
+
         Returns:
             float: The angle in radians for the motor that corresponds to the branch
             attachment platform position.
-        """
 
+        """
         px, py, pz = branch_attachment_platform
         rs = self.servo_arm_length
         rp = self.branch_length
@@ -126,14 +126,14 @@ class ReachyMiniAnalyticKinematics:
             )
 
     def jacobian_motor_to_branch(self, branch_attachment_platform, solution=0):
-        """
-        Calculates the Jacobian matrix for the platform branch attachment point in the motor frame.
+        """Calculates the Jacobian matrix for the platform branch attachment point in the motor frame.
 
         Args:
             branch_attachment_platform (tuple): A tuple of three floats representing the
                 x, y, z coordinates of the branch attachment platform in the head frame.
             solution (int): The solution index for the inverse kinematics. It can be either
                 0 or 1, representing the two possible solutions for the inverse kinematics.
+
         Returns:
             np.ndarray: A 3x3 Jacobian matrix representing the relationship between the
             branch attachment platform position and the motor angles.
@@ -729,8 +729,7 @@ class ReachyMiniAnalyticKinematics:
     def jacobian_platform_to_branch(
         self, branch_position, roll, pitch, yaw, T_motor_world=None
     ):
-        """
-        Calculates the Jacobian matrix for the platform branch attachment point in the motor (if provided) frame.
+        """Calculates the Jacobian matrix for the platform branch attachment point in the motor (if provided) frame.
 
         Args:
             branch_position (np.ndarray): The position of the branch attachment point in the head frame,
@@ -745,6 +744,7 @@ class ReachyMiniAnalyticKinematics:
             np.ndarray: The Jacobian matrix for the platform branch attachment point in the motor frame (
             if T_motor_world is provided) or in the world frame (if T_motor_world is None), represented as a
                 3x6 numpy array.
+
         """
         ax, ay, az = branch_position
         # The Jacobian of the platform branch attachment point in the head frame
@@ -796,8 +796,7 @@ class ReachyMiniAnalyticKinematics:
     def ik_platform_to_branch(
         self, attach_head, platform_world, roll, pitch, yaw, T_motor_world=None
     ):
-        """
-            Calculates the inverse kinematics for the platform branch attachment point in the motor frame (if T_motor_world is provided else in world frame).
+        """Calculates the inverse kinematics for the platform branch attachment point in the motor frame (if T_motor_world is provided else in world frame).
 
         Args:
             attach_head (np.ndarray): The attachment point in the head frame, represented as a
@@ -815,8 +814,8 @@ class ReachyMiniAnalyticKinematics:
             np.ndarray: The position of the leg attachment point in the motor frame (if T_motor
             world is provided) or in the world frame (if T_motor_world is None), represented as a
                 3-element numpy array.
-        """
 
+        """
         ax, ay, az = attach_head
         px, py, pz = platform_world
 
@@ -854,8 +853,7 @@ class ReachyMiniAnalyticKinematics:
             return leg_attach_motor[:3, 0]
 
     def ik(self, T_world_target):
-        """
-        Calculates the inverse kinematics for the Reachy Mini robot to reach a target position and orientation.
+        """Calculates the inverse kinematics for the Reachy Mini robot to reach a target position and orientation.
 
         Args:
             T_world_target (np.ndarray): The target transformation matrix in the world frame, represented as
@@ -864,6 +862,7 @@ class ReachyMiniAnalyticKinematics:
         Returns:
             dict: A dictionary containing the joint angles for each motor, where keys are motor names and
                 values are the corresponding joint angles in radians.
+
         """
         roll, pitch, yaw = tf.euler_from_matrix(T_world_target[:3, :3], axes="sxyz")
         joints = {}
@@ -895,8 +894,7 @@ class ReachyMiniAnalyticKinematics:
         return joints
 
     def jacobian(self, T_world_head_current):
-        """
-        Calculates the head Jacobian matrix for the Reachy Mini robot.
+        """Calculates the head Jacobian matrix for the Reachy Mini robot.
         The convention is local world aligned.
 
         The first three rows correspond to the linear velocity of the head,
@@ -905,10 +903,12 @@ class ReachyMiniAnalyticKinematics:
         Args:
             T_world_head_current (np.ndarray): The current transformation matrix of the head in the world
                                                frame, represented as a 4x4 numpy array.
+
         Returns:
             np.ndarray: The Jacobian matrix of shape (n_motors, 6), where n_motors is the number of motors in the head.
                         The first three rows correspond to the linear velocity of the head,
                         and the last three rows correspond to the angular velocity in the roll, pitch, and yaw axes.
+
         """
         T_headz_head = np.linalg.inv(self.T_world_head_home) @ T_world_head_current
         roll, pitch, yaw = tf.euler_from_matrix(T_headz_head[:3, :3], axes="sxyz")

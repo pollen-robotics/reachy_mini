@@ -85,6 +85,7 @@ class Backend:
 
         Args:
             current (List[float]): A list of current values for the head motors.
+
         """
         self.head_joint_current = current
 
@@ -99,6 +100,7 @@ class Backend:
         Args:
             mode (int): The operation mode for the head motors. This could be a specific mode
                         like position control, velocity control, or torque control.
+
         """
         raise NotImplementedError(
             "The method set_head_operation_mode should be overridden by subclasses."
@@ -115,6 +117,7 @@ class Backend:
         Args:
             mode (int): The operation mode for the antenna motors. This could be a specific mode
                         like position control, velocity control, or torque control.
+
         """
         raise NotImplementedError(
             "The method set_antennas_operation_mode should be overridden by subclasses."

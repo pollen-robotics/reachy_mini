@@ -150,8 +150,7 @@ class PlacoKinematics:
     def ik(
         self, pose: np.ndarray, check_collision: bool = False
     ) -> Optional[List[float]]:
-        """
-        Computes the inverse kinematics for the head for a given pose.
+        """Computes the inverse kinematics for the head for a given pose.
 
         Args:
             pose (np.ndarray): A 4x4 homogeneous transformation matrix
@@ -193,8 +192,7 @@ class PlacoKinematics:
         return joints
 
     def fk(self, joints_angles: List[float], check_collision=False) -> np.ndarray:
-        """
-        Computes the forward kinematics for the head given joint angles.
+        """Computes the forward kinematics for the head given joint angles.
 
         Args:
             joints_angles (List[float]): A list of joint angles for the head.
@@ -231,8 +229,7 @@ class PlacoKinematics:
         return T_world_head
 
     def config_collision_model(self):
-        """
-        Configures the collision model for the robot by adding collision pairs
+        """Configures the collision model for the robot by adding collision pairs
         between the torso and the head colliders.
 
         """
@@ -253,11 +250,11 @@ class PlacoKinematics:
             )  # torso with head colliders
 
     def compute_collision(self, margin=0.005):
-        """
-        Compute the collision between the robot and the environment.
+        """Compute the collision between the robot and the environment.
 
         Args:
             margin (float): The margin to consider for collision detection (default: 5mm).
+
         Returns:
             True if there is a collision, False otherwise.
 
@@ -282,8 +279,7 @@ class PlacoKinematics:
         return False  # Safe
 
     def compute_jacobian(self, q: np.ndarray = None) -> np.ndarray:
-        """
-        Computes the Jacobian of the head frame with respect to the actuated DoFs.
+        """Computes the Jacobian of the head frame with respect to the actuated DoFs.
         The jacobian in local world aligned
 
         Args:
@@ -291,8 +287,8 @@ class PlacoKinematics:
 
         Returns:
             np.ndarray: The Jacobian matrix.
-        """
 
+        """
         # If q is provided, use it to compute the forward kinematics
         if q is not None:
             self.fk(q)
@@ -331,8 +327,7 @@ class PlacoKinematics:
         return J[:, self.actuated_idx_in_active]
 
     def compute_gravity_torque(self, q: np.ndarray = None) -> np.ndarray:
-        """
-        Computes the gravity torque vector for the actuated joints of the robot.
+        """Computes the gravity torque vector for the actuated joints of the robot.
         This method uses the static gravity compensation torques from the robot's dictionary
 
         Args:
@@ -340,8 +335,8 @@ class PlacoKinematics:
 
         Returns:
             np.ndarray: The gravity torque vector.
-        """
 
+        """
         # If q is provided, use it to compute the forward kinematics
         if q is not None:
             self.fk(q)

@@ -500,20 +500,20 @@ class ReachyMini:
         self.client.send_command(json.dumps(cmd))
 
     def _set_head_operation_mode(self, mode: int) -> None:
-        """
-        Set the operation mode for the head motors.
+        """Set the operation mode for the head motors.
 
         Args:
             mode (int): The desired operation mode.
+
         """
         self.client.send_command(json.dumps({"head_operation_mode": mode}))
 
     def _set_antennas_operation_mode(self, mode: int) -> None:
-        """
-        Set the operation mode for the antennas motors.
+        """Set the operation mode for the antennas motors.
 
         Args:
             mode (int): The desired operation mode.
+
         """
         self.client.send_command(json.dumps({"antennas_operation_mode": mode}))
 
