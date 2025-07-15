@@ -139,7 +139,7 @@ class ReachyMini:
         Args:
             head (Optional[np.ndarray]): 4x4 pose matrix representing the head pose.
             antennas (Optional[Union[np.ndarray, List[float]]]): 1D array with two elements representing the angles of the antennas in radians.
-            check_collision (bool): If True, checks for collisions before setting the position.
+            check_collision (bool): If True, checks for collisions before setting the position. Beware that this will slow down the IK computation (~1ms).
 
         Raises:
             ValueError: If neither head nor antennas are provided, or if the shape of head is not (4, 4), or if antennas is not a 1D array with two elements.
@@ -159,7 +159,9 @@ class ReachyMini:
 
             # This means that a collision was detected
             if head_joint_positions is None:
-                return
+                raise ValueError(
+                    f"The target head pose is not reachable (head pose: {head}). Check the kinematics or the collision detection."
+                )
         else:
             head_joint_positions = None
 
@@ -192,6 +194,7 @@ class ReachyMini:
             antennas (Optional[Union[np.ndarray, List[float]]]): 1D array with two elements representing the angles of the antennas in radians.
             duration (float): Duration of the movement in seconds.
             method (str): Interpolation method to use ("linear", "minjerk", "ease", "cartoon"). Default is "minjerk".
+            check_collision (bool): If True, checks for collisions before setting the position. Beware that this will slow down the IK computation (~1ms)!
 
         Raises:
             ValueError: If neither head nor antennas are provided, or if duration is not positive.
@@ -213,14 +216,12 @@ class ReachyMini:
             start_head_pose = self._last_head_pose
 
         target_head_pose = (
-            self.head_kinematics.fk(cur_head_joints, check_collision=check_collision)
-            if head is None
-            else head
+            self.head_kinematics.fk(cur_head_joints) if head is None else head
         )
 
         if target_head_pose is None:
             raise ValueError(
-                "The target head pose is not reachable. Check the kinematics or the collision detection."
+                f"The target head pose is not reachable (head pose: {target_head_pose}). Check the kinematics or the collision detection."
             )
 
         start_antennas = np.array(cur_antennas_joints)
@@ -238,7 +239,11 @@ class ReachyMini:
                 start_antennas + (target_antennas - start_antennas) * interp_time
             )
 
-            self.set_target(interp_head_pose, list(interp_antennas_joint))
+            self.set_target(
+                interp_head_pose,
+                list(interp_antennas_joint),
+                check_collision=check_collision,
+            )
 
             time.sleep(0.01)
 
