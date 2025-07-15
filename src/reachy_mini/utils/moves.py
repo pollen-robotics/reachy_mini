@@ -906,14 +906,21 @@ DEFAULT_ANTENNA_PARAMS: dict[str, Any] = {
 # This single dictionary is now the main entry point for all moves.
 # It maps a move name to a tuple containing:
 # 1. The callable move function.
-# 2. A dictionary of its default parameters.
-AVAILABLE_MOVES: dict[str, tuple[Callable[..., MoveOffsets], dict[str, Any]]] = {
+# 2. A dictionary of its runtime parameters.
+# 3. A dictionary of metadata (e.g., description, default duration).
+AVAILABLE_MOVES: dict[
+    str, tuple[Callable[..., MoveOffsets], dict[str, Any], dict[str, Any]]
+] = {
     "simple_nod": (
         move_simple_nod,
         {
             "amplitude_rad": np.deg2rad(20),
             "subcycles_per_beat": 1.0,
             **DEFAULT_ANTENNA_PARAMS,
+        },
+        {
+            "default_duration_beats": 4,
+            "description": "A simple, continuous up-and-down nodding motion.",
         },
     ),
     "head_tilt_roll": (
@@ -923,10 +930,18 @@ AVAILABLE_MOVES: dict[str, tuple[Callable[..., MoveOffsets], dict[str, Any]]] = 
             "subcycles_per_beat": 0.5,
             **DEFAULT_ANTENNA_PARAMS,
         },
+        {
+            "default_duration_beats": 4,
+            "description": "A continuous side-to-side head roll (ear to shoulder).",
+        },
     ),
     "side_to_side_sway": (
         move_side_to_side_sway,
         {"amplitude_m": 0.04, "subcycles_per_beat": 0.5, **DEFAULT_ANTENNA_PARAMS},
+        {
+            "default_duration_beats": 4,
+            "description": "A smooth, side-to-side sway of the entire head.",
+        },
     ),
     "dizzy_spin": (
         move_dizzy_spin,
@@ -935,6 +950,10 @@ AVAILABLE_MOVES: dict[str, tuple[Callable[..., MoveOffsets], dict[str, Any]]] = 
             "pitch_amplitude_rad": np.deg2rad(15),
             "subcycles_per_beat": 0.25,
             **DEFAULT_ANTENNA_PARAMS,
+        },
+        {
+            "default_duration_beats": 4,
+            "description": "A circular 'dizzy' head motion combining roll and pitch.",
         },
     ),
     "stumble_and_recover": (
@@ -947,6 +966,10 @@ AVAILABLE_MOVES: dict[str, tuple[Callable[..., MoveOffsets], dict[str, Any]]] = 
             "antenna_move_name": "both",
             "antenna_amplitude_rad": np.deg2rad(50),
         },
+        {
+            "default_duration_beats": 5,
+            "description": "A simulated stumble and recovery with multiple axis movements. Good vibes",
+        },
     ),
     "headbanger_combo": (
         move_headbanger_combo,
@@ -958,6 +981,10 @@ AVAILABLE_MOVES: dict[str, tuple[Callable[..., MoveOffsets], dict[str, Any]]] = 
             "antenna_move_name": "both",
             "antenna_amplitude_rad": np.deg2rad(40),
         },
+        {
+            "default_duration_beats": 4,
+            "description": "A strong head nod combined with a vertical bounce.",
+        },
     ),
     "interwoven_spirals": (
         move_interwoven_spirals,
@@ -968,6 +995,10 @@ AVAILABLE_MOVES: dict[str, tuple[Callable[..., MoveOffsets], dict[str, Any]]] = 
             "subcycles_per_beat": 0.125,
             **DEFAULT_ANTENNA_PARAMS,
         },
+        {
+            "default_duration_beats": 4,
+            "description": "A complex spiral motion using three axes at different frequencies.",
+        },
     ),
     "sharp_side_tilt": (
         move_sharp_side_tilt,
@@ -976,6 +1007,10 @@ AVAILABLE_MOVES: dict[str, tuple[Callable[..., MoveOffsets], dict[str, Any]]] = 
             "subcycles_per_beat": 1.0,
             "waveform": "triangle",
             **DEFAULT_ANTENNA_PARAMS,
+        },
+        {
+            "default_duration_beats": 6,
+            "description": "A sharp, quick side-to-side tilt using a triangle waveform.",
         },
     ),
     "side_peekaboo": (
@@ -988,6 +1023,10 @@ AVAILABLE_MOVES: dict[str, tuple[Callable[..., MoveOffsets], dict[str, Any]]] = 
             "antenna_move_name": "both",
             "antenna_amplitude_rad": np.deg2rad(60),
         },
+        {
+            "default_duration_beats": 8,
+            "description": "A multi-stage peekaboo performance, hiding and peeking to each side.",
+        },
     ),
     "yeah_nod": (
         move_yeah_nod,
@@ -997,6 +1036,10 @@ AVAILABLE_MOVES: dict[str, tuple[Callable[..., MoveOffsets], dict[str, Any]]] = 
             "antenna_move_name": "both",
             "antenna_amplitude_rad": np.deg2rad(20),
         },
+        {
+            "default_duration_beats": 4,
+            "description": "An emphatic two-part yeah nod using transient motions.",
+        },
     ),
     "uh_huh_tilt": (
         move_uh_huh_tilt,
@@ -1005,10 +1048,18 @@ AVAILABLE_MOVES: dict[str, tuple[Callable[..., MoveOffsets], dict[str, Any]]] = 
             "subcycles_per_beat": 0.5,
             **DEFAULT_ANTENNA_PARAMS,
         },
+        {
+            "default_duration_beats": 4,
+            "description": "A combined roll-and-pitch uh-huh gesture of agreement.",
+        },
     ),
     "neck_recoil": (
         move_neck_recoil,
         {"amplitude_m": 0.015, "subcycles_per_beat": 0.5, **DEFAULT_ANTENNA_PARAMS},
+        {
+            "default_duration_beats": 4,
+            "description": "A quick, transient backward recoil of the neck.",
+        },
     ),
     "chin_lead": (
         move_chin_lead,
@@ -1019,6 +1070,10 @@ AVAILABLE_MOVES: dict[str, tuple[Callable[..., MoveOffsets], dict[str, Any]]] = 
             "antenna_move_name": "both",
             **DEFAULT_ANTENNA_PARAMS,
         },
+        {
+            "default_duration_beats": 4,
+            "description": "A forward motion led by the chin, combining translation and pitch.",
+        },
     ),
     "groovy_sway_and_roll": (
         move_groovy_sway_and_roll,
@@ -1027,6 +1082,10 @@ AVAILABLE_MOVES: dict[str, tuple[Callable[..., MoveOffsets], dict[str, Any]]] = 
             "roll_amplitude_rad": np.deg2rad(15),
             "subcycles_per_beat": 0.5,
             **DEFAULT_ANTENNA_PARAMS,
+        },
+        {
+            "default_duration_beats": 4,
+            "description": "A side-to-side sway combined with a corresponding roll for a groovy effect.",
         },
     ),
     "chicken_peck": (
@@ -1037,6 +1096,10 @@ AVAILABLE_MOVES: dict[str, tuple[Callable[..., MoveOffsets], dict[str, Any]]] = 
             "antenna_move_name": "both",
             "antenna_amplitude_rad": np.deg2rad(30),
         },
+        {
+            "default_duration_beats": 4,
+            "description": "A sharp, forward, chicken-like pecking motion.",
+        },
     ),
     "side_glance_flick": (
         move_side_glance_flick,
@@ -1044,6 +1107,10 @@ AVAILABLE_MOVES: dict[str, tuple[Callable[..., MoveOffsets], dict[str, Any]]] = 
             "yaw_amplitude_rad": np.deg2rad(45),
             "subcycles_per_beat": 0.25,
             **DEFAULT_ANTENNA_PARAMS,
+        },
+        {
+            "default_duration_beats": 4,
+            "description": "A quick glance to the side that holds, then returns.",
         },
     ),
     "polyrhythm_combo": (
@@ -1054,6 +1121,10 @@ AVAILABLE_MOVES: dict[str, tuple[Callable[..., MoveOffsets], dict[str, Any]]] = 
             "antenna_amplitude_rad": np.deg2rad(45),
             "antenna_move_name": "wiggle",
         },
+        {
+            "default_duration_beats": 4,
+            "description": "A 3-beat sway and a 2-beat nod create a polyrhythmic feel.",
+        },
     ),
     "grid_snap": (
         move_grid_snap,
@@ -1063,6 +1134,10 @@ AVAILABLE_MOVES: dict[str, tuple[Callable[..., MoveOffsets], dict[str, Any]]] = 
             "antenna_move_name": "both",
             "antenna_amplitude_rad": np.deg2rad(10),
         },
+        {
+            "default_duration_beats": 6,
+            "description": "A robotic, grid-snapping motion using square waveforms.",
+        },
     ),
     "pendulum_swing": (
         move_pendulum_swing,
@@ -1070,6 +1145,10 @@ AVAILABLE_MOVES: dict[str, tuple[Callable[..., MoveOffsets], dict[str, Any]]] = 
             "amplitude_rad": np.deg2rad(25),
             "subcycles_per_beat": 0.25,
             **DEFAULT_ANTENNA_PARAMS,
+        },
+        {
+            "default_duration_beats": 4,
+            "description": "A simple, smooth pendulum-like swing using a roll motion.",
         },
     ),
     "jackson_square": (
@@ -1079,6 +1158,10 @@ AVAILABLE_MOVES: dict[str, tuple[Callable[..., MoveOffsets], dict[str, Any]]] = 
             "twitch_amplitude_rad": np.deg2rad(20),
             "subcycles_per_beat": 0.125,
             **DEFAULT_ANTENNA_PARAMS,
+        },
+        {
+            "default_duration_beats": 8,
+            "description": "Traces a square path with sharp twitches at each corner.",
         },
     ),
 }

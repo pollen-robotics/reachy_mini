@@ -312,7 +312,7 @@ def main(config: Config) -> None:
                 if choreography_mode:
                     current_step = choreography[choreography_step_idx]
                     move_name = current_step["move"]
-                    _, params = AVAILABLE_MOVES[move_name]
+                    _, params, _ = AVAILABLE_MOVES[move_name]
 
                     target_cycles = current_step["cycles"]
                     subcycles_per_beat = params.get("subcycles_per_beat", 1.0)
@@ -343,7 +343,7 @@ def main(config: Config) -> None:
                     t_motion = t_beats
 
                 waveform = waveforms[current_waveform_idx]
-                move_fn, base_params = AVAILABLE_MOVES[move_name]
+                move_fn, base_params, _ = AVAILABLE_MOVES[move_name]
                 current_params = base_params.copy()
 
                 if "waveform" in base_params:
@@ -369,7 +369,7 @@ def main(config: Config) -> None:
                     status = "RUNNING" if shared_state.running else "PAUSED "
 
                     if choreography_mode:
-                        _, params_for_ui = AVAILABLE_MOVES[move_name]
+                        _, params_for_ui, _ = AVAILABLE_MOVES[move_name]
                         subcycles_for_ui = params_for_ui.get("subcycles_per_beat", 1.0)
                         target_beats_display = (
                             choreography[choreography_step_idx]["cycles"]
