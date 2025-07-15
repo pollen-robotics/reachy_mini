@@ -5,7 +5,7 @@ repos:
   hooks:
     # Run the linter.
     - id: ruff-check
-      args: ["--select", "I"]
-      # args: ["--select", "I", "--select", "D", "--ignore", "D203", "--ignore", "D213"]
+      # args: ["--select", "I"]
+      args: ["--select", "I", "--select", "D", "--ignore", "D203", "--ignore", "D213"]
     # Run the formatter.
     - id: ruff-format
