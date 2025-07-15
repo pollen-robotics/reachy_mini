@@ -183,6 +183,7 @@ class ReachyMini:
         ] = None,  # [left_angle, right_angle] (in rads)
         duration: float = 0.5,  # Duration in seconds for the movement, default is 0.5 seconds.
         method="default",  # can be "linear", "minjerk", "ease" or "cartoon", default is "default" (-> "minjerk" interpolation)
+        check_collision: bool = False,
     ):
         """Go to a target head pose and/or antennas position using task space interpolation, in "duration" seconds.
 
@@ -212,8 +213,15 @@ class ReachyMini:
             start_head_pose = self._last_head_pose
 
         target_head_pose = (
-            self.head_kinematics.fk(cur_head_joints) if head is None else head
+            self.head_kinematics.fk(cur_head_joints, check_collision=check_collision)
+            if head is None
+            else head
         )
+
+        if target_head_pose is None:
+            raise ValueError(
+                "The target head pose is not reachable. Check the kinematics or the collision detection."
+            )
 
         start_antennas = np.array(cur_antennas_joints)
         target_antennas = start_antennas if antennas is None else np.array(antennas)
