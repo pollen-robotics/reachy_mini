@@ -90,35 +90,13 @@ class Backend:
         self.head_joint_current = current
 
     def set_head_operation_mode(self, mode: int) -> None:
-        """Set mode of operation for the head.
-            0: current control
-            3: position control
-            5: current-based position control.
-
-        This method is a placeholder and should be overridden by subclasses.
-
-        Args:
-            mode (int): The operation mode for the head motors. This could be a specific mode
-                        like position control, velocity control, or torque control.
-
-        """
+        """Set mode of operation for the head."""
         raise NotImplementedError(
             "The method set_head_operation_mode should be overridden by subclasses."
         )
 
     def set_antennas_operation_mode(self, mode: int) -> None:
-        """Set mode of operation for the antennas.
-            0: current control
-            3: position control
-            5: current-based position control.
-
-        This method is a placeholder and should be overridden by subclasses.
-
-        Args:
-            mode (int): The operation mode for the antenna motors. This could be a specific mode
-                        like position control, velocity control, or torque control.
-
-        """
+        """Set mode of operation for the antennas."""
         raise NotImplementedError(
             "The method set_antennas_operation_mode should be overridden by subclasses."
         )

@@ -1,3 +1,5 @@
+"""Reachy Mini Analytical Kinematics GUI Example."""
+
 import time
 import tkinter as tk
 
@@ -9,6 +11,7 @@ from reachy_mini.analytic_kinematics import ReachyMiniAnalyticKinematics
 
 
 def main():
+    """Run a GUI to set the head position and orientation of Reachy Mini."""
     with ReachyMini() as mini:
         analytic_solver = ReachyMiniAnalyticKinematics(robot=mini.head_kinematics.robot)
 

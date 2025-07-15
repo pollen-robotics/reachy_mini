@@ -1,3 +1,5 @@
+"""Compute analytical kinematics for Reachy Mini."""
+
 from sympy import Eq, Matrix, MatrixSymbol, cos, simplify, sin, solve, symbols
 
 # motor angle

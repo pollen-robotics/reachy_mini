@@ -193,6 +193,11 @@ class RobotBackend(Backend):
 
     def set_head_operation_mode(self, mode: int) -> None:
         """Change the operation mode of the head motors.
+
+        Args:
+            mode (int): The operation mode for the head motors.
+
+        The operation modes can be:
             0: torque control
             3: position control
             5: current-based position control.
@@ -236,11 +241,11 @@ class RobotBackend(Backend):
 
             self._head_operation_mode = mode
 
-    def set_antennas_operation_mode(self, mode):
+    def set_antennas_operation_mode(self, mode: int) -> None:
         """Change the operation mode of the antennas motors.
-            0: torque control
-            3: position control
-            5: current-based position control.
+
+        Args:
+            mode (int): The operation mode for the antennas motors (0: torque control, 3: position control, 5: current-based position control).
 
         Important:
             This method does not work well with the current feetech motors, as they do not support torque control.

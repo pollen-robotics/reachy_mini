@@ -1,3 +1,5 @@
+"""Reachy Mini Analytic Kinematics Module."""
+
 import numpy as np
 import placo
 from placo_utils.tf import tf
@@ -6,7 +8,20 @@ from .placo_kinematics import PlacoKinematics
 
 
 class ReachyMiniAnalyticKinematics:
+    """Reachy Mini Analytic Kinematics class for computing inverse kinematics and Jacobians."""
+
     def __init__(self, urdf_path=None, robot=None):
+        """Initialize the Reachy Mini Analytic Kinematics.
+
+        Args:
+            urdf_path (str, optional): Path to the URDF file of the Reachy Mini robot.
+            robot (placo.Robot, optional): An instance of the Placo Robot class. If provided,
+                it will be used instead of loading from a URDF file.
+
+        Raises:
+            ValueError: If neither urdf_path nor robot is provided.
+
+        """
         if urdf_path is None and robot is None:
             raise ValueError("Either urdf_path or robot must be provided.")
         if robot is not None:
@@ -55,7 +70,8 @@ class ReachyMiniAnalyticKinematics:
             motor["branch_position"] = T_head_branch[:3, 3]
 
     def ik_motor_to_branch(self, branch_attachment_platform, solution=0):
-        """Inverse kinematics for the branch attachment platform to the motor angles.
+        """Compute Inverse kinematics for the branch attachment platform to the motor angles.
+
         This function computes the inverse kinematics for the branch attachment platform
         to the motor angles based on the branch attachment platform position and the
         servo arm and branch lengths.
@@ -126,7 +142,7 @@ class ReachyMiniAnalyticKinematics:
             )
 
     def jacobian_motor_to_branch(self, branch_attachment_platform, solution=0):
-        """Calculates the Jacobian matrix for the platform branch attachment point in the motor frame.
+        """Calculate the Jacobian matrix for the platform branch attachment point in the motor frame.
 
         Args:
             branch_attachment_platform (tuple): A tuple of three floats representing the
@@ -729,7 +745,7 @@ class ReachyMiniAnalyticKinematics:
     def jacobian_platform_to_branch(
         self, branch_position, roll, pitch, yaw, T_motor_world=None
     ):
-        """Calculates the Jacobian matrix for the platform branch attachment point in the motor (if provided) frame.
+        """Calculate the Jacobian matrix for the platform branch attachment point in the motor (if provided) frame.
 
         Args:
             branch_position (np.ndarray): The position of the branch attachment point in the head frame,
@@ -796,7 +812,7 @@ class ReachyMiniAnalyticKinematics:
     def ik_platform_to_branch(
         self, attach_head, platform_world, roll, pitch, yaw, T_motor_world=None
     ):
-        """Calculates the inverse kinematics for the platform branch attachment point in the motor frame (if T_motor_world is provided else in world frame).
+        """Calculate the inverse kinematics for the platform branch attachment point in the motor frame (if T_motor_world is provided else in world frame).
 
         Args:
             attach_head (np.ndarray): The attachment point in the head frame, represented as a
@@ -853,7 +869,7 @@ class ReachyMiniAnalyticKinematics:
             return leg_attach_motor[:3, 0]
 
     def ik(self, T_world_target):
-        """Calculates the inverse kinematics for the Reachy Mini robot to reach a target position and orientation.
+        """Calculate the inverse kinematics for the Reachy Mini robot to reach a target position and orientation.
 
         Args:
             T_world_target (np.ndarray): The target transformation matrix in the world frame, represented as
@@ -894,7 +910,8 @@ class ReachyMiniAnalyticKinematics:
         return joints
 
     def jacobian(self, T_world_head_current):
-        """Calculates the head Jacobian matrix for the Reachy Mini robot.
+        """Calculate the head Jacobian matrix for the Reachy Mini robot.
+
         The convention is local world aligned.
 
         The first three rows correspond to the linear velocity of the head,

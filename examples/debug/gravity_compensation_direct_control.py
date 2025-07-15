@@ -1,3 +1,5 @@
+"""Reachy Mini Gravity Compensation Direct Control Example."""
+
 import time
 
 import numpy as np
@@ -8,6 +10,7 @@ from reachy_mini.placo_kinematics import PlacoKinematics
 
 
 def main():
+    """Run a demo to compensate the gravity of the Reachy Mini platform."""
     urdf_path = "src/reachy_mini/descriptions/reachy_mini/urdf/robot.urdf"
     solver = PlacoKinematics(urdf_path, 0.02)
     robot = solver.robot

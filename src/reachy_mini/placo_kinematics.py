@@ -150,7 +150,7 @@ class PlacoKinematics:
     def ik(
         self, pose: np.ndarray, check_collision: bool = False
     ) -> Optional[List[float]]:
-        """Computes the inverse kinematics for the head for a given pose.
+        """Compute the inverse kinematics for the head for a given pose.
 
         Args:
             pose (np.ndarray): A 4x4 homogeneous transformation matrix
@@ -191,8 +191,10 @@ class PlacoKinematics:
 
         return joints
 
-    def fk(self, joints_angles: List[float], check_collision=False) -> np.ndarray:
-        """Computes the forward kinematics for the head given joint angles.
+    def fk(
+        self, joints_angles: List[float], check_collision=False
+    ) -> Optional[np.ndarray]:
+        """Compute the forward kinematics for the head given joint angles.
 
         Args:
             joints_angles (List[float]): A list of joint angles for the head.
@@ -229,9 +231,9 @@ class PlacoKinematics:
         return T_world_head
 
     def config_collision_model(self):
-        """Configures the collision model for the robot by adding collision pairs
-        between the torso and the head colliders.
+        """Configure the collision model for the robot.
 
+        Add collision pairs between the torso and the head colliders.
         """
         geom_model = self.robot.collision_model
 
@@ -278,8 +280,9 @@ class PlacoKinematics:
 
         return False  # Safe
 
-    def compute_jacobian(self, q: np.ndarray = None) -> np.ndarray:
-        """Computes the Jacobian of the head frame with respect to the actuated DoFs.
+    def compute_jacobian(self, q: Optional[np.ndarray] = None) -> np.ndarray:
+        """Compute the Jacobian of the head frame with respect to the actuated DoFs.
+
         The jacobian in local world aligned.
 
         Args:
@@ -326,8 +329,9 @@ class PlacoKinematics:
 
         return J[:, self.actuated_idx_in_active]
 
-    def compute_gravity_torque(self, q: np.ndarray = None) -> np.ndarray:
-        """Computes the gravity torque vector for the actuated joints of the robot.
+    def compute_gravity_torque(self, q: Optional[np.ndarray] = None) -> np.ndarray:
+        """Compute the gravity torque vector for the actuated joints of the robot.
+
         This method uses the static gravity compensation torques from the robot's dictionary.
 
         Args:

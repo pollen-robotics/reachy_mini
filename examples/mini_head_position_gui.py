@@ -1,3 +1,5 @@
+"""Reachy Mini Head Position GUI Example."""
+
 import time
 import tkinter as tk
 
@@ -8,6 +10,7 @@ from reachy_mini import ReachyMini
 
 
 def main():
+    """Run a GUI to set the head position and orientation of Reachy Mini."""
     with ReachyMini() as mini:
         t0 = time.time()
 

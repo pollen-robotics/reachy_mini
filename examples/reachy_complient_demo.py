@@ -1,3 +1,5 @@
+"""Reachy Mini Compliant Demo."""
+
 import time
 
 from reachy_mini import ReachyMini
