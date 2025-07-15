@@ -27,8 +27,14 @@ dependencies = [
     "pyserial",
 ]
 
+
+
 [project.optional-dependencies]
 dev = ["pytest"]
+examples = [
+    "librosa",
+    "pynput",
+]
 
 [project.scripts]
 reachy-mini-daemon = "reachy_mini.daemon.cli:main"
@@ -49,7 +55,7 @@ reachy_mini = ["**/*"] # Inclut tous les fichiers non .py
 
 [tool.ruff]
 exclude = [
-    "examples/remi_outdated/*.py",
+    "src/reachy_mini/__init__.py",
     "build/*",
     "conftest.py",
     "src/reachy_mini_dashboard/*",
