@@ -280,7 +280,7 @@ class PlacoKinematics:
 
     def compute_jacobian(self, q: np.ndarray = None) -> np.ndarray:
         """Computes the Jacobian of the head frame with respect to the actuated DoFs.
-        The jacobian in local world aligned
+        The jacobian in local world aligned.
 
         Args:
             q (np.ndarray, optional): Joint angles of the robot. If None, uses the current state of the robot. (default: None)
@@ -328,7 +328,7 @@ class PlacoKinematics:
 
     def compute_gravity_torque(self, q: np.ndarray = None) -> np.ndarray:
         """Computes the gravity torque vector for the actuated joints of the robot.
-        This method uses the static gravity compensation torques from the robot's dictionary
+        This method uses the static gravity compensation torques from the robot's dictionary.
 
         Args:
             q (np.ndarray, optional): Joint angles of the robot. If None, uses the current state of the robot. (default: None)

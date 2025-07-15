@@ -195,7 +195,7 @@ class RobotBackend(Backend):
         """Change the operation mode of the head motors.
             0: torque control
             3: position control
-            5: current-based position control
+            5: current-based position control.
 
         Important:
             This method does not work well with the current feetech motors (body rotation), as they do not support torque control.
@@ -240,7 +240,7 @@ class RobotBackend(Backend):
         """Change the operation mode of the antennas motors.
             0: torque control
             3: position control
-            5: current-based position control
+            5: current-based position control.
 
         Important:
             This method does not work well with the current feetech motors, as they do not support torque control.

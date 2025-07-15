@@ -93,7 +93,7 @@ class Backend:
         """Set mode of operation for the head.
             0: current control
             3: position control
-            5: current-based position control
+            5: current-based position control.
 
         This method is a placeholder and should be overridden by subclasses.
 
@@ -110,7 +110,7 @@ class Backend:
         """Set mode of operation for the antennas.
             0: current control
             3: position control
-            5: current-based position control
+            5: current-based position control.
 
         This method is a placeholder and should be overridden by subclasses.
 
