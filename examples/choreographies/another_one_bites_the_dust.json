@@ -1,0 +1,40 @@
+{
+    "bpm": 114,
+    "sequence": [
+        {
+            "move": "side_to_side_sway",
+            "cycles": 4
+        },
+        {
+            "move": "stumble_and_recover",
+            "cycles": 4,
+            "amplitude": 1.0
+        },
+        {
+            "move": "side_peekaboo",
+            "cycles": 8
+        },
+        {
+            "move": "head_tilt_roll",
+            "cycles": 4
+        },
+        {
+            "move": "simple_nod",
+            "cycles": 4,
+            "amplitude": 0.6
+        },
+        {
+            "move": "uh_huh_tilt",
+            "cycles": 4,
+            "amplitude": 1.0
+        },
+        {
+            "move": "neck_recoil",
+            "cycles": 4
+        },
+        {
+            "move": "jackson_square",
+            "cycles": 2
+        }
+    ]
+}
