@@ -530,7 +530,11 @@ class ReachyMini:
         """
         self.client.send_command(json.dumps({"antennas_operation_mode": mode}))
 
-    def make_compliant(self, head: bool = True, antennas: bool = True) -> None:
+    def make_compliant(
+        self,
+        head: Optional[bool] = None,
+        antennas: Optional[bool] = None,
+    ) -> None:
         """Set the head and/or antennas to compliant mode.
 
         Args:
@@ -538,15 +542,15 @@ class ReachyMini:
             antennas (bool): If True, set the antennas to compliant mode.
 
         """
-        if head:
-            self._set_head_operation_mode(0)  # 0 is compliant mode
-        else:
-            self._set_head_operation_mode(3)
+        if head is not None:
+            self._set_head_operation_mode(
+                0 if head else 3
+            )  # 0 is compliant mode, 3 is position control mode
 
-        if antennas:
-            self._set_antennas_operation_mode(0)
-        else:
-            self._set_antennas_operation_mode(3)
+        if antennas is not None:
+            self._set_antennas_operation_mode(
+                0 if antennas else 3
+            )  # 0 is compliant mode, 3 is position control mode
 
     def _set_head_joint_current(self, current: List[int]) -> None:
         """Set the head joint current (torque) in milliamperes (mA).
