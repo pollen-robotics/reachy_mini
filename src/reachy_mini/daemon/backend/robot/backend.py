@@ -220,29 +220,28 @@ class RobotBackend(Backend):
             "Invalid operation mode. Must be one of [0 (torque), 3 (position), 5 (current-limiting position)]."
         )
 
-        if self._head_operation_mode != mode:
-            # if motors are enabled, disable them before changing the mode
-            if self._torque_enabled:
-                self.c.enable_stewart_platform(False)
-            # set the new operation mode
-            self.c.set_stewart_platform_operating_mode(mode)
+        # if motors are enabled, disable them before changing the mode
+        if self._torque_enabled:
+            self.c.enable_stewart_platform(False)
+        # set the new operation mode
+        self.c.set_stewart_platform_operating_mode(mode)
 
-            if mode != 0:
-                # if the mode is not torque control, we need to set the head joint positions
-                # to the current positions to avoid sudden movements
-                motor_pos = self.c.read_all_positions()
-                self.head_joint_positions = [motor_pos[0]] + motor_pos[3:]
-                self.c.set_stewart_platform_position(self.head_joint_positions[1:])
-                self.c.set_body_rotation(self.head_joint_positions[0])
-                self.c.enable_body_rotation(True)
-                self.c.set_body_rotation_operating_mode(0)
-            else:
-                self.c.enable_body_rotation(False)
+        if mode != 0:
+            # if the mode is not torque control, we need to set the head joint positions
+            # to the current positions to avoid sudden movements
+            motor_pos = self.c.read_all_positions()
+            self.head_joint_positions = [motor_pos[0]] + motor_pos[3:]
+            self.c.set_stewart_platform_position(self.head_joint_positions[1:])
+            self.c.set_body_rotation(self.head_joint_positions[0])
+            self.c.enable_body_rotation(True)
+            self.c.set_body_rotation_operating_mode(0)
+        else:
+            self.c.enable_body_rotation(False)
 
-            if self._torque_enabled:
-                self.c.enable_stewart_platform(True)
+        if self._torque_enabled:
+            self.c.enable_stewart_platform(True)
 
-            self._head_operation_mode = mode
+        self._head_operation_mode = mode
 
     def set_antennas_operation_mode(self, mode: int) -> None:
         """Change the operation mode of the antennas motors.
