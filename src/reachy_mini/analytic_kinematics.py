@@ -1,4 +1,7 @@
-"""Reachy Mini Analytic Kinematics Module."""
+"""Reachy Mini Analytic Kinematics Module.
+
+The math was generated using the examples/analytical_kinematics/compute_analytical_kinematics.py
+"""
 
 import numpy as np
 import placo
