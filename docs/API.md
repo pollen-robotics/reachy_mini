@@ -221,6 +221,31 @@ TODO
 
 TODO
 
+## Playing moves
+
+You can also play predefined moves simply. You can find an example on how to do this in the [Dance Player](../examples/minimal_dance_player.py) example. 
+
+Basically, you just need to load the move from the collections you want. And run the `play_on` method on a `ReachyMini` instance.
+
+```python
+from reachy_mini.motion.dance_move import DanceMove
+from reachy_mini.reachy_mini import ReachyMini
+
+with ReachyMini() as mini:
+    move = DanceMove("dizzy_spin")
+    move.play_on(mini)
+```
+
+You can also list the available moves in a collection as follows:
+
+```python
+from reachy_mini.motion.collection.dance import AVAILABLE_MOVES
+
+print("Available moves:", list(AVAILABLE_MOVES.keys()))
+
+>>> Available moves: ['simple_nod', 'head_tilt_roll', 'side_to_side_sway', 'dizzy_spin', 'stumble_and_recover', 'headbanger_combo', 'interwoven_spirals', 'sharp_side_tilt', 'side_peekaboo', 'yeah_nod', 'uh_huh_tilt', 'neck_recoil', 'chin_lead', 'groovy_sway_and_roll', 'chicken_peck', 'side_glance_flick', 'polyrhythm_combo', 'grid_snap', 'pendulum_swing', 'jackson_square']
+```
+
 ## Writing an App
 
 We provide a simple way to wrap your in an application that can be run as a standalone script. This is useful to properly manage the start/stop of the app and to add discovery/install mechanisms to allow users to easily run your app. We are also working on a dashboard to manage the apps and their installation.
