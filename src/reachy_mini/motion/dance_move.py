@@ -23,6 +23,8 @@ class DanceMove(Move):
         self.move_fn, self.move_params, self.move_metadata = AVAILABLE_MOVES[move_name]
         self.move_params.update(params)
 
+        self.name = move_name
+
     @property
     def duration(self) -> float:
         """Return the duration of the dance move.
