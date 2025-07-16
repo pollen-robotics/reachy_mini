@@ -84,6 +84,7 @@ class ReachyMini:
         spawn_daemon: bool = False,
         use_sim: bool = True,
         timeout: float = 5.0,
+        automatic_body_yaw: bool = True,
     ) -> None:
         """Initialize the Reachy Mini robot.
 
@@ -92,6 +93,7 @@ class ReachyMini:
             spawn_daemon (bool): If True, will spawn a daemon to control the robot, defaults to False.
             use_sim (bool): If True and spawn_daemon is True, will spawn a simulated robot, defaults to True.
             timeout (float): Timeout for the client connection, defaults to 5.0 seconds.
+            automatic_body_yaw (bool): If True, the body yaw will be used to compute the IK and FK. Default is True.
 
         It will try to connect to the daemon, and if it fails, it will raise an exception.
 
@@ -101,7 +103,10 @@ class ReachyMini:
         self.client.wait_for_connection(timeout=timeout)
         self._last_head_pose = None
 
-        self.head_kinematics = PlacoKinematics(self.urdf_root_path)
+        self._automatic_body_yaw = automatic_body_yaw
+        self.head_kinematics = PlacoKinematics(
+            self.urdf_root_path, automatic_body_yaw=automatic_body_yaw
+        )
 
         self.K = np.array(
             [[550.3564, 0.0, 638.0112], [0.0, 549.1653, 364.589], [0.0, 0.0, 1.0]]
@@ -132,6 +137,7 @@ class ReachyMini:
         antennas: Optional[
             Union[np.ndarray, List[float]]
         ] = None,  # [left_angle, right_angle] (in rads)
+        body_yaw: Optional[float] = 0.0,  # Body yaw angle in radians
         check_collision: bool = False,  # Check for collisions before setting the position
     ) -> None:
         """Set the target pose of the head and/or the target position of the antennas.
@@ -139,6 +145,7 @@ class ReachyMini:
         Args:
             head (Optional[np.ndarray]): 4x4 pose matrix representing the head pose.
             antennas (Optional[Union[np.ndarray, List[float]]]): 1D array with two elements representing the angles of the antennas in radians.
+            body_yaw (Optional[float]): Body yaw angle in radians.
             check_collision (bool): If True, checks for collisions before setting the position. Beware that this will slow down the IK computation (~1ms).
 
         Raises:
@@ -154,7 +161,7 @@ class ReachyMini:
                     f"Head pose must be a 4x4 matrix, got shape {head.shape}."
                 )
             head_joint_positions = self.head_kinematics.ik(
-                head, check_collision=check_collision
+                head, body_yaw=body_yaw, check_collision=check_collision
             )
 
             # This means that a collision was detected

@@ -16,12 +16,15 @@ class PlacoKinematics:
     This class provides methods for inverse and forward kinematics using the Placo library and a URDF model of the Reachy Mini robot.
     """
 
-    def __init__(self, urdf_path: str, dt: float = 0.02) -> None:
+    def __init__(
+        self, urdf_path: str, dt: float = 0.02, automatic_body_yaw: bool = True
+    ) -> None:
         """Initialize the PlacoKinematics class.
 
         Args:
             urdf_path (str): Path to the URDF file of the Reachy Mini robot.
             dt (float): Time step for the kinematics solver. Default is 0.02 seconds.
+            automatic_body_yaw (bool): If True, the body yaw will be used to compute the IK and FK. Default is True.
 
         """
         self.robot = placo.RobotWrapper(urdf_path, placo.Flags.ignore_collisions)
@@ -31,6 +34,8 @@ class PlacoKinematics:
 
         self.fk_solver = placo.KinematicsSolver(self.robot)
         self.fk_solver.mask_fbase(True)
+
+        self._automatic_body_yaw = automatic_body_yaw
 
         # they should be hard but we use soft to avoir singularities and
         # tradeoff the precision for the robustness
@@ -69,7 +74,10 @@ class PlacoKinematics:
         # regularization
         self.ik_yaw_joint_task = self.ik_solver.add_joints_task()
         self.ik_yaw_joint_task.set_joints({"all_yaw": 0})
-        self.ik_yaw_joint_task.configure("joints", "soft", 5e-5)
+        if self._automatic_body_yaw:
+            self.ik_yaw_joint_task.configure("joints", "soft", 5e-5)
+        else:
+            self.ik_yaw_joint_task.configure("joints", "soft", 1.0)
 
         self.ik_joint_task = self.ik_solver.add_joints_task()
         self.ik_joint_task.set_joints({f"{k}": 0 for k in range(1, 7)})
@@ -85,7 +93,10 @@ class PlacoKinematics:
         # regularization
         self.fk_yaw_joint_task = self.fk_solver.add_joints_task()
         self.fk_yaw_joint_task.set_joints({"all_yaw": 0})
-        self.fk_yaw_joint_task.configure("joints", "soft", 5e-5)
+        if self._automatic_body_yaw:
+            self.fk_yaw_joint_task.configure("joints", "soft", 5e-5)
+        else:
+            self.fk_yaw_joint_task.configure("joints", "soft", 1.0)
 
         self.fk_joint_task = self.fk_solver.add_joints_task()
         self.fk_joint_task.set_joints({f"{k}": 0 for k in range(1, 7)})
@@ -148,13 +159,14 @@ class PlacoKinematics:
         self.config_collision_model()
 
     def ik(
-        self, pose: np.ndarray, check_collision: bool = False
+        self, pose: np.ndarray, body_yaw: float = None, check_collision: bool = False
     ) -> Optional[List[float]]:
         """Compute the inverse kinematics for the head for a given pose.
 
         Args:
             pose (np.ndarray): A 4x4 homogeneous transformation matrix
                 representing the desired position and orientation of the head.
+            body_yaw (float): Body yaw angle in radians.
             check_collision (bool): If True, checks for collisions after solving IK. (default: False)
 
 
@@ -163,6 +175,10 @@ class PlacoKinematics:
 
         """
         _pose = pose.copy()
+
+        if body_yaw is not None:
+            # TODO Is this how we set a new task goal?
+            self.ik_yaw_joint_task.set_joints({"all_yaw": body_yaw})
 
         # set the head pose
         _pose[:3, 3][2] += self.head_z_offset  # offset the height of the head
