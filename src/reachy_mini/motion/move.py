@@ -1,3 +1,9 @@
+"""Module for defining and playing motion moves on the ReachyMini robot.
+
+This module provides the base class for moves, allowing for the creation of custom motions and the ability to play them on the robot.
+
+"""
+
 import time
 from abc import ABC, abstractmethod
 from multiprocessing import Event
@@ -8,6 +14,8 @@ from reachy_mini import ReachyMini
 
 
 class Move(ABC):
+    """Abstract base class for defining a move on the ReachyMini robot."""
+
     @property
     @abstractmethod
     def duration(self) -> float:

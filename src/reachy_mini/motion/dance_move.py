@@ -1,9 +1,25 @@
+"""Define the DanceMove and Choreography classes for ReachyMini.
+
+These classes allow you to play dance moves and choreographies on the ReachyMini robot.
+"""
+
+import json
+
+import numpy as np
+
+from reachy_mini.motion.collection.dance import AVAILABLE_MOVES
+from reachy_mini.motion.move import Move
+from reachy_mini.reachy_mini import ReachyMini
+from reachy_mini.utils import create_head_pose
+
+
 class DanceMove(Move):
     """A specific type of Move that represents a dance move."""
 
     default_bpm: int = 114
 
     def __init__(self, move_name: str, **params):
+        """Initialize a dance move with the given name and parameters."""
         self.move_fn, self.move_params, self.move_metadata = AVAILABLE_MOVES[move_name]
         self.move_params.update(params)
 
@@ -46,10 +62,10 @@ class DanceMove(Move):
 
 
 class Choreography(Move):
-    def __init__(self, choreography_file: str):
-        """Initialize a choreography from a file."""
-        import json
+    """A sequence of DanceMoves that form a choreography."""
 
+    def __init__(self, choreography_file: str):
+        """Initialize a choreography from a json file."""
         with open(choreography_file, "r") as f:
             choreography = json.load(f)
 
@@ -88,6 +104,7 @@ class Choreography(Move):
         raise NotImplementedError("Choreography evaluation is not implemented yet.")
 
     def play_on(self, reachy_mini: ReachyMini, repeat: int = 1, frequency: float = 100):
+        """Play the choreography on the ReachyMini robot."""
         for _ in range(repeat):
             for move, cycle in zip(self.moves, self.cycles):
                 move.play_on(reachy_mini, repeat=cycle, frequency=frequency)

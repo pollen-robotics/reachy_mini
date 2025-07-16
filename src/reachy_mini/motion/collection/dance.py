@@ -1,4 +1,4 @@
-"""Dance Moves for Reachy Mini.
+"""Dance Moves Collection for Reachy Mini.
 
 ----------------------------------
 This module provides a library of high-level, choreographed dance moves.
