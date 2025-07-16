@@ -105,9 +105,9 @@ class Daemon:
             try:
                 self.logger.info("Waking up Reachy Mini...")
                 with ReachyMini() as mini:
-                    mini.set_torque(on=False)
-                    mini.make_compliant(head=False, antennas=False)
-                    mini.set_torque(on=True)
+                    mini.disable_motors()
+                    mini.make_motors_compliant(head=False, antennas=False)
+                    mini.enable_motors()
                     mini.wake_up()
             except Exception as e:
                 self.logger.error(f"Error while waking up Reachy Mini: {e}")
@@ -154,9 +154,9 @@ class Daemon:
                 try:
                     self.logger.info("Putting Reachy Mini to sleep...")
                     with ReachyMini() as mini:
-                        mini.make_compliant(head=False, antennas=False)
+                        mini.make_motors_compliant(head=False, antennas=False)
                         mini.goto_sleep()
-                        mini.set_torque(on=False)
+                        mini.disable_motors()
                 except Exception as e:
                     self.logger.error(f"Error while putting Reachy Mini to sleep: {e}")
                     self._status.state = DaemonState.ERROR

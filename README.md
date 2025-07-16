@@ -1,6 +1,6 @@
 # Reachy Mini
 
-[Reachy Mini](https://www.pollen-robotics.com/reachy-mini/) is the first open-source desktop robot designed to explore human-robot interaction and creative custom applications. We made it to be affordable, easy to use, hackable and cute, so that you can focus on build cool AI applications!
+[Reachy Mini](https://www.pollen-robotics.com/reachy-mini/) is the first open-source desktop robot designed to explore human-robot interaction and creative custom applications. We made it to be affordable, easy to use, hackable and cute, so that you can focus on building cool AI applications!
 
 [![Reachy Mini Hello](/docs/assets/reachy_mini_hello.gif)](https://www.pollen-robotics.com/reachy-mini/)
 
@@ -25,9 +25,9 @@ with ReachyMini() as reachy_mini:
     reachy_mini.goto_target(head=pose, duration=2.0)
 ```
 
-We support and test on Linux and macOS. We are working on Windows support, but it is not yet available. Any Python 3.8+ environment should work.
-
 ## Installation
+
+We support and test on Linux and macOS. We are working on Windows support, but it is not yet available. Any Python 3.8+ environment should work.
 
 You can install Reachy Mini from the source code or from PyPI.
 

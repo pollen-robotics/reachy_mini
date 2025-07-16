@@ -76,7 +76,10 @@ class ZenohServer(AbstractServer):
         command = json.loads(data)
         with self._lock:
             if "torque" in command:
-                self.backend.set_torque(command["torque"])
+                if command["torque"]:
+                    self.backend.enable_motors()
+                else:
+                    self.backend.disable_motors()
             if "head_joint_positions" in command:
                 self.backend.set_head_joint_positions(command["head_joint_positions"])
             if "antennas_joint_positions" in command:

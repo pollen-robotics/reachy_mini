@@ -101,13 +101,16 @@ class Backend:
             "The method set_antennas_operation_mode should be overridden by subclasses."
         )
 
-    def set_torque(self, enabled: bool) -> None:
-        """Enable or disable torque control.
-
-        This method is a placeholder and should be overridden by subclasses.
-        """
+    def enable_motors(self) -> None:
+        """Enable the motors."""
         raise NotImplementedError(
-            "The method set_torque should be overridden by subclasses."
+            "The method enable_motors should be overridden by subclasses."
+        )
+
+    def disable_motors(self) -> None:
+        """Disable the motors."""
+        raise NotImplementedError(
+            "The method disable_motors should be overridden by subclasses."
         )
 
     def get_head_joint_positions(self) -> List[float]:

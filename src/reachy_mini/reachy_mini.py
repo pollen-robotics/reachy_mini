@@ -247,15 +247,6 @@ class ReachyMini:
 
             time.sleep(0.01)
 
-    def set_torque(self, on: bool):
-        """Set the torque state of the motors.
-
-        Args:
-            on (bool): If True, enables torque; if False, disables it.
-
-        """
-        self.client.send_command(json.dumps({"torque": on}))
-
     def wake_up(self) -> None:
         """Wake up the robot - go to the initial head position and play the wake up emote and sound."""
         self.goto_target(INIT_HEAD_POSE, antennas=[0.0, 0.0], duration=2)
@@ -530,12 +521,20 @@ class ReachyMini:
         """
         self.client.send_command(json.dumps({"antennas_operation_mode": mode}))
 
-    def make_compliant(
+    def enable_motors(self) -> None:
+        """Enable the motors."""
+        self._set_torque(True)
+
+    def disable_motors(self) -> None:
+        """Disable the motors."""
+        self._set_torque(False)
+
+    def make_motors_compliant(
         self,
         head: Optional[bool] = None,
         antennas: Optional[bool] = None,
     ) -> None:
-        """Set the head and/or antennas to compliant mode.
+        """Set the head and/or antennas to compliant mode. This means that the motors will not resist external forces and will allow free movement.
 
         Args:
             head (bool): If True, set the head to compliant mode.
@@ -551,6 +550,9 @@ class ReachyMini:
             self._set_antennas_operation_mode(
                 0 if antennas else 3
             )  # 0 is compliant mode, 3 is position control mode
+
+    def _set_torque(self, on: bool):
+        self.client.send_command(json.dumps({"torque": on}))
 
     def _set_head_joint_current(self, current: List[int]) -> None:
         """Set the head joint current (torque) in milliamperes (mA).

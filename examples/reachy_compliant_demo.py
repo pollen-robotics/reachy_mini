@@ -14,7 +14,7 @@ from reachy_mini import ReachyMini
 with ReachyMini() as mini:
     try:
         # set torque control mode
-        mini.make_compliant(head=True, antennas=True)
+        mini.make_motors_compliant(head=True, antennas=True)
 
         print("Reachy Mini is now compliant. Press Ctrl+C to exit.")
         while True:
@@ -25,5 +25,5 @@ with ReachyMini() as mini:
 
             time.sleep(0.02)
     except KeyboardInterrupt:
-        mini.make_compliant(head=False, antennas=False)
+        mini.make_motors_compliant(head=False, antennas=False)
         print("Exiting... Reachy Mini is stiff again.")

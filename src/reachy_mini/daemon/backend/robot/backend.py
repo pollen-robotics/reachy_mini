@@ -180,16 +180,19 @@ class RobotBackend(Backend):
                 self._stats["nb_error"] = 0
                 self.stats_record_t0 = time.time()
 
-    def set_torque(self, enabled: bool) -> None:
-        """Enable or disable the torque on the motors."""
+    def enable_motors(self) -> None:
+        """Enable the motors by turning the torque on."""
         assert self.c is not None, "Motor controller not initialized or already closed."
 
-        if enabled:
-            self.c.enable_torque()
-        else:
-            self.c.disable_torque()
+        self.c.enable_torque()
+        self._torque_enabled = True
 
-        self._torque_enabled = enabled
+    def disable_motors(self) -> None:
+        """Disable the motors by turning the torque off."""
+        assert self.c is not None, "Motor controller not initialized or already closed."
+
+        self.c.disable_torque()
+        self._torque_enabled = False
 
     def set_head_operation_mode(self, mode: int) -> None:
         """Change the operation mode of the head motors.
