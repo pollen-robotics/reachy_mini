@@ -152,21 +152,37 @@ class MujocoBackend(Backend):
         """Get the current joint positions of the antennas."""
         return self.data.qpos[self.joint_qpos_addr[-2:]].flatten().tolist()
 
-    def set_torque(self, enabled: bool) -> None:
-        """Enable or disable torque control for the joints.
+    def enable_motors(self) -> None:
+        """Enable the motors.
 
-        Args:
-            enabled (bool): If True, enable torque control; if False, disable it.
-
-        Does nothing in the Mujoco backend as it does not support torque control directly.
-
+        Does nothing in the Mujoco backend as it does not have a concept of enabling/disabling motors.
         """
-        # TODO Do something in mujoco here ?
+        pass
+
+    def disable_motors(self) -> None:
+        """Disable the motors.
+
+        Does nothing in the Mujoco backend as it does not have a concept of enabling/disabling motors.
+        """
         pass
 
     def close(self) -> None:
         """Close the Mujoco backend."""
         # TODO Do something in mujoco here ?
+        pass
+
+    def set_head_operation_mode(self, mode: int) -> None:
+        """Set mode of operation for the head.
+
+        This does nothing in the Mujoco backend as it does not have a concept of operation modes.
+        """
+        pass
+
+    def set_antennas_operation_mode(self, mode: int) -> None:
+        """Set mode of operation for the antennas.
+
+        This does nothing in the Mujoco backend as it does not have a concept of operation modes.
+        """
         pass
 
     def get_status(self) -> "MujocoBackendStatus":

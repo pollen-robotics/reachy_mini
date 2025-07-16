@@ -34,6 +34,9 @@ class Backend:
             self.close()
             raise e
 
+        self.head_joint_current = None  # Placeholder for head joint torque
+        self.head_operation_mode = None  # Placeholder for head operation mode
+
     def run(self):
         """Run the backend.
 
@@ -77,13 +80,37 @@ class Backend:
         """
         self.antenna_joint_positions = positions
 
-    def set_torque(self, enabled: bool) -> None:
-        """Enable or disable torque control.
+    def set_head_joint_current(self, current: List[int]) -> None:
+        """Set the head joint current.
 
-        This method is a placeholder and should be overridden by subclasses.
+        Args:
+            current (List[float]): A list of current values for the head motors.
+
         """
+        self.head_joint_current = current
+
+    def set_head_operation_mode(self, mode: int) -> None:
+        """Set mode of operation for the head."""
         raise NotImplementedError(
-            "The method set_torque should be overridden by subclasses."
+            "The method set_head_operation_mode should be overridden by subclasses."
+        )
+
+    def set_antennas_operation_mode(self, mode: int) -> None:
+        """Set mode of operation for the antennas."""
+        raise NotImplementedError(
+            "The method set_antennas_operation_mode should be overridden by subclasses."
+        )
+
+    def enable_motors(self) -> None:
+        """Enable the motors."""
+        raise NotImplementedError(
+            "The method enable_motors should be overridden by subclasses."
+        )
+
+    def disable_motors(self) -> None:
+        """Disable the motors."""
+        raise NotImplementedError(
+            "The method disable_motors should be overridden by subclasses."
         )
 
     def get_head_joint_positions(self) -> List[float]:

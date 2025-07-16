@@ -132,12 +132,14 @@ class ReachyMini:
         antennas: Optional[
             Union[np.ndarray, List[float]]
         ] = None,  # [left_angle, right_angle] (in rads)
+        check_collision: bool = False,  # Check for collisions before setting the position
     ) -> None:
         """Set the target pose of the head and/or the target position of the antennas.
 
         Args:
             head (Optional[np.ndarray]): 4x4 pose matrix representing the head pose.
             antennas (Optional[Union[np.ndarray, List[float]]]): 1D array with two elements representing the angles of the antennas in radians.
+            check_collision (bool): If True, checks for collisions before setting the position. Beware that this will slow down the IK computation (~1ms).
 
         Raises:
             ValueError: If neither head nor antennas are provided, or if the shape of head is not (4, 4), or if antennas is not a 1D array with two elements.
@@ -151,7 +153,15 @@ class ReachyMini:
                 raise ValueError(
                     f"Head pose must be a 4x4 matrix, got shape {head.shape}."
                 )
-            head_joint_positions = self.head_kinematics.ik(head)
+            head_joint_positions = self.head_kinematics.ik(
+                head, check_collision=check_collision
+            )
+
+            # This means that a collision was detected
+            if head_joint_positions is None:
+                raise ValueError(
+                    f"The target head pose is not reachable (head pose: {head}). Check the kinematics or the collision detection."
+                )
         else:
             head_joint_positions = None
 
@@ -175,6 +185,7 @@ class ReachyMini:
         ] = None,  # [left_angle, right_angle] (in rads)
         duration: float = 0.5,  # Duration in seconds for the movement, default is 0.5 seconds.
         method="default",  # can be "linear", "minjerk", "ease" or "cartoon", default is "default" (-> "minjerk" interpolation)
+        check_collision: bool = False,
     ):
         """Go to a target head pose and/or antennas position using task space interpolation, in "duration" seconds.
 
@@ -183,6 +194,7 @@ class ReachyMini:
             antennas (Optional[Union[np.ndarray, List[float]]]): 1D array with two elements representing the angles of the antennas in radians.
             duration (float): Duration of the movement in seconds.
             method (str): Interpolation method to use ("linear", "minjerk", "ease", "cartoon"). Default is "minjerk".
+            check_collision (bool): If True, checks for collisions before setting the position. Beware that this will slow down the IK computation (~1ms)!
 
         Raises:
             ValueError: If neither head nor antennas are provided, or if duration is not positive.
@@ -207,6 +219,11 @@ class ReachyMini:
             self.head_kinematics.fk(cur_head_joints) if head is None else head
         )
 
+        if target_head_pose is None:
+            raise ValueError(
+                f"The target head pose is not reachable (head pose: {target_head_pose}). Check the kinematics or the collision detection."
+            )
+
         start_antennas = np.array(cur_antennas_joints)
         target_antennas = start_antennas if antennas is None else np.array(antennas)
 
@@ -222,18 +239,13 @@ class ReachyMini:
                 start_antennas + (target_antennas - start_antennas) * interp_time
             )
 
-            self.set_target(interp_head_pose, list(interp_antennas_joint))
+            self.set_target(
+                interp_head_pose,
+                list(interp_antennas_joint),
+                check_collision=check_collision,
+            )
 
             time.sleep(0.01)
-
-    def set_torque(self, on: bool):
-        """Set the torque state of the motors.
-
-        Args:
-            on (bool): If True, enables torque; if False, disables it.
-
-        """
-        self.client.send_command(json.dumps({"torque": on}))
 
     def wake_up(self) -> None:
         """Wake up the robot - go to the initial head position and play the wake up emote and sound."""
@@ -490,3 +502,89 @@ class ReachyMini:
             )
 
         self.client.send_command(json.dumps(cmd))
+
+    def _set_head_operation_mode(self, mode: int) -> None:
+        """Set the operation mode for the head motors.
+
+        Args:
+            mode (int): The desired operation mode.
+
+        """
+        self.client.send_command(json.dumps({"head_operation_mode": mode}))
+
+    def _set_antennas_operation_mode(self, mode: int) -> None:
+        """Set the operation mode for the antennas motors.
+
+        Args:
+            mode (int): The desired operation mode.
+
+        """
+        self.client.send_command(json.dumps({"antennas_operation_mode": mode}))
+
+    def enable_motors(self) -> None:
+        """Enable the motors."""
+        self._set_torque(True)
+
+    def disable_motors(self) -> None:
+        """Disable the motors."""
+        self._set_torque(False)
+
+    def make_motors_compliant(
+        self,
+        head: Optional[bool] = None,
+        antennas: Optional[bool] = None,
+    ) -> None:
+        """Set the head and/or antennas to compliant mode. This means that the motors will not resist external forces and will allow free movement.
+
+        Args:
+            head (bool): If True, set the head to compliant mode.
+            antennas (bool): If True, set the antennas to compliant mode.
+
+        """
+        if head is not None:
+            self._set_head_operation_mode(
+                0 if head else 3
+            )  # 0 is compliant mode, 3 is position control mode
+
+        if antennas is not None:
+            self._set_antennas_operation_mode(
+                0 if antennas else 3
+            )  # 0 is compliant mode, 3 is position control mode
+
+    def _set_torque(self, on: bool):
+        self.client.send_command(json.dumps({"torque": on}))
+
+    def _set_head_joint_current(self, current: List[int]) -> None:
+        """Set the head joint current (torque) in milliamperes (mA).
+
+        Args:
+            current (List[int]): A list of joint currents for the head.
+
+        """
+        assert len(current) == 7, (
+            f"Head joint current must have length 7, got {current}."
+        )
+        self.client.send_command(json.dumps({"head_joint_current": list(current)}))
+
+    def compensate_gravity(self) -> None:
+        """Enable or disable gravity compensation for the head motors."""
+        # Even though in their docs dynamixes says that 1 count is 1 mA, in practice I've found it to be 3mA.
+        # I am not sure why this happens
+        # Another explanation is that our model is bad and the current is overestimated 3x (but I have not had these issues with other robots)
+        # So I am using a magic number to compensate for this.
+        # for currents under 30mA the constant is around 1
+        from_Nm_to_mA = (
+            1.47 / 0.52 * 1000
+        )  # Conversion factor from Nm to mA for the Stewart platform motors
+        # The torque constant is not linear, so we need to use a correction factor
+        # This is a magic number that should be determined experimentally
+        # For currents under 30mA, the constant is around 3
+        # Then it drops to 1.0 for currents above 1.5A
+        correction_factor = 3.0
+        # Get the current head joint positions
+        head_joints = self._get_current_joint_positions()[0]
+        gravity_torque = self.head_kinematics.compute_gravity_torque(head_joints)
+        # Convert the torque from Nm to mA
+        current = gravity_torque * from_Nm_to_mA / correction_factor
+        # Set the head joint current
+        self._set_head_joint_current(current)
