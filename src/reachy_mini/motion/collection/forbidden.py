@@ -1,4 +1,4 @@
-"""Forbidden and Experimental Moves.
+"""Forbidden and Experimental Moves, use with caution.
 
 --------------------------------------
 This module contains experimental and diagnostic moves that are not part of
@@ -16,9 +16,9 @@ from typing import Any, Callable
 import numpy as np
 
 # Import all the necessary building blocks from the core motion library.
-from .rhythmic_motion import (
+from reachy_mini.motion.collection.dance import DEFAULT_ANTENNA_PARAMS
+from reachy_mini.motion.rhythmic_motion import (
     AVAILABLE_ANTENNA_MOVES,
-    DEFAULT_ANTENNA_PARAMS,
     MoveOffsets,
     OscillationParams,
     atomic_roll,

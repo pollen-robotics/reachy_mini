@@ -14,7 +14,7 @@ This library is built on a compositional pattern:
     are the fundamental building blocks.
 3.  **Choreographed Moves:** The main library of named moves, created by
     combining multiple atomic moves using the `combine_offsets` utility.
-    These moves can be found in moves.py
+    These moves can be found in the collection folder.
 
 Key Parameters
 --------------
