@@ -97,7 +97,8 @@ class DanceMove(Move):
             A tuple containing the head position and antennas positions.
 
         """
-        offsets = self.move_fn(t, **self.move_params)
+        t_beats = t * (self.default_bpm / 60.0)  # Convert time to beats
+        offsets = self.move_fn(t_beats, **self.move_params)
         (x, y, z) = offsets.position_offset
         (roll, pitch, yaw) = offsets.orientation_offset
 
