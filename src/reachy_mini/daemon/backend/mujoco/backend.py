@@ -169,6 +169,20 @@ class MujocoBackend(Backend):
         # TODO Do something in mujoco here ?
         pass
 
+    def set_head_operation_mode(self, mode: int) -> None:
+        """Set mode of operation for the head.
+
+        This does nothing in the Mujoco backend as it does not have a concept of operation modes.
+        """
+        pass
+
+    def set_antennas_operation_mode(self, mode: int) -> None:
+        """Set mode of operation for the antennas.
+
+        This does nothing in the Mujoco backend as it does not have a concept of operation modes.
+        """
+        pass
+
     def get_status(self) -> "MujocoBackendStatus":
         """Get the status of the Mujoco backend.
 
