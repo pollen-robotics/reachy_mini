@@ -15,7 +15,7 @@ from typing import Any, Callable
 import numpy as np
 
 # Import all the necessary building blocks from the core motion library.
-from .rhythmic_motion import (
+from ..rhythmic_motion import (
     AVAILABLE_ANTENNA_MOVES,
     MoveOffsets,
     OscillationParams,
