@@ -768,34 +768,58 @@ def move_grid_snap(
     antenna_move_name: str = "both",
     phase_offset: float = 0.0,
 ) -> MoveOffsets:
-    """Create a robotic, grid-snapping motion using square waveforms.
+    """Create a robotic motion that snaps to four corners and returns to center.
+
+    This move defines a 5-step cycle: it snaps to four corners of a square
+    in the yaw-pitch plane, and on the fifth step, it returns to the origin.
 
     Args:
         t_beats (float): Continuous time in beats at which to evaluate the motion,
             increases by 1 every beat. t_beats [dimensionless] =
             time_in_seconds [seconds] * frequency [hertz].
-        amplitude_rad (float): The primary amplitude for both yaw and pitch.
+        amplitude_rad (float): The primary amplitude for both yaw and pitch,
+            defining the corner positions in radians.
         antenna_amplitude_rad (float): The amplitude of the antenna motion in radians.
-        subcycles_per_beat (float): Number of movement oscillations per beat.
+        subcycles_per_beat (float): The number of full 5-step snap cycles
+            to perform per beat.
         antenna_move_name (str): The style of antenna motion (e.g. 'wiggle' or 'both').
-        phase_offset (float): A normalized phase offset for the motion as a fraction of a cycle.
-            0.5 shifts by half a period.
+        phase_offset (float): A normalized phase offset for the antenna motion as a
+            fraction of a cycle. 0.5 shifts by half a period.
 
     Returns:
         MoveOffsets: The calculated motion offsets.
 
     """
-    base_params = OscillationParams(
-        amplitude_rad, subcycles_per_beat, phase_offset, waveform="square"
+    period = 1.0 / subcycles_per_beat
+    t_in_period = t_beats % period
+
+    # We define a 5-step cycle within the period: 4 corners, 1 return to center
+    num_steps = 5.0
+    step_duration = period / num_steps
+    current_step = np.floor(t_in_period / step_duration)
+
+    yaw_offset = 0.0
+    pitch_offset = 0.0
+
+    if current_step == 0:  # Top-right
+        yaw_offset, pitch_offset = amplitude_rad, amplitude_rad
+    elif current_step == 1:  # Bottom-right
+        yaw_offset, pitch_offset = amplitude_rad, -amplitude_rad
+    elif current_step == 2:  # Bottom-left
+        yaw_offset, pitch_offset = -amplitude_rad, -amplitude_rad
+    elif current_step == 3:  # Top-left
+        yaw_offset, pitch_offset = -amplitude_rad, amplitude_rad
+    else:  # Step 4: Return to center
+        yaw_offset, pitch_offset = 0.0, 0.0
+
+    base = MoveOffsets(
+        np.zeros(3), np.array([0, pitch_offset, yaw_offset]), np.zeros(2)
     )
-    pitch_params = replace(base_params, phase_offset=base_params.phase_offset + 0.25)
     antenna_params = OscillationParams(
         antenna_amplitude_rad, subcycles_per_beat, phase_offset
     )
-    yaw = atomic_yaw(t_beats, base_params)
-    pitch = atomic_pitch(t_beats, pitch_params)
     antennas = AVAILABLE_ANTENNA_MOVES[antenna_move_name](t_beats, antenna_params)
-    return combine_offsets([yaw, pitch, antennas])
+    return combine_offsets([base, antennas])
 
 
 def move_pendulum_swing(
@@ -838,58 +862,88 @@ def move_pendulum_swing(
 
 def move_jackson_square(
     t_beats: float,
-    square_amp_m: float,
+    y_amp_m: float,
+    z_amp_m: float,
     twitch_amplitude_rad: float,
     antenna_amplitude_rad: float,
     subcycles_per_beat: float,
     antenna_move_name: str = "wiggle",
+    z_offset_m: float = -0.01,
 ) -> MoveOffsets:
-    """Trace a square in the Y-Z plane with sharp roll twitches at each corner.
+    """Trace a vertically offset rectangle with twitches on arrival at each corner.
+
+    This move follows a fixed 10-beat sequence composed of 5 "legs" of
+    2-beats each. It starts from an offset origin, moves to the four corners
+    of a rectangle, and returns to the start. A sharp, alternating roll twitch
+    is executed upon arriving at each of the five path checkpoints.
 
     Args:
-        t_beats (float): Continuous time in beats at which to evaluate the motion,
-            increases by 1 every beat. t_beats [dimensionless] =
-            time_in_seconds [seconds] * frequency [hertz].
-        square_amp_m (float): The half-width of the square path in meters.
+        t_beats (float): Continuous time in beats at which to evaluate the motion.
+        y_amp_m (float): The half-width of the rectangle (Y-axis) in meters.
+        z_amp_m (float): The half-height of the rectangle (Z-axis) in meters.
         twitch_amplitude_rad (float): The amplitude of the roll twitch in radians.
         antenna_amplitude_rad (float): The amplitude of the antenna motion in radians.
-        subcycles_per_beat (float): Number of movement oscillations per beat (for antennas).
+        subcycles_per_beat (float): Number of antenna oscillations per beat.
         antenna_move_name (str): The style of antenna motion (e.g. 'wiggle' or 'both').
+        z_offset_m (float): A vertical offset in meters to lower or raise the rectangle.
 
     Returns:
         MoveOffsets: The calculated motion offsets.
 
     """
-    period = 8.0
+    period = 10.0  # 5 legs, 2 beats per leg
+    leg_duration = 2.0
     t_in_period = t_beats % period
     pos, ori = np.zeros(3), np.zeros(3)
+
+    # Define the 5 checkpoints of the path: Origin -> 4 corners
+    path_points = np.array(
+        [
+            [0, 0, z_offset_m],  # P0: Offset Origin
+            [0, y_amp_m, z_amp_m + z_offset_m],  # P1: Top-right
+            [0, -y_amp_m, z_amp_m + z_offset_m],  # P2: Top-left
+            [0, -y_amp_m, -z_amp_m + z_offset_m],  # P3: Bottom-left
+            [0, y_amp_m, -z_amp_m + z_offset_m],  # P4: Bottom-right
+        ]
+    )
 
     def ease(t: float) -> float:
         t_clipped = np.clip(t, 0.0, 1.0)
         return t_clipped * t_clipped * (3 - 2 * t_clipped)
 
-    if t_in_period < 2.0:
-        t = (t_in_period - 0.0) / 2.0
-        pos[1] = square_amp_m * (1 - 2 * ease(t))
-        pos[2] = square_amp_m
-    elif t_in_period < 4.0:
-        t = (t_in_period - 2.0) / 2.0
-        pos[1] = -square_amp_m
-        pos[2] = square_amp_m * (1 - 2 * ease(t))
-    elif t_in_period < 6.0:
-        t = (t_in_period - 4.0) / 2.0
-        pos[1] = -square_amp_m * (1 - 2 * ease(t))
-        pos[2] = -square_amp_m
-    else:
-        t = (t_in_period - 6.0) / 2.0
-        pos[1] = square_amp_m
-        pos[2] = -square_amp_m * (1 - 2 * ease(t))
+    # --- Corrected Twitch Logic ---
+    # We want 5 twitches, one at the end of each 2-beat leg (t=2, 4, 6, 8, 10).
+    # We achieve this by setting the delay to be almost a full leg duration.
     twitch_params = TransientParams(
-        twitch_amplitude_rad, duration_in_beats=0.2, repeat_every=2.0
+        twitch_amplitude_rad,
+        duration_in_beats=0.3,
+        repeat_every=leg_duration,
+        delay_beats=leg_duration - 0.15,  # This makes the first twitch start at t=1.85
     )
-    twitch = transient_motion(t_beats, twitch_params)
-    twitch_direction = (-1) ** np.floor(t_in_period / 2.0)
-    ori[0] = twitch * twitch_direction
+    twitch_val = transient_motion(t_beats, twitch_params)
+
+    # Determine which leg of the journey we are on
+    current_leg_index = int(np.floor(t_in_period / leg_duration))
+
+    # The twitch direction alternates for each of the 5 arrival points.
+    # We use `floor(t_beats / leg_duration)` to get a continuous index that
+    # correctly identifies the twitch number (0 to 4) even across loops.
+    twitch_number = int(np.floor(t_beats / leg_duration))
+    twitch_direction = (-1) ** twitch_number
+    ori[0] = twitch_val * twitch_direction
+
+    # --- Path Interpolation Logic ---
+    # Determine start and end points for the current leg
+    start_point = path_points[current_leg_index]
+    end_point = path_points[(current_leg_index + 1) % len(path_points)]
+
+    # Calculate progress along the current leg and apply easing
+    progress = (t_in_period % leg_duration) / leg_duration
+    eased_progress = ease(progress)
+
+    # Interpolate position between the start and end points
+    pos = start_point + (end_point - start_point) * eased_progress
+
     base_move = MoveOffsets(pos, ori, np.zeros(2))
     antenna_params = OscillationParams(antenna_amplitude_rad, subcycles_per_beat)
     antennas = AVAILABLE_ANTENNA_MOVES[antenna_move_name](t_beats, antenna_params)
@@ -967,7 +1021,7 @@ AVAILABLE_MOVES: dict[
             "antenna_amplitude_rad": np.deg2rad(50),
         },
         {
-            "default_duration_beats": 5,
+            "default_duration_beats": 4,
             "description": "A simulated stumble and recovery with multiple axis movements. Good vibes",
         },
     ),
@@ -996,7 +1050,7 @@ AVAILABLE_MOVES: dict[
             **DEFAULT_ANTENNA_PARAMS,
         },
         {
-            "default_duration_beats": 4,
+            "default_duration_beats": 8,
             "description": "A complex spiral motion using three axes at different frequencies.",
         },
     ),
@@ -1024,7 +1078,7 @@ AVAILABLE_MOVES: dict[
             "antenna_amplitude_rad": np.deg2rad(60),
         },
         {
-            "default_duration_beats": 8,
+            "default_duration_beats": 10,
             "description": "A multi-stage peekaboo performance, hiding and peeking to each side.",
         },
     ),
@@ -1122,7 +1176,7 @@ AVAILABLE_MOVES: dict[
             "antenna_move_name": "wiggle",
         },
         {
-            "default_duration_beats": 4,
+            "default_duration_beats": 6,
             "description": "A 3-beat sway and a 2-beat nod create a polyrhythmic feel.",
         },
     ),
@@ -1135,7 +1189,7 @@ AVAILABLE_MOVES: dict[
             "antenna_amplitude_rad": np.deg2rad(10),
         },
         {
-            "default_duration_beats": 6,
+            "default_duration_beats": 4,
             "description": "A robotic, grid-snapping motion using square waveforms.",
         },
     ),
@@ -1154,14 +1208,16 @@ AVAILABLE_MOVES: dict[
     "jackson_square": (
         move_jackson_square,
         {
-            "square_amp_m": 0.035,
+            "y_amp_m": 0.035,
+            "z_amp_m": 0.025,
             "twitch_amplitude_rad": np.deg2rad(20),
-            "subcycles_per_beat": 0.125,
+            "z_offset_m": -0.01,
+            "subcycles_per_beat": 0.2,
             **DEFAULT_ANTENNA_PARAMS,
         },
         {
-            "default_duration_beats": 8,
-            "description": "Traces a square path with sharp twitches at each corner.",
+            "default_duration_beats": 10,
+            "description": "Traces a rectangle via a 5-point path, with sharp twitches on arrival at each checkpoint.",
         },
     ),
 }
