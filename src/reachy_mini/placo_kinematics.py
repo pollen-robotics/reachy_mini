@@ -35,7 +35,7 @@ class PlacoKinematics:
         self.fk_solver = placo.KinematicsSolver(self.robot)
         self.fk_solver.mask_fbase(True)
 
-        self._automatic_body_yaw = automatic_body_yaw
+        self.automatic_body_yaw = automatic_body_yaw
 
         # they should be hard but we use soft to avoir singularities and
         # tradeoff the precision for the robustness
@@ -74,10 +74,11 @@ class PlacoKinematics:
         # regularization
         self.ik_yaw_joint_task = self.ik_solver.add_joints_task()
         self.ik_yaw_joint_task.set_joints({"all_yaw": 0})
-        if self._automatic_body_yaw:
+        if self.automatic_body_yaw:
             self.ik_yaw_joint_task.configure("joints", "soft", 5e-5)
         else:
-            self.ik_yaw_joint_task.configure("joints", "soft", 1.0)
+            self.ik_yaw_joint_task.configure("joints", "soft", 10.0)
+            
 
         self.ik_joint_task = self.ik_solver.add_joints_task()
         self.ik_joint_task.set_joints({f"{k}": 0 for k in range(1, 7)})
@@ -93,10 +94,7 @@ class PlacoKinematics:
         # regularization
         self.fk_yaw_joint_task = self.fk_solver.add_joints_task()
         self.fk_yaw_joint_task.set_joints({"all_yaw": 0})
-        if self._automatic_body_yaw:
-            self.fk_yaw_joint_task.configure("joints", "soft", 5e-5)
-        else:
-            self.fk_yaw_joint_task.configure("joints", "soft", 1.0)
+        self.fk_yaw_joint_task.configure("joints", "soft", 5e-5)
 
         self.fk_joint_task = self.fk_solver.add_joints_task()
         self.fk_joint_task.set_joints({f"{k}": 0 for k in range(1, 7)})
@@ -176,6 +174,11 @@ class PlacoKinematics:
         """
         _pose = pose.copy()
 
+        if self.automatic_body_yaw: 
+            self.ik_solver.unmask_dof("all_yaw")
+        else:
+            self.ik_solver.mask_dof("all_yaw")
+
         if body_yaw is not None:
             # TODO Is this how we set a new task goal?
             self.ik_yaw_joint_task.set_joints({"all_yaw": body_yaw})
@@ -204,7 +207,12 @@ class PlacoKinematics:
         for joint_name in self.joints_names:
             joint = self.robot.get_joint(joint_name)
             joints.append(joint)
-
+    
+        if (not self.automatic_body_yaw) and (body_yaw is not None):
+            # If body_yaw is set, we need to set the yaw joint to the desired value
+            # because the IK solver will not control this DOF 
+            joints[0] = body_yaw
+            
         return joints
 
     def fk(
