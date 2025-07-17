@@ -35,6 +35,8 @@ class ZenohClient(AbstractClient):
         else:
             c = zenoh.Config()
 
+        self.keep_alive_event = threading.Event()
+
         self.session = zenoh.open(c)
         self.cmd_pub = self.session.declare_publisher("reachy_mini/command")
 
@@ -49,7 +51,6 @@ class ZenohClient(AbstractClient):
         self._last_head_joint_positions = None
         self._last_antennas_joint_positions = None
         self._last_head_pose = None
-        self.keep_alive_event = threading.Event()
 
     def wait_for_connection(self, timeout: float = 5.0):
         """Wait for the client to connect to the server.
