@@ -8,6 +8,7 @@ import json
 import threading
 import time
 
+import numpy as np
 import zenoh
 
 from reachy_mini.io.abstract import AbstractClient
@@ -41,8 +42,13 @@ class ZenohClient(AbstractClient):
             "reachy_mini/joint_positions",
             self._handle_joint_positions,
         )
+        self.pose_sub = self.session.declare_subscriber(
+            "reachy_mini/head_pose",
+            self._handle_head_pose,
+        )
         self._last_head_joint_positions = None
         self._last_antennas_joint_positions = None
+        self._last_head_pose = None
         self.keep_alive_event = threading.Event()
 
     def wait_for_connection(self, timeout: float = 5.0):
@@ -97,3 +103,15 @@ class ZenohClient(AbstractClient):
             self._last_head_joint_positions.copy(),
             self._last_antennas_joint_positions.copy(),
         )
+
+    def _handle_head_pose(self, sample):
+        """Handle incoming head pose."""
+        if sample.payload:
+            pose = json.loads(sample.payload.to_string())
+            self._last_head_pose = np.array(pose.get("head_pose")).reshape(4, 4)
+            self.keep_alive_event.set()
+
+    def get_current_head_pose(self) -> np.ndarray:
+        """Get the current head pose."""
+        assert self._last_head_pose is not None, "No head pose received yet."
+        return self._last_head_pose.copy()

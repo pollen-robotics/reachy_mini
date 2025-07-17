@@ -10,6 +10,7 @@ either on localhost only or to accept connections from other hosts.
 import json
 import threading
 
+import numpy as np
 import zenoh
 
 from reachy_mini.daemon.backend.abstract import Backend
@@ -63,6 +64,9 @@ class ZenohServer(AbstractServer):
         self.pub = self.session.declare_publisher("reachy_mini/joint_positions")
         self.backend.set_joint_positions_publisher(self.pub)
 
+        self.pub_pose = self.session.declare_publisher("reachy_mini/head_pose")
+        self.backend.set_pose_publisher(self.pub_pose)
+
     def stop(self):
         """Stop the Zenoh server."""
         self.session.close()
@@ -79,6 +83,8 @@ class ZenohServer(AbstractServer):
                 self.backend.set_torque(command["torque"])
             if "head_joint_positions" in command:
                 self.backend.set_head_joint_positions(command["head_joint_positions"])
+            if "head_pose" in command:
+                self.backend.set_head_pose(np.array(command["head_pose"]).reshape(4, 4))
             if "antennas_joint_positions" in command:
                 self.backend.set_antenna_joint_positions(
                     command["antennas_joint_positions"]

@@ -92,21 +92,27 @@ class RobotBackend(Backend):
             if self.antenna_joint_positions is not None:
                 self.c.set_antennas_positions(self.antenna_joint_positions)
 
-        if self.joint_positions_publisher is not None:
+        if (
+            self.joint_positions_publisher is not None
+            and self.pose_publisher is not None
+        ):
             try:
-                positions = self.c.read_all_positions()
-                yaw = positions[0]
-                antennas = positions[1:3]
-                dofs = positions[3:]
-
                 self.joint_positions_publisher.put(
                     json.dumps(
                         {
-                            "head_joint_positions": [yaw] + list(dofs),
-                            "antennas_joint_positions": list(antennas),
+                            "head_joint_positions": self.get_head_joint_positions(),
+                            "antennas_joint_positions": self.get_antenna_joint_positions(),
                         }
                     )
                 )
+                self.pose_publisher.put(
+                    json.dumps(
+                        {
+                            "head_pose": self.get_head_pose().tolist(),
+                        }
+                    )
+                )
+
                 self.last_alive = time.time()
                 self._stats["timestamps"].append(self.last_alive)
 
@@ -170,6 +176,19 @@ class RobotBackend(Backend):
             self.c.disable_torque()
 
         self._torque_enabled = enabled
+
+    def get_head_joint_positions(self):
+        """Get the current head joint positions."""
+        positions = self.c.read_all_positions()
+        yaw = positions[0]
+        dofs = positions[3:]
+        return [yaw] + list(dofs)
+
+    def get_antenna_joint_positions(self):
+        """Get the current antenna joint positions."""
+        positions = self.c.read_all_positions()
+        antennas = positions[1:3]
+        return list(antennas)
 
     def close(self) -> None:
         """Close the motor controller connection."""

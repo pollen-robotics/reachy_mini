@@ -7,6 +7,7 @@ It includes methods for running the simulation, getting joint positions, and con
 """
 
 import json
+import logging
 import time
 from dataclasses import dataclass
 from importlib.resources import files
@@ -126,12 +127,22 @@ class MujocoBackend(Backend):
                     if self.antenna_joint_positions is not None:
                         self.data.ctrl[-2:] = self.antenna_joint_positions
 
-                    if self.joint_positions_publisher is not None:
+                    if (
+                        self.joint_positions_publisher is not None
+                        and self.pose_publisher is not None
+                    ):
                         self.joint_positions_publisher.put(
                             json.dumps(
                                 {
                                     "head_joint_positions": self.get_head_joint_positions(),
                                     "antennas_joint_positions": self.get_antenna_joint_positions(),
+                                }
+                            ).encode("utf-8")
+                        )
+                        self.pose_publisher.put(
+                            json.dumps(
+                                {
+                                    "head_pose": self.get_head_pose().tolist(),
                                 }
                             ).encode("utf-8")
                         )

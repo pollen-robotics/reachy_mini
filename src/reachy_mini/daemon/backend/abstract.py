@@ -9,7 +9,13 @@ each type of backend.
 """
 
 import threading
+from importlib.resources import files
 from typing import List
+
+import numpy as np
+
+import reachy_mini
+from reachy_mini.placo_kinematics import PlacoKinematics
 
 
 class Backend:
@@ -20,9 +26,17 @@ class Backend:
         self.should_stop = threading.Event()
         self.ready = threading.Event()
 
+        urdf_root_path: str = str(
+            files(reachy_mini).joinpath("descriptions/reachy_mini/urdf")
+        )
+
+        self.head_kinematics = PlacoKinematics(urdf_root_path)
+
+        self.head_pose = None  # 4x4 pose matrix
         self.head_joint_positions = None  # [yaw, 0, 1, 2, 3, 4, 5]
         self.antenna_joint_positions = None  # [0, 1]
         self.joint_positions_publisher = None  # Placeholder for a publisher object
+        self.pose_publisher = None  # Placeholder for a pose publisher object
         self.error = None  # To store any error that occurs during execution
 
     def wrapped_run(self):
@@ -59,6 +73,25 @@ class Backend:
         """
         self.joint_positions_publisher = publisher
 
+    def set_pose_publisher(self, publisher) -> None:
+        """Set the publisher for head pose.
+
+        Args:
+            publisher: A publisher object that will be used to publish head pose.
+
+        """
+        self.pose_publisher = publisher
+
+    def set_head_pose(self, pose: np.ndarray) -> None:
+        """Set the head pose. Computes the IK and sets the head joint positions.
+
+        Args:
+            pose (np.ndarray): 4x4 pose matrix representing the head pose.
+
+        """
+        self.head_pose = pose
+        self.set_head_joint_positions(self.head_kinematics.ik(pose))
+
     def set_head_joint_positions(self, positions: List[float]) -> None:
         """Set the head joint positions.
 
@@ -94,6 +127,10 @@ class Backend:
         raise NotImplementedError(
             "The method get_head_joint_positions should be overridden by subclasses."
         )
+
+    def get_head_pose(self) -> np.ndarray:
+        """Return the current head pose as a 4x4 matrix."""
+        return self.head_kinematics.fk(self.get_head_joint_positions())
 
     def get_antenna_joint_positions(self) -> List[float]:
         """Return the current antenna joint positions.

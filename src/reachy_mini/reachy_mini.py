@@ -13,6 +13,7 @@ from typing import List, Optional, Union
 
 os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "hide"
 
+
 from importlib.resources import files
 
 import cv2
@@ -23,7 +24,6 @@ from scipy.spatial.transform import Rotation as R
 import reachy_mini
 from reachy_mini.daemon.utils import daemon_check
 from reachy_mini.io import Client
-from reachy_mini.placo_kinematics import PlacoKinematics
 from reachy_mini.utils.interpolation import (
     linear_pose_interpolation,
     minimum_jerk,
@@ -73,11 +73,6 @@ class ReachyMini:
 
     """
 
-    urdf_root_path: str = str(
-        files(reachy_mini).joinpath("descriptions/reachy_mini/urdf")
-    )
-    assets_root_path: str = str(files(reachy_mini).joinpath("assets/"))
-
     def __init__(
         self,
         localhost_only: bool = True,
@@ -101,7 +96,7 @@ class ReachyMini:
         self.client.wait_for_connection(timeout=timeout)
         self._last_head_pose = None
 
-        self.head_kinematics = PlacoKinematics(self.urdf_root_path)
+        self.assets_root_path: str = str(files(reachy_mini).joinpath("assets/"))
 
         self.K = np.array(
             [[550.3564, 0.0, 638.0112], [0.0, 549.1653, 364.589], [0.0, 0.0, 1.0]]
@@ -151,20 +146,15 @@ class ReachyMini:
                 raise ValueError(
                     f"Head pose must be a 4x4 matrix, got shape {head.shape}."
                 )
-            head_joint_positions = self.head_kinematics.ik(head)
-        else:
-            head_joint_positions = None
 
         if antennas is not None:
             if not len(antennas) == 2:
                 raise ValueError(
                     "Antennas must be a list or 1D np array with two elements."
                 )
-            antenna_joint_positions = list(antennas)
-        else:
-            antenna_joint_positions = None
 
-        self._set_joint_positions(head_joint_positions, antenna_joint_positions)
+        self._set_joint_positions(None, list(antennas))
+        self._set_head_pose(head)
         self._last_head_pose = head
 
     def goto_target(
@@ -196,16 +186,15 @@ class ReachyMini:
                 "Duration must be positive and non-zero. Use set_target() for immediate position setting."
             )
 
-        cur_head_joints, cur_antennas_joints = self._get_current_joint_positions()
+        _, cur_antennas_joints = self._get_current_joint_positions()
+        cur_head_pose = self._get_current_head_pose()
 
         if self._last_head_pose is None:
-            start_head_pose = self.head_kinematics.fk(cur_head_joints)
+            start_head_pose = cur_head_pose
         else:
             start_head_pose = self._last_head_pose
 
-        target_head_pose = (
-            self.head_kinematics.fk(cur_head_joints) if head is None else head
-        )
+        target_head_pose = cur_head_pose if head is None else head
 
         start_antennas = np.array(cur_antennas_joints)
         target_antennas = start_antennas if antennas is None else np.array(antennas)
@@ -256,7 +245,17 @@ class ReachyMini:
         # Check if we are too far from the initial position
         # Move to the initial position if necessary
         current_positions, _ = self._get_current_joint_positions()
-        init_positions = self.head_kinematics.ik(INIT_HEAD_POSE)
+        # init_positions = self.head_kinematics.ik(INIT_HEAD_POSE)
+        # Todo : get init position from the daemon?
+        init_positions = [
+            6.959852054044218e-07,
+            0.5251518455536499,
+            -0.668710345667336,
+            0.6067086443974802,
+            -0.606711497194891,
+            0.6687148024583701,
+            -0.5251586523105128,
+        ]
         dist = np.linalg.norm(np.array(current_positions) - np.array(init_positions))
         if dist > 0.2:
             self.goto_target(INIT_HEAD_POSE, antennas=[0.0, 0.0], duration=1)
@@ -299,8 +298,7 @@ class ReachyMini:
         ray_cam = np.array([x_n, y_n, 1.0])
         ray_cam /= np.linalg.norm(ray_cam)
 
-        cur_head_joints, _ = self._get_current_joint_positions()
-        T_world_head = self.head_kinematics.fk(cur_head_joints)
+        T_world_head = self._get_current_head_pose()
         T_world_cam = T_world_head @ self.T_head_cam
 
         R_wc = T_world_cam[:3, :3]
@@ -454,6 +452,17 @@ class ReachyMini:
         """
         return self.client.get_current_joints()
 
+    def _get_current_head_pose(self) -> np.ndarray:
+        """Get the current head pose as a 4x4 matrix.
+
+        [Internal] Get the current head pose as a 4x4 matrix.
+
+        Returns:
+            np.ndarray: A 4x4 matrix representing the current head pose.
+
+        """
+        return self.client.get_current_head_pose()
+
     def _set_joint_positions(
         self,
         head_joint_positions: Optional[
@@ -488,5 +497,27 @@ class ReachyMini:
             raise ValueError(
                 "At least one of head_joint_positions or antennas must be provided."
             )
+
+        self.client.send_command(json.dumps(cmd))
+
+    def _set_head_pose(self, pose: np.ndarray) -> None:
+        """Set the head pose to a specific 4x4 matrix.
+
+        Args:
+            pose (np.ndarray): A 4x4 matrix representing the desired head pose.
+
+        Raises:
+            ValueError: If the shape of the pose is not (4, 4).
+
+        """
+        cmd = {}
+
+        if pose is not None:
+            assert pose.shape == (4, 4), (
+                f"Head pose should be a 4x4 matrix, got {pose.shape}."
+            )
+            cmd["head_pose"] = pose.tolist()
+        else:
+            raise ValueError("Pose must be provided as a 4x4 matrix.")
 
         self.client.send_command(json.dumps(cmd))
