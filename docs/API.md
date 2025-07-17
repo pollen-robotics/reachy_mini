@@ -101,7 +101,7 @@ with ReachyMini() as reachy:
 
 You need to pass the angles in radians, so you can use `numpy.deg2rad` to convert degrees to radians. The first value in the list corresponds to the left antenna, and the second value corresponds to the right antenna.
 
-You can also move the head, the body and the antennas at the same time by passing both arguments to the `goto_target` method:
+You can also move the head, the body and the antennas at the same time by passing all three arguments to the `goto_target` method:
 
 ```python
 import numpy as np
@@ -164,6 +164,8 @@ with ReachyMini() as reachy:
         y = 10 * np.sin(2 * np.pi * 0.5 * t)  # Sinusoidal trajectory
         # Set the new target position
         reachy.set_target(head=create_head_pose(y=y, mm=True))
+
+        time.sleep(0.01)
 ```
 
 ### Look at
@@ -174,7 +176,7 @@ The `look_at_image` method allows the robot to look at a point in the image coor
 
 You can see the example in [look_at_image.py](../examples/look_at_image.py).
 
-There is also a `look_at_world` method that allows the robot to look at a point in the world coordinates. The world coordinates are defined as a 3D point in the robot's coordinate system.
+There is also a `look_at_world` method that allows the robot to look at a point in the world coordinates. The world coordinates are defined as a 3D point in the robot's coordinate system. TODO add a schematic of this coordinate system.
 
 ### Enable/disable motors and compliancy
 
