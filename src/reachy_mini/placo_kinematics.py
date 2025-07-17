@@ -17,14 +17,17 @@ class PlacoKinematics:
     """
 
     def __init__(
-        self, urdf_path: str, dt: float = 0.02, automatic_body_yaw: bool = True
+        self,
+        urdf_path: str,
+        dt: float = 0.02,
+        automatic_body_yaw: bool = False,
     ) -> None:
         """Initialize the PlacoKinematics class.
 
         Args:
             urdf_path (str): Path to the URDF file of the Reachy Mini robot.
             dt (float): Time step for the kinematics solver. Default is 0.02 seconds.
-            automatic_body_yaw (bool): If True, the body yaw will be used to compute the IK and FK. Default is True.
+            automatic_body_yaw (bool): If True, the body yaw will be used to compute the IK and FK. Default is False.
 
         """
         self.robot = placo.RobotWrapper(urdf_path, placo.Flags.ignore_collisions)

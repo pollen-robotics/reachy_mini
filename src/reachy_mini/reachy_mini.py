@@ -84,7 +84,7 @@ class ReachyMini:
         spawn_daemon: bool = False,
         use_sim: bool = True,
         timeout: float = 5.0,
-        automatic_body_yaw: bool = True,
+        automatic_body_yaw: bool = False,
     ) -> None:
         """Initialize the Reachy Mini robot.
 
@@ -93,7 +93,7 @@ class ReachyMini:
             spawn_daemon (bool): If True, will spawn a daemon to control the robot, defaults to False.
             use_sim (bool): If True and spawn_daemon is True, will spawn a simulated robot, defaults to True.
             timeout (float): Timeout for the client connection, defaults to 5.0 seconds.
-            automatic_body_yaw (bool): If True, the body yaw will be used to compute the IK and FK. Default is True.
+            automatic_body_yaw (bool): If True, the body yaw will be used to compute the IK and FK. Default is False.
 
         It will try to connect to the daemon, and if it fails, it will raise an exception.
 
@@ -192,6 +192,7 @@ class ReachyMini:
         ] = None,  # [left_angle, right_angle] (in rads)
         duration: float = 0.5,  # Duration in seconds for the movement, default is 0.5 seconds.
         method="default",  # can be "linear", "minjerk", "ease" or "cartoon", default is "default" (-> "minjerk" interpolation)
+        body_yaw: float = 0.0,  # Body yaw angle in radians
         check_collision: bool = False,
     ):
         """Go to a target head pose and/or antennas position using task space interpolation, in "duration" seconds.
@@ -201,6 +202,7 @@ class ReachyMini:
             antennas (Optional[Union[np.ndarray, List[float]]]): 1D array with two elements representing the angles of the antennas in radians.
             duration (float): Duration of the movement in seconds.
             method (str): Interpolation method to use ("linear", "minjerk", "ease", "cartoon"). Default is "minjerk".
+            body_yaw (float): Body yaw angle in radians.
             check_collision (bool): If True, checks for collisions before setting the position. Beware that this will slow down the IK computation (~1ms)!
 
         Raises:
@@ -249,6 +251,7 @@ class ReachyMini:
             self.set_target(
                 interp_head_pose,
                 list(interp_antennas_joint),
+                body_yaw=body_yaw,
                 check_collision=check_collision,
             )
 
