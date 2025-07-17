@@ -157,7 +157,7 @@ class PlacoKinematics:
         self.config_collision_model()
 
     def ik(
-        self, pose: np.ndarray, body_yaw: float = None, check_collision: bool = False
+        self, pose: np.ndarray, body_yaw: float = 0.0, check_collision: bool = False
     ) -> Optional[List[float]]:
         """Compute the inverse kinematics for the head for a given pose.
 
@@ -174,8 +174,7 @@ class PlacoKinematics:
         """
         _pose = pose.copy()
 
-        if body_yaw is not None:
-            self.ik_yaw_joint_task.set_joints({"all_yaw": -body_yaw})
+        self.ik_yaw_joint_task.set_joints({"all_yaw": -body_yaw})
 
         # set the head pose
         _pose[:3, 3][2] += self.head_z_offset  # offset the height of the head

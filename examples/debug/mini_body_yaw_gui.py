@@ -79,12 +79,12 @@ def main():
         ).grid(row=6, column=1)
 
         # Add checkbox for automatic body yaw
-        automatic_body_yaw_var = tk.BooleanVar(value=True)
-        tk.Checkbutton(
-            root,
-            text="Manual Body Yaw",
-            variable=automatic_body_yaw_var,
-        ).grid(row=7, column=0)
+        # automatic_body_yaw_var = tk.BooleanVar(value=True)
+        # tk.Checkbutton(
+        #     root,
+        #     text="Manual Body Yaw",
+        #     variable=automatic_body_yaw_var,
+        # ).grid(row=7, column=0)
 
         # Run the GUI in a non-blocking way
         root.update()
@@ -107,7 +107,7 @@ def main():
 
             root.update()
 
-            mini.head_kinematics.automatic_body_yaw = not automatic_body_yaw_var.get()
+            # mini.head_kinematics.automatic_body_yaw = not automatic_body_yaw_var.get()
 
             mini.set_target(
                 head=head,
