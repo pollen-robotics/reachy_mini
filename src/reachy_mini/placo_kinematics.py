@@ -77,7 +77,7 @@ class PlacoKinematics:
         if self.automatic_body_yaw:
             self.ik_yaw_joint_task.configure("joints", "soft", 5e-5)
         else:
-            self.ik_yaw_joint_task.configure("joints", "soft", 10.0)
+            self.ik_yaw_joint_task.configure("joints", "soft", 1.0)
             
 
         self.ik_joint_task = self.ik_solver.add_joints_task()
@@ -179,9 +179,9 @@ class PlacoKinematics:
         else:
             self.ik_solver.mask_dof("all_yaw")
 
-        if body_yaw is not None:
-            # TODO Is this how we set a new task goal?
-            self.ik_yaw_joint_task.set_joints({"all_yaw": body_yaw})
+        # if body_yaw is not None:
+        #     # TODO Is this how we set a new task goal?
+        #     self.ik_yaw_joint_task.set_joints({"all_yaw": body_yaw})
 
         # set the head pose
         _pose[:3, 3][2] += self.head_z_offset  # offset the height of the head

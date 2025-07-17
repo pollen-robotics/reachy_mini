@@ -107,7 +107,7 @@ def main():
 
             root.update()
 
-            mini.head_kinematics.automatic_body_yaw = automatic_body_yaw_var.get()
+            mini.head_kinematics.automatic_body_yaw = not automatic_body_yaw_var.get()
 
             mini.set_target(
                 head=head,
