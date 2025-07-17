@@ -29,6 +29,7 @@ with ReachyMini() as mini:
 
 Then, the next step is to show how to move the robot. The `ReachyMini` class provides methods called `set_target` and `goto_target` that allows you to move the robot's joints to a specific target position. You can control:
 * the head's position and orientation
+* the body's rotation angle
 * the antennas' position
 
 For instance, to move the head of the robot slightly to the left then go back, you can use the following code:
@@ -100,7 +101,7 @@ with ReachyMini() as reachy:
 
 You need to pass the angles in radians, so you can use `numpy.deg2rad` to convert degrees to radians. The first value in the list corresponds to the left antenna, and the second value corresponds to the right antenna.
 
-You can also move both the head and antennas at the same time by passing both arguments to the `goto_target` method:
+You can also move the head, the body and the antennas at the same time by passing all three arguments to the `goto_target` method:
 
 ```python
 import numpy as np
@@ -113,7 +114,8 @@ with ReachyMini() as reachy:
     reachy.goto_target(
         head=create_head_pose(y=-10, mm=True),
         antennas=np.deg2rad([45, 45]),
-        duration=2.0
+        duration=2.0,
+        body_yaw=np.deg2rad(30)
     )
 ```
 
@@ -162,6 +164,8 @@ with ReachyMini() as reachy:
         y = 10 * np.sin(2 * np.pi * 0.5 * t)  # Sinusoidal trajectory
         # Set the new target position
         reachy.set_target(head=create_head_pose(y=y, mm=True))
+
+        time.sleep(0.01)
 ```
 
 ### Look at
@@ -172,7 +176,7 @@ The `look_at_image` method allows the robot to look at a point in the image coor
 
 You can see the example in [look_at_image.py](../examples/look_at_image.py).
 
-There is also a `look_at_world` method that allows the robot to look at a point in the world coordinates. The world coordinates are defined as a 3D point in the robot's coordinate system.
+There is also a `look_at_world` method that allows the robot to look at a point in the world coordinates. The world coordinates are defined as a 3D point in the robot's coordinate system. TODO add a schematic of this coordinate system.
 
 ### Enable/disable motors and compliancy
 
@@ -248,9 +252,9 @@ print("Available moves:", list(AVAILABLE_MOVES.keys()))
 
 ## Writing an App
 
-We provide a simple way to wrap your in an application that can be run as a standalone script. This is useful to properly manage the start/stop of the app and to add discovery/install mechanisms to allow users to easily run your app. We are also working on a dashboard to manage the apps and their installation.
+We provide a simple way to wrap your behavior in an application that can be run as a standalone script. This is useful to properly manage the start/stop of the app and to add discovery/install mechanisms to allow users to easily run your app. We are also working on a dashboard to manage the apps and their installation.
 
-To write you app, you simply needs to define a class that inherits from `ReachyMiniApp` and implement the `run` method. This method will be called when the app is started, and you can use it to interact with the robot.
+To write your app, you simply need to define a class that inherits from `ReachyMiniApp` and implements the `run` method. This method will be called when the app is started, and you can use it to interact with the robot.
 
 ```python
 import threading
