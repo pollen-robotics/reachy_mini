@@ -177,7 +177,7 @@ class PlacoKinematics:
         """
         _pose = pose.copy()
 
-        self.ik_yaw_joint_task.set_joints({"all_yaw": -body_yaw})
+        self.ik_yaw_joint_task.set_joints({"all_yaw": body_yaw})
 
         # set the head pose
         _pose[:3, 3][2] += self.head_z_offset  # offset the height of the head

@@ -29,6 +29,7 @@ with ReachyMini() as mini:
 
 Then, the next step is to show how to move the robot. The `ReachyMini` class provides methods called `set_target` and `goto_target` that allows you to move the robot's joints to a specific target position. You can control:
 * the head's position and orientation
+* the body's rotation angle
 * the antennas' position
 
 For instance, to move the head of the robot slightly to the left then go back, you can use the following code:
@@ -100,7 +101,7 @@ with ReachyMini() as reachy:
 
 You need to pass the angles in radians, so you can use `numpy.deg2rad` to convert degrees to radians. The first value in the list corresponds to the left antenna, and the second value corresponds to the right antenna.
 
-You can also move both the head and antennas at the same time by passing both arguments to the `goto_target` method:
+You can also move the head, the body and the antennas at the same time by passing both arguments to the `goto_target` method:
 
 ```python
 import numpy as np
@@ -113,7 +114,8 @@ with ReachyMini() as reachy:
     reachy.goto_target(
         head=create_head_pose(y=-10, mm=True),
         antennas=np.deg2rad([45, 45]),
-        duration=2.0
+        duration=2.0,
+        body_yaw=np.deg2rad(30)
     )
 ```
 
@@ -248,9 +250,9 @@ print("Available moves:", list(AVAILABLE_MOVES.keys()))
 
 ## Writing an App
 
-We provide a simple way to wrap your in an application that can be run as a standalone script. This is useful to properly manage the start/stop of the app and to add discovery/install mechanisms to allow users to easily run your app. We are also working on a dashboard to manage the apps and their installation.
+We provide a simple way to wrap your behavior in an application that can be run as a standalone script. This is useful to properly manage the start/stop of the app and to add discovery/install mechanisms to allow users to easily run your app. We are also working on a dashboard to manage the apps and their installation.
 
-To write you app, you simply needs to define a class that inherits from `ReachyMiniApp` and implement the `run` method. This method will be called when the app is started, and you can use it to interact with the robot.
+To write your app, you simply need to define a class that inherits from `ReachyMiniApp` and implements the `run` method. This method will be called when the app is started, and you can use it to interact with the robot.
 
 ```python
 import threading

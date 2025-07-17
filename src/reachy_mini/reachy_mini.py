@@ -218,6 +218,7 @@ class ReachyMini:
             )
 
         cur_head_joints, cur_antennas_joints = self._get_current_joint_positions()
+        start_body_yaw = cur_head_joints[0]
 
         if self._last_head_pose is None:
             start_head_pose = self.head_kinematics.fk(cur_head_joints)
@@ -247,11 +248,14 @@ class ReachyMini:
             interp_antennas_joint = (
                 start_antennas + (target_antennas - start_antennas) * interp_time
             )
+            interp_body_yaw_joint = (
+                start_body_yaw + (body_yaw - start_body_yaw) * interp_time
+            )
 
             self.set_target(
                 interp_head_pose,
                 list(interp_antennas_joint),
-                body_yaw=body_yaw,
+                body_yaw=interp_body_yaw_joint,
                 check_collision=check_collision,
             )
 
