@@ -103,7 +103,6 @@ class ReachyMini:
         self.client.wait_for_connection(timeout=timeout)
         self._last_head_pose = None
 
-        self._automatic_body_yaw = automatic_body_yaw
         self.head_kinematics = PlacoKinematics(
             self.urdf_root_path, automatic_body_yaw=automatic_body_yaw
         )
