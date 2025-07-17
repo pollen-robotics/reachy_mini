@@ -74,11 +74,11 @@ class PlacoKinematics:
         # regularization
         self.ik_yaw_joint_task = self.ik_solver.add_joints_task()
         self.ik_yaw_joint_task.set_joints({"all_yaw": 0})
+
         if self.automatic_body_yaw:
             self.ik_yaw_joint_task.configure("joints", "soft", 5e-5)
         else:
             self.ik_yaw_joint_task.configure("joints", "soft", 1.0)
-            
 
         self.ik_joint_task = self.ik_solver.add_joints_task()
         self.ik_joint_task.set_joints({f"{k}": 0 for k in range(1, 7)})
@@ -174,14 +174,8 @@ class PlacoKinematics:
         """
         _pose = pose.copy()
 
-        if self.automatic_body_yaw: 
-            self.ik_solver.unmask_dof("all_yaw")
-        else:
-            self.ik_solver.mask_dof("all_yaw")
-
-        # if body_yaw is not None:
-        #     # TODO Is this how we set a new task goal?
-        #     self.ik_yaw_joint_task.set_joints({"all_yaw": body_yaw})
+        if body_yaw is not None:
+            self.ik_yaw_joint_task.set_joints({"all_yaw": -body_yaw})
 
         # set the head pose
         _pose[:3, 3][2] += self.head_z_offset  # offset the height of the head
@@ -207,12 +201,7 @@ class PlacoKinematics:
         for joint_name in self.joints_names:
             joint = self.robot.get_joint(joint_name)
             joints.append(joint)
-    
-        if (not self.automatic_body_yaw) and (body_yaw is not None):
-            # If body_yaw is set, we need to set the yaw joint to the desired value
-            # because the IK solver will not control this DOF 
-            joints[0] = body_yaw
-            
+
         return joints
 
     def fk(

@@ -33,7 +33,7 @@ def main():
         tk.Scale(root, variable=yaw_var, from_=-180, to=180, orient=tk.HORIZONTAL).grid(
             row=2, column=1
         )
-    
+
         # Add sliders for X, Y, Z position
         x_var = tk.DoubleVar(value=0.0)
         y_var = tk.DoubleVar(value=0.0)
@@ -77,7 +77,7 @@ def main():
             to=180,
             orient=tk.HORIZONTAL,
         ).grid(row=6, column=1)
-        
+
         # Add checkbox for automatic body yaw
         automatic_body_yaw_var = tk.BooleanVar(value=True)
         tk.Checkbutton(
@@ -85,7 +85,7 @@ def main():
             text="Manual Body Yaw",
             variable=automatic_body_yaw_var,
         ).grid(row=7, column=0)
-        
+
         # Run the GUI in a non-blocking way
         root.update()
 
