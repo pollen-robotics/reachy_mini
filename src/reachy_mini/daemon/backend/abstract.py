@@ -110,7 +110,6 @@ class Backend:
 
         """
         if self.is_recording:
-            print("Added record")
             self.recorded_data.append(record)
 
     def start_recording(self) -> None:
@@ -122,7 +121,7 @@ class Backend:
         """Stop recording data and publish the recorded data."""
         self.is_recording = False
         recorded_data = self.recorded_data.copy()
-        self.recording_publisher.put(json.dumps({"recorded_data": recorded_data}))
+        self.recording_publisher.put(json.dumps(recorded_data))
         self.recorded_data.clear()
 
     def set_head_operation_mode(self, mode: int) -> None:
