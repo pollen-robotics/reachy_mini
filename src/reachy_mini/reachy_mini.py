@@ -72,6 +72,9 @@ class ReachyMini:
 
     """
 
+    urdf_root_path: str = str(
+        files(reachy_mini).joinpath("descriptions/reachy_mini/urdf")
+    )
     assets_root_path: str = str(files(reachy_mini).joinpath("assets/"))
 
     def __init__(
@@ -80,6 +83,7 @@ class ReachyMini:
         spawn_daemon: bool = False,
         use_sim: bool = True,
         timeout: float = 5.0,
+        automatic_body_yaw: bool = False,
     ) -> None:
         """Initialize the Reachy Mini robot.
 
@@ -88,6 +92,7 @@ class ReachyMini:
             spawn_daemon (bool): If True, will spawn a daemon to control the robot, defaults to False.
             use_sim (bool): If True and spawn_daemon is True, will spawn a simulated robot, defaults to True.
             timeout (float): Timeout for the client connection, defaults to 5.0 seconds.
+            automatic_body_yaw (bool): If True, the body yaw will be used to compute the IK and FK. Default is False.
 
         It will try to connect to the daemon, and if it fails, it will raise an exception.
 
@@ -126,6 +131,7 @@ class ReachyMini:
         antennas: Optional[
             Union[np.ndarray, List[float]]
         ] = None,  # [left_angle, right_angle] (in rads)
+        body_yaw: Optional[float] = 0.0,  # Body yaw angle in radians
         check_collision: bool = False,  # Check for collisions before setting the position
     ) -> None:
         """Set the target pose of the head and/or the target position of the antennas.
@@ -133,6 +139,7 @@ class ReachyMini:
         Args:
             head (Optional[np.ndarray]): 4x4 pose matrix representing the head pose.
             antennas (Optional[Union[np.ndarray, List[float]]]): 1D array with two elements representing the angles of the antennas in radians.
+            body_yaw (Optional[float]): Body yaw angle in radians.
             check_collision (bool): If True, checks for collisions before setting the position. Beware that this will slow down the IK computation (~1ms).
 
         Raises:
@@ -147,6 +154,17 @@ class ReachyMini:
                 raise ValueError(
                     f"Head pose must be a 4x4 matrix, got shape {head.shape}."
                 )
+            head_joint_positions = self.head_kinematics.ik(
+                head, check_collision=check_collision
+            )
+
+            # This means that a collision was detected
+            if head_joint_positions is None:
+                raise ValueError(
+                    f"The target head pose is not reachable (head pose: {head}). Check the kinematics or the collision detection."
+                )
+        else:
+            head_joint_positions = None
 
         if antennas is not None:
             if not len(antennas) == 2:
@@ -154,6 +172,7 @@ class ReachyMini:
                     "Antennas must be a list or 1D np array with two elements."
                 )
         self._set_check_collision(check_collision)
+	#todo yaw
         self._set_joint_positions(None, list(antennas))
         self._set_head_pose(head)
         self._last_head_pose = head
@@ -166,6 +185,7 @@ class ReachyMini:
         ] = None,  # [left_angle, right_angle] (in rads)
         duration: float = 0.5,  # Duration in seconds for the movement, default is 0.5 seconds.
         method="default",  # can be "linear", "minjerk", "ease" or "cartoon", default is "default" (-> "minjerk" interpolation)
+        body_yaw: float = 0.0,  # Body yaw angle in radians
         check_collision: bool = False,
     ):
         """Go to a target head pose and/or antennas position using task space interpolation, in "duration" seconds.
@@ -175,6 +195,7 @@ class ReachyMini:
             antennas (Optional[Union[np.ndarray, List[float]]]): 1D array with two elements representing the angles of the antennas in radians.
             duration (float): Duration of the movement in seconds.
             method (str): Interpolation method to use ("linear", "minjerk", "ease", "cartoon"). Default is "minjerk".
+            body_yaw (float): Body yaw angle in radians.
             check_collision (bool): If True, checks for collisions before setting the position. Beware that this will slow down the IK computation (~1ms)!
 
         Raises:
@@ -213,10 +234,14 @@ class ReachyMini:
             interp_antennas_joint = (
                 start_antennas + (target_antennas - start_antennas) * interp_time
             )
+            interp_body_yaw_joint = (
+                start_body_yaw + (body_yaw - start_body_yaw) * interp_time
+            )
 
             self.set_target(
                 interp_head_pose,
                 list(interp_antennas_joint),
+                body_yaw=interp_body_yaw_joint,
                 check_collision=check_collision,
             )
 
