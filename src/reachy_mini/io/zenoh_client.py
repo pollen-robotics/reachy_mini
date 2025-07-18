@@ -35,7 +35,8 @@ class ZenohClient(AbstractClient):
         else:
             c = zenoh.Config()
 
-        self.keep_alive_event = threading.Event()
+        self.joint_position_received = threading.Event()
+        self.head_pose_received = threading.Event()
 
         self.session = zenoh.open(c)
         self.cmd_pub = self.session.declare_publisher("reachy_mini/command")
@@ -44,6 +45,22 @@ class ZenohClient(AbstractClient):
             "reachy_mini/joint_positions",
             self._handle_joint_positions,
         )
+
+        self.joint_current_sub = self.session.declare_subscriber(
+            "reachy_mini/joint_current",
+            self._handle_joint_current,
+        )
+
+        self.head_operation_mode_sub = self.session.declare_subscriber(
+            "reachy_mini/head_operation_mode",
+            self._handle_head_operation_mode,
+        )
+
+        self.pose_sub = self.session.declare_subscriber(
+            "reachy_mini/head_pose",
+            self._handle_head_pose,
+        )
+
         self._last_head_joint_positions = None
         self._last_antennas_joint_positions = None
         self._last_head_joint_current = None
@@ -61,7 +78,9 @@ class ZenohClient(AbstractClient):
 
         """
         start = time.time()
-        while not self.keep_alive_event.wait(timeout=1.0):
+        while not self.joint_position_received.wait(
+            timeout=1.0
+        ) or not self.head_pose_received.wait(timeout=1.0):
             if time.time() - start > timeout:
                 self.disconnect()
                 raise TimeoutError(
@@ -71,8 +90,11 @@ class ZenohClient(AbstractClient):
 
     def is_connected(self) -> bool:
         """Check if the client is connected to the server."""
-        self.keep_alive_event.clear()
-        return self.keep_alive_event.wait(timeout=1.0)
+        self.joint_position_received.clear()
+        self.head_pose_received.clear()
+        return self.joint_position_received.wait(
+            timeout=1.0
+        ) and self.head_pose_received.wait(timeout=1.0)
 
     def disconnect(self):
         """Disconnect the client from the server."""
@@ -90,7 +112,7 @@ class ZenohClient(AbstractClient):
             self._last_antennas_joint_positions = positions.get(
                 "antennas_joint_positions"
             )
-            self.keep_alive_event.set()
+            self.joint_position_received.set()
 
     def get_current_joints(self) -> tuple[list[float], list[float]]:
         """Get the current joint positions."""
@@ -108,21 +130,21 @@ class ZenohClient(AbstractClient):
         if sample.payload:
             current = json.loads(sample.payload.to_string())
             self._last_head_joint_current = current.get("head_joint_current")
-            self.keep_alive_event.set()
+            # self.joint_position_received.set()
 
     def _handle_head_operation_mode(self, sample):
         """Handle incoming head operation mode."""
         if sample.payload:
             mode = json.loads(sample.payload.to_string())
             self._last_head_operation_mode = mode.get("head_operation_mode")
-            self.keep_alive_event.set()
+            # self.keep_alive_event.set()
 
     def _handle_head_pose(self, sample):
         """Handle incoming head pose."""
         if sample.payload:
             pose = json.loads(sample.payload.to_string())
             self._last_head_pose = np.array(pose.get("head_pose")).reshape(4, 4)
-            self.keep_alive_event.set()
+            self.head_pose_received.set()
 
     def get_current_head_pose(self) -> np.ndarray:
         """Get the current head pose."""
