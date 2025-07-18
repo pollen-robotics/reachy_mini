@@ -7,7 +7,6 @@ It includes methods for running the simulation, getting joint positions, and con
 """
 
 import json
-import logging
 import time
 from dataclasses import dataclass
 from importlib.resources import files

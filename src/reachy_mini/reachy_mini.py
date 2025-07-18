@@ -153,7 +153,7 @@ class ReachyMini:
                 raise ValueError(
                     "Antennas must be a list or 1D np array with two elements."
                 )
-	#todo check collision
+        self._set_check_collision(check_collision)
         self._set_joint_positions(None, list(antennas))
         self._set_head_pose(head)
         self._last_head_pose = head
@@ -198,8 +198,6 @@ class ReachyMini:
             start_head_pose = self._last_head_pose
 
         target_head_pose = cur_head_pose if head is None else head
-
-	#todo check colllision
 
         start_antennas = np.array(cur_antennas_joints)
         target_antennas = start_antennas if antennas is None else np.array(antennas)
@@ -594,25 +592,15 @@ class ReachyMini:
         )
         self.client.send_command(json.dumps({"head_joint_current": list(current)}))
 
+    def _set_check_collision(self, check: bool) -> None:
+        """Set whether to check for collisions.
+
+        Args:
+            check (bool): If True, the backend will check for collisions.
+
+        """
+        self.client.send_command(json.dumps({"check_collision": check}))
+
     def compensate_gravity(self) -> None:
         """Enable or disable gravity compensation for the head motors."""
-        # Even though in their docs dynamixes says that 1 count is 1 mA, in practice I've found it to be 3mA.
-        # I am not sure why this happens
-        # Another explanation is that our model is bad and the current is overestimated 3x (but I have not had these issues with other robots)
-        # So I am using a magic number to compensate for this.
-        # for currents under 30mA the constant is around 1
-        from_Nm_to_mA = (
-            1.47 / 0.52 * 1000
-        )  # Conversion factor from Nm to mA for the Stewart platform motors
-        # The torque constant is not linear, so we need to use a correction factor
-        # This is a magic number that should be determined experimentally
-        # For currents under 30mA, the constant is around 3
-        # Then it drops to 1.0 for currents above 1.5A
-        correction_factor = 3.0
-        # Get the current head joint positions
-        head_joints = self._get_current_joint_positions()[0]
-        gravity_torque = self.head_kinematics.compute_gravity_torque(head_joints)
-        # Convert the torque from Nm to mA
-        current = gravity_torque * from_Nm_to_mA / correction_factor
-        # Set the head joint current
-        self._set_head_joint_current(current)
+        self.client.send_command(json.dumps({"gravity_compensation": True}))

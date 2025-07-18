@@ -31,6 +31,7 @@ class Backend:
         )
 
         self.head_kinematics = PlacoKinematics(urdf_root_path)
+        self.check_collision = False
 
         self.head_pose = None  # 4x4 pose matrix
         self.head_joint_positions = None  # [yaw, 0, 1, 2, 3, 4, 5]
@@ -94,6 +95,15 @@ class Backend:
         """
         self.head_pose = pose
         self.set_head_joint_positions(self.head_kinematics.ik(pose))
+
+    def set_check_collision(self, check: bool) -> None:
+        """Set whether to check collisions.
+
+        Args:
+            check (bool): If True, the backend will check for collisions.
+
+        """
+        self.check_collision = check
 
     def set_head_joint_positions(self, positions: List[float]) -> None:
         """Set the head joint positions.
@@ -176,3 +186,26 @@ class Backend:
         raise NotImplementedError(
             "The method get_status should be overridden by subclasses."
         )
+
+    def compensate_gravity(self) -> None:
+        """Enable or disable gravity compensation for the head motors."""
+        # Even though in their docs dynamixes says that 1 count is 1 mA, in practice I've found it to be 3mA.
+        # I am not sure why this happens
+        # Another explanation is that our model is bad and the current is overestimated 3x (but I have not had these issues with other robots)
+        # So I am using a magic number to compensate for this.
+        # for currents under 30mA the constant is around 1
+        from_Nm_to_mA = (
+            1.47 / 0.52 * 1000
+        )  # Conversion factor from Nm to mA for the Stewart platform motors
+        # The torque constant is not linear, so we need to use a correction factor
+        # This is a magic number that should be determined experimentally
+        # For currents under 30mA, the constant is around 3
+        # Then it drops to 1.0 for currents above 1.5A
+        correction_factor = 3.0
+        # Get the current head joint positions
+        head_joints = self.get_head_joint_positions()
+        gravity_torque = self.head_kinematics.compute_gravity_torque(head_joints)
+        # Convert the torque from Nm to mA
+        current = gravity_torque * from_Nm_to_mA / correction_factor
+        # Set the head joint current
+        self.set_head_joint_current(current)

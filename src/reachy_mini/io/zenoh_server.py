@@ -100,4 +100,9 @@ class ZenohServer(AbstractServer):
                 self.backend.set_antennas_operation_mode(
                     command["antennas_operation_mode"]
                 )
+            if "check_collision" in command:
+                self.backend.set_check_collision(command["check_collision"])
+            if "compensate_gravity" in command:
+                self.backend.compensate_gravity()
+
         self._cmd_event.set()
