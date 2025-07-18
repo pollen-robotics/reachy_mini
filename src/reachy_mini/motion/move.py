@@ -61,7 +61,8 @@ class Move(ABC):
                 head, antennas = self.evaluate(t)
                 reachy_mini.set_target(head=head, antennas=antennas)
 
-                loop_duration = time.time() - t
+                end = time.time() - t0
+                loop_duration = end - t
                 sleep_duration = max(0, dt - loop_duration)
                 if sleep_duration > 0:
                     timer.wait(sleep_duration)
