@@ -100,6 +100,7 @@ class ReachyMini:
         daemon_check(spawn_daemon, use_sim)
         self.client = Client(localhost_only)
         self.client.wait_for_connection(timeout=timeout)
+        self.set_automatic_body_yaw(automatic_body_yaw)
         self._last_head_pose = None
 
         self.K = np.array(
@@ -131,7 +132,7 @@ class ReachyMini:
         antennas: Optional[
             Union[np.ndarray, List[float]]
         ] = None,  # [left_angle, right_angle] (in rads)
-        body_yaw: Optional[float] = 0.0,  # Body yaw angle in radians
+        body_yaw: float = 0.0,  # Body yaw angle in radians
         check_collision: bool = False,  # Check for collisions before setting the position
     ) -> None:
         """Set the target pose of the head and/or the target position of the antennas.
@@ -149,32 +150,17 @@ class ReachyMini:
         if head is None and antennas is None:
             raise ValueError("At least one of head or antennas must be provided.")
 
-        if head is not None:
-            if not head.shape == (4, 4):
-                raise ValueError(
-                    f"Head pose must be a 4x4 matrix, got shape {head.shape}."
-                )
-            head_joint_positions = self.head_kinematics.ik(
-                head, check_collision=check_collision
+        if head is not None and not head.shape == (4, 4):
+            raise ValueError(f"Head pose must be a 4x4 matrix, got shape {head.shape}.")
+
+        if antennas is not None and not len(antennas) == 2:
+            raise ValueError(
+                "Antennas must be a list or 1D np array with two elements."
             )
 
-            # This means that a collision was detected
-            if head_joint_positions is None:
-                raise ValueError(
-                    f"The target head pose is not reachable (head pose: {head}). Check the kinematics or the collision detection."
-                )
-        else:
-            head_joint_positions = None
-
-        if antennas is not None:
-            if not len(antennas) == 2:
-                raise ValueError(
-                    "Antennas must be a list or 1D np array with two elements."
-                )
         self._set_check_collision(check_collision)
-	#todo yaw
         self._set_joint_positions(None, list(antennas))
-        self._set_head_pose(head)
+        self._set_head_pose(head, body_yaw)
         self._last_head_pose = head
 
     def goto_target(
@@ -210,7 +196,8 @@ class ReachyMini:
                 "Duration must be positive and non-zero. Use set_target() for immediate position setting."
             )
 
-        _, cur_antennas_joints = self._get_current_joint_positions()
+        cur_head_joints, cur_antennas_joints = self._get_current_joint_positions()
+        start_body_yaw = cur_head_joints[0]
         cur_head_pose = self._get_current_head_pose()
 
         if self._last_head_pose is None:
@@ -532,11 +519,12 @@ class ReachyMini:
 
         self.client.send_command(json.dumps(cmd))
 
-    def _set_head_pose(self, pose: np.ndarray) -> None:
+    def _set_head_pose(self, pose: np.ndarray, body_yaw: float = 0.0) -> None:
         """Set the head pose to a specific 4x4 matrix.
 
         Args:
             pose (np.ndarray): A 4x4 matrix representing the desired head pose.
+            body_yaw (float): The yaw angle of the body, used to adjust the head pose.
 
         Raises:
             ValueError: If the shape of the pose is not (4, 4).
@@ -551,6 +539,8 @@ class ReachyMini:
             cmd["head_pose"] = pose.tolist()
         else:
             raise ValueError("Pose must be provided as a 4x4 matrix.")
+
+        cmd["body_yaw"] = body_yaw
 
         self.client.send_command(json.dumps(cmd))
 
@@ -629,3 +619,12 @@ class ReachyMini:
     def compensate_gravity(self) -> None:
         """Enable or disable gravity compensation for the head motors."""
         self.client.send_command(json.dumps({"gravity_compensation": True}))
+
+    def set_automatic_body_yaw(self, body_yaw: float) -> None:
+        """Set the automatic body yaw.
+
+        Args:
+            body_yaw (float): The yaw angle of the body in radians.
+
+        """
+        self.client.send_command(json.dumps({"automatic_body_yaw": body_yaw}))

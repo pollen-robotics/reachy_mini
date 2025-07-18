@@ -87,7 +87,9 @@ class ZenohServer(AbstractServer):
             if "head_joint_positions" in command:
                 self.backend.set_head_joint_positions(command["head_joint_positions"])
             if "head_pose" in command:
-                self.backend.set_head_pose(np.array(command["head_pose"]).reshape(4, 4))
+                self.backend.set_head_pose(
+                    np.array(command["head_pose"]).reshape(4, 4), command["body_yaw"]
+                )
             if "antennas_joint_positions" in command:
                 self.backend.set_antenna_joint_positions(
                     command["antennas_joint_positions"]
@@ -104,5 +106,7 @@ class ZenohServer(AbstractServer):
                 self.backend.set_check_collision(command["check_collision"])
             if "compensate_gravity" in command:
                 self.backend.compensate_gravity()
+            if "automatic_body_yaw" in command:
+                self.backend.set_automatic_body_yaw(command["automatic_body_yaw"])
 
         self._cmd_event.set()

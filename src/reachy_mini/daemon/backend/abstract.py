@@ -86,15 +86,20 @@ class Backend:
         """
         self.pose_publisher = publisher
 
-    def set_head_pose(self, pose: np.ndarray) -> None:
+    def set_head_pose(self, pose: np.ndarray, body_yaw: float = 0.0) -> None:
         """Set the head pose. Computes the IK and sets the head joint positions.
 
         Args:
             pose (np.ndarray): 4x4 pose matrix representing the head pose.
+            body_yaw (float): The yaw angle of the body, used to adjust the head pose.
 
         """
         self.head_pose = pose
-        self.set_head_joint_positions(self.head_kinematics.ik(pose))
+        self.set_head_joint_positions(
+            self.head_kinematics.ik(
+                pose, body_yaw=body_yaw, check_collision=self.check_collision
+            )
+        )
 
     def set_check_collision(self, check: bool) -> None:
         """Set whether to check collisions.
@@ -167,7 +172,9 @@ class Backend:
 
     def get_head_pose(self) -> np.ndarray:
         """Return the current head pose as a 4x4 matrix."""
-        return self.head_kinematics.fk(self.get_head_joint_positions())
+        return self.head_kinematics.fk(
+            self.get_head_joint_positions(), self.check_collision
+        )
 
     def get_antenna_joint_positions(self) -> List[float]:
         """Return the current antenna joint positions.
@@ -209,3 +216,12 @@ class Backend:
         current = gravity_torque * from_Nm_to_mA / correction_factor
         # Set the head joint current
         self.set_head_joint_current(current)
+
+    def set_automatic_body_yaw(self, body_yaw: float) -> None:
+        """Set the automatic body yaw.
+
+        Args:
+            body_yaw (float): The yaw angle of the body.
+
+        """
+        self.head_kinematics.start_body_yaw = body_yaw

@@ -390,3 +390,12 @@ class PlacoKinematics:
 
         # Compute the gravity torque
         return grav_torque_actuated
+
+    def set_automatic_body_yaw(self, body_yaw: float) -> None:
+        """Set the automatic body yaw.
+
+        Args:
+            body_yaw (float): The yaw angle of the body.
+
+        """
+        self.start_body_yaw = body_yaw
