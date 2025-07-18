@@ -122,35 +122,6 @@ class ReachyMini:
             ]
         )
 
-        # Recording attributes
-        self._is_recording = False
-        self._recording_start_time: Optional[float] = None
-        self._recorded_data: List[Dict] = []
-
-    def start_recording(self) -> None:
-        """Start recording task-space commands sent via set_target.
-
-        Initializes the recording state. Each subsequent call to set_target will be
-        logged in memory.
-        """
-        self._is_recording = True
-        self._recorded_data = []
-        self._recording_start_time = time.time()
-
-    def stop_recording(self) -> List[Dict]:
-        """Stop recording and return the recorded data.
-
-        Returns:
-            List[Dict]: A list of recorded commands. Each command is a dictionary
-                        containing 'time', 'head', 'antennas', 'body_yaw',
-                        and 'check_collision'.
-
-        """
-        self._is_recording = False
-        recording = self._recorded_data
-        self._recorded_data = []
-        return recording
-
     def __enter__(self) -> "ReachyMini":
         """Context manager entry point for Reachy Mini."""
         return self
@@ -183,17 +154,13 @@ class ReachyMini:
         if head is None and antennas is None:
             raise ValueError("At least one of head or antennas must be provided.")
 
-        if self._is_recording:
-            record_time = time.time() - self._recording_start_time
-
-            record = {
-                "time": record_time,
-                "head": head.tolist() if head is not None else None,
-                "antennas": list(antennas) if antennas is not None else None,
-                "body_yaw": body_yaw,
-                "check_collision": check_collision,
-            }
-            self._recorded_data.append(record)
+        record = {
+            "time": time.time(),
+            "head": head.tolist() if head is not None else None,
+            "antennas": list(antennas) if antennas is not None else None,
+            "body_yaw": body_yaw,
+            "check_collision": check_collision,
+        }
 
         if head is not None:
             if not head.shape == (4, 4):
@@ -221,7 +188,9 @@ class ReachyMini:
         else:
             antenna_joint_positions = None
 
-        self._set_joint_positions(head_joint_positions, antenna_joint_positions)
+        self._set_joint_positions(
+            head_joint_positions, antenna_joint_positions, record=record
+        )
         self._last_head_pose = head
 
     def goto_target(
@@ -528,6 +497,7 @@ class ReachyMini:
         antennas_joint_positions: Optional[
             List[float]
         ],  # [left_angle, right_angle] length 2
+        record: Optional[Dict] = None,  # If recording, the command will be logged
     ):
         """Set the joint positions of the head and/or antennas.
 
@@ -536,6 +506,7 @@ class ReachyMini:
         Args:
             head_joint_positions (Optional[List[float]]): List of head joint positions in radians (length 7).
             antennas_joint_positions (Optional[List[float]]): List of antennas joint positions in radians (length 2).
+            record (Optional[Dict]): If provided, the command will be logged with the given record data.
 
         """
         cmd = {}
@@ -554,8 +525,24 @@ class ReachyMini:
             raise ValueError(
                 "At least one of head_joint_positions or antennas must be provided."
             )
+        if record is not None:
+            cmd["set_target_record"] = record
 
         self.client.send_command(json.dumps(cmd))
+
+    def start_recording(self) -> None:
+        """Start recording data."""
+        self.client.send_command(json.dumps({"start_recording": True}))
+        self.is_recording = True
+
+    def stop_recording(self) -> List[Dict]:
+        """Stop recording data and return the recorded data."""
+        self.client.send_command(json.dumps({"stop_recording": True}))
+        self.is_recording = False
+        time.sleep(2.0)  # Give some time for the backend to process the command
+        recorded_data = self.client.get_recorded_data()
+
+        return recorded_data
 
     def _set_head_operation_mode(self, mode: int) -> None:
         """Set the operation mode for the head motors.

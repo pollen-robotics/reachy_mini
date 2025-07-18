@@ -61,7 +61,9 @@ class ZenohServer(AbstractServer):
             self._handle_command,
         )
         self.pub = self.session.declare_publisher("reachy_mini/joint_positions")
+        self.pub_record = self.session.declare_publisher("reachy_mini/recorded_data")
         self.backend.set_joint_positions_publisher(self.pub)
+        self.backend.set_recording_publisher(self.pub_record)
 
     def stop(self):
         """Stop the Zenoh server."""
@@ -94,4 +96,11 @@ class ZenohServer(AbstractServer):
                 self.backend.set_antennas_operation_mode(
                     command["antennas_operation_mode"]
                 )
+            if "set_target_record" in command:
+                self.backend.append_record(command["set_target_record"])
+
+            if "start_recording" in command:
+                self.backend.start_recording()
+            if "stop_recording" in command:
+                self.backend.stop_recording()
         self._cmd_event.set()
