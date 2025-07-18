@@ -174,17 +174,16 @@ You can see the example in [look_at_image.py](../examples/look_at_image.py).
 
 There is also a `look_at_world` method that allows the robot to look at a point in the world coordinates. The world coordinates are defined as a 3D point in the robot's coordinate system.
 
-### Torque ON/OFF
+### Enable/disable motors and compliancy
 
-You can enable/disable the torque of the motors using the `set_torque` method. This is useful to turn off the motors when you want to manipulate the robot manually or when you want to save power.
 
-```python
-from reachy_mini import ReachyMini
+You can control the robot's motors with three main methods:
 
-with ReachyMini() as reachy:
-    # Disable the torque of the motors
-    reachy.set_torque(False)
-```
+1. **`enable_motors`**: Powers on the motors, making the robot ready to move and respond to commands. In this mode, the robot holds its position and you cannot move it by hand.
+
+2. **`disable_motors`**: Powers off the motors. The robot will not respond to commands, but you can move it freely by hand (no resistance).
+
+3. **`make_motors_compliant`**: Makes the motors compliant (requires motors to be enabled first). In this mode, the motors are powered on, but they do not resist external forces, so you can move the robot by hand, and it will feel "soft". This is useful for safe manual manipulation or teaching by demonstration. For an example, see the [gravity compensation example](../examples/reachy_compliant_demo.py): in this demo, you can move the robot's head and antennas freely, but the robot will use its motors to compensate for gravity and maintain its position/orientation in space.
 
 ## Accessing the sensors
 
@@ -221,6 +220,31 @@ TODO
 ### Speaker
 
 TODO
+
+## Playing moves
+
+You can also play predefined moves simply. You can find an example on how to do this in the [Dance Player](../examples/minimal_dance_player.py) example. 
+
+Basically, you just need to load the move from the collections you want. And run the `play_on` method on a `ReachyMini` instance.
+
+```python
+from reachy_mini.motion.dance_move import DanceMove
+from reachy_mini.reachy_mini import ReachyMini
+
+with ReachyMini() as mini:
+    move = DanceMove("dizzy_spin")
+    move.play_on(mini)
+```
+
+You can also list the available moves in a collection as follows:
+
+```python
+from reachy_mini.motion.collection.dance import AVAILABLE_MOVES
+
+print("Available moves:", list(AVAILABLE_MOVES.keys()))
+
+>>> Available moves: ['simple_nod', 'head_tilt_roll', 'side_to_side_sway', 'dizzy_spin', 'stumble_and_recover', 'headbanger_combo', 'interwoven_spirals', 'sharp_side_tilt', 'side_peekaboo', 'yeah_nod', 'uh_huh_tilt', 'neck_recoil', 'chin_lead', 'groovy_sway_and_roll', 'chicken_peck', 'side_glance_flick', 'polyrhythm_combo', 'grid_snap', 'pendulum_swing', 'jackson_square']
+```
 
 ## Writing an App
 

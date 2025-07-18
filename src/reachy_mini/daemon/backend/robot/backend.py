@@ -55,6 +55,10 @@ class RobotBackend(Backend):
             "nb_error": 0,
             "record_period": self._stats_record_period,
         }
+        self._head_operation_mode = -1  # Default to torque control mode
+        self._antennas_operation_mode = -1  # Default to torque control mode
+        self.antenna_joint_current = None  # Placeholder for antenna joint torque
+        self.head_joint_current = None  # Placeholder for head joint torque
 
     def run(self):
         """Run the control loop for the robot backend.
@@ -86,11 +90,27 @@ class RobotBackend(Backend):
         assert self.c is not None, "Motor controller not initialized or already closed."
 
         if self._torque_enabled:
-            if self.head_joint_positions is not None:
-                self.c.set_stewart_platform_position(self.head_joint_positions[1:])
-                self.c.set_body_rotation(self.head_joint_positions[0])
-            if self.antenna_joint_positions is not None:
-                self.c.set_antennas_positions(self.antenna_joint_positions)
+            if self._head_operation_mode != 0:  # if position control mode
+                if self.head_joint_positions is not None:
+                    self.c.set_stewart_platform_position(self.head_joint_positions[1:])
+                    self.c.set_body_rotation(self.head_joint_positions[0])
+            else:  # it's in torque control mode
+                if self.head_joint_current is not None:
+                    self.c.set_stewart_platform_goal_current(
+                        np.round(self.head_joint_current[1:], 0).astype(int).tolist()
+                    )
+                    # Body rotation torque control is not supported with feetech motors
+                    # self.c.set_body_rotation_goal_current(int(self.head_joint_current[0]))
+
+            if self._antennas_operation_mode != 0:  # if position control mode
+                if self.antenna_joint_positions is not None:
+                    self.c.set_antennas_positions(self.antenna_joint_positions)
+            # Antenna torque control is not supported with feetech motors
+            # else:
+            #     if self.antenna_joint_current is not None:
+            #         self.c.set_antennas_goal_current(
+            #            np.round(self.antenna_joint_current, 0).astype(int).tolist()
+            #         )
 
         if (
             self.joint_positions_publisher is not None
@@ -166,16 +186,100 @@ class RobotBackend(Backend):
                 self._stats["nb_error"] = 0
                 self.stats_record_t0 = time.time()
 
-    def set_torque(self, enabled: bool) -> None:
-        """Enable or disable the torque on the motors."""
+    def enable_motors(self) -> None:
+        """Enable the motors by turning the torque on."""
         assert self.c is not None, "Motor controller not initialized or already closed."
 
-        if enabled:
-            self.c.enable_torque()
-        else:
-            self.c.disable_torque()
+        self.c.enable_torque()
+        self._torque_enabled = True
 
-        self._torque_enabled = enabled
+    def disable_motors(self) -> None:
+        """Disable the motors by turning the torque off."""
+        assert self.c is not None, "Motor controller not initialized or already closed."
+
+        self.c.disable_torque()
+        self._torque_enabled = False
+
+    def set_head_operation_mode(self, mode: int) -> None:
+        """Change the operation mode of the head motors.
+
+        Args:
+            mode (int): The operation mode for the head motors.
+
+        The operation modes can be:
+            0: torque control
+            3: position control
+            5: current-based position control.
+
+        Important:
+            This method does not work well with the current feetech motors (body rotation), as they do not support torque control.
+            So the method disables the antennas when in torque control mode.
+            The dynamixel motors used for the head do support torque control, so this method works as expected.
+
+        Args:
+            mode (int): The operation mode for the head motors.
+                        This could be a specific mode like position control, velocity control, or torque control.
+
+        """
+        assert self.c is not None, "Motor controller not initialized or already closed."
+        assert mode in [0, 3, 5], (
+            "Invalid operation mode. Must be one of [0 (torque), 3 (position), 5 (current-limiting position)]."
+        )
+
+        # if motors are enabled, disable them before changing the mode
+        if self._torque_enabled:
+            self.c.enable_stewart_platform(False)
+        # set the new operation mode
+        self.c.set_stewart_platform_operating_mode(mode)
+
+        if mode != 0:
+            # if the mode is not torque control, we need to set the head joint positions
+            # to the current positions to avoid sudden movements
+            motor_pos = self.c.read_all_positions()
+            self.head_joint_positions = [motor_pos[0]] + motor_pos[3:]
+            self.c.set_stewart_platform_position(self.head_joint_positions[1:])
+            self.c.set_body_rotation(self.head_joint_positions[0])
+            self.c.enable_body_rotation(True)
+            self.c.set_body_rotation_operating_mode(0)
+        else:
+            self.c.enable_body_rotation(False)
+
+        if self._torque_enabled:
+            self.c.enable_stewart_platform(True)
+
+        self._head_operation_mode = mode
+
+    def set_antennas_operation_mode(self, mode: int) -> None:
+        """Change the operation mode of the antennas motors.
+
+        Args:
+            mode (int): The operation mode for the antennas motors (0: torque control, 3: position control, 5: current-based position control).
+
+        Important:
+            This method does not work well with the current feetech motors, as they do not support torque control.
+            So the method disables the antennas when in torque control mode.
+
+        Args:
+            mode (int): The operation mode for the antennas motors.
+                        This could be a specific mode like position control, velocity control, or torque control.
+
+        """
+        assert self.c is not None, "Motor controller not initialized or already closed."
+        assert mode in [0, 3, 5], (
+            "Invalid operation mode. Must be one of [0 (torque), 3 (position), 5 (current-limiting position)]."
+        )
+
+        if self._antennas_operation_mode != mode:
+            if mode != 0:
+                # if the mode is not torque control, we need to set the head joint positions
+                # to the current positions to avoid sudden movements
+                self.antenna_joint_positions = self.c.read_all_positions()[1:3]
+                self.c.set_antennas_positions(self.antenna_joint_positions)
+                self.c.enable_antennas(True)
+            else:
+                self.c.enable_antennas(False)
+
+            self._antennas_operation_mode = mode
 
     def get_head_joint_positions(self):
         """Get the current head joint positions."""
