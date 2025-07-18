@@ -21,16 +21,16 @@ from reachy_mini.placo_kinematics import PlacoKinematics
 class Backend:
     """Base class for robot backends, simulated or real."""
 
+    urdf_root_path: str = str(
+        files(reachy_mini).joinpath("descriptions/reachy_mini/urdf")
+    )
+
     def __init__(self) -> None:
         """Initialize the backend."""
         self.should_stop = threading.Event()
         self.ready = threading.Event()
 
-        urdf_root_path: str = str(
-            files(reachy_mini).joinpath("descriptions/reachy_mini/urdf")
-        )
-
-        self.head_kinematics = PlacoKinematics(urdf_root_path)
+        self.head_kinematics = PlacoKinematics(Backend.urdf_root_path)
         self.check_collision = False
 
         self.head_pose = None  # 4x4 pose matrix

@@ -72,6 +72,8 @@ class ReachyMini:
 
     """
 
+    assets_root_path: str = str(files(reachy_mini).joinpath("assets/"))
+
     def __init__(
         self,
         localhost_only: bool = True,
@@ -94,8 +96,6 @@ class ReachyMini:
         self.client = Client(localhost_only)
         self.client.wait_for_connection(timeout=timeout)
         self._last_head_pose = None
-
-        self.assets_root_path: str = str(files(reachy_mini).joinpath("assets/"))
 
         self.K = np.array(
             [[550.3564, 0.0, 638.0112], [0.0, 549.1653, 364.589], [0.0, 0.0, 1.0]]
@@ -387,7 +387,7 @@ class ReachyMini:
         if pygame.mixer is None:
             print("Pygame mixer is not initialized. Cannot play sound.")
             return
-        pygame.mixer.music.load(f"{self.assets_root_path}/{sound_file}")
+        pygame.mixer.music.load(f"{ReachyMini.assets_root_path}/{sound_file}")
         pygame.mixer.music.play()
 
     def _goto_joint_positions(
