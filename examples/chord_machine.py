@@ -27,13 +27,29 @@ BASE_YAW_RANGE = (-2.0, 2.0)
 BPM_MIN, BPM_MAX = 60, 200
 
 
+# ───────── diagnostic helpers ───────────────────────────────────────
+def _col_bar(val: float, lo: float, hi: float, width=24) -> str:
+    """Return a coloured ASCII bar for val in [lo,hi]."""
+    span = hi - lo
+    pos = max(0, min(val - lo, span))
+    filled = int(pos / span * width)
+    empty = width - filled
+    if pos / span < 0.5:
+        colour = "32"  # green
+    elif pos / span < 0.8:
+        colour = "33"  # yellow
+    else:
+        colour = "31"  # red
+    return f"\x1b[0;{colour}m{'█' * filled}{'-' * empty}\x1b[0m"
+
+
 def _aff(x, a, b, y0, y1):
     return y0 if x <= a else y1 if x >= b else (x - a) * (y1 - y0) / (b - a) + y0
 
 
 # ─────────── SCAMP session & bigger thread pool  ─────────────────────
 POOL = 1000
-sess = Session()
+sess = Session(max_threads=POOL)
 
 # # print all attributes of the session
 # print("SCAMP session attributes:", ", ".join(dir(sess)))
@@ -113,11 +129,47 @@ class ChordMachine:
         self.next_change = now + 2  # hold 2 s
 
 
+# ───────── bar helper (numeric + coloured bar) ──────────
+def _dash_bar(val: float, lo: float, hi: float, width: int = 26) -> str:
+    """Return '   123.4 |███--------' style string."""
+    span = hi - lo
+    ratio = max(0.0, min((val - lo) / span, 1.0))
+    filled = int(ratio * width)
+    empty = width - filled
+    if ratio < 0.5:
+        colour = "32"  # green
+    elif ratio < 0.8:
+        colour = "33"  # yellow
+    else:
+        colour = "31"  # red
+    bar = f"\x1b[{colour}m{'█' * filled}{'-' * empty}\x1b[0m"
+    return f"{val:8.2f} |{bar}"
+
+
 # ─────────── sensor loop (no queues needed) ──────────────────────────
 def sensor_loop():
     cm = ChordMachine()
     bpm_prev = 120
     sess.tempo = bpm_prev
+
+    hdr = (
+        "BPM",
+        "Bright",
+        "Amp",
+        "Tr",
+        "Col",
+        "Oct",
+        "ArpNPS",
+        "L_ant",
+        "R_ant",
+        "Yaw",
+        "Pitch",
+        "Roll",
+        "Xmm",
+        "Ymm",
+        "Zmm",
+    )
+    print(" | ".join(f"{h:>7}" for h in hdr))
 
     with ReachyMini() as r:
         r.disable_motors()
@@ -145,7 +197,32 @@ def sensor_loop():
 
             cm.set_arp_speed(nps)
             cm.tick(tr, col, octv, amp, bright)
-            time.sleep(0.02)
+
+            # -------- print every frame (14 lines) ------------------
+            out = [
+                ("BPM           ", _dash_bar(bpm, BPM_MIN, BPM_MAX)),
+                ("Brightness Hz ", _dash_bar(bright, 300, 8000)),
+                ("Pad amp       ", _dash_bar(amp, 0, 1)),
+                ("Arp speed nps ", _dash_bar(nps, 1, 8)),
+                ("Transpose st  ", f"{tr:+8d}"),
+                ("Colour index  ", f"{col:8d}  (0=5th 1=add9 2=sus4 3=maj7)"),
+                ("Octave        ", f"{octv:8d}"),
+                ("Left ant roll ", f"{ants[0]:8.2f}"),
+                ("Right ant roll", f"{ants[1]:8.2f}"),
+                ("Head yaw °    ", f"{rpy[2]:8.1f}"),
+                ("Head pitch °  ", f"{rpy[1]:8.1f}"),
+                ("Head roll °   ", f"{rpy[0]:8.1f}"),
+                ("Head X mm     ", f"{trans[0]:8.1f}"),
+                ("Head Y mm     ", f"{trans[1]:8.1f}"),
+                ("Head Z mm     ", f"{trans[2]:8.1f}"),
+            ]
+
+            lines = "\n".join(f"{label}{val}" for label, val in out)
+            # overwrite in‑place
+            sys.stdout.write("\r" + lines + "\033[F" * (len(out) - 1))
+            sys.stdout.flush()
+
+            time.sleep(0.05)  # 20 fps HUD
 
 
 # ─────────── graceful shutdown & main ───────────────────────────────
