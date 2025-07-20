@@ -404,7 +404,7 @@ def precision_mode() -> None:
             )
             print(
                 f"\r{bars[0]} {bars[1]} {bars[2]} "
-                f"best={best:6.2f} time_left={remain:4.1f}s",
+                f"score={score:6.2f} best={best:6.2f} time_left={remain:4.1f}s",
                 end="",
             )
             time.sleep(0.02)
@@ -429,8 +429,8 @@ def parse_args() -> argparse.Namespace:
         "--levels",
         "-n",
         type=int,
-        default=4,
-        help="number of targets in speed‑run (default 4)",
+        default=5,
+        help="number of targets in speed‑run (default 5)",
     )
     return parser.parse_args()
 
