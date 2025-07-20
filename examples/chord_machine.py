@@ -30,10 +30,9 @@ NS = int(RATE * SLICE_SEC)
 # ---- SCAMP session ----------------------
 from scamp import Session
 
-POOL = 1000  # plenty for fast arpeggio + pads
-sess = Session(thread_pool_size=POOL)
-PAD = sess.new_part("warm_pad")
-ARP = sess.new_part("synth_bass_1")
+sess = Session()
+PAD = sess.new_part("warm_pad")  # GM program 89
+ARP = sess.new_part("synth_bass_1")  # GM program 39
 
 # ─────────── constants & helpers ───────────────────────────────────────
 SLICE_SEC = 0.05
