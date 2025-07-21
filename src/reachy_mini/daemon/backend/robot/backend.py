@@ -117,11 +117,16 @@ class RobotBackend(Backend):
             and self.pose_publisher is not None
         ):
             try:
+                positions = self.c.read_all_positions()
+                yaw = positions[0]
+                antennas = positions[1:3]
+                stewart_dofs = positions[3:]
+
                 self.joint_positions_publisher.put(
                     json.dumps(
                         {
-                            "head_joint_positions": self.get_head_joint_positions(),
-                            "antennas_joint_positions": self.get_antenna_joint_positions(),
+                            "head_joint_positions": [yaw] + list(stewart_dofs),
+                            "antennas_joint_positions": list(antennas),
                         }
                     )
                 )
