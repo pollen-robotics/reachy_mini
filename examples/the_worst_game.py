@@ -317,7 +317,7 @@ def _audio_thread() -> None:
 
 
 # ─────────────────────────── game loops ───────────────────────────────────
-def speed_run(threshold: float, cheats: bool, n_levels: int) -> None:
+def speed_run(threshold: float, cheats: bool, n_levels: int, compensate_gravity: bool = False) -> None:
     """Speed‑run game: clear *n_levels* targets as fast as possible."""
     targets = [np.eye(4)] + [random_target_pose() for _ in range(n_levels - 1)]
     current = 0
@@ -332,9 +332,17 @@ def speed_run(threshold: float, cheats: bool, n_levels: int) -> None:
         print("Target 1 (x mm y mm z mm roll ° pitch ° yaw °):", *xyz, *rpy)
 
     with ReachyMini() as reachy:
-        reachy.disable_motors()
+        if compensate_gravity:
+            reachy.enable_motors()
+            reachy.make_motors_compliant(head=True, antennas=True)
+        else:
+            reachy.disable_motors()
 
         while current < n_levels:
+            
+            if compensate_gravity:
+                reachy.compensate_gravity()
+            
             joints, _ = reachy._get_current_joint_positions()
             pose = reachy.head_kinematics.fk(joints)
 
@@ -382,15 +390,29 @@ def speed_run(threshold: float, cheats: bool, n_levels: int) -> None:
 
     print(f"\n🏁  Time for {n_levels} targets: {time.monotonic() - start:.2f} s")
 
+    if compensate_gravity:
+        reachy.make_motors_compliant(head=False, antennas=False)
+        reachy.disable_motors()
 
-def precision_mode() -> None:
+def precision_mode(compensate_gravity: bool = False) -> None:
     """30 s countdown; try for the lowest possible score."""
     deadline = time.monotonic() + 30
     best = float("inf")
 
     with ReachyMini() as reachy:
-        reachy.disable_motors()
+        
+        if compensate_gravity:
+            reachy.enable_motors()
+            reachy.make_motors_compliant(head=True, antennas=True)
+        else:
+            reachy.disable_motors()
+        
         while (remain := deadline - time.monotonic()) > 0:
+            
+            
+            if compensate_gravity:
+                reachy.compensate_gravity()
+            
             joints, _ = reachy._get_current_joint_positions()
             pose = reachy.head_kinematics.fk(joints)
             t_dist, a_dist, score = distance_between_poses(np.eye(4), pose)
@@ -411,6 +433,9 @@ def precision_mode() -> None:
 
     print(f"\n⌛️  Precision best score = {best:.2f}")
 
+    if compensate_gravity:
+        reachy.make_motors_compliant(head=False, antennas=False)
+        reachy.disable_motors()
 
 # ─────────────────────────────── CLI ───────────────────────────────────────
 def parse_args() -> argparse.Namespace:
@@ -432,6 +457,11 @@ def parse_args() -> argparse.Namespace:
         default=5,
         help="number of targets in speed‑run (default 5)",
     )
+    parser.add_argument(
+        "--no-gravity",
+        action="store_true",
+        help="enable motors and compensate gravity (default off)",
+    )
     return parser.parse_args()
 
 
@@ -447,7 +477,7 @@ def main() -> None:
         sys.exit()
 
     thresholds = {"easy": 25.0, "medium": 12.0, "hard": 6.0}
-    speed_run(thresholds[args.difficulty], cheats=args.cheats, n_levels=args.levels)
+    speed_run(thresholds[args.difficulty], cheats=args.cheats, n_levels=args.levels, compensate_gravity=args.no_gravity)
     if args.difficulty == "hard":
         jingle_brass_fanfare()
     elif args.difficulty == "medium":
