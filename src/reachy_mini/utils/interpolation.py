@@ -1,8 +1,9 @@
 """Interpolation utilities for Reachy Mini."""
 
-from typing import Callable, Optional
+from typing import Callable, Optional, Tuple
 
 import numpy as np
+from numpy.typing import NDArray
 from scipy.spatial.transform import Rotation as R
 
 InterpolationFunc = Callable[[float], np.ndarray]
@@ -118,3 +119,55 @@ def time_trajectory(t: float, method="default"):
                 method
             )
         )
+
+
+def delta_angle_between_mat_rot(
+    P: NDArray[np.float64], Q: NDArray[np.float64]
+) -> float:
+    """Compute the angle (in radians) between two 3x3 rotation matrices `P` and `Q`.
+
+    This is equivalent to the angular distance in axis-angle space.
+    It is computed via the trace of the relative rotation matrix.
+
+    References:
+        - https://math.stackexchange.com/questions/2113634/comparing-two-rotation-matrices
+        - http://www.boris-belousov.net/2016/12/01/quat-dist/
+
+    Args:
+        P: A 3x3 rotation matrix.
+        Q: Another 3x3 rotation matrix.
+
+    Returns:
+        The angle in radians between the two rotations.
+
+    """
+    R = np.dot(P, Q.T)
+    tr = (np.trace(R) - 1) / 2
+    tr = np.clip(tr, -1.0, 1.0)  # Ensure numerical stability
+    return np.arccos(tr)
+
+
+def distance_between_poses(
+    pose1: NDArray[np.float64], pose2: NDArray[np.float64]
+) -> Tuple[float, float, float]:
+    """Compute three types of distance between two 4x4 homogeneous transformation matrices.
+
+    The result combines translation (in mm) and rotation (in degrees) using an arbitrary but
+    emotionally satisfying equivalence: 1 degree ≈ 1 mm.
+
+    Args:
+        pose1: A 4x4 homogeneous transformation matrix representing the first pose.
+        pose2: A 4x4 homogeneous transformation matrix representing the second pose.
+
+    Returns:
+        A tuple of:
+        - translation distance in meters,
+        - angular distance in radians,
+        - unhinged distance in magic-mm (translation in mm + rotation in degrees).
+
+    """
+    distance_translation = np.linalg.norm(pose1[:3, 3] - pose2[:3, 3])
+    distance_angle = delta_angle_between_mat_rot(pose1[:3, :3], pose2[:3, :3])
+    unhinged_distance = distance_translation * 1000 + np.rad2deg(distance_angle)
+
+    return distance_translation, distance_angle, unhinged_distance
