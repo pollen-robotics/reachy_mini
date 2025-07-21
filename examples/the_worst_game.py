@@ -317,7 +317,9 @@ def _audio_thread() -> None:
 
 
 # ─────────────────────────── game loops ───────────────────────────────────
-def speed_run(threshold: float, cheats: bool, n_levels: int, compensate_gravity: bool = False) -> None:
+def speed_run(
+    threshold: float, cheats: bool, n_levels: int, compensate_gravity: bool = False
+) -> None:
     """Speed‑run game: clear *n_levels* targets as fast as possible."""
     targets = [np.eye(4)] + [random_target_pose() for _ in range(n_levels - 1)]
     current = 0
@@ -331,18 +333,19 @@ def speed_run(threshold: float, cheats: bool, n_levels: int, compensate_gravity:
         )
         print("Target 1 (x mm y mm z mm roll ° pitch ° yaw °):", *xyz, *rpy)
 
+    print("\nLevel 1!\n")
+
     with ReachyMini() as reachy:
         if compensate_gravity:
             reachy.enable_motors()
             reachy.make_motors_compliant(head=True, antennas=True)
         else:
             reachy.disable_motors()
-
+        first_loop = True
         while current < n_levels:
-            
             if compensate_gravity:
                 reachy.compensate_gravity()
-            
+
             joints, _ = reachy._get_current_joint_positions()
             pose = reachy.head_kinematics.fk(joints)
 
@@ -365,6 +368,9 @@ def speed_run(threshold: float, cheats: bool, n_levels: int, compensate_gravity:
                     _bar(ang_deg, threshold, 40),
                     _bar(score, threshold, threshold * 2),
                 )
+                if first_loop:
+                    print("\nDistance error       Angle error          Score")
+                    first_loop = False
                 print(
                     f"\r{bars[0]} {bars[1]} {bars[2]} "
                     f"score={score:6.2f} best={best_score:6.2f}",
@@ -384,7 +390,7 @@ def speed_run(threshold: float, cheats: bool, n_levels: int, compensate_gravity:
                     )
                     print("\nTarget", current + 1, ":", *xyz, *rpy)
                 elif current < n_levels:
-                    print("\nNext target!")
+                    print("\nLevel", current + 1, "!")
 
             time.sleep(0.02)
 
@@ -394,25 +400,23 @@ def speed_run(threshold: float, cheats: bool, n_levels: int, compensate_gravity:
         reachy.make_motors_compliant(head=False, antennas=False)
         reachy.disable_motors()
 
+
 def precision_mode(compensate_gravity: bool = False) -> None:
     """30 s countdown; try for the lowest possible score."""
     deadline = time.monotonic() + 30
     best = float("inf")
 
     with ReachyMini() as reachy:
-        
         if compensate_gravity:
             reachy.enable_motors()
             reachy.make_motors_compliant(head=True, antennas=True)
         else:
             reachy.disable_motors()
-        
+        first_loop = True
         while (remain := deadline - time.monotonic()) > 0:
-            
-            
             if compensate_gravity:
                 reachy.compensate_gravity()
-            
+
             joints, _ = reachy._get_current_joint_positions()
             pose = reachy.head_kinematics.fk(joints)
             t_dist, a_dist, score = distance_between_poses(np.eye(4), pose)
@@ -424,6 +428,9 @@ def precision_mode(compensate_gravity: bool = False) -> None:
                 _bar(np.degrees(a_dist), 40, 40),
                 _bar(score, 40, 40),
             )
+            if first_loop:
+                print("\nDistance error       Angle error          Score")
+                first_loop = False
             print(
                 f"\r{bars[0]} {bars[1]} {bars[2]} "
                 f"score={score:6.2f} best={best:6.2f} time_left={remain:4.1f}s",
@@ -437,11 +444,14 @@ def precision_mode(compensate_gravity: bool = False) -> None:
         reachy.make_motors_compliant(head=False, antennas=False)
         reachy.disable_motors()
 
+
 # ─────────────────────────────── CLI ───────────────────────────────────────
 def parse_args() -> argparse.Namespace:
     """Parse command‑line arguments."""
     parser = argparse.ArgumentParser(description="Reachy Mini head‑pose game")
-    parser.add_argument("--precision", action="store_true", help="30 s precision mode")
+    parser.add_argument(
+        "--campaign", action="store_true", help="campaign mode with levels to clear"
+    )
     parser.add_argument("--cheats", action="store_true", help="print per‑axis errors")
     parser.add_argument(
         "--difficulty",
@@ -468,16 +478,37 @@ def parse_args() -> argparse.Namespace:
 # ─────────────────────────────── main ──────────────────────────────────────
 def main() -> None:
     """Start audio thread and launch the chosen game mode."""
+    print(
+        "\nGrab your Reachy Mini's head and try to get as close as possible to the target!\n"
+    )
+
+    with ReachyMini() as reachy:
+        # Goes to a predefined pose to avoid clearing targets at start
+        reachy.enable_motors()
+        pose = np.eye(4)
+        pose[:3, 3] = [0.0, 0.0, -0.02]
+        reachy.goto_target(
+            head=pose,
+            antennas=np.array([0.0, 0.0]),
+            body_yaw=0.0,
+            check_collision=False,
+            duration=1.0,
+        )
     state_q.put((40.0, 40.0))  # neutral seed for audio
     threading.Thread(target=_audio_thread, daemon=True).start()
 
     args = parse_args()
-    if args.precision:
+    if not args.campaign:
         precision_mode()
         sys.exit()
 
     thresholds = {"easy": 25.0, "medium": 12.0, "hard": 6.0}
-    speed_run(thresholds[args.difficulty], cheats=args.cheats, n_levels=args.levels, compensate_gravity=args.no_gravity)
+    speed_run(
+        thresholds[args.difficulty],
+        cheats=args.cheats,
+        n_levels=args.levels,
+        compensate_gravity=args.no_gravity,
+    )
     if args.difficulty == "hard":
         jingle_brass_fanfare()
     elif args.difficulty == "medium":
