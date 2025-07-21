@@ -234,15 +234,6 @@ class ReachyMini:
 
             time.sleep(0.01)
 
-    def set_torque(self, on: bool):
-        """Set the torque state of the motors.
-
-        Args:
-            on (bool): If True, enables torque; if False, disables it.
-
-        """
-        self.client.send_command(json.dumps({"torque": on}))
-
     def wake_up(self) -> None:
         """Wake up the robot - go to the initial head position and play the wake up emote and sound."""
         self.goto_target(INIT_HEAD_POSE, antennas=[0.0, 0.0], duration=2)
@@ -617,8 +608,12 @@ class ReachyMini:
         self.client.send_command(json.dumps({"check_collision": check}))
 
     def compensate_gravity(self) -> None:
-        """Enable or disable gravity compensation for the head motors."""
+        """Enable gravity compensation for the head motors."""
         self.client.send_command(json.dumps({"gravity_compensation": True}))
+
+    def disable_gravity_compensation(self) -> None:
+        """Disable gravity compensation for the head motors."""
+        self.client.send_command(json.dumps({"gravity_compensation": False}))
 
     def set_automatic_body_yaw(self, body_yaw: float) -> None:
         """Set the automatic body yaw.
