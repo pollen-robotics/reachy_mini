@@ -40,7 +40,6 @@ class Backend:
         self.joint_positions_publisher = None  # Placeholder for a publisher object
         self.pose_publisher = None  # Placeholder for a pose publisher object
         self.error = None  # To store any error that occurs during execution
-        
 
     def wrapped_run(self):
         """Run the backend in a try-except block to store errors."""
@@ -204,7 +203,6 @@ class Backend:
             "The method get_status should be overridden by subclasses."
         )
 
-
     def set_automatic_body_yaw(self, body_yaw: float) -> None:
         """Set the automatic body yaw.
 
@@ -214,7 +212,6 @@ class Backend:
         """
         self.head_kinematics.start_body_yaw = body_yaw
 
-
     def set_gravity_compensation_mode(self, mode: bool) -> None:
         """Set the gravity compensation mode.
 
@@ -222,19 +219,16 @@ class Backend:
             mode (bool): If True, gravity compensation is enabled.
 
         """
-        self.gravity_compensation_mode = mode # True (enable) or False (disable)
+        self.gravity_compensation_mode = mode  # True (enable) or False (disable)
 
     def compensate_head_gravity(self) -> None:
         """Calculate the currents necessary to compensate for gravity."""
-        print("Compensating for gravity...")
         # Even though in their docs dynamixes says that 1 count is 1 mA, in practice I've found it to be 3mA.
         # I am not sure why this happens
         # Another explanation is that our model is bad and the current is overestimated 3x (but I have not had these issues with other robots)
         # So I am using a magic number to compensate for this.
         # for currents under 30mA the constant is around 1
-        from_Nm_to_mA = (
-            1.47 / 0.52 * 1000
-        )  
+        from_Nm_to_mA = 1.47 / 0.52 * 1000
         # Conversion factor from Nm to mA for the Stewart platform motors
         # The torque constant is not linear, so we need to use a correction factor
         # This is a magic number that should be determined experimentally
