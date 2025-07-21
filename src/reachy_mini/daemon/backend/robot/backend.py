@@ -81,10 +81,15 @@ class RobotBackend(Backend):
             self._update()
             took = time.time() - start_t
 
-            sleep_time = max(0, period - took)
-            if sleep_time > 0:
-                next_call_event.clear()
-                next_call_event.wait(sleep_time)
+            sleep_time = period - took
+            if sleep_time < 0:
+                self.logger.warning(
+                    f"Control loop took too long: {took * 1000:.3f} ms, expected {period * 1000:.3f} ms"
+                )
+                sleep_time = 0.001
+
+            next_call_event.clear()
+            next_call_event.wait(sleep_time)
 
     def _update(self):
         assert self.c is not None, "Motor controller not initialized or already closed."
