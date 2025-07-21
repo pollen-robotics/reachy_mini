@@ -39,7 +39,7 @@ class RobotBackend(Backend):
         self.logger.setLevel(log_level)
 
         self.c = ReachyMiniMotorController(serialport)
-        self.control_loop_frequency = 200.0
+        self.control_loop_frequency = 100.0
         self.last_alive = None
 
         self._torque_enabled = False
@@ -59,7 +59,8 @@ class RobotBackend(Backend):
         self._antennas_operation_mode = -1  # Default to torque control mode
         self.antenna_joint_current = None  # Placeholder for antenna joint torque
         self.head_joint_current = None  # Placeholder for head joint torque
-
+        
+        
     def run(self):
         """Run the control loop for the robot backend.
 
@@ -100,6 +101,10 @@ class RobotBackend(Backend):
                     self.c.set_stewart_platform_position(self.head_joint_positions[1:])
                     self.c.set_body_rotation(self.head_joint_positions[0])
             else:  # it's in torque control mode
+                if self.gravity_compensation_mode:
+                    # This function will set the head_joint_current
+                    # to the current necessary to compensate for gravity
+                    self.compensate_head_gravity()  
                 if self.head_joint_current is not None:
                     self.c.set_stewart_platform_goal_current(
                         np.round(self.head_joint_current[1:], 0).astype(int).tolist()
