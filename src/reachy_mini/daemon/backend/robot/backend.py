@@ -117,16 +117,13 @@ class RobotBackend(Backend):
             and self.pose_publisher is not None
         ):
             try:
-                positions = self.c.read_all_positions()
-                yaw = positions[0]
-                antennas = positions[1:3]
-                stewart_dofs = positions[3:]
+                head_positions, antenna_positions = self.get_all_joint_positions()
 
                 self.joint_positions_publisher.put(
                     json.dumps(
                         {
-                            "head_joint_positions": [yaw] + list(stewart_dofs),
-                            "antennas_joint_positions": list(antennas),
+                            "head_joint_positions": head_positions,
+                            "antennas_joint_positions": antenna_positions,
                         }
                     )
                 )
@@ -286,18 +283,22 @@ class RobotBackend(Backend):
 
             self._antennas_operation_mode = mode
 
-    def get_head_joint_positions(self):
-        """Get the current head joint positions."""
-        positions = self.c.read_all_positions()
-        yaw = positions[0]
-        dofs = positions[3:]
-        return [yaw] + list(dofs)
+    def get_all_joint_positions(self) -> tuple[list, list]:
+        """Get the current joint positions of the robot.
 
-    def get_antenna_joint_positions(self):
-        """Get the current antenna joint positions."""
+        Returns:
+            tuple: A tuple containing two lists - the first list is for the head joint positions,
+                    and the second list is for the antenna joint positions.
+
+        """
+        assert self.c is not None, "Motor controller not initialized or already closed."
         positions = self.c.read_all_positions()
+
+        yaw = positions[0]
         antennas = positions[1:3]
-        return list(antennas)
+        dofs = positions[3:]
+
+        return [yaw] + list(dofs), list(antennas)
 
     def close(self) -> None:
         """Close the motor controller connection."""
