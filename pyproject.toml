@@ -15,7 +15,7 @@ dependencies = [
     "mujoco==3.3.0",
     "onshape-to-robot==1.7.6",
     "placo==0.9.4",
-    "reachy_mini_motor_controller>=0.4.0",
+    "reachy_mini_motor_controller>=0.5.0",
     "pygame==2.6.1",
     "eclipse-zenoh>=1.4.0",
     "opencv-python<=5.0",
