@@ -39,7 +39,7 @@ class RobotBackend(Backend):
         self.logger.setLevel(log_level)
 
         self.c = ReachyMiniMotorController(serialport)
-        self.control_loop_frequency = 100.0
+        self.control_loop_frequency = 200.0
         self.last_alive = None
 
         self._torque_enabled = False
