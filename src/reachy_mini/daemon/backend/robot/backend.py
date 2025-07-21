@@ -135,7 +135,7 @@ class RobotBackend(Backend):
                 self.pose_publisher.put(
                     json.dumps(
                         {
-                            "head_pose": self.get_head_pose().tolist(),
+                            "head_pose": self.get_head_pose(head_positions).tolist(),
                         }
                     )
                 )
