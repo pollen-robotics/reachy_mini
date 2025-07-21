@@ -300,6 +300,28 @@ class RobotBackend(Backend):
 
         return [yaw] + list(dofs), list(antennas)
 
+    def get_head_joint_positions(self) -> list:
+        """Get the current joint positions of the head.
+
+        Returns:
+            list: A list of joint positions for the head, including the body rotation.
+
+        If you want to get both head and antenna joint positions, use `get_all_joint_positions()` instead, as it will only read the positions once.
+
+        """
+        return self.get_all_joint_positions()[0]
+
+    def get_antenna_joint_positions(self) -> list:
+        """Get the current joint positions of the antennas.
+
+        Returns:
+            list: A list of joint positions for the antennas.
+
+        If you want to get both head and antenna joint positions, use `get_all_joint_positions()` instead, as it will only read the positions once.
+
+        """
+        return self.get_all_joint_positions()[1]
+
     def close(self) -> None:
         """Close the motor controller connection."""
         self.c = None
