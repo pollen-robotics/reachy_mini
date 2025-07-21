@@ -565,12 +565,17 @@ class ReachyMini:
         self,
         head: Optional[bool] = None,
         antennas: Optional[bool] = None,
+        compensate_gravity: bool = False,
     ) -> None:
         """Set the head and/or antennas to compliant mode. This means that the motors will not resist external forces and will allow free movement.
+
+            The compensate_gravity argument will enable gravity compensation for the head motors if they are in the compliant mode,
+            In the non-compliant mode, the gravity compensation will have no effect.
 
         Args:
             head (bool): If True, set the head to compliant mode.
             antennas (bool): If True, set the antennas to compliant mode.
+            compensate_gravity (bool): If True, enable gravity compensation for the head motors.
 
         """
         if head is not None:
@@ -582,6 +587,11 @@ class ReachyMini:
             self._set_antennas_operation_mode(
                 0 if antennas else 3
             )  # 0 is compliant mode, 3 is position control mode
+
+        if compensate_gravity:
+            self.enable_gravity_compensation()
+        else:
+            self.disable_gravity_compensation()
 
     def _set_torque(self, on: bool):
         self.client.send_command(json.dumps({"torque": on}))
@@ -607,7 +617,7 @@ class ReachyMini:
         """
         self.client.send_command(json.dumps({"check_collision": check}))
 
-    def compensate_gravity(self) -> None:
+    def enable_gravity_compensation(self) -> None:
         """Enable gravity compensation for the head motors."""
         self.client.send_command(json.dumps({"gravity_compensation": True}))
 
