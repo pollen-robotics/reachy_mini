@@ -173,11 +173,13 @@ class Backend:
             "The method get_head_joint_positions should be overridden by subclasses."
         )
 
-    def get_head_pose(self) -> np.ndarray | None:
+    def get_head_pose(self) -> np.ndarray:
         """Return the current head pose as a 4x4 matrix."""
-        return self.head_kinematics.fk(
+        pose = self.head_kinematics.fk(
             self.get_head_joint_positions(), self.check_collision
         )
+        assert pose is not None, "FK failed to compute the current head pose."
+        return pose
 
     def get_antenna_joint_positions(self) -> List[float]:
         """Return the current antenna joint positions.
