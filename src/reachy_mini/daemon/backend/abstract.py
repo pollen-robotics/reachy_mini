@@ -95,11 +95,14 @@ class Backend:
 
         """
         self.head_pose = pose
-        self.set_head_joint_positions(
-            self.head_kinematics.ik(
-                pose, body_yaw=body_yaw, check_collision=self.check_collision
-            )
+
+        joints = self.head_kinematics.ik(
+            pose, body_yaw=body_yaw, check_collision=self.check_collision
         )
+        if joints is None:
+            raise ValueError("Could not compute inverse kinematics for the given pose.")
+
+        self.set_head_joint_positions(joints)
 
     def set_check_collision(self, check: bool) -> None:
         """Set whether to check collisions.
@@ -170,7 +173,7 @@ class Backend:
             "The method get_head_joint_positions should be overridden by subclasses."
         )
 
-    def get_head_pose(self) -> np.ndarray:
+    def get_head_pose(self) -> np.ndarray | None:
         """Return the current head pose as a 4x4 matrix."""
         return self.head_kinematics.fk(
             self.get_head_joint_positions(), self.check_collision
