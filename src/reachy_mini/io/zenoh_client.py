@@ -130,14 +130,12 @@ class ZenohClient(AbstractClient):
         if sample.payload:
             current = json.loads(sample.payload.to_string())
             self._last_head_joint_current = current.get("head_joint_current")
-            # self.joint_position_received.set()
 
     def _handle_head_operation_mode(self, sample):
         """Handle incoming head operation mode."""
         if sample.payload:
             mode = json.loads(sample.payload.to_string())
             self._last_head_operation_mode = mode.get("head_operation_mode")
-            # self.keep_alive_event.set()
 
     def _handle_head_pose(self, sample):
         """Handle incoming head pose."""
