@@ -36,13 +36,16 @@ class Backend:
 
         self.head_pose = None  # 4x4 pose matrix
         self.head_joint_positions = None  # [yaw, 0, 1, 2, 3, 4, 5]
-        self._last_head_joint_positions = None  # To store the last head joint positions
-        self._last_head_pose = None  # To store the last head pose
         self.antenna_joint_positions = None  # [0, 1]
         self.joint_positions_publisher = None  # Placeholder for a publisher object
         self.pose_publisher = None  # Placeholder for a pose publisher object
         self.error = None  # To store any error that occurs during execution
-
+        
+        # variables to store the last computed head joint positions and pose
+        self._last_head_joint_positions = None  # To store the last head joint positions
+        self._last_head_pose = None  # To store the last head pose
+        self._kinematics_computation_tolerance = 1e-3  # Tolerance for kinematics computations
+        
     def wrapped_run(self):
         """Run the backend in a try-except block to store errors."""
         try:
@@ -98,7 +101,7 @@ class Backend:
 
         """
         #check if the pose is the same as the current one
-        if self.head_pose is not None and np.allclose(self.head_pose, pose, atol=1e-3):
+        if self.head_pose is not None and np.allclose(self.head_pose, pose, atol=self._kinematics_computation_tolerance):
             # If the pose is the same, do not recompute IK
             return
         
@@ -192,7 +195,7 @@ class Backend:
         # check if the head joint positions have changed
         no_change_detected = False
         if (self._last_head_joint_positions is not None) and (self._last_head_pose is not None):
-            no_change_detected = np.allclose(self._last_head_joint_positions, head_joint_positions, atol=1e-3)
+            no_change_detected = np.allclose(self._last_head_joint_positions, head_joint_positions, atol=self._kinematics_computation_tolerance)
 
         if no_change_detected:
             # If the head joint positions have not changed, return the cached pose
