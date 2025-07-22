@@ -37,6 +37,7 @@ class Backend:
         self.head_pose = None  # 4x4 pose matrix
         self.head_joint_positions = None  # [yaw, 0, 1, 2, 3, 4, 5]
         self._last_head_joint_positions = None  # To store the last head joint positions
+        self._last_head_pose = None  # To store the last head pose
         self.antenna_joint_positions = None  # [0, 1]
         self.joint_positions_publisher = None  # Placeholder for a publisher object
         self.pose_publisher = None  # Placeholder for a pose publisher object
@@ -190,24 +191,23 @@ class Backend:
         # filter unnecessary calls to FK
         # check if the head joint positions have changed
         no_change_detected = False
-        if (self._last_head_joint_positions is not None) and (self.head_pose is not None):
+        if (self._last_head_joint_positions is not None) and (self._last_head_pose is not None):
             no_change_detected = np.allclose(self._last_head_joint_positions, head_joint_positions, atol=1e-3)
 
         if no_change_detected:
             # If the head joint positions have not changed, return the cached pose
-            return self.head_pose
+            return self._last_head_pose
         else:  
             # Compute the forward kinematics to get the current head pose
-            self.head_pose = self.head_kinematics.fk(head_joint_positions, self.check_collision)
-            
-        
+            self._last_head_pose = self.head_kinematics.fk(head_joint_positions, self.check_collision)
+
         # Check if the FK was successful
-        assert self.head_pose is not None, "FK failed to compute the current head pose."
-        
+        assert self._last_head_pose is not None, "FK failed to compute the current head pose."
+
         # Store the last head joint positions
         self._last_head_joint_positions = head_joint_positions
-        
-        return self.head_pose
+
+        return self._last_head_pose
 
     def get_antenna_joint_positions(self) -> List[float]:
         """Return the current antenna joint positions.
