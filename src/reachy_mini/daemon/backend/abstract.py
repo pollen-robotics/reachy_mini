@@ -36,6 +36,7 @@ class Backend:
 
         self.head_pose = None  # 4x4 pose matrix
         self.head_joint_positions = None  # [yaw, 0, 1, 2, 3, 4, 5]
+        self._last_head_joint_positions = None  # To store the last head joint positions
         self.antenna_joint_positions = None  # [0, 1]
         self.joint_positions_publisher = None  # Placeholder for a publisher object
         self.pose_publisher = None  # Placeholder for a pose publisher object
@@ -95,6 +96,11 @@ class Backend:
             body_yaw (float): The yaw angle of the body, used to adjust the head pose.
 
         """
+        #check if the pose is the same as the current one
+        if self.head_pose is not None and np.allclose(self.head_pose, pose, atol=1e-3):
+            # If the pose is the same, do not recompute IK
+            return
+        
         self.head_pose = pose
 
         joints = self.head_kinematics.ik(
@@ -181,9 +187,27 @@ class Backend:
         if head_joint_positions is None:
             head_joint_positions = self.get_head_joint_positions()
 
-        pose = self.head_kinematics.fk(head_joint_positions, self.check_collision)
-        assert pose is not None, "FK failed to compute the current head pose."
-        return pose
+        # filter unnecessary calls to FK
+        # check if the head joint positions have changed
+        no_change_detected = False
+        if (self._last_head_joint_positions is not None) and (self.head_pose is not None):
+            no_change_detected = np.allclose(self._last_head_joint_positions, head_joint_positions, atol=1e-3)
+
+        if no_change_detected:
+            # If the head joint positions have not changed, return the cached pose
+            return self.head_pose
+        else:  
+            # Compute the forward kinematics to get the current head pose
+            self.head_pose = self.head_kinematics.fk(head_joint_positions, self.check_collision)
+            
+        
+        # Check if the FK was successful
+        assert self.head_pose is not None, "FK failed to compute the current head pose."
+        
+        # Store the last head joint positions
+        self._last_head_joint_positions = head_joint_positions
+        
+        return self.head_pose
 
     def get_antenna_joint_positions(self) -> List[float]:
         """Return the current antenna joint positions.
