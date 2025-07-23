@@ -200,13 +200,14 @@ class Backend:
             pose, body_yaw=body_yaw, check_collision=self.check_collision
         )
 
+        if joints is None:
+            raise ValueError(
+                f"Could not compute inverse kinematics for the given pose {pose}."
+            )
+
         # update the target head pose and body yaw
         self.target_head_pose = pose
         self._target_body_yaw = body_yaw
-
-        if joints is None:
-            print("IK: Could not compute inverse kinematics for the given pose.")
-            return
 
         self.set_head_joint_positions(joints)
 
