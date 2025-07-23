@@ -17,8 +17,6 @@ from reachy_mini_motor_controller import ReachyMiniMotorController
 
 from reachy_mini.daemon.backend.abstract import Backend
 
-logger = logging.getLogger(__name__)
-
 
 class RobotBackend(Backend):
     """Real robot backend for Reachy Mini."""
@@ -85,7 +83,7 @@ class RobotBackend(Backend):
 
             sleep_time = period - took
             if sleep_time < 0:
-                self.logger.warning(
+                self.logger.debug(
                     f"Control loop took too long: {took * 1000:.3f} ms, expected {period * 1000:.3f} ms"
                 )
                 sleep_time = 0.001

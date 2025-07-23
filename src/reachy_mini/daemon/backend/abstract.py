@@ -8,6 +8,7 @@ It is designed to be extended by subclasses that implement the specific behavior
 each type of backend.
 """
 
+import logging
 import threading
 from importlib.resources import files
 from typing import List
@@ -25,8 +26,11 @@ class Backend:
         files(reachy_mini).joinpath("descriptions/reachy_mini/urdf")
     )
 
-    def __init__(self) -> None:
+    def __init__(self, log_level: str = "INFO") -> None:
         """Initialize the backend."""
+        self.logger = logging.getLogger(__name__)
+        self.logger.setLevel(log_level)
+
         self.should_stop = threading.Event()
         self.ready = threading.Event()
 
