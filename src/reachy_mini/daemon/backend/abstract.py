@@ -36,30 +36,30 @@ class Backend:
 
         self.current_head_pose = None  # 4x4 pose matrix
         self.target_head_pose = None  # 4x4 pose matrix
-        
+
         self.target_head_joint_positions = None  # [yaw, 0, 1, 2, 3, 4, 5]
         self.current_head_joint_positions = None  # [yaw, 0, 1, 2, 3, 4, 5]
         self.target_antenna_joint_positions = None  # [0, 1]
         self.current_antenna_joint_positions = None  # [0, 1]
-        
+
         self.joint_positions_publisher = None  # Placeholder for a publisher object
         self.pose_publisher = None  # Placeholder for a pose publisher object
         self.error = None  # To store any error that occurs during execution
-        
-        # variables to store the last computed head joint positions and pose    
+
+        # variables to store the last computed head joint positions and pose
         self._target_body_yaw = None  # Last body yaw used in IK computations
         self.target_head_joint_current = None  # Placeholder for head joint torque
         self.target_head_operation_mode = None  # Placeholder for head operation mode
-        
-        # Tolerance for kinematics computations 
-        # For Forward kinematics (around 0.25deg) 
+
+        # Tolerance for kinematics computations
+        # For Forward kinematics (around 0.25deg)
         # - FK is calculated at each timestep and is susceptible to noise
-        self._fk_kin_tolerance = 4e-3   # rads
-        # For Inverse kinematics (around 0.5mm and 0.1 degrees) 
-        # - IK is calculated only when the head pose is set by the user 
+        self._fk_kin_tolerance = 4e-3  # rads
+        # For Inverse kinematics (around 0.5mm and 0.1 degrees)
+        # - IK is calculated only when the head pose is set by the user
         self._ik_kin_tolerance = {
             "rad": 2e-3,  # rads
-            "m": 0.5e-3  # m
+            "m": 0.5e-3,  # m
         }
 
     def wrapped_run(self):
@@ -71,52 +71,62 @@ class Backend:
             self.close()
             raise e
 
-    def update_head_kinematics_model(self, head_joint_positions: List[float] | None = None, antennas_joint_positions: List[float] | None = None) -> None:
+    def update_head_kinematics_model(
+        self,
+        head_joint_positions: List[float] | None = None,
+        antennas_joint_positions: List[float] | None = None,
+    ) -> None:
         """Update the placo kinematics of the robot.
 
         Args:
             head_joint_positions (List[float] | None): The joint positions of the head.
             antennas_joint_positions (List[float] | None): The joint positions of the antennas.
-        
+
         Returns:
             None: This method does not return anything.
-        
+
         This method updates the head kinematics model with the given joint positions.
         - If the joint positions are not provided, it will use the current joint positions.
         - If the head joint positions have not changed, it will return without recomputing the forward kinematics.
         - If the head joint positions have changed, it will compute the forward kinematics to get the current head pose.
         - If the forward kinematics fails, it will raise an assertion error.
         - If the antennas joint positions are provided, it will update the current antenna joint positions.
-        
+
         Note:
             This method will update the `current_head_pose` and `current_head_joint_positions`
             attributes of the backend instance with the computed values. And the `current_antenna_joint_positions` if provided.
 
         """
-        
         if head_joint_positions is None:
             head_joint_positions = self.get_head_joint_positions()
 
         # filter unnecessary calls to FK
         # check if the head joint positions have changed
-        if self.current_head_joint_positions is not None and \
-            self.current_head_pose is not None and \
-            np.allclose(self.current_head_joint_positions, head_joint_positions, atol=self._fk_kin_tolerance):
+        if (
+            self.current_head_joint_positions is not None
+            and self.current_head_pose is not None
+            and np.allclose(
+                self.current_head_joint_positions,
+                head_joint_positions,
+                atol=self._fk_kin_tolerance,
+            )
+        ):
             # If the head joint positions have not changed, return the cached pose
-            return 
-        else:  
+            return
+        else:
             # Compute the forward kinematics to get the current head pose
             self.current_head_pose = self.head_kinematics.fk(head_joint_positions)
-                
+
         # Check if the FK was successful
-        assert self.current_head_pose is not None, "FK failed to compute the current head pose."
+        assert self.current_head_pose is not None, (
+            "FK failed to compute the current head pose."
+        )
 
         # Store the last head joint positions
         self.current_head_joint_positions = head_joint_positions
-        
+
         if antennas_joint_positions is not None:
             self.current_antenna_joint_positions = antennas_joint_positions
-
 
     def run(self):
         """Run the backend.
@@ -160,21 +170,32 @@ class Backend:
             body_yaw (float): The yaw angle of the body, used to adjust the head pose.
 
         """
-        #check if the pose is the same as the current one
-        if self.target_head_pose is not None and \
-            self._target_body_yaw is not None and \
-            np.allclose(self._target_body_yaw, body_yaw, atol=self._ik_kin_tolerance["rad"]) and \
-            np.allclose(self.target_head_pose[:3, 3], pose[:3, 3], atol=self._ik_kin_tolerance["m"]) and \
-            np.allclose(self.target_head_pose[:3, :3], pose[:3, :3], atol=self._ik_kin_tolerance["rad"]):
-
+        # check if the pose is the same as the current one
+        if (
+            self.target_head_pose is not None
+            and self._target_body_yaw is not None
+            and np.allclose(
+                self._target_body_yaw, body_yaw, atol=self._ik_kin_tolerance["rad"]
+            )
+            and np.allclose(
+                self.target_head_pose[:3, 3],
+                pose[:3, 3],
+                atol=self._ik_kin_tolerance["m"],
+            )
+            and np.allclose(
+                self.target_head_pose[:3, :3],
+                pose[:3, :3],
+                atol=self._ik_kin_tolerance["rad"],
+            )
+        ):
             # If the pose is the same, do not recompute IK
             return
-        
+
         # Compute the inverse kinematics to get the head joint positions
         joints = self.head_kinematics.ik(
             pose, body_yaw=body_yaw, check_collision=self.check_collision
         )
-            
+
         # update the target head pose and body yaw
         self.target_head_pose = pose
         self._target_body_yaw = body_yaw
@@ -182,7 +203,7 @@ class Backend:
         if joints is None:
             print("IK: Could not compute inverse kinematics for the given pose.")
             return
-        
+
         self.set_head_joint_positions(joints)
 
     def set_check_collision(self, check: bool) -> None:
@@ -254,11 +275,8 @@ class Backend:
             "The method get_head_joint_positions should be overridden by subclasses."
         )
 
-    def get_head_pose(
-        self
-    ) -> np.ndarray:
+    def get_head_pose(self) -> np.ndarray:
         """Return the current head pose as a 4x4 matrix."""
-        
         return self.current_head_pose
 
     def get_antenna_joint_positions(self) -> List[float]:

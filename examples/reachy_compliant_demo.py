@@ -14,16 +14,16 @@ from reachy_mini import ReachyMini
 with ReachyMini() as mini:
     try:
         # Set the head and antennas to compliant mode
-        # With compensate_gravity=True, the robot will compensate for gravity 
+        # With compensate_gravity=True, the robot will compensate for gravity
         # and will not fall down when you push it.
         # If you want to disable gravity compensation, set compensate_gravity=False.
         mini.make_motors_compliant(head=True, antennas=True, compensate_gravity=True)
-        
+
         print("Reachy Mini is now compliant. Press Ctrl+C to exit.")
         while True:
             # do nothing, just keep the program running
             time.sleep(0.02)
-            
+
     except KeyboardInterrupt:
         mini.make_motors_compliant(head=False, antennas=False)
         print("Exiting... Reachy Mini is stiff again.")

@@ -55,13 +55,12 @@ class RobotBackend(Backend):
             "nb_error": 0,
             "record_period": self._stats_record_period,
         }
-        
+
         self._current_head_operation_mode = -1  # Default to torque control mode
         self._current_antennas_operation_mode = -1  # Default to torque control mode
         self.target_antenna_joint_current = None  # Placeholder for antenna joint torque
         self.target_head_joint_current = None  # Placeholder for head joint torque
-                
-        
+
     def run(self):
         """Run the control loop for the robot backend.
 
@@ -100,16 +99,20 @@ class RobotBackend(Backend):
         if self._torque_enabled:
             if self._current_head_operation_mode != 0:  # if position control mode
                 if self.target_head_joint_positions is not None:
-                    self.c.set_stewart_platform_position(self.target_head_joint_positions[1:])
+                    self.c.set_stewart_platform_position(
+                        self.target_head_joint_positions[1:]
+                    )
                     self.c.set_body_rotation(self.target_head_joint_positions[0])
             else:  # it's in torque control mode
                 if self.gravity_compensation_mode:
                     # This function will set the head_joint_current
                     # to the current necessary to compensate for gravity
-                    self.compensate_head_gravity()  
+                    self.compensate_head_gravity()
                 if self.target_head_joint_current is not None:
                     self.c.set_stewart_platform_goal_current(
-                        np.round(self.target_head_joint_current[1:], 0).astype(int).tolist()
+                        np.round(self.target_head_joint_current[1:], 0)
+                        .astype(int)
+                        .tolist()
                     )
                     # Body rotation torque control is not supported with feetech motors
                     # self.c.set_body_rotation_goal_current(int(self.target_head_joint_current[0]))
@@ -130,7 +133,7 @@ class RobotBackend(Backend):
         ):
             try:
                 head_positions, antenna_positions = self.get_all_joint_positions()
-                
+
                 # Update the head kinematics model with the current head positions
                 self.update_head_kinematics_model(head_positions, antenna_positions)
 

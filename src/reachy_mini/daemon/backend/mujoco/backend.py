@@ -121,10 +121,9 @@ class MujocoBackend(Backend):
                 start_t = time.time()
 
                 if step % self.decimation == 0:
-                    
                     head_positions = self.get_head_joint_positions()
                     antenna_positions = self.get_antenna_joint_positions()
-                    
+
                     # updating the head kinematics model
                     # it will update the head kinematics
                     self.update_head_kinematics_model(head_positions, antenna_positions)
