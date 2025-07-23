@@ -204,6 +204,10 @@ class PlacoKinematics:
             joint = self.robot.get_joint(joint_name)
             joints.append(joint)
 
+        # set the head kinematics back to the current state
+        self.robot.state.q = q  # revert to the previous state
+        self.robot.update_kinematics()
+
         return joints
 
     def fk(

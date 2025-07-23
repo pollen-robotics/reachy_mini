@@ -18,8 +18,6 @@ from reachy_mini_motor_controller import ReachyMiniPyControlLoop
 
 from reachy_mini.daemon.backend.abstract import Backend
 
-logger = logging.getLogger(__name__)
-
 
 class RobotBackend(Backend):
     """Real robot backend for Reachy Mini."""
@@ -62,10 +60,11 @@ class RobotBackend(Backend):
             "nb_error": 0,
             "record_period": self._stats_record_period,
         }
-        self._head_operation_mode = -1  # Default to torque control mode
-        self._antennas_operation_mode = -1  # Default to torque control mode
-        self.antenna_joint_current = None  # Placeholder for antenna joint torque
-        self.head_joint_current = None  # Placeholder for head joint torque
+
+        self._current_head_operation_mode = -1  # Default to torque control mode
+        self._current_antennas_operation_mode = -1  # Default to torque control mode
+        self.target_antenna_joint_current = None  # Placeholder for antenna joint torque
+        self.target_head_joint_current = None  # Placeholder for head joint torque
 
     def run(self):
         """Run the control loop for the robot backend.
@@ -85,12 +84,13 @@ class RobotBackend(Backend):
 
         while not self.should_stop.is_set():
             start_t = time.time()
+            self.update_head_kinematics_model()
             self._update()
             took = time.time() - start_t
 
             sleep_time = period - took
             if sleep_time < 0:
-                self.logger.warning(
+                self.logger.debug(
                     f"Control loop took too long: {took * 1000:.3f} ms, expected {period * 1000:.3f} ms"
                 )
                 sleep_time = 0.001
@@ -102,26 +102,34 @@ class RobotBackend(Backend):
         assert self.c is not None, "Motor controller not initialized or already closed."
 
         if self._torque_enabled:
-            if self._head_operation_mode != 0:  # if position control mode
-                if self.head_joint_positions is not None:
-                    self.c.set_stewart_platform_position(self.head_joint_positions[1:])
-                    self.c.set_body_rotation(self.head_joint_positions[0])
+            if self._current_head_operation_mode != 0:  # if position control mode
+                if self.target_head_joint_positions is not None:
+                    self.c.set_stewart_platform_position(
+                        self.target_head_joint_positions[1:]
+                    )
+                    self.c.set_body_rotation(self.target_head_joint_positions[0])
             else:  # it's in torque control mode
-                if self.head_joint_current is not None:
+                if self.gravity_compensation_mode:
+                    # This function will set the head_joint_current
+                    # to the current necessary to compensate for gravity
+                    self.compensate_head_gravity()
+                if self.target_head_joint_current is not None:
                     self.c.set_stewart_platform_goal_current(
-                        np.round(self.head_joint_current[1:], 0).astype(int).tolist()
+                        np.round(self.target_head_joint_current[1:], 0)
+                        .astype(int)
+                        .tolist()
                     )
                     # Body rotation torque control is not supported with feetech motors
-                    # self.c.set_body_rotation_goal_current(int(self.head_joint_current[0]))
+                    # self.c.set_body_rotation_goal_current(int(self.target_head_joint_current[0]))
 
-            if self._antennas_operation_mode != 0:  # if position control mode
-                if self.antenna_joint_positions is not None:
-                    self.c.set_antennas_positions(self.antenna_joint_positions)
+            if self._current_antennas_operation_mode != 0:  # if position control mode
+                if self.target_antenna_joint_positions is not None:
+                    self.c.set_antennas_positions(self.target_antenna_joint_positions)
             # Antenna torque control is not supported with feetech motors
             # else:
-            #     if self.antenna_joint_current is not None:
+            #     if self.target_antenna_joint_current is not None:
             #         self.c.set_antennas_goal_current(
-            #            np.round(self.antenna_joint_current, 0).astype(int).tolist()
+            #            np.round(self.target_antenna_joint_current, 0).astype(int).tolist()
             #         )
 
         if (
@@ -130,6 +138,9 @@ class RobotBackend(Backend):
         ):
             try:
                 head_positions, antenna_positions = self.get_all_joint_positions()
+
+                # Update the head kinematics model with the current head positions
+                self.update_head_kinematics_model(head_positions, antenna_positions)
 
                 self.joint_positions_publisher.put(
                     json.dumps(
@@ -142,7 +153,7 @@ class RobotBackend(Backend):
                 self.pose_publisher.put(
                     json.dumps(
                         {
-                            "head_pose": self.get_head_pose(head_positions).tolist(),
+                            "head_pose": self.get_head_pose().tolist(),
                         }
                     )
                 )
@@ -250,10 +261,10 @@ class RobotBackend(Backend):
             # if the mode is not torque control, we need to set the head joint positions
             # to the current positions to avoid sudden movements
             motor_pos = self.c.get_last_position()
-            self.head_joint_positions = [motor_pos.body_yaw] + motor_pos.stewart
+            self.target_head_joint_positions = [motor_pos.body_yaw] + motor_pos.stewart
 
-            self.c.set_stewart_platform_position(motor_pos.stewart)
-            self.c.set_body_rotation(motor_pos.body_yaw)
+            self.c.set_stewart_platform_position(self.target_head_joint_positions[1:])
+            self.c.set_body_rotation(self.target_head_joint_positions[0])
             self.c.enable_body_rotation(True)
             self.c.set_body_rotation_operating_mode(0)
         else:
@@ -262,7 +273,7 @@ class RobotBackend(Backend):
         if self._torque_enabled:
             self.c.enable_stewart_platform(True)
 
-        self._head_operation_mode = mode
+        self._current_head_operation_mode = mode
 
     def set_antennas_operation_mode(self, mode: int) -> None:
         """Change the operation mode of the antennas motors.
@@ -284,17 +295,19 @@ class RobotBackend(Backend):
             "Invalid operation mode. Must be one of [0 (torque), 3 (position), 5 (current-limiting position)]."
         )
 
-        if self._antennas_operation_mode != mode:
+        if self._current_antennas_operation_mode != mode:
             if mode != 0:
                 # if the mode is not torque control, we need to set the head joint positions
                 # to the current positions to avoid sudden movements
-                self.antenna_joint_positions = self.c.get_last_position().antennas
-                self.c.set_antennas_positions(self.antenna_joint_positions)
+                self.target_antenna_joint_positions = (
+                    self.c.get_last_position().antennas
+                )
+                self.c.set_antennas_positions(self.target_antenna_joint_positions)
                 self.c.enable_antennas(True)
             else:
                 self.c.enable_antennas(False)
 
-            self._antennas_operation_mode = mode
+            self._current_antennas_operation_mode = mode
 
     def get_all_joint_positions(self) -> tuple[list, list]:
         """Get the current joint positions of the robot.

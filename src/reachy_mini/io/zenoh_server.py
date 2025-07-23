@@ -104,8 +104,10 @@ class ZenohServer(AbstractServer):
                 )
             if "check_collision" in command:
                 self.backend.set_check_collision(command["check_collision"])
-            if "compensate_gravity" in command:
-                self.backend.compensate_gravity()
+            if "gravity_compensation" in command:
+                self.backend.set_gravity_compensation_mode(
+                    command["gravity_compensation"]
+                )
             if "automatic_body_yaw" in command:
                 self.backend.set_automatic_body_yaw(command["automatic_body_yaw"])
 
