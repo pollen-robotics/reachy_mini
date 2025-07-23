@@ -123,6 +123,27 @@ Once the daemon is running, you can run the examples.
     python examples/goto_interpolation_playground.py
     ```
 
+## Run touch sensing examples
+
+First install the audio-related dependencies. In the cloned repository run : 
+
+    ```bash
+    pip install -e ".[touch]"
+    ```
+
+To record touch action samples run :
+
+    ```bash
+    python examples/touch_record.py --touch-action <carress,tap,etc.> --storage-folder <my_storage_folder> --plot             
+    ```
+When the recording starts, you can perform the touch action multiple times in a row, but make sure each action is separated from the previous one by at least half a second !
+
+To train a SVM classifier based on the recorded data, run :
+
+    ```bash
+    python examples/touch_detection.py --train-data-folder <my_train_data_folder> --test-data-folder <my_test_data_folder> --sample-rate 16000            
+    ```
+
 ## Reachy Mini's API
 
 The API is designed to be simple and intuitive. You can control the robot's features such as the head, antennas, camera, speakers, and microphone. For instance, to move the head of the robot, you can use the `goto_target` method as shown in the example below:
