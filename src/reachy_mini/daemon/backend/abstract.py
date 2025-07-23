@@ -43,9 +43,16 @@ class Backend:
         
         # variables to store the last computed head joint positions and pose
         self._last_head_joint_positions = None  # To store the last head joint positions
-        self._last_head_pose = None  # To store the last head pose
-        self._kinematics_computation_tolerance = 1e-3  # Tolerance for kinematics computations        
+        self._last_head_pose = None  # To store the last head pose    
         self._last_body_yaw = None  # Last body yaw used in IK computations
+        
+        # Tolerance for kinematics computations 
+        # For Forward kinematics (around 0.25deg) 
+        # - FK is calculated at each timestep and is susceptible to noise
+        self._fk_kin_tolerance = 4e-3   # rads
+        # For Inverse kinematics (around 1mm and 0.1 degrees) 
+        # - IK is calculated only when the head pose is set by the user 
+        self._ik_kin_tolerance = 1e-3  # rads and m
         
     def wrapped_run(self):
         """Run the backend in a try-except block to store errors."""
@@ -104,8 +111,8 @@ class Backend:
         #check if the pose is the same as the current one
         if self.head_pose is not None and \
             self._last_body_yaw is not None and \
-            np.allclose(self._last_body_yaw, body_yaw, atol=self._kinematics_computation_tolerance) and \
-            np.allclose(self.head_pose, pose, atol=self._kinematics_computation_tolerance):
+            np.allclose(self._last_body_yaw, body_yaw, atol=self._ik_kin_tolerance) and \
+            np.allclose(self.head_pose, pose, atol=self._ik_kin_tolerance):
             # If the pose is the same, do not recompute IK
             return
         
@@ -201,7 +208,7 @@ class Backend:
         # check if the head joint positions have changed
         if self._last_head_joint_positions is not None and \
             self._last_head_pose is not None and \
-            np.allclose(self._last_head_joint_positions, head_joint_positions, atol=self._kinematics_computation_tolerance):
+            np.allclose(self._last_head_joint_positions, head_joint_positions, atol=self._fk_kin_tolerance):
             # If the head joint positions have not changed, return the cached pose
             return self._last_head_pose
         else:  
