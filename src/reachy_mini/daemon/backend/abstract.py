@@ -281,6 +281,9 @@ class Backend:
 
     def get_head_pose(self) -> np.ndarray:
         """Return the current head pose as a 4x4 matrix."""
+        assert self.current_head_pose is not None, (
+            "The current head pose is not set. Please call the update_head_kinematics_model method first."
+        )
         return self.current_head_pose
 
     def get_antenna_joint_positions(self) -> List[float]:
