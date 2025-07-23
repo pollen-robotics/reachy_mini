@@ -207,7 +207,7 @@ class PlacoKinematics:
         # set the head kinematics back to the current state
         self.robot.state.q = q  # revert to the previous state
         self.robot.update_kinematics()
-        
+
         return joints
 
     def fk(
@@ -234,7 +234,7 @@ class PlacoKinematics:
                 "6": joints_angles[6],
             }
         )
-        
+
         q = self.robot.state.q.copy()
         for _ in range(10):
             self.fk_solver.solve(True)
