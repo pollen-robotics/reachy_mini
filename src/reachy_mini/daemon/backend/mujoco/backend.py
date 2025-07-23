@@ -121,10 +121,18 @@ class MujocoBackend(Backend):
                 start_t = time.time()
 
                 if step % self.decimation == 0:
-                    if self.head_joint_positions is not None:
-                        self.data.ctrl[:7] = self.head_joint_positions
-                    if self.antenna_joint_positions is not None:
-                        self.data.ctrl[-2:] = self.antenna_joint_positions
+                    
+                    head_positions = self.get_head_joint_positions()
+                    antenna_positions = self.get_antenna_joint_positions()
+                    
+                    # updating the head kinematics model
+                    # it will update the head kinematics
+                    self.update_head_kinematics_model(head_positions, antenna_positions)
+
+                    if self.target_head_joint_positions is not None:
+                        self.data.ctrl[:7] = self.target_head_joint_positions
+                    if self.target_antenna_joint_positions is not None:
+                        self.data.ctrl[-2:] = self.target_antenna_joint_positions
 
                     if (
                         self.joint_positions_publisher is not None
@@ -133,8 +141,8 @@ class MujocoBackend(Backend):
                         self.joint_positions_publisher.put(
                             json.dumps(
                                 {
-                                    "head_joint_positions": self.get_head_joint_positions(),
-                                    "antennas_joint_positions": self.get_antenna_joint_positions(),
+                                    "head_joint_positions": head_positions,
+                                    "antennas_joint_positions": antenna_positions,
                                 }
                             ).encode("utf-8")
                         )
