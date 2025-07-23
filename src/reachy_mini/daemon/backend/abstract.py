@@ -105,7 +105,6 @@ class Backend:
             # If the head joint positions have not changed, return the cached pose
             return 
         else:  
-            print(f"Updating head kinematics model with joint positions")
             # Compute the forward kinematics to get the current head pose
             self.current_head_pose = self.head_kinematics.fk(head_joint_positions)
                 
