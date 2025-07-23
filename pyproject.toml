@@ -35,6 +35,16 @@ examples = [
     "librosa",
     "pynput",
 ]
+touch = [
+    "sounddevice",
+    "soundfile",
+    "pydub",
+    "audioop-lts",
+    "matplotlib",
+    "pandas",
+    "librosa",
+    "tqdm",
+]
 
 [project.scripts]
 reachy-mini-daemon = "reachy_mini.daemon.cli:main"
