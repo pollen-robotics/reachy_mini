@@ -197,7 +197,6 @@ class ReachyMini:
             )
 
         cur_head_joints, cur_antennas_joints = self._get_current_joint_positions()
-        # print(f"antennas: {cur_antennas_joints}")
         start_body_yaw = cur_head_joints[0]
         cur_head_pose = self._get_current_head_pose()
 
