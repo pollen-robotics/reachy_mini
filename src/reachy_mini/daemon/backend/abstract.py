@@ -199,11 +199,9 @@ class Backend:
 
         # filter unnecessary calls to FK
         # check if the head joint positions have changed
-        no_change_detected = False
-        if (self._last_head_joint_positions is not None) and (self._last_head_pose is not None):
-            no_change_detected = np.allclose(self._last_head_joint_positions, head_joint_positions, atol=self._kinematics_computation_tolerance)
-
-        if no_change_detected:
+        if self._last_head_joint_positions is not None and \
+            self._last_head_pose is not None and \
+            np.allclose(self._last_head_joint_positions, head_joint_positions, atol=self._kinematics_computation_tolerance):
             # If the head joint positions have not changed, return the cached pose
             return self._last_head_pose
         else:  
