@@ -50,10 +50,13 @@ class Backend:
         # For Forward kinematics (around 0.25deg) 
         # - FK is calculated at each timestep and is susceptible to noise
         self._fk_kin_tolerance = 4e-3   # rads
-        # For Inverse kinematics (around 1mm and 0.1 degrees) 
+        # For Inverse kinematics (around 0.5mm and 0.1 degrees) 
         # - IK is calculated only when the head pose is set by the user 
-        self._ik_kin_tolerance = 1e-3  # rads and m
-        
+        self._ik_kin_tolerance = {
+            "rad": 2e-3,  # rads
+            "m": 0.5e-3  # m
+        }
+
     def wrapped_run(self):
         """Run the backend in a try-except block to store errors."""
         try:
@@ -111,8 +114,9 @@ class Backend:
         #check if the pose is the same as the current one
         if self.head_pose is not None and \
             self._last_body_yaw is not None and \
-            np.allclose(self._last_body_yaw, body_yaw, atol=self._ik_kin_tolerance) and \
-            np.allclose(self.head_pose, pose, atol=self._ik_kin_tolerance):
+            np.allclose(self._last_body_yaw, body_yaw, atol=self._ik_kin_tolerance["rad"]) and \
+            np.allclose(self.head_pose[:3, 3], pose[:3, 3], atol=self._ik_kin_tolerance["m"]) and \
+            np.allclose(self.head_pose[:3, :3], pose[:3, :3], atol=self._ik_kin_tolerance["rad"]):
             # If the pose is the same, do not recompute IK
             return
         
