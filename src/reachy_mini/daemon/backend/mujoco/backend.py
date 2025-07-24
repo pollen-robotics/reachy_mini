@@ -121,8 +121,8 @@ class MujocoBackend(Backend):
                 start_t = time.time()
 
                 if step % self.decimation == 0:
-                    head_positions = self.get_head_joint_positions()
-                    antenna_positions = self.get_antenna_joint_positions()
+                    head_positions = self.get_present_head_joint_positions()
+                    antenna_positions = self.get_present_antenna_joint_positions()
 
                     # updating the head kinematics model
                     # it will update the head kinematics
@@ -148,7 +148,7 @@ class MujocoBackend(Backend):
                         self.pose_publisher.put(
                             json.dumps(
                                 {
-                                    "head_pose": self.get_head_pose().tolist(),
+                                    "head_pose": self.get_present_head_pose().tolist(),
                                 }
                             ).encode("utf-8")
                         )
@@ -161,11 +161,11 @@ class MujocoBackend(Backend):
                 step += 1
                 self.ready.set()
 
-    def get_head_joint_positions(self):
+    def get_present_head_joint_positions(self):
         """Get the current joint positions of the head."""
         return self.data.qpos[self.joint_qpos_addr[:7]].flatten().tolist()
 
-    def get_antenna_joint_positions(self):
+    def get_present_antenna_joint_positions(self):
         """Get the current joint positions of the antennas."""
         return self.data.qpos[self.joint_qpos_addr[-2:]].flatten().tolist()
 

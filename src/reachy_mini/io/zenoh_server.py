@@ -85,17 +85,21 @@ class ZenohServer(AbstractServer):
                 else:
                     self.backend.disable_motors()
             if "head_joint_positions" in command:
-                self.backend.set_head_joint_positions(command["head_joint_positions"])
+                self.backend.set_target_head_joint_positions(
+                    command["head_joint_positions"]
+                )
             if "head_pose" in command:
-                self.backend.set_head_pose(
+                self.backend.set_target_head_pose(
                     np.array(command["head_pose"]).reshape(4, 4), command["body_yaw"]
                 )
             if "antennas_joint_positions" in command:
-                self.backend.set_antenna_joint_positions(
+                self.backend.set_target_antenna_joint_positions(
                     command["antennas_joint_positions"]
                 )
             if "head_joint_current" in command:
-                self.backend.set_head_joint_current(command["head_joint_current"])
+                self.backend.set_target_head_joint_current(
+                    command["head_joint_current"]
+                )
             if "head_operation_mode" in command:
                 self.backend.set_head_operation_mode(command["head_operation_mode"])
             if "antennas_operation_mode" in command:

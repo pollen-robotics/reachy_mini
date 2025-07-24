@@ -146,7 +146,7 @@ class RobotBackend(Backend):
                 self.pose_publisher.put(
                     json.dumps(
                         {
-                            "head_pose": self.get_head_pose().tolist(),
+                            "head_pose": self.get_present_head_pose().tolist(),
                         }
                     )
                 )
@@ -316,7 +316,7 @@ class RobotBackend(Backend):
 
         return [yaw] + list(dofs), list(antennas)
 
-    def get_head_joint_positions(self) -> list:
+    def get_present_head_joint_positions(self) -> list:
         """Get the current joint positions of the head.
 
         Returns:
@@ -327,7 +327,7 @@ class RobotBackend(Backend):
         """
         return self.get_all_joint_positions()[0]
 
-    def get_antenna_joint_positions(self) -> list:
+    def get_present_antenna_joint_positions(self) -> list:
         """Get the current joint positions of the antennas.
 
         Returns:

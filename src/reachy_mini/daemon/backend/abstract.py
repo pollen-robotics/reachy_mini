@@ -102,7 +102,7 @@ class Backend:
 
         """
         if head_joint_positions is None:
-            head_joint_positions = self.get_head_joint_positions()
+            head_joint_positions = self.get_present_head_joint_positions()
 
         # filter unnecessary calls to FK
         # check if the head joint positions have changed
@@ -166,7 +166,7 @@ class Backend:
         """
         self.pose_publisher = publisher
 
-    def set_head_pose(self, pose: np.ndarray, body_yaw: float = 0.0) -> None:
+    def set_target_head_pose(self, pose: np.ndarray, body_yaw: float = 0.0) -> None:
         """Set the head pose. Computes the IK and sets the head joint positions.
 
         Args:
@@ -209,7 +209,7 @@ class Backend:
         self.target_head_pose = pose
         self._target_body_yaw = body_yaw
 
-        self.set_head_joint_positions(joints)
+        self.set_target_head_joint_positions(joints)
 
     def set_check_collision(self, check: bool) -> None:
         """Set whether to check collisions.
@@ -220,7 +220,7 @@ class Backend:
         """
         self.check_collision = check
 
-    def set_head_joint_positions(self, positions: List[float]) -> None:
+    def set_target_head_joint_positions(self, positions: List[float]) -> None:
         """Set the head joint positions.
 
         Args:
@@ -229,7 +229,7 @@ class Backend:
         """
         self.target_head_joint_positions = positions
 
-    def set_antenna_joint_positions(self, positions: List[float]) -> None:
+    def set_target_antenna_joint_positions(self, positions: List[float]) -> None:
         """Set the antenna joint positions.
 
         Args:
@@ -238,7 +238,7 @@ class Backend:
         """
         self.target_antenna_joint_positions = positions
 
-    def set_head_joint_current(self, current: List[int]) -> None:
+    def set_target_head_joint_current(self, current: List[int]) -> None:
         """Set the head joint current.
 
         Args:
@@ -271,8 +271,8 @@ class Backend:
             "The method disable_motors should be overridden by subclasses."
         )
 
-    def get_head_joint_positions(self) -> List[float]:
-        """Return the current head joint positions.
+    def get_present_head_joint_positions(self) -> List[float]:
+        """Return the present head joint positions.
 
         This method is a placeholder and should be overridden by subclasses.
         """
@@ -280,15 +280,15 @@ class Backend:
             "The method get_head_joint_positions should be overridden by subclasses."
         )
 
-    def get_head_pose(self) -> np.ndarray:
-        """Return the current head pose as a 4x4 matrix."""
+    def get_present_head_pose(self) -> np.ndarray:
+        """Return the present head pose as a 4x4 matrix."""
         assert self.current_head_pose is not None, (
             "The current head pose is not set. Please call the update_head_kinematics_model method first."
         )
         return self.current_head_pose
 
-    def get_antenna_joint_positions(self) -> List[float]:
-        """Return the current antenna joint positions.
+    def get_present_antenna_joint_positions(self) -> List[float]:
+        """Return the present antenna joint positions.
 
         This method is a placeholder and should be overridden by subclasses.
         """
@@ -338,9 +338,11 @@ class Backend:
         # Then it drops to 1.0 for currents above 1.5A
         correction_factor = 3.0
         # Get the current head joint positions
-        head_joints = self.get_head_joint_positions()
-        gravity_torque = self.head_kinematics.compute_gravity_torque(head_joints)
+        head_joints = self.get_present_head_joint_positions()
+        gravity_torque = self.head_kinematics.compute_gravity_torque(
+            np.array(head_joints)
+        )
         # Convert the torque from Nm to mA
         current = gravity_torque * from_Nm_to_mA / correction_factor
         # Set the head joint current
-        self.set_head_joint_current(current)
+        self.set_target_head_joint_current(current.tolist())
