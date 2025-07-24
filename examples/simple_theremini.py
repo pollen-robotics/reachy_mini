@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""
-Reachy Mini Theremin (v4)
+"""Reachy Mini Theremin (v4).
+
 ─────────────────────────
 • Head roll  → pitch   (‑60° … +60° → C3 … C6)
 • Head Z     → volume  (‑30 mm … +5 mm → 0 … 100 %)
@@ -10,12 +10,18 @@ Depend‑ons: reachy‑mini, scamp, numpy, scipy
 """
 
 from __future__ import annotations
-import math, signal, sys, time
-from reachy_mini import ReachyMini
+
+import contextlib
+import io
+import math
+import signal
+import sys
+import time
+
 from scamp import Session
 from scipy.spatial.transform import Rotation as R
-import contextlib, io
 
+from reachy_mini import ReachyMini
 
 # ────────────────── mapping constants ───────────────────────────────
 ROLL_DEG_RANGE = (-60, 60)  # head roll span
@@ -190,7 +196,8 @@ def _dash_bar(val: float, lo: float, hi: float, width=28):
 
 # ────────────────── session & globals ───────────────────────────────
 sess = Session(max_threads=1024)
-THEREMIN = sess.new_part("glockenspiel")
+# THEREMIN = sess.new_part("glockenspiel")
+THEREMIN = sess.new_part("choir_aahs")
 note_handle: object | None = None
 current_pitch: int | None = None
 current_prog: int | None = None
