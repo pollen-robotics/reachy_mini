@@ -198,9 +198,9 @@ class ReachyMini:
                 "Duration must be positive and non-zero. Use set_target() for immediate position setting."
             )
 
-        cur_head_joints, cur_antennas_joints = self._get_current_joint_positions()
+        cur_head_joints, cur_antennas_joints = self.get_current_joint_positions()
         start_body_yaw = cur_head_joints[0]
-        cur_head_pose = self._get_current_head_pose()
+        cur_head_pose = self.get_current_head_pose()
 
         if self._last_head_pose is None:
             start_head_pose = cur_head_pose
@@ -256,7 +256,7 @@ class ReachyMini:
         """Put the robot to sleep by moving the head and antennas to a predefined sleep position."""
         # Check if we are too far from the initial position
         # Move to the initial position if necessary
-        current_positions, _ = self._get_current_joint_positions()
+        current_positions, _ = self.get_current_joint_positions()
         # init_positions = self.head_kinematics.ik(INIT_HEAD_POSE)
         # Todo : get init position from the daemon?
         init_positions = [
@@ -310,7 +310,7 @@ class ReachyMini:
         ray_cam = np.array([x_n, y_n, 1.0])
         ray_cam /= np.linalg.norm(ray_cam)
 
-        T_world_head = self._get_current_head_pose()
+        T_world_head = self.get_current_head_pose()
         T_world_cam = T_world_head @ self.T_head_cam
 
         R_wc = T_world_cam[:3, :3]
@@ -423,7 +423,7 @@ class ReachyMini:
                 "Duration must be positive and non-zero. Use set_target() for immediate position setting."
             )
 
-        cur_head, cur_antennas = self._get_current_joint_positions()
+        cur_head, cur_antennas = self.get_current_joint_positions()
         current = cur_head + cur_antennas
 
         target = []
@@ -451,10 +451,10 @@ class ReachyMini:
             self._set_joint_positions(list(head_joint), list(antennas_joint))
             time.sleep(0.01)
 
-    def _get_current_joint_positions(self) -> tuple[list[float], list[float]]:
+    def get_current_joint_positions(self) -> tuple[list[float], list[float]]:
         """Get the current joint positions of the head and antennas.
 
-        [Internal] Get the current joint positions of the head and antennas (in rad)
+        Get the current joint positions of the head and antennas (in rad)
 
         Returns:
             tuple: A tuple containing two lists:
@@ -464,10 +464,10 @@ class ReachyMini:
         """
         return self.client.get_current_joints()
 
-    def _get_current_head_pose(self) -> np.ndarray:
+    def get_current_head_pose(self) -> np.ndarray:
         """Get the current head pose as a 4x4 matrix.
 
-        [Internal] Get the current head pose as a 4x4 matrix.
+        Get the current head pose as a 4x4 matrix.
 
         Returns:
             np.ndarray: A 4x4 matrix representing the current head pose.
