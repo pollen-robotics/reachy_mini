@@ -159,8 +159,10 @@ class ReachyMini:
             )
 
         self._set_check_collision(check_collision)
-        self._set_joint_positions(None, list(antennas))
-        self._set_head_pose(head, body_yaw)
+        if antennas is not None:
+            self._set_joint_positions(antennas_joint_positions=list(antennas))
+        if head is not None:
+            self._set_head_pose(head, body_yaw)
         self._last_head_pose = head
 
     def goto_target(
@@ -475,12 +477,8 @@ class ReachyMini:
 
     def _set_joint_positions(
         self,
-        head_joint_positions: Optional[
-            List[float]
-        ],  # [yaw, stewart_platform x 6] length 7
-        antennas_joint_positions: Optional[
-            List[float]
-        ],  # [left_angle, right_angle] length 2
+        head_joint_positions: list[float] | None = None,
+        antennas_joint_positions: list[float] | None = None,
     ):
         """Set the joint positions of the head and/or antennas.
 
