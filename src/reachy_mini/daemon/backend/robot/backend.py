@@ -204,6 +204,15 @@ class RobotBackend(Backend):
                 self._stats["nb_error"] = 0
                 self.stats_record_t0 = time.time()
 
+    def close(self) -> None:
+        """Close the motor controller connection."""
+        self.c = None
+
+    def get_status(self) -> "RobotBackendStatus":
+        """Get the current status of the robot backend."""
+        self._status.error = self.error
+        return self._status
+
     def enable_motors(self) -> None:
         """Enable the motors by turning the torque on."""
         assert self.c is not None, "Motor controller not initialized or already closed."
@@ -337,15 +346,6 @@ class RobotBackend(Backend):
 
         """
         return self.get_all_joint_positions()[1]
-
-    def close(self) -> None:
-        """Close the motor controller connection."""
-        self.c = None
-
-    def get_status(self) -> "RobotBackendStatus":
-        """Get the current status of the robot backend."""
-        self._status.error = self.error
-        return self._status
 
 
 @dataclass

@@ -66,6 +66,7 @@ class Backend:
             "m": 0.5e-3,  # m
         }
 
+    # Life cycle methods
     def wrapped_run(self):
         """Run the backend in a try-except block to store errors."""
         try:
@@ -74,63 +75,6 @@ class Backend:
             self.error = str(e)
             self.close()
             raise e
-
-    def update_head_kinematics_model(
-        self,
-        head_joint_positions: List[float] | None = None,
-        antennas_joint_positions: List[float] | None = None,
-    ) -> None:
-        """Update the placo kinematics of the robot.
-
-        Args:
-            head_joint_positions (List[float] | None): The joint positions of the head.
-            antennas_joint_positions (List[float] | None): The joint positions of the antennas.
-
-        Returns:
-            None: This method does not return anything.
-
-        This method updates the head kinematics model with the given joint positions.
-        - If the joint positions are not provided, it will use the current joint positions.
-        - If the head joint positions have not changed, it will return without recomputing the forward kinematics.
-        - If the head joint positions have changed, it will compute the forward kinematics to get the current head pose.
-        - If the forward kinematics fails, it will raise an assertion error.
-        - If the antennas joint positions are provided, it will update the current antenna joint positions.
-
-        Note:
-            This method will update the `current_head_pose` and `current_head_joint_positions`
-            attributes of the backend instance with the computed values. And the `current_antenna_joint_positions` if provided.
-
-        """
-        if head_joint_positions is None:
-            head_joint_positions = self.get_present_head_joint_positions()
-
-        # filter unnecessary calls to FK
-        # check if the head joint positions have changed
-        if (
-            self.current_head_joint_positions is not None
-            and self.current_head_pose is not None
-            and np.allclose(
-                self.current_head_joint_positions,
-                head_joint_positions,
-                atol=self._fk_kin_tolerance,
-            )
-        ):
-            # If the head joint positions have not changed, return the cached pose
-            return
-        else:
-            # Compute the forward kinematics to get the current head pose
-            self.current_head_pose = self.head_kinematics.fk(head_joint_positions)
-
-        # Check if the FK was successful
-        assert self.current_head_pose is not None, (
-            "FK failed to compute the current head pose."
-        )
-
-        # Store the last head joint positions
-        self.current_head_joint_positions = head_joint_positions
-
-        if antennas_joint_positions is not None:
-            self.current_antenna_joint_positions = antennas_joint_positions
 
     def run(self):
         """Run the backend.
@@ -148,6 +92,16 @@ class Backend:
             "The method close should be overridden by subclasses."
         )
 
+    def get_status(self):
+        """Return backend statistics.
+
+        This method is a placeholder and should be overridden by subclasses.
+        """
+        raise NotImplementedError(
+            "The method get_status should be overridden by subclasses."
+        )
+
+    # Present/Target joint positions
     def set_joint_positions_publisher(self, publisher) -> None:
         """Set the publisher for joint positions.
 
@@ -210,15 +164,6 @@ class Backend:
         self._target_body_yaw = body_yaw
 
         self.set_target_head_joint_positions(joints)
-
-    def set_check_collision(self, check: bool) -> None:
-        """Set whether to check collisions.
-
-        Args:
-            check (bool): If True, the backend will check for collisions.
-
-        """
-        self.check_collision = check
 
     def set_target_head_joint_positions(self, positions: List[float]) -> None:
         """Set the head joint positions.
@@ -296,14 +241,72 @@ class Backend:
             "The method get_antenna_joint_positions should be overridden by subclasses."
         )
 
-    def get_status(self):
-        """Return backend statistics.
+    # Kinematics methods
+    def update_head_kinematics_model(
+        self,
+        head_joint_positions: List[float] | None = None,
+        antennas_joint_positions: List[float] | None = None,
+    ) -> None:
+        """Update the placo kinematics of the robot.
 
-        This method is a placeholder and should be overridden by subclasses.
+        Args:
+            head_joint_positions (List[float] | None): The joint positions of the head.
+            antennas_joint_positions (List[float] | None): The joint positions of the antennas.
+
+        Returns:
+            None: This method does not return anything.
+
+        This method updates the head kinematics model with the given joint positions.
+        - If the joint positions are not provided, it will use the current joint positions.
+        - If the head joint positions have not changed, it will return without recomputing the forward kinematics.
+        - If the head joint positions have changed, it will compute the forward kinematics to get the current head pose.
+        - If the forward kinematics fails, it will raise an assertion error.
+        - If the antennas joint positions are provided, it will update the current antenna joint positions.
+
+        Note:
+            This method will update the `current_head_pose` and `current_head_joint_positions`
+            attributes of the backend instance with the computed values. And the `current_antenna_joint_positions` if provided.
+
         """
-        raise NotImplementedError(
-            "The method get_status should be overridden by subclasses."
+        if head_joint_positions is None:
+            head_joint_positions = self.get_present_head_joint_positions()
+
+        # filter unnecessary calls to FK
+        # check if the head joint positions have changed
+        if (
+            self.current_head_joint_positions is not None
+            and self.current_head_pose is not None
+            and np.allclose(
+                self.current_head_joint_positions,
+                head_joint_positions,
+                atol=self._fk_kin_tolerance,
+            )
+        ):
+            # If the head joint positions have not changed, return the cached pose
+            return
+        else:
+            # Compute the forward kinematics to get the current head pose
+            self.current_head_pose = self.head_kinematics.fk(head_joint_positions)
+
+        # Check if the FK was successful
+        assert self.current_head_pose is not None, (
+            "FK failed to compute the current head pose."
         )
+
+        # Store the last head joint positions
+        self.current_head_joint_positions = head_joint_positions
+
+        if antennas_joint_positions is not None:
+            self.current_antenna_joint_positions = antennas_joint_positions
+
+    def set_check_collision(self, check: bool) -> None:
+        """Set whether to check collisions.
+
+        Args:
+            check (bool): If True, the backend will check for collisions.
+
+        """
+        self.check_collision = check
 
     def set_automatic_body_yaw(self, body_yaw: float) -> None:
         """Set the automatic body yaw.

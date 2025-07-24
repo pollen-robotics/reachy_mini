@@ -161,6 +161,20 @@ class MujocoBackend(Backend):
                 step += 1
                 self.ready.set()
 
+    def close(self) -> None:
+        """Close the Mujoco backend."""
+        # TODO Do something in mujoco here ?
+        pass
+
+    def get_status(self) -> "MujocoBackendStatus":
+        """Get the status of the Mujoco backend.
+
+        Returns:
+            dict: An empty dictionary as the Mujoco backend does not have a specific status to report.
+
+        """
+        return MujocoBackendStatus()
+
     def get_present_head_joint_positions(self):
         """Get the current joint positions of the head."""
         return self.data.qpos[self.joint_qpos_addr[:7]].flatten().tolist()
@@ -183,11 +197,6 @@ class MujocoBackend(Backend):
         """
         pass
 
-    def close(self) -> None:
-        """Close the Mujoco backend."""
-        # TODO Do something in mujoco here ?
-        pass
-
     def set_head_operation_mode(self, mode: int) -> None:
         """Set mode of operation for the head.
 
@@ -201,15 +210,6 @@ class MujocoBackend(Backend):
         This does nothing in the Mujoco backend as it does not have a concept of operation modes.
         """
         pass
-
-    def get_status(self) -> "MujocoBackendStatus":
-        """Get the status of the Mujoco backend.
-
-        Returns:
-            dict: An empty dictionary as the Mujoco backend does not have a specific status to report.
-
-        """
-        return MujocoBackendStatus()
 
 
 @dataclass
