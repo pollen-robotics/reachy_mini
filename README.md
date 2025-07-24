@@ -143,6 +143,14 @@ To train a SVM classifier based on the recorded data, run :
     ```bash
     python examples/touch_detection.py --train-data-folder <my_train_data_folder> --test-data-folder <my_test_data_folder> --sample-rate 16000            
     ```
+This will save the model as *touch_classifier.joblib*.
+
+To predict classes on live recording use:
+
+```bash
+python examples/touch_predict_from_mic.py --model touch_classifier.joblib --window 1.0 --hop 0.5 --sample-rate 16000
+```
+
 
 ## Reachy Mini's API
 
