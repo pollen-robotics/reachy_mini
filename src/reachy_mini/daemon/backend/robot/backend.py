@@ -332,8 +332,6 @@ class RobotBackend(Backend):
         Returns:
             list: A list of joint positions for the head, including the body rotation.
 
-        If you want to get both head and antenna joint positions, use `get_all_joint_positions()` instead, as it will only read the positions once.
-
         """
         return self.get_all_joint_positions()[0]
 
@@ -342,8 +340,6 @@ class RobotBackend(Backend):
 
         Returns:
             list: A list of joint positions for the antennas.
-
-        If you want to get both head and antenna joint positions, use `get_all_joint_positions()` instead, as it will only read the positions once.
 
         """
         return self.get_all_joint_positions()[1]
