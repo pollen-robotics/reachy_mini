@@ -28,10 +28,10 @@ ROLL_DEG_RANGE = (-60, 60)  # head roll span
 NOTE_MIDI_RANGE = (48, 84)  # C3–C6
 Z_MM_RANGE = (-30, 5)  # farther → quieter
 AMP_RANGE = (0.0, 1.0)  # mute…full
-RIGHT_ANT_RANGE = (-math.pi, math.pi)  # raw radians → 0‑127 program
+RIGHT_ANT_RANGE = (-math.pi / 3, math.pi / 3)  # raw radians → 0‑127 program
 
 # ────────────────── FluidSynth preset names (GM bank) ───────────────
-AVAILABLE_PARTS = [
+AVAILABLE_PARTS_ALL = [
     # 0‑15
     "piano_1",
     "piano_2",
@@ -169,6 +169,18 @@ AVAILABLE_PARTS = [
     "gunshot",
     "coupled_harpsichord",
 ]
+AVAILABLE_PARTS = [
+    "choir_aahs",
+    "orchestra_hit",
+    "taiko_drum",
+    "trumpet",
+    "french_horn",
+    # "piccolo",
+    # "warm_pad",
+    "soundtrack",
+    # "crystal",
+    # "violin",
+]
 
 # ────────────────── helpers ─────────────────────────────────────────
 NOTE_NAMES = ["C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B"]
@@ -239,7 +251,10 @@ def main():
             target_pitch = int(round(_aff(roll_deg, *ROLL_DEG_RANGE, *NOTE_MIDI_RANGE)))
             amp = max(0.0, min(_aff(trans_mm[2], *Z_MM_RANGE, *AMP_RANGE), 1.0))
 
-            prog = int(_aff(ants[1], *RIGHT_ANT_RANGE, 0, 127.999))
+            # prog = int(_aff(ants[1], *RIGHT_ANT_RANGE, 0, 127.999))
+            prog = int(
+                _aff(ants[1], *RIGHT_ANT_RANGE, 0, len(AVAILABLE_PARTS) - 0.0001)
+            )
             if prog != current_prog:
                 if note_handle:
                     note_handle.end()
