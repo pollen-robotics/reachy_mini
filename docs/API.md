@@ -4,7 +4,7 @@
 
 ## ReachyMini
 
-Reachy Mini's API is designed to be simple and intuitive. You will mostly interact with the `ReachyMini` class, which provides methods to control the robot's joints such as the head and antennas and interacti with its sensors.
+Reachy Mini's API is designed to be simple and intuitive. You will mostly interact with the `ReachyMini` class, which provides methods to control the robot's joints such as the head and antennas and interact with its sensors.
 
 The first step is to instantiate the `ReachyMini` class. This can be done as follows:
 
