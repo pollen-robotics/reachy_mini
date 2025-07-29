@@ -71,6 +71,7 @@ class ReachyMiniAnalyticKinematics:
             ) @ tf.translation_matrix((0, 0, arm_z))
             motor["T_motor_world"] = np.linalg.inv(T_world_motor)
             motor["branch_position"] = T_head_branch[:3, 3]
+            motor["limits"] = self.robot.get_joint_limits(motor["name"])
 
     def ik_motor_to_branch(self, branch_attachment_platform, solution=0):
         """Compute Inverse kinematics for the branch attachment platform to the motor angles.
@@ -871,7 +872,7 @@ class ReachyMiniAnalyticKinematics:
             leg_attach_motor = T_motor_world @ np.vstack([leg_attach_world, np.ones(1)])
             return leg_attach_motor[:3, 0]
 
-    def ik(self, T_world_target):
+    def ik(self, T_world_target, body_yaw=0.0):
         """Calculate the inverse kinematics for the Reachy Mini robot to reach a target position and orientation.
 
         Args:
@@ -884,7 +885,13 @@ class ReachyMiniAnalyticKinematics:
 
         """
         roll, pitch, yaw = tf.euler_from_matrix(T_world_target[:3, :3], axes="sxyz")
+        
+        # adjust yaw by the body yaw
+        yaw += body_yaw
+        
         joints = {}
+        joints["all_yaw"] = body_yaw
+        #joints.append(body_yaw)
         for motor in self.motors:
             T_motor_world = motor["T_motor_world"]
             try:
@@ -909,7 +916,16 @@ class ReachyMiniAnalyticKinematics:
             except Exception as e:
                 print(f"Error in IK for motor {motor['name']}: {e}")
                 return {}
-            joints[motor["name"]] = placo.wrap_angle(solution)
+            solution = placo.wrap_angle(solution)
+            if solution > motor["limits"][1] or solution < motor["limits"][0]:
+                print(
+                    f"Solution for motor {motor['name']} is out of limits: {solution} not in {motor['limits']}"
+                )
+                joints[motor["name"]] = np.nan
+            else:
+                joints[motor["name"]] = solution
+            #joints.append(solution)
+        
         return joints
 
     def jacobian(self, T_world_head_current):

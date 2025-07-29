@@ -9,6 +9,7 @@ import numpy as np
 import pinocchio as pin
 import placo
 
+from placo_utils.visualization import frame_viz, robot_frame_viz, robot_viz
 
 class PlacoKinematics:
     """Placo Kinematics class for Reachy Mini.
@@ -31,8 +32,9 @@ class PlacoKinematics:
 
         """
         self.robot = placo.RobotWrapper(urdf_path, placo.Flags.ignore_collisions)
+        self.robot_ik = placo.RobotWrapper(urdf_path, placo.Flags.ignore_collisions)
 
-        self.ik_solver = placo.KinematicsSolver(self.robot)
+        self.ik_solver = placo.KinematicsSolver(self.robot_ik)
         self.ik_solver.mask_fbase(True)
 
         self.fk_solver = placo.KinematicsSolver(self.robot)
@@ -62,6 +64,22 @@ class PlacoKinematics:
             fk_closing_task.configure(f"closing_{i}", constrant_type, 1.0)
             fk_closing_tasks.append(fk_closing_task)
 
+    
+        # Add the constraint between the rotated torso and the head
+        # This will allow independent control of the torso and the head yaw
+        # until this constraint is reached
+        yaw_constraint = self.ik_solver.add_yaw_constraint(
+            "dummy_torso_yaw", "head", np.deg2rad(75.0)
+        )
+        yaw_constraint.configure("rel_yaw", "hard")    
+        
+        # Add a cone constraint for the head to not exceed a certain angle
+        # This is to avoid the head from looking too far up or down
+        self.ik_solver.add_cone_constraint(
+            "pp01071_turning_bowl", "head", np.deg2rad(40.0)
+        )
+        
+
         # Z offset for the head to make it easier to compute the IK and FK
         # This is the height of the head from the base of the robot
         self.head_z_offset = 0.177  # offset for the head height
@@ -77,33 +95,26 @@ class PlacoKinematics:
         # regularization
         self.ik_yaw_joint_task = self.ik_solver.add_joints_task()
         self.ik_yaw_joint_task.set_joints({"all_yaw": 0})
-
         if self.automatic_body_yaw:
             self.ik_yaw_joint_task.configure("joints", "soft", 5e-5)
         else:
             self.ik_yaw_joint_task.configure("joints", "soft", 1.0)
-
-        self.ik_joint_task = self.ik_solver.add_joints_task()
-        self.ik_joint_task.set_joints({f"{k}": 0 for k in range(1, 7)})
-        self.ik_joint_task.configure("joints", "soft", 1e-5)
+        
+        # self.ik_joint_task = self.ik_solver.add_joints_task()
+        # self.ik_joint_task.set_joints({f"{k}": 0 for k in range(1, 7)})
+        # self.ik_joint_task.configure("joints", "soft", 1e-5)
 
         self.ik_solver.enable_velocity_limits(True)
+        self.ik_solver.enable_joint_limits(True)
         self.ik_solver.dt = dt
 
         # FK joint task
         self.head_joints_task = self.fk_solver.add_joints_task()
         self.head_joints_task.configure("joints", "soft", 1.0)
 
-        # regularization
-        self.fk_yaw_joint_task = self.fk_solver.add_joints_task()
-        self.fk_yaw_joint_task.set_joints({"all_yaw": 0})
-        self.fk_yaw_joint_task.configure("joints", "soft", 5e-5)
 
-        self.fk_joint_task = self.fk_solver.add_joints_task()
-        self.fk_joint_task.set_joints({f"{k}": 0 for k in range(1, 7)})
-        self.fk_joint_task.configure("joints", "soft", 1e-5)
-
-        # self.fk_solver.enable_velocity_limits(True)
+        self.fk_solver.enable_velocity_limits(True)
+        self.fk_solver.enable_joint_limits(True)
         self.fk_solver.dt = dt
 
         # Actuated DoFs
@@ -176,37 +187,36 @@ class PlacoKinematics:
 
         """
         _pose = pose.copy()
-
         self.ik_yaw_joint_task.set_joints({"all_yaw": body_yaw})
 
-        # set the head pose
+        # set the head pose 
         _pose[:3, 3][2] += self.head_z_offset  # offset the height of the head
         self.head_frame.T_world_frame = _pose
 
-        q = self.robot.state.q.copy()
+        q = self.robot_ik.state.q.copy()
         for _ in range(10):
             try:
                 self.ik_solver.solve(True)  # False to not update the kinematics
             except Exception as e:
                 print(f"IK solver failed: {e}")
-                self.robot.state.q = q
-            self.robot.update_kinematics()
+                self.robot_ik.state.q = q
+            self.robot_ik.update_kinematics()
 
         # verify that there is no collision
         if check_collision and self.compute_collision():
             print("Collision detected, stopping ik...")
-            self.robot.state.q = q  # revert to the previous state
-            self.robot.update_kinematics()
+            self.robot_ik.state.q = q  # revert to the previous state
+            self.robot_ik.update_kinematics()
             return None
 
         joints = []
         for joint_name in self.joints_names:
-            joint = self.robot.get_joint(joint_name)
+            joint = self.robot_ik.get_joint(joint_name)
             joints.append(joint)
-
-        # set the head kinematics back to the current state
-        self.robot.state.q = q  # revert to the previous state
-        self.robot.update_kinematics()
+                
+        # update the head kinematics model
+        self.robot_ik.state.q = q.copy()
+        self.robot_ik.update_kinematics()
 
         return joints
 
@@ -244,7 +254,8 @@ class PlacoKinematics:
             print("Collision detected, stopping FK...")
             self.robot.state.q = q  # revert to the previous state
             return None
-
+        
+        
         T_world_head = self.robot.get_T_world_frame("head")
         T_world_head[:3, 3][2] -= self.head_z_offset  # offset the height of the head
         return T_world_head

@@ -2088,9 +2088,27 @@
   <!-- Joint from pp01071_turning_bowl to dc15_a01_case_b_dummy -->
   <joint name="all_yaw" type="revolute">
     <origin xyz="4.85723e-17 -5.60663e-19 0.0339" rpy="3.14159 -2.22045e-16 1.5708"/>
+    <!-- <origin xyz="4.85723e-17 -5.60663e-19 0.0339" rpy="3.14159 -2.22045e-16 1.5708"/> -->
     <parent link="pp01071_turning_bowl"/>
     <child link="dc15_a01_case_b_dummy"/>
     <axis xyz="0 0 1"/>
     <limit effort="10" velocity="8" lower="-3.141592653589793" upper="3.141592653589793"/>
+  </joint>
+  <!-- Dummy Link head_oriented_yaw used for constraint setting in placo-kinematics -->
+  <link name="dummy_torso_yaw">
+    <visual>
+      <geometry>
+        <box size="0 0 0"/>
+      </geometry>
+      <material name="blue"/>
+    </visual>
+  </link>
+  <!-- Joint from pp01071_turning_bowl to dc15_a01_case_b_dummy -->
+  <joint name="dummy_yaw" type="fixed">
+    <origin xyz="0 0 0" rpy="3.14 0 1.57"/>
+    <!-- <origin xyz="4.85723e-17 -5.60663e-19 0.0339" rpy="3.14159 -2.22045e-16 1.5708"/> -->
+    <parent link="dc15_a01_case_b_dummy"/>
+    <child link="dummy_torso_yaw"/>
+    <axis xyz="0 0 1"/>
   </joint>
 </robot>
