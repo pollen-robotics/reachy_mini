@@ -13,7 +13,7 @@ def test_analytic_kinematics():
     joints = ak_solver.ik(ak_solver.T_world_head_home)
     assert np.allclose(
         np.array(list(joints.values())),
-        np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0]),
+        np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]),
         atol=1e-2,
     ), "IK failed to return expected joint angles"
 
@@ -32,7 +32,7 @@ def test_with_a_pitch():
     joints = ak_solver.ik(T_world_head)
     assert np.allclose(
         np.array(list(joints.values())),
-        np.array([-0.43, -0.37, 0.26, -0.26, 0.37, 0.43]),
+        np.array([0.0, -0.43, -0.37, 0.26, -0.26, 0.37, 0.43]),
         atol=1e-2,
     ), "IK failed to return expected joint angles with pitch"
 
@@ -51,6 +51,6 @@ def test_with_a_yaw():
     joints = ak_solver.ik(T_world_head)
     assert np.allclose(
         np.array(list(joints.values())),
-        np.array([0.097, 0.079, 0.097, 0.079, 0.097, 0.079]),
+        np.array([0.0, 0.097, 0.079, 0.097, 0.079, 0.097, 0.079]),
         atol=1e-2,
     ), "IK failed to return expected joint angles with yaw"
