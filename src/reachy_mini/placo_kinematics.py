@@ -9,7 +9,6 @@ import numpy as np
 import pinocchio as pin
 import placo
 
-from placo_utils.visualization import frame_viz, robot_frame_viz, robot_viz
 
 class PlacoKinematics:
     """Placo Kinematics class for Reachy Mini.
@@ -78,7 +77,7 @@ class PlacoKinematics:
         self.ik_solver.add_cone_constraint(
             "pp01071_turning_bowl", "head", np.deg2rad(40.0)
         )
-        
+    
 
         # Z offset for the head to make it easier to compute the IK and FK
         # This is the height of the head from the base of the robot
@@ -88,7 +87,13 @@ class PlacoKinematics:
         self.head_starting_pose = np.eye(4)
         self.head_starting_pose[:3, 3][2] = self.head_z_offset
         self.head_frame = self.ik_solver.add_frame_task("head", self.head_starting_pose)
-        self.head_frame.configure("head", "soft", 1.0, 1.0)
+        # equivalance to 1mm = 1deg weights
+        self.head_frame.configure(
+            "head", 
+            "soft", 
+            1.0, # in meters  # 1m=1000mm
+            1.0*180/np.pi  # in radians # 1rad = 180/np.pi degrees
+            )
 
         self.head_frame.T_world_frame = self.head_starting_pose
 
