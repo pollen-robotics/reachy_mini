@@ -87,12 +87,13 @@ class PlacoKinematics:
         self.head_starting_pose = np.eye(4)
         self.head_starting_pose[:3, 3][2] = self.head_z_offset
         self.head_frame = self.ik_solver.add_frame_task("head", self.head_starting_pose)
-        # equivalance to 1mm = 1deg weights
+        # equivalance to ~1cm = 1deg weights
+        # set to 5 to be higher than the 1.0 for the body yaw
         self.head_frame.configure(
             "head", 
             "soft", 
-            1.0, # in meters  # 1m=1000mm
-            1.0*180/np.pi  # in radians # 1rad = 180/np.pi degrees
+            5.0, # in meters  # 1m
+            5.0  # in radians # 1rad 
             )
 
         self.head_frame.T_world_frame = self.head_starting_pose
