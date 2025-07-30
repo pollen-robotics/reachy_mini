@@ -10,7 +10,7 @@ description = ""
 readme = "README.md"
 requires-python = ">=3.8"
 dependencies = [
-    "numpy==2.2.5",
+    "numpy>=2.2.5",
     "scipy==1.15.3",
     "mujoco==3.3.0",
     "onshape-to-robot==1.7.6",
