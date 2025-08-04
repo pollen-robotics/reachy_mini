@@ -872,32 +872,35 @@ class ReachyMiniAnalyticKinematics:
             leg_attach_motor = T_motor_world @ np.vstack([leg_attach_world, np.ones(1)])
             return leg_attach_motor[:3, 0]
 
-    def ik(self, T_world_target, body_yaw=0.0):
+    def ik(self, pose, body_yaw=0.0, check_collision: bool = False):
         """Calculate the inverse kinematics for the Reachy Mini robot to reach a target position and orientation.
 
         Args:
-            T_world_target (np.ndarray): The target transformation matrix in the world frame, represented as
-                a 4x4 numpy array.
+            pose (np.ndarray): The target pose in the world frame, represented as a 4x4 numpy array.
+            body_yaw (float, optional): The yaw angle of the body in radians. Defaults to 0.0.
+            check_collision (bool, optional): If True, checks for collisions after solving IK. Defaults to False.
 
         Returns:
-            dict: A dictionary containing the joint angles for each motor, where keys are motor names and
-                values are the corresponding joint angles in radians.
+            np.ndarray: A 1D numpy array containing the joint angles for each motor in radians.
 
         """
-        roll, pitch, yaw = tf.euler_from_matrix(T_world_target[:3, :3], axes="sxyz")
         
+        if check_collision:
+            print("WARNING: Collision checking is not implemented with the analytic IK.")
+
+        pose[:3, 3][2] += 0.177  # offset the height of the head
+        roll, pitch, yaw = tf.euler_from_matrix(pose[:3, :3], axes="sxyz")
+
         # adjust yaw by the body yaw
         yaw += body_yaw
         
-        joints = {}
-        joints["all_yaw"] = body_yaw
-        #joints.append(body_yaw)
+        joints = [body_yaw]
         for motor in self.motors:
             T_motor_world = motor["T_motor_world"]
             try:
                 branch_position = self.ik_platform_to_branch(
                     motor["branch_position"],
-                    T_world_target[:3, 3],
+                    pose[:3, 3],
                     roll,
                     pitch,
                     yaw,
@@ -921,10 +924,9 @@ class ReachyMiniAnalyticKinematics:
                 print(
                     f"Solution for motor {motor['name']} is out of limits: {solution} not in {motor['limits']}"
                 )
-                joints[motor["name"]] = np.nan
+                joints.append(np.nan)
             else:
-                joints[motor["name"]] = solution
-            #joints.append(solution)
+                joints.append(solution)
         
         return joints
 
