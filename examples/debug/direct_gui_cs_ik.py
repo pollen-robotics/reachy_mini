@@ -6,13 +6,17 @@ import numpy as np
 from placo_utils.tf import tf
 
 from reachy_mini.placo_kinematics import PlacoKinematics
+from reachy_mini.analytic_kinematics import ReachyMiniAnalyticKinematics
 from placo_utils.tf import tf
 from placo_utils.visualization import frame_viz, robot_frame_viz, robot_viz
+import os
 
-urdf_path = "/home/gospar/pollen_robotics/reachy_mini/src/reachy_mini/descriptions/reachy_mini/urdf/robot.urdf"
+urdf_path = os.path.abspath("src/reachy_mini/descriptions/reachy_mini/urdf/robot.urdf")
 solver = PlacoKinematics(urdf_path, 0.02)
 robot = solver.robot
 robot.update_kinematics()
+
+asolver = ReachyMiniAnalyticKinematics(robot = robot)
 
 viz = robot_viz(robot)
 
@@ -52,7 +56,17 @@ def main():
         orient="horizontal",
         length=200,
     ).grid(row=6, column=1)
-
+    
+    # Collision checkbox
+    collision_var = tk.BooleanVar(value=False)
+    tk.Checkbutton(
+        root,
+        text="Enable Collisions",
+        variable=collision_var,
+        onvalue=True,
+        offvalue=False
+    ).grid(row=7, column=0, columnspan=2)
+    
     while True:
         root.update()
 
@@ -67,10 +81,13 @@ def main():
         )
         
         joints = solver.ik(pose=T_world_target, body_yaw=body_yaw_var.get())
-
+        
         if hasattr(solver, "robot_ik"):
-            solver.fk(joints)
-            
+            try:
+                solver.fk(joints, collision_var.get())
+            except Exception as e:
+                print(f"FK failed: {e}")
+
         if len(joints) != 7:
             print("joints IK failed for some motors, skipping iteration")
             continue
