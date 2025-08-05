@@ -33,7 +33,7 @@ class ReachyMiniAnalyticKinematics:
             solver = PlacoKinematics(urdf_path, 0.02)
             self.robot = solver.robot
 
-        solver.fk([0.0]*7)
+        solver.fk([0.0] * 7)
         self.robot.update_kinematics()
 
         self.motors = [
@@ -49,8 +49,6 @@ class ReachyMiniAnalyticKinematics:
                 "solution": 1,
             },
         ]
-
-
 
         # Measuring lengths for the arm and branch (constants could be used)
         self.T_world_head_home = self.robot.get_T_world_frame("head").copy()
@@ -77,7 +75,7 @@ class ReachyMiniAnalyticKinematics:
             motor["T_motor_world"] = np.linalg.inv(T_world_motor)
             motor["branch_position"] = T_head_branch[:3, 3]
             motor["limits"] = self.robot.get_joint_limits(motor["name"])
-            
+
     def ik_motor_to_branch(self, branch_attachment_platform, solution=0):
         """Compute Inverse kinematics for the branch attachment platform to the motor angles.
 
@@ -876,7 +874,7 @@ class ReachyMiniAnalyticKinematics:
         else:
             leg_attach_motor = T_motor_world @ np.vstack([leg_attach_world, np.ones(1)])
             return leg_attach_motor[:3, 0]
-    
+
     def ik(self, pose, body_yaw=0.0, check_collision: bool = False):
         """Calculate the inverse kinematics for the Reachy Mini robot to reach a target position and orientation.
 
@@ -889,9 +887,11 @@ class ReachyMiniAnalyticKinematics:
             np.ndarray: A 1D numpy array containing the joint angles for each motor in radians.
 
         """
-        
+
         if check_collision:
-            print("WARNING: Collision checking is not implemented with the analytic IK.")
+            print(
+                "WARNING: Collision checking is not implemented with the analytic IK."
+            )
 
         _pose = np.array(pose.copy())
         _pose[:3, 3][2] += self.head_z_offset  # offset the height of the head
@@ -899,7 +899,7 @@ class ReachyMiniAnalyticKinematics:
 
         # adjust yaw by the body yaw
         yaw += body_yaw
-        
+
         joints = [body_yaw]
         for motor in self.motors:
             T_motor_world = motor["T_motor_world"]
@@ -933,7 +933,7 @@ class ReachyMiniAnalyticKinematics:
                 joints.append(np.nan)
             else:
                 joints.append(solution)
-        
+
         return joints
 
     def jacobian(self, T_home_head_current):

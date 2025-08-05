@@ -13,7 +13,9 @@ from reachy_mini.analytic_kinematics import ReachyMiniAnalyticKinematics
 def main():
     """Run a GUI to set the head position and orientation of Reachy Mini."""
     with ReachyMini() as mini:
-        analytic_solver = ReachyMiniAnalyticKinematics(urdf_path="src/reachy_mini/descriptions/reachy_mini/urdf/robot.urdf")
+        analytic_solver = ReachyMiniAnalyticKinematics(
+            urdf_path="src/reachy_mini/descriptions/reachy_mini/urdf/robot.urdf"
+        )
 
         # initial joint angles
         joints = analytic_solver.ik(np.eye(4))
@@ -23,7 +25,15 @@ def main():
         root.title("Target Position and Orientation")
         pos_vars = [tk.DoubleVar(value=0.0) for _ in range(3)]
         rpy_vars = [tk.DoubleVar(value=0.0) for _ in range(4)]
-        labels = ["X (m)", "Y (m)", "Z (m)", "Roll (rad)", "Pitch (rad)", "Yaw (rad)", "Body Yaw (rad)"]
+        labels = [
+            "X (m)",
+            "Y (m)",
+            "Z (m)",
+            "Roll (rad)",
+            "Pitch (rad)",
+            "Yaw (rad)",
+            "Body Yaw (rad)",
+        ]
         for i, label in enumerate(labels):
             tk.Label(root, text=label).grid(row=i, column=0)
             var = pos_vars[i] if i < 3 else rpy_vars[i - 3]
@@ -44,9 +54,8 @@ def main():
             px, py, pz = [v.get() for v in pos_vars]
             roll, pitch, yaw, body_yaw = [v.get() for v in rpy_vars]
             # Compute the target transformation matrix in the world frame
-            T_home_head_target = (
-                tf.translation_matrix((px, py, pz))
-                @ tf.euler_matrix(roll, pitch, yaw)
+            T_home_head_target = tf.translation_matrix((px, py, pz)) @ tf.euler_matrix(
+                roll, pitch, yaw
             )
 
             T_home_head_current = mini.get_current_head_pose()
@@ -56,11 +65,10 @@ def main():
             error_p = dM[:3, 3]
             error_rpy = np.array(tf.euler_from_matrix(dM[:3, :3], axes="sxyz"))
             dq = jacobian @ np.concatenate((error_p, error_rpy))
-            
 
             joints_dq = dq * 0.02
             # Update joint positions with the computed increments
-            joints = [(j + j_dq) for j, j_dq in zip(joints, [0.0]+list(joints_dq))]
+            joints = [(j + j_dq) for j, j_dq in zip(joints, [0.0] + list(joints_dq))]
             joints[0] = body_yaw  # Set the body yaw joint position
 
             if len(joints) != 7 or not np.all(np.isfinite(joints)):
@@ -74,8 +82,7 @@ def main():
 
             try:
                 mini._set_joint_positions(
-                    head_joint_positions=joints,
-                    antennas_joint_positions=None
+                    head_joint_positions=joints, antennas_joint_positions=None
                 )
             except ValueError as e:
                 print(f"Error: {e}")
