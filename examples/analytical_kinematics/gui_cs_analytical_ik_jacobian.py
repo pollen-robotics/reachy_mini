@@ -13,17 +13,17 @@ from reachy_mini.analytic_kinematics import ReachyMiniAnalyticKinematics
 def main():
     """Run a GUI to set the head position and orientation of Reachy Mini."""
     with ReachyMini() as mini:
-        analytic_solver = ReachyMiniAnalyticKinematics(robot=mini.head_kinematics.robot)
+        analytic_solver = ReachyMiniAnalyticKinematics(urdf_path="src/reachy_mini/descriptions/reachy_mini/urdf/robot.urdf")
 
         # initial joint angles
-        joints = analytic_solver.ik(analytic_solver.T_world_head_home)
+        joints = analytic_solver.ik(np.eye(4))
 
         # gui definition
         root = tk.Tk()
         root.title("Target Position and Orientation")
         pos_vars = [tk.DoubleVar(value=0.0) for _ in range(3)]
-        rpy_vars = [tk.DoubleVar(value=0.0) for _ in range(3)]
-        labels = ["X (m)", "Y (m)", "Z (m)", "Roll (rad)", "Pitch (rad)", "Yaw (rad)"]
+        rpy_vars = [tk.DoubleVar(value=0.0) for _ in range(4)]
+        labels = ["X (m)", "Y (m)", "Z (m)", "Roll (rad)", "Pitch (rad)", "Yaw (rad)", "Body Yaw (rad)"]
         for i, label in enumerate(labels):
             tk.Label(root, text=label).grid(row=i, column=0)
             var = pos_vars[i] if i < 3 else rpy_vars[i - 3]
@@ -42,30 +42,29 @@ def main():
 
             # Read GUI values
             px, py, pz = [v.get() for v in pos_vars]
-            roll, pitch, yaw = [v.get() for v in rpy_vars]
+            roll, pitch, yaw, body_yaw = [v.get() for v in rpy_vars]
             # Compute the target transformation matrix in the world frame
-            T_world_target = (
-                analytic_solver.T_world_head_home
-                @ tf.translation_matrix((px, py, pz))
+            T_home_head_target = (
+                tf.translation_matrix((px, py, pz))
                 @ tf.euler_matrix(roll, pitch, yaw)
             )
 
-            T_world_head = analytic_solver.robot.get_T_world_frame("head")
+            T_home_head_current = mini.get_current_head_pose()
+            jacobian = analytic_solver.jacobian(T_home_head_current)
 
-            jacobian = analytic_solver.jacobian(T_world_head)
-
-            dM = np.linalg.inv(T_world_head) @ T_world_target
+            dM = np.linalg.inv(T_home_head_current) @ T_home_head_target
             error_p = dM[:3, 3]
             error_rpy = np.array(tf.euler_from_matrix(dM[:3, :3], axes="sxyz"))
             dq = jacobian @ np.concatenate((error_p, error_rpy))
+            
 
-            joints_dq = dq * 0.1
-            joints = {
-                name: value + joints_dq[i]
-                for i, (name, value) in enumerate(joints.items())
-            }
+            joints_dq = dq * 0.02
+            # Update joint positions with the computed increments
+            joints = [(j + j_dq) for j, j_dq in zip(joints, [0.0]+list(joints_dq))]
+            joints[0] = body_yaw  # Set the body yaw joint position
 
-            if len(joints) != 6:
+            if len(joints) != 7 or not np.all(np.isfinite(joints)):
+                print(joints)
                 print("joints IK failed for some motors, skipping iteration")
                 continue
 
@@ -74,24 +73,13 @@ def main():
             # print("singular values orientation:", 1/np.linalg.svd(jacobian[:,3:], compute_uv=False))
 
             try:
-                mini._send_joint_command(
-                    head_joint_positions=[
-                        0.0,
-                        joints["1"],
-                        joints["2"],
-                        joints["3"],
-                        joints["4"],
-                        joints["5"],
-                        joints["6"],
-                    ],
-                    antennas_joint_positions=None,
-                    check_collision=False,
+                mini._set_joint_positions(
+                    head_joint_positions=joints,
+                    antennas_joint_positions=None
                 )
             except ValueError as e:
                 print(f"Error: {e}")
                 continue
-
-            mini.head_kinematics.fk([0.0] + list(joints.values()))
 
             time.sleep(0.02)
 
