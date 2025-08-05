@@ -201,12 +201,13 @@ class PlacoKinematics:
         self.config_collision_model()
 
     def _update_state_to_initial(self, robot: placo.RobotWrapper) -> None:
-        """
-        Update the robot state to the initial state.
+        """Update the robot state to the initial state.
+        
         It does not call update_kinematics, so the robot state is not updated.
 
         Args:
             robot (placo.RobotWrapper): The robot wrapper instance to update.
+
         """
         robot.state.q = self._inital_q
         robot.state.qd = self._inital_qd
@@ -277,7 +278,6 @@ class PlacoKinematics:
             np.ndarray: A 4x4 homogeneous transformation matrix
 
         """
-
         self.head_joints_task.set_joints(
             {
                 "all_yaw": joints_angles[0],

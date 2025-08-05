@@ -887,7 +887,6 @@ class ReachyMiniAnalyticKinematics:
             np.ndarray: A 1D numpy array containing the joint angles for each motor in radians.
 
         """
-
         if check_collision:
             print(
                 "WARNING: Collision checking is not implemented with the analytic IK."
@@ -945,8 +944,8 @@ class ReachyMiniAnalyticKinematics:
         and the last three rows correspond to the angular velocity in the roll, pitch, and yaw axes.
 
         Args:
-            T_world_head_current (np.ndarray): The current transformation matrix of the head in the world
-                                               frame, represented as a 4x4 numpy array.
+            T_home_head_current (np.ndarray): The current transformation matrix of the head in the home
+                                               frame (zero head position), represented as a 4x4 numpy array.
 
         Returns:
             np.ndarray: The Jacobian matrix of shape (n_motors, 6), where n_motors is the number of motors in the head.

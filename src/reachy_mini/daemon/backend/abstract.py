@@ -157,7 +157,7 @@ class Backend:
 
         if joints is None or np.any(np.isnan(joints)):
             raise ValueError(
-                f"WARNING: Collision detected or head pose not achievable!"
+                "WARNING: Collision detected or head pose not achievable!"
             )
 
         # update the target head pose and body yaw

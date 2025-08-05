@@ -1,27 +1,24 @@
 """Reachy Mini Analytical Kinematics GUI Example."""
 
+import os
 import time
 import tkinter as tk
-import numpy as np
-from placo_utils.tf import tf
 
-from reachy_mini.placo_kinematics import PlacoKinematics
-from reachy_mini.analytic_kinematics import ReachyMiniAnalyticKinematics
 from placo_utils.tf import tf
 from placo_utils.visualization import frame_viz, robot_frame_viz, robot_viz
-import os
+
+from reachy_mini.placo_kinematics import PlacoKinematics
 
 urdf_path = os.path.abspath("src/reachy_mini/descriptions/reachy_mini/urdf/robot.urdf")
 solver = PlacoKinematics(urdf_path, 0.02)
 robot = solver.robot
 robot.update_kinematics()
 
-asolver = ReachyMiniAnalyticKinematics(robot = robot)
 
 viz = robot_viz(robot)
 
-def main():
 
+def main():
     # initial joint angles
     joints = solver.ik(solver.head_starting_pose)
 
@@ -56,7 +53,7 @@ def main():
         orient="horizontal",
         length=200,
     ).grid(row=6, column=1)
-    
+
     # Collision checkbox
     collision_var = tk.BooleanVar(value=False)
     tk.Checkbutton(
@@ -64,9 +61,9 @@ def main():
         text="Enable Collisions",
         variable=collision_var,
         onvalue=True,
-        offvalue=False
+        offvalue=False,
     ).grid(row=7, column=0, columnspan=2)
-    
+
     while True:
         root.update()
 
@@ -74,14 +71,12 @@ def main():
         px, py, pz = [v.get() for v in pos_vars]
         roll, pitch, yaw = [v.get() for v in rpy_vars]
         # Compute the target transformation matrix in the world frame
-        T_world_target = (
-            solver.head_starting_pose
-            @ tf.translation_matrix((px, py, pz - solver.head_z_offset))
-            @ tf.euler_matrix(roll, pitch, yaw)
+        T_head_target = tf.translation_matrix((px, py, pz)) @ tf.euler_matrix(
+            roll, pitch, yaw
         )
-        
-        joints = solver.ik(pose=T_world_target, body_yaw=body_yaw_var.get())
-        
+
+        joints = solver.ik(pose=T_head_target, body_yaw=body_yaw_var.get())
+
         if hasattr(solver, "robot_ik"):
             try:
                 solver.fk(joints, collision_var.get())
@@ -91,17 +86,19 @@ def main():
         if len(joints) != 7:
             print("joints IK failed for some motors, skipping iteration")
             continue
-        
+
         viz.display(robot.state.q)
         robot_frame_viz(robot, "head")
-        #robot_frame_viz(robot, "dummy_torso_yaw")
-        frame_viz("target", (
-            solver.head_starting_pose
-            @ tf.translation_matrix((px, py, pz))
-            @ tf.euler_matrix(roll, pitch, yaw)
+        # robot_frame_viz(robot, "dummy_torso_yaw")
+        frame_viz(
+            "target",
+            (
+                solver.head_starting_pose
+                @ tf.translation_matrix((px, py, pz))
+                @ tf.euler_matrix(roll, pitch, yaw)
+            ),
         )
-        )
-        
+
         time.sleep(0.02)
 
 

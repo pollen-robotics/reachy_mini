@@ -3,12 +3,11 @@
 import time
 import tkinter as tk
 
+import numpy as np
 from placo_utils.tf import tf
 
 from reachy_mini import ReachyMini
 from reachy_mini.analytic_kinematics import ReachyMiniAnalyticKinematics
-
-import numpy as np
 
 
 def main():
