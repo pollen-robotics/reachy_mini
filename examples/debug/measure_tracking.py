@@ -28,6 +28,7 @@ from typing import Dict, Tuple
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.spatial.transform import Rotation as R
+
 from reachy_mini import ReachyMini, utils
 from reachy_mini.motion.collection.dance import AVAILABLE_MOVES
 from reachy_mini.utils.interpolation import distance_between_poses
@@ -231,6 +232,7 @@ def run_one_move(
         Array (N, 3) from R.from_matrix(target_pose[:3,:3]).as_euler("xyz", degrees=True).
     present_rpy_deg
         Array (N, 3) from R.from_matrix(current_pose[:3,:3]).as_euler("xyz", degrees=True).
+
     """
     period = 1.0 / sample_hz
     move_fn, base_params, _ = move_def
