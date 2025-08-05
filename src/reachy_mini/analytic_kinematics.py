@@ -33,6 +33,7 @@ class ReachyMiniAnalyticKinematics:
             solver = PlacoKinematics(urdf_path, 0.02)
             self.robot = solver.robot
 
+        solver.fk([0.0] * 7)
         self.robot.update_kinematics()
 
         self.motors = [
@@ -51,11 +52,13 @@ class ReachyMiniAnalyticKinematics:
 
         # Measuring lengths for the arm and branch (constants could be used)
         self.T_world_head_home = self.robot.get_T_world_frame("head").copy()
+        self.head_z_offset = solver.head_z_offset
         T_world_1 = self.robot.get_T_world_frame("1")
         T_world_arm1 = self.robot.get_T_world_frame("passive_1_link_x")
 
         T_1_arm1 = np.linalg.inv(T_world_1) @ T_world_arm1
         arm_z = T_1_arm1[2, 3]
+        # Print all public variables of the class instance
         self.servo_arm_length = np.linalg.norm(T_1_arm1[:2, 3])
         T_world_branch1 = self.robot.get_T_world_frame("closing_1_2")
         T_arm1_branch1 = np.linalg.inv(T_world_arm1) @ T_world_branch1
@@ -876,7 +879,7 @@ class ReachyMiniAnalyticKinematics:
         """Calculate the inverse kinematics for the Reachy Mini robot to reach a target position and orientation.
 
         Args:
-            pose (np.ndarray): The target pose in the world frame, represented as a 4x4 numpy array.
+            pose (np.ndarray): The target pose in the locala world aligned frame, represented as a 4x4 numpy array.
             body_yaw (float, optional): The yaw angle of the body in radians. Defaults to 0.0.
             check_collision (bool, optional): If True, checks for collisions after solving IK. Defaults to False.
 
@@ -884,23 +887,25 @@ class ReachyMiniAnalyticKinematics:
             np.ndarray: A 1D numpy array containing the joint angles for each motor in radians.
 
         """
-        
         if check_collision:
-            print("WARNING: Collision checking is not implemented with the analytic IK.")
+            print(
+                "WARNING: Collision checking is not implemented with the analytic IK."
+            )
 
-        pose[:3, 3][2] += 0.177  # offset the height of the head
-        roll, pitch, yaw = tf.euler_from_matrix(pose[:3, :3], axes="sxyz")
+        _pose = np.array(pose.copy())
+        _pose[:3, 3][2] += self.head_z_offset  # offset the height of the head
+        roll, pitch, yaw = tf.euler_from_matrix(_pose[:3, :3], axes="sxyz")
 
         # adjust yaw by the body yaw
         yaw += body_yaw
-        
+
         joints = [body_yaw]
         for motor in self.motors:
             T_motor_world = motor["T_motor_world"]
             try:
                 branch_position = self.ik_platform_to_branch(
                     motor["branch_position"],
-                    pose[:3, 3],
+                    _pose[:3, 3],
                     roll,
                     pitch,
                     yaw,
@@ -927,10 +932,10 @@ class ReachyMiniAnalyticKinematics:
                 joints.append(np.nan)
             else:
                 joints.append(solution)
-        
+
         return joints
 
-    def jacobian(self, T_world_head_current):
+    def jacobian(self, T_home_head_current):
         """Calculate the head Jacobian matrix for the Reachy Mini robot.
 
         The convention is local world aligned.
@@ -939,8 +944,8 @@ class ReachyMiniAnalyticKinematics:
         and the last three rows correspond to the angular velocity in the roll, pitch, and yaw axes.
 
         Args:
-            T_world_head_current (np.ndarray): The current transformation matrix of the head in the world
-                                               frame, represented as a 4x4 numpy array.
+            T_home_head_current (np.ndarray): The current transformation matrix of the head in the home
+                                               frame (zero head position), represented as a 4x4 numpy array.
 
         Returns:
             np.ndarray: The Jacobian matrix of shape (n_motors, 6), where n_motors is the number of motors in the head.
@@ -948,6 +953,8 @@ class ReachyMiniAnalyticKinematics:
                         and the last three rows correspond to the angular velocity in the roll, pitch, and yaw axes.
 
         """
+        T_world_head_current = T_home_head_current.copy()
+        T_world_head_current[:3, 3] += np.array([0, 0, self.head_z_offset])
         T_headz_head = np.linalg.inv(self.T_world_head_home) @ T_world_head_current
         roll, pitch, yaw = tf.euler_from_matrix(T_headz_head[:3, :3], axes="sxyz")
         jacobian = np.zeros((len(self.motors), 6))
