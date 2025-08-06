@@ -135,9 +135,9 @@ class MujocoBackend(Backend):
                                 }
                             ).encode("utf-8")
                         )
+                    viewer.sync()   
 
                 mujoco.mj_step(self.model, self.data)  # type: ignore
-                viewer.sync()
 
                 took = time.time() - start_t
                 time.sleep(max(0, self.model.opt.timestep - took))
