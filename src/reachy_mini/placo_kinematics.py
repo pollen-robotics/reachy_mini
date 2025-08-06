@@ -41,8 +41,9 @@ class PlacoKinematics:
 
         self.automatic_body_yaw = automatic_body_yaw
 
-        # they should be hard but we use soft to avoir singularities and
-        # tradeoff the precision for the robustness
+        # we could go to soft limits to avoid over-constraining the IK
+        # but the current implementation works robustly with hard limits
+        # so we keep the hard limits for now
         constrant_type = "hard"  # "hard" or "soft"
 
         # IK closing tasks
