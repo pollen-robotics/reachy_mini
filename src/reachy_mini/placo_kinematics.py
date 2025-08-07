@@ -180,6 +180,17 @@ class PlacoKinematics:
             i for i, idx in enumerate(self.actives_idx) if idx in self.actuated_idx
         ]
 
+        # set velocity limits to be artificially high 
+        # to enable faster convergence of the IK/FK solver
+        max_vel = 13.0  # rad/s
+        for joint_name in self.joints_names:
+            self.robot.set_velocity_limit(joint_name, max_vel)
+            self.robot_ik.set_velocity_limit(joint_name, max_vel)
+            
+        self.robot.set_joint_limits("all_yaw", -2.8, 2.8)
+        self.robot_ik.set_joint_limits("all_yaw", -2.8, 2.8)
+
+
         # initial state
         self._inital_q = self.robot.state.q.copy()
         self._inital_qd = np.zeros_like(self.robot.state.qd)
@@ -203,7 +214,7 @@ class PlacoKinematics:
 
     def _update_state_to_initial(self, robot: placo.RobotWrapper) -> None:
         """Update the robot state to the initial state.
-        
+
         It does not call update_kinematics, so the robot state is not updated.
 
         Args:
@@ -238,7 +249,7 @@ class PlacoKinematics:
         self.head_frame.T_world_frame = _pose
 
         # self.robot_ik.state.q = self._inital_q
-        for _ in range(10):
+        for _ in range(12):
             try:
                 self.ik_solver.solve(True)  # False to not update the kinematics
             except Exception as e:
@@ -293,7 +304,7 @@ class PlacoKinematics:
 
         self._update_state_to_initial(self.robot)  # revert to the previous state
         self.robot.update_kinematics()
-        for _ in range(10):
+        for _ in range(12):
             try:
                 self.fk_solver.solve(True)  # False to not update the kinematics
             except Exception as e:
