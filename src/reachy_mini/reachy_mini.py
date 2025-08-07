@@ -555,8 +555,9 @@ class ReachyMini:
         self.client.send_command(json.dumps({"stop_recording": True}))
         self.is_recording = False
         print("Recording stopped. Retrieving recorded data...")
-        time.sleep(2.0)  # Give some time for the backend to process the command
-        recorded_data = self.client.get_recorded_data()
+        if not self.client.wait_for_recorded_data(timeout=5):
+            raise RuntimeError("Daemon did not provide recorded data in time!")
+        recorded_data = self.client.get_recorded_data(wait=False)
 
         return recorded_data
 
