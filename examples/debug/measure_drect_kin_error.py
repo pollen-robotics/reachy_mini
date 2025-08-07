@@ -7,6 +7,7 @@ import time
 import matplotlib.pyplot as plt
 import numpy as np
 from placo_utils.tf import tf
+from placo_utils.visualization import frame_viz, robot_frame_viz, robot_viz
 
 from reachy_mini.analytic_kinematics import ReachyMiniAnalyticKinematics
 from reachy_mini.placo_kinematics import PlacoKinematics
@@ -16,8 +17,12 @@ solver = PlacoKinematics(urdf_path, 0.02)
 robot = solver.robot
 robot.update_kinematics()
 
+viz = robot_viz(robot)
 
-# viz = robot_viz(robot)
+
+robot_limits = []
+for jn in solver.joints_names:
+    robot_limits.append(robot.get_joint_limits(jn))
 
 asolver = ReachyMiniAnalyticKinematics(urdf_path)
 
@@ -35,7 +40,7 @@ while i < 1000:
     # Read GUI values
     px, py, pz = [np.random.uniform(-0.01, 0.01) for _ in range(3)]
     roll, pitch = [np.random.uniform(-np.deg2rad(30), np.deg2rad(30)) for _ in range(2)]
-    yaw = np.random.uniform(-3.1, 3.1)
+    yaw = np.random.uniform(-2.8, 2.8)
     body_yaw = -yaw  # + np.random.uniform(-np.deg2rad(20), np.deg2rad(20))
 
     # Compute the target transformation matrix in the world frame
@@ -62,9 +67,10 @@ while i < 1000:
 
     # Measure time for solver FK
     start_solver_fk = time.time()
-    final_pose = solver.fk(joints)
+    for _ in range(2):
+        final_pose = solver.fk(joints)
     end_solver_fk = time.time()
-    solver_fk_time = end_solver_fk - start_solver_fk
+    solver_fk_time = (end_solver_fk - start_solver_fk)/2
 
     # Save times for later analysis
     solver_ik_times.append(solver_ik_time)
@@ -79,10 +85,26 @@ while i < 1000:
     rot_diff = R_final @ R_target.T
     angle_error = np.arccos(np.clip((np.trace(rot_diff) - 1) / 2, -1.0, 1.0))
 
-    if pos_error > 0.05 or angle_error > np.deg2rad(10):
-        # avoid outliers
+    joints = [robot.get_joint(jn) for jn in solver.joints_names]
+    skip = False
+    for j in range(7):
+        # Check if joint limits are respected
+        if not (robot_limits[j][0] < joints[j] < robot_limits[j][1]):
+            skip = True
+            break
+    if skip:
         continue
-
+        
+    if pos_error > 0.02 or angle_error > np.deg2rad(10):
+        viz.display(robot.state.q)
+        robot_frame_viz(robot, "head")
+        frame_viz("target", 
+                  solver.head_starting_pose @ 
+                    tf.translation_matrix((px, py, pz)) @
+                    tf.euler_matrix(roll, pitch, yaw))
+        print(px, py, pz, roll, pitch, yaw)
+        input("Press Enter to continue...")
+        
     position_errors.append(pos_error)
     angular_errors.append(np.degrees(angle_error))
 
