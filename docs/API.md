@@ -241,6 +241,35 @@ You can control the robot's motors with three main methods:
 
 3. **`make_motors_compliant`**: Makes the motors compliant (requires motors to be enabled first). In this mode, the motors are powered on, but they do not resist external forces, so you can move the robot by hand, and it will feel "soft". This is useful for safe manual manipulation or teaching by demonstration. For an example, see the [gravity compensation example](../examples/reachy_compliant_demo.py): in this demo, you can move the robot's head and antennas freely, but the robot will use its motors to compensate for gravity and maintain its position/orientation in space.
 
+### Recording moves
+Let's assume that you have a script that uses the `set_target` fonction to move the robot and you want to record the commands to be able to replay them.
+For example, this could be a teleoperation script, and you could be recording cute emotions (OK this is how we did it).
+You can create another ReachyMini client (or use the same) and simply use `start_recording()` and `stop_recording()`.
+Below is the snippet of code that show how to start a recording, stop the recording and unpack the data:
+```python
+    try:
+        # The daemon will start recording the set_target() calls
+        mini.start_recording()
+        print("\nRecording started. Press Ctrl+C here to stop recording.")
+
+        while True:
+            # Keep the script alive to listen for Ctrl+C
+            time.sleep(0.01) 
+    except KeyboardInterrupt:
+        # Stop recording and retrieve the logged data
+        recorded_motion = mini.stop_recording()
+        
+        data = {}
+        for frame in recorded_motion:
+            data["time"].append(frame.get("time"))
+            pose_info = {
+                'head': frame.get('head'),
+                'antennas': frame.get('antennas'),
+                'body_yaw': frame.get('body_yaw'),
+                'check_collision': frame.get('check_collision'),
+            }
+            data["set_target_data"].append(pose_info)
+```
 ## Accessing the sensors
 
 Reachy Mini comes with several sensors (camera, microphone, speaker) that are connected to your computer via USB through the robot. These devices appear just like standard USB peripherals, so you can access them using your usual tools and libraries, exactly as if they were plugged directly into your computer.
