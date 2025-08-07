@@ -8,7 +8,11 @@ It is designed to be extended by subclasses that implement the specific behavior
 each type of backend.
 """
 
+<<<<<<< HEAD
 import logging
+=======
+import json
+>>>>>>> 148-temporary-motion-record-system
 import threading
 from importlib.resources import files
 from typing import List
@@ -48,7 +52,10 @@ class Backend:
 
         self.joint_positions_publisher = None  # Placeholder for a publisher object
         self.pose_publisher = None  # Placeholder for a pose publisher object
+        self.recording_publisher = None  # Placeholder for a recording publisher object
         self.error = None  # To store any error that occurs during execution
+        self.is_recording = False  # Flag to indicate if recording is active
+        self.recorded_data = []  # List to store recorded data
 
         # variables to store the last computed head joint positions and pose
         self._target_body_yaw = None  # Last body yaw used in IK computations
@@ -193,6 +200,37 @@ class Backend:
 
         """
         self.target_head_joint_current = current
+        
+    def set_recording_publisher(self, publisher) -> None:
+        """Set the publisher for recording data.
+
+        Args:
+            publisher: A publisher object that will be used to publish recorded data.
+
+        """
+        self.recording_publisher = publisher
+
+    def append_record(self, record: dict) -> None:
+        """Append a record to the recorded data.
+
+        Args:
+            record (dict): A dictionary containing the record data to be appended.
+
+        """
+        if self.is_recording:
+            self.recorded_data.append(record)
+
+    def start_recording(self) -> None:
+        """Start recording data."""
+        self.is_recording = True
+        self.recorded_data = []
+
+    def stop_recording(self) -> None:
+        """Stop recording data and publish the recorded data."""
+        self.is_recording = False
+        recorded_data = self.recorded_data.copy()
+        self.recording_publisher.put(json.dumps(recorded_data))
+        self.recorded_data.clear()
 
     def set_head_operation_mode(self, mode: int) -> None:
         """Set mode of operation for the head."""

@@ -9,7 +9,7 @@ It also includes methods for multimedia interactions like playing sounds and loo
 import json
 import os
 import time
-from typing import List, Optional, Union
+from typing import Dict, List, Optional, Union
 
 os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "hide"
 
@@ -150,19 +150,51 @@ class ReachyMini:
         if head is None and antennas is None:
             raise ValueError("At least one of head or antennas must be provided.")
 
+<<<<<<< HEAD
         if head is not None and not head.shape == (4, 4):
             raise ValueError(f"Head pose must be a 4x4 matrix, got shape {head.shape}.")
 
         if antennas is not None and not len(antennas) == 2:
             raise ValueError(
                 "Antennas must be a list or 1D np array with two elements."
+=======
+        record = {
+            "time": time.time(),
+            "head": head.tolist() if head is not None else None,
+            "antennas": list(antennas) if antennas is not None else None,
+            "body_yaw": body_yaw,
+            "check_collision": check_collision,
+        }
+
+        if head is not None:
+            if not head.shape == (4, 4):
+                raise ValueError(
+                    f"Head pose must be a 4x4 matrix, got shape {head.shape}."
+                )
+            head_joint_positions = self.head_kinematics.ik(
+                head, body_yaw=body_yaw, check_collision=check_collision
+>>>>>>> 148-temporary-motion-record-system
             )
 
         self._set_check_collision(check_collision)
         if antennas is not None:
+<<<<<<< HEAD
             self._set_joint_positions(antennas_joint_positions=list(antennas))
         if head is not None:
             self._set_head_pose(head, body_yaw)
+=======
+            if not len(antennas) == 2:
+                raise ValueError(
+                    "Antennas must be a list or 1D np array with two elements."
+                )
+            antenna_joint_positions = list(antennas)
+        else:
+            antenna_joint_positions = None
+
+        self._set_joint_positions(
+            head_joint_positions, antenna_joint_positions, record=record
+        )
+>>>>>>> 148-temporary-motion-record-system
         self._last_head_pose = head
 
     def goto_target(
@@ -477,8 +509,18 @@ class ReachyMini:
 
     def _set_joint_positions(
         self,
+<<<<<<< HEAD
         head_joint_positions: list[float] | None = None,
         antennas_joint_positions: list[float] | None = None,
+=======
+        head_joint_positions: Optional[
+            List[float]
+        ],  # [yaw, stewart_platform x 6] length 7
+        antennas_joint_positions: Optional[
+            List[float]
+        ],  # [left_angle, right_angle] length 2
+        record: Optional[Dict] = None,  # If recording, the command will be logged
+>>>>>>> 148-temporary-motion-record-system
     ):
         """Set the joint positions of the head and/or antennas.
 
@@ -487,6 +529,7 @@ class ReachyMini:
         Args:
             head_joint_positions (Optional[List[float]]): List of head joint positions in radians (length 7).
             antennas_joint_positions (Optional[List[float]]): List of antennas joint positions in radians (length 2).
+            record (Optional[Dict]): If provided, the command will be logged with the given record data.
 
         """
         cmd = {}
@@ -505,9 +548,12 @@ class ReachyMini:
             raise ValueError(
                 "At least one of head_joint_positions or antennas must be provided."
             )
+        if record is not None:
+            cmd["set_target_record"] = record
 
         self.client.send_command(json.dumps(cmd))
 
+<<<<<<< HEAD
     def _set_head_pose(self, pose: np.ndarray, body_yaw: float = 0.0) -> None:
         """Set the head pose to a specific 4x4 matrix.
 
@@ -532,6 +578,21 @@ class ReachyMini:
         cmd["body_yaw"] = body_yaw
 
         self.client.send_command(json.dumps(cmd))
+=======
+    def start_recording(self) -> None:
+        """Start recording data."""
+        self.client.send_command(json.dumps({"start_recording": True}))
+        self.is_recording = True
+
+    def stop_recording(self) -> List[Dict]:
+        """Stop recording data and return the recorded data."""
+        self.client.send_command(json.dumps({"stop_recording": True}))
+        self.is_recording = False
+        time.sleep(2.0)  # Give some time for the backend to process the command
+        recorded_data = self.client.get_recorded_data()
+
+        return recorded_data
+>>>>>>> 148-temporary-motion-record-system
 
     def _set_head_operation_mode(self, mode: int) -> None:
         """Set the operation mode for the head motors.
