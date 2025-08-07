@@ -8,8 +8,8 @@ It is designed to be extended by subclasses that implement the specific behavior
 each type of backend.
 """
 
-import logging
 import json
+import logging
 import threading
 from importlib.resources import files
 from typing import List
