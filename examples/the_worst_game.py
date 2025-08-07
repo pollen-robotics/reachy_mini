@@ -346,8 +346,7 @@ def speed_run(
             if compensate_gravity:
                 reachy.compensate_gravity()
 
-            joints, _ = reachy._get_current_joint_positions()
-            pose = reachy.head_kinematics.fk(joints)
+            pose = reachy.get_current_head_pose()
 
             t_dist, a_dist, score = distance_between_poses(targets[current], pose)
             best_score = min(best_score, score)
@@ -417,8 +416,8 @@ def precision_mode(compensate_gravity: bool = False) -> None:
             if compensate_gravity:
                 reachy.compensate_gravity()
 
-            joints, _ = reachy._get_current_joint_positions()
-            pose = reachy.head_kinematics.fk(joints)
+            pose = reachy.get_current_head_pose()
+
             t_dist, a_dist, score = distance_between_poses(np.eye(4), pose)
             best = min(best, score)
             state_q.put((t_dist * 1_000, np.degrees(a_dist)))
