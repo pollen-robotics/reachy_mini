@@ -124,7 +124,6 @@ class ZenohClient(AbstractClient):
         if sample.payload:
             data = json.loads(sample.payload.to_string())
             self._recorded_data = data
-            self.keep_alive_event.set()
         print(f"Recorded data: {len(self._recorded_data)} frames received.")
 
     def get_current_joints(self) -> tuple[list[float], list[float]]:

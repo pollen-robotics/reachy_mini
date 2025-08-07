@@ -102,6 +102,7 @@ class ReachyMini:
         self.client.wait_for_connection(timeout=timeout)
         self.set_automatic_body_yaw(automatic_body_yaw)
         self._last_head_pose = None
+        self.is_recording = False
 
         self.K = np.array(
             [[550.3564, 0.0, 638.0112], [0.0, 549.1653, 364.589], [0.0, 0.0, 1.0]]
@@ -134,7 +135,6 @@ class ReachyMini:
         ] = None,  # [left_angle, right_angle] (in rads)
         body_yaw: float = 0.0,  # Body yaw angle in radians
         check_collision: bool = False,  # Check for collisions before setting the position
-        record: Optional[Dict] = None,  # Record the command data
     ) -> None:
         """Set the target pose of the head and/or the target position of the antennas.
 
@@ -143,7 +143,6 @@ class ReachyMini:
             antennas (Optional[Union[np.ndarray, List[float]]]): 1D array with two elements representing the angles of the antennas in radians.
             body_yaw (Optional[float]): Body yaw angle in radians.
             check_collision (bool): If True, checks for collisions before setting the position. Beware that this will slow down the IK computation (~1ms).
-            record (Optional[Dict]): If True, all the parameters will be recorded daemon-side.
 
         Raises:
             ValueError: If neither head nor antennas are provided, or if the shape of head is not (4, 4), or if antennas is not a 1D array with two elements.
@@ -166,15 +165,15 @@ class ReachyMini:
         if head is not None:
             self._set_head_pose(head, body_yaw)
         self._last_head_pose = head
-        if record is not None:
-            record = {
-                "time": time.time(),
-                "head": head.tolist() if head is not None else None,
-                "antennas": list(antennas) if antennas is not None else None,
-                "body_yaw": body_yaw,
-                "check_collision": check_collision,
-            }
-            self._set_record_data(record)
+
+        record = {
+            "time": time.time(),
+            "head": head.tolist() if head is not None else None,
+            "antennas": list(antennas) if antennas is not None else None,
+            "body_yaw": body_yaw,
+            "check_collision": check_collision,
+        }
+        self._set_record_data(record)
 
     def goto_target(
         self,
@@ -549,11 +548,13 @@ class ReachyMini:
         """Start recording data."""
         self.client.send_command(json.dumps({"start_recording": True}))
         self.is_recording = True
+        print("Recording started. Data will be logged until stop_recording is called.")
 
     def stop_recording(self) -> List[Dict]:
         """Stop recording data and return the recorded data."""
         self.client.send_command(json.dumps({"stop_recording": True}))
         self.is_recording = False
+        print("Recording stopped. Retrieving recorded data...")
         time.sleep(2.0)  # Give some time for the backend to process the command
         recorded_data = self.client.get_recorded_data()
 
