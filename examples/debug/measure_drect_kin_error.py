@@ -3,9 +3,12 @@
 import os
 import time
 
+# Show histograms
+import matplotlib.pyplot as plt
 import numpy as np
 from placo_utils.tf import tf
 
+from reachy_mini.analytic_kinematics import ReachyMiniAnalyticKinematics
 from reachy_mini.placo_kinematics import PlacoKinematics
 
 urdf_path = os.path.abspath("src/reachy_mini/descriptions/reachy_mini/urdf/robot.urdf")
@@ -13,7 +16,6 @@ solver = PlacoKinematics(urdf_path, 0.02)
 robot = solver.robot
 robot.update_kinematics()
 
-from reachy_mini.analytic_kinematics import ReachyMiniAnalyticKinematics
 
 # viz = robot_viz(robot)
 
@@ -102,9 +104,6 @@ while i < 1000:
 
     if i % 100 == 0:
         print(f"Iteration {i} out of 1000")
-
-# Show histograms
-import matplotlib.pyplot as plt
 
 # plot the position and angular errors distributions
 plt.figure(figsize=(12, 5))
