@@ -58,7 +58,7 @@ class Backend:
         # Tolerance for kinematics computations
         # For Forward kinematics (around 0.25deg)
         # - FK is calculated at each timestep and is susceptible to noise
-        self._fk_kin_tolerance = 4e-3  # rads
+        self._fk_kin_tolerance = 1e-3  # rads
         # For Inverse kinematics (around 0.5mm and 0.1 degrees)
         # - IK is calculated only when the head pose is set by the user
         self._ik_kin_tolerance = {
@@ -145,6 +145,7 @@ class Backend:
                 pose[:3, :3],
                 atol=self._ik_kin_tolerance["rad"],
             )
+            and self._last_collision_check == self.check_collision
         ):
             # If the pose is the same, do not recompute IK
             return
@@ -154,14 +155,15 @@ class Backend:
             pose, body_yaw=body_yaw, check_collision=self.check_collision
         )
 
-        if joints is None:
+        if joints is None or np.any(np.isnan(joints)):
             raise ValueError(
-                f"Could not compute inverse kinematics for the given pose {pose}."
+                "WARNING: Collision detected or head pose not achievable!"
             )
 
         # update the target head pose and body yaw
         self.target_head_pose = pose
         self._target_body_yaw = body_yaw
+        self._last_collision_check = self.check_collision
 
         self.set_target_head_joint_positions(joints)
 

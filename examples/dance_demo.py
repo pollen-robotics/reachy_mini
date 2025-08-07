@@ -40,7 +40,7 @@ class Config:
     beats_per_sequence: int = 8  # Switch move every 8 beats
     start_move: str = "simple_nod"
     amplitude_scale: float = 1.0
-    neutral_pos: np.ndarray = field(default_factory=lambda: np.array([0, 0, 0.02]))
+    neutral_pos: np.ndarray = field(default_factory=lambda: np.array([0, 0, 0.0]))
     neutral_eul: np.ndarray = field(default_factory=lambda: np.zeros(3))
     choreography_path: Optional[str] = None
 
