@@ -767,7 +767,9 @@
     <parent link="dc15_a01_case_b_dummy"/>
     <child link="pp01062_stewart_arm"/>
     <axis xyz="0 0 1"/>
-    <limit effort="10" velocity="10" lower="-1.39626" upper="1.39626"/>
+    <limit effort="10" velocity="20" lower="-1.39626" upper="1.39626"/>
+    <!-- Real velocity limit is around 10 rad/s -->
+    <!--<limit effort="10" velocity="10" lower="-1.39626" upper="1.39626"/>-->
   </joint>
   <!-- Link pp01062_stewart_arm_2 -->
   <link name="pp01062_stewart_arm_2">
@@ -926,7 +928,9 @@
     <parent link="dc15_a01_case_b_dummy"/>
     <child link="pp01062_stewart_arm_2"/>
     <axis xyz="0 0 1"/>
-    <limit effort="10" velocity="10" lower="-1.39626" upper="1.39626"/>
+    <limit effort="10" velocity="20" lower="-1.39626" upper="1.39626"/>
+    <!-- Real velocity limit is around 10 rad/s -->
+    <!--<limit effort="10" velocity="10" lower="-1.39626" upper="1.39626"/>-->
   </joint>
   <!-- Link pp01062_stewart_arm_3 -->
   <link name="pp01062_stewart_arm_3">
@@ -1085,7 +1089,9 @@
     <parent link="dc15_a01_case_b_dummy"/>
     <child link="pp01062_stewart_arm_3"/>
     <axis xyz="0 0 1"/>
-    <limit effort="10" velocity="10" lower="-1.39626" upper="1.39626"/>
+    <limit effort="10" velocity="20" lower="-1.39626" upper="1.39626"/>
+    <!-- Real velocity limit is around 10 rad/s -->
+    <!--<limit effort="10" velocity="10" lower="-1.39626" upper="1.39626"/>-->
   </joint>
   <!-- Link pp01062_stewart_arm_4 -->
   <link name="pp01062_stewart_arm_4">
@@ -1244,7 +1250,9 @@
     <parent link="dc15_a01_case_b_dummy"/>
     <child link="pp01062_stewart_arm_4"/>
     <axis xyz="0 0 1"/>
-    <limit effort="10" velocity="10" lower="-1.39626" upper="1.39626"/>
+    <limit effort="10" velocity="20" lower="-1.39626" upper="1.39626"/>
+    <!-- Real velocity limit is around 10 rad/s -->
+    <!--<limit effort="10" velocity="10" lower="-1.39626" upper="1.39626"/>-->
   </joint>
   <!-- Link pp01062_stewart_arm_5 -->
   <link name="pp01062_stewart_arm_5">
@@ -1403,7 +1411,9 @@
     <parent link="dc15_a01_case_b_dummy"/>
     <child link="pp01062_stewart_arm_5"/>
     <axis xyz="0 0 1"/>
-    <limit effort="10" velocity="10" lower="-1.39626" upper="1.39626"/>
+    <limit effort="10" velocity="20" lower="-1.39626" upper="1.39626"/>
+    <!-- Real velocity limit is around 10 rad/s -->
+    <!--<limit effort="10" velocity="10" lower="-1.39626" upper="1.39626"/>-->
   </joint>
   <!-- Link pp01062_stewart_arm_6 -->
   <link name="pp01062_stewart_arm_6">
@@ -1979,7 +1989,9 @@
     <parent link="pp01063_stewart_plateform"/>
     <child link="test_antenna_body"/>
     <axis xyz="0 0 1"/>
-    <limit effort="10" velocity="10" lower="-3.141592653589793" upper="3.141592653589793"/>
+    <limit effort="10" velocity="20" lower="-3.141592653589793" upper="3.141592653589793"/>
+    <!-- Real velocity limit is around 10 rad/s -->
+    <!--<limit effort="10" velocity="10" lower="-3.141592653589793" upper="3.141592653589793"/>-->
   </joint>
   <!-- Link test_antenna -->
   <link name="test_antenna">
@@ -2027,7 +2039,9 @@
     <parent link="pp01063_stewart_plateform"/>
     <child link="test_antenna"/>
     <axis xyz="0 0 1"/>
-    <limit effort="10" velocity="10" lower="-3.141592653589793" upper="3.141592653589793"/>
+    <limit effort="10" velocity="20" lower="-3.141592653589793" upper="3.141592653589793"/>
+    <!-- Real velocity limit is around 10 rad/s -->
+    <!--<limit effort="10" velocity="10" lower="-3.141592653589793" upper="3.141592653589793"/>-->
   </joint>
   <!-- Joint from passive_7_link_y to pp01063_stewart_plateform -->
   <joint name="passive_7_z" type="revolute">
@@ -2083,7 +2097,9 @@
     <parent link="dc15_a01_case_b_dummy"/>
     <child link="pp01062_stewart_arm_6"/>
     <axis xyz="0 0 1"/>
-    <limit effort="10" velocity="10" lower="-1.39626" upper="1.39626"/>
+    <limit effort="10" velocity="20" lower="-1.39626" upper="1.39626"/>
+    <!-- Real velocity limit is around 10 rad/s -->
+    <!--<limit effort="10" velocity="10" lower="-1.39626" upper="1.39626"/>-->
   </joint>
   <!-- Joint from pp01071_turning_bowl to dc15_a01_case_b_dummy -->
   <joint name="all_yaw" type="revolute">
@@ -2092,7 +2108,9 @@
     <parent link="pp01071_turning_bowl"/>
     <child link="dc15_a01_case_b_dummy"/>
     <axis xyz="0 0 1"/>
-    <limit effort="10" velocity="10" lower="-3.141592653589793" upper="3.141592653589793"/>
+    <limit effort="10" velocity="20" lower="-3.141592653589793" upper="3.141592653589793"/>
+    <!-- Real velocity limit is around 10 rad/s -->
+    <!--<limit effort="10" velocity="10" lower="-3.141592653589793" upper="3.141592653589793"/>-->
   </joint>
   <!-- Dummy Link head_oriented_yaw used for constraint setting in placo-kinematics -->
   <link name="dummy_torso_yaw">
