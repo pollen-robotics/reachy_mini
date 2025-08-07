@@ -23,7 +23,6 @@ from scipy.spatial.transform import Rotation as R
 import reachy_mini
 from reachy_mini.daemon.utils import daemon_check
 from reachy_mini.io import Client
-from reachy_mini.placo_kinematics import PlacoKinematics
 from reachy_mini.utils.interpolation import (
     linear_pose_interpolation,
     minimum_jerk,
@@ -101,11 +100,8 @@ class ReachyMini:
         daemon_check(spawn_daemon, use_sim)
         self.client = Client(localhost_only)
         self.client.wait_for_connection(timeout=timeout)
+        self.set_automatic_body_yaw(automatic_body_yaw)
         self._last_head_pose = None
-
-        self.head_kinematics = PlacoKinematics(
-            self.urdf_root_path, automatic_body_yaw=automatic_body_yaw
-        )
 
         self.K = np.array(
             [[550.3564, 0.0, 638.0112], [0.0, 549.1653, 364.589], [0.0, 0.0, 1.0]]
@@ -136,7 +132,7 @@ class ReachyMini:
         antennas: Optional[
             Union[np.ndarray, List[float]]
         ] = None,  # [left_angle, right_angle] (in rads)
-        body_yaw: Optional[float] = 0.0,  # Body yaw angle in radians
+        body_yaw: float = 0.0,  # Body yaw angle in radians
         check_collision: bool = False,  # Check for collisions before setting the position
     ) -> None:
         """Set the target pose of the head and/or the target position of the antennas.
@@ -154,33 +150,19 @@ class ReachyMini:
         if head is None and antennas is None:
             raise ValueError("At least one of head or antennas must be provided.")
 
-        if head is not None:
-            if not head.shape == (4, 4):
-                raise ValueError(
-                    f"Head pose must be a 4x4 matrix, got shape {head.shape}."
-                )
-            head_joint_positions = self.head_kinematics.ik(
-                head, body_yaw=body_yaw, check_collision=check_collision
+        if head is not None and not head.shape == (4, 4):
+            raise ValueError(f"Head pose must be a 4x4 matrix, got shape {head.shape}.")
+
+        if antennas is not None and not len(antennas) == 2:
+            raise ValueError(
+                "Antennas must be a list or 1D np array with two elements."
             )
 
-            # This means that a collision was detected
-            if head_joint_positions is None:
-                raise ValueError(
-                    f"The target head pose is not reachable (head pose: {head}). Check the kinematics or the collision detection."
-                )
-        else:
-            head_joint_positions = None
-
+        self._set_check_collision(check_collision)
         if antennas is not None:
-            if not len(antennas) == 2:
-                raise ValueError(
-                    "Antennas must be a list or 1D np array with two elements."
-                )
-            antenna_joint_positions = list(antennas)
-        else:
-            antenna_joint_positions = None
-
-        self._set_joint_positions(head_joint_positions, antenna_joint_positions)
+            self._set_joint_positions(antennas_joint_positions=list(antennas))
+        if head is not None:
+            self._set_head_pose(head, body_yaw)
         self._last_head_pose = head
 
     def goto_target(
@@ -216,22 +198,16 @@ class ReachyMini:
                 "Duration must be positive and non-zero. Use set_target() for immediate position setting."
             )
 
-        cur_head_joints, cur_antennas_joints = self._get_current_joint_positions()
+        cur_head_joints, cur_antennas_joints = self.get_current_joint_positions()
         start_body_yaw = cur_head_joints[0]
+        cur_head_pose = self.get_current_head_pose()
 
         if self._last_head_pose is None:
-            start_head_pose = self.head_kinematics.fk(cur_head_joints)
+            start_head_pose = cur_head_pose
         else:
             start_head_pose = self._last_head_pose
 
-        target_head_pose = (
-            self.head_kinematics.fk(cur_head_joints) if head is None else head
-        )
-
-        if target_head_pose is None:
-            raise ValueError(
-                f"The target head pose is not reachable (head pose: {target_head_pose}). Check the kinematics or the collision detection."
-            )
+        target_head_pose = cur_head_pose if head is None else head
 
         start_antennas = np.array(cur_antennas_joints)
         target_antennas = start_antennas if antennas is None else np.array(antennas)
@@ -280,8 +256,18 @@ class ReachyMini:
         """Put the robot to sleep by moving the head and antennas to a predefined sleep position."""
         # Check if we are too far from the initial position
         # Move to the initial position if necessary
-        current_positions, _ = self._get_current_joint_positions()
-        init_positions = self.head_kinematics.ik(INIT_HEAD_POSE)
+        current_positions, _ = self.get_current_joint_positions()
+        # init_positions = self.head_kinematics.ik(INIT_HEAD_POSE)
+        # Todo : get init position from the daemon?
+        init_positions = [
+            6.959852054044218e-07,
+            0.5251518455536499,
+            -0.668710345667336,
+            0.6067086443974802,
+            -0.606711497194891,
+            0.6687148024583701,
+            -0.5251586523105128,
+        ]
         dist = np.linalg.norm(np.array(current_positions) - np.array(init_positions))
         if dist > 0.2:
             self.goto_target(INIT_HEAD_POSE, antennas=[0.0, 0.0], duration=1)
@@ -324,8 +310,7 @@ class ReachyMini:
         ray_cam = np.array([x_n, y_n, 1.0])
         ray_cam /= np.linalg.norm(ray_cam)
 
-        cur_head_joints, _ = self._get_current_joint_positions()
-        T_world_head = self.head_kinematics.fk(cur_head_joints)
+        T_world_head = self.get_current_head_pose()
         T_world_cam = T_world_head @ self.T_head_cam
 
         R_wc = T_world_cam[:3, :3]
@@ -407,7 +392,7 @@ class ReachyMini:
         if pygame.mixer is None:
             print("Pygame mixer is not initialized. Cannot play sound.")
             return
-        pygame.mixer.music.load(f"{self.assets_root_path}/{sound_file}")
+        pygame.mixer.music.load(f"{ReachyMini.assets_root_path}/{sound_file}")
         pygame.mixer.music.play()
 
     def _goto_joint_positions(
@@ -438,7 +423,7 @@ class ReachyMini:
                 "Duration must be positive and non-zero. Use set_target() for immediate position setting."
             )
 
-        cur_head, cur_antennas = self._get_current_joint_positions()
+        cur_head, cur_antennas = self.get_current_joint_positions()
         current = cur_head + cur_antennas
 
         target = []
@@ -466,10 +451,10 @@ class ReachyMini:
             self._set_joint_positions(list(head_joint), list(antennas_joint))
             time.sleep(0.01)
 
-    def _get_current_joint_positions(self) -> tuple[list[float], list[float]]:
+    def get_current_joint_positions(self) -> tuple[list[float], list[float]]:
         """Get the current joint positions of the head and antennas.
 
-        [Internal] Get the current joint positions of the head and antennas (in rad)
+        Get the current joint positions of the head and antennas (in rad)
 
         Returns:
             tuple: A tuple containing two lists:
@@ -479,14 +464,21 @@ class ReachyMini:
         """
         return self.client.get_current_joints()
 
+    def get_current_head_pose(self) -> np.ndarray:
+        """Get the current head pose as a 4x4 matrix.
+
+        Get the current head pose as a 4x4 matrix.
+
+        Returns:
+            np.ndarray: A 4x4 matrix representing the current head pose.
+
+        """
+        return self.client.get_current_head_pose()
+
     def _set_joint_positions(
         self,
-        head_joint_positions: Optional[
-            List[float]
-        ],  # [yaw, stewart_platform x 6] length 7
-        antennas_joint_positions: Optional[
-            List[float]
-        ],  # [left_angle, right_angle] length 2
+        head_joint_positions: list[float] | None = None,
+        antennas_joint_positions: list[float] | None = None,
     ):
         """Set the joint positions of the head and/or antennas.
 
@@ -513,6 +505,31 @@ class ReachyMini:
             raise ValueError(
                 "At least one of head_joint_positions or antennas must be provided."
             )
+
+        self.client.send_command(json.dumps(cmd))
+
+    def _set_head_pose(self, pose: np.ndarray, body_yaw: float = 0.0) -> None:
+        """Set the head pose to a specific 4x4 matrix.
+
+        Args:
+            pose (np.ndarray): A 4x4 matrix representing the desired head pose.
+            body_yaw (float): The yaw angle of the body, used to adjust the head pose.
+
+        Raises:
+            ValueError: If the shape of the pose is not (4, 4).
+
+        """
+        cmd = {}
+
+        if pose is not None:
+            assert pose.shape == (4, 4), (
+                f"Head pose should be a 4x4 matrix, got {pose.shape}."
+            )
+            cmd["head_pose"] = pose.tolist()
+        else:
+            raise ValueError("Pose must be provided as a 4x4 matrix.")
+
+        cmd["body_yaw"] = body_yaw
 
         self.client.send_command(json.dumps(cmd))
 
@@ -546,12 +563,17 @@ class ReachyMini:
         self,
         head: Optional[bool] = None,
         antennas: Optional[bool] = None,
+        compensate_gravity: bool = False,
     ) -> None:
         """Set the head and/or antennas to compliant mode. This means that the motors will not resist external forces and will allow free movement.
+
+            The compensate_gravity argument will enable gravity compensation for the head motors if they are in the compliant mode,
+            In the non-compliant mode, the gravity compensation will have no effect.
 
         Args:
             head (bool): If True, set the head to compliant mode.
             antennas (bool): If True, set the antennas to compliant mode.
+            compensate_gravity (bool): If True, enable gravity compensation for the head motors.
 
         """
         if head is not None:
@@ -563,6 +585,11 @@ class ReachyMini:
             self._set_antennas_operation_mode(
                 0 if antennas else 3
             )  # 0 is compliant mode, 3 is position control mode
+
+        if compensate_gravity:
+            self.enable_gravity_compensation()
+        else:
+            self.disable_gravity_compensation()
 
     def _set_torque(self, on: bool):
         self.client.send_command(json.dumps({"torque": on}))
@@ -579,25 +606,28 @@ class ReachyMini:
         )
         self.client.send_command(json.dumps({"head_joint_current": list(current)}))
 
-    def compensate_gravity(self) -> None:
-        """Enable or disable gravity compensation for the head motors."""
-        # Even though in their docs dynamixes says that 1 count is 1 mA, in practice I've found it to be 3mA.
-        # I am not sure why this happens
-        # Another explanation is that our model is bad and the current is overestimated 3x (but I have not had these issues with other robots)
-        # So I am using a magic number to compensate for this.
-        # for currents under 30mA the constant is around 1
-        from_Nm_to_mA = (
-            1.47 / 0.52 * 1000
-        )  # Conversion factor from Nm to mA for the Stewart platform motors
-        # The torque constant is not linear, so we need to use a correction factor
-        # This is a magic number that should be determined experimentally
-        # For currents under 30mA, the constant is around 3
-        # Then it drops to 1.0 for currents above 1.5A
-        correction_factor = 3.0
-        # Get the current head joint positions
-        head_joints = self._get_current_joint_positions()[0]
-        gravity_torque = self.head_kinematics.compute_gravity_torque(head_joints)
-        # Convert the torque from Nm to mA
-        current = gravity_torque * from_Nm_to_mA / correction_factor
-        # Set the head joint current
-        self._set_head_joint_current(current)
+    def _set_check_collision(self, check: bool) -> None:
+        """Set whether to check for collisions.
+
+        Args:
+            check (bool): If True, the backend will check for collisions.
+
+        """
+        self.client.send_command(json.dumps({"check_collision": check}))
+
+    def enable_gravity_compensation(self) -> None:
+        """Enable gravity compensation for the head motors."""
+        self.client.send_command(json.dumps({"gravity_compensation": True}))
+
+    def disable_gravity_compensation(self) -> None:
+        """Disable gravity compensation for the head motors."""
+        self.client.send_command(json.dumps({"gravity_compensation": False}))
+
+    def set_automatic_body_yaw(self, body_yaw: float) -> None:
+        """Set the automatic body yaw.
+
+        Args:
+            body_yaw (float): The yaw angle of the body in radians.
+
+        """
+        self.client.send_command(json.dumps({"automatic_body_yaw": body_yaw}))

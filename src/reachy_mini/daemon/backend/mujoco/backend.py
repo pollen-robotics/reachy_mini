@@ -121,17 +121,34 @@ class MujocoBackend(Backend):
                 start_t = time.time()
 
                 if step % self.decimation == 0:
-                    if self.head_joint_positions is not None:
-                        self.data.ctrl[:7] = self.head_joint_positions
-                    if self.antenna_joint_positions is not None:
-                        self.data.ctrl[-2:] = self.antenna_joint_positions
+                    head_positions = self.get_present_head_joint_positions()
+                    antenna_positions = self.get_present_antenna_joint_positions()
 
-                    if self.joint_positions_publisher is not None:
+                    # updating the head kinematics model
+                    # it will update the head kinematics
+                    self.update_head_kinematics_model(head_positions, antenna_positions)
+
+                    if self.target_head_joint_positions is not None:
+                        self.data.ctrl[:7] = self.target_head_joint_positions
+                    if self.target_antenna_joint_positions is not None:
+                        self.data.ctrl[-2:] = self.target_antenna_joint_positions
+
+                    if (
+                        self.joint_positions_publisher is not None
+                        and self.pose_publisher is not None
+                    ):
                         self.joint_positions_publisher.put(
                             json.dumps(
                                 {
-                                    "head_joint_positions": self.get_head_joint_positions(),
-                                    "antennas_joint_positions": self.get_antenna_joint_positions(),
+                                    "head_joint_positions": head_positions,
+                                    "antennas_joint_positions": antenna_positions,
+                                }
+                            ).encode("utf-8")
+                        )
+                        self.pose_publisher.put(
+                            json.dumps(
+                                {
+                                    "head_pose": self.get_present_head_pose().tolist(),
                                 }
                             ).encode("utf-8")
                         )
@@ -144,11 +161,25 @@ class MujocoBackend(Backend):
                 step += 1
                 self.ready.set()
 
-    def get_head_joint_positions(self):
+    def close(self) -> None:
+        """Close the Mujoco backend."""
+        # TODO Do something in mujoco here ?
+        pass
+
+    def get_status(self) -> "MujocoBackendStatus":
+        """Get the status of the Mujoco backend.
+
+        Returns:
+            dict: An empty dictionary as the Mujoco backend does not have a specific status to report.
+
+        """
+        return MujocoBackendStatus()
+
+    def get_present_head_joint_positions(self):
         """Get the current joint positions of the head."""
         return self.data.qpos[self.joint_qpos_addr[:7]].flatten().tolist()
 
-    def get_antenna_joint_positions(self):
+    def get_present_antenna_joint_positions(self):
         """Get the current joint positions of the antennas."""
         return self.data.qpos[self.joint_qpos_addr[-2:]].flatten().tolist()
 
@@ -166,11 +197,6 @@ class MujocoBackend(Backend):
         """
         pass
 
-    def close(self) -> None:
-        """Close the Mujoco backend."""
-        # TODO Do something in mujoco here ?
-        pass
-
     def set_head_operation_mode(self, mode: int) -> None:
         """Set mode of operation for the head.
 
@@ -184,15 +210,6 @@ class MujocoBackend(Backend):
         This does nothing in the Mujoco backend as it does not have a concept of operation modes.
         """
         pass
-
-    def get_status(self) -> "MujocoBackendStatus":
-        """Get the status of the Mujoco backend.
-
-        Returns:
-            dict: An empty dictionary as the Mujoco backend does not have a specific status to report.
-
-        """
-        return MujocoBackendStatus()
 
 
 @dataclass
