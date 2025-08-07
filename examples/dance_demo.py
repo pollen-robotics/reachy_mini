@@ -43,6 +43,7 @@ class Config:
     neutral_pos: np.ndarray = field(default_factory=lambda: np.array([0, 0, 0.0]))
     neutral_eul: np.ndarray = field(default_factory=lambda: np.zeros(3))
     choreography_path: Optional[str] = None
+    disable_keyboard: bool = False
 
 
 # --- Constants for UI ---
@@ -226,9 +227,13 @@ def main(config: Config) -> None:
         else:
             return
 
-    threading.Thread(
-        target=keyboard_listener_thread, args=(shared_state, stop_event), daemon=True
-    ).start()
+    # Conditionally start the keyboard listener thread based on config
+    if not config.disable_keyboard:
+        threading.Thread(
+            target=keyboard_listener_thread,
+            args=(shared_state, stop_event),
+            daemon=True,
+        ).start()
 
     move_names: List[str] = list(AVAILABLE_MOVES.keys())
     waveforms: List[str] = ["sin", "cos", "triangle", "square", "sawtooth"]
@@ -257,8 +262,12 @@ def main(config: Config) -> None:
             print(f"Robot connected. Starting {mode_text}...")
             mini.wake_up()
 
-            print(INTERACTIVE_HELP_MESSAGE)
-            last_help_print_time = time.time()
+            if not config.disable_keyboard:
+                print(INTERACTIVE_HELP_MESSAGE)
+                last_help_print_time = time.time()
+            else:
+                print("Keyboard input disabled. Use Ctrl+C to exit.")
+
             last_loop_time = time.time()
 
             while not stop_event.is_set():
@@ -395,7 +404,10 @@ def main(config: Config) -> None:
                     sys.stdout.flush()
                     last_status_print_time = loop_start_time
 
-                if loop_start_time - last_help_print_time > 30.0:
+                # <<< Conditionally check for re-printing help
+                if not config.disable_keyboard and (
+                    loop_start_time - last_help_print_time > 30.0
+                ):
                     print(f"\n{INTERACTIVE_HELP_MESSAGE}")
                     last_help_print_time = loop_start_time
 
@@ -440,6 +452,11 @@ if __name__ == "__main__":
         default=None,
         help="Path to a JSON choreography file to play. Overrides interactive mode.",
     )
+    parser.add_argument(
+        "--no-keyboard",
+        action="store_true",
+        help="Disable interactive keyboard controls.",
+    )
 
     cli_args = parser.parse_args()
 
@@ -462,6 +479,7 @@ if __name__ == "__main__":
         start_move=cli_args.start_move,
         beats_per_sequence=cli_args.beats_per_sequence,
         choreography_path=cli_args.choreography,
+        disable_keyboard=cli_args.no_keyboard,
     )
 
     main(app_config)
