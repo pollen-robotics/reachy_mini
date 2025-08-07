@@ -61,6 +61,10 @@ class ZenohClient(AbstractClient):
             self._handle_head_pose,
         )
 
+        self.recording_sub = self.session.declare_subscriber(
+            "reachy_mini/recorded_data",
+            self._handle_recorded_data,
+        )
         self._last_head_joint_positions = None
         self._last_antennas_joint_positions = None
         self._last_head_joint_current = None
@@ -114,6 +118,14 @@ class ZenohClient(AbstractClient):
             )
             self.joint_position_received.set()
 
+    def _handle_recorded_data(self, sample):
+        """Handle incoming recorded data."""
+        print("Received recorded data.")
+        if sample.payload:
+            data = json.loads(sample.payload.to_string())
+            self._recorded_data = data
+        print(f"Recorded data: {len(self._recorded_data)} frames received.")
+
     def get_current_joints(self) -> tuple[list[float], list[float]]:
         """Get the current joint positions."""
         assert (
@@ -124,6 +136,10 @@ class ZenohClient(AbstractClient):
             self._last_head_joint_positions.copy(),
             self._last_antennas_joint_positions.copy(),
         )
+
+    def get_recorded_data(self) -> list[dict]:
+        """Get the recorded data."""
+        return self._recorded_data.copy()
 
     def _handle_joint_current(self, sample):
         """Handle incoming joint current."""
