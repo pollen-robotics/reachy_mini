@@ -134,6 +134,7 @@ class ReachyMini:
         ] = None,  # [left_angle, right_angle] (in rads)
         body_yaw: float = 0.0,  # Body yaw angle in radians
         check_collision: bool = False,  # Check for collisions before setting the position
+        record: Optional[Dict] = None,  # Record the command data
     ) -> None:
         """Set the target pose of the head and/or the target position of the antennas.
 
@@ -142,6 +143,7 @@ class ReachyMini:
             antennas (Optional[Union[np.ndarray, List[float]]]): 1D array with two elements representing the angles of the antennas in radians.
             body_yaw (Optional[float]): Body yaw angle in radians.
             check_collision (bool): If True, checks for collisions before setting the position. Beware that this will slow down the IK computation (~1ms).
+            record (Optional[Dict]): If True, all the parameters will be recorded daemon-side.
 
         Raises:
             ValueError: If neither head nor antennas are provided, or if the shape of head is not (4, 4), or if antennas is not a 1D array with two elements.
@@ -150,52 +152,29 @@ class ReachyMini:
         if head is None and antennas is None:
             raise ValueError("At least one of head or antennas must be provided.")
 
-<<<<<<< HEAD
         if head is not None and not head.shape == (4, 4):
             raise ValueError(f"Head pose must be a 4x4 matrix, got shape {head.shape}.")
 
         if antennas is not None and not len(antennas) == 2:
             raise ValueError(
                 "Antennas must be a list or 1D np array with two elements."
-=======
-        record = {
-            "time": time.time(),
-            "head": head.tolist() if head is not None else None,
-            "antennas": list(antennas) if antennas is not None else None,
-            "body_yaw": body_yaw,
-            "check_collision": check_collision,
-        }
-
-        if head is not None:
-            if not head.shape == (4, 4):
-                raise ValueError(
-                    f"Head pose must be a 4x4 matrix, got shape {head.shape}."
-                )
-            head_joint_positions = self.head_kinematics.ik(
-                head, body_yaw=body_yaw, check_collision=check_collision
->>>>>>> 148-temporary-motion-record-system
             )
 
         self._set_check_collision(check_collision)
         if antennas is not None:
-<<<<<<< HEAD
             self._set_joint_positions(antennas_joint_positions=list(antennas))
         if head is not None:
             self._set_head_pose(head, body_yaw)
-=======
-            if not len(antennas) == 2:
-                raise ValueError(
-                    "Antennas must be a list or 1D np array with two elements."
-                )
-            antenna_joint_positions = list(antennas)
-        else:
-            antenna_joint_positions = None
-
-        self._set_joint_positions(
-            head_joint_positions, antenna_joint_positions, record=record
-        )
->>>>>>> 148-temporary-motion-record-system
         self._last_head_pose = head
+        if record is not None:
+            record = {
+                "time": time.time(),
+                "head": head.tolist() if head is not None else None,
+                "antennas": list(antennas) if antennas is not None else None,
+                "body_yaw": body_yaw,
+                "check_collision": check_collision,
+            }
+            self._set_record_data(record)
 
     def goto_target(
         self,
@@ -509,18 +488,8 @@ class ReachyMini:
 
     def _set_joint_positions(
         self,
-<<<<<<< HEAD
         head_joint_positions: list[float] | None = None,
         antennas_joint_positions: list[float] | None = None,
-=======
-        head_joint_positions: Optional[
-            List[float]
-        ],  # [yaw, stewart_platform x 6] length 7
-        antennas_joint_positions: Optional[
-            List[float]
-        ],  # [left_angle, right_angle] length 2
-        record: Optional[Dict] = None,  # If recording, the command will be logged
->>>>>>> 148-temporary-motion-record-system
     ):
         """Set the joint positions of the head and/or antennas.
 
@@ -548,12 +517,9 @@ class ReachyMini:
             raise ValueError(
                 "At least one of head_joint_positions or antennas must be provided."
             )
-        if record is not None:
-            cmd["set_target_record"] = record
 
         self.client.send_command(json.dumps(cmd))
 
-<<<<<<< HEAD
     def _set_head_pose(self, pose: np.ndarray, body_yaw: float = 0.0) -> None:
         """Set the head pose to a specific 4x4 matrix.
 
@@ -578,7 +544,7 @@ class ReachyMini:
         cmd["body_yaw"] = body_yaw
 
         self.client.send_command(json.dumps(cmd))
-=======
+
     def start_recording(self) -> None:
         """Start recording data."""
         self.client.send_command(json.dumps({"start_recording": True}))
@@ -592,7 +558,6 @@ class ReachyMini:
         recorded_data = self.client.get_recorded_data()
 
         return recorded_data
->>>>>>> 148-temporary-motion-record-system
 
     def _set_head_operation_mode(self, mode: int) -> None:
         """Set the operation mode for the head motors.
@@ -611,6 +576,19 @@ class ReachyMini:
 
         """
         self.client.send_command(json.dumps({"antennas_operation_mode": mode}))
+
+    def _set_record_data(self, record: Dict) -> None:
+        """Set the record data to be logged by the backend.
+
+        Args:
+            record (Dict): The record data to be logged.
+
+        """
+        if not isinstance(record, dict):
+            raise ValueError("Record must be a dictionary.")
+
+        # Send the record data to the backend
+        self.client.send_command(json.dumps({"set_target_record": record}))
 
     def enable_motors(self) -> None:
         """Enable the motors."""

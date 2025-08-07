@@ -8,11 +8,8 @@ It is designed to be extended by subclasses that implement the specific behavior
 each type of backend.
 """
 
-<<<<<<< HEAD
 import logging
-=======
 import json
->>>>>>> 148-temporary-motion-record-system
 import threading
 from importlib.resources import files
 from typing import List
@@ -163,9 +160,7 @@ class Backend:
         )
 
         if joints is None or np.any(np.isnan(joints)):
-            raise ValueError(
-                "WARNING: Collision detected or head pose not achievable!"
-            )
+            raise ValueError("WARNING: Collision detected or head pose not achievable!")
 
         # update the target head pose and body yaw
         self.target_head_pose = pose
@@ -200,7 +195,7 @@ class Backend:
 
         """
         self.target_head_joint_current = current
-        
+
     def set_recording_publisher(self, publisher) -> None:
         """Set the publisher for recording data.
 
