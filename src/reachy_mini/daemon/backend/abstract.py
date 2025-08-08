@@ -58,6 +58,7 @@ class Backend:
         self._target_body_yaw = None  # Last body yaw used in IK computations
         self.target_head_joint_current = None  # Placeholder for head joint torque
         self.target_head_operation_mode = None  # Placeholder for head operation mode
+        self._last_collision_check = None  # Track the last collision flag used in IK
 
         # Tolerance for kinematics computations
         # For Forward kinematics (around 0.25deg)
@@ -69,6 +70,9 @@ class Backend:
             "rad": 2e-3,  # rads
             "m": 0.5e-3,  # m
         }
+
+        # Recording lock to guard buffer swaps and appends
+        self._rec_lock = threading.Lock()
 
     # Life cycle methods
     def wrapped_run(self):
@@ -187,7 +191,7 @@ class Backend:
         """
         self.target_antenna_joint_positions = positions
 
-    def set_target_head_joint_current(self, current: List[int]) -> None:
+    def set_target_head_joint_current(self, current: List[float]) -> None:
         """Set the head joint current.
 
         Args:
@@ -212,20 +216,32 @@ class Backend:
             record (dict): A dictionary containing the record data to be appended.
 
         """
-        if self.is_recording:
-            self.recorded_data.append(record)
+        if not self.is_recording:
+            return
+        # Double-check under lock to avoid race with stop_recording
+        with self._rec_lock:
+            if self.is_recording:
+                self.recorded_data.append(record)
 
     def start_recording(self) -> None:
         """Start recording data."""
-        self.recorded_data = []
-        self.is_recording = True
+        with self._rec_lock:
+            self.recorded_data = []
+            self.is_recording = True
 
     def stop_recording(self) -> None:
         """Stop recording data and publish the recorded data."""
-        self.is_recording = False
-        recorded_data = self.recorded_data.copy()
-        self.recording_publisher.put(json.dumps(recorded_data))
-        self.recorded_data.clear()
+        # Swap buffer under lock so writers cannot touch the published list
+        with self._rec_lock:
+            self.is_recording = False
+            recorded_data, self.recorded_data = self.recorded_data, []
+        # Publish outside the lock
+        if self.recording_publisher is not None:
+            self.recording_publisher.put(json.dumps(recorded_data))
+        else:
+            self.logger.warning(
+                "stop_recording called but recording_publisher is not set; dropping data."
+            )
 
     def set_head_operation_mode(self, mode: int) -> None:
         """Set mode of operation for the head."""
@@ -257,7 +273,7 @@ class Backend:
         This method is a placeholder and should be overridden by subclasses.
         """
         raise NotImplementedError(
-            "The method get_head_joint_positions should be overridden by subclasses."
+            "The method get_present_head_joint_positions should be overridden by subclasses."
         )
 
     def get_present_head_pose(self) -> np.ndarray:
@@ -273,7 +289,7 @@ class Backend:
         This method is a placeholder and should be overridden by subclasses.
         """
         raise NotImplementedError(
-            "The method get_antenna_joint_positions should be overridden by subclasses."
+            "The method get_present_antenna_joint_positions should be overridden by subclasses."
         )
 
     # Kinematics methods
@@ -301,7 +317,7 @@ class Backend:
         Note:
             This method will update the `current_head_pose` and `current_head_joint_positions`
             attributes of the backend instance with the computed values. And the `current_antenna_joint_positions` if provided.
-
+            
         """
         if head_joint_positions is None:
             head_joint_positions = self.get_present_head_joint_positions()
