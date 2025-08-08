@@ -61,11 +61,17 @@ class ZenohClient(AbstractClient):
             self._handle_head_pose,
         )
 
+        self.recording_sub = self.session.declare_subscriber(
+            "reachy_mini/recorded_data",
+            self._handle_recorded_data,
+        )
         self._last_head_joint_positions = None
         self._last_antennas_joint_positions = None
         self._last_head_joint_current = None
         self._last_head_operation_mode = None
         self._last_head_pose = None
+        self._recorded_data = None
+        self._recorded_data_ready = threading.Event()
 
     def wait_for_connection(self, timeout: float = 5.0):
         """Wait for the client to connect to the server.
@@ -114,6 +120,15 @@ class ZenohClient(AbstractClient):
             )
             self.joint_position_received.set()
 
+    def _handle_recorded_data(self, sample):
+        """Handle incoming recorded data."""
+        print("Received recorded data.")
+        if sample.payload:
+            data = json.loads(sample.payload.to_string())
+            self._recorded_data = data
+            self._recorded_data_ready.set()
+        print(f"Recorded data: {len(self._recorded_data)} frames received.")
+
     def get_current_joints(self) -> tuple[list[float], list[float]]:
         """Get the current joint positions."""
         assert (
@@ -124,6 +139,20 @@ class ZenohClient(AbstractClient):
             self._last_head_joint_positions.copy(),
             self._last_antennas_joint_positions.copy(),
         )
+
+    def wait_for_recorded_data(self, timeout: float = 5.0) -> bool:
+        """Block until the daemon publishes the frames (or timeout)."""
+        return self._recorded_data_ready.wait(timeout)
+
+    def get_recorded_data(self, wait: bool = True, timeout: float = 5.0) -> list[dict]:
+        """Return the cached recording, optionally blocking until it arrives.
+
+        Raises `TimeoutError` if nothing shows up in time.
+        """
+        if wait and not self._recorded_data_ready.wait(timeout):
+            raise TimeoutError("Recording not received in time.")
+        self._recorded_data_ready.clear()  # ready for next run
+        return self._recorded_data.copy()
 
     def _handle_joint_current(self, sample):
         """Handle incoming joint current."""

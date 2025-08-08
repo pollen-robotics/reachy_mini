@@ -9,7 +9,7 @@ It also includes methods for multimedia interactions like playing sounds and loo
 import json
 import os
 import time
-from typing import List, Optional, Union
+from typing import Dict, List, Optional, Union
 
 os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "hide"
 
@@ -102,6 +102,7 @@ class ReachyMini:
         self.client.wait_for_connection(timeout=timeout)
         self.set_automatic_body_yaw(automatic_body_yaw)
         self._last_head_pose = None
+        self.is_recording = False
 
         self.K = np.array(
             [[550.3564, 0.0, 638.0112], [0.0, 549.1653, 364.589], [0.0, 0.0, 1.0]]
@@ -164,6 +165,15 @@ class ReachyMini:
         if head is not None:
             self._set_head_pose(head, body_yaw)
         self._last_head_pose = head
+
+        record = {
+            "time": time.time(),
+            "head": head.tolist() if head is not None else None,
+            "antennas": list(antennas) if antennas is not None else None,
+            "body_yaw": body_yaw,
+            "check_collision": check_collision,
+        }
+        self._set_record_data(record)
 
     def goto_target(
         self,
@@ -487,6 +497,7 @@ class ReachyMini:
         Args:
             head_joint_positions (Optional[List[float]]): List of head joint positions in radians (length 7).
             antennas_joint_positions (Optional[List[float]]): List of antennas joint positions in radians (length 2).
+            record (Optional[Dict]): If provided, the command will be logged with the given record data.
 
         """
         cmd = {}
@@ -533,6 +544,21 @@ class ReachyMini:
 
         self.client.send_command(json.dumps(cmd))
 
+    def start_recording(self) -> None:
+        """Start recording data."""
+        self.client.send_command(json.dumps({"start_recording": True}))
+        self.is_recording = True
+
+    def stop_recording(self) -> List[Dict]:
+        """Stop recording data and return the recorded data."""
+        self.client.send_command(json.dumps({"stop_recording": True}))
+        self.is_recording = False
+        if not self.client.wait_for_recorded_data(timeout=5):
+            raise RuntimeError("Daemon did not provide recorded data in time!")
+        recorded_data = self.client.get_recorded_data(wait=False)
+
+        return recorded_data
+
     def _set_head_operation_mode(self, mode: int) -> None:
         """Set the operation mode for the head motors.
 
@@ -550,6 +576,19 @@ class ReachyMini:
 
         """
         self.client.send_command(json.dumps({"antennas_operation_mode": mode}))
+
+    def _set_record_data(self, record: Dict) -> None:
+        """Set the record data to be logged by the backend.
+
+        Args:
+            record (Dict): The record data to be logged.
+
+        """
+        if not isinstance(record, dict):
+            raise ValueError("Record must be a dictionary.")
+
+        # Send the record data to the backend
+        self.client.send_command(json.dumps({"set_target_record": record}))
 
     def enable_motors(self) -> None:
         """Enable the motors."""
