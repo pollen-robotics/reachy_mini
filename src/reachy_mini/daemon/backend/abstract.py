@@ -217,8 +217,8 @@ class Backend:
 
     def start_recording(self) -> None:
         """Start recording data."""
-        self.is_recording = True
         self.recorded_data = []
+        self.is_recording = True
 
     def stop_recording(self) -> None:
         """Stop recording data and publish the recorded data."""

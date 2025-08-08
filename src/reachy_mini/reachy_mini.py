@@ -548,13 +548,11 @@ class ReachyMini:
         """Start recording data."""
         self.client.send_command(json.dumps({"start_recording": True}))
         self.is_recording = True
-        print("Recording started. Data will be logged until stop_recording is called.")
 
     def stop_recording(self) -> List[Dict]:
         """Stop recording data and return the recorded data."""
         self.client.send_command(json.dumps({"stop_recording": True}))
         self.is_recording = False
-        print("Recording stopped. Retrieving recorded data...")
         if not self.client.wait_for_recorded_data(timeout=5):
             raise RuntimeError("Daemon did not provide recorded data in time!")
         recorded_data = self.client.get_recorded_data(wait=False)
