@@ -1,3 +1,5 @@
+"""Protocol definitions for Reachy Mini client/server communication."""
+
 from datetime import datetime
 from uuid import UUID
 
