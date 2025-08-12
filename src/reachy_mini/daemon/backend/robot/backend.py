@@ -153,7 +153,7 @@ class RobotBackend(Backend):
                 self.pose_publisher.put(
                     json.dumps(
                         {
-                            "head_pose": self.get_head_pose().tolist(),
+                            "head_pose": self.get_present_head_pose().tolist(),
                         }
                     )
                 )
@@ -210,6 +210,15 @@ class RobotBackend(Backend):
                 self._stats["timestamps"].clear()
                 self._stats["nb_error"] = 0
                 self.stats_record_t0 = time.time()
+
+    def close(self) -> None:
+        """Close the motor controller connection."""
+        self.c = None
+
+    def get_status(self) -> "RobotBackendStatus":
+        """Get the current status of the robot backend."""
+        self._status.error = self.error
+        return self._status
 
     def enable_motors(self) -> None:
         """Enable the motors by turning the torque on."""
@@ -326,7 +335,7 @@ class RobotBackend(Backend):
 
         return [yaw] + list(dofs), list(antennas)
 
-    def get_head_joint_positions(self) -> list:
+    def get_present_head_joint_positions(self) -> list:
         """Get the current joint positions of the head.
 
         Returns:
@@ -335,7 +344,7 @@ class RobotBackend(Backend):
         """
         return self.get_all_joint_positions()[0]
 
-    def get_antenna_joint_positions(self) -> list:
+    def get_present_antenna_joint_positions(self) -> list:
         """Get the current joint positions of the antennas.
 
         Returns:
@@ -343,15 +352,6 @@ class RobotBackend(Backend):
 
         """
         return self.get_all_joint_positions()[1]
-
-    def close(self) -> None:
-        """Close the motor controller connection."""
-        self.c = None
-
-    def get_status(self) -> "RobotBackendStatus":
-        """Get the current status of the robot backend."""
-        self._status.error = self.error
-        return self._status
 
 
 @dataclass

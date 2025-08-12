@@ -9,7 +9,7 @@ It also includes methods for multimedia interactions like playing sounds and loo
 import json
 import os
 import time
-from typing import List, Optional, Union
+from typing import Dict, List, Optional, Union
 
 os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "hide"
 
@@ -102,6 +102,7 @@ class ReachyMini:
         self.client.wait_for_connection(timeout=timeout)
         self.set_automatic_body_yaw(automatic_body_yaw)
         self._last_head_pose = None
+        self.is_recording = False
 
         self.K = np.array(
             [[550.3564, 0.0, 638.0112], [0.0, 549.1653, 364.589], [0.0, 0.0, 1.0]]
@@ -159,9 +160,20 @@ class ReachyMini:
             )
 
         self._set_check_collision(check_collision)
-        self._set_joint_positions(None, list(antennas))
-        self._set_head_pose(head, body_yaw)
+        if antennas is not None:
+            self._set_joint_positions(antennas_joint_positions=list(antennas))
+        if head is not None:
+            self._set_head_pose(head, body_yaw)
         self._last_head_pose = head
+
+        record = {
+            "time": time.time(),
+            "head": head.tolist() if head is not None else None,
+            "antennas": list(antennas) if antennas is not None else None,
+            "body_yaw": body_yaw,
+            "check_collision": check_collision,
+        }
+        self._set_record_data(record)
 
     def goto_target(
         self,
@@ -196,9 +208,9 @@ class ReachyMini:
                 "Duration must be positive and non-zero. Use set_target() for immediate position setting."
             )
 
-        cur_head_joints, cur_antennas_joints = self._get_current_joint_positions()
+        cur_head_joints, cur_antennas_joints = self.get_current_joint_positions()
         start_body_yaw = cur_head_joints[0]
-        cur_head_pose = self._get_current_head_pose()
+        cur_head_pose = self.get_current_head_pose()
 
         if self._last_head_pose is None:
             start_head_pose = cur_head_pose
@@ -254,7 +266,7 @@ class ReachyMini:
         """Put the robot to sleep by moving the head and antennas to a predefined sleep position."""
         # Check if we are too far from the initial position
         # Move to the initial position if necessary
-        current_positions, _ = self._get_current_joint_positions()
+        current_positions, _ = self.get_current_joint_positions()
         # init_positions = self.head_kinematics.ik(INIT_HEAD_POSE)
         # Todo : get init position from the daemon?
         init_positions = [
@@ -308,7 +320,7 @@ class ReachyMini:
         ray_cam = np.array([x_n, y_n, 1.0])
         ray_cam /= np.linalg.norm(ray_cam)
 
-        T_world_head = self._get_current_head_pose()
+        T_world_head = self.get_current_head_pose()
         T_world_cam = T_world_head @ self.T_head_cam
 
         R_wc = T_world_cam[:3, :3]
@@ -421,7 +433,7 @@ class ReachyMini:
                 "Duration must be positive and non-zero. Use set_target() for immediate position setting."
             )
 
-        cur_head, cur_antennas = self._get_current_joint_positions()
+        cur_head, cur_antennas = self.get_current_joint_positions()
         current = cur_head + cur_antennas
 
         target = []
@@ -449,10 +461,10 @@ class ReachyMini:
             self._set_joint_positions(list(head_joint), list(antennas_joint))
             time.sleep(0.01)
 
-    def _get_current_joint_positions(self) -> tuple[list[float], list[float]]:
+    def get_current_joint_positions(self) -> tuple[list[float], list[float]]:
         """Get the current joint positions of the head and antennas.
 
-        [Internal] Get the current joint positions of the head and antennas (in rad)
+        Get the current joint positions of the head and antennas (in rad)
 
         Returns:
             tuple: A tuple containing two lists:
@@ -462,10 +474,10 @@ class ReachyMini:
         """
         return self.client.get_current_joints()
 
-    def _get_current_head_pose(self) -> np.ndarray:
+    def get_current_head_pose(self) -> np.ndarray:
         """Get the current head pose as a 4x4 matrix.
 
-        [Internal] Get the current head pose as a 4x4 matrix.
+        Get the current head pose as a 4x4 matrix.
 
         Returns:
             np.ndarray: A 4x4 matrix representing the current head pose.
@@ -475,12 +487,8 @@ class ReachyMini:
 
     def _set_joint_positions(
         self,
-        head_joint_positions: Optional[
-            List[float]
-        ],  # [yaw, stewart_platform x 6] length 7
-        antennas_joint_positions: Optional[
-            List[float]
-        ],  # [left_angle, right_angle] length 2
+        head_joint_positions: list[float] | None = None,
+        antennas_joint_positions: list[float] | None = None,
     ):
         """Set the joint positions of the head and/or antennas.
 
@@ -489,6 +497,7 @@ class ReachyMini:
         Args:
             head_joint_positions (Optional[List[float]]): List of head joint positions in radians (length 7).
             antennas_joint_positions (Optional[List[float]]): List of antennas joint positions in radians (length 2).
+            record (Optional[Dict]): If provided, the command will be logged with the given record data.
 
         """
         cmd = {}
@@ -535,6 +544,21 @@ class ReachyMini:
 
         self.client.send_command(json.dumps(cmd))
 
+    def start_recording(self) -> None:
+        """Start recording data."""
+        self.client.send_command(json.dumps({"start_recording": True}))
+        self.is_recording = True
+
+    def stop_recording(self) -> List[Dict]:
+        """Stop recording data and return the recorded data."""
+        self.client.send_command(json.dumps({"stop_recording": True}))
+        self.is_recording = False
+        if not self.client.wait_for_recorded_data(timeout=5):
+            raise RuntimeError("Daemon did not provide recorded data in time!")
+        recorded_data = self.client.get_recorded_data(wait=False)
+
+        return recorded_data
+
     def _set_head_operation_mode(self, mode: int) -> None:
         """Set the operation mode for the head motors.
 
@@ -552,6 +576,19 @@ class ReachyMini:
 
         """
         self.client.send_command(json.dumps({"antennas_operation_mode": mode}))
+
+    def _set_record_data(self, record: Dict) -> None:
+        """Set the record data to be logged by the backend.
+
+        Args:
+            record (Dict): The record data to be logged.
+
+        """
+        if not isinstance(record, dict):
+            raise ValueError("Record must be a dictionary.")
+
+        # Send the record data to the backend
+        self.client.send_command(json.dumps({"set_target_record": record}))
 
     def enable_motors(self) -> None:
         """Enable the motors."""

@@ -16,22 +16,23 @@ def main():
         t0 = time.time()
 
         root = tk.Tk()
-        root.title("Set Head Euler Angles")
+        slider_length = 200
+        root.title("Target Position and Orientation")
 
         roll_var = tk.DoubleVar(value=0.0)
         pitch_var = tk.DoubleVar(value=0.0)
         yaw_var = tk.DoubleVar(value=0.0)
 
         tk.Label(root, text="Roll (deg):").grid(row=0, column=0)
-        tk.Scale(root, variable=roll_var, from_=-90, to=90, orient=tk.HORIZONTAL).grid(
+        tk.Scale(root, variable=roll_var, from_=-180, to=180, orient=tk.HORIZONTAL, length=slider_length).grid(
             row=0, column=1
         )
         tk.Label(root, text="Pitch (deg):").grid(row=1, column=0)
-        tk.Scale(root, variable=pitch_var, from_=-90, to=90, orient=tk.HORIZONTAL).grid(
+        tk.Scale(root, variable=pitch_var, from_=-180, to=180, orient=tk.HORIZONTAL, length=slider_length).grid(
             row=1, column=1
         )
         tk.Label(root, text="Yaw (deg):").grid(row=2, column=0)
-        tk.Scale(root, variable=yaw_var, from_=-180, to=180, orient=tk.HORIZONTAL).grid(
+        tk.Scale(root, variable=yaw_var, from_=-180, to=180, orient=tk.HORIZONTAL, length=slider_length).grid(
             row=2, column=1
         )
 
@@ -48,6 +49,7 @@ def main():
             to=0.05,
             resolution=0.001,
             orient=tk.HORIZONTAL,
+            length=slider_length
         ).grid(row=3, column=1)
         tk.Label(root, text="Y (m):").grid(row=4, column=0)
         tk.Scale(
@@ -57,6 +59,7 @@ def main():
             to=0.05,
             resolution=0.001,
             orient=tk.HORIZONTAL,
+            length=slider_length
         ).grid(row=4, column=1)
         tk.Label(root, text="Z (m):").grid(row=5, column=0)
         tk.Scale(
@@ -66,6 +69,7 @@ def main():
             to=0.05,
             resolution=0.001,
             orient=tk.HORIZONTAL,
+            length=slider_length
         ).grid(row=5, column=1)
 
         # Add slider for Body Yaw
@@ -77,6 +81,7 @@ def main():
             from_=-180,
             to=180,
             orient=tk.HORIZONTAL,
+            length=slider_length
         ).grid(row=6, column=1)
 
         # Add checkbox for automatic body yaw
@@ -116,6 +121,7 @@ def main():
                 body_yaw=np.deg2rad(body_yaw_var.get()),
                 check_collision=False,
             )
+            time.sleep(0.02)
 
 
 if __name__ == "__main__":

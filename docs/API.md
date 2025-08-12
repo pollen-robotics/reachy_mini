@@ -4,7 +4,7 @@
 
 ## ReachyMini
 
-Reachy Mini's API is designed to be simple and intuitive. You will mostly interact with the `ReachyMini` class, which provides methods to control the robot's joints such as the head and antennas and interacti with its sensors.
+Reachy Mini's API is designed to be simple and intuitive. You will mostly interact with the `ReachyMini` class, which provides methods to control the robot's joints such as the head and antennas and interact with its sensors.
 
 The first step is to instantiate the `ReachyMini` class. This can be done as follows:
 
@@ -168,6 +168,58 @@ with ReachyMini() as reachy:
         time.sleep(0.01)
 ```
 
+⚠️ <b>BEWARE: Mini's head range of motion is limited</b> ⚠️
+
+
+When it comes to the reachy mini's head, it is important to note that it has several physical limitations of its head and body position and orientation 
+capabilities. Such as:
+1. The robots motors have a limited range of motion
+2. The robot's head can collide with the body
+3. The robot's body rotation (body yaw) is limited to [-180, 180] degrees.
+
+In addition to the physical limitations, the robot has several software safety features that limit the head's position and orientation. These safety features are designed to prevent the robot from moving to unsafe positions or orientations that could cause damage to the robot or its surroundings.
+
+4. The head's pitch and roll angles are limited to [-40, 40] degrees.
+5. The head's yaw angle is limited to [-180, 180] degrees
+6. The difference between the body yaw and head yaw angles is limited to [-65, 65] degrees.
+
+If any of these limits are exceeded, the robot will move to the closest valid position within the limits.
+
+For example, if you try to move the head to an orientation that exceeds the limits, such as:
+
+```python
+reachy.goto_target(head=create_head_pose(roll=-50, degrees=True))
+```
+
+The robot will not be able to follow due to the safety limit 4.
+
+Or another example, if you try to move the body yaw to an angle that exceeds the limits, such as:
+
+```python
+reachy.goto_target(
+    head=create_head_pose(yaw=10, degrees=True), body_yaw=np.deg2rad(100)
+)
+```
+
+The robot will not be able to follow the command exactly due to the safety limit 6.
+
+Reachy mini will not throw an error if you exceed these limits, but it will move to the closest valid position within the limits. You can check the current position of the head using the `get_current_head_pose` method of the `ReachyMini` instance. For example:
+
+```python
+from reachy_mini import ReachyMini
+from reachy_mini.utils import create_head_pose
+import time 
+reachy = ReachyMini()
+# construct a head pose with roll -20 degrees
+pose = create_head_pose(roll=-20, degrees=True)
+reachy.goto_target(head=pose)
+time.sleep(1)  # wait for the movement to complete
+# get the current head pose
+head_pose = reachy.get_current_head_pose()
+print("current head pose", head_pose)
+print("target head pose", pose)
+```
+
 ### Look at
 
 To make the robot look at a specific point, we provide look_at methods. 
@@ -189,6 +241,35 @@ You can control the robot's motors with three main methods:
 
 3. **`make_motors_compliant`**: Makes the motors compliant (requires motors to be enabled first). In this mode, the motors are powered on, but they do not resist external forces, so you can move the robot by hand, and it will feel "soft". This is useful for safe manual manipulation or teaching by demonstration. For an example, see the [gravity compensation example](../examples/reachy_compliant_demo.py): in this demo, you can move the robot's head and antennas freely, but the robot will use its motors to compensate for gravity and maintain its position/orientation in space.
 
+### Recording moves
+Let's assume that you have a script that uses the `set_target` fonction to move the robot and you want to record the commands to be able to replay them.
+For example, this could be a teleoperation script, and you could be recording cute emotions (OK this is how we did it).
+You can create another ReachyMini client (or use the same) and simply use `start_recording()` and `stop_recording()`.
+Below is the snippet of code that show how to start a recording, stop the recording and unpack the data:
+```python
+    try:
+        # The daemon will start recording the set_target() calls
+        mini.start_recording()
+        print("\nRecording started. Press Ctrl+C here to stop recording.")
+
+        while True:
+            # Keep the script alive to listen for Ctrl+C
+            time.sleep(0.01) 
+    except KeyboardInterrupt:
+        # Stop recording and retrieve the logged data
+        recorded_motion = mini.stop_recording()
+        
+        data = {}
+        for frame in recorded_motion:
+            data["time"].append(frame.get("time"))
+            pose_info = {
+                'head': frame.get('head'),
+                'antennas': frame.get('antennas'),
+                'body_yaw': frame.get('body_yaw'),
+                'check_collision': frame.get('check_collision'),
+            }
+            data["set_target_data"].append(pose_info)
+```
 ## Accessing the sensors
 
 Reachy Mini comes with several sensors (camera, microphone, speaker) that are connected to your computer via USB through the robot. These devices appear just like standard USB peripherals, so you can access them using your usual tools and libraries, exactly as if they were plugged directly into your computer.
