@@ -1,3 +1,7 @@
 __pycache__/
 reachy_mini.egg-info/
 *.egg-info/
+build/*
+dist/*
+src/reachy_mini_dashboard/installed_apps/*
+examples/debug/measures/*

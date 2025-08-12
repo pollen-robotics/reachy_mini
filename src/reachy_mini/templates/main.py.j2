@@ -1,0 +1,46 @@
+import threading
+
+from reachy_mini import ReachyMini, ReachyMiniApp
+from reachy_mini.utils import create_head_pose
+
+
+class {{ class_name }}(ReachyMiniApp):
+    def run(self, reachy_mini: ReachyMini, stop_event: threading.Event):
+        # Write your code here
+        # ReachyMini is already initialized and connected
+        # Check the stop_event to gracefully exit the loop
+        # Example:
+        # import time
+        # import numpy as np
+        #
+        # t0 = time.time()
+        #
+        # while not stop_event.is_set():
+        #     t = time.time() - t0
+        #
+        #     yaw = 30 * np.sin(2 * np.pi * 0.5 * t)
+        #     head_pose = create_head_pose(yaw=yaw, degrees=True) 
+        #
+        #     reachy_mini.set_target(head=head_pose)
+        #
+        #     time.sleep(0.01)
+
+        print("This is a placeholder for your app logic.")
+
+
+if __name__ == "__main__":
+    # You can run the app directly from this script
+    with ReachyMini() as mini:
+        app = {{ class_name }}()
+
+        stop = threading.Event()
+
+        try:
+            print("Running '{{ app_name }}' a ReachyMiniApp...")
+            print("Press Ctrl+C to stop the app.")
+            app.run(mini, stop)
+            print("App has stopped.")
+
+        except KeyboardInterrupt:
+            print("Stopping the app...")
+            stop.set()
