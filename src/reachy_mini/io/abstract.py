@@ -7,6 +7,9 @@ the server, handling commands, and managing client connections.
 
 from abc import ABC, abstractmethod
 from threading import Event
+from uuid import UUID
+
+from reachy_mini.io.protocol import AnyTaskRequest
 
 
 class AbstractServer(ABC):
@@ -54,4 +57,14 @@ class AbstractClient(ABC):
     @abstractmethod
     def get_current_joints(self) -> tuple[list[float], list[float]]:
         """Get the current joint positions."""
+        pass
+
+    @abstractmethod
+    def send_task_request(self, task_req: AnyTaskRequest) -> UUID:
+        """Send a task request to the server and return a unique task identifier."""
+        pass
+
+    @abstractmethod
+    def wait_for_task_completion(self, task_uid: UUID, timeout: float = 5.0):
+        """Wait for the specified task to complete."""
         pass

@@ -11,6 +11,8 @@ import os
 import time
 from typing import Dict, List, Optional, Union
 
+from reachy_mini.io.protocol import GotoTaskRequest
+
 os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "hide"
 
 from importlib.resources import files
@@ -24,9 +26,7 @@ import reachy_mini
 from reachy_mini.daemon.utils import daemon_check
 from reachy_mini.io import Client
 from reachy_mini.utils.interpolation import (
-    linear_pose_interpolation,
     minimum_jerk,
-    time_trajectory,
 )
 
 try:
@@ -208,43 +208,21 @@ class ReachyMini:
                 "Duration must be positive and non-zero. Use set_target() for immediate position setting."
             )
 
-        cur_head_joints, cur_antennas_joints = self.get_current_joint_positions()
-        start_body_yaw = cur_head_joints[0]
-        cur_head_pose = self.get_current_head_pose()
+        req = GotoTaskRequest(
+            head=np.array(head, dtype=np.float64).flatten().tolist()
+            if head is not None
+            else None,
+            antennas=np.array(antennas, dtype=np.float64).flatten().tolist()
+            if antennas is not None
+            else None,
+            duration=duration,
+            method=method,
+            body_yaw=body_yaw,
+            check_collision=check_collision,
+        )
 
-        if self._last_head_pose is None:
-            start_head_pose = cur_head_pose
-        else:
-            start_head_pose = self._last_head_pose
-
-        target_head_pose = cur_head_pose if head is None else head
-
-        start_antennas = np.array(cur_antennas_joints)
-        target_antennas = start_antennas if antennas is None else np.array(antennas)
-
-        t0 = time.time()
-        while time.time() - t0 < duration:
-            t = time.time() - t0
-
-            interp_time = time_trajectory(t / duration, method=method)
-            interp_head_pose = linear_pose_interpolation(
-                start_head_pose, target_head_pose, interp_time
-            )
-            interp_antennas_joint = (
-                start_antennas + (target_antennas - start_antennas) * interp_time
-            )
-            interp_body_yaw_joint = (
-                start_body_yaw + (body_yaw - start_body_yaw) * interp_time
-            )
-
-            self.set_target(
-                interp_head_pose,
-                list(interp_antennas_joint),
-                body_yaw=interp_body_yaw_joint,
-                check_collision=check_collision,
-            )
-
-            time.sleep(0.01)
+        task_uid = self.client.send_task_request(req)
+        self.client.wait_for_task_completion(task_uid)
 
     def wake_up(self) -> None:
         """Wake up the robot - go to the initial head position and play the wake up emote and sound."""

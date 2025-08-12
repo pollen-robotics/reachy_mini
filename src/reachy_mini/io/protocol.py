@@ -1,0 +1,41 @@
+from datetime import datetime
+from uuid import UUID
+
+from pydantic import BaseModel
+
+
+class GotoTaskRequest(BaseModel):
+    """Class to represent a goto target task."""
+
+    head: list[float] | None  # 4x4 flatten pose matrix
+    antennas: list[float] | None  # [left_angle, right_angle] (in rads)
+    duration: float
+    method: str
+    body_yaw: float
+    check_collision: bool
+
+
+class PlayMoveTaskRequest(BaseModel):
+    """Class to represent a play move task."""
+
+    move_name: str
+
+
+AnyTaskRequest = GotoTaskRequest | PlayMoveTaskRequest
+
+
+class TaskRequest(BaseModel):
+    """Class to represent any task request."""
+
+    uuid: UUID
+    req: AnyTaskRequest
+    timestamp: datetime
+
+
+class TaskProgress(BaseModel):
+    """Class to represent task progress."""
+
+    uuid: UUID
+    finished: bool = False
+    error: str | None = None
+    timestamp: datetime
