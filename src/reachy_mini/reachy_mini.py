@@ -222,7 +222,7 @@ class ReachyMini:
         )
 
         task_uid = self.client.send_task_request(req)
-        self.client.wait_for_task_completion(task_uid)
+        self.client.wait_for_task_completion(task_uid, timeout=duration + 1.0)
 
     def wake_up(self) -> None:
         """Wake up the robot - go to the initial head position and play the wake up emote and sound."""
