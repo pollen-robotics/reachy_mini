@@ -40,9 +40,10 @@ class RobotBackend(Backend):
         self.control_loop_frequency = 200.0  # Hz
         self.c = ReachyMiniPyControlLoop(
             serialport,
-            update_loop_period=timedelta(seconds=1.0 / self.control_loop_frequency),
+            read_position_loop_period=timedelta(
+                seconds=1.0 / self.control_loop_frequency
+            ),
             allowed_retries=5,
-            init_timeout=timedelta(seconds=0.5),
             stats_pub_period=None,
         )
         self.last_alive = None
