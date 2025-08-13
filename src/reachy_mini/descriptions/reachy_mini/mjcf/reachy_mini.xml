@@ -327,7 +327,7 @@
               <!-- Frame head -->
               <site group="3" name="head" pos="-0.0134282 -0.0012 0.0365883" quat="0.683013 0.683013 0.183013 -0.183013"/>
               <!-- Frame camera -->
-              <body pos="0.0244171 -0.0524 0.0147383" quat="0.683013 0.683013 0.183013 -0.183013">
+              <body pos="0.0244171 -0.0524 0.0147383" quat="-0.000 -0.500 0.000 0.866">
                 <site group="3" name="camera"/>
                 <camera name="eye_camera"
                  mode="fixed"
