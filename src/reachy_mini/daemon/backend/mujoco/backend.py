@@ -166,7 +166,6 @@ class MujocoBackend(Backend):
 
                 took = time.time() - start_t
                 time.sleep(max(0, self.model.opt.timestep - took))
-                print(f"Step {step}: {took*1000:.1f}ms")
                 step += 1
                 self.ready.set()
 
