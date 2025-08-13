@@ -10,6 +10,7 @@ import json
 import time
 from dataclasses import dataclass
 from importlib.resources import files
+from threading import Thread
 from typing import Optional
 
 import mujoco
@@ -23,6 +24,7 @@ from reachy_mini.daemon.backend.mujoco.utils import (
     get_joint_addr_from_name,
     get_joint_id_from_name,
 )
+from reachy_mini.daemon.backend.mujoco.video_udp import UDPJPEGFrameSender
 
 
 class MujocoBackend(Backend):
@@ -54,16 +56,13 @@ class MujocoBackend(Backend):
         self.data = mujoco.MjData(self.model)  # type: ignore
         self.model.opt.timestep = 0.002  # s, simulation timestep, 500hz
         self.decimation = 10  # -> 50hz control loop
+        self.rendering_timestep = 0.04  # s, rendering loop # 25Hz
 
         self.camera_id = mujoco.mj_name2id(  # type: ignore
             self.model,
             mujoco.mjtObj.mjOBJ_CAMERA,  # type: ignore
             "eye_camera",
         )
-        # self.camera_size = (1280, 720)
-        # self.offscreen_renderer = mujoco.Renderer(
-        #     self.model, height=self.camera_size[1], width=self.camera_size[0]
-        # )
 
         self.joint_names = get_actuator_names(self.model)
 
@@ -74,7 +73,24 @@ class MujocoBackend(Backend):
             get_joint_addr_from_name(self.model, n) for n in self.joint_names
         ]
 
-        # self.streamer_udp = UDPJPEGFrameSender()
+    def rendering_loop(self):
+        """Offline Rendering loop for the Mujoco simulation.
+
+        Capture the image from the virtual Reachy's camera and send it over UDP.
+        """
+        streamer_udp = UDPJPEGFrameSender()
+        camera_size = (1280, 720)
+        offscreen_renderer = mujoco.Renderer(
+            self.model, height=camera_size[1], width=camera_size[0]
+        )
+        while not self.should_stop.is_set():
+            start_t = time.time()
+            offscreen_renderer.update_scene(self.data, self.camera_id)
+            im = offscreen_renderer.render()
+            streamer_udp.send_frame(im)
+
+            took = time.time() - start_t
+            time.sleep(max(0, self.rendering_timestep - took))
 
     def run(self):
         """Run the Mujoco simulation with a viewer.
@@ -116,6 +132,9 @@ class MujocoBackend(Backend):
             mujoco.mj_step(self.model, self.data)  # type: ignore
             viewer.sync()
 
+            rendering_thread = Thread(target=self.rendering_loop, daemon=True)
+            rendering_thread.start()
+
             # 3) now enter your normal loop
             while not self.should_stop.is_set():
                 start_t = time.time()
@@ -152,7 +171,7 @@ class MujocoBackend(Backend):
                                 }
                             ).encode("utf-8")
                         )
-                    viewer.sync()   
+                    viewer.sync()
 
                 mujoco.mj_step(self.model, self.data)  # type: ignore
 
