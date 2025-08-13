@@ -134,6 +134,12 @@ class RobotBackend(Backend):
                 # Update the head kinematics model with the current head positions
                 self.update_head_kinematics_model(head_positions, antenna_positions)
 
+                # Update the target head joint positions from IK if necessary
+                # - does nothing if the targets did not change 
+                if self.ik_required:
+                    self.update_target_head_joints_from_ik(self.target_head_pose, self.target_body_yaw)
+                    self.ik_required = False
+                    
                 self.joint_positions_publisher.put(
                     json.dumps(
                         {

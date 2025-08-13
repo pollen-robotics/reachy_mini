@@ -41,6 +41,7 @@ class Backend:
 
         self.current_head_pose = None  # 4x4 pose matrix
         self.target_head_pose = None  # 4x4 pose matrix
+        self.target_body_yaw = None  # Last body yaw used in IK computations
 
         self.target_head_joint_positions = None  # [yaw, 0, 1, 2, 3, 4, 5]
         self.current_head_joint_positions = None  # [yaw, 0, 1, 2, 3, 4, 5]
@@ -55,10 +56,12 @@ class Backend:
         self.recorded_data = []  # List to store recorded data
 
         # variables to store the last computed head joint positions and pose
-        self._target_body_yaw = None  # Last body yaw used in IK computations
+        self._last_target_body_yaw = None  # Last body yaw used in IK computations
+        self._last_target_head_pose = None  # Last head pose used in IK computations
         self.target_head_joint_current = None  # Placeholder for head joint torque
         self.target_head_operation_mode = None  # Placeholder for head operation mode
         self._last_collision_check = None  # Track the last collision flag used in IK
+        self.ik_required = False  # Flag to indicate if IK computation is required
 
         # Tolerance for kinematics computations
         # For Forward kinematics (around 0.25deg)
@@ -128,28 +131,35 @@ class Backend:
         """
         self.pose_publisher = publisher
 
-    def set_target_head_pose(self, pose: np.ndarray, body_yaw: float = 0.0) -> None:
-        """Set the head pose. Computes the IK and sets the head joint positions.
+    def update_target_head_joints_from_ik(self, pose: np.ndarray = None, body_yaw: float = None) -> None:
+        """Update the target head joint positions from inverse kinematics.
 
         Args:
             pose (np.ndarray): 4x4 pose matrix representing the head pose.
             body_yaw (float): The yaw angle of the body, used to adjust the head pose.
 
         """
+        
+        if pose is None:
+            pose = self.target_head_pose if self.target_head_pose is not None else np.eye(4)
+
+        if body_yaw is None:
+            body_yaw = self.target_body_yaw if self.target_body_yaw is not None else 0.0
+
         # check if the pose is the same as the current one
         if (
-            self.target_head_pose is not None
-            and self._target_body_yaw is not None
+            self._last_target_head_pose is not None
+            and self._last_target_body_yaw is not None
             and np.allclose(
-                self._target_body_yaw, body_yaw, atol=self._ik_kin_tolerance["rad"]
+                self._last_target_body_yaw, body_yaw, atol=self._ik_kin_tolerance["rad"]
             )
             and np.allclose(
-                self.target_head_pose[:3, 3],
+                self._last_target_head_pose[:3, 3],
                 pose[:3, 3],
                 atol=self._ik_kin_tolerance["m"],
             )
             and np.allclose(
-                self.target_head_pose[:3, :3],
+                self._last_target_head_pose[:3, :3],
                 pose[:3, :3],
                 atol=self._ik_kin_tolerance["rad"],
             )
@@ -167,11 +177,25 @@ class Backend:
             raise ValueError("WARNING: Collision detected or head pose not achievable!")
 
         # update the target head pose and body yaw
-        self.target_head_pose = pose
-        self._target_body_yaw = body_yaw
+        self._last_target_head_pose = pose
+        self._last_target_body_yaw = body_yaw
         self._last_collision_check = self.check_collision
 
         self.set_target_head_joint_positions(joints)
+
+    def set_target_head_pose(self, pose: np.ndarray, body_yaw: float = 0.0) -> None:
+        """Set the target head pose for the robot.
+
+        Args:
+            pose (np.ndarray): 4x4 pose matrix representing the head pose.
+            body_yaw (float): The yaw angle of the body, used to adjust the head pose.
+
+        """
+
+        # update the target head pose and body yaw
+        self.target_head_pose = pose
+        self.target_body_yaw = body_yaw
+        self.ik_required = True
 
     def set_target_head_joint_positions(self, positions: List[float]) -> None:
         """Set the head joint positions.

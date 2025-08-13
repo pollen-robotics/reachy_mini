@@ -121,12 +121,19 @@ class MujocoBackend(Backend):
                 start_t = time.time()
 
                 if step % self.decimation == 0:
+                     
                     head_positions = self.get_present_head_joint_positions()
                     antenna_positions = self.get_present_antenna_joint_positions()
 
                     # updating the head kinematics model
                     # it will update the head kinematics
                     self.update_head_kinematics_model(head_positions, antenna_positions)
+
+
+                    # Update the target head joint positions from IK if necessary
+                    # - does nothing if the targets did not change 
+                    if self.ik_required:
+                        self.update_target_head_joints_from_ik(self.target_head_pose, self.target_body_yaw)
 
                     if self.target_head_joint_positions is not None:
                         self.data.ctrl[:7] = self.target_head_joint_positions
@@ -158,6 +165,7 @@ class MujocoBackend(Backend):
 
                 took = time.time() - start_t
                 time.sleep(max(0, self.model.opt.timestep - took))
+                print(f"Step {step}: {took*1000:.1f}ms")
                 step += 1
                 self.ready.set()
 
