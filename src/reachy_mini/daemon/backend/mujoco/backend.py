@@ -134,6 +134,7 @@ class MujocoBackend(Backend):
                     # - does nothing if the targets did not change 
                     if self.ik_required:
                         self.update_target_head_joints_from_ik(self.target_head_pose, self.target_body_yaw)
+                        self.ik_required = False
 
                     if self.target_head_joint_positions is not None:
                         self.data.ctrl[:7] = self.target_head_joint_positions
