@@ -67,10 +67,10 @@ while i < 1000:
 
     # Measure time for solver FK
     start_solver_fk = time.time()
-    for _ in range(2):
+    for _ in range(15):
         final_pose = solver.fk(joints)
     end_solver_fk = time.time()
-    solver_fk_time = (end_solver_fk - start_solver_fk)/2
+    solver_fk_time = (end_solver_fk - start_solver_fk)/15.0
 
     # Save times for later analysis
     solver_ik_times.append(solver_ik_time)
@@ -103,7 +103,7 @@ while i < 1000:
                     tf.translation_matrix((px, py, pz)) @
                     tf.euler_matrix(roll, pitch, yaw))
         print(px, py, pz, roll, pitch, yaw)
-        input("Press Enter to continue...")
+        #input("Press Enter to continue...")
         
     position_errors.append(pos_error)
     angular_errors.append(np.degrees(angle_error))
