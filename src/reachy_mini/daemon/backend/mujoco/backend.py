@@ -65,6 +65,28 @@ class MujocoBackend(Backend):
         #     self.model, height=self.camera_size[1], width=self.camera_size[0]
         # )
 
+        self.head_id = mujoco.mj_name2id(  # type: ignore
+            self.model,
+            mujoco.mjtObj.mjOBJ_BODY,  # type: ignore
+            "pp01063_stewart_plateform",
+        )
+        
+        self.platform_to_head_transform = np.array(
+            [[ 8.66025292e-01,  5.00000194e-01, -1.83660327e-06, -1.34282000e-02],
+            [ 5.55111512e-16, -3.67320510e-06, -1.00000000e+00, -1.20000000e-03],
+            [-5.00000194e-01,  8.66025292e-01 ,-3.18108852e-06,  3.65883000e-02 ],
+            [0,  0,  0,  1.00000000e+00]])
+        #remove_z_offset  = np.eye(4)
+        #remove_z_offset[2, 3] = -0.177
+        #self.platform_to_head_transform = self.platform_to_head_transform @ remove_z_offset
+
+        self.current_head_pose = np.eye(4)
+        
+        # print("Joints in the model:")
+        # for i in range(self.model.njoint):
+        #     name = mujoco.mj_id2joint(self.model, i)
+        #     print(f"  {i}: {name}")
+
         self.joint_names = get_actuator_names(self.model)
 
         self.joint_ids = [
@@ -121,14 +143,11 @@ class MujocoBackend(Backend):
                 start_t = time.time()
 
                 if step % self.decimation == 0:
-                     
-                    head_positions = self.get_present_head_joint_positions()
-                    antenna_positions = self.get_present_antenna_joint_positions()
-
-                    # updating the head kinematics model
-                    # it will update the head kinematics
-                    self.update_head_kinematics_model(head_positions, antenna_positions)
-
+                    
+                    # update the current states
+                    self.current_head_joint_positions = self.get_present_head_joint_positions()
+                    self.current_antenna_joint_positions = self.get_present_antenna_joint_positions()
+                    self.current_head_pose = self.get_mj_present_head_pose()
 
                     # Update the target head joint positions from IK if necessary
                     # - does nothing if the targets did not change 
@@ -148,8 +167,8 @@ class MujocoBackend(Backend):
                         self.joint_positions_publisher.put(
                             json.dumps(
                                 {
-                                    "head_joint_positions": head_positions,
-                                    "antennas_joint_positions": antenna_positions,
+                                    "head_joint_positions": self.current_head_joint_positions,
+                                    "antennas_joint_positions":  self.current_antenna_joint_positions,
                                 }
                             ).encode("utf-8")
                         )
@@ -166,8 +185,24 @@ class MujocoBackend(Backend):
 
                 took = time.time() - start_t
                 time.sleep(max(0, self.model.opt.timestep - took))
+                #print(f"Step {step}: took {took*1000:.1f}ms")
                 step += 1
                 self.ready.set()
+
+
+
+    def get_mj_present_head_pose(self) -> np.ndarray:
+        """Get the current head pose from the Mujoco simulation.
+
+        Returns:
+            np.ndarray: The current head pose as a 4x4 transformation matrix.
+        """
+        mj_current_head_pose = np.eye(4)
+        mj_current_head_pose[:3, :3] = self.data.xmat[self.head_id].reshape(3, 3)
+        mj_current_head_pose[:3, 3] = self.data.xpos[self.head_id]
+        mj_current_head_pose = mj_current_head_pose @ self.platform_to_head_transform
+        mj_current_head_pose[2, 3] -= 0.177
+        return mj_current_head_pose
 
     def close(self) -> None:
         """Close the Mujoco backend."""

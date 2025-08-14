@@ -124,7 +124,7 @@ class PlacoKinematics:
 
         # FK joint task
         self.head_joints_task = self.fk_solver.add_joints_task()
-        self.head_joints_task.configure("joints", "soft", 1.0)
+        self.head_joints_task.configure("joints", "soft", 5.0)
         # joint limit tasks (values form URDF)
         self.fk_solver.enable_velocity_limits(True)
         self.fk_solver.enable_joint_limits(True)
@@ -248,7 +248,8 @@ class PlacoKinematics:
         _pose[:3, 3][2] += self.head_z_offset  # offset the height of the head
         self.head_frame.T_world_frame = _pose
 
-        # self.robot_ik.state.q = self._inital_q
+        self._update_state_to_initial(self.robot_ik)  # revert to the previous state
+        self.robot_ik.update_kinematics()
         for _ in range(12):
             try:
                 self.ik_solver.solve(True)  # False to not update the kinematics
@@ -272,8 +273,8 @@ class PlacoKinematics:
             joints.append(joint)
 
         # update the head kinematics model
-        self._update_state_to_initial(self.robot_ik)  # revert to the inital state
-        self.robot_ik.update_kinematics()
+        # self._update_state_to_initial(self.robot_ik)  # revert to the inital state
+        # self.robot_ik.update_kinematics()
 
         return joints
 
@@ -301,34 +302,54 @@ class PlacoKinematics:
                 "6": joints_angles[6],
             }
         )
-
-        self._update_state_to_initial(self.robot)  # revert to the previous state
-        self.robot.update_kinematics()
-        for _ in range(12):
-            try:
-                self.fk_solver.solve(True)  # False to not update the kinematics
-            except Exception as e:
-                print(f"WARNING: FK solver failed: {e}")
-                self._update_state_to_initial(
-                    self.robot
-                )  # revert to the previous state
-                self.robot.state.q = self._last_good_q
+        
+        
+        q = self.robot.state.q.copy()
+        no_iter = 2
+        no_retries = 2 # we should not be retrying more than once
+        for _ in range(no_retries):
+            # do the inital ik with 2 iterations
+            for i in range(no_iter):
+                try:
+                    self.fk_solver.solve(True)  # False to not update the kinematics
+                except Exception as e:
+                    print(f"WARNING: FK solver failed: {e}, retrying...")
+                    self._update_state_to_initial(
+                        self.robot
+                    )  # revert to the inital state and optimise from there
+                    self.robot.update_kinematics()
+                    no_iter = 5
+                    break 
                 self.robot.update_kinematics()
-                break
-            self.robot.update_kinematics()
+                
+            # Check if all equality constraints are satisfied (closing tasks)
+            tolerance = 1e-2
+            for i in range(1, 6):
+                pos1 = self.robot.get_T_world_frame(f"closing_{i}_1")[:3, 3]
+                pos2 = self.robot.get_T_world_frame(f"closing_{i}_2")[:3, 3]
+                if not np.allclose(pos1, pos2, atol=tolerance):
+                    print(f"WARNING: FK: Not all equality constraints are satisfied in FK, retrying...")
+                    self._update_state_to_initial(
+                        self.robot
+                    )  # revert to the inital state and optimise from there
+                    self.robot.update_kinematics()
+                    no_iter = 5
+            
+            # if we get to here everything is good
+            break
 
+                
         if check_collision and self.compute_collision():
             print("Collision detected, stopping FK...")
             self._update_state_to_initial(self.robot)  # revert to the previous state
-            self.robot.state.q = self._last_good_q
+            self.robot.state.q = q
             self.robot.update_kinematics()
             return None
-
-        # remember the last good q (before the collision or failed solver QP)
-        self._last_good_q = self.robot.state.q.copy()
+            
         # Get the head frame transformation
         T_world_head = self.robot.get_T_world_frame("head")
         T_world_head[:3, 3][2] -= self.head_z_offset  # offset the height of the head
+
         return T_world_head
 
     def config_collision_model(self):

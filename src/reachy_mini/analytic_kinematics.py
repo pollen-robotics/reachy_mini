@@ -915,7 +915,7 @@ class ReachyMiniAnalyticKinematics:
                 print(
                     f"Error in IK for branch attach IK for the branch {motor['name']}: {e}"
                 )
-                return {}
+                return None
             try:
                 solution = (
                     self.ik_motor_to_branch(branch_position, motor["solution"])
@@ -923,7 +923,7 @@ class ReachyMiniAnalyticKinematics:
                 )
             except Exception as e:
                 print(f"Error in IK for motor {motor['name']}: {e}")
-                return {}
+                return None
             solution = placo.wrap_angle(solution)
             if solution > motor["limits"][1] or solution < motor["limits"][0]:
                 print(

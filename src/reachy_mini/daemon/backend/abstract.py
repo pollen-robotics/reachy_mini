@@ -346,22 +346,8 @@ class Backend:
         if head_joint_positions is None:
             head_joint_positions = self.get_present_head_joint_positions()
 
-        # filter unnecessary calls to FK
-        # check if the head joint positions have changed
-        if (
-            self.current_head_joint_positions is not None
-            and self.current_head_pose is not None
-            and np.allclose(
-                self.current_head_joint_positions,
-                head_joint_positions,
-                atol=self._fk_kin_tolerance,
-            )
-        ):
-            # If the head joint positions have not changed, return the cached pose
-            return
-        else:
-            # Compute the forward kinematics to get the current head pose
-            self.current_head_pose = self.head_kinematics.fk(head_joint_positions)
+        # Compute the forward kinematics to get the current head pose
+        self.current_head_pose = self.head_kinematics.fk(head_joint_positions)
 
         # Check if the FK was successful
         assert self.current_head_pose is not None, (
