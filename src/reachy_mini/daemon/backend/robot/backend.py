@@ -85,7 +85,6 @@ class RobotBackend(Backend):
 
         while not self.should_stop.is_set():
             start_t = time.time()
-            self.update_head_kinematics_model()
             self._update()
             took = time.time() - start_t
 

@@ -30,10 +30,18 @@ def main():
         default=None,
         help="Camera index to use (if not specified, it will automatically tries to find it).",
     )
+    parser.add_argument(
+        "--udp-camera",
+        type=str,
+        default=None,
+        help="UDP camera address of the Mujoco simulation (udp://@127.0.0.1:5005).",
+    )
     args = parser.parse_args()
 
     if args.camera_opencv_id is not None:
         cam = cv2.VideoCapture(args.camera_opencv_id)
+    elif args.udp_camera:
+        cam = cv2.VideoCapture(args.udp_camera)
     else:
         cam = find_camera()
         if cam is None:
