@@ -35,6 +35,8 @@ angular_distances_from_initial = []
 solver_ik_times = []
 solver_fk_times = []
 
+np.random.seed(1578)
+
 i = 0
 while i < 1000:
     # Read GUI values
@@ -52,14 +54,16 @@ while i < 1000:
 
     # Check for NaN values or incorrect joint count
     if len(joints1) != 7 or np.any(np.isnan(joints1)):
-        print(f"Invalid IK solution at iteration {i}, redoing iteration.")
+        print(f"Invalid IK analytic solution at iteration {i}, redoing iteration.")
         continue
 
     # Measure time for solver IK
     start_solver_ik = time.time()
-    joints = solver.ik(pose=T_head_target, body_yaw=body_yaw)
+    #joints = asolver.ik(pose=T_head_target, body_yaw=body_yaw)
+    for _ in range(12):
+        joints = solver.ik(pose=T_head_target, body_yaw=body_yaw)
     end_solver_ik = time.time()
-    solver_ik_time = end_solver_ik - start_solver_ik
+    solver_ik_time = (end_solver_ik - start_solver_ik)/12
 
     if len(joints) != 7 or np.any(np.isnan(joints)):
         print(f"Invalid IK solution at iteration {i}, redoing iteration.")
@@ -67,10 +71,10 @@ while i < 1000:
 
     # Measure time for solver FK
     start_solver_fk = time.time()
-    for _ in range(15):
+    for _ in range(12):
         final_pose = solver.fk(joints)
     end_solver_fk = time.time()
-    solver_fk_time = (end_solver_fk - start_solver_fk)/15.0
+    solver_fk_time = (end_solver_fk - start_solver_fk)/12.0
 
     # Save times for later analysis
     solver_ik_times.append(solver_ik_time)
@@ -123,7 +127,7 @@ while i < 1000:
     angular_distances_from_initial.append(np.degrees(angular_distance_from_initial))
 
     i += 1
-
+    
     if i % 100 == 0:
         print(f"Iteration {i} out of 1000")
 
