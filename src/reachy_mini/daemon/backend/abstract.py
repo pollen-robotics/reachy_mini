@@ -146,28 +146,6 @@ class Backend:
         if body_yaw is None:
             body_yaw = self.target_body_yaw if self.target_body_yaw is not None else 0.0
 
-        # check if the pose is the same as the current one
-        if (
-            self._last_target_head_pose is not None
-            and self._last_target_body_yaw is not None
-            and np.allclose(
-                self._last_target_body_yaw, body_yaw, atol=self._ik_kin_tolerance["rad"]
-            )
-            and np.allclose(
-                self._last_target_head_pose[:3, 3],
-                pose[:3, 3],
-                atol=self._ik_kin_tolerance["m"],
-            )
-            and np.allclose(
-                self._last_target_head_pose[:3, :3],
-                pose[:3, :3],
-                atol=self._ik_kin_tolerance["rad"],
-            )
-            and self._last_collision_check == self.check_collision
-        ):
-            # If the pose is the same, do not recompute IK
-            return
-
         # Compute the inverse kinematics to get the head joint positions
         joints = self.head_kinematics.ik(
             pose, body_yaw=body_yaw, check_collision=self.check_collision

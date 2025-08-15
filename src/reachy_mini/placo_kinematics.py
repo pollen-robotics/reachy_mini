@@ -10,6 +10,9 @@ import pinocchio as pin
 import placo
 
 
+import logging
+
+
 class PlacoKinematics:
     """Placo Kinematics class for Reachy Mini.
 
@@ -21,6 +24,7 @@ class PlacoKinematics:
         urdf_path: str,
         dt: float = 0.02,
         automatic_body_yaw: bool = False,
+        log_level: str = "INFO"
     ) -> None:
         """Initialize the PlacoKinematics class.
 
@@ -40,6 +44,9 @@ class PlacoKinematics:
         self.fk_solver.mask_fbase(True)
 
         self.automatic_body_yaw = automatic_body_yaw
+        
+        self._logger = logging.getLogger(__name__)
+        self._logger.setLevel(log_level)
 
         # we could go to soft limits to avoid over-constraining the IK
         # but the current implementation works robustly with hard limits
@@ -225,8 +232,57 @@ class PlacoKinematics:
         robot.state.qd = self._inital_qd
         robot.state.qdd = self._inital_qdd
 
+    def _pose_distance(self, pose1: np.ndarray, pose2: np.ndarray) -> (float, float):
+        """Compute the orientation distance between two poses.
+
+        Args:
+            pose1 (np.ndarray): The first pose (4x4 homogeneous transformation matrix).
+            pose2 (np.ndarray): The second pose (4x4 homogeneous transformation matrix).
+
+        Returns:
+            float: The Euler distance between the two poses.
+        """
+        euler1 = pin.rpy.matrixToRpy(pose1[:3, :3])
+        euler2 = pin.rpy.matrixToRpy(pose2[:3, :3])
+        p1 = pose1[:3, 3]
+        p2 = pose2[:3, 3]
+        return np.linalg.norm(euler1 - euler2), np.linalg.norm(p1 - p2)
+
+    def _closed_loop_constraints_valid(self, robot: placo.RobotWrapper, tol: float = 1e-2) -> bool:
+        """Check if all closed-loop constraints are satisfied.
+
+        Args:
+            robot (placo.RobotWrapper): The robot wrapper instance to check.
+            tol (float): The tolerance for checking constraints (default: 1e-2).
+
+        Returns:
+            bool: True if all constraints are satisfied, False otherwise.
+        """
+        for i in range(1, 6):
+            pos1 = robot.get_T_world_frame(f"closing_{i}_1")[:3, 3]
+            pos2 = robot.get_T_world_frame(f"closing_{i}_2")[:3, 3]
+            if not np.allclose(pos1, pos2, atol=tol):
+                return False
+        return True
+
+    def _get_joint_values(self, robot: placo.RobotWrapper) -> List[float]:
+        """Get the joint values from the robot state.
+
+        Args:
+            robot (placo.RobotWrapper): The robot wrapper instance to get joint values from.
+
+        Returns:
+            List[float]: A list of joint values.
+        """
+        
+        joints = []
+        for joint_name in self.joints_names:
+            joint = robot.get_joint(joint_name)
+            joints.append(joint)
+        return joints
+
     def ik(
-        self, pose: np.ndarray, body_yaw: float = 0.0, check_collision: bool = False
+        self, pose: np.ndarray, body_yaw: float = 0.0, check_collision: bool = False, no_iterations: int = 2
     ) -> Optional[List[float]]:
         """Compute the inverse kinematics for the head for a given pose.
 
@@ -235,57 +291,85 @@ class PlacoKinematics:
                 representing the desired position and orientation of the head.
             body_yaw (float): Body yaw angle in radians.
             check_collision (bool): If True, checks for collisions after solving IK. (default: False)
-
+            no_iterations (int): Number of iterations to perform (default: 2). The higher the value, the more accurate the solution.
 
         Returns:
             List[float]: A list of joint angles for the head.
 
         """
         _pose = pose.copy()
-        self.ik_yaw_joint_task.set_joints({"all_yaw": body_yaw})
-
         # set the head pose
         _pose[:3, 3][2] += self.head_z_offset  # offset the height of the head
         self.head_frame.T_world_frame = _pose
+        # update the body_yaw task        
+        self.ik_yaw_joint_task.set_joints({"all_yaw": body_yaw})
 
-        self._update_state_to_initial(self.robot_ik)  # revert to the previous state
-        self.robot_ik.update_kinematics()
-        for _ in range(12):
+        # save the initial configuration
+        q = self.robot_ik.state.q.copy()
+        # check the starting configuration
+        # if the poses are too far start from the initial configuration
+        _dist_o, _dist_p = self._pose_distance(_pose, self.robot_ik.get_T_world_frame("head"))
+        # if distance too small 0.1mm and 0.1 deg and the QP has converged (almost 0 velocity)
+        if _dist_p < 0.1e-4 and _dist_o < np.deg2rad(0.01) and np.linalg.norm(self.robot_ik.state.qd) < 1e-4:
+            # no need to recalculate - return the current joint values
+            return self._get_joint_values(self.robot_ik)  # no need to solve IK
+        if _dist_o >= np.pi:
+            self._update_state_to_initial(self.robot_ik)
+            self.robot_ik.update_kinematics()
+            no_iterations += 6 # add a few more iterations
+            self._logger.debug("IK: Poses too far, starting from initial configuration")
+
+        done = True
+        # do the inital ik
+        for i in range(no_iterations):
             try:
                 self.ik_solver.solve(True)  # False to not update the kinematics
             except Exception as e:
-                print(f"WARNING: IK solver failed: {e}")
-                self._update_state_to_initial(
-                    self.robot_ik
-                )  # revert to the inital state
+                self._logger.debug(f"IK solver failed: {e}, retrying...")
+                done = False
+                break 
+            self.robot_ik.update_kinematics()
+            
+        # if no problem in solving the IK check for constraint violation
+        if done and (not self._closed_loop_constraints_valid(self.robot_ik)):
+            self._logger.debug(f"IK: Not all equality constraints are satisfied in IK, retrying...")
+            done = False
+
+        # if there was an issue start from scratch
+        if not done:
+            # set the initial pose 
+            self._update_state_to_initial(self.robot_ik)
             self.robot_ik.update_kinematics()
 
+            no_iterations += 6  # add a few more iterations
+            # do the inital ik with 10 iterations
+            for i in range(no_iterations):
+                try:
+                    self.ik_solver.solve(True)  # False to not update the kinematics
+                except Exception as e:
+                    self._logger.warning(f"IK solver failed: {e}, no solution found!")
+                    return None
+                self.robot_ik.update_kinematics()
+        
         # verify that there is no collision
         if check_collision and self.compute_collision():
-            print("Collision detected, stopping ik...")
+            self._logger.warning("IK: Collision detected, using the previous configuration...")
             self._update_state_to_initial(self.robot_ik)  # revert to the inital state
             self.robot_ik.update_kinematics()
             return None
 
-        joints = []
-        for joint_name in self.joints_names:
-            joint = self.robot_ik.get_joint(joint_name)
-            joints.append(joint)
-
-        # update the head kinematics model
-        # self._update_state_to_initial(self.robot_ik)  # revert to the inital state
-        # self.robot_ik.update_kinematics()
-
-        return joints
+        # Get the joint angles
+        return self._get_joint_values(self.robot_ik)
 
     def fk(
-        self, joints_angles: List[float], check_collision=False
+        self, joints_angles: List[float], check_collision: bool = False, no_iterations: int = 2
     ) -> Optional[np.ndarray]:
         """Compute the forward kinematics for the head given joint angles.
 
         Args:
             joints_angles (List[float]): A list of joint angles for the head.
             check_collision (bool): If True, checks for collisions after solving FK. (default: False)
+            no_iterations (int): The number of iterations to use for the FK solver. (default: 2), the higher the more accurate the result.
 
         Returns:
             np.ndarray: A 4x4 homogeneous transformation matrix
@@ -302,45 +386,42 @@ class PlacoKinematics:
                 "6": joints_angles[6],
             }
         )
-        
-        
+
+        # save the initial configuration
         q = self.robot.state.q.copy()
-        no_iter = 2
-        no_retries = 2 # we should not be retrying more than once
-        for _ in range(no_retries):
-            # do the inital ik with 2 iterations
-            for i in range(no_iter):
+        
+        done = True
+        # do the inital ik with 2 iterations
+        for i in range(no_iterations):
+            try:
+                self.fk_solver.solve(True)  # False to not update the kinematics
+            except Exception as e:
+                self._logger.debug(f"FK solver failed: {e}, retrying...")
+                done = False
+                break 
+            self.robot.update_kinematics()
+        
+        if done and (not self._closed_loop_constraints_valid(self.robot)):
+            self._logger.debug(f"FK: Not all equality constraints are satisfied in FK, retrying...")
+            done = False
+                
+        if not done:
+            self._update_state_to_initial(self.robot)  # revert to the previous state
+            self.robot.update_kinematics()
+
+            no_iterations += 6  # add a few more iterations
+            # do the inital ik with 10 iterations
+            for i in range(no_iterations):
                 try:
                     self.fk_solver.solve(True)  # False to not update the kinematics
                 except Exception as e:
-                    print(f"WARNING: FK solver failed: {e}, retrying...")
-                    self._update_state_to_initial(
-                        self.robot
-                    )  # revert to the inital state and optimise from there
-                    self.robot.update_kinematics()
-                    no_iter = 5
-                    break 
+                    self._logger.warning(f"FK solver failed: {e}, no solution found!")
+                    return None
                 self.robot.update_kinematics()
-                
-            # Check if all equality constraints are satisfied (closing tasks)
-            tolerance = 1e-2
-            for i in range(1, 6):
-                pos1 = self.robot.get_T_world_frame(f"closing_{i}_1")[:3, 3]
-                pos2 = self.robot.get_T_world_frame(f"closing_{i}_2")[:3, 3]
-                if not np.allclose(pos1, pos2, atol=tolerance):
-                    print(f"WARNING: FK: Not all equality constraints are satisfied in FK, retrying...")
-                    self._update_state_to_initial(
-                        self.robot
-                    )  # revert to the inital state and optimise from there
-                    self.robot.update_kinematics()
-                    no_iter = 5
             
-            # if we get to here everything is good
-            break
 
-                
         if check_collision and self.compute_collision():
-            print("Collision detected, stopping FK...")
+            self._logger.warning("FK: Collision detected, using the previous config...")
             self._update_state_to_initial(self.robot)  # revert to the previous state
             self.robot.state.q = q
             self.robot.update_kinematics()
@@ -416,7 +497,7 @@ class PlacoKinematics:
         """
         # If q is provided, use it to compute the forward kinematics
         if q is not None:
-            self.fk(q)
+            self.fk(q, no_iterations=20)
 
         # Computing the platform Jacobian
         # dx = Jp.dq
