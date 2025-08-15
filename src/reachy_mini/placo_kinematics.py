@@ -375,6 +375,18 @@ class PlacoKinematics:
             np.ndarray: A 4x4 homogeneous transformation matrix
 
         """
+
+        # check if we're already there
+        _current_joints = self._get_joint_values(self.robot)
+        # if the joint angles are the same (tol 1e-4) and teh QP has converged (max speed is 1e-4rad/s) 
+        # no need to compute the FK 
+        if np.linalg.norm(np.array(_current_joints) - np.array(joints_angles)) < 1e-4 and self.robot.state.qd.max() < 1e-4:
+            # no need to compute FK
+            T_world_head = self.robot.get_T_world_frame("head")
+            T_world_head[:3, 3][2] -= self.head_z_offset  # offset the height of the head
+            return T_world_head
+
+        # update the main task
         self.head_joints_task.set_joints(
             {
                 "all_yaw": joints_angles[0],
@@ -386,7 +398,7 @@ class PlacoKinematics:
                 "6": joints_angles[6],
             }
         )
-
+        
         # save the initial configuration
         q = self.robot.state.q.copy()
         
