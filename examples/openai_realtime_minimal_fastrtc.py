@@ -1,7 +1,6 @@
 import asyncio
 import base64
 import time
-from pathlib import Path
 from threading import Thread
 
 import gradio as gr
@@ -12,8 +11,6 @@ from fastrtc import AdditionalOutputs, AsyncStreamHandler, Stream, wait_for_item
 from speech_tapper import SpeechTapper
 
 load_dotenv()
-
-cur_dir = Path(__file__).parent
 
 SAMPLE_RATE = 24000
 
