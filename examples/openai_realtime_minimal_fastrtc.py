@@ -1,24 +1,93 @@
-import asyncio, base64, json, time
+import asyncio
+import base64
+import json
+import time
 from threading import Thread
 
+import cv2
 import gradio as gr
 import numpy as np
 import openai
 from dotenv import load_dotenv
 from fastrtc import AdditionalOutputs, AsyncStreamHandler, Stream, wait_for_item
+from openai import OpenAI
 from speech_tapper import SpeechTapper
+
 from reachy_mini import ReachyMini
 from reachy_mini.utils import create_head_pose
+from reachy_mini.utils.camera import find_camera
 
 load_dotenv()
 SAMPLE_RATE = 24000
+SIM = True
 
 reachy_mini = ReachyMini()
 
+if not SIM:
+    cap = find_camera()
+else:
+    cap = cv2.VideoCapture(0)
 
-async def look_around(params: dict) -> dict:
+
+class OpenAIImageHandler:
+    def __init__(self):
+        self.client = OpenAI()
+        pass
+
+    def ask_about_image(self, im: np.ndarray, question: str) -> str:
+        # print("play sound", f"hmm{np.random.randint(1, 6)}.wav")
+        try:
+            reachy_mini.play_sound(f"hmm{np.random.randint(1, 6)}.wav")
+        except Exception as e:
+            print(e)
+        # reachy_mini.play_sound("proud2.wav")
+        # Play a buffer sound here (Hmm, give me a sec  ...)
+        cv2.imwrite("/tmp/tmp_image.jpg", im)
+        image_file = open("/tmp/tmp_image.jpg", "rb")
+        b64_encoded_im = base64.b64encode(image_file.read()).decode("utf-8")
+        url = "data:image/jpeg;base64," + b64_encoded_im
+
+        messages = [
+            {
+                "role": "system",
+                "content": question,
+            },
+            {
+                "role": "user",
+                "content": [{"type": "input_image", "image_url": url}],
+            },
+        ]
+
+        response = self.client.responses.create(
+            model="gpt-4o-mini",
+            input=messages,
+        )
+        return response.output[0].content[0].text
+
+
+image_handler = OpenAIImageHandler()
+
+
+async def camera(params: dict) -> dict:
+    print("[TOOL CALL] camera with params", params)
+    trials = 0
+    ret = False
+    while not ret or trials < 5:
+        ret, frame = cap.read()
+        trials += 1
+    if not ret:
+        print("ERROR: failed to capture image")
+        return {"error": "Failed to capture image"}
+
+    image_description = image_handler.ask_about_image(frame, params.get("question"))
+    print("Image description", image_description)
+
+    return {"image_description": image_description}
+
+
+async def move_head(params: dict) -> dict:
     # look left, right up, down or front
-    print("look_around called with params:", params)
+    print("[TOOL CALL] move_head", params)
     direction = params.get("direction", "front")
     if direction == "left":
         look_left_head_pose = create_head_pose(0, 0, 0, 0, 0, 40, degrees=True)
@@ -38,30 +107,6 @@ async def look_around(params: dict) -> dict:
     return {"status": "looking " + direction}
 
 
-# ---- example tools implemented in Python ----
-async def get_time_tool(params: dict) -> dict:
-    # echo timezone if given; keep it simple for demo
-    print("get_time_tool called with params:", params)
-    return {
-        "epoch_ms": int(time.time() * 1000),
-        "timezone": params.get("timezone", "UTC"),
-    }
-
-
-async def add_tool(params: dict) -> dict:
-    print("add_tool called with params:", params)
-    a = float(params.get("a", 0))
-    b = float(params.get("b", 0))
-    return {"sum": a + b}
-
-
-async def mars_weather_tool(params: dict) -> dict:
-    # This is a placeholder for a tool that could fetch Mars weather data.
-    # In a real implementation, you would call an API or use a database.
-    print("mars_weather_tool called with params:", params)
-    return {"weather": "sunny", "temperature": -60}  # Example response
-
-
 class OpenAIHandler(AsyncStreamHandler):
     def __init__(self) -> None:
         super().__init__(
@@ -75,10 +120,8 @@ class OpenAIHandler(AsyncStreamHandler):
         self._pending_calls: dict[str, dict] = {}
         # registry: tool name -> coroutine
         self._tools = {
-            "get_time": get_time_tool,
-            "add": add_tool,
-            "mars_weather": mars_weather_tool,
-            "look_around": look_around,
+            "move_head": move_head,
+            "camera": camera,
         }
 
     def copy(self):
@@ -100,9 +143,13 @@ class OpenAIHandler(AsyncStreamHandler):
                         You wanted to be a mars rover and you'll be very disappointed if you find out that this is not the case.
 
                         You can use foul language and you're generally very irritated, but you also have a lot of humor. For example, you're able to use sarcasm and irony.
-                        
-                        "You are a voice agent. Prefer speaking. "
-                        "Call tools when helpful. After tool output arrives, explain it briefly in speech."
+                        You are a voice agent. Prefer speaking.
+                        Call tools when helpful. After tool output arrives, explain it briefly in speech.
+
+                        You have a camera tool, use it to ask questions about the environment. When asked what you see, or a specific question about the environment, ALWAYS use you camera, don't make things up.
+                        You can move your head in a given direction: left, right, up, down or front. Use this tool when asked to look around.
+
+                        You can chain tool calls, like move head up and use camera.
                     """,
                     "voice": "ballad",
                     "input_audio_transcription": {
@@ -112,41 +159,8 @@ class OpenAIHandler(AsyncStreamHandler):
                     "tools": [
                         {
                             "type": "function",
-                            "name": "get_time",
-                            "description": "Get current time in ms and optional timezone echo.",
-                            "parameters": {
-                                "type": "object",
-                                "properties": {"timezone": {"type": "string"}},
-                                "required": [],
-                            },
-                        },
-                        {
-                            "type": "function",
-                            "name": "add",
-                            "description": "Add two numbers.",
-                            "parameters": {
-                                "type": "object",
-                                "properties": {
-                                    "a": {"type": "number"},
-                                    "b": {"type": "number"},
-                                },
-                                "required": ["a", "b"],
-                            },
-                        },
-                        {
-                            "type": "function",
-                            "name": "mars_weather",
-                            "description": "Get current weather on Mars.",
-                            "parameters": {
-                                "type": "object",
-                                "properties": {},
-                                "required": [],
-                            },
-                        },
-                        {
-                            "type": "function",
-                            "name": "look_around",
-                            "description": "Look around in a given direction: left, right, up, down or front.",
+                            "name": "move_head",
+                            "description": "Move your head in a given direction: left, right, up, down or front.",
                             "parameters": {
                                 "type": "object",
                                 "properties": {
@@ -162,6 +176,21 @@ class OpenAIHandler(AsyncStreamHandler):
                                     }
                                 },
                                 "required": ["direction"],
+                            },
+                        },
+                        {
+                            "type": "function",
+                            "name": "camera",
+                            "description": "Take a picture using your camera, ask a question about the picture. Get an answer about the picture",
+                            "parameters": {
+                                "type": "object",
+                                "properties": {
+                                    "question": {
+                                        "type": "string",
+                                        "description": "The question to ask about the picture",
+                                    }
+                                },
+                                "required": ["question"],
                             },
                         },
                     ],
@@ -191,6 +220,7 @@ class OpenAIHandler(AsyncStreamHandler):
 
                 # stream audio to fastrtc
                 if et == "response.audio.delta":
+                    # print(np.frombuffer(base64.b64decode(event.delta), dtype=np.int16).reshape(1, -1))
                     await self.output_queue.put(
                         (
                             self.output_sample_rate,
