@@ -18,6 +18,8 @@ from speech_tapper3 import SwayRollRT, HOP_MS
 from reachy_mini import ReachyMini
 from reachy_mini.utils import create_head_pose
 from reachy_mini.utils.camera import find_camera
+from scipy.spatial.transform import Rotation as R
+from head_tracker import HeadTracker
 
 load_dotenv()
 SAMPLE_RATE = 24000
@@ -30,7 +32,12 @@ if not SIM:
 else:
     cap = cv2.VideoCapture(0)
 
+# Globals. TODO Find a way to it better ?
 speech_head_offsets = [0, 0, 0, 0, 0, 0]
+current_head_pose = np.eye(4)
+moving_start = time.time()
+moving_for = 0.0
+is_head_tracking = False
 
 
 class OpenAIImageHandler:
@@ -88,25 +95,38 @@ async def camera(params: dict) -> dict:
 
 
 async def move_head(params: dict) -> dict:
+    global current_head_pose, moving_start, moving_for
     # look left, right up, down or front
     print("[TOOL CALL] move_head", params)
     direction = params.get("direction", "front")
+    target_pose = np.eye(4)
     if direction == "left":
-        look_left_head_pose = create_head_pose(0, 0, 0, 0, 0, 40, degrees=True)
-        reachy_mini.goto_target(look_left_head_pose, duration=1.0)
+        target_pose = create_head_pose(0, 0, 0, 0, 0, 40, degrees=True)
     elif direction == "right":
-        look_right_head_pose = create_head_pose(0, 0, 0, 0, 0, -40, degrees=True)
-        reachy_mini.goto_target(look_right_head_pose, duration=1.0)
+        target_pose = create_head_pose(0, 0, 0, 0, 0, -40, degrees=True)
     elif direction == "up":
-        look_up_head_pose = create_head_pose(0, 0, 0, 0, -30, 0, degrees=True)
-        reachy_mini.goto_target(look_up_head_pose, duration=1.0)
+        target_pose = create_head_pose(0, 0, 0, 0, -30, 0, degrees=True)
     elif direction == "down":
-        look_down_head_pose = create_head_pose(0, 0, 0, 0, 30, 0, degrees=True)
-        reachy_mini.goto_target(look_down_head_pose, duration=1.0)
+        target_pose = create_head_pose(0, 0, 0, 0, 30, 0, degrees=True)
     else:
-        look_front_head_pose = create_head_pose(0, 0, 0, 0, 0, 0, degrees=True)
-        reachy_mini.goto_target(look_front_head_pose, duration=1.0)
+        target_pose = create_head_pose(0, 0, 0, 0, 0, 0, degrees=True)
+
+    moving_start = time.time()
+    moving_for = 1.0
+    reachy_mini.goto_target(target_pose, duration=moving_for)
+    current_head_pose = target_pose
     return {"status": "looking " + direction}
+
+
+async def head_tracking(params: dict) -> dict:
+    global is_head_tracking
+    if params.get("start"):
+        is_head_tracking = True
+    else:
+        is_head_tracking = False
+
+    print(f"[TOOL CALL] head_tracking {'started' if is_head_tracking else 'stopped'}")
+    return {"status": "head tracking " + ("started" if is_head_tracking else "stopped")}
 
 
 def _drain(q: asyncio.Queue):
@@ -133,6 +153,7 @@ class OpenAIHandler(AsyncStreamHandler):
         self._tools = {
             "move_head": move_head,
             "camera": camera,
+            "head_tracking": head_tracking,
         }
 
         self.sway = SwayRollRT()
@@ -159,6 +180,10 @@ class OpenAIHandler(AsyncStreamHandler):
 
             i = 0
             while i < len(results):
+                if self._base_ts is None:
+                    self._base_ts = loop.time()
+                    continue
+
                 target = (
                     self._base_ts + self.MOVEMENT_LATENCY_S + self._hops_done * HOP_DT
                 )
@@ -217,6 +242,8 @@ class OpenAIHandler(AsyncStreamHandler):
                         You can move your head in a given direction: left, right, up, down or front. Use this tool when asked to look around.
 
                         You can chain tool calls, like move head up and use camera.
+
+                        Enable the head tracking tool if you are asked to look at someone, disable it if you are asked to stop looking at someone. You can choose to enable or disable it if you think it's relevant
                     """,
                     "voice": "ballad",
                     "input_audio_transcription": {
@@ -258,6 +285,21 @@ class OpenAIHandler(AsyncStreamHandler):
                                     }
                                 },
                                 "required": ["question"],
+                            },
+                        },
+                        {
+                            "type": "function",
+                            "name": "head_tracking",
+                            "description": "Start or stop head tracking",
+                            "parameters": {
+                                "type": "object",
+                                "properties": {
+                                    "start": {
+                                        "type": "boolean",
+                                        "description": "Whether to start or stop head tracking",
+                                    }
+                                },
+                                "required": ["start"],
                             },
                         },
                     ],
@@ -434,16 +476,39 @@ stream = Stream(
 
 if __name__ == "__main__":
     Thread(target=stream.ui.launch, kwargs={"server_port": 7860}).start()
+    head_tracker = HeadTracker()
     while True:
-        head_pose = create_head_pose(
-            x=speech_head_offsets[0],
-            y=speech_head_offsets[1],
-            z=speech_head_offsets[2],
-            roll=speech_head_offsets[3],
-            pitch=speech_head_offsets[4],
-            yaw=speech_head_offsets[5],
-            degrees=False,
-            mm=False,
-        )
-        reachy_mini.set_target(head=head_pose, antennas=(0.0, 0.0))
+        # current_head_pose = reachy_mini.get_current_head_pose()
+        if is_head_tracking:
+            success, im = cap.read()
+            if success:
+                eye_center, _ = head_tracker.get_head_position(im)
+                if eye_center is not None:
+                    h, w, _ = im.shape
+                    eye_center = (eye_center + 1) / 2
+                    eye_center[0] *= w
+                    eye_center[1] *= h
+                    current_head_pose = reachy_mini.look_at_image(
+                        *eye_center, duration=0.0, apply=False
+                    )
+
+        current_x, current_y, current_z = current_head_pose[:3, 3]
+        current_roll, current_pitch, current_yaw = R.from_matrix(
+            current_head_pose[:3, :3]
+        ).as_euler("xyz", degrees=False)
+
+        moving = time.time() - moving_start < moving_for
+
+        if not moving:
+            head_pose = create_head_pose(
+                x=current_x + speech_head_offsets[0],
+                y=current_y + speech_head_offsets[1],
+                z=current_z + speech_head_offsets[2],
+                roll=current_roll + speech_head_offsets[3],
+                pitch=current_pitch + speech_head_offsets[4],
+                yaw=current_yaw + speech_head_offsets[5],
+                degrees=False,
+                mm=False,
+            )
+            reachy_mini.set_target(head=head_pose, antennas=(0.0, 0.0))
         time.sleep(0.02)
