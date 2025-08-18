@@ -12,7 +12,6 @@ import openai
 from dotenv import load_dotenv
 from fastrtc import AdditionalOutputs, AsyncStreamHandler, Stream, wait_for_item
 from openai import OpenAI
-# from speech_tapper import SpeechTapper
 from speech_tapper3 import SwayRollRT, HOP_MS
 
 
@@ -31,6 +30,8 @@ if not SIM:
 else:
     cap = cv2.VideoCapture(0)
 
+speech_head_offsets = [0, 0, 0, 0, 0, 0]
+
 
 class OpenAIImageHandler:
     def __init__(self):
@@ -42,7 +43,7 @@ class OpenAIImageHandler:
             reachy_mini.play_sound(f"hmm{np.random.randint(1, 6)}.wav")
         except Exception as e:
             print(e)
-            
+
         cv2.imwrite("/tmp/tmp_image.jpg", im)
         image_file = open("/tmp/tmp_image.jpg", "rb")
         b64_encoded_im = base64.b64encode(image_file.read()).decode("utf-8")
@@ -115,6 +116,7 @@ def _drain(q: asyncio.Queue):
     except QueueEmpty:
         pass
 
+
 class OpenAIHandler(AsyncStreamHandler):
     def __init__(self) -> None:
         super().__init__(
@@ -143,10 +145,11 @@ class OpenAIHandler(AsyncStreamHandler):
         return OpenAIHandler()
 
     async def _sway_consumer(self):
+        global speech_head_offsets
         HOP_DT = HOP_MS / 1000.0
         loop = asyncio.get_running_loop()
         while True:
-            sr, chunk = await self.sway_queue.get()          # (1, N), int16
+            sr, chunk = await self.sway_queue.get()  # (1, N), int16
             pcm = np.asarray(chunk).squeeze(0)
             results = self.sway.feed(pcm, sr)
 
@@ -156,14 +159,18 @@ class OpenAIHandler(AsyncStreamHandler):
 
             i = 0
             while i < len(results):
-                target = self._base_ts + self.MOVEMENT_LATENCY_S + self._hops_done * HOP_DT
+                target = (
+                    self._base_ts + self.MOVEMENT_LATENCY_S + self._hops_done * HOP_DT
+                )
                 now = loop.time()
 
                 # if late by ≥1 hop, drop poses to catch up (no drift accumulation)
                 if now - target >= HOP_DT:
                     # how many hops behind? cap drops to avoid huge skips
                     lag_hops = int((now - target) / HOP_DT)
-                    drop = min(lag_hops, len(results) - i - 1)  # keep at least one to show
+                    drop = min(
+                        lag_hops, len(results) - i - 1
+                    )  # keep at least one to show
                     if drop > 0:
                         self._hops_done += drop
                         i += drop
@@ -174,12 +181,15 @@ class OpenAIHandler(AsyncStreamHandler):
                     await asyncio.sleep(target - now)
 
                 r = results[i]
-                head_pose = create_head_pose(
-                    x=r["x_mm"] / 1000.0, y=r["y_mm"] / 1000.0, z=r["z_mm"] / 1000.0,
-                    roll=r["roll_rad"], pitch=r["pitch_rad"], yaw=r["yaw_rad"],
-                    degrees=False, mm=False,
-                )
-                reachy_mini.set_target(head=head_pose, antennas=(0.0, 0.0))
+
+                speech_head_offsets = [
+                    r["x_mm"] / 1000.0,
+                    r["y_mm"] / 1000.0,
+                    r["z_mm"] / 1000.0,
+                    r["roll_rad"],
+                    r["pitch_rad"],
+                    r["yaw_rad"],
+                ]
 
                 self._hops_done += 1
                 i += 1
@@ -257,7 +267,6 @@ class OpenAIHandler(AsyncStreamHandler):
             self.connection = conn
             asyncio.create_task(self._sway_consumer())
 
-
             async for event in self.connection:
                 et = getattr(event, "type", None)
 
@@ -289,7 +298,9 @@ class OpenAIHandler(AsyncStreamHandler):
 
                 # stream audio to fastrtc
                 if et == "response.audio.delta":
-                    buf = np.frombuffer(base64.b64decode(event.delta), dtype=np.int16).reshape(1, -1)
+                    buf = np.frombuffer(
+                        base64.b64decode(event.delta), dtype=np.int16
+                    ).reshape(1, -1)
                     # 1) to fastrtc playback
                     await self.output_queue.put((self.output_sample_rate, buf))
                     # 2) to sway engine for synchronized motion
@@ -306,10 +317,10 @@ class OpenAIHandler(AsyncStreamHandler):
 
                 if et == "response.started":
                     # hard reset per utterance
-                    self._base_ts = None           # <-- was never reset
+                    self._base_ts = None  # <-- was never reset
                     self._hops_done = 0
-                    self.sway.reset()              # clear carry/envelope/VAD
-                    _drain(self.sway_queue)        # drop any stale chunks not yet consumed
+                    self.sway.reset()  # clear carry/envelope/VAD
+                    _drain(self.sway_queue)  # drop any stale chunks not yet consumed
                     # optional: also clear playback queue if you want
                     # _drain(self.output_queue)
 
@@ -423,6 +434,16 @@ stream = Stream(
 
 if __name__ == "__main__":
     Thread(target=stream.ui.launch, kwargs={"server_port": 7860}).start()
-    # st = SpeechTapper()
     while True:
-        time.sleep(1)
+        head_pose = create_head_pose(
+            x=speech_head_offsets[0],
+            y=speech_head_offsets[1],
+            z=speech_head_offsets[2],
+            roll=speech_head_offsets[3],
+            pitch=speech_head_offsets[4],
+            yaw=speech_head_offsets[5],
+            degrees=False,
+            mm=False,
+        )
+        reachy_mini.set_target(head=head_pose, antennas=(0.0, 0.0))
+        time.sleep(0.02)
