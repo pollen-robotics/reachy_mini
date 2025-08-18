@@ -243,7 +243,8 @@ class OpenAIHandler(AsyncStreamHandler):
 
                         You can chain tool calls, like move head up and use camera.
 
-                        Enable the head tracking tool if you are asked to look at someone, disable it if you are asked to stop looking at someone. You can choose to enable or disable it if you think it's relevant
+                        Enable the head tracking tool if you are asked to look at someone, disable it if you are asked to stop looking at someone. 
+                        You can choose to enable or disable the head tracking tool it if you think it's relevant. It's better to look at the people when talking to them. 
                     """,
                     "voice": "ballad",
                     "input_audio_transcription": {
