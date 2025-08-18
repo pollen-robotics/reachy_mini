@@ -11,7 +11,9 @@ import openai
 from dotenv import load_dotenv
 from fastrtc import AdditionalOutputs, AsyncStreamHandler, Stream, wait_for_item
 from openai import OpenAI
-from speech_tapper import SpeechTapper
+# from speech_tapper import SpeechTapper
+from speech_tapper3 import SwayRollRT, HOP_MS
+
 
 from reachy_mini import ReachyMini
 from reachy_mini.utils import create_head_pose
@@ -19,7 +21,7 @@ from reachy_mini.utils.camera import find_camera
 
 load_dotenv()
 SAMPLE_RATE = 24000
-SIM = True
+SIM = False
 
 reachy_mini = ReachyMini()
 
@@ -35,13 +37,11 @@ class OpenAIImageHandler:
         pass
 
     def ask_about_image(self, im: np.ndarray, question: str) -> str:
-        # print("play sound", f"hmm{np.random.randint(1, 6)}.wav")
         try:
             reachy_mini.play_sound(f"hmm{np.random.randint(1, 6)}.wav")
         except Exception as e:
             print(e)
-        # reachy_mini.play_sound("proud2.wav")
-        # Play a buffer sound here (Hmm, give me a sec  ...)
+            
         cv2.imwrite("/tmp/tmp_image.jpg", im)
         image_file = open("/tmp/tmp_image.jpg", "rb")
         b64_encoded_im = base64.b64encode(image_file.read()).decode("utf-8")
@@ -116,6 +116,7 @@ class OpenAIHandler(AsyncStreamHandler):
         )
         self.connection = None
         self.output_queue = asyncio.Queue()
+        self.sway_queue = asyncio.Queue()
         # call_id -> {"name": str, "args_buf": str}
         self._pending_calls: dict[str, dict] = {}
         # registry: tool name -> coroutine
@@ -124,8 +125,37 @@ class OpenAIHandler(AsyncStreamHandler):
             "camera": camera,
         }
 
+        self.sway = SwayRollRT()
+        self._sched_next_ts = None
+        self.MOVEMENT_LATENCY_S = 0.08
+
     def copy(self):
         return OpenAIHandler()
+
+    async def _sway_consumer(self):
+        """Consume TTS audio chunks, compute sway, pace at 100 Hz, command Reachy."""
+        HOP_DT = HOP_MS / 1000.0
+        while True:
+            sr, chunk = await self.sway_queue.get()      # chunk shape (1, N), dtype=int16
+            pcm = np.asarray(chunk).squeeze(0)
+            results = self.sway.feed(pcm, sr)
+            for r in results:
+                # schedule: constant-rate with fixed latency offset
+                now = time.monotonic()
+                if self._sched_next_ts is None:
+                    self._sched_next_ts = now + self.MOVEMENT_LATENCY_S
+                if now < self._sched_next_ts:
+                    await asyncio.sleep(self._sched_next_ts - now)
+
+                head_pose = create_head_pose(
+                    x=r["x_mm"] / 1000.0, y=r["y_mm"] / 1000.0, z=r["z_mm"] / 1000.0,
+                    roll=r["roll_rad"], pitch=r["pitch_rad"], yaw=r["yaw_rad"],
+                    degrees=False, mm=False,
+                )
+                # non-blocking command
+                reachy_mini.set_target(head=head_pose, antennas=(0.0, 0.0))
+
+                self._sched_next_ts += HOP_DT
 
     async def start_up(self):
         self.client = openai.AsyncOpenAI()
@@ -198,6 +228,8 @@ class OpenAIHandler(AsyncStreamHandler):
                 }
             )
             self.connection = conn
+            asyncio.create_task(self._sway_consumer())
+
 
             async for event in self.connection:
                 et = getattr(event, "type", None)
@@ -220,15 +252,23 @@ class OpenAIHandler(AsyncStreamHandler):
 
                 # stream audio to fastrtc
                 if et == "response.audio.delta":
-                    # print(np.frombuffer(base64.b64decode(event.delta), dtype=np.int16).reshape(1, -1))
-                    await self.output_queue.put(
-                        (
-                            self.output_sample_rate,
-                            np.frombuffer(
-                                base64.b64decode(event.delta), dtype=np.int16
-                            ).reshape(1, -1),
-                        )
-                    )
+                    buf = np.frombuffer(base64.b64decode(event.delta), dtype=np.int16).reshape(1, -1)
+                    # 1) to fastrtc playback
+                    await self.output_queue.put((self.output_sample_rate, buf))
+                    # 2) to sway engine for synchronized motion
+                    await self.sway_queue.put((self.output_sample_rate, buf))
+
+                    # await self.output_queue.put(
+                    #     (
+                    #         self.output_sample_rate,
+                    #         np.frombuffer(
+                    #             base64.b64decode(event.delta), dtype=np.int16
+                    #         ).reshape(1, -1),
+                    #     )
+                    # )
+
+                if et == "response.started":
+                    self._sched_next_ts = None
 
                 # ---- tool-calling plumbing ----
                 # 1) model announces a function call item; capture name + call_id
