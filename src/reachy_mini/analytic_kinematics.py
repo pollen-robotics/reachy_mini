@@ -3,25 +3,26 @@
 The math was generated using the examples/analytical_kinematics/compute_analytical_kinematics.py
 """
 
+import logging
+
 import numpy as np
 import placo
 from placo_utils.tf import tf
 
 from .placo_kinematics import PlacoKinematics
 
-import logging
-
 
 class ReachyMiniAnalyticKinematics:
     """Reachy Mini Analytic Kinematics class for computing inverse kinematics and Jacobians."""
 
-    def __init__(self, urdf_path=None, robot=None, log_level="INFO"):
+    def __init__(self, urdf_path:str = None, robot:placo.RobotWrapper = None, log_level:str ="INFO"):
         """Initialize the Reachy Mini Analytic Kinematics.
 
         Args:
             urdf_path (str, optional): Path to the URDF file of the Reachy Mini robot.
             robot (placo.Robot, optional): An instance of the Placo Robot class. If provided,
                 it will be used instead of loading from a URDF file.
+            log_level (str, optional): Logging level for the kinematics computations.
 
         Raises:
             ValueError: If neither urdf_path nor robot is provided.

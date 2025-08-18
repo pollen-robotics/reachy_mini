@@ -196,6 +196,7 @@ class MujocoBackend(Backend):
 
         Returns:
             np.ndarray: The current head pose as a 4x4 transformation matrix.
+
         """
         mj_current_head_pose = np.eye(4)
         mj_current_head_pose[:3, :3] = self.data.xmat[self.head_id].reshape(3, 3)

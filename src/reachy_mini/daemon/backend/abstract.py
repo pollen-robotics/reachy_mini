@@ -139,7 +139,6 @@ class Backend:
             body_yaw (float): The yaw angle of the body, used to adjust the head pose.
 
         """
-        
         if pose is None:
             pose = self.target_head_pose if self.target_head_pose is not None else np.eye(4)
 
@@ -169,7 +168,6 @@ class Backend:
             body_yaw (float): The yaw angle of the body, used to adjust the head pose.
 
         """
-
         # update the target head pose and body yaw
         self.target_head_pose = pose
         self.target_body_yaw = body_yaw

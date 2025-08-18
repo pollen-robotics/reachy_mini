@@ -3,14 +3,12 @@
 This module provides the PlacoKinematics class for performing inverse and forward kinematics based on the Reachy Mini robot URDF using the Placo library.
 """
 
+import logging
 from typing import List, Optional
 
 import numpy as np
 import pinocchio as pin
 import placo
-
-
-import logging
 
 
 class PlacoKinematics:
@@ -32,6 +30,7 @@ class PlacoKinematics:
             urdf_path (str): Path to the URDF file of the Reachy Mini robot.
             dt (float): Time step for the kinematics solver. Default is 0.02 seconds.
             automatic_body_yaw (bool): If True, the body yaw will be used to compute the IK and FK. Default is False.
+            log_level (str): Logging level for the kinematics computations.
 
         """
         self.robot = placo.RobotWrapper(urdf_path, placo.Flags.ignore_collisions)
@@ -78,6 +77,16 @@ class PlacoKinematics:
             "dummy_torso_yaw", "head", np.deg2rad(65.0)
         )
         yaw_constraint.configure("rel_yaw", "hard")
+
+
+        # Add the constraint to avoid the head from looking too far behind
+        # Mostly due to some numerical problems 180 is always a bit tricky
+        # Not really constraining because the this 180 pose is almost not 
+        # reachable with the real robot anyway
+        yaw_constraint_abs = self.ik_solver.add_yaw_constraint(
+            "pp01071_turning_bowl", "head", np.deg2rad(179.0)
+        )
+        yaw_constraint_abs.configure("abs_yaw", "hard")
 
         # Add a cone constraint for the head to not exceed a certain angle
         # This is to avoid the head from looking too far up or down
@@ -241,6 +250,7 @@ class PlacoKinematics:
 
         Returns:
             float: The Euler distance between the two poses.
+
         """
         euler1 = pin.rpy.matrixToRpy(pose1[:3, :3])
         euler2 = pin.rpy.matrixToRpy(pose2[:3, :3])
@@ -257,6 +267,7 @@ class PlacoKinematics:
 
         Returns:
             bool: True if all constraints are satisfied, False otherwise.
+
         """
         for i in range(1, 6):
             pos1 = robot.get_T_world_frame(f"closing_{i}_1")[:3, 3]
@@ -273,8 +284,8 @@ class PlacoKinematics:
 
         Returns:
             List[float]: A list of joint values.
+
         """
-        
         joints = []
         for joint_name in self.joints_names:
             joint = robot.get_joint(joint_name)
@@ -304,19 +315,19 @@ class PlacoKinematics:
         # update the body_yaw task        
         self.ik_yaw_joint_task.set_joints({"all_yaw": body_yaw})
 
-        # save the initial configuration
-        q = self.robot_ik.state.q.copy()
         # check the starting configuration
         # if the poses are too far start from the initial configuration
         _dist_o, _dist_p = self._pose_distance(_pose, self.robot_ik.get_T_world_frame("head"))
         # if distance too small 0.1mm and 0.1 deg and the QP has converged (almost 0 velocity)
-        if _dist_p < 0.1e-4 and _dist_o < np.deg2rad(0.01) and np.linalg.norm(self.robot_ik.state.qd) < 1e-4:
+        _dist_by = np.abs(body_yaw - self.robot_ik.get_joint("all_yaw"))
+        if _dist_p < 0.1e-4 and _dist_o < np.deg2rad(0.01) and _dist_by < np.deg2rad(0.01) and np.linalg.norm(self.robot_ik.state.qd) < 1e-4:
             # no need to recalculate - return the current joint values
             return self._get_joint_values(self.robot_ik)  # no need to solve IK
         if _dist_o >= np.pi:
+            # distance too big between the current and the target pose
+            # start the optim from zero position
             self._update_state_to_initial(self.robot_ik)
             self.robot_ik.update_kinematics()
-            no_iterations += 6 # add a few more iterations
             self._logger.debug("IK: Poses too far, starting from initial configuration")
 
         done = True
@@ -332,7 +343,7 @@ class PlacoKinematics:
             
         # if no problem in solving the IK check for constraint violation
         if done and (not self._closed_loop_constraints_valid(self.robot_ik)):
-            self._logger.debug(f"IK: Not all equality constraints are satisfied in IK, retrying...")
+            self._logger.debug("IK: Not all equality constraints are satisfied in IK, retrying...")
             done = False
 
         # if there was an issue start from scratch
@@ -375,7 +386,6 @@ class PlacoKinematics:
             np.ndarray: A 4x4 homogeneous transformation matrix
 
         """
-
         # check if we're already there
         _current_joints = self._get_joint_values(self.robot)
         # if the joint angles are the same (tol 1e-4) and teh QP has converged (max speed is 1e-4rad/s) 
@@ -414,7 +424,7 @@ class PlacoKinematics:
             self.robot.update_kinematics()
         
         if done and (not self._closed_loop_constraints_valid(self.robot)):
-            self._logger.debug(f"FK: Not all equality constraints are satisfied in FK, retrying...")
+            self._logger.debug("FK: Not all equality constraints are satisfied in FK, retrying...")
             done = False
                 
         if not done:
