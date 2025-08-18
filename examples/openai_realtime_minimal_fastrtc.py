@@ -1,4 +1,5 @@
 import asyncio
+from asyncio import QueueEmpty
 import base64
 import json
 import time
@@ -106,6 +107,13 @@ async def move_head(params: dict) -> dict:
         reachy_mini.goto_target(look_front_head_pose, duration=1.0)
     return {"status": "looking " + direction}
 
+
+def _drain(q: asyncio.Queue):
+    try:
+        while True:
+            q.get_nowait()
+    except QueueEmpty:
+        pass
 
 class OpenAIHandler(AsyncStreamHandler):
     def __init__(self) -> None:
@@ -256,6 +264,16 @@ class OpenAIHandler(AsyncStreamHandler):
                 # interruption
                 if et == "input_audio_buffer.speech_started":
                     self.clear_queue()
+                    _drain(self.sway_queue)
+                    self._base_ts = None
+                    self._hops_done = 0
+                    self.sway.reset()
+
+                if et in ("response.audio.completed", "response.completed"):
+                    self._base_ts = None
+                    self._hops_done = 0
+                    self.sway.reset()
+                    _drain(self.sway_queue)
 
                 # surface transcripts to the UI
                 if et == "conversation.item.input_audio_transcription.completed":
@@ -287,8 +305,13 @@ class OpenAIHandler(AsyncStreamHandler):
                     # )
 
                 if et == "response.started":
-                    self._sched_next_ts = None
+                    # hard reset per utterance
+                    self._base_ts = None           # <-- was never reset
                     self._hops_done = 0
+                    self.sway.reset()              # clear carry/envelope/VAD
+                    _drain(self.sway_queue)        # drop any stale chunks not yet consumed
+                    # optional: also clear playback queue if you want
+                    # _drain(self.output_queue)
 
                 # ---- tool-calling plumbing ----
                 # 1) model announces a function call item; capture name + call_id
