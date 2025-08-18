@@ -35,7 +35,7 @@ def main():
                 body_yaw=target,
                 check_collision=False,
             )
-            time.sleep(0.001)
+            time.sleep(0.01)
 
 
 if __name__ == "__main__":
