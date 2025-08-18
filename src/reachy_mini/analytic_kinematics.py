@@ -36,7 +36,8 @@ class ReachyMiniAnalyticKinematics:
             solver = PlacoKinematics(urdf_path, 0.02)
             self.robot = solver.robot
 
-        solver.fk([0.0] * 7)
+        # do the fk but with more iterations (to converge fully)
+        solver.fk([0.0] * 7, no_iterations=20)
         self.robot.update_kinematics()
 
         self.motors = [
