@@ -128,34 +128,53 @@ class OpenAIHandler(AsyncStreamHandler):
         self.sway = SwayRollRT()
         self._sched_next_ts = None
         self.MOVEMENT_LATENCY_S = 0.08
+        self._base_ts = None
+        self._hops_done = 0
 
     def copy(self):
         return OpenAIHandler()
 
     async def _sway_consumer(self):
-        """Consume TTS audio chunks, compute sway, pace at 100 Hz, command Reachy."""
         HOP_DT = HOP_MS / 1000.0
+        loop = asyncio.get_running_loop()
         while True:
-            sr, chunk = await self.sway_queue.get()      # chunk shape (1, N), dtype=int16
+            sr, chunk = await self.sway_queue.get()          # (1, N), int16
             pcm = np.asarray(chunk).squeeze(0)
             results = self.sway.feed(pcm, sr)
-            for r in results:
-                # schedule: constant-rate with fixed latency offset
-                now = time.monotonic()
-                if self._sched_next_ts is None:
-                    self._sched_next_ts = now + self.MOVEMENT_LATENCY_S
-                if now < self._sched_next_ts:
-                    await asyncio.sleep(self._sched_next_ts - now)
 
+            if self._base_ts is None:
+                # anchor when first audio samples of this utterance arrive
+                self._base_ts = loop.time()
+
+            i = 0
+            while i < len(results):
+                target = self._base_ts + self.MOVEMENT_LATENCY_S + self._hops_done * HOP_DT
+                now = loop.time()
+
+                # if late by ≥1 hop, drop poses to catch up (no drift accumulation)
+                if now - target >= HOP_DT:
+                    # how many hops behind? cap drops to avoid huge skips
+                    lag_hops = int((now - target) / HOP_DT)
+                    drop = min(lag_hops, len(results) - i - 1)  # keep at least one to show
+                    if drop > 0:
+                        self._hops_done += drop
+                        i += drop
+                        continue
+
+                # if early, sleep until target
+                if target > now:
+                    await asyncio.sleep(target - now)
+
+                r = results[i]
                 head_pose = create_head_pose(
                     x=r["x_mm"] / 1000.0, y=r["y_mm"] / 1000.0, z=r["z_mm"] / 1000.0,
                     roll=r["roll_rad"], pitch=r["pitch_rad"], yaw=r["yaw_rad"],
                     degrees=False, mm=False,
                 )
-                # non-blocking command
                 reachy_mini.set_target(head=head_pose, antennas=(0.0, 0.0))
 
-                self._sched_next_ts += HOP_DT
+                self._hops_done += 1
+                i += 1
 
     async def start_up(self):
         self.client = openai.AsyncOpenAI()
@@ -269,6 +288,7 @@ class OpenAIHandler(AsyncStreamHandler):
 
                 if et == "response.started":
                     self._sched_next_ts = None
+                    self._hops_done = 0
 
                 # ---- tool-calling plumbing ----
                 # 1) model announces a function call item; capture name + call_id
