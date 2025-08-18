@@ -258,6 +258,7 @@ class PlacoKinematics:
         p2 = pose2[:3, 3]
         return np.linalg.norm(euler1 - euler2), np.linalg.norm(p1 - p2)
 
+
     def _closed_loop_constraints_valid(self, robot: placo.RobotWrapper, tol: float = 1e-2) -> bool:
         """Check if all closed-loop constraints are satisfied.
 
@@ -326,6 +327,9 @@ class PlacoKinematics:
         if _dist_o >= np.pi:
             # distance too big between the current and the target pose
             # start the optim from zero position
+            # 
+            # TO INVESTIGATE: Another way to do this would be not to start from 0 but 
+            # to set the target pose not to the actual target but to some intermediate pose
             self._update_state_to_initial(self.robot_ik)
             self.robot_ik.update_kinematics()
             self._logger.debug("IK: Poses too far, starting from initial configuration")
