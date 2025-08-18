@@ -33,6 +33,9 @@ class PlacoKinematics:
             log_level (str): Logging level for the kinematics computations.
 
         """
+        
+        self.fk_reached_tol = np.deg2rad(0.1)  # 0.1 degrees tolerance for the FK reached condition
+        
         self.robot = placo.RobotWrapper(urdf_path, placo.Flags.ignore_collisions)
         self.robot_ik = placo.RobotWrapper(urdf_path, placo.Flags.ignore_collisions)
 
@@ -394,7 +397,7 @@ class PlacoKinematics:
         _current_joints = self._get_joint_values(self.robot)
         # if the joint angles are the same (tol 1e-4) and teh QP has converged (max speed is 1e-4rad/s) 
         # no need to compute the FK 
-        if np.linalg.norm(np.array(_current_joints) - np.array(joints_angles)) < 1e-4 and self.robot.state.qd.max() < 1e-4:
+        if np.linalg.norm(np.array(_current_joints) - np.array(joints_angles)) < self.fk_reached_tol and self.robot.state.qd.max() < 1e-4:
             # no need to compute FK
             T_world_head = self.robot.get_T_world_frame("head")
             T_world_head[:3, 3][2] -= self.head_z_offset  # offset the height of the head
