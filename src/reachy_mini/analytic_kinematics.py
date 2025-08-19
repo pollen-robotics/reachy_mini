@@ -3,6 +3,8 @@
 The math was generated using the examples/analytical_kinematics/compute_analytical_kinematics.py
 """
 
+import logging
+
 import numpy as np
 import placo
 from placo_utils.tf import tf
@@ -13,27 +15,30 @@ from .placo_kinematics import PlacoKinematics
 class ReachyMiniAnalyticKinematics:
     """Reachy Mini Analytic Kinematics class for computing inverse kinematics and Jacobians."""
 
-    def __init__(self, urdf_path=None, robot=None):
+    def __init__(
+        self,
+        urdf_path: str,
+        robot: placo.RobotWrapper | None = None,
+        log_level: str = "INFO",
+    ):
         """Initialize the Reachy Mini Analytic Kinematics.
 
         Args:
-            urdf_path (str, optional): Path to the URDF file of the Reachy Mini robot.
+            urdf_path (str): Path to the URDF file of the Reachy Mini robot.
             robot (placo.Robot, optional): An instance of the Placo Robot class. If provided,
                 it will be used instead of loading from a URDF file.
-
-        Raises:
-            ValueError: If neither urdf_path nor robot is provided.
+            log_level (str, optional): Logging level for the kinematics computations.
 
         """
-        if urdf_path is None and robot is None:
-            raise ValueError("Either urdf_path or robot must be provided.")
+        solver = PlacoKinematics(urdf_path, 0.02)
+
         if robot is not None:
             self.robot = robot
         elif urdf_path is not None:
-            solver = PlacoKinematics(urdf_path, 0.02)
             self.robot = solver.robot
 
-        solver.fk([0.0] * 7)
+        # do the fk but with more iterations (to converge fully)
+        solver.fk([0.0] * 7, no_iterations=20)
         self.robot.update_kinematics()
 
         self.motors = [
@@ -75,6 +80,9 @@ class ReachyMiniAnalyticKinematics:
             motor["T_motor_world"] = np.linalg.inv(T_world_motor)
             motor["branch_position"] = T_head_branch[:3, 3]
             motor["limits"] = self.robot.get_joint_limits(motor["name"])
+
+        self.logger = logging.getLogger(__name__)
+        self.logger.setLevel(log_level)
 
     def ik_motor_to_branch(self, branch_attachment_platform, solution=0):
         """Compute Inverse kinematics for the branch attachment platform to the motor angles.
@@ -888,8 +896,8 @@ class ReachyMiniAnalyticKinematics:
 
         """
         if check_collision:
-            print(
-                "WARNING: Collision checking is not implemented with the analytic IK."
+            self.logger.warning(
+                "Analytic IK: Collision checking is not implemented with the analytic IK."
             )
 
         _pose = np.array(pose.copy())
@@ -912,21 +920,21 @@ class ReachyMiniAnalyticKinematics:
                     T_motor_world,
                 ).flatten()
             except Exception as e:
-                print(
+                self.logger.warning(
                     f"Error in IK for branch attach IK for the branch {motor['name']}: {e}"
                 )
-                return {}
+                return None
             try:
                 solution = (
                     self.ik_motor_to_branch(branch_position, motor["solution"])
                     + motor["offset"]
                 )
             except Exception as e:
-                print(f"Error in IK for motor {motor['name']}: {e}")
-                return {}
+                self.logger.warning(f"Error in IK for motor {motor['name']}: {e}")
+                return None
             solution = placo.wrap_angle(solution)
             if solution > motor["limits"][1] or solution < motor["limits"][0]:
-                print(
+                self.logger.debug(
                     f"Solution for motor {motor['name']} is out of limits: {solution} not in {motor['limits']}"
                 )
                 joints.append(np.nan)
@@ -971,6 +979,6 @@ class ReachyMiniAnalyticKinematics:
                 )
                 jacobian[i, :] = jac
             except Exception as e:
-                print(f"Error in Jacobian for motor {motor['name']}: {e}")
+                self.logger.debug(f"Error in Jacobian for motor {motor['name']}: {e}")
                 break
         return np.array(jacobian)

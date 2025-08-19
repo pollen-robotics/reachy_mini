@@ -35,8 +35,10 @@ angular_distances_from_initial = []
 solver_ik_times = []
 solver_fk_times = []
 
+np.random.seed(1578)
+
 i = 0
-while i < 1000:
+while i < 2000:
     # Read GUI values
     px, py, pz = [np.random.uniform(-0.01, 0.01) for _ in range(3)]
     roll, pitch = [np.random.uniform(-np.deg2rad(30), np.deg2rad(30)) for _ in range(2)]
@@ -52,30 +54,28 @@ while i < 1000:
 
     # Check for NaN values or incorrect joint count
     if len(joints1) != 7 or np.any(np.isnan(joints1)):
-        print(f"Invalid IK solution at iteration {i}, redoing iteration.")
+        print(f"Invalid IK analytic solution at iteration {i}, redoing iteration.")
         continue
 
-    # Measure time for solver IK
-    start_solver_ik = time.time()
-    joints = solver.ik(pose=T_head_target, body_yaw=body_yaw)
-    end_solver_ik = time.time()
-    solver_ik_time = end_solver_ik - start_solver_ik
+    #joints = asolver.ik(pose=T_head_target, body_yaw=body_yaw)
+    for _ in range(12):
+        # Measure time for solver IK
+        start_solver_ik = time.time()
+        joints = solver.ik(pose=T_head_target, body_yaw=body_yaw)
+        end_solver_ik = time.time()
+        solver_ik_times.append(end_solver_ik - start_solver_ik)
 
     if len(joints) != 7 or np.any(np.isnan(joints)):
         print(f"Invalid IK solution at iteration {i}, redoing iteration.")
         continue
 
-    # Measure time for solver FK
-    start_solver_fk = time.time()
-    for _ in range(2):
+    for _ in range(20):
+        # Measure time for solver FK
+        start_solver_fk = time.time()
         final_pose = solver.fk(joints)
-    end_solver_fk = time.time()
-    solver_fk_time = (end_solver_fk - start_solver_fk)/2
-
-    # Save times for later analysis
-    solver_ik_times.append(solver_ik_time)
-    solver_fk_times.append(solver_fk_time)
-
+        end_solver_fk = time.time()
+        solver_fk_times.append((end_solver_fk - start_solver_fk))
+        
     # Compute pose error
     pos_error = np.linalg.norm(final_pose[:3, 3] - T_head_target[:3, 3])
 
@@ -103,7 +103,7 @@ while i < 1000:
                     tf.translation_matrix((px, py, pz)) @
                     tf.euler_matrix(roll, pitch, yaw))
         print(px, py, pz, roll, pitch, yaw)
-        input("Press Enter to continue...")
+        #input("Press Enter to continue...")
         
     position_errors.append(pos_error)
     angular_errors.append(np.degrees(angle_error))
@@ -123,9 +123,13 @@ while i < 1000:
     angular_distances_from_initial.append(np.degrees(angular_distance_from_initial))
 
     i += 1
-
+    
     if i % 100 == 0:
         print(f"Iteration {i} out of 1000")
+
+print(f"Total iterations: {i}")
+print(f"IK time: {np.mean(solver_ik_times) * 1000:.2f} ms (max {np.max(solver_ik_times) * 1000:.2f} ms)")
+print(f"FK time: {np.mean(solver_fk_times) * 1000:.2f} ms (max {np.max(solver_fk_times) * 1000:.2f} ms)")
 
 # plot the position and angular errors distributions
 plt.figure(figsize=(12, 5))
