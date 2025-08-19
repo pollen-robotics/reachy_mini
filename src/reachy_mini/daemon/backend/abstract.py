@@ -131,7 +131,9 @@ class Backend:
         """
         self.pose_publisher = publisher
 
-    def update_target_head_joints_from_ik(self, pose: np.ndarray = None, body_yaw: float = None) -> None:
+    def update_target_head_joints_from_ik(
+        self, pose: np.ndarray | None = None, body_yaw: float | None = None
+    ) -> None:
         """Update the target head joint positions from inverse kinematics.
 
         Args:
@@ -140,7 +142,11 @@ class Backend:
 
         """
         if pose is None:
-            pose = self.target_head_pose if self.target_head_pose is not None else np.eye(4)
+            pose = (
+                self.target_head_pose
+                if self.target_head_pose is not None
+                else np.eye(4)
+            )
 
         if body_yaw is None:
             body_yaw = self.target_body_yaw if self.target_body_yaw is not None else 0.0
@@ -162,7 +168,7 @@ class Backend:
 
     def set_target_head_pose(self, pose: np.ndarray, body_yaw: float = 0.0) -> None:
         """Set the target head pose for the robot.
-        
+
         Args:
             pose (np.ndarray): 4x4 pose matrix representing the head pose.
             body_yaw (float): The yaw angle of the body, used to adjust the head pose.
@@ -319,7 +325,7 @@ class Backend:
         Note:
             This method will update the `current_head_pose` and `current_head_joint_positions`
             attributes of the backend instance with the computed values. And the `current_antenna_joint_positions` if provided.
-            
+
         """
         if head_joint_positions is None:
             head_joint_positions = self.get_present_head_joint_positions()
