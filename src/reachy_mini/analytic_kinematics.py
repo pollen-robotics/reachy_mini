@@ -17,28 +17,24 @@ class ReachyMiniAnalyticKinematics:
 
     def __init__(
         self,
-        urdf_path: str | None = None,
+        urdf_path: str,
         robot: placo.RobotWrapper | None = None,
         log_level: str = "INFO",
     ):
         """Initialize the Reachy Mini Analytic Kinematics.
 
         Args:
-            urdf_path (str, optional): Path to the URDF file of the Reachy Mini robot.
+            urdf_path (str): Path to the URDF file of the Reachy Mini robot.
             robot (placo.Robot, optional): An instance of the Placo Robot class. If provided,
                 it will be used instead of loading from a URDF file.
             log_level (str, optional): Logging level for the kinematics computations.
 
-        Raises:
-            ValueError: If neither urdf_path nor robot is provided.
-
         """
-        if urdf_path is None and robot is None:
-            raise ValueError("Either urdf_path or robot must be provided.")
+        solver = PlacoKinematics(urdf_path, 0.02)
+
         if robot is not None:
             self.robot = robot
         elif urdf_path is not None:
-            solver = PlacoKinematics(urdf_path, 0.02)
             self.robot = solver.robot
 
         # do the fk but with more iterations (to converge fully)
