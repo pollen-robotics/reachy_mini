@@ -37,7 +37,7 @@ class RobotBackend(Backend):
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(log_level)
 
-        self.control_loop_frequency = 200.0  # Hz
+        self.control_loop_frequency = 50.0  # Hz
         self.c = ReachyMiniPyControlLoop(
             serialport,
             read_position_loop_period=timedelta(
@@ -92,6 +92,7 @@ class RobotBackend(Backend):
 
         while not self.should_stop.is_set():
             start_t = time.time()
+            self._stats["timestamps"].append(time.time())
             self._update()
             took = time.time() - start_t
 
@@ -171,7 +172,6 @@ class RobotBackend(Backend):
                 )
 
                 self.last_alive = time.time()
-                self._stats["timestamps"].append(self.last_alive)
 
                 self.ready.set()  # Mark the backend as ready
             except RuntimeError as e:
