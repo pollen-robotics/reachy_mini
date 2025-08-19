@@ -302,8 +302,8 @@ class Daemon:
             try:
                 self.logger.info("Daemon is running. Press Ctrl+C to stop.")
                 while self.backend_run_thread.is_alive():
-                    self.logger.debug(f"Daemon status: {self.status()}")
-                    self.backend_run_thread.join(timeout=1.0)
+                    self.logger.info(f"Daemon status: {self.status()}")
+                    self.backend_run_thread.join(timeout=10.0)
                 else:
                     self.logger.error("Backend thread has stopped unexpectedly.")
                     self._status.state = DaemonState.ERROR
