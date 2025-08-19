@@ -244,7 +244,9 @@ class PlacoKinematics:
         robot.state.qd = self._inital_qd
         robot.state.qdd = self._inital_qdd
 
-    def _pose_distance(self, pose1: np.ndarray, pose2: np.ndarray) -> (float, float):
+    def _pose_distance(
+        self, pose1: np.ndarray, pose2: np.ndarray
+    ) -> tuple[float, float]:
         """Compute the orientation distance between two poses.
 
         Args:
