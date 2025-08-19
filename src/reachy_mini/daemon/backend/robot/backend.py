@@ -9,11 +9,12 @@ import json
 import logging
 import time
 from dataclasses import dataclass
+from datetime import timedelta
 from multiprocessing import Event  # It seems to be more accurate than threading.Event
 from typing import Optional
 
 import numpy as np
-from reachy_mini_motor_controller import ReachyMiniMotorController
+from reachy_mini_motor_controller import ReachyMiniPyControlLoop
 
 from reachy_mini.daemon.backend.abstract import Backend
 
@@ -36,8 +37,15 @@ class RobotBackend(Backend):
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(log_level)
 
-        self.c = ReachyMiniMotorController(serialport)
-        self.control_loop_frequency = 200.0
+        self.control_loop_frequency = 200.0  # Hz
+        self.c = ReachyMiniPyControlLoop(
+            serialport,
+            read_position_loop_period=timedelta(
+                seconds=1.0 / self.control_loop_frequency
+            ),
+            allowed_retries=5,
+            stats_pub_period=None,
+        )
         self.last_alive = None
 
         self._torque_enabled = False
@@ -273,8 +281,9 @@ class RobotBackend(Backend):
         if mode != 0:
             # if the mode is not torque control, we need to set the head joint positions
             # to the current positions to avoid sudden movements
-            motor_pos = self.c.read_all_positions()
-            self.target_head_joint_positions = [motor_pos[0]] + motor_pos[3:]
+            motor_pos = self.c.get_last_position()
+            self.target_head_joint_positions = [motor_pos.body_yaw] + motor_pos.stewart
+
             self.c.set_stewart_platform_position(self.target_head_joint_positions[1:])
             self.c.set_body_rotation(self.target_head_joint_positions[0])
             self.c.enable_body_rotation(True)
@@ -311,7 +320,9 @@ class RobotBackend(Backend):
             if mode != 0:
                 # if the mode is not torque control, we need to set the head joint positions
                 # to the current positions to avoid sudden movements
-                self.target_antenna_joint_positions = self.c.read_all_positions()[1:3]
+                self.target_antenna_joint_positions = (
+                    self.c.get_last_position().antennas
+                )
                 self.c.set_antennas_positions(self.target_antenna_joint_positions)
                 self.c.enable_antennas(True)
             else:
@@ -328,11 +339,11 @@ class RobotBackend(Backend):
 
         """
         assert self.c is not None, "Motor controller not initialized or already closed."
-        positions = self.c.read_all_positions()
+        positions = self.c.get_last_position()
 
-        yaw = positions[0]
-        antennas = positions[1:3]
-        dofs = positions[3:]
+        yaw = positions.body_yaw
+        antennas = positions.antennas
+        dofs = positions.stewart
 
         return [yaw] + list(dofs), list(antennas)
 
@@ -342,8 +353,6 @@ class RobotBackend(Backend):
         Returns:
             list: A list of joint positions for the head, including the body rotation.
 
-        If you want to get both head and antenna joint positions, use `get_all_joint_positions()` instead, as it will only read the positions once.
-
         """
         return self.get_all_joint_positions()[0]
 
@@ -352,8 +361,6 @@ class RobotBackend(Backend):
 
         Returns:
             list: A list of joint positions for the antennas.
-
-        If you want to get both head and antenna joint positions, use `get_all_joint_positions()` instead, as it will only read the positions once.
 
         """
         return self.get_all_joint_positions()[1]
