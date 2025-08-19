@@ -15,7 +15,12 @@ from .placo_kinematics import PlacoKinematics
 class ReachyMiniAnalyticKinematics:
     """Reachy Mini Analytic Kinematics class for computing inverse kinematics and Jacobians."""
 
-    def __init__(self, urdf_path:str = None, robot:placo.RobotWrapper = None, log_level:str ="INFO"):
+    def __init__(
+        self,
+        urdf_path: str | None = None,
+        robot: placo.RobotWrapper | None = None,
+        log_level: str = "INFO",
+    ):
         """Initialize the Reachy Mini Analytic Kinematics.
 
         Args:
