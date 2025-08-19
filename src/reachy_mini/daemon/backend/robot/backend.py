@@ -74,6 +74,13 @@ class RobotBackend(Backend):
         self.stats_record_t0 = time.time()
 
         next_call_event = Event()
+        
+        
+        # Compute the forward kinematics to get the initial head pose
+        # IMPORTANT for wake_up
+        head_positions, _ = self.get_all_joint_positions()
+        # make sure to converge fully (a lot of iterations)
+        self.current_head_pose = self.head_kinematics.fk(head_positions, no_iterations=20)
 
         while not self.should_stop.is_set():
             start_t = time.time()
@@ -138,7 +145,6 @@ class RobotBackend(Backend):
                 # - does nothing if the targets did not change 
                 if self.ik_required:
                     self.update_target_head_joints_from_ik(self.target_head_pose, self.target_body_yaw)
-                    self.ik_required = False
                     
                 self.joint_positions_publisher.put(
                     json.dumps(

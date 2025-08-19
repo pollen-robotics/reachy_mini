@@ -158,11 +158,11 @@ class Backend:
         self._last_target_body_yaw = body_yaw
         self._last_collision_check = self.check_collision
 
-        self.set_target_head_joint_positions(joints)
+        self.target_head_joint_positions = joints
 
     def set_target_head_pose(self, pose: np.ndarray, body_yaw: float = 0.0) -> None:
         """Set the target head pose for the robot.
-
+§
         Args:
             pose (np.ndarray): 4x4 pose matrix representing the head pose.
             body_yaw (float): The yaw angle of the body, used to adjust the head pose.
@@ -181,6 +181,7 @@ class Backend:
 
         """
         self.target_head_joint_positions = positions
+        self.ik_required = False
 
     def set_target_antenna_joint_positions(self, positions: List[float]) -> None:
         """Set the antenna joint positions.
@@ -199,6 +200,7 @@ class Backend:
 
         """
         self.target_head_joint_current = current
+        self.ik_required = False
 
     def set_recording_publisher(self, publisher) -> None:
         """Set the publisher for recording data.

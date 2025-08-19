@@ -203,8 +203,9 @@ class PlacoKinematics:
         # to enable faster convergence of the IK/FK solver
         max_vel = 13.0  # rad/s
         for joint_name in self.joints_names:
-            self.robot.set_velocity_limit(joint_name, max_vel)
-            self.robot_ik.set_velocity_limit(joint_name, max_vel)
+            if joint_name != "all_yaw":
+                self.robot.set_velocity_limit(joint_name, max_vel)
+                self.robot_ik.set_velocity_limit(joint_name, max_vel)
             
         self.robot.set_joint_limits("all_yaw", -2.8, 2.8)
         self.robot_ik.set_joint_limits("all_yaw", -2.8, 2.8)
@@ -297,7 +298,7 @@ class PlacoKinematics:
         return joints
 
     def ik(
-        self, pose: np.ndarray, body_yaw: float = 0.0, check_collision: bool = False, no_iterations: int = 2
+        self, pose: np.ndarray, body_yaw: float = 0.0, check_collision: bool = False, no_iterations: int =2
     ) -> Optional[List[float]]:
         """Compute the inverse kinematics for the head for a given pose.
 
@@ -359,7 +360,7 @@ class PlacoKinematics:
             self._update_state_to_initial(self.robot_ik)
             self.robot_ik.update_kinematics()
 
-            no_iterations += 6  # add a few more iterations
+            no_iterations += 2  # add a few more iterations
             # do the inital ik with 10 iterations
             for i in range(no_iterations):
                 try:
@@ -438,7 +439,7 @@ class PlacoKinematics:
             self._update_state_to_initial(self.robot)  # revert to the previous state
             self.robot.update_kinematics()
 
-            no_iterations += 6  # add a few more iterations
+            no_iterations += 2  # add a few more iterations
             # do the inital ik with 10 iterations
             for i in range(no_iterations):
                 try:
