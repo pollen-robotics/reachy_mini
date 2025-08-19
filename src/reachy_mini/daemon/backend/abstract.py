@@ -162,7 +162,7 @@ class Backend:
 
     def set_target_head_pose(self, pose: np.ndarray, body_yaw: float = 0.0) -> None:
         """Set the target head pose for the robot.
-§
+        
         Args:
             pose (np.ndarray): 4x4 pose matrix representing the head pose.
             body_yaw (float): The yaw angle of the body, used to adjust the head pose.

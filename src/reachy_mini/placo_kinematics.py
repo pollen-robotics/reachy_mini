@@ -33,7 +33,6 @@ class PlacoKinematics:
             log_level (str): Logging level for the kinematics computations.
 
         """
-        
         self.fk_reached_tol = np.deg2rad(0.1)  # 0.1 degrees tolerance for the FK reached condition
         
         self.robot = placo.RobotWrapper(urdf_path, placo.Flags.ignore_collisions)
