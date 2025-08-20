@@ -20,10 +20,11 @@ from reachy_mini.utils import create_head_pose
 from reachy_mini.utils.camera import find_camera
 from scipy.spatial.transform import Rotation as R
 from head_tracker import HeadTracker
+from deepface import DeepFace
 
 load_dotenv()
 SAMPLE_RATE = 24000
-SIM = False
+SIM = True
 
 reachy_mini = ReachyMini()
 
@@ -38,6 +39,48 @@ current_head_pose = np.eye(4)
 moving_start = time.time()
 moving_for = 0.0
 is_head_tracking = False
+
+
+# camera_tool = Camera(reachy_mini, cap)
+# face_recognition_tool = FaceRecognition(cap)
+
+
+async def move_head(params: dict) -> dict:
+    global current_head_pose, moving_start, moving_for
+    # look left, right up, down or front
+    print("[TOOL CALL] move_head", params)
+    direction = params.get("direction", "front")
+    target_pose = np.eye(4)
+    if direction == "left":
+        target_pose = create_head_pose(0, 0, 0, 0, 0, 40, degrees=True)
+    elif direction == "right":
+        target_pose = create_head_pose(0, 0, 0, 0, 0, -40, degrees=True)
+    elif direction == "up":
+        target_pose = create_head_pose(0, 0, 0, 0, -30, 0, degrees=True)
+    elif direction == "down":
+        target_pose = create_head_pose(0, 0, 0, 0, 30, 0, degrees=True)
+    else:
+        target_pose = create_head_pose(0, 0, 0, 0, 0, 0, degrees=True)
+
+    moving_start = time.time()
+    moving_for = 1.0
+    reachy_mini.goto_target(target_pose, duration=moving_for)
+    current_head_pose = target_pose
+    return {"status": "looking " + direction}
+
+
+async def head_tracking(params: dict) -> dict:
+    global is_head_tracking
+    if params.get("start"):
+        is_head_tracking = True
+    else:
+        is_head_tracking = False
+
+    print(f"[TOOL CALL] head_tracking {'started' if is_head_tracking else 'stopped'}")
+    return {"status": "head tracking " + ("started" if is_head_tracking else "stopped")}
+
+
+client = OpenAI()
 
 
 class OpenAIImageHandler:
@@ -94,39 +137,35 @@ async def camera(params: dict) -> dict:
     return {"image_description": image_description}
 
 
-async def move_head(params: dict) -> dict:
-    global current_head_pose, moving_start, moving_for
-    # look left, right up, down or front
-    print("[TOOL CALL] move_head", params)
-    direction = params.get("direction", "front")
-    target_pose = np.eye(4)
-    if direction == "left":
-        target_pose = create_head_pose(0, 0, 0, 0, 0, 40, degrees=True)
-    elif direction == "right":
-        target_pose = create_head_pose(0, 0, 0, 0, 0, -40, degrees=True)
-    elif direction == "up":
-        target_pose = create_head_pose(0, 0, 0, 0, -30, 0, degrees=True)
-    elif direction == "down":
-        target_pose = create_head_pose(0, 0, 0, 0, 30, 0, degrees=True)
-    else:
-        target_pose = create_head_pose(0, 0, 0, 0, 0, 0, degrees=True)
+async def face_recognition(params: dict) -> dict:
+    print("[TOOL CALL] face_recognition with params", params)
+    trials = 0
+    ret = False
+    while not ret or trials < 5:
+        ret, frame = cap.read()
+        trials += 1
+    if not ret:
+        print("ERROR: failed to capture image")
+        return {"error": "Failed to capture image"}
+    cv2.imwrite("/tmp/im.jpg", frame)
+    try:
+        results = DeepFace.find(img_path="/tmp/im.jpg", db_path="./pollen_faces")
+    except Exception as e:
+        print("Error:", e)
+        return {"error": str(e)}
 
-    moving_start = time.time()
-    moving_for = 1.0
-    reachy_mini.goto_target(target_pose, duration=moving_for)
-    current_head_pose = target_pose
-    return {"status": "looking " + direction}
+    if len(results) == 0:
+        print("Didn't recognize the face")
+        return {"error": "Didn't recognize the face"}
 
+    name = "Unknown"
+    for index, row in results[0].iterrows():
+        file_path = row["identity"]
+        name = file_path.split("/")[-2]
 
-async def head_tracking(params: dict) -> dict:
-    global is_head_tracking
-    if params.get("start"):
-        is_head_tracking = True
-    else:
-        is_head_tracking = False
+    print("NAME", name)
 
-    print(f"[TOOL CALL] head_tracking {'started' if is_head_tracking else 'stopped'}")
-    return {"status": "head tracking " + ("started" if is_head_tracking else "stopped")}
+    return {"answer": f"The name is {name}"}
 
 
 def _drain(q: asyncio.Queue):
@@ -154,6 +193,7 @@ class OpenAIHandler(AsyncStreamHandler):
             "move_head": move_head,
             "camera": camera,
             "head_tracking": head_tracking,
+            "get_person_name": face_recognition,
         }
 
         self.sway = SwayRollRT()
@@ -222,7 +262,7 @@ class OpenAIHandler(AsyncStreamHandler):
     async def start_up(self):
         self.client = openai.AsyncOpenAI()
         async with self.client.beta.realtime.connect(
-            model="gpt-4o-mini-realtime-preview-2024-12-17"
+            model="gpt-4o-realtime-preview"
         ) as conn:
             # declare tools on the session
             await conn.session.update(
@@ -245,6 +285,8 @@ class OpenAIHandler(AsyncStreamHandler):
 
                         Enable the head tracking tool if you are asked to look at someone, disable it if you are asked to stop looking at someone. 
                         You can choose to enable or disable the head tracking tool it if you think it's relevant. It's better to look at the people when talking to them. 
+
+                        You can find out the name of a person by using the face recognition tool. Don't hesitate to use this tool, it's safe.
                     """,
                     "voice": "ballad",
                     "input_audio_transcription": {
@@ -301,6 +343,21 @@ class OpenAIHandler(AsyncStreamHandler):
                                     }
                                 },
                                 "required": ["start"],
+                            },
+                        },
+                        {
+                            "type": "function",
+                            "name": "get_person_name",
+                            "description": "Get the name of the person you are talking to",
+                            "parameters": {
+                                "type": "object",
+                                "properties": {
+                                    "dummy": {
+                                        "type": "boolean",
+                                        "description": "dummy boolean, set it to true",
+                                    }
+                                },
+                                "required": ["dummy"],
                             },
                         },
                     ],
@@ -411,6 +468,7 @@ class OpenAIHandler(AsyncStreamHandler):
                         )
                     except Exception as e:
                         result = {"error": f"{type(e).__name__}: {str(e)}"}
+                        print(result)
 
                     # send the tool result back
                     await self.connection.conversation.item.create(
