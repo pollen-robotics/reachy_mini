@@ -7,11 +7,15 @@ robot. It subscribes to joint positions updates and allows sending commands to t
 import json
 import threading
 import time
+from dataclasses import dataclass
+from datetime import datetime
+from uuid import UUID, uuid4
 
 import numpy as np
 import zenoh
 
 from reachy_mini.io.abstract import AbstractClient
+from reachy_mini.io.protocol import AnyTaskRequest, TaskProgress, TaskRequest
 
 
 class ZenohClient(AbstractClient):
@@ -72,6 +76,13 @@ class ZenohClient(AbstractClient):
         self._last_head_pose = None
         self._recorded_data = None
         self._recorded_data_ready = threading.Event()
+
+        self.tasks: dict[UUID, TaskState] = {}
+        self.task_request_pub = self.session.declare_publisher("reachy_mini/task")
+        self.task_progress_sub = self.session.declare_subscriber(
+            "reachy_mini/task_progress",
+            self._handle_task_progress,
+        )
 
     def wait_for_connection(self, timeout: float = 5.0):
         """Wait for the client to connect to the server.
@@ -177,3 +188,45 @@ class ZenohClient(AbstractClient):
         """Get the current head pose."""
         assert self._last_head_pose is not None, "No head pose received yet."
         return self._last_head_pose.copy()
+
+    def send_task_request(self, task_req: AnyTaskRequest) -> UUID:
+        """Send a task request to the server."""
+        task = TaskRequest(uuid=uuid4(), req=task_req, timestamp=datetime.now())
+
+        self.tasks[task.uuid] = TaskState(event=threading.Event(), error=None)
+
+        self.task_request_pub.put(task.model_dump_json())
+        return task.uuid
+
+    def wait_for_task_completion(self, task_uid: UUID, timeout: float = 5.0):
+        """Wait for the specified task to complete."""
+        if task_uid not in self.tasks:
+            raise ValueError("Task not found.")
+
+        self.tasks[task_uid].event.wait(timeout)
+
+        if not self.tasks[task_uid].event.is_set():
+            raise TimeoutError("Task did not complete in time.")
+        if self.tasks[task_uid].error is not None:
+            raise Exception(f"Task failed with error: {self.tasks[task_uid].error}")
+
+        del self.tasks[task_uid]
+
+    def _handle_task_progress(self, sample):
+        if sample.payload:
+            progress = TaskProgress.model_validate_json(sample.payload.to_string())
+            assert progress.uuid in self.tasks, "Unknown task UUID."
+
+            if progress.error:
+                self.tasks[progress.uuid].error = progress.error
+
+            if progress.finished:
+                self.tasks[progress.uuid].event.set()
+
+
+@dataclass
+class TaskState:
+    """Represents the state of a task."""
+
+    event: threading.Event
+    error: str | None

@@ -11,6 +11,7 @@ each type of backend.
 import json
 import logging
 import threading
+import time
 from importlib.resources import files
 from typing import List
 
@@ -18,6 +19,7 @@ import numpy as np
 
 import reachy_mini
 from reachy_mini.placo_kinematics import PlacoKinematics
+from reachy_mini.utils.interpolation import linear_pose_interpolation, time_trajectory
 
 
 class Backend:
@@ -208,6 +210,65 @@ class Backend:
         self.target_head_joint_current = current
         self.ik_required = False
 
+    def goto_target(
+        self,
+        head: np.ndarray | None = None,  # 4x4 pose matrix
+        antennas: np.ndarray
+        | list[float]
+        | None = None,  # [left_angle, right_angle] (in rads)
+        duration: float = 0.5,  # Duration in seconds for the movement, default is 0.5 seconds.
+        method="default",  # can be "linear", "minjerk", "ease" or "cartoon", default is "default" (-> "minjerk" interpolation)
+        body_yaw: float = 0.0,  # Body yaw angle in radians
+        check_collision: bool = False,
+    ):
+        """Go to a target head pose and/or antennas position using task space interpolation, in "duration" seconds.
+
+        Args:
+            head (np.ndarray | None): 4x4 pose matrix representing the target head pose.
+            antennas (np.ndarray | list[float] | None): 1D array with two elements representing the angles of the antennas in radians.
+            duration (float): Duration of the movement in seconds.
+            method (str): Interpolation method to use ("linear", "minjerk", "ease", "cartoon"). Default is "minjerk".
+            body_yaw (float): Body yaw angle in radians.
+            check_collision (bool): If True, checks for collisions before setting the position. Beware that this will slow down the IK computation (~1ms)!
+
+        Raises:
+            ValueError: If neither head nor antennas are provided, or if duration is not positive.
+
+        """
+        current_collision_check = self.check_collision
+        self.set_check_collision(check_collision)
+
+        start_head_pose = self.get_present_head_pose()
+        target_head_pose = head if head is not None else start_head_pose
+        start_body_yaw = self.get_present_body_yaw()
+
+        start_antennas = np.array(self.get_present_antenna_joint_positions())
+        target_antennas = antennas if antennas is not None else start_antennas
+
+        t0 = time.time()
+        while time.time() - t0 < duration:
+            t = time.time() - t0
+
+            interp_time = time_trajectory(t / duration, method=method)
+            interp_head_pose = linear_pose_interpolation(
+                start_head_pose, target_head_pose, interp_time
+            )
+            interp_antennas_joint = (
+                start_antennas + (target_antennas - start_antennas) * interp_time
+            )
+            interp_body_yaw_joint = (
+                start_body_yaw + (body_yaw - start_body_yaw) * interp_time
+            )
+
+            self.set_target_head_pose(
+                interp_head_pose,
+                body_yaw=interp_body_yaw_joint,
+            )
+            self.set_target_antenna_joint_positions(list(interp_antennas_joint))
+            time.sleep(0.01)
+
+        self.set_check_collision(current_collision_check)
+
     def set_recording_publisher(self, publisher) -> None:
         """Set the publisher for recording data.
 
@@ -283,6 +344,10 @@ class Backend:
         raise NotImplementedError(
             "The method get_present_head_joint_positions should be overridden by subclasses."
         )
+
+    def get_present_body_yaw(self) -> float:
+        """Return the present body yaw."""
+        return self.get_present_head_joint_positions()[0]
 
     def get_present_head_pose(self) -> np.ndarray:
         """Return the present head pose as a 4x4 matrix."""
