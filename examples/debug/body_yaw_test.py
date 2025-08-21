@@ -33,7 +33,6 @@ def main():
                 head=head,
                 antennas=np.array([target, -target]),
                 body_yaw=target,
-                check_collision=False,
             )
             time.sleep(0.01)
 
