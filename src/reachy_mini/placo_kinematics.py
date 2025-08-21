@@ -22,6 +22,7 @@ class PlacoKinematics:
         urdf_path: str,
         dt: float = 0.02,
         automatic_body_yaw: bool = False,
+        check_collision=False,
         log_level: str = "INFO",
     ) -> None:
         """Initialize the PlacoKinematics class.
@@ -30,6 +31,7 @@ class PlacoKinematics:
             urdf_path (str): Path to the URDF file of the Reachy Mini robot.
             dt (float): Time step for the kinematics solver. Default is 0.02 seconds.
             automatic_body_yaw (bool): If True, the body yaw will be used to compute the IK and FK. Default is False.
+            check_collision (bool): If True, checks for collisions after solving IK. (default: False)
             log_level (str): Logging level for the kinematics computations.
 
         """
@@ -37,8 +39,15 @@ class PlacoKinematics:
             0.1
         )  # 0.1 degrees tolerance for the FK reached condition
 
-        self.robot = placo.RobotWrapper(urdf_path, placo.Flags.ignore_collisions)
-        self.robot_ik = placo.RobotWrapper(urdf_path, placo.Flags.ignore_collisions)
+        if not urdf_path.endswith(".urdf"):
+            urdf_path = f"{urdf_path}/{'robot.urdf' if check_collision else 'robot_no_collision.urdf'}"
+
+        self.robot = placo.RobotWrapper(
+            urdf_path, placo.Flags.ignore_collisions + placo.Flags.collision_as_visual
+        )
+        self.robot_ik = placo.RobotWrapper(
+            urdf_path, placo.Flags.ignore_collisions + placo.Flags.collision_as_visual
+        )
 
         self.ik_solver = placo.KinematicsSolver(self.robot_ik)
         self.ik_solver.mask_fbase(True)
@@ -47,6 +56,7 @@ class PlacoKinematics:
         self.fk_solver.mask_fbase(True)
 
         self.automatic_body_yaw = automatic_body_yaw
+        self.check_collision = check_collision
 
         self._logger = logging.getLogger(__name__)
         self._logger.setLevel(log_level)
@@ -228,8 +238,9 @@ class PlacoKinematics:
         self._update_state_to_initial(self.robot)  # revert to the inital state
         self.robot.update_kinematics()
 
-        # setup the collision model
-        self.config_collision_model()
+        if self.check_collision:
+            # setup the collision model
+            self.config_collision_model()
 
     def _update_state_to_initial(self, robot: placo.RobotWrapper) -> None:
         """Update the robot state to the initial state.
@@ -303,7 +314,6 @@ class PlacoKinematics:
         self,
         pose: np.ndarray,
         body_yaw: float = 0.0,
-        check_collision: bool = False,
         no_iterations: int = 2,
     ) -> Optional[List[float]]:
         """Compute the inverse kinematics for the head for a given pose.
@@ -312,7 +322,6 @@ class PlacoKinematics:
             pose (np.ndarray): A 4x4 homogeneous transformation matrix
                 representing the desired position and orientation of the head.
             body_yaw (float): Body yaw angle in radians.
-            check_collision (bool): If True, checks for collisions after solving IK. (default: False)
             no_iterations (int): Number of iterations to perform (default: 2). The higher the value, the more accurate the solution.
 
         Returns:
@@ -386,7 +395,7 @@ class PlacoKinematics:
                 self.robot_ik.update_kinematics()
 
         # verify that there is no collision
-        if check_collision and self.compute_collision():
+        if self.check_collision and self.compute_collision():
             self._logger.warning(
                 "IK: Collision detected, using the previous configuration..."
             )
@@ -400,14 +409,12 @@ class PlacoKinematics:
     def fk(
         self,
         joints_angles: List[float],
-        check_collision: bool = False,
         no_iterations: int = 2,
     ) -> Optional[np.ndarray]:
         """Compute the forward kinematics for the head given joint angles.
 
         Args:
             joints_angles (List[float]): A list of joint angles for the head.
-            check_collision (bool): If True, checks for collisions after solving FK. (default: False)
             no_iterations (int): The number of iterations to use for the FK solver. (default: 2), the higher the more accurate the result.
 
         Returns:
@@ -477,7 +484,7 @@ class PlacoKinematics:
                     return None
                 self.robot.update_kinematics()
 
-        if check_collision and self.compute_collision():
+        if self.check_collision and self.compute_collision():
             self._logger.warning("FK: Collision detected, using the previous config...")
             self._update_state_to_initial(self.robot)  # revert to the previous state
             self.robot.state.q = q
