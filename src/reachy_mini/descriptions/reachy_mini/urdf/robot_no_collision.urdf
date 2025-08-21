@@ -1,0 +1,1586 @@
+<?xml version="1.0" ?>
+<!-- Generated using onshape-to-robot -->
+<!-- Onshape https://cad.onshape.com/documents/e305b26a84339af20c593973/w/ec7765eccdaa9a5960507125/e/251023ea04190ab16854eb80 -->
+<robot name="robot">
+  <!-- Link pp01071_turning_bowl -->
+  <link name="pp01071_turning_bowl">
+    <inertial>
+      <origin xyz="0.000667521 1.7878e-09 0.0118411" rpy="0 0 0"/>
+      <mass value="0.0947234"/>
+      <inertia ixx="0.000111359" ixy="1.02485e-11" ixz="8.96229e-07" iyy="0.000106563" iyz="4.95917e-13" izz="0.000196298"/>
+    </inertial>
+    <!-- Part pp01071_turning_bowl -->
+    <visual>
+      <origin xyz="-1.38778e-17 0 0.2345" rpy="0 -3.45127e-31 1.5708"/>
+      <geometry>
+        <mesh filename="package://assets/pp01071_turning_bowl.stl"/>
+      </geometry>
+      <material name="pp01071_turning_bowl_material">
+        <color rgba="0.34902 0.376471 0.4 1"/>
+      </material>
+    </visual>
+     <!-- (removed collisions) -->    <!-- Part pp01072_turning_end -->
+    <visual>
+      <origin xyz="3.46945e-17 -4.51028e-17 0.2345" rpy="0 -2.22045e-16 1.5708"/>
+      <geometry>
+        <mesh filename="package://assets/pp01072_turning_end.stl"/>
+      </geometry>
+      <material name="pp01072_turning_end_material">
+        <color rgba="0.262745 0.282353 0.301961 1"/>
+      </material>
+    </visual>
+     <!-- (removed collisions) -->  </link>
+  <!-- Link dc15_a01_case_b_dummy -->
+  <link name="dc15_a01_case_b_dummy">
+    <inertial>
+      <origin xyz="-1.60377e-06 0.00140187 -0.0329593" rpy="0 0 0"/>
+      <mass value="0.443795"/>
+      <inertia ixx="0.00159333" ixy="2.80397e-07" ixz="1.98452e-07" iyy="0.0015483" iyz="4.26838e-05" izz="0.00187065"/>
+    </inertial>
+    <!-- Part pp01065_stewart_side_plate -->
+    <visual>
+      <origin xyz="-3.43031e-17 -4.85723e-17 -0.00705" rpy="-3.14159 8.59989e-16 1.0472"/>
+      <geometry>
+        <mesh filename="package://assets/pp01065_stewart_side_plate.stl"/>
+      </geometry>
+      <material name="pp01065_stewart_side_plate_material">
+        <color rgba="0.196078 0.196078 0.196078 1"/>
+      </material>
+    </visual>
+     <!-- (removed collisions) -->    <!-- Part pp01067_bottom_body -->
+    <visual>
+      <origin xyz="1.38767e-16 1.83881e-16 -0.20055" rpy="3.14159 5.52235e-16 -1.38778e-17"/>
+      <geometry>
+        <mesh filename="package://assets/pp01067_bottom_body.stl"/>
+      </geometry>
+      <material name="pp01067_bottom_body_material">
+        <color rgba="1 1 1 1"/>
+      </material>
+    </visual>
+     <!-- (removed collisions) -->    <!-- Part dc15_a01_case_m_dummy -->
+    <visual>
+      <origin xyz="-1.4706e-16 -8.67362e-17 -0.00705" rpy="3.14159 -3.07754e-16 -1.0472"/>
+      <geometry>
+        <mesh filename="package://assets/dc15_a01_case_m_dummy.stl"/>
+      </geometry>
+      <material name="dc15_a01_case_m_dummy_material">
+        <color rgba="0.262745 0.282353 0.301961 1"/>
+      </material>
+    </visual>
+     <!-- (removed collisions) -->    <!-- Part dc15_a01_case_f_dummy -->
+    <visual>
+      <origin xyz="0.0205 6.93889e-18 -0.00705" rpy="-3.14159 -5.52235e-16 3.14159"/>
+      <geometry>
+        <mesh filename="package://assets/dc15_a01_case_f_dummy.stl"/>
+      </geometry>
+      <material name="dc15_a01_case_f_dummy_material">
+        <color rgba="0.262745 0.282353 0.301961 1"/>
+      </material>
+    </visual>
+     <!-- (removed collisions) -->    <!-- Part dc15_a01_horn_dummy -->
+    <visual>
+      <origin xyz="0.0205 1.73472e-17 -0.00705" rpy="-3.14159 -5.52235e-16 3.14159"/>
+      <geometry>
+        <mesh filename="package://assets/dc15_a01_horn_dummy.stl"/>
+      </geometry>
+      <material name="dc15_a01_horn_dummy_material">
+        <color rgba="0.262745 0.282353 0.301961 1"/>
+      </material>
+    </visual>
+     <!-- (removed collisions) -->    <!-- Part dc15_a01_horn_dummy_2 -->
+    <visual>
+      <origin xyz="-0.01025 0.0177535 -0.00705" rpy="3.14159 -3.07754e-16 -1.0472"/>
+      <geometry>
+        <mesh filename="package://assets/dc15_a01_horn_dummy.stl"/>
+      </geometry>
+      <material name="dc15_a01_horn_dummy_2_material">
+        <color rgba="0.262745 0.282353 0.301961 1"/>
+      </material>
+    </visual>
+     <!-- (removed collisions) -->    <!-- Part wj_wk00_0122topcabinetcase_95__configuration_default -->
+    <visual>
+      <origin xyz="6.12843e-18 -0.0255 -0.00945" rpy="1.5708 -6.74197e-16 -1.5708"/>
+      <geometry>
+        <mesh filename="package://assets/wj_wk00_0122topcabinetcase_95__configuration_default.stl"/>
+      </geometry>
+      <material name="wj_wk00_0122topcabinetcase_95__configuration_default_material">
+        <color rgba="0.247059 0.243137 0.243137 1"/>
+      </material>
+    </visual>
+     <!-- (removed collisions) -->    <!-- Part dc15_a01_case_m_dummy_2 -->
+    <visual>
+      <origin xyz="-2.56295e-17 3.1225e-17 -0.00705" rpy="-3.14159 -5.52235e-16 -3.14159"/>
+      <geometry>
+        <mesh filename="package://assets/dc15_a01_case_m_dummy.stl"/>
+      </geometry>
+      <material name="dc15_a01_case_m_dummy_2_material">
+        <color rgba="0.262745 0.282353 0.301961 1"/>
+      </material>
+    </visual>
+     <!-- (removed collisions) -->    <!-- Part dc15_a01_case_b_dummy -->
+    <visual>
+      <origin xyz="-0.01025 -0.0177535 -0.00705" rpy="-3.14159 8.59989e-16 1.0472"/>
+      <geometry>
+        <mesh filename="package://assets/dc15_a01_case_b_dummy.stl"/>
+      </geometry>
+      <material name="dc15_a01_case_b_dummy_material">
+        <color rgba="0.262745 0.282353 0.301961 1"/>
+      </material>
+    </visual>
+     <!-- (removed collisions) -->    <!-- Part dc15_a01_case_b_dummy_2 -->
+    <visual>
+      <origin xyz="0.0205 3.46945e-18 -0.00705" rpy="-3.14159 -5.52235e-16 3.14159"/>
+      <geometry>
+        <mesh filename="package://assets/dc15_a01_case_b_dummy.stl"/>
+      </geometry>
+      <material name="dc15_a01_case_b_dummy_2_material">
+        <color rgba="0.262745 0.282353 0.301961 1"/>
+      </material>
+    </visual>
+     <!-- (removed collisions) -->    <!-- Part pp01068_top_body -->
+    <visual>
+      <origin xyz="-8.55341e-16 -3.12493e-14 -0.20005" rpy="3.14159 6.00449e-15 -2.08167e-17"/>
+      <geometry>
+        <mesh filename="package://assets/pp01068_top_body.stl"/>
+      </geometry>
+      <material name="pp01068_top_body_material">
+        <color rgba="1 1 1 1"/>
+      </material>
+    </visual>
+     <!-- (removed collisions) -->    <!-- Part dc15_a01_case_f_dummy_2 -->
+    <visual>
+      <origin xyz="-3.43031e-17 -3.46945e-18 -0.00705" rpy="-3.14159 -5.52235e-16 3.14159"/>
+      <geometry>
+        <mesh filename="package://assets/dc15_a01_case_f_dummy.stl"/>
+      </geometry>
+      <material name="dc15_a01_case_f_dummy_2_material">
+        <color rgba="0.262745 0.282353 0.301961 1"/>
+      </material>
+    </visual>
+     <!-- (removed collisions) -->    <!-- Part drive_palonier__configuration_default -->
+    <visual>
+      <origin xyz="4.39371e-18 -0.0255 -0.00945" rpy="1.5708 -6.74197e-16 -1.5708"/>
+      <geometry>
+        <mesh filename="package://assets/drive_palonier__configuration_default.stl"/>
+      </geometry>
+      <material name="drive_palonier__configuration_default_material">
+        <color rgba="0.623529 0.666667 0.701961 1"/>
+      </material>
+    </visual>
+     <!-- (removed collisions) -->    <!-- Part dc15_a01_case_f_dummy_3 -->
+    <visual>
+      <origin xyz="-0.01025 0.0177535 -0.00705" rpy="3.14159 -3.07754e-16 -1.0472"/>
+      <geometry>
+        <mesh filename="package://assets/dc15_a01_case_f_dummy.stl"/>
+      </geometry>
+      <material name="dc15_a01_case_f_dummy_3_material">
+        <color rgba="0.262745 0.282353 0.301961 1"/>
+      </material>
+    </visual>
+     <!-- (removed collisions) -->    <!-- Part dc15_a01_case_m_dummy_3 -->
+    <visual>
+      <origin xyz="-3.43031e-17 -6.245e-17 -0.00705" rpy="-3.14159 8.59989e-16 1.0472"/>
+      <geometry>
+        <mesh filename="package://assets/dc15_a01_case_m_dummy.stl"/>
+      </geometry>
+      <material name="dc15_a01_case_m_dummy_3_material">
+        <color rgba="0.262745 0.282353 0.301961 1"/>
+      </material>
+    </visual>
+     <!-- (removed collisions) -->    <!-- Part dc15_a01_case_b_dummy_3 -->
+    <visual>
+      <origin xyz="-9.1549e-17 -6.245e-17 -0.00705" rpy="3.14159 -3.07754e-16 -1.0472"/>
+      <geometry>
+        <mesh filename="package://assets/dc15_a01_case_b_dummy.stl"/>
+      </geometry>
+      <material name="dc15_a01_case_b_dummy_3_material">
+        <color rgba="0.262745 0.282353 0.301961 1"/>
+      </material>
+    </visual>
+     <!-- (removed collisions) -->    <!-- Part wj_wk00_0123middlecase_56__configuration_default -->
+    <visual>
+      <origin xyz="-1.75347e-05 -0.0254895 -0.00945" rpy="1.5708 -6.74197e-16 -1.5708"/>
+      <geometry>
+        <mesh filename="package://assets/wj_wk00_0123middlecase_56__configuration_default.stl"/>
+      </geometry>
+      <material name="wj_wk00_0123middlecase_56__configuration_default_material">
+        <color rgba="0.247059 0.243137 0.243137 1"/>
+      </material>
+    </visual>
+     <!-- (removed collisions) -->    <!-- Part dc15_a01_case_b_dummy_4 -->
+    <visual>
+      <origin xyz="-3.60378e-17 -1.04083e-17 -0.00705" rpy="-3.14159 -5.52235e-16 3.14159"/>
+      <geometry>
+        <mesh filename="package://assets/dc15_a01_case_b_dummy.stl"/>
+      </geometry>
+      <material name="dc15_a01_case_b_dummy_4_material">
+        <color rgba="0.262745 0.282353 0.301961 1"/>
+      </material>
+    </visual>
+     <!-- (removed collisions) -->    <!-- Part dc15_a01_case_f_dummy_4 -->
+    <visual>
+      <origin xyz="-2.26857e-16 -1.00614e-16 -0.00705" rpy="3.14159 -3.07754e-16 -1.0472"/>
+      <geometry>
+        <mesh filename="package://assets/dc15_a01_case_f_dummy.stl"/>
+      </geometry>
+      <material name="dc15_a01_case_f_dummy_4_material">
+        <color rgba="0.262745 0.282353 0.301961 1"/>
+      </material>
+    </visual>
+     <!-- (removed collisions) -->    <!-- Part dc15_a01_case_b_dummy_5 -->
+    <visual>
+      <origin xyz="-0.01025 0.0177535 -0.00705" rpy="3.14159 -3.07754e-16 -1.0472"/>
+      <geometry>
+        <mesh filename="package://assets/dc15_a01_case_b_dummy.stl"/>
+      </geometry>
+      <material name="dc15_a01_case_b_dummy_5_material">
+        <color rgba="0.262745 0.282353 0.301961 1"/>
+      </material>
+    </visual>
+     <!-- (removed collisions) -->    <!-- Part dc15_a01_horn_dummy_3 -->
+    <visual>
+      <origin xyz="-1.15835e-16 -6.93889e-17 -0.00705" rpy="3.14159 -3.07754e-16 -1.0472"/>
+      <geometry>
+        <mesh filename="package://assets/dc15_a01_horn_dummy.stl"/>
+      </geometry>
+      <material name="dc15_a01_horn_dummy_3_material">
+        <color rgba="0.262745 0.282353 0.301961 1"/>
+      </material>
+    </visual>
+     <!-- (removed collisions) -->    <!-- Part dc15_a01_horn_dummy_4 -->
+    <visual>
+      <origin xyz="-0.01025 -0.0177535 -0.00705" rpy="-3.14159 8.59989e-16 1.0472"/>
+      <geometry>
+        <mesh filename="package://assets/dc15_a01_horn_dummy.stl"/>
+      </geometry>
+      <material name="dc15_a01_horn_dummy_4_material">
+        <color rgba="0.262745 0.282353 0.301961 1"/>
+      </material>
+    </visual>
+     <!-- (removed collisions) -->    <!-- Part dc15_a01_case_m_dummy_4 -->
+    <visual>
+      <origin xyz="-0.01025 0.0177535 -0.00705" rpy="3.14159 -3.07754e-16 -1.0472"/>
+      <geometry>
+        <mesh filename="package://assets/dc15_a01_case_m_dummy.stl"/>
+      </geometry>
+      <material name="dc15_a01_case_m_dummy_4_material">
+        <color rgba="0.262745 0.282353 0.301961 1"/>
+      </material>
+    </visual>
+     <!-- (removed collisions) -->    <!-- Part pp01065_stewart_side_plate_2 -->
+    <visual>
+      <origin xyz="-1.34864e-17 6.59195e-17 -0.00705" rpy="-3.14159 -5.52235e-16 3.14159"/>
+      <geometry>
+        <mesh filename="package://assets/pp01065_stewart_side_plate.stl"/>
+      </geometry>
+      <material name="pp01065_stewart_side_plate_2_material">
+        <color rgba="0.196078 0.196078 0.196078 1"/>
+      </material>
+    </visual>
+     <!-- (removed collisions) -->    <!-- Part dc15_a01_case_b_dummy_6 -->
+    <visual>
+      <origin xyz="-6.37934e-17 -3.46945e-17 -0.00705" rpy="-3.14159 8.59989e-16 1.0472"/>
+      <geometry>
+        <mesh filename="package://assets/dc15_a01_case_b_dummy.stl"/>
+      </geometry>
+      <material name="dc15_a01_case_b_dummy_6_material">
+        <color rgba="0.262745 0.282353 0.301961 1"/>
+      </material>
+    </visual>
+     <!-- (removed collisions) -->    <!-- Part pp01066_stewart_mid_plate -->
+    <visual>
+      <origin xyz="-8.28754e-17 -1.04083e-17 -0.00705" rpy="-3.14159 8.59989e-16 1.0472"/>
+      <geometry>
+        <mesh filename="package://assets/pp01066_stewart_mid_plate.stl"/>
+      </geometry>
+      <material name="pp01066_stewart_mid_plate_material">
+        <color rgba="0.196078 0.196078 0.196078 1"/>
+      </material>
+    </visual>
+     <!-- (removed collisions) -->    <!-- Part dc15_a01_case_f_dummy_5 -->
+    <visual>
+      <origin xyz="-3.77726e-17 -4.85723e-17 -0.00705" rpy="-3.14159 8.59989e-16 1.0472"/>
+      <geometry>
+        <mesh filename="package://assets/dc15_a01_case_f_dummy.stl"/>
+      </geometry>
+      <material name="dc15_a01_case_f_dummy_5_material">
+        <color rgba="0.262745 0.282353 0.301961 1"/>
+      </material>
+    </visual>
+     <!-- (removed collisions) -->    <!-- Part dc15_a01_horn_dummy_5 -->
+    <visual>
+      <origin xyz="-5.51198e-17 -4.85723e-17 -0.00705" rpy="-3.14159 8.59989e-16 1.0472"/>
+      <geometry>
+        <mesh filename="package://assets/dc15_a01_horn_dummy.stl"/>
+      </geometry>
+      <material name="dc15_a01_horn_dummy_5_material">
+        <color rgba="0.262745 0.282353 0.301961 1"/>
+      </material>
+    </visual>
+     <!-- (removed collisions) -->    <!-- Part dc15_a01_case_m_dummy_5 -->
+    <visual>
+      <origin xyz="0.0205 3.81639e-17 -0.00705" rpy="-3.14159 -5.52235e-16 -3.14159"/>
+      <geometry>
+        <mesh filename="package://assets/dc15_a01_case_m_dummy.stl"/>
+      </geometry>
+      <material name="dc15_a01_case_m_dummy_5_material">
+        <color rgba="0.262745 0.282353 0.301961 1"/>
+      </material>
+    </visual>
+     <!-- (removed collisions) -->    <!-- Part wj_wk00_0124bottomcase_45__configuration_default -->
+    <visual>
+      <origin xyz="-1.04636e-05 -0.0254966 -0.00945" rpy="1.5708 -6.74197e-16 -1.5708"/>
+      <geometry>
+        <mesh filename="package://assets/wj_wk00_0124bottomcase_45__configuration_default.stl"/>
+      </geometry>
+      <material name="wj_wk00_0124bottomcase_45__configuration_default_material">
+        <color rgba="0.247059 0.243137 0.243137 1"/>
+      </material>
+    </visual>
+     <!-- (removed collisions) -->    <!-- Part dc15_a01_horn_dummy_6 -->
+    <visual>
+      <origin xyz="-3.25684e-17 1.04083e-17 -0.00705" rpy="-3.14159 -5.52235e-16 3.14159"/>
+      <geometry>
+        <mesh filename="package://assets/dc15_a01_horn_dummy.stl"/>
+      </geometry>
+      <material name="dc15_a01_horn_dummy_6_material">
+        <color rgba="0.262745 0.282353 0.301961 1"/>
+      </material>
+    </visual>
+     <!-- (removed collisions) -->    <!-- Part dc15_a01_case_m_dummy_6 -->
+    <visual>
+      <origin xyz="-0.01025 -0.0177535 -0.00705" rpy="-3.14159 8.59989e-16 1.0472"/>
+      <geometry>
+        <mesh filename="package://assets/dc15_a01_case_m_dummy.stl"/>
+      </geometry>
+      <material name="dc15_a01_case_m_dummy_6_material">
+        <color rgba="0.262745 0.282353 0.301961 1"/>
+      </material>
+    </visual>
+     <!-- (removed collisions) -->    <!-- Part pp01064_stewart_main_plate -->
+    <visual>
+      <origin xyz="-2.73642e-17 -1.38778e-17 -0.00705" rpy="-3.14159 -5.52235e-16 -3.14159"/>
+      <geometry>
+        <mesh filename="package://assets/pp01064_stewart_main_plate.stl"/>
+      </geometry>
+      <material name="pp01064_stewart_main_plate_material">
+        <color rgba="0.196078 0.196078 0.196078 1"/>
+      </material>
+    </visual>
+     <!-- (removed collisions) -->    <!-- Part dc15_a01_case_f_dummy_6 -->
+    <visual>
+      <origin xyz="-0.01025 -0.0177535 -0.00705" rpy="-3.14159 8.59989e-16 1.0472"/>
+      <geometry>
+        <mesh filename="package://assets/dc15_a01_case_f_dummy.stl"/>
+      </geometry>
+      <material name="dc15_a01_case_f_dummy_6_material">
+        <color rgba="0.262745 0.282353 0.301961 1"/>
+      </material>
+    </visual>
+     <!-- (removed collisions) -->    <!-- Part pp01065_stewart_side_plate_3 -->
+    <visual>
+      <origin xyz="-6.20587e-17 -1.04083e-17 -0.00705" rpy="3.14159 -3.07754e-16 -1.0472"/>
+      <geometry>
+        <mesh filename="package://assets/pp01065_stewart_side_plate.stl"/>
+      </geometry>
+      <material name="pp01065_stewart_side_plate_3_material">
+        <color rgba="0.196078 0.196078 0.196078 1"/>
+      </material>
+    </visual>
+     <!-- (removed collisions) -->  </link>
+  <!-- Link pp01062_stewart_arm -->
+  <link name="pp01062_stewart_arm">
+    <inertial>
+      <origin xyz="0.0181787 2.77556e-17 0.00350559" rpy="0 0 0"/>
+      <mass value="0.00272417"/>
+      <inertia ixx="4.89963e-08" ixy="-2.63422e-25" ixz="-7.04811e-08" iyy="6.75761e-07" iyz="2.66043e-25" izz="6.91798e-07"/>
+    </inertial>
+    <!-- Part ball -->
+    <visual>
+      <origin xyz="0.038 2.77556e-17 0.00768" rpy="-3.14159 1.07037e-16 -1.79126e-30"/>
+      <geometry>
+        <mesh filename="package://assets/ball.stl"/>
+      </geometry>
+      <material name="ball_material">
+        <color rgba="0.901961 0.901961 0.901961 1"/>
+      </material>
+    </visual>
+     <!-- (removed collisions) -->    <!-- Part pp01062_stewart_arm -->
+    <visual>
+      <origin xyz="-0.01025 0.03 0.0425915" rpy="1.5708 -2.36919e-16 -1.14935e-31"/>
+      <geometry>
+        <mesh filename="package://assets/pp01062_stewart_arm.stl"/>
+      </geometry>
+      <material name="pp01062_stewart_arm_material">
+        <color rgba="0.196078 0.196078 0.196078 1"/>
+      </material>
+    </visual>
+     <!-- (removed collisions) -->  </link>
+  <!-- Link passive_1_link_x -->
+  <link name="passive_1_link_x">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="1e-09"/>
+      <inertia ixx="1e-09" ixy="0" ixz="0" iyy="1e-09" iyz="0" izz="1e-09"/>
+    </inertial>
+  </link>
+  <!-- Link passive_1_link_y -->
+  <link name="passive_1_link_y">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="1e-09"/>
+      <inertia ixx="1e-09" ixy="0" ixz="0" iyy="1e-09" iyz="0" izz="1e-09"/>
+    </inertial>
+  </link>
+  <!-- Link shape -->
+  <link name="shape">
+    <inertial>
+      <origin xyz="-0.0450002 -2.17877e-17 -4.85069e-17" rpy="0 0 0"/>
+      <mass value="0.00355525"/>
+      <inertia ixx="1.7732e-08" ixy="3.75919e-22" ixz="-8.93073e-21" iyy="3.06049e-06" iyz="-1.00288e-21" izz="3.0658e-06"/>
+    </inertial>
+    <!-- Part shape -->
+    <visual>
+      <origin xyz="6.93889e-18 -1.38778e-17 0" rpy="6.20901e-17 1.31226e-17 -3.8231e-17"/>
+      <geometry>
+        <mesh filename="package://assets/shape.stl"/>
+      </geometry>
+      <material name="shape_material">
+        <color rgba="0.901961 0.901961 0.901961 1"/>
+      </material>
+    </visual>
+     <!-- (removed collisions) -->    <!-- Part pp00xxx_stewart_rod -->
+    <visual>
+      <origin xyz="0.00371031 0.0370326 -0.0564076" rpy="0.01484 -1.08842 -7.89987e-16"/>
+      <geometry>
+        <mesh filename="package://assets/pp00xxx_stewart_rod.stl"/>
+      </geometry>
+      <material name="pp00xxx_stewart_rod_material">
+        <color rgba="0.8 0.8 0.8 1"/>
+      </material>
+    </visual>
+     <!-- (removed collisions) -->    <!-- Part shape_2 -->
+    <visual>
+      <origin xyz="-0.0900003 -2.77556e-17 -8.32667e-17" rpy="-3.14159 1.84488e-15 -3.14159"/>
+      <geometry>
+        <mesh filename="package://assets/shape.stl"/>
+      </geometry>
+      <material name="shape_2_material">
+        <color rgba="0.901961 0.901961 0.901961 1"/>
+      </material>
+    </visual>
+     <!-- (removed collisions) -->  </link>
+  <!-- Frame closing_1_1 (dummy link + fixed joint) -->
+  <link name="closing_1_1">
+    <origin xyz="0 0 0" rpy="0 -0 0"/>
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="1e-9"/>
+      <inertia ixx="0" ixy="0" ixz="0" iyy="0" iyz="0" izz="0"/>
+    </inertial>
+  </link>
+  <joint name="closing_1_1_frame" type="fixed">
+    <origin xyz="-0.0900003 -2.77556e-17 -8.32667e-17" rpy="-3.14159 1.84488e-15 -3.14159"/>
+    <parent link="shape"/>
+    <child link="closing_1_1"/>
+    <axis xyz="0 0 0"/>
+  </joint>
+  <!-- Joint from passive_1_link_y to shape -->
+  <joint name="passive_1_z" type="revolute">
+    <origin xyz="6.93889e-18 -1.38778e-17 0" rpy="6.20901e-17 1.31226e-17 -3.8231e-17"/>
+    <parent link="passive_1_link_y"/>
+    <child link="shape"/>
+    <axis xyz="0 0 1"/>
+    <limit effort="10" velocity="1e+08" lower="-3.141592653589793" upper="3.141592653589793"/>
+  </joint>
+  <!-- Joint from passive_1_link_x to passive_1_link_y -->
+  <joint name="passive_1_y" type="revolute">
+    <origin xyz="6.93889e-18 -1.38778e-17 0" rpy="6.20901e-17 1.31226e-17 -3.8231e-17"/>
+    <parent link="passive_1_link_x"/>
+    <child link="passive_1_link_y"/>
+    <axis xyz="0 1 0"/>
+    <limit effort="10" velocity="1e+08" lower="-3.141592653589793" upper="3.141592653589793"/>
+  </joint>
+  <!-- Joint from pp01062_stewart_arm to passive_1_link_x -->
+  <joint name="passive_1_x" type="revolute">
+    <origin xyz="0.038 2.77556e-17 0.00768" rpy="-3.09302 0.0258157 -1.08824"/>
+    <parent link="pp01062_stewart_arm"/>
+    <child link="passive_1_link_x"/>
+    <axis xyz="1 0 0"/>
+    <limit effort="10" velocity="1e+08" lower="-3.141592653589793" upper="3.141592653589793"/>
+  </joint>
+  <!-- Joint from dc15_a01_case_b_dummy to pp01062_stewart_arm -->
+  <joint name="1" type="revolute">
+    <origin xyz="0.0317603 0.0301725 -0.03705" rpy="-1.5708 7.95539e-16 2.0944"/>
+    <parent link="dc15_a01_case_b_dummy"/>
+    <child link="pp01062_stewart_arm"/>
+    <axis xyz="0 0 1"/>
+    <limit effort="10" velocity="10" lower="-1.39626" upper="1.39626"/>
+  </joint>
+  <!-- Link pp01062_stewart_arm_2 -->
+  <link name="pp01062_stewart_arm_2">
+    <inertial>
+      <origin xyz="0.0181787 2.34834e-18 0.00350559" rpy="0 0 0"/>
+      <mass value="0.00272417"/>
+      <inertia ixx="4.89963e-08" ixy="2.48336e-22" ixz="-7.04811e-08" iyy="6.75761e-07" iyz="5.24015e-23" izz="6.91798e-07"/>
+    </inertial>
+    <!-- Part ball_2 -->
+    <visual>
+      <origin xyz="0.038 -1.38778e-17 0.00768" rpy="-3.14159 1.48742e-16 -3.14159"/>
+      <geometry>
+        <mesh filename="package://assets/ball.stl"/>
+      </geometry>
+      <material name="ball_2_material">
+        <color rgba="0.901961 0.901961 0.901961 1"/>
+      </material>
+    </visual>
+     <!-- (removed collisions) -->    <!-- Part pp01062_stewart_arm_2 -->
+    <visual>
+      <origin xyz="-0.01025 0.03 0.0425915" rpy="1.5708 -2.95348e-16 -3.08149e-31"/>
+      <geometry>
+        <mesh filename="package://assets/pp01062_stewart_arm.stl"/>
+      </geometry>
+      <material name="pp01062_stewart_arm_2_material">
+        <color rgba="0.196078 0.196078 0.196078 1"/>
+      </material>
+    </visual>
+     <!-- (removed collisions) -->  </link>
+  <!-- Link passive_2_link_x -->
+  <link name="passive_2_link_x">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="1e-09"/>
+      <inertia ixx="1e-09" ixy="0" ixz="0" iyy="1e-09" iyz="0" izz="1e-09"/>
+    </inertial>
+  </link>
+  <!-- Link passive_2_link_y -->
+  <link name="passive_2_link_y">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="1e-09"/>
+      <inertia ixx="1e-09" ixy="0" ixz="0" iyy="1e-09" iyz="0" izz="1e-09"/>
+    </inertial>
+  </link>
+  <!-- Link shape_2 -->
+  <link name="shape_2">
+    <inertial>
+      <origin xyz="-0.0450002 -1.00413e-17 -8.56034e-18" rpy="0 0 0"/>
+      <mass value="0.00355525"/>
+      <inertia ixx="1.7732e-08" ixy="9.05427e-21" ixz="-9.31125e-21" iyy="3.06049e-06" iyz="-1.13245e-20" izz="3.0658e-06"/>
+    </inertial>
+    <!-- Part shape_3 -->
+    <visual>
+      <origin xyz="-0.0900003 -2.77556e-17 2.08167e-17" rpy="-3.14159 -1.44324e-15 -3.14159"/>
+      <geometry>
+        <mesh filename="package://assets/shape.stl"/>
+      </geometry>
+      <material name="shape_3_material">
+        <color rgba="0.901961 0.901961 0.901961 1"/>
+      </material>
+    </visual>
+     <!-- (removed collisions) -->    <!-- Part shape_4 -->
+    <visual>
+      <origin xyz="6.93889e-18 0 6.93889e-18" rpy="1.03529e-16 -2.76081e-18 1.06701e-17"/>
+      <geometry>
+        <mesh filename="package://assets/shape.stl"/>
+      </geometry>
+      <material name="shape_4_material">
+        <color rgba="0.901961 0.901961 0.901961 1"/>
+      </material>
+    </visual>
+     <!-- (removed collisions) -->    <!-- Part pp00xxx_stewart_rod_2 -->
+    <visual>
+      <origin xyz="0.00371031 0.0370326 -0.0564076" rpy="0.01484 -1.08842 -2.82816e-14"/>
+      <geometry>
+        <mesh filename="package://assets/pp00xxx_stewart_rod.stl"/>
+      </geometry>
+      <material name="pp00xxx_stewart_rod_2_material">
+        <color rgba="0.8 0.8 0.8 1"/>
+      </material>
+    </visual>
+     <!-- (removed collisions) -->  </link>
+  <!-- Frame closing_2_2 (dummy link + fixed joint) -->
+  <link name="closing_2_2">
+    <origin xyz="0 0 0" rpy="0 -0 0"/>
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="1e-9"/>
+      <inertia ixx="0" ixy="0" ixz="0" iyy="0" iyz="0" izz="0"/>
+    </inertial>
+  </link>
+  <joint name="closing_2_2_frame" type="fixed">
+    <origin xyz="-0.0900003 -2.77556e-17 2.08167e-17" rpy="3.14159 -5.94057e-16 -1.5708"/>
+    <parent link="shape_2"/>
+    <child link="closing_2_2"/>
+    <axis xyz="0 0 0"/>
+  </joint>
+  <!-- Joint from passive_2_link_y to shape_2 -->
+  <joint name="passive_2_z" type="revolute">
+    <origin xyz="6.93889e-18 0 6.93889e-18" rpy="1.03529e-16 -2.76081e-18 1.06701e-17"/>
+    <parent link="passive_2_link_y"/>
+    <child link="shape_2"/>
+    <axis xyz="0 0 1"/>
+    <limit effort="10" velocity="1e+08" lower="-3.141592653589793" upper="3.141592653589793"/>
+  </joint>
+  <!-- Joint from passive_2_link_x to passive_2_link_y -->
+  <joint name="passive_2_y" type="revolute">
+    <origin xyz="6.93889e-18 0 6.93889e-18" rpy="1.03529e-16 -2.76081e-18 1.06701e-17"/>
+    <parent link="passive_2_link_x"/>
+    <child link="passive_2_link_y"/>
+    <axis xyz="0 1 0"/>
+    <limit effort="10" velocity="1e+08" lower="-3.141592653589793" upper="3.141592653589793"/>
+  </joint>
+  <!-- Joint from pp01062_stewart_arm_2 to passive_2_link_x -->
+  <joint name="passive_2_x" type="revolute">
+    <origin xyz="0.038 -8.32667e-17 0.00768" rpy="-3.09518 0.0258157 1.08824"/>
+    <parent link="pp01062_stewart_arm_2"/>
+    <child link="passive_2_link_x"/>
+    <axis xyz="1 0 0"/>
+    <limit effort="10" velocity="1e+08" lower="-3.141592653589793" upper="3.141592653589793"/>
+  </joint>
+  <!-- Joint from dc15_a01_case_b_dummy to pp01062_stewart_arm_2 -->
+  <joint name="2" type="revolute">
+    <origin xyz="0.0420103 0.012419 -0.03705" rpy="1.5708 -1.05471e-15 -1.0472"/>
+    <parent link="dc15_a01_case_b_dummy"/>
+    <child link="pp01062_stewart_arm_2"/>
+    <axis xyz="0 0 1"/>
+    <limit effort="10" velocity="10" lower="-1.39626" upper="1.39626"/>
+  </joint>
+  <!-- Link pp01062_stewart_arm_3 -->
+  <link name="pp01062_stewart_arm_3">
+    <inertial>
+      <origin xyz="0.0181787 -1.87132e-19 0.00350559" rpy="0 0 0"/>
+      <mass value="0.00272417"/>
+      <inertia ixx="4.89963e-08" ixy="9.85709e-24" ixz="-7.04811e-08" iyy="6.75761e-07" iyz="-1.47314e-24" izz="6.91798e-07"/>
+    </inertial>
+    <!-- Part pp01062_stewart_arm_3 -->
+    <visual>
+      <origin xyz="-0.01025 0.03 0.0425915" rpy="1.5708 -2.89121e-16 6.16298e-33"/>
+      <geometry>
+        <mesh filename="package://assets/pp01062_stewart_arm.stl"/>
+      </geometry>
+      <material name="pp01062_stewart_arm_3_material">
+        <color rgba="0.196078 0.196078 0.196078 1"/>
+      </material>
+    </visual>
+     <!-- (removed collisions) -->    <!-- Part ball_3 -->
+    <visual>
+      <origin xyz="0.038 0 0.00768" rpy="-3.14159 -4.36322e-16 -1.5708"/>
+      <geometry>
+        <mesh filename="package://assets/ball.stl"/>
+      </geometry>
+      <material name="ball_3_material">
+        <color rgba="0.901961 0.901961 0.901961 1"/>
+      </material>
+    </visual>
+     <!-- (removed collisions) -->  </link>
+  <!-- Link passive_3_link_x -->
+  <link name="passive_3_link_x">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="1e-09"/>
+      <inertia ixx="1e-09" ixy="0" ixz="0" iyy="1e-09" iyz="0" izz="1e-09"/>
+    </inertial>
+  </link>
+  <!-- Link passive_3_link_y -->
+  <link name="passive_3_link_y">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="1e-09"/>
+      <inertia ixx="1e-09" ixy="0" ixz="0" iyy="1e-09" iyz="0" izz="1e-09"/>
+    </inertial>
+  </link>
+  <!-- Link shape_3 -->
+  <link name="shape_3">
+    <inertial>
+      <origin xyz="-0.0450002 -4.79199e-18 4.11785e-17" rpy="0 0 0"/>
+      <mass value="0.00355525"/>
+      <inertia ixx="1.7732e-08" ixy="9.80819e-22" ixz="-7.34923e-21" iyy="3.06049e-06" iyz="1.45141e-21" izz="3.0658e-06"/>
+    </inertial>
+    <!-- Part shape_5 -->
+    <visual>
+      <origin xyz="-0.0900003 0 1.31839e-16" rpy="3.14159 -1.66398e-15 3.14159"/>
+      <geometry>
+        <mesh filename="package://assets/shape.stl"/>
+      </geometry>
+      <material name="shape_5_material">
+        <color rgba="0.901961 0.901961 0.901961 1"/>
+      </material>
+    </visual>
+     <!-- (removed collisions) -->    <!-- Part shape_6 -->
+    <visual>
+      <origin xyz="1.38778e-17 0 0" rpy="-1.00225e-17 4.94486e-18 1.68244e-17"/>
+      <geometry>
+        <mesh filename="package://assets/shape.stl"/>
+      </geometry>
+      <material name="shape_6_material">
+        <color rgba="0.901961 0.901961 0.901961 1"/>
+      </material>
+    </visual>
+     <!-- (removed collisions) -->    <!-- Part pp00xxx_stewart_rod_3 -->
+    <visual>
+      <origin xyz="0.00371031 0.0370326 -0.0564076" rpy="0.01484 -1.08842 2.84814e-15"/>
+      <geometry>
+        <mesh filename="package://assets/pp00xxx_stewart_rod.stl"/>
+      </geometry>
+      <material name="pp00xxx_stewart_rod_3_material">
+        <color rgba="0.8 0.8 0.8 1"/>
+      </material>
+    </visual>
+     <!-- (removed collisions) -->  </link>
+  <!-- Frame closing_3_2 (dummy link + fixed joint) -->
+  <link name="closing_3_2">
+    <origin xyz="0 0 0" rpy="0 -0 0"/>
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="1e-9"/>
+      <inertia ixx="0" ixy="0" ixz="0" iyy="0" iyz="0" izz="0"/>
+    </inertial>
+  </link>
+  <joint name="closing_3_2_frame" type="fixed">
+    <origin xyz="-0.0900003 0 1.31839e-16" rpy="-1.02731e-16 -1.66398e-15 3.14159"/>
+    <parent link="shape_3"/>
+    <child link="closing_3_2"/>
+    <axis xyz="0 0 0"/>
+  </joint>
+  <!-- Joint from passive_3_link_y to shape_3 -->
+  <joint name="passive_3_z" type="revolute">
+    <origin xyz="1.38778e-17 0 0" rpy="-1.00225e-17 4.94486e-18 1.68244e-17"/>
+    <parent link="passive_3_link_y"/>
+    <child link="shape_3"/>
+    <axis xyz="0 0 1"/>
+    <limit effort="10" velocity="1e+08" lower="-3.141592653589793" upper="3.141592653589793"/>
+  </joint>
+  <!-- Joint from passive_3_link_x to passive_3_link_y -->
+  <joint name="passive_3_y" type="revolute">
+    <origin xyz="1.38778e-17 0 0" rpy="-1.00225e-17 4.94486e-18 1.68244e-17"/>
+    <parent link="passive_3_link_x"/>
+    <child link="passive_3_link_y"/>
+    <axis xyz="0 1 0"/>
+    <limit effort="10" velocity="1e+08" lower="-3.141592653589793" upper="3.141592653589793"/>
+  </joint>
+  <!-- Joint from pp01062_stewart_arm_3 to passive_3_link_x -->
+  <joint name="passive_3_x" type="revolute">
+    <origin xyz="0.038 4.16334e-17 0.00768" rpy="-0.0802622 0.0258157 -1.08824"/>
+    <parent link="pp01062_stewart_arm_3"/>
+    <child link="passive_3_link_x"/>
+    <axis xyz="1 0 0"/>
+    <limit effort="10" velocity="1e+08" lower="-3.141592653589793" upper="3.141592653589793"/>
+  </joint>
+  <!-- Joint from dc15_a01_case_b_dummy to pp01062_stewart_arm_3 -->
+  <joint name="3" type="revolute">
+    <origin xyz="0.01025 -0.0425915 -0.03705" rpy="-1.5708 -2.77556e-16 3.14916e-16"/>
+    <parent link="dc15_a01_case_b_dummy"/>
+    <child link="pp01062_stewart_arm_3"/>
+    <axis xyz="0 0 1"/>
+    <limit effort="10" velocity="10" lower="-1.39626" upper="1.39626"/>
+  </joint>
+  <!-- Link pp01062_stewart_arm_4 -->
+  <link name="pp01062_stewart_arm_4">
+    <inertial>
+      <origin xyz="0.0181787 -5.24899e-19 0.00350559" rpy="0 0 0"/>
+      <mass value="0.00272417"/>
+      <inertia ixx="4.89963e-08" ixy="4.36416e-22" ixz="-7.04811e-08" iyy="6.75761e-07" iyz="3.66848e-23" izz="6.91798e-07"/>
+    </inertial>
+    <!-- Part ball_4 -->
+    <visual>
+      <origin xyz="0.038 -2.77556e-17 0.00768" rpy="-3.14159 2.47897e-30 1.5708"/>
+      <geometry>
+        <mesh filename="package://assets/ball.stl"/>
+      </geometry>
+      <material name="ball_4_material">
+        <color rgba="0.901961 0.901961 0.901961 1"/>
+      </material>
+    </visual>
+     <!-- (removed collisions) -->    <!-- Part pp01062_stewart_arm_4 -->
+    <visual>
+      <origin xyz="-0.01025 0.03 0.0425915" rpy="1.5708 -2.89121e-16 9.19877e-32"/>
+      <geometry>
+        <mesh filename="package://assets/pp01062_stewart_arm.stl"/>
+      </geometry>
+      <material name="pp01062_stewart_arm_4_material">
+        <color rgba="0.196078 0.196078 0.196078 1"/>
+      </material>
+    </visual>
+     <!-- (removed collisions) -->  </link>
+  <!-- Link passive_4_link_x -->
+  <link name="passive_4_link_x">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="1e-09"/>
+      <inertia ixx="1e-09" ixy="0" ixz="0" iyy="1e-09" iyz="0" izz="1e-09"/>
+    </inertial>
+  </link>
+  <!-- Link passive_4_link_y -->
+  <link name="passive_4_link_y">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="1e-09"/>
+      <inertia ixx="1e-09" ixy="0" ixz="0" iyy="1e-09" iyz="0" izz="1e-09"/>
+    </inertial>
+  </link>
+  <!-- Link shape_4 -->
+  <link name="shape_4">
+    <inertial>
+      <origin xyz="-0.0450002 1.04447e-16 -1.1361e-17" rpy="0 0 0"/>
+      <mass value="0.00355525"/>
+      <inertia ixx="1.7732e-08" ixy="6.31755e-21" ixz="-5.94417e-21" iyy="3.06049e-06" iyz="1.35905e-20" izz="3.0658e-06"/>
+    </inertial>
+    <!-- Part shape_7 -->
+    <visual>
+      <origin xyz="-0.0900003 2.08167e-16 3.46945e-18" rpy="-3.14159 2.0365e-19 3.14159"/>
+      <geometry>
+        <mesh filename="package://assets/shape.stl"/>
+      </geometry>
+      <material name="shape_7_material">
+        <color rgba="0.901961 0.901961 0.901961 1"/>
+      </material>
+    </visual>
+     <!-- (removed collisions) -->    <!-- Part pp00xxx_stewart_rod_4 -->
+    <visual>
+      <origin xyz="0.00371031 0.0370326 -0.0564076" rpy="0.01484 -1.08842 3.14647e-14"/>
+      <geometry>
+        <mesh filename="package://assets/pp00xxx_stewart_rod.stl"/>
+      </geometry>
+      <material name="pp00xxx_stewart_rod_4_material">
+        <color rgba="0.8 0.8 0.8 1"/>
+      </material>
+    </visual>
+     <!-- (removed collisions) -->    <!-- Part shape_8 -->
+    <visual>
+      <origin xyz="6.93889e-18 0 3.46945e-18" rpy="-5.32364e-18 3.35739e-18 2.46433e-17"/>
+      <geometry>
+        <mesh filename="package://assets/shape.stl"/>
+      </geometry>
+      <material name="shape_8_material">
+        <color rgba="0.901961 0.901961 0.901961 1"/>
+      </material>
+    </visual>
+     <!-- (removed collisions) -->  </link>
+  <!-- Frame closing_4_1 (dummy link + fixed joint) -->
+  <link name="closing_4_1">
+    <origin xyz="0 0 0" rpy="0 -0 0"/>
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="1e-9"/>
+      <inertia ixx="0" ixy="0" ixz="0" iyy="0" iyz="0" izz="0"/>
+    </inertial>
+  </link>
+  <joint name="closing_4_1_frame" type="fixed">
+    <origin xyz="-0.0900003 2.08167e-16 3.46945e-18" rpy="-3.14159 2.0365e-19 3.14159"/>
+    <parent link="shape_4"/>
+    <child link="closing_4_1"/>
+    <axis xyz="0 0 0"/>
+  </joint>
+  <!-- Joint from passive_4_link_y to shape_4 -->
+  <joint name="passive_4_z" type="revolute">
+    <origin xyz="6.93889e-18 0 3.46945e-18" rpy="-5.32364e-18 3.35739e-18 2.46433e-17"/>
+    <parent link="passive_4_link_y"/>
+    <child link="shape_4"/>
+    <axis xyz="0 0 1"/>
+    <limit effort="10" velocity="1e+08" lower="-3.141592653589793" upper="3.141592653589793"/>
+  </joint>
+  <!-- Joint from passive_4_link_x to passive_4_link_y -->
+  <joint name="passive_4_y" type="revolute">
+    <origin xyz="6.93889e-18 0 3.46945e-18" rpy="-5.32364e-18 3.35739e-18 2.46433e-17"/>
+    <parent link="passive_4_link_x"/>
+    <child link="passive_4_link_y"/>
+    <axis xyz="0 1 0"/>
+    <limit effort="10" velocity="1e+08" lower="-3.141592653589793" upper="3.141592653589793"/>
+  </joint>
+  <!-- Joint from pp01062_stewart_arm_4 to passive_4_link_x -->
+  <joint name="passive_4_x" type="revolute">
+    <origin xyz="0.038 -2.77556e-17 0.00768" rpy="0.118327 0.0258157 1.08824"/>
+    <parent link="pp01062_stewart_arm_4"/>
+    <child link="passive_4_link_x"/>
+    <axis xyz="1 0 0"/>
+    <limit effort="10" velocity="1e+08" lower="-3.141592653589793" upper="3.141592653589793"/>
+  </joint>
+  <!-- Joint from dc15_a01_case_b_dummy to pp01062_stewart_arm_4 -->
+  <joint name="4" type="revolute">
+    <origin xyz="-0.01025 -0.0425915 -0.03705" rpy="1.5708 4.44377e-15 3.14159"/>
+    <parent link="dc15_a01_case_b_dummy"/>
+    <child link="pp01062_stewart_arm_4"/>
+    <axis xyz="0 0 1"/>
+    <limit effort="10" velocity="10" lower="-1.39626" upper="1.39626"/>
+  </joint>
+  <!-- Link pp01062_stewart_arm_5 -->
+  <link name="pp01062_stewart_arm_5">
+    <inertial>
+      <origin xyz="0.0181787 3.11301e-35 0.00350559" rpy="0 0 0"/>
+      <mass value="0.00272417"/>
+      <inertia ixx="4.89963e-08" ixy="-4.49492e-25" ixz="-7.04811e-08" iyy="6.75761e-07" iyz="-1.26741e-25" izz="6.91798e-07"/>
+    </inertial>
+    <!-- Part pp01062_stewart_arm_5 -->
+    <visual>
+      <origin xyz="-0.01025 0.03 0.0425915" rpy="1.5708 -2.70119e-16 -8.75346e-32"/>
+      <geometry>
+        <mesh filename="package://assets/pp01062_stewart_arm.stl"/>
+      </geometry>
+      <material name="pp01062_stewart_arm_5_material">
+        <color rgba="0.196078 0.196078 0.196078 1"/>
+      </material>
+    </visual>
+     <!-- (removed collisions) -->    <!-- Part ball_5 -->
+    <visual>
+      <origin xyz="0.038 0 0.00768" rpy="3.14159 -3.03319e-16 3.14159"/>
+      <geometry>
+        <mesh filename="package://assets/ball.stl"/>
+      </geometry>
+      <material name="ball_5_material">
+        <color rgba="0.901961 0.901961 0.901961 1"/>
+      </material>
+    </visual>
+     <!-- (removed collisions) -->  </link>
+  <!-- Link passive_5_link_x -->
+  <link name="passive_5_link_x">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="1e-09"/>
+      <inertia ixx="1e-09" ixy="0" ixz="0" iyy="1e-09" iyz="0" izz="1e-09"/>
+    </inertial>
+  </link>
+  <!-- Link passive_5_link_y -->
+  <link name="passive_5_link_y">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="1e-09"/>
+      <inertia ixx="1e-09" ixy="0" ixz="0" iyy="1e-09" iyz="0" izz="1e-09"/>
+    </inertial>
+  </link>
+  <!-- Link pp00xxx_stewart_rod -->
+  <link name="pp00xxx_stewart_rod">
+    <inertial>
+      <origin xyz="-0.0450002 7.44667e-17 -1.14016e-17" rpy="0 0 0"/>
+      <mass value="0.00355525"/>
+      <inertia ixx="1.7732e-08" ixy="4.55471e-21" ixz="-4.43821e-21" iyy="3.06049e-06" iyz="1.23083e-21" izz="3.0658e-06"/>
+    </inertial>
+    <!-- Part shape_9 -->
+    <visual>
+      <origin xyz="0 0 0" rpy="-3.08493e-17 2.79333e-17 5.24089e-17"/>
+      <geometry>
+        <mesh filename="package://assets/shape.stl"/>
+      </geometry>
+      <material name="shape_9_material">
+        <color rgba="0.901961 0.901961 0.901961 1"/>
+      </material>
+    </visual>
+     <!-- (removed collisions) -->    <!-- Part pp00xxx_stewart_rod_5 -->
+    <visual>
+      <origin xyz="0.00371031 0.0370326 -0.0564076" rpy="0.01484 -1.08842 1.20922e-15"/>
+      <geometry>
+        <mesh filename="package://assets/pp00xxx_stewart_rod.stl"/>
+      </geometry>
+      <material name="pp00xxx_stewart_rod_5_material">
+        <color rgba="0.8 0.8 0.8 1"/>
+      </material>
+    </visual>
+     <!-- (removed collisions) -->    <!-- Part shape_10 -->
+    <visual>
+      <origin xyz="-0.0900003 1.38778e-16 6.93889e-18" rpy="-3.14159 -7.144e-17 -3.14159"/>
+      <geometry>
+        <mesh filename="package://assets/shape.stl"/>
+      </geometry>
+      <material name="shape_10_material">
+        <color rgba="0.901961 0.901961 0.901961 1"/>
+      </material>
+    </visual>
+     <!-- (removed collisions) -->  </link>
+  <!-- Frame closing_5_1 (dummy link + fixed joint) -->
+  <link name="closing_5_1">
+    <origin xyz="0 0 0" rpy="0 -0 0"/>
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="1e-9"/>
+      <inertia ixx="0" ixy="0" ixz="0" iyy="0" iyz="0" izz="0"/>
+    </inertial>
+  </link>
+  <joint name="closing_5_1_frame" type="fixed">
+    <origin xyz="-0.0900003 1.38778e-16 6.93889e-18" rpy="-3.14159 -7.144e-17 -3.14159"/>
+    <parent link="pp00xxx_stewart_rod"/>
+    <child link="closing_5_1"/>
+    <axis xyz="0 0 0"/>
+  </joint>
+  <!-- Joint from passive_5_link_y to pp00xxx_stewart_rod -->
+  <joint name="passive_5_z" type="revolute">
+    <origin xyz="0 0 0" rpy="-3.08493e-17 2.79333e-17 5.24089e-17"/>
+    <parent link="passive_5_link_y"/>
+    <child link="pp00xxx_stewart_rod"/>
+    <axis xyz="0 0 1"/>
+    <limit effort="10" velocity="1e+08" lower="-3.141592653589793" upper="3.141592653589793"/>
+  </joint>
+  <!-- Joint from passive_5_link_x to passive_5_link_y -->
+  <joint name="passive_5_y" type="revolute">
+    <origin xyz="0 0 0" rpy="-3.08493e-17 2.79333e-17 5.24089e-17"/>
+    <parent link="passive_5_link_x"/>
+    <child link="passive_5_link_y"/>
+    <axis xyz="0 1 0"/>
+    <limit effort="10" velocity="1e+08" lower="-3.141592653589793" upper="3.141592653589793"/>
+  </joint>
+  <!-- Joint from pp01062_stewart_arm_5 to passive_5_link_x -->
+  <joint name="passive_5_x" type="revolute">
+    <origin xyz="0.038 1.38778e-17 0.00768" rpy="-2.94446 0.0258157 -1.08824"/>
+    <parent link="pp01062_stewart_arm_5"/>
+    <child link="passive_5_link_x"/>
+    <axis xyz="1 0 0"/>
+    <limit effort="10" velocity="1e+08" lower="-3.141592653589793" upper="3.141592653589793"/>
+  </joint>
+  <!-- Joint from dc15_a01_case_b_dummy to pp01062_stewart_arm_5 -->
+  <joint name="5" type="revolute">
+    <origin xyz="-0.0420103 0.012419 -0.03705" rpy="-1.5708 4.85252e-16 -2.0944"/>
+    <parent link="dc15_a01_case_b_dummy"/>
+    <child link="pp01062_stewart_arm_5"/>
+    <axis xyz="0 0 1"/>
+    <limit effort="10" velocity="10" lower="-1.39626" upper="1.39626"/>
+  </joint>
+  <!-- Link pp01062_stewart_arm_6 -->
+  <link name="pp01062_stewart_arm_6">
+    <inertial>
+      <origin xyz="0.0181787 -1.69382e-17 0.00350559" rpy="0 0 0"/>
+      <mass value="0.00272417"/>
+      <inertia ixx="4.89963e-08" ixy="1.6528e-22" ixz="-7.04811e-08" iyy="6.75761e-07" iyz="3.48685e-23" izz="6.91798e-07"/>
+    </inertial>
+    <!-- Part pp01062_stewart_arm_6 -->
+    <visual>
+      <origin xyz="-0.01025 0.03 0.0425915" rpy="1.5708 -2.83391e-16 -4.93038e-32"/>
+      <geometry>
+        <mesh filename="package://assets/pp01062_stewart_arm.stl"/>
+      </geometry>
+      <material name="pp01062_stewart_arm_6_material">
+        <color rgba="0.196078 0.196078 0.196078 1"/>
+      </material>
+    </visual>
+     <!-- (removed collisions) -->    <!-- Part ball_6 -->
+    <visual>
+      <origin xyz="0.038 -2.77556e-17 0.00768" rpy="-3.14159 -9.82073e-18 -6.40949e-31"/>
+      <geometry>
+        <mesh filename="package://assets/ball.stl"/>
+      </geometry>
+      <material name="ball_6_material">
+        <color rgba="0.901961 0.901961 0.901961 1"/>
+      </material>
+    </visual>
+     <!-- (removed collisions) -->  </link>
+  <!-- Link passive_6_link_x -->
+  <link name="passive_6_link_x">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="1e-09"/>
+      <inertia ixx="1e-09" ixy="0" ixz="0" iyy="1e-09" iyz="0" izz="1e-09"/>
+    </inertial>
+  </link>
+  <!-- Link passive_6_link_y -->
+  <link name="passive_6_link_y">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="1e-09"/>
+      <inertia ixx="1e-09" ixy="0" ixz="0" iyy="1e-09" iyz="0" izz="1e-09"/>
+    </inertial>
+  </link>
+  <!-- Link shape_5 -->
+  <link name="shape_5">
+    <inertial>
+      <origin xyz="-0.0450002 7.95049e-16 -1.5589e-17" rpy="0 0 0"/>
+      <mass value="0.00355525"/>
+      <inertia ixx="1.7732e-08" ixy="4.84585e-20" ixz="-8.92792e-21" iyy="3.06049e-06" iyz="-1.86218e-20" izz="3.0658e-06"/>
+    </inertial>
+    <!-- Part shape_11 -->
+    <visual>
+      <origin xyz="-0.0900003 1.83187e-15 6.93889e-18" rpy="3.14159 1.2007e-17 3.14159"/>
+      <geometry>
+        <mesh filename="package://assets/shape.stl"/>
+      </geometry>
+      <material name="shape_11_material">
+        <color rgba="0.901961 0.901961 0.901961 1"/>
+      </material>
+    </visual>
+     <!-- (removed collisions) -->    <!-- Part shape_12 -->
+    <visual>
+      <origin xyz="6.93889e-18 0 0" rpy="9.77399e-17 3.28422e-18 1.01949e-16"/>
+      <geometry>
+        <mesh filename="package://assets/shape.stl"/>
+      </geometry>
+      <material name="shape_12_material">
+        <color rgba="0.901961 0.901961 0.901961 1"/>
+      </material>
+    </visual>
+     <!-- (removed collisions) -->    <!-- Part pp00xxx_stewart_rod_6 -->
+    <visual>
+      <origin xyz="0.00371031 0.0370326 -0.0564076" rpy="0.01484 -1.08842 -6.98898e-14"/>
+      <geometry>
+        <mesh filename="package://assets/pp00xxx_stewart_rod.stl"/>
+      </geometry>
+      <material name="pp00xxx_stewart_rod_6_material">
+        <color rgba="0.8 0.8 0.8 1"/>
+      </material>
+    </visual>
+     <!-- (removed collisions) -->  </link>
+  <!-- Link passive_7_link_x -->
+  <link name="passive_7_link_x">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="1e-09"/>
+      <inertia ixx="1e-09" ixy="0" ixz="0" iyy="1e-09" iyz="0" izz="1e-09"/>
+    </inertial>
+  </link>
+  <!-- Link passive_7_link_y -->
+  <link name="passive_7_link_y">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="1e-09"/>
+      <inertia ixx="1e-09" ixy="0" ixz="0" iyy="1e-09" iyz="0" izz="1e-09"/>
+    </inertial>
+  </link>
+  <!-- Link pp01063_stewart_plateform -->
+  <link name="pp01063_stewart_plateform">
+    <inertial>
+      <origin xyz="-0.00488914 -0.0469134 0.0291732" rpy="0 0 0"/>
+      <mass value="0.168092"/>
+      <inertia ixx="0.000413571" ixy="-2.28564e-06" ixz="-5.24367e-05" iyy="0.000428808" iyz="-9.58295e-07" izz="0.000324749"/>
+    </inertial>
+    <!-- Part small_lens -->
+    <visual>
+      <origin xyz="0.0262444 -0.0524 0.0136834" rpy="1.5708 -1.0472 -1.25351e-29"/>
+      <geometry>
+        <mesh filename="package://assets/small_lens.stl"/>
+      </geometry>
+      <material name="small_lens_material">
+        <color rgba="0.439216 0.47451 0.501961 0.298039"/>
+      </material>
+    </visual>
+     <!-- (removed collisions) -->    <!-- Part m12_lens -->
+    <visual>
+      <origin xyz="0.010421 -0.0524 -0.0147088" rpy="2.61799 2.82066e-16 -1.5708"/>
+      <geometry>
+        <mesh filename="package://assets/m12_lens.stl"/>
+      </geometry>
+      <material name="m12_lens_material">
+        <color rgba="0.262745 0.282353 0.301961 1"/>
+      </material>
+    </visual>
+     <!-- (removed collisions) -->    <!-- Part pp01080_back_small_eye -->
+    <visual>
+      <origin xyz="0.0262444 -0.0524 0.0136834" rpy="1.5708 -1.0472 -1.8846e-29"/>
+      <geometry>
+        <mesh filename="package://assets/pp01080_back_small_eye.stl"/>
+      </geometry>
+      <material name="pp01080_back_small_eye_material">
+        <color rgba="0.168627 0.168627 0.168627 1"/>
+      </material>
+    </visual>
+     <!-- (removed collisions) -->    <!-- Part m12_lens_2 -->
+    <visual>
+      <origin xyz="0.042581 -0.0524 0.0417792" rpy="2.61799 -5.97717e-16 -1.5708"/>
+      <geometry>
+        <mesh filename="package://assets/m12_lens.stl"/>
+      </geometry>
+      <material name="m12_lens_2_material">
+        <color rgba="0.262745 0.282353 0.301961 1"/>
+      </material>
+    </visual>
+     <!-- (removed collisions) -->    <!-- Part ball_7 -->
+    <visual>
+      <origin xyz="-0.013 5.55112e-17 -5.55112e-17" rpy="5.29636e-15 3.77194e-17 9.25494e-30"/>
+      <geometry>
+        <mesh filename="package://assets/ball.stl"/>
+      </geometry>
+      <material name="ball_7_material">
+        <color rgba="0.901961 0.901961 0.901961 1"/>
+      </material>
+    </visual>
+     <!-- (removed collisions) -->    <!-- Part uc_a37_rev_a_step -->
+    <visual>
+      <origin xyz="0.0239513 -0.04265 0.0271316" rpy="-3.14159 -1.0472 -1.8846e-29"/>
+      <geometry>
+        <mesh filename="package://assets/uc_a37_rev_a_step.stl"/>
+      </geometry>
+      <material name="uc_a37_rev_a_step_material">
+        <color rgba="0.25098 0.25098 0.25098 1"/>
+      </material>
+    </visual>
+     <!-- (removed collisions) -->    <!-- Part ball_8 -->
+    <visual>
+      <origin xyz="-8.67362e-19 2.77556e-17 0" rpy="-1.00928e-30 6.45118e-17 -2.11395e-31"/>
+      <geometry>
+        <mesh filename="package://assets/ball.stl"/>
+      </geometry>
+      <material name="ball_8_material">
+        <color rgba="0.901961 0.901961 0.901961 1"/>
+      </material>
+    </visual>
+     <!-- (removed collisions) -->    <!-- Part pp01070_head_head_back -->
+    <visual>
+      <origin xyz="-0.0134282 -0.0524 0.0365883" rpy="1.5708 -1.0472 8.66953e-32"/>
+      <geometry>
+        <mesh filename="package://assets/pp01070_head_head_back.stl"/>
+      </geometry>
+      <material name="pp01070_head_head_back_material">
+        <color rgba="1 1 1 1"/>
+      </material>
+    </visual>
+     <!-- (removed collisions) -->    <!-- Part ball_9 -->
+    <visual>
+      <origin xyz="0.0249723 5.55112e-17 0.0432533" rpy="3.14159 1.0472 8.95684e-30"/>
+      <geometry>
+        <mesh filename="package://assets/ball.stl"/>
+      </geometry>
+      <material name="ball_9_material">
+        <color rgba="0.901961 0.901961 0.901961 1"/>
+      </material>
+    </visual>
+     <!-- (removed collisions) -->    <!-- Part pp01079_back_big_eye -->
+    <visual>
+      <origin xyz="0.0265844 -0.0524 0.013487" rpy="1.5708 -1.0472 -1.25351e-29"/>
+      <geometry>
+        <mesh filename="package://assets/pp01079_back_big_eye.stl"/>
+      </geometry>
+      <material name="pp01079_back_big_eye_material">
+        <color rgba="0.168627 0.168627 0.168627 1"/>
+      </material>
+    </visual>
+     <!-- (removed collisions) -->    <!-- Part ball_10 -->
+    <visual>
+      <origin xyz="-0.0379723 5.55112e-17 0.0432533" rpy="-2.0944 -6.90096e-15 -1.5708"/>
+      <geometry>
+        <mesh filename="package://assets/ball.stl"/>
+      </geometry>
+      <material name="ball_10_material">
+        <color rgba="0.901961 0.901961 0.901961 1"/>
+      </material>
+    </visual>
+     <!-- (removed collisions) -->    <!-- Part pp01069_head_shell_front -->
+    <visual>
+      <origin xyz="-0.0142942 -0.0524 0.0370883" rpy="1.5708 -1.0472 6.39758e-30"/>
+      <geometry>
+        <mesh filename="package://assets/pp01069_head_shell_front.stl"/>
+      </geometry>
+      <material name="pp01069_head_shell_front_material">
+        <color rgba="1 1 1 1"/>
+      </material>
+    </visual>
+     <!-- (removed collisions) -->    <!-- Part pp01078_glasses -->
+    <visual>
+      <origin xyz="0.025976 -0.0524 0.0138383" rpy="1.5708 -1.0472 -6.22419e-30"/>
+      <geometry>
+        <mesh filename="package://assets/pp01078_glasses.stl"/>
+      </geometry>
+      <material name="pp01078_glasses_material">
+        <color rgba="0.168627 0.168627 0.168627 1"/>
+      </material>
+    </visual>
+     <!-- (removed collisions) -->    <!-- Part pp01063_stewart_plateform -->
+    <visual>
+      <origin xyz="-0.0065 0.109722 0.0325883" rpy="-1.5708 1.0472 -3.14159"/>
+      <geometry>
+        <mesh filename="package://assets/pp01063_stewart_plateform.stl"/>
+      </geometry>
+      <material name="pp01063_stewart_plateform_material">
+        <color rgba="1 1 1 1"/>
+      </material>
+    </visual>
+     <!-- (removed collisions) -->    <!-- Part ball_11 -->
+    <visual>
+      <origin xyz="-0.0314723 2.77556e-17 0.0545117" rpy="-2.0944 -2.36516e-15 -1.5708"/>
+      <geometry>
+        <mesh filename="package://assets/ball.stl"/>
+      </geometry>
+      <material name="ball_11_material">
+        <color rgba="0.901961 0.901961 0.901961 1"/>
+      </material>
+    </visual>
+     <!-- (removed collisions) -->    <!-- Part big_lens -->
+    <visual>
+      <origin xyz="0.0281677 -0.0524 0.0125729" rpy="1.5708 -1.0472 -6.22419e-30"/>
+      <geometry>
+        <mesh filename="package://assets/big_lens.stl"/>
+      </geometry>
+      <material name="big_lens_material">
+        <color rgba="0.439216 0.47451 0.501961 0.298039"/>
+      </material>
+    </visual>
+     <!-- (removed collisions) -->    <!-- Part ball_12 -->
+    <visual>
+      <origin xyz="0.0184723 5.55112e-17 0.0545117" rpy="-3.14159 1.0472 -3.66493e-30"/>
+      <geometry>
+        <mesh filename="package://assets/ball.stl"/>
+      </geometry>
+      <material name="ball_12_material">
+        <color rgba="0.901961 0.901961 0.901961 1"/>
+      </material>
+    </visual>
+     <!-- (removed collisions) -->  </link>
+  <!-- Frame closing_1_2 (dummy link + fixed joint) -->
+  <link name="closing_1_2">
+    <origin xyz="0 0 0" rpy="0 -0 0"/>
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="1e-9"/>
+      <inertia ixx="0" ixy="0" ixz="0" iyy="0" iyz="0" izz="0"/>
+    </inertial>
+  </link>
+  <joint name="closing_1_2_frame" type="fixed">
+    <origin xyz="0.0249723 5.55112e-17 0.0432533" rpy="2.0944 -4.74456e-17 -1.5708"/>
+    <parent link="pp01063_stewart_plateform"/>
+    <child link="closing_1_2"/>
+    <axis xyz="0 0 0"/>
+  </joint>
+  <!-- Frame closing_2_1 (dummy link + fixed joint) -->
+  <link name="closing_2_1">
+    <origin xyz="0 0 0" rpy="0 -0 0"/>
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="1e-9"/>
+      <inertia ixx="0" ixy="0" ixz="0" iyy="0" iyz="0" izz="0"/>
+    </inertial>
+  </link>
+  <joint name="closing_2_1_frame" type="fixed">
+    <origin xyz="0.0184723 5.55112e-17 0.0545117" rpy="-3.14159 1.0472 -3.66493e-30"/>
+    <parent link="pp01063_stewart_plateform"/>
+    <child link="closing_2_1"/>
+    <axis xyz="0 0 0"/>
+  </joint>
+  <!-- Frame closing_3_1 (dummy link + fixed joint) -->
+  <link name="closing_3_1">
+    <origin xyz="0 0 0" rpy="0 -0 0"/>
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="1e-9"/>
+      <inertia ixx="0" ixy="0" ixz="0" iyy="0" iyz="0" izz="0"/>
+    </inertial>
+  </link>
+  <joint name="closing_3_1_frame" type="fixed">
+    <origin xyz="-0.0314723 2.77556e-17 0.0545117" rpy="-2.0944 -2.36516e-15 -1.5708"/>
+    <parent link="pp01063_stewart_plateform"/>
+    <child link="closing_3_1"/>
+    <axis xyz="0 0 0"/>
+  </joint>
+  <!-- Frame closing_4_2 (dummy link + fixed joint) -->
+  <link name="closing_4_2">
+    <origin xyz="0 0 0" rpy="0 -0 0"/>
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="1e-9"/>
+      <inertia ixx="0" ixy="0" ixz="0" iyy="0" iyz="0" izz="0"/>
+    </inertial>
+  </link>
+  <joint name="closing_4_2_frame" type="fixed">
+    <origin xyz="-0.0379723 5.55112e-17 0.0432533" rpy="1.0472 -6.90096e-15 -1.5708"/>
+    <parent link="pp01063_stewart_plateform"/>
+    <child link="closing_4_2"/>
+    <axis xyz="0 0 0"/>
+  </joint>
+  <!-- Frame closing_5_2 (dummy link + fixed joint) -->
+  <link name="closing_5_2">
+    <origin xyz="0 0 0" rpy="0 -0 0"/>
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="1e-9"/>
+      <inertia ixx="0" ixy="0" ixz="0" iyy="0" iyz="0" izz="0"/>
+    </inertial>
+  </link>
+  <joint name="closing_5_2_frame" type="fixed">
+    <origin xyz="-0.013 5.55112e-17 -5.55112e-17" rpy="-3.77194e-17 5.29636e-15 -1.5708"/>
+    <parent link="pp01063_stewart_plateform"/>
+    <child link="closing_5_2"/>
+    <axis xyz="0 0 0"/>
+  </joint>
+  <!-- Frame head (dummy link + fixed joint) -->
+  <link name="head">
+    <origin xyz="0 0 0" rpy="0 -0 0"/>
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="1e-9"/>
+      <inertia ixx="0" ixy="0" ixz="0" iyy="0" iyz="0" izz="0"/>
+    </inertial>
+  </link>
+  <joint name="head_frame" type="fixed">
+    <origin xyz="-0.0134282 -0.0012 0.0365883" rpy="1.5708 0.523599 4.24373e-30"/>
+    <parent link="pp01063_stewart_plateform"/>
+    <child link="head"/>
+    <axis xyz="0 0 0"/>
+  </joint>
+  <!-- Frame camera (dummy link + fixed joint) -->
+  <link name="camera">
+    <origin xyz="0 0 0" rpy="0 -0 0"/>
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="1e-9"/>
+      <inertia ixx="0" ixy="0" ixz="0" iyy="0" iyz="0" izz="0"/>
+    </inertial>
+  </link>
+  <joint name="camera_frame" type="fixed">
+    <origin xyz="0.0244171 -0.0524 0.0147383" rpy="1.5708 0.523599 -8.01234e-18"/>
+    <parent link="pp01063_stewart_plateform"/>
+    <child link="camera"/>
+    <axis xyz="0 0 0"/>
+  </joint>
+  <!-- Frame camera_optical (dummy link + fixed joint) -->
+  <link name="camera_optical">
+    <origin xyz="0 0 0" rpy="0 -0 0"/>
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="1e-9"/>
+      <inertia ixx="0" ixy="0" ixz="0" iyy="0" iyz="0" izz="0"/>
+    </inertial>
+  </link>
+  <joint name="camera_optical_frame" type="fixed">
+    <origin xyz="0.0244171 -0.0524 0.0147383" rpy="3.14159 1.0472 3.14159"/>
+    <parent link="pp01063_stewart_plateform"/>
+    <child link="camera_optical"/>
+    <axis xyz="0 0 0"/>
+  </joint>
+  <!-- Link test_antenna_body -->
+  <link name="test_antenna_body">
+    <inertial>
+      <origin xyz="0.00147983 -0.0294086 0.00298611" rpy="0 0 0"/>
+      <mass value="0.00456766"/>
+      <inertia ixx="1.38179e-05" ixy="6.85535e-07" ixz="5.01796e-08" iyy="2.28739e-07" iyz="-9.97217e-07" izz="1.38227e-05"/>
+    </inertial>
+    <!-- Part test_antenna -->
+    <visual>
+      <origin xyz="0.0285777 0.0175124 -0.0571006" rpy="1.47011 0.521403 -6.70307e-16"/>
+      <geometry>
+        <mesh filename="package://assets/test_antenna.stl"/>
+      </geometry>
+      <material name="test_antenna_material">
+        <color rgba="0.262745 0.282353 0.301961 1"/>
+      </material>
+    </visual>
+     <!-- (removed collisions) -->    <!-- Part test_antenna_body -->
+    <visual>
+      <origin xyz="0.0285297 0.0184653 -0.0570171" rpy="1.47011 0.521403 -5.25242e-18"/>
+      <geometry>
+        <mesh filename="package://assets/test_antenna_body.stl"/>
+      </geometry>
+      <material name="test_antenna_body_material">
+        <color rgba="1 1 1 1"/>
+      </material>
+    </visual>
+     <!-- (removed collisions) -->  </link>
+  <!-- Joint from pp01063_stewart_plateform to test_antenna_body -->
+  <joint name="left_antenna" type="revolute">
+    <origin xyz="-0.0161053 -0.0744 0.100068" rpy="0.0581863 -0.527253 0.0579647"/>
+    <parent link="pp01063_stewart_plateform"/>
+    <child link="test_antenna_body"/>
+    <axis xyz="0 0 1"/>
+    <limit effort="10" velocity="10" lower="-3.141592653589793" upper="3.141592653589793"/>
+  </joint>
+  <!-- Link test_antenna -->
+  <link name="test_antenna">
+    <inertial>
+      <origin xyz="0.00147983 -0.0294086 0.00298611" rpy="0 0 0"/>
+      <mass value="0.00456766"/>
+      <inertia ixx="1.38179e-05" ixy="6.85535e-07" ixz="5.01796e-08" iyy="2.28739e-07" iyz="-9.97217e-07" izz="1.38227e-05"/>
+    </inertial>
+    <!-- Part test_antenna_2 -->
+    <visual>
+      <origin xyz="0.0285777 0.0175124 -0.0571006" rpy="1.47011 0.521403 8.90199e-17"/>
+      <geometry>
+        <mesh filename="package://assets/test_antenna.stl"/>
+      </geometry>
+      <material name="test_antenna_2_material">
+        <color rgba="0.262745 0.282353 0.301961 1"/>
+      </material>
+    </visual>
+     <!-- (removed collisions) -->    <!-- Part test_antenna_body_2 -->
+    <visual>
+      <origin xyz="0.0285297 0.0184653 -0.0570171" rpy="1.47011 0.521403 -1.56953e-17"/>
+      <geometry>
+        <mesh filename="package://assets/test_antenna_body.stl"/>
+      </geometry>
+      <material name="test_antenna_body_2_material">
+        <color rgba="1 1 1 1"/>
+      </material>
+    </visual>
+     <!-- (removed collisions) -->  </link>
+  <!-- Joint from pp01063_stewart_plateform to test_antenna -->
+  <joint name="right_antenna" type="revolute">
+    <origin xyz="-0.0697422 -0.0744 0.00716666" rpy="1.5708 -1.40009 -1.48353"/>
+    <parent link="pp01063_stewart_plateform"/>
+    <child link="test_antenna"/>
+    <axis xyz="0 0 1"/>
+    <limit effort="10" velocity="10" lower="-3.141592653589793" upper="3.141592653589793"/>
+  </joint>
+  <!-- Joint from passive_7_link_y to pp01063_stewart_plateform -->
+  <joint name="passive_7_z" type="revolute">
+    <origin xyz="-8.67362e-19 2.77556e-17 0" rpy="-1.00928e-30 6.45118e-17 -2.11395e-31"/>
+    <parent link="passive_7_link_y"/>
+    <child link="pp01063_stewart_plateform"/>
+    <axis xyz="0 0 1"/>
+    <limit effort="10" velocity="1e+08" lower="-3.141592653589793" upper="3.141592653589793"/>
+  </joint>
+  <!-- Joint from passive_7_link_x to passive_7_link_y -->
+  <joint name="passive_7_y" type="revolute">
+    <origin xyz="-8.67362e-19 2.77556e-17 0" rpy="-1.00928e-30 6.45118e-17 -2.11395e-31"/>
+    <parent link="passive_7_link_x"/>
+    <child link="passive_7_link_y"/>
+    <axis xyz="0 1 0"/>
+    <limit effort="10" velocity="1e+08" lower="-3.141592653589793" upper="3.141592653589793"/>
+  </joint>
+  <!-- Joint from shape_5 to passive_7_link_x -->
+  <joint name="passive_7_x" type="revolute">
+    <origin xyz="-0.0900003 1.88738e-15 -2.08167e-17" rpy="-3.14025 0.0530311 1.08768"/>
+    <parent link="shape_5"/>
+    <child link="passive_7_link_x"/>
+    <axis xyz="1 0 0"/>
+    <limit effort="10" velocity="1e+08" lower="-3.141592653589793" upper="3.141592653589793"/>
+  </joint>
+  <!-- Joint from passive_6_link_y to shape_5 -->
+  <joint name="passive_6_z" type="revolute">
+    <origin xyz="6.93889e-18 0 0" rpy="9.77399e-17 3.28422e-18 1.01949e-16"/>
+    <parent link="passive_6_link_y"/>
+    <child link="shape_5"/>
+    <axis xyz="0 0 1"/>
+    <limit effort="10" velocity="1e+08" lower="-3.141592653589793" upper="3.141592653589793"/>
+  </joint>
+  <!-- Joint from passive_6_link_x to passive_6_link_y -->
+  <joint name="passive_6_y" type="revolute">
+    <origin xyz="6.93889e-18 0 0" rpy="9.77399e-17 3.28422e-18 1.01949e-16"/>
+    <parent link="passive_6_link_x"/>
+    <child link="passive_6_link_y"/>
+    <axis xyz="0 1 0"/>
+    <limit effort="10" velocity="1e+08" lower="-3.141592653589793" upper="3.141592653589793"/>
+  </joint>
+  <!-- Joint from pp01062_stewart_arm_6 to passive_6_link_x -->
+  <joint name="passive_6_x" type="revolute">
+    <origin xyz="0.038 -2.77556e-17 0.00768" rpy="-3.09524 0.0258157 1.08824"/>
+    <parent link="pp01062_stewart_arm_6"/>
+    <child link="passive_6_link_x"/>
+    <axis xyz="1 0 0"/>
+    <limit effort="10" velocity="1e+08" lower="-3.141592653589793" upper="3.141592653589793"/>
+  </joint>
+  <!-- Joint from dc15_a01_case_b_dummy to pp01062_stewart_arm_6 -->
+  <joint name="6" type="revolute">
+    <origin xyz="-0.0317603 0.0301725 -0.03705" rpy="1.5708 1.05471e-15 1.0472"/>
+    <parent link="dc15_a01_case_b_dummy"/>
+    <child link="pp01062_stewart_arm_6"/>
+    <axis xyz="0 0 1"/>
+    <limit effort="10" velocity="10" lower="-1.39626" upper="1.39626"/>
+  </joint>
+  <!-- Joint from pp01071_turning_bowl to dc15_a01_case_b_dummy -->
+  <joint name="all_yaw" type="revolute">
+    <origin xyz="4.85723e-17 -5.60663e-19 0.0339" rpy="3.14159 -2.22045e-16 1.5708"/>
+    <!-- <origin xyz="4.85723e-17 -5.60663e-19 0.0339" rpy="3.14159 -2.22045e-16 1.5708"/> -->
+    <parent link="pp01071_turning_bowl"/>
+    <child link="dc15_a01_case_b_dummy"/>
+    <axis xyz="0 0 1"/>
+    <limit effort="10" velocity="10" lower="-3.141592653589793" upper="3.141592653589793"/>
+  </joint>
+  <!-- Dummy Link head_oriented_yaw used for constraint setting in placo-kinematics -->
+  <link name="dummy_torso_yaw">
+    <visual>
+      <geometry>
+        <box size="0 0 0"/>
+      </geometry>
+      <material name="blue"/>
+    </visual>
+  </link>
+  <!-- Joint from pp01071_turning_bowl to dc15_a01_case_b_dummy -->
+  <joint name="dummy_yaw" type="fixed">
+    <origin xyz="0 0 0" rpy="3.14 0 1.57"/>
+    <!-- <origin xyz="4.85723e-17 -5.60663e-19 0.0339" rpy="3.14159 -2.22045e-16 1.5708"/> -->
+    <parent link="dc15_a01_case_b_dummy"/>
+    <child link="dummy_torso_yaw"/>
+    <axis xyz="0 0 1"/>
+  </joint>
+</robot>
