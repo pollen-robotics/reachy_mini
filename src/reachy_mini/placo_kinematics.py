@@ -489,7 +489,7 @@ class PlacoKinematics:
             self._update_state_to_initial(self.robot)  # revert to the previous state
             self.robot.state.q = q
             self.robot.update_kinematics()
-            return None
+            # return None
 
         # Get the head frame transformation
         T_world_head = self.robot.get_T_world_frame("head")
