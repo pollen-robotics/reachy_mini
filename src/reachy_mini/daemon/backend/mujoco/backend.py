@@ -35,6 +35,7 @@ class MujocoBackend(Backend):
 
         Args:
             scene (str): The name of the scene to load. Default is "empty".
+            check_collision (bool): If True, enable collision checking. Default is False.
 
         """
         super().__init__(check_collision=check_collision)

@@ -30,6 +30,7 @@ class RobotBackend(Backend):
         Args:
             serialport (str): The serial port to which the Reachy Mini is connected.
             log_level (str): The logging level for the backend. Default is "INFO".
+            check_collision (bool): If True, enable collision checking. Default is False.
 
         Tries to connect to the Reachy Mini motor controller and initializes the control loop.
 
