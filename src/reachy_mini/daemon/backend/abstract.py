@@ -29,7 +29,7 @@ class Backend:
         files(reachy_mini).joinpath("descriptions/reachy_mini/urdf")
     )
 
-    def __init__(self, log_level: str = "INFO") -> None:
+    def __init__(self, log_level: str = "INFO", check_collision: bool = False) -> None:
         """Initialize the backend."""
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(log_level)
@@ -37,7 +37,9 @@ class Backend:
         self.should_stop = threading.Event()
         self.ready = threading.Event()
 
-        self.check_collision = False
+        self.check_collision = (
+            check_collision  # Flag to enable/disable collision checking
+        )
         self.head_kinematics = PlacoKinematics(
             Backend.urdf_root_path, check_collision=self.check_collision
         )

@@ -30,14 +30,14 @@ from reachy_mini.daemon.backend.mujoco.video_udp import UDPJPEGFrameSender
 class MujocoBackend(Backend):
     """Simulated Reachy Mini using MuJoCo."""
 
-    def __init__(self, scene="empty"):
+    def __init__(self, scene="empty", check_collision: bool = False):
         """Initialize the MujocoBackend with a specified scene.
 
         Args:
             scene (str): The name of the scene to load. Default is "empty".
 
         """
-        super().__init__()
+        super().__init__(check_collision=check_collision)
 
         from reachy_mini.reachy_mini import (
             SLEEP_ANTENNAS_JOINT_POSITIONS,
@@ -69,18 +69,21 @@ class MujocoBackend(Backend):
             mujoco.mjtObj.mjOBJ_BODY,  # type: ignore
             "pp01063_stewart_plateform",
         )
-        
+
         self.platform_to_head_transform = np.array(
-            [[ 8.66025292e-01,  5.00000194e-01, -1.83660327e-06, -1.34282000e-02],
-            [ 5.55111512e-16, -3.67320510e-06, -1.00000000e+00, -1.20000000e-03],
-            [-5.00000194e-01,  8.66025292e-01 ,-3.18108852e-06,  3.65883000e-02 ],
-            [0,  0,  0,  1.00000000e+00]])
-        #remove_z_offset  = np.eye(4)
-        #remove_z_offset[2, 3] = -0.177
-        #self.platform_to_head_transform = self.platform_to_head_transform @ remove_z_offset
+            [
+                [8.66025292e-01, 5.00000194e-01, -1.83660327e-06, -1.34282000e-02],
+                [5.55111512e-16, -3.67320510e-06, -1.00000000e00, -1.20000000e-03],
+                [-5.00000194e-01, 8.66025292e-01, -3.18108852e-06, 3.65883000e-02],
+                [0, 0, 0, 1.00000000e00],
+            ]
+        )
+        # remove_z_offset  = np.eye(4)
+        # remove_z_offset[2, 3] = -0.177
+        # self.platform_to_head_transform = self.platform_to_head_transform @ remove_z_offset
 
         self.current_head_pose = np.eye(4)
-        
+
         # print("Joints in the model:")
         # for i in range(self.model.njoint):
         #     name = mujoco.mj_id2joint(self.model, i)
@@ -162,16 +165,21 @@ class MujocoBackend(Backend):
                 start_t = time.time()
 
                 if step % self.decimation == 0:
-                    
                     # update the current states
-                    self.current_head_joint_positions = self.get_present_head_joint_positions()
-                    self.current_antenna_joint_positions = self.get_present_antenna_joint_positions()
+                    self.current_head_joint_positions = (
+                        self.get_present_head_joint_positions()
+                    )
+                    self.current_antenna_joint_positions = (
+                        self.get_present_antenna_joint_positions()
+                    )
                     self.current_head_pose = self.get_mj_present_head_pose()
 
                     # Update the target head joint positions from IK if necessary
-                    # - does nothing if the targets did not change 
+                    # - does nothing if the targets did not change
                     if self.ik_required:
-                        self.update_target_head_joints_from_ik(self.target_head_pose, self.target_body_yaw)
+                        self.update_target_head_joints_from_ik(
+                            self.target_head_pose, self.target_body_yaw
+                        )
 
                     if self.target_head_joint_positions is not None:
                         self.data.ctrl[:7] = self.target_head_joint_positions
@@ -186,7 +194,7 @@ class MujocoBackend(Backend):
                             json.dumps(
                                 {
                                     "head_joint_positions": self.current_head_joint_positions,
-                                    "antennas_joint_positions":  self.current_antenna_joint_positions,
+                                    "antennas_joint_positions": self.current_antenna_joint_positions,
                                 }
                             ).encode("utf-8")
                         )
@@ -203,11 +211,9 @@ class MujocoBackend(Backend):
 
                 took = time.time() - start_t
                 time.sleep(max(0, self.model.opt.timestep - took))
-                #print(f"Step {step}: took {took*1000:.1f}ms")
+                # print(f"Step {step}: took {took*1000:.1f}ms")
                 step += 1
                 self.ready.set()
-
-
 
     def get_mj_present_head_pose(self) -> np.ndarray:
         """Get the current head pose from the Mujoco simulation.
