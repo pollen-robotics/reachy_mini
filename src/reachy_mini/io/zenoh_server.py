@@ -9,12 +9,19 @@ either on localhost only or to accept connections from other hosts.
 
 import json
 import threading
+from datetime import datetime
 
 import numpy as np
 import zenoh
 
 from reachy_mini.daemon.backend.abstract import Backend
 from reachy_mini.io.abstract import AbstractServer
+from reachy_mini.io.protocol import (
+    GotoTaskRequest,
+    PlayMoveTaskRequest,
+    TaskProgress,
+    TaskRequest,
+)
 
 
 class ZenohServer(AbstractServer):
@@ -68,6 +75,14 @@ class ZenohServer(AbstractServer):
 
         self.pub_pose = self.session.declare_publisher("reachy_mini/head_pose")
         self.backend.set_pose_publisher(self.pub_pose)
+
+        self.task_req_sub = self.session.declare_subscriber(
+            "reachy_mini/task",
+            self._handle_task_request,
+        )
+        self.task_progress_pub = self.session.declare_publisher(
+            "reachy_mini/task_progress"
+        )
 
     def stop(self):
         """Stop the Zenoh server."""
@@ -125,3 +140,43 @@ class ZenohServer(AbstractServer):
             if "stop_recording" in command:
                 self.backend.stop_recording()
         self._cmd_event.set()
+
+    def _handle_task_request(self, sample: zenoh.Sample):
+        task_req = TaskRequest.model_validate_json(sample.payload.to_string())
+
+        if isinstance(task_req.req, GotoTaskRequest):
+            req = task_req.req
+
+            def task():
+                self.backend.goto_target(
+                    head=np.array(req.head).reshape(4, 4) if req.head else None,
+                    antennas=req.antennas,
+                    duration=req.duration,
+                    method=req.method,
+                    body_yaw=req.body_yaw,
+                    check_collision=req.check_collision,
+                )
+        elif isinstance(task_req.req, PlayMoveTaskRequest):
+
+            def task():
+                print("PLAY MOVE")
+
+        else:
+            assert False, f"Unknown task request type {task_req.req.__class__.__name__}"
+
+        def wrapped_task():
+            error = None
+            try:
+                task()
+            except Exception as e:
+                error = str(e)
+
+            progress = TaskProgress(
+                uuid=task_req.uuid,
+                finished=True,
+                error=error,
+                timestamp=datetime.now(),
+            )
+            self.task_progress_pub.put(progress.model_dump_json())
+
+        threading.Thread(target=wrapped_task).start()
