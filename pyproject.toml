@@ -25,6 +25,12 @@ dependencies = [
     "uvicorn",
     "fastapi",
     "pyserial",
+    "gradio",
+    "openai",
+    "fastrtc",
+    "insightface",
+    "onnxruntime",
+    "PyGObject",
 ]
 
 
@@ -43,6 +49,7 @@ examples = [
 reachy-mini-daemon = "reachy_mini.daemon.cli:main"
 reachy-mini-make-app = "reachy_mini.app:main"
 reachy-mini-dashboard = "reachy_mini_dashboard.dashboard_api:main"
+reachy-mini-talk = "reachy_mini_talk.main:main"
 
 [tool.setuptools]
 package-dir = { "" = "src" }
