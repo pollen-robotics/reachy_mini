@@ -16,6 +16,7 @@ import serial.tools.list_ports
 from reachy_mini.daemon.backend.mujoco import MujocoBackend, MujocoBackendStatus
 from reachy_mini.daemon.backend.robot import RobotBackend, RobotBackendStatus
 from reachy_mini.io import Server
+from reachy_mini.daemon.gstreamer_webrtc import GstWebRTC
 
 
 class Daemon:
@@ -24,7 +25,7 @@ class Daemon:
     Runs the server with the appropriate backend (Mujoco for simulation or RobotBackend for real hardware).
     """
 
-    def __init__(self, log_level: str = "INFO"):
+    def __init__(self, log_level: str = "INFO", webrtc: bool = False):
         """Initialize the Reachy Mini daemon."""
         self.log_level = log_level
         self.logger = logging.getLogger(__name__)
@@ -36,6 +37,10 @@ class Daemon:
             backend_status=None,
             error=None,
         )
+
+        self.webrtc : Optional[GstWebRTC] = None
+        if webrtc:
+            self.webrtc = GstWebRTC(log_level)
 
     def start(
         self,
@@ -70,6 +75,9 @@ class Daemon:
             "scene": scene,
             "localhost_only": localhost_only,
         }
+
+        if self.webrtc:
+            self.webrtc.start()
 
         self.logger.info("Starting Reachy Mini daemon...")
         self._status.state = DaemonState.STARTING
@@ -170,6 +178,9 @@ class Daemon:
             if self.backend_run_thread.is_alive():
                 self.logger.warning("Backend did not stop in time, forcing shutdown.")
                 self._status.state = DaemonState.ERROR
+
+            if self.webrtc:
+                self.webrtc.stop()
 
             self.backend.close()
             self.server.stop()

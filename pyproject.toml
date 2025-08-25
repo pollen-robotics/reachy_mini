@@ -25,6 +25,7 @@ dependencies = [
     "uvicorn",
     "fastapi",
     "pyserial",
+    "PyGObject>=3.42.2, <=3.46.0"
 ]
 
 

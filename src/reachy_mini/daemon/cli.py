@@ -56,6 +56,11 @@ def main():
         help="Allow the server to listen on all interfaces (default: False).",
     )
     parser.add_argument(
+        "--webrtc",
+        action="store_true",
+        help="Enable camera and microphone webrtc streaming",
+    )
+    parser.add_argument(
         "--log-level",
         type=str,
         default="INFO",
@@ -69,11 +74,12 @@ def main():
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     )
 
-    Daemon(log_level=args.log_level).run4ever(
+    Daemon(log_level=args.log_level, webrtc=args.webrtc).run4ever(
         sim=args.sim,
         serialport=args.serialport,
         scene=args.scene,
         localhost_only=args.localhost_only,
+        
     )
 
 
