@@ -62,6 +62,13 @@ def main():
         choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
         help="Set the logging level (default: INFO).",
     )
+    parser.add_argument(
+        "--check-collision",
+        action="store_true",
+        default=False,
+        help="Enable collision checking (default: False).",
+    )
+
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -74,6 +81,7 @@ def main():
         serialport=args.serialport,
         scene=args.scene,
         localhost_only=args.localhost_only,
+        check_collision=args.check_collision,
     )
 
 

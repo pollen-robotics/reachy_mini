@@ -123,8 +123,6 @@ class ZenohServer(AbstractServer):
                 self.backend.set_antennas_operation_mode(
                     command["antennas_operation_mode"]
                 )
-            if "check_collision" in command:
-                self.backend.set_check_collision(command["check_collision"])
             if "gravity_compensation" in command:
                 self.backend.set_gravity_compensation_mode(
                     command["gravity_compensation"]
@@ -154,7 +152,6 @@ class ZenohServer(AbstractServer):
                     duration=req.duration,
                     method=req.method,
                     body_yaw=req.body_yaw,
-                    check_collision=req.check_collision,
                 )
         elif isinstance(task_req.req, PlayMoveTaskRequest):
 
