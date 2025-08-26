@@ -1,5 +1,5 @@
-# from reachy_mini.utils.onnx_infer import OnnxInfer
-from utils.onnx_infer import OnnxInfer
+from reachy_mini.utils.onnx_infer import OnnxInfer
+# from utils.onnx_infer import OnnxInfer
 import numpy as np
 from typing import List
 import time
@@ -8,7 +8,7 @@ from scipy.spatial.transform import Rotation as R
 
 class NNKinematics:
     def __init__(self, models_root_path: str):
-        self.fk_model_path = f"{models_root_path}/fknetwork.dynamic.onnx"
+        self.fk_model_path = f"{models_root_path}/fknetwork.onnx"
         self.ik_model_path = f"{models_root_path}/iknetwork.onnx"
         self.fk_infer = OnnxInfer(self.fk_model_path)
         self.ik_infer = OnnxInfer(self.ik_model_path)
