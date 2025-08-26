@@ -30,7 +30,7 @@ dependencies = [
     "fastrtc",
     "insightface",
     "onnxruntime",
-    "PyGObject",
+    "PyGObject>=3.42.2, <=3.46.0",
 ]
 
 
