@@ -2,12 +2,15 @@ import logging
 from threading import Thread
 from typing import Optional
 import subprocess
+from gst_signalling import GstSignallingListener
 
 import gi
 
 gi.require_version("Gst", "1.0")
 gi.require_version("GstApp", "1.0")
 from gi.repository import GLib, Gst, GstApp
+import asyncio
+from typing import List, Optional, Tuple, Dict
 
 
 class GstWebRTC:
@@ -18,6 +21,8 @@ class GstWebRTC:
         self._loop = GLib.MainLoop()
         self._thread_bus_calls: Optional[Thread] = None
 
+        self._id_audio_card = self._get_respeaker_card_number()
+
         self.pipeline = Gst.Pipeline.new("reachymini_webrtc")
 
         webrtcsink = self._configure_webrtc(self.pipeline)
@@ -25,6 +30,16 @@ class GstWebRTC:
         self._configure_video(self.pipeline, webrtcsink)
         self._configure_audio(self.pipeline, webrtcsink)
 
+        self._webrtcsrc : Optional[Gst.Element] = None
+        self._webrtcsrc_count = -1
+        self._peer_audio_id = ""
+        self._peer_audio_name = "reachymini_client"
+        self._peer_audio_listener : Optional[GstSignallingListener] = None
+        self._receiver_elements = []
+        self._asyncio_loop = None
+
+        self._thread_webrtcsrc_manager = Thread(target=self._webrtcsrc_manager, daemon=True)
+ 
     def _configure_webrtc(self, pipeline) -> Gst.Element:
         self._logger.debug("Configuring WebRTC")
         webrtcsink = Gst.ElementFactory.make("webrtcsink")
@@ -102,8 +117,7 @@ class GstWebRTC:
     def _configure_audio(self, pipeline, webrtcsink):
         self._logger.debug("Configuring audio")
         alsasrc = Gst.ElementFactory.make("alsasrc")
-        id_card = self._get_respeaker_card_number()
-        alsasrc.set_property("device", f"hw:{id_card},0")
+        alsasrc.set_property("device", f"hw:{self._id_audio_card},0")
         queue = Gst.ElementFactory.make("queue")
         audioconvert = Gst.ElementFactory.make("audioconvert")
         audioresample = Gst.ElementFactory.make("audioresample")
@@ -169,24 +183,153 @@ class GstWebRTC:
     def start(self):
         self._logger.debug("Starting WebRTC")
         self.pipeline.set_state(Gst.State.PLAYING)
+        self._thread_webrtcsrc_manager.start()
         if self._thread_bus_calls is not None:
             self._thread_bus_calls = Thread(target=self._handle_bus_calls, daemon=True)
             self._thread_bus_calls.start()
 
+    def pause(self):
+        self._logger.debug("Pausing WebRTC")
+        self.pipeline.set_state(Gst.State.PAUSED)
+
     def stop(self):
-        self._logger.debug("Stopping WebRTC")
+        self._logger.debug("Stopping WebRTC")    
+
+        if self._asyncio_loop and self._peer_audio_listener:
+            future = asyncio.run_coroutine_threadsafe(
+            self._peer_audio_listener.close(), self._asyncio_loop
+            )
+            future.result()  # Wait for the close coroutine to finish
+
         self._loop.quit()
         self.pipeline.set_state(Gst.State.NULL)
 
+    def _webrtcsrc_manager(self) -> None:
+        # there is asyncio in the daemon for now. we'll limit its usage here.
+        self._logger.debug("Starting webrtcsrc manager")
+        self._asyncio_loop = asyncio.new_event_loop()
+        self._asyncio_loop.run_until_complete(self._webrtcsrc_manager_coroutine())
+        self._logger.debug("Stopping webrtcsrc manager")
 
-if __name__ == "__main__":
+    async def _webrtcsrc_manager_coroutine(self) -> None:
+        self._logger.debug("Starting webrtcsrc manager coroutine")
+        self._peer_audio_listener = GstSignallingListener(
+            host="127.0.0.1",
+            port=8443,
+            name=self._peer_audio_name,
+        )
+        self._peer_audio_listener.on("PeerStatusChanged", self._handle_peer_status_changed)
+        await self._peer_audio_listener.serve4ever()
+
+    def _removing_webrtcsrc(self) -> None:
+        self._peer_audio_id = ""
+        if self._webrtcsrc is not None:            
+            self._webrtcsrc.send_event(Gst.Event.new_eos())
+            self._webrtcsrc.set_state(Gst.State.NULL)
+            self.pipeline.remove(self._webrtcsrc)
+            self._webrtcsrc = None
+            for elt in self._receiver_elements:
+                self.pipeline.remove(elt)
+                elt.set_state(Gst.State.NULL)
+            self._receiver_elements.clear()
+        self._logger.debug("webrtcsrc removed")
+
+
+    def _configure_webrtcbin(self, webrtcsrc: Gst.Element) -> None:
+        if isinstance(webrtcsrc, Gst.Bin):
+            webrtcbin_name = "webrtcbin" + str(self._webrtcsrc_count)
+            webrtcbin = webrtcsrc.get_by_name(webrtcbin_name)
+            assert webrtcbin is not None
+            # jitterbuffer has a default 200 ms buffer.
+            webrtcbin.set_property("latency", 50)
+            self._receiver_elements.append(webrtcbin)
+
+    def _webrtcsrc_pad_added_cb(self, webrtcsrc: Gst.Element, pad: Gst.Pad) -> None:
+        if pad is not None and pad.get_name().startswith("audio"):  # type: ignore[union-attr]
+            self._logger.info("Connecting audio client")
+
+            self._configure_webrtcbin(webrtcsrc)
+
+            volume = Gst.ElementFactory.make("volume")
+            assert volume is not None
+            volume.set_property("volume", 0.2)
+            sink = Gst.ElementFactory.make("alsasink")
+            sink.set_property("device", f"hw:{self._id_audio_card},0")
+            assert sink is not None
+
+            self.pipeline.add(volume)
+            self.pipeline.add(sink)
+            self._receiver_elements.append(volume)
+            self._receiver_elements.append(sink)
+
+            volume.link(sink)
+            pad.link(volume.get_static_pad("sink"))  # type: ignore[arg-type]
+
+            volume.sync_state_with_parent()
+            sink.sync_state_with_parent()
+        elif pad.get_name().startswith("video"):
+            self._logger.warning("Ignoring video element")
+            fakesink = Gst.ElementFactory.make("fakesink")
+            assert fakesink is not None
+            self.pipeline.add(fakesink)
+            fakesink.sync_state_with_parent()
+            pad.link(fakesink.get_static_pad("sink"))  # type: ignore[arg-type]
+
+    def _add_webrtcsrc(self, peer_audio_id: str) -> Gst.Element:
+        webrtcsrc = Gst.ElementFactory.make("webrtcsrc")
+        assert webrtcsrc is not None
+        self._webrtcsrc_count += 1
+
+        signaller = webrtcsrc.get_property("signaller")
+        signaller.set_property("producer-peer-id", peer_audio_id)
+        signaller.set_property("uri", "ws://127.0.0.1:8443")
+
+        webrtcsrc.connect("pad-added", self._webrtcsrc_pad_added_cb)
+
+        self.pipeline.add(webrtcsrc)
+        webrtcsrc.sync_state_with_parent()
+        return webrtcsrc
+
+    async def _adding_webrtcsrc(self, peer_audio_id: str) -> None:
+        while True:
+            state_change_return, state, pending = self.pipeline.get_state(Gst.CLOCK_TIME_NONE)
+            if state_change_return == Gst.StateChangeReturn.SUCCESS and state == Gst.State.PLAYING:
+                self._logger.debug("Pipeline is ready and playing")
+                break
+            elif state_change_return == Gst.StateChangeReturn.FAILURE:
+                self._logger.error("Failed to get the pipeline state, it might be in an error state")
+                break
+            else:
+                self._logger.debug(f"Pipeline is not ready yet, current state: {state.value_nick}")
+                await asyncio.sleep(0.5)
+        self._webrtcsrc = self._add_webrtcsrc(peer_audio_id)
+
+    async def _handle_peer_status_changed(self, peer_id: str, roles: List[str], meta: Dict[str, str]) -> None:
+        self._logger.debug(f'Peer "{peer_id}" changed roles to {roles} with meta {meta}')
+        if meta is None:
+            pass
+        elif peer_id == self._peer_audio_id and meta["name"] == self._peer_audio_name:
+            self._removing_webrtcsrc()
+            self._logger.info(f"Client {self._peer_audio_id} is disconnected")
+        elif self._peer_audio_id == "" and meta["name"] == self._peer_audio_name and "producer" in roles:
+            self._peer_audio_id = peer_id
+            await self._adding_webrtcsrc(self._peer_audio_id)
+            self._logger.info(f"Client is connected with id : {self._peer_audio_id}")
+
+
+if __name__ == "__main__":   
     import time
+    logging.basicConfig(
+        level=logging.DEBUG,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    )
+
     webrtc = GstWebRTC(log_level="DEBUG")
     webrtc.start()
     try: 
         while True:
             time.sleep(1)
     except KeyboardInterrupt:
-        print("User interrupted")
+        logging.info("User interrupted")
     finally:
         webrtc.stop()
