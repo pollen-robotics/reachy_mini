@@ -29,6 +29,9 @@ echo 'export GST_PLUGIN_PATH=/opt/gst-plugins-rs/lib/aarch64-linux-gnu/' >> ~/.b
 
 gst-launch-1.0 webrtcsink run-signalling-server=true meta="meta,name=reachymini" name=ws libcamerasrc ! capsfilter caps=video/x-raw,width=1280,height=720,framerate=60/1,format=YUY2,colorimetry=bt709,interlace-mode=progressive ! queue !  v4l2h264enc extra-controls="controls,repeat_sequence_header=1" ! 'video/x-h264,level=(string)4' ! ws. alsasrc device=hw:4 ! queue ! audioconvert ! audioresample ! opusenc ! audio/x-opus, rate=48000, channels=2 ! ws.
 
+gst-launch-1.0 webrtcsink signaller::uri="ws://10.0.1.38:8443" name=ws meta="meta,name=reachymini_client"  audiotestsrc ! opusenc ! audio/x-opus, rate=48000, channels=2 ! ws.
+
+
 ```bash
 reachy-mini-daemon --webrtc
 ```
