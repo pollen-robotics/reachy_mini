@@ -450,6 +450,11 @@ class Backend:
             mode (bool): If True, gravity compensation is enabled.
 
         """
+
+        if KINEMATICS_TYPE != "Placo":
+            raise ValueError(
+                "Gravity compensation is only available with Placo kinematics"
+            )
         self.gravity_compensation_mode = mode  # True (enable) or False (disable)
 
     def compensate_head_gravity(self) -> None:
