@@ -1,13 +1,18 @@
-from reachy_mini.utils.onnx_infer import OnnxInfer
-# from utils.onnx_infer import OnnxInfer
-import numpy as np
-from typing import List
 import time
+from typing import List
+
+import numpy as np
 from scipy.spatial.transform import Rotation as R
+
+# from utils.onnx_infer import OnnxInfer
+from reachy_mini.utils.onnx_infer import OnnxInfer
 
 
 class NNKinematics:
+    """Neural Network based FK/IK. Fitted from PlacoKinematics data."""
+
     def __init__(self, models_root_path: str):
+        """Intialize."""
         self.fk_model_path = f"{models_root_path}/fknetwork.onnx"
         self.ik_model_path = f"{models_root_path}/iknetwork.onnx"
         self.fk_infer = OnnxInfer(self.fk_model_path)
@@ -22,7 +27,7 @@ class NNKinematics:
         check_collision: bool = False,
         no_iterations: int = 0,
     ):
-        """body_yaw, check_collision and no_iterations are not used by NNKinematics.
+        """check_collision and no_iterations are not used by NNKinematics.
 
         We keep them for compatibility with the other kinematics engines
         """
@@ -31,7 +36,10 @@ class NNKinematics:
 
         input = [x, y, z, roll, pitch, yaw]
 
-        return self.ik_infer.infer(input)
+        joints = self.ik_infer.infer(input)
+        joints[0] = body_yaw
+
+        return joints
 
     def fk(
         self,
@@ -43,7 +51,6 @@ class NNKinematics:
 
         We keep them for compatibility with the other kinematics engines
         """
-
         x, y, z, roll, pitch, yaw = self.fk_infer.infer(joint_angles)
         pose = np.eye(4)
         pose[:3, 3] = [x, y, z]
