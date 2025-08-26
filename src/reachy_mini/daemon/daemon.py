@@ -56,6 +56,7 @@ class Daemon:
             localhost_only (bool): If True, restrict the server to localhost only clients. Defaults to True.
             wake_up_on_start (bool): If True, wake up Reachy Mini on start. Defaults to True.
             check_collision (bool): If True, enable collision checking. Defaults to False.
+            kinematics_engine (str): Kinematics engine to use. Defaults to "Placo".
 
         Returns:
             DaemonState: The current state of the daemon after attempting to start it.
@@ -296,6 +297,7 @@ class Daemon:
             wake_up_on_start (bool): If True, wake up Reachy Mini on start. Defaults to True.
             goto_sleep_on_stop (bool): If True, put Reachy Mini to sleep on stop. Defaults to True
             check_collision (bool): If True, enable collision checking. Defaults to False.
+            kinematics_engine (str): Kinematics engine to use. Defaults to "Placo".
 
         """
         self.start(

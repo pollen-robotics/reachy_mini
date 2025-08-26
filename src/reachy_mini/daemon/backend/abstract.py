@@ -450,7 +450,6 @@ class Backend:
             mode (bool): If True, gravity compensation is enabled.
 
         """
-
         if self.kinematics_engine != "Placo":
             raise ValueError(
                 "Gravity compensation is only available with Placo kinematics"
