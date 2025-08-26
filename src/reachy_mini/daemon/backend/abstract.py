@@ -18,8 +18,20 @@ from typing import List
 import numpy as np
 
 import reachy_mini
-from reachy_mini.placo_kinematics import PlacoKinematics
 from reachy_mini.utils.interpolation import linear_pose_interpolation, time_trajectory
+
+
+KINEMATICS_TYPE = "Placo"
+# KINEMATICS_TYPE = "Analytical"
+# KINEMATICS_TYPE = "NN"
+
+if KINEMATICS_TYPE == "Placo":
+    from reachy_mini.placo_kinematics import PlacoKinematics
+elif KINEMATICS_TYPE == "NN":
+    from reachy_mini.nn_kinematics import NNKinematics
+else:
+    print("Analytical kinematics not integrated yet")
+    exit()
 
 
 class Backend:
