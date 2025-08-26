@@ -134,7 +134,6 @@ class ReachyMini:
             Union[np.ndarray, List[float]]
         ] = None,  # [left_angle, right_angle] (in rads)
         body_yaw: float = 0.0,  # Body yaw angle in radians
-        check_collision: bool = False,  # Check for collisions before setting the position
     ) -> None:
         """Set the target pose of the head and/or the target position of the antennas.
 
@@ -142,7 +141,6 @@ class ReachyMini:
             head (Optional[np.ndarray]): 4x4 pose matrix representing the head pose.
             antennas (Optional[Union[np.ndarray, List[float]]]): 1D array with two elements representing the angles of the antennas in radians.
             body_yaw (Optional[float]): Body yaw angle in radians.
-            check_collision (bool): If True, checks for collisions before setting the position. Beware that this will slow down the IK computation (~1ms).
 
         Raises:
             ValueError: If neither head nor antennas are provided, or if the shape of head is not (4, 4), or if antennas is not a 1D array with two elements.
@@ -159,7 +157,6 @@ class ReachyMini:
                 "Antennas must be a list or 1D np array with two elements."
             )
 
-        self._set_check_collision(check_collision)
         if antennas is not None:
             self._set_joint_positions(antennas_joint_positions=list(antennas))
         if head is not None:
@@ -171,7 +168,6 @@ class ReachyMini:
             "head": head.tolist() if head is not None else None,
             "antennas": list(antennas) if antennas is not None else None,
             "body_yaw": body_yaw,
-            "check_collision": check_collision,
         }
         self._set_record_data(record)
 
@@ -184,7 +180,6 @@ class ReachyMini:
         duration: float = 0.5,  # Duration in seconds for the movement, default is 0.5 seconds.
         method="default",  # can be "linear", "minjerk", "ease" or "cartoon", default is "default" (-> "minjerk" interpolation)
         body_yaw: float = 0.0,  # Body yaw angle in radians
-        check_collision: bool = False,
     ):
         """Go to a target head pose and/or antennas position using task space interpolation, in "duration" seconds.
 
@@ -194,7 +189,6 @@ class ReachyMini:
             duration (float): Duration of the movement in seconds.
             method (str): Interpolation method to use ("linear", "minjerk", "ease", "cartoon"). Default is "minjerk".
             body_yaw (float): Body yaw angle in radians.
-            check_collision (bool): If True, checks for collisions before setting the position. Beware that this will slow down the IK computation (~1ms)!
 
         Raises:
             ValueError: If neither head nor antennas are provided, or if duration is not positive.
@@ -218,7 +212,6 @@ class ReachyMini:
             duration=duration,
             method=method,
             body_yaw=body_yaw,
-            check_collision=check_collision,
         )
 
         task_uid = self.client.send_task_request(req)
@@ -622,15 +615,6 @@ class ReachyMini:
             f"Head joint current must have length 7, got {current}."
         )
         self.client.send_command(json.dumps({"head_joint_current": list(current)}))
-
-    def _set_check_collision(self, check: bool) -> None:
-        """Set whether to check for collisions.
-
-        Args:
-            check (bool): If True, the backend will check for collisions.
-
-        """
-        self.client.send_command(json.dumps({"check_collision": check}))
 
     def enable_gravity_compensation(self) -> None:
         """Enable gravity compensation for the head motors."""

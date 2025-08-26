@@ -43,7 +43,7 @@ class Backend:
 
     models_root_path: str = str(files(reachy_mini).joinpath("assets/models"))
 
-    def __init__(self, log_level: str = "INFO") -> None:
+    def __init__(self, log_level: str = "INFO", check_collision: bool = False) -> None:
         """Initialize the backend."""
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(log_level)
@@ -51,21 +51,31 @@ class Backend:
         self.should_stop = threading.Event()
         self.ready = threading.Event()
 
-        if KINEMATICS_TYPE == "Placo":
-            self.head_kinematics = PlacoKinematics(Backend.urdf_root_path)
-        elif KINEMATICS_TYPE == "NN":
-            self.head_kinematics = NNKinematics(Backend.models_root_path)
-        else:
-            print("???")
-            exit()
+        self.check_collision = (
+            check_collision  # Flag to enable/disable collision checking
+        )
 
-        self.check_collision = False
+        if self.check_collision:
+            assert KINEMATICS_TYPE == "Placo", (
+                "Collision checking is only available with Placo Kinematics"
+            )
+
         self.gravity_compensation_mode = False  # Flag for gravity compensation mode
 
         if self.gravity_compensation_mode:
             assert KINEMATICS_TYPE == "Placo", (
                 "Gravity compensation is only available with Placo kinematics"
             )
+
+        if KINEMATICS_TYPE == "Placo":
+            self.head_kinematics = PlacoKinematics(
+                Backend.urdf_root_path, self.check_collision
+            )
+        elif KINEMATICS_TYPE == "NN":
+            self.head_kinematics = NNKinematics(Backend.models_root_path)
+        else:
+            print("???")
+            exit()
 
         self.current_head_pose = None  # 4x4 pose matrix
         self.target_head_pose = None  # 4x4 pose matrix
@@ -88,7 +98,6 @@ class Backend:
         self._last_target_head_pose = None  # Last head pose used in IK computations
         self.target_head_joint_current = None  # Placeholder for head joint torque
         self.target_head_operation_mode = None  # Placeholder for head operation mode
-        self._last_collision_check = None  # Track the last collision flag used in IK
         self.ik_required = False  # Flag to indicate if IK computation is required
 
         # Tolerance for kinematics computations
@@ -180,9 +189,7 @@ class Backend:
             body_yaw = self.target_body_yaw if self.target_body_yaw is not None else 0.0
 
         # Compute the inverse kinematics to get the head joint positions
-        joints = self.head_kinematics.ik(
-            pose, body_yaw=body_yaw, check_collision=self.check_collision
-        )
+        joints = self.head_kinematics.ik(pose, body_yaw=body_yaw)
 
         if joints is None or np.any(np.isnan(joints)):
             raise ValueError("WARNING: Collision detected or head pose not achievable!")
@@ -190,7 +197,6 @@ class Backend:
         # update the target head pose and body yaw
         self._last_target_head_pose = pose
         self._last_target_body_yaw = body_yaw
-        self._last_collision_check = self.check_collision
 
         self.target_head_joint_positions = joints
 
@@ -245,7 +251,6 @@ class Backend:
         duration: float = 0.5,  # Duration in seconds for the movement, default is 0.5 seconds.
         method="default",  # can be "linear", "minjerk", "ease" or "cartoon", default is "default" (-> "minjerk" interpolation)
         body_yaw: float = 0.0,  # Body yaw angle in radians
-        check_collision: bool = False,
     ):
         """Go to a target head pose and/or antennas position using task space interpolation, in "duration" seconds.
 
@@ -255,15 +260,11 @@ class Backend:
             duration (float): Duration of the movement in seconds.
             method (str): Interpolation method to use ("linear", "minjerk", "ease", "cartoon"). Default is "minjerk".
             body_yaw (float): Body yaw angle in radians.
-            check_collision (bool): If True, checks for collisions before setting the position. Beware that this will slow down the IK computation (~1ms)!
 
         Raises:
             ValueError: If neither head nor antennas are provided, or if duration is not positive.
 
         """
-        current_collision_check = self.check_collision
-        self.set_check_collision(check_collision)
-
         start_head_pose = self.get_present_head_pose()
         target_head_pose = head if head is not None else start_head_pose
         start_body_yaw = self.get_present_body_yaw()
@@ -292,8 +293,6 @@ class Backend:
             )
             self.set_target_antenna_joint_positions(list(interp_antennas_joint))
             time.sleep(0.01)
-
-        self.set_check_collision(current_collision_check)
 
     def set_recording_publisher(self, publisher) -> None:
         """Set the publisher for recording data.
@@ -434,15 +433,6 @@ class Backend:
 
         if antennas_joint_positions is not None:
             self.current_antenna_joint_positions = antennas_joint_positions
-
-    def set_check_collision(self, check: bool) -> None:
-        """Set whether to check collisions.
-
-        Args:
-            check (bool): If True, the backend will check for collisions.
-
-        """
-        self.check_collision = check
 
     def set_automatic_body_yaw(self, body_yaw: float) -> None:
         """Set the automatic body yaw.
