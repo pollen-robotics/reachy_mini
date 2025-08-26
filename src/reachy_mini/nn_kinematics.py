@@ -1,4 +1,5 @@
-from reachy_mini.utils.onnx_infer import OnnxInfer
+# from reachy_mini.utils.onnx_infer import OnnxInfer
+from utils.onnx_infer import OnnxInfer
 import numpy as np
 from typing import List
 import time
@@ -7,7 +8,7 @@ from scipy.spatial.transform import Rotation as R
 
 class NNKinematics:
     def __init__(self, models_root_path: str):
-        self.fk_model_path = f"{models_root_path}/fknetwork.onnx"
+        self.fk_model_path = f"{models_root_path}/fknetwork.dynamic.onnx"
         self.ik_model_path = f"{models_root_path}/iknetwork.onnx"
         self.fk_infer = OnnxInfer(self.fk_model_path)
         self.ik_infer = OnnxInfer(self.ik_model_path)
@@ -59,15 +60,15 @@ if __name__ == "__main__":
     times_ik = []
     for i in range(1000):
         fk_input = np.random.random(7).astype(np.float32)
-        ik_input = np.random.random(6).astype(np.float32)
+        # ik_input = np.random.random(6).astype(np.float32)
 
         fk_s = time.time()
         fk_output = nn_kin.fk(fk_input)
         times_fk.append(time.time() - fk_s)
 
-        ik_s = time.time()
-        ik_output = nn_kin.ik(ik_input)
-        times_ik.append(time.time() - ik_s)
+        # ik_s = time.time()
+        # ik_output = nn_kin.ik(ik_input)
+        # times_ik.append(time.time() - ik_s)
 
     print(f"Average FK inference time: {np.mean(times_fk) * 1e6} µs")
-    print(f"Average IK inference time: {np.mean(times_ik) * 1e6} µs")
+    # print(f"Average IK inference time: {np.mean(times_ik) * 1e6} µs")
