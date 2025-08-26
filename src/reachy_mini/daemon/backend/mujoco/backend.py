@@ -30,7 +30,12 @@ from reachy_mini.daemon.backend.mujoco.video_udp import UDPJPEGFrameSender
 class MujocoBackend(Backend):
     """Simulated Reachy Mini using MuJoCo."""
 
-    def __init__(self, scene="empty", check_collision: bool = False):
+    def __init__(
+        self,
+        scene="empty",
+        check_collision: bool = False,
+        kinematics_engine: str = "Placo",
+    ):
         """Initialize the MujocoBackend with a specified scene.
 
         Args:
@@ -38,7 +43,9 @@ class MujocoBackend(Backend):
             check_collision (bool): If True, enable collision checking. Default is False.
 
         """
-        super().__init__(check_collision=check_collision)
+        super().__init__(
+            check_collision=check_collision, kinematics_engine=kinematics_engine
+        )
 
         from reachy_mini.reachy_mini import (
             SLEEP_ANTENNAS_JOINT_POSITIONS,

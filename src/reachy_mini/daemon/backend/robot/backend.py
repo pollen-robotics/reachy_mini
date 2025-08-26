@@ -23,7 +23,11 @@ class RobotBackend(Backend):
     """Real robot backend for Reachy Mini."""
 
     def __init__(
-        self, serialport: str, log_level: str = "INFO", check_collision: bool = False
+        self,
+        serialport: str,
+        log_level: str = "INFO",
+        check_collision: bool = False,
+        kinematics_engine: str = "Placo",
     ):
         """Initialize the RobotBackend.
 
@@ -35,7 +39,9 @@ class RobotBackend(Backend):
         Tries to connect to the Reachy Mini motor controller and initializes the control loop.
 
         """
-        super().__init__(check_collision=check_collision)
+        super().__init__(
+            check_collision=check_collision, kinematics_engine=kinematics_engine
+        )
 
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(log_level)
