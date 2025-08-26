@@ -18,8 +18,8 @@ class NNKinematics:
 
 if __name__ == "__main__":
     nn_kin = NNKinematics(
-        "/home/antoine/Pollen/reachy_mini_nn_kinematics/fknetwork.onnx",
-        "/home/antoine/Pollen/reachy_mini_nn_kinematics/iknetwork.onnx",
+        "assets/models/fknetwork.onnx",
+        "assets/models/iknetwork.onnx",
     )
 
     times_fk = []
