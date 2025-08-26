@@ -21,9 +21,9 @@ import reachy_mini
 from reachy_mini.utils.interpolation import linear_pose_interpolation, time_trajectory
 
 
-KINEMATICS_TYPE = "Placo"
+# KINEMATICS_TYPE = "Placo"
 # KINEMATICS_TYPE = "Analytical"
-# KINEMATICS_TYPE = "NN"
+KINEMATICS_TYPE = "NN"
 
 if KINEMATICS_TYPE == "Placo":
     from reachy_mini.placo_kinematics import PlacoKinematics
@@ -41,6 +41,8 @@ class Backend:
         files(reachy_mini).joinpath("descriptions/reachy_mini/urdf")
     )
 
+    models_root_path: str = str(files(reachy_mini).joinpath("assets/models"))
+
     def __init__(self, log_level: str = "INFO") -> None:
         """Initialize the backend."""
         self.logger = logging.getLogger(__name__)
@@ -49,9 +51,21 @@ class Backend:
         self.should_stop = threading.Event()
         self.ready = threading.Event()
 
-        self.head_kinematics = PlacoKinematics(Backend.urdf_root_path)
+        if KINEMATICS_TYPE == "Placo":
+            self.head_kinematics = PlacoKinematics(Backend.urdf_root_path)
+        elif KINEMATICS_TYPE == "NN":
+            self.head_kinematics = NNKinematics(Backend.models_root_path)
+        else:
+            print("???")
+            exit()
+
         self.check_collision = False
         self.gravity_compensation_mode = False  # Flag for gravity compensation mode
+
+        if self.gravity_compensation_mode:
+            assert KINEMATICS_TYPE == "Placo", (
+                "Gravity compensation is only available with Placo kinematics"
+            )
 
         self.current_head_pose = None  # 4x4 pose matrix
         self.target_head_pose = None  # 4x4 pose matrix

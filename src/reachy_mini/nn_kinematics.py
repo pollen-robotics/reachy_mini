@@ -1,25 +1,58 @@
-from utils.onnx_infer import OnnxInfer
+from reachy_mini.utils.onnx_infer import OnnxInfer
 import numpy as np
 from typing import List
 import time
+from scipy.spatial.transform import Rotation as R
 
 
 class NNKinematics:
-    def __init__(self, fk_model_path: str, ik_model_path: str):
-        self.fk_infer = OnnxInfer(fk_model_path)
-        self.ik_infer = OnnxInfer(ik_model_path)
+    def __init__(self, models_root_path: str):
+        self.fk_model_path = f"{models_root_path}/fknetwork.onnx"
+        self.ik_model_path = f"{models_root_path}/iknetwork.onnx"
+        self.fk_infer = OnnxInfer(self.fk_model_path)
+        self.ik_infer = OnnxInfer(self.ik_model_path)
 
-    def ik(self, pose: np.ndarray):
-        return self.ik_infer.infer(pose)
+        self.start_body_yaw = 0.0  # No used, kept for compatibility
 
-    def fk(self, joint_angles: List[float]):
-        return self.fk_infer.infer(joint_angles)
+    def ik(
+        self,
+        pose: np.ndarray,
+        body_yaw: float = 0.0,
+        check_collision: bool = False,
+        no_iterations: int = 0,
+    ):
+        """body_yaw, check_collision and no_iterations are not used by NNKinematics.
+
+        We keep them for compatibility with the other kinematics engines
+        """
+        x, y, z = pose[:3, 3][0], pose[:3, 3][1], pose[:3, 3][2]
+        roll, pitch, yaw = R.from_matrix(pose[:3, :3]).as_euler("xyz")
+
+        input = [x, y, z, roll, pitch, yaw]
+
+        return self.ik_infer.infer(input)
+
+    def fk(
+        self,
+        joint_angles: List[float],
+        check_collision: bool = False,
+        no_iterations: int = 0,
+    ):
+        """check_collision and no_iterations are not used by NNKinematics.
+
+        We keep them for compatibility with the other kinematics engines
+        """
+
+        x, y, z, roll, pitch, yaw = self.fk_infer.infer(joint_angles)
+        pose = np.eye(4)
+        pose[:3, 3] = [x, y, z]
+        pose[:3, :3] = R.from_euler("xyz", [roll, pitch, yaw]).as_matrix()
+        return pose
 
 
 if __name__ == "__main__":
     nn_kin = NNKinematics(
-        "assets/models/fknetwork.onnx",
-        "assets/models/iknetwork.onnx",
+        "assets/models",
     )
 
     times_fk = []

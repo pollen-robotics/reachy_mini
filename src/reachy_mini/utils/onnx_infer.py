@@ -1,5 +1,5 @@
 import onnxruntime
-
+import numpy as np
 
 class OnnxInfer:
     def __init__(self, onnx_model_path):
