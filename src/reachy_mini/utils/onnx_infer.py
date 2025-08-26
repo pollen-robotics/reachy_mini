@@ -1,4 +1,4 @@
-import onnxruntime
+import onnxruntime  # noqa: D100
 
 
 class OnnxInfer:

@@ -1,4 +1,4 @@
-import time
+import time  # noqa: D100
 from typing import List
 
 import numpy as np
