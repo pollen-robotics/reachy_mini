@@ -16,7 +16,7 @@ import serial.tools.list_ports
 from reachy_mini.daemon.backend.mujoco import MujocoBackend, MujocoBackendStatus
 from reachy_mini.daemon.backend.robot import RobotBackend, RobotBackendStatus
 from reachy_mini.io import Server
-from reachy_mini.daemon.gstreamer_webrtc import GstWebRTC
+from reachy_mini.gstreamer.webrtc_daemon import GstWebRTC
 
 
 class Daemon:

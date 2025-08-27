@@ -1,7 +1,7 @@
 import logging
 from threading import Thread
 from typing import Optional
-import subprocess
+
 from gst_signalling import GstSignallingListener
 
 import gi
@@ -11,6 +11,7 @@ gi.require_version("GstApp", "1.0")
 from gi.repository import GLib, Gst, GstApp
 import asyncio
 from typing import List, Optional, Tuple, Dict
+from reachy_mini.gstreamer.utils import get_respeaker_card_number
 
 
 class GstWebRTC:
@@ -21,7 +22,7 @@ class GstWebRTC:
         self._loop = GLib.MainLoop()
         self._thread_bus_calls: Optional[Thread] = None
 
-        self._id_audio_card = self._get_respeaker_card_number()
+        self._id_audio_card = get_respeaker_card_number()
 
         self.pipeline = Gst.Pipeline.new("reachymini_webrtc")
 
@@ -95,24 +96,7 @@ class GstWebRTC:
         v4l2h264enc.link(capsfilter_h264)
         capsfilter_h264.link(webrtcsink)
 
-    def _get_respeaker_card_number(self) -> int:
-        try:
-            result = subprocess.run(['arecord', '-l'], capture_output=True, text=True, check=True)
-            output = result.stdout
 
-            lines = output.split('\n')
-            for line in lines:
-                if 'ReSpeaker' in line and 'card' in line:
-                    card_number = line.split(':')[0].split('card ')[1].strip()
-                    self._logger.debug(f"Found ReSpeaker sound card: {card_number}")
-                    return int(card_number)
-
-            self._logger.warning("ReSpeaker sound card not found. Returning default card")
-            return 0  # default sound card
-
-        except subprocess.CalledProcessError as e:
-            self._logger.error(f"Cannot find sound card: {e}")
-            return 0
 
     def _configure_audio(self, pipeline, webrtcsink):
         self._logger.debug("Configuring audio")
