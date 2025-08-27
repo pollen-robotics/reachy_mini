@@ -12,7 +12,8 @@ from placo_utils.visualization import frame_viz, robot_frame_viz, robot_viz
 from reachy_mini.analytic_kinematics import ReachyMiniAnalyticKinematics
 from reachy_mini.placo_kinematics import PlacoKinematics
 
-urdf_path = os.path.abspath("src/reachy_mini/descriptions/reachy_mini/urdf/robot.urdf")
+urdf_path = os.path.abspath("../../src/reachy_mini/descriptions/reachy_mini/urdf/robot.urdf")
+
 solver = PlacoKinematics(urdf_path, 0.02)
 robot = solver.robot
 robot.update_kinematics()

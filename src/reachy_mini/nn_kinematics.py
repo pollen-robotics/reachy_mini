@@ -37,7 +37,7 @@ class NNKinematics:
         input = [x, y, z, roll, pitch, yaw]
 
         joints = self.ik_infer.infer(input)
-        joints[0] = body_yaw
+        joints[0] += body_yaw
 
         return joints
 
