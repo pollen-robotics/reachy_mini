@@ -262,7 +262,8 @@ class OpenAIHandler(AsyncStreamHandler):
     async def start_up(self):
         self.client = openai.AsyncOpenAI()
         async with self.client.beta.realtime.connect(
-            model="gpt-4o-realtime-preview"
+            # model="gpt-4o-realtime-preview"
+            model="gpt-4o-realtime-preview-2025-06-03"
         ) as conn:
             # declare tools on the session
             await conn.session.update(
