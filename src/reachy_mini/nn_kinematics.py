@@ -34,6 +34,7 @@ class NNKinematics:
         x, y, z = pose[:3, 3][0], pose[:3, 3][1], pose[:3, 3][2]
         roll, pitch, yaw = R.from_matrix(pose[:3, :3]).as_euler("xyz")
 
+        yaw += body_yaw
         input = [x, y, z, roll, pitch, yaw]
 
         joints = self.ik_infer.infer(input)
