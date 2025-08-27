@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 # compare_recordings.py
-"""
-Compare two ReachyMini dance-run recordings by regenerating overlay plots.
+"""Compare two ReachyMini dance-run recordings by regenerating overlay plots.
 
 Usage
 -----
@@ -28,6 +27,7 @@ Notes
 - Matplotlib only, no seaborn. Plots use grids and legends; sizes chosen for readability.
 
 Dependencies: numpy, matplotlib
+
 """
 
 from __future__ import annotations
@@ -35,14 +35,14 @@ from __future__ import annotations
 import argparse
 import logging
 from pathlib import Path
-from typing import Dict, Tuple, Optional, Set
+from typing import Dict, Optional, Set
 
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
 
 
 # ------------------------- Logging ---------------------------------
-def setup_logging() -> None:
+def setup_logging() -> None:  # noqa: D103
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s [%(levelname)s] %(message)s",
@@ -133,6 +133,7 @@ def plot_xyzrpy_compare(
     out_png: Path,
 ) -> None:
     """Overlay XYZ (mm) and RPY (deg) present trajectories for two runs.
+
     Also plot goal from run A as a thin reference line.
     """
     tA = A["t"] - A["t"][0]
@@ -221,7 +222,7 @@ def derive_output_root(dirA: Path, dirB: Path) -> Path:
     return out
 
 
-def process_move(move: str, dirA: Path, dirB: Path, out_dir: Path) -> None:
+def process_move(move: str, dirA: Path, dirB: Path, out_dir: Path) -> None:  # noqa: D103
     pathA = dirA / f"{move}.npz"
     pathB = dirB / f"{move}.npz"
 
@@ -242,7 +243,7 @@ def process_move(move: str, dirA: Path, dirB: Path, out_dir: Path) -> None:
     logging.info("Saved %s and %s", out_err, out_xyzrpy)
 
 
-def main() -> None:
+def main() -> None:  # noqa: D103
     setup_logging()
     parser = argparse.ArgumentParser(
         description="Regenerate and compare per-move plots from two recordings."
