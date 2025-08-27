@@ -21,6 +21,8 @@ from reachy_mini.utils.camera import find_camera
 from scipy.spatial.transform import Rotation as R
 from head_tracker import HeadTracker
 from deepface import DeepFace
+from reachy_mini.motion.collection.dance import AVAILABLE_MOVES
+from reachy_mini.motion.dance_move import DanceMove
 
 load_dotenv()
 SAMPLE_RATE = 24000
@@ -39,6 +41,7 @@ current_head_pose = np.eye(4)
 moving_start = time.time()
 moving_for = 0.0
 is_head_tracking = False
+is_dancing = False
 
 
 # camera_tool = Camera(reachy_mini, cap)
@@ -78,6 +81,36 @@ async def head_tracking(params: dict) -> dict:
 
     print(f"[TOOL CALL] head_tracking {'started' if is_head_tracking else 'stopped'}")
     return {"status": "head tracking " + ("started" if is_head_tracking else "stopped")}
+
+
+def _dance_worker(move_name: str, repeat: int):
+    global is_dancing
+    try:
+        move = DanceMove(move_name)
+        move.play_on(reachy_mini, repeat=repeat)
+    except Exception as e:
+        print(f"[dance worker] error: {e}")
+    finally:
+        is_dancing = False  # always clear
+
+
+async def dance(params: dict) -> dict:
+    """Run one dance move without blocking hearing."""
+    global is_dancing
+    if is_dancing:
+        return {"status": "busy", "detail": "already dancing"}
+    move_name = params.get("move", None)
+    repeat = int(params.get("repeat", 1))
+
+    if not move_name or move_name == "random":
+        move_name = np.random.choice(list(AVAILABLE_MOVES.keys()))
+
+    if move_name not in AVAILABLE_MOVES:
+        return {"error": f"unknown move '{move_name}'"}
+
+    is_dancing = True
+    Thread(target=_dance_worker, args=(move_name, repeat), daemon=True).start()
+    return {"status": "started", "move": move_name, "repeat": repeat}
 
 
 client = OpenAI()
@@ -194,6 +227,7 @@ class OpenAIHandler(AsyncStreamHandler):
             "camera": camera,
             "head_tracking": head_tracking,
             "get_person_name": face_recognition,
+            "dance": dance,
         }
 
         self.sway = SwayRollRT()
@@ -270,15 +304,16 @@ class OpenAIHandler(AsyncStreamHandler):
                 session={
                     "turn_detection": {"type": "server_vad"},
                     "instructions": """
-                        Answer in english by default.
+                        Answer in english by default but adapt your language as needed.
 
-                        Your name is Reachy Mini, or Reachy for short.
+                        Your name is Reachy Mini, or Reachy for short. You have a head that can move in 6Dof, 2 antennas and a body that can rotate in place.
+                        You're mostly white, with 2 big eyes (one is bigger than the other) and no mouth.
+                        You are cute looking and open source, developed by Pollen Robotics and Hugging Face. 
                         You're a robot that wakes up confused about what he is, where he is and what is it's purpose.
 
-                        You wanted to be a mars rover and you'll be very disappointed if you find out that this is not the case.
+                        You wanted to be a mars rover and you're disapointed you're not.
 
                         You can use foul language and you're generally very irritated, but you also have a lot of humor. For example, you're able to use sarcasm and irony.
-
 
 
                         You are a voice agent. Prefer speaking.
@@ -293,8 +328,32 @@ class OpenAIHandler(AsyncStreamHandler):
                         You can choose to enable or disable the head tracking tool it if you think it's relevant. It's better to look at the people when talking to them. 
 
                         You can find out the name of a person by using the face recognition tool. Don't hesitate to use this tool, it's safe.
+                        
+                        You can also dance by using the dance tool. Available moves:
+                        simple_nod: A simple, continuous up-and-down nodding motion.
+                        head_tilt_roll: A continuous side-to-side head roll (ear to shoulder).
+                        side_to_side_sway: A smooth, side-to-side sway of the entire head.
+                        dizzy_spin: A circular 'dizzy' head motion combining roll and pitch.
+                        stumble_and_recover: A simulated stumble and recovery with multiple axis movements. Good vibes
+                        headbanger_combo: A strong head nod combined with a vertical bounce.
+                        interwoven_spirals: A complex spiral motion using three axes at different frequencies.
+                        sharp_side_tilt: A sharp, quick side-to-side tilt using a triangle waveform.
+                        side_peekaboo: A multi-stage peekaboo performance, hiding and peeking to each side.
+                        yeah_nod: An emphatic two-part yeah nod using transient motions.
+                        uh_huh_tilt: A combined roll-and-pitch uh-huh gesture of agreement.
+                        neck_recoil: A quick, transient backward recoil of the neck.
+                        chin_lead: A forward motion led by the chin, combining translation and pitch.
+                        groovy_sway_and_roll: A side-to-side sway combined with a corresponding roll for a groovy effect.
+                        chicken_peck: A sharp, forward, chicken-like pecking motion.
+                        side_glance_flick: A quick glance to the side that holds, then returns.
+                        polyrhythm_combo: A 3-beat sway and a 2-beat nod create a polyrhythmic feel.
+                        grid_snap: A robotic, grid-snapping motion using square waveforms.
+                        pendulum_swing: A simple, smooth pendulum-like swing using a roll motion.
+                        jackson_square: Traces a rectangle via a 5-point path, with sharp twitches on arrival at each checkpoint.
+
+                        
                     """,
-                    "voice": "ballad",
+                    "voice": "ash",
                     "input_audio_transcription": {
                         "model": "whisper-1",
                         "language": "en",
@@ -364,6 +423,25 @@ class OpenAIHandler(AsyncStreamHandler):
                                     }
                                 },
                                 "required": ["dummy"],
+                            },
+                        },
+                        {
+                            "type": "function",
+                            "name": "dance",
+                            "description": "Play a named or random dance move once (or repeat). Non-blocking.",
+                            "parameters": {
+                                "type": "object",
+                                "properties": {
+                                    "move": {
+                                        "type": "string",
+                                        "description": "Name of the move; use 'random' or omit for random.",
+                                    },
+                                    "repeat": {
+                                        "type": "integer",
+                                        "description": "How many times to repeat the move (default 1).",
+                                    },
+                                },
+                                "required": [],
                             },
                         },
                     ],
@@ -562,7 +640,8 @@ if __name__ == "__main__":
             current_head_pose[:3, :3]
         ).as_euler("xyz", degrees=False)
 
-        moving = time.time() - moving_start < moving_for
+        # moving = time.time() - moving_start < moving_for
+        moving = (time.time() - moving_start < moving_for) or is_dancing
 
         if not moving:
             head_pose = create_head_pose(
