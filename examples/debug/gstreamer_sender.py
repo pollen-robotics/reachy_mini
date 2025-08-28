@@ -4,7 +4,6 @@ import gi
 
 gi.require_version("Gst", "1.0")
 from gi.repository import GLib, Gst
-from gst_signalling.utils import find_producer_peer_id_by_name
 
 
 class GstSender:
@@ -52,7 +51,6 @@ class GstSender:
         return self.pipeline.get_bus()
 
     def play(self) -> None:
-        # Start playing
         ret = self.pipeline.set_state(Gst.State.PLAYING)
         if ret == Gst.StateChangeReturn.FAILURE:
             print("Error starting playback.")
