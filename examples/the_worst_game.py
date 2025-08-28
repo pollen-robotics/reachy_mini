@@ -490,7 +490,6 @@ def main() -> None:
             head=pose,
             antennas=np.array([0.0, 0.0]),
             body_yaw=0.0,
-            check_collision=False,
             duration=1.0,
         )
     state_q.put((40.0, 40.0))  # neutral seed for audio

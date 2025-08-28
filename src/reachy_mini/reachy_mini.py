@@ -134,7 +134,6 @@ class ReachyMini:
             Union[np.ndarray, List[float]]
         ] = None,  # [left_angle, right_angle] (in rads)
         body_yaw: float = 0.0,  # Body yaw angle in radians
-        check_collision: bool = False,  # Check for collisions before setting the position
     ) -> None:
         """Set the target pose of the head and/or the target position of the antennas.
 
@@ -142,7 +141,6 @@ class ReachyMini:
             head (Optional[np.ndarray]): 4x4 pose matrix representing the head pose.
             antennas (Optional[Union[np.ndarray, List[float]]]): 1D array with two elements representing the angles of the antennas in radians.
             body_yaw (Optional[float]): Body yaw angle in radians.
-            check_collision (bool): If True, checks for collisions before setting the position. Beware that this will slow down the IK computation (~1ms).
 
         Raises:
             ValueError: If neither head nor antennas are provided, or if the shape of head is not (4, 4), or if antennas is not a 1D array with two elements.
@@ -159,7 +157,6 @@ class ReachyMini:
                 "Antennas must be a list or 1D np array with two elements."
             )
 
-        self._set_check_collision(check_collision)
         if antennas is not None:
             self._set_joint_positions(antennas_joint_positions=list(antennas))
         if head is not None:
@@ -171,7 +168,6 @@ class ReachyMini:
             "head": head.tolist() if head is not None else None,
             "antennas": list(antennas) if antennas is not None else None,
             "body_yaw": body_yaw,
-            "check_collision": check_collision,
         }
         self._set_record_data(record)
 
@@ -184,7 +180,6 @@ class ReachyMini:
         duration: float = 0.5,  # Duration in seconds for the movement, default is 0.5 seconds.
         method="default",  # can be "linear", "minjerk", "ease" or "cartoon", default is "default" (-> "minjerk" interpolation)
         body_yaw: float = 0.0,  # Body yaw angle in radians
-        check_collision: bool = False,
     ):
         """Go to a target head pose and/or antennas position using task space interpolation, in "duration" seconds.
 
@@ -194,7 +189,6 @@ class ReachyMini:
             duration (float): Duration of the movement in seconds.
             method (str): Interpolation method to use ("linear", "minjerk", "ease", "cartoon"). Default is "minjerk".
             body_yaw (float): Body yaw angle in radians.
-            check_collision (bool): If True, checks for collisions before setting the position. Beware that this will slow down the IK computation (~1ms)!
 
         Raises:
             ValueError: If neither head nor antennas are provided, or if duration is not positive.
@@ -218,7 +212,6 @@ class ReachyMini:
             duration=duration,
             method=method,
             body_yaw=body_yaw,
-            check_collision=check_collision,
         )
 
         task_uid = self.client.send_task_request(req)
@@ -388,6 +381,8 @@ class ReachyMini:
     def play_sound(self, sound_file: str) -> None:
         """Play a sound file from the assets directory.
 
+        If the file is not found in the assets directory, try to load the path itself.
+
         Args:
             sound_file (str): The name of the sound file to play (e.g., "proud2.wav").
 
@@ -395,7 +390,17 @@ class ReachyMini:
         if pygame.mixer is None:
             print("Pygame mixer is not initialized. Cannot play sound.")
             return
-        pygame.mixer.music.load(f"{ReachyMini.assets_root_path}/{sound_file}")
+
+        # first check if the name exists in the asset sound directory
+        file_path = f"{ReachyMini.assets_root_path}/{sound_file}"
+        if not os.path.exists(file_path):
+            # If not, check if the raw_path exists
+            if not os.path.exists(sound_file):
+                raise FileNotFoundError(f"Sound file {sound_file} not found.")
+            else:
+                file_path = sound_file
+
+        pygame.mixer.music.load(file_path)
         pygame.mixer.music.play()
 
     def _goto_joint_positions(
@@ -637,15 +642,6 @@ class ReachyMini:
             f"Head joint current must have length 7, got {current}."
         )
         self.client.send_command(json.dumps({"head_joint_current": list(current)}))
-
-    def _set_check_collision(self, check: bool) -> None:
-        """Set whether to check for collisions.
-
-        Args:
-            check (bool): If True, the backend will check for collisions.
-
-        """
-        self.client.send_command(json.dumps({"check_collision": check}))
 
     def enable_gravity_compensation(self) -> None:
         """Enable gravity compensation for the head motors."""

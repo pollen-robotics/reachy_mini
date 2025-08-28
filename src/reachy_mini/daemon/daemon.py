@@ -44,6 +44,7 @@ class Daemon:
         scene: str = "empty",
         localhost_only: bool = True,
         wake_up_on_start: bool = True,
+        check_collision: bool = False,
     ) -> "DaemonState":
         """Start the Reachy Mini daemon.
 
@@ -53,6 +54,7 @@ class Daemon:
             scene (str): Name of the scene to load in simulation mode ("empty" or "minimal"). Defaults to "empty".
             localhost_only (bool): If True, restrict the server to localhost only clients. Defaults to True.
             wake_up_on_start (bool): If True, wake up Reachy Mini on start. Defaults to True.
+            check_collision (bool): If True, enable collision checking. Defaults to False.
 
         Returns:
             DaemonState: The current state of the daemon after attempting to start it.
@@ -79,6 +81,7 @@ class Daemon:
                 sim=sim,
                 serialport=serialport,
                 scene=scene,
+                check_collision=check_collision,
             )
         except Exception as e:
             self._status.state = DaemonState.ERROR
@@ -276,6 +279,7 @@ class Daemon:
         localhost_only: bool = True,
         wake_up_on_start: bool = True,
         goto_sleep_on_stop: bool = True,
+        check_collision: bool = False,
     ):
         """Run the Reachy Mini daemon indefinitely.
 
@@ -288,6 +292,7 @@ class Daemon:
             localhost_only (bool): If True, restrict the server to localhost only clients. Defaults to True.
             wake_up_on_start (bool): If True, wake up Reachy Mini on start. Defaults to True.
             goto_sleep_on_stop (bool): If True, put Reachy Mini to sleep on stop. Defaults to True
+            check_collision (bool): If True, enable collision checking. Defaults to False.
 
         """
         self.start(
@@ -296,6 +301,7 @@ class Daemon:
             scene=scene,
             localhost_only=localhost_only,
             wake_up_on_start=wake_up_on_start,
+            check_collision=check_collision,
         )
 
         if self._status.state == DaemonState.RUNNING:
@@ -316,9 +322,11 @@ class Daemon:
 
         self.stop(goto_sleep_on_stop)
 
-    def _setup_backend(self, sim, serialport, scene) -> "RobotBackend | MujocoBackend":
+    def _setup_backend(
+        self, sim, serialport, scene, check_collision
+    ) -> "RobotBackend | MujocoBackend":
         if sim:
-            return MujocoBackend(scene=scene)
+            return MujocoBackend(scene=scene, check_collision=check_collision)
         else:
             if serialport == "auto":
                 ports = find_serial_port()
@@ -338,7 +346,11 @@ class Daemon:
                 serialport = ports[0]
                 self.logger.info(f"Found Reachy Mini serial port: {serialport}")
 
-            return RobotBackend(serialport=serialport, log_level=self.log_level)
+            return RobotBackend(
+                serialport=serialport,
+                log_level=self.log_level,
+                check_collision=check_collision,
+            )
 
 
 class DaemonState(Enum):

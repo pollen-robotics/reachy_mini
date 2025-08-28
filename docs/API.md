@@ -266,7 +266,6 @@ Below is the snippet of code that show how to start a recording, stop the record
                 'head': frame.get('head'),
                 'antennas': frame.get('antennas'),
                 'body_yaw': frame.get('body_yaw'),
-                'check_collision': frame.get('check_collision'),
             }
             data["set_target_data"].append(pose_info)
 ```

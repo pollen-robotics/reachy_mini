@@ -22,17 +22,17 @@ def main():
         yaw_var = tk.DoubleVar(value=0.0)
 
         tk.Label(root, text="Roll (deg):").grid(row=0, column=0)
-        tk.Scale(root, variable=roll_var, from_=-45, to=45, orient=tk.HORIZONTAL, length=200).grid(
-            row=0, column=1
-        )
+        tk.Scale(
+            root, variable=roll_var, from_=-45, to=45, orient=tk.HORIZONTAL, length=200
+        ).grid(row=0, column=1)
         tk.Label(root, text="Pitch (deg):").grid(row=1, column=0)
-        tk.Scale(root, variable=pitch_var, from_=-45, to=45, orient=tk.HORIZONTAL, length=200).grid(
-            row=1, column=1
-        )
+        tk.Scale(
+            root, variable=pitch_var, from_=-45, to=45, orient=tk.HORIZONTAL, length=200
+        ).grid(row=1, column=1)
         tk.Label(root, text="Yaw (deg):").grid(row=2, column=0)
-        tk.Scale(root, variable=yaw_var, from_=-175, to=175, orient=tk.HORIZONTAL, length=200).grid(
-            row=2, column=1
-        )
+        tk.Scale(
+            root, variable=yaw_var, from_=-175, to=175, orient=tk.HORIZONTAL, length=200
+        ).grid(row=2, column=1)
 
         # Add sliders for X, Y, Z position
         x_var = tk.DoubleVar(value=0.0)
@@ -47,7 +47,7 @@ def main():
             to=0.05,
             resolution=0.001,
             orient=tk.HORIZONTAL,
-            length=200
+            length=200,
         ).grid(row=3, column=1)
         tk.Label(root, text="Y (m):").grid(row=4, column=0)
         tk.Scale(
@@ -57,7 +57,7 @@ def main():
             to=0.05,
             resolution=0.001,
             orient=tk.HORIZONTAL,
-            length=200
+            length=200,
         ).grid(row=4, column=1)
         tk.Label(root, text="Z (m):").grid(row=5, column=0)
         tk.Scale(
@@ -67,12 +67,20 @@ def main():
             to=0.03,
             resolution=0.001,
             orient=tk.HORIZONTAL,
-            length=200
+            length=200,
         ).grid(row=5, column=1)
-        
+
         tk.Label(root, text="Body Yaw (deg):").grid(row=6, column=0)
         body_yaw_var = tk.DoubleVar(value=0.0)
-        tk.Scale(root, variable=body_yaw_var, from_=-180, to=180, resolution=1.0, orient=tk.HORIZONTAL, length=200).grid(row=6, column=1)
+        tk.Scale(
+            root,
+            variable=body_yaw_var,
+            from_=-180,
+            to=180,
+            resolution=1.0,
+            orient=tk.HORIZONTAL,
+            length=200,
+        ).grid(row=6, column=1)
 
         # add a checkbox to enable/disable collision checking
         collision_check_var = tk.BooleanVar(value=False)
@@ -105,7 +113,6 @@ def main():
                 head=head,
                 body_yaw=np.deg2rad(body_yaw_var.get()),
                 antennas=np.array([target, -target]),
-                check_collision=collision_check_var.get(),
             )
 
 

@@ -1,32 +1,32 @@
 import asyncio
-from asyncio import QueueEmpty
 import base64
 import json
 import time
+from asyncio import QueueEmpty
 from threading import Thread
 
 import cv2
 import gradio as gr
 import numpy as np
 import openai
+from deepface import DeepFace
 from dotenv import load_dotenv
 from fastrtc import AdditionalOutputs, AsyncStreamHandler, Stream, wait_for_item
+from head_tracker import HeadTracker
 from openai import OpenAI
-from speech_tapper3 import SwayRollRT, HOP_MS
-
+from scipy.spatial.transform import Rotation as R
+from speech_tapper3 import HOP_MS, SwayRollRT
 
 from reachy_mini import ReachyMini
+from reachy_mini.motion.dance import DanceMove
+from reachy_mini.motion.dance.collection.dance import AVAILABLE_MOVES
 from reachy_mini.utils import create_head_pose
 from reachy_mini.utils.camera import find_camera
-from scipy.spatial.transform import Rotation as R
-from head_tracker import HeadTracker
-from deepface import DeepFace
-from reachy_mini.motion.collection.dance import AVAILABLE_MOVES
-from reachy_mini.motion.dance_move import DanceMove
+from reachy_mini.motion.recorded import RecordedMoves
 
 load_dotenv()
 SAMPLE_RATE = 24000
-SIM = False
+SIM = True
 
 reachy_mini = ReachyMini()
 
@@ -42,6 +42,8 @@ moving_start = time.time()
 moving_for = 0.0
 is_head_tracking = False
 is_dancing = False
+is_emoting = False
+is_moving = False
 
 
 # camera_tool = Camera(reachy_mini, cap)
@@ -108,9 +110,54 @@ async def dance(params: dict) -> dict:
     if move_name not in AVAILABLE_MOVES:
         return {"error": f"unknown move '{move_name}'"}
 
+    print(f"[TOOL CALL] dance started with {move_name}")
+
     is_dancing = True
     Thread(target=_dance_worker, args=(move_name, repeat), daemon=True).start()
     return {"status": "started", "move": move_name, "repeat": repeat}
+
+
+recorded_moves = RecordedMoves("pollen-robotics/reachy-mini-emotions-library")
+
+
+def _play_emotion_worker(emotion_name: str):
+    global is_emoting
+    try:
+        recorded_moves.get(emotion_name).play_on(reachy_mini, repeat=1, start_goto=True)
+    except Exception as e:
+        print(f"[play emotion worker] error: {e}")
+    finally:
+        is_emoting = False
+
+
+async def play_emotion(params: dict) -> dict:
+    """Play a pre-recorded emotion."""
+    global is_emoting
+    emotion_name = params.get("emotion", None)
+    if emotion_name is None:
+        return {"error": "Requested emotion does not exist"}
+
+    is_emoting = True
+    print(f"[TOOL CALL] play_emotion with {emotion_name}")
+
+    Thread(target=_play_emotion_worker, args=(emotion_name,), daemon=True).start()
+
+    return {"status": "started", "emotion": emotion_name}
+
+
+def get_available_emotions_and_descriptions():
+    names = recorded_moves.list_moves()
+
+    ret = """
+    Available emotions:
+
+    """
+
+    for name in names:
+        description = recorded_moves.get(name).description
+        ret += f" - {name}: {description}\n"
+
+    return ret
 
 
 client = OpenAI()
@@ -228,6 +275,7 @@ class OpenAIHandler(AsyncStreamHandler):
             "head_tracking": head_tracking,
             "get_person_name": face_recognition,
             "dance": dance,
+            "play_emotion": play_emotion,
         }
 
         self.sway = SwayRollRT()
@@ -303,7 +351,7 @@ class OpenAIHandler(AsyncStreamHandler):
             await conn.session.update(
                 session={
                     "turn_detection": {"type": "server_vad"},
-                    "instructions": """
+                    "instructions": f"""
                         Answer in english by default but adapt your language as needed.
 
                         Your name is Reachy Mini, or Reachy for short. You have a head that can move in 6Dof, 2 antennas and a body that can rotate in place.
@@ -351,9 +399,13 @@ class OpenAIHandler(AsyncStreamHandler):
                         pendulum_swing: A simple, smooth pendulum-like swing using a roll motion.
                         jackson_square: Traces a rectangle via a 5-point path, with sharp twitches on arrival at each checkpoint.
 
+                        You can also play pre-recorded emotions if you feel like it. Use it to express yourself better. 
+                        Don't hesitate to use emotions on top of your responses. You can use them often, but not all the time.
+
+                        {get_available_emotions_and_descriptions()}
                         
                     """,
-                    "voice": "ash",
+                    "voice": "ballad",
                     "input_audio_transcription": {
                         "model": "whisper-1",
                         "language": "en",
@@ -442,6 +494,21 @@ class OpenAIHandler(AsyncStreamHandler):
                                     },
                                 },
                                 "required": [],
+                            },
+                        },
+                        {
+                            "type": "function",
+                            "name": "play_emotion",
+                            "description": "Play a pre-recorded emotion",
+                            "parameters": {
+                                "type": "object",
+                                "properties": {
+                                    "emotion": {
+                                        "type": "string",
+                                        "description": "Name of the emotion to play",
+                                    },
+                                },
+                                "required": ["emotion"],
                             },
                         },
                     ],
@@ -641,18 +708,27 @@ if __name__ == "__main__":
         ).as_euler("xyz", degrees=False)
 
         # moving = time.time() - moving_start < moving_for
-        moving = (time.time() - moving_start < moving_for) or is_dancing
+        is_moving = (
+            (time.time() - moving_start < moving_for) or is_dancing or is_emoting
+        )
 
-        if not moving:
+        if not is_moving:
             head_pose = create_head_pose(
                 x=current_x + speech_head_offsets[0],
                 y=current_y + speech_head_offsets[1],
-                z=current_z + speech_head_offsets[2],
+                z=current_z
+                + speech_head_offsets[2]
+                + 0.01 * np.sin(2 * np.pi * 0.1 * time.time()),  # idle
                 roll=current_roll + speech_head_offsets[3],
                 pitch=current_pitch + speech_head_offsets[4],
                 yaw=current_yaw + speech_head_offsets[5],
                 degrees=False,
                 mm=False,
             )
-            reachy_mini.set_target(head=head_pose, antennas=(0.0, 0.0))
+            antenna_target = np.deg2rad(15) * np.sin(
+                2 * np.pi * 0.5 * time.time()
+            )  # idle
+            reachy_mini.set_target(
+                head=head_pose, antennas=np.array([antenna_target, -antenna_target])
+            )
         time.sleep(0.02)

@@ -7,14 +7,19 @@ This module provides the base class for moves, allowing for the creation of cust
 import time
 from abc import ABC, abstractmethod
 from multiprocessing import Event
+from typing import Optional
 
 import numpy as np
 
 from reachy_mini import ReachyMini
+from reachy_mini.utils.interpolation import distance_between_poses
 
 
 class Move(ABC):
     """Abstract base class for defining a move on the ReachyMini robot."""
+
+    ms_per_degree = 10
+    ms_per_magic_mm = 10
 
     @property
     @abstractmethod
@@ -23,12 +28,14 @@ class Move(ABC):
         pass
 
     @abstractmethod
-    def evaluate(self, t: float) -> tuple[np.ndarray, np.ndarray]:
+    def evaluate(self, t: float) -> tuple[np.ndarray, np.ndarray, float, Optional[str]]:
         """Evaluate the move at time t.
 
         Returns:
-            head: The head position.
-            antennas: The antennas positions.
+            head: The head position (4x4 homogeneous matrix).
+            antennas: The antennas positions (rad).
+            body_yaw: The body yaw angle (rad).
+            play_sound: The sound to play (if any).
 
         """
 
@@ -37,6 +44,8 @@ class Move(ABC):
         reachy_mini: ReachyMini,
         repeat: int = 1,
         frequency: float = 100.0,
+        start_goto: bool = False,
+        no_audio=False,
     ):
         """Play the move on the ReachyMini robot.
 
@@ -44,10 +53,40 @@ class Move(ABC):
             reachy_mini: The ReachyMini instance to control.
             repeat: Number of times to repeat the move.
             frequency: Frequency of updates in Hz.
+            start_goto: Whether to interpolate to the starting position before playing the move.
 
         """
         timer = Event()
         dt = 1.0 / frequency
+
+        if start_goto:
+            # Interpolation phase to reach the first target pose.
+            start_head_pose, start_antennas_positions, start_body_yaw, _ = (
+                self.evaluate(0)
+            )
+
+            _, cur_antenna_joints = reachy_mini.get_current_joint_positions()
+            current_head_pose = reachy_mini.get_current_head_pose()
+            _, _, distance_to_goal = distance_between_poses(
+                np.array(start_head_pose),
+                current_head_pose,
+            )
+            head_interpol_duration = distance_to_goal * self.ms_per_magic_mm / 1000
+
+            antenna_dist = max(
+                abs(cur_antenna_joints - np.array(start_antennas_positions))
+            )
+            antenna_dist = np.rad2deg(antenna_dist)
+            antenna_interpol_duration = antenna_dist * self.ms_per_degree / 1000
+
+            first_duration = max(head_interpol_duration, antenna_interpol_duration)
+            reachy_mini.goto_target(
+                start_head_pose,
+                start_antennas_positions,
+                body_yaw=start_body_yaw,
+                duration=first_duration,
+                method="minjerk",
+            )
 
         for _ in range(repeat):
             t0 = time.time()
@@ -58,8 +97,12 @@ class Move(ABC):
                 if t > self.duration:
                     break
 
-                head, antennas = self.evaluate(t)
-                reachy_mini.set_target(head=head, antennas=antennas)
+                head, antennas, body_yaw, play_sound = self.evaluate(t)
+
+                if not no_audio and play_sound is not None:
+                    reachy_mini.play_sound(play_sound)
+
+                reachy_mini.set_target(head=head, antennas=antennas, body_yaw=body_yaw)
 
                 end = time.time() - t0
                 loop_duration = end - t
