@@ -86,6 +86,24 @@ class GstRecorder:
                 self.pipeline.add(camsrc)
                 camsrc.link(self._appsink_video)
 
+                """
+                # a vizualiser can be added - remove the camsrc.link above
+                tee = Gst.ElementFactory.make("tee")
+                self.pipeline.add(tee)
+                camsrc.link(tee)
+                # Add audiovideosink branch
+                queue_av = Gst.ElementFactory.make("queue")
+                videoconvert = Gst.ElementFactory.make("jpegdec")
+                audiovideosink = Gst.ElementFactory.make("autovideosink")
+                self.pipeline.add(queue_av)
+                self.pipeline.add(videoconvert)
+                self.pipeline.add(audiovideosink)
+                tee.link(queue_av)
+                tee.link(self._appsink_video)
+                queue_av.link(videoconvert)
+                videoconvert.link(audiovideosink)
+                """
+
         else:
             self._logger.error("Unsupported player mode")
             raise ValueError("Unsupported player mode")
@@ -94,6 +112,11 @@ class GstRecorder:
         self, signaling_host: str, signaling_port: int, peer_id: str
     ):
         source = Gst.ElementFactory.make("webrtcsrc")
+        if not source:
+            raise RuntimeError(
+                "Failed to create webrtcsrc element. Is the GStreamer webrtc rust plugin installed?"
+            )
+
         source.connect("pad-added", self.webrtcsrc_pad_added_cb)
         signaller = source.get_property("signaller")
         signaller.set_property("producer-peer-id", peer_id)
@@ -112,6 +135,7 @@ class GstRecorder:
         self._configure_webrtcbin(webrtcsrc)
         if pad.get_name().startswith("video"):  # type: ignore[union-attr]
             # the pipeline should be adapted to the app needs
+
             """
             self._logger.warning("Ignoring video pad")
             sink = Gst.ElementFactory.make("fakesink")
@@ -124,6 +148,7 @@ class GstRecorder:
 
             self._logger.debug("outputing video frames as jpeg")
             queue = Gst.ElementFactory.make("queue")
+
             videoconvert = Gst.ElementFactory.make("videoconvert")
             videoscale = Gst.ElementFactory.make("videoscale")
             videorate = Gst.ElementFactory.make("videorate")
