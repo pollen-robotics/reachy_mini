@@ -8,14 +8,14 @@ gi.require_version("Gst", "1.0")
 gi.require_version("GstApp", "1.0")
 from gi.repository import GLib, Gst, GstApp
 
-from reachy_mini.gstreamer.utils import PlayerMode
+from reachy_mini.gstreamer.utils import PlayerMode, get_arducam_video_device
 
 
 class GstRecorder:
     def __init__(
         self,
         mode: PlayerMode,
-        peer_id: str,
+        peer_id: str = "",
         signaling_host: str = "",
         signaling_port: int = 8443,
     ):
@@ -26,10 +26,21 @@ class GstRecorder:
 
         self.pipeline = Gst.Pipeline.new("audio_recorder")
 
-        self.appsink = Gst.ElementFactory.make("appsink", None)
+        self._appsink_audio = Gst.ElementFactory.make("appsink")
         caps = Gst.Caps.from_string("audio/x-raw,channels=1,rate=24000,format=S16LE")
-        self.appsink.set_property("caps", caps)
-        self.pipeline.add(self.appsink)
+        self._appsink_audio.set_property("caps", caps)
+        self._appsink_audio.set_property("drop", True)  # avoid overflow
+        self._appsink_audio.set_property("max-buffers", 200)
+        self.pipeline.add(self._appsink_audio)
+
+        self._appsink_video = Gst.ElementFactory.make("appsink")
+        caps_video = Gst.Caps.from_string(
+            "image/jpeg, width=1920, height=1080, framerate=30/1"
+        )
+        self._appsink_video.set_property("caps", caps_video)
+        self._appsink_video.set_property("drop", True)  # avoid overflow
+        self._appsink_video.set_property("max-buffers", 1)  # keep last image only
+        self.pipeline.add(self._appsink_video)
 
         if mode == PlayerMode.WEBRTC:
             webrtcsrc = self._configure_webrtcsrc(
@@ -63,7 +74,18 @@ class GstRecorder:
             autoaudiosrc.link(queue)
             queue.link(audioconvert)
             audioconvert.link(audioresample)
-            audioresample.link(self.appsink)
+            audioresample.link(self._appsink_audio)
+
+            cam_path = get_arducam_video_device()
+            if cam_path == "":
+                self._logger.warning("Recording pipeline set without camera.")
+                self.pipeline.remove(self._appsink_video)
+            else:
+                camsrc = Gst.ElementFactory.make("v4l2src")
+                camsrc.set_property("device", cam_path)
+                self.pipeline.add(camsrc)
+                camsrc.link(self._appsink_video)
+
         else:
             self._logger.error("Unsupported player mode")
             raise ValueError("Unsupported player mode")
@@ -98,44 +120,8 @@ class GstRecorder:
             sink.sync_state_with_parent()
 
         elif pad.get_name().startswith("audio"):  # type: ignore[union-attr]
-            """
-            audiodepay = Gst.ElementFactory.make("rtpopusdepay")
-            assert audiodepay is not None
-            queue = Gst.ElementFactory.make("queue")
-            assert queue is not None
-            opusparse = Gst.ElementFactory.make("opusparse")
-            assert opusparse is not None
-            opusdec = Gst.ElementFactory.make("opusdec")
-            assert opusdec is not None
-            audioconvert = Gst.ElementFactory.make("audioconvert")
-            assert audioconvert is not None
-            audioresample = Gst.ElementFactory.make("audioresample")
-            assert audioresample is not None
-
-            self.pipeline.add(audiodepay)
-            self.pipeline.add(queue)
-            self.pipeline.add(opusparse)
-            self.pipeline.add(opusdec)
-            self.pipeline.add(audioconvert)
-            self.pipeline.add(audioresample)
-            audiodepay.link(queue)
-            queue.link(opusparse)
-            opusparse.link(opusdec)
-            opusdec.link(audioconvert)
-            audioconvert.link(audioresample)
-            audioresample.link(self.appsink)
-            pad.link(audiodepay.get_static_pad("sink"))  # type: ignore[arg-type]
-
-            audiodepay.sync_state_with_parent()
-            queue.sync_state_with_parent()
-            opusdec.sync_state_with_parent()
-            opusparse.sync_state_with_parent()
-            audioconvert.sync_state_with_parent()
-            audioresample.sync_state_with_parent()
-            self.appsink.sync_state_with_parent()
-            """
-            pad.link(self.appsink.get_static_pad("sink"))  # type: ignore[arg-type]
-            self.appsink.sync_state_with_parent()
+            pad.link(self.appsink_audio.get_static_pad("sink"))  # type: ignore[arg-type]
+            self.appsink_audio.sync_state_with_parent()
 
     def _on_bus_message(self, bus: Gst.Bus, msg: Gst.Message, loop) -> bool:  # type: ignore[no-untyped-def]
         t = msg.type
@@ -163,9 +149,8 @@ class GstRecorder:
         self._thread_bus_calls = Thread(target=self._handle_bus_calls, daemon=True)
         self._thread_bus_calls.start()
 
-    def get_sample(self):
-        sample = self.appsink.pull_sample()
-        # sample = self.appsink.try_pull_sample(10_000_000)
+    def _get_sample(self, appsink):
+        sample = appsink.pull_sample()
         if sample is None:
             return None
         data = None
@@ -177,6 +162,30 @@ class GstRecorder:
             data = buf.extract_dup(0, buf.get_size())
         return data
 
+    def get_audio_sample(self):
+        return self._get_sample(self._appsink_audio)
+
+    def get_video_sample(self):
+        return self._get_sample(self._appsink_video)
+
     def stop(self):
         self._loop.quit()
         self.pipeline.set_state(Gst.State.NULL)
+
+
+if __name__ == "__main__":
+    import time
+
+    logging.basicConfig(level=logging.INFO)
+    recorder = GstRecorder(mode=PlayerMode.LOCAL)
+    recorder.record()
+    # Wait for the pipeline to start and capture a frame
+    time.sleep(2)
+    jpeg_data = recorder.get_video_sample()
+    if jpeg_data:
+        with open("frame.jpg", "wb") as f:
+            f.write(jpeg_data)
+        logging.info("Image saved as frame.jpg")
+    else:
+        logging.error("No image captured")
+    recorder.stop()

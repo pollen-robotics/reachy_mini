@@ -55,8 +55,6 @@ class GstPlayer:
             audioresample.link(webrtcsink)
         elif mode == PlayerMode.LOCAL:
             queue = Gst.ElementFactory.make("queue")
-            audioconvert = Gst.ElementFactory.make("audioconvert")
-            audioresample = Gst.ElementFactory.make("audioresample")
             audiosink = Gst.ElementFactory.make("autoaudiosink")  # use default speaker
 
             self.pipeline.add(queue)

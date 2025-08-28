@@ -111,7 +111,7 @@ class OpenAIHandler(AsyncStreamHandler):
 async def receive_loop(recorder: GstRecorder, openai: OpenAIHandler) -> None:
     receive_logger.info("Starting receive loop")
     while True:
-        data = recorder.get_sample()
+        data = recorder.get_audio_sample()
         if data is not None:
             await openai.receive(data)
         await asyncio.sleep(0)  # Prevent busy waiting
