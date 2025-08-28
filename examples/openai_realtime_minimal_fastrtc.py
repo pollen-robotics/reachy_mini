@@ -26,7 +26,7 @@ from reachy_mini.motion.recorded import RecordedMoves
 
 load_dotenv()
 SAMPLE_RATE = 24000
-SIM = False
+SIM = True
 
 reachy_mini = ReachyMini()
 
@@ -43,6 +43,7 @@ moving_for = 0.0
 is_head_tracking = False
 is_dancing = False
 is_emoting = False
+is_moving = False
 
 
 # camera_tool = Camera(reachy_mini, cap)
@@ -707,18 +708,27 @@ if __name__ == "__main__":
         ).as_euler("xyz", degrees=False)
 
         # moving = time.time() - moving_start < moving_for
-        moving = (time.time() - moving_start < moving_for) or is_dancing or is_emoting
+        is_moving = (
+            (time.time() - moving_start < moving_for) or is_dancing or is_emoting
+        )
 
-        if not moving:
+        if not is_moving:
             head_pose = create_head_pose(
                 x=current_x + speech_head_offsets[0],
                 y=current_y + speech_head_offsets[1],
-                z=current_z + speech_head_offsets[2],
+                z=current_z
+                + speech_head_offsets[2]
+                + 0.01 * np.sin(2 * np.pi * 0.1 * time.time()),  # idle
                 roll=current_roll + speech_head_offsets[3],
                 pitch=current_pitch + speech_head_offsets[4],
                 yaw=current_yaw + speech_head_offsets[5],
                 degrees=False,
                 mm=False,
             )
-            reachy_mini.set_target(head=head_pose, antennas=(0.0, 0.0))
+            antenna_target = np.deg2rad(15) * np.sin(
+                2 * np.pi * 0.5 * time.time()
+            )  # idle
+            reachy_mini.set_target(
+                head=head_pose, antennas=np.array([antenna_target, -antenna_target])
+            )
         time.sleep(0.02)
