@@ -1,1 +1,0 @@
-# Placeholder # noqa: D100

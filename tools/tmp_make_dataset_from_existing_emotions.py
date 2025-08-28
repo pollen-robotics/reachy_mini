@@ -68,6 +68,7 @@ api.create_repo(
     exist_ok=True,
     repo_id="pollen-robotics/reachy-mini-emotions-library",
     repo_type="dataset",
+    private=True
 )
 
 api.upload_folder(
