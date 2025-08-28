@@ -26,7 +26,7 @@ dependencies = [
     "fastapi",
     "pyserial",
     "PyGObject>=3.42.2, <=3.46.0",
-    "gst-signalling==1.1.0"
+    "gst-signalling==1.1.1"
 ]
 
 
