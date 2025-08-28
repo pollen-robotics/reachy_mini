@@ -35,7 +35,7 @@ class GstRecorder:
 
         self._appsink_video = Gst.ElementFactory.make("appsink")
         caps_video = Gst.Caps.from_string(
-            "image/jpeg, width=1920, height=1080, framerate=30/1"
+            "image/jpeg, width=1280, height=720, framerate=30/1"
         )
         self._appsink_video.set_property("caps", caps_video)
         self._appsink_video.set_property("drop", True)  # avoid overflow
@@ -111,17 +111,47 @@ class GstRecorder:
     def webrtcsrc_pad_added_cb(self, webrtcsrc: Gst.Element, pad: Gst.Pad) -> None:
         self._configure_webrtcbin(webrtcsrc)
         if pad.get_name().startswith("video"):  # type: ignore[union-attr]
+            # the pipeline should be adapted to the app needs
+            """
             self._logger.warning("Ignoring video pad")
             sink = Gst.ElementFactory.make("fakesink")
-            # sink = Gst.ElementFactory.make("fpsdisplaysink")
+            # sink = Gst.ElementFactory.make("fpsdisplaysink")            
             assert sink is not None
             self.pipeline.add(sink)
             pad.link(sink.get_static_pad("sink"))  # type: ignore[arg-type]
             sink.sync_state_with_parent()
+            """
+
+            self._logger.debug("outputing video frames as jpeg")
+            queue = Gst.ElementFactory.make("queue")
+            videoconvert = Gst.ElementFactory.make("videoconvert")
+            videoscale = Gst.ElementFactory.make("videoscale")
+            videorate = Gst.ElementFactory.make("videorate")
+            jpegenc = Gst.ElementFactory.make("jpegenc")
+            sink = self._appsink_video
+            self.pipeline.add(queue)
+            self.pipeline.add(videoconvert)
+            self.pipeline.add(videoscale)
+            self.pipeline.add(videorate)
+            self.pipeline.add(jpegenc)
+            pad.link(queue.get_static_pad("sink"))  # type: ignore[arg-type]
+
+            queue.link(videoconvert)
+            videoconvert.link(videoscale)
+            videoscale.link(videorate)
+            videorate.link(jpegenc)
+            jpegenc.link(sink)
+
+            queue.sync_state_with_parent()
+            videoconvert.sync_state_with_parent()
+            videoscale.sync_state_with_parent()
+            videorate.sync_state_with_parent()
+            jpegenc.sync_state_with_parent()
+            sink.sync_state_with_parent()
 
         elif pad.get_name().startswith("audio"):  # type: ignore[union-attr]
-            pad.link(self.appsink_audio.get_static_pad("sink"))  # type: ignore[arg-type]
-            self.appsink_audio.sync_state_with_parent()
+            pad.link(self._appsink_audio.get_static_pad("sink"))  # type: ignore[arg-type]
+            self._appsink_audio.sync_state_with_parent()
 
     def _on_bus_message(self, bus: Gst.Bus, msg: Gst.Message, loop) -> bool:  # type: ignore[no-untyped-def]
         t = msg.type
@@ -150,7 +180,7 @@ class GstRecorder:
         self._thread_bus_calls.start()
 
     def _get_sample(self, appsink):
-        sample = appsink.pull_sample()
+        sample = appsink.try_pull_sample(20_000_000)
         if sample is None:
             return None
         data = None
@@ -174,13 +204,50 @@ class GstRecorder:
 
 
 if __name__ == "__main__":
+    import argparse
     import time
 
+    from gst_signalling.utils import find_producer_peer_id_by_name
+
+    parser = argparse.ArgumentParser(description="GStreamer Recorder")
+    parser.add_argument(
+        "--mode",
+        choices=["local", "webrtc"],
+        default="local",
+        help="Select player mode: local or webrtc",
+    )
+    parser.add_argument(
+        "--peer-id", type=str, default="reachymini", help="Peer ID for WebRTC mode"
+    )
+    parser.add_argument(
+        "--signaling-host",
+        type=str,
+        default="localhost",
+        help="Signaling host for WebRTC",
+    )
+    parser.add_argument(
+        "--signaling-port", type=int, default=8443, help="Signaling port for WebRTC"
+    )
+    args = parser.parse_args()
+
+    peer_id = ""
+    if args.mode == "local":
+        mode = PlayerMode.LOCAL
+    else:
+        mode = PlayerMode.WEBRTC
+        peer_id = find_producer_peer_id_by_name(
+            args.signaling_host, args.signaling_port, "reachymini"
+        )
     logging.basicConfig(level=logging.INFO)
-    recorder = GstRecorder(mode=PlayerMode.LOCAL)
+    recorder = GstRecorder(
+        mode=mode,
+        peer_id=peer_id,
+        signaling_host=args.signaling_host,
+        signaling_port=args.signaling_port,
+    )
     recorder.record()
     # Wait for the pipeline to start and capture a frame
-    time.sleep(2)
+    time.sleep(5)
     jpeg_data = recorder.get_video_sample()
     if jpeg_data:
         with open("frame.jpg", "wb") as f:
