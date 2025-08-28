@@ -200,7 +200,7 @@ class GstWebRTC:
         self._peer_audio_listener = GstSignallingListener(
             host="127.0.0.1",
             port=8443,
-            name=self._peer_audio_name,
+            name="peer_listener",
         )
         self._peer_audio_listener.on("PeerStatusChanged", self._handle_peer_status_changed)
         await self._peer_audio_listener.serve4ever()
@@ -258,6 +258,8 @@ class GstWebRTC:
             self.pipeline.add(fakesink)
             fakesink.sync_state_with_parent()
             pad.link(fakesink.get_static_pad("sink"))  # type: ignore[arg-type]
+        else:
+            self._logger.warning(f"Unhandled pad type: {pad.get_name()}")
 
     def _add_webrtcsrc(self, peer_audio_id: str) -> Gst.Element:
         webrtcsrc = Gst.ElementFactory.make("webrtcsrc")

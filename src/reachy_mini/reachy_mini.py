@@ -13,13 +13,13 @@ from typing import Dict, List, Optional, Union
 
 from reachy_mini.io.protocol import GotoTaskRequest
 
-os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "hide"
+#os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "hide"
 
 from importlib.resources import files
 
 import cv2
 import numpy as np
-import pygame
+#import pygame
 from scipy.spatial.transform import Rotation as R
 
 import reachy_mini
@@ -29,11 +29,15 @@ from reachy_mini.utils.interpolation import (
     minimum_jerk,
 )
 
+'''
 try:
     pygame.mixer.init()
 except pygame.error as e:
     print(f"Failed to initialize pygame mixer: {e}")
     pygame.mixer = None
+'''
+
+from reachy_mini.gstreamer.file_player import GstFilePlayer
 
 # Behavior definitions
 INIT_HEAD_POSE = np.eye(4)
@@ -103,6 +107,8 @@ class ReachyMini:
         self.set_automatic_body_yaw(automatic_body_yaw)
         self._last_head_pose = None
         self.is_recording = False
+        self.gst_file_player: Optional[GstFilePlayer] = None
+  
 
         self.K = np.array(
             [[550.3564, 0.0, 638.0112], [0.0, 549.1653, 364.589], [0.0, 0.0, 1.0]]
@@ -126,6 +132,8 @@ class ReachyMini:
     def __exit__(self, exc_type, exc_value, traceback) -> None:
         """Context manager exit point for Reachy Mini."""
         self.client.disconnect()
+        if self.gst_file_player is not None:
+            self.gst_file_player.stop()
 
     def set_target(
         self,
@@ -377,11 +385,20 @@ class ReachyMini:
             sound_file (str): The name of the sound file to play (e.g., "proud2.wav").
 
         """
+        '''
         if pygame.mixer is None:
             print("Pygame mixer is not initialized. Cannot play sound.")
             return
         pygame.mixer.music.load(f"{ReachyMini.assets_root_path}/{sound_file}")
         pygame.mixer.music.play()
+        '''
+
+        if self.gst_file_player is not None:
+            self.gst_file_player.stop()
+        file_path = os.path.join(ReachyMini.assets_root_path, sound_file)
+        #Todo handle the webrtc case (not localhost)
+        self.gst_file_player = GstFilePlayer(log_level="DEBUG", file=file_path)
+        self.gst_file_player.start()
 
     def _goto_joint_positions(
         self,
