@@ -1,14 +1,15 @@
-from typing import Optional
-import numpy as np
-import bisect
-from huggingface_hub import snapshot_download
-from reachy_mini.utils.interpolation import linear_pose_interpolation
-
-from reachy_mini.motion import Move
-from glob import glob
-from pathlib import Path
+import bisect  # noqa: D100
 import json
 import os
+from glob import glob
+from pathlib import Path
+from typing import Optional
+
+import numpy as np
+from huggingface_hub import snapshot_download
+
+from reachy_mini.motion import Move
+from reachy_mini.utils.interpolation import linear_pose_interpolation
 
 
 def lerp(v0, v1, alpha):
@@ -17,7 +18,10 @@ def lerp(v0, v1, alpha):
 
 
 class RecordedMoves:
+    """Load a library of recorded moves from a HuggingFace dataset."""
+
     def __init__(self, hf_dataset_name: str):
+        """Initialize RecordedMoves."""
         self.hf_dataset_name = hf_dataset_name
         self.local_path = snapshot_download(self.hf_dataset_name, repo_type="dataset")
         self.moves = {}
@@ -26,6 +30,7 @@ class RecordedMoves:
         self.process()
 
     def process(self):
+        """Populate recorded moves and sounds."""
         move_paths = glob(f"{self.local_path}/*.json")
         move_paths = [Path(move_path) for move_path in move_paths]
         for move_path in move_paths:
@@ -48,9 +53,16 @@ class RecordedMoves:
 
         return RecordedMove(self.moves[move_name], self.sounds[move_name])
 
+    def list_moves(self):
+        """List all moves in the loaded library."""
+        return list(self.moves.keys())
+
 
 class RecordedMove(Move):
+    """Represent a recorded move."""
+
     def __init__(self, move, sound_path):
+        """Initialize RecordedMove."""
         self.move = move
 
         self.sound_path = sound_path
@@ -64,9 +76,19 @@ class RecordedMove(Move):
 
     @property
     def duration(self) -> float:
+        """Get the duration of the recorded move."""
         return len(self.trajectory) * self.dt
 
     def evaluate(self, t: float) -> tuple[np.ndarray, np.ndarray, float, Optional[str]]:
+        """Evaluate the move at time t.
+
+        Returns:
+            head: The head position (4x4 homogeneous matrix).
+            antennas: The antennas positions (rad).
+            body_yaw: The body yaw angle (rad).
+            play_sound: The sound to play (if any).
+
+        """
         # we want to play the sound at the beginning of the move
         play_sound = None
 
@@ -106,7 +128,7 @@ class RecordedMove(Move):
         antennas_next = self.trajectory[idx_next]["antennas"]
         body_yaw_prev = self.trajectory[idx_prev].get("body_yaw", 0.0)
         body_yaw_next = self.trajectory[idx_next].get("body_yaw", 0.0)
-        check_collision = self.trajectory[idx_prev].get("check_collision", False)
+        # check_collision = self.trajectory[idx_prev].get("check_collision", False)
 
         # Interpolate to infer a better position at the current time.
         # Joint interpolations are easy:
@@ -122,14 +144,3 @@ class RecordedMove(Move):
         head_pose = linear_pose_interpolation(head_prev, head_next, alpha)
 
         return head_pose, antennas_joints, body_yaw, play_sound
-
-
-if __name__ == "__main__":
-    from reachy_mini import ReachyMini
-
-    with ReachyMini() as mini:
-        recorded_moves = RecordedMoves("apirrone/test_moves_dataset2")
-        recorded_moves.get("welcoming1").play_on(mini, repeat=1, start_goto=True)
-        recorded_moves.get("yes1").play_on(mini, repeat=1, start_goto=True)
-        recorded_moves.get("tired1").play_on(mini, repeat=1, start_goto=True)
-        recorded_moves.get("sad1").play_on(mini, repeat=1, start_goto=True)

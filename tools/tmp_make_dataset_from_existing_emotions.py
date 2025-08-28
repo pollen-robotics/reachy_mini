@@ -1,11 +1,9 @@
-import json
+import json  # noqa: D100
 import os
 from glob import glob
 from pathlib import Path
-from typing import List
 
 import numpy as np
-from datasets import Audio, Dataset, Features
 from huggingface_hub import HfApi
 
 
@@ -24,14 +22,18 @@ def zero_timestamps(timestamps):
 
 
 def load_move(path: Path):
+    """Load a move from a JSON file.
+
+    Removes the first 1.6 seconds and zeroes the timestamps.
+    """
     move = json.load(open(path, "rb"))
 
     timestamps = zero_timestamps(move["time"])
 
-    # remove the first 1.5seconds
-    idx_1_5s = np.searchsorted(timestamps, 1.6)
-    timestamps = timestamps[idx_1_5s:]
-    move["set_target_data"] = move["set_target_data"][idx_1_5s:]
+    # remove the first 1.6seconds
+    idx_1_6s = np.searchsorted(timestamps, 1.6)
+    timestamps = timestamps[idx_1_6s:]
+    move["set_target_data"] = move["set_target_data"][idx_1_6s:]
 
     timestamps = zero_timestamps(timestamps)
 
@@ -63,7 +65,9 @@ for move_path in all_moves_paths:
 api = HfApi()
 
 api.create_repo(
-    exist_ok=True, repo_id="pollen-robotics/reachy-mini-emotions-library", repo_type="dataset"
+    exist_ok=True,
+    repo_id="pollen-robotics/reachy-mini-emotions-library",
+    repo_type="dataset",
 )
 
 api.upload_folder(

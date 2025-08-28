@@ -52,6 +52,7 @@ class Move(ABC):
             reachy_mini: The ReachyMini instance to control.
             repeat: Number of times to repeat the move.
             frequency: Frequency of updates in Hz.
+            start_goto: Whether to interpolate to the starting position before playing the move.
 
         """
         timer = Event()
