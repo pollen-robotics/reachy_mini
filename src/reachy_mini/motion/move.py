@@ -45,6 +45,7 @@ class Move(ABC):
         repeat: int = 1,
         frequency: float = 100.0,
         start_goto: bool = False,
+        no_audio=False,
     ):
         """Play the move on the ReachyMini robot.
 
@@ -98,7 +99,7 @@ class Move(ABC):
 
                 head, antennas, body_yaw, play_sound = self.evaluate(t)
 
-                if play_sound is not None:
+                if not no_audio and play_sound is not None:
                     reachy_mini.play_sound(play_sound)
 
                 reachy_mini.set_target(head=head, antennas=antennas, body_yaw=body_yaw)
