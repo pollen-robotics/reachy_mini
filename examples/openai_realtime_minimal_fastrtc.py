@@ -26,7 +26,7 @@ from reachy_mini.motion.recorded import RecordedMoves
 
 load_dotenv()
 SAMPLE_RATE = 24000
-SIM = True
+SIM = False
 
 reachy_mini = ReachyMini()
 
@@ -119,8 +119,18 @@ async def dance(params: dict) -> dict:
 recorded_moves = RecordedMoves("pollen-robotics/reachy-mini-emotions-library")
 
 
+def _play_emotion_worker(emotion_name: str):
+    global is_emoting
+    try:
+        recorded_moves.get(emotion_name).play_on(reachy_mini, repeat=1, start_goto=True)
+    except Exception as e:
+        print(f"[play emotion worker] error: {e}")
+    finally:
+        is_emoting = False
+
+
 async def play_emotion(params: dict) -> dict:
-    """Play a pre-recorded emotion"""
+    """Play a pre-recorded emotion."""
     global is_emoting
     emotion_name = params.get("emotion", None)
     if emotion_name is None:
@@ -129,14 +139,9 @@ async def play_emotion(params: dict) -> dict:
     is_emoting = True
     print(f"[TOOL CALL] play_emotion with {emotion_name}")
 
-    recorded_moves.get(emotion_name).play_on(reachy_mini, repeat=1, start_goto=True)
+    Thread(target=_play_emotion_worker, args=(emotion_name,), daemon=True).start()
 
-    is_emoting = False
-
-    return {
-        "status": "playing",
-        "emotion": emotion_name,
-    }  # actually return "finished playing ?
+    return {"status": "started", "emotion": emotion_name}
 
 
 def get_available_emotions_and_descriptions():
@@ -394,11 +399,12 @@ class OpenAIHandler(AsyncStreamHandler):
                         jackson_square: Traces a rectangle via a 5-point path, with sharp twitches on arrival at each checkpoint.
 
                         You can also play pre-recorded emotions if you feel like it. Use it to express yourself better. 
+                        Don't hesitate to use emotions on top of your responses. You can use them often, but not all the time.
 
                         {get_available_emotions_and_descriptions()}
                         
                     """,
-                    "voice": "ash",
+                    "voice": "ballad",
                     "input_audio_transcription": {
                         "model": "whisper-1",
                         "language": "en",
