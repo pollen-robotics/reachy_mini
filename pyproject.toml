@@ -25,6 +25,7 @@ dependencies = [
     "uvicorn",
     "fastapi",
     "pyserial",
+    "huggingface-hub==0.34.4"
 ]
 
 

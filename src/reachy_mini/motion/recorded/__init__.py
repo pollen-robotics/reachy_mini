@@ -1,0 +1,1 @@
+from reachy_mini.motion.recorded.recorded_move import RecordedMoves

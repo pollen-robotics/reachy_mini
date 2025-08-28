@@ -4,12 +4,13 @@ These classes allow you to play dance moves and choreographies on the ReachyMini
 """
 
 import json
+from typing import Optional
 
 import numpy as np
 
-from reachy_mini.motion.collection.dance import AVAILABLE_MOVES
-from reachy_mini.motion.move import Move
-from reachy_mini.reachy_mini import ReachyMini
+from reachy_mini import ReachyMini
+from reachy_mini.motion import Move
+from reachy_mini.motion.dance.collection.dance import AVAILABLE_MOVES
 from reachy_mini.utils import create_head_pose
 
 
@@ -39,7 +40,7 @@ class DanceMove(Move):
 
         return beat_duration * nb_beats
 
-    def evaluate(self, t: float) -> tuple[np.ndarray, np.ndarray]:
+    def evaluate(self, t: float) -> tuple[np.ndarray, np.ndarray, float, Optional[str]]:
         """Evaluate the dance move at time t.
 
         This method calls the move function with the current time and parameters,
@@ -60,7 +61,7 @@ class DanceMove(Move):
         head_pose = create_head_pose(
             x=x, y=y, z=z, roll=roll, pitch=pitch, yaw=yaw, degrees=False, mm=False
         )
-        return head_pose, offsets.antennas_offset
+        return head_pose, offsets.antennas_offset, 0, None
 
 
 class Choreography(Move):
@@ -90,7 +91,7 @@ class Choreography(Move):
         """Calculate the total duration of the choreography."""
         return sum(move.duration for move in self.moves)
 
-    def evaluate(self, t: float) -> tuple[np.ndarray, np.ndarray]:
+    def evaluate(self, t: float) -> tuple[np.ndarray, np.ndarray, float, Optional[str]]:
         """Evaluate the choreography at time t.
 
         This method iterates through the moves and evaluates them based on the

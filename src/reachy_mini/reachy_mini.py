@@ -366,6 +366,8 @@ class ReachyMini:
     def play_sound(self, sound_file: str) -> None:
         """Play a sound file from the assets directory.
 
+        If the file is not found in the assets directory, try to load the path itself.
+
         Args:
             sound_file (str): The name of the sound file to play (e.g., "proud2.wav").
 
@@ -373,7 +375,17 @@ class ReachyMini:
         if pygame.mixer is None:
             print("Pygame mixer is not initialized. Cannot play sound.")
             return
-        pygame.mixer.music.load(f"{ReachyMini.assets_root_path}/{sound_file}")
+
+        # first check if the name exists in the asset sound directory
+        file_path = f"{ReachyMini.assets_root_path}/{sound_file}"
+        if not os.path.exists(file_path):
+            # If not, check if the raw_path exists
+            if not os.path.exists(sound_file):
+                raise FileNotFoundError(f"Sound file {sound_file} not found.")
+            else:
+                file_path = sound_file
+
+        pygame.mixer.music.load(file_path)
         pygame.mixer.music.play()
 
     def _goto_joint_positions(
