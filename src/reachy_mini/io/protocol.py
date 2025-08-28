@@ -14,7 +14,6 @@ class GotoTaskRequest(BaseModel):
     duration: float
     method: str
     body_yaw: float
-    check_collision: bool
 
 
 class PlayMoveTaskRequest(BaseModel):
