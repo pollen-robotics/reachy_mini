@@ -114,8 +114,6 @@ def record(args):
             print(sd.query_devices())
             return
 
-    # threading.Timer(1.5, beep).start()
-
     try:
         t0 = time.time()
         # Start the recording.
