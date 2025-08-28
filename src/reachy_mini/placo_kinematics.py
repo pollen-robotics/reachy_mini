@@ -156,16 +156,15 @@ class PlacoKinematics:
         self.fk_solver.enable_joint_limits(True)
         self.fk_solver.dt = dt
 
-
         # Tolerance values for checking if the solver converged
         # if they are all satisfied the solver is considered to have converged
         # forward kinematics solver
-        self.fk_reached_tol = {
+        self.fk_converged_tol = {
             "q": np.deg2rad(0.1), # 0.1 deg 
             "qd": 1e-4, # ~0.01 deg/s
         }
         # inverse kinematics solver
-        self.ik_reached_tol = {
+        self.ik_converged_tol = {
             "pos": 1e-4, # 0.1 mm
             "rot": np.deg2rad(0.1), # 0.1 rad
             "body_yaw": np.deg2rad(0.1), # 0.1 deg
@@ -356,10 +355,10 @@ class PlacoKinematics:
         # if distance too small 0.1mm and 0.1 deg and the QP has converged (almost 0 velocity)
         _dist_by = np.abs(body_yaw - self.robot_ik.get_joint("all_yaw"))
         if (
-            _dist_p < self.ik_reached_tol["pos"]
-            and _dist_o < self.ik_reached_tol["rot"]
-            and _dist_by < self.ik_reached_tol["body_yaw"]
-            and np.linalg.norm(self.robot_ik.state.qd) < self.ik_reached_tol["qd"]
+            _dist_p < self.ik_converged_tol["pos"]
+            and _dist_o < self.ik_converged_tol["rot"]
+            and _dist_by < self.ik_converged_tol["body_yaw"]
+            and np.linalg.norm(self.robot_ik.state.qd) < self.ik_converged_tol["qd"]
         ):
             # no need to recalculate - return the current joint values
             return self._get_joint_values(self.robot_ik)  # no need to solve IK
@@ -440,8 +439,8 @@ class PlacoKinematics:
         # no need to compute the FK
         if (
             np.linalg.norm(np.array(_current_joints) - np.array(joints_angles))
-            < self.fk_reached_tol["q"]
-            and self.robot.state.qd.max() < self.fk_reached_tol["qd"]
+            < self.fk_converged_tol["q"]
+            and self.robot.state.qd.max() < self.fk_converged_tol["qd"]
         ):
             # no need to compute FK
             T_world_head = self.robot.get_T_world_frame("head")
