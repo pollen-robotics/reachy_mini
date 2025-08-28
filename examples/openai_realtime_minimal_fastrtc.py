@@ -1,32 +1,32 @@
 import asyncio
-from asyncio import QueueEmpty
 import base64
 import json
 import time
+from asyncio import QueueEmpty
 from threading import Thread
 
 import cv2
 import gradio as gr
 import numpy as np
 import openai
+from deepface import DeepFace
 from dotenv import load_dotenv
 from fastrtc import AdditionalOutputs, AsyncStreamHandler, Stream, wait_for_item
+from head_tracker import HeadTracker
 from openai import OpenAI
-from speech_tapper3 import SwayRollRT, HOP_MS
-
+from scipy.spatial.transform import Rotation as R
+from speech_tapper3 import HOP_MS, SwayRollRT
 
 from reachy_mini import ReachyMini
+from reachy_mini.motion.dance import DanceMove
+from reachy_mini.motion.dance.collection.dance import AVAILABLE_MOVES
 from reachy_mini.utils import create_head_pose
 from reachy_mini.utils.camera import find_camera
-from scipy.spatial.transform import Rotation as R
-from head_tracker import HeadTracker
-from deepface import DeepFace
-from reachy_mini.motion.collection.dance import AVAILABLE_MOVES
-from reachy_mini.motion.dance_move import DanceMove
+from reachy_mini.motion.recorded import RecordedMoves
 
 load_dotenv()
 SAMPLE_RATE = 24000
-SIM = False
+SIM = True
 
 reachy_mini = ReachyMini()
 
@@ -42,6 +42,7 @@ moving_start = time.time()
 moving_for = 0.0
 is_head_tracking = False
 is_dancing = False
+is_emoting = False
 
 
 # camera_tool = Camera(reachy_mini, cap)
@@ -108,9 +109,49 @@ async def dance(params: dict) -> dict:
     if move_name not in AVAILABLE_MOVES:
         return {"error": f"unknown move '{move_name}'"}
 
+    print(f"[TOOL CALL] dance started with {move_name}")
+
     is_dancing = True
     Thread(target=_dance_worker, args=(move_name, repeat), daemon=True).start()
     return {"status": "started", "move": move_name, "repeat": repeat}
+
+
+recorded_moves = RecordedMoves("pollen-robotics/reachy-mini-emotions-library")
+
+
+async def play_emotion(params: dict) -> dict:
+    """Play a pre-recorded emotion"""
+    global is_emoting
+    emotion_name = params.get("emotion", None)
+    if emotion_name is None:
+        return {"error": "Requested emotion does not exist"}
+
+    is_emoting = True
+    print(f"[TOOL CALL] play_emotion with {emotion_name}")
+
+    recorded_moves.get(emotion_name).play_on(reachy_mini, repeat=1, start_goto=True)
+
+    is_emoting = False
+
+    return {
+        "status": "playing",
+        "emotion": emotion_name,
+    }  # actually return "finished playing ?
+
+
+def get_available_emotions_and_descriptions():
+    names = recorded_moves.list_moves()
+
+    ret = """
+    Available emotions:
+
+    """
+
+    for name in names:
+        description = recorded_moves.get(name).description
+        ret += f" - {name}: {description}\n"
+
+    return ret
 
 
 client = OpenAI()
@@ -228,6 +269,7 @@ class OpenAIHandler(AsyncStreamHandler):
             "head_tracking": head_tracking,
             "get_person_name": face_recognition,
             "dance": dance,
+            "play_emotion": play_emotion,
         }
 
         self.sway = SwayRollRT()
@@ -303,7 +345,7 @@ class OpenAIHandler(AsyncStreamHandler):
             await conn.session.update(
                 session={
                     "turn_detection": {"type": "server_vad"},
-                    "instructions": """
+                    "instructions": f"""
                         Answer in english by default but adapt your language as needed.
 
                         Your name is Reachy Mini, or Reachy for short. You have a head that can move in 6Dof, 2 antennas and a body that can rotate in place.
@@ -351,6 +393,9 @@ class OpenAIHandler(AsyncStreamHandler):
                         pendulum_swing: A simple, smooth pendulum-like swing using a roll motion.
                         jackson_square: Traces a rectangle via a 5-point path, with sharp twitches on arrival at each checkpoint.
 
+                        You can also play pre-recorded emotions if you feel like it. Use it to express yourself better. 
+
+                        {get_available_emotions_and_descriptions()}
                         
                     """,
                     "voice": "ash",
@@ -442,6 +487,21 @@ class OpenAIHandler(AsyncStreamHandler):
                                     },
                                 },
                                 "required": [],
+                            },
+                        },
+                        {
+                            "type": "function",
+                            "name": "play_emotion",
+                            "description": "Play a pre-recorded emotion",
+                            "parameters": {
+                                "type": "object",
+                                "properties": {
+                                    "emotion": {
+                                        "type": "string",
+                                        "description": "Name of the emotion to play",
+                                    },
+                                },
+                                "required": ["emotion"],
                             },
                         },
                     ],
@@ -641,7 +701,7 @@ if __name__ == "__main__":
         ).as_euler("xyz", degrees=False)
 
         # moving = time.time() - moving_start < moving_for
-        moving = (time.time() - moving_start < moving_for) or is_dancing
+        moving = (time.time() - moving_start < moving_for) or is_dancing or is_emoting
 
         if not moving:
             head_pose = create_head_pose(
