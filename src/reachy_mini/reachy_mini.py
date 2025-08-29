@@ -134,6 +134,7 @@ class ReachyMini:
             Union[np.ndarray, List[float]]
         ] = None,  # [left_angle, right_angle] (in rads)
         body_yaw: float = 0.0,  # Body yaw angle in radians
+        is_relative: bool = False,  # If True, treat values as offsets
     ) -> None:
         """Set the target pose of the head and/or the target position of the antennas.
 
@@ -141,6 +142,7 @@ class ReachyMini:
             head (Optional[np.ndarray]): 4x4 pose matrix representing the head pose.
             antennas (Optional[Union[np.ndarray, List[float]]]): 1D array with two elements representing the angles of the antennas in radians.
             body_yaw (Optional[float]): Body yaw angle in radians.
+            is_relative (bool): If True, treat values as offsets to be added to current targets.
 
         Raises:
             ValueError: If neither head nor antennas are provided, or if the shape of head is not (4, 4), or if antennas is not a 1D array with two elements.
@@ -158,9 +160,9 @@ class ReachyMini:
             )
 
         if antennas is not None:
-            self._set_joint_positions(antennas_joint_positions=list(antennas))
+            self._set_joint_positions(antennas_joint_positions=list(antennas), is_relative=is_relative)
         if head is not None:
-            self._set_head_pose(head, body_yaw)
+            self._set_head_pose(head, body_yaw, is_relative=is_relative)
         self._last_head_pose = head
 
         record = {
@@ -460,6 +462,7 @@ class ReachyMini:
         self,
         head_joint_positions: list[float] | None = None,
         antennas_joint_positions: list[float] | None = None,
+        is_relative: bool = False,
     ):
         """Set the joint positions of the head and/or antennas.
 
@@ -468,6 +471,7 @@ class ReachyMini:
         Args:
             head_joint_positions (Optional[List[float]]): List of head joint positions in radians (length 7).
             antennas_joint_positions (Optional[List[float]]): List of antennas joint positions in radians (length 2).
+            is_relative (bool): If True, treat values as offsets.
             record (Optional[Dict]): If provided, the command will be logged with the given record data.
 
         """
@@ -488,14 +492,17 @@ class ReachyMini:
                 "At least one of head_joint_positions or antennas must be provided."
             )
 
+        cmd["is_relative"] = is_relative
+
         self.client.send_command(json.dumps(cmd))
 
-    def _set_head_pose(self, pose: np.ndarray, body_yaw: float = 0.0) -> None:
+    def _set_head_pose(self, pose: np.ndarray, body_yaw: float = 0.0, is_relative: bool = False) -> None:
         """Set the head pose to a specific 4x4 matrix.
 
         Args:
             pose (np.ndarray): A 4x4 matrix representing the desired head pose.
             body_yaw (float): The yaw angle of the body, used to adjust the head pose.
+            is_relative (bool): If True, treat pose as an offset.
 
         Raises:
             ValueError: If the shape of the pose is not (4, 4).
@@ -512,6 +519,7 @@ class ReachyMini:
             raise ValueError("Pose must be provided as a 4x4 matrix.")
 
         cmd["body_yaw"] = body_yaw
+        cmd["is_relative"] = is_relative
 
         self.client.send_command(json.dumps(cmd))
 

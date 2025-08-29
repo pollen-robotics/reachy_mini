@@ -54,6 +54,11 @@ class Backend:
         self.target_antenna_joint_positions = None  # [0, 1]
         self.current_antenna_joint_positions = None  # [0, 1]
 
+        # Relative offsets in task space (initialized to zero)
+        self.head_pose_offset = np.eye(4)  # 4x4 identity matrix for head pose offset
+        self.body_yaw_offset = 0.0  # Body yaw offset in radians
+        self.antenna_joint_positions_offset = [0.0, 0.0]  # [left, right] antenna offsets
+
         self.joint_positions_publisher = None  # Placeholder for a publisher object
         self.pose_publisher = None  # Placeholder for a pose publisher object
         self.recording_publisher = None  # Placeholder for a recording publisher object
@@ -81,6 +86,68 @@ class Backend:
 
         # Recording lock to guard buffer swaps and appends
         self._rec_lock = threading.Lock()
+
+    def _compose_world_offset(self, T_abs: np.ndarray, T_off_world: np.ndarray,
+                             reorthonormalize: bool = False) -> np.ndarray:
+        """
+        Compose an absolute world-frame pose with a world-frame offset:
+          - translations add in world:       t_final = t_abs + t_off
+          - rotations compose in world:      R_final = R_off @ R_abs
+        This rotates the frame in place (about its own origin) by a rotation
+        defined in world axes, and shifts it by a world translation.
+
+        Parameters
+        ----------
+        T_abs : (4,4) ndarray
+            Absolute pose in world frame.
+        T_off_world : (4,4) ndarray
+            Offset transform specified in world axes (dx,dy,dz in world; dR about world axes).
+        reorthonormalize : bool
+            If True, SVD-orthonormalize the resulting rotation to fight drift.
+
+        Returns
+        -------
+        T_final : (4,4) ndarray
+            Resulting pose in world frame.
+        """
+        R_abs, t_abs = T_abs[:3, :3], T_abs[:3, 3]
+        R_off, t_off = T_off_world[:3, :3], T_off_world[:3, 3]
+
+        R_final = R_off @ R_abs
+        if reorthonormalize:
+            U, _, Vt = np.linalg.svd(R_final)
+            R_final = U @ Vt
+
+        t_final = t_abs + t_off
+
+        T_final = np.eye(4)
+        T_final[:3, :3] = R_final
+        T_final[:3, 3]  = t_final
+        return T_final
+
+    def get_effective_head_pose_and_yaw(self) -> tuple[np.ndarray, float]:
+        """Get the effective head pose and body yaw (absolute target + relative offsets).
+        
+        Returns:
+            tuple: (effective_head_pose, effective_body_yaw)
+        """
+        base_pose = self.target_head_pose if self.target_head_pose is not None else np.eye(4)
+        base_yaw = self.target_body_yaw if self.target_body_yaw is not None else 0.0
+        
+        # Apply relative offsets using correct matrix composition
+        effective_pose = self._compose_world_offset(base_pose, self.head_pose_offset)
+        effective_yaw = base_yaw + self.body_yaw_offset
+        
+        return effective_pose, effective_yaw
+
+    def get_effective_antenna_positions(self) -> List[float]:
+        """Get the effective antenna positions (absolute target + relative offsets).
+        
+        Returns:
+            List[float]: effective antenna positions
+        """
+        base_positions = self.target_antenna_joint_positions if self.target_antenna_joint_positions is not None else [0.0, 0.0]
+        return [base_positions[i] + self.antenna_joint_positions_offset[i] for i in range(2)]
 
     # Life cycle methods
     def wrapped_run(self):
@@ -168,17 +235,23 @@ class Backend:
 
         self.target_head_joint_positions = joints
 
-    def set_target_head_pose(self, pose: np.ndarray, body_yaw: float = 0.0) -> None:
+    def set_target_head_pose(self, pose: np.ndarray, body_yaw: float = 0.0, is_relative: bool = False) -> None:
         """Set the target head pose for the robot.
 
         Args:
             pose (np.ndarray): 4x4 pose matrix representing the head pose.
             body_yaw (float): The yaw angle of the body, used to adjust the head pose.
+            is_relative (bool): If True, treat pose as an offset to be stored.
 
         """
-        # update the target head pose and body yaw
-        self.target_head_pose = pose
-        self.target_body_yaw = body_yaw
+        if is_relative:
+            # Store as offsets
+            self.head_pose_offset = pose
+            self.body_yaw_offset = body_yaw
+        else:
+            # Set absolute targets
+            self.target_head_pose = pose
+            self.target_body_yaw = body_yaw
         self.ik_required = True
 
     def set_target_head_joint_positions(self, positions: List[float]) -> None:
@@ -191,14 +264,20 @@ class Backend:
         self.target_head_joint_positions = positions
         self.ik_required = False
 
-    def set_target_antenna_joint_positions(self, positions: List[float]) -> None:
+    def set_target_antenna_joint_positions(self, positions: List[float], is_relative: bool = False) -> None:
         """Set the antenna joint positions.
 
         Args:
             positions (List[float]): A list of joint positions for the antenna.
+            is_relative (bool): If True, treat positions as offsets to be stored.
 
         """
-        self.target_antenna_joint_positions = positions
+        if is_relative:
+            # Store as offsets
+            self.antenna_joint_positions_offset = positions
+        else:
+            # Set absolute targets
+            self.target_antenna_joint_positions = positions
 
     def set_target_head_joint_current(self, current: List[float]) -> None:
         """Set the head joint current.
