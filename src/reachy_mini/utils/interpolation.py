@@ -171,3 +171,42 @@ def distance_between_poses(
     unhinged_distance = distance_translation * 1000 + np.rad2deg(distance_angle)
 
     return distance_translation, distance_angle, unhinged_distance
+
+
+def compose_world_offset(T_abs: np.ndarray, T_off_world: np.ndarray,
+                         reorthonormalize: bool = False) -> np.ndarray:
+    """
+    Compose an absolute world-frame pose with a world-frame offset:
+      - translations add in world:       t_final = t_abs + t_off
+      - rotations compose in world:      R_final = R_off @ R_abs
+    This rotates the frame in place (about its own origin) by a rotation
+    defined in world axes, and shifts it by a world translation.
+
+    Parameters
+    ----------
+    T_abs : (4,4) ndarray
+        Absolute pose in world frame.
+    T_off_world : (4,4) ndarray
+        Offset transform specified in world axes (dx,dy,dz in world; dR about world axes).
+    reorthonormalize : bool
+        If True, SVD-orthonormalize the resulting rotation to fight drift.
+
+    Returns
+    -------
+    T_final : (4,4) ndarray
+        Resulting pose in world frame.
+    """
+    R_abs, t_abs = T_abs[:3, :3], T_abs[:3, 3]
+    R_off, t_off = T_off_world[:3, :3], T_off_world[:3, 3]
+
+    R_final = R_off @ R_abs
+    if reorthonormalize:
+        U, _, Vt = np.linalg.svd(R_final)
+        R_final = U @ Vt
+
+    t_final = t_abs + t_off
+
+    T_final = np.eye(4)
+    T_final[:3, :3] = R_final
+    T_final[:3, 3]  = t_final
+    return T_final

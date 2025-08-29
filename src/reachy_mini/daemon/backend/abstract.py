@@ -19,7 +19,8 @@ import numpy as np
 
 import reachy_mini
 from reachy_mini.placo_kinematics import PlacoKinematics
-from reachy_mini.utils.interpolation import linear_pose_interpolation, time_trajectory
+from reachy_mini.utils.interpolation import compose_world_offset, linear_pose_interpolation, time_trajectory
+from reachy_mini.utils.relative_timeout import RelativeOffsetManager
 
 
 class Backend:
@@ -54,10 +55,8 @@ class Backend:
         self.target_antenna_joint_positions = None  # [0, 1]
         self.current_antenna_joint_positions = None  # [0, 1]
 
-        # Relative offsets in task space (initialized to zero)
-        self.head_pose_offset = np.eye(4)  # 4x4 identity matrix for head pose offset
-        self.body_yaw_offset = 0.0  # Body yaw offset in radians
-        self.antenna_joint_positions_offset = [0.0, 0.0]  # [left, right] antenna offsets
+        # Relative offsets manager with timeout and smooth decay
+        self.relative_manager = RelativeOffsetManager(timeout_seconds=1.0, decay_duration=1.0)
 
         self.joint_positions_publisher = None  # Placeholder for a publisher object
         self.pose_publisher = None  # Placeholder for a pose publisher object
@@ -87,44 +86,6 @@ class Backend:
         # Recording lock to guard buffer swaps and appends
         self._rec_lock = threading.Lock()
 
-    def _compose_world_offset(self, T_abs: np.ndarray, T_off_world: np.ndarray,
-                             reorthonormalize: bool = False) -> np.ndarray:
-        """
-        Compose an absolute world-frame pose with a world-frame offset:
-          - translations add in world:       t_final = t_abs + t_off
-          - rotations compose in world:      R_final = R_off @ R_abs
-        This rotates the frame in place (about its own origin) by a rotation
-        defined in world axes, and shifts it by a world translation.
-
-        Parameters
-        ----------
-        T_abs : (4,4) ndarray
-            Absolute pose in world frame.
-        T_off_world : (4,4) ndarray
-            Offset transform specified in world axes (dx,dy,dz in world; dR about world axes).
-        reorthonormalize : bool
-            If True, SVD-orthonormalize the resulting rotation to fight drift.
-
-        Returns
-        -------
-        T_final : (4,4) ndarray
-            Resulting pose in world frame.
-        """
-        R_abs, t_abs = T_abs[:3, :3], T_abs[:3, 3]
-        R_off, t_off = T_off_world[:3, :3], T_off_world[:3, 3]
-
-        R_final = R_off @ R_abs
-        if reorthonormalize:
-            U, _, Vt = np.linalg.svd(R_final)
-            R_final = U @ Vt
-
-        t_final = t_abs + t_off
-
-        T_final = np.eye(4)
-        T_final[:3, :3] = R_final
-        T_final[:3, 3]  = t_final
-        return T_final
-
     def get_effective_head_pose_and_yaw(self) -> tuple[np.ndarray, float]:
         """Get the effective head pose and body yaw (absolute target + relative offsets).
         
@@ -134,9 +95,12 @@ class Backend:
         base_pose = self.target_head_pose if self.target_head_pose is not None else np.eye(4)
         base_yaw = self.target_body_yaw if self.target_body_yaw is not None else 0.0
         
+        # Get current offsets (with timeout/decay applied)
+        head_offset, yaw_offset, _ = self.relative_manager.get_current_offsets()
+        
         # Apply relative offsets using correct matrix composition
-        effective_pose = self._compose_world_offset(base_pose, self.head_pose_offset)
-        effective_yaw = base_yaw + self.body_yaw_offset
+        effective_pose = compose_world_offset(base_pose, head_offset)
+        effective_yaw = base_yaw + yaw_offset
         
         return effective_pose, effective_yaw
 
@@ -147,7 +111,11 @@ class Backend:
             List[float]: effective antenna positions
         """
         base_positions = self.target_antenna_joint_positions if self.target_antenna_joint_positions is not None else [0.0, 0.0]
-        return [base_positions[i] + self.antenna_joint_positions_offset[i] for i in range(2)]
+        
+        # Get current offsets (with timeout/decay applied)
+        _, _, antenna_offsets = self.relative_manager.get_current_offsets()
+        
+        return [base_positions[i] + antenna_offsets[i] for i in range(2)]
 
     # Life cycle methods
     def wrapped_run(self):
@@ -245,9 +213,11 @@ class Backend:
 
         """
         if is_relative:
-            # Store as offsets
-            self.head_pose_offset = pose
-            self.body_yaw_offset = body_yaw
+            # Update relative offsets in the manager
+            self.relative_manager.update_offsets(
+                head_pose_offset=pose,
+                body_yaw_offset=body_yaw
+            )
         else:
             # Set absolute targets
             self.target_head_pose = pose
@@ -273,8 +243,8 @@ class Backend:
 
         """
         if is_relative:
-            # Store as offsets
-            self.antenna_joint_positions_offset = positions
+            # Update relative offsets in the manager
+            self.relative_manager.update_offsets(antenna_offsets=positions)
         else:
             # Set absolute targets
             self.target_antenna_joint_positions = positions
