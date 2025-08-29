@@ -123,7 +123,9 @@ recorded_moves = RecordedMoves("pollen-robotics/reachy-mini-emotions-library")
 def _play_emotion_worker(emotion_name: str):
     global is_emoting
     try:
-        recorded_moves.get(emotion_name).play_on(reachy_mini, repeat=1, start_goto=True, no_audio=True)
+        recorded_moves.get(emotion_name).play_on(
+            reachy_mini, repeat=1, start_goto=True, no_audio=True
+        )
     except Exception as e:
         print(f"[play emotion worker] error: {e}")
     finally:
@@ -689,6 +691,11 @@ stream = Stream(
 if __name__ == "__main__":
     Thread(target=stream.ui.launch, kwargs={"server_port": 7860}).start()
     head_tracker = HeadTracker()
+    # going to center at start
+    reachy_mini.goto_target(
+        create_head_pose(0, 0, 0, 0, 0, 0, degrees=True), antennas=(0, 0), duration=1.0
+    )
+    t0 = time.time()
     while True:
         # current_head_pose = reachy_mini.get_current_head_pose()
         if is_head_tracking:
@@ -715,21 +722,20 @@ if __name__ == "__main__":
         )
 
         if not is_moving:
+            t = time.time() - t0
             head_pose = create_head_pose(
                 x=current_x + speech_head_offsets[0],
                 y=current_y + speech_head_offsets[1],
                 z=current_z
                 + speech_head_offsets[2]
-                + 0.01 * np.sin(2 * np.pi * 0.1 * time.time()),  # idle
+                + 0.01 * np.sin(2 * np.pi * 0.1 * t),  # idle
                 roll=current_roll + speech_head_offsets[3],
                 pitch=current_pitch + speech_head_offsets[4],
                 yaw=current_yaw + speech_head_offsets[5],
                 degrees=False,
                 mm=False,
             )
-            antenna_target = np.deg2rad(15) * np.sin(
-                2 * np.pi * 0.5 * time.time()
-            )  # idle
+            antenna_target = np.deg2rad(15) * np.sin(2 * np.pi * 0.5 * t)  # idle
             reachy_mini.set_target(
                 head=head_pose, antennas=np.array([antenna_target, -antenna_target])
             )
