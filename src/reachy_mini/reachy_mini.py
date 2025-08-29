@@ -182,6 +182,7 @@ class ReachyMini:
         duration: float = 0.5,  # Duration in seconds for the movement, default is 0.5 seconds.
         method="default",  # can be "linear", "minjerk", "ease" or "cartoon", default is "default" (-> "minjerk" interpolation)
         body_yaw: float = 0.0,  # Body yaw angle in radians
+        is_relative: bool = False,  # If True, treat values as offsets
     ):
         """Go to a target head pose and/or antennas position using task space interpolation, in "duration" seconds.
 
@@ -191,6 +192,7 @@ class ReachyMini:
             duration (float): Duration of the movement in seconds.
             method (str): Interpolation method to use ("linear", "minjerk", "ease", "cartoon"). Default is "minjerk".
             body_yaw (float): Body yaw angle in radians.
+            is_relative (bool): If True, treat values as offsets to be added during interpolation.
 
         Raises:
             ValueError: If neither head nor antennas are provided, or if duration is not positive.
@@ -214,6 +216,7 @@ class ReachyMini:
             duration=duration,
             method=method,
             body_yaw=body_yaw,
+            is_relative=is_relative,
         )
 
         task_uid = self.client.send_task_request(req)

@@ -157,6 +157,7 @@ class ZenohServer(AbstractServer):
                     duration=req.duration,
                     method=req.method,
                     body_yaw=req.body_yaw,
+                    is_relative=req.is_relative,
                 )
         elif isinstance(task_req.req, PlayMoveTaskRequest):
 
