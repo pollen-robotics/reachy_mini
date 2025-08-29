@@ -110,7 +110,7 @@ async def dance(params: dict) -> dict:
     if move_name not in AVAILABLE_MOVES:
         return {"error": f"unknown move '{move_name}'"}
 
-    print(f"[TOOL CALL] dance started with {move_name}")
+    print(f"[TOOL CALL] dance started with {move_name}, repeat={repeat}")
 
     is_dancing = True
     Thread(target=_dance_worker, args=(move_name, repeat), daemon=True).start()
@@ -408,8 +408,16 @@ class OpenAIHandler(AsyncStreamHandler):
 
                         {get_available_emotions_and_descriptions()}
                         
+                        Voice specifications:
+                        Voice: The voice should be deep, velvety, and effortlessly cool, like a late-night jazz radio host.
+
+                        Tone: The tone is smooth, laid-back, and inviting, creating a relaxed and easygoing atmosphere.
+
+                        Personality: The delivery exudes confidence, charm, and a touch of playful sophistication, as if guiding the listener through a luxurious experience.
+                        
                     """,
-                    "voice": "ballad",
+                    # "voice": "ballad",
+                    "voice": "ash",
                     "input_audio_transcription": {
                         "model": "whisper-1",
                         "language": "en",
@@ -721,24 +729,29 @@ if __name__ == "__main__":
             (time.time() - moving_start < moving_for) or is_dancing or is_emoting
         )
 
+        # Always apply speech offsets (with is_relative=True)
+        t = time.time() - t0
+        head_pose = create_head_pose(
+            x=current_x + speech_head_offsets[0],
+            y=current_y + speech_head_offsets[1],
+            z=current_z + speech_head_offsets[2],
+            roll=current_roll + speech_head_offsets[3],
+            pitch=current_pitch + speech_head_offsets[4],
+            yaw=current_yaw + speech_head_offsets[5],
+            degrees=False,
+            mm=False,
+        )
+        reachy_mini.set_target(
+            head=head_pose,
+            is_relative=True,
+        )
         if not is_moving:
             t = time.time() - t0
-            head_pose = create_head_pose(
-                x=current_x + speech_head_offsets[0],
-                y=current_y + speech_head_offsets[1],
-                z=current_z
-                + speech_head_offsets[2]
-                + 0.01 * np.sin(2 * np.pi * 0.1 * t),  # idle
-                roll=current_roll + speech_head_offsets[3],
-                pitch=current_pitch + speech_head_offsets[4],
-                yaw=current_yaw + speech_head_offsets[5],
-                degrees=False,
-                mm=False,
-            )
-            antenna_target = np.deg2rad(15) * np.sin(2 * np.pi * 0.5 * t)  # idle
+            head_pose = create_head_pose(z=0.01 * np.sin(2 * np.pi * 0.1 * t))  # idle
+            antenna_target = np.deg2rad(15) * np.sin(2 * np.pi * 0.5 * t)
             reachy_mini.set_target(
                 head=head_pose,
                 antennas=np.array([antenna_target, -antenna_target]),
-                is_relative=True,
+                is_relative=False,
             )
         time.sleep(0.02)
