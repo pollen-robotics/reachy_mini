@@ -123,7 +123,7 @@ recorded_moves = RecordedMoves("pollen-robotics/reachy-mini-emotions-library")
 def _play_emotion_worker(emotion_name: str):
     global is_emoting
     try:
-        recorded_moves.get(emotion_name).play_on(reachy_mini, repeat=1, start_goto=True)
+        recorded_moves.get(emotion_name).play_on(reachy_mini, repeat=1, start_goto=True, no_audio=True)
     except Exception as e:
         print(f"[play emotion worker] error: {e}")
     finally:
@@ -344,8 +344,9 @@ class OpenAIHandler(AsyncStreamHandler):
     async def start_up(self):
         self.client = openai.AsyncOpenAI()
         async with self.client.beta.realtime.connect(
+            model="gpt-realtime"
             # model="gpt-4o-realtime-preview"
-            model="gpt-4o-realtime-preview-2025-06-03"
+            # model="gpt-4o-realtime-preview-2025-06-03"
         ) as conn:
             # declare tools on the session
             await conn.session.update(
@@ -401,6 +402,7 @@ class OpenAIHandler(AsyncStreamHandler):
 
                         You can also play pre-recorded emotions if you feel like it. Use it to express yourself better. 
                         Don't hesitate to use emotions on top of your responses. You can use them often, but not all the time.
+                        Never comment on the emotion your are displaying, use it as a non verbal cue along with what you want to say
 
                         {get_available_emotions_and_descriptions()}
                         
