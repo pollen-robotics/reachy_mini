@@ -50,7 +50,7 @@ class Config:
     neutral_eul: np.ndarray = field(default_factory=lambda: np.zeros(3))
     choreography_path: Optional[str] = None
     disable_keyboard: bool = False
-    
+
     # Relative motion parameters
     relative_amplitude_deg: float = 5.0  # degrees for rotations
     relative_amplitude_mm: float = 2.0  # mm for translations
@@ -131,10 +131,13 @@ class SharedState:
 
 
 # --- Relative Motion Thread ---
-def relative_motion_thread(mini: ReachyMini, shared_state: SharedState, 
-                          stop_event: threading.Event, config: Config) -> None:
+def relative_motion_thread(
+    mini: ReachyMini,
+    shared_state: SharedState,
+    stop_event: threading.Event,
+    config: Config,
+) -> None:
     """Continuous relative motion with cycling modes every 4 seconds."""
-    
     # Define motion modes
     motion_modes = [
         {"name": "Pure Pitch", "components": ["pitch"]},
@@ -147,74 +150,84 @@ def relative_motion_thread(mini: ReachyMini, shared_state: SharedState,
         {"name": "X + Pitch + Yaw", "components": ["x", "pitch", "yaw"]},
         {"name": "X + Pitch + Yaw + Roll", "components": ["x", "pitch", "yaw", "roll"]},
     ]
-    
+
     # Prime frequencies to avoid alignment - using different primes for each component
     frequencies = {
-        "pitch": 2.0,    # Hz
-        "roll": 3.0,     # Hz  
-        "yaw": 5.0,      # Hz
-        "x": 7.0,        # Hz
-        "y": 11.0,       # Hz
-        "z": 13.0,       # Hz
+        "pitch": 2.0,  # Hz
+        "roll": 3.0,  # Hz
+        "yaw": 5.0,  # Hz
+        "x": 7.0,  # Hz
+        "y": 11.0,  # Hz
+        "z": 13.0,  # Hz
     }
-    
+
     print(f"Starting relative motion thread with {len(motion_modes)} cycling modes")
-    
+
     start_time = time.time()
     control_period = 0.02  # 50Hz control rate for smooth motion
     current_mode_index = 0
-    
+
     while not stop_event.is_set():
         current_time = time.time()
         elapsed_time = current_time - start_time
-        
+
         # Determine current mode based on elapsed time
-        mode_index = int(elapsed_time // config.mode_change_interval) % len(motion_modes)
+        mode_index = int(elapsed_time // config.mode_change_interval) % len(
+            motion_modes
+        )
         if mode_index != current_mode_index:
             current_mode_index = mode_index
             print(f"Switching to mode: {motion_modes[current_mode_index]['name']}")
-        
+
         current_mode = motion_modes[current_mode_index]
-        
+
         if shared_state.running:
             # Initialize offsets
             x_offset = y_offset = z_offset = 0.0
             roll_offset = pitch_offset = yaw_offset = 0.0
-            
+
             # Generate offsets based on current mode
             for component in current_mode["components"]:
                 freq = frequencies[component]
                 phase = 2 * math.pi * freq * elapsed_time
-                
+
                 if component == "x":
-                    x_offset = (config.relative_amplitude_mm / 1000.0) * math.sin(phase)  # Convert mm to m
+                    x_offset = (config.relative_amplitude_mm / 1000.0) * math.sin(
+                        phase
+                    )  # Convert mm to m
                 elif component == "y":
                     y_offset = (config.relative_amplitude_mm / 1000.0) * math.sin(phase)
                 elif component == "z":
                     z_offset = (config.relative_amplitude_mm / 1000.0) * math.sin(phase)
                 elif component == "roll":
-                    roll_offset = math.radians(config.relative_amplitude_deg) * math.sin(phase)
+                    roll_offset = math.radians(
+                        config.relative_amplitude_deg
+                    ) * math.sin(phase)
                 elif component == "pitch":
-                    pitch_offset = math.radians(config.relative_amplitude_deg) * math.sin(phase)
+                    pitch_offset = math.radians(
+                        config.relative_amplitude_deg
+                    ) * math.sin(phase)
                 elif component == "yaw":
-                    yaw_offset = math.radians(config.relative_amplitude_deg) * math.sin(phase)
-            
+                    yaw_offset = math.radians(config.relative_amplitude_deg) * math.sin(
+                        phase
+                    )
+
             # Create relative pose offset
             relative_pose = utils.create_head_pose(
-                x_offset, y_offset, z_offset, 
-                roll_offset, pitch_offset, yaw_offset, 
-                degrees=False
+                x_offset,
+                y_offset,
+                z_offset,
+                roll_offset,
+                pitch_offset,
+                yaw_offset,
+                degrees=False,
             )
-            
+
             # Send relative command
-            mini.set_target(
-                head=relative_pose,
-                body_yaw=0.0,
-                is_relative=True
-            )
-        
+            mini.set_target(head=relative_pose, body_yaw=0.0, is_relative=True)
+
         time.sleep(control_period)
-    
+
     print("Relative motion thread stopped.")
 
 
@@ -359,21 +372,30 @@ def main(config: Config) -> None:
             mode_text = (
                 "Choreography Player" if choreography_mode else "Interactive Tester"
             )
-            print(f"Robot connected. Starting {mode_text} with Cycling Relative Motion...")
+            print(
+                f"Robot connected. Starting {mode_text} with Cycling Relative Motion..."
+            )
             mini.wake_up()
 
             # Start the relative motion thread
             relative_thread = threading.Thread(
                 target=relative_motion_thread,
                 args=(mini, shared_state, stop_event, config),
-                daemon=True
+                daemon=True,
             )
             relative_thread.start()
-            
+
             # Track current motion mode for display
             motion_modes = [
-                "Pure Pitch", "Pure Roll", "Pure Yaw", "Pure X", "Pure Y", "Pure Z",
-                "X + Pitch", "X + Pitch + Yaw", "X + Pitch + Yaw + Roll"
+                "Pure Pitch",
+                "Pure Roll",
+                "Pure Yaw",
+                "Pure X",
+                "Pure Y",
+                "Pure Z",
+                "X + Pitch",
+                "X + Pitch + Yaw",
+                "X + Pitch + Yaw + Roll",
             ]
 
             if not config.disable_keyboard:
@@ -383,7 +405,9 @@ def main(config: Config) -> None:
                 print("Keyboard input disabled. Use Ctrl+C to exit.")
 
             last_loop_time = time.time()
-            absolute_start_time = last_loop_time  # Track absolute start for motion modes
+            absolute_start_time = (
+                last_loop_time  # Track absolute start for motion modes
+            )
 
             while not stop_event.is_set():
                 loop_start_time = time.time()
@@ -427,7 +451,7 @@ def main(config: Config) -> None:
                             *config.neutral_pos, *config.neutral_eul, degrees=False
                         ),
                         antennas=np.zeros(2),
-                        is_relative=False  # Use absolute positioning for neutral
+                        is_relative=False,  # Use absolute positioning for neutral
                     )
                     time.sleep(config.control_ts)
                     continue
@@ -484,7 +508,7 @@ def main(config: Config) -> None:
                 final_pos = config.neutral_pos + offsets.position_offset
                 final_eul = config.neutral_eul + offsets.orientation_offset
                 final_ant = offsets.antennas_offset
-                
+
                 # Use absolute positioning for dance moves (is_relative=False is default)
                 mini.set_target(
                     utils.create_head_pose(*final_pos, *final_eul, degrees=False),
@@ -494,12 +518,14 @@ def main(config: Config) -> None:
                 if loop_start_time - last_status_print_time > 1.0:
                     sys.stdout.write("\r" + " " * 120 + "\r")
                     status = "RUNNING" if shared_state.running else "PAUSED "
-                    
+
                     # Calculate current motion mode
                     elapsed_time = loop_start_time - absolute_start_time
-                    mode_index = int(elapsed_time // config.mode_change_interval) % len(motion_modes)
+                    mode_index = int(elapsed_time // config.mode_change_interval) % len(
+                        motion_modes
+                    )
                     current_motion_mode = motion_modes[mode_index]
-                    
+
                     # Time until next mode change
                     time_in_mode = elapsed_time % config.mode_change_interval
                     time_remaining = config.mode_change_interval - time_in_mode

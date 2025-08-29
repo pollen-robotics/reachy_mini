@@ -95,6 +95,7 @@ class Backend:
         
         Returns:
             tuple: (effective_head_pose, effective_body_yaw)
+            
         """
         base_pose = self.target_head_pose if self.target_head_pose is not None else np.eye(4)
         base_yaw = self.target_body_yaw if self.target_body_yaw is not None else 0.0
@@ -113,6 +114,7 @@ class Backend:
         
         Returns:
             List[float]: effective antenna positions
+            
         """
         base_positions = self.target_antenna_joint_positions if self.target_antenna_joint_positions is not None else [0.0, 0.0]
         

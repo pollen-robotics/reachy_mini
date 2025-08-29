@@ -175,8 +175,8 @@ def distance_between_poses(
 
 def compose_world_offset(T_abs: np.ndarray, T_off_world: np.ndarray,
                          reorthonormalize: bool = False) -> np.ndarray:
-    """
-    Compose an absolute world-frame pose with a world-frame offset:
+    """Compose an absolute world-frame pose with a world-frame offset.
+    
       - translations add in world:       t_final = t_abs + t_off
       - rotations compose in world:      R_final = R_off @ R_abs
     This rotates the frame in place (about its own origin) by a rotation

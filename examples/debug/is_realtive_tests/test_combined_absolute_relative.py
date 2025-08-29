@@ -140,7 +140,7 @@ def main():
                 )
                 time.sleep(1.0)
 
-            print(f"\n\n--- Phase 2: Stop relative motion, continue absolute ---")
+            print("\n\n--- Phase 2: Stop relative motion, continue absolute ---")
             print("Stopping dance expressions, rectangle continues...")
 
             # Stop dance thread but continue rectangle
@@ -158,7 +158,7 @@ def main():
                 )
                 time.sleep(1.0)
 
-            print(f"\n\n--- Phase 3: Timeout behavior test ---")
+            print("\n\n--- Phase 3: Timeout behavior test ---")
             print("Stopping all motion, observing relative offset decay...")
 
             # Stop all motion and observe timeout
