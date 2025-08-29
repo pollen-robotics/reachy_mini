@@ -50,7 +50,7 @@ class DanceMove(Move):
             t: The current time in seconds.
 
         Returns:
-            A tuple containing the head position and antennas positions.
+            A tuple containing the head position, antennas positions, body_yaw and the path to a sound to be played (if any, else None).
 
         """
         t_beats = t * (self.default_bpm / 60.0)  # Convert time to beats
