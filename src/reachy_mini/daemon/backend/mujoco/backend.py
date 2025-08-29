@@ -178,14 +178,18 @@ class MujocoBackend(Backend):
                     # Update the target head joint positions from IK if necessary
                     # - does nothing if the targets did not change
                     if self.ik_required:
+                        # Use effective targets (absolute + relative offsets)
+                        effective_pose, effective_yaw = self.get_effective_head_pose_and_yaw()
                         self.update_target_head_joints_from_ik(
-                            self.target_head_pose, self.target_body_yaw
+                            effective_pose, effective_yaw
                         )
 
                     if self.target_head_joint_positions is not None:
                         self.data.ctrl[:7] = self.target_head_joint_positions
                     if self.target_antenna_joint_positions is not None:
-                        self.data.ctrl[-2:] = self.target_antenna_joint_positions
+                        # Use effective antenna targets (absolute + relative offsets)
+                        effective_antenna_positions = self.get_effective_antenna_positions()
+                        self.data.ctrl[-2:] = effective_antenna_positions
 
                     if (
                         self.joint_positions_publisher is not None

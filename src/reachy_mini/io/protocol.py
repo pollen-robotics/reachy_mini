@@ -14,6 +14,7 @@ class GotoTaskRequest(BaseModel):
     duration: float
     method: str
     body_yaw: float
+    is_relative: bool = False  # If True, treat values as offsets
 
 
 class PlayMoveTaskRequest(BaseModel):

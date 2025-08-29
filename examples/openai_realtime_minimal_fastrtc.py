@@ -737,6 +737,8 @@ if __name__ == "__main__":
             )
             antenna_target = np.deg2rad(15) * np.sin(2 * np.pi * 0.5 * t)  # idle
             reachy_mini.set_target(
-                head=head_pose, antennas=np.array([antenna_target, -antenna_target])
+                head=head_pose,
+                antennas=np.array([antenna_target, -antenna_target]),
+                is_relative=True,
             )
         time.sleep(0.02)

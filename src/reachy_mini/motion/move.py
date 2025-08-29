@@ -46,6 +46,7 @@ class Move(ABC):
         frequency: float = 100.0,
         start_goto: bool = False,
         no_audio=False,
+        is_relative: bool = False,
     ):
         """Play the move on the ReachyMini robot.
 
@@ -54,6 +55,7 @@ class Move(ABC):
             repeat: Number of times to repeat the move.
             frequency: Frequency of updates in Hz.
             start_goto: Whether to interpolate to the starting position before playing the move.
+            is_relative: If True, treat move as relative offsets.
 
         """
         timer = Event()
@@ -102,7 +104,7 @@ class Move(ABC):
                 if not no_audio and play_sound is not None:
                     reachy_mini.play_sound(play_sound)
 
-                reachy_mini.set_target(head=head, antennas=antennas, body_yaw=body_yaw)
+                reachy_mini.set_target(head=head, antennas=antennas, is_relative=is_relative)
 
                 end = time.time() - t0
                 loop_duration = end - t
