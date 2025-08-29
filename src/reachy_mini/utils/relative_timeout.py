@@ -17,6 +17,7 @@ class RelativeOffsetManager:
         Args:
             timeout_seconds: Time after which offsets start decaying if not updated
             decay_duration: Duration over which offsets smoothly decay to zero
+            
         """
         self.timeout_seconds = timeout_seconds
         self.decay_duration = decay_duration

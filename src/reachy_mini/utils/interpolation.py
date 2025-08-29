@@ -195,6 +195,7 @@ def compose_world_offset(T_abs: np.ndarray, T_off_world: np.ndarray,
     -------
     T_final : (4,4) ndarray
         Resulting pose in world frame.
+        
     """
     R_abs, t_abs = T_abs[:3, :3], T_abs[:3, 3]
     R_off, t_off = T_off_world[:3, :3], T_off_world[:3, 3]
