@@ -19,7 +19,11 @@ import numpy as np
 
 import reachy_mini
 from reachy_mini.placo_kinematics import PlacoKinematics
-from reachy_mini.utils.interpolation import compose_world_offset, linear_pose_interpolation, time_trajectory
+from reachy_mini.utils.interpolation import (
+    compose_world_offset,
+    linear_pose_interpolation,
+    time_trajectory,
+)
 from reachy_mini.utils.relative_timeout import RelativeOffsetManager
 
 
