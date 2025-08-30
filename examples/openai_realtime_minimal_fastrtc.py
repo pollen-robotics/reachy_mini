@@ -1,5 +1,6 @@
 import asyncio
 import base64
+from datetime import datetime
 import json
 import time
 from asyncio import QueueEmpty
@@ -27,6 +28,18 @@ from reachy_mini.motion.recorded import RecordedMoves
 load_dotenv()
 SAMPLE_RATE = 24000
 SIM = True
+
+# Timestamp tracking
+script_start_time = time.time()
+
+
+def format_timestamp():
+    """Format current timestamp with date, time and elapsed seconds."""
+    current_time = time.time()
+    elapsed_seconds = current_time - script_start_time
+    dt = datetime.fromtimestamp(current_time)
+    return f"[{dt.strftime('%Y-%m-%d %H:%M:%S')} | +{elapsed_seconds:.1f}s]"
+
 
 reachy_mini = ReachyMini()
 
@@ -285,6 +298,7 @@ class OpenAIHandler(AsyncStreamHandler):
         self.MOVEMENT_LATENCY_S = 0.08
         self._base_ts = None
         self._hops_done = 0
+        self._current_timestamp = None
 
     def copy(self):
         return OpenAIHandler()
@@ -356,6 +370,8 @@ class OpenAIHandler(AsyncStreamHandler):
                     "turn_detection": {"type": "server_vad"},
                     "instructions": f"""
                         Answer in english by default but adapt your language as needed.
+
+                        Note: You will receive timestamp information for user messages showing the date, time, and elapsed seconds since the conversation started.
 
                         Your name is Reachy Mini, or Reachy for short. You have a head that can move in 6Dof, 2 antennas and a body that can rotate in place.
                         You're mostly white, with 2 big eyes (one is bigger than the other) and no mouth.
@@ -535,6 +551,21 @@ class OpenAIHandler(AsyncStreamHandler):
 
                 # interruption
                 if et == "input_audio_buffer.speech_started":
+                    # Capture timestamp once when user starts speaking
+                    self._current_timestamp = format_timestamp()
+                    timestamp_msg = f"[User started speaking at: {self._current_timestamp}]"
+                    # Send to assistant
+                    await self.connection.conversation.item.create(
+                        item={
+                            "type": "message",
+                            "role": "user", 
+                            "content": [{"type": "input_text", "text": timestamp_msg}]
+                        }
+                    )
+                    # Show timestamp immediately in UI
+                    await self.output_queue.put(
+                        AdditionalOutputs({"role": "user", "content": self._current_timestamp})
+                    )
                     self.clear_queue()
                     _drain(self.sway_queue)
                     self._base_ts = None
@@ -549,6 +580,7 @@ class OpenAIHandler(AsyncStreamHandler):
 
                 # surface transcripts to the UI
                 if et == "conversation.item.input_audio_transcription.completed":
+                    # Show transcript without timestamp (timestamp already shown when speech started)
                     await self.output_queue.put(
                         AdditionalOutputs({"role": "user", "content": event.transcript})
                     )
@@ -745,7 +777,9 @@ if __name__ == "__main__":
             head=head_pose,
             is_relative=True,
         )
-        if not is_moving:
+        if (
+            not is_moving
+        ):  # Going from moving to not moving creates a discontinuity, to be fixed
             t = time.time() - t0
             head_pose = create_head_pose(z=0.01 * np.sin(2 * np.pi * 0.1 * t))  # idle
             antenna_target = np.deg2rad(15) * np.sin(2 * np.pi * 0.5 * t)
