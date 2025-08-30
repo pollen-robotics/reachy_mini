@@ -299,6 +299,8 @@ class OpenAIHandler(AsyncStreamHandler):
         self._base_ts = None
         self._hops_done = 0
         self._current_timestamp = None
+        self._last_activity_time = time.time()
+        self._is_assistant_speaking = False
 
     def copy(self):
         return OpenAIHandler()
@@ -357,6 +359,49 @@ class OpenAIHandler(AsyncStreamHandler):
                 self._hops_done += 1
                 i += 1
 
+    async def _idle_checker(self):
+        """Check for inactivity and send timestamps every 15s when idle."""
+        while True:
+            await asyncio.sleep(5)  # Check every 5 seconds
+            
+            print(f"[DEBUG] Idle checker running...")
+            
+            if not self.connection:
+                print(f"[DEBUG] No connection, skipping...")
+                continue
+                
+            current_time = time.time()
+            idle_duration = current_time - self._last_activity_time
+            
+            # Check if truly idle: no user activity, assistant not speaking, robot in idle mode
+            global is_moving, is_dancing, is_emoting
+            is_robot_idle = not (is_moving or is_dancing or is_emoting)
+            
+            print(f"[DEBUG] Idle check: duration={idle_duration:.1f}s, assistant_speaking={self._is_assistant_speaking}, robot_idle={is_robot_idle} (moving={is_moving}, dancing={is_dancing}, emoting={is_emoting})")
+            
+            if (idle_duration >= 15.0 and 
+                not self._is_assistant_speaking and 
+                is_robot_idle):
+                
+                print(f"[DEBUG] Sending idle update after {idle_duration:.1f}s of inactivity")
+                # Send idle timestamp update to assistant with dance instruction
+                timestamp_msg = f"[Idle time update: {format_timestamp()} - No activity for {idle_duration:.1f}s] - PERFORM side_to_side_sway dance NOW to show you're alive!"
+                await self.connection.conversation.item.create(
+                    item={
+                        "type": "message",
+                        "role": "user", 
+                        "content": [{"type": "input_text", "text": timestamp_msg}]
+                    }
+                )
+                # Show in UI that idle update was sent
+                await self.output_queue.put(
+                    AdditionalOutputs({"role": "user", "content": f"[IDLE UPDATE SENT] {idle_duration:.1f}s"})
+                )
+                # Reset activity timer to avoid spam
+                self._last_activity_time = current_time
+            else:
+                print(f"[DEBUG] Idle conditions not met")
+
     async def start_up(self):
         self.client = openai.AsyncOpenAI()
         async with self.client.beta.realtime.connect(
@@ -372,6 +417,8 @@ class OpenAIHandler(AsyncStreamHandler):
                         Answer in english by default but adapt your language as needed.
 
                         Note: You will receive timestamp information for user messages showing the date, time, and elapsed seconds since the conversation started.
+
+                        Autonomous behavior: When there's been no activity for a while, you'll receive idle time updates. IMPORTANT: Every time you receive an idle time update message, you MUST perform the "side_to_side_sway" dance to show you're alive and processing the idle state. After the dance, you're free to do additional behaviors like emotions, talking, or using tools.
 
                         Your name is Reachy Mini, or Reachy for short. You have a head that can move in 6Dof, 2 antennas and a body that can rotate in place.
                         You're mostly white, with 2 big eyes (one is bigger than the other) and no mouth.
@@ -545,12 +592,15 @@ class OpenAIHandler(AsyncStreamHandler):
             )
             self.connection = conn
             asyncio.create_task(self._sway_consumer())
+            asyncio.create_task(self._idle_checker())
 
             async for event in self.connection:
                 et = getattr(event, "type", None)
 
                 # interruption
                 if et == "input_audio_buffer.speech_started":
+                    # User activity detected
+                    self._last_activity_time = time.time()
                     # Capture timestamp once when user starts speaking
                     self._current_timestamp = format_timestamp()
                     timestamp_msg = f"[User started speaking at: {self._current_timestamp}]"
@@ -573,6 +623,7 @@ class OpenAIHandler(AsyncStreamHandler):
                     self.sway.reset()
 
                 if et in ("response.audio.completed", "response.completed"):
+                    self._is_assistant_speaking = False
                     self._base_ts = None
                     self._hops_done = 0
                     self.sway.reset()
@@ -611,6 +662,9 @@ class OpenAIHandler(AsyncStreamHandler):
                     # )
 
                 if et == "response.started":
+                    # Assistant activity detected
+                    self._last_activity_time = time.time()
+                    self._is_assistant_speaking = True
                     # hard reset per utterance
                     self._base_ts = None  # <-- was never reset
                     self._hops_done = 0
