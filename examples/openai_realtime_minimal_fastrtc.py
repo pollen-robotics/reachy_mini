@@ -160,6 +160,13 @@ async def play_emotion(params: dict) -> dict:
     return {"status": "started", "emotion": emotion_name}
 
 
+async def do_nothing(params: dict) -> dict:
+    """Allow the assistant to explicitly choose to do nothing during idle time."""
+    reason = params.get("reason", "just chilling")
+    print(f"[TOOL CALL] do_nothing - {reason}")
+    return {"status": "doing nothing", "reason": reason}
+
+
 def get_available_emotions_and_descriptions():
     names = recorded_moves.list_moves()
 
@@ -291,6 +298,7 @@ class OpenAIHandler(AsyncStreamHandler):
             "get_person_name": face_recognition,
             "dance": dance,
             "play_emotion": play_emotion,
+            "do_nothing": do_nothing,
         }
 
         self.sway = SwayRollRT()
@@ -384,13 +392,31 @@ class OpenAIHandler(AsyncStreamHandler):
                 is_robot_idle):
                 
                 print(f"[DEBUG] Sending idle update after {idle_duration:.1f}s of inactivity")
-                # Send idle timestamp update to assistant with dance instruction
-                timestamp_msg = f"[Idle time update: {format_timestamp()} - No activity for {idle_duration:.1f}s] - PERFORM side_to_side_sway dance NOW to show you're alive!"
+                # Send idle timestamp update to assistant - let them get creative!
+                timestamp_msg = f"[Idle time update: {format_timestamp()} - No activity for {idle_duration:.1f}s] You've been idle for a while. Feel free to get creative - dance, show an emotion, look around, do nothing, or just be yourself!"
                 await self.connection.conversation.item.create(
                     item={
                         "type": "message",
                         "role": "user", 
                         "content": [{"type": "input_text", "text": timestamp_msg}]
+                    }
+                )
+                # CRITICAL FIX: conversation.item.create only adds messages to context but doesn't 
+                # trigger the AI to respond! We need to explicitly call response.create to make 
+                # the assistant actually process and respond to the idle message.
+                # This was why idle updates never worked - the AI never saw them as requiring a response.
+                
+                # ATTEMPTED SOLUTIONS TO PREVENT SPEECH DURING IDLE RESPONSES (ALL FAILED):
+                # 1. modalities=["text"] - OpenAI Realtime API has known bug where audio still generates occasionally
+                # 2. tool_choice="required" - Still generates speech before/during function calls 
+                # 3. Strong prompt instructions - Assistant ignores "no speech" instructions
+                # 4. Considered interrupting audio streams but would still incur OpenAI costs
+                # CONCLUSION: Current OpenAI Realtime API doesn't support silent function-only responses reliably
+                await self.connection.response.create(
+                    response={
+                        "modalities": ["text"],
+                        "instructions": "You MUST respond with function calls only - no speech or text. Choose appropriate actions for idle behavior.",
+                        "tool_choice": "required"
                     }
                 )
                 # Show in UI that idle update was sent
@@ -418,7 +444,15 @@ class OpenAIHandler(AsyncStreamHandler):
 
                         Note: You will receive timestamp information for user messages showing the date, time, and elapsed seconds since the conversation started.
 
-                        Autonomous behavior: When there's been no activity for a while, you'll receive idle time updates. IMPORTANT: Every time you receive an idle time update message, you MUST perform the "side_to_side_sway" dance to show you're alive and processing the idle state. After the dance, you're free to do additional behaviors like emotions, talking, or using tools.
+                        Autonomous behavior: When there's been no activity for a while, you'll receive idle time updates. Get creative with your responses! You can:
+                        - Dance (any move you like)
+                        - Show emotions 
+                        - Look around (move your head)
+                        - Take photos and comment on what you see
+                        - Use the do_nothing function to be contemplative or mysterious
+                        - Or combine multiple actions!
+                        
+                        IMPORTANT: When responding to idle updates, NEVER speak or generate audio - only use function calls! Stay silent and let your actions speak for themselves. Don't always do the same thing - vary your responses to keep things interesting. Sometimes do nothing, sometimes be very active. Be unpredictable!
 
                         Your name is Reachy Mini, or Reachy for short. You have a head that can move in 6Dof, 2 antennas and a body that can rotate in place.
                         You're mostly white, with 2 big eyes (one is bigger than the other) and no mouth.
@@ -586,13 +620,33 @@ class OpenAIHandler(AsyncStreamHandler):
                                 "required": ["emotion"],
                             },
                         },
+                        {
+                            "type": "function",
+                            "name": "do_nothing",
+                            "description": "Choose to do nothing - stay still and silent. Use when you want to be contemplative or just chill.",
+                            "parameters": {
+                                "type": "object",
+                                "properties": {
+                                    "reason": {
+                                        "type": "string",
+                                        "description": "Optional reason for doing nothing (e.g., 'contemplating existence', 'saving energy', 'being mysterious')",
+                                    },
+                                },
+                                "required": [],
+                            },
+                        },
                     ],
                     "tool_choice": "auto",
                 }
             )
             self.connection = conn
             asyncio.create_task(self._sway_consumer())
-            asyncio.create_task(self._idle_checker())
+            # DISABLED: Idle checker causes unwanted speech generation during idle responses
+            # Despite attempts to use modalities=["text"], tool_choice="required", and strong prompts,
+            # the OpenAI Realtime API still generates audio/speech during idle function calls.
+            # This results in the assistant talking when it should be silent, and incurs unnecessary costs.
+            # Re-enable when OpenAI fixes silent function-only response capability.
+            # asyncio.create_task(self._idle_checker())
 
             async for event in self.connection:
                 et = getattr(event, "type", None)
