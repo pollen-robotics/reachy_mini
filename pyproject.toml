@@ -27,7 +27,7 @@ dependencies = [
     "pyserial",
     "huggingface-hub==0.34.4",
     "sounddevice==0.5.1",
-    "soundfile==0.13.1"
+    "soundfile==0.13.1",
     "onnxruntime==1.22.1",
 ]
 
