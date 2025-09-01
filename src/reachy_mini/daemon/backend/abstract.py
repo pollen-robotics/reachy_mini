@@ -18,6 +18,7 @@ from typing import List
 import numpy as np
 
 import reachy_mini
+from reachy_mini.nn_kinematics import NNKinematics
 from reachy_mini.placo_kinematics import PlacoKinematics
 from reachy_mini.utils.interpolation import (
     compose_world_offset,
@@ -34,7 +35,14 @@ class Backend:
         files(reachy_mini).joinpath("descriptions/reachy_mini/urdf")
     )
 
-    def __init__(self, log_level: str = "INFO", check_collision: bool = False) -> None:
+    models_root_path: str = str(files(reachy_mini).joinpath("assets/models"))
+
+    def __init__(
+        self,
+        log_level: str = "INFO",
+        check_collision: bool = False,
+        kinematics_engine: str = "Placo",
+    ) -> None:
         """Initialize the backend."""
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(log_level)
@@ -45,10 +53,34 @@ class Backend:
         self.check_collision = (
             check_collision  # Flag to enable/disable collision checking
         )
-        self.head_kinematics = PlacoKinematics(
-            Backend.urdf_root_path, check_collision=self.check_collision
+        self.kinematics_engine = kinematics_engine
+        assert self.kinematics_engine != "Analytical", (
+            "Analytical kinematics engine is not integrated yet"
         )
+        
+        self.logger.info(f"Using {self.kinematics_engine} kinematics engine")
+
+        if self.check_collision:
+            assert self.kinematics_engine == "Placo", (
+                "Collision checking is only available with Placo Kinematics"
+            )
+
         self.gravity_compensation_mode = False  # Flag for gravity compensation mode
+
+        if self.gravity_compensation_mode:
+            assert self.kinematics_engine == "Placo", (
+                "Gravity compensation is only available with Placo kinematics"
+            )
+
+        if self.kinematics_engine == "Placo":
+            self.head_kinematics = PlacoKinematics(
+                Backend.urdf_root_path, check_collision=self.check_collision
+            )
+        elif self.kinematics_engine == "NN":
+            self.head_kinematics = NNKinematics(Backend.models_root_path)
+        else:
+            print("???")
+            exit()
 
         self.current_head_pose = None  # 4x4 pose matrix
         self.target_head_pose = None  # 4x4 pose matrix
@@ -478,6 +510,10 @@ class Backend:
             mode (bool): If True, gravity compensation is enabled.
 
         """
+        if self.kinematics_engine != "Placo":
+            raise ValueError(
+                "Gravity compensation is only available with Placo kinematics"
+            )
         self.gravity_compensation_mode = mode  # True (enable) or False (disable)
 
     def compensate_head_gravity(self) -> None:

@@ -129,9 +129,12 @@ class ZenohServer(AbstractServer):
                     command["antennas_operation_mode"]
                 )
             if "gravity_compensation" in command:
-                self.backend.set_gravity_compensation_mode(
-                    command["gravity_compensation"]
-                )
+                try:
+                    self.backend.set_gravity_compensation_mode(
+                        command["gravity_compensation"]
+                    )
+                except ValueError as e:
+                    print(e)
             if "automatic_body_yaw" in command:
                 self.backend.set_automatic_body_yaw(command["automatic_body_yaw"])
 

@@ -69,6 +69,14 @@ def main():
         help="Enable collision checking (default: False).",
     )
 
+    parser.add_argument(
+        "--kinematics-engine",
+        type=str,
+        default="Placo",
+        choices=["Placo", "NN", "Analytical"],
+        help="Set the kinematics engine (default: Placo).",
+    )
+
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -82,6 +90,7 @@ def main():
         scene=args.scene,
         localhost_only=args.localhost_only,
         check_collision=args.check_collision,
+        kinematics_engine=args.kinematics_engine,
     )
 
 
