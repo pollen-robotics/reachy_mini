@@ -9,8 +9,8 @@ import numpy as np
 from placo_utils.tf import tf
 from placo_utils.visualization import frame_viz, robot_frame_viz, robot_viz
 
-from reachy_mini.analytic_kinematics import ReachyMiniAnalyticKinematics
-from reachy_mini.placo_kinematics import PlacoKinematics
+from reachy_mini.kinematics import ReachyMiniAnalyticKinematics
+from reachy_mini.kinematics import PlacoKinematics
 
 urdf_path = os.path.abspath("../../src/reachy_mini/descriptions/reachy_mini/urdf/robot.urdf")
 
@@ -76,7 +76,7 @@ while i < 2000:
         final_pose = solver.fk(joints)
         end_solver_fk = time.time()
         solver_fk_times.append((end_solver_fk - start_solver_fk))
-        
+
     # Compute pose error
     pos_error = np.linalg.norm(final_pose[:3, 3] - T_head_target[:3, 3])
 
@@ -95,17 +95,17 @@ while i < 2000:
             break
     if skip:
         continue
-        
+
     if pos_error > 0.02 or angle_error > np.deg2rad(10):
         viz.display(robot.state.q)
         robot_frame_viz(robot, "head")
-        frame_viz("target", 
-                  solver.head_starting_pose @ 
+        frame_viz("target",
+                  solver.head_starting_pose @
                     tf.translation_matrix((px, py, pz)) @
                     tf.euler_matrix(roll, pitch, yaw))
         print(px, py, pz, roll, pitch, yaw)
         #input("Press Enter to continue...")
-        
+
     position_errors.append(pos_error)
     angular_errors.append(np.degrees(angle_error))
 
@@ -124,7 +124,7 @@ while i < 2000:
     angular_distances_from_initial.append(np.degrees(angular_distance_from_initial))
 
     i += 1
-    
+
     if i % 100 == 0:
         print(f"Iteration {i} out of 1000")
 
