@@ -1,9 +1,7 @@
 import argparse
 import json
 import os
-import threading
 import time
-from pathlib import Path
 
 import numpy as np
 import sounddevice as sd
