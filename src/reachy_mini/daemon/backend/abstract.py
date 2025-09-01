@@ -13,6 +13,7 @@ import logging
 import threading
 import time
 from importlib.resources import files
+from pathlib import Path
 from typing import List
 
 import numpy as np
@@ -57,7 +58,7 @@ class Backend:
         assert self.kinematics_engine != "Analytical", (
             "Analytical kinematics engine is not integrated yet"
         )
-        
+
         self.logger.info(f"Using {self.kinematics_engine} kinematics engine")
 
         if self.check_collision:
@@ -92,7 +93,9 @@ class Backend:
         self.current_antenna_joint_positions = None  # [0, 1]
 
         # Relative offsets manager with timeout and smooth decay
-        self.relative_manager = RelativeOffsetManager(timeout_seconds=1.0, decay_duration=1.0)
+        self.relative_manager = RelativeOffsetManager(
+            timeout_seconds=1.0, decay_duration=1.0
+        )
 
         self.joint_positions_publisher = None  # Placeholder for a publisher object
         self.pose_publisher = None  # Placeholder for a pose publisher object
@@ -124,35 +127,41 @@ class Backend:
 
     def get_effective_head_pose_and_yaw(self) -> tuple[np.ndarray, float]:
         """Get the effective head pose and body yaw (absolute target + relative offsets).
-        
+
         Returns:
             tuple: (effective_head_pose, effective_body_yaw)
-            
+
         """
-        base_pose = self.target_head_pose if self.target_head_pose is not None else np.eye(4)
+        base_pose = (
+            self.target_head_pose if self.target_head_pose is not None else np.eye(4)
+        )
         base_yaw = self.target_body_yaw if self.target_body_yaw is not None else 0.0
-        
+
         # Get current offsets (with timeout/decay applied)
         head_offset, yaw_offset, _ = self.relative_manager.get_current_offsets()
-        
+
         # Apply relative offsets using correct matrix composition
         effective_pose = compose_world_offset(base_pose, head_offset)
         effective_yaw = base_yaw + yaw_offset
-        
+
         return effective_pose, effective_yaw
 
     def get_effective_antenna_positions(self) -> List[float]:
         """Get the effective antenna positions (absolute target + relative offsets).
-        
+
         Returns:
             List[float]: effective antenna positions
-            
+
         """
-        base_positions = self.target_antenna_joint_positions if self.target_antenna_joint_positions is not None else [0.0, 0.0]
-        
+        base_positions = (
+            self.target_antenna_joint_positions
+            if self.target_antenna_joint_positions is not None
+            else [0.0, 0.0]
+        )
+
         # Get current offsets (with timeout/decay applied)
         _, _, antenna_offsets = self.relative_manager.get_current_offsets()
-        
+
         return [base_positions[i] + antenna_offsets[i] for i in range(2)]
 
     # Life cycle methods
@@ -241,7 +250,9 @@ class Backend:
 
         self.target_head_joint_positions = joints
 
-    def set_target_head_pose(self, pose: np.ndarray, body_yaw: float = 0.0, is_relative: bool = False) -> None:
+    def set_target_head_pose(
+        self, pose: np.ndarray, body_yaw: float = 0.0, is_relative: bool = False
+    ) -> None:
         """Set the target head pose for the robot.
 
         Args:
@@ -253,8 +264,7 @@ class Backend:
         if is_relative:
             # Update relative offsets in the manager
             self.relative_manager.update_offsets(
-                head_pose_offset=pose,
-                body_yaw_offset=body_yaw
+                head_pose_offset=pose, body_yaw_offset=body_yaw
             )
         else:
             # Set absolute targets
@@ -272,7 +282,9 @@ class Backend:
         self.target_head_joint_positions = positions
         self.ik_required = False
 
-    def set_target_antenna_joint_positions(self, positions: List[float], is_relative: bool = False) -> None:
+    def set_target_antenna_joint_positions(
+        self, positions: List[float], is_relative: bool = False
+    ) -> None:
         """Set the antenna joint positions.
 
         Args:
@@ -539,3 +551,15 @@ class Backend:
         current = gravity_torque * from_Nm_to_mA / correction_factor
         # Set the head joint current
         self.set_target_head_joint_current(current.tolist())
+
+    def get_urdf(self) -> str:
+        """Get the current URDF as a string.
+
+        Returns:
+            str: The current URDF.
+
+        """
+        urdf_path = Path(self.urdf_root_path) / "robot.urdf"
+
+        with open(urdf_path, "r") as f:
+            return f.read()

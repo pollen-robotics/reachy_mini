@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import APIRouter, FastAPI
 
 from ..daemon import Daemon
-from .routers import state
+from .routers import daemon, kinematics, state
 
 
 @asynccontextmanager
@@ -20,6 +20,8 @@ app.state.daemon = Daemon()
 
 
 router = APIRouter(prefix="/api")
+router.include_router(daemon.router)
+router.include_router(kinematics.router)
 router.include_router(state.router)
 
 
