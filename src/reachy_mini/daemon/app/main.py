@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 
 from fastapi import APIRouter, FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from ..daemon import Daemon
 from .routers import daemon, kinematics, state
@@ -17,6 +18,13 @@ app = FastAPI(
     lifespan=lifespan,
 )
 app.state.daemon = Daemon()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # or restrict to your HF domain
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 router = APIRouter(prefix="/api")
