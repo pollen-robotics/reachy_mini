@@ -1,3 +1,5 @@
+"""Record move cli utility."""
+
 import argparse
 import json
 import os
@@ -51,6 +53,7 @@ if args.list_audio_devices:
 
 
 def record(args):
+    """Record a motion move."""
     mini = ReachyMini()
     json_rec_path = os.path.join(args.library, f"{args.name}.json")
     wav_rec_path = os.path.join(args.library, f"{args.name}.wav")

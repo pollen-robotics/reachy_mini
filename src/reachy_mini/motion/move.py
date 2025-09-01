@@ -54,6 +54,7 @@ class Move(ABC):
             repeat: Number of times to repeat the move.
             frequency: Frequency of updates in Hz.
             start_goto: Whether to interpolate to the starting position before playing the move.
+            no_audio: Whether to disable audio playback.
 
         """
         timer = Event()

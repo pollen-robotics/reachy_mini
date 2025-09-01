@@ -1,3 +1,5 @@
+"""Create a move library from recorded moves cli utility."""
+
 import argparse
 
 from huggingface_hub import HfApi
