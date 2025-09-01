@@ -1,5 +1,5 @@
 from reachy_mini import ReachyMini
-from reachy_mini.placo_kinematics import PlacoKinematics
+from reachy_mini.kinematics import PlacoKinematics
 from reachy_mini.utils import create_head_pose
 
 

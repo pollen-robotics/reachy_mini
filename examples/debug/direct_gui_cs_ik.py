@@ -7,7 +7,7 @@ import tkinter as tk
 from placo_utils.tf import tf
 from placo_utils.visualization import frame_viz, robot_frame_viz, robot_viz
 
-from reachy_mini.placo_kinematics import PlacoKinematics
+from reachy_mini.kinematics import PlacoKinematics
 
 urdf_path = os.path.abspath("src/reachy_mini/descriptions/reachy_mini/urdf/robot.urdf")
 solver = PlacoKinematics(urdf_path, 0.02)

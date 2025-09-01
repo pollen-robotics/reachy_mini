@@ -25,9 +25,7 @@ from scipy.spatial.transform import Rotation as R
 import reachy_mini
 from reachy_mini.daemon.utils import daemon_check
 from reachy_mini.io import Client
-from reachy_mini.utils.interpolation import (
-    minimum_jerk,
-)
+from reachy_mini.utils.interpolation import minimum_jerk
 
 try:
     pygame.mixer.init()
@@ -160,7 +158,9 @@ class ReachyMini:
             )
 
         if antennas is not None:
-            self._set_joint_positions(antennas_joint_positions=list(antennas), is_relative=is_relative)
+            self._set_joint_positions(
+                antennas_joint_positions=list(antennas), is_relative=is_relative
+            )
         if head is not None:
             self._set_head_pose(head, body_yaw, is_relative=is_relative)
         self._last_head_pose = head
@@ -511,7 +511,9 @@ class ReachyMini:
 
         self.client.send_command(json.dumps(cmd))
 
-    def _set_head_pose(self, pose: np.ndarray, body_yaw: float = 0.0, is_relative: bool = False) -> None:
+    def _set_head_pose(
+        self, pose: np.ndarray, body_yaw: float = 0.0, is_relative: bool = False
+    ) -> None:
         """Set the head pose to a specific 4x4 matrix.
 
         Args:

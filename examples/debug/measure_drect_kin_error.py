@@ -9,10 +9,11 @@ import numpy as np
 from placo_utils.tf import tf
 from placo_utils.visualization import frame_viz, robot_frame_viz, robot_viz
 
-from reachy_mini.analytic_kinematics import ReachyMiniAnalyticKinematics
-from reachy_mini.placo_kinematics import PlacoKinematics
+from reachy_mini.kinematics import PlacoKinematics, ReachyMiniAnalyticKinematics
 
-urdf_path = os.path.abspath("../../src/reachy_mini/descriptions/reachy_mini/urdf/robot.urdf")
+urdf_path = os.path.abspath(
+    "../../src/reachy_mini/descriptions/reachy_mini/urdf/robot.urdf"
+)
 
 solver = PlacoKinematics(urdf_path, 0.02)
 robot = solver.robot
@@ -58,7 +59,7 @@ while i < 2000:
         print(f"Invalid IK analytic solution at iteration {i}, redoing iteration.")
         continue
 
-    #joints = asolver.ik(pose=T_head_target, body_yaw=body_yaw)
+    # joints = asolver.ik(pose=T_head_target, body_yaw=body_yaw)
     for _ in range(12):
         # Measure time for solver IK
         start_solver_ik = time.time()
@@ -76,7 +77,7 @@ while i < 2000:
         final_pose = solver.fk(joints)
         end_solver_fk = time.time()
         solver_fk_times.append((end_solver_fk - start_solver_fk))
-        
+
     # Compute pose error
     pos_error = np.linalg.norm(final_pose[:3, 3] - T_head_target[:3, 3])
 
@@ -95,17 +96,19 @@ while i < 2000:
             break
     if skip:
         continue
-        
+
     if pos_error > 0.02 or angle_error > np.deg2rad(10):
         viz.display(robot.state.q)
         robot_frame_viz(robot, "head")
-        frame_viz("target", 
-                  solver.head_starting_pose @ 
-                    tf.translation_matrix((px, py, pz)) @
-                    tf.euler_matrix(roll, pitch, yaw))
+        frame_viz(
+            "target",
+            solver.head_starting_pose
+            @ tf.translation_matrix((px, py, pz))
+            @ tf.euler_matrix(roll, pitch, yaw),
+        )
         print(px, py, pz, roll, pitch, yaw)
-        #input("Press Enter to continue...")
-        
+        # input("Press Enter to continue...")
+
     position_errors.append(pos_error)
     angular_errors.append(np.degrees(angle_error))
 
@@ -124,13 +127,17 @@ while i < 2000:
     angular_distances_from_initial.append(np.degrees(angular_distance_from_initial))
 
     i += 1
-    
+
     if i % 100 == 0:
         print(f"Iteration {i} out of 1000")
 
 print(f"Total iterations: {i}")
-print(f"IK time: {np.mean(solver_ik_times) * 1000:.2f} ms (max {np.max(solver_ik_times) * 1000:.2f} ms)")
-print(f"FK time: {np.mean(solver_fk_times) * 1000:.2f} ms (max {np.max(solver_fk_times) * 1000:.2f} ms)")
+print(
+    f"IK time: {np.mean(solver_ik_times) * 1000:.2f} ms (max {np.max(solver_ik_times) * 1000:.2f} ms)"
+)
+print(
+    f"FK time: {np.mean(solver_fk_times) * 1000:.2f} ms (max {np.max(solver_fk_times) * 1000:.2f} ms)"
+)
 
 # plot the position and angular errors distributions
 plt.figure(figsize=(12, 5))

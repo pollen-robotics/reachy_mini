@@ -18,8 +18,7 @@ from typing import List
 import numpy as np
 
 import reachy_mini
-from reachy_mini.nn_kinematics import NNKinematics
-from reachy_mini.placo_kinematics import PlacoKinematics
+from reachy_mini.kinematics import NNKinematics, PlacoKinematics
 from reachy_mini.utils.interpolation import (
     compose_world_offset,
     linear_pose_interpolation,
@@ -57,7 +56,7 @@ class Backend:
         assert self.kinematics_engine != "Analytical", (
             "Analytical kinematics engine is not integrated yet"
         )
-        
+
         self.logger.info(f"Using {self.kinematics_engine} kinematics engine")
 
         if self.check_collision:
@@ -124,35 +123,35 @@ class Backend:
 
     def get_effective_head_pose_and_yaw(self) -> tuple[np.ndarray, float]:
         """Get the effective head pose and body yaw (absolute target + relative offsets).
-        
+
         Returns:
             tuple: (effective_head_pose, effective_body_yaw)
-            
+
         """
         base_pose = self.target_head_pose if self.target_head_pose is not None else np.eye(4)
         base_yaw = self.target_body_yaw if self.target_body_yaw is not None else 0.0
-        
+
         # Get current offsets (with timeout/decay applied)
         head_offset, yaw_offset, _ = self.relative_manager.get_current_offsets()
-        
+
         # Apply relative offsets using correct matrix composition
         effective_pose = compose_world_offset(base_pose, head_offset)
         effective_yaw = base_yaw + yaw_offset
-        
+
         return effective_pose, effective_yaw
 
     def get_effective_antenna_positions(self) -> List[float]:
         """Get the effective antenna positions (absolute target + relative offsets).
-        
+
         Returns:
             List[float]: effective antenna positions
-            
+
         """
         base_positions = self.target_antenna_joint_positions if self.target_antenna_joint_positions is not None else [0.0, 0.0]
-        
+
         # Get current offsets (with timeout/decay applied)
         _, _, antenna_offsets = self.relative_manager.get_current_offsets()
-        
+
         return [base_positions[i] + antenna_offsets[i] for i in range(2)]
 
     # Life cycle methods
