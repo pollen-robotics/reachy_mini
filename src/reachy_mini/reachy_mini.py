@@ -38,6 +38,16 @@ except pygame.error as e:
 # Behavior definitions
 INIT_HEAD_POSE = np.eye(4)
 
+INIT_HEAD_JOINT_POSITIONS = [
+            6.959852054044218e-07,
+            0.5251518455536499,
+            -0.668710345667336,
+            0.6067086443974802,
+            -0.606711497194891,
+            0.6687148024583701,
+            -0.5251586523105128,
+        ]
+
 SLEEP_HEAD_JOINT_POSITIONS = [
     0,
     -0.9848156658225817,
@@ -219,7 +229,12 @@ class ReachyMini:
 
     def wake_up(self) -> None:
         """Wake up the robot - go to the initial head position and play the wake up emote and sound."""
-        self.goto_target(INIT_HEAD_POSE, antennas=[0.0, 0.0], duration=2)
+        self._goto_joint_positions(
+            head_joint_positions=INIT_HEAD_JOINT_POSITIONS,
+            antennas_joint_positions=[0.0,0.0],
+            duration=2,
+        )
+        #self.goto_target(INIT_HEAD_POSE, antennas=[0.0, 0.0], duration=2)
         time.sleep(0.1)
 
         # Toudoum
@@ -240,18 +255,13 @@ class ReachyMini:
         current_positions, _ = self.get_current_joint_positions()
         # init_positions = self.head_kinematics.ik(INIT_HEAD_POSE)
         # Todo : get init position from the daemon?
-        init_positions = [
-            6.959852054044218e-07,
-            0.5251518455536499,
-            -0.668710345667336,
-            0.6067086443974802,
-            -0.606711497194891,
-            0.6687148024583701,
-            -0.5251586523105128,
-        ]
-        dist = np.linalg.norm(np.array(current_positions) - np.array(init_positions))
+        dist = np.linalg.norm(np.array(current_positions) - np.array(INIT_HEAD_JOINT_POSITIONS))
         if dist > 0.2:
-            self.goto_target(INIT_HEAD_POSE, antennas=[0.0, 0.0], duration=1)
+            self._goto_joint_positions(
+                head_joint_positions=INIT_HEAD_JOINT_POSITIONS, 
+                antennas_joint_positions=[0.0, 0.0], 
+                duration=1
+                )
             time.sleep(0.2)
 
         # Pfiou

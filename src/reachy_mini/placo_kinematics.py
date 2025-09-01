@@ -147,6 +147,7 @@ class PlacoKinematics:
         self.ik_solver.enable_velocity_limits(True)
         self.ik_solver.enable_joint_limits(True)
         self.ik_solver.dt = dt
+        
 
         # FK joint task
         self.head_joints_task = self.fk_solver.add_joints_task()
@@ -251,8 +252,16 @@ class PlacoKinematics:
         self.robot.update_kinematics()
 
         if self.check_collision:
-            # setup the collision model
-            self.config_collision_model()
+            # setup the collision model for the ik
+            self.config_collision_model(self.robot_ik)
+            # setup the collision model for the fk
+            # self.config_collision_model(self.robot)
+            
+            # this would be the prefered way to do it, but its too unstable 
+            # a lot of vibrations - we will not use it for now
+            # self.collision_constraint = self.ik_solver.add_avoid_self_collisions_constraint()
+            # self.collision_constraint.configure("collision", "hard", 0.1)
+            # self.collision_constraint.self_collisions_trigger = 0.005
 
     def _update_state_to_initial(self, robot: placo.RobotWrapper) -> None:
         """Update the robot state to the initial state.
@@ -372,6 +381,9 @@ class PlacoKinematics:
             self.robot_ik.update_kinematics()
             self._logger.debug("IK: Poses too far, starting from initial configuration")
 
+        # save the initial configuration
+        q = self.robot_ik.state.q.copy()
+        
         done = True
         # do the inital ik
         for i in range(no_iterations):
@@ -407,14 +419,15 @@ class PlacoKinematics:
                 self.robot_ik.update_kinematics()
 
         # verify that there is no collision
-        if self.check_collision and self.compute_collision():
+        if self.check_collision and self.compute_collision(robot=self.robot_ik):
             self._logger.warning(
                 "IK: Collision detected, using the previous configuration..."
             )
-            self._update_state_to_initial(self.robot_ik)  # revert to the inital state
+            self._update_state_to_initial(self.robot_ik)  # revert to the previous state
+            self.robot_ik.state.q = q
             self.robot_ik.update_kinematics()
-            return None
-
+            # return None
+            
         # Get the joint angles
         return self._get_joint_values(self.robot_ik)
 
@@ -496,12 +509,12 @@ class PlacoKinematics:
                     return None
                 self.robot.update_kinematics()
 
-        if self.check_collision and self.compute_collision():
-            self._logger.warning("FK: Collision detected, using the previous config...")
-            self._update_state_to_initial(self.robot)  # revert to the previous state
-            self.robot.state.q = q
-            self.robot.update_kinematics()
-            # return None
+        # if self.check_collision and self.compute_collision(robot=self.robot, margin=2e-3):
+        #     self._logger.warning("FK: Collision detected, using the previous config...")
+        #     self._update_state_to_initial(self.robot)  # revert to the previous state
+        #     self.robot.state.q = q
+        #     self.robot.update_kinematics()
+        #     # return None
 
         # Get the head frame transformation
         T_world_head = self.robot.get_T_world_frame("head")
@@ -509,12 +522,17 @@ class PlacoKinematics:
 
         return T_world_head
 
-    def config_collision_model(self):
+    def config_collision_model(self, robot: placo.RobotWrapper = None) -> None:
         """Configure the collision model for the robot.
 
         Add collision pairs between the torso and the head colliders.
+        
+        > TODO : maybe use placo's API: robot.load_collision_pairs(...)
+        >        it would require a json file specifying the collision pairs.
         """
-        geom_model = self.robot.collision_model
+        if robot is None:
+            robot = self.robot
+        geom_model = robot.collision_model
 
         # name_torso_collider = "dc15_a01_case_b_dummy_10"
         # names_head_colliders = ["pp01063_stewart_plateform_7", "pp01063_stewart_plateform_11"]
@@ -530,7 +548,7 @@ class PlacoKinematics:
                 pin.CollisionPair(id_torso_collider, i)
             )  # torso with head colliders
 
-    def compute_collision(self, margin=0.005):
+    def compute_collision(self, margin=0.005, robot: placo.RobotWrapper = None) -> bool:
         """Compute the collision between the robot and the environment.
 
         Args:
@@ -538,25 +556,30 @@ class PlacoKinematics:
 
         Returns:
             True if there is a collision, False otherwise.
-
         """
-        collision_data = self.robot.collision_model.createData()
-        data = self.robot.model.createData()
+        
+        if robot is None:
+            robot = self.robot
+        collision_data = robot.collision_model.createData()
+        data = robot.model.createData()
 
+        # Could use robot.distances() from placo
+        # Benchmarked quickly and no diff in performance 
+        # (at least for the current setup)
         # pin.computeCollisions(
         pin.computeDistances(
-            self.robot.model,
+            robot.model,
             data,
-            self.robot.collision_model,
+            robot.collision_model,
             collision_data,
-            self.robot.state.q,
+            robot.state.q,
         )
 
         # Iterate over all collision pairs
         for distance_result in collision_data.distanceResults:
             if distance_result.min_distance <= margin:
                 return True  # Something is too close or colliding!
-
+            
         return False  # Safe
 
     def compute_jacobian(self, q: Optional[np.ndarray] = None) -> np.ndarray:
