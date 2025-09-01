@@ -37,6 +37,7 @@ class Move(ABC):
         reachy_mini: ReachyMini,
         repeat: int = 1,
         frequency: float = 100.0,
+        is_relative: bool = False,
     ):
         """Play the move on the ReachyMini robot.
 
@@ -44,6 +45,7 @@ class Move(ABC):
             reachy_mini: The ReachyMini instance to control.
             repeat: Number of times to repeat the move.
             frequency: Frequency of updates in Hz.
+            is_relative: If True, treat move as relative offsets.
 
         """
         timer = Event()
@@ -59,7 +61,7 @@ class Move(ABC):
                     break
 
                 head, antennas = self.evaluate(t)
-                reachy_mini.set_target(head=head, antennas=antennas)
+                reachy_mini.set_target(head=head, antennas=antennas, is_relative=is_relative)
 
                 end = time.time() - t0
                 loop_duration = end - t
