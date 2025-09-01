@@ -4,11 +4,15 @@ These classes allow you to play dance moves and choreographies on the ReachyMini
 """
 
 import json
-from typing import Optional
+from typing import TYPE_CHECKING
 
 import numpy as np
 
-from reachy_mini import ReachyMini
+if TYPE_CHECKING:
+    from reachy_mini import ReachyMini
+    from reachy_mini.daemon.backend.abstract import Backend
+
+
 from reachy_mini.motion import Move
 from reachy_mini.motion.dance.collection.dance import AVAILABLE_MOVES
 from reachy_mini.utils import create_head_pose
@@ -40,7 +44,7 @@ class DanceMove(Move):
 
         return beat_duration * nb_beats
 
-    def evaluate(self, t: float) -> tuple[np.ndarray, np.ndarray, float, Optional[str]]:
+    def evaluate(self, t: float) -> tuple[np.ndarray, np.ndarray, float]:
         """Evaluate the dance move at time t.
 
         This method calls the move function with the current time and parameters,
@@ -61,7 +65,7 @@ class DanceMove(Move):
         head_pose = create_head_pose(
             x=x, y=y, z=z, roll=roll, pitch=pitch, yaw=yaw, degrees=False, mm=False
         )
-        return head_pose, offsets.antennas_offset, 0, None
+        return head_pose, offsets.antennas_offset, 0
 
 
 class Choreography(Move):
@@ -91,7 +95,7 @@ class Choreography(Move):
         """Calculate the total duration of the choreography."""
         return sum(move.duration for move in self.moves)
 
-    def evaluate(self, t: float) -> tuple[np.ndarray, np.ndarray, float, Optional[str]]:
+    def evaluate(self, t: float) -> tuple[np.ndarray, np.ndarray, float]:
         """Evaluate the choreography at time t.
 
         This method iterates through the moves and evaluates them based on the
@@ -106,7 +110,14 @@ class Choreography(Move):
         """
         raise NotImplementedError("Choreography evaluation is not implemented yet.")
 
-    def play_on(self, reachy_mini: ReachyMini, repeat: int = 1, frequency: float = 100):
+    def play_on(
+        self,
+        reachy_mini: "Backend | ReachyMini",
+        repeat: int = 1,
+        frequency: float = 100,
+        start_goto: bool = False,
+        is_relative: bool = False,
+    ):
         """Play the choreography on the ReachyMini robot."""
         for _ in range(repeat):
             for move, cycle in zip(self.moves, self.cycles):

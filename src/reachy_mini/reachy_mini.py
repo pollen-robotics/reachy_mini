@@ -462,6 +462,17 @@ class ReachyMini:
         """
         return self.client.get_current_joints()
 
+    def get_present_antenna_joint_positions(self) -> list[float]:
+        """Get the present joint positions of the antennas.
+
+        Get the present joint positions of the antennas (in rad)
+
+        Returns:
+            list: A list of antennas joint positions (rad) (length 2).
+
+        """
+        return self.get_current_joint_positions()[1]
+
     def get_current_head_pose(self) -> np.ndarray:
         """Get the current head pose as a 4x4 matrix.
 

@@ -91,7 +91,9 @@ class Backend:
         self.current_antenna_joint_positions = None  # [0, 1]
 
         # Relative offsets manager with timeout and smooth decay
-        self.relative_manager = RelativeOffsetManager(timeout_seconds=1.0, decay_duration=1.0)
+        self.relative_manager = RelativeOffsetManager(
+            timeout_seconds=1.0, decay_duration=1.0
+        )
 
         self.joint_positions_publisher = None  # Placeholder for a publisher object
         self.pose_publisher = None  # Placeholder for a pose publisher object
@@ -128,7 +130,9 @@ class Backend:
             tuple: (effective_head_pose, effective_body_yaw)
 
         """
-        base_pose = self.target_head_pose if self.target_head_pose is not None else np.eye(4)
+        base_pose = (
+            self.target_head_pose if self.target_head_pose is not None else np.eye(4)
+        )
         base_yaw = self.target_body_yaw if self.target_body_yaw is not None else 0.0
 
         # Get current offsets (with timeout/decay applied)
@@ -147,7 +151,11 @@ class Backend:
             List[float]: effective antenna positions
 
         """
-        base_positions = self.target_antenna_joint_positions if self.target_antenna_joint_positions is not None else [0.0, 0.0]
+        base_positions = (
+            self.target_antenna_joint_positions
+            if self.target_antenna_joint_positions is not None
+            else [0.0, 0.0]
+        )
 
         # Get current offsets (with timeout/decay applied)
         _, _, antenna_offsets = self.relative_manager.get_current_offsets()
@@ -190,6 +198,7 @@ class Backend:
         )
 
     # Present/Target joint positions
+
     def set_joint_positions_publisher(self, publisher) -> None:
         """Set the publisher for joint positions.
 
@@ -240,7 +249,9 @@ class Backend:
 
         self.target_head_joint_positions = joints
 
-    def set_target_head_pose(self, pose: np.ndarray, body_yaw: float = 0.0, is_relative: bool = False) -> None:
+    def set_target_head_pose(
+        self, pose: np.ndarray, body_yaw: float = 0.0, is_relative: bool = False
+    ) -> None:
         """Set the target head pose for the robot.
 
         Args:
@@ -252,8 +263,7 @@ class Backend:
         if is_relative:
             # Update relative offsets in the manager
             self.relative_manager.update_offsets(
-                head_pose_offset=pose,
-                body_yaw_offset=body_yaw
+                head_pose_offset=pose, body_yaw_offset=body_yaw
             )
         else:
             # Set absolute targets
@@ -271,7 +281,26 @@ class Backend:
         self.target_head_joint_positions = positions
         self.ik_required = False
 
-    def set_target_antenna_joint_positions(self, positions: List[float], is_relative: bool = False) -> None:
+    def set_target(
+        self,
+        head: np.ndarray | None = None,  # 4x4 pose matrix
+        antennas: np.ndarray
+        | list[float]
+        | None = None,  # [left_angle, right_angle] (in rads)
+        body_yaw: float = 0.0,  # Body yaw angle in radians
+        is_relative: bool = False,  # If True, treat values as offsets
+    ) -> None:
+        """Set the target head pose and/or antenna positions."""
+        if head is not None:
+            self.set_target_head_pose(head, body_yaw, is_relative=is_relative)
+        if antennas is not None:
+            if isinstance(antennas, np.ndarray):
+                antennas = antennas.tolist()
+            self.set_target_antenna_joint_positions(antennas, is_relative=is_relative)
+
+    def set_target_antenna_joint_positions(
+        self, positions: List[float], is_relative: bool = False
+    ) -> None:
         """Set the antenna joint positions.
 
         Args:
@@ -439,6 +468,10 @@ class Backend:
             "The current head pose is not set. Please call the update_head_kinematics_model method first."
         )
         return self.current_head_pose
+
+    def get_current_head_pose(self) -> np.ndarray:
+        """Return the present head pose as a 4x4 matrix."""
+        return self.get_present_head_pose()
 
     def get_present_antenna_joint_positions(self) -> List[float]:
         """Return the present antenna joint positions.
