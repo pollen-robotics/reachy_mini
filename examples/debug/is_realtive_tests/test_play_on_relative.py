@@ -14,7 +14,7 @@ import threading
 import time
 
 from reachy_mini import ReachyMini, utils
-from reachy_mini.motion.dance_move import DanceMove
+from reachy_mini.motion.dance.dance_move import DanceMove
 
 
 def absolute_pitch_thread(mini: ReachyMini, stop_event: threading.Event):
