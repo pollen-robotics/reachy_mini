@@ -45,6 +45,7 @@ class Daemon:
         localhost_only: bool = True,
         wake_up_on_start: bool = True,
         check_collision: bool = False,
+        kinematics_engine: str = "Placo",
     ) -> "DaemonState":
         """Start the Reachy Mini daemon.
 
@@ -55,6 +56,7 @@ class Daemon:
             localhost_only (bool): If True, restrict the server to localhost only clients. Defaults to True.
             wake_up_on_start (bool): If True, wake up Reachy Mini on start. Defaults to True.
             check_collision (bool): If True, enable collision checking. Defaults to False.
+            kinematics_engine (str): Kinematics engine to use. Defaults to "Placo".
 
         Returns:
             DaemonState: The current state of the daemon after attempting to start it.
@@ -82,6 +84,7 @@ class Daemon:
                 serialport=serialport,
                 scene=scene,
                 check_collision=check_collision,
+                kinematics_engine=kinematics_engine,
             )
         except Exception as e:
             self._status.state = DaemonState.ERROR
@@ -280,6 +283,7 @@ class Daemon:
         wake_up_on_start: bool = True,
         goto_sleep_on_stop: bool = True,
         check_collision: bool = False,
+        kinematics_engine: str = "Placo",
     ):
         """Run the Reachy Mini daemon indefinitely.
 
@@ -293,6 +297,7 @@ class Daemon:
             wake_up_on_start (bool): If True, wake up Reachy Mini on start. Defaults to True.
             goto_sleep_on_stop (bool): If True, put Reachy Mini to sleep on stop. Defaults to True
             check_collision (bool): If True, enable collision checking. Defaults to False.
+            kinematics_engine (str): Kinematics engine to use. Defaults to "Placo".
 
         """
         self.start(
@@ -302,6 +307,7 @@ class Daemon:
             localhost_only=localhost_only,
             wake_up_on_start=wake_up_on_start,
             check_collision=check_collision,
+            kinematics_engine=kinematics_engine,
         )
 
         if self._status.state == DaemonState.RUNNING:
@@ -323,10 +329,10 @@ class Daemon:
         self.stop(goto_sleep_on_stop)
 
     def _setup_backend(
-        self, sim, serialport, scene, check_collision
+        self, sim, serialport, scene, check_collision, kinematics_engine
     ) -> "RobotBackend | MujocoBackend":
         if sim:
-            return MujocoBackend(scene=scene, check_collision=check_collision)
+            return MujocoBackend(scene=scene, check_collision=check_collision, kinematics_engine=kinematics_engine)
         else:
             if serialport == "auto":
                 ports = find_serial_port()
@@ -350,6 +356,7 @@ class Daemon:
                 serialport=serialport,
                 log_level=self.log_level,
                 check_collision=check_collision,
+                kinematics_engine=kinematics_engine,
             )
 
 
