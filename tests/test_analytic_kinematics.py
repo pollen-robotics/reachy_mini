@@ -1,9 +1,9 @@
 import numpy as np
 from placo_utils.tf import tf
 
-import reachy_mini.analytic_kinematics as ak
+from reachy_mini.kinematics import ReachyMiniAnalyticKinematics
 
-ak_solver = ak.ReachyMiniAnalyticKinematics(
+ak_solver = ReachyMiniAnalyticKinematics(
     urdf_path="src/reachy_mini/descriptions/reachy_mini/urdf/robot.urdf"
 )
 
@@ -47,7 +47,7 @@ def test_with_a_yaw():
 
 
 def test_z_axis():
-    
+
     # Set a target position along the Z-axis
     target_position = np.array([-0.008, 0.0, -0.025])
     pose = tf.translation_matrix(target_position)
@@ -58,7 +58,7 @@ def test_z_axis():
         np.array([0.0]*7),
         atol=1e-2,
     ), "IK failed to return expected joint angles for Z-axis target"
-    
+
 def test_body_yaw():
 
     # Set a body yaw angle

@@ -19,8 +19,7 @@ from typing import List
 import numpy as np
 
 import reachy_mini
-from reachy_mini.nn_kinematics import NNKinematics
-from reachy_mini.placo_kinematics import PlacoKinematics
+from reachy_mini.kinematics import NNKinematics, PlacoKinematics
 from reachy_mini.utils.interpolation import (
     compose_world_offset,
     linear_pose_interpolation,

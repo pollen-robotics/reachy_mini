@@ -3,8 +3,7 @@ import os  # noqa: D100
 import numpy as np
 from placo_utils.tf import tf
 
-from reachy_mini.nn_kinematics import NNKinematics
-from reachy_mini.placo_kinematics import PlacoKinematics
+from reachy_mini.kinematics import NNKinematics, PlacoKinematics
 
 urdf_path = os.path.abspath(
     "../../src/reachy_mini/descriptions/reachy_mini/urdf/robot.urdf"

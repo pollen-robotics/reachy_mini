@@ -7,7 +7,7 @@ import numpy as np
 from placo_utils.tf import tf
 
 from reachy_mini import ReachyMini
-from reachy_mini.analytic_kinematics import ReachyMiniAnalyticKinematics
+from reachy_mini.kinematics import ReachyMiniAnalyticKinematics
 
 
 def main():
