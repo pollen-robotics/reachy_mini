@@ -1,6 +1,6 @@
-from huggingface_hub import HfApi
-
 import argparse
+
+from huggingface_hub import HfApi
 
 parser = argparse.ArgumentParser(
     description="Create a move library from moves recorded with record_move.py, upload as a dataset to HuggingFace."

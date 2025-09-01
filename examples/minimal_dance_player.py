@@ -7,8 +7,8 @@ each move once on the connected Reachy Mini robot in an infinite loop.
 """
 
 from reachy_mini import ReachyMini
-from reachy_mini.motion.dance.collection.dance import AVAILABLE_MOVES
 from reachy_mini.motion.dance import DanceMove
+from reachy_mini.motion.dance.collection.dance import AVAILABLE_MOVES
 
 
 def main() -> None:

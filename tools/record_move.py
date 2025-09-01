@@ -1,15 +1,15 @@
 import argparse
 import json
-import time
 import os
 import threading
+import time
+from pathlib import Path
 
 import numpy as np
 import sounddevice as sd
 import soundfile as sf
 
 from reachy_mini import ReachyMini
-from pathlib import Path
 
 SAMPLE_RATE = 44100  # samples per second (you can adjust as needed)
 
