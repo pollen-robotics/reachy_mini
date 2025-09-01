@@ -11,7 +11,7 @@
         <geom type="mesh" contype="0" conaffinity="0" group="2"/>
       </default>
       <default class="collision">
-        <geom group="3"/>
+        <geom type="mesh" contype="1" conaffinity="1"  group="3"/>
       </default>
     </default>
   </default>
@@ -20,7 +20,7 @@
     <default class="perfect_actuator">
       <geom contype="0" conaffinity="0"/>
       <joint damping="0.095" frictionloss="0.001" armature="0.001"/>
-      <position kp="10.0" kv="0.1" forcerange="-20.0 20.0"/>
+      <position kp="10.0" kv="0.1" forcerange="-10.0 10.0"/>
       <!-- <position kp="10.0" kv="0.0" forcerange="-10.0 10.0"/> -->
       <default class="chosen_actuator"/>
     </default>
@@ -86,7 +86,7 @@
         <!-- Part dc15_a01_case_b_dummy_2 -->
         <geom type="mesh" class="visual" pos="0.0205 3.46945e-18 -0.00705" quat="3.33067e-16 3.64292e-17 1 -4.44089e-16" mesh="dc15_a01_case_b_dummy" material="dc15_a01_case_b_dummy_material"/>
         <!-- Part pp01068_top_body -->
-        <geom type="mesh" class="visual" pos="-8.55341e-16 -3.12493e-14 -0.20005" quat="9.19752e-14 1 -3.64292e-17 -2.66929e-15" mesh="pp01068_top_body" material="pp01068_top_body_material"/>
+        <geom type="mesh" class="visual" contype="1" conaffinity="1" pos="-8.55341e-16 -3.12493e-14 -0.20005" quat="9.19752e-14 1 -3.64292e-17 -2.66929e-15" mesh="pp01068_top_body" material="pp01068_top_body_material"/>
         <!-- Part dc15_a01_case_f_dummy_2 -->
         <geom type="mesh" class="visual" pos="-3.43031e-17 -3.46945e-18 -0.00705" quat="3.33067e-16 3.64292e-17 1 -4.44089e-16" mesh="dc15_a01_case_f_dummy" material="dc15_a01_case_f_dummy_material"/>
         <!-- Part drive_palonier__configuration_default -->
@@ -303,7 +303,9 @@
               <!-- Part ball_10 -->
               <geom type="mesh" class="visual" pos="-0.0379723 5.55112e-17 0.0432533" quat="0.353553 -0.612372 0.612372 -0.353553" mesh="ball" material="ball_material"/>
               <!-- Part pp01069_head_shell_front -->
-              <geom type="mesh" class="visual" pos="-0.0142942 -0.0524 0.0370883" quat="0.612372 0.612372 -0.353553 0.353553" mesh="pp01069_head_shell_front" material="pp01069_head_shell_front_material"/>
+              <geom type="mesh"  class="visual" pos="-0.0142942 -0.0524 0.0370883" quat="0.612372 0.612372 -0.353553 0.353553"  mesh="pp01069_head_shell_front" material="pp01069_head_shell_front_material"/>
+              <!-- <geom type="capsule" class="collision"  quat="0.612372 0.612372 -0.353553 0.353553" name="head_collider" size="0.05"/> -->
+              <geom type="capsule" class="collision" name="head_collider" size="0.048" fromto="0.005 -0.05 0.060068 -0.0257422 -0.05 0.00716666"/>
               <!-- Part pp01078_glasses -->
               <geom type="mesh" class="visual" pos="0.025976 -0.0524 0.0138383" quat="0.612372 0.612372 -0.353553 0.353553" mesh="pp01078_glasses" material="pp01078_glasses_material"/>
               <!-- Part pp01063_stewart_plateform -->

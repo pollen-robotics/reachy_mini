@@ -99,6 +99,12 @@ class MujocoBackend(Backend):
             get_joint_addr_from_name(self.model, n) for n in self.joint_names
         ]
 
+        # disable the collisions by default 
+        self.model.geom_contype[13] = 0 # head capsule
+        self.model.geom_conaffinity[13] = 0 
+        self.model.geom_contype[80] = 0 # top of the torso 
+        self.model.geom_conaffinity[80] = 0
+
     def rendering_loop(self):
         """Offline Rendering loop for the Mujoco simulation.
 
@@ -117,6 +123,8 @@ class MujocoBackend(Backend):
 
             took = time.time() - start_t
             time.sleep(max(0, self.rendering_timestep - took))
+
+
 
     def run(self):
         """Run the Mujoco simulation with a viewer.
@@ -153,14 +161,26 @@ class MujocoBackend(Backend):
 
                 # recompute all kinematics, collisions, etc.
                 mujoco.mj_forward(self.model, self.data)  # type: ignore
-
-            # one more frame so the viewer shows your startup pose
-            mujoco.mj_step(self.model, self.data)  # type: ignore
+                
+            for i in range(20):
+                # one more frame so the viewer shows your startup pose
+                mujoco.mj_step(self.model, self.data)  # type: ignore
             viewer.sync()
 
             rendering_thread = Thread(target=self.rendering_loop, daemon=True)
             rendering_thread.start()
+            
+            if self.check_collision:
+                # enable collisions
+                self.model.geom_contype[13] = 1 # head capsule
+                self.model.geom_conaffinity[13] = 1
+                self.model.geom_contype[80] = 1 # top of the torso 
+                self.model.geom_conaffinity[80] = 1
 
+                mujoco.mj_step(self.model, self.data)
+            
+            
+            
             # 3) now enter your normal loop
             while not self.should_stop.is_set():
                 start_t = time.time()
