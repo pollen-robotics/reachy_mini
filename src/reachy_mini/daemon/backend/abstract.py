@@ -729,9 +729,7 @@ class Backend:
 
     async def wake_up(self) -> None:
         """Wake up the robot - go to the initial head position and play the wake up emote and sound."""
-        print(self.get_current_head_pose())
-        await asyncio.sleep(2)
-        print(self.get_current_head_pose())
+        await asyncio.sleep(0.1)
 
         await self.async_goto_target(
             self.INIT_HEAD_POSE,
