@@ -8,6 +8,7 @@ It is designed to be extended by subclasses that implement the specific behavior
 each type of backend.
 """
 
+import asyncio
 import json
 import logging
 import threading
@@ -16,6 +17,7 @@ from importlib.resources import files
 from typing import List
 
 import numpy as np
+from scipy.spatial.transform import Rotation as R
 
 import reachy_mini
 from reachy_mini.kinematics import NNKinematics, PlacoKinematics
@@ -325,7 +327,7 @@ class Backend:
         self.target_head_joint_current = current
         self.ik_required = False
 
-    def goto_target(
+    async def async_goto_target(
         self,
         head: np.ndarray | None = None,  # 4x4 pose matrix
         antennas: np.ndarray
@@ -336,7 +338,7 @@ class Backend:
         body_yaw: float = 0.0,  # Body yaw angle in radians
         is_relative: bool = False,  # If True, treat values as offsets
     ):
-        """Go to a target head pose and/or antennas position using task space interpolation, in "duration" seconds.
+        """Asynchronously go to a target head pose and/or antennas position using task space interpolation, in "duration" seconds.
 
         Args:
             head (np.ndarray | None): 4x4 pose matrix representing the target head pose.
@@ -380,7 +382,100 @@ class Backend:
             self.set_target_antenna_joint_positions(
                 list(interp_antennas_joint), is_relative=is_relative
             )
-            time.sleep(0.01)
+            await asyncio.sleep(0.01)
+
+    async def async_goto_joint_positions(
+        self,
+        head_joint_positions: list[float]
+        | None = None,  # [yaw, stewart_platform x 6] length 7
+        antennas_joint_positions: list[float]
+        | None = None,  # [left_angle, right_angle] length 2
+        duration: float = 0.5,  # Duration in seconds for the movement
+        method="minjerk",  # can be "linear", "minjerk", "ease" or "cartoon", default is "default" (-> "minjerk" interpolation)
+    ) -> None:
+        """Asynchronously go to a target head joint positions and/or antennas joint positions using joint space interpolation, in "duration" seconds.
+
+        Go to a target head joint positions and/or antennas joint positions using joint space interpolation, in "duration" seconds.
+
+        Args:
+            head_joint_positions (Optional[List[float]]): List of head joint positions in radians (length 7).
+            antennas_joint_positions (Optional[List[float]]): List of antennas joint positions in radians (length 2).
+            duration (float): Duration of the movement in seconds. Default is 0.5 seconds.
+            method (str): Interpolation method to use ("linear", "minjerk", "ease", "cartoon"). Default is "minjerk".
+
+        Raises:
+            ValueError: If neither head_joint_positions nor antennas_joint_positions are provided, or if duration is not positive.
+
+        """
+        if duration <= 0.0:
+            raise ValueError(
+                "Duration must be positive and non-zero. Use set_target() for immediate position setting."
+            )
+
+        start_head = np.array(self.get_present_head_joint_positions())
+        start_antennas = np.array(self.get_present_antenna_joint_positions())
+
+        target_head = (
+            np.array(head_joint_positions)
+            if head_joint_positions is not None
+            else start_head
+        )
+        target_antennas = (
+            np.array(antennas_joint_positions)
+            if antennas_joint_positions is not None
+            else start_antennas
+        )
+
+        t0 = time.time()
+        while time.time() - t0 < duration:
+            t = time.time() - t0
+
+            interp_time = time_trajectory(t / duration, method=method)
+
+            head_joint = start_head + (target_head - start_head) * interp_time
+            antennas_joint = (
+                start_antennas + (target_antennas - start_antennas) * interp_time
+            )
+
+            self.set_target_head_joint_positions(head_joint.tolist())
+            self.set_target_antenna_joint_positions(antennas_joint.tolist())
+            await asyncio.sleep(0.01)
+
+    def goto_target(
+        self,
+        head: np.ndarray | None = None,  # 4x4 pose matrix
+        antennas: np.ndarray
+        | list[float]
+        | None = None,  # [left_angle, right_angle] (in rads)
+        duration: float = 0.5,  # Duration in seconds for the movement, default is 0.5 seconds.
+        method="default",  # can be "linear", "minjerk", "ease" or "cartoon", default is "default" (-> "minjerk" interpolation)
+        body_yaw: float = 0.0,  # Body yaw angle in radians
+        is_relative: bool = False,  # If True, treat values as offsets
+    ):
+        """Go to a target head pose and/or antennas position using task space interpolation, in "duration" seconds.
+
+        Args:
+            head (np.ndarray | None): 4x4 pose matrix representing the target head pose.
+            antennas (np.ndarray | list[float] | None): 1D array with two elements representing the angles of the antennas in radians.
+            duration (float): Duration of the movement in seconds.
+            method (str): Interpolation method to use ("linear", "minjerk", "ease", "cartoon"). Default is "minjerk".
+            body_yaw (float): Body yaw angle in radians.
+            is_relative (bool): If True, treat values as offsets applied at each interpolation step.
+
+        Raises:
+            ValueError: If neither head nor antennas are provided, or if duration is not positive.
+
+        """
+        asyncio.run(
+            self.async_goto_target(
+                head=head,
+                antennas=antennas,
+                duration=duration,
+                method=method,
+                body_yaw=body_yaw,
+                is_relative=is_relative,
+            )
+        )
 
     def set_recording_publisher(self, publisher) -> None:
         """Set the publisher for recording data.
