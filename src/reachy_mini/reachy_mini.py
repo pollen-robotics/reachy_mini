@@ -271,7 +271,7 @@ class ReachyMini:
         self._last_head_pose = SLEEP_HEAD_POSE
         time.sleep(2)
 
-    def look_at_image(self, u: int, v: int, duration: float = 1.0) -> None:
+    def look_at_image(self, u: int, v: int, duration: float = 1.0, perform_movement: bool = True) -> np.ndarray:
         """Make the robot head look at a point defined by a pixel position (u,v).
 
         # TODO image of reachy mini coordinate system
@@ -280,6 +280,10 @@ class ReachyMini:
             u (int): Horizontal coordinate in image frame.
             v (int): Vertical coordinate in image frame.
             duration (float): Duration of the movement in seconds. If 0, the head will snap to the position immediately.
+            perform_movement (bool): If True, perform the movement. If False, only calculate and return the pose.
+
+        Returns:
+            np.ndarray: The calculated head pose as a 4x4 matrix.
 
         Raises:
             ValueError: If duration is negative.
@@ -306,9 +310,9 @@ class ReachyMini:
 
         P_world = t_wc + ray_world
 
-        self.look_at_world(*P_world, duration=duration)
+        return self.look_at_world(*P_world, duration=duration, perform_movement=perform_movement)
 
-    def look_at_world(self, x: float, y: float, z: float, duration: float = 1.0):
+    def look_at_world(self, x: float, y: float, z: float, duration: float = 1.0, perform_movement: bool = True) -> np.ndarray:
         """Look at a specific point in 3D space in Reachy Mini's reference frame.
 
         TODO include image of reachy mini coordinate system
@@ -318,6 +322,10 @@ class ReachyMini:
             y (float): Y coordinate in meters.
             z (float): Z coordinate in meters.
             duration (float): Duration of the movement in seconds. If 0, the head will snap to the position immediately.
+            perform_movement (bool): If True, perform the movement. If False, only calculate and return the pose.
+
+        Returns:
+            np.ndarray: The calculated head pose as a 4x4 matrix.
 
         Raises:
             ValueError: If duration is negative.
@@ -360,12 +368,16 @@ class ReachyMini:
         target_head_pose = np.eye(4)
         target_head_pose[:3, :3] = rot_mat
 
-        # If duration is specified, use the goto_target method to move smoothly
-        # Otherwise, set the position immediately
-        if duration > 0:
-            self.goto_target(target_head_pose, duration=duration)
-        else:
-            self.set_target(target_head_pose)
+        # If perform_movement is True, execute the movement
+        if perform_movement:
+            # If duration is specified, use the goto_target method to move smoothly
+            # Otherwise, set the position immediately
+            if duration > 0:
+                self.goto_target(target_head_pose, duration=duration)
+            else:
+                self.set_target(target_head_pose)
+
+        return target_head_pose
 
     # Multimedia methods
     def play_sound(self, sound_file: str) -> None:
