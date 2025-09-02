@@ -4,7 +4,7 @@ from fastapi import APIRouter, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from ..daemon import Daemon
-from .routers import daemon, kinematics, move, state
+from .routers import daemon, kinematics, motors, move, state
 
 
 @asynccontextmanager
@@ -30,6 +30,7 @@ app.add_middleware(
 router = APIRouter(prefix="/api")
 router.include_router(daemon.router)
 router.include_router(kinematics.router)
+router.include_router(motors.router)
 router.include_router(move.router)
 router.include_router(state.router)
 
