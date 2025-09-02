@@ -1,9 +1,7 @@
 import bisect  # noqa: D100
 import json
-import os
 from glob import glob
 from pathlib import Path
-from typing import Optional
 
 import numpy as np
 from huggingface_hub import snapshot_download
@@ -25,7 +23,6 @@ class RecordedMoves:
         self.hf_dataset_name = hf_dataset_name
         self.local_path = snapshot_download(self.hf_dataset_name, repo_type="dataset")
         self.moves = {}
-        self.sounds = {}
 
         self.process()
 
@@ -39,11 +36,6 @@ class RecordedMoves:
             move = json.load(open(move_path, "r"))
             self.moves[move_name] = move
 
-            sound_path = move_path.with_suffix(".wav")
-            self.sounds[move_name] = None
-            if os.path.exists(sound_path):
-                self.sounds[move_name] = sound_path
-
     def get(self, move_name):
         """Get a recorded move by name."""
         if move_name not in self.moves:
@@ -51,7 +43,7 @@ class RecordedMoves:
                 f"Move {move_name} not found in recorded moves library {self.hf_dataset_name}"
             )
 
-        return RecordedMove(self.moves[move_name], self.sounds[move_name])
+        return RecordedMove(self.moves[move_name])
 
     def list_moves(self):
         """List all moves in the loaded library."""
@@ -61,12 +53,9 @@ class RecordedMoves:
 class RecordedMove(Move):
     """Represent a recorded move."""
 
-    def __init__(self, move, sound_path):
+    def __init__(self, move):
         """Initialize RecordedMove."""
         self.move = move
-
-        self.sound_path = sound_path
-        self.playing_sound = False
 
         self.description = self.move["description"]
         self.timestamps = self.move["time"]
@@ -79,30 +68,16 @@ class RecordedMove(Move):
         """Get the duration of the recorded move."""
         return len(self.trajectory) * self.dt
 
-    def evaluate(self, t: float) -> tuple[np.ndarray, np.ndarray, float, Optional[str]]:
+    def evaluate(self, t: float) -> tuple[np.ndarray, np.ndarray, float]:
         """Evaluate the move at time t.
 
         Returns:
             head: The head position (4x4 homogeneous matrix).
             antennas: The antennas positions (rad).
             body_yaw: The body yaw angle (rad).
-            play_sound: The sound to play (if any).
 
         """
-        # we want to play the sound at the beginning of the move
-        play_sound = None
-
-        if self.sound_path is not None:
-            if t < 0.1 and not self.playing_sound:
-                self.playing_sound = True
-                play_sound = str(self.sound_path)
-            elif t >= 0.1:
-                self.playing_sound = False
-
-        if t == 0.0:
-            self.playing_sound = False
-
-        # Under is Rémi's emotions code, adapted
+        # Under is Remi's emotions code, adapted
         if t >= self.timestamps[-1]:
             raise Exception("Tried to evaluate recorded move beyond its duration.")
 
@@ -143,4 +118,4 @@ class RecordedMove(Move):
         # Head position interpolation is more complex:
         head_pose = linear_pose_interpolation(head_prev, head_next, alpha)
 
-        return head_pose, antennas_joints, body_yaw, play_sound
+        return head_pose, antennas_joints, body_yaw

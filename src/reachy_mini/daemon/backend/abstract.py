@@ -8,15 +8,21 @@ It is designed to be extended by subclasses that implement the specific behavior
 each type of backend.
 """
 
+import asyncio
 import json
 import logging
+import os
 import threading
 import time
 from importlib.resources import files
 from pathlib import Path
 from typing import List
 
+os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "hide"
+
 import numpy as np
+import pygame
+from scipy.spatial.transform import Rotation as R
 
 import reachy_mini
 from reachy_mini.kinematics import NNKinematics, PlacoKinematics
@@ -27,6 +33,12 @@ from reachy_mini.utils.interpolation import (
 )
 from reachy_mini.utils.relative_timeout import RelativeOffsetManager
 
+try:
+    pygame.mixer.init()
+except pygame.error as e:
+    print(f"Failed to initialize pygame mixer: {e}")
+    pygame.mixer = None
+
 
 class Backend:
     """Base class for robot backends, simulated or real."""
@@ -35,6 +47,7 @@ class Backend:
         files(reachy_mini).joinpath("descriptions/reachy_mini/urdf")
     )
 
+    assets_root_path: str = str(files(reachy_mini).joinpath("assets"))
     models_root_path: str = str(files(reachy_mini).joinpath("assets/models"))
 
     def __init__(
@@ -199,6 +212,7 @@ class Backend:
         )
 
     # Present/Target joint positions
+
     def set_joint_positions_publisher(self, publisher) -> None:
         """Set the publisher for joint positions.
 
@@ -281,6 +295,23 @@ class Backend:
         self.target_head_joint_positions = positions
         self.ik_required = False
 
+    def set_target(
+        self,
+        head: np.ndarray | None = None,  # 4x4 pose matrix
+        antennas: np.ndarray
+        | list[float]
+        | None = None,  # [left_angle, right_angle] (in rads)
+        body_yaw: float = 0.0,  # Body yaw angle in radians
+        is_relative: bool = False,  # If True, treat values as offsets
+    ) -> None:
+        """Set the target head pose and/or antenna positions."""
+        if head is not None:
+            self.set_target_head_pose(head, body_yaw, is_relative=is_relative)
+        if antennas is not None:
+            if isinstance(antennas, np.ndarray):
+                antennas = antennas.tolist()
+            self.set_target_antenna_joint_positions(antennas, is_relative=is_relative)
+
     def set_target_antenna_joint_positions(
         self, positions: List[float], is_relative: bool = False
     ) -> None:
@@ -308,7 +339,7 @@ class Backend:
         self.target_head_joint_current = current
         self.ik_required = False
 
-    def goto_target(
+    async def async_goto_target(
         self,
         head: np.ndarray | None = None,  # 4x4 pose matrix
         antennas: np.ndarray
@@ -319,7 +350,7 @@ class Backend:
         body_yaw: float = 0.0,  # Body yaw angle in radians
         is_relative: bool = False,  # If True, treat values as offsets
     ):
-        """Go to a target head pose and/or antennas position using task space interpolation, in "duration" seconds.
+        """Asynchronously go to a target head pose and/or antennas position using task space interpolation, in "duration" seconds.
 
         Args:
             head (np.ndarray | None): 4x4 pose matrix representing the target head pose.
@@ -363,7 +394,100 @@ class Backend:
             self.set_target_antenna_joint_positions(
                 list(interp_antennas_joint), is_relative=is_relative
             )
-            time.sleep(0.01)
+            await asyncio.sleep(0.01)
+
+    async def async_goto_joint_positions(
+        self,
+        head_joint_positions: list[float]
+        | None = None,  # [yaw, stewart_platform x 6] length 7
+        antennas_joint_positions: list[float]
+        | None = None,  # [left_angle, right_angle] length 2
+        duration: float = 0.5,  # Duration in seconds for the movement
+        method="minjerk",  # can be "linear", "minjerk", "ease" or "cartoon", default is "default" (-> "minjerk" interpolation)
+    ) -> None:
+        """Asynchronously go to a target head joint positions and/or antennas joint positions using joint space interpolation, in "duration" seconds.
+
+        Go to a target head joint positions and/or antennas joint positions using joint space interpolation, in "duration" seconds.
+
+        Args:
+            head_joint_positions (Optional[List[float]]): List of head joint positions in radians (length 7).
+            antennas_joint_positions (Optional[List[float]]): List of antennas joint positions in radians (length 2).
+            duration (float): Duration of the movement in seconds. Default is 0.5 seconds.
+            method (str): Interpolation method to use ("linear", "minjerk", "ease", "cartoon"). Default is "minjerk".
+
+        Raises:
+            ValueError: If neither head_joint_positions nor antennas_joint_positions are provided, or if duration is not positive.
+
+        """
+        if duration <= 0.0:
+            raise ValueError(
+                "Duration must be positive and non-zero. Use set_target() for immediate position setting."
+            )
+
+        start_head = np.array(self.get_present_head_joint_positions())
+        start_antennas = np.array(self.get_present_antenna_joint_positions())
+
+        target_head = (
+            np.array(head_joint_positions)
+            if head_joint_positions is not None
+            else start_head
+        )
+        target_antennas = (
+            np.array(antennas_joint_positions)
+            if antennas_joint_positions is not None
+            else start_antennas
+        )
+
+        t0 = time.time()
+        while time.time() - t0 < duration:
+            t = time.time() - t0
+
+            interp_time = time_trajectory(t / duration, method=method)
+
+            head_joint = start_head + (target_head - start_head) * interp_time
+            antennas_joint = (
+                start_antennas + (target_antennas - start_antennas) * interp_time
+            )
+
+            self.set_target_head_joint_positions(head_joint.tolist())
+            self.set_target_antenna_joint_positions(antennas_joint.tolist())
+            await asyncio.sleep(0.01)
+
+    def goto_target(
+        self,
+        head: np.ndarray | None = None,  # 4x4 pose matrix
+        antennas: np.ndarray
+        | list[float]
+        | None = None,  # [left_angle, right_angle] (in rads)
+        duration: float = 0.5,  # Duration in seconds for the movement, default is 0.5 seconds.
+        method="default",  # can be "linear", "minjerk", "ease" or "cartoon", default is "default" (-> "minjerk" interpolation)
+        body_yaw: float = 0.0,  # Body yaw angle in radians
+        is_relative: bool = False,  # If True, treat values as offsets
+    ):
+        """Go to a target head pose and/or antennas position using task space interpolation, in "duration" seconds.
+
+        Args:
+            head (np.ndarray | None): 4x4 pose matrix representing the target head pose.
+            antennas (np.ndarray | list[float] | None): 1D array with two elements representing the angles of the antennas in radians.
+            duration (float): Duration of the movement in seconds.
+            method (str): Interpolation method to use ("linear", "minjerk", "ease", "cartoon"). Default is "minjerk".
+            body_yaw (float): Body yaw angle in radians.
+            is_relative (bool): If True, treat values as offsets applied at each interpolation step.
+
+        Raises:
+            ValueError: If neither head nor antennas are provided, or if duration is not positive.
+
+        """
+        asyncio.run(
+            self.async_goto_target(
+                head=head,
+                antennas=antennas,
+                duration=duration,
+                method=method,
+                body_yaw=body_yaw,
+                is_relative=is_relative,
+            )
+        )
 
     def set_recording_publisher(self, publisher) -> None:
         """Set the publisher for recording data.
@@ -451,6 +575,10 @@ class Backend:
             "The current head pose is not set. Please call the update_head_kinematics_model method first."
         )
         return self.current_head_pose
+
+    def get_current_head_pose(self) -> np.ndarray:
+        """Return the present head pose as a 4x4 matrix."""
+        return self.get_present_head_pose()
 
     def get_present_antenna_joint_positions(self) -> List[float]:
         """Return the present antenna joint positions.
@@ -562,3 +690,108 @@ class Backend:
 
         with open(urdf_path, "r") as f:
             return f.read()
+
+    # Multimedia methods
+    def play_sound(self, sound_file: str) -> None:
+        """Play a sound file from the assets directory.
+
+        If the file is not found in the assets directory, try to load the path itself.
+
+        Args:
+            sound_file (str): The name of the sound file to play (e.g., "proud2.wav").
+
+        """
+        if pygame.mixer is None:
+            print("Pygame mixer is not initialized. Cannot play sound.")
+            return
+
+        # first check if the name exists in the asset sound directory
+        file_path = f"{self.assets_root_path}/{sound_file}"
+        if not os.path.exists(file_path):
+            # If not, check if the raw_path exists
+            if not os.path.exists(sound_file):
+                raise FileNotFoundError(f"Sound file {sound_file} not found.")
+            else:
+                file_path = sound_file
+
+        pygame.mixer.music.load(file_path)
+        pygame.mixer.music.play()
+
+    # Basic move definitions
+    INIT_HEAD_POSE = np.eye(4)
+
+    SLEEP_HEAD_JOINT_POSITIONS = [
+        0,
+        -0.9848156658225817,
+        1.2624661884298831,
+        -0.24390294527381684,
+        0.20555342557667577,
+        -1.2363885150358267,
+        1.0032234352772091,
+    ]
+
+    SLEEP_ANTENNAS_JOINT_POSITIONS = [3.05, -3.05]
+    SLEEP_HEAD_POSE = np.array(
+        [
+            [0.911, 0.004, 0.413, -0.021],
+            [-0.004, 1.0, -0.001, 0.001],
+            [-0.413, -0.001, 0.911, -0.044],
+            [0.0, 0.0, 0.0, 1.0],
+        ]
+    )
+
+    async def wake_up(self) -> None:
+        """Wake up the robot - go to the initial head position and play the wake up emote and sound."""
+        await asyncio.sleep(0.1)
+
+        await self.async_goto_target(
+            self.INIT_HEAD_POSE,
+            antennas=[0.0, 0.0],
+            duration=2,
+        )
+        await asyncio.sleep(0.1)
+
+        # Toudoum
+        self.play_sound("proud2.wav")
+
+        # Roll 20° to the left
+        pose = self.INIT_HEAD_POSE.copy()
+        pose[:3, :3] = R.from_euler("xyz", [20, 0, 0], degrees=True).as_matrix()
+        await self.async_goto_target(pose, duration=0.2)
+
+        # Go back to the initial position
+        await self.async_goto_target(self.INIT_HEAD_POSE, duration=0.2)
+
+    async def goto_sleep(self) -> None:
+        """Put the robot to sleep by moving the head and antennas to a predefined sleep position."""
+        init_positions = [
+            6.959852054044218e-07,
+            0.5251518455536499,
+            -0.668710345667336,
+            0.6067086443974802,
+            -0.606711497194891,
+            0.6687148024583701,
+            -0.5251586523105128,
+        ]
+        # Check if we are too far from the initial position
+        # Move to the initial position if necessary
+        dist = np.linalg.norm(
+            np.array(self.get_present_head_joint_positions()) - np.array(init_positions)
+        )
+        if dist > 0.2:
+            await self.async_goto_target(
+                self.INIT_HEAD_POSE, antennas=[0.0, 0.0], duration=1
+            )
+            await asyncio.sleep(0.2)
+
+        # Pfiou
+        self.play_sound("go_sleep.wav")
+
+        # Move to the sleep position
+        await self.async_goto_joint_positions(
+            head_joint_positions=self.SLEEP_HEAD_JOINT_POSITIONS,
+            antennas_joint_positions=self.SLEEP_ANTENNAS_JOINT_POSITIONS,
+            duration=2,
+        )
+        self._last_head_pose = self.SLEEP_HEAD_POSE
+        await asyncio.sleep(2)

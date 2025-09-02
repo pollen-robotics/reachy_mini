@@ -187,7 +187,9 @@ class MujocoBackend(Backend):
                     # - does nothing if the targets did not change
                     if self.ik_required:
                         # Use effective targets (absolute + relative offsets)
-                        effective_pose, effective_yaw = self.get_effective_head_pose_and_yaw()
+                        effective_pose, effective_yaw = (
+                            self.get_effective_head_pose_and_yaw()
+                        )
                         self.update_target_head_joints_from_ik(
                             effective_pose, effective_yaw
                         )
@@ -196,7 +198,9 @@ class MujocoBackend(Backend):
                         self.data.ctrl[:7] = self.target_head_joint_positions
                     if self.target_antenna_joint_positions is not None:
                         # Use effective antenna targets (absolute + relative offsets)
-                        effective_antenna_positions = self.get_effective_antenna_positions()
+                        effective_antenna_positions = (
+                            self.get_effective_antenna_positions()
+                        )
                         self.data.ctrl[-2:] = effective_antenna_positions
 
                     if (
@@ -218,6 +222,8 @@ class MujocoBackend(Backend):
                                 }
                             ).encode("utf-8")
                         )
+                        self.ready.set()
+
                     viewer.sync()
 
                 mujoco.mj_step(self.model, self.data)  # type: ignore
@@ -226,7 +232,6 @@ class MujocoBackend(Backend):
                 time.sleep(max(0, self.model.opt.timestep - took))
                 # print(f"Step {step}: took {took*1000:.1f}ms")
                 step += 1
-                self.ready.set()
 
     def get_mj_present_head_pose(self) -> np.ndarray:
         """Get the current head pose from the Mujoco simulation.
