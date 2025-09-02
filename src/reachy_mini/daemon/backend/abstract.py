@@ -11,12 +11,16 @@ each type of backend.
 import asyncio
 import json
 import logging
+import os
 import threading
 import time
 from importlib.resources import files
 from typing import List
 
+os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "hide"
+
 import numpy as np
+import pygame
 from scipy.spatial.transform import Rotation as R
 
 import reachy_mini
@@ -28,6 +32,12 @@ from reachy_mini.utils.interpolation import (
 )
 from reachy_mini.utils.relative_timeout import RelativeOffsetManager
 
+try:
+    pygame.mixer.init()
+except pygame.error as e:
+    print(f"Failed to initialize pygame mixer: {e}")
+    pygame.mixer = None
+
 
 class Backend:
     """Base class for robot backends, simulated or real."""
@@ -36,6 +46,7 @@ class Backend:
         files(reachy_mini).joinpath("descriptions/reachy_mini/urdf")
     )
 
+    assets_root_path: str = str(files(reachy_mini).joinpath("assets"))
     models_root_path: str = str(files(reachy_mini).joinpath("assets/models"))
 
     def __init__(
@@ -666,3 +677,108 @@ class Backend:
         current = gravity_torque * from_Nm_to_mA / correction_factor
         # Set the head joint current
         self.set_target_head_joint_current(current.tolist())
+
+    # Multimedia methods
+    def play_sound(self, sound_file: str) -> None:
+        """Play a sound file from the assets directory.
+
+        If the file is not found in the assets directory, try to load the path itself.
+
+        Args:
+            sound_file (str): The name of the sound file to play (e.g., "proud2.wav").
+
+        """
+        if pygame.mixer is None:
+            print("Pygame mixer is not initialized. Cannot play sound.")
+            return
+
+        # first check if the name exists in the asset sound directory
+        file_path = f"{self.assets_root_path}/{sound_file}"
+        if not os.path.exists(file_path):
+            # If not, check if the raw_path exists
+            if not os.path.exists(sound_file):
+                raise FileNotFoundError(f"Sound file {sound_file} not found.")
+            else:
+                file_path = sound_file
+
+        pygame.mixer.music.load(file_path)
+        pygame.mixer.music.play()
+
+    # Basic move definitions
+    INIT_HEAD_POSE = np.eye(4)
+
+    SLEEP_HEAD_JOINT_POSITIONS = [
+        0,
+        -0.9848156658225817,
+        1.2624661884298831,
+        -0.24390294527381684,
+        0.20555342557667577,
+        -1.2363885150358267,
+        1.0032234352772091,
+    ]
+
+    SLEEP_ANTENNAS_JOINT_POSITIONS = [3.05, -3.05]
+    SLEEP_HEAD_POSE = np.array(
+        [
+            [0.911, 0.004, 0.413, -0.021],
+            [-0.004, 1.0, -0.001, 0.001],
+            [-0.413, -0.001, 0.911, -0.044],
+            [0.0, 0.0, 0.0, 1.0],
+        ]
+    )
+
+    async def wake_up(self) -> None:
+        """Wake up the robot - go to the initial head position and play the wake up emote and sound."""
+        print(self.get_current_head_pose())
+        await asyncio.sleep(2)
+        print(self.get_current_head_pose())
+
+        await self.async_goto_target(
+            self.INIT_HEAD_POSE,
+            antennas=[0.0, 0.0],
+            duration=2,
+        )
+        await asyncio.sleep(0.1)
+
+        # Toudoum
+        self.play_sound("proud2.wav")
+
+        # Roll 20° to the left
+        pose = self.INIT_HEAD_POSE.copy()
+        pose[:3, :3] = R.from_euler("xyz", [20, 0, 0], degrees=True).as_matrix()
+        await self.async_goto_target(pose, duration=0.2)
+
+        # Go back to the initial position
+        await self.async_goto_target(self.INIT_HEAD_POSE, duration=0.2)
+
+    async def goto_sleep(self) -> None:
+        """Put the robot to sleep by moving the head and antennas to a predefined sleep position."""
+        init_positions = [
+            6.959852054044218e-07,
+            0.5251518455536499,
+            -0.668710345667336,
+            0.6067086443974802,
+            -0.606711497194891,
+            0.6687148024583701,
+            -0.5251586523105128,
+        ]
+        # Check if we are too far from the initial position
+        # Move to the initial position if necessary
+        dist = np.linalg.norm(
+            np.array(self.get_present_head_joint_positions()) - np.array(init_positions)
+        )
+        if dist > 0.2:
+            self.goto_target(self.INIT_HEAD_POSE, antennas=[0.0, 0.0], duration=1)
+            time.sleep(0.2)
+
+        # Pfiou
+        self.play_sound("go_sleep.wav")
+
+        # Move to the sleep position
+        await self.async_goto_joint_positions(
+            head_joint_positions=self.SLEEP_HEAD_JOINT_POSITIONS,
+            antennas_joint_positions=self.SLEEP_ANTENNAS_JOINT_POSITIONS,
+            duration=2,
+        )
+        self._last_head_pose = self.SLEEP_HEAD_POSE
+        await asyncio.sleep(2)
