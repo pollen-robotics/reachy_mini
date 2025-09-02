@@ -4,14 +4,18 @@ This module provides the base class for moves, allowing for the creation of cust
 
 """
 
+import asyncio
 import time
 from abc import ABC, abstractmethod
-from multiprocessing import Event
-from typing import Optional
+from typing import TYPE_CHECKING
 
 import numpy as np
 
-from reachy_mini import ReachyMini
+if TYPE_CHECKING:
+    from reachy_mini import ReachyMini
+    from reachy_mini.daemon.backend.abstract import Backend
+
+
 from reachy_mini.utils.interpolation import distance_between_poses
 
 
@@ -28,24 +32,22 @@ class Move(ABC):
         pass
 
     @abstractmethod
-    def evaluate(self, t: float) -> tuple[np.ndarray, np.ndarray, float, Optional[str]]:
+    def evaluate(self, t: float) -> tuple[np.ndarray, np.ndarray, float]:
         """Evaluate the move at time t.
 
         Returns:
             head: The head position (4x4 homogeneous matrix).
             antennas: The antennas positions (rad).
             body_yaw: The body yaw angle (rad).
-            play_sound: The sound to play (if any).
 
         """
 
     def play_on(
         self,
-        reachy_mini: ReachyMini,
+        reachy_mini: "Backend | ReachyMini",
         repeat: int = 1,
         frequency: float = 100.0,
         start_goto: bool = False,
-        no_audio=False,
         is_relative: bool = False,
     ):
         """Play the move on the ReachyMini robot.
@@ -55,20 +57,44 @@ class Move(ABC):
             repeat: Number of times to repeat the move.
             frequency: Frequency of updates in Hz.
             start_goto: Whether to interpolate to the starting position before playing the move.
-            no_audio: Whether to disable audio playback.
             is_relative: If True, treat move as relative offsets.
 
         """
-        timer = Event()
+        asyncio.run(
+            self.async_play_on(
+                reachy_mini=reachy_mini,
+                repeat=repeat,
+                frequency=frequency,
+                start_goto=start_goto,
+                is_relative=is_relative,
+            )
+        )
+
+    async def async_play_on(
+        self,
+        reachy_mini: "Backend | ReachyMini",
+        repeat: int = 1,
+        frequency: float = 100.0,
+        start_goto: bool = False,
+        is_relative: bool = False,
+    ):
+        """Play asynchronously the move on the ReachyMini robot.
+
+        Args:
+            reachy_mini: The ReachyMini instance to control.
+            repeat: Number of times to repeat the move.
+            frequency: Frequency of updates in Hz.
+            start_goto: Whether to interpolate to the starting position before playing the move.
+            is_relative: If True, treat move as relative offsets.
+
+        """
         dt = 1.0 / frequency
 
         if start_goto:
             # Interpolation phase to reach the first target pose.
-            start_head_pose, start_antennas_positions, start_body_yaw, _ = (
-                self.evaluate(0)
-            )
+            start_head_pose, start_antennas_positions, start_body_yaw = self.evaluate(0)
 
-            _, cur_antenna_joints = reachy_mini.get_current_joint_positions()
+            _, cur_antenna_joints = reachy_mini.get_present_antenna_joint_positions()
             current_head_pose = reachy_mini.get_current_head_pose()
             _, _, distance_to_goal = distance_between_poses(
                 np.array(start_head_pose),
@@ -100,10 +126,7 @@ class Move(ABC):
                 if t > self.duration:
                     break
 
-                head, antennas, body_yaw, play_sound = self.evaluate(t)
-
-                if not no_audio and play_sound is not None:
-                    reachy_mini.play_sound(play_sound)
+                head, antennas, body_yaw = self.evaluate(t)
 
                 reachy_mini.set_target(
                     head=head,
@@ -116,4 +139,4 @@ class Move(ABC):
                 loop_duration = end - t
                 sleep_duration = max(0, dt - loop_duration)
                 if sleep_duration > 0:
-                    timer.wait(sleep_duration)
+                    await asyncio.sleep(sleep_duration)

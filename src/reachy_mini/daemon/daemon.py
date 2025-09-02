@@ -5,6 +5,7 @@ It includes methods to start, stop, and restart the daemon, as well as to check 
 It also provides a command-line interface for easy interaction.
 """
 
+import asyncio
 import logging
 from dataclasses import dataclass
 from enum import Enum
@@ -13,9 +14,9 @@ from typing import Optional
 
 import serial.tools.list_ports
 
-from reachy_mini.daemon.backend.mujoco import MujocoBackend, MujocoBackendStatus
-from reachy_mini.daemon.backend.robot import RobotBackend, RobotBackendStatus
-from reachy_mini.io import Server
+from ..io import Server
+from .backend.mujoco import MujocoBackend, MujocoBackendStatus
+from .backend.robot import RobotBackend, RobotBackendStatus
 
 
 class Daemon:
@@ -106,15 +107,13 @@ class Daemon:
             return self._status.state
 
         if wake_up_on_start:
-            from reachy_mini.reachy_mini import ReachyMini
-
             try:
                 self.logger.info("Waking up Reachy Mini...")
-                with ReachyMini() as mini:
-                    mini.disable_motors()
-                    mini.make_motors_compliant(head=False, antennas=False)
-                    mini.enable_motors()
-                    mini.wake_up()
+                self.backend.disable_motors()
+                self.backend.set_head_operation_mode(3)
+                self.backend.set_antennas_operation_mode(3)
+                self.backend.enable_motors()
+                asyncio.run(self.backend.wake_up())
             except Exception as e:
                 self.logger.error(f"Error while waking up Reachy Mini: {e}")
                 self._status.state = DaemonState.ERROR
@@ -155,14 +154,12 @@ class Daemon:
                 return self._status.state
 
             if goto_sleep_on_stop:
-                from reachy_mini.reachy_mini import ReachyMini
-
                 try:
                     self.logger.info("Putting Reachy Mini to sleep...")
-                    with ReachyMini() as mini:
-                        mini.make_motors_compliant(head=False, antennas=False)
-                        mini.goto_sleep()
-                        mini.disable_motors()
+                    self.backend.set_head_operation_mode(3)
+                    self.backend.set_antennas_operation_mode(3)
+                    asyncio.run(self.backend.goto_sleep())
+                    self.backend.disable_motors()
                 except Exception as e:
                     self.logger.error(f"Error while putting Reachy Mini to sleep: {e}")
                     self._status.state = DaemonState.ERROR
@@ -315,7 +312,8 @@ class Daemon:
                 self.logger.info("Daemon is running. Press Ctrl+C to stop.")
                 while self.backend_run_thread.is_alive():
                     self.logger.info(f"Daemon status: {self.status()}")
-                    self.backend_run_thread.join(timeout=10.0)
+                    for _ in range(10):
+                        self.backend_run_thread.join(timeout=1.0)
                 else:
                     self.logger.error("Backend thread has stopped unexpectedly.")
                     self._status.state = DaemonState.ERROR
@@ -332,7 +330,11 @@ class Daemon:
         self, sim, serialport, scene, check_collision, kinematics_engine
     ) -> "RobotBackend | MujocoBackend":
         if sim:
-            return MujocoBackend(scene=scene, check_collision=check_collision, kinematics_engine=kinematics_engine)
+            return MujocoBackend(
+                scene=scene,
+                check_collision=check_collision,
+                kinematics_engine=kinematics_engine,
+            )
         else:
             if serialport == "auto":
                 ports = find_serial_port()
