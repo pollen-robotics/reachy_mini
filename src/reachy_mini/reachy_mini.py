@@ -29,7 +29,7 @@ from reachy_mini.utils.interpolation import minimum_jerk
 
 try:
     pygame.mixer.init()
-except pygame.error as e:
+except (AttributeError, pygame.error) as e:
     print(f"Failed to initialize pygame mixer: {e}")
     pygame.mixer = None
 
