@@ -766,8 +766,10 @@ class Backend:
             np.array(self.get_present_head_joint_positions()) - np.array(init_positions)
         )
         if dist > 0.2:
-            self.goto_target(self.INIT_HEAD_POSE, antennas=[0.0, 0.0], duration=1)
-            time.sleep(0.2)
+            await self.async_goto_target(
+                self.INIT_HEAD_POSE, antennas=[0.0, 0.0], duration=1
+            )
+            await asyncio.sleep(0.2)
 
         # Pfiou
         self.play_sound("go_sleep.wav")
