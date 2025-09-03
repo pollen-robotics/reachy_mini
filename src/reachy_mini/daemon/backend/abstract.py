@@ -29,6 +29,7 @@ import reachy_mini
 from reachy_mini.kinematics import NNKinematics, PlacoKinematics
 from reachy_mini.utils.interpolation import (
     compose_world_offset,
+    distance_between_poses,
     linear_pose_interpolation,
     time_trajectory,
 )
@@ -698,36 +699,38 @@ class Backend:
         await self.async_goto_target(self.INIT_HEAD_POSE, duration=0.2)
 
     async def goto_sleep(self) -> None:
-        """Put the robot to sleep by moving the head and antennas to a predefined sleep position."""
-        init_positions = [
-            6.959852054044218e-07,
-            0.5251518455536499,
-            -0.668710345667336,
-            0.6067086443974802,
-            -0.606711497194891,
-            0.6687148024583701,
-            -0.5251586523105128,
-        ]
-        # Check if we are too far from the initial position
-        # Move to the initial position if necessary
-        dist = np.linalg.norm(
-            np.array(self.get_present_head_joint_positions()) - np.array(init_positions)
+        """Put the robot to sleep by moving the head and antennas to a predefined sleep position.
+
+        - If we are already very close to the sleep position, we do nothing.
+        - If we are far from the sleep position:
+            - If we are far from the initial position, we move there first.
+            - If we are close to the initial position, we move directly to the sleep position.
+        """
+        # Magic units
+        _, _, dist_to_sleep_pose = distance_between_poses(
+            self.get_current_head_pose(), self.SLEEP_HEAD_POSE
         )
-        if dist > 0.2:
+        _, _, dist_to_init_pose = distance_between_poses(
+            self.get_current_head_pose(), self.INIT_HEAD_POSE
+        )
+
+        # Thresholds found empirically.
+        if dist_to_sleep_pose > 10:
+            if dist_to_init_pose > 30:
+                # Move to the initial position
+                await self.async_goto_target(
+                    self.INIT_HEAD_POSE, antennas=[0.0, 0.0], duration=1
+                )
+                await asyncio.sleep(0.2)
+
+            self.play_sound("go_sleep.wav")
+
+            # Move to the sleep position
             await self.async_goto_target(
-                self.INIT_HEAD_POSE, antennas=[0.0, 0.0], duration=1
+                self.SLEEP_HEAD_POSE,
+                antennas=self.SLEEP_ANTENNAS_JOINT_POSITIONS,
+                duration=2,
             )
-            await asyncio.sleep(0.2)
-
-        # Pfiou
-        self.play_sound("go_sleep.wav")
-
-        # Move to the sleep position
-        await self.async_goto_target(
-            self.SLEEP_HEAD_POSE,
-            antennas=self.SLEEP_ANTENNAS_JOINT_POSITIONS,
-            duration=2
-        )
 
         self._last_head_pose = self.SLEEP_HEAD_POSE
         await asyncio.sleep(2)
