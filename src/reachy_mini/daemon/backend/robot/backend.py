@@ -16,6 +16,8 @@ from typing import Optional
 import numpy as np
 from reachy_mini_motor_controller import ReachyMiniPyControlLoop
 
+from reachy_mini.kinematics.placo_kinematics import PlacoKinematics
+
 from ..abstract import Backend, MotorControlMode
 
 
@@ -391,6 +393,10 @@ class RobotBackend(Backend):
 
     def compensate_head_gravity(self) -> None:
         """Calculate the currents necessary to compensate for gravity."""
+        assert self.kinematics_engine == "Placo" and isinstance(
+            self.head_kinematics, PlacoKinematics
+        ), "Gravity compensation is only supported with the Placo kinematics engine."
+
         # Even though in their docs dynamixes says that 1 count is 1 mA, in practice I've found it to be 3mA.
         # I am not sure why this happens
         # Another explanation is that our model is bad and the current is overestimated 3x (but I have not had these issues with other robots)
