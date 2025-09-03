@@ -57,7 +57,7 @@ async def get_full_state(
     if with_antenna_positions:
         result["antennas_position"] = backend.get_present_antenna_joint_positions()
 
-    result["datetime"] = datetime.now(timezone.utc)
+    result["timestamp"] = datetime.now(timezone.utc)
     return FullState.model_validate(result)
 
 
