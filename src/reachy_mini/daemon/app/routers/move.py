@@ -1,14 +1,15 @@
 import asyncio
+import json
 from enum import Enum
 from typing import Coroutine
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
 from ....daemon.backend.abstract import Backend
-from ..dependencies import get_backend
-from ..models import AnyPose
+from ..dependencies import get_backend, ws_get_backend
+from ..models import AnyPose, FullBodyTarget
 
 router = APIRouter(
     prefix="/move",
@@ -92,3 +93,40 @@ async def play_goto_sleep(backend: Backend = Depends(get_backend)) -> MoveUUID:
 @router.post("/stop")
 async def stop_move(uuid: MoveUUID):
     return await stop_move_task(uuid.uuid)
+
+
+# --- FullBodyTarget streaming and single set_target ---
+@router.post("/set_target")
+async def set_target(
+    target: FullBodyTarget,
+    backend: Backend = Depends(get_backend),
+) -> dict:
+    """POST route to set a single FullBodyTarget."""
+    backend.set_target(
+        head=target.target_head_pose.to_pose_array()
+        if target.target_head_pose
+        else None,
+        antennas=list(target.target_antennas) if target.target_antennas else None,
+    )
+    return {"status": "ok"}
+
+
+@router.websocket("/ws/set_target")
+async def ws_set_target(
+    websocket: WebSocket, backend: Backend = Depends(ws_get_backend)
+):
+    """WebSocket route to stream FullBodyTarget set_target calls."""
+    await websocket.accept()
+    try:
+        while True:
+            data = await websocket.receive_text()
+            try:
+                target = FullBodyTarget.model_validate_json(data)
+                await set_target(target, backend)
+
+            except Exception as e:
+                await websocket.send_text(
+                    json.dumps({"status": "error", "detail": str(e)})
+                )
+    except WebSocketDisconnect:
+        pass

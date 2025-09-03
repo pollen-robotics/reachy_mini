@@ -83,6 +83,11 @@ def as_any_pose(pose, use_matrix) -> AnyPose:
     )
 
 
+class FullBodyTarget(BaseModel):
+    target_head_pose: AnyPose | None = None
+    target_antennas: tuple[float, float] | None = None
+
+
 class FullState(BaseModel):
     head_pose: AnyPose | None = None
     head_joints: list[float] | None = None
