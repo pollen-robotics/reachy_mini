@@ -14,6 +14,8 @@ from typing import Optional
 
 import serial.tools.list_ports
 
+from reachy_mini.daemon.backend.abstract import MotorControlMode
+
 from ..io import Server
 from .backend.mujoco import MujocoBackend, MujocoBackendStatus
 from .backend.robot import RobotBackend, RobotBackendStatus
@@ -109,10 +111,7 @@ class Daemon:
         if wake_up_on_start:
             try:
                 self.logger.info("Waking up Reachy Mini...")
-                self.backend.disable_motors()
-                self.backend.set_head_operation_mode(3)
-                self.backend.set_antennas_operation_mode(3)
-                self.backend.enable_motors()
+                self.backend.set_motor_control_mode(MotorControlMode.Enabled)
                 asyncio.run(self.backend.wake_up())
             except Exception as e:
                 self.logger.error(f"Error while waking up Reachy Mini: {e}")
@@ -156,10 +155,13 @@ class Daemon:
             if goto_sleep_on_stop:
                 try:
                     self.logger.info("Putting Reachy Mini to sleep...")
-                    self.backend.set_head_operation_mode(3)
-                    self.backend.set_antennas_operation_mode(3)
+                    if (
+                        self.backend.get_motor_control_mode()
+                        == MotorControlMode.GravityCompensation
+                    ):
+                        self.backend.set_motor_control_mode(MotorControlMode.Enabled)
                     asyncio.run(self.backend.goto_sleep())
-                    self.backend.disable_motors()
+                    self.backend.set_motor_control_mode(MotorControlMode.Disabled)
                 except Exception as e:
                     self.logger.error(f"Error while putting Reachy Mini to sleep: {e}")
                     self._status.state = DaemonState.ERROR
