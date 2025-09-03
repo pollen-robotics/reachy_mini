@@ -50,16 +50,6 @@ class ZenohClient(AbstractClient):
             self._handle_joint_positions,
         )
 
-        self.joint_current_sub = self.session.declare_subscriber(
-            "reachy_mini/joint_current",
-            self._handle_joint_current,
-        )
-
-        self.head_operation_mode_sub = self.session.declare_subscriber(
-            "reachy_mini/head_operation_mode",
-            self._handle_head_operation_mode,
-        )
-
         self.pose_sub = self.session.declare_subscriber(
             "reachy_mini/head_pose",
             self._handle_head_pose,
@@ -71,8 +61,6 @@ class ZenohClient(AbstractClient):
         )
         self._last_head_joint_positions = None
         self._last_antennas_joint_positions = None
-        self._last_head_joint_current = None
-        self._last_head_operation_mode = None
         self._last_head_pose = None
         self._recorded_data = None
         self._recorded_data_ready = threading.Event()
@@ -164,18 +152,6 @@ class ZenohClient(AbstractClient):
             raise TimeoutError("Recording not received in time.")
         self._recorded_data_ready.clear()  # ready for next run
         return self._recorded_data.copy()
-
-    def _handle_joint_current(self, sample):
-        """Handle incoming joint current."""
-        if sample.payload:
-            current = json.loads(sample.payload.to_string())
-            self._last_head_joint_current = current.get("head_joint_current")
-
-    def _handle_head_operation_mode(self, sample):
-        """Handle incoming head operation mode."""
-        if sample.payload:
-            mode = json.loads(sample.payload.to_string())
-            self._last_head_operation_mode = mode.get("head_operation_mode")
 
     def _handle_head_pose(self, sample):
         """Handle incoming head pose."""

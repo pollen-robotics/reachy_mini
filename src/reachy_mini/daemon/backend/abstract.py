@@ -14,8 +14,9 @@ import logging
 import os
 import threading
 import time
+from abc import abstractmethod
+from enum import Enum
 from importlib.resources import files
-from pathlib import Path
 from typing import List
 
 os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "hide"
@@ -38,6 +39,14 @@ try:
 except pygame.error as e:
     print(f"Failed to initialize pygame mixer: {e}")
     pygame.mixer = None
+
+
+class MotorControlMode(str, Enum):
+    """Enum for motor control modes."""
+
+    Enabled = "enabled"  # Torque ON and controlled in position
+    Disabled = "disabled"  # Torque OFF
+    GravityCompensation = "gravity_compensation"  # Torque ON and controlled in current to compensate for gravity
 
 
 class Backend:
@@ -137,6 +146,42 @@ class Backend:
         # Recording lock to guard buffer swaps and appends
         self._rec_lock = threading.Lock()
 
+    # Life cycle methods
+    def wrapped_run(self):
+        """Run the backend in a try-except block to store errors."""
+        try:
+            self.run()
+        except Exception as e:
+            self.error = str(e)
+            self.close()
+            raise e
+
+    def run(self):
+        """Run the backend.
+
+        This method is a placeholder and should be overridden by subclasses.
+        """
+        raise NotImplementedError("The method run should be overridden by subclasses.")
+
+    def close(self) -> None:
+        """Close the backend.
+
+        This method is a placeholder and should be overridden by subclasses.
+        """
+        raise NotImplementedError(
+            "The method close should be overridden by subclasses."
+        )
+
+    def get_status(self):
+        """Return backend statistics.
+
+        This method is a placeholder and should be overridden by subclasses.
+        """
+        raise NotImplementedError(
+            "The method get_status should be overridden by subclasses."
+        )
+
+    # Present/Target joint positions
     def get_effective_head_pose_and_yaw(self) -> tuple[np.ndarray, float]:
         """Get the effective head pose and body yaw (absolute target + relative offsets).
 
@@ -175,43 +220,6 @@ class Backend:
         _, _, antenna_offsets = self.relative_manager.get_current_offsets()
 
         return [base_positions[i] + antenna_offsets[i] for i in range(2)]
-
-    # Life cycle methods
-    def wrapped_run(self):
-        """Run the backend in a try-except block to store errors."""
-        try:
-            self.run()
-        except Exception as e:
-            self.error = str(e)
-            self.close()
-            raise e
-
-    def run(self):
-        """Run the backend.
-
-        This method is a placeholder and should be overridden by subclasses.
-        """
-        raise NotImplementedError("The method run should be overridden by subclasses.")
-
-    def close(self) -> None:
-        """Close the backend.
-
-        This method is a placeholder and should be overridden by subclasses.
-        """
-        raise NotImplementedError(
-            "The method close should be overridden by subclasses."
-        )
-
-    def get_status(self):
-        """Return backend statistics.
-
-        This method is a placeholder and should be overridden by subclasses.
-        """
-        raise NotImplementedError(
-            "The method get_status should be overridden by subclasses."
-        )
-
-    # Present/Target joint positions
 
     def set_joint_positions_publisher(self, publisher) -> None:
         """Set the publisher for joint positions.
@@ -532,30 +540,6 @@ class Backend:
                 "stop_recording called but recording_publisher is not set; dropping data."
             )
 
-    def set_head_operation_mode(self, mode: int) -> None:
-        """Set mode of operation for the head."""
-        raise NotImplementedError(
-            "The method set_head_operation_mode should be overridden by subclasses."
-        )
-
-    def set_antennas_operation_mode(self, mode: int) -> None:
-        """Set mode of operation for the antennas."""
-        raise NotImplementedError(
-            "The method set_antennas_operation_mode should be overridden by subclasses."
-        )
-
-    def enable_motors(self) -> None:
-        """Enable the motors."""
-        raise NotImplementedError(
-            "The method enable_motors should be overridden by subclasses."
-        )
-
-    def disable_motors(self) -> None:
-        """Disable the motors."""
-        raise NotImplementedError(
-            "The method disable_motors should be overridden by subclasses."
-        )
-
     def get_present_head_joint_positions(self) -> List[float]:
         """Return the present head joint positions.
 
@@ -641,55 +625,6 @@ class Backend:
 
         """
         self.head_kinematics.start_body_yaw = body_yaw
-
-    def set_gravity_compensation_mode(self, mode: bool) -> None:
-        """Set the gravity compensation mode.
-
-        Args:
-            mode (bool): If True, gravity compensation is enabled.
-
-        """
-        if self.kinematics_engine != "Placo":
-            raise ValueError(
-                "Gravity compensation is only available with Placo kinematics"
-            )
-        self.gravity_compensation_mode = mode  # True (enable) or False (disable)
-
-    def compensate_head_gravity(self) -> None:
-        """Calculate the currents necessary to compensate for gravity."""
-        # Even though in their docs dynamixes says that 1 count is 1 mA, in practice I've found it to be 3mA.
-        # I am not sure why this happens
-        # Another explanation is that our model is bad and the current is overestimated 3x (but I have not had these issues with other robots)
-        # So I am using a magic number to compensate for this.
-        # for currents under 30mA the constant is around 1
-        from_Nm_to_mA = 1.47 / 0.52 * 1000
-        # Conversion factor from Nm to mA for the Stewart platform motors
-        # The torque constant is not linear, so we need to use a correction factor
-        # This is a magic number that should be determined experimentally
-        # For currents under 30mA, the constant is around 3
-        # Then it drops to 1.0 for currents above 1.5A
-        correction_factor = 3.0
-        # Get the current head joint positions
-        head_joints = self.get_present_head_joint_positions()
-        gravity_torque = self.head_kinematics.compute_gravity_torque(
-            np.array(head_joints)
-        )
-        # Convert the torque from Nm to mA
-        current = gravity_torque * from_Nm_to_mA / correction_factor
-        # Set the head joint current
-        self.set_target_head_joint_current(current.tolist())
-
-    def get_urdf(self) -> str:
-        """Get the current URDF as a string.
-
-        Returns:
-            str: The current URDF.
-
-        """
-        urdf_path = Path(self.urdf_root_path) / "robot.urdf"
-
-        with open(urdf_path, "r") as f:
-            return f.read()
 
     # Multimedia methods
     def play_sound(self, sound_file: str) -> None:
@@ -795,3 +730,14 @@ class Backend:
         )
         self._last_head_pose = self.SLEEP_HEAD_POSE
         await asyncio.sleep(2)
+
+    # Motor control modes
+    @abstractmethod
+    def get_motor_control_mode(self) -> MotorControlMode:
+        """Get the motor control mode."""
+        pass
+
+    @abstractmethod
+    def set_motor_control_mode(self, mode: MotorControlMode) -> None:
+        """Set the motor control mode."""
+        pass

@@ -117,6 +117,14 @@ class ReachyMini:
             ]
         )
 
+    def __del__(self):
+        """Destroy the Reachy Mini instance.
+
+        The client is disconnected explicitly to avoid a thread pending issue.
+
+        """
+        self.client.disconnect()
+
     def __enter__(self) -> "ReachyMini":
         """Context manager entry point for Reachy Mini."""
         return self
@@ -271,7 +279,9 @@ class ReachyMini:
         self._last_head_pose = SLEEP_HEAD_POSE
         time.sleep(2)
 
-    def look_at_image(self, u: int, v: int, duration: float = 1.0) -> None:
+    def look_at_image(
+        self, u: int, v: int, duration: float = 1.0, perform_movement: bool = True
+    ) -> np.ndarray:
         """Make the robot head look at a point defined by a pixel position (u,v).
 
         # TODO image of reachy mini coordinate system
@@ -280,6 +290,10 @@ class ReachyMini:
             u (int): Horizontal coordinate in image frame.
             v (int): Vertical coordinate in image frame.
             duration (float): Duration of the movement in seconds. If 0, the head will snap to the position immediately.
+            perform_movement (bool): If True, perform the movement. If False, only calculate and return the pose.
+
+        Returns:
+            np.ndarray: The calculated head pose as a 4x4 matrix.
 
         Raises:
             ValueError: If duration is negative.
@@ -306,9 +320,18 @@ class ReachyMini:
 
         P_world = t_wc + ray_world
 
-        self.look_at_world(*P_world, duration=duration)
+        return self.look_at_world(
+            *P_world, duration=duration, perform_movement=perform_movement
+        )
 
-    def look_at_world(self, x: float, y: float, z: float, duration: float = 1.0):
+    def look_at_world(
+        self,
+        x: float,
+        y: float,
+        z: float,
+        duration: float = 1.0,
+        perform_movement: bool = True,
+    ) -> np.ndarray:
         """Look at a specific point in 3D space in Reachy Mini's reference frame.
 
         TODO include image of reachy mini coordinate system
@@ -318,6 +341,10 @@ class ReachyMini:
             y (float): Y coordinate in meters.
             z (float): Z coordinate in meters.
             duration (float): Duration of the movement in seconds. If 0, the head will snap to the position immediately.
+            perform_movement (bool): If True, perform the movement. If False, only calculate and return the pose.
+
+        Returns:
+            np.ndarray: The calculated head pose as a 4x4 matrix.
 
         Raises:
             ValueError: If duration is negative.
@@ -360,12 +387,16 @@ class ReachyMini:
         target_head_pose = np.eye(4)
         target_head_pose[:3, :3] = rot_mat
 
-        # If duration is specified, use the goto_target method to move smoothly
-        # Otherwise, set the position immediately
-        if duration > 0:
-            self.goto_target(target_head_pose, duration=duration)
-        else:
-            self.set_target(target_head_pose)
+        # If perform_movement is True, execute the movement
+        if perform_movement:
+            # If duration is specified, use the goto_target method to move smoothly
+            # Otherwise, set the position immediately
+            if duration > 0:
+                self.goto_target(target_head_pose, duration=duration)
+            else:
+                self.set_target(target_head_pose)
+
+        return target_head_pose
 
     # Multimedia methods
     def play_sound(self, sound_file: str) -> None:
@@ -566,24 +597,6 @@ class ReachyMini:
 
         return recorded_data
 
-    def _set_head_operation_mode(self, mode: int) -> None:
-        """Set the operation mode for the head motors.
-
-        Args:
-            mode (int): The desired operation mode.
-
-        """
-        self.client.send_command(json.dumps({"head_operation_mode": mode}))
-
-    def _set_antennas_operation_mode(self, mode: int) -> None:
-        """Set the operation mode for the antennas motors.
-
-        Args:
-            mode (int): The desired operation mode.
-
-        """
-        self.client.send_command(json.dumps({"antennas_operation_mode": mode}))
-
     def _set_record_data(self, record: Dict) -> None:
         """Set the record data to be logged by the backend.
 
@@ -605,52 +618,8 @@ class ReachyMini:
         """Disable the motors."""
         self._set_torque(False)
 
-    def make_motors_compliant(
-        self,
-        head: Optional[bool] = None,
-        antennas: Optional[bool] = None,
-        compensate_gravity: bool = False,
-    ) -> None:
-        """Set the head and/or antennas to compliant mode. This means that the motors will not resist external forces and will allow free movement.
-
-            The compensate_gravity argument will enable gravity compensation for the head motors if they are in the compliant mode,
-            In the non-compliant mode, the gravity compensation will have no effect.
-
-        Args:
-            head (bool): If True, set the head to compliant mode.
-            antennas (bool): If True, set the antennas to compliant mode.
-            compensate_gravity (bool): If True, enable gravity compensation for the head motors.
-
-        """
-        if head is not None:
-            self._set_head_operation_mode(
-                0 if head else 3
-            )  # 0 is compliant mode, 3 is position control mode
-
-        if antennas is not None:
-            self._set_antennas_operation_mode(
-                0 if antennas else 3
-            )  # 0 is compliant mode, 3 is position control mode
-
-        if compensate_gravity:
-            self.enable_gravity_compensation()
-        else:
-            self.disable_gravity_compensation()
-
     def _set_torque(self, on: bool):
         self.client.send_command(json.dumps({"torque": on}))
-
-    def _set_head_joint_current(self, current: List[int]) -> None:
-        """Set the head joint current (torque) in milliamperes (mA).
-
-        Args:
-            current (List[int]): A list of joint currents for the head.
-
-        """
-        assert len(current) == 7, (
-            f"Head joint current must have length 7, got {current}."
-        )
-        self.client.send_command(json.dumps({"head_joint_current": list(current)}))
 
     def enable_gravity_compensation(self) -> None:
         """Enable gravity compensation for the head motors."""
