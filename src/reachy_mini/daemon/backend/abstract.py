@@ -33,6 +33,7 @@ from reachy_mini.utils.interpolation import (
     time_trajectory,
 )
 from reachy_mini.utils.relative_timeout import RelativeOffsetManager
+from reachy_mini.utils.interpolation import distance_between_poses
 
 try:
     pygame.mixer.init()
@@ -679,12 +680,17 @@ class Backend:
         """Wake up the robot - go to the initial head position and play the wake up emote and sound."""
         await asyncio.sleep(0.1)
 
-        await self.async_goto_target(
-            self.INIT_HEAD_POSE,
-            antennas=[0.0, 0.0],
-            duration=2,
+        _, _, magic_distance = distance_between_poses(
+            self.get_current_head_pose(), self.INIT_HEAD_POSE
         )
-        await asyncio.sleep(0.1)
+
+        if magic_distance > 10: # found empirically
+            await self.async_goto_target(
+                self.INIT_HEAD_POSE,
+                antennas=[0.0, 0.0],
+                duration=2,
+            )
+            await asyncio.sleep(0.1)
 
         # Toudoum
         self.play_sound("proud2.wav")
@@ -713,6 +719,7 @@ class Backend:
         dist = np.linalg.norm(
             np.array(self.get_present_head_joint_positions()) - np.array(init_positions)
         )
+        
         if dist > 0.2:
             await self.async_goto_target(
                 self.INIT_HEAD_POSE, antennas=[0.0, 0.0], duration=1
@@ -726,7 +733,7 @@ class Backend:
         await self.async_goto_target(
             self.SLEEP_HEAD_POSE,
             antennas=self.SLEEP_ANTENNAS_JOINT_POSITIONS,
-            duration=2
+            duration=2,
         )
 
         self._last_head_pose = self.SLEEP_HEAD_POSE
