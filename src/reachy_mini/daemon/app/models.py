@@ -1,3 +1,5 @@
+"""Common pydantic models definitions."""
+
 from datetime import datetime
 
 import numpy as np
@@ -29,6 +31,7 @@ class Matrix4x4Pose(BaseModel):
 
     @classmethod
     def from_pose_array(cls, arr: np.ndarray) -> "Matrix4x4Pose":
+        """Create a Matrix4x4 pose representation from a 4x4 pose array."""
         assert arr.shape == (4, 4), "Array must be of shape (4, 4)"
         return cls(m=tuple(arr.flatten().tolist()))
 
@@ -49,6 +52,7 @@ class XYZRPYPose(BaseModel):
 
     @classmethod
     def from_pose_array(cls, arr: np.ndarray) -> "XYZRPYPose":
+        """Create an XYZRPYPose representation from a 4x4 pose array."""
         assert arr.shape == (4, 4), "Array must be of shape (4, 4)"
 
         x, y, z = arr[0, 3], arr[1, 3], arr[2, 3]
@@ -76,6 +80,7 @@ AnyPose = XYZRPYPose | Matrix4x4Pose
 
 
 def as_any_pose(pose, use_matrix) -> AnyPose:
+    """Convert a numpy array to an AnyPose representation."""
     return (
         Matrix4x4Pose.from_pose_array(pose)
         if use_matrix
@@ -84,11 +89,16 @@ def as_any_pose(pose, use_matrix) -> AnyPose:
 
 
 class FullBodyTarget(BaseModel):
+    """Represent the full body including the head pose and the joints for antennas."""
+
     target_head_pose: AnyPose | None = None
     target_antennas: tuple[float, float] | None = None
+    timestamp: datetime | None = None
 
 
 class FullState(BaseModel):
+    """Represent the full state of the robot including all joint positions and poses."""
+
     head_pose: AnyPose | None = None
     head_joints: list[float] | None = None
     body_yaw: float | None = None
