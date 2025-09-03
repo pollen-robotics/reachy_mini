@@ -16,7 +16,7 @@ from typing import Optional
 import numpy as np
 from reachy_mini_motor_controller import ReachyMiniPyControlLoop
 
-from reachy_mini.daemon.backend.abstract import Backend
+from ..abstract import Backend, MotorControlMode
 
 
 class RobotBackend(Backend):
@@ -56,6 +56,10 @@ class RobotBackend(Backend):
             allowed_retries=5,
             stats_pub_period=None,
         )
+
+        self.motor_control_mode = self._infer_control_mode()
+        self.logger.info(f"Motor control mode: {self.motor_control_mode}")
+        self.motor_control_mode = MotorControlMode.Disabled
         self.last_alive = None
 
         self._torque_enabled = False
@@ -167,7 +171,9 @@ class RobotBackend(Backend):
                 # - does nothing if the targets did not change
                 if self.ik_required:
                     # Use effective targets (absolute + relative offsets)
-                    effective_pose, effective_yaw = self.get_effective_head_pose_and_yaw()
+                    effective_pose, effective_yaw = (
+                        self.get_effective_head_pose_and_yaw()
+                    )
                     self.update_target_head_joints_from_ik(
                         effective_pose, effective_yaw
                     )
@@ -287,6 +293,7 @@ class RobotBackend(Backend):
         assert self.c is not None, "Motor controller not initialized or already closed."
         assert mode in [0, 3, 5], (
             "Invalid operation mode. Must be one of [0 (torque), 3 (position), 5 (current-limiting position)]."
+            f" Got {mode} instead"
         )
 
         # if motors are enabled, disable them before changing the mode
@@ -381,6 +388,89 @@ class RobotBackend(Backend):
 
         """
         return self.get_all_joint_positions()[1]
+
+    def set_gravity_compensation_mode(self, mode: bool) -> None:
+        """Set the gravity compensation mode.
+
+        Args:
+            mode (bool): If True, gravity compensation is enabled.
+
+        """
+        if self.kinematics_engine != "Placo":
+            raise ValueError(
+                "Gravity compensation is only available with Placo kinematics"
+            )
+        self.gravity_compensation_mode = mode  # True (enable) or False (disable)
+
+    def compensate_head_gravity(self) -> None:
+        """Calculate the currents necessary to compensate for gravity."""
+        # Even though in their docs dynamixes says that 1 count is 1 mA, in practice I've found it to be 3mA.
+        # I am not sure why this happens
+        # Another explanation is that our model is bad and the current is overestimated 3x (but I have not had these issues with other robots)
+        # So I am using a magic number to compensate for this.
+        # for currents under 30mA the constant is around 1
+        from_Nm_to_mA = 1.47 / 0.52 * 1000
+        # Conversion factor from Nm to mA for the Stewart platform motors
+        # The torque constant is not linear, so we need to use a correction factor
+        # This is a magic number that should be determined experimentally
+        # For currents under 30mA, the constant is around 3
+        # Then it drops to 1.0 for currents above 1.5A
+        correction_factor = 3.0
+        # Get the current head joint positions
+        head_joints = self.get_present_head_joint_positions()
+        gravity_torque = self.head_kinematics.compute_gravity_torque(
+            np.array(head_joints)
+        )
+        # Convert the torque from Nm to mA
+        current = gravity_torque * from_Nm_to_mA / correction_factor
+        # Set the head joint current
+        self.set_target_head_joint_current(current.tolist())
+
+    def get_motor_control_mode(self) -> MotorControlMode:
+        """Get the motor control mode."""
+        return self.motor_control_mode
+
+    def set_motor_control_mode(self, mode: MotorControlMode) -> None:
+        """Set the motor control mode."""
+        # Check if the mode is already set
+        if mode == self.motor_control_mode:
+            return
+
+        if mode == MotorControlMode.Enabled:
+            if self.motor_control_mode == MotorControlMode.GravityCompensation:
+                # First, make sure we switch to position control
+                self.disable_motors()
+                self.set_head_operation_mode(3)
+                self.set_antennas_operation_mode(3)
+
+            self.enable_motors()
+
+        elif mode == MotorControlMode.Disabled:
+            self.disable_motors()
+
+        elif mode == MotorControlMode.GravityCompensation:
+            self.disable_motors()
+            self.set_head_operation_mode(0)
+            self.set_antennas_operation_mode(0)
+            self.enable_motors()
+
+        self.motor_control_mode = mode
+
+    def _infer_control_mode(self) -> MotorControlMode:
+        assert self.c is not None, "Motor controller not initialized or already closed."
+
+        torque = self.c.is_torque_enabled()
+
+        if not torque:
+            return MotorControlMode.Disabled
+
+        mode = self.c.get_stewart_platform_operating_mode()
+        if mode == 3:
+            return MotorControlMode.Enabled
+        elif mode == 1:
+            return MotorControlMode.GravityCompensation
+        else:
+            raise ValueError(f"Unknown motor control mode: {mode}")
 
 
 @dataclass

@@ -14,7 +14,7 @@ from datetime import datetime
 import numpy as np
 import zenoh
 
-from reachy_mini.daemon.backend.abstract import Backend
+from reachy_mini.daemon.backend.abstract import Backend, MotorControlMode
 from reachy_mini.io.abstract import AbstractServer
 from reachy_mini.io.protocol import (
     GotoTaskRequest,
@@ -98,9 +98,9 @@ class ZenohServer(AbstractServer):
         with self._lock:
             if "torque" in command:
                 if command["torque"]:
-                    self.backend.enable_motors()
+                    self.backend.set_motor_control_mode(MotorControlMode.Enabled)
                 else:
-                    self.backend.disable_motors()
+                    self.backend.set_motor_control_mode(MotorControlMode.Disabled)
             if "head_joint_positions" in command:
                 self.backend.set_target_head_joint_positions(
                     command["head_joint_positions"]
@@ -108,31 +108,24 @@ class ZenohServer(AbstractServer):
             if "head_pose" in command:
                 is_relative = command.get("is_relative", False)
                 self.backend.set_target_head_pose(
-                    np.array(command["head_pose"]).reshape(4, 4), 
+                    np.array(command["head_pose"]).reshape(4, 4),
                     command["body_yaw"],
-                    is_relative=is_relative
+                    is_relative=is_relative,
                 )
             if "antennas_joint_positions" in command:
                 is_relative = command.get("is_relative", False)
                 self.backend.set_target_antenna_joint_positions(
-                    command["antennas_joint_positions"],
-                    is_relative=is_relative
-                )
-            if "head_joint_current" in command:
-                self.backend.set_target_head_joint_current(
-                    command["head_joint_current"]
-                )
-            if "head_operation_mode" in command:
-                self.backend.set_head_operation_mode(command["head_operation_mode"])
-            if "antennas_operation_mode" in command:
-                self.backend.set_antennas_operation_mode(
-                    command["antennas_operation_mode"]
+                    command["antennas_joint_positions"], is_relative=is_relative
                 )
             if "gravity_compensation" in command:
                 try:
-                    self.backend.set_gravity_compensation_mode(
-                        command["gravity_compensation"]
-                    )
+                    if command["gravity_compensation"]:
+                        self.backend.set_motor_control_mode(
+                            MotorControlMode.GravityCompensation
+                        )
+                    else:
+                        self.backend.set_motor_control_mode(MotorControlMode.Enabled)
+
                 except ValueError as e:
                     print(e)
             if "automatic_body_yaw" in command:

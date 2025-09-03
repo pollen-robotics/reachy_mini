@@ -18,13 +18,14 @@ import mujoco.viewer
 import numpy as np
 
 import reachy_mini
-from reachy_mini.daemon.backend.abstract import Backend
-from reachy_mini.daemon.backend.mujoco.utils import (
+
+from ..abstract import Backend, MotorControlMode
+from .utils import (
     get_actuator_names,
     get_joint_addr_from_name,
     get_joint_id_from_name,
 )
-from reachy_mini.daemon.backend.mujoco.video_udp import UDPJPEGFrameSender
+from .video_udp import UDPJPEGFrameSender
 
 
 class MujocoBackend(Backend):
@@ -269,32 +270,12 @@ class MujocoBackend(Backend):
         """Get the current joint positions of the antennas."""
         return self.data.qpos[self.joint_qpos_addr[-2:]].flatten().tolist()
 
-    def enable_motors(self) -> None:
-        """Enable the motors.
+    def get_motor_control_mode(self) -> MotorControlMode:
+        """Get the motor control mode."""
+        return MotorControlMode.Enabled
 
-        Does nothing in the Mujoco backend as it does not have a concept of enabling/disabling motors.
-        """
-        pass
-
-    def disable_motors(self) -> None:
-        """Disable the motors.
-
-        Does nothing in the Mujoco backend as it does not have a concept of enabling/disabling motors.
-        """
-        pass
-
-    def set_head_operation_mode(self, mode: int) -> None:
-        """Set mode of operation for the head.
-
-        This does nothing in the Mujoco backend as it does not have a concept of operation modes.
-        """
-        pass
-
-    def set_antennas_operation_mode(self, mode: int) -> None:
-        """Set mode of operation for the antennas.
-
-        This does nothing in the Mujoco backend as it does not have a concept of operation modes.
-        """
+    def set_motor_control_mode(self, mode: MotorControlMode) -> None:
+        """Set the motor control mode."""
         pass
 
 
