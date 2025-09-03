@@ -29,11 +29,11 @@ import reachy_mini
 from reachy_mini.kinematics import NNKinematics, PlacoKinematics
 from reachy_mini.utils.interpolation import (
     compose_world_offset,
+    distance_between_poses,
     linear_pose_interpolation,
     time_trajectory,
 )
 from reachy_mini.utils.relative_timeout import RelativeOffsetManager
-from reachy_mini.utils.interpolation import distance_between_poses
 
 try:
     pygame.mixer.init()
