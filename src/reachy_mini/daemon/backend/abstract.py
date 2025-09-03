@@ -723,11 +723,12 @@ class Backend:
         self.play_sound("go_sleep.wav")
 
         # Move to the sleep position
-        await self.async_goto_joint_positions(
-            head_joint_positions=self.SLEEP_HEAD_JOINT_POSITIONS,
-            antennas_joint_positions=self.SLEEP_ANTENNAS_JOINT_POSITIONS,
-            duration=2,
+        await self.async_goto_target(
+            self.SLEEP_HEAD_POSE,
+            antennas=self.SLEEP_ANTENNAS_JOINT_POSITIONS,
+            duration=2
         )
+
         self._last_head_pose = self.SLEEP_HEAD_POSE
         await asyncio.sleep(2)
 
