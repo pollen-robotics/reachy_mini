@@ -136,6 +136,42 @@ class Backend:
         # Recording lock to guard buffer swaps and appends
         self._rec_lock = threading.Lock()
 
+    # Life cycle methods
+    def wrapped_run(self):
+        """Run the backend in a try-except block to store errors."""
+        try:
+            self.run()
+        except Exception as e:
+            self.error = str(e)
+            self.close()
+            raise e
+
+    def run(self):
+        """Run the backend.
+
+        This method is a placeholder and should be overridden by subclasses.
+        """
+        raise NotImplementedError("The method run should be overridden by subclasses.")
+
+    def close(self) -> None:
+        """Close the backend.
+
+        This method is a placeholder and should be overridden by subclasses.
+        """
+        raise NotImplementedError(
+            "The method close should be overridden by subclasses."
+        )
+
+    def get_status(self):
+        """Return backend statistics.
+
+        This method is a placeholder and should be overridden by subclasses.
+        """
+        raise NotImplementedError(
+            "The method get_status should be overridden by subclasses."
+        )
+
+    # Present/Target joint positions
     def get_effective_head_pose_and_yaw(self) -> tuple[np.ndarray, float]:
         """Get the effective head pose and body yaw (absolute target + relative offsets).
 
@@ -174,43 +210,6 @@ class Backend:
         _, _, antenna_offsets = self.relative_manager.get_current_offsets()
 
         return [base_positions[i] + antenna_offsets[i] for i in range(2)]
-
-    # Life cycle methods
-    def wrapped_run(self):
-        """Run the backend in a try-except block to store errors."""
-        try:
-            self.run()
-        except Exception as e:
-            self.error = str(e)
-            self.close()
-            raise e
-
-    def run(self):
-        """Run the backend.
-
-        This method is a placeholder and should be overridden by subclasses.
-        """
-        raise NotImplementedError("The method run should be overridden by subclasses.")
-
-    def close(self) -> None:
-        """Close the backend.
-
-        This method is a placeholder and should be overridden by subclasses.
-        """
-        raise NotImplementedError(
-            "The method close should be overridden by subclasses."
-        )
-
-    def get_status(self):
-        """Return backend statistics.
-
-        This method is a placeholder and should be overridden by subclasses.
-        """
-        raise NotImplementedError(
-            "The method get_status should be overridden by subclasses."
-        )
-
-    # Present/Target joint positions
 
     def set_joint_positions_publisher(self, publisher) -> None:
         """Set the publisher for joint positions.
