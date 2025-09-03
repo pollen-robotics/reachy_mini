@@ -1,3 +1,6 @@
+"""Main API entry point server."""
+
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import APIRouter, FastAPI
@@ -9,6 +12,7 @@ from .routers import daemon, kinematics, motors, move, state
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    """Lifespan context manager for the FastAPI application."""
     app.state.daemon.start(sim=True, wake_up_on_start=False)
     yield
     app.state.daemon.stop(goto_sleep_on_stop=False)

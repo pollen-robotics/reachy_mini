@@ -1,3 +1,10 @@
+"""State-related API routes.
+
+This exposes:
+- basic get routes to retrieve most common fields
+- full state and streaming state updates
+"""
+
 import asyncio
 from datetime import datetime, timezone
 
@@ -15,6 +22,16 @@ async def get_head_pose(
     use_pose_matrix: bool = False,
     backend: Backend = Depends(get_backend),
 ) -> AnyPose:
+    """Get the present head pose.
+
+    Arguments:
+        use_pose_matrix (bool): Whether to use the pose matrix representation (4x4 flattened) or the translation + Euler angles representation (x, y, z, roll, pitch, yaw).
+        backend (Backend): The backend instance.
+
+    Returns:
+        AnyPose: The present head pose.
+
+    """
     return as_any_pose(backend.get_present_head_pose(), use_pose_matrix)
 
 
@@ -22,6 +39,7 @@ async def get_head_pose(
 async def get_body_yaw(
     backend: Backend = Depends(get_backend),
 ) -> float:
+    """Get the present body yaw (in radians)."""
     return backend.get_present_body_yaw()
 
 
@@ -29,12 +47,12 @@ async def get_body_yaw(
 async def get_antenna_joint_positions(
     backend: Backend = Depends(get_backend),
 ) -> tuple[float, float]:
+    """Get the present antenna joint positions (in radians) - (left, right)."""
     pos = backend.get_present_antenna_joint_positions()
     assert len(pos) == 2
     return (pos[0], pos[1])
 
 
-# TODO: Only send target in full to simplify API
 @router.get("/full")
 async def get_full_state(
     with_head_pose: bool = True,
@@ -72,6 +90,7 @@ async def ws_full_state(
     use_pose_matrix: bool = False,
     backend: Backend = Depends(ws_get_backend),
 ):
+    """WebSocket endpoint to stream the full state of the robot."""
     await websocket.accept()
     period = 1.0 / frequency
 

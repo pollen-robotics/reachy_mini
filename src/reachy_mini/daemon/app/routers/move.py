@@ -1,3 +1,12 @@
+"""Movement-related API routes.
+
+This exposes:
+- goto
+- play (wake_up, goto_sleep)
+- stop running moves
+- set_target and streaming set_target
+"""
+
 import asyncio
 import json
 from enum import Enum
@@ -17,6 +26,10 @@ router = APIRouter(
 
 
 class InterpolationMode(str, Enum):
+    """Interpolation modes for movement."""
+
+    # TODO: This should be the same as for the backend
+
     LINEAR = "linear"
     MINJERK = "minjerk"
     EASE = "ease"
@@ -24,6 +37,8 @@ class InterpolationMode(str, Enum):
 
 
 class GotoModelRequest(BaseModel):
+    """Request model for the goto endpoint."""
+
     head_pose: AnyPose | None = None
     antennas: tuple[float, float] | None = None
     duration: float
@@ -31,6 +46,8 @@ class GotoModelRequest(BaseModel):
 
 
 class MoveUUID(BaseModel):
+    """Model representing a unique identifier for a move task."""
+
     uuid: UUID
 
 
@@ -38,6 +55,7 @@ move_tasks: dict[UUID, asyncio.Task] = {}
 
 
 def create_move_task(coro: Coroutine) -> MoveUUID:
+    """Create a new move task using async task coroutine."""
     uuid = uuid4()
 
     task = asyncio.create_task(coro)
@@ -49,6 +67,7 @@ def create_move_task(coro: Coroutine) -> MoveUUID:
 
 
 async def stop_move_task(uuid: UUID):
+    """Stop a running move task by cancelling it."""
     if uuid not in move_tasks:
         raise KeyError(f"Running move with UUID {uuid} not found")
 
@@ -71,6 +90,7 @@ async def stop_move_task(uuid: UUID):
 async def goto(
     goto_req: GotoModelRequest, backend: Backend = Depends(get_backend)
 ) -> MoveUUID:
+    """Request a movement to a specific target."""
     return create_move_task(
         backend.async_goto_target(
             head=goto_req.head_pose.to_pose_array() if goto_req.head_pose else None,
@@ -82,16 +102,19 @@ async def goto(
 
 @router.post("/play/wake_up")
 async def play_wake_up(backend: Backend = Depends(get_backend)) -> MoveUUID:
+    """Request the robot to wake up."""
     return create_move_task(backend.wake_up())
 
 
 @router.post("/play/goto_sleep")
 async def play_goto_sleep(backend: Backend = Depends(get_backend)) -> MoveUUID:
+    """Request the robot to go to sleep."""
     return create_move_task(backend.goto_sleep())
 
 
 @router.post("/stop")
 async def stop_move(uuid: MoveUUID):
+    """Stop a running move task."""
     return await stop_move_task(uuid.uuid)
 
 
