@@ -389,19 +389,6 @@ class RobotBackend(Backend):
         """
         return self.get_all_joint_positions()[1]
 
-    def set_gravity_compensation_mode(self, mode: bool) -> None:
-        """Set the gravity compensation mode.
-
-        Args:
-            mode (bool): If True, gravity compensation is enabled.
-
-        """
-        if self.kinematics_engine != "Placo":
-            raise ValueError(
-                "Gravity compensation is only available with Placo kinematics"
-            )
-        self.gravity_compensation_mode = mode  # True (enable) or False (disable)
-
     def compensate_head_gravity(self) -> None:
         """Calculate the currents necessary to compensate for gravity."""
         # Even though in their docs dynamixes says that 1 count is 1 mA, in practice I've found it to be 3mA.
@@ -443,15 +430,23 @@ class RobotBackend(Backend):
                 self.set_head_operation_mode(3)
                 self.set_antennas_operation_mode(3)
 
+            self.gravity_compensation_mode = False
             self.enable_motors()
 
         elif mode == MotorControlMode.Disabled:
+            self.gravity_compensation_mode = False
             self.disable_motors()
 
         elif mode == MotorControlMode.GravityCompensation:
+            if self.kinematics_engine != "Placo":
+                raise RuntimeError(
+                    "Gravity compensation mode is only supported with the Placo kinematics engine."
+                )
+
             self.disable_motors()
             self.set_head_operation_mode(0)
             self.set_antennas_operation_mode(0)
+            self.gravity_compensation_mode = True
             self.enable_motors()
 
         self.motor_control_mode = mode
