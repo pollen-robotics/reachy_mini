@@ -270,12 +270,9 @@ class ReachyMini:
         # Pfiou
         self.play_sound("go_sleep.wav")
 
-        # Move to the sleep position
-        self._goto_joint_positions(
-            head_joint_positions=SLEEP_HEAD_JOINT_POSITIONS,
-            antennas_joint_positions=SLEEP_ANTENNAS_JOINT_POSITIONS,
-            duration=2,
-        )
+        # # Move to the sleep position
+        self.goto_target(SLEEP_HEAD_POSE, antennas=SLEEP_ANTENNAS_JOINT_POSITIONS, duration=2)
+
         self._last_head_pose = SLEEP_HEAD_POSE
         time.sleep(2)
 
