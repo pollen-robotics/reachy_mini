@@ -12,7 +12,7 @@ It is recommended to setup a wifi password and a ssh connection.
 sudo apt-get install libgstreamer-plugins-bad1.0-dev libgstreamer-plugins-base1.0-dev libgstreamer1.0-dev libglib2.0-dev libssl-dev git libgirepository1.0-dev libcairo2-dev
 ```
 
-## Install Rust
+## Install Rust
 
 ```bash
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
@@ -47,7 +47,7 @@ Start with webrtc mode
 reachy-mini-daemon --webrtc
 ```
 
-### Client
+### Client
 
 This should open view of the camera, and play back the sound.
 
