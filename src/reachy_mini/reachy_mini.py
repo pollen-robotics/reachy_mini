@@ -117,6 +117,14 @@ class ReachyMini:
             ]
         )
 
+    def __del__(self):
+        """Destroy the Reachy Mini instance.
+
+        The client is disconnected explicitly to avoid a thread pending issue.
+
+        """
+        self.client.disconnect()
+
     def __enter__(self) -> "ReachyMini":
         """Context manager entry point for Reachy Mini."""
         return self
