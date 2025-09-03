@@ -1,6 +1,5 @@
 """Main API entry point server."""
 
-import os
 from contextlib import asynccontextmanager
 
 from fastapi import APIRouter, FastAPI
