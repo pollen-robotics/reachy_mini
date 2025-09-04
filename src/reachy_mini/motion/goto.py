@@ -1,0 +1,59 @@
+from numpy import ndarray
+
+from reachy_mini.utils.interpolation import (
+    InterpolationTechnique,
+    linear_pose_interpolation,
+    time_trajectory,
+)
+
+from .move import Move
+
+
+class GotoMove(Move):
+    def __init__(
+        self,
+        start_head_pose: ndarray,
+        target_head_pose: ndarray | None,
+        start_antennas: ndarray,
+        target_antennas: ndarray | None,
+        start_body_yaw: float,
+        target_body_yaw: float | None,
+        duration: float,
+        method: InterpolationTechnique,
+    ):
+        self.start_head_pose = start_head_pose
+        self.target_head_pose = (
+            target_head_pose if target_head_pose is not None else start_head_pose
+        )
+        self.start_antennas = start_antennas
+        self.target_antennas = (
+            target_antennas if target_antennas is not None else start_antennas
+        )
+        self.start_body_yaw = start_body_yaw
+        self.target_body_yaw = (
+            target_body_yaw if target_body_yaw is not None else start_body_yaw
+        )
+
+        self._duration = duration
+        self.method = method
+
+    @property
+    def duration(self) -> float:
+        return self._duration
+
+    def evaluate(self, t: float) -> tuple[ndarray | None, ndarray | None, float | None]:
+        interp_time = time_trajectory(t / self.duration, method=self.method)
+
+        interp_head_pose = linear_pose_interpolation(
+            self.start_head_pose, self.target_head_pose, interp_time
+        )
+        interp_antennas_joint = (
+            self.start_antennas
+            + (self.target_antennas - self.start_antennas) * interp_time
+        )
+        interp_body_yaw_joint = (
+            self.start_body_yaw
+            + (self.target_body_yaw - self.start_body_yaw) * interp_time
+        )
+
+        return interp_head_pose, interp_antennas_joint, interp_body_yaw_joint

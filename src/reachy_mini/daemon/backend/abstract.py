@@ -19,6 +19,8 @@ from enum import Enum
 from importlib.resources import files
 from typing import List
 
+from reachy_mini.motion.goto import GotoMove
+
 os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "hide"
 
 import numpy as np
@@ -27,9 +29,10 @@ from scipy.spatial.transform import Rotation as R
 
 import reachy_mini
 from reachy_mini.kinematics import NNKinematics, PlacoKinematics
+from reachy_mini.motion.move import Move
 from reachy_mini.utils.interpolation import (
+    InterpolationTechnique,
     distance_between_poses,
-    linear_pose_interpolation,
     time_trajectory,
 )
 
@@ -291,14 +294,43 @@ class Backend:
         self.target_head_joint_current = current
         self.ik_required = False
 
-    async def async_goto_target(
+    async def play_move(self, move: Move, play_frequency: float = 100.0) -> None:
+        """Asynchronously play a Move.
+
+        Args:
+            move (Move): The Move object to be played.
+            play_frequency (float): The frequency at which to evaluate the move (in Hz).
+
+        """
+        sleep_period = 1.0 / play_frequency
+
+        t0 = time.time()
+        while time.time() - t0 < move.duration:
+            t = time.time() - t0
+
+            head, antennas, body_yaw = move.evaluate(t)
+            if head is not None:
+                self.set_target_head_pose(
+                    head,
+                    body_yaw=body_yaw if body_yaw is not None else 0.0,
+                )
+            if antennas is not None:
+                self.set_target_antenna_joint_positions(list(antennas))
+
+            elapsed = time.time() - t0 - t
+            if elapsed < sleep_period:
+                await asyncio.sleep(sleep_period - elapsed)
+            else:
+                await asyncio.sleep(0.001)
+
+    async def goto_target(
         self,
         head: np.ndarray | None = None,  # 4x4 pose matrix
         antennas: np.ndarray
         | list[float]
         | None = None,  # [left_angle, right_angle] (in rads)
         duration: float = 0.5,  # Duration in seconds for the movement, default is 0.5 seconds.
-        method="default",  # can be "linear", "minjerk", "ease" or "cartoon", default is "default" (-> "minjerk" interpolation)
+        method: InterpolationTechnique = InterpolationTechnique.MIN_JERK,  # can be "linear", "minjerk", "ease" or "cartoon", default is "minjerk"
         body_yaw: float = 0.0,  # Body yaw angle in radians
     ):
         """Asynchronously go to a target head pose and/or antennas position using task space interpolation, in "duration" seconds.
@@ -314,45 +346,27 @@ class Backend:
             ValueError: If neither head nor antennas are provided, or if duration is not positive.
 
         """
-        start_head_pose = self.get_present_head_pose()
-        target_head_pose = head if head is not None else start_head_pose
-        start_body_yaw = self.get_present_body_yaw()
-
-        start_antennas = np.array(self.get_present_antenna_joint_positions())
-        target_antennas = antennas if antennas is not None else start_antennas
-
-        t0 = time.time()
-        while time.time() - t0 < duration:
-            t = time.time() - t0
-
-            interp_time = time_trajectory(t / duration, method=method)
-            interp_head_pose = linear_pose_interpolation(
-                start_head_pose, target_head_pose, interp_time
+        return await self.play_move(
+            move=GotoMove(
+                start_head_pose=self.get_present_head_pose(),
+                target_head_pose=head,
+                start_body_yaw=self.get_present_body_yaw(),
+                target_body_yaw=body_yaw,
+                start_antennas=np.array(self.get_present_antenna_joint_positions()),
+                target_antennas=np.array(antennas) if antennas is not None else None,
+                duration=duration,
+                method=method,
             )
-            interp_antennas_joint = (
-                start_antennas + (target_antennas - start_antennas) * interp_time
-            )
-            interp_body_yaw_joint = (
-                start_body_yaw + (body_yaw - start_body_yaw) * interp_time
-            )
+        )
 
-            self.set_target_head_pose(
-                interp_head_pose,
-                body_yaw=interp_body_yaw_joint,
-            )
-            self.set_target_antenna_joint_positions(
-                list(interp_antennas_joint),
-            )
-            await asyncio.sleep(0.01)
-
-    async def async_goto_joint_positions(
+    async def goto_joint_positions(
         self,
         head_joint_positions: list[float]
         | None = None,  # [yaw, stewart_platform x 6] length 7
         antennas_joint_positions: list[float]
         | None = None,  # [left_angle, right_angle] length 2
         duration: float = 0.5,  # Duration in seconds for the movement
-        method="minjerk",  # can be "linear", "minjerk", "ease" or "cartoon", default is "default" (-> "minjerk" interpolation)
+        method: InterpolationTechnique = InterpolationTechnique.MIN_JERK,  # can be "linear", "minjerk", "ease" or "cartoon", default is "minjerk"
     ) -> None:
         """Asynchronously go to a target head joint positions and/or antennas joint positions using joint space interpolation, in "duration" seconds.
 
@@ -401,39 +415,6 @@ class Backend:
             self.set_target_head_joint_positions(head_joint.tolist())
             self.set_target_antenna_joint_positions(antennas_joint.tolist())
             await asyncio.sleep(0.01)
-
-    def goto_target(
-        self,
-        head: np.ndarray | None = None,  # 4x4 pose matrix
-        antennas: np.ndarray
-        | list[float]
-        | None = None,  # [left_angle, right_angle] (in rads)
-        duration: float = 0.5,  # Duration in seconds for the movement, default is 0.5 seconds.
-        method="default",  # can be "linear", "minjerk", "ease" or "cartoon", default is "default" (-> "minjerk" interpolation)
-        body_yaw: float = 0.0,  # Body yaw angle in radians
-    ):
-        """Go to a target head pose and/or antennas position using task space interpolation, in "duration" seconds.
-
-        Args:
-            head (np.ndarray | None): 4x4 pose matrix representing the target head pose.
-            antennas (np.ndarray | list[float] | None): 1D array with two elements representing the angles of the antennas in radians.
-            duration (float): Duration of the movement in seconds.
-            method (str): Interpolation method to use ("linear", "minjerk", "ease", "cartoon"). Default is "minjerk".
-            body_yaw (float): Body yaw angle in radians.
-
-        Raises:
-            ValueError: If neither head nor antennas are provided, or if duration is not positive.
-
-        """
-        asyncio.run(
-            self.async_goto_target(
-                head=head,
-                antennas=antennas,
-                duration=duration,
-                method=method,
-                body_yaw=body_yaw,
-            )
-        )
 
     def set_recording_publisher(self, publisher) -> None:
         """Set the publisher for recording data.
@@ -617,7 +598,7 @@ class Backend:
         """Wake up the robot - go to the initial head position and play the wake up emote and sound."""
         await asyncio.sleep(0.1)
 
-        await self.async_goto_target(
+        await self.goto_target(
             self.INIT_HEAD_POSE,
             antennas=[0.0, 0.0],
             duration=2,
@@ -630,10 +611,10 @@ class Backend:
         # Roll 20° to the left
         pose = self.INIT_HEAD_POSE.copy()
         pose[:3, :3] = R.from_euler("xyz", [20, 0, 0], degrees=True).as_matrix()
-        await self.async_goto_target(pose, duration=0.2)
+        await self.goto_target(pose, duration=0.2)
 
         # Go back to the initial position
-        await self.async_goto_target(self.INIT_HEAD_POSE, duration=0.2)
+        await self.goto_target(self.INIT_HEAD_POSE, duration=0.2)
 
     async def goto_sleep(self) -> None:
         """Put the robot to sleep by moving the head and antennas to a predefined sleep position.
@@ -657,7 +638,7 @@ class Backend:
         if dist_to_sleep_pose > 10:
             if dist_to_init_pose > 30:
                 # Move to the initial position
-                await self.async_goto_target(
+                await self.goto_target(
                     self.INIT_HEAD_POSE, antennas=[0.0, 0.0], duration=1
                 )
                 await asyncio.sleep(0.2)
@@ -665,7 +646,7 @@ class Backend:
             self.play_sound("go_sleep.wav")
 
             # Move to the sleep position
-            await self.async_goto_target(
+            await self.goto_target(
                 self.SLEEP_HEAD_POSE,
                 antennas=self.SLEEP_ANTENNAS_JOINT_POSITIONS,
                 duration=2,

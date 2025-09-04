@@ -1,5 +1,6 @@
 """Interpolation utilities for Reachy Mini."""
 
+from enum import Enum
 from typing import Callable, Optional, Tuple
 
 import numpy as np
@@ -83,26 +84,35 @@ def linear_pose_interpolation(
     return interp_pose
 
 
-def time_trajectory(t: float, method="default"):
-    """Compute the time trajectory value based on the specified interpolation method."""
-    method = "minjerk" if method == "default" else method
+class InterpolationTechnique(str, Enum):
+    """Enumeration of interpolation techniques."""
 
+    LINEAR = "linear"
+    MIN_JERK = "minjerk"
+    EASE_IN_OUT = "ease_in_out"
+    CARTOON = "cartoon"
+
+
+def time_trajectory(
+    t: float, method: InterpolationTechnique = InterpolationTechnique.MIN_JERK
+) -> float:
+    """Compute the time trajectory value based on the specified interpolation method."""
     if t < 0 or t > 1:
         raise ValueError("time value is out of range [0,1]")
 
-    if method == "linear":
+    if method == InterpolationTechnique.LINEAR:
         return t
 
-    elif method == "minjerk":
+    elif method == InterpolationTechnique.MIN_JERK:
         return 10 * t**3 - 15 * t**4 + 6 * t**5
 
-    elif method == "ease":
+    elif method == InterpolationTechnique.EASE_IN_OUT:
         if t < 0.5:
             return 2 * t * t
         else:
             return 1 - ((-2 * t + 2) ** 2) / 2
 
-    elif method == "cartoon":
+    elif method == InterpolationTechnique.CARTOON:
         c1 = 1.70158
         c2 = c1 * 1.525
 
@@ -115,8 +125,9 @@ def time_trajectory(t: float, method="default"):
 
     else:
         raise ValueError(
-            "Unknown interpolation method: {} (possible values: linear, minjerk, ease, cartoon)".format(
-                method
+            "Unknown interpolation method: {} (possible values: {})".format(
+                method,
+                list(InterpolationTechnique),
             )
         )
 
@@ -173,10 +184,11 @@ def distance_between_poses(
     return distance_translation, distance_angle, unhinged_distance
 
 
-def compose_world_offset(T_abs: np.ndarray, T_off_world: np.ndarray,
-                         reorthonormalize: bool = False) -> np.ndarray:
+def compose_world_offset(
+    T_abs: np.ndarray, T_off_world: np.ndarray, reorthonormalize: bool = False
+) -> np.ndarray:
     """Compose an absolute world-frame pose with a world-frame offset.
-    
+
       - translations add in world:       t_final = t_abs + t_off
       - rotations compose in world:      R_final = R_off @ R_abs
     This rotates the frame in place (about its own origin) by a rotation
@@ -195,7 +207,7 @@ def compose_world_offset(T_abs: np.ndarray, T_off_world: np.ndarray,
     -------
     T_final : (4,4) ndarray
         Resulting pose in world frame.
-        
+
     """
     R_abs, t_abs = T_abs[:3, :3], T_abs[:3, 3]
     R_off, t_off = T_off_world[:3, :3], T_off_world[:3, 3]
@@ -209,5 +221,5 @@ def compose_world_offset(T_abs: np.ndarray, T_off_world: np.ndarray,
 
     T_final = np.eye(4)
     T_final[:3, :3] = R_final
-    T_final[:3, 3]  = t_final
+    T_final[:3, 3] = t_final
     return T_final
