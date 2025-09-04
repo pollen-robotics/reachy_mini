@@ -680,10 +680,14 @@ class Backend:
         """Wake up the robot - go to the initial head position and play the wake up emote and sound."""
         await asyncio.sleep(0.1)
 
+        _, _, magic_distance = distance_between_poses(
+            self.get_current_head_pose(), self.INIT_HEAD_POSE
+        )
+
         await self.async_goto_target(
             self.INIT_HEAD_POSE,
             antennas=[0.0, 0.0],
-            duration=2,
+            duration=magic_distance * 20 / 1000,  # ms_per_magic_mm = 10
         )
         await asyncio.sleep(0.1)
 
