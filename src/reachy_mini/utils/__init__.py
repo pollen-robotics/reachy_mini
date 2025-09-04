@@ -5,9 +5,6 @@ checking if the Reachy Mini daemon is running, and performing linear pose interp
 
 """
 
-import asyncio
-from functools import wraps
-
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 
