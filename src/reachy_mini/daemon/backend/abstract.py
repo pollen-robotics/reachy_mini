@@ -28,12 +28,10 @@ from scipy.spatial.transform import Rotation as R
 import reachy_mini
 from reachy_mini.kinematics import NNKinematics, PlacoKinematics
 from reachy_mini.utils.interpolation import (
-    compose_world_offset,
     distance_between_poses,
     linear_pose_interpolation,
     time_trajectory,
 )
-from reachy_mini.utils.relative_timeout import RelativeOffsetManager
 
 try:
     pygame.mixer.init()
@@ -114,11 +112,6 @@ class Backend:
         self.target_antenna_joint_positions = None  # [0, 1]
         self.current_antenna_joint_positions = None  # [0, 1]
 
-        # Relative offsets manager with timeout and smooth decay
-        self.relative_manager = RelativeOffsetManager(
-            timeout_seconds=1.0, decay_duration=1.0
-        )
-
         self.joint_positions_publisher = None  # Placeholder for a publisher object
         self.pose_publisher = None  # Placeholder for a pose publisher object
         self.recording_publisher = None  # Placeholder for a recording publisher object
@@ -183,45 +176,6 @@ class Backend:
         )
 
     # Present/Target joint positions
-    def get_effective_head_pose_and_yaw(self) -> tuple[np.ndarray, float]:
-        """Get the effective head pose and body yaw (absolute target + relative offsets).
-
-        Returns:
-            tuple: (effective_head_pose, effective_body_yaw)
-
-        """
-        base_pose = (
-            self.target_head_pose if self.target_head_pose is not None else np.eye(4)
-        )
-        base_yaw = self.target_body_yaw if self.target_body_yaw is not None else 0.0
-
-        # Get current offsets (with timeout/decay applied)
-        head_offset, yaw_offset, _ = self.relative_manager.get_current_offsets()
-
-        # Apply relative offsets using correct matrix composition
-        effective_pose = compose_world_offset(base_pose, head_offset)
-        effective_yaw = base_yaw + yaw_offset
-
-        return effective_pose, effective_yaw
-
-    def get_effective_antenna_positions(self) -> List[float]:
-        """Get the effective antenna positions (absolute target + relative offsets).
-
-        Returns:
-            List[float]: effective antenna positions
-
-        """
-        base_positions = (
-            self.target_antenna_joint_positions
-            if self.target_antenna_joint_positions is not None
-            else [0.0, 0.0]
-        )
-
-        # Get current offsets (with timeout/decay applied)
-        _, _, antenna_offsets = self.relative_manager.get_current_offsets()
-
-        return [base_positions[i] + antenna_offsets[i] for i in range(2)]
-
     def set_joint_positions_publisher(self, publisher) -> None:
         """Set the publisher for joint positions.
 
@@ -273,25 +227,19 @@ class Backend:
         self.target_head_joint_positions = joints
 
     def set_target_head_pose(
-        self, pose: np.ndarray, body_yaw: float = 0.0, is_relative: bool = False
+        self,
+        pose: np.ndarray,
+        body_yaw: float = 0.0,
     ) -> None:
         """Set the target head pose for the robot.
 
         Args:
             pose (np.ndarray): 4x4 pose matrix representing the head pose.
             body_yaw (float): The yaw angle of the body, used to adjust the head pose.
-            is_relative (bool): If True, treat pose as an offset to be stored.
 
         """
-        if is_relative:
-            # Update relative offsets in the manager
-            self.relative_manager.update_offsets(
-                head_pose_offset=pose, body_yaw_offset=body_yaw
-            )
-        else:
-            # Set absolute targets
-            self.target_head_pose = pose
-            self.target_body_yaw = body_yaw
+        self.target_head_pose = pose
+        self.target_body_yaw = body_yaw
         self.ik_required = True
 
     def set_target_head_joint_positions(self, positions: List[float]) -> None:
@@ -311,32 +259,27 @@ class Backend:
         | list[float]
         | None = None,  # [left_angle, right_angle] (in rads)
         body_yaw: float = 0.0,  # Body yaw angle in radians
-        is_relative: bool = False,  # If True, treat values as offsets
     ) -> None:
         """Set the target head pose and/or antenna positions."""
         if head is not None:
-            self.set_target_head_pose(head, body_yaw, is_relative=is_relative)
+            self.set_target_head_pose(head, body_yaw)
+
         if antennas is not None:
             if isinstance(antennas, np.ndarray):
                 antennas = antennas.tolist()
-            self.set_target_antenna_joint_positions(antennas, is_relative=is_relative)
+            self.set_target_antenna_joint_positions(antennas)
 
     def set_target_antenna_joint_positions(
-        self, positions: List[float], is_relative: bool = False
+        self,
+        positions: List[float],
     ) -> None:
         """Set the antenna joint positions.
 
         Args:
             positions (List[float]): A list of joint positions for the antenna.
-            is_relative (bool): If True, treat positions as offsets to be stored.
 
         """
-        if is_relative:
-            # Update relative offsets in the manager
-            self.relative_manager.update_offsets(antenna_offsets=positions)
-        else:
-            # Set absolute targets
-            self.target_antenna_joint_positions = positions
+        self.target_antenna_joint_positions = positions
 
     def set_target_head_joint_current(self, current: List[float]) -> None:
         """Set the head joint current.
@@ -357,7 +300,6 @@ class Backend:
         duration: float = 0.5,  # Duration in seconds for the movement, default is 0.5 seconds.
         method="default",  # can be "linear", "minjerk", "ease" or "cartoon", default is "default" (-> "minjerk" interpolation)
         body_yaw: float = 0.0,  # Body yaw angle in radians
-        is_relative: bool = False,  # If True, treat values as offsets
     ):
         """Asynchronously go to a target head pose and/or antennas position using task space interpolation, in "duration" seconds.
 
@@ -367,7 +309,6 @@ class Backend:
             duration (float): Duration of the movement in seconds.
             method (str): Interpolation method to use ("linear", "minjerk", "ease", "cartoon"). Default is "minjerk".
             body_yaw (float): Body yaw angle in radians.
-            is_relative (bool): If True, treat values as offsets applied at each interpolation step.
 
         Raises:
             ValueError: If neither head nor antennas are provided, or if duration is not positive.
@@ -398,10 +339,9 @@ class Backend:
             self.set_target_head_pose(
                 interp_head_pose,
                 body_yaw=interp_body_yaw_joint,
-                is_relative=is_relative,
             )
             self.set_target_antenna_joint_positions(
-                list(interp_antennas_joint), is_relative=is_relative
+                list(interp_antennas_joint),
             )
             await asyncio.sleep(0.01)
 
@@ -471,7 +411,6 @@ class Backend:
         duration: float = 0.5,  # Duration in seconds for the movement, default is 0.5 seconds.
         method="default",  # can be "linear", "minjerk", "ease" or "cartoon", default is "default" (-> "minjerk" interpolation)
         body_yaw: float = 0.0,  # Body yaw angle in radians
-        is_relative: bool = False,  # If True, treat values as offsets
     ):
         """Go to a target head pose and/or antennas position using task space interpolation, in "duration" seconds.
 
@@ -481,7 +420,6 @@ class Backend:
             duration (float): Duration of the movement in seconds.
             method (str): Interpolation method to use ("linear", "minjerk", "ease", "cartoon"). Default is "minjerk".
             body_yaw (float): Body yaw angle in radians.
-            is_relative (bool): If True, treat values as offsets applied at each interpolation step.
 
         Raises:
             ValueError: If neither head nor antennas are provided, or if duration is not positive.
@@ -494,7 +432,6 @@ class Backend:
                 duration=duration,
                 method=method,
                 body_yaw=body_yaw,
-                is_relative=is_relative,
             )
         )
 
@@ -713,9 +650,6 @@ class Backend:
         _, _, dist_to_init_pose = distance_between_poses(
             self.get_current_head_pose(), self.INIT_HEAD_POSE
         )
-
-        print("dist to sleep pose:", dist_to_sleep_pose)
-        print("dist to init pose:", dist_to_init_pose)
 
         sleep_time = 2.0
 

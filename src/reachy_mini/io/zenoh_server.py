@@ -106,16 +106,13 @@ class ZenohServer(AbstractServer):
                     command["head_joint_positions"]
                 )
             if "head_pose" in command:
-                is_relative = command.get("is_relative", False)
                 self.backend.set_target_head_pose(
                     np.array(command["head_pose"]).reshape(4, 4),
                     command["body_yaw"],
-                    is_relative=is_relative,
                 )
             if "antennas_joint_positions" in command:
-                is_relative = command.get("is_relative", False)
                 self.backend.set_target_antenna_joint_positions(
-                    command["antennas_joint_positions"], is_relative=is_relative
+                    command["antennas_joint_positions"],
                 )
             if "gravity_compensation" in command:
                 try:
@@ -153,7 +150,6 @@ class ZenohServer(AbstractServer):
                     duration=req.duration,
                     method=req.method,
                     body_yaw=req.body_yaw,
-                    is_relative=req.is_relative,
                 )
         elif isinstance(task_req.req, PlayMoveTaskRequest):
 

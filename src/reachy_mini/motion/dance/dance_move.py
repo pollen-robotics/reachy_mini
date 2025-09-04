@@ -116,7 +116,6 @@ class Choreography(Move):
         repeat: int = 1,
         frequency: float = 100,
         start_goto: bool = False,
-        is_relative: bool = False,
     ):
         """Play the choreography on the ReachyMini robot."""
         for _ in range(repeat):

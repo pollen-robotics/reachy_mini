@@ -48,7 +48,6 @@ class Move(ABC):
         repeat: int = 1,
         frequency: float = 100.0,
         start_goto: bool = False,
-        is_relative: bool = False,
     ):
         """Play the move on the ReachyMini robot.
 
@@ -57,7 +56,6 @@ class Move(ABC):
             repeat: Number of times to repeat the move.
             frequency: Frequency of updates in Hz.
             start_goto: Whether to interpolate to the starting position before playing the move.
-            is_relative: If True, treat move as relative offsets.
 
         """
         asyncio.run(
@@ -66,7 +64,6 @@ class Move(ABC):
                 repeat=repeat,
                 frequency=frequency,
                 start_goto=start_goto,
-                is_relative=is_relative,
             )
         )
 
@@ -76,7 +73,6 @@ class Move(ABC):
         repeat: int = 1,
         frequency: float = 100.0,
         start_goto: bool = False,
-        is_relative: bool = False,
     ):
         """Play asynchronously the move on the ReachyMini robot.
 
@@ -85,7 +81,6 @@ class Move(ABC):
             repeat: Number of times to repeat the move.
             frequency: Frequency of updates in Hz.
             start_goto: Whether to interpolate to the starting position before playing the move.
-            is_relative: If True, treat move as relative offsets.
 
         """
         dt = 1.0 / frequency
@@ -132,7 +127,6 @@ class Move(ABC):
                     head=head,
                     antennas=antennas,
                     body_yaw=body_yaw,
-                    is_relative=is_relative,
                 )
 
                 end = time.time() - t0
