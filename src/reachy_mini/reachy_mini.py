@@ -12,9 +12,10 @@ import os
 import time
 from typing import Dict, List, Optional, Union
 
+from asgiref.sync import async_to_sync
+
 from reachy_mini.io.protocol import GotoTaskRequest
 from reachy_mini.motion.move import Move
-from reachy_mini.utils import sincify
 
 os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "hide"
 
@@ -665,4 +666,4 @@ class ReachyMini:
             else:
                 await asyncio.sleep(0.001)
 
-    play_move = sincify(async_play_move)
+    play_move = async_to_sync(async_play_move)
