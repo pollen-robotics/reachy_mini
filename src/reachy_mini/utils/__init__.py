@@ -5,6 +5,9 @@ checking if the Reachy Mini daemon is running, and performing linear pose interp
 
 """
 
+import asyncio
+from functools import wraps
+
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 
@@ -43,3 +46,13 @@ def create_head_pose(
         pose[:3, 3] /= 1000
 
     return pose
+
+
+def sincify(func):
+    """Decorate to convert a coroutine function into a regular function that runs the event loop."""
+
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        return asyncio.run(func(*args, **kwargs))
+
+    return wrapper

@@ -6,12 +6,15 @@ set their target positions, and perform various behaviors such as waking up and 
 It also includes methods for multimedia interactions like playing sounds and looking at specific points in the image frame or world coordinates.
 """
 
+import asyncio
 import json
 import os
 import time
 from typing import Dict, List, Optional, Union
 
 from reachy_mini.io.protocol import GotoTaskRequest
+from reachy_mini.motion.move import Move
+from reachy_mini.utils import sincify
 
 os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "hide"
 
@@ -543,7 +546,7 @@ class ReachyMini:
 
         self.client.send_command(json.dumps(cmd))
 
-    def _set_head_pose(
+    def set_target_head_pose(
         self,
         pose: np.ndarray,
         body_yaw: float = 0.0,
@@ -570,6 +573,11 @@ class ReachyMini:
 
         cmd["body_yaw"] = body_yaw
 
+        self.client.send_command(json.dumps(cmd))
+
+    def set_target_antenna_joint_positions(self, antennas: List[float]) -> None:
+        """Set the target joint positions of the antennas."""
+        cmd = {"antennas_joint_positions": antennas}
         self.client.send_command(json.dumps(cmd))
 
     def start_recording(self) -> None:
@@ -627,3 +635,34 @@ class ReachyMini:
 
         """
         self.client.send_command(json.dumps({"automatic_body_yaw": body_yaw}))
+
+    async def async_play_move(self, move: Move, play_frequency: float = 100.0) -> None:
+        """Asynchronously play a Move.
+
+        Args:
+            move (Move): The Move object to be played.
+            play_frequency (float): The frequency at which to evaluate the move (in Hz).
+
+        """
+        sleep_period = 1.0 / play_frequency
+
+        t0 = time.time()
+        while time.time() - t0 < move.duration:
+            t = time.time() - t0
+
+            head, antennas, body_yaw = move.evaluate(t)
+            if head is not None:
+                self.set_target_head_pose(
+                    head,
+                    body_yaw=body_yaw if body_yaw is not None else 0.0,
+                )
+            if antennas is not None:
+                self.set_target_antenna_joint_positions(list(antennas))
+
+            elapsed = time.time() - t0 - t
+            if elapsed < sleep_period:
+                await asyncio.sleep(sleep_period - elapsed)
+            else:
+                await asyncio.sleep(0.001)
+
+    play_move = sincify(async_play_move)
