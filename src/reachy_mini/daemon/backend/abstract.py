@@ -684,13 +684,12 @@ class Backend:
             self.get_current_head_pose(), self.INIT_HEAD_POSE
         )
 
-        if magic_distance > 10: # found empirically
-            await self.async_goto_target(
-                self.INIT_HEAD_POSE,
-                antennas=[0.0, 0.0],
-                duration=2,
-            )
-            await asyncio.sleep(0.1)
+        await self.async_goto_target(
+            self.INIT_HEAD_POSE,
+            antennas=[0.0, 0.0],
+            duration=magic_distance * 20 / 1000,  # ms_per_magic_mm = 10
+        )
+        await asyncio.sleep(0.1)
 
         # Toudoum
         self.play_sound("proud2.wav")
