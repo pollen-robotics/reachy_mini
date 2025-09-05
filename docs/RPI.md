@@ -32,7 +32,7 @@ sudo mkdir /opt/gst-plugins-rs
 
 sudo chown reachy /opt/gst-plugins-rs
 
-cargo install -p gst-plugin-webrtc --prefix=/opt/gst-plugins-rs --release
+cargo cinstall -p gst-plugin-webrtc --prefix=/opt/gst-plugins-rs --release
 
 echo 'export GST_PLUGIN_PATH=/opt/gst-plugins-rs/lib/aarch64-linux-gnu/' >> ~/.bashrc
 ```
