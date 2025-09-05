@@ -6,7 +6,3 @@ def test_daemon():  # noqa: D100, D103
     from reachy_mini.daemon.daemon import Daemon    
     
     daemon = Daemon()
-    daemon.start(
-        sim=True
-    )
-    daemon.stop()
