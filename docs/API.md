@@ -323,18 +323,17 @@ TODO
 
 You can also play predefined moves simply. You can find an example on how to do this in the [Dance Player](../examples/minimal_dance_player.py) example. 
 
-Basically, you just need to load the move from the collections you want. And run the `play_on` method on a `ReachyMini` instance.
+Basically, you just need to load the move from the dataset you want. And run the `play_on` method on a `ReachyMini` instance.
 
 ```python
 from reachy_mini.motion.dance_move import DanceMove
 from reachy_mini.reachy_mini import ReachyMini
 
+recorded_moves = RecordedMoves("pollen-robotics/reachy-mini-dances-library")
+
 with ReachyMini() as mini:
-    move = DanceMove("dizzy_spin")
+    move = recorded_moves.get("dizzy_spin")
     move.play_on(mini)
-    
-    # Or play as relative motion (layered on top of other movements)
-    move.play_on(mini, is_relative=True)
 ```
 
 You can also list the available moves in a collection as follows:
