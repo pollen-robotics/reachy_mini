@@ -55,7 +55,8 @@ This should open view of the camera, and play back the sound.
 python examples/debug/gstreamer_client.py --signaling-host <Reachy Mini ip>
 ```
 
-It is assumed that gstreamer is installed in your machine.
+It is assumed that gstreamer is installed in your machine. For Linux users you may want to follow the above procedure. For MacOS, please install via [brew](https://gstreamer.freedesktop.org/download/#macos). *ToDo* For Windows please make a conda environement.
+
 
 ## Unit tests
 
