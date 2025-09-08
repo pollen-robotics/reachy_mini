@@ -26,7 +26,7 @@ import pygame
 from scipy.spatial.transform import Rotation as R
 
 import reachy_mini
-from reachy_mini.kinematics import NNKinematics, PlacoKinematics
+from reachy_mini.kinematics import NNKinematics, PlacoKinematics, CPPAnalyticKinematics
 from reachy_mini.utils.interpolation import (
     compose_world_offset,
     distance_between_poses,
@@ -101,6 +101,8 @@ class Backend:
             )
         elif self.kinematics_engine == "NN":
             self.head_kinematics = NNKinematics(Backend.models_root_path)
+        elif self.kinematics_engine == "CPPAnalytical":
+            self.head_kinematics = CPPAnalyticKinematics(Backend.urdf_root_path)
         else:
             print("???")
             exit()
