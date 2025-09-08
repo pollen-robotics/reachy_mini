@@ -22,6 +22,8 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 ```bash
 git clone https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs.git
 
+cd gst-plugins-rs
+
 git checkout 0.14.1
 
 cargo install cargo-c
