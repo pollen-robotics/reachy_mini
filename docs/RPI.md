@@ -28,7 +28,7 @@ git checkout 0.14.1
 
 cargo install cargo-c
 
-cargo cbuild -p gst-plugin-webrtc
+cargo cbuild -p gst-plugin-webrtc --release
 
 sudo mkdir /opt/gst-plugins-rs
 
