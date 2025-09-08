@@ -88,6 +88,12 @@ async def stop_move_task(uuid: UUID):
     }
 
 
+@router.get("/running")
+async def get_running_moves() -> list[MoveUUID]:
+    """Get a list of currently running move tasks."""
+    return [MoveUUID(uuid=uuid) for uuid in move_tasks.keys()]
+
+
 @router.post("/goto")
 async def goto(
     goto_req: GotoModelRequest, backend: Backend = Depends(get_backend)
