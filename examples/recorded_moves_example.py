@@ -5,7 +5,6 @@ with ReachyMini() as mini:
     recorded_moves = RecordedMoves("pollen-robotics/reachy-mini-emotions-library")
     print(recorded_moves.list_moves())
 
-    mini.play_move(recorded_moves.get("welcoming1"))
-    mini.play_move(recorded_moves.get("yes1"))
-    mini.play_move(recorded_moves.get("tired1"))
-    mini.play_move(recorded_moves.get("sad1"))
+    for move_name in recorded_moves.list_moves():
+        print(f"Playing move: {move_name}")
+        mini.play_move(recorded_moves.get(move_name), initial_goto_duration=2.0)
