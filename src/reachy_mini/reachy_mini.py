@@ -29,7 +29,7 @@ from scipy.spatial.transform import Rotation as R
 import reachy_mini
 from reachy_mini.daemon.utils import daemon_check
 from reachy_mini.io import Client
-from reachy_mini.utils.interpolation import minimum_jerk
+from reachy_mini.utils.interpolation import InterpolationTechnique, minimum_jerk
 
 try:
     pygame.mixer.init()
@@ -190,7 +190,7 @@ class ReachyMini:
             Union[np.ndarray, List[float]]
         ] = None,  # [left_angle, right_angle] (in rads)
         duration: float = 0.5,  # Duration in seconds for the movement, default is 0.5 seconds.
-        method="default",  # can be "linear", "minjerk", "ease" or "cartoon", default is "default" (-> "minjerk" interpolation)
+        method=InterpolationTechnique.MIN_JERK,  # can be "linear", "minjerk", "ease" or "cartoon", default is "minjerk")
         body_yaw: float = 0.0,  # Body yaw angle in radians
     ):
         """Go to a target head pose and/or antennas position using task space interpolation, in "duration" seconds.
@@ -199,7 +199,7 @@ class ReachyMini:
             head (Optional[np.ndarray]): 4x4 pose matrix representing the target head pose.
             antennas (Optional[Union[np.ndarray, List[float]]]): 1D array with two elements representing the angles of the antennas in radians.
             duration (float): Duration of the movement in seconds.
-            method (str): Interpolation method to use ("linear", "minjerk", "ease", "cartoon"). Default is "minjerk".
+            method (InterpolationTechnique): Interpolation method to use ("linear", "minjerk", "ease", "cartoon"). Default is "minjerk".
             body_yaw (float): Body yaw angle in radians.
 
         Raises:
