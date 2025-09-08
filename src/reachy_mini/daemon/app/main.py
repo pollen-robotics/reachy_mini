@@ -12,15 +12,27 @@ from .routers import daemon, kinematics, motors, move, state
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Lifespan context manager for the FastAPI application."""
-    app.state.daemon.start(sim=True, wake_up_on_start=False)
+    await app.state.daemon.start(
+        sim=app.state.params["sim"],
+        scene=app.state.params["scene"],
+        wake_up_on_start=app.state.params["wake_up_on_start"],
+    )
     yield
-    app.state.daemon.stop(goto_sleep_on_stop=False)
+    await app.state.daemon.stop(
+        goto_sleep_on_stop=app.state.params["goto_sleep_on_stop"]
+    )
 
 
 app = FastAPI(
     lifespan=lifespan,
 )
 app.state.daemon = Daemon()
+app.state.params = {
+    "sim": True,
+    "scene": "empty",
+    "wake_up_on_start": True,
+    "goto_sleep_on_stop": True,
+}
 
 app.add_middleware(
     CORSMiddleware,

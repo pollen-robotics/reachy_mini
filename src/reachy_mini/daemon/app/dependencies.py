@@ -1,6 +1,6 @@
 """FastAPI common request dependencies."""
 
-from fastapi import Request, WebSocket
+from fastapi import HTTPException, Request, WebSocket
 
 from ..backend.abstract import Backend
 from ..daemon import Daemon
@@ -13,7 +13,12 @@ def get_daemon(request: Request) -> Daemon:
 
 def get_backend(request: Request) -> Backend:
     """Get the backend as request dependency."""
-    return request.app.state.daemon.backend
+    backend = request.app.state.daemon.backend
+
+    if not backend.ready.is_set():
+        raise HTTPException(status_code=503, detail="Backend not running")
+
+    return backend
 
 
 def ws_get_backend(websocket: WebSocket) -> Backend:

@@ -5,7 +5,6 @@ It includes methods to start, stop, and restart the daemon, as well as to check 
 It also provides a command-line interface for easy interaction.
 """
 
-import asyncio
 import logging
 from dataclasses import dataclass
 from enum import Enum
@@ -40,7 +39,7 @@ class Daemon:
             error=None,
         )
 
-    def start(
+    async def start(
         self,
         sim: bool = False,
         serialport: str = "auto",
@@ -112,7 +111,7 @@ class Daemon:
             try:
                 self.logger.info("Waking up Reachy Mini...")
                 self.backend.set_motor_control_mode(MotorControlMode.Enabled)
-                asyncio.run(self.backend.wake_up())
+                await self.backend.wake_up()
             except Exception as e:
                 self.logger.error(f"Error while waking up Reachy Mini: {e}")
                 self._status.state = DaemonState.ERROR
@@ -127,7 +126,7 @@ class Daemon:
         self._status.state = DaemonState.RUNNING
         return self._status.state
 
-    def stop(self, goto_sleep_on_stop: bool = True) -> "DaemonState":
+    async def stop(self, goto_sleep_on_stop: bool = True) -> "DaemonState":
         """Stop the Reachy Mini daemon.
 
         Args:
@@ -160,7 +159,7 @@ class Daemon:
                         == MotorControlMode.GravityCompensation
                     ):
                         self.backend.set_motor_control_mode(MotorControlMode.Enabled)
-                    asyncio.run(self.backend.goto_sleep())
+                    await self.backend.goto_sleep()
                     self.backend.set_motor_control_mode(MotorControlMode.Disabled)
                 except Exception as e:
                     self.logger.error(f"Error while putting Reachy Mini to sleep: {e}")
@@ -177,6 +176,7 @@ class Daemon:
                 self._status.state = DaemonState.ERROR
 
             self.backend.close()
+            self.backend.ready.clear()
             self.server.stop()
 
             if self._status.state != DaemonState.ERROR:
@@ -191,7 +191,7 @@ class Daemon:
 
         return self._status.state
 
-    def restart(
+    async def restart(
         self,
         sim: Optional[bool] = None,
         serialport: Optional[str] = None,
@@ -221,7 +221,7 @@ class Daemon:
         if self._status.state in (DaemonState.RUNNING, DaemonState.ERROR):
             self.logger.info("Restarting Reachy Mini daemon...")
 
-            self.stop(
+            await self.stop(
                 goto_sleep_on_stop=goto_sleep_on_stop
                 if goto_sleep_on_stop is not None
                 else False
@@ -240,7 +240,7 @@ class Daemon:
                 else False,
             }
 
-            return self.start(**params)
+            return await self.start(**params)
 
         raise NotImplementedError(
             "Restarting is only supported when the daemon is in RUNNING or ERROR state."
@@ -261,9 +261,9 @@ class Daemon:
 
         return self._status
 
-    def reset(self):
+    async def reset(self):
         """Reset the daemon status to NOT_INITIALIZED."""
-        self.stop(goto_sleep_on_stop=False)
+        await self.stop(goto_sleep_on_stop=False)
 
         self._status = DaemonStatus(
             state=DaemonState.NOT_INITIALIZED,
@@ -273,7 +273,7 @@ class Daemon:
         )
         self.logger.info("Daemon status reset to NOT_INITIALIZED.")
 
-    def run4ever(
+    async def run4ever(
         self,
         sim: bool = False,
         serialport: str = "auto",
@@ -299,7 +299,7 @@ class Daemon:
             kinematics_engine (str): Kinematics engine to use. Defaults to "Placo".
 
         """
-        self.start(
+        await self.start(
             sim=sim,
             serialport=serialport,
             scene=scene,
@@ -326,7 +326,7 @@ class Daemon:
                 self._status.state = DaemonState.ERROR
                 self._status.error = str(e)
 
-        self.stop(goto_sleep_on_stop)
+        await self.stop(goto_sleep_on_stop)
 
     def _setup_backend(
         self, sim, serialport, scene, check_collision, kinematics_engine
