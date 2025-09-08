@@ -107,6 +107,10 @@ class RobotBackend(Backend):
             head_positions, no_iterations=20
         )
 
+        self.head_kinematics.ik(
+            self.current_head_pose, no_iterations=20
+        )
+
         while not self.should_stop.is_set():
             start_t = time.time()
             self._stats["timestamps"].append(time.time())
