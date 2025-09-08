@@ -6,8 +6,9 @@ from pathlib import Path
 import numpy as np
 from huggingface_hub import snapshot_download
 
-from reachy_mini.motion import Move
 from reachy_mini.utils.interpolation import linear_pose_interpolation
+
+from . import Move
 
 
 def lerp(v0, v1, alpha):

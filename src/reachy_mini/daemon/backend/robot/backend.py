@@ -104,11 +104,14 @@ class RobotBackend(Backend):
         head_positions, _ = self.get_all_joint_positions()
         # make sure to converge fully (a lot of iterations)
         self.current_head_pose = self.head_kinematics.fk(
-            head_positions, no_iterations=20
+            head_positions,
+            no_iterations=20,
         )
+        assert self.current_head_pose is not None
 
         self.head_kinematics.ik(
-            self.current_head_pose, no_iterations=20
+            self.current_head_pose,
+            no_iterations=20,
         )
 
         while not self.should_stop.is_set():
@@ -153,9 +156,7 @@ class RobotBackend(Backend):
 
             if self._current_antennas_operation_mode != 0:  # if position control mode
                 if self.target_antenna_joint_positions is not None:
-                    # Use effective antenna targets (absolute + relative offsets)
-                    effective_antenna_positions = self.get_effective_antenna_positions()
-                    self.c.set_antennas_positions(effective_antenna_positions)
+                    self.c.set_antennas_positions(self.target_antenna_joint_positions)
             # Antenna torque control is not supported with feetech motors
             # else:
             #     if self.target_antenna_joint_current is not None:
@@ -176,12 +177,8 @@ class RobotBackend(Backend):
                 # Update the target head joint positions from IK if necessary
                 # - does nothing if the targets did not change
                 if self.ik_required:
-                    # Use effective targets (absolute + relative offsets)
-                    effective_pose, effective_yaw = (
-                        self.get_effective_head_pose_and_yaw()
-                    )
                     self.update_target_head_joints_from_ik(
-                        effective_pose, effective_yaw
+                        self.target_head_pose, self.target_body_yaw
                     )
 
                 self.joint_positions_publisher.put(
