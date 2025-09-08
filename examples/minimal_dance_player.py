@@ -7,7 +7,7 @@ each move once on the connected Reachy Mini robot in an infinite loop.
 """
 
 from reachy_mini import ReachyMini
-from reachy_mini.motion.recorded import RecordedMove, RecordedMoves
+from reachy_mini.motion.recorded_move import RecordedMove, RecordedMoves
 
 
 def main() -> None:
@@ -25,7 +25,7 @@ def main() -> None:
                     move: RecordedMove = recorded_moves.get(move_name)
                     print(f"Playing move: {move_name}: {move.description}\n")
                     # print(f"params: {move.move_params}")
-                    move.play_on(reachy, repeat=1)
+                    reachy.play_move(move, initial_goto_duration=1.0)
 
         except KeyboardInterrupt:
             print("\nDance sequence interrupted by user. Shutting down.")
