@@ -2,7 +2,6 @@ import numpy as np
 import reachy_mini_kinematics as rk
 from placo_utils.tf import tf
 
-
 from reachy_mini.kinematics import PlacoKinematics
 
 
@@ -15,6 +14,9 @@ class CPPAnalyticKinematics:
 
         self.placo_kinematics = PlacoKinematics(urdf_path, 0.02)
         self.robot = self.placo_kinematics.robot
+
+        self.placo_kinematics.fk([0.0] * 7, no_iterations=20)
+        self.robot.update_kinematics()
 
         # Measuring lengths for the arm and branch (constants could be used)
         self.T_world_head_home = self.robot.get_T_world_frame("head").copy()
@@ -68,11 +70,14 @@ class CPPAnalyticKinematics:
         check_collision: bool = False,
         no_iterations: int = 0,
     ):
-        """body_yaw, check_collision and no_iterations are not used by CPPAnalyticKinematics.
+        """check_collision and no_iterations are not used by CPPAnalyticKinematics.
 
         We keep them for compatibility with the other kinematics engines
         """
-        return self.kin.inverse_kinematics(pose)
+        # return self.placo_kinematics.ik(pose)
+        _pose = pose.copy()
+        _pose[:3, 3][2] += self.placo_kinematics.head_z_offset
+        return [body_yaw] + list(self.kin.inverse_kinematics(_pose))
 
     def fk(
         self,
@@ -94,13 +99,15 @@ if __name__ == "__main__":
     print("Motor arm length:", cpp_kin.motor_arm_length)
     print("Rod length:", cpp_kin.rod_length)
 
-    SLEEP_HEAD_POSE = np.array(
-        [
-            [0.911, 0.004, 0.413, -0.021],
-            [-0.004, 1.0, -0.001, 0.001],
-            [-0.413, -0.001, 0.911, -0.044],
-            [0.0, 0.0, 0.0, 1.0],
-        ]
-    )
+    pose = np.eye(4)
 
-    print(cpp_kin.ik(SLEEP_HEAD_POSE))
+    # SLEEP_HEAD_POSE = np.array(
+    #     [
+    #         [0.911, 0.004, 0.413, -0.021],
+    #         [-0.004, 1.0, -0.001, 0.001],
+    #         [-0.413, -0.001, 0.911, -0.044],
+    #         [0.0, 0.0, 0.0, 1.0],
+    #     ]
+    # )
+
+    print(np.around(cpp_kin.ik(pose), 3))
