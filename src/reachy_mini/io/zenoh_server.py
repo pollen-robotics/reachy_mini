@@ -7,6 +7,7 @@ It uses the Zenoh protocol for efficient data exchange and can be configured to 
 either on localhost only or to accept connections from other hosts.
 """
 
+import asyncio
 import json
 import threading
 from datetime import datetime
@@ -144,12 +145,14 @@ class ZenohServer(AbstractServer):
             req = task_req.req
 
             def task():
-                self.backend.goto_target(
-                    head=np.array(req.head).reshape(4, 4) if req.head else None,
-                    antennas=req.antennas,
-                    duration=req.duration,
-                    method=req.method,
-                    body_yaw=req.body_yaw,
+                asyncio.run(
+                    self.backend.goto_target(
+                        head=np.array(req.head).reshape(4, 4) if req.head else None,
+                        antennas=req.antennas,
+                        duration=req.duration,
+                        method=req.method,
+                        body_yaw=req.body_yaw,
+                    )
                 )
         elif isinstance(task_req.req, PlayMoveTaskRequest):
 
