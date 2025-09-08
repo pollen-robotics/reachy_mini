@@ -295,14 +295,30 @@ class Backend:
         self.target_head_joint_current = current
         self.ik_required = False
 
-    async def play_move(self, move: Move, play_frequency: float = 100.0) -> None:
+    async def play_move(
+        self,
+        move: Move,
+        play_frequency: float = 100.0,
+        initial_goto_duration: float = 0.0,
+    ) -> None:
         """Asynchronously play a Move.
 
         Args:
             move (Move): The Move object to be played.
             play_frequency (float): The frequency at which to evaluate the move (in Hz).
+            initial_goto_duration (float): Duration for an initial goto to the move's starting position. If 0.0, no initial goto is performed.
 
         """
+        if initial_goto_duration > 0.0:
+            start_head_pose, start_antennas_positions, start_body_yaw = move.evaluate(
+                0.0
+            )
+            await self.goto_target(
+                head=start_head_pose,
+                antennas=start_antennas_positions,
+                duration=initial_goto_duration,
+                body_yaw=start_body_yaw,
+            )
         sleep_period = 1.0 / play_frequency
 
         t0 = time.time()

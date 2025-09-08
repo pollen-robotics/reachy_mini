@@ -29,7 +29,7 @@ from scipy.spatial.transform import Rotation as R
 import reachy_mini
 from reachy_mini.daemon.utils import daemon_check
 from reachy_mini.io import Client
-from reachy_mini.utils.interpolation import minimum_jerk
+from reachy_mini.utils.interpolation import InterpolationTechnique, minimum_jerk
 
 try:
     pygame.mixer.init()
@@ -190,7 +190,7 @@ class ReachyMini:
             Union[np.ndarray, List[float]]
         ] = None,  # [left_angle, right_angle] (in rads)
         duration: float = 0.5,  # Duration in seconds for the movement, default is 0.5 seconds.
-        method="default",  # can be "linear", "minjerk", "ease" or "cartoon", default is "default" (-> "minjerk" interpolation)
+        method=InterpolationTechnique.MIN_JERK,  # can be "linear", "minjerk", "ease" or "cartoon", default is "minjerk")
         body_yaw: float = 0.0,  # Body yaw angle in radians
     ):
         """Go to a target head pose and/or antennas position using task space interpolation, in "duration" seconds.
@@ -199,7 +199,7 @@ class ReachyMini:
             head (Optional[np.ndarray]): 4x4 pose matrix representing the target head pose.
             antennas (Optional[Union[np.ndarray, List[float]]]): 1D array with two elements representing the angles of the antennas in radians.
             duration (float): Duration of the movement in seconds.
-            method (str): Interpolation method to use ("linear", "minjerk", "ease", "cartoon"). Default is "minjerk".
+            method (InterpolationTechnique): Interpolation method to use ("linear", "minjerk", "ease", "cartoon"). Default is "minjerk".
             body_yaw (float): Body yaw angle in radians.
 
         Raises:
@@ -637,14 +637,31 @@ class ReachyMini:
         """
         self.client.send_command(json.dumps({"automatic_body_yaw": body_yaw}))
 
-    async def async_play_move(self, move: Move, play_frequency: float = 100.0) -> None:
+    async def async_play_move(
+        self,
+        move: Move,
+        play_frequency: float = 100.0,
+        initial_goto_duration: float = 0.0,
+    ) -> None:
         """Asynchronously play a Move.
 
         Args:
             move (Move): The Move object to be played.
             play_frequency (float): The frequency at which to evaluate the move (in Hz).
+            initial_goto_duration (float): Duration for the initial goto to the starting position of the move (in seconds). If 0, no initial goto is performed.
 
         """
+        if initial_goto_duration > 0.0:
+            start_head_pose, start_antennas_positions, start_body_yaw = move.evaluate(
+                0.0
+            )
+            self.goto_target(
+                head=start_head_pose,
+                antennas=start_antennas_positions,
+                duration=initial_goto_duration,
+                body_yaw=start_body_yaw,
+            )
+
         sleep_period = 1.0 / play_frequency
 
         t0 = time.time()
