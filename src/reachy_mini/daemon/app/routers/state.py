@@ -53,7 +53,6 @@ async def get_antenna_joint_positions(
     return (pos[0], pos[1])
 
 
-# TODO: get target back
 @router.get("/full")
 async def get_full_state(
     with_head_pose: bool = True,
