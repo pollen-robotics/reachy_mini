@@ -7,4 +7,4 @@ with ReachyMini() as mini:
 
     for move_name in recorded_moves.list_moves():
         print(f"Playing move: {move_name}")
-        mini.play_move(recorded_moves.get(move_name), initial_goto_duration=2.0)
+        mini.play_move(recorded_moves.get(move_name), initial_goto_duration=1.0)
