@@ -16,6 +16,8 @@ from uuid import UUID, uuid4
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
+from reachy_mini.motion.recorded_move import RecordedMoves
+
 from ....daemon.backend.abstract import Backend
 from ..dependencies import get_backend, ws_get_backend
 from ..models import AnyPose, FullBodyTarget
@@ -110,6 +112,17 @@ async def play_wake_up(backend: Backend = Depends(get_backend)) -> MoveUUID:
 async def play_goto_sleep(backend: Backend = Depends(get_backend)) -> MoveUUID:
     """Request the robot to go to sleep."""
     return create_move_task(backend.goto_sleep())
+
+
+@router.post("/play/recorded-move-dataset/{dataset_name:path}/{move_name}")
+async def play_recorded_move_dataset(
+    dataset_name: str,
+    move_name: str,
+    backend: Backend = Depends(get_backend),
+) -> MoveUUID:
+    """Request the robot to play a predefined recorded move from a dataset."""
+    move = RecordedMoves(dataset_name).get(move_name)
+    return create_move_task(backend.play_move(move))
 
 
 @router.post("/stop")
