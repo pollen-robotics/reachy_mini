@@ -172,7 +172,7 @@ class ReachyMini:
                 antennas_joint_positions=list(antennas),
             )
         if head is not None:
-            self._set_head_pose(head, body_yaw)
+            self.set_target_head_pose(head, body_yaw)
         self._last_head_pose = head
 
         record = {
