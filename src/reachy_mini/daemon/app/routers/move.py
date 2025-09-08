@@ -92,7 +92,7 @@ async def goto(
 ) -> MoveUUID:
     """Request a movement to a specific target."""
     return create_move_task(
-        backend.async_goto_target(
+        backend.goto_target(
             head=goto_req.head_pose.to_pose_array() if goto_req.head_pose else None,
             antennas=list(goto_req.antennas) if goto_req.antennas else None,
             duration=goto_req.duration,
