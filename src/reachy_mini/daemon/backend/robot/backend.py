@@ -109,14 +109,7 @@ class RobotBackend(Backend):
         )
         assert self.current_head_pose is not None
 
-<<<<<<< HEAD
         self.head_kinematics.ik(self.current_head_pose, no_iterations=20)
-=======
-        self.head_kinematics.ik(
-            self.current_head_pose,
-            no_iterations=20,
-        )
->>>>>>> develop
 
         while not self.should_stop.is_set():
             start_t = time.time()
