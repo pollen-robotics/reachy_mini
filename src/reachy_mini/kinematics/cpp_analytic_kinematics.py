@@ -3,7 +3,7 @@ import reachy_mini_kinematics as rk
 from placo_utils.tf import tf
 
 from reachy_mini.kinematics import PlacoKinematics
-
+from FramesViewer import Viewer
 
 class CPPAnalyticKinematics:
     """Reachy Mini Analytic Kinematics class, implemented in C++ with python bindings."""
@@ -68,11 +68,13 @@ class CPPAnalyticKinematics:
         initial_T_world_platform = np.eye(4)
         initial_T_world_platform[:3, 3][2] += self.placo_kinematics.head_z_offset
         self.kin.reset_forward_kinematics(initial_T_world_platform)
-        joints = self.kin.inverse_kinematics(initial_T_world_platform)
-        joints = joints[1:]
+        # joint_angles = self.kin.inverse_kinematics(initial_T_world_platform)
+        # _joint_angles = joint_angles[1:]
+        # for _ in range(100):
+        #     self.kin.forward_kinematics(np.double(_joint_angles))
 
-        for _ in range(20):
-            self.kin.forward_kinematics(np.double(joints))
+        self.fv = Viewer()
+        self.fv.start()
 
     def ik(
         self,
@@ -98,16 +100,21 @@ class CPPAnalyticKinematics:
 
         For now, ignores the body yaw (first joint angle).
         """
+
         placo_res = self.placo_kinematics.fk(joint_angles)
         _joint_angles = joint_angles[1:]
 
         for _ in range(no_iterations):
             T_world_platform = self.kin.forward_kinematics(np.double(_joint_angles))
 
-        # T_world_platform[:3, 3][2] -= self.placo_kinematics.head_z_offset
+        T_world_platform[:3, 3][2] -= self.placo_kinematics.head_z_offset
         cpp_res = T_world_platform
 
-        # return cpp_res
+        random_name_cpp = f"cpp_{np.random.randint(0, 100000)}"
+        random_name_placo = f"placo_{np.random.randint(0, 100000)}"
+        self.fv.push_frame(cpp_res, name="cpp", color=(255, 0, 0))
+        self.fv.push_frame(placo_res, name="placo", color=(0, 255, 255))
+
         return placo_res
 
 
