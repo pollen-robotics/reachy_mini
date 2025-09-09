@@ -26,7 +26,7 @@ import pygame
 from scipy.spatial.transform import Rotation as R
 
 import reachy_mini
-from reachy_mini.kinematics import NNKinematics, PlacoKinematics, CPPAnalyticKinematics
+from reachy_mini.kinematics import CPPAnalyticKinematics, NNKinematics, PlacoKinematics
 from reachy_mini.utils.interpolation import (
     compose_world_offset,
     distance_between_poses,

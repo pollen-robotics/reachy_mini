@@ -12,6 +12,8 @@ class CPPAnalyticKinematics:
         """Initialize."""
         self.urdf_path = urdf_path
 
+        # TODO get rid of the PlacoKinematics dependency
+        # Store the values, or use a different urdf parser ?
         self.placo_kinematics = PlacoKinematics(urdf_path, 0.02)
         self.robot = self.placo_kinematics.robot
 
