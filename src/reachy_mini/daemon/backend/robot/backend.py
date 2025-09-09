@@ -107,9 +107,7 @@ class RobotBackend(Backend):
             head_positions, no_iterations=20
         )
 
-        self.head_kinematics.ik(
-            self.current_head_pose, no_iterations=20
-        )
+        self.head_kinematics.ik(self.current_head_pose, no_iterations=20)
 
         while not self.should_stop.is_set():
             start_t = time.time()
@@ -180,9 +178,12 @@ class RobotBackend(Backend):
                     effective_pose, effective_yaw = (
                         self.get_effective_head_pose_and_yaw()
                     )
-                    self.update_target_head_joints_from_ik(
-                        effective_pose, effective_yaw
-                    )
+                    try:
+                        self.update_target_head_joints_from_ik(
+                            effective_pose, effective_yaw
+                        )
+                    except Exception as e:
+                        self.logger.warning(f"IK error: {e}")
 
                 self.joint_positions_publisher.put(
                     json.dumps(

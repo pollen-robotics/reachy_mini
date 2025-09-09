@@ -191,9 +191,12 @@ class MujocoBackend(Backend):
                         effective_pose, effective_yaw = (
                             self.get_effective_head_pose_and_yaw()
                         )
-                        self.update_target_head_joints_from_ik(
-                            effective_pose, effective_yaw
-                        )
+                        try:
+                            self.update_target_head_joints_from_ik(
+                                effective_pose, effective_yaw
+                            )
+                        except Exception as e:
+                            print("IK error:", e)
 
                     if self.target_head_joint_positions is not None:
                         self.data.ctrl[:7] = self.target_head_joint_positions

@@ -719,10 +719,7 @@ class Backend:
         _, _, dist_to_init_pose = distance_between_poses(
             self.get_current_head_pose(), self.INIT_HEAD_POSE
         )
-
-        print("dist to sleep pose:", dist_to_sleep_pose)
-        print("dist to init pose:", dist_to_init_pose)
-
+        
         sleep_time = 2.0
 
         # Thresholds found empirically.
