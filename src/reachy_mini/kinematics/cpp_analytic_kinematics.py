@@ -1,4 +1,4 @@
-import numpy as np
+import numpy as np  # noqa: D100
 import reachy_mini_kinematics as rk
 from placo_utils.tf import tf
 

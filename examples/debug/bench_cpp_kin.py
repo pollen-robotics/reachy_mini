@@ -1,4 +1,4 @@
-import time
+import time  # noqa: D100
 
 import numpy as np
 
