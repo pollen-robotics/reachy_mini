@@ -23,7 +23,7 @@ for i in range(1000):
     ik_times.append(ik_time)
 
     fk_t0 = time.time()
-    cpp_kin.fk(np.double(joints))
+    cpp_kin.fk(np.double(joints), no_iterations=1)
     fk_time = time.time() - fk_t0
     fk_times.append(fk_time)
 
