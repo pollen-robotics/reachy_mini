@@ -1,6 +1,6 @@
 """Apps router for apps management."""
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 
 from reachy_mini.apps import AppInfo, SourceKind
 from reachy_mini.apps.manager import AppManager, AppStatus
@@ -52,13 +52,19 @@ async def start_app(
     app_manager: "AppManager" = Depends(get_app_manager),
 ) -> AppStatus:
     """Start an installed app by name."""
-    return await app_manager.start_app(app_name)
+    try:
+        return await app_manager.start_app(app_name)
+    except RuntimeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.post("/stop-current-app")
 async def stop_current_app(app_manager: "AppManager" = Depends(get_app_manager)):
     """Stop the currently running app."""
-    return await app_manager.stop_current_app()
+    try:
+        return await app_manager.stop_current_app()
+    except RuntimeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.post("/restart-current-app")
@@ -66,7 +72,10 @@ async def restart_app(
     app_manager: "AppManager" = Depends(get_app_manager),
 ) -> AppStatus:
     """Restart the currently running app."""
-    return await app_manager.restart_current_app()
+    try:
+        return await app_manager.restart_current_app()
+    except RuntimeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.get("/current-app-status")
