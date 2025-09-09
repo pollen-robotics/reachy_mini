@@ -63,6 +63,10 @@ class CPPAnalyticKinematics:
                 1 if motor["solution"] else -1,
             )
 
+        initial_T_world_platform = np.eye(4)
+        initial_T_world_platform[:3, 3][2] += self.placo_kinematics.head_z_offset
+        self.kin.reset_forward_kinematics(initial_T_world_platform)
+
     def ik(
         self,
         pose: np.ndarray,
@@ -83,12 +87,17 @@ class CPPAnalyticKinematics:
         self,
         joint_angles: list,
         check_collision: bool = False,
-        no_iterations: int = 0,
+        no_iterations: int = 3,
     ):
         """check_collision and no_iterations are not used by CPPAnalyticKinematics.
 
         Not implemented in C++ version, using PlacoKinematics's FK instead.
         """
+        _joint_angles = joint_angles[1:]
+        for _ in range(no_iterations):
+            T_world_platform = self.kin.forward_kinematics(_joint_angles)
+        T_world_platform[:3, 3][2] -= self.placo_kinematics.head_z_offset
+        return T_world_platform
         return self.placo_kinematics.fk(joint_angles)
 
 
