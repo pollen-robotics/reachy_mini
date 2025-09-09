@@ -6,12 +6,16 @@ set their target positions, and perform various behaviors such as waking up and 
 It also includes methods for multimedia interactions like playing sounds and looking at specific points in the image frame or world coordinates.
 """
 
+import asyncio
 import json
 import os
 import time
 from typing import Dict, List, Optional, Union
 
+from asgiref.sync import async_to_sync
+
 from reachy_mini.io.protocol import GotoTaskRequest
+from reachy_mini.motion.move import Move
 
 os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "hide"
 
@@ -25,7 +29,7 @@ from scipy.spatial.transform import Rotation as R
 import reachy_mini
 from reachy_mini.daemon.utils import daemon_check
 from reachy_mini.io import Client
-from reachy_mini.utils.interpolation import minimum_jerk
+from reachy_mini.utils.interpolation import InterpolationTechnique, minimum_jerk
 
 try:
     pygame.mixer.init()
@@ -140,7 +144,6 @@ class ReachyMini:
             Union[np.ndarray, List[float]]
         ] = None,  # [left_angle, right_angle] (in rads)
         body_yaw: float = 0.0,  # Body yaw angle in radians
-        is_relative: bool = False,  # If True, treat values as offsets
     ) -> None:
         """Set the target pose of the head and/or the target position of the antennas.
 
@@ -148,7 +151,6 @@ class ReachyMini:
             head (Optional[np.ndarray]): 4x4 pose matrix representing the head pose.
             antennas (Optional[Union[np.ndarray, List[float]]]): 1D array with two elements representing the angles of the antennas in radians.
             body_yaw (Optional[float]): Body yaw angle in radians.
-            is_relative (bool): If True, treat values as offsets to be added to current targets.
 
         Raises:
             ValueError: If neither head nor antennas are provided, or if the shape of head is not (4, 4), or if antennas is not a 1D array with two elements.
@@ -167,10 +169,10 @@ class ReachyMini:
 
         if antennas is not None:
             self._set_joint_positions(
-                antennas_joint_positions=list(antennas), is_relative=is_relative
+                antennas_joint_positions=list(antennas),
             )
         if head is not None:
-            self._set_head_pose(head, body_yaw, is_relative=is_relative)
+            self.set_target_head_pose(head, body_yaw)
         self._last_head_pose = head
 
         record = {
@@ -188,9 +190,8 @@ class ReachyMini:
             Union[np.ndarray, List[float]]
         ] = None,  # [left_angle, right_angle] (in rads)
         duration: float = 0.5,  # Duration in seconds for the movement, default is 0.5 seconds.
-        method="default",  # can be "linear", "minjerk", "ease" or "cartoon", default is "default" (-> "minjerk" interpolation)
+        method=InterpolationTechnique.MIN_JERK,  # can be "linear", "minjerk", "ease" or "cartoon", default is "minjerk")
         body_yaw: float = 0.0,  # Body yaw angle in radians
-        is_relative: bool = False,  # If True, treat values as offsets
     ):
         """Go to a target head pose and/or antennas position using task space interpolation, in "duration" seconds.
 
@@ -198,9 +199,8 @@ class ReachyMini:
             head (Optional[np.ndarray]): 4x4 pose matrix representing the target head pose.
             antennas (Optional[Union[np.ndarray, List[float]]]): 1D array with two elements representing the angles of the antennas in radians.
             duration (float): Duration of the movement in seconds.
-            method (str): Interpolation method to use ("linear", "minjerk", "ease", "cartoon"). Default is "minjerk".
+            method (InterpolationTechnique): Interpolation method to use ("linear", "minjerk", "ease", "cartoon"). Default is "minjerk".
             body_yaw (float): Body yaw angle in radians.
-            is_relative (bool): If True, treat values as offsets to be added during interpolation.
 
         Raises:
             ValueError: If neither head nor antennas are provided, or if duration is not positive.
@@ -224,7 +224,6 @@ class ReachyMini:
             duration=duration,
             method=method,
             body_yaw=body_yaw,
-            is_relative=is_relative,
         )
 
         task_uid = self.client.send_task_request(req)
@@ -271,7 +270,9 @@ class ReachyMini:
         self.play_sound("go_sleep.wav")
 
         # # Move to the sleep position
-        self.goto_target(SLEEP_HEAD_POSE, antennas=SLEEP_ANTENNAS_JOINT_POSITIONS, duration=2)
+        self.goto_target(
+            SLEEP_HEAD_POSE, antennas=SLEEP_ANTENNAS_JOINT_POSITIONS, duration=2
+        )
 
         self._last_head_pose = SLEEP_HEAD_POSE
         time.sleep(2)
@@ -516,7 +517,6 @@ class ReachyMini:
         self,
         head_joint_positions: list[float] | None = None,
         antennas_joint_positions: list[float] | None = None,
-        is_relative: bool = False,
     ):
         """Set the joint positions of the head and/or antennas.
 
@@ -525,7 +525,6 @@ class ReachyMini:
         Args:
             head_joint_positions (Optional[List[float]]): List of head joint positions in radians (length 7).
             antennas_joint_positions (Optional[List[float]]): List of antennas joint positions in radians (length 2).
-            is_relative (bool): If True, treat values as offsets.
             record (Optional[Dict]): If provided, the command will be logged with the given record data.
 
         """
@@ -546,19 +545,18 @@ class ReachyMini:
                 "At least one of head_joint_positions or antennas must be provided."
             )
 
-        cmd["is_relative"] = is_relative
-
         self.client.send_command(json.dumps(cmd))
 
-    def _set_head_pose(
-        self, pose: np.ndarray, body_yaw: float = 0.0, is_relative: bool = False
+    def set_target_head_pose(
+        self,
+        pose: np.ndarray,
+        body_yaw: float = 0.0,
     ) -> None:
         """Set the head pose to a specific 4x4 matrix.
 
         Args:
             pose (np.ndarray): A 4x4 matrix representing the desired head pose.
             body_yaw (float): The yaw angle of the body, used to adjust the head pose.
-            is_relative (bool): If True, treat pose as an offset.
 
         Raises:
             ValueError: If the shape of the pose is not (4, 4).
@@ -575,8 +573,12 @@ class ReachyMini:
             raise ValueError("Pose must be provided as a 4x4 matrix.")
 
         cmd["body_yaw"] = body_yaw
-        cmd["is_relative"] = is_relative
 
+        self.client.send_command(json.dumps(cmd))
+
+    def set_target_antenna_joint_positions(self, antennas: List[float]) -> None:
+        """Set the target joint positions of the antennas."""
+        cmd = {"antennas_joint_positions": antennas}
         self.client.send_command(json.dumps(cmd))
 
     def start_recording(self) -> None:
@@ -634,3 +636,51 @@ class ReachyMini:
 
         """
         self.client.send_command(json.dumps({"automatic_body_yaw": body_yaw}))
+
+    async def async_play_move(
+        self,
+        move: Move,
+        play_frequency: float = 100.0,
+        initial_goto_duration: float = 0.0,
+    ) -> None:
+        """Asynchronously play a Move.
+
+        Args:
+            move (Move): The Move object to be played.
+            play_frequency (float): The frequency at which to evaluate the move (in Hz).
+            initial_goto_duration (float): Duration for the initial goto to the starting position of the move (in seconds). If 0, no initial goto is performed.
+
+        """
+        if initial_goto_duration > 0.0:
+            start_head_pose, start_antennas_positions, start_body_yaw = move.evaluate(
+                0.0
+            )
+            self.goto_target(
+                head=start_head_pose,
+                antennas=start_antennas_positions,
+                duration=initial_goto_duration,
+                body_yaw=start_body_yaw,
+            )
+
+        sleep_period = 1.0 / play_frequency
+
+        t0 = time.time()
+        while time.time() - t0 < move.duration:
+            t = time.time() - t0
+
+            head, antennas, body_yaw = move.evaluate(t)
+            if head is not None:
+                self.set_target_head_pose(
+                    head,
+                    body_yaw=body_yaw if body_yaw is not None else 0.0,
+                )
+            if antennas is not None:
+                self.set_target_antenna_joint_positions(list(antennas))
+
+            elapsed = time.time() - t0 - t
+            if elapsed < sleep_period:
+                await asyncio.sleep(sleep_period - elapsed)
+            else:
+                await asyncio.sleep(0.001)
+
+    play_move = async_to_sync(async_play_move)

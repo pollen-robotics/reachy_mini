@@ -10,12 +10,13 @@ import numpy as np
 
 from reachy_mini import ReachyMini
 from reachy_mini.utils import create_head_pose
+from reachy_mini.utils.interpolation import InterpolationTechnique
 
 
 def main():
     """Run the different interpolation methods."""
     with ReachyMini() as mini:
-        for method in ["linear", "minjerk", "ease", "cartoon"]:
+        for method in InterpolationTechnique:
             print(f"Testing method: {method}")
 
             pose = create_head_pose(x=0, y=0, z=0, yaw=0)

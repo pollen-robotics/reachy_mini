@@ -201,11 +201,7 @@ class MujocoBackend(Backend):
                     if self.target_head_joint_positions is not None:
                         self.data.ctrl[:7] = self.target_head_joint_positions
                     if self.target_antenna_joint_positions is not None:
-                        # Use effective antenna targets (absolute + relative offsets)
-                        effective_antenna_positions = (
-                            self.get_effective_antenna_positions()
-                        )
-                        self.data.ctrl[-2:] = effective_antenna_positions
+                        self.data.ctrl[-2:] = self.target_antenna_joint_positions
 
                     if (
                         self.joint_positions_publisher is not None

@@ -5,6 +5,8 @@ from uuid import UUID
 
 from pydantic import BaseModel
 
+from reachy_mini.utils.interpolation import InterpolationTechnique
+
 
 class GotoTaskRequest(BaseModel):
     """Class to represent a goto target task."""
@@ -12,9 +14,8 @@ class GotoTaskRequest(BaseModel):
     head: list[float] | None  # 4x4 flatten pose matrix
     antennas: list[float] | None  # [left_angle, right_angle] (in rads)
     duration: float
-    method: str
+    method: InterpolationTechnique
     body_yaw: float
-    is_relative: bool = False  # If True, treat values as offsets
 
 
 class PlayMoveTaskRequest(BaseModel):
