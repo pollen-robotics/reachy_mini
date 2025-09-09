@@ -80,8 +80,10 @@ class AppManager:
 
             try:
                 self.current_app.status.state = AppState.RUNNING
+                self.logger.getChild("runner").info(f"App {app_name} is running")
                 app.wrapped_run()
                 self.current_app.status.state = AppState.DONE
+                self.logger.getChild("runner").info(f"App {app_name} finished")
             except Exception as e:
                 self.logger.getChild("runner").error(
                     f"An error occurred in the app {app_name}: {e}"
@@ -98,6 +100,7 @@ class AppManager:
             app=app,
             thread=Thread(target=wrapped_run),
         )
+        self.logger.getChild("runner").info(f"Starting app {app_name}")
         self.current_app.thread.start()
 
         return self.current_app.status
@@ -110,6 +113,9 @@ class AppManager:
         assert self.current_app is not None
 
         self.current_app.status.state = AppState.STOPPING
+        self.logger.getChild("runner").info(
+            f"Stopping app {self.current_app.status.info.name}"
+        )
         self.current_app.app.stop()
         self.current_app.thread.join(timeout)
 
@@ -117,6 +123,8 @@ class AppManager:
             self.logger.getChild("runner").warning(
                 "The app did not stop within the timeout"
             )
+        else:
+            self.logger.getChild("runner").info("App stopped successfully")
 
         self.current_app = None
 
