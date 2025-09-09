@@ -4,9 +4,8 @@ import asyncio
 import logging
 
 
-async def running_command(command: list[str], logger_name: str) -> None:
+async def running_command(command: list[str], logger: logging.Logger) -> None:
     """Run a shell command and stream its output to the provided logger."""
-    logger = logging.getLogger(logger_name)
     logger.info(f"Running command: {' '.join(command)}")
 
     proc = await asyncio.create_subprocess_exec(

@@ -5,8 +5,9 @@ from contextlib import asynccontextmanager
 from fastapi import APIRouter, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from ...apps.manager import AppManager
 from ..daemon import Daemon
-from .routers import daemon, kinematics, motors, move, state
+from .routers import apps, daemon, kinematics, motors, move, state
 
 
 @asynccontextmanager
@@ -18,6 +19,7 @@ async def lifespan(app: FastAPI):
         wake_up_on_start=app.state.params["wake_up_on_start"],
     )
     yield
+    await app.state.app_manager.close()
     await app.state.daemon.stop(
         goto_sleep_on_stop=app.state.params["goto_sleep_on_stop"]
     )
@@ -27,6 +29,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 app.state.daemon = Daemon()
+app.state.app_manager = AppManager()
 app.state.params = {
     "sim": True,
     "scene": "empty",
@@ -43,11 +46,11 @@ app.add_middleware(
 
 
 router = APIRouter(prefix="/api")
+router.include_router(apps.router)
 router.include_router(daemon.router)
 router.include_router(kinematics.router)
 router.include_router(motors.router)
 router.include_router(move.router)
 router.include_router(state.router)
-
 
 app.include_router(router)
