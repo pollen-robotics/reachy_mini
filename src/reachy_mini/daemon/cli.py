@@ -76,6 +76,12 @@ def main():
         choices=["Placo", "NN", "Analytical"],
         help="Set the kinematics engine (default: Placo).",
     )
+    parser.add_argument(
+        "--headless",
+        action="store_true",
+        default=False,
+        help="Run Mujoco in headless mode (no GUI) (default: False).",
+    )
 
     args = parser.parse_args()
 
@@ -91,6 +97,7 @@ def main():
         localhost_only=args.localhost_only,
         check_collision=args.check_collision,
         kinematics_engine=args.kinematics_engine,
+        headless=args.headless,
     )
 
 
