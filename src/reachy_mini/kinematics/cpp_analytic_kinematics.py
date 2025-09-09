@@ -68,6 +68,11 @@ class CPPAnalyticKinematics:
         initial_T_world_platform = np.eye(4)
         initial_T_world_platform[:3, 3][2] += self.placo_kinematics.head_z_offset
         self.kin.reset_forward_kinematics(initial_T_world_platform)
+        joints = self.kin.inverse_kinematics(initial_T_world_platform)
+        joints = joints[1:]
+
+        for _ in range(20):
+            self.kin.forward_kinematics(np.double(joints))
 
     def ik(
         self,
@@ -93,13 +98,17 @@ class CPPAnalyticKinematics:
 
         For now, ignores the body yaw (first joint angle).
         """
+        placo_res = self.placo_kinematics.fk(joint_angles)
         _joint_angles = joint_angles[1:]
 
         for _ in range(no_iterations):
             T_world_platform = self.kin.forward_kinematics(np.double(_joint_angles))
 
-        T_world_platform[:3, 3][2] -= self.placo_kinematics.head_z_offset
-        return T_world_platform
+        # T_world_platform[:3, 3][2] -= self.placo_kinematics.head_z_offset
+        cpp_res = T_world_platform
+
+        # return cpp_res
+        return placo_res
 
 
 if __name__ == "__main__":
