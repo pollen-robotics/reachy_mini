@@ -168,20 +168,6 @@ with ReachyMini() as reachy:
         time.sleep(0.01)
 ```
 
-### Relative Motion
-
-Both `set_target` and `goto_target` support an optional `is_relative` parameter that allows you to layer motion offsets on top of existing movements. When `is_relative=True`, the pose values are treated as additive offsets rather than absolute targets.
-
-Relative offsets are designed to be called frequently (typically at high frequency like 50Hz) to create smooth layered motion. If you stop sending relative commands, the system will automatically smooth the offsets back to zero over 2 seconds (1 second timeout + 1 second decay).
-
-Common use cases include:
-- **Speech animation**: Small head wobbles during talking while maintaining overall gaze direction
-- **Expressive layers**: Adding emotional micro-expressions on top of choreographed dance moves  
-- **Breathing effects**: Subtle motion that continues regardless of other activities
-- **Live performance**: Real-time expression control layered over pre-programmed choreography
-
-The key advantage is that relative motion can run independently from absolute motion - you can have a planned routine running with `goto_target()` while simultaneously adding live expressive movements with `set_target(is_relative=True)`.
-
 ⚠️ <b>BEWARE: Mini's head range of motion is limited</b> ⚠️
 
 
@@ -323,18 +309,17 @@ TODO
 
 You can also play predefined moves simply. You can find an example on how to do this in the [Dance Player](../examples/minimal_dance_player.py) example. 
 
-Basically, you just need to load the move from the collections you want. And run the `play_on` method on a `ReachyMini` instance.
+Basically, you just need to load the move from the dataset you want. And run the `play_on` method on a `ReachyMini` instance.
 
 ```python
 from reachy_mini.motion.dance_move import DanceMove
 from reachy_mini.reachy_mini import ReachyMini
 
+recorded_moves = RecordedMoves("pollen-robotics/reachy-mini-dances-library")
+
 with ReachyMini() as mini:
-    move = DanceMove("dizzy_spin")
+    move = recorded_moves.get("dizzy_spin")
     move.play_on(mini)
-    
-    # Or play as relative motion (layered on top of other movements)
-    move.play_on(mini, is_relative=True)
 ```
 
 You can also list the available moves in a collection as follows:
