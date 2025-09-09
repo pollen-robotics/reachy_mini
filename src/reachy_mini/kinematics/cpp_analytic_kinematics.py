@@ -80,7 +80,6 @@ class CPPAnalyticKinematics:
 
         We keep them for compatibility with the other kinematics engines
         """
-        # return self.placo_kinematics.ik(pose)
         _pose = pose.copy()
         _pose[:3, 3][2] += self.placo_kinematics.head_z_offset
         return [body_yaw] + list(self.kin.inverse_kinematics(_pose))
@@ -91,16 +90,17 @@ class CPPAnalyticKinematics:
         check_collision: bool = False,
         no_iterations: int = 3,
     ):
-        """check_collision and no_iterations are not used by CPPAnalyticKinematics.
+        """check_collision is not used by CPPAnalyticKinematics.
 
-        Not implemented in C++ version, using PlacoKinematics's FK instead.
+        For now, ignores the body yaw (first joint angle).
         """
         _joint_angles = joint_angles[1:]
+
         for _ in range(no_iterations):
             T_world_platform = self.kin.forward_kinematics(_joint_angles)
+
         T_world_platform[:3, 3][2] -= self.placo_kinematics.head_z_offset
         return T_world_platform
-        return self.placo_kinematics.fk(joint_angles)
 
 
 if __name__ == "__main__":
