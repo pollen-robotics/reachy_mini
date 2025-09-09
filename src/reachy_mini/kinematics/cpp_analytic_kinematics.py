@@ -96,7 +96,7 @@ class CPPAnalyticKinematics:
         _joint_angles = joint_angles[1:]
 
         for _ in range(no_iterations):
-            T_world_platform = self.kin.forward_kinematics(_joint_angles)
+            T_world_platform = self.kin.forward_kinematics(np.double(_joint_angles))
 
         T_world_platform[:3, 3][2] -= self.placo_kinematics.head_z_offset
         return T_world_platform
