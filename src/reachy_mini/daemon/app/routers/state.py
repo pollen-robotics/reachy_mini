@@ -57,7 +57,7 @@ async def get_antenna_joint_positions(
 async def get_full_state(
     with_head_pose: bool = True,
     with_target_head_pose: bool = False,
-    with_head_joints: bool = True,
+    with_head_joints: bool = False,
     with_target_head_joints: bool = False,
     with_body_yaw: bool = True,
     with_target_body_yaw: bool = False,
@@ -98,7 +98,7 @@ async def ws_full_state(
     frequency: float = 10.0,
     with_head_pose: bool = True,
     with_target_head_pose: bool = False,
-    with_head_joints: bool = True,
+    with_head_joints: bool = False,
     with_target_head_joints: bool = False,
     with_body_yaw: bool = True,
     with_target_body_yaw: bool = False,
