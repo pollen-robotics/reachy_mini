@@ -135,6 +135,18 @@ async def ws_apps_manager(websocket: WebSocket, job_id: str):
             del job.new_log_evt[ws_uuid]
 
 
+@router.post("/start-app/{app_name}")
+async def start_app(
+    app_name: str,
+    app_manager: "AppManager" = Depends(get_app_manager),
+) -> AppStatus:
+    """Start an app by its name."""
+    try:
+        return await app_manager.start_app(app_name)
+    except RuntimeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @router.post("/restart-current-app")
 async def restart_app(
     app_manager: "AppManager" = Depends(get_app_manager),
@@ -142,6 +154,17 @@ async def restart_app(
     """Restart the currently running app."""
     try:
         return await app_manager.restart_current_app()
+    except RuntimeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/stop-current-app")
+async def stop_app(
+    app_manager: "AppManager" = Depends(get_app_manager),
+) -> None:
+    """Stop the currently running app."""
+    try:
+        return await app_manager.stop_current_app()
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
