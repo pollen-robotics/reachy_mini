@@ -17,22 +17,22 @@ async def list_available_apps() -> list[AppInfo]:
     ]
 
 
-async def install_package(app: AppInfo, logger: logging.Logger) -> None:
+async def install_package(app: AppInfo, logger: logging.Logger) -> int:
     """Install a package given an AppInfo object, streaming logs."""
     target = f"git+{app.url}" if app.url is not None else app.name
-    await running_command(
+    return await running_command(
         [sys.executable, "-m", "pip", "install", target],
         logger=logger,
     )
 
 
-async def uninstall_package(app_name: str, logger: logging.Logger) -> None:
+async def uninstall_package(app_name: str, logger: logging.Logger) -> int:
     """Uninstall a package given an app name."""
     existing_apps = await list_available_apps()
     if app_name not in [app.name for app in existing_apps]:
         raise ValueError(f"Cannot uninstall app '{app_name}': it is not installed")
 
-    await running_command(
+    return await running_command(
         [sys.executable, "-m", "pip", "uninstall", "-y", app_name],
         logger=logger,
     )

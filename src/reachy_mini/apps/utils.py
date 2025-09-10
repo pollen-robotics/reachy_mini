@@ -4,7 +4,7 @@ import asyncio
 import logging
 
 
-async def running_command(command: list[str], logger: logging.Logger) -> None:
+async def running_command(command: list[str], logger: logging.Logger) -> int:
     """Run a shell command and stream its output to the provided logger."""
     logger.info(f"Running command: {' '.join(command)}")
 
@@ -27,4 +27,4 @@ async def running_command(command: list[str], logger: logging.Logger) -> None:
     if err:
         logger.error(err.decode().rstrip())
 
-    await proc.wait()
+    return await proc.wait()

@@ -166,8 +166,12 @@ class AppManager:
 
     async def install_new_app(self, app: AppInfo, logger: logging.Logger) -> None:
         """Install a new app by name."""
-        await local_common_venv.install_package(app, logger)
+        success = await local_common_venv.install_package(app, logger)
+        if success != 0:
+            raise RuntimeError(f"Failed to install app '{app.name}'")
 
     async def remove_app(self, app_name: str, logger: logging.Logger) -> None:
         """Remove an installed app by name."""
-        await local_common_venv.uninstall_package(app_name, logger)
+        success = await local_common_venv.uninstall_package(app_name, logger)
+        if success != 0:
+            raise RuntimeError(f"Failed to uninstall app '{app_name}'")
