@@ -164,12 +164,10 @@ class AppManager:
         else:
             raise NotImplementedError(f"Unknown source kind: {source}")
 
-    async def install_new_app(self, app: AppInfo) -> None:
+    async def install_new_app(self, app: AppInfo, logger: logging.Logger) -> None:
         """Install a new app by name."""
-        await local_common_venv.install_package(app, self.logger.getChild("install"))
+        await local_common_venv.install_package(app, logger)
 
-    async def remove_app(self, app_name: str) -> None:
+    async def remove_app(self, app_name: str, logger: logging.Logger) -> None:
         """Remove an installed app by name."""
-        await local_common_venv.uninstall_package(
-            app_name, self.logger.getChild("uninstall")
-        )
+        await local_common_venv.uninstall_package(app_name, logger)
