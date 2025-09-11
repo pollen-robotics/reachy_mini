@@ -28,7 +28,7 @@ import pygame
 from scipy.spatial.transform import Rotation as R
 
 import reachy_mini
-from reachy_mini.kinematics import NNKinematics, PlacoKinematics
+from reachy_mini.kinematics import CPPAnalyticKinematics, NNKinematics, PlacoKinematics
 from reachy_mini.motion.move import Move
 from reachy_mini.utils.interpolation import (
     InterpolationTechnique,
@@ -102,9 +102,12 @@ class Backend:
             )
         elif self.kinematics_engine == "NN":
             self.head_kinematics = NNKinematics(Backend.models_root_path)
+        elif self.kinematics_engine == "CPPAnalytical":
+            self.head_kinematics = CPPAnalyticKinematics(Backend.urdf_root_path)
         else:
-            print("???")
-            exit()
+            raise ValueError(
+                f"Unknown kinematics engine: {self.kinematics_engine}. Use 'Placo', 'NN' or 'CPPAnalytical'."
+            )
 
         self.current_head_pose = None  # 4x4 pose matrix
         self.target_head_pose = None  # 4x4 pose matrix
@@ -219,7 +222,6 @@ class Backend:
 
         # Compute the inverse kinematics to get the head joint positions
         joints = self.head_kinematics.ik(pose, body_yaw=body_yaw)
-
         if joints is None or np.any(np.isnan(joints)):
             raise ValueError("WARNING: Collision detected or head pose not achievable!")
 
@@ -651,7 +653,6 @@ class Backend:
         _, _, dist_to_init_pose = distance_between_poses(
             self.get_current_head_pose(), self.INIT_HEAD_POSE
         )
-
         sleep_time = 2.0
 
         # Thresholds found empirically.
