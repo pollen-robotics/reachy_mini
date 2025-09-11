@@ -29,6 +29,8 @@ from scipy.spatial.transform import Rotation as R
 import reachy_mini
 from reachy_mini.daemon.utils import daemon_check
 from reachy_mini.io import Client
+from reachy_mini.media.camera_base import CameraBase
+from reachy_mini.media.camera_opencv import OpenCVCamera
 from reachy_mini.utils.interpolation import InterpolationTechnique, minimum_jerk
 
 try:
@@ -121,6 +123,9 @@ class ReachyMini:
             ]
         )
 
+        self.camera: Optional[CameraBase] = None
+        self._init_camera(use_sim)
+
     def __del__(self):
         """Destroy the Reachy Mini instance.
 
@@ -128,6 +133,8 @@ class ReachyMini:
 
         """
         self.client.disconnect()
+        if self.camera is not None:
+            self.camera.close()
 
     def __enter__(self) -> "ReachyMini":
         """Context manager entry point for Reachy Mini."""
@@ -136,6 +143,23 @@ class ReachyMini:
     def __exit__(self, exc_type, exc_value, traceback) -> None:
         """Context manager exit point for Reachy Mini."""
         self.client.disconnect()
+
+    def _init_camera(self, use_sim: bool) -> None:
+        """Initialize the camera."""
+        self.camera = OpenCVCamera()
+        if use_sim:
+            self.camera.open(udp_camera="udp://@127.0.0.1:5005")
+        else:
+            self.camera.open()
+
+    def get_frame(self) -> Optional[np.ndarray]:
+        """Get a frame from the camera.
+
+        Returns:
+            Optional[np.ndarray]: The captured frame, or None if the camera is not available.
+
+        """
+        return self.camera.read()
 
     def set_target(
         self,

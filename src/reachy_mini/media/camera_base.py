@@ -1,0 +1,41 @@
+"""Base classes for camera implementations.
+
+The camera implementations support various backends and provide a unified
+interface for capturing images.
+"""
+
+import logging
+from abc import ABC, abstractmethod
+from enum import Enum
+
+
+class CameraBackend(Enum):
+    """Camera backends."""
+
+    OPENCV = "opencv"
+    GSTREAMER = "gstreamer"
+
+
+class CameraBase(ABC):
+    """Abstract class for opening and managing a camera."""
+
+    def __init__(self, backend: CameraBackend, log_level: str = "INFO") -> None:
+        """Initialize the camera."""
+        self.logger = logging.getLogger(__name__)
+        self.logger.setLevel(log_level)
+        self.backend = backend
+
+    @abstractmethod
+    def open(self):
+        """Open the camera."""
+        pass
+
+    @abstractmethod
+    def read(self):
+        """Read an image from the camera. Returns the image or None if error."""
+        pass
+
+    @abstractmethod
+    def close(self):
+        """Close the camera and release resources."""
+        pass

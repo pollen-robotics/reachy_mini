@@ -1,0 +1,1 @@
+"""Init the media module."""
