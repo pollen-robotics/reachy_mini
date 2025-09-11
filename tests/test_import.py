@@ -7,6 +7,7 @@ def test_daemon():  # noqa: D100, D103
     
     daemon = Daemon()
     daemon.start(
-        sim=True
+        sim=True,
+        headless=True
     )
     daemon.stop()
