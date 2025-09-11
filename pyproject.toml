@@ -21,7 +21,7 @@ dependencies = [
     "cv2_enumerate_cameras>=1.2.1",
     "psutil",
     "jinja2",
-    "uvicorn",
+    "uvicorn[standard]",
     "fastapi",
     "pyserial",
     "huggingface-hub==0.34.4",
