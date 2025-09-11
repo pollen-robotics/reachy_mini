@@ -221,7 +221,6 @@ class Backend:
 
         # Compute the inverse kinematics to get the head joint positions
         joints = self.head_kinematics.ik(pose, body_yaw=body_yaw)
-
         if joints is None or np.any(np.isnan(joints)):
             raise ValueError("WARNING: Collision detected or head pose not achievable!")
 

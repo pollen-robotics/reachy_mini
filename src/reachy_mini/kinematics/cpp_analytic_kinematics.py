@@ -90,8 +90,9 @@ class CPPAnalyticKinematics:
 
         We keep them for compatibility with the other kinematics engines
         """
-        pose[:3, 3][2] += self.placo_kinematics.head_z_offset
-        return [body_yaw] + list(self.kin.inverse_kinematics(pose))
+        _pose = pose.copy()
+        _pose[:3, 3][2] += self.placo_kinematics.head_z_offset
+        return [body_yaw] + list(self.kin.inverse_kinematics(_pose))
 
     def fk(
         self,
