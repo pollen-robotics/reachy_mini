@@ -251,6 +251,7 @@ class RobotBackend(Backend):
 
     def close(self) -> None:
         """Close the motor controller connection."""
+        self.c.close()
         self.c = None
 
     def get_status(self) -> "RobotBackendStatus":
