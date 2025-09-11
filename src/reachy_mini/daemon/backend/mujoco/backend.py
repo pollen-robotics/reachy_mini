@@ -137,12 +137,11 @@ class MujocoBackend(Backend):
         This method initializes the viewer and enters the main simulation loop.
         It updates the joint positions at a rate and publishes the joint positions.
         """
+        step = 1
         if not self.headless:
             viewer = mujoco.viewer.launch_passive(
                 self.model, self.data, show_left_ui=False, show_right_ui=False
             )
-        step = 1
-        if not self.headless:
             with viewer.lock():
                 viewer.cam.type = mujoco.mjtCamera.mjCAMERA_FREE  # type: ignore
                 viewer.cam.distance = 0.8  # ≃ ||pos - lookat||

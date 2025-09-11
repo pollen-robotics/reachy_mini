@@ -73,7 +73,7 @@ def main():
         "--kinematics-engine",
         type=str,
         default="Placo",
-        choices=["Placo", "NN", "Analytical"],
+        choices=["Placo", "NN", "Analytical", "CPPAnalytical"],
         help="Set the kinematics engine (default: Placo).",
     )
     parser.add_argument(
