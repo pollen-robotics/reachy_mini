@@ -180,7 +180,6 @@ class RobotBackend(Backend):
                         )
                     except ValueError as e:
                         self.logger.warning(f"IK error: {e}")
-                        pass
 
                 self.joint_positions_publisher.put(
                     json.dumps(

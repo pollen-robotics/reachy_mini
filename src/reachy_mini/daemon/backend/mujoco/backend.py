@@ -192,8 +192,7 @@ class MujocoBackend(Backend):
                                 self.target_head_pose, self.target_body_yaw
                             )
                         except ValueError as e:
-                            print("IK error:", e)
-                            pass
+                            self.logger.warning(f"IK error: {e}")
 
                     if self.target_head_joint_positions is not None:
                         self.data.ctrl[:7] = self.target_head_joint_positions

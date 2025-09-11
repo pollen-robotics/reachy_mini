@@ -105,8 +105,9 @@ class Backend:
         elif self.kinematics_engine == "CPPAnalytical":
             self.head_kinematics = CPPAnalyticKinematics(Backend.urdf_root_path)
         else:
-            print("???")
-            exit()
+            raise ValueError(
+                f"Unknown kinematics engine: {self.kinematics_engine}. Use 'Placo', 'NN' or 'CPPAnalytical'."
+            )
 
         self.current_head_pose = None  # 4x4 pose matrix
         self.target_head_pose = None  # 4x4 pose matrix
