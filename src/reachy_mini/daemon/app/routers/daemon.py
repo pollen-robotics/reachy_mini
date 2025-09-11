@@ -18,8 +18,8 @@ async def start_daemon(
 ):
     """Start the daemon."""
     await daemon.start(
-        sim=request.app.state.params["sim"],
-        scene=request.app.state.params["scene"],
+        sim=request.app.state.args.sim,
+        scene=request.app.state.args.scene,
         wake_up_on_start=wake_up,
     )
     return daemon.status()
@@ -38,8 +38,8 @@ async def stop_daemon(
 async def restart_daemon(request: Request, daemon: Daemon = Depends(get_daemon)):
     """Restart the daemon."""
     await daemon.restart(
-        sim=request.app.state.params["sim"],
-        scene=request.app.state.params["scene"],
+        sim=request.app.state.args.sim,
+        scene=request.app.state.args.scene,
     )
     return daemon.status()
 
