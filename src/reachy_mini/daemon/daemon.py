@@ -48,6 +48,7 @@ class Daemon:
         wake_up_on_start: bool = True,
         check_collision: bool = False,
         kinematics_engine: str = "Placo",
+        headless: bool = False,
     ) -> "DaemonState":
         """Start the Reachy Mini daemon.
 
@@ -59,6 +60,7 @@ class Daemon:
             wake_up_on_start (bool): If True, wake up Reachy Mini on start. Defaults to True.
             check_collision (bool): If True, enable collision checking. Defaults to False.
             kinematics_engine (str): Kinematics engine to use. Defaults to "Placo".
+            headless (bool): If True, run Mujoco in headless mode (no GUI). Defaults to False.
 
         Returns:
             DaemonState: The current state of the daemon after attempting to start it.
@@ -87,6 +89,7 @@ class Daemon:
                 scene=scene,
                 check_collision=check_collision,
                 kinematics_engine=kinematics_engine,
+                headless=headless,
             )
         except Exception as e:
             self._status.state = DaemonState.ERROR
@@ -283,6 +286,7 @@ class Daemon:
         goto_sleep_on_stop: bool = True,
         check_collision: bool = False,
         kinematics_engine: str = "Placo",
+        headless: bool = False,
     ):
         """Run the Reachy Mini daemon indefinitely.
 
@@ -297,6 +301,7 @@ class Daemon:
             goto_sleep_on_stop (bool): If True, put Reachy Mini to sleep on stop. Defaults to True
             check_collision (bool): If True, enable collision checking. Defaults to False.
             kinematics_engine (str): Kinematics engine to use. Defaults to "Placo".
+            headless (bool): If True, run Mujoco in headless mode (no GUI). Defaults to False.
 
         """
         await self.start(
@@ -307,6 +312,7 @@ class Daemon:
             wake_up_on_start=wake_up_on_start,
             check_collision=check_collision,
             kinematics_engine=kinematics_engine,
+            headless=headless,
         )
 
         if self._status.state == DaemonState.RUNNING:
@@ -329,13 +335,14 @@ class Daemon:
         await self.stop(goto_sleep_on_stop)
 
     def _setup_backend(
-        self, sim, serialport, scene, check_collision, kinematics_engine
+        self, sim, serialport, scene, check_collision, kinematics_engine, headless
     ) -> "RobotBackend | MujocoBackend":
         if sim:
             return MujocoBackend(
                 scene=scene,
                 check_collision=check_collision,
                 kinematics_engine=kinematics_engine,
+                headless=headless,
             )
         else:
             if serialport == "auto":

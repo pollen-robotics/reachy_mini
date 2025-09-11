@@ -109,10 +109,7 @@ class RobotBackend(Backend):
         )
         assert self.current_head_pose is not None
 
-        self.head_kinematics.ik(
-            self.current_head_pose,
-            no_iterations=20,
-        )
+        self.head_kinematics.ik(self.current_head_pose, no_iterations=20)
 
         while not self.should_stop.is_set():
             start_t = time.time()
@@ -177,9 +174,12 @@ class RobotBackend(Backend):
                 # Update the target head joint positions from IK if necessary
                 # - does nothing if the targets did not change
                 if self.ik_required:
-                    self.update_target_head_joints_from_ik(
-                        self.target_head_pose, self.target_body_yaw
-                    )
+                    try:
+                        self.update_target_head_joints_from_ik(
+                            self.target_head_pose, self.target_body_yaw
+                        )
+                    except ValueError as e:
+                        self.logger.warning(f"IK error: {e}")
 
                 self.joint_positions_publisher.put(
                     json.dumps(

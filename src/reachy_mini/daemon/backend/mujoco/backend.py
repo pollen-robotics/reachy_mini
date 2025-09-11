@@ -36,6 +36,7 @@ class MujocoBackend(Backend):
         scene="empty",
         check_collision: bool = False,
         kinematics_engine: str = "Placo",
+        headless: bool = False,
     ):
         """Initialize the MujocoBackend with a specified scene.
 
@@ -43,11 +44,14 @@ class MujocoBackend(Backend):
             scene (str): The name of the scene to load. Default is "empty".
             check_collision (bool): If True, enable collision checking. Default is False.
             kinematics_engine (str): Kinematics engine to use. Defaults to "Placo".
+            headless (bool): If True, run Mujoco in headless mode (no GUI). Default is False.
 
         """
         super().__init__(
             check_collision=check_collision, kinematics_engine=kinematics_engine
         )
+
+        self.headless = headless
 
         from reachy_mini.reachy_mini import (
             SLEEP_ANTENNAS_JOINT_POSITIONS,
@@ -134,9 +138,10 @@ class MujocoBackend(Backend):
         It updates the joint positions at a rate and publishes the joint positions.
         """
         step = 1
-        with mujoco.viewer.launch_passive(
-            self.model, self.data, show_left_ui=False, show_right_ui=False
-        ) as viewer:
+        if not self.headless:
+            viewer = mujoco.viewer.launch_passive(
+                self.model, self.data, show_left_ui=False, show_right_ui=False
+            )
             with viewer.lock():
                 viewer.cam.type = mujoco.mjtCamera.mjCAMERA_FREE  # type: ignore
                 viewer.cam.distance = 0.8  # ≃ ||pos - lookat||
@@ -150,7 +155,7 @@ class MujocoBackend(Backend):
 
                 # im = self.get_camera()
                 # self.streamer_udp.send_frame(im)
-            with viewer.lock():
+
                 self.data.qpos[self.joint_qpos_addr] = np.array(
                     self._SLEEP_HEAD_JOINT_POSITIONS
                     + self._SLEEP_ANTENNAS_JOINT_POSITIONS
@@ -163,68 +168,70 @@ class MujocoBackend(Backend):
                 # recompute all kinematics, collisions, etc.
                 mujoco.mj_forward(self.model, self.data)  # type: ignore
 
-            # one more frame so the viewer shows your startup pose
-            mujoco.mj_step(self.model, self.data)  # type: ignore
+        # one more frame so the viewer shows your startup pose
+        mujoco.mj_step(self.model, self.data)  # type: ignore
+        if not self.headless:
             viewer.sync()
 
             rendering_thread = Thread(target=self.rendering_loop, daemon=True)
             rendering_thread.start()
 
-            # 3) now enter your normal loop
-            while not self.should_stop.is_set():
-                start_t = time.time()
+        # 3) now enter your normal loop
+        while not self.should_stop.is_set():
+            start_t = time.time()
 
-                if step % self.decimation == 0:
-                    # update the current states
-                    self.current_head_joint_positions = (
-                        self.get_present_head_joint_positions()
+            if step % self.decimation == 0:
+                # update the current states
+                self.current_head_joint_positions = (
+                    self.get_present_head_joint_positions()
+                )
+                self.current_antenna_joint_positions = (
+                    self.get_present_antenna_joint_positions()
+                )
+                self.current_head_pose = self.get_mj_present_head_pose()
+
+                # Update the target head joint positions from IK if necessary
+                # - does nothing if the targets did not change
+                if self.ik_required:
+                    self.update_target_head_joints_from_ik(
+                        self.target_head_pose, self.target_body_yaw
                     )
-                    self.current_antenna_joint_positions = (
-                        self.get_present_antenna_joint_positions()
+
+                if self.target_head_joint_positions is not None:
+                    self.data.ctrl[:7] = self.target_head_joint_positions
+                if self.target_antenna_joint_positions is not None:
+                    self.data.ctrl[-2:] = self.target_antenna_joint_positions
+
+                if (
+                    self.joint_positions_publisher is not None
+                    and self.pose_publisher is not None
+                ):
+                    self.joint_positions_publisher.put(
+                        json.dumps(
+                            {
+                                "head_joint_positions": self.current_head_joint_positions,
+                                "antennas_joint_positions": self.current_antenna_joint_positions,
+                            }
+                        ).encode("utf-8")
                     )
-                    self.current_head_pose = self.get_mj_present_head_pose()
+                    self.pose_publisher.put(
+                        json.dumps(
+                            {
+                                "head_pose": self.get_present_head_pose().tolist(),
+                            }
+                        ).encode("utf-8")
+                    )
+                    self.ready.set()
 
-                    # Update the target head joint positions from IK if necessary
-                    # - does nothing if the targets did not change
-                    if self.ik_required:
-                        self.update_target_head_joints_from_ik(
-                            self.target_head_pose, self.target_body_yaw
-                        )
-
-                    if self.target_head_joint_positions is not None:
-                        self.data.ctrl[:7] = self.target_head_joint_positions
-                    if self.target_antenna_joint_positions is not None:
-                        self.data.ctrl[-2:] = self.target_antenna_joint_positions
-
-                    if (
-                        self.joint_positions_publisher is not None
-                        and self.pose_publisher is not None
-                    ):
-                        self.joint_positions_publisher.put(
-                            json.dumps(
-                                {
-                                    "head_joint_positions": self.current_head_joint_positions,
-                                    "antennas_joint_positions": self.current_antenna_joint_positions,
-                                }
-                            ).encode("utf-8")
-                        )
-                        self.pose_publisher.put(
-                            json.dumps(
-                                {
-                                    "head_pose": self.get_present_head_pose().tolist(),
-                                }
-                            ).encode("utf-8")
-                        )
-                        self.ready.set()
-
+                if not self.headless:
                     viewer.sync()
 
-                mujoco.mj_step(self.model, self.data)  # type: ignore
+            mujoco.mj_step(self.model, self.data)  # type: ignore
 
-                took = time.time() - start_t
-                time.sleep(max(0, self.model.opt.timestep - took))
-                # print(f"Step {step}: took {took*1000:.1f}ms")
-                step += 1
+            took = time.time() - start_t
+            time.sleep(max(0, self.model.opt.timestep - took))
+            # print(f"Step {step}: took {took*1000:.1f}ms")
+            step += 1
 
     def get_mj_present_head_pose(self) -> np.ndarray:
         """Get the current head pose from the Mujoco simulation.
