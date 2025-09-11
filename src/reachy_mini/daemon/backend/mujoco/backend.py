@@ -187,9 +187,13 @@ class MujocoBackend(Backend):
                     # Update the target head joint positions from IK if necessary
                     # - does nothing if the targets did not change
                     if self.ik_required:
-                        self.update_target_head_joints_from_ik(
-                            self.target_head_pose, self.target_body_yaw
-                        )
+                        try:
+                            self.update_target_head_joints_from_ik(
+                                self.target_head_pose, self.target_body_yaw
+                            )
+                        except Exception as e:
+                            print("IK error:", e)
+                            pass
 
                     if self.target_head_joint_positions is not None:
                         self.data.ctrl[:7] = self.target_head_joint_positions
