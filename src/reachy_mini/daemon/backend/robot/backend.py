@@ -178,7 +178,7 @@ class RobotBackend(Backend):
                         self.update_target_head_joints_from_ik(
                             self.target_head_pose, self.target_body_yaw
                         )
-                    except Exception as e:
+                    except ValueError as e:
                         self.logger.warning(f"IK error: {e}")
                         pass
 

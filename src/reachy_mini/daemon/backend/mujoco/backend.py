@@ -191,7 +191,7 @@ class MujocoBackend(Backend):
                             self.update_target_head_joints_from_ik(
                                 self.target_head_pose, self.target_body_yaw
                             )
-                        except Exception as e:
+                        except ValueError as e:
                             print("IK error:", e)
                             pass
 
