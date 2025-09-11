@@ -48,6 +48,24 @@
     </div>
 
     <script>
+        // Poll /api/move/running to update move status and button state
+        async function pollMoveStatus() {
+            try {
+                const res = await fetch('/api/move/running');
+                const runningMoves = await res.json();
+                // If any moves are running, disable buttons except stop
+                const isRunning = Array.isArray(runningMoves) && runningMoves.length > 0;
+                setMoveButtonsDisabled(isRunning);
+                document.getElementById('stop-btn').disabled = !isRunning;
+                // Optionally update lastMoveUUID to the first running move
+                lastMoveUUID = isRunning ? runningMoves[0].uuid : null;
+            } catch (err) {
+                // On error, enable all buttons
+                setMoveButtonsDisabled(false);
+                document.getElementById('stop-btn').disabled = true;
+            }
+        }
+        setInterval(pollMoveStatus, 1000);
         // Utility to enable/disable move buttons
         function setMoveButtonsDisabled(disabled) {
             document.getElementById('goto-form').querySelector('button[type="submit"]').disabled = disabled;
@@ -112,10 +130,22 @@
         // --- Move commands ---
         const resultDiv = document.getElementById('move-result');
         let lastMoveUUID = null;
+        // Helper: wait for move to finish by polling /api/move/running
+        async function waitForMoveToFinish() {
+            for (let i = 0; i < 60; i++) { // max 30s
+                try {
+                    const res = await fetch('/api/move/running');
+                    const runningMoves = await res.json();
+                    const isRunning = Array.isArray(runningMoves) && runningMoves.length > 0;
+                    if (!isRunning) return;
+                } catch (e) { }
+                await new Promise(r => setTimeout(r, 500));
+            }
+        }
 
         document.getElementById('goto-form').onsubmit = async function (e) {
             e.preventDefault();
-            resultDiv.textContent = 'Sending goto...';
+            resultDiv.textContent = 'playing move goto';
             setMoveButtonsDisabled(true);
             const useDeg = document.getElementById('goto-use-deg').checked;
             // If using degrees, convert roll/pitch/yaw to radians
@@ -143,7 +173,8 @@
                 });
                 const data = await res.json();
                 lastMoveUUID = data.uuid || null;
-                resultDiv.textContent = 'Goto result: ' + JSON.stringify(data);
+                await waitForMoveToFinish();
+                resultDiv.textContent = 'move goto finished';
             } catch (err) {
                 resultDiv.textContent = 'Error sending goto.';
             }
@@ -151,13 +182,14 @@
         };
 
         document.getElementById('wake-up-btn').onclick = async function () {
-            resultDiv.textContent = 'Sending wake up...';
+            resultDiv.textContent = 'playing move wake_up';
             setMoveButtonsDisabled(true);
             try {
                 const res = await fetch('/api/move/play/wake_up', { method: 'POST' });
                 const data = await res.json();
                 lastMoveUUID = data.uuid || null;
-                resultDiv.textContent = 'Wake up result: ' + JSON.stringify(data);
+                await waitForMoveToFinish();
+                resultDiv.textContent = 'move wake_up finished';
             } catch (err) {
                 resultDiv.textContent = 'Error sending wake up.';
             }
@@ -165,13 +197,14 @@
         };
 
         document.getElementById('sleep-btn').onclick = async function () {
-            resultDiv.textContent = 'Sending go to sleep...';
+            resultDiv.textContent = 'playing move goto_sleep';
             setMoveButtonsDisabled(true);
             try {
                 const res = await fetch('/api/move/play/goto_sleep', { method: 'POST' });
                 const data = await res.json();
                 lastMoveUUID = data.uuid || null;
-                resultDiv.textContent = 'Go to sleep result: ' + JSON.stringify(data);
+                await waitForMoveToFinish();
+                resultDiv.textContent = 'move goto_sleep finished';
             } catch (err) {
                 resultDiv.textContent = 'Error sending go to sleep.';
             }
@@ -183,7 +216,7 @@
                 resultDiv.textContent = 'No move UUID to stop.';
                 return;
             }
-            resultDiv.textContent = 'Stopping move...';
+            resultDiv.textContent = 'playing move stop';
             setMoveButtonsDisabled(true);
             try {
                 const res = await fetch('/api/move/stop', {
@@ -192,7 +225,8 @@
                     body: JSON.stringify({ uuid: lastMoveUUID })
                 });
                 const data = await res.json();
-                resultDiv.textContent = 'Stop result: ' + JSON.stringify(data);
+                await waitForMoveToFinish();
+                resultDiv.textContent = 'move stop finished';
                 lastMoveUUID = null;
             } catch (err) {
                 resultDiv.textContent = 'Error stopping move.';
