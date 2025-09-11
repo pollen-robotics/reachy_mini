@@ -20,6 +20,7 @@ async def start_daemon(
     await daemon.start(
         sim=request.app.state.args.sim,
         scene=request.app.state.args.scene,
+        headless=request.app.state.args.headless,
         wake_up_on_start=wake_up,
     )
     return daemon.status()

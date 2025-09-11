@@ -33,6 +33,7 @@ async def lifespan(app: FastAPI):
     await app.state.daemon.start(
         sim=app.state.args.sim,
         scene=app.state.args.scene,
+        headless=app.state.args.headless,
         wake_up_on_start=app.state.args.wake_up_on_start,
     )
     yield
@@ -112,6 +113,11 @@ def main():
         type=str,
         default="empty",
         help="Name of the scene to load (default: empty)",
+    )
+    parser.add_argument(
+        "--headless",
+        action="store_true",
+        help="Run the daemon in headless mode (default: False).",
     )
     # Daemon options
     parser.add_argument(

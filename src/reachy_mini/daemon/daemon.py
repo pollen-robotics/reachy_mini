@@ -75,6 +75,7 @@ class Daemon:
         self._start_params = {
             "sim": sim,
             "serialport": serialport,
+            "headless": headless,
             "scene": scene,
             "localhost_only": localhost_only,
         }
@@ -199,6 +200,7 @@ class Daemon:
         sim: Optional[bool] = None,
         serialport: Optional[str] = None,
         scene: Optional[str] = None,
+        headless: Optional[bool] = None,
         localhost_only: Optional[bool] = None,
         wake_up_on_start: Optional[bool] = None,
         goto_sleep_on_stop: Optional[bool] = None,
@@ -209,6 +211,7 @@ class Daemon:
             sim (bool): If True, run in simulation mode using Mujoco. Defaults to None (uses the previous value).
             serialport (str): Serial port for real motors. Defaults to None (uses the previous value).
             scene (str): Name of the scene to load in simulation mode ("empty" or "minimal"). Defaults to None (uses the previous value).
+            headless (bool): If True, run Mujoco in headless mode (no GUI). Defaults to None (uses the previous value).
             localhost_only (bool): If True, restrict the server to localhost only clients. Defaults to None (uses the previous value).
             wake_up_on_start (bool): If True, wake up Reachy Mini on start. Defaults to None (don't wake up).
             goto_sleep_on_stop (bool): If True, put Reachy Mini to sleep on stop. Defaults to None (don't go to sleep).
@@ -235,6 +238,9 @@ class Daemon:
                 if serialport is not None
                 else self._start_params["serialport"],
                 "scene": scene if scene is not None else self._start_params["scene"],
+                "headless": headless
+                if headless is not None
+                else self._start_params["headless"],
                 "localhost_only": localhost_only
                 if localhost_only is not None
                 else self._start_params["localhost_only"],
