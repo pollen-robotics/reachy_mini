@@ -22,7 +22,7 @@ from reachy_mini.apps.manager import AppManager
 from reachy_mini.daemon.app.routers import apps, daemon, kinematics, motors, move, state
 from reachy_mini.daemon.daemon import Daemon
 
-EXAMPLES_WEB_DIR = Path(__file__).parent / "examples"
+DASHBOARD_PAGES = Path(__file__).parent / "dashboard"
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
@@ -71,22 +71,22 @@ app.include_router(router)
 
 
 # Route to list available HTML/JS/CSS examples with links using Jinja2 template
-@app.get("/examples")
+@app.get("/")
 async def list_examples(request: Request):
-    """Render the examples list using a Jinja2 template."""
-    files = [f for f in os.listdir(EXAMPLES_WEB_DIR) if f.endswith(".html")]
+    """Render the dashboard."""
+    files = [f for f in os.listdir(DASHBOARD_PAGES) if f.endswith(".html")]
     return templates.TemplateResponse(
-        "examples_list.html", {"request": request, "files": files}
+        "dashboard.html", {"request": request, "files": files}
     )
 
 
 # Route to serve a specific example file from examples_web
-@app.get("/examples/{filename}")
+@app.get("/dashboard/{filename}")
 async def serve_example(filename: str):
-    """Serve a specific example file from examples_web directory."""
-    file_path = os.path.join(EXAMPLES_WEB_DIR, filename)
+    """Serve a specific page file from dashboard directory."""
+    file_path = os.path.join(DASHBOARD_PAGES, filename)
     if not os.path.isfile(file_path):
-        raise HTTPException(status_code=404, detail="Example not found")
+        raise HTTPException(status_code=404, detail="Page not found")
     return responses.FileResponse(file_path)
 
 

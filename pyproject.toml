@@ -38,9 +38,8 @@ dev = ["pytest", "ruff==0.12.0", "onshape-to-robot==1.7.6",]
 examples = ["pynput"]
 
 [project.scripts]
-reachy-mini-daemon = "reachy_mini.daemon.cli:main"
+reachy-mini-daemon = "reachy_mini.daemon.app.main:main"
 reachy-mini-make-app = "reachy_mini.apps.apps.app:main"
-reachy-mini-dashboard = "reachy_mini_dashboard.dashboard_api:main"
 
 [tool.setuptools]
 package-dir = { "" = "src" }

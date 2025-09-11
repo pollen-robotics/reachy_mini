@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Dashboard</title>
+    <link rel="stylesheet" href="/dashboard/style.css">
+</head>
+
+<body>
+    <h1>Dashboard</h1>
+    <ul>
+        {% for fname in files %}
+        <li><a href="/dashboard/{{ fname }}">{{ fname }}</a></li>
+        {% endfor %}
+    </ul>
+</body>
+
+</html>
