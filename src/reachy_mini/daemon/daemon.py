@@ -158,11 +158,7 @@ class Daemon:
             if goto_sleep_on_stop:
                 try:
                     self.logger.info("Putting Reachy Mini to sleep...")
-                    if (
-                        self.backend.get_motor_control_mode()
-                        == MotorControlMode.GravityCompensation
-                    ):
-                        self.backend.set_motor_control_mode(MotorControlMode.Enabled)
+                    self.backend.set_motor_control_mode(MotorControlMode.Enabled)
                     await self.backend.goto_sleep()
                     self.backend.set_motor_control_mode(MotorControlMode.Disabled)
                 except Exception as e:

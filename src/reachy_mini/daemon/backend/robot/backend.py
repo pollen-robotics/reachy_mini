@@ -60,11 +60,9 @@ class RobotBackend(Backend):
         )
 
         self.motor_control_mode = self._infer_control_mode()
+        self._torque_enabled = self.motor_control_mode != MotorControlMode.Disabled
         self.logger.info(f"Motor control mode: {self.motor_control_mode}")
-        self.motor_control_mode = MotorControlMode.Disabled
         self.last_alive = None
-
-        self._torque_enabled = False
 
         self._status = RobotBackendStatus(
             ready=False,
