@@ -31,6 +31,9 @@
                 const res = await fetch('/api/daemon/status');
                 const status = await res.json();
                 document.getElementById('daemon-status').textContent = `State: ${status.state}${status.error ? ' | Error: ' + status.error : ''}`;
+                if (status.backend_status) {
+                    document.getElementById('daemon-status').innerHTML += `<br>Backend status: ${JSON.stringify(status.backend_status)}`;
+                }
                 // Enable/disable buttons based on daemon state
                 const startBtn = document.getElementById('start-daemon');
                 const stopBtn = document.getElementById('stop-daemon');
