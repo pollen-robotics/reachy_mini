@@ -6,6 +6,8 @@ import numpy as np
 from pydantic import BaseModel
 from scipy.spatial.transform import Rotation as R
 
+from reachy_mini.daemon.backend.abstract import MotorControlMode
+
 
 class Matrix4x4Pose(BaseModel):
     """Represent a 3D pose by its 4x4 transformation matrix (translation is expressed in meters)."""
@@ -99,6 +101,7 @@ class FullBodyTarget(BaseModel):
 class FullState(BaseModel):
     """Represent the full state of the robot including all joint positions and poses."""
 
+    control_mode: MotorControlMode | None = None
     head_pose: AnyPose | None = None
     head_joints: list[float] | None = None
     body_yaw: float | None = None

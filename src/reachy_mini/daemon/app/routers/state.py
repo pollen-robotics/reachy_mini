@@ -55,6 +55,7 @@ async def get_antenna_joint_positions(
 
 @router.get("/full")
 async def get_full_state(
+    with_control_mode: bool = True,
     with_head_pose: bool = True,
     with_target_head_pose: bool = False,
     with_head_joints: bool = False,
@@ -68,6 +69,9 @@ async def get_full_state(
 ) -> FullState:
     """Get the full robot state, with optional fields."""
     result = {}
+
+    if with_control_mode:
+        result["control_mode"] = backend.get_motor_control_mode().value
 
     if with_head_pose:
         pose = backend.get_present_head_pose()
