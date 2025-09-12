@@ -233,6 +233,9 @@ class MujocoBackend(Backend):
             # print(f"Step {step}: took {took*1000:.1f}ms")
             step += 1
 
+        if not self.headless:
+            viewer.close()
+
     def get_mj_present_head_pose(self) -> np.ndarray:
         """Get the current head pose from the Mujoco simulation.
 
