@@ -2,7 +2,7 @@ import numpy as np  # noqa: D100
 import reachy_mini_kinematics as rk
 from placo_utils.tf import tf
 
-from reachy_mini.kinematics import PlacoKinematics
+from .placo_kinematics import PlacoKinematics
 
 # Duplicated for now.
 SLEEP_HEAD_POSE = np.array(

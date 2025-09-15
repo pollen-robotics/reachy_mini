@@ -12,7 +12,6 @@ requires-python = ">=3.8"
 dependencies = [
     "numpy>=2.2.5,<2.3.0",
     "scipy==1.15.3",
-    "mujoco==3.3.0",
     "placo==0.9.14",
     "reachy_mini_motor_controller>=0.6.2",
     "pygame==2.6.1",
@@ -25,9 +24,6 @@ dependencies = [
     "fastapi",
     "pyserial",
     "huggingface-hub==0.34.4",
-    "sounddevice==0.5.1",
-    "soundfile==0.13.1",
-    "onnxruntime==1.22.1",
     "poc-reachy-mini-kinematics==0.0.7",
     "asgiref",
     "aiohttp",
@@ -36,7 +32,9 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest", "pytest-asyncio", "ruff==0.12.0", "onshape-to-robot==1.7.6",]
-examples = ["pynput"]
+examples = []
+mujoco = ["mujoco==3.3.0"]
+nn_kinematics = ["onnxruntime==1.22.1",]
 
 [project.scripts]
 reachy-mini-daemon = "reachy_mini.daemon.app.main:main"
