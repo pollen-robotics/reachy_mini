@@ -14,8 +14,9 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 import uvicorn
-from fastapi import APIRouter, FastAPI, HTTPException, Request, responses
+from fastapi import APIRouter, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from reachy_mini.apps.manager import AppManager
@@ -81,14 +82,11 @@ async def list_examples(request: Request):
     )
 
 
-# Route to serve a specific example file from examples_web
-@app.get("/dashboard/{filename}")
-async def serve_example(filename: str):
-    """Serve a specific page file from dashboard directory."""
-    file_path = os.path.join(DASHBOARD_PAGES, filename)
-    if not os.path.isfile(file_path):
-        raise HTTPException(status_code=404, detail="Page not found")
-    return responses.FileResponse(file_path)
+app.mount(
+    "/dashboard",
+    StaticFiles(directory=str(DASHBOARD_PAGES), html=True),
+    name="dashboard",
+)
 
 
 def main():
