@@ -65,7 +65,7 @@ def im_diff(prev, current):
 time_interval = 0.05
 prev_frame = None
 last_move = time.time()
-with ReachyMini() as reachy_mini:
+with ReachyMini(use_sim=False) as reachy_mini:
     while True:
         frame = reachy_mini.get_frame()
         if frame is None:

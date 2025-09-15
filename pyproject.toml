@@ -15,7 +15,6 @@ dependencies = [
     "mujoco==3.3.0",
     "placo==0.9.4",
     "reachy_mini_motor_controller>=0.6",
-    "pygame==2.6.1",
     "eclipse-zenoh>=1.4.0",
     "opencv-python<=5.0",
     "cv2_enumerate_cameras>=1.2.1",
@@ -27,6 +26,7 @@ dependencies = [
     "huggingface-hub==0.34.4",
     "sounddevice==0.5.1",
     "soundfile==0.13.1",
+    "samplerate==0.2.1",
     "onnxruntime==1.22.1",
     "asgiref",
 ]

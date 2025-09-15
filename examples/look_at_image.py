@@ -29,7 +29,7 @@ def main():
 
     print("Click on the image to make ReachyMini look at that point.")
     print("Press 'q' to quit the camera feed.")
-    with ReachyMini() as reachy_mini:
+    with ReachyMini(use_sim=False) as reachy_mini:
         while True:
             frame = reachy_mini.get_frame()
             if frame is None:

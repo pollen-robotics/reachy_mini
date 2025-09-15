@@ -8,36 +8,21 @@ It also includes methods for multimedia interactions like playing sounds and loo
 
 import asyncio
 import json
-import os
+import logging
 import time
 from typing import Dict, List, Optional, Union
 
-from asgiref.sync import async_to_sync
-
-from reachy_mini.io.protocol import GotoTaskRequest
-from reachy_mini.motion.move import Move
-
-os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "hide"
-
-from importlib.resources import files
-
 import cv2
 import numpy as np
-import pygame
+from asgiref.sync import async_to_sync
 from scipy.spatial.transform import Rotation as R
 
-import reachy_mini
 from reachy_mini.daemon.utils import daemon_check
 from reachy_mini.io import Client
-from reachy_mini.media.camera_base import CameraBase
-from reachy_mini.media.camera_opencv import OpenCVCamera
+from reachy_mini.io.protocol import GotoTaskRequest
+from reachy_mini.media.media_manager import MediaBackend, MediaManager
+from reachy_mini.motion.move import Move
 from reachy_mini.utils.interpolation import InterpolationTechnique, minimum_jerk
-
-try:
-    pygame.mixer.init()
-except (AttributeError, pygame.error) as e:
-    print(f"Failed to initialize pygame mixer: {e}")
-    pygame.mixer = None
 
 # Behavior definitions
 INIT_HEAD_POSE = np.eye(4)
@@ -76,11 +61,6 @@ class ReachyMini:
 
     """
 
-    urdf_root_path: str = str(
-        files(reachy_mini).joinpath("descriptions/reachy_mini/urdf")
-    )
-    assets_root_path: str = str(files(reachy_mini).joinpath("assets/"))
-
     def __init__(
         self,
         localhost_only: bool = True,
@@ -88,6 +68,7 @@ class ReachyMini:
         use_sim: bool = True,
         timeout: float = 5.0,
         automatic_body_yaw: bool = False,
+        log_level: str = "INFO",
     ) -> None:
         """Initialize the Reachy Mini robot.
 
@@ -97,10 +78,13 @@ class ReachyMini:
             use_sim (bool): If True and spawn_daemon is True, will spawn a simulated robot, defaults to True.
             timeout (float): Timeout for the client connection, defaults to 5.0 seconds.
             automatic_body_yaw (bool): If True, the body yaw will be used to compute the IK and FK. Default is False.
+            log_level (str): Logging level, defaults to "INFO".
 
         It will try to connect to the daemon, and if it fails, it will raise an exception.
 
         """
+        self.logger = logging.getLogger(__name__)
+        self.logger.setLevel(log_level)
         daemon_check(spawn_daemon, use_sim)
         self.client = Client(localhost_only)
         self.client.wait_for_connection(timeout=timeout)
@@ -123,8 +107,9 @@ class ReachyMini:
             ]
         )
 
-        self.camera: Optional[CameraBase] = None
-        self._init_camera(use_sim)
+        self.media = MediaManager(
+            use_sim=use_sim, backend=MediaBackend.DEFAULT, log_level=log_level
+        )
 
     def __del__(self):
         """Destroy the Reachy Mini instance.
@@ -144,14 +129,6 @@ class ReachyMini:
         """Context manager exit point for Reachy Mini."""
         self.client.disconnect()
 
-    def _init_camera(self, use_sim: bool) -> None:
-        """Initialize the camera."""
-        self.camera = OpenCVCamera()
-        if use_sim:
-            self.camera.open(udp_camera="udp://@127.0.0.1:5005")
-        else:
-            self.camera.open()
-
     def get_frame(self) -> Optional[np.ndarray]:
         """Get a frame from the camera.
 
@@ -159,7 +136,7 @@ class ReachyMini:
             Optional[np.ndarray]: The captured frame, or None if the camera is not available.
 
         """
-        return self.camera.read()
+        return self.media.get_frame()
 
     def set_target(
         self,
@@ -259,7 +236,7 @@ class ReachyMini:
         time.sleep(0.1)
 
         # Toudoum
-        self.play_sound("proud2.wav")
+        self.media.play_sound("proud2.wav")
 
         # Roll 20° to the left
         pose = INIT_HEAD_POSE.copy()
@@ -291,7 +268,7 @@ class ReachyMini:
             time.sleep(0.2)
 
         # Pfiou
-        self.play_sound("go_sleep.wav")
+        self.media.play_sound("go_sleep.wav")
 
         # # Move to the sleep position
         self.goto_target(
@@ -419,32 +396,6 @@ class ReachyMini:
                 self.set_target(target_head_pose)
 
         return target_head_pose
-
-    # Multimedia methods
-    def play_sound(self, sound_file: str) -> None:
-        """Play a sound file from the assets directory.
-
-        If the file is not found in the assets directory, try to load the path itself.
-
-        Args:
-            sound_file (str): The name of the sound file to play (e.g., "proud2.wav").
-
-        """
-        if pygame.mixer is None:
-            print("Pygame mixer is not initialized. Cannot play sound.")
-            return
-
-        # first check if the name exists in the asset sound directory
-        file_path = f"{ReachyMini.assets_root_path}/{sound_file}"
-        if not os.path.exists(file_path):
-            # If not, check if the raw_path exists
-            if not os.path.exists(sound_file):
-                raise FileNotFoundError(f"Sound file {sound_file} not found.")
-            else:
-                file_path = sound_file
-
-        pygame.mixer.music.load(file_path)
-        pygame.mixer.music.play()
 
     def _goto_joint_positions(
         self,

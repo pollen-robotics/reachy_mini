@@ -1,0 +1,85 @@
+"""Media Manager.
+
+Provides camera and audio access based on the selected backedn
+"""
+
+import logging
+from enum import Enum
+from typing import Optional
+
+import numpy as np
+
+from reachy_mini.media.audio_base import AudioBase
+from reachy_mini.media.camera_base import CameraBase
+
+# actual backends are dynamically imported
+
+
+class MediaBackend(Enum):
+    """Media backends."""
+
+    DEFAULT = "default"
+    GSTREAMER = "gstreamer"
+
+
+class MediaManager:
+    """Abstract class for opening and managing audio devices."""
+
+    def __init__(
+        self,
+        backend: MediaBackend = MediaBackend.DEFAULT,
+        log_level: str = "INFO",
+        use_sim: bool = False,
+    ) -> None:
+        """Initialize the audio device."""
+        self.logger = logging.getLogger(__name__)
+        self.logger.setLevel(log_level)
+        self.backend = backend
+        self.camera: Optional[CameraBase] = None
+        self._init_camera(use_sim)  # Todo: automatically detect simulation
+        self.audio: Optional[AudioBase] = None
+        self._init_audio()
+
+    def _init_camera(self, use_sim: bool) -> None:
+        """Initialize the camera."""
+        self.logger.debug("Initializing camera...")
+        if self.backend == MediaBackend.DEFAULT:
+            self.logger.info("Using OpenCV camera backend.")
+            from reachy_mini.media.camera_opencv import OpenCVCamera
+
+            self.camera = OpenCVCamera()
+            if use_sim:
+                self.camera.open(udp_camera="udp://@127.0.0.1:5005")
+            else:
+                self.camera.open()
+        else:
+            raise NotImplementedError(f"Camera backend {self.backend} not implemented.")
+
+    def get_frame(self) -> Optional[np.ndarray]:
+        """Get a frame from the camera.
+
+        Returns:
+            Optional[np.ndarray]: The captured frame, or None if the camera is not available.
+
+        """
+        return self.camera.read()
+
+    def _init_audio(self) -> None:
+        """Initialize the audio system."""
+        self.logger.debug("Initializing audio...")
+        if self.backend == MediaBackend.DEFAULT:
+            self.logger.info("Using SoundDevice audio backend.")
+            from reachy_mini.media.audio_sounddevice import SoundDeviceAudio
+
+            self.audio = SoundDeviceAudio()
+        else:
+            raise NotImplementedError(f"Audio backend {self.backend} not implemented.")
+
+    def play_sound(self, sound_file: str) -> None:
+        """Play a sound file.
+
+        Args:
+            sound_file (str): Path to the sound file to play.
+
+        """
+        self.audio.play_sound(sound_file)
