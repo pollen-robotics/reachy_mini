@@ -14,7 +14,7 @@ dependencies = [
     "scipy==1.15.3",
     "mujoco==3.3.0",
     "placo==0.9.14",
-    "reachy_mini_motor_controller>=0.6",
+    "reachy_mini_motor_controller>=0.6.2",
     "pygame==2.6.1",
     "eclipse-zenoh>=1.4.0",
     "opencv-python<=5.0",
