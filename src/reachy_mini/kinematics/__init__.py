@@ -12,7 +12,7 @@ except ImportError:
         def __init__(self, *args, **kwargs):
             """Raise ImportError when trying to instantiate the class."""
             raise ImportError(
-                "NNKinematics could not be imported. Make sure you run pip install reachy_mini[nn_ik]."
+                "NNKinematics could not be imported. Make sure you run pip install reachy_mini[nn_kinematics]."
             )
 
     NNKinematics = MockupNNKinematics
