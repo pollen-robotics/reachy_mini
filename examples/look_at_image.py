@@ -7,7 +7,10 @@ look_at_image method to make the robot look at the specified point.
 Note: The daemon must be running before executing this script.
 """
 
+import argparse
+
 import cv2
+import numpy as np
 
 from reachy_mini import ReachyMini
 
@@ -20,7 +23,7 @@ def click(event, x, y, flags, param):
         param["y"] = y
 
 
-def main():
+def main(backend):
     """Show the camera feed from Reachy Mini and make it look at clicked points."""
     state = {"x": 0, "y": 0, "just_clicked": False}
 
@@ -29,12 +32,18 @@ def main():
 
     print("Click on the image to make ReachyMini look at that point.")
     print("Press 'q' to quit the camera feed.")
-    with ReachyMini(use_sim=False) as reachy_mini:
+    with ReachyMini(use_sim=False, media_backend=backend) as reachy_mini:
         while True:
             frame = reachy_mini.media.get_frame()
+
             if frame is None:
                 print("Failed to grab frame.")
                 continue
+
+            if backend == "gstreamer":
+                frame = cv2.imdecode(
+                    np.frombuffer(frame, dtype=np.uint8), cv2.IMREAD_COLOR
+                )
 
             cv2.imshow("Reachy Mini Camera", frame)
             if cv2.waitKey(1) & 0xFF == ord("q"):
@@ -47,4 +56,16 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(
+        description="Regenerate and compare per-move plots from two recordings."
+    )
+    parser.add_argument(
+        "--backend",
+        type=str,
+        choices=["default", "gstreamer"],
+        default="default",
+        help="Media backend to use.",
+    )
+
+    args = parser.parse_args()
+    main(backend=args.backend)

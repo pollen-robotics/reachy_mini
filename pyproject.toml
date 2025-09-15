@@ -35,6 +35,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = ["pytest", "ruff==0.12.0", "onshape-to-robot==1.7.6","pre-commit"]
 examples = ["pynput"]
+gstreamer = ["PyGObject>=3.42.2,<=3.46.0"]
 
 [project.scripts]
 reachy-mini-daemon = "reachy_mini.daemon.cli:main"

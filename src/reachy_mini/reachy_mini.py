@@ -69,6 +69,7 @@ class ReachyMini:
         timeout: float = 5.0,
         automatic_body_yaw: bool = False,
         log_level: str = "INFO",
+        media_backend: str = "default",
     ) -> None:
         """Initialize the Reachy Mini robot.
 
@@ -79,6 +80,7 @@ class ReachyMini:
             timeout (float): Timeout for the client connection, defaults to 5.0 seconds.
             automatic_body_yaw (bool): If True, the body yaw will be used to compute the IK and FK. Default is False.
             log_level (str): Logging level, defaults to "INFO".
+            media_backend (str): Media backend to use, either "default" (OpenCV) or "gstreamer", defaults to "default".
 
         It will try to connect to the daemon, and if it fails, it will raise an exception.
 
@@ -107,8 +109,18 @@ class ReachyMini:
             ]
         )
 
+        mbackend = MediaBackend.DEFAULT
+        if media_backend.lower() == "gstreamer":
+            mbackend = MediaBackend.GSTREAMER
+        elif media_backend.lower() == "default":
+            mbackend = MediaBackend.DEFAULT
+        else:
+            raise ValueError(
+                f"Invalid media_backend '{media_backend}'. Supported values are 'default' and 'gstreamer'."
+            )
+
         self.media_manager = MediaManager(
-            use_sim=use_sim, backend=MediaBackend.DEFAULT, log_level=log_level
+            use_sim=use_sim, backend=mbackend, log_level=log_level
         )
 
     def __del__(self):

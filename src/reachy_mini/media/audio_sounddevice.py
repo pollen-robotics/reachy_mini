@@ -84,7 +84,7 @@ class SoundDeviceAudio(AudioBase):
                 f"Resampled audio from {samplerate_in} Hz to {self._samplerate} Hz"
             )
 
-        sd.play(data, self._samplerate, device=self._device_id, blocking=True)
+        sd.play(data, self._samplerate, device=self._device_id, blocking=False)
 
     def get_output_device_id(self, name_contains: str) -> int:
         """Return the output device id whose name contains the given string (case-insensitive).

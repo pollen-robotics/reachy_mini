@@ -7,7 +7,7 @@ import cv2
 
 from reachy_mini.media.camera_utils import find_camera
 
-from .camera_base import CameraBase
+from .camera_base import CameraBackend, CameraBase
 
 
 class OpenCVCamera(CameraBase):
@@ -15,7 +15,7 @@ class OpenCVCamera(CameraBase):
 
     def __init__(self):
         """Initialize the OpenCV camera."""
-        super().__init__(backend="opencv")
+        super().__init__(backend=CameraBackend.OPENCV)
         self.cap = None
 
     def open(self, udp_camera: str = None):

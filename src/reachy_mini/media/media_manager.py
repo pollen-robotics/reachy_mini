@@ -52,6 +52,14 @@ class MediaManager:
                 self.camera.open(udp_camera="udp://@127.0.0.1:5005")
             else:
                 self.camera.open()
+        elif self.backend == MediaBackend.GSTREAMER:
+            self.logger.info("Using GStreamer camera backend.")
+            from reachy_mini.media.camera_gstreamer import GStreamerCamera
+
+            self.camera = GStreamerCamera()
+            self.camera.open()
+            # Todo: use simulation with gstreamer?
+
         else:
             raise NotImplementedError(f"Camera backend {self.backend} not implemented.")
 
@@ -67,7 +75,10 @@ class MediaManager:
     def _init_audio(self) -> None:
         """Initialize the audio system."""
         self.logger.debug("Initializing audio...")
-        if self.backend == MediaBackend.DEFAULT:
+        if (
+            self.backend == MediaBackend.DEFAULT
+            or self.backend == MediaBackend.GSTREAMER
+        ):
             self.logger.info("Using SoundDevice audio backend.")
             from reachy_mini.media.audio_sounddevice import SoundDeviceAudio
 
