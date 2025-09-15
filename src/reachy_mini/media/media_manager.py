@@ -83,3 +83,29 @@ class MediaManager:
 
         """
         self.audio.play_sound(sound_file)
+
+    def start_recording(self) -> None:
+        """Start recording audio."""
+        self.audio.start_recording()
+
+    def get_audio_sample(self) -> Optional[np.ndarray]:
+        """Get an audio sample from the audio device.
+
+        Returns:
+            Optional[np.ndarray]: The recorded audio sample, or None if no data is available.
+
+        """
+        return self.audio.get_audio_sample()
+
+    def get_audio_samplerate(self) -> int:
+        """Get the samplerate of the audio device.
+
+        Returns:
+            int: The samplerate of the audio device.
+
+        """
+        return self.audio.get_audio_samplerate()
+
+    def stop_recording(self) -> None:
+        """Stop recording audio."""
+        self.audio.stop_recording()

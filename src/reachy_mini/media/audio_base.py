@@ -26,16 +26,16 @@ class AudioBase(ABC):
         self.backend = backend
 
     @abstractmethod
-    def open(self):
-        """Open the audio device."""
+    def start_recording(self):
+        """Start recording audio."""
         pass
 
     @abstractmethod
-    def read(self):
+    def get_audio_sample(self):
         """Read audio data from the device. Returns the data or None if error."""
         pass
 
     @abstractmethod
-    def close(self):
+    def stop_recording(self):
         """Close the audio device and release resources."""
         pass

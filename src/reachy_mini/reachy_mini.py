@@ -107,7 +107,7 @@ class ReachyMini:
             ]
         )
 
-        self.media = MediaManager(
+        self.media_manager = MediaManager(
             use_sim=use_sim, backend=MediaBackend.DEFAULT, log_level=log_level
         )
 
@@ -118,8 +118,6 @@ class ReachyMini:
 
         """
         self.client.disconnect()
-        if self.camera is not None:
-            self.camera.close()
 
     def __enter__(self) -> "ReachyMini":
         """Context manager entry point for Reachy Mini."""
@@ -129,14 +127,10 @@ class ReachyMini:
         """Context manager exit point for Reachy Mini."""
         self.client.disconnect()
 
-    def get_frame(self) -> Optional[np.ndarray]:
-        """Get a frame from the camera.
-
-        Returns:
-            Optional[np.ndarray]: The captured frame, or None if the camera is not available.
-
-        """
-        return self.media.get_frame()
+    @property
+    def media(self) -> MediaManager:
+        """Expose the MediaManager instance used by ReachyMini."""
+        return self.media_manager
 
     def set_target(
         self,

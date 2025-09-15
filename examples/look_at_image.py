@@ -31,7 +31,7 @@ def main():
     print("Press 'q' to quit the camera feed.")
     with ReachyMini(use_sim=False) as reachy_mini:
         while True:
-            frame = reachy_mini.get_frame()
+            frame = reachy_mini.media.get_frame()
             if frame is None:
                 print("Failed to grab frame.")
                 continue

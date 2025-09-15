@@ -10,7 +10,6 @@ import soundfile as sf
 from reachy_mini.utils.constants import ASSETS_ROOT_PATH
 
 from .audio_base import AudioBackend, AudioBase
-from .audio_utils import get_respeaker_card_number
 
 
 class SoundDeviceAudio(AudioBase):
@@ -18,18 +17,12 @@ class SoundDeviceAudio(AudioBase):
 
     def __init__(
         self,
-        samplerate=16000,
-        channels=1,
-        dtype="float32",
         frames_per_buffer=1024,
         log_level="INFO",
         device=None,
     ):
         """Initialize the SoundDevice audio device."""
         super().__init__(backend=AudioBackend.SOUNDDEVICE, log_level=log_level)
-        self.samplerate = samplerate
-        self.channels = channels
-        self.dtype = dtype
         self.frames_per_buffer = frames_per_buffer
         self.device = device
         self.stream = None
@@ -37,17 +30,11 @@ class SoundDeviceAudio(AudioBase):
         self._device_id = self.get_output_device_id("respeaker")
         self._samplerate = int(sd.query_devices(self._device_id)["default_samplerate"])
 
-    def open(self):
+    def start_recording(self):
         """Open the audio input stream, using ReSpeaker card if available."""
-        if self.device is None:
-            self.device = get_respeaker_card_number()
-            self.logger.info(f"Using audio device: {self.device}")
         self.stream = sd.InputStream(
-            samplerate=self.samplerate,
-            channels=self.channels,
-            dtype=self.dtype,
             blocksize=self.frames_per_buffer,
-            device=self.device,
+            device=self._device_id,
             callback=self._callback,
         )
         self._buffer = []
@@ -59,15 +46,20 @@ class SoundDeviceAudio(AudioBase):
             self.logger.warning(f"SoundDevice status: {status}")
         self._buffer.append(indata.copy())
 
-    def read(self):
+    def get_audio_sample(self):
         """Read audio data from the buffer. Returns numpy array or None if empty."""
         if self._buffer and len(self._buffer) > 0:
             data = np.concatenate(self._buffer, axis=0)
             self._buffer.clear()
             return data
+        self.logger.warning("No audio data available in buffer.")
         return None
 
-    def close(self):
+    def get_audio_samplerate(self) -> int:
+        """Return the samplerate of the audio device."""
+        return self._samplerate
+
+    def stop_recording(self):
         """Close the audio stream and release resources."""
         if self.stream is not None:
             self.stream.stop()
