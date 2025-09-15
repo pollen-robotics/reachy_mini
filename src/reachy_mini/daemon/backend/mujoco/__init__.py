@@ -9,13 +9,6 @@ try:
     )
 
 except ImportError:
-    import logging
-
-    logging.warning(
-        "MuJoCo is not installed. MuJoCo backend will not be available."
-        " To use MuJoCo backend, please install the 'mujoco' extra dependencies"
-        " with 'pip install reachy_mini[mujoco]'."
-    )
 
     class MujocoMockupBackend:
         """Mockup class to avoid import errors when MuJoCo is not installed."""
