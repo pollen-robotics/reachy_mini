@@ -1,10 +1,10 @@
-"""Reachy Mini Analytic Kinematics class, implemented in C++ with python bindings."""
+"""A translation of the cpp kinematics using Rust."""
 
 import json
 from importlib.resources import files
 
 import numpy as np  # noqa: D100
-import reachy_mini_kinematics as rk
+from reachy_mini_rust_kinematics import ReachyMiniRustKinematics
 
 import reachy_mini
 
@@ -19,8 +19,8 @@ SLEEP_HEAD_POSE = np.array(
 )
 
 
-class CPPAnalyticKinematics:
-    """Reachy Mini Analytic Kinematics class, implemented in C++ with python bindings."""
+class RustKinematics:
+    """Reachy Mini Rust Kinematics class, implemented in Rust with python bindings."""
 
     def __init__(self):
         """Initialize."""
@@ -30,7 +30,9 @@ class CPPAnalyticKinematics:
 
         self.head_z_offset = data["head_z_offset"]
 
-        self.kin = rk.Kinematics(data["motor_arm_length"], data["rod_length"])
+        self.kin = ReachyMiniRustKinematics(
+            data["motor_arm_length"], data["rod_length"]
+        )
 
         self.motors = data["motors"]
         for motor in self.motors:
@@ -51,7 +53,7 @@ class CPPAnalyticKinematics:
         check_collision: bool = False,
         no_iterations: int = 0,
     ):
-        """check_collision and no_iterations are not used by CPPAnalyticKinematics.
+        """check_collision and no_iterations are not used by RustKinematics.
 
         We keep them for compatibility with the other kinematics engines
         """
@@ -65,18 +67,16 @@ class CPPAnalyticKinematics:
         check_collision: bool = False,
         no_iterations: int = 3,
     ):
-        """check_collision is not used by CPPAnalyticKinematics.
+        """check_collision is not used by RustKinematics.
 
         For now, ignores the body yaw (first joint angle).
         """
         _joint_angles = joint_angles[1:]
 
         for _ in range(no_iterations):
-            T_world_platform = self.kin.forward_kinematics(np.double(_joint_angles))
+            T_world_platform = np.array(
+                self.kin.forward_kinematics(np.double(_joint_angles))
+            )
 
-<<<<<<< HEAD
-        T_world_platform[:3, 3][2] -= self.placo_kinematics.head_z_offset
-=======
         T_world_platform[:3, 3][2] -= self.head_z_offset
->>>>>>> 225-remove-placo-dependency-for-parsing-urdf-in-cpp-and-rust-kinematics
         return T_world_platform

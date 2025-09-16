@@ -25,6 +25,7 @@ dependencies = [
     "pyserial",
     "huggingface-hub==0.34.4",
     "poc-reachy-mini-kinematics==0.0.7",
+    "reachy-mini-rust-kinematics==0.1.1",
     "asgiref",
 ]
 
