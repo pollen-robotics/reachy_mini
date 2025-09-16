@@ -16,8 +16,6 @@ from typing import Optional
 import numpy as np
 from reachy_mini_motor_controller import ReachyMiniPyControlLoop
 
-from reachy_mini.kinematics.placo_kinematics import PlacoKinematics
-
 from ..abstract import Backend, MotorControlMode
 
 
@@ -29,7 +27,7 @@ class RobotBackend(Backend):
         serialport: str,
         log_level: str = "INFO",
         check_collision: bool = False,
-        kinematics_engine: str = "Placo",
+        kinematics_engine: str = "RustKinematics",
     ):
         """Initialize the RobotBackend.
 
@@ -37,7 +35,7 @@ class RobotBackend(Backend):
             serialport (str): The serial port to which the Reachy Mini is connected.
             log_level (str): The logging level for the backend. Default is "INFO".
             check_collision (bool): If True, enable collision checking. Default is False.
-            kinematics_engine (str): Kinematics engine to use. Defaults to "Placo".
+            kinematics_engine (str): Kinematics engine to use. Defaults to "RustKinematics".
 
         Tries to connect to the Reachy Mini motor controller and initializes the control loop.
 
@@ -394,9 +392,9 @@ class RobotBackend(Backend):
 
     def compensate_head_gravity(self) -> None:
         """Calculate the currents necessary to compensate for gravity."""
-        assert self.kinematics_engine == "Placo" and isinstance(
-            self.head_kinematics, PlacoKinematics
-        ), "Gravity compensation is only supported with the Placo kinematics engine."
+        assert self.kinematics_engine == "Placo", (
+            "Gravity compensation is only supported with the Placo kinematics engine."
+        )
 
         # Even though in their docs dynamixes says that 1 count is 1 mA, in practice I've found it to be 3mA.
         # I am not sure why this happens

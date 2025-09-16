@@ -72,9 +72,9 @@ def main():
     parser.add_argument(
         "--kinematics-engine",
         type=str,
-        default="Placo",
-        choices=["Placo", "NN", "Analytical", "CPPAnalytical", "RustKinematics"],
-        help="Set the kinematics engine (default: Placo).",
+        default="RustKinematics",
+        choices=["Placo", "NN", "RustKinematics"],
+        help="Set the kinematics engine (default: RustKinematics).",
     )
     parser.add_argument(
         "--headless",
