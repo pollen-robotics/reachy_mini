@@ -1,8 +1,12 @@
+"""Reachy Mini Analytic Kinematics class, implemented in C++ with python bindings."""
+
+import json
+from importlib.resources import files
+
 import numpy as np  # noqa: D100
 import reachy_mini_kinematics as rk
-from placo_utils.tf import tf
 
-from reachy_mini.kinematics import PlacoKinematics
+import reachy_mini
 
 # Duplicated for now.
 SLEEP_HEAD_POSE = np.array(
@@ -18,56 +22,17 @@ SLEEP_HEAD_POSE = np.array(
 class CPPAnalyticKinematics:
     """Reachy Mini Analytic Kinematics class, implemented in C++ with python bindings."""
 
-    def __init__(self, urdf_path: str):
+    def __init__(self):
         """Initialize."""
-        self.urdf_path = urdf_path
+        assets_root_path: str = str(files(reachy_mini).joinpath("assets/"))
+        data_path = assets_root_path + "/kinematics_data.json"
+        data = json.load(open(data_path, "rb"))
 
-        # TODO get rid of the PlacoKinematics dependency
-        # Store the values, or use a different urdf parser ?
-        self.placo_kinematics = PlacoKinematics(urdf_path, 0.02)
-        self.robot = self.placo_kinematics.robot
+        self.head_z_offset = data["head_z_offset"]
 
-        self.placo_kinematics.fk([0.0] * 7, no_iterations=20)
-        self.robot.update_kinematics()
+        self.kin = rk.Kinematics(data["motor_arm_length"], data["rod_length"])
 
-        # Measuring lengths for the arm and branch (constants could be used)
-        self.T_world_head_home = self.robot.get_T_world_frame("head").copy()
-        T_world_1 = self.robot.get_T_world_frame("1")
-        T_world_arm1 = self.robot.get_T_world_frame("passive_1_link_x")
-        T_1_arm1 = np.linalg.inv(T_world_1) @ T_world_arm1
-        arm_z = T_1_arm1[2, 3]
-        self.motor_arm_length = np.linalg.norm(T_1_arm1[:2, 3])
-
-        T_world_branch1 = self.robot.get_T_world_frame("closing_1_2")
-        T_arm1_branch1 = np.linalg.inv(T_world_arm1) @ T_world_branch1
-        self.rod_length = np.linalg.norm(T_arm1_branch1[:3, 3])
-
-        self.kin = rk.Kinematics(self.motor_arm_length, self.rod_length)
-
-        self.motors = [
-            {"name": "1", "branch_frame": "closing_1_2", "offset": 0, "solution": 0},
-            {"name": "2", "branch_frame": "closing_2_2", "offset": 0, "solution": 1},
-            {"name": "3", "branch_frame": "closing_3_2", "offset": 0, "solution": 0},
-            {"name": "4", "branch_frame": "closing_4_2", "offset": 0, "solution": 1},
-            {"name": "5", "branch_frame": "closing_5_2", "offset": 0, "solution": 0},
-            {
-                "name": "6",
-                "branch_frame": "passive_7_link_y",
-                "offset": 0,
-                "solution": 1,
-            },
-        ]
-
-        for motor in self.motors:
-            T_world_branch = self.robot.get_T_world_frame(motor["branch_frame"])
-            T_head_branch = np.linalg.inv(self.T_world_head_home) @ T_world_branch
-            T_world_motor = self.robot.get_T_world_frame(
-                motor["name"]
-            ) @ tf.translation_matrix((0, 0, arm_z))
-            motor["T_motor_world"] = np.linalg.inv(T_world_motor)
-            motor["branch_position"] = T_head_branch[:3, 3]
-            motor["limits"] = self.robot.get_joint_limits(motor["name"])
-
+        self.motors = data["motors"]
         for motor in self.motors:
             self.kin.add_branch(
                 np.array(motor["branch_position"]),
@@ -76,7 +41,7 @@ class CPPAnalyticKinematics:
             )
 
         sleep_head_pose = SLEEP_HEAD_POSE
-        sleep_head_pose[:3, 3][2] += self.placo_kinematics.head_z_offset
+        sleep_head_pose[:3, 3][2] += self.head_z_offset
         self.kin.reset_forward_kinematics(sleep_head_pose)
 
     def ik(
@@ -91,7 +56,7 @@ class CPPAnalyticKinematics:
         We keep them for compatibility with the other kinematics engines
         """
         _pose = pose.copy()
-        _pose[:3, 3][2] += self.placo_kinematics.head_z_offset
+        _pose[:3, 3][2] += self.head_z_offset
         return [body_yaw] + list(self.kin.inverse_kinematics(_pose))
 
     def fk(
@@ -109,5 +74,5 @@ class CPPAnalyticKinematics:
         for _ in range(no_iterations):
             T_world_platform = self.kin.forward_kinematics(np.double(_joint_angles))
 
-        T_world_platform[:3, 3][2] -= self.placo_kinematics.head_z_offset
+        T_world_platform[:3, 3][2] -= self.head_z_offset
         return T_world_platform

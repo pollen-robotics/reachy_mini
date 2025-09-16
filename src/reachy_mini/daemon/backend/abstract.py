@@ -108,9 +108,9 @@ class Backend:
         elif self.kinematics_engine == "NN":
             self.head_kinematics = NNKinematics(Backend.models_root_path)
         elif self.kinematics_engine == "CPPAnalytical":
-            self.head_kinematics = CPPAnalyticKinematics(Backend.urdf_root_path)
+            self.head_kinematics = CPPAnalyticKinematics()
         elif self.kinematics_engine == "RustKinematics":
-            self.head_kinematics = RustKinematics(Backend.urdf_root_path)
+            self.head_kinematics = RustKinematics()
         else:
             raise ValueError(
                 f"Unknown kinematics engine: {self.kinematics_engine}. Use 'Placo', 'NN' or 'CPPAnalytical'."
