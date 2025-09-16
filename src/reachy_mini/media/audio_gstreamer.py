@@ -32,12 +32,29 @@ class GStreamerAudio(AudioBase):
         super().__init__(backend=AudioBackend.GSTREAMER)
         Gst.init(None)
         self._loop = GLib.MainLoop()
-        self._thread_bus_calls: Optional[Thread] = None
+        self._thread_bus_calls = Thread(target=lambda: self._loop.run(), daemon=True)
+        self._thread_bus_calls.start()
+
         self._samplerate = 24000
 
-        self.pipeline = Gst.Pipeline.new("audio_recorder")
+        self._pipeline_record = Gst.Pipeline.new("audio_recorder")
+        self._appsink_audio: Optional[GstApp] = None
+        self._init_pipeline_record(self._pipeline_record)
+        self._bus_record = self._pipeline_record.get_bus()
+        self._bus_record.add_watch(
+            GLib.PRIORITY_DEFAULT, self._on_bus_message, self._loop
+        )
 
-        self._appsink_audio: GstApp = Gst.ElementFactory.make("appsink")
+        self._pipeline_playback = Gst.Pipeline.new("audio_player")
+        self._appsrc: Optional[GstApp] = None
+        self._init_pipeline_playback(self._pipeline_playback)
+        self._bus_playback = self._pipeline_playback.get_bus()
+        self._bus_playback.add_watch(
+            GLib.PRIORITY_DEFAULT, self._on_bus_message, self._loop
+        )
+
+    def _init_pipeline_record(self, pipeline):
+        self._appsink_audio = Gst.ElementFactory.make("appsink")
         caps = Gst.Caps.from_string(
             f"audio/x-raw,channels=1,rate={self._samplerate},format=S16LE"
         )
@@ -59,16 +76,48 @@ class GStreamerAudio(AudioBase):
         ):
             raise RuntimeError("Failed to create GStreamer elements")
 
-        self.pipeline.add(autoaudiosrc)
-        self.pipeline.add(queue)
-        self.pipeline.add(audioconvert)
-        self.pipeline.add(audioresample)
-        self.pipeline.add(self._appsink_audio)
+        pipeline.add(autoaudiosrc)
+        pipeline.add(queue)
+        pipeline.add(audioconvert)
+        pipeline.add(audioresample)
+        pipeline.add(self._appsink_audio)
 
         autoaudiosrc.link(queue)
         queue.link(audioconvert)
         audioconvert.link(audioresample)
         audioresample.link(self._appsink_audio)
+
+    def __del__(self):
+        """Destructor to ensure gstreamer resources are released."""
+        self._loop.quit()
+        self._bus_record.remove_watch()
+        self._bus_playback.remove_watch()
+
+    def _init_pipeline_playback(self, pipeline):
+        self._appsrc = Gst.ElementFactory.make("appsrc")
+        self._appsrc.set_property("format", Gst.Format.TIME)
+        self._appsrc.set_property("is-live", True)
+        caps = Gst.Caps.from_string(
+            f"audio/x-raw,format=F32LE,channels=1,rate={self._samplerate},layout=interleaved"
+        )
+        self._appsrc.set_property("caps", caps)
+
+        audioconvert = Gst.ElementFactory.make("audioconvert")
+        audioresample = Gst.ElementFactory.make("audioresample")
+
+        queue = Gst.ElementFactory.make("queue")
+        audiosink = Gst.ElementFactory.make("autoaudiosink")  # use default speaker
+
+        pipeline.add(queue)
+        pipeline.add(audiosink)
+        pipeline.add(self._appsrc)
+        pipeline.add(audioconvert)
+        pipeline.add(audioresample)
+
+        self._appsrc.link(queue)
+        queue.link(audioconvert)
+        audioconvert.link(audioresample)
+        audioresample.link(audiosink)
 
     def _on_bus_message(self, bus: Gst.Bus, msg: Gst.Message, loop) -> bool:  # type: ignore[no-untyped-def]
         t = msg.type
@@ -83,19 +132,9 @@ class GStreamerAudio(AudioBase):
 
         return True
 
-    def _handle_bus_calls(self) -> None:
-        self.logger.debug("starting bus message loop")
-        bus = self.pipeline.get_bus()
-        bus.add_watch(GLib.PRIORITY_DEFAULT, self._on_bus_message, self._loop)
-        self._loop.run()  # type: ignore[no-untyped-call]
-        bus.remove_watch()
-        self.logger.debug("bus message loop stopped")
-
     def start_recording(self):
         """Open the audio card using GStreamer."""
-        self.pipeline.set_state(Gst.State.PLAYING)
-        self._thread_bus_calls = Thread(target=self._handle_bus_calls, daemon=True)
-        self._thread_bus_calls.start()
+        self._pipeline_record.set_state(Gst.State.PLAYING)
 
     def _get_sample(self, appsink):
         sample = appsink.try_pull_sample(20_000_000)
@@ -125,5 +164,22 @@ class GStreamerAudio(AudioBase):
 
     def stop_recording(self):
         """Release the camera resource."""
-        self._loop.quit()
-        self.pipeline.set_state(Gst.State.NULL)
+        self._pipeline_record.set_state(Gst.State.NULL)
+
+    def start_playing(self):
+        """Open the audio output using GStreamer."""
+        self._pipeline_playback.set_state(Gst.State.PLAYING)
+
+    def stop_playing(self):
+        """Stop playing audio and release resources."""
+        self._pipeline_playback.set_state(Gst.State.NULL)
+
+    def push_audio_sample(self, data: bytes):
+        """Push audio data to the output device."""
+        if self._appsrc is not None:
+            buf = Gst.Buffer.new_wrapped(data)
+            self._appsrc.push_buffer(buf)
+        else:
+            self.logger.warning(
+                "AppSrc is not initialized. Call start_playing() first."
+            )

@@ -10,6 +10,7 @@ import logging
 import os
 import time
 
+import numpy as np
 import samplerate as sr
 import soundfile as sf
 
@@ -36,7 +37,7 @@ def main(backend: str):
         if samplerate != mini.media.get_audio_samplerate():
             ratio = mini.media.get_audio_samplerate() / samplerate
             data = sr.resample(data, ratio, "sinc_best")
-        # data = np.ascontiguousarray(data)
+        data = np.ascontiguousarray(data)
 
         mini.media.start_playing()
         print("Playing audio...")
@@ -44,8 +45,11 @@ def main(backend: str):
         chunk_size = 1024
         for i in range(0, len(data), chunk_size):
             chunk = data[i : i + chunk_size]
+            if backend == "gstreamer":
+                chunk = chunk.tobytes()
             mini.media.push_audio_sample(chunk)
-            time.sleep(chunk_size / samplerate)
+
+        time.sleep(1)  # wait a bit to ensure all samples are played
         mini.media.stop_playing()
         print("Playback finished.")
 
