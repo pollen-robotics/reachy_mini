@@ -19,9 +19,9 @@ gi.require_version("Gst", "1.0")
 gi.require_version("GstApp", "1.0")
 
 
-from gi.repository import GLib, Gst, GstApp
+from gi.repository import GLib, Gst, GstApp  # noqa: E402
 
-from .audio_base import AudioBackend, AudioBase
+from .audio_base import AudioBackend, AudioBase  # noqa: E402
 
 
 class GStreamerAudio(AudioBase):

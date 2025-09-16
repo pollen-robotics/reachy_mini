@@ -19,9 +19,9 @@ gi.require_version("Gst", "1.0")
 gi.require_version("GstApp", "1.0")
 
 
-from gi.repository import GLib, Gst, GstApp
+from gi.repository import GLib, Gst, GstApp  # noqa: E402
 
-from .camera_base import CameraBackend, CameraBase
+from .camera_base import CameraBackend, CameraBase  # noqa: E402
 
 
 class GStreamerCamera(CameraBase):
