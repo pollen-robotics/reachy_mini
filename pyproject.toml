@@ -29,6 +29,7 @@ dependencies = [
     "soundfile==0.13.1",
     "onnxruntime==1.22.1",
     "poc-reachy-mini-kinematics==0.0.7",
+    "reachy-mini-rust-kinematics==0.1.1",
     "asgiref",
 ]
 
