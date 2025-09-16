@@ -7,3 +7,7 @@ from reachy_mini.kinematics.placo_kinematics import PlacoKinematics  # noqa: F40
 from reachy_mini.kinematics.cpp_analytic_kinematics import (
     CPPAnalyticKinematics,  # noqa: F401
 )
+
+from reachy_mini.kinematics.rust_kinematics import (  # noqa: F401
+    RustKinematics,
+)
