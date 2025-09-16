@@ -456,7 +456,7 @@ class RobotBackend(Backend):
             self.gravity_compensation_mode = True
             self.enable_motors()
 
-        self._status.motor_control_mode = mode
+        self.motor_control_mode = mode
 
     def _infer_control_mode(self) -> MotorControlMode:
         assert self.c is not None, "Motor controller not initialized or already closed."
