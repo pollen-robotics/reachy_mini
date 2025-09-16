@@ -32,10 +32,14 @@ templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 async def lifespan(app: FastAPI):
     """Lifespan context manager for the FastAPI application."""
     await app.state.daemon.start(
+        serialport=app.state.args.serialport,
         sim=app.state.args.sim,
         scene=app.state.args.scene,
         headless=app.state.args.headless,
+        kinematics_engine=app.state.args.kinematics_engine,
+        check_collision=app.state.args.check_collision,
         wake_up_on_start=app.state.args.wake_up_on_start,
+        localhost_only=app.state.args.localhost_only,
     )
     yield
     await app.state.app_manager.close()
