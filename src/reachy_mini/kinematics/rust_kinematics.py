@@ -1,7 +1,6 @@
 """A translation of the cpp kinematics using Rust."""
 
 import numpy as np  # noqa: D100
-import reachy_mini_kinematics as rk
 from placo_utils.tf import tf
 from reachy_mini_rust_kinematics import ReachyMiniRustKinematics
 
@@ -110,7 +109,9 @@ class RustKinematics:
         _joint_angles = joint_angles[1:]
 
         for _ in range(no_iterations):
-            T_world_platform = np.array(self.kin.forward_kinematics(np.double(_joint_angles)))
+            T_world_platform = np.array(
+                self.kin.forward_kinematics(np.double(_joint_angles))
+            )
 
         T_world_platform[:3, 3][2] -= self.placo_kinematics.head_z_offset
         return T_world_platform

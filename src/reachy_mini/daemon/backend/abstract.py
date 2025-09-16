@@ -28,7 +28,12 @@ import pygame
 from scipy.spatial.transform import Rotation as R
 
 import reachy_mini
-from reachy_mini.kinematics import CPPAnalyticKinematics, NNKinematics, PlacoKinematics, RustKinematics
+from reachy_mini.kinematics import (
+    CPPAnalyticKinematics,
+    NNKinematics,
+    PlacoKinematics,
+    RustKinematics,
+)
 from reachy_mini.motion.move import Move
 from reachy_mini.utils.interpolation import (
     InterpolationTechnique,
