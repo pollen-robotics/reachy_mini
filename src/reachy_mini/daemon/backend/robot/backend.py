@@ -15,7 +15,7 @@ from multiprocessing import Event  # It seems to be more accurate than threading
 import numpy as np
 from reachy_mini_motor_controller import ReachyMiniPyControlLoop
 
-from reachy_mini.kinematics.placo_kinematics import PlacoKinematics
+from reachy_mini.kinematics import PlacoKinematics
 
 from ..abstract import Backend, MotorControlMode
 
