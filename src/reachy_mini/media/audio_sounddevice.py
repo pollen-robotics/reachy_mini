@@ -26,6 +26,7 @@ class SoundDeviceAudio(AudioBase):
         self.frames_per_buffer = frames_per_buffer
         self.device = device
         self.stream = None
+        self._output_stream = None
         self._buffer = None
         self._device_id = self.get_output_device_id("respeaker")
         self._samplerate = int(sd.query_devices(self._device_id)["default_samplerate"])
@@ -66,6 +67,32 @@ class SoundDeviceAudio(AudioBase):
             self.stream.close()
             self.stream = None
             self.logger.info("SoundDevice audio stream closed.")
+
+    def push_audio_sample(self, data):
+        """Push audio data to the output device."""
+        if self._output_stream is not None:
+            self._output_stream.write(data)
+        else:
+            self.logger.warning(
+                "Output stream is not open. Call start_playing() first."
+            )
+
+    def start_playing(self):
+        """Open the audio output stream."""
+        self._output_stream = sd.OutputStream(
+            samplerate=self._samplerate,
+            device=self._device_id,
+            channels=1,
+        )
+        self._output_stream.start()
+
+    def stop_playing(self):
+        """Close the audio output stream."""
+        if self._output_stream is not None:
+            self._output_stream.stop()
+            self._output_stream.close()
+            self._output_stream = None
+            self.logger.info("SoundDevice audio output stream closed.")
 
     def play_sound(self, sound_file: str) -> None:
         """Play a sound file from the assets directory or a given path using sounddevice and soundfile."""

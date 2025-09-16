@@ -36,6 +36,26 @@ class AudioBase(ABC):
         pass
 
     @abstractmethod
+    def get_audio_samplerate(self) -> int:
+        """Return the samplerate of the audio device."""
+        pass
+
+    @abstractmethod
     def stop_recording(self):
         """Close the audio device and release resources."""
+        pass
+
+    @abstractmethod
+    def start_playing(self):
+        """Start playing audio."""
+        pass
+
+    @abstractmethod
+    def push_audio_sample(self, data):
+        """Push audio data to the output device."""
+        pass
+
+    @abstractmethod
+    def stop_playing(self):
+        """Stop playing audio and release resources."""
         pass

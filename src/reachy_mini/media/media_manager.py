@@ -75,14 +75,16 @@ class MediaManager:
     def _init_audio(self) -> None:
         """Initialize the audio system."""
         self.logger.debug("Initializing audio...")
-        if (
-            self.backend == MediaBackend.DEFAULT
-            or self.backend == MediaBackend.GSTREAMER
-        ):
+        if self.backend == MediaBackend.DEFAULT:
             self.logger.info("Using SoundDevice audio backend.")
             from reachy_mini.media.audio_sounddevice import SoundDeviceAudio
 
             self.audio = SoundDeviceAudio()
+        elif self.backend == MediaBackend.GSTREAMER:
+            self.logger.info("Using GStreamer audio backend.")
+            from reachy_mini.media.audio_gstreamer import GStreamerAudio
+
+            self.audio = GStreamerAudio()
         else:
             raise NotImplementedError(f"Audio backend {self.backend} not implemented.")
 
@@ -120,3 +122,20 @@ class MediaManager:
     def stop_recording(self) -> None:
         """Stop recording audio."""
         self.audio.stop_recording()
+
+    def start_playing(self) -> None:
+        """Start playing audio."""
+        self.audio.start_playing()
+
+    def push_audio_sample(self, data) -> None:
+        """Push audio data to the output device.
+
+        Args:
+            data: The audio data to push to the output device.
+
+        """
+        self.audio.push_audio_sample(data)
+
+    def stop_playing(self) -> None:
+        """Stop playing audio."""
+        self.audio.stop_playing()

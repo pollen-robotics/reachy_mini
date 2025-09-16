@@ -1,6 +1,7 @@
 """GStreamer camera backend.
 
 This module provides an implementation of the CameraBase class using GStreamer.
+By default the module directly returns JPEG images as output by the camera.
 """
 
 from threading import Thread
@@ -33,7 +34,7 @@ class GStreamerCamera(CameraBase):
         self._loop = GLib.MainLoop()
         self._thread_bus_calls: Optional[Thread] = None
 
-        self.pipeline = Gst.Pipeline.new("audio_recorder")
+        self.pipeline = Gst.Pipeline.new("camera_recorder")
 
         self._appsink_video: GstApp = Gst.ElementFactory.make("appsink")
         caps_video = Gst.Caps.from_string(
@@ -94,8 +95,13 @@ class GStreamerCamera(CameraBase):
             data = buf.extract_dup(0, buf.get_size())
         return data
 
-    def read(self):
-        """Read a frame from the camera. Returns the frame or None if error."""
+    def read(self) -> Optional[bytes]:
+        """Read a frame from the camera. Returns the frame or None if error.
+
+        Returns:
+            Optional[bytes]: The captured frame in JPEG format, or None if error.
+
+        """
         return self._get_sample(self._appsink_video)
 
     def close(self):

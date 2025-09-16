@@ -57,7 +57,7 @@ def main(backend):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="Regenerate and compare per-move plots from two recordings."
+        description="Display Reachy Mini's camera feed and make it look at clicked points."
     )
     parser.add_argument(
         "--backend",
