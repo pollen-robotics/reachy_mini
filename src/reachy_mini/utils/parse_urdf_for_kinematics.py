@@ -1,6 +1,6 @@
-"""Badly named.
+"""Generate kinematics data from URDF using Placo as preprocessing.
 
-The cpp and rust kinematics need information from the URDF. This files computes the information and writes it in a .json file.
+The analytical kinematics need information from the URDF. This files computes the information and writes it in a .json file.
 """
 
 import json
@@ -75,8 +75,8 @@ def main():
     """Generate the urdf_kinematics.json file."""
     assets_root_path: str = str(files(reachy_mini).joinpath("assets/"))
     data = get_data()
-    print(assets_root_path + '/' + "kinematics_data.json")
-    with open(assets_root_path + '/' + "kinematics_data.json", "w") as f:
+    print(assets_root_path + "/" + "kinematics_data.json")
+    with open(assets_root_path + "/" + "kinematics_data.json", "w") as f:
         json.dump(data, f, indent=4)
 
 
