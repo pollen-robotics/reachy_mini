@@ -1,4 +1,8 @@
-"""A translation of the cpp kinematics using Rust."""
+"""An analytical kinematics engine for Reachy Mini, using Rust bindings.
+
+The inverse kinematics use an analytical method, while the forward kinematics
+use a numerical method (Newton).
+"""
 
 import json
 from importlib.resources import files
@@ -19,8 +23,8 @@ SLEEP_HEAD_POSE = np.array(
 )
 
 
-class RustKinematics:
-    """Reachy Mini Rust Kinematics class, implemented in Rust with python bindings."""
+class AnalyticalKinematics:
+    """Reachy Mini Analytical Kinematics class, implemented in Rust with python bindings."""
 
     def __init__(self):
         """Initialize."""
@@ -53,9 +57,9 @@ class RustKinematics:
         check_collision: bool = False,
         no_iterations: int = 0,
     ):
-        """check_collision and no_iterations are not used by RustKinematics.
+        """Compute the inverse kinematics for a given head pose.
 
-        We keep them for compatibility with the other kinematics engines
+        check_collision and no_iterations are not used by AnalyticalKinematics. We keep them for compatibility with the other kinematics engines
         """
         _pose = pose.copy()
         _pose[:3, 3][2] += self.head_z_offset
@@ -67,8 +71,9 @@ class RustKinematics:
         check_collision: bool = False,
         no_iterations: int = 3,
     ):
-        """check_collision is not used by RustKinematics.
+        """Compute the forward kinematics for a given set of joint angles.
 
+        check_collision is not used by AnalyticalKinematics.
         For now, ignores the body yaw (first joint angle).
         """
         _joint_angles = joint_angles[1:]

@@ -27,7 +27,7 @@ class RobotBackend(Backend):
         serialport: str,
         log_level: str = "INFO",
         check_collision: bool = False,
-        kinematics_engine: str = "RustKinematics",
+        kinematics_engine: str = "AnalyticalKinematics",
     ):
         """Initialize the RobotBackend.
 
@@ -35,7 +35,7 @@ class RobotBackend(Backend):
             serialport (str): The serial port to which the Reachy Mini is connected.
             log_level (str): The logging level for the backend. Default is "INFO".
             check_collision (bool): If True, enable collision checking. Default is False.
-            kinematics_engine (str): Kinematics engine to use. Defaults to "RustKinematics".
+            kinematics_engine (str): Kinematics engine to use. Defaults to "AnalyticalKinematics".
 
         Tries to connect to the Reachy Mini motor controller and initializes the control loop.
 

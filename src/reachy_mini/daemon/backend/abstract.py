@@ -64,7 +64,7 @@ class Backend:
         self,
         log_level: str = "INFO",
         check_collision: bool = False,
-        kinematics_engine: str = "RustKinematics",
+        kinematics_engine: str = "AnalyticalKinematics",
     ) -> None:
         """Initialize the backend."""
         self.logger = logging.getLogger(__name__)
@@ -102,13 +102,13 @@ class Backend:
             from reachy_mini.kinematics import NNKinematics
 
             self.head_kinematics = NNKinematics(Backend.models_root_path)
-        elif self.kinematics_engine == "RustKinematics":
-            from reachy_mini.kinematics import RustKinematics
+        elif self.kinematics_engine == "AnalyticalKinematics":
+            from reachy_mini.kinematics import AnalyticalKinematics
 
-            self.head_kinematics = RustKinematics()
+            self.head_kinematics = AnalyticalKinematics()
         else:
             raise ValueError(
-                f"Unknown kinematics engine: {self.kinematics_engine}. Use 'Placo', 'NN' or 'RustKinematics'."
+                f"Unknown kinematics engine: {self.kinematics_engine}. Use 'Placo', 'NN' or 'AnalyticalKinematics'."
             )
 
         self.current_head_pose = None  # 4x4 pose matrix

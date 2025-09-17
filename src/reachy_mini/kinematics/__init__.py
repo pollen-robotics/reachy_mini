@@ -29,6 +29,6 @@ except ImportError:
     PlacoKinematics = MockupPlacoKinematics
 
 
-from reachy_mini.kinematics.rust_kinematics import (  # noqa: F401
-    RustKinematics,
+from reachy_mini.kinematics.analytical_kinematics import (  # noqa: F401
+    AnalyticalKinematics,
 )
