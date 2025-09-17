@@ -12,35 +12,44 @@ requires-python = ">=3.10"
 dependencies = [
     "numpy>=2.2.5,<2.3.0",
     "scipy==1.15.3",
-    "mujoco==3.3.0",
-    "placo==0.9.4",
-    "reachy_mini_motor_controller>=0.6",
+    "reachy_mini_motor_controller>=0.6.2",
     "eclipse-zenoh>=1.4.0",
     "opencv-python<=5.0",
     "cv2_enumerate_cameras>=1.2.1",
     "psutil",
     "jinja2",
-    "uvicorn",
+    "uvicorn[standard]",
     "fastapi",
     "pyserial",
     "huggingface-hub==0.34.4",
     "sounddevice==0.5.1",
     "soundfile==0.13.1",
     "samplerate==0.2.1",
-    "onnxruntime==1.22.1",
+    "reachy-mini-rust-kinematics==0.1.1",
     "asgiref",
+    "aiohttp",
 ]
 
 
 [project.optional-dependencies]
-dev = ["pytest", "ruff==0.12.0", "onshape-to-robot==1.7.6","pre-commit"]
+dev = [
+    "pytest", 
+    "pytest-asyncio",
+    "ruff==0.12.0", 
+    "onshape-to-robot==1.7.6",
+    "mujoco==3.3.0",
+    "placo==0.9.14",
+    "pre-commit",
+]
 examples = ["pynput"]
+mujoco = ["mujoco==3.3.0"]
+nn_kinematics = ["onnxruntime==1.22.1"]
+placo_kinematics = ["placo==0.9.14"]
 gstreamer = ["PyGObject>=3.42.2,<=3.46.0"]
 
 [project.scripts]
-reachy-mini-daemon = "reachy_mini.daemon.cli:main"
-reachy-mini-make-app = "reachy_mini.app:main"
-reachy-mini-dashboard = "reachy_mini_dashboard.dashboard_api:main"
+reachy-mini-daemon = "reachy_mini.daemon.app.main:main"
+reachy-mini-make-app = "reachy_mini.apps.apps.app:main"
 
 [tool.setuptools]
 package-dir = { "" = "src" }

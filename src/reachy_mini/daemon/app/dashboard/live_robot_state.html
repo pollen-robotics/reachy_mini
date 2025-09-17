@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Live Robot State & Control</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- Chart.js for live joint plotting -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+
+<body>
+    <h2>Live Robot State & Control</h2>
+    <div>
+        <h3>Head Pose (x, y, z, roll, pitch, yaw)</h3>
+        <canvas id="pose-chart" width="400" height="200"></canvas>
+    </div>
+    <div>
+        <h3>Move Commands</h3>
+        <form id="goto-form">
+            <fieldset>
+                <legend>Goto</legend>
+                <label>x: <input type="number" step="any" id="goto-x"></label>
+                <label>y: <input type="number" step="any" id="goto-y"></label>
+                <label>z: <input type="number" step="any" id="goto-z"></label><br>
+                <label>roll: <input type="number" step="any" id="goto-roll"></label>
+                <label>pitch: <input type="number" step="any" id="goto-pitch"></label>
+                <label>yaw: <input type="number" step="any" id="goto-yaw"></label>
+                <span style="margin-left:10px"><input type="checkbox" id="goto-use-deg" checked> Use degrees</span><br>
+                <label>Antennas (left,right): <input type="number" step="any" id="goto-ant-l"> <input type="number"
+                        step="any" id="goto-ant-r"></label><br>
+                <label>Duration (s): <input type="number" step="any" id="goto-duration" value="2"></label>
+                <label>Interpolation:
+                    <select id="goto-interp">
+                        <option value="linear">linear</option>
+                        <option value="minjerk" selected>minjerk</option>
+                        <option value="ease">ease</option>
+                        <option value="cartoon">cartoon</option>
+                    </select>
+                </label>
+                <button type="submit">Send Goto</button>
+            </fieldset>
+        </form>
+        <button id="wake-up-btn">Wake Up</button>
+        <button id="sleep-btn">Go to Sleep</button>
+        <button id="stop-btn">Stop Move</button>
+        <div id="move-result"></div>
+    </div>
+
+    <script>
+        // Poll /api/move/running to update move status and button state
+        async function pollMoveStatus() {
+            try {
+                const res = await fetch('/api/move/running');
+                const runningMoves = await res.json();
+                // If any moves are running, disable buttons except stop
+                const isRunning = Array.isArray(runningMoves) && runningMoves.length > 0;
+                setMoveButtonsDisabled(isRunning);
+                document.getElementById('stop-btn').disabled = !isRunning;
+                // Optionally update lastMoveUUID to the first running move
+                lastMoveUUID = isRunning ? runningMoves[0].uuid : null;
+            } catch (err) {
+                // On error, enable all buttons
+                setMoveButtonsDisabled(false);
+                document.getElementById('stop-btn').disabled = true;
+            }
+        }
+        setInterval(pollMoveStatus, 1000);
+        // Utility to enable/disable move buttons
+        function setMoveButtonsDisabled(disabled) {
+            document.getElementById('goto-form').querySelector('button[type="submit"]').disabled = disabled;
+            document.getElementById('wake-up-btn').disabled = disabled;
+            document.getElementById('sleep-btn').disabled = disabled;
+        }
+
+        function updateMoveButtons() {
+            setMoveButtonsDisabled(!!lastMoveUUID);
+            document.getElementById('stop-btn').disabled = !lastMoveUUID;
+        }
+        // --- Chart.js Setup for head pose (x, y, z, roll, pitch, yaw) ---
+        const poseCtx = document.getElementById('pose-chart').getContext('2d');
+        const poseLabels = ["x", "y", "z", "roll", "pitch", "yaw"];
+        const poseData = {
+            labels: poseLabels,
+            datasets: [{
+                label: 'Head Pose',
+                data: [0, 0, 0, 0, 0, 0],
+                backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                borderColor: 'rgba(255, 99, 132, 1)',
+                borderWidth: 1
+            }]
+        };
+        const poseChart = new Chart(poseCtx, {
+            type: 'bar',
+            data: poseData,
+            options: { scales: { y: { beginAtZero: true } } }
+        });
+
+        // --- Live robot state via WebSocket ---
+        let ws;
+        function connectWS() {
+            ws = new WebSocket(`ws://${location.host}/api/state/ws/full`);
+            ws.onopen = () => {
+                /* ...existing code... */
+            };
+            ws.onmessage = (event) => {
+                let data;
+                try {
+                    data = JSON.parse(event.data);
+                } catch {
+                    return;
+                }
+                // Update head pose chart if available
+                if (data.head_pose) {
+                    poseChart.data.datasets[0].data[0] = data.head_pose.x;
+                    poseChart.data.datasets[0].data[1] = data.head_pose.y;
+                    poseChart.data.datasets[0].data[2] = data.head_pose.z;
+                    poseChart.data.datasets[0].data[3] = data.head_pose.roll;
+                    poseChart.data.datasets[0].data[4] = data.head_pose.pitch;
+                    poseChart.data.datasets[0].data[5] = data.head_pose.yaw;
+                    poseChart.update();
+                }
+            };
+            ws.onclose = () => {
+                setTimeout(connectWS, 1000);
+            };
+        }
+        connectWS();
+
+        // --- Move commands ---
+        const resultDiv = document.getElementById('move-result');
+        let lastMoveUUID = null;
+        // Helper: wait for move to finish by polling /api/move/running
+        async function waitForMoveToFinish() {
+            for (let i = 0; i < 60; i++) { // max 30s
+                try {
+                    const res = await fetch('/api/move/running');
+                    const runningMoves = await res.json();
+                    const isRunning = Array.isArray(runningMoves) && runningMoves.length > 0;
+                    if (!isRunning) return;
+                } catch (e) { }
+                await new Promise(r => setTimeout(r, 500));
+            }
+        }
+
+        document.getElementById('goto-form').onsubmit = async function (e) {
+            e.preventDefault();
+            resultDiv.textContent = 'playing move goto';
+            setMoveButtonsDisabled(true);
+            const useDeg = document.getElementById('goto-use-deg').checked;
+            // If using degrees, convert roll/pitch/yaw to radians
+            function toRad(val) { return useDeg ? (parseFloat(val) || 0) * Math.PI / 180 : parseFloat(val) || 0; }
+            const head_pose = {
+                x: parseFloat(document.getElementById('goto-x').value) || 0,
+                y: parseFloat(document.getElementById('goto-y').value) || 0,
+                z: parseFloat(document.getElementById('goto-z').value) || 0,
+                roll: toRad(document.getElementById('goto-roll').value) || 0,
+                pitch: toRad(document.getElementById('goto-pitch').value) || 0,
+                yaw: toRad(document.getElementById('goto-yaw').value) || 0,
+            };
+            const antennas = [
+                parseFloat(document.getElementById('goto-ant-l').value) || 0,
+                parseFloat(document.getElementById('goto-ant-r').value) || 0
+            ];
+            const duration = parseFloat(document.getElementById('goto-duration').value) || 2;
+            const interpolation = document.getElementById('goto-interp').value;
+            try {
+                console.log('Sending goto:', { head_pose, antennas, duration, interpolation });
+                const res = await fetch('/api/move/goto', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ head_pose, antennas, duration, interpolation })
+                });
+                const data = await res.json();
+                lastMoveUUID = data.uuid || null;
+                await waitForMoveToFinish();
+                resultDiv.textContent = 'move goto finished';
+            } catch (err) {
+                resultDiv.textContent = 'Error sending goto.';
+            }
+            updateMoveButtons();
+        };
+
+        document.getElementById('wake-up-btn').onclick = async function () {
+            resultDiv.textContent = 'playing move wake_up';
+            setMoveButtonsDisabled(true);
+            try {
+                const res = await fetch('/api/move/play/wake_up', { method: 'POST' });
+                const data = await res.json();
+                lastMoveUUID = data.uuid || null;
+                await waitForMoveToFinish();
+                resultDiv.textContent = 'move wake_up finished';
+            } catch (err) {
+                resultDiv.textContent = 'Error sending wake up.';
+            }
+            updateMoveButtons();
+        };
+
+        document.getElementById('sleep-btn').onclick = async function () {
+            resultDiv.textContent = 'playing move goto_sleep';
+            setMoveButtonsDisabled(true);
+            try {
+                const res = await fetch('/api/move/play/goto_sleep', { method: 'POST' });
+                const data = await res.json();
+                lastMoveUUID = data.uuid || null;
+                await waitForMoveToFinish();
+                resultDiv.textContent = 'move goto_sleep finished';
+            } catch (err) {
+                resultDiv.textContent = 'Error sending go to sleep.';
+            }
+            updateMoveButtons();
+        };
+
+        document.getElementById('stop-btn').onclick = async function () {
+            if (!lastMoveUUID) {
+                resultDiv.textContent = 'No move UUID to stop.';
+                return;
+            }
+            resultDiv.textContent = 'playing move stop';
+            setMoveButtonsDisabled(true);
+            try {
+                const res = await fetch('/api/move/stop', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ uuid: lastMoveUUID })
+                });
+                const data = await res.json();
+                await waitForMoveToFinish();
+                resultDiv.textContent = 'move stop finished';
+                lastMoveUUID = null;
+            } catch (err) {
+                resultDiv.textContent = 'Error stopping move.';
+            }
+            updateMoveButtons();
+            // Initialize button states on page load
+            updateMoveButtons();
+        };
+    </script>
+    <!-- Removed duplicated move section -->
+</body>
+
+</html>

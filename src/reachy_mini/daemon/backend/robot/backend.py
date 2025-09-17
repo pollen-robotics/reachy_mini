@@ -11,12 +11,9 @@ import time
 from dataclasses import dataclass
 from datetime import timedelta
 from multiprocessing import Event  # It seems to be more accurate than threading.Event
-from typing import Optional
 
 import numpy as np
 from reachy_mini_motor_controller import ReachyMiniPyControlLoop
-
-from reachy_mini.kinematics.placo_kinematics import PlacoKinematics
 
 from ..abstract import Backend, MotorControlMode
 
@@ -29,7 +26,7 @@ class RobotBackend(Backend):
         serialport: str,
         log_level: str = "INFO",
         check_collision: bool = False,
-        kinematics_engine: str = "Placo",
+        kinematics_engine: str = "AnalyticalKinematics",
     ):
         """Initialize the RobotBackend.
 
@@ -37,7 +34,7 @@ class RobotBackend(Backend):
             serialport (str): The serial port to which the Reachy Mini is connected.
             log_level (str): The logging level for the backend. Default is "INFO".
             check_collision (bool): If True, enable collision checking. Default is False.
-            kinematics_engine (str): Kinematics engine to use. Defaults to "Placo".
+            kinematics_engine (str): Kinematics engine to use. Defaults to "AnalyticalKinematics".
 
         Tries to connect to the Reachy Mini motor controller and initializes the control loop.
 
@@ -60,13 +57,12 @@ class RobotBackend(Backend):
         )
 
         self.motor_control_mode = self._infer_control_mode()
+        self._torque_enabled = self.motor_control_mode != MotorControlMode.Disabled
         self.logger.info(f"Motor control mode: {self.motor_control_mode}")
-        self.motor_control_mode = MotorControlMode.Disabled
         self.last_alive = None
 
-        self._torque_enabled = False
-
         self._status = RobotBackendStatus(
+            motor_control_mode=self.motor_control_mode,
             ready=False,
             last_alive=None,
             control_loop_stats={},
@@ -109,10 +105,7 @@ class RobotBackend(Backend):
         )
         assert self.current_head_pose is not None
 
-        self.head_kinematics.ik(
-            self.current_head_pose,
-            no_iterations=20,
-        )
+        self.head_kinematics.ik(self.current_head_pose, no_iterations=20)
 
         while not self.should_stop.is_set():
             start_t = time.time()
@@ -177,9 +170,12 @@ class RobotBackend(Backend):
                 # Update the target head joint positions from IK if necessary
                 # - does nothing if the targets did not change
                 if self.ik_required:
-                    self.update_target_head_joints_from_ik(
-                        self.target_head_pose, self.target_body_yaw
-                    )
+                    try:
+                        self.update_target_head_joints_from_ik(
+                            self.target_head_pose, self.target_body_yaw
+                        )
+                    except ValueError as e:
+                        self.logger.warning(f"IK error: {e}")
 
                 self.joint_positions_publisher.put(
                     json.dumps(
@@ -251,11 +247,13 @@ class RobotBackend(Backend):
 
     def close(self) -> None:
         """Close the motor controller connection."""
+        self.c.close()
         self.c = None
 
     def get_status(self) -> "RobotBackendStatus":
         """Get the current status of the robot backend."""
         self._status.error = self.error
+        self._status.motor_control_mode = self.motor_control_mode
         return self._status
 
     def enable_motors(self) -> None:
@@ -394,9 +392,9 @@ class RobotBackend(Backend):
 
     def compensate_head_gravity(self) -> None:
         """Calculate the currents necessary to compensate for gravity."""
-        assert self.kinematics_engine == "Placo" and isinstance(
-            self.head_kinematics, PlacoKinematics
-        ), "Gravity compensation is only supported with the Placo kinematics engine."
+        assert self.kinematics_engine == "Placo", (
+            "Gravity compensation is only supported with the Placo kinematics engine."
+        )
 
         # Even though in their docs dynamixes says that 1 count is 1 mA, in practice I've found it to be 3mA.
         # I am not sure why this happens
@@ -480,6 +478,7 @@ class RobotBackendStatus:
     """Status of the Robot Backend."""
 
     ready: bool
-    last_alive: Optional[float]
+    motor_control_mode: MotorControlMode
+    last_alive: float | None
     control_loop_stats: dict
-    error: Optional[str] = None
+    error: str | None = None

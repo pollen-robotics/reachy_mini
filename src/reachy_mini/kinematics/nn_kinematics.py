@@ -1,11 +1,11 @@
-import time  # noqa: D100
+"""Neural Network based FK/IK."""
+
+import time
 from typing import List
 
 import numpy as np
+import onnxruntime
 from scipy.spatial.transform import Rotation as R
-
-# from utils.onnx_infer import OnnxInfer
-from reachy_mini.utils.onnx_infer import OnnxInfer
 
 
 class NNKinematics:
@@ -57,6 +57,22 @@ class NNKinematics:
         pose[:3, 3] = [x, y, z]
         pose[:3, :3] = R.from_euler("xyz", [roll, pitch, yaw]).as_matrix()
         return pose
+
+
+class OnnxInfer:
+    """Infer an onnx model."""
+
+    def __init__(self, onnx_model_path):
+        """Initialize."""
+        self.onnx_model_path = onnx_model_path
+        self.ort_session = onnxruntime.InferenceSession(
+            self.onnx_model_path, providers=["CPUExecutionProvider"]
+        )
+
+    def infer(self, input):
+        """Run inference on the input."""
+        outputs = self.ort_session.run(None, {"input": [input]})
+        return outputs[0][0]
 
 
 if __name__ == "__main__":

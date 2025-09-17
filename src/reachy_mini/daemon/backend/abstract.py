@@ -15,16 +15,17 @@ import threading
 import time
 from abc import abstractmethod
 from enum import Enum
+from importlib.resources import files
+from pathlib import Path
 from typing import List
 
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 
-from reachy_mini.kinematics import NNKinematics, PlacoKinematics
 from reachy_mini.media.audio_sounddevice import SoundDeviceAudio
 from reachy_mini.motion.goto import GotoMove
 from reachy_mini.motion.move import Move
-from reachy_mini.utils.constants import MODELS_ROOT_PATH, URDF_ROOT_PATH
+from reachy_mini.utils.constants import URDF_ROOT_PATH
 from reachy_mini.utils.interpolation import (
     InterpolationTechnique,
     distance_between_poses,
@@ -43,11 +44,20 @@ class MotorControlMode(str, Enum):
 class Backend:
     """Base class for robot backends, simulated or real."""
 
+    import reachy_mini
+
+    urdf_root_path: str = str(
+        files(reachy_mini).joinpath("descriptions/reachy_mini/urdf")
+    )
+
+    assets_root_path: str = str(files(reachy_mini).joinpath("assets"))
+    models_root_path: str = str(files(reachy_mini).joinpath("assets/models"))
+
     def __init__(
         self,
         log_level: str = "INFO",
         check_collision: bool = False,
-        kinematics_engine: str = "Placo",
+        kinematics_engine: str = "AnalyticalKinematics",
     ) -> None:
         """Initialize the backend."""
         self.logger = logging.getLogger(__name__)
@@ -60,9 +70,6 @@ class Backend:
             check_collision  # Flag to enable/disable collision checking
         )
         self.kinematics_engine = kinematics_engine
-        assert self.kinematics_engine != "Analytical", (
-            "Analytical kinematics engine is not integrated yet"
-        )
 
         self.logger.info(f"Using {self.kinematics_engine} kinematics engine")
 
@@ -79,14 +86,23 @@ class Backend:
             )
 
         if self.kinematics_engine == "Placo":
+            from reachy_mini.kinematics import PlacoKinematics
+
             self.head_kinematics = PlacoKinematics(
                 URDF_ROOT_PATH, check_collision=self.check_collision
             )
         elif self.kinematics_engine == "NN":
-            self.head_kinematics = NNKinematics(MODELS_ROOT_PATH)
+            from reachy_mini.kinematics import NNKinematics
+
+            self.head_kinematics = NNKinematics(Backend.models_root_path)
+        elif self.kinematics_engine == "AnalyticalKinematics":
+            from reachy_mini.kinematics import AnalyticalKinematics
+
+            self.head_kinematics = AnalyticalKinematics()
         else:
-            print("???")
-            exit()
+            raise ValueError(
+                f"Unknown kinematics engine: {self.kinematics_engine}. Use 'Placo', 'NN' or 'AnalyticalKinematics'."
+            )
 
         self.current_head_pose = None  # 4x4 pose matrix
         self.target_head_pose = None  # 4x4 pose matrix
@@ -203,7 +219,6 @@ class Backend:
 
         # Compute the inverse kinematics to get the head joint positions
         joints = self.head_kinematics.ik(pose, body_yaw=body_yaw)
-
         if joints is None or np.any(np.isnan(joints)):
             raise ValueError("WARNING: Collision detected or head pose not achievable!")
 
@@ -545,6 +560,13 @@ class Backend:
         """
         self.head_kinematics.start_body_yaw = body_yaw
 
+    def get_urdf(self) -> str:
+        """Get the URDF representation of the robot."""
+        urdf_path = Path(self.urdf_root_path) / "robot.urdf"
+
+        with open(urdf_path, "r") as f:
+            return f.read()
+
     # Multimedia methods
     def play_sound(self, sound_file: str) -> None:
         """Play a sound file from the assets directory.
@@ -621,7 +643,6 @@ class Backend:
         _, _, dist_to_init_pose = distance_between_poses(
             self.get_current_head_pose(), self.INIT_HEAD_POSE
         )
-
         sleep_time = 2.0
 
         # Thresholds found empirically.
