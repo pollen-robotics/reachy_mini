@@ -1,4 +1,6 @@
-try:  # noqa: D104
+"""Try to import kinematics engines, and provide mockup classes if they are not available."""
+
+try:
     from reachy_mini.kinematics.nn_kinematics import NNKinematics  # noqa: F401
 except ImportError:
 
