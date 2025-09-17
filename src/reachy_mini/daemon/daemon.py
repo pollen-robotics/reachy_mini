@@ -48,7 +48,7 @@ class Daemon:
         localhost_only: bool = True,
         wake_up_on_start: bool = True,
         check_collision: bool = False,
-        kinematics_engine: str = "Placo",
+        kinematics_engine: str = "AnalyticalKinematics",
         headless: bool = False,
     ) -> "DaemonState":
         """Start the Reachy Mini daemon.
@@ -60,7 +60,7 @@ class Daemon:
             localhost_only (bool): If True, restrict the server to localhost only clients. Defaults to True.
             wake_up_on_start (bool): If True, wake up Reachy Mini on start. Defaults to True.
             check_collision (bool): If True, enable collision checking. Defaults to False.
-            kinematics_engine (str): Kinematics engine to use. Defaults to "Placo".
+            kinematics_engine (str): Kinematics engine to use. Defaults to "AnalyticalKinematics".
             headless (bool): If True, run Mujoco in headless mode (no GUI). Defaults to False.
 
         Returns:
@@ -285,7 +285,7 @@ class Daemon:
         wake_up_on_start: bool = True,
         goto_sleep_on_stop: bool = True,
         check_collision: bool = False,
-        kinematics_engine: str = "Placo",
+        kinematics_engine: str = "AnalyticalKinematics",
         headless: bool = False,
     ):
         """Run the Reachy Mini daemon indefinitely.
@@ -300,7 +300,7 @@ class Daemon:
             wake_up_on_start (bool): If True, wake up Reachy Mini on start. Defaults to True.
             goto_sleep_on_stop (bool): If True, put Reachy Mini to sleep on stop. Defaults to True
             check_collision (bool): If True, enable collision checking. Defaults to False.
-            kinematics_engine (str): Kinematics engine to use. Defaults to "Placo".
+            kinematics_engine (str): Kinematics engine to use. Defaults to "AnalyticalKinematics".
             headless (bool): If True, run Mujoco in headless mode (no GUI). Defaults to False.
 
         """

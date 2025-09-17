@@ -35,7 +35,7 @@ class MujocoBackend(Backend):
         self,
         scene="empty",
         check_collision: bool = False,
-        kinematics_engine: str = "Placo",
+        kinematics_engine: str = "AnalyticalKinematics",
         headless: bool = False,
     ):
         """Initialize the MujocoBackend with a specified scene.
@@ -43,7 +43,7 @@ class MujocoBackend(Backend):
         Args:
             scene (str): The name of the scene to load. Default is "empty".
             check_collision (bool): If True, enable collision checking. Default is False.
-            kinematics_engine (str): Kinematics engine to use. Defaults to "Placo".
+            kinematics_engine (str): Kinematics engine to use. Defaults to "AnalyticalKinematics".
             headless (bool): If True, run Mujoco in headless mode (no GUI). Default is False.
 
         """
