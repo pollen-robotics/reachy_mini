@@ -46,7 +46,7 @@ class AnalyticalKinematics:
                 1 if motor["solution"] else -1,
             )
 
-        sleep_head_pose = SLEEP_HEAD_POSE
+        sleep_head_pose = SLEEP_HEAD_POSE.copy()
         sleep_head_pose[:3, 3][2] += self.head_z_offset
         self.kin.reset_forward_kinematics(sleep_head_pose)
 
