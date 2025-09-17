@@ -15,7 +15,6 @@ import threading
 import time
 from abc import abstractmethod
 from enum import Enum
-from importlib.resources import files
 from pathlib import Path
 from typing import List
 
@@ -25,7 +24,7 @@ from scipy.spatial.transform import Rotation as R
 from reachy_mini.media.audio_sounddevice import SoundDeviceAudio
 from reachy_mini.motion.goto import GotoMove
 from reachy_mini.motion.move import Move
-from reachy_mini.utils.constants import URDF_ROOT_PATH
+from reachy_mini.utils.constants import MODELS_ROOT_PATH, URDF_ROOT_PATH
 from reachy_mini.utils.interpolation import (
     InterpolationTechnique,
     distance_between_poses,
@@ -43,15 +42,6 @@ class MotorControlMode(str, Enum):
 
 class Backend:
     """Base class for robot backends, simulated or real."""
-
-    import reachy_mini
-
-    urdf_root_path: str = str(
-        files(reachy_mini).joinpath("descriptions/reachy_mini/urdf")
-    )
-
-    assets_root_path: str = str(files(reachy_mini).joinpath("assets"))
-    models_root_path: str = str(files(reachy_mini).joinpath("assets/models"))
 
     def __init__(
         self,
@@ -94,7 +84,7 @@ class Backend:
         elif self.kinematics_engine == "NN":
             from reachy_mini.kinematics import NNKinematics
 
-            self.head_kinematics = NNKinematics(Backend.models_root_path)
+            self.head_kinematics = NNKinematics(MODELS_ROOT_PATH)
         elif self.kinematics_engine == "AnalyticalKinematics":
             from reachy_mini.kinematics import AnalyticalKinematics
 
