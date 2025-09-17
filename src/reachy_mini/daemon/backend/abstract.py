@@ -29,7 +29,6 @@ import pygame
 from scipy.spatial.transform import Rotation as R
 
 import reachy_mini
-from reachy_mini.kinematics import CPPAnalyticKinematics, NNKinematics, PlacoKinematics
 from reachy_mini.motion.move import Move
 from reachy_mini.utils.interpolation import (
     InterpolationTechnique,
@@ -66,7 +65,7 @@ class Backend:
         self,
         log_level: str = "INFO",
         check_collision: bool = False,
-        kinematics_engine: str = "Placo",
+        kinematics_engine: str = "AnalyticalKinematics",
     ) -> None:
         """Initialize the backend."""
         self.logger = logging.getLogger(__name__)
@@ -79,9 +78,6 @@ class Backend:
             check_collision  # Flag to enable/disable collision checking
         )
         self.kinematics_engine = kinematics_engine
-        assert self.kinematics_engine != "Analytical", (
-            "Analytical kinematics engine is not integrated yet"
-        )
 
         self.logger.info(f"Using {self.kinematics_engine} kinematics engine")
 
@@ -98,16 +94,22 @@ class Backend:
             )
 
         if self.kinematics_engine == "Placo":
+            from reachy_mini.kinematics import PlacoKinematics
+
             self.head_kinematics = PlacoKinematics(
                 Backend.urdf_root_path, check_collision=self.check_collision
             )
         elif self.kinematics_engine == "NN":
+            from reachy_mini.kinematics import NNKinematics
+
             self.head_kinematics = NNKinematics(Backend.models_root_path)
-        elif self.kinematics_engine == "CPPAnalytical":
-            self.head_kinematics = CPPAnalyticKinematics(Backend.urdf_root_path)
+        elif self.kinematics_engine == "AnalyticalKinematics":
+            from reachy_mini.kinematics import AnalyticalKinematics
+
+            self.head_kinematics = AnalyticalKinematics()
         else:
             raise ValueError(
-                f"Unknown kinematics engine: {self.kinematics_engine}. Use 'Placo', 'NN' or 'CPPAnalytical'."
+                f"Unknown kinematics engine: {self.kinematics_engine}. Use 'Placo', 'NN' or 'AnalyticalKinematics'."
             )
 
         self.current_head_pose = None  # 4x4 pose matrix

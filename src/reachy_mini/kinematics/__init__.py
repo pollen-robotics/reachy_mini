@@ -1,6 +1,4 @@
-from reachy_mini.kinematics.analytic_kinematics import (  # noqa: D104, F401, I001
-    ReachyMiniAnalyticKinematics,
-)
+"""Try to import kinematics engines, and provide mockup classes if they are not available."""
 
 try:
     from reachy_mini.kinematics.nn_kinematics import NNKinematics  # noqa: F401
@@ -17,8 +15,22 @@ except ImportError:
 
     NNKinematics = MockupNNKinematics
 
+try:
+    from reachy_mini.kinematics.placo_kinematics import PlacoKinematics  # noqa: F401
+except ImportError:
 
-from reachy_mini.kinematics.cpp_analytic_kinematics import (
-    CPPAnalyticKinematics,  # noqa: F401
+    class MockupPlacoKinematics:
+        """Mockup class for PlacoKinematics."""
+
+        def __init__(self, *args, **kwargs):
+            """Raise ImportError when trying to instantiate the class."""
+            raise ImportError(
+                "PlacoKinematics could not be imported. Make sure you run pip install reachy_mini[placo_kinematics]."
+            )
+
+    PlacoKinematics = MockupPlacoKinematics
+
+
+from reachy_mini.kinematics.analytical_kinematics import (  # noqa: F401
+    AnalyticalKinematics,
 )
-from reachy_mini.kinematics.placo_kinematics import PlacoKinematics  # noqa: F401

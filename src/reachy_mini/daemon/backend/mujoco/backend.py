@@ -34,7 +34,7 @@ class MujocoBackend(Backend):
         self,
         scene="empty",
         check_collision: bool = False,
-        kinematics_engine: str = "Placo",
+        kinematics_engine: str = "AnalyticalKinematics",
         headless: bool = False,
     ):
         """Initialize the MujocoBackend with a specified scene.
@@ -42,7 +42,7 @@ class MujocoBackend(Backend):
         Args:
             scene (str): The name of the scene to load. Default is "empty".
             check_collision (bool): If True, enable collision checking. Default is False.
-            kinematics_engine (str): Kinematics engine to use. Defaults to "Placo".
+            kinematics_engine (str): Kinematics engine to use. Defaults to "AnalyticalKinematics".
             headless (bool): If True, run Mujoco in headless mode (no GUI). Default is False.
 
         """
@@ -192,9 +192,12 @@ class MujocoBackend(Backend):
                 # Update the target head joint positions from IK if necessary
                 # - does nothing if the targets did not change
                 if self.ik_required:
-                    self.update_target_head_joints_from_ik(
-                        self.target_head_pose, self.target_body_yaw
-                    )
+                    try:
+                        self.update_target_head_joints_from_ik(
+                            self.target_head_pose, self.target_body_yaw
+                        )
+                    except ValueError as e:
+                        self.logger.warning(f"IK error: {e}")
 
                 if self.target_head_joint_positions is not None:
                     self.data.ctrl[:7] = self.target_head_joint_positions
