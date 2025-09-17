@@ -158,9 +158,9 @@ def main():
     parser.add_argument(
         "--kinematics-engine",
         type=str,
-        default="Placo",
-        choices=["Placo", "NN", "Analytical"],
-        help="Set the kinematics engine (default: Placo).",
+        default="AnalyticalKinematics",
+        choices=["Placo", "NN", "AnalyticalKinematics"],
+        help="Set the kinematics engine (default: AnalyticalKinematics).",
     )
     # FastAPI server options
     parser.add_argument(
