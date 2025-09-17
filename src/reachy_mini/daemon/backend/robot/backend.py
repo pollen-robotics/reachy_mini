@@ -11,7 +11,6 @@ import time
 from dataclasses import dataclass
 from datetime import timedelta
 from multiprocessing import Event  # It seems to be more accurate than threading.Event
-from typing import Optional
 
 import numpy as np
 from reachy_mini_motor_controller import ReachyMiniPyControlLoop
@@ -58,13 +57,12 @@ class RobotBackend(Backend):
         )
 
         self.motor_control_mode = self._infer_control_mode()
+        self._torque_enabled = self.motor_control_mode != MotorControlMode.Disabled
         self.logger.info(f"Motor control mode: {self.motor_control_mode}")
-        self.motor_control_mode = MotorControlMode.Disabled
         self.last_alive = None
 
-        self._torque_enabled = False
-
         self._status = RobotBackendStatus(
+            motor_control_mode=self.motor_control_mode,
             ready=False,
             last_alive=None,
             control_loop_stats={},
@@ -249,11 +247,13 @@ class RobotBackend(Backend):
 
     def close(self) -> None:
         """Close the motor controller connection."""
+        self.c.close()
         self.c = None
 
     def get_status(self) -> "RobotBackendStatus":
         """Get the current status of the robot backend."""
         self._status.error = self.error
+        self._status.motor_control_mode = self.motor_control_mode
         return self._status
 
     def enable_motors(self) -> None:
@@ -478,6 +478,7 @@ class RobotBackendStatus:
     """Status of the Robot Backend."""
 
     ready: bool
-    last_alive: Optional[float]
+    motor_control_mode: MotorControlMode
+    last_alive: float | None
     control_loop_stats: dict
-    error: Optional[str] = None
+    error: str | None = None

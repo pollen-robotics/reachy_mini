@@ -17,6 +17,7 @@ import time
 from abc import abstractmethod
 from enum import Enum
 from importlib.resources import files
+from pathlib import Path
 from typing import List
 
 from reachy_mini.motion.goto import GotoMove
@@ -564,6 +565,13 @@ class Backend:
 
         """
         self.head_kinematics.start_body_yaw = body_yaw
+
+    def get_urdf(self) -> str:
+        """Get the URDF representation of the robot."""
+        urdf_path = Path(self.urdf_root_path) / "robot.urdf"
+
+        with open(urdf_path, "r") as f:
+            return f.read()
 
     # Multimedia methods
     def play_sound(self, sound_file: str) -> None:

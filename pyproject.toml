@@ -12,25 +12,27 @@ requires-python = ">=3.8"
 dependencies = [
     "numpy>=2.2.5,<2.3.0",
     "scipy==1.15.3",
-    "reachy_mini_motor_controller>=0.6",
+    "reachy_mini_motor_controller>=0.6.2",
     "pygame==2.6.1",
     "eclipse-zenoh>=1.4.0",
     "opencv-python<=5.0",
     "cv2_enumerate_cameras>=1.2.1",
     "psutil",
     "jinja2",
-    "uvicorn",
+    "uvicorn[standard]",
     "fastapi",
     "pyserial",
     "huggingface-hub==0.34.4",
     "reachy-mini-rust-kinematics==0.1.1",
     "asgiref",
+    "aiohttp",
 ]
 
 
 [project.optional-dependencies]
 dev = [
     "pytest", 
+    "pytest-asyncio",
     "ruff==0.12.0", 
     "onshape-to-robot==1.7.6",
     "mujoco==3.3.0",
@@ -42,9 +44,8 @@ nn_kinematics = ["onnxruntime==1.22.1"]
 placo_kinematics = ["placo==0.9.14"]
 
 [project.scripts]
-reachy-mini-daemon = "reachy_mini.daemon.cli:main"
-reachy-mini-make-app = "reachy_mini.app:main"
-reachy-mini-dashboard = "reachy_mini_dashboard.dashboard_api:main"
+reachy-mini-daemon = "reachy_mini.daemon.app.main:main"
+reachy-mini-make-app = "reachy_mini.apps.apps.app:main"
 
 [tool.setuptools]
 package-dir = { "" = "src" }

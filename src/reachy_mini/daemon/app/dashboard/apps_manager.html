@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Apps Manager</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <h2>Apps Manager</h2>
+    <div id="apps-list">
+        <h3>Available Apps</h3>
+        <ul id="available-apps"></ul>
+    </div>
+    <div id="installed-apps-list">
+        <h3>Installed Apps</h3>
+        <ul id="installed-apps"></ul>
+    </div>
+    <div id="job-status">
+        <h3>Job Status</h3>
+        <pre id="output"></pre>
+    </div>
+    <script>
+        let installedAppsCache = [];
+        let availableAppsCache = [];
+        let runningAppCache = null;
+
+        async function fetchApps() {
+            // Installed apps
+            const resInstalled = await fetch('/api/apps/list-available/installed');
+            installedAppsCache = await resInstalled.json();
+            const ulInstalled = document.getElementById('installed-apps');
+            ulInstalled.innerHTML = '';
+            installedAppsCache.forEach(app => {
+                const li = document.createElement('li');
+                li.innerHTML = renderAppInfo(app);
+                const uninstallBtn = document.createElement('button');
+                uninstallBtn.textContent = 'Uninstall';
+                uninstallBtn.onclick = () => runJob('remove', app);
+                if (runningAppCache && runningAppCache.name === app.name) {
+                    uninstallBtn.disabled = true;
+                    uninstallBtn.title = 'Cannot uninstall a running app';
+                }
+                li.appendChild(uninstallBtn);
+                ulInstalled.appendChild(li);
+            });
+
+            // Available apps (exclude installed)
+            const resAvailable = await fetch('/api/apps/list-available');
+            availableAppsCache = await resAvailable.json();
+            const ulAvailable = document.getElementById('available-apps');
+            ulAvailable.innerHTML = '';
+            // Build a set of installed app names for fast lookup
+            const installedNames = new Set(installedAppsCache.map(app => app.name));
+            availableAppsCache.forEach(app => {
+                if (!installedNames.has(app.name)) {
+                    const li = document.createElement('li');
+                    li.innerHTML = renderAppInfo(app);
+                    const installBtn = document.createElement('button');
+                    installBtn.textContent = 'Install';
+                    installBtn.onclick = () => runJob('install', app);
+                    li.appendChild(installBtn);
+                    ulAvailable.appendChild(li);
+                }
+            });
+        }
+
+        async function refreshCurrentAppStatus() {
+            let runningApp = null;
+            try {
+                const resStatus = await fetch('/api/apps/current-app-status');
+                runningApp = await resStatus.json();
+            } catch { }
+            runningAppCache = runningApp;
+
+            // Update installed apps controls only
+            const ulInstalled = document.getElementById('installed-apps');
+            ulInstalled.innerHTML = '';
+            installedAppsCache.forEach(app => {
+                const li = document.createElement('li');
+                li.innerHTML = renderAppInfo(app);
+                const uninstallBtn = document.createElement('button');
+                uninstallBtn.textContent = 'Uninstall';
+                uninstallBtn.onclick = () => runJob('remove', app);
+                if (runningApp && runningApp.info && runningApp.info.name === app.name) {
+                    uninstallBtn.disabled = true;
+                    uninstallBtn.title = 'Cannot uninstall a running app';
+                }
+                li.appendChild(uninstallBtn);
+
+                // App control buttons
+                if (!runningApp || !runningApp.info.name) {
+                    // No app running, show start button
+                    const startBtn = document.createElement('button');
+                    startBtn.textContent = 'Start';
+                    startBtn.onclick = () => runAppAction('start', app);
+                    li.appendChild(startBtn);
+                } else if (runningApp.info.name === app.name) {
+                    // This app is running, show restart/stop
+                    const restartBtn = document.createElement('button');
+                    restartBtn.textContent = 'Restart';
+                    restartBtn.onclick = () => runAppAction('restart', app);
+                    li.appendChild(restartBtn);
+                    const stopBtn = document.createElement('button');
+                    stopBtn.textContent = 'Stop';
+                    stopBtn.onclick = () => runAppAction('stop', app);
+                    li.appendChild(stopBtn);
+                } else {
+                    // Another app is running, disable start/restart/stop
+                    const runningLabel = document.createElement('span');
+                    runningLabel.textContent = ' (Another app running)';
+                    runningLabel.style.color = '#888';
+                    li.appendChild(runningLabel);
+                }
+                ulInstalled.appendChild(li);
+            });
+        }
+
+        // Periodically refresh running app status and update controls
+        setInterval(refreshCurrentAppStatus, 1000);
+        async function runAppAction(action, app) {
+            let res, jobId;
+            let endpoint = '';
+            if (action === 'start') {
+                endpoint = `/api/apps/start-app/${app.name}`;
+            } else if (action === 'restart') {
+                endpoint = `/api/apps/restart-current-app`;
+            } else if (action === 'stop') {
+                endpoint = `/api/apps/stop-current-app`;
+            }
+            res = await fetch(endpoint, { method: 'POST' });
+            // Optionally show feedback, refresh app status
+            fetchApps();
+        }
+
+        function renderAppInfo(app) {
+            let html = `<strong>${app.name}</strong> <span style="color: #888">[${app.source_kind}]</span>`;
+            if (app.description) html += `<br><em>${app.description}</em>`;
+            if (app.url) html += `<br><a href="${app.url}" target="_blank">${app.url}</a>`;
+            if (app.extra && Object.keys(app.extra).length > 0) {
+                html += `<br><details><summary>Extra Info</summary><pre>${JSON.stringify(app.extra, null, 2)}</pre></details>`;
+            }
+            return html;
+        }
+
+        async function runJob(action, app) {
+            let res, jobId;
+            if (action === 'install') {
+                res = await fetch('/api/apps/install', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(app)
+                });
+            } else if (action === 'remove') {
+                res = await fetch(`/api/apps/remove/${app.name}`, { method: 'POST' });
+            }
+            const data = await res.json();
+            jobId = data.job_id;
+            logJobStatus(jobId);
+        }
+
+        function logJobStatus(jobId) {
+            const output = document.getElementById('output');
+            output.innerHTML = '';
+            const ws = new WebSocket(`ws://${location.host}/api/apps/ws/apps-manager/${jobId}`);
+            ws.onmessage = (event) => {
+                let data;
+                try {
+                    data = JSON.parse(event.data);
+                } catch {
+                    output.innerHTML += `<div class="log-line">${event.data}</div>`;
+                    return;
+                }
+                // Show command and status (only the real status value)
+                let statusValue = data.status;
+                // If status is a JSON string/object, extract the 'status' field
+                try {
+                    const parsed = typeof statusValue === 'string' ? JSON.parse(statusValue) : statusValue;
+                    if (parsed && typeof parsed === 'object' && 'status' in parsed) {
+                        statusValue = parsed.status;
+                    }
+                } catch { }
+                output.innerHTML = `<strong>Command:</strong> ${data.command}<br><strong>Status:</strong> ${statusValue}<br>`;
+                // Show logs as a list
+                if (data.logs && data.logs.length > 0) {
+                    output.innerHTML += '<ul>' + data.logs.map(log => `<li>${log}</li>`).join('') + '</ul>';
+                }
+            };
+            ws.onclose = () => {
+                console.log("WebSocket connection closed");
+                output.innerHTML += "<div class='log-line'>[Connection closed]</div>";
+                // Refresh app lists after job is done
+                fetchApps();
+            };
+        }
+
+        fetchApps();
+    </script>
+</body>
+
+</html>

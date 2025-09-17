@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Dashboard</title>
+    <link rel="stylesheet" href="/dashboard/style.css">
+</head>
+
+<body>
+    <h1>Dashboard</h1>
+    <section id="daemon-control">
+        <h2>Daemon Control</h2>
+        <div id="daemon-status">Loading daemon status...</div>
+        <button id="start-daemon">Start Daemon</button>
+        <button id="stop-daemon">Stop Daemon</button>
+        <button id="restart-daemon">Restart Daemon</button>
+        <label><input type="checkbox" id="wake-up-on-start" checked> Wake up on start</label>
+        <label><input type="checkbox" id="goto-sleep-on-stop" checked> Go to sleep on stop</label>
+    </section>
+    <hr>
+    <h2>Video stream</h2>
+    <div id="video-stream">
+        <div class="video">
+            <video id="video"></video>
+        </div>
+    </div>
+    <input type="text" id="video-ip" placeholder="IP address" value="pierre-pi.local" style="margin-right:8px;">
+    <button id="connect-video">Connect</button>
+    <h2>Examples</h2>
+    <ul id="examples-list">
+        {% for fname in files %}
+        <li><a href="/dashboard/{{ fname }}">{{ fname }}</a></li>
+        {% endfor %}
+    </ul>
+    <script src="/dashboard/js/3rdparty/gstwebrtc-api-2.0.0.min.js"></script>
+    <script src="/dashboard/js/dashboard.js"></script>
+</body>
+
+</html>

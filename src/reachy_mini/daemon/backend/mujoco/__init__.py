@@ -1,5 +1,7 @@
 """MuJoCo Backend for Reachy Mini Daemon."""
 
+from dataclasses import dataclass
+
 try:
     import mujoco  # noqa: F401
 
@@ -23,6 +25,7 @@ except ImportError:
 
     MujocoBackend = MujocoMockupBackend
 
+    @dataclass
     class MujocoMockupBackendStatus:
         """Mockup class to avoid import errors when MuJoCo is not installed."""
 

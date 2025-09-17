@@ -11,7 +11,6 @@ import time
 from dataclasses import dataclass
 from importlib.resources import files
 from threading import Thread
-from typing import Optional
 
 import mujoco
 import mujoco.viewer
@@ -236,6 +235,9 @@ class MujocoBackend(Backend):
             # print(f"Step {step}: took {took*1000:.1f}ms")
             step += 1
 
+        if not self.headless:
+            viewer.close()
+
     def get_mj_present_head_pose(self) -> np.ndarray:
         """Get the current head pose from the Mujoco simulation.
 
@@ -262,7 +264,7 @@ class MujocoBackend(Backend):
             dict: An empty dictionary as the Mujoco backend does not have a specific status to report.
 
         """
-        return MujocoBackendStatus()
+        return MujocoBackendStatus(motor_control_mode=self.get_motor_control_mode())
 
     def get_present_head_joint_positions(self):
         """Get the current joint positions of the head."""
@@ -288,4 +290,5 @@ class MujocoBackendStatus:
     Empty for now, as the Mujoco backend does not have a specific status to report.
     """
 
-    error: Optional[str] = None
+    motor_control_mode: MotorControlMode
+    error: str | None = None

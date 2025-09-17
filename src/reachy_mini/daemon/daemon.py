@@ -5,7 +5,6 @@ It includes methods to start, stop, and restart the daemon, as well as to check 
 It also provides a command-line interface for easy interaction.
 """
 
-import asyncio
 import logging
 from dataclasses import dataclass
 from enum import Enum
@@ -40,7 +39,7 @@ class Daemon:
             error=None,
         )
 
-    def start(
+    async def start(
         self,
         sim: bool = False,
         serialport: str = "auto",
@@ -76,6 +75,7 @@ class Daemon:
         self._start_params = {
             "sim": sim,
             "serialport": serialport,
+            "headless": headless,
             "scene": scene,
             "localhost_only": localhost_only,
         }
@@ -115,7 +115,7 @@ class Daemon:
             try:
                 self.logger.info("Waking up Reachy Mini...")
                 self.backend.set_motor_control_mode(MotorControlMode.Enabled)
-                asyncio.run(self.backend.wake_up())
+                await self.backend.wake_up()
             except Exception as e:
                 self.logger.error(f"Error while waking up Reachy Mini: {e}")
                 self._status.state = DaemonState.ERROR
@@ -130,7 +130,7 @@ class Daemon:
         self._status.state = DaemonState.RUNNING
         return self._status.state
 
-    def stop(self, goto_sleep_on_stop: bool = True) -> "DaemonState":
+    async def stop(self, goto_sleep_on_stop: bool = True) -> "DaemonState":
         """Stop the Reachy Mini daemon.
 
         Args:
@@ -158,12 +158,8 @@ class Daemon:
             if goto_sleep_on_stop:
                 try:
                     self.logger.info("Putting Reachy Mini to sleep...")
-                    if (
-                        self.backend.get_motor_control_mode()
-                        == MotorControlMode.GravityCompensation
-                    ):
-                        self.backend.set_motor_control_mode(MotorControlMode.Enabled)
-                    asyncio.run(self.backend.goto_sleep())
+                    self.backend.set_motor_control_mode(MotorControlMode.Enabled)
+                    await self.backend.goto_sleep()
                     self.backend.set_motor_control_mode(MotorControlMode.Disabled)
                 except Exception as e:
                     self.logger.error(f"Error while putting Reachy Mini to sleep: {e}")
@@ -180,6 +176,7 @@ class Daemon:
                 self._status.state = DaemonState.ERROR
 
             self.backend.close()
+            self.backend.ready.clear()
             self.server.stop()
 
             if self._status.state != DaemonState.ERROR:
@@ -194,11 +191,12 @@ class Daemon:
 
         return self._status.state
 
-    def restart(
+    async def restart(
         self,
         sim: Optional[bool] = None,
         serialport: Optional[str] = None,
         scene: Optional[str] = None,
+        headless: Optional[bool] = None,
         localhost_only: Optional[bool] = None,
         wake_up_on_start: Optional[bool] = None,
         goto_sleep_on_stop: Optional[bool] = None,
@@ -209,6 +207,7 @@ class Daemon:
             sim (bool): If True, run in simulation mode using Mujoco. Defaults to None (uses the previous value).
             serialport (str): Serial port for real motors. Defaults to None (uses the previous value).
             scene (str): Name of the scene to load in simulation mode ("empty" or "minimal"). Defaults to None (uses the previous value).
+            headless (bool): If True, run Mujoco in headless mode (no GUI). Defaults to None (uses the previous value).
             localhost_only (bool): If True, restrict the server to localhost only clients. Defaults to None (uses the previous value).
             wake_up_on_start (bool): If True, wake up Reachy Mini on start. Defaults to None (don't wake up).
             goto_sleep_on_stop (bool): If True, put Reachy Mini to sleep on stop. Defaults to None (don't go to sleep).
@@ -224,7 +223,7 @@ class Daemon:
         if self._status.state in (DaemonState.RUNNING, DaemonState.ERROR):
             self.logger.info("Restarting Reachy Mini daemon...")
 
-            self.stop(
+            await self.stop(
                 goto_sleep_on_stop=goto_sleep_on_stop
                 if goto_sleep_on_stop is not None
                 else False
@@ -235,6 +234,9 @@ class Daemon:
                 if serialport is not None
                 else self._start_params["serialport"],
                 "scene": scene if scene is not None else self._start_params["scene"],
+                "headless": headless
+                if headless is not None
+                else self._start_params["headless"],
                 "localhost_only": localhost_only
                 if localhost_only is not None
                 else self._start_params["localhost_only"],
@@ -243,7 +245,7 @@ class Daemon:
                 else False,
             }
 
-            return self.start(**params)
+            return await self.start(**params)
 
         raise NotImplementedError(
             "Restarting is only supported when the daemon is in RUNNING or ERROR state."
@@ -264,9 +266,9 @@ class Daemon:
 
         return self._status
 
-    def reset(self):
+    async def reset(self):
         """Reset the daemon status to NOT_INITIALIZED."""
-        self.stop(goto_sleep_on_stop=False)
+        await self.stop(goto_sleep_on_stop=False)
 
         self._status = DaemonStatus(
             state=DaemonState.NOT_INITIALIZED,
@@ -276,7 +278,7 @@ class Daemon:
         )
         self.logger.info("Daemon status reset to NOT_INITIALIZED.")
 
-    def run4ever(
+    async def run4ever(
         self,
         sim: bool = False,
         serialport: str = "auto",
@@ -304,7 +306,7 @@ class Daemon:
             headless (bool): If True, run Mujoco in headless mode (no GUI). Defaults to False.
 
         """
-        self.start(
+        await self.start(
             sim=sim,
             serialport=serialport,
             scene=scene,
@@ -332,7 +334,7 @@ class Daemon:
                 self._status.state = DaemonState.ERROR
                 self._status.error = str(e)
 
-        self.stop(goto_sleep_on_stop)
+        await self.stop(goto_sleep_on_stop)
 
     def _setup_backend(
         self, sim, serialport, scene, check_collision, kinematics_engine, headless

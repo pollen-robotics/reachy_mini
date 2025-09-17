@@ -1,0 +1,37 @@
+body {
+    font-family: Arial, sans-serif;
+    background: #f7f7f7;
+    margin: 0;
+    padding: 0;
+}
+
+h1 {
+    background: #2d3e50;
+    color: #fff;
+    padding: 1em;
+    margin: 0 0 1em 0;
+}
+
+ul#examples-list {
+    list-style: none;
+    padding: 0;
+    margin: 2em;
+}
+
+ul#examples-list li {
+    background: #fff;
+    margin-bottom: 1em;
+    padding: 1em;
+    border-radius: 6px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.07);
+}
+
+ul#examples-list li a {
+    color: #2d3e50;
+    text-decoration: none;
+    font-weight: bold;
+}
+
+ul#examples-list li a:hover {
+    text-decoration: underline;
+}
