@@ -12,7 +12,7 @@ requires-python = ">=3.8"
 dependencies = [
     "numpy>=2.2.5,<2.3.0",
     "scipy==1.15.3",
-    "reachy_mini_motor_controller>=0.6.2",
+    "reachy_mini_motor_controller>=0.6.3",
     "pygame==2.6.1",
     "eclipse-zenoh>=1.4.0",
     "opencv-python<=5.0",
