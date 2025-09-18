@@ -129,10 +129,22 @@ def main():
         help="Wake up the robot on daemon start (default: True).",
     )
     parser.add_argument(
+        "--no-wake-up-on-start",
+        action="store_false",
+        dest="wake_up_on_start",
+        help="Do not wake up the robot on daemon start (default: False).",
+    )
+    parser.add_argument(
         "--goto-sleep-on-stop",
         action="store_true",
         default=True,
         help="Put the robot to sleep on daemon stop (default: True).",
+    )
+    parser.add_argument(
+        "--no-goto-sleep-on-stop",
+        action="store_false",
+        dest="goto_sleep_on_stop",
+        help="Do not put the robot to sleep on daemon stop (default: False).",
     )
     # Zenoh server options
     parser.add_argument(
