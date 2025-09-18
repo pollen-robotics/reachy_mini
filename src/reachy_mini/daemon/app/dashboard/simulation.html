@@ -102,12 +102,7 @@
             <div class="status-section">
                 <h4>Simulation Status</h4>
                 <span class="status-indicator status-loading" id="status-indicator"></span>
-                <span id="status-text">Checking simulation status...</span>
-            </div>
-
-            <div class="warning">
-                <strong>Note:</strong> The simulation requires Cross-Origin isolation features. For best performance and compatibility,
-                it's recommended to open the simulation in a new tab/window.
+                <span id="status-text">Checking simulation availability...</span>
             </div>
 
             <div>
@@ -120,8 +115,8 @@
             </div>
 
             <div class="note">
-                The simulation will open with proper Cross-Origin headers to support WebAssembly features.
-                Use the controls in the simulation to interact with the 3D environment.
+                The simulation runs directly from FastAPI with WebAssembly support.
+                Use mouse controls in the 3D view: drag to rotate, scroll to zoom, right-click to pan.
             </div>
         </div>
     </div>
@@ -138,30 +133,23 @@
         // Check if simulation files are available
         async function checkSimulationAvailability() {
             try {
-                const response = await fetch('/simulation/');
-                if (response.ok) {
-                    updateStatus('running', 'Simulation is available and ready to launch');
+                const response = await fetch('/api/simulation/status');
+                const data = await response.json();
+
+                if (data.available) {
+                    updateStatus('running', data.message);
                 } else {
-                    updateStatus('stopped', 'Simulation files not found');
+                    updateStatus('stopped', data.message);
                 }
             } catch (error) {
                 console.error('Error checking simulation:', error);
-                updateStatus('stopped', 'Unable to check simulation availability');
+                updateStatus('stopped', 'Unable to check simulation status');
             }
         }
 
         // Initialize
         window.addEventListener('load', () => {
             checkSimulationAvailability();
-        });
-
-        // Add click tracking
-        document.getElementById('same-tab-btn').addEventListener('click', function() {
-            console.log('Opening simulation in same tab');
-        });
-
-        document.getElementById('new-tab-btn').addEventListener('click', function() {
-            console.log('Opening simulation in new tab');
         });
     </script>
 </body>
