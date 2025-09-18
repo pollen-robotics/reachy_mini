@@ -263,7 +263,7 @@ class Daemon:
 
             if self._status.backend_status.error:
                 self._status.state = DaemonState.ERROR
-                self._status.error = self._status.backend_status.error
+            self._status.error = self._status.backend_status.error
 
         return self._status
 
