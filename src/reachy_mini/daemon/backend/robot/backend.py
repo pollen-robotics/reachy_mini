@@ -199,33 +199,17 @@ class RobotBackend(Backend):
                 self.ready.set()  # Mark the backend as ready
             except RuntimeError as e:
                 self._stats["nb_error"] += 1
-                self.logger.warning(f"Error reading positions: {e}")
+                # self.logger.warning(f"Error reading positions: {e}")
 
-                # If we never received a position, we retry a few times
-                # But most likely the robot is not powered on or connected
-                if self.last_alive is None:
-                    if self.retries > 0:
-                        self.logger.error(
-                            f"Error reading positions, retrying ({self.retries} left): {e}"
-                        )
-                        self.retries -= 1
-                        time.sleep(0.1)
-                        return
-                    self.logger.error("No response from the robot, stopping.")
-                    self.logger.error(
-                        "Make sure the robot is powered on and connected."
-                    )
-                    self.error = "Motors are not powered on or connected."
-                    self.should_stop.set()
-                    return
+                assert self.last_alive is not None
 
-                if self.last_alive + 2 < time.time():
+                if self.last_alive + 1 < time.time():
                     self.error = (
-                        "No response from the robot's motor for the last 2 seconds."
+                        "No response from the robot's motor for the last second."
                     )
 
                     self.logger.error(
-                        "No response from the robot for 2 seconds, stopping."
+                        "No response from the robot for the last second, stopping."
                     )
                     raise e
 
