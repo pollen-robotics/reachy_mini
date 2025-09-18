@@ -1,0 +1,19 @@
+<mujoco model="Empty">
+  <option timestep="0.005"/>
+
+  <visual>
+    <rgba haze="0.15 0.25 0.35 1"/>
+    <global offwidth="2560" offheight="1440" elevation="-20" azimuth="120"/>
+  </visual>
+
+  <asset>
+    <texture type="skybox" builtin="gradient" rgb1=".3 .5 .7" rgb2="0 0 0" width="32" height="512"/>
+    <texture name="grid" type="2d" builtin="checker" width="512" height="512" rgb1=".1 .2 .3" rgb2=".2 .3 .4"/>
+    <material name="grid" texture="grid" texrepeat="1 1" texuniform="true" reflectance=".2"/>
+  </asset>
+
+  <worldbody>
+    <geom name="floor" size="0 0 .05" type="plane" material="grid" condim="3"/>
+  </worldbody>
+
+</mujoco>
