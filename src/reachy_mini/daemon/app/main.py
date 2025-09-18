@@ -11,6 +11,7 @@ import argparse
 import logging
 import os
 from contextlib import asynccontextmanager
+from dataclasses import dataclass
 from pathlib import Path
 
 import uvicorn
@@ -28,105 +29,144 @@ TEMPLATES_DIR = Path(__file__).parent / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """Lifespan context manager for the FastAPI application."""
-    if app.state.args.autostart:
-        await app.state.daemon.start(
-            serialport=app.state.args.serialport,
-            sim=app.state.args.sim,
-            scene=app.state.args.scene,
-            headless=app.state.args.headless,
-            kinematics_engine=app.state.args.kinematics_engine,
-            check_collision=app.state.args.check_collision,
-            wake_up_on_start=app.state.args.wake_up_on_start,
-            localhost_only=app.state.args.localhost_only,
+@dataclass
+class Args:
+    """Arguments for configuring the Reachy Mini daemon."""
+
+    log_level: str = "INFO"
+
+    serialport: str = "auto"
+
+    sim: bool = False
+    scene: str = "default"
+    headless: bool = False
+
+    kinematics_engine: str = "AnalyticalKinematics"
+    check_collision: bool = False
+
+    autostart: bool = True
+
+    wake_up_on_start: bool = True
+    goto_sleep_on_stop: bool = True
+
+    fastapi_host: str = "0.0.0.0"
+    fastapi_port: int = 8000
+
+    localhost_only: bool = True
+
+
+def create_app(args: Args) -> FastAPI:
+    """Create and configure the FastAPI application."""
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        """Lifespan context manager for the FastAPI application."""
+        args = app.state.args  # type: Args
+
+        if args.autostart:
+            await app.state.daemon.start(
+                serialport=args.serialport,
+                sim=args.sim,
+                scene=args.scene,
+                headless=args.headless,
+                kinematics_engine=args.kinematics_engine,
+                check_collision=args.check_collision,
+                wake_up_on_start=args.wake_up_on_start,
+                localhost_only=args.localhost_only,
+            )
+        yield
+        await app.state.app_manager.close()
+        await app.state.daemon.stop(
+            goto_sleep_on_stop=args.goto_sleep_on_stop,
         )
-    yield
-    await app.state.app_manager.close()
-    await app.state.daemon.stop(
-        goto_sleep_on_stop=app.state.args.goto_sleep_on_stop,
+
+    app = FastAPI(
+        lifespan=lifespan,
+    )
+    app.state.args = args
+    app.state.daemon = Daemon()
+    app.state.app_manager = AppManager()
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],  # or restrict to your HF domain
+        allow_methods=["*"],
+        allow_headers=["*"],
     )
 
+    router = APIRouter(prefix="/api")
+    router.include_router(apps.router)
+    router.include_router(daemon.router)
+    router.include_router(kinematics.router)
+    router.include_router(motors.router)
+    router.include_router(move.router)
+    router.include_router(state.router)
 
-logging.basicConfig(level=logging.INFO)
+    app.include_router(router)
 
-app = FastAPI(
-    lifespan=lifespan,
-)
-app.state.daemon = Daemon()
-app.state.app_manager = AppManager()
+    # Route to list available HTML/JS/CSS examples with links using Jinja2 template
+    @app.get("/")
+    async def list_examples(request: Request):
+        """Render the dashboard."""
+        files = [f for f in os.listdir(DASHBOARD_PAGES) if f.endswith(".html")]
+        return templates.TemplateResponse(
+            "dashboard.html", {"request": request, "files": files}
+        )
 
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # or restrict to your HF domain
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-
-router = APIRouter(prefix="/api")
-router.include_router(apps.router)
-router.include_router(daemon.router)
-router.include_router(kinematics.router)
-router.include_router(motors.router)
-router.include_router(move.router)
-router.include_router(state.router)
-
-app.include_router(router)
-
-
-# Route to list available HTML/JS/CSS examples with links using Jinja2 template
-@app.get("/")
-async def list_examples(request: Request):
-    """Render the dashboard."""
-    files = [f for f in os.listdir(DASHBOARD_PAGES) if f.endswith(".html")]
-    return templates.TemplateResponse(
-        "dashboard.html", {"request": request, "files": files}
+    app.mount(
+        "/dashboard",
+        StaticFiles(directory=str(DASHBOARD_PAGES), html=True),
+        name="dashboard",
     )
 
+    return app
 
-app.mount(
-    "/dashboard",
-    StaticFiles(directory=str(DASHBOARD_PAGES), html=True),
-    name="dashboard",
-)
+
+def run_app(args: Args):
+    """Run the FastAPI app with Uvicorn."""
+    logging.basicConfig(level=logging.INFO)
+
+    app = create_app(args)
+    uvicorn.run(app, host=args.fastapi_host, port=args.fastapi_port)
 
 
 def main():
     """Run the FastAPI app with Uvicorn."""
+    default_args = Args()
+
     parser = argparse.ArgumentParser(description="Run the Reachy Mini daemon.")
     # Real robot mode
     parser.add_argument(
         "-p",
         "--serialport",
         type=str,
-        default="auto",
+        default=default_args.serialport,
         help="Serial port for real motors (default: will try to automatically find the port).",
     )
     # Simulation mode
     parser.add_argument(
         "--sim",
         action="store_true",
+        default=default_args.sim,
         help="Run in simulation mode using Mujoco.",
     )
     parser.add_argument(
         "--scene",
         type=str,
-        default="empty",
+        default=default_args.scene,
         help="Name of the scene to load (default: empty)",
     )
     parser.add_argument(
         "--headless",
         action="store_true",
+        default=default_args.headless,
         help="Run the daemon in headless mode (default: False).",
     )
     # Daemon options
     parser.add_argument(
         "--autostart",
         action="store_true",
-        default=True,
+        default=default_args.autostart,
         help="Automatically start the daemon on launch (default: True).",
     )
     parser.add_argument(
@@ -138,7 +178,7 @@ def main():
     parser.add_argument(
         "--wake-up-on-start",
         action="store_true",
-        default=True,
+        default=default_args.wake_up_on_start,
         help="Wake up the robot on daemon start (default: True).",
     )
     parser.add_argument(
@@ -150,7 +190,7 @@ def main():
     parser.add_argument(
         "--goto-sleep-on-stop",
         action="store_true",
-        default=True,
+        default=default_args.goto_sleep_on_stop,
         help="Put the robot to sleep on daemon stop (default: True).",
     )
     parser.add_argument(
@@ -163,7 +203,7 @@ def main():
     parser.add_argument(
         "--localhost-only",
         action="store_true",
-        default=True,
+        default=default_args.localhost_only,
         help="Restrict the server to localhost only (default: True).",
     )
     parser.add_argument(
@@ -176,14 +216,14 @@ def main():
     parser.add_argument(
         "--check-collision",
         action="store_true",
-        default=False,
+        default=default_args.check_collision,
         help="Enable collision checking (default: False).",
     )
 
     parser.add_argument(
         "--kinematics-engine",
         type=str,
-        default="AnalyticalKinematics",
+        default=default_args.kinematics_engine,
         choices=["Placo", "NN", "AnalyticalKinematics"],
         help="Set the kinematics engine (default: AnalyticalKinematics).",
     )
@@ -191,26 +231,25 @@ def main():
     parser.add_argument(
         "--fastapi-host",
         type=str,
-        default="0.0.0.0",
+        default=default_args.fastapi_host,
     )
     parser.add_argument(
         "--fastapi-port",
         type=int,
-        default=8000,
+        default=default_args.fastapi_port,
     )
     # Logging options
     parser.add_argument(
         "--log-level",
         type=str,
-        default="INFO",
+        default=default_args.log_level,
         choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
         help="Set the logging level (default: INFO).",
     )
 
     args = parser.parse_args()
-
-    app.state.args = args
-    uvicorn.run(app, host=args.fastapi_host, port=args.fastapi_port)
+    args = Args(**vars(args))
+    run_app(args)
 
 
 if __name__ == "__main__":
