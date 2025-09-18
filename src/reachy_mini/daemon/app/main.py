@@ -31,16 +31,17 @@ templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Lifespan context manager for the FastAPI application."""
-    await app.state.daemon.start(
-        serialport=app.state.args.serialport,
-        sim=app.state.args.sim,
-        scene=app.state.args.scene,
-        headless=app.state.args.headless,
-        kinematics_engine=app.state.args.kinematics_engine,
-        check_collision=app.state.args.check_collision,
-        wake_up_on_start=app.state.args.wake_up_on_start,
-        localhost_only=app.state.args.localhost_only,
-    )
+    if app.state.args.autostart:
+        await app.state.daemon.start(
+            serialport=app.state.args.serialport,
+            sim=app.state.args.sim,
+            scene=app.state.args.scene,
+            headless=app.state.args.headless,
+            kinematics_engine=app.state.args.kinematics_engine,
+            check_collision=app.state.args.check_collision,
+            wake_up_on_start=app.state.args.wake_up_on_start,
+            localhost_only=app.state.args.localhost_only,
+        )
     yield
     await app.state.app_manager.close()
     await app.state.daemon.stop(
@@ -122,6 +123,18 @@ def main():
         help="Run the daemon in headless mode (default: False).",
     )
     # Daemon options
+    parser.add_argument(
+        "--autostart",
+        action="store_true",
+        default=True,
+        help="Automatically start the daemon on launch (default: True).",
+    )
+    parser.add_argument(
+        "--no-autostart",
+        action="store_false",
+        dest="autostart",
+        help="Do not automatically start the daemon on launch (default: False).",
+    )
     parser.add_argument(
         "--wake-up-on-start",
         action="store_true",
