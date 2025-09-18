@@ -177,21 +177,22 @@ class RobotBackend(Backend):
                     except ValueError as e:
                         self.logger.warning(f"IK error: {e}")
 
-                self.joint_positions_publisher.put(
-                    json.dumps(
-                        {
-                            "head_joint_positions": head_positions,
-                            "antennas_joint_positions": antenna_positions,
-                        }
+                if not self.is_shutting_down:
+                    self.joint_positions_publisher.put(
+                        json.dumps(
+                            {
+                                "head_joint_positions": head_positions,
+                                "antennas_joint_positions": antenna_positions,
+                            }
+                        )
                     )
-                )
-                self.pose_publisher.put(
-                    json.dumps(
-                        {
-                            "head_pose": self.get_present_head_pose().tolist(),
-                        }
+                    self.pose_publisher.put(
+                        json.dumps(
+                            {
+                                "head_pose": self.get_present_head_pose().tolist(),
+                            }
+                        )
                     )
-                )
 
                 self.last_alive = time.time()
 

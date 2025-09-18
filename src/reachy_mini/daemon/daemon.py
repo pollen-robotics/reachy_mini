@@ -150,6 +150,8 @@ class Daemon:
 
             self.logger.info("Stopping Reachy Mini daemon...")
             self._status.state = DaemonState.STOPPING
+            self.backend.is_shutting_down = True
+            self.server.stop()
 
             if not hasattr(self, "backend"):
                 self._status.state = DaemonState.STOPPED
@@ -177,7 +179,6 @@ class Daemon:
 
             self.backend.close()
             self.backend.ready.clear()
-            self.server.stop()
 
             if self._status.state != DaemonState.ERROR:
                 self.logger.info("Daemon stopped successfully.")

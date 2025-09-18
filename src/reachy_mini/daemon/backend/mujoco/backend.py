@@ -208,21 +208,22 @@ class MujocoBackend(Backend):
                     self.joint_positions_publisher is not None
                     and self.pose_publisher is not None
                 ):
-                    self.joint_positions_publisher.put(
-                        json.dumps(
-                            {
-                                "head_joint_positions": self.current_head_joint_positions,
-                                "antennas_joint_positions": self.current_antenna_joint_positions,
-                            }
-                        ).encode("utf-8")
-                    )
-                    self.pose_publisher.put(
-                        json.dumps(
-                            {
-                                "head_pose": self.get_present_head_pose().tolist(),
-                            }
-                        ).encode("utf-8")
-                    )
+                    if not self.is_shutting_down:
+                        self.joint_positions_publisher.put(
+                            json.dumps(
+                                {
+                                    "head_joint_positions": self.current_head_joint_positions,
+                                    "antennas_joint_positions": self.current_antenna_joint_positions,
+                                }
+                            ).encode("utf-8")
+                        )
+                        self.pose_publisher.put(
+                            json.dumps(
+                                {
+                                    "head_pose": self.get_present_head_pose().tolist(),
+                                }
+                            ).encode("utf-8")
+                        )
                     self.ready.set()
 
                 if not self.headless:

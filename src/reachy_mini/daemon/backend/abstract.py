@@ -135,6 +135,8 @@ class Backend:
         self.target_head_operation_mode = None  # Placeholder for head operation mode
         self.ik_required = False  # Flag to indicate if IK computation is required
 
+        self.is_shutting_down = False
+
         # Tolerance for kinematics computations
         # For Forward kinematics (around 0.25deg)
         # - FK is calculated at each timestep and is susceptible to noise
