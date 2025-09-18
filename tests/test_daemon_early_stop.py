@@ -1,12 +1,10 @@
 import asyncio
-import time
 import numpy as np
 import pytest
 
 from reachy_mini.daemon.daemon import Daemon    
 from reachy_mini.reachy_mini import ReachyMini
 
-pytest_plugins = ('pytest_asyncio',)
 
 @pytest.mark.asyncio
 async def test_daemon_early_stop():    
@@ -17,21 +15,25 @@ async def test_daemon_early_stop():
         wake_up_on_start=False,
     )
 
-    def client_bg():
-        with pytest.raises(ConnectionError, match="Lost connection with the server."):
-            with ReachyMini() as reachy:
-                start = time.time()
-                while time.time() - start < 5.0:
-                    reachy.set_target(head=np.eye(4))
-                    time.sleep(0.1)
-                raise Exception("This should not happen")
-    client_task = asyncio.get_event_loop().run_in_executor(None, client_bg)
+    client_connected = asyncio.Event()
+    daemon_stopped = asyncio.Event()
 
+    async def client_bg():
+        with ReachyMini() as reachy:
+            client_connected.set()
+            await daemon_stopped.wait()
+
+            # Make sure the keep-alive check runs at least once
+            await asyncio.sleep(1.1)
+
+            with pytest.raises(ConnectionError, match="Lost connection with the server."):
+                reachy.set_target(head=np.eye(4))
+        
     async def will_stop_soon():
-        await asyncio.sleep(0.1)
+        await client_connected.wait()
         await daemon.stop(goto_sleep_on_stop=False)
+        daemon_stopped.set()
 
-    await asyncio.gather(client_task, will_stop_soon())
+    await asyncio.gather(client_bg(), will_stop_soon())
 
-    
 
