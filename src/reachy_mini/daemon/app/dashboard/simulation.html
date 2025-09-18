@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>MuJoCo Simulation</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .simulation-container {
+            text-align: center;
+            padding: 40px 20px;
+        }
+
+        .simulation-info {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border-left: 4px solid #007bff;
+        }
+
+        .launch-button {
+            display: inline-block;
+            padding: 15px 30px;
+            margin: 20px 10px;
+            background: #007bff;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            font-size: 16px;
+            font-weight: bold;
+            transition: background-color 0.3s;
+        }
+
+        .launch-button:hover {
+            background: #0056b3;
+            color: white;
+        }
+
+        .launch-button.new-tab {
+            background: #28a745;
+        }
+
+        .launch-button.new-tab:hover {
+            background: #1e7e34;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+
+        .status-running {
+            background: #28a745;
+        }
+
+        .status-stopped {
+            background: #dc3545;
+        }
+
+        .status-loading {
+            background: #ffc107;
+        }
+
+        .status-section {
+            margin: 20px 0;
+            padding: 15px;
+            background: white;
+            border-radius: 5px;
+            border: 1px solid #dee2e6;
+        }
+
+        .note {
+            font-size: 14px;
+            color: #6c757d;
+            margin-top: 10px;
+        }
+
+        .warning {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            color: #856404;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 15px 0;
+        }
+    </style>
+</head>
+
+<body>
+    <h2>MuJoCo Simulation</h2>
+
+    <div class="simulation-container">
+        <div class="simulation-info">
+            <h3>3D Physics Simulation</h3>
+            <p>Experience the MuJoCo physics simulation in your browser. The simulation provides a real-time 3D environment with advanced physics modeling.</p>
+
+            <div class="status-section">
+                <h4>Simulation Status</h4>
+                <span class="status-indicator status-loading" id="status-indicator"></span>
+                <span id="status-text">Checking simulation status...</span>
+            </div>
+
+            <div class="warning">
+                <strong>Note:</strong> The simulation requires Cross-Origin isolation features. For best performance and compatibility,
+                it's recommended to open the simulation in a new tab/window.
+            </div>
+
+            <div>
+                <a href="/simulation/" class="launch-button" id="same-tab-btn">
+                    Open Simulation (Same Tab)
+                </a>
+                <a href="/simulation/" target="_blank" class="launch-button new-tab" id="new-tab-btn">
+                    Open Simulation (New Tab)
+                </a>
+            </div>
+
+            <div class="note">
+                The simulation will open with proper Cross-Origin headers to support WebAssembly features.
+                Use the controls in the simulation to interact with the 3D environment.
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const statusIndicator = document.getElementById('status-indicator');
+        const statusText = document.getElementById('status-text');
+
+        function updateStatus(status, text) {
+            statusIndicator.className = `status-indicator status-${status}`;
+            statusText.textContent = text;
+        }
+
+        // Check if simulation files are available
+        async function checkSimulationAvailability() {
+            try {
+                const response = await fetch('/simulation/');
+                if (response.ok) {
+                    updateStatus('running', 'Simulation is available and ready to launch');
+                } else {
+                    updateStatus('stopped', 'Simulation files not found');
+                }
+            } catch (error) {
+                console.error('Error checking simulation:', error);
+                updateStatus('stopped', 'Unable to check simulation availability');
+            }
+        }
+
+        // Initialize
+        window.addEventListener('load', () => {
+            checkSimulationAvailability();
+        });
+
+        // Add click tracking
+        document.getElementById('same-tab-btn').addEventListener('click', function() {
+            console.log('Opening simulation in same tab');
+        });
+
+        document.getElementById('new-tab-btn').addEventListener('click', function() {
+            console.log('Opening simulation in new tab');
+        });
+    </script>
+</body>
+
+</html>

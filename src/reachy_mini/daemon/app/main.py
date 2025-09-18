@@ -9,23 +9,101 @@ managing the robot's state.
 
 import argparse
 import logging
+import mimetypes
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 import uvicorn
-from fastapi import APIRouter, FastAPI, Request
+from fastapi import APIRouter, FastAPI, HTTPException, Request, Response
+from fastapi.responses import RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from reachy_mini.apps.manager import AppManager
-from reachy_mini.daemon.app.routers import apps, daemon, kinematics, motors, move, state
+from reachy_mini.daemon.app.routers import apps, daemon, kinematics, motors, move, simulation, state
 from reachy_mini.daemon.daemon import Daemon
 
 DASHBOARD_PAGES = Path(__file__).parent / "dashboard"
 TEMPLATES_DIR = Path(__file__).parent / "templates"
+WASM_DIR = Path(__file__).parent / "wasm" / "dist"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
+
+
+class COOPStaticFiles(StaticFiles):
+    """StaticFiles with COOP/COEP headers and proper MIME types for WASM support."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Ensure proper MIME types are registered
+        mimetypes.add_type('application/javascript', '.js')
+        mimetypes.add_type('application/wasm', '.wasm')
+        mimetypes.add_type('text/css', '.css')
+        mimetypes.add_type('text/html', '.html')
+
+    async def get_response(self, path: str, scope):
+        response = await super().get_response(path, scope)
+
+        # Debug logging
+        logger.info(f"Serving file: {path}")
+
+        if hasattr(response, 'headers'):
+            # Add COOP/COEP headers required for SharedArrayBuffer
+            response.headers['Cross-Origin-Opener-Policy'] = 'same-origin'
+            response.headers['Cross-Origin-Embedder-Policy'] = 'require-corp'
+            response.headers['Cross-Origin-Resource-Policy'] = 'cross-origin'
+
+            # Extract just the file extension for MIME type detection
+            file_path = path.lower()
+            original_content_type = response.headers.get('content-type', 'unknown')
+
+            if file_path.endswith('.js'):
+                response.headers['Content-Type'] = 'application/javascript; charset=utf-8'
+                logger.info(f"Set JS MIME type for {path}: application/javascript")
+            elif file_path.endswith('.wasm'):
+                response.headers['Content-Type'] = 'application/wasm'
+                logger.info(f"Set WASM MIME type for {path}: application/wasm")
+            elif file_path.endswith('.css'):
+                response.headers['Content-Type'] = 'text/css; charset=utf-8'
+                logger.info(f"Set CSS MIME type for {path}: text/css")
+            elif file_path.endswith('.html') or file_path.endswith('/') or file_path == '':
+                response.headers['Content-Type'] = 'text/html; charset=utf-8'
+                logger.info(f"Set HTML MIME type for {path}: text/html")
+            else:
+                logger.warning(f"No MIME type override for {path}, original: {original_content_type}")
+
+        return response
+
+
+class SimulationMimeTypeMiddleware(BaseHTTPMiddleware):
+    """Middleware to fix MIME types for simulation assets."""
+
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+
+        # Only process simulation and assets requests
+        if request.url.path.startswith("/simulation/") or request.url.path.startswith("/assets/"):
+            path = request.url.path.lower()
+
+            # Override MIME types for specific extensions
+            if path.endswith('.js'):
+                response.headers['Content-Type'] = 'application/javascript; charset=utf-8'
+                logger.info(f"Middleware: Fixed MIME type for JS file: {request.url.path}")
+            elif path.endswith('.wasm'):
+                response.headers['Content-Type'] = 'application/wasm'
+                logger.info(f"Middleware: Fixed MIME type for WASM file: {request.url.path}")
+            elif path.endswith('.css'):
+                response.headers['Content-Type'] = 'text/css; charset=utf-8'
+                logger.info(f"Middleware: Fixed MIME type for CSS file: {request.url.path}")
+
+            # Always add COOP/COEP headers for simulation
+            response.headers['Cross-Origin-Opener-Policy'] = 'same-origin'
+            response.headers['Cross-Origin-Embedder-Policy'] = 'require-corp'
+            response.headers['Cross-Origin-Resource-Policy'] = 'cross-origin'
+
+        return response
 
 
 @asynccontextmanager
@@ -49,6 +127,7 @@ async def lifespan(app: FastAPI):
 
 
 logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 app = FastAPI(
     lifespan=lifespan,
@@ -64,6 +143,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Add simulation MIME type middleware
+app.add_middleware(SimulationMimeTypeMiddleware)
+
 
 router = APIRouter(prefix="/api")
 router.include_router(apps.router)
@@ -71,6 +153,7 @@ router.include_router(daemon.router)
 router.include_router(kinematics.router)
 router.include_router(motors.router)
 router.include_router(move.router)
+router.include_router(simulation.router)
 router.include_router(state.router)
 
 app.include_router(router)
@@ -86,11 +169,96 @@ async def list_examples(request: Request):
     )
 
 
+@app.get("/simulation-debug")
+async def simulation_debug():
+    """Debug endpoint to check simulation files."""
+    wasm_files = []
+    if WASM_DIR.exists():
+        for file_path in WASM_DIR.rglob("*"):
+            if file_path.is_file():
+                wasm_files.append(str(file_path.relative_to(WASM_DIR)))
+
+    return {
+        "wasm_dir_exists": WASM_DIR.exists(),
+        "wasm_dir_path": str(WASM_DIR),
+        "files": wasm_files[:20],  # Limit output
+        "index_html_exists": (WASM_DIR / "index.html").exists(),
+        "js_files": [f for f in wasm_files if f.endswith('.js')][:5],
+        "test_urls": [
+            "/simulation/",
+            "/simulation/index.html",
+            "/simulation/assets/index-BWx1u7ga.js"
+        ]
+    }
+
+
+@app.get("/test-js-mime")
+async def test_js_mime():
+    """Test endpoint to check if JS MIME type is working."""
+    js_file = WASM_DIR / "assets" / "index-BWx1u7ga.js"
+    if js_file.exists():
+        return {
+            "file_exists": True,
+            "file_size": js_file.stat().st_size,
+            "test_url": "/simulation/assets/index-BWx1u7ga.js",
+            "file_path": str(js_file)
+        }
+    else:
+        return {"file_exists": False, "expected_path": str(js_file)}
+
+
+@app.get("/assets/{asset_path:path}")
+async def serve_assets_directly(asset_path: str, request: Request):
+    """Serve assets directly from /assets/ path for compatibility."""
+    logger.info(f"Serving asset directly: /assets/{asset_path}")
+
+    # Construct the file path
+    file_path = WASM_DIR / "assets" / asset_path
+
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail=f"Asset not found: {asset_path}")
+
+    # Read the file
+    with open(file_path, 'rb') as f:
+        content = f.read()
+
+    # Determine MIME type based on extension
+    content_type = "application/octet-stream"  # default
+    if asset_path.lower().endswith('.js'):
+        content_type = "application/javascript; charset=utf-8"
+    elif asset_path.lower().endswith('.wasm'):
+        content_type = "application/wasm"
+    elif asset_path.lower().endswith('.css'):
+        content_type = "text/css; charset=utf-8"
+
+    # Add required headers
+    headers = {
+        'Content-Type': content_type,
+        'Cross-Origin-Opener-Policy': 'same-origin',
+        'Cross-Origin-Embedder-Policy': 'require-corp',
+        'Cross-Origin-Resource-Policy': 'cross-origin',
+    }
+
+    logger.info(f"Serving {asset_path} with MIME type: {content_type}")
+    return Response(content=content, headers=headers)
+
+
 app.mount(
     "/dashboard",
     StaticFiles(directory=str(DASHBOARD_PAGES), html=True),
     name="dashboard",
 )
+
+# Mount simulation files (middleware will handle MIME types and headers)
+if WASM_DIR.exists():
+    app.mount(
+        "/simulation",
+        StaticFiles(directory=str(WASM_DIR), html=True),
+        name="simulation",
+    )
+    logger.info(f"Mounted simulation directory: {WASM_DIR}")
+else:
+    logger.warning(f"Simulation directory not found: {WASM_DIR}")
 
 
 def main():

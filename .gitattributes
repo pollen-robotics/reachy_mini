@@ -11,3 +11,5 @@
 *.stl filter=lfs diff=lfs merge=lfs -text
 *.npz filter=lfs diff=lfs merge=lfs -text
 *.onnx filter=lfs diff=lfs merge=lfs -text
+*.wasm filter=lfs diff=lfs merge=lfs -text
+src/reachy_mini/daemon/app/wasm/dist/assets/*.js filter=lfs diff=lfs merge=lfs -text
