@@ -36,18 +36,18 @@ class MediaManager:
         self.logger.setLevel(log_level)
         self.backend = backend
         self.camera: Optional[CameraBase] = None
-        self._init_camera(use_sim)  # Todo: automatically detect simulation
+        self._init_camera(use_sim, log_level)  # Todo: automatically detect simulation
         self.audio: Optional[AudioBase] = None
-        self._init_audio()
+        self._init_audio(log_level)
 
-    def _init_camera(self, use_sim: bool) -> None:
+    def _init_camera(self, use_sim: bool, log_level: str) -> None:
         """Initialize the camera."""
         self.logger.debug("Initializing camera...")
         if self.backend == MediaBackend.DEFAULT:
             self.logger.info("Using OpenCV camera backend.")
             from reachy_mini.media.camera_opencv import OpenCVCamera
 
-            self.camera = OpenCVCamera()
+            self.camera = OpenCVCamera(log_level=log_level)
             if use_sim:
                 self.camera.open(udp_camera="udp://@127.0.0.1:5005")
             else:
@@ -56,7 +56,7 @@ class MediaManager:
             self.logger.info("Using GStreamer camera backend.")
             from reachy_mini.media.camera_gstreamer import GStreamerCamera
 
-            self.camera = GStreamerCamera()
+            self.camera = GStreamerCamera(log_level=log_level)
             self.camera.open()
             # Todo: use simulation with gstreamer?
 
@@ -72,19 +72,19 @@ class MediaManager:
         """
         return self.camera.read()
 
-    def _init_audio(self) -> None:
+    def _init_audio(self, log_level: str) -> None:
         """Initialize the audio system."""
         self.logger.debug("Initializing audio...")
         if self.backend == MediaBackend.DEFAULT:
             self.logger.info("Using SoundDevice audio backend.")
             from reachy_mini.media.audio_sounddevice import SoundDeviceAudio
 
-            self.audio = SoundDeviceAudio()
+            self.audio = SoundDeviceAudio(log_level=log_level)
         elif self.backend == MediaBackend.GSTREAMER:
             self.logger.info("Using GStreamer audio backend.")
             from reachy_mini.media.audio_gstreamer import GStreamerAudio
 
-            self.audio = GStreamerAudio()
+            self.audio = GStreamerAudio(log_level=log_level)
         else:
             raise NotImplementedError(f"Audio backend {self.backend} not implemented.")
 

@@ -27,9 +27,9 @@ from .camera_base import CameraBackend, CameraBase  # noqa: E402
 class GStreamerCamera(CameraBase):
     """Camera implementation using GStreamer."""
 
-    def __init__(self):
+    def __init__(self, log_level: str = "INFO") -> None:
         """Initialize the GStreamer camera."""
-        super().__init__(backend=CameraBackend.GSTREAMER)
+        super().__init__(backend=CameraBackend.GSTREAMER, log_level=log_level)
         Gst.init(None)
         self._loop = GLib.MainLoop()
         self._thread_bus_calls: Optional[Thread] = None

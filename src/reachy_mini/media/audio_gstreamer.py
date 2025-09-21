@@ -27,9 +27,9 @@ from .audio_base import AudioBackend, AudioBase  # noqa: E402
 class GStreamerAudio(AudioBase):
     """Audio implementation using GStreamer."""
 
-    def __init__(self):
+    def __init__(self, log_level: str = "INFO") -> None:
         """Initialize the GStreamer audio."""
-        super().__init__(backend=AudioBackend.GSTREAMER)
+        super().__init__(backend=AudioBackend.GSTREAMER, log_level=log_level)
         Gst.init(None)
         self._loop = GLib.MainLoop()
         self._thread_bus_calls = Thread(target=lambda: self._loop.run(), daemon=True)

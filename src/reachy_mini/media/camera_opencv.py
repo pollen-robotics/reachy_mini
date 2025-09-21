@@ -13,9 +13,9 @@ from .camera_base import CameraBackend, CameraBase
 class OpenCVCamera(CameraBase):
     """Camera implementation using OpenCV."""
 
-    def __init__(self):
+    def __init__(self, log_level: str = "INFO") -> None:
         """Initialize the OpenCV camera."""
-        super().__init__(backend=CameraBackend.OPENCV)
+        super().__init__(backend=CameraBackend.OPENCV, log_level=log_level)
         self.cap = None
 
     def open(self, udp_camera: str = None):
