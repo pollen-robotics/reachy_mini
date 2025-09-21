@@ -2,10 +2,9 @@
 
 import os
 
+import librosa
 import numpy as np
-import samplerate as sr
 import sounddevice as sd
-import soundfile as sf
 
 from reachy_mini.utils.constants import ASSETS_ROOT_PATH
 
@@ -100,16 +99,9 @@ class SoundDeviceAudio(AudioBase):
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"Sound file {file_path} not found.")
 
-        data, samplerate_in = sf.read(file_path, dtype="float32")
+        data, samplerate_in = librosa.load(file_path, sr=self._samplerate, mono=True)
+
         self.logger.debug(f"Playing sound '{file_path}' at {samplerate_in} Hz")
-
-        if samplerate_in != self._samplerate:
-            ratio = self._samplerate / samplerate_in
-            data = sr.resample(data, ratio, "sinc_best")
-
-            self.logger.debug(
-                f"Resampled audio from {samplerate_in} Hz to {self._samplerate} Hz"
-            )
 
         sd.play(data, self._samplerate, device=self._device_id, blocking=False)
 
@@ -119,11 +111,9 @@ class SoundDeviceAudio(AudioBase):
         If not found, return the default output device id.
         """
         devices = sd.query_devices()
+
         for idx, dev in enumerate(devices):
-            if (
-                dev["max_output_channels"] > 0
-                and name_contains.lower() in dev["name"].lower()
-            ):
+            if name_contains.lower() in dev["name"].lower():
                 return idx
         # Return default output device if not found
         self.logger.warning(

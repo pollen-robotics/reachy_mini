@@ -10,9 +10,7 @@ import logging
 import os
 import time
 
-import numpy as np
-import samplerate as sr
-import soundfile as sf
+import librosa
 
 from reachy_mini import ReachyMini
 from reachy_mini.utils.constants import ASSETS_ROOT_PATH
@@ -26,18 +24,10 @@ def main(backend: str):
         level=logging.DEBUG, format="%(asctime)s [%(levelname)s] %(message)s"
     )
 
-    # Load audio file
-    data, samplerate = sf.read(INPUT_FILE, dtype="float32")
-    print(f"Loaded {INPUT_FILE}: {data.shape}, {samplerate} Hz")
-    # Convert to mono by taking only the left channel if necessary
-    if data.ndim > 1:
-        data = data[:, 0]
-
     with ReachyMini(log_level="DEBUG", media_backend=backend) as mini:
-        if samplerate != mini.media.get_audio_samplerate():
-            ratio = mini.media.get_audio_samplerate() / samplerate
-            data = sr.resample(data, ratio, "sinc_best")
-        data = np.ascontiguousarray(data)
+        data, _ = librosa.load(
+            INPUT_FILE, sr=mini.media.get_audio_samplerate(), mono=True
+        )
 
         mini.media.start_playing()
         print("Playing audio...")
