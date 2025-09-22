@@ -18,6 +18,7 @@ from reachy_mini.media.camera_base import CameraBase
 class MediaBackend(Enum):
     """Media backends."""
 
+    NO_MEDIA = "no_media"
     DEFAULT = "default"
     DEFAULT_NO_VIDEO = "default_no_video"
     GSTREAMER = "gstreamer"
@@ -37,12 +38,16 @@ class MediaManager:
         self.logger.setLevel(log_level)
         self.backend = backend
         self.camera: Optional[CameraBase] = None
-        if not backend == MediaBackend.DEFAULT_NO_VIDEO:
+        if (
+            not backend == MediaBackend.DEFAULT_NO_VIDEO
+            and not backend == MediaBackend.NO_MEDIA
+        ):
             self._init_camera(
                 use_sim, log_level
             )  # Todo: automatically detect simulation
         self.audio: Optional[AudioBase] = None
-        self._init_audio(log_level)
+        if not backend == MediaBackend.NO_MEDIA:
+            self._init_audio(log_level)
 
     def _init_camera(self, use_sim: bool, log_level: str) -> None:
         """Initialize the camera."""
@@ -74,6 +79,9 @@ class MediaManager:
             Optional[np.ndarray]: The captured frame, or None if the camera is not available.
 
         """
+        if self.camera is None:
+            self.logger.warning("Camera is not initialized.")
+            return None
         return self.camera.read()
 
     def _init_audio(self, log_level: str) -> None:
@@ -102,6 +110,9 @@ class MediaManager:
             sound_file (str): Path to the sound file to play.
 
         """
+        if self.audio is None:
+            self.logger.warning("Audio system is not initialized.")
+            return
         self.audio.play_sound(sound_file)
 
     def start_recording(self) -> None:
@@ -115,6 +126,9 @@ class MediaManager:
             Optional[np.ndarray]: The recorded audio sample, or None if no data is available.
 
         """
+        if self.audio is None:
+            self.logger.warning("Audio system is not initialized.")
+            return None
         return self.audio.get_audio_sample()
 
     def get_audio_samplerate(self) -> int:
@@ -124,14 +138,23 @@ class MediaManager:
             int: The samplerate of the audio device.
 
         """
+        if self.audio is None:
+            self.logger.warning("Audio system is not initialized.")
+            return -1
         return self.audio.get_audio_samplerate()
 
     def stop_recording(self) -> None:
         """Stop recording audio."""
+        if self.audio is None:
+            self.logger.warning("Audio system is not initialized.")
+            return
         self.audio.stop_recording()
 
     def start_playing(self) -> None:
         """Start playing audio."""
+        if self.audio is None:
+            self.logger.warning("Audio system is not initialized.")
+            return
         self.audio.start_playing()
 
     def push_audio_sample(self, data) -> None:
@@ -141,8 +164,14 @@ class MediaManager:
             data: The audio data to push to the output device.
 
         """
+        if self.audio is None:
+            self.logger.warning("Audio system is not initialized.")
+            return
         self.audio.push_audio_sample(data)
 
     def stop_playing(self) -> None:
         """Stop playing audio."""
+        if self.audio is None:
+            self.logger.warning("Audio system is not initialized.")
+            return
         self.audio.stop_playing()

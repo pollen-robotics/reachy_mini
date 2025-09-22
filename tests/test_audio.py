@@ -65,3 +65,11 @@ def test_record_audio_and_file_exists():
     assert audio is not None    
     media.stop_recording()
 
+
+def test_no_media():
+    """Test that methods handle uninitialized media gracefully."""
+    media = MediaManager(backend=MediaBackend.NO_MEDIA)
+
+    assert media.get_frame() is None
+    assert media.get_audio_sample() is None
+    assert media.get_audio_samplerate() == -1

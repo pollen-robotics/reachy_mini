@@ -114,9 +114,13 @@ class ReachyMini:
             mbackend = MediaBackend.GSTREAMER
         elif media_backend.lower() == "default":
             mbackend = MediaBackend.DEFAULT
+        elif media_backend.lower() == "no_media":
+            mbackend = MediaBackend.NO_MEDIA
+        elif media_backend.lower() == "default_no_video":
+            mbackend = MediaBackend.DEFAULT_NO_VIDEO
         else:
             raise ValueError(
-                f"Invalid media_backend '{media_backend}'. Supported values are 'default' and 'gstreamer'."
+                f"Invalid media_backend '{media_backend}'. Supported values are 'default', 'gstreamer', 'no_media', and 'default_no_video'."
             )
 
         self.media_manager = MediaManager(
