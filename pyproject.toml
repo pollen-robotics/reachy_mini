@@ -76,3 +76,10 @@ lint.ignore = [
     "D203", # Incompatible with D211
     "D213", # Incompatible with D212
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "audio: mark test as requiring audio hardware",
+    "video: mark test as requiring video hardware",
+]

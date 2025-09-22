@@ -8,7 +8,7 @@ from reachy_mini.media.media_manager import MediaManager, MediaBackend
 @pytest.mark.audio
 def test_play_sound_default_backend():
     """Test playing a sound with the default backend."""
-    media = MediaManager(backend=MediaBackend.DEFAULT)
+    media = MediaManager(backend=MediaBackend.DEFAULT_NO_VIDEO)
     # Use a short sound file present in your assets directory
     sound_file = "proud2.wav"  # Change to a valid file if needed
     media.play_sound(sound_file)
@@ -21,7 +21,7 @@ def test_play_sound_default_backend():
 @pytest.mark.audio
 def test_record_audio_and_file_exists():
     """Test recording audio and check that the file exists and is not empty."""
-    media = MediaManager(backend=MediaBackend.DEFAULT)
+    media = MediaManager(backend=MediaBackend.DEFAULT_NO_VIDEO)
     duration = 2  # seconds
     tmpfile = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
     tmpfile.close()
@@ -29,6 +29,41 @@ def test_record_audio_and_file_exists():
     time.sleep(duration)
     media.stop_recording()
     audio = media.get_audio_sample()
+    samplerate = media.get_audio_samplerate()
+    if audio is not None:
+        sf.write(tmpfile.name, audio, samplerate)
+    assert os.path.exists(tmpfile.name)
+    assert os.path.getsize(tmpfile.name) > 0
+    # comment the following line if you want to keep the file for inspection
+    os.remove(tmpfile.name)
+    # print(f"Recorded audio saved to {tmpfile.name}")
+
+'''
+@pytest.mark.audio_gstreamer
+def test_play_sound_gstreamer_backend():
+    """Test playing a sound with the GStreamer backend."""
+    media = MediaManager(backend=MediaBackend.GSTREAMER)
+    # Use a short sound file present in your assets directory
+    sound_file = "proud2.wav"  # Change to a valid file if needed
+    media.play_sound(sound_file)
+    print("Playing sound with GStreamer backend...")
+    # Wait a bit to let the sound play (non-blocking backend)
+    time.sleep(2)
+    # No assertion: test passes if no exception is raised.
+    # Sound should be audible if the audio device is correctly set up.
+'''
+@pytest.mark.audio
+def test_record_audio_and_file_exists():
+    """Test recording audio and check that the file exists and is not empty."""
+    media = MediaManager(backend=MediaBackend.GSTREAMER)
+    duration = 2  # seconds
+    tmpfile = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
+    tmpfile.close()
+    media.start_recording()
+    time.sleep(duration)
+    media.stop_recording()
+    audio = media.get_audio_sample()
+    assert audio is not None
     samplerate = media.get_audio_samplerate()
     if audio is not None:
         sf.write(tmpfile.name, audio, samplerate)

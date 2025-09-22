@@ -19,6 +19,7 @@ class MediaBackend(Enum):
     """Media backends."""
 
     DEFAULT = "default"
+    DEFAULT_NO_VIDEO = "default_no_video"
     GSTREAMER = "gstreamer"
 
 
@@ -36,7 +37,10 @@ class MediaManager:
         self.logger.setLevel(log_level)
         self.backend = backend
         self.camera: Optional[CameraBase] = None
-        self._init_camera(use_sim, log_level)  # Todo: automatically detect simulation
+        if not backend == MediaBackend.DEFAULT_NO_VIDEO:
+            self._init_camera(
+                use_sim, log_level
+            )  # Todo: automatically detect simulation
         self.audio: Optional[AudioBase] = None
         self._init_audio(log_level)
 
@@ -75,7 +79,10 @@ class MediaManager:
     def _init_audio(self, log_level: str) -> None:
         """Initialize the audio system."""
         self.logger.debug("Initializing audio...")
-        if self.backend == MediaBackend.DEFAULT:
+        if (
+            self.backend == MediaBackend.DEFAULT
+            or self.backend == MediaBackend.DEFAULT_NO_VIDEO
+        ):
             self.logger.info("Using SoundDevice audio backend.")
             from reachy_mini.media.audio_sounddevice import SoundDeviceAudio
 
