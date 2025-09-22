@@ -32,6 +32,7 @@ class Daemon:
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(self.log_level)
 
+        self.backend = None
         self._status = DaemonStatus(
             state=DaemonState.NOT_INITIALIZED,
             simulation_enabled=None,
@@ -100,7 +101,21 @@ class Daemon:
         self.server = Server(self.backend, localhost_only=localhost_only)
         self.server.start()
 
-        self.backend_run_thread = Thread(target=self.backend.wrapped_run)
+        def backend_wrapped_run():
+            assert self.backend is not None, (
+                "Backend should be initialized before running."
+            )
+
+            try:
+                self.backend.wrapped_run()
+            except Exception as e:
+                self.logger.error(f"Backend encountered an error: {e}")
+                self._status.state = DaemonState.ERROR
+                self._status.error = str(e)
+                self.server.stop()
+                self.backend = None
+
+        self.backend_run_thread = Thread(target=backend_wrapped_run)
         self.backend_run_thread.start()
 
         if not self.backend.ready.wait(timeout=2.0):
@@ -144,12 +159,18 @@ class Daemon:
             self.logger.warning("Daemon is already stopped.")
             return self._status.state
 
+        assert self.backend is not None, (
+            "Backend should be initialized before stopping."
+        )
+
         try:
             if self._status.state in (DaemonState.STOPPING, DaemonState.ERROR):
                 goto_sleep_on_stop = False
 
             self.logger.info("Stopping Reachy Mini daemon...")
             self._status.state = DaemonState.STOPPING
+            self.backend.is_shutting_down = True
+            self.server.stop()
 
             if not hasattr(self, "backend"):
                 self._status.state = DaemonState.STOPPED
@@ -177,7 +198,6 @@ class Daemon:
 
             self.backend.close()
             self.backend.ready.clear()
-            self.server.stop()
 
             if self._status.state != DaemonState.ERROR:
                 self.logger.info("Daemon stopped successfully.")
@@ -188,6 +208,12 @@ class Daemon:
             self._status.error = str(e)
         except KeyboardInterrupt:
             self.logger.warning("Daemon already stopping...")
+
+        backend_status = self.backend.get_status()
+        if backend_status.error:
+            self._status.state = DaemonState.ERROR
+
+        self.backend = None
 
         return self._status.state
 
@@ -253,7 +279,7 @@ class Daemon:
 
     def status(self) -> "DaemonStatus":
         """Get the current status of the Reachy Mini daemon."""
-        if hasattr(self, "backend"):
+        if self.backend is not None:
             self._status.backend_status = self.backend.get_status()
 
             assert self._status.backend_status is not None, (
@@ -262,21 +288,11 @@ class Daemon:
 
             if self._status.backend_status.error:
                 self._status.state = DaemonState.ERROR
-                self._status.error = self._status.backend_status.error
+            self._status.error = self._status.backend_status.error
+        else:
+            self._status.backend_status = None
 
         return self._status
-
-    async def reset(self):
-        """Reset the daemon status to NOT_INITIALIZED."""
-        await self.stop(goto_sleep_on_stop=False)
-
-        self._status = DaemonStatus(
-            state=DaemonState.NOT_INITIALIZED,
-            simulation_enabled=None,
-            backend_status=None,
-            error=None,
-        )
-        self.logger.info("Daemon status reset to NOT_INITIALIZED.")
 
     async def run4ever(
         self,

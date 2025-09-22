@@ -8,11 +8,11 @@ version = "0.1.0"
 authors = [{ name = "Pollen Robotics", email = "contact@pollen-robotics.com" }]
 description = ""
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.8"
 dependencies = [
     "numpy>=2.2.5,<2.3.0",
     "scipy==1.15.3",
-    "reachy_mini_motor_controller>=0.6.2",
+    "reachy_mini_motor_controller>=0.6.3",    
     "eclipse-zenoh>=1.4.0",
     "opencv-python<=5.0",
     "cv2_enumerate_cameras>=1.2.1",

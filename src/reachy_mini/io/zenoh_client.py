@@ -64,6 +64,7 @@ class ZenohClient(AbstractClient):
         self._last_head_pose = None
         self._recorded_data = None
         self._recorded_data_ready = threading.Event()
+        self._is_alive = False
 
         self.tasks: dict[UUID, TaskState] = {}
         self.task_request_pub = self.session.declare_publisher("reachy_mini/task")
@@ -93,6 +94,15 @@ class ZenohClient(AbstractClient):
                 )
             print("Waiting for connection with the server...")
 
+        self._is_alive = True
+        threading.Thread(target=self.check_alive, daemon=True).start()
+
+    def check_alive(self) -> None:
+        """Periodically check if the client is still connected to the server."""
+        while True:
+            self._is_alive = self.is_connected()
+            time.sleep(1.0)
+
     def is_connected(self) -> bool:
         """Check if the client is connected to the server."""
         self.joint_position_received.clear()
@@ -107,6 +117,9 @@ class ZenohClient(AbstractClient):
 
     def send_command(self, command: str):
         """Send a command to the server."""
+        if not self._is_alive:
+            raise ConnectionError("Lost connection with the server.")
+
         self.cmd_pub.put(command.encode("utf-8"))
 
     def _handle_joint_positions(self, sample):
@@ -167,11 +180,15 @@ class ZenohClient(AbstractClient):
 
     def send_task_request(self, task_req: AnyTaskRequest) -> UUID:
         """Send a task request to the server."""
+        if not self._is_alive:
+            raise ConnectionError("Lost connection with the server.")
+
         task = TaskRequest(uuid=uuid4(), req=task_req, timestamp=datetime.now())
 
         self.tasks[task.uuid] = TaskState(event=threading.Event(), error=None)
 
         self.task_request_pub.put(task.model_dump_json())
+
         return task.uuid
 
     def wait_for_task_completion(self, task_uid: UUID, timeout: float = 5.0):
