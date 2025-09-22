@@ -44,7 +44,7 @@ git clone https://github.com/pollen-robotics/reachy_mini
 pip install -e ./reachy_mini
 ```
 
-It requires Python 3.8 or later.
+It requires Python 3.10 or later.
 
 ## Run the reachy mini daemon
 

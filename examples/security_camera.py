@@ -11,9 +11,6 @@ import cv2
 import numpy as np
 
 from reachy_mini import ReachyMini
-from reachy_mini.utils.camera import find_camera
-
-cap = find_camera()
 
 
 def detect_motion(
@@ -68,10 +65,11 @@ def im_diff(prev, current):
 time_interval = 0.05
 prev_frame = None
 last_move = time.time()
-with ReachyMini() as reachy_mini:
+with ReachyMini(use_sim=False) as reachy_mini:
     while True:
-        success, frame = cap.read()
-        if not success:
+        frame = reachy_mini.mediaget_frame()
+        if frame is None:
+            print("Failed to grab frame.")
             continue
 
         if prev_frame is not None:

@@ -11,36 +11,25 @@ each type of backend.
 import asyncio
 import json
 import logging
-import os
 import threading
 import time
 from abc import abstractmethod
 from enum import Enum
-from importlib.resources import files
 from pathlib import Path
 from typing import List
 
-from reachy_mini.motion.goto import GotoMove
-
-os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "hide"
-
 import numpy as np
-import pygame
 from scipy.spatial.transform import Rotation as R
 
-import reachy_mini
+from reachy_mini.media.audio_sounddevice import SoundDeviceAudio
+from reachy_mini.motion.goto import GotoMove
 from reachy_mini.motion.move import Move
+from reachy_mini.utils.constants import MODELS_ROOT_PATH, URDF_ROOT_PATH
 from reachy_mini.utils.interpolation import (
     InterpolationTechnique,
     distance_between_poses,
     time_trajectory,
 )
-
-try:
-    pygame.mixer.init()
-except pygame.error as e:
-    print(f"Failed to initialize pygame mixer: {e}")
-    pygame.mixer = None
 
 
 class MotorControlMode(str, Enum):
@@ -53,13 +42,6 @@ class MotorControlMode(str, Enum):
 
 class Backend:
     """Base class for robot backends, simulated or real."""
-
-    urdf_root_path: str = str(
-        files(reachy_mini).joinpath("descriptions/reachy_mini/urdf")
-    )
-
-    assets_root_path: str = str(files(reachy_mini).joinpath("assets"))
-    models_root_path: str = str(files(reachy_mini).joinpath("assets/models"))
 
     def __init__(
         self,
@@ -97,12 +79,12 @@ class Backend:
             from reachy_mini.kinematics import PlacoKinematics
 
             self.head_kinematics = PlacoKinematics(
-                Backend.urdf_root_path, check_collision=self.check_collision
+                URDF_ROOT_PATH, check_collision=self.check_collision
             )
         elif self.kinematics_engine == "NN":
             from reachy_mini.kinematics import NNKinematics
 
-            self.head_kinematics = NNKinematics(Backend.models_root_path)
+            self.head_kinematics = NNKinematics(MODELS_ROOT_PATH)
         elif self.kinematics_engine == "AnalyticalKinematics":
             from reachy_mini.kinematics import AnalyticalKinematics
 
@@ -150,6 +132,8 @@ class Backend:
 
         # Recording lock to guard buffer swaps and appends
         self._rec_lock = threading.Lock()
+
+        self.audio = SoundDeviceAudio(log_level=log_level)
 
     # Life cycle methods
     def wrapped_run(self):
@@ -585,21 +569,7 @@ class Backend:
             sound_file (str): The name of the sound file to play (e.g., "proud2.wav").
 
         """
-        if pygame.mixer is None:
-            print("Pygame mixer is not initialized. Cannot play sound.")
-            return
-
-        # first check if the name exists in the asset sound directory
-        file_path = f"{self.assets_root_path}/{sound_file}"
-        if not os.path.exists(file_path):
-            # If not, check if the raw_path exists
-            if not os.path.exists(sound_file):
-                raise FileNotFoundError(f"Sound file {sound_file} not found.")
-            else:
-                file_path = sound_file
-
-        pygame.mixer.music.load(file_path)
-        pygame.mixer.music.play()
+        self.audio.play_sound(sound_file)
 
     # Basic move definitions
     INIT_HEAD_POSE = np.eye(4)

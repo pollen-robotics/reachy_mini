@@ -28,7 +28,7 @@ def find_camera(
     selected_cap = None
     for c in enumerate_cameras(apiPreference):
         if c.vid == vid and c.pid == pid:
-            # the Arducam camera create two /dev/videoX devices
+            # the Arducam camera creates two /dev/videoX devices
             # that enumerate_cameras cannot differentiate
             try:
                 cap = cv2.VideoCapture(c.index, c.backend)
