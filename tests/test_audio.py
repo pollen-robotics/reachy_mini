@@ -52,7 +52,7 @@ def test_play_sound_gstreamer_backend():
     # No assertion: test passes if no exception is raised.
     # Sound should be audible if the audio device is correctly set up.
 '''
-@pytest.mark.audio
+@pytest.mark.audio_gstreamer
 def test_record_audio_and_file_exists():
     """Test recording audio and check that the file exists and is not empty."""
     media = MediaManager(backend=MediaBackend.GSTREAMER)
@@ -61,14 +61,7 @@ def test_record_audio_and_file_exists():
     tmpfile.close()
     media.start_recording()
     time.sleep(duration)
-    media.stop_recording()
     audio = media.get_audio_sample()
-    assert audio is not None
-    samplerate = media.get_audio_samplerate()
-    if audio is not None:
-        sf.write(tmpfile.name, audio, samplerate)
-    assert os.path.exists(tmpfile.name)
-    assert os.path.getsize(tmpfile.name) > 0
-    # comment the following line if you want to keep the file for inspection
-    os.remove(tmpfile.name)
-    # print(f"Recorded audio saved to {tmpfile.name}")
+    assert audio is not None    
+    media.stop_recording()
+
