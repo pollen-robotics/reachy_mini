@@ -38,7 +38,7 @@ class Args:
     serialport: str = "auto"
 
     sim: bool = False
-    scene: str = "default"
+    scene: str = "empty"
     headless: bool = False
 
     kinematics_engine: str = "AnalyticalKinematics"
