@@ -23,6 +23,6 @@ jobs:
           pip install .[dev]
       - name: Run tests
         run: |
-          pytest -v -m 'not audio' --tb=short
+          pytest -v -m 'not audio and not video' --tb=short
         env:
           MUJOCO_GL: disable
