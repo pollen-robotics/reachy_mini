@@ -28,7 +28,9 @@ class SoundDeviceAudio(AudioBase):
         self._output_stream = None
         self._buffer = None
         self._device_id = self.get_output_device_id("respeaker")
-        self._samplerate = int(sd.query_devices(self._device_id)["default_samplerate"])
+        self._samplerate = (
+            -1
+        )  # will be set on first use to avoid issues if device is not present (CI)
 
     def start_recording(self):
         """Open the audio input stream, using ReSpeaker card if available."""
@@ -57,6 +59,10 @@ class SoundDeviceAudio(AudioBase):
 
     def get_audio_samplerate(self) -> int:
         """Return the samplerate of the audio device."""
+        if self._samplerate == -1:
+            self._samplerate = int(
+                sd.query_devices(self._device_id)["default_samplerate"]
+            )
         return self._samplerate
 
     def stop_recording(self):
@@ -79,7 +85,7 @@ class SoundDeviceAudio(AudioBase):
     def start_playing(self):
         """Open the audio output stream."""
         self._output_stream = sd.OutputStream(
-            samplerate=self._samplerate,
+            samplerate=self.get_audio_samplerate(),
             device=self._device_id,
             channels=1,
         )
@@ -99,11 +105,15 @@ class SoundDeviceAudio(AudioBase):
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"Sound file {file_path} not found.")
 
-        data, samplerate_in = librosa.load(file_path, sr=self._samplerate, mono=True)
+        data, samplerate_in = librosa.load(
+            file_path, sr=self.get_audio_samplerate(), mono=True
+        )
 
         self.logger.debug(f"Playing sound '{file_path}' at {samplerate_in} Hz")
 
-        sd.play(data, self._samplerate, device=self._device_id, blocking=False)
+        sd.play(
+            data, self.get_audio_samplerate(), device=self._device_id, blocking=False
+        )
 
     def get_output_device_id(self, name_contains: str) -> int:
         """Return the output device id whose name contains the given string (case-insensitive).
