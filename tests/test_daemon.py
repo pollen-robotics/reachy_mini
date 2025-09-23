@@ -5,7 +5,6 @@ import pytest
 from reachy_mini.daemon.daemon import Daemon    
 from reachy_mini.reachy_mini import ReachyMini
 
-
 @pytest.mark.asyncio
 async def test_daemon_start_stop():
     from reachy_mini.daemon.daemon import Daemon    
@@ -29,8 +28,9 @@ async def test_daemon_client_disconnection():
     )
 
     client_connected = asyncio.Event()
+
     async def simple_client():
-        with ReachyMini() as reachy:
+        with ReachyMini(media_backend="no_media"):
             client_connected.set()
 
     async def wait_for_client():
@@ -52,7 +52,7 @@ async def test_daemon_early_stop():
     daemon_stopped = asyncio.Event()
 
     async def client_bg():
-        with ReachyMini() as reachy:
+        with ReachyMini(media_backend="no_media") as reachy:
             client_connected.set()
             await daemon_stopped.wait()
 

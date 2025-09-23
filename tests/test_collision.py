@@ -1,11 +1,11 @@
-from reachy_mini import ReachyMini
+from reachy_mini.utils.constants import URDF_ROOT_PATH
 from reachy_mini.kinematics import PlacoKinematics
 from reachy_mini.utils import create_head_pose
 
 
 def offline_test_collision():
     head_kinematics = PlacoKinematics(
-        urdf_path=ReachyMini.urdf_root_path, check_collision=True
+        urdf_path=URDF_ROOT_PATH, check_collision=True
     )
 
     reachable_pose = create_head_pose()

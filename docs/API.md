@@ -271,39 +271,60 @@ Below is the snippet of code that show how to start a recording, stop the record
 ```
 ## Accessing the sensors
 
-Reachy Mini comes with several sensors (camera, microphone, speaker) that are connected to your computer via USB through the robot. These devices appear just like standard USB peripherals, so you can access them using your usual tools and libraries, exactly as if they were plugged directly into your computer.
+Reachy Mini comes with several sensors (camera, microphone, speaker) that are connected to your computer via USB through the robot. These devices are accessible via the `reachy_mini.media` object.
 
 ### Camera
 
-You can access the camera using OpenCV or any other library that supports video capture. We provide an utility function to create the capture using OpenCV:
+A camera frame can be easily retrieved as follows:
 
 ```python
-import cv2
-
-from reachy_mini.utils.camera import find_camera
-
-cap = find_camera()
-assert cap is not None and cap.isOpened(), "Camera not found"
-
-# Capture a frame
-ret, frame = cap.read()
-if not ret:
-    print("Failed to capture frame")
-
-cv2.imshow("Camera", frame)
-cv2.waitKey(0)
-
-cap.release()
-cv2.destroyAllWindows()
+from reachy_mini import ReachyMini
+with ReachyMini() as reachy_mini:
+    while True:
+        frame = reachy_mini.media.get_frame()
+        # frame is a numpy array as output by opencv
 ```
+
+Please refer to the examples: [look_at_image](../examples/look_at_images.py) and  [security_camera](../examples/security_camera.py).
 
 ### Microphone
 
-TODO
+Audio samples from the microphone can be obtained as follows:
+
+```python
+from reachy_mini import ReachyMini
+with ReachyMini() as reachy_mini:
+    while True:
+        sample = mini.media.get_audio_sample()
+        # sample is a numpy array as output by souddevice
+```
+
+Please refer to the example [sound_record](../examples/debug/sound_record.py).
 
 ### Speaker
 
-TODO
+Audio samples can be pushed to the speaker as follows:
+
+```python
+from reachy_mini import ReachyMini
+with ReachyMini() as reachy_mini:
+    while True:
+        # get audio chunk from mic / live source / file
+        mini.media.push_audio_sample(chunk)        
+```
+Please refer to the example: [sound_play](../examples/debug/sound_play.py).
+
+### GStreamer Backend
+
+By default, OpenCV manages the camera, and sounddevice manages the audio. Advanced users can use the GStreamer backend, which enables the creation of more complex media pipelines and provides better control over audio/video latency. The above examples can be started with the `--backend gstreamer` argument.
+To enable the use of the GStreamer backend, the package should be installed as follows:
+
+
+```bash
+pip install -e .[gstreamer]
+```
+
+It is assumed that the [gstreamer binaires](https://gstreamer.freedesktop.org/download/) are properly installed on your system. You will likely want to configure your own pipeline. See [gstreamer camera](../src/reachy_mini/media/camera_gstreamer.py) for an example.
 
 ## Playing moves
 
