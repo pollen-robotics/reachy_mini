@@ -22,7 +22,7 @@ class PlacoKinematics:
         urdf_path: str,
         dt: float = 0.02,
         automatic_body_yaw: bool = False,
-        check_collision=False,
+        check_collision: bool = False,
         log_level: str = "INFO",
     ) -> None:
         """Initialize the PlacoKinematics class.
@@ -497,7 +497,7 @@ class PlacoKinematics:
 
         return T_world_head
 
-    def config_collision_model(self):
+    def config_collision_model(self) -> None:
         """Configure the collision model for the robot.
 
         Add collision pairs between the torso and the head colliders.
@@ -518,7 +518,7 @@ class PlacoKinematics:
                 pin.CollisionPair(id_torso_collider, i)
             )  # torso with head colliders
 
-    def compute_collision(self, margin=0.005):
+    def compute_collision(self, margin: float = 0.005) -> bool:
         """Compute the collision between the robot and the environment.
 
         Args:

@@ -7,7 +7,7 @@ except ImportError:
     class MockupNNKinematics:
         """Mockup class for NNKinematics."""
 
-        def __init__(self, *args, **kwargs):
+        def __init__(self, *args, **kwargs) -> None:  # type: ignore[no-untyped-def]
             """Raise ImportError when trying to instantiate the class."""
             raise ImportError(
                 "NNKinematics could not be imported. Make sure you run pip install reachy_mini[nn_kinematics]."
@@ -22,7 +22,7 @@ except ImportError:
     class MockupPlacoKinematics:
         """Mockup class for PlacoKinematics."""
 
-        def __init__(self, *args, **kwargs):
+        def __init__(self, *args, **kwargs) -> None:  # type: ignore[no-untyped-def]
             """Raise ImportError when trying to instantiate the class."""
             raise ImportError(
                 "PlacoKinematics could not be imported. Make sure you run pip install reachy_mini[placo_kinematics]."
