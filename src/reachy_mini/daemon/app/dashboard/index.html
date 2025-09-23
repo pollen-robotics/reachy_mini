@@ -1,0 +1,60 @@
+<!doctype html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+
+    <script src="/dashboard/js/daemon.js"></script>
+    <link rel="stylesheet" href="/dashboard/css/dashboard.css">
+</head>
+
+<body>
+    <div id="daemon-dashboard" class="flex-row items-center justify-between w-full px-4 relative">
+        <div class="flex items-center justify-between w-full pt-3 border-gray-200">
+            <span class="reachy-title text-blue-900 justify-start">Reachy Mini</span>
+
+            <label class="inline-flex items-center cursor-pointer">
+                <input id="daemon-toggle" type="checkbox" value="" class="sr-only peer">
+
+                <div
+                    class="relative w-15 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-gray-100 dark:peer-focus:ring-gray-100 rounded-full peer dark:bg-red-400 peer-checked:after:translate-x-[36px] rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-green-400 dark:peer-checked:bg-green-400">
+                    <span id="daemon-toggle-on"
+                        class="absolute top-1/2 start-1.5 -translate-y-1/2 flex justify-center items-center size-5 text-white peer-checked:text-white transition-colors duration-200 hidden">ON</span>
+                    <span id="daemon-toggle-off"
+                        class="absolute top-1/2 end-2.5 -translate-y-1/2 flex justify-center items-center size-5 text-white">
+                        OFF
+                    </span>
+                </div>
+            </label>
+        </div>
+
+        <div class="flex items-center pt-1 w-full overflow-hidden">
+            <span class="inline-block  w-4 h-4 rounded-full bg-red-500 align-middle mr-2"></span>
+            <span class="daemon-status-collapse"> Plug Reachy Mini</span>
+            <span id="collapse-toggle" class="ml-2 cursor-pointer select-none daemon-status-collapse">&lt;</span>
+        </div>
+        <div id="collapse-content"
+            class="daemon-status-collapse-content w-full overflow-hidden block break-words whitespace-pre-wrap overflow-x-auto max-w-full hidden">
+            Backend status:
+            {“ready:false,”motor_control_mode”:”disabled”,”last_alive”:null,”control_loop_stats”:{“mean_control_loop_frequency”:48.72,”max_control_loop_interval”:0.02,”nb_error”:0},”error”:null}
+        </div>
+
+
+
+        <div class="pt-6">
+            <div id="daemon-mini-thumb" class="rounded-sm">
+                <object id="daemon-thumb-img" type="image/svg+xml" data="/dashboard/assets/reachy-mini-sleeping.svg"
+                    class="w-full"></object>
+            </div>
+        </div>
+
+        <div id="daemon-loading-overlay"
+            class="absolute inset-0 flex items-center justify-center bg-white opacity-25 z-50 "></div>
+    </div>
+
+</body>
+
+
+</html>

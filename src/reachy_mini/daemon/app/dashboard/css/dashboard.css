@@ -1,0 +1,54 @@
+@import url('https://fonts.googleapis.com/css2?family=Archivo:wght@400;700&display=swap');
+
+
+.reachy-title {
+    font-family: 'Archivo', Arial, sans-serif;
+    font-weight: 700;
+    font-style: bold;
+    font-size: 42px;
+    line-height: 100%;
+    letter-spacing: 0.3px;
+}
+
+.daemon-status-collapse {
+    font-family: 'Asap', Arial, sans-serif;
+    font-weight: 400;
+    font-style: normal;
+    font-size: 16px;
+    line-height: 140%;
+    letter-spacing: 0.3px;
+    color: #2E4787B2;
+}
+
+.daemon-status-collapse-content {
+    font-family: Asap;
+    font-weight: Body/Font Weight Regular;
+    font-style: Regular;
+    font-size: 12px;
+    line-height: 140%;
+    letter-spacing: 0%;
+    vertical-align: middle;
+    color: #181818c6;
+}
+
+
+body {
+    font-family: 'Archivo', Arial, sans-serif;
+}
+
+.daemon-dashboard-loading {
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+#daemon-loading-overlay {
+    display: none;
+}
+
+#daemon-loading-overlay.active {
+    display: flex;
+}
+
+#daemon-dashboard-overlay.active {
+    display: flex;
+}

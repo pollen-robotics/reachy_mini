@@ -105,12 +105,12 @@ def create_app(args: Args) -> FastAPI:
     app.include_router(router)
 
     # Route to list available HTML/JS/CSS examples with links using Jinja2 template
-    @app.get("/")
+    @app.get("/examples")
     async def list_examples(request: Request):
-        """Render the dashboard."""
+        """Render the examples list."""
         files = [f for f in os.listdir(DASHBOARD_PAGES) if f.endswith(".html")]
         return templates.TemplateResponse(
-            "dashboard.html", {"request": request, "files": files}
+            "list_examples.html", {"request": request, "files": files}
         )
 
     app.mount(
