@@ -17,7 +17,8 @@ window.onload = () => {
     }
     document.getElementById('daemon-toggle').onchange = onDaemonToggleSwitch;
 
-    checkDaemonStatus();
+    // checkDaemonStatus();
+    setInterval(checkDaemonStatus, 2000);
 }
 
 const getDaemonStatus = async () => {
