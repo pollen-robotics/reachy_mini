@@ -121,20 +121,15 @@ def create_app(args: Args) -> FastAPI:
 
     # Mount WASM files - always use bin directory
     wasm_bin_dir = Path(__file__).parent / "wasm" / "bin"
-    wasm_dist_dir = Path(__file__).parent / "wasm" / "dist"
+    original_mjcf_dir = Path(__file__).parent.parent.parent / "descriptions" / "reachy_mini" / "mjcf"
 
     if wasm_bin_dir.exists():
-        # Mount specific paths first (more specific paths must come before general ones)
-        if wasm_dist_dir.exists():
+        # Mount original model files from descriptions directory
+        if original_mjcf_dir.exists():
             app.mount(
-                "/wasm/dist/examples",
-                StaticFiles(directory=str(wasm_dist_dir / "examples")),
-                name="wasm_examples",
-            )
-            app.mount(
-                "/wasm/dist/models",
-                StaticFiles(directory=str(wasm_dist_dir / "models")),
-                name="wasm_models",
+                "/wasm/dist/examples/scenes/reachy",
+                StaticFiles(directory=str(original_mjcf_dir)),
+                name="wasm_original_models",
             )
 
         # Mount general path last

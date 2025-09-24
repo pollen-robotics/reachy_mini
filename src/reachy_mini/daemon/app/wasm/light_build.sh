@@ -157,6 +157,50 @@ if [[ ! -d "node_modules" ]]; then
     print_success "Production dependencies installed"
 fi
 
+# Create bin directory with essential files for FastAPI app
+print_step "Creating bin directory with essential app files..."
+rm -rf bin
+mkdir -p bin/assets
+
+# Copy essential files for FastAPI integration
+cp dist/vite.svg bin/
+cp dist/mujoco.js bin/
+cp dist/mujoco.wasm bin/
+
+# Create index.html with generic asset references
+sed 's|/assets/index-[^.]*\.js|/assets/index.js|g; s|/assets/index-[^.]*\.css|/assets/index.css|g' dist/index.html > bin/index.html
+print_success "Created index.html with generic asset references"
+
+# Copy React app assets with generic names
+INDEX_JS=$(ls dist/assets/index-*.js 2>/dev/null | head -1)
+INDEX_CSS=$(ls dist/assets/index-*.css 2>/dev/null | head -1)
+
+if [[ -n "$INDEX_JS" ]]; then
+    cp "$INDEX_JS" bin/assets/index.js
+    print_success "Copied $(basename "$INDEX_JS") as index.js"
+fi
+
+if [[ -n "$INDEX_CSS" ]]; then
+    cp "$INDEX_CSS" bin/assets/index.css
+    print_success "Copied $(basename "$INDEX_CSS") as index.css"
+fi
+
+# Copy MuJoCo WASM assets with generic names
+MUJOCO_WASM=$(ls dist/assets/mujoco_wasm-*.wasm 2>/dev/null | head -1)
+MUJOCO_JS=$(ls dist/assets/mujoco_wasm-*.js 2>/dev/null | head -1)
+
+if [[ -n "$MUJOCO_WASM" ]]; then
+    cp "$MUJOCO_WASM" bin/assets/mujoco_wasm.wasm
+    print_success "Copied $(basename "$MUJOCO_WASM") as mujoco_wasm.wasm"
+fi
+
+if [[ -n "$MUJOCO_JS" ]]; then
+    cp "$MUJOCO_JS" bin/assets/mujoco_wasm.js
+    print_success "Copied $(basename "$MUJOCO_JS") as mujoco_wasm.js"
+fi
+
+print_success "Essential app files copied to bin directory with generic names"
+
 print_success "🎉 Light build completed successfully!"
 echo ""
 echo -e "${GREEN}📁 Built files are in: ./dist${NC}"

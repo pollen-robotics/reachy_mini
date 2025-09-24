@@ -1,6 +1,8 @@
-# Build outputs
+# Build outputs (ignore dist but keep bin for production)
 dist/
 dist
+# Keep bin directory for production deployment
+!bin/
 
 # Node.js dependencies
 node_modules/
