@@ -9,10 +9,11 @@ import threading
 import time
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Dict, List
+from typing import Dict, List, Optional
 from uuid import UUID, uuid4
 
 import numpy as np
+import numpy.typing as npt
 import zenoh
 
 from reachy_mini.io.abstract import AbstractClient
@@ -62,8 +63,10 @@ class ZenohClient(AbstractClient):
         )
         self._last_head_joint_positions = None
         self._last_antennas_joint_positions = None
-        self._last_head_pose = None
-        self._recorded_data = None
+        self._last_head_pose: Optional[npt.NDArray[np.float64]] = None
+        self._recorded_data: Optional[
+            List[Dict[str, float | List[float] | List[List[float]]]]
+        ] = None
         self._recorded_data_ready = threading.Event()
         self._is_alive = False
 
@@ -140,7 +143,8 @@ class ZenohClient(AbstractClient):
             data = json.loads(sample.payload.to_string())
             self._recorded_data = data
             self._recorded_data_ready.set()
-        print(f"Recorded data: {len(self._recorded_data)} frames received.")
+        if self._recorded_data is not None:
+            print(f"Recorded data: {len(self._recorded_data)} frames received.")
 
     def get_current_joints(self) -> tuple[list[float], list[float]]:
         """Get the current joint positions."""
@@ -157,7 +161,9 @@ class ZenohClient(AbstractClient):
         """Block until the daemon publishes the frames (or timeout)."""
         return self._recorded_data_ready.wait(timeout)
 
-    def get_recorded_data(self, wait: bool = True, timeout: float = 5.0) -> List[Dict]:
+    def get_recorded_data(
+        self, wait: bool = True, timeout: float = 5.0
+    ) -> Optional[List[Dict[str, float | List[float] | List[List[float]]]]]:
         """Return the cached recording, optionally blocking until it arrives.
 
         Raises `TimeoutError` if nothing shows up in time.
@@ -165,7 +171,9 @@ class ZenohClient(AbstractClient):
         if wait and not self._recorded_data_ready.wait(timeout):
             raise TimeoutError("Recording not received in time.")
         self._recorded_data_ready.clear()  # ready for next run
-        return self._recorded_data.copy()
+        if self._recorded_data is not None:
+            return self._recorded_data.copy()
+        return None
 
     def _handle_head_pose(self, sample: zenoh.Sample) -> None:
         """Handle incoming head pose."""
@@ -174,7 +182,7 @@ class ZenohClient(AbstractClient):
             self._last_head_pose = np.array(pose.get("head_pose")).reshape(4, 4)
             self.head_pose_received.set()
 
-    def get_current_head_pose(self) -> np.ndarray:
+    def get_current_head_pose(self) -> npt.NDArray[np.float64]:
         """Get the current head pose."""
         assert self._last_head_pose is not None, "No head pose received yet."
         return self._last_head_pose.copy()
