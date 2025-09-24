@@ -119,34 +119,68 @@ def create_app(args: Args) -> FastAPI:
         name="dashboard",
     )
 
-    # Mount WASM files
-    wasm_dir = Path(__file__).parent / "wasm" / "dist"
-    if wasm_dir.exists():
+    # Mount WASM files - always use bin directory
+    wasm_bin_dir = Path(__file__).parent / "wasm" / "bin"
+    wasm_dist_dir = Path(__file__).parent / "wasm" / "dist"
+
+    if wasm_bin_dir.exists():
+        # Mount specific paths first (more specific paths must come before general ones)
+        if wasm_dist_dir.exists():
+            app.mount(
+                "/wasm/dist/examples",
+                StaticFiles(directory=str(wasm_dist_dir / "examples")),
+                name="wasm_examples",
+            )
+            app.mount(
+                "/wasm/dist/models",
+                StaticFiles(directory=str(wasm_dist_dir / "models")),
+                name="wasm_models",
+            )
+
+        # Mount general path last
         app.mount(
             "/wasm/dist",
-            StaticFiles(directory=str(wasm_dir)),
+            StaticFiles(directory=str(wasm_bin_dir)),
             name="wasm",
         )
 
-        # Add routes for the expected MuJoCo files that redirect to versioned files
+        # Add redirects for React app assets when accessed from iframe
         from fastapi.responses import RedirectResponse
 
-        @app.get("/wasm/dist/mujoco_wasm.js")
-        async def get_mujoco_wasm_js():
-            return RedirectResponse(url="/wasm/dist/assets/mujoco_wasm-DC5SLeI2.js")
-
-        @app.get("/wasm/dist/mujoco_wasm.wasm")
-        async def get_mujoco_wasm_wasm():
-            return RedirectResponse(url="/wasm/dist/assets/mujoco_wasm-BcVIF72Z.wasm")
-
-        # Add redirects for React app assets when accessed from iframe
         @app.get("/assets/{file_path}")
         async def get_asset_redirect(file_path: str):
-            return RedirectResponse(url=f"/wasm/dist/assets/{file_path}")
+            # Handle versioned files by mapping to generic names
+            if file_path.startswith("mujoco_wasm-") and file_path.endswith(".wasm"):
+                return RedirectResponse(url="/wasm/dist/assets/mujoco_wasm.wasm")
+            elif file_path.startswith("mujoco_wasm-") and file_path.endswith(".js"):
+                return RedirectResponse(url="/wasm/dist/assets/mujoco_wasm.js")
+            elif file_path.startswith("index-") and file_path.endswith(".js"):
+                return RedirectResponse(url="/wasm/dist/assets/index.js")
+            elif file_path.startswith("index-") and file_path.endswith(".css"):
+                return RedirectResponse(url="/wasm/dist/assets/index.css")
+            else:
+                return RedirectResponse(url=f"/wasm/dist/assets/{file_path}")
 
         @app.get("/vite.svg")
         async def get_vite_svg():
             return RedirectResponse(url="/wasm/dist/vite.svg")
+
+        # Also add direct redirects for the full paths
+        @app.get("/wasm/dist/assets/mujoco_wasm-{hash}.wasm")
+        async def get_versioned_mujoco_wasm(hash: str):
+            return RedirectResponse(url="/wasm/dist/assets/mujoco_wasm.wasm")
+
+        @app.get("/wasm/dist/assets/mujoco_wasm-{hash}.js")
+        async def get_versioned_mujoco_js(hash: str):
+            return RedirectResponse(url="/wasm/dist/assets/mujoco_wasm.js")
+
+        @app.get("/wasm/dist/assets/index-{hash}.js")
+        async def get_versioned_index_js(hash: str):
+            return RedirectResponse(url="/wasm/dist/assets/index.js")
+
+        @app.get("/wasm/dist/assets/index-{hash}.css")
+        async def get_versioned_index_css(hash: str):
+            return RedirectResponse(url="/wasm/dist/assets/index.css")
 
         # Add proper MIME types and COOP/COEP headers for WASM
         @app.middleware("http")
@@ -164,6 +198,10 @@ def create_app(args: Args) -> FastAPI:
             response.headers["Cross-Origin-Embedder-Policy"] = "require-corp"
 
             return response
+
+    else:
+        print(f"Warning: WASM bin directory not found at {wasm_bin_dir}")
+        print("Run the build script to generate the bin directory with generic asset names")
 
     return app
 
