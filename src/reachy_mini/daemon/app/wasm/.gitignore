@@ -22,6 +22,8 @@ fork/mujoco_web/pnpm-lock.yaml
 # WASM build artifacts
 *.wasm
 *.wasm.map
+# But keep WASM files in bin directory for production
+!bin/**/*.wasm
 
 # CMake build artifacts
 CMakeCache.txt
