@@ -65,7 +65,7 @@ class ReachyMini:
         self,
         localhost_only: bool = True,
         spawn_daemon: bool = False,
-        use_sim: bool = True,
+        use_sim: bool = False,
         timeout: float = 5.0,
         automatic_body_yaw: bool = False,
         log_level: str = "INFO",
