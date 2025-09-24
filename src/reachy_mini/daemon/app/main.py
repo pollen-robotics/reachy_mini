@@ -119,6 +119,52 @@ def create_app(args: Args) -> FastAPI:
         name="dashboard",
     )
 
+    # Mount WASM files
+    wasm_dir = Path(__file__).parent / "wasm" / "dist"
+    if wasm_dir.exists():
+        app.mount(
+            "/wasm/dist",
+            StaticFiles(directory=str(wasm_dir)),
+            name="wasm",
+        )
+
+        # Add routes for the expected MuJoCo files that redirect to versioned files
+        from fastapi.responses import RedirectResponse
+
+        @app.get("/wasm/dist/mujoco_wasm.js")
+        async def get_mujoco_wasm_js():
+            return RedirectResponse(url="/wasm/dist/assets/mujoco_wasm-DC5SLeI2.js")
+
+        @app.get("/wasm/dist/mujoco_wasm.wasm")
+        async def get_mujoco_wasm_wasm():
+            return RedirectResponse(url="/wasm/dist/assets/mujoco_wasm-BcVIF72Z.wasm")
+
+        # Add redirects for React app assets when accessed from iframe
+        @app.get("/assets/{file_path}")
+        async def get_asset_redirect(file_path: str):
+            return RedirectResponse(url=f"/wasm/dist/assets/{file_path}")
+
+        @app.get("/vite.svg")
+        async def get_vite_svg():
+            return RedirectResponse(url="/wasm/dist/vite.svg")
+
+        # Add proper MIME types and COOP/COEP headers for WASM
+        @app.middleware("http")
+        async def add_wasm_headers(request: Request, call_next):
+            response = await call_next(request)
+
+            # Add MIME types
+            if request.url.path.endswith('.wasm'):
+                response.headers["content-type"] = "application/wasm"
+            elif request.url.path.endswith('.js') and '/wasm/' in request.url.path:
+                response.headers["content-type"] = "text/javascript"
+
+            # Add Cross-Origin headers for WASM Web Workers
+            response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
+            response.headers["Cross-Origin-Embedder-Policy"] = "require-corp"
+
+            return response
+
     return app
 
 
