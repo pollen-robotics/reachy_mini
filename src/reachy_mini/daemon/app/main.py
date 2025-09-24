@@ -22,7 +22,7 @@ from fastapi.templating import Jinja2Templates
 
 from reachy_mini.apps.manager import AppManager
 from reachy_mini.daemon.app.routers import apps, daemon, kinematics, motors, move, state
-from reachy_mini.daemon.daemon import Daemon
+from reachy_mini.daemon.daemon import Daemon, DaemonState
 
 DASHBOARD_PAGES = Path(__file__).parent / "dashboard"
 TEMPLATES_DIR = Path(__file__).parent / "templates"
@@ -76,9 +76,13 @@ def create_app(args: Args) -> FastAPI:
             )
         yield
         await app.state.app_manager.close()
-        await app.state.daemon.stop(
-            goto_sleep_on_stop=args.goto_sleep_on_stop,
-        )
+        if app.state.daemon.status().state in (
+            DaemonState.RUNNING,
+            DaemonState.ERROR,
+        ):
+            await app.state.daemon.stop(
+                goto_sleep_on_stop=args.goto_sleep_on_stop,
+            )
 
     app = FastAPI(
         lifespan=lifespan,
@@ -127,7 +131,12 @@ def run_app(args: Args):
     logging.basicConfig(level=logging.INFO)
 
     app = create_app(args)
-    uvicorn.run(app, host=args.fastapi_host, port=args.fastapi_port)
+    uvicorn.run(
+        app,
+        host=args.fastapi_host,
+        port=args.fastapi_port,
+        timeout_graceful_shutdown=0,
+    )
 
 
 def main():

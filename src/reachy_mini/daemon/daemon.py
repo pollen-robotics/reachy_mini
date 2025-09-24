@@ -5,13 +5,15 @@ It includes methods to start, stop, and restart the daemon, as well as to check 
 It also provides a command-line interface for easy interaction.
 """
 
+import asyncio
 import logging
-from dataclasses import dataclass
+import uuid
 from enum import Enum
 from threading import Thread
-from typing import Optional
+from typing import Awaitable, Callable, Optional
 
 import serial.tools.list_ports
+from pydantic import BaseModel
 
 from reachy_mini.daemon.backend.abstract import MotorControlMode
 
@@ -33,12 +35,8 @@ class Daemon:
         self.logger.setLevel(self.log_level)
 
         self.backend = None
-        self._status = DaemonStatus(
-            state=DaemonState.NOT_INITIALIZED,
-            simulation_enabled=None,
-            backend_status=None,
-            error=None,
-        )
+        self._status_handlers: dict[str, Callable[[DaemonStatus], Awaitable[None]]] = {}
+        asyncio.run(self._set_status(DaemonState.NOT_INITIALIZED))
 
     async def start(
         self,
@@ -67,11 +65,14 @@ class Daemon:
             DaemonState: The current state of the daemon after attempting to start it.
 
         """
+        if self._status.state == DaemonState.STARTING:
+            raise RuntimeError("Daemon is already starting.")
         if self._status.state == DaemonState.RUNNING:
-            self.logger.warning("Daemon is already running.")
-            return self._status.state
-
-        self._status.simulation_enabled = sim
+            raise RuntimeError("Daemon is already running.")
+        if self._status.state == DaemonState.STOPPING:
+            raise RuntimeError("Daemon is stopping. Please wait.")
+        if self._status.state == DaemonState.ERROR:
+            self.logger.warning("Daemon is in error state. Attempting to restart...")
 
         self._start_params = {
             "sim": sim,
@@ -82,7 +83,7 @@ class Daemon:
         }
 
         self.logger.info("Starting Reachy Mini daemon...")
-        self._status.state = DaemonState.STARTING
+        await self._set_status(DaemonState.STARTING)
 
         try:
             self.backend = self._setup_backend(
@@ -94,8 +95,7 @@ class Daemon:
                 headless=headless,
             )
         except Exception as e:
-            self._status.state = DaemonState.ERROR
-            self._status.error = str(e)
+            await self._set_status(DaemonState.ERROR, str(e))
             raise e
 
         self.server = Server(self.backend, localhost_only=localhost_only)
@@ -110,8 +110,7 @@ class Daemon:
                 self.backend.wrapped_run()
             except Exception as e:
                 self.logger.error(f"Backend encountered an error: {e}")
-                self._status.state = DaemonState.ERROR
-                self._status.error = str(e)
+                asyncio.run(self._set_status(DaemonState.ERROR, str(e)))
                 self.server.stop()
                 self.backend = None
 
@@ -122,8 +121,7 @@ class Daemon:
             self.logger.error(
                 "Backend is not ready after 2 seconds. Some error occurred."
             )
-            self._status.state = DaemonState.ERROR
-            self._status.error = self.backend.error
+            await self._set_status(DaemonState.ERROR, self.backend.error)
             return self._status.state
 
         if wake_up_on_start:
@@ -133,16 +131,15 @@ class Daemon:
                 await self.backend.wake_up()
             except Exception as e:
                 self.logger.error(f"Error while waking up Reachy Mini: {e}")
-                self._status.state = DaemonState.ERROR
-                self._status.error = str(e)
+                await self._set_status(DaemonState.ERROR, str(e))
                 return self._status.state
             except KeyboardInterrupt:
                 self.logger.warning("Wake up interrupted by user.")
-                self._status.state = DaemonState.STOPPING
+                await self._set_status(DaemonState.STOPPING)
                 return self._status.state
 
         self.logger.info("Daemon started successfully.")
-        self._status.state = DaemonState.RUNNING
+        await self._set_status(DaemonState.RUNNING)
         return self._status.state
 
     async def stop(self, goto_sleep_on_stop: bool = True) -> "DaemonState":
@@ -155,9 +152,16 @@ class Daemon:
             DaemonState: The current state of the daemon after attempting to stop it.
 
         """
+        if self._status.state == DaemonState.NOT_INITIALIZED:
+            raise RuntimeError("Daemon is not initialized.")
+        if self._status.state == DaemonState.STARTING:
+            raise RuntimeError("Daemon is starting. Please wait.")
+        if self._status.state == DaemonState.STOPPING:
+            raise RuntimeError("Daemon is already stopping. Please wait.")
         if self._status.state == DaemonState.STOPPED:
-            self.logger.warning("Daemon is already stopped.")
-            return self._status.state
+            raise RuntimeError("Daemon is already stopped.")
+        if self._status.state == DaemonState.ERROR:
+            self.logger.warning("Daemon is in error state. Attempting to stop...")
 
         assert self.backend is not None, (
             "Backend should be initialized before stopping."
@@ -168,12 +172,12 @@ class Daemon:
                 goto_sleep_on_stop = False
 
             self.logger.info("Stopping Reachy Mini daemon...")
-            self._status.state = DaemonState.STOPPING
+            await self._set_status(DaemonState.STOPPING)
             self.backend.is_shutting_down = True
             self.server.stop()
 
             if not hasattr(self, "backend"):
-                self._status.state = DaemonState.STOPPED
+                await self._set_status(DaemonState.STOPPED)
                 return self._status.state
 
             if goto_sleep_on_stop:
@@ -184,34 +188,34 @@ class Daemon:
                     self.backend.set_motor_control_mode(MotorControlMode.Disabled)
                 except Exception as e:
                     self.logger.error(f"Error while putting Reachy Mini to sleep: {e}")
-                    self._status.state = DaemonState.ERROR
-                    self._status.error = str(e)
+                    await self._set_status(DaemonState.ERROR, str(e))
                 except KeyboardInterrupt:
                     self.logger.warning("Sleep interrupted by user.")
-                    self._status.state = DaemonState.STOPPING
+                    await self._set_status(DaemonState.STOPPING)
 
             self.backend.should_stop.set()
             self.backend_run_thread.join(timeout=5.0)
             if self.backend_run_thread.is_alive():
                 self.logger.warning("Backend did not stop in time, forcing shutdown.")
-                self._status.state = DaemonState.ERROR
+                await self._set_status(
+                    DaemonState.ERROR, "Backend did not stop in time"
+                )
 
             self.backend.close()
             self.backend.ready.clear()
 
             if self._status.state != DaemonState.ERROR:
                 self.logger.info("Daemon stopped successfully.")
-                self._status.state = DaemonState.STOPPED
+                await self._set_status(DaemonState.STOPPED)
         except Exception as e:
             self.logger.error(f"Error while stopping the daemon: {e}")
-            self._status.state = DaemonState.ERROR
-            self._status.error = str(e)
+            await self._set_status(DaemonState.ERROR, str(e))
         except KeyboardInterrupt:
             self.logger.warning("Daemon already stopping...")
 
         backend_status = self.backend.get_status()
         if backend_status.error:
-            self._status.state = DaemonState.ERROR
+            await self._set_status(DaemonState.ERROR, backend_status.error)
 
         self.backend = None
 
@@ -342,15 +346,42 @@ class Daemon:
                         self.backend_run_thread.join(timeout=1.0)
                 else:
                     self.logger.error("Backend thread has stopped unexpectedly.")
-                    self._status.state = DaemonState.ERROR
+                    await self._set_status(
+                        DaemonState.ERROR, "Backend thread has stopped unexpectedly."
+                    )
             except KeyboardInterrupt:
                 self.logger.warning("Daemon interrupted by user.")
             except Exception as e:
                 self.logger.error(f"An error occurred: {e}")
-                self._status.state = DaemonState.ERROR
-                self._status.error = str(e)
+                await self._set_status(DaemonState.ERROR, str(e))
 
         await self.stop(goto_sleep_on_stop)
+
+    async def wait_for_stop(self):
+        """Wait until the daemon is stopped."""
+        pass
+
+    async def _set_status(self, state: "DaemonState", error: str | None = None):
+        self._status = DaemonStatus(
+            state=state,
+            error=error,
+        )
+
+        for handler in self._status_handlers.values():
+            asyncio.create_task(handler(self.status()))
+
+    def register_status_notification(
+        self, handler: Callable[["DaemonStatus"], Awaitable[None]]
+    ) -> str:
+        """Register a handler to be called on status changes."""
+        handler_id = str(uuid.uuid4())
+        self._status_handlers[handler_id] = handler
+        return handler_id
+
+    def unregister_status_notification(self, handler_id: str):
+        """Unregister a previously registered status handler."""
+        if handler_id in self._status_handlers:
+            del self._status_handlers[handler_id]
 
     def _setup_backend(
         self, sim, serialport, scene, check_collision, kinematics_engine, headless
@@ -400,14 +431,12 @@ class DaemonState(Enum):
     ERROR = "error"
 
 
-@dataclass
-class DaemonStatus:
+class DaemonStatus(BaseModel):
     """Dataclass representing the status of the Reachy Mini daemon."""
 
     state: DaemonState
-    simulation_enabled: Optional[bool]
-    backend_status: Optional[RobotBackendStatus | MujocoBackendStatus]
-    error: Optional[str] = None
+    error: str | None = None
+    backend_status: "RobotBackendStatus | MujocoBackendStatus | None" = None
 
 
 def find_serial_port(vid: str = "1a86", pid: str = "55d3") -> list[str]:

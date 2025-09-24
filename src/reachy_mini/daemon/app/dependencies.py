@@ -30,3 +30,8 @@ def get_app_manager(request: Request) -> "AppManager":
 def ws_get_backend(websocket: WebSocket) -> Backend:
     """Get the backend as websocket dependency."""
     return websocket.app.state.daemon.backend
+
+
+def ws_get_daemon(websocket: WebSocket) -> Daemon:
+    """Get the daemon as websocket dependency."""
+    return websocket.app.state.daemon

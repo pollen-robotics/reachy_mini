@@ -1,6 +1,5 @@
 
 window.onload = () => {
-    // Collapse/expand logic
     const collapseToggle = document.getElementById('collapse-toggle');
     const collapseContent = document.getElementById('collapse-content');
     const plugRow = collapseToggle && collapseToggle.parentElement;
@@ -18,14 +17,14 @@ window.onload = () => {
     document.getElementById('daemon-toggle').onchange = onDaemonToggleSwitch;
 
     checkDaemonStatus();
-    setInterval(checkDaemonStatus, 1000);
 }
 
 const getDaemonStatus = async () => {
     return await fetch('/api/daemon/status')
         .then(response => response.json())
-        .then(data => {
-            return data;
+        .then(status => {
+            applyDaemonStatus(status);
+            return status;
         })
         .catch(error => {
             console.error('Error fetching daemon status:', error);
@@ -34,7 +33,22 @@ const getDaemonStatus = async () => {
 
 const checkDaemonStatus = async () => {
     const status = await getDaemonStatus();
-    applyDaemonStatus(status);
+    if (!status) {
+        setTimeout(checkDaemonStatus, 1000); // Retry after 1 second if failed
+        return;
+    }
+
+    let ws = new WebSocket(`ws://${window.location.host}/api/daemon/status/ws/notifications`);
+
+    ws.onmessage = (event) => {
+        const status = JSON.parse(event.data);
+        applyDaemonStatus(status);
+    };
+
+    ws.onclose = (event) => {
+        applyDaemonStatus({ state: 'lost-connection', error: 'Connection to daemon lost' });
+        setTimeout(checkDaemonStatus, 1000); // Retry connection after 1 second
+    }
 };
 
 const onDaemonToggleSwitch = () => {
@@ -62,8 +76,6 @@ const onDaemonToggleSwitch = () => {
     overlay.classList.add('active');
 
     if (isOn) {
-        applyDaemonStatus({ state: 'starting' });
-
         fetch(`/api/daemon/start?wake_up=${wakeUpOnStart}`, { method: 'POST' })
             .then(response => {
                 if (!response.ok) {
@@ -71,21 +83,14 @@ const onDaemonToggleSwitch = () => {
                 }
                 return response.json();
             })
-            .then(data => {
-                checkDaemonStatus();
-            })
             .catch(error => {
-                toggle.checked = false; // Revert toggle on error
-                checkDaemonStatus();
+                toggle.checked = false;
             })
             .finally(() => {
                 toggle.disabled = false;
                 dashboard.classList.remove('daemon-dashboard-loading');
-                overlay.classList.remove('active');
             });
     } else {
-        applyDaemonStatus({ state: 'stopping' });
-
         fetch(`/api/daemon/stop?goto_sleep=${gotoSleepOnStop}`, { method: 'POST' })
             .then(response => {
                 if (!response.ok) {
@@ -93,26 +98,19 @@ const onDaemonToggleSwitch = () => {
                 }
                 return response.json();
             })
-            .then(data => {
-                checkDaemonStatus();
-            })
             .catch(error => {
                 toggle.checked = true; // Revert toggle on error
-                checkDaemonStatus();
             })
             .finally(() => {
                 toggle.disabled = false;
                 dashboard.classList.remove('daemon-dashboard-loading');
-                overlay.classList.remove('active');
             });
     }
 };
 
-
-
 let currentDaemonState;
 const applyDaemonStatus = (status) => {
-    console.log('Daemon status:', status);
+    console.log('Applying daemon status:', status);
 
     // State update
     if (status.state === currentDaemonState) return;
@@ -152,6 +150,8 @@ const applyDaemonStatus = (status) => {
         backendStatusIcon.classList.add('bg-yellow-500');
         backendStatusText.textContent = 'Waking up...';
         collapseToggle.classList.add('hidden');
+
+        // TODO: add message on overlay
     }
     else if (currentDaemonState === 'running') {
         toggle.checked = true;
@@ -169,6 +169,8 @@ const applyDaemonStatus = (status) => {
         backendStatusIcon.classList.add('bg-yellow-500');
         backendStatusText.textContent = 'Going to sleep...';
         collapseToggle.classList.add('hidden');
+
+        // TODO: add message on overlay
     }
     else if (currentDaemonState === 'stopped' || currentDaemonState === 'not_initialized') {
         toggle.checked = false;
@@ -180,11 +182,18 @@ const applyDaemonStatus = (status) => {
         thumb.classList.add('error');
         thumbImgObj.data = '/dashboard/assets/reachy-mini-ko-animation.svg';
         backendStatusIcon.classList.add('bg-red-500');
-        backendStatusText.textContent = 'Error';
+        backendStatusText.textContent = 'Something bad happened';
         collapseToggle.textContent = '>'; // Reset to default
         collapseContent.innerHTML = status.error;
         collapseContent.classList.remove('hidden');
-    } else {
+    }
+    else if (currentDaemonState === 'lost-connection') {
+        toggleSlider.classList.add('hidden');
+        overlay.classList.add('active');
+
+        // TODO: add message on overlay
+    }
+    else {
         console.error('Unknown daemon state:', currentDaemonState);
         return;
     }

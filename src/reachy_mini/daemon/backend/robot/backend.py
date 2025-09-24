@@ -8,11 +8,11 @@ It uses the `ReachyMiniMotorController` to communicate with the robot's motors.
 import json
 import logging
 import time
-from dataclasses import dataclass
 from datetime import timedelta
 from multiprocessing import Event  # It seems to be more accurate than threading.Event
 
 import numpy as np
+from pydantic import BaseModel
 from reachy_mini_motor_controller import ReachyMiniPyControlLoop
 
 from ..abstract import Backend, MotorControlMode
@@ -458,8 +458,7 @@ class RobotBackend(Backend):
             raise ValueError(f"Unknown motor control mode: {mode}")
 
 
-@dataclass
-class RobotBackendStatus:
+class RobotBackendStatus(BaseModel):
     """Status of the Robot Backend."""
 
     ready: bool
