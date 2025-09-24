@@ -17,11 +17,10 @@
 
             <label class="inline-flex items-center cursor-pointer">
                 <input id="daemon-toggle" type="checkbox" value="" class="sr-only peer">
-
-                <div
-                    class="relative w-20 h-8 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-gray-100 dark:peer-focus:ring-gray-100 rounded-full peer dark:bg-red-400 peer-checked:after:translate-x-[46px] rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-7 after:w-7 after:transition-all dark:border-gray-600 peer-checked:bg-green-400 dark:peer-checked:bg-green-400">
+                <div id="daemon-toggle-slider"
+                    class="relative w-20 h-8 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-gray-100 dark:peer-focus:ring-gray-100 rounded-full peer dark:bg-red-400 peer-checked:after:translate-x-[46px] rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-7 after:w-7 after:transition-all dark:border-gray-600 peer-checked:bg-green-400 dark:peer-checked:bg-green-400 hidden">
                     <span id="daemon-toggle-on"
-                        class="absolute top-1/2 start-1.5 -translate-y-1/2 flex justify-center items-center size-7 text-white peer-checked:text-white transition-colors duration-200">ON</span>
+                        class="absolute top-1/2 start-1.5 -translate-y-1/2 flex justify-center items-center size-7 text-white peer-checked:text-white transition-colors duration-200 hidden">ON</span>
                     <span id="daemon-toggle-off"
                         class="absolute top-1/2 end-2.5 -translate-y-1/2 flex justify-center items-center size-7 text-white">
                         OFF
@@ -32,23 +31,17 @@
 
         <div id="backend-status" class="">
             <div class="flex items-center pt-1 w-full">
-                <span id="backend-status-icon"
-                    class="inline-block  w-4 h-4 rounded-full align-middle mr-2 bg-red-500"></span>
+                <span id="backend-status-icon" class=""></span>
                 <span id="backend-status-text" class="daemon-status-collapse"></span>
-                <span id="collapse-toggle" class="ml-2 cursor-pointer select-none daemon-status-collapse">&lt;</span>
+                <span id="collapse-toggle" class="ml-2 cursor-pointer select-none daemon-status-collapse"></span>
             </div>
             <div id="collapse-content"
                 class="daemon-status-collapse-content w-full block break-words whitespace-pre-wrap overflow-x-auto max-w-full hidden">
             </div>
         </div>
 
-
-
         <div class="pt-6">
-            <div id="daemon-mini-thumb" class="rounded-sm">
-                <object id="daemon-thumb-img" type="image/svg+xml" data="/dashboard/assets/reachy-mini-sleeping.svg"
-                    class="w-full"></object>
-            </div>
+            <div id="daemon-mini-thumb" class="rounded-sm"></div>
         </div>
 
         <div id="daemon-loading-overlay"

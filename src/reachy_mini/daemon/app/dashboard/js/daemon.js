@@ -5,9 +5,9 @@ window.onload = () => {
     const collapseContent = document.getElementById('collapse-content');
     const plugRow = collapseToggle && collapseToggle.parentElement;
 
-    let expanded = false;
     if (collapseToggle && plugRow) {
         collapseToggle.onclick = () => {
+            let expanded = !collapseContent.classList.contains('hidden');
             expanded = !expanded;
             collapseToggle.textContent = expanded ? '>' : '<';
             if (collapseContent) {
@@ -17,8 +17,8 @@ window.onload = () => {
     }
     document.getElementById('daemon-toggle').onchange = onDaemonToggleSwitch;
 
-    // checkDaemonStatus();
-    setInterval(checkDaemonStatus, 2000);
+    checkDaemonStatus();
+    setInterval(checkDaemonStatus, 1000);
 }
 
 const getDaemonStatus = async () => {
@@ -112,25 +112,29 @@ const onDaemonToggleSwitch = () => {
 
 let currentDaemonState;
 const applyDaemonStatus = (status) => {
+    console.log('Daemon status:', status);
+
     // State update
     if (status.state === currentDaemonState) return;
     currentDaemonState = status.state;
 
     const overlay = document.getElementById('daemon-loading-overlay');
     const toggle = document.getElementById('daemon-toggle');
+    const toggleSlider = document.getElementById('daemon-toggle-slider');
     const toggleOnLabel = document.getElementById('daemon-toggle-on');
     const toggleOffLabel = document.getElementById('daemon-toggle-off');
     const thumb = document.getElementById('daemon-mini-thumb')
-    const thumbImgObj = document.createElement('object');
     const backendStatus = document.getElementById('backend-status');
     const backendStatusIcon = document.getElementById('backend-status-icon');
     const backendStatusText = document.getElementById('backend-status-text');
     const collapseToggle = document.getElementById('collapse-toggle');
     const collapseContent = document.getElementById('collapse-content');
 
+    toggleSlider.classList.remove('hidden');
     overlay.classList.remove('active');
     thumb.classList = 'rounded-sm'; // Reset classes
     thumb.innerHTML = ''; // Clear previous content
+    const thumbImgObj = document.createElement('object');
     thumbImgObj.type = 'image/svg+xml';
     thumbImgObj.classList = 'w-full';
     thumb.appendChild(thumbImgObj);
@@ -176,10 +180,10 @@ const applyDaemonStatus = (status) => {
         thumb.classList.add('error');
         thumbImgObj.data = '/dashboard/assets/reachy-mini-ko-animation.svg';
         backendStatusIcon.classList.add('bg-red-500');
-        backendStatusText.textContent = 'ERROR';
+        backendStatusText.textContent = 'Error';
+        collapseToggle.textContent = '>'; // Reset to default
         collapseContent.innerHTML = status.error;
-
-
+        collapseContent.classList.remove('hidden');
     } else {
         console.error('Unknown daemon state:', currentDaemonState);
         return;
