@@ -112,7 +112,6 @@ class Daemon:
                 self.logger.error(f"Backend encountered an error: {e}")
                 asyncio.run(self._set_status(DaemonState.ERROR, str(e)))
                 self.server.stop()
-                self.backend = None
 
         self.backend_run_thread = Thread(target=backend_wrapped_run)
         self.backend_run_thread.start()
@@ -176,18 +175,17 @@ class Daemon:
             self.backend.is_shutting_down = True
             self.server.stop()
 
-            if not hasattr(self, "backend"):
-                await self._set_status(DaemonState.STOPPED)
+            if self.backend is None:
                 return self._status.state
 
             if goto_sleep_on_stop:
                 try:
-                    self.logger.info("Putting Reachy Mini to sleep...")
+                    self.logger.info("Putting Reachy Mini to bed...")
                     self.backend.set_motor_control_mode(MotorControlMode.Enabled)
                     await self.backend.goto_sleep()
                     self.backend.set_motor_control_mode(MotorControlMode.Disabled)
                 except Exception as e:
-                    self.logger.error(f"Error while putting Reachy Mini to sleep: {e}")
+                    self.logger.error(f"Error while putting Reachy Mini to bed: {e}")
                     await self._set_status(DaemonState.ERROR, str(e))
                 except KeyboardInterrupt:
                     self.logger.warning("Sleep interrupted by user.")
@@ -204,7 +202,9 @@ class Daemon:
             self.backend.close()
             self.backend.ready.clear()
 
-            if self._status.state != DaemonState.ERROR:
+            if self._status.state == DaemonState.ERROR:
+                await self._set_status(DaemonState.ERROR, self.backend.error)
+            else:
                 self.logger.info("Daemon stopped successfully.")
                 await self._set_status(DaemonState.STOPPED)
         except Exception as e:
