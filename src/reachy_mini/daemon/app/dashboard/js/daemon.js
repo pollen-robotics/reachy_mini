@@ -1,5 +1,7 @@
 
-window.onload = () => {
+let lost_svg = null;
+
+window.onload = async () => {
     const collapseToggle = document.getElementById('collapse-toggle');
     const collapseContent = document.getElementById('collapse-content');
     const plugRow = collapseToggle && collapseToggle.parentElement;
@@ -15,6 +17,12 @@ window.onload = () => {
         };
     }
     document.getElementById('daemon-toggle').onchange = onDaemonToggleSwitch;
+
+    await fetch('/dashboard/assets/reachy-mini-connection-lost-animation.svg')
+        .then(response => response.text())
+        .then(svg => {
+            lost_svg = svg;
+        });
 
     checkDaemonStatus();
 }
@@ -121,7 +129,7 @@ const applyDaemonStatus = (status) => {
     const toggleSlider = document.getElementById('daemon-toggle-slider');
     const toggleOnLabel = document.getElementById('daemon-toggle-on');
     const toggleOffLabel = document.getElementById('daemon-toggle-off');
-    const thumb = document.getElementById('daemon-mini-thumb')
+    const thumb = document.getElementById('daemon-mini-thumb');
     const backendStatus = document.getElementById('backend-status');
     const backendStatusIcon = document.getElementById('backend-status-icon');
     const backendStatusText = document.getElementById('backend-status-text');
@@ -130,7 +138,6 @@ const applyDaemonStatus = (status) => {
 
     toggleSlider.classList.remove('hidden');
     overlay.classList.remove('active');
-    thumb.classList = 'rounded-sm'; // Reset classes
     thumb.innerHTML = ''; // Clear previous content
     const thumbImgObj = document.createElement('object');
     thumbImgObj.type = 'image/svg+xml';
@@ -144,18 +151,14 @@ const applyDaemonStatus = (status) => {
 
     if (currentDaemonState === 'starting') {
         toggle.checked = true;
-        thumb.classList.add('starting');
         overlay.classList.add('active');
         thumbImgObj.data = '/dashboard/assets/reachy-mini-wake-up-animation.svg';
         backendStatusIcon.classList.add('bg-yellow-500');
         backendStatusText.textContent = 'Waking up...';
         collapseToggle.classList.add('hidden');
-
-        // TODO: add message on overlay
     }
     else if (currentDaemonState === 'running') {
         toggle.checked = true;
-        thumb.classList.add('running');
         thumbImgObj.data = '/dashboard/assets/reachy-mini-awake.svg';
         backendStatusIcon.classList.add('bg-green-500');
         backendStatusText.textContent = 'Up and ready';
@@ -163,23 +166,18 @@ const applyDaemonStatus = (status) => {
     }
     else if (currentDaemonState === 'stopping') {
         toggle.checked = false;
-        thumb.classList.add('stopping');
         overlay.classList.add('active');
         thumbImgObj.data = '/dashboard/assets/reachy-mini-go-to-sleep-animation.svg';
         backendStatusIcon.classList.add('bg-yellow-500');
         backendStatusText.textContent = 'Going to sleep...';
         collapseToggle.classList.add('hidden');
-
-        // TODO: add message on overlay
     }
     else if (currentDaemonState === 'stopped' || currentDaemonState === 'not_initialized') {
         toggle.checked = false;
-        thumb.classList.add('stopped');
         thumbImgObj.data = '/dashboard/assets/reachy-mini-sleeping.svg';
         backendStatus.classList.add('hidden');
     } else if (currentDaemonState === 'error') {
         toggle.checked = false;
-        thumb.classList.add('error');
         thumbImgObj.data = '/dashboard/assets/reachy-mini-ko-animation.svg';
         backendStatusIcon.classList.add('bg-red-500');
         backendStatusText.textContent = 'Something bad happened';
@@ -190,8 +188,12 @@ const applyDaemonStatus = (status) => {
     else if (currentDaemonState === 'lost-connection') {
         toggleSlider.classList.add('hidden');
         overlay.classList.add('active');
-
-        // TODO: add message on overlay
+        backendStatusIcon.classList.add('bg-red-500');
+        backendStatusText.textContent = 'Connection lost';
+        collapseToggle.textContent = '>'; // Reset to default
+        collapseContent.innerHTML = 'Will try to reconnect automatically...';
+        collapseContent.classList.remove('hidden');
+        thumb.innerHTML = lost_svg;
     }
     else {
         console.error('Unknown daemon state:', currentDaemonState);
@@ -206,3 +208,12 @@ const applyDaemonStatus = (status) => {
         toggleOffLabel.classList.remove('hidden');
     }
 };
+
+
+const preload_svg_lost_connection = () => {
+    fetch('/dashboard/assets/reachy-mini-connection-lost-animation.svg')
+        .then(response => response.text())
+        .then(svg => {
+            lost_svg = svg;
+        });
+}
