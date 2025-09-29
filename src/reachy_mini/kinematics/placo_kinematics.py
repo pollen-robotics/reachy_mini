@@ -4,7 +4,7 @@ This module provides the PlacoKinematics class for performing inverse and forwar
 """
 
 import logging
-from typing import List, Optional
+from typing import Annotated, List, Optional
 
 import numpy as np
 import numpy.typing as npt
@@ -316,7 +316,7 @@ class PlacoKinematics:
         pose: npt.NDArray[np.float64],
         body_yaw: float = 0.0,
         no_iterations: int = 2,
-    ) -> Optional[List[float]]:
+    ) -> Annotated[npt.NDArray[np.float64], (7,)] | None:
         """Compute the inverse kinematics for the head for a given pose.
 
         Args:
@@ -350,7 +350,9 @@ class PlacoKinematics:
             and np.linalg.norm(self.robot_ik.state.qd) < 1e-4
         ):
             # no need to recalculate - return the current joint values
-            return self._get_joint_values(self.robot_ik)  # no need to solve IK
+            return np.array(
+                self._get_joint_values(self.robot_ik)
+            )  # no need to solve IK
         if _dist_o >= np.pi:
             # distance too big between the current and the target pose
             # start the optim from zero position
@@ -405,11 +407,11 @@ class PlacoKinematics:
             return None
 
         # Get the joint angles
-        return self._get_joint_values(self.robot_ik)
+        return np.array(self._get_joint_values(self.robot_ik))
 
     def fk(
         self,
-        joints_angles: List[float],
+        joints_angles: Annotated[npt.NDArray[np.float64], (7,)],
         no_iterations: int = 2,
     ) -> Optional[npt.NDArray[np.float64]]:
         """Compute the forward kinematics for the head given joint angles.

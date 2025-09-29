@@ -23,7 +23,7 @@ def get_data() -> Dict[str, Any]:
     placo_kinematics = PlacoKinematics(urdf_root_path, 0.02)
     robot = placo_kinematics.robot
 
-    placo_kinematics.fk([0.0] * 7, no_iterations=20)
+    placo_kinematics.fk(np.array([0.0] * 7), no_iterations=20)
     robot.update_kinematics()
 
     # Measuring lengths for the arm and branch (constants could be used)

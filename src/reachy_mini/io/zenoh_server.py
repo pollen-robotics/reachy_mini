@@ -104,7 +104,7 @@ class ZenohServer(AbstractServer):
                     self.backend.set_motor_control_mode(MotorControlMode.Disabled)
             if "head_joint_positions" in command:
                 self.backend.set_target_head_joint_positions(
-                    command["head_joint_positions"]
+                    np.array(command["head_joint_positions"])
                 )
             if "head_pose" in command:
                 self.backend.set_target_head_pose(
@@ -113,7 +113,7 @@ class ZenohServer(AbstractServer):
                 )
             if "antennas_joint_positions" in command:
                 self.backend.set_target_antenna_joint_positions(
-                    command["antennas_joint_positions"],
+                    np.array(command["antennas_joint_positions"]),
                 )
             if "gravity_compensation" in command:
                 try:
@@ -148,7 +148,7 @@ class ZenohServer(AbstractServer):
                 asyncio.run(
                     self.backend.goto_target(
                         head=np.array(req.head).reshape(4, 4) if req.head else None,
-                        antennas=req.antennas,
+                        antennas=np.array(req.antennas) if req.antennas else None,
                         duration=req.duration,
                         method=req.method,
                         body_yaw=req.body_yaw,
