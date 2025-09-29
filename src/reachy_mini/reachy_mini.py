@@ -14,6 +14,7 @@ from typing import Dict, List, Optional, Union
 
 import cv2
 import numpy as np
+import numpy.typing as npt
 from asgiref.sync import async_to_sync
 from scipy.spatial.transform import Rotation as R
 
@@ -127,7 +128,7 @@ class ReachyMini:
             use_sim=use_sim, backend=mbackend, log_level=log_level
         )
 
-    def __del__(self):
+    def __del__(self) -> None:
         """Destroy the Reachy Mini instance.
 
         The client is disconnected explicitly to avoid a thread pending issue.
@@ -139,7 +140,7 @@ class ReachyMini:
         """Context manager entry point for Reachy Mini."""
         return self
 
-    def __exit__(self, exc_type, exc_value, traceback) -> None:
+    def __exit__(self, exc_type, exc_value, traceback) -> None:  # type: ignore [no-untyped-def]
         """Context manager exit point for Reachy Mini."""
         self.client.disconnect()
 
@@ -290,7 +291,7 @@ class ReachyMini:
 
     def look_at_image(
         self, u: int, v: int, duration: float = 1.0, perform_movement: bool = True
-    ) -> np.ndarray:
+    ) -> npt.NDArray[np.float64]:
         """Make the robot head look at a point defined by a pixel position (u,v).
 
         # TODO image of reachy mini coordinate system
@@ -340,7 +341,7 @@ class ReachyMini:
         z: float,
         duration: float = 1.0,
         perform_movement: bool = True,
-    ) -> np.ndarray:
+    ) -> npt.NDArray[np.float64]:
         """Look at a specific point in 3D space in Reachy Mini's reference frame.
 
         TODO include image of reachy mini coordinate system
@@ -502,7 +503,7 @@ class ReachyMini:
         self,
         head_joint_positions: list[float] | None = None,
         antennas_joint_positions: list[float] | None = None,
-    ):
+    ) -> None:
         """Set the joint positions of the head and/or antennas.
 
         [Internal] Set the joint positions of the head and/or antennas.
@@ -602,7 +603,7 @@ class ReachyMini:
         """Disable the motors."""
         self._set_torque(False)
 
-    def _set_torque(self, on: bool):
+    def _set_torque(self, on: bool) -> None:
         self.client.send_command(json.dumps({"torque": on}))
 
     def enable_gravity_compensation(self) -> None:
