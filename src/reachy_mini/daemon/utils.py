@@ -7,10 +7,12 @@ import time
 import psutil
 
 
-def daemon_check(spawn_daemon, use_sim):
+def daemon_check(spawn_daemon: bool, use_sim: bool) -> None:
     """Check if the Reachy Mini daemon is running and spawn it if necessary."""
 
-    def is_python_script_running(script_name):
+    def is_python_script_running(
+        script_name: str,
+    ) -> tuple[bool, int | None, bool | None]:
         """Check if a specific Python script is running."""
         found_script = False
         simluation_enabled = False
