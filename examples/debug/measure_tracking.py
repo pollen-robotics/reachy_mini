@@ -27,11 +27,10 @@ from typing import Dict, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
+from reachy_mini_dances_library.collection.dance import AVAILABLE_MOVES
 from scipy.spatial.transform import Rotation as R
 
 from reachy_mini import ReachyMini, utils
-from reachy_mini_dances_library.collection.dance import AVAILABLE_MOVES
-
 from reachy_mini.utils.interpolation import distance_between_poses
 
 # ---------------- Configuration (tweak as needed) ----------------
