@@ -7,6 +7,7 @@ import logging
 from typing import List, Optional
 
 import numpy as np
+import numpy.typing as npt
 import pinocchio as pin
 import placo
 
@@ -256,7 +257,7 @@ class PlacoKinematics:
         robot.state.qdd = self._inital_qdd
 
     def _pose_distance(
-        self, pose1: np.ndarray, pose2: np.ndarray
+        self, pose1: npt.NDArray[np.float64], pose2: npt.NDArray[np.float64]
     ) -> tuple[float, float]:
         """Compute the orientation distance between two poses.
 
@@ -272,7 +273,7 @@ class PlacoKinematics:
         euler2 = pin.rpy.matrixToRpy(pose2[:3, :3])
         p1 = pose1[:3, 3]
         p2 = pose2[:3, 3]
-        return np.linalg.norm(euler1 - euler2), np.linalg.norm(p1 - p2)
+        return float(np.linalg.norm(euler1 - euler2)), float(np.linalg.norm(p1 - p2))
 
     def _closed_loop_constraints_valid(
         self, robot: placo.RobotWrapper, tol: float = 1e-2
@@ -312,7 +313,7 @@ class PlacoKinematics:
 
     def ik(
         self,
-        pose: np.ndarray,
+        pose: npt.NDArray[np.float64],
         body_yaw: float = 0.0,
         no_iterations: int = 2,
     ) -> Optional[List[float]]:
@@ -410,7 +411,7 @@ class PlacoKinematics:
         self,
         joints_angles: List[float],
         no_iterations: int = 2,
-    ) -> Optional[np.ndarray]:
+    ) -> Optional[npt.NDArray[np.float64]]:
         """Compute the forward kinematics for the head given joint angles.
 
         Args:
@@ -431,7 +432,9 @@ class PlacoKinematics:
             and self.robot.state.qd.max() < 1e-4
         ):
             # no need to compute FK
-            T_world_head = self.robot.get_T_world_frame("head")
+            T_world_head = np.asarray(
+                self.robot.get_T_world_frame("head"), dtype=np.float64
+            )
             T_world_head[:3, 3][2] -= (
                 self.head_z_offset
             )  # offset the height of the head
@@ -492,7 +495,9 @@ class PlacoKinematics:
             # return None
 
         # Get the head frame transformation
-        T_world_head = self.robot.get_T_world_frame("head")
+        T_world_head = np.asarray(
+            self.robot.get_T_world_frame("head"), dtype=np.float64
+        )
         T_world_head[:3, 3][2] -= self.head_z_offset  # offset the height of the head
 
         return T_world_head
@@ -547,7 +552,9 @@ class PlacoKinematics:
 
         return False  # Safe
 
-    def compute_jacobian(self, q: Optional[np.ndarray] = None) -> np.ndarray:
+    def compute_jacobian(
+        self, q: Optional[npt.NDArray[np.float64]] = None
+    ) -> npt.NDArray[np.float64]:
         """Compute the Jacobian of the head frame with respect to the actuated DoFs.
 
         The jacobian in local world aligned.
@@ -594,9 +601,11 @@ class PlacoKinematics:
         # This new jacobian
         J = Jp_a - Jp_p @ np.linalg.inv(Jc_p) @ Jc_a
 
-        return J[:, self.actuated_idx_in_active]
+        return np.asarray(J[:, self.actuated_idx_in_active], dtype=np.float64)
 
-    def compute_gravity_torque(self, q: Optional[np.ndarray] = None) -> np.ndarray:
+    def compute_gravity_torque(
+        self, q: Optional[npt.NDArray[np.float64]] = None
+    ) -> npt.NDArray[np.float64]:
         """Compute the gravity torque vector for the actuated joints of the robot.
 
         This method uses the static gravity compensation torques from the robot's dictionary.
@@ -641,7 +650,7 @@ class PlacoKinematics:
         grav_torque_actuated = G @ grav_torque_all_joints
 
         # Compute the gravity torque
-        return grav_torque_actuated
+        return np.asarray(grav_torque_actuated, dtype=np.float64)
 
     def set_automatic_body_yaw(self, body_yaw: float) -> None:
         """Set the automatic body yaw.
