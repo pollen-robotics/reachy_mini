@@ -49,7 +49,7 @@ class SoundDeviceAudio(AudioBase):
         self,
         indata: npt.NDArray[np.float32],
         frames: int,
-        time: sd.CallbackTime,
+        time: int,
         status: sd.CallbackFlags,
     ) -> None:
         if status:
