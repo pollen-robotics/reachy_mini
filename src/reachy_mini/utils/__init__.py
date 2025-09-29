@@ -6,6 +6,7 @@ checking if the Reachy Mini daemon is running, and performing linear pose interp
 """
 
 import numpy as np
+import numpy.typing as npt
 from scipy.spatial.transform import Rotation as R
 
 
@@ -18,7 +19,7 @@ def create_head_pose(
     yaw: float = 0,
     mm: bool = False,
     degrees: bool = True,
-) -> np.ndarray:
+) -> npt.NDArray[np.float64]:
     """Create a homogeneous transformation matrix representing a pose in 6D space (position and orientation).
 
     Args:
