@@ -36,11 +36,12 @@ class OpenCVCamera(CameraBase):
         """Read a frame from the camera. Returns the frame or None if error."""
         if self.cap is None:
             raise RuntimeError("Camera is not opened.")
+
         ret, frame = self.cap.read()
         if not ret:
             return None
 
-        return np.asarray(frame, dtype=np.uint8)
+        return np.asarray(frame, dtype=np.uint8, copy=False)
 
     def close(self) -> None:
         """Release the camera resource."""
