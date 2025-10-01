@@ -50,7 +50,7 @@ def minimum_jerk(
     def f(t: float) -> npt.NDArray[np.float64]:
         if t > duration:
             return goal_position
-        return np.sum([c * t**i for i, c in enumerate(coeffs)], axis=0)
+        return np.sum([c * t**i for i, c in enumerate(coeffs)], axis=0)  # type: ignore[no-any-return]
 
     return f
 

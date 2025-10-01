@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 import numpy as np
+import numpy.typing as npt
 from huggingface_hub import snapshot_download
 
 from reachy_mini.motion.move import Move
@@ -25,18 +26,22 @@ class RecordedMove(Move):
 
         self.description: str = self.move["description"]
         self.timestamps: List[float] = self.move["time"]
-        self.trajectory: List[Dict[str, List[List[float]]]] = self.move[
-            "set_target_data"
-        ]
+        self.trajectory: List[Dict[str, List[List[float]] | List[float] | float]] = (
+            self.move["set_target_data"]
+        )
 
-        self.dt = (self.timestamps[-1] - self.timestamps[0]) / len(self.timestamps)
+        self.dt: float = (self.timestamps[-1] - self.timestamps[0]) / len(
+            self.timestamps
+        )
 
     @property
     def duration(self) -> float:
         """Get the duration of the recorded move."""
         return len(self.trajectory) * self.dt
 
-    def evaluate(self, t: float) -> tuple[np.ndarray, np.ndarray, float]:
+    def evaluate(
+        self, t: float
+    ) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64], float]:
         """Evaluate the move at time t.
 
         Returns:
@@ -65,22 +70,25 @@ class RecordedMove(Move):
         else:
             alpha = (t - t_prev) / (t_next - t_prev)
 
-        head_prev = np.array(self.trajectory[idx_prev]["head"])
-        head_next = np.array(self.trajectory[idx_next]["head"])
-        antennas_prev = self.trajectory[idx_prev]["antennas"]
-        antennas_next = self.trajectory[idx_next]["antennas"]
-        body_yaw_prev = self.trajectory[idx_prev].get("body_yaw", 0.0)
-        body_yaw_next = self.trajectory[idx_next].get("body_yaw", 0.0)
+        head_prev = np.array(self.trajectory[idx_prev]["head"], dtype=np.float64)
+        head_next = np.array(self.trajectory[idx_next]["head"], dtype=np.float64)
+        antennas_prev: List[float] = self.trajectory[idx_prev]["antennas"]  # type: ignore[assignment]
+        antennas_next: List[float] = self.trajectory[idx_next]["antennas"]  # type: ignore[assignment]
+        body_yaw_prev: float = self.trajectory[idx_prev].get("body_yaw", 0.0)  # type: ignore[assignment]
+        body_yaw_next: float = self.trajectory[idx_next].get("body_yaw", 0.0)  # type: ignore[assignment]
         # check_collision = self.trajectory[idx_prev].get("check_collision", False)
 
         # Interpolate to infer a better position at the current time.
         # Joint interpolations are easy:
+
         antennas_joints = np.array(
             [
                 lerp(pos_prev, pos_next, alpha)
                 for pos_prev, pos_next in zip(antennas_prev, antennas_next)
-            ]
+            ],
+            dtype=np.float64,
         )
+
         body_yaw = lerp(body_yaw_prev, body_yaw_next, alpha)
 
         # Head position interpolation is more complex:
