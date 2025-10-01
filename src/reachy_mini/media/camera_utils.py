@@ -40,11 +40,16 @@ def find_camera(
 
 
 if __name__ == "__main__":
+    from reachy_mini.media.camera_constants import CameraResolution
+
     cam = find_camera()
 
     if cam is None:
         print("Camera not found")
     else:
+        cam.set(cv2.CAP_PROP_FRAME_WIDTH, CameraResolution.R1280x720.value[0])
+        cam.set(cv2.CAP_PROP_FRAME_HEIGHT, CameraResolution.R1280x720.value[1])
+
         while True:
             ret, frame = cam.read()
             if not ret:

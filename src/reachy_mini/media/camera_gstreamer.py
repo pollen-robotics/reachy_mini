@@ -7,6 +7,8 @@ By default the module directly returns JPEG images as output by the camera.
 from threading import Thread
 from typing import Optional
 
+from reachy_mini.media.camera_constants import CameraResolution
+
 try:
     import gi
 except ImportError as e:
@@ -27,9 +29,15 @@ from .camera_base import CameraBackend, CameraBase  # noqa: E402
 class GStreamerCamera(CameraBase):
     """Camera implementation using GStreamer."""
 
-    def __init__(self, log_level: str = "INFO") -> None:
+    def __init__(
+        self,
+        log_level: str = "INFO",
+        resolution: CameraResolution = CameraResolution.R1280x720,
+    ) -> None:
         """Initialize the GStreamer camera."""
-        super().__init__(backend=CameraBackend.GSTREAMER, log_level=log_level)
+        super().__init__(
+            backend=CameraBackend.GSTREAMER, log_level=log_level, resolution=resolution
+        )
         Gst.init(None)
         self._loop = GLib.MainLoop()
         self._thread_bus_calls: Optional[Thread] = None
@@ -38,7 +46,7 @@ class GStreamerCamera(CameraBase):
 
         self._appsink_video: GstApp = Gst.ElementFactory.make("appsink")
         caps_video = Gst.Caps.from_string(
-            "image/jpeg, width=1280, height=720, framerate=30/1"
+            f"image/jpeg, width={self.resolution[0]}, height={self.resolution[1]}, framerate=30/1"
         )
         self._appsink_video.set_property("caps", caps_video)
         self._appsink_video.set_property("drop", True)  # avoid overflow
