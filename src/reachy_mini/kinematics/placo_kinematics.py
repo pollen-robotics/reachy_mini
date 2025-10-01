@@ -434,9 +434,7 @@ class PlacoKinematics:
             and self.robot.state.qd.max() < 1e-4
         ):
             # no need to compute FK
-            T_world_head = np.asarray(
-                self.robot.get_T_world_frame("head"), dtype=np.float64
-            )
+            T_world_head: npt.NDArray[np.float64] = self.robot.get_T_world_frame("head")
             T_world_head[:3, 3][2] -= (
                 self.head_z_offset
             )  # offset the height of the head
@@ -497,9 +495,7 @@ class PlacoKinematics:
             # return None
 
         # Get the head frame transformation
-        T_world_head = np.asarray(
-            self.robot.get_T_world_frame("head"), dtype=np.float64
-        )
+        T_world_head = self.robot.get_T_world_frame("head")
         T_world_head[:3, 3][2] -= self.head_z_offset  # offset the height of the head
 
         return T_world_head
@@ -574,7 +570,9 @@ class PlacoKinematics:
 
         # Computing the platform Jacobian
         # dx = Jp.dq
-        Jp = self.robot.frame_jacobian("head", "local_world_aligned")
+        Jp: npt.NDArray[np.float64] = self.robot.frame_jacobian(
+            "head", "local_world_aligned"
+        )
 
         # Computing the constraints Jacobian
         # 0 = Jc.dq
@@ -601,9 +599,9 @@ class PlacoKinematics:
         #       dq_p = - (Jc_p)^(⁻1) @ Jc_a @ dq_a
         # Then we can substitute dq_p in the first equation and get
         # This new jacobian
-        J = Jp_a - Jp_p @ np.linalg.inv(Jc_p) @ Jc_a
+        J: npt.NDArray[np.float64] = Jp_a - Jp_p @ np.linalg.inv(Jc_p) @ Jc_a
 
-        return np.asarray(J[:, self.actuated_idx_in_active], dtype=np.float64)
+        return J[:, self.actuated_idx_in_active]
 
     def compute_gravity_torque(
         self, q: Optional[npt.NDArray[np.float64]] = None
@@ -641,18 +639,18 @@ class PlacoKinematics:
         #       wrench_eq = np.linalg.pinv(J_all_joints.T) @ torque_all_joints
         # And then we can compute the actuated torques as:
         #       torque_actuated = J_actuated.T @ wrench_eq
-        J_all_joints = self.robot.frame_jacobian("head", "local_world_aligned")[
-            :, 6:
-        ]  # all joints except the mobile base 6dofs
+        J_all_joints: npt.NDArray[np.float64] = self.robot.frame_jacobian(
+            "head", "local_world_aligned"
+        )[:, 6:]  # all joints except the mobile base 6dofs
         J_actuated = self.compute_jacobian()
         # using a single matrix G to compute the actuated torques
         G = J_actuated.T @ np.linalg.pinv(J_all_joints.T)
 
         # torques of actuated joints
-        grav_torque_actuated = G @ grav_torque_all_joints
+        grav_torque_actuated: npt.NDArray[np.float64] = G @ grav_torque_all_joints
 
         # Compute the gravity torque
-        return np.asarray(grav_torque_actuated, dtype=np.float64)
+        return grav_torque_actuated
 
     def set_automatic_body_yaw(self, body_yaw: float) -> None:
         """Set the automatic body yaw.
