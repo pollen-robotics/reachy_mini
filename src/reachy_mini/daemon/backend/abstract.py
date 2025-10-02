@@ -367,7 +367,7 @@ class Backend:
         | None = None,  # [left_angle, right_angle] (in rads)
         duration: float = 0.5,  # Duration in seconds for the movement, default is 0.5 seconds.
         method: InterpolationTechnique = InterpolationTechnique.MIN_JERK,  # can be "linear", "minjerk", "ease" or "cartoon", default is "minjerk"
-        body_yaw: float = 0.0,  # Body yaw angle in radians
+        body_yaw: float | None = 0.0,  # Body yaw angle in radians
     ) -> None:
         """Asynchronously go to a target head pose and/or antennas position using task space interpolation, in "duration" seconds.
 
