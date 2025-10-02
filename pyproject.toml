@@ -46,6 +46,9 @@ mujoco = ["mujoco==3.3.0"]
 nn_kinematics = ["onnxruntime==1.22.1"]
 placo_kinematics = ["placo==0.9.14"]
 gstreamer = ["PyGObject>=3.42.2,<=3.46.0"]
+rerun = ["rerun-sdk>=0.23.4",
+         "rerun-loader-urdf @ git+https://github.com/rerun-io/rerun-loader-python-example-urdf.git",
+]
 
 [project.scripts]
 reachy-mini-daemon = "reachy_mini.daemon.app.main:main"
