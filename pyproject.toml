@@ -28,6 +28,7 @@ dependencies = [
     "reachy-mini-rust-kinematics==0.1.1",
     "asgiref",
     "aiohttp",
+    "pyusb>=1.2.1",
 ]
 
 
