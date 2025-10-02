@@ -38,6 +38,18 @@ def test_record_audio_and_file_exists():
     os.remove(tmpfile.name)
     # print(f"Recorded audio saved to {tmpfile.name}")
 
+@pytest.mark.audio
+def test_DoA():
+    """Test Direction of Arrival (DoA) estimation."""
+    media = MediaManager(backend=MediaBackend.DEFAULT_NO_VIDEO)
+    doa = media.audio.get_DoA()
+    assert doa is not None
+    assert isinstance(doa, tuple)
+    assert len(doa) == 2
+    assert isinstance(doa[0], int)
+    assert isinstance(doa[1], bool)
+
+
 '''
 @pytest.mark.audio_gstreamer
 def test_play_sound_gstreamer_backend():
