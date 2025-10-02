@@ -40,6 +40,8 @@ class AnalyticalKinematics:
             data["motor_arm_length"], data["rod_length"]
         )
 
+        self.start_body_yaw = 0.0
+
         self.motors = data["motors"]
         for motor in self.motors:
             self.kin.add_branch(
