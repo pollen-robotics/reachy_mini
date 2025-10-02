@@ -376,7 +376,7 @@ class Backend:
             antennas (np.ndarray | list[float] | None): 1D array with two elements representing the angles of the antennas in radians.
             duration (float): Duration of the movement in seconds.
             method (str): Interpolation method to use ("linear", "minjerk", "ease", "cartoon"). Default is "minjerk".
-            body_yaw (float): Body yaw angle in radians.
+            body_yaw (float | None): Body yaw angle in radians.
 
         Raises:
             ValueError: If neither head nor antennas are provided, or if duration is not positive.

@@ -15,7 +15,7 @@ class GotoTaskRequest(BaseModel):
     antennas: list[float] | None  # [left_angle, right_angle] (in rads)
     duration: float
     method: InterpolationTechnique
-    body_yaw: float
+    body_yaw: float | None
 
 
 class PlayMoveTaskRequest(BaseModel):
