@@ -3,6 +3,34 @@ version: beta
 serial:
   baudrate: 1000000
 
+# Offset and angle limits are in raw units
+# Offset: +/- 626
+# Upper limit of the stewart platform +/- 120
+# Lower limit
+#    - 2 & 5 +/- 1842
+#    - 1 & 6 +/- 1684
+#    - 3 & 4 +/- 1600
+
+# s1
+#  lower: 2048 + 626 - 1684 = 990
+#  upper: 2048 + 626 - 120 = 2554
+# s2
+#  lower: 2048 - 626 + 120 = 1542
+#  upper: 2048 - 626 + 1842 = 3264
+# s3
+#  lower: 2048 + 626 - 1600 = 1074
+#  upper: 2048 + 626 - 120 = 2554
+# s4
+#  lower: 2048 - 626 + 120 = 1542
+#  upper: 2048 - 626 + 1600 = 3022
+# s5
+#  lower: 2048 + 626 - 1842 = 832
+#  upper: 2048 + 626 - 120 = 2554
+# s6
+#  lower: 2048 - 626 + 120 = 1542
+#  upper: 2048 - 626 + 1684 = 3106
+
+
 motors:
   - body_yaw:
       id: 10
@@ -13,44 +41,44 @@ motors:
       shutdown_error: 52
   - stewart_platform_1:
       id: 11
-      offset: 1024
-      lower_limit: 0
-      upper_limit: 4095
+      offset: 626
+      lower_limit: 990
+      upper_limit: 2554
       return_delay_time: 0
       shutdown_error: 52
   - stewart_platform_2:
       id: 12
-      offset: -1024
-      lower_limit: 0
-      upper_limit: 4095
+      offset: -626
+      lower_limit: 1542
+      upper_limit: 3264
       return_delay_time: 0
       shutdown_error: 52
   - stewart_platform_3:
       id: 13
-      offset: 1024
-      lower_limit: 0
-      upper_limit: 4095
+      offset: 626
+      lower_limit: 1074
+      upper_limit: 2554
       return_delay_time: 0
       shutdown_error: 52
   - stewart_platform_4:
       id: 14
-      offset: -1024
-      lower_limit: 0
-      upper_limit: 4095
+      offset: -626
+      lower_limit: 1542
+      upper_limit: 3022
       return_delay_time: 0
       shutdown_error: 52
   - stewart_platform_5:
       id: 15
-      offset: 1024
-      lower_limit: 0
-      upper_limit: 4095
+      offset: 626
+      lower_limit: 832
+      upper_limit: 2554
       return_delay_time: 0
       shutdown_error: 52
   - stewart_platform_6:
       id: 16
-      offset: -1024
-      lower_limit: 0
-      upper_limit: 4095
+      offset: -626
+      lower_limit: 1542
+      upper_limit: 3106
       return_delay_time: 0
       shutdown_error: 52
   - right_antenna:

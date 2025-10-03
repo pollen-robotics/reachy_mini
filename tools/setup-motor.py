@@ -4,7 +4,7 @@ This script allows to configure the motors of the Reachy Mini robot by setting t
 
 The motor needs to be configured one by one, so you will need to connect only one motor at a time to the serial port. You can specify which motor to configure by passing its name as an argument.
 
-It assumes the motor is in the factory settings (ID 1 and baudrate 57600). If it's not the case, you will need to use a tool like Dynamixel Wizard to first reset it.
+If not specified, it assumes the motor is in the factory settings (ID 1 and baudrate 57600). If it's not the case, you will need to use a tool like Dynamixel Wizard to first reset it or manually specify the ID and baudrate.
 
 Please note that all values given in the configuration file are in the motor's raw units.
 """
@@ -91,44 +91,50 @@ XL_BAUDRATE_CONV_TABLE = {
 }
 
 
-def setup_motor(motor_config: MotorConfig, serial_port: str, baudrate: int):
+def setup_motor(
+    motor_config: MotorConfig,
+    serial_port: str,
+    from_baudrate: int,
+    target_baudrate: int,
+    from_id: int,
+):
     """Set up the motor with the given configuration."""
     if not lookup_for_motor(
         serial_port,
-        FACTORY_DEFAULT_ID,
-        FACTORY_DEFAULT_BAUDRATE,
+        from_id,
+        from_baudrate,
     ):
         raise RuntimeError(
             f"No motor found on port {serial_port}. "
-            f"Make sure the motor is in factory settings (ID {FACTORY_DEFAULT_ID} and baudrate {FACTORY_DEFAULT_BAUDRATE}) and connected to the specified port."
+            f"Make sure the motor is in factory settings (ID {from_id} and baudrate {from_baudrate}) and connected to the specified port."
         )
 
     # Make sure the torque is disabled to be able to write EEPROM
-    disable_torque(serial_port, FACTORY_DEFAULT_ID, FACTORY_DEFAULT_BAUDRATE)
+    disable_torque(serial_port, from_id, from_baudrate)
 
-    change_baudrate(
-        serial_port,
-        id=FACTORY_DEFAULT_ID,
-        base_baudrate=FACTORY_DEFAULT_BAUDRATE,
-        target_baudrate=baudrate,
-    )
+    if from_baudrate != target_baudrate:
+        change_baudrate(
+            serial_port,
+            id=from_id,
+            base_baudrate=from_baudrate,
+            target_baudrate=target_baudrate,
+        )
+        time.sleep(MOTOR_SETUP_DELAY)
 
-    time.sleep(MOTOR_SETUP_DELAY)
-
-    change_id(
-        serial_port,
-        current_id=FACTORY_DEFAULT_ID,
-        new_id=motor_config.id,
-        baudrate=baudrate,
-    )
-
-    time.sleep(MOTOR_SETUP_DELAY)
+    if from_id != motor_config.id:
+        change_id(
+            serial_port,
+            current_id=from_id,
+            new_id=motor_config.id,
+            baudrate=target_baudrate,
+        )
+        time.sleep(MOTOR_SETUP_DELAY)
 
     change_offset(
         serial_port,
         id=motor_config.id,
         offset=motor_config.offset,
-        baudrate=baudrate,
+        baudrate=target_baudrate,
     )
 
     time.sleep(MOTOR_SETUP_DELAY)
@@ -138,7 +144,7 @@ def setup_motor(motor_config: MotorConfig, serial_port: str, baudrate: int):
         id=motor_config.id,
         angle_limit_min=motor_config.angle_limit_min,
         angle_limit_max=motor_config.angle_limit_max,
-        baudrate=baudrate,
+        baudrate=target_baudrate,
     )
 
     time.sleep(MOTOR_SETUP_DELAY)
@@ -146,7 +152,7 @@ def setup_motor(motor_config: MotorConfig, serial_port: str, baudrate: int):
     change_shutdown_error(
         serial_port,
         id=motor_config.id,
-        baudrate=baudrate,
+        baudrate=target_baudrate,
         shutdown_error=motor_config.shutdown_error,
     )
 
@@ -156,7 +162,7 @@ def setup_motor(motor_config: MotorConfig, serial_port: str, baudrate: int):
         serial_port,
         id=motor_config.id,
         return_delay_time=motor_config.return_delay_time,
-        baudrate=baudrate,
+        baudrate=target_baudrate,
     )
 
     time.sleep(MOTOR_SETUP_DELAY)
@@ -327,36 +333,66 @@ def main():
             "stewart_platform_6",
             "right_antenna",
             "left_antenna",
+            "all",
         ],
     )
     parser.add_argument(
-        "-p",
-        "--serialport",
+        "serialport",
         type=str,
-        help="Serial port for real motors (default: will try to automatically find the port).",
+        help="Serial port for communication with the motor.",
     )
     parser.add_argument(
         "--check-only",
         action="store_true",
         help="Only check the configuration without applying changes.",
     )
+    parser.add_argument(
+        "--from-id",
+        type=int,
+        default=FACTORY_DEFAULT_ID,
+        help=f"Current ID of the motor (default: {FACTORY_DEFAULT_ID}).",
+    )
+    parser.add_argument(
+        "--from-baudrate",
+        type=int,
+        default=FACTORY_DEFAULT_BAUDRATE,
+        help=f"Current baudrate of the motor (default: {FACTORY_DEFAULT_BAUDRATE}).",
+    )
+    parser.add_argument(
+        "--update-config",
+        action="store_true",
+        help="Update a specific motor (assumes it already has the correct id and baudrate).",
+    )
     args = parser.parse_args()
 
     config = parse_yaml_config(args.config_file)
-    motor_config = config.motors[args.motor_name]
 
-    if not args.check_only:
-        setup_motor(
+    if args.motor_name == "all":
+        motors = list(config.motors.keys())
+    else:
+        motors = [args.motor_name]
+
+    for motor_name in motors:
+        motor_config = config.motors[motor_name]
+
+        if args.update_config:
+            args.from_id = motor_config.id
+            args.from_baudrate = config.serial.baudrate
+
+        if not args.check_only:
+            setup_motor(
+                motor_config,
+                args.serialport,
+                from_id=args.from_id,
+                from_baudrate=args.from_baudrate,
+                target_baudrate=config.serial.baudrate,
+            )
+
+        check_configuration(
             motor_config,
             args.serialport,
             baudrate=config.serial.baudrate,
         )
-
-    check_configuration(
-        motor_config,
-        args.serialport,
-        baudrate=config.serial.baudrate,
-    )
 
 
 if __name__ == "__main__":
