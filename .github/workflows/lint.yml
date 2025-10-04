@@ -1,4 +1,4 @@
-name: Ruff
+name: Linters
 on: [ push, pull_request ]
 jobs:
   ruff:
