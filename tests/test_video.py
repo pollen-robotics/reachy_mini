@@ -8,7 +8,7 @@ import time
 
 
 @pytest.mark.video
-def test_get_frame_exists():
+def test_get_frame_exists() -> None:
     """Test that a frame can be retrieved from the camera and is not None."""
     resolution = CameraResolution.R1280x720
     media = MediaManager(backend=MediaBackend.DEFAULT, resolution=resolution)
@@ -23,35 +23,35 @@ def test_get_frame_exists():
     #    print(f"Frame saved for inspection: {tmp_file.name}")    
 
 @pytest.mark.video
-def test_get_frame_exists_1600():
+def test_get_frame_exists_1600() -> None:
     resolution = CameraResolution.R1600x1200
     media = MediaManager(backend=MediaBackend.DEFAULT, resolution=resolution)
     frame = media.get_frame()
     assert frame.shape[0] == resolution.value[1] and frame.shape[1] == resolution.value[0], f"Frame has incorrect dimensions: {frame.shape}"
 
 @pytest.mark.video
-def test_get_frame_exists_1920():
+def test_get_frame_exists_1920() -> None:
     resolution = CameraResolution.R1920x1080
     media = MediaManager(backend=MediaBackend.DEFAULT, resolution=resolution)
     frame = media.get_frame()
     assert frame.shape[0] == resolution.value[1] and frame.shape[1] == resolution.value[0], f"Frame has incorrect dimensions: {frame.shape}"
 
 @pytest.mark.video
-def test_get_frame_exists_2304():
+def test_get_frame_exists_2304() -> None:
     resolution = CameraResolution.R2304x1296
     media = MediaManager(backend=MediaBackend.DEFAULT, resolution=resolution)
     frame = media.get_frame()
     assert frame.shape[0] == resolution.value[1] and frame.shape[1] == resolution.value[0], f"Frame has incorrect dimensions: {frame.shape}"
 
 @pytest.mark.video
-def test_get_frame_exists_4608():
+def test_get_frame_exists_4608() -> None:
     resolution = CameraResolution.R4608x2592
     media = MediaManager(backend=MediaBackend.DEFAULT, resolution=resolution)
     frame = media.get_frame()
     assert frame.shape[0] == resolution.value[1] and frame.shape[1] == resolution.value[0], f"Frame has incorrect dimensions: {frame.shape}"
 
 @pytest.mark.video_gstreamer
-def test_get_frame_exists_gstreamer():
+def test_get_frame_exists_gstreamer() -> None:
     """Test that a frame can be retrieved from the camera and is not None."""
     media = MediaManager(backend=MediaBackend.GSTREAMER)
     time.sleep(2)  # Give some time for the camera to initialize
