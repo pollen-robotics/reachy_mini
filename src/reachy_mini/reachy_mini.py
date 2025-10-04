@@ -49,8 +49,6 @@ SLEEP_HEAD_POSE = np.array(
     ]
 )
 
-IMAGE_SIZE = (1280, 720)  # Width, Height in pixels
-
 
 class ReachyMini:
     """Reachy Mini class for controlling a simulated or real Reachy Mini robot.
@@ -66,7 +64,7 @@ class ReachyMini:
         self,
         localhost_only: bool = True,
         spawn_daemon: bool = False,
-        use_sim: bool = True,
+        use_sim: bool = False,
         timeout: float = 5.0,
         automatic_body_yaw: bool = False,
         log_level: str = "INFO",
@@ -125,7 +123,9 @@ class ReachyMini:
             )
 
         self.media_manager = MediaManager(
-            use_sim=use_sim, backend=mbackend, log_level=log_level
+            use_sim=use_sim,
+            backend=mbackend,
+            log_level=log_level,
         )
 
     def __del__(self) -> None:
@@ -311,8 +311,15 @@ class ReachyMini:
             ValueError: If duration is negative.
 
         """
-        assert 0 < u < IMAGE_SIZE[0], f"u must be in [0, {IMAGE_SIZE[0]}], got {u}."
-        assert 0 < v < IMAGE_SIZE[1], f"v must be in [0, {IMAGE_SIZE[1]}], got {v}."
+        if self.media_manager.camera is None:
+            raise RuntimeError("Camera is not initialized.")
+
+        assert 0 < u < self.media_manager.camera.resolution[0], (
+            f"u must be in [0, {self.media_manager.camera.resolution[0]}], got {u}."
+        )
+        assert 0 < v < self.media_manager.camera.resolution[1], (
+            f"v must be in [0, {self.media_manager.camera.resolution[1]}], got {v}."
+        )
 
         if duration < 0:
             raise ValueError("Duration can't be negative.")

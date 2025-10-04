@@ -39,7 +39,7 @@ def create_head_pose(
     pose = np.eye(4)
     rot = R.from_euler("xyz", [roll, pitch, yaw], degrees=degrees).as_matrix()
     pose[:3, :3] = rot
-    pose[:, 3] = [x, y, z, 0]
+    pose[:, 3] = [x, y, z, 1]
     if mm:
         pose[:3, 3] /= 1000
 
