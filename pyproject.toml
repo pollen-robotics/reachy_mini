@@ -90,6 +90,4 @@ python_version = "3.10"
 files = ["src/"]
 ignore_missing_imports = true
 strict = true
-explicit_package_bases = true
-mypy_path = ["src"]
-exclude = ['./tests/.*' , './example/.*', './build/.*']
+
