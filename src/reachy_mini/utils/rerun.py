@@ -15,6 +15,7 @@ from threading import Event, Thread
 
 import cv2
 import numpy as np
+import requests
 import rerun as rr
 from rerun_loader_urdf import URDFLogger
 from urdf_parser_py import urdf
@@ -68,6 +69,7 @@ class Rerun:
 
         self.running = Event()
         self.thread_log_camera = Thread(target=self.log_camera, daemon=True)
+        self.thread_log_movements = Thread(target=self.log_movements, daemon=True)
         # self.thread_log_rerun_info = Thread(target=self.log_rerun_info, daemon=True)
         # self.thread_log_mouvement = Thread(target=self.log_movement, daemon=True)
 
@@ -86,6 +88,7 @@ class Rerun:
         # self.thread_log_rerun_info.start()
         # self.thread_log_mouvement.start()
         self.thread_log_camera.start()
+        self.thread_log_movements.start()
 
     def stop(self):
         """Stop the Rerun logging thread."""
@@ -115,7 +118,7 @@ class Rerun:
         self.logger.info("Starting camera logging to Rerun.")
 
         while not self.running.is_set():
-            rr.set_time("deamon", timestamp=time.time(), recording=self.recording)
+            rr.set_time("reachymini", timestamp=time.time(), recording=self.recording)
             frame = self._reachymini.media.get_frame()
             if frame is not None:
                 cam_name = self._get_joint("camera_optical_frame")
@@ -158,6 +161,201 @@ class Rerun:
                 self.logger.error("Failed to encode frame to JPEG.")
 
             time.sleep(0.3)  # ~30fps
+
+    def log_movements(self):
+        """Log the movement data to Rerun."""
+        antenna_left = self._get_joint("left_antenna")
+        antenna_left_joint = self.urdf_logger.joint_entity_path(antenna_left)
+        antenna_right = self._get_joint("right_antenna")
+        antenna_right_joint = self.urdf_logger.joint_entity_path(antenna_right)
+
+        motor_1 = self._get_joint("1")
+        motor_1_joint = self.urdf_logger.joint_entity_path(motor_1)
+        motor_2 = self._get_joint("2")
+        motor_2_joint = self.urdf_logger.joint_entity_path(motor_2)
+        motor_3 = self._get_joint("3")
+        motor_3_joint = self.urdf_logger.joint_entity_path(motor_3)
+        motor_4 = self._get_joint("4")
+        motor_4_joint = self.urdf_logger.joint_entity_path(motor_4)
+        motor_5 = self._get_joint("5")
+        motor_5_joint = self.urdf_logger.joint_entity_path(motor_5)
+        motor_6 = self._get_joint("6")
+        motor_6_joint = self.urdf_logger.joint_entity_path(motor_6)
+        motor_yaw = self._get_joint("all_yaw")
+        motor_yaw_joint = self.urdf_logger.joint_entity_path(motor_yaw)
+
+        passive_1_x = self._get_joint("passive_1_x")
+        passive_1_x_joint = self.urdf_logger.joint_entity_path(passive_1_x)
+        passive_1_y = self._get_joint("passive_1_y")
+        passive_1_y_joint = self.urdf_logger.joint_entity_path(passive_1_y)
+        passive_1_z = self._get_joint("passive_1_z")
+        passive_1_z_joint = self.urdf_logger.joint_entity_path(passive_1_z)
+
+        passive_2_x = self._get_joint("passive_2_x")
+        passive_2_x_joint = self.urdf_logger.joint_entity_path(passive_2_x)
+        passive_2_y = self._get_joint("passive_2_y")
+        passive_2_y_joint = self.urdf_logger.joint_entity_path(passive_2_y)
+        passive_2_z = self._get_joint("passive_2_z")
+        passive_2_z_joint = self.urdf_logger.joint_entity_path(passive_2_z)
+
+        passive_3_x = self._get_joint("passive_3_x")
+        passive_3_x_joint = self.urdf_logger.joint_entity_path(passive_3_x)
+        passive_3_y = self._get_joint("passive_3_y")
+        passive_3_y_joint = self.urdf_logger.joint_entity_path(passive_3_y)
+        passive_3_z = self._get_joint("passive_3_z")
+        passive_3_z_joint = self.urdf_logger.joint_entity_path(passive_3_z)
+
+        passive_4_x = self._get_joint("passive_4_x")
+        passive_4_x_joint = self.urdf_logger.joint_entity_path(passive_4_x)
+        passive_4_y = self._get_joint("passive_4_y")
+        passive_4_y_joint = self.urdf_logger.joint_entity_path(passive_4_y)
+        passive_4_z = self._get_joint("passive_4_z")
+        passive_4_z_joint = self.urdf_logger.joint_entity_path(passive_4_z)
+
+        passive_5_x = self._get_joint("passive_5_x")
+        passive_5_x_joint = self.urdf_logger.joint_entity_path(passive_5_x)
+        passive_5_y = self._get_joint("passive_5_y")
+        passive_5_y_joint = self.urdf_logger.joint_entity_path(passive_5_y)
+        passive_5_z = self._get_joint("passive_5_z")
+        passive_5_z_joint = self.urdf_logger.joint_entity_path(passive_5_z)
+
+        passive_6_x = self._get_joint("passive_6_x")
+        passive_6_x_joint = self.urdf_logger.joint_entity_path(passive_6_x)
+        passive_6_y = self._get_joint("passive_6_y")
+        passive_6_y_joint = self.urdf_logger.joint_entity_path(passive_6_y)
+        passive_6_z = self._get_joint("passive_6_z")
+        passive_6_z_joint = self.urdf_logger.joint_entity_path(passive_6_z)
+
+        passive_7_x = self._get_joint("passive_7_x")
+        passive_7_x_joint = self.urdf_logger.joint_entity_path(passive_7_x)
+        passive_7_y = self._get_joint("passive_7_y")
+        passive_7_y_joint = self.urdf_logger.joint_entity_path(passive_7_y)
+        passive_7_z = self._get_joint("passive_7_z")
+        passive_7_z_joint = self.urdf_logger.joint_entity_path(passive_7_z)
+
+        url = "http://localhost:8000/api/state/full"
+
+        params = {
+            "with_control_mode": "false",
+            "with_head_pose": "false",
+            "with_target_head_pose": "false",
+            "with_head_joints": "true",
+            "with_target_head_joints": "false",
+            "with_body_yaw": "false",  # already in head_joints
+            "with_target_body_yaw": "false",
+            "with_antenna_positions": "true",
+            "with_target_antenna_positions": "false",
+            "use_pose_matrix": "false",
+        }
+
+        while not self.running.is_set():
+            msg = requests.get(url, params=params)
+
+            if msg.status_code != 200:
+                self.logger.error(
+                    f"Request failed with status {msg.status_code}: {msg.text}"
+                )
+                time.sleep(0.1)
+                continue
+            try:
+                data = json.loads(msg.text)
+                self.logger.debug(f"Data: {data}")
+            except Exception:
+                continue
+
+            rr.set_time("reachymini", timestamp=time.time(), recording=self.recording)
+
+            if "head_pose" in data:
+                pose = data["head_pose"]
+                print(
+                    f"x={pose['x']}, y={pose['y']}, z={pose['z']}, "
+                    f"roll={pose['roll']}, pitch={pose['pitch']}, yaw={pose['yaw']}"
+                )
+            if "antennas_positions" in data:
+                antennas = data["antennas_positions"]
+                if antennas is not None:
+                    antenna_left.origin.rotation = [
+                        -0.0581863,
+                        -0.527253,
+                        -0.0579647 + antennas[0],
+                    ]
+                    self.urdf_logger.log_joint(
+                        antenna_left_joint,
+                        joint=antenna_left,
+                        recording=self.recording,
+                    )
+                    antenna_right.origin.rotation = [
+                        1.5708,
+                        -1.40009 - antennas[1],
+                        -1.48353,
+                    ]
+                    self.urdf_logger.log_joint(
+                        antenna_right_joint,
+                        joint=antenna_right,
+                        recording=self.recording,
+                    )
+            if "head_joints" in data:
+                head_joints = data["head_joints"]
+                motor_1.origin.rotation = [
+                    -1.5708,
+                    7.95539e-16 + head_joints[1],
+                    2.0944,
+                ]
+                self.urdf_logger.log_joint(
+                    motor_1_joint, joint=motor_1, recording=self.recording
+                )
+
+                motor_2.origin.rotation = [
+                    1.5708,
+                    -1.05471e-15 - head_joints[2],
+                    -1.0472,
+                ]
+                self.urdf_logger.log_joint(
+                    motor_2_joint, joint=motor_2, recording=self.recording
+                )
+
+                motor_3.origin.rotation = [
+                    -1.5708,
+                    -2.77556e-16 + head_joints[3],
+                    3.14916e-16,
+                ]
+                self.urdf_logger.log_joint(
+                    motor_3_joint, joint=motor_3, recording=self.recording
+                )
+                motor_4.origin.rotation = [
+                    1.5708,
+                    4.44377e-15 - head_joints[4],
+                    3.14159,
+                ]
+                self.urdf_logger.log_joint(
+                    motor_4_joint, joint=motor_4, recording=self.recording
+                )
+                motor_5.origin.rotation = [
+                    -1.5708,
+                    4.85252e-16 + head_joints[5],
+                    -2.0944,
+                ]
+                self.urdf_logger.log_joint(
+                    motor_5_joint, joint=motor_5, recording=self.recording
+                )
+                motor_6.origin.rotation = [
+                    1.5708,
+                    1.05471e-15 - head_joints[6],
+                    1.0472,
+                ]
+                self.urdf_logger.log_joint(
+                    motor_6_joint, joint=motor_6, recording=self.recording
+                )
+
+                motor_yaw.origin.rotation = [
+                    3.14159,
+                    -2.22045e-16,
+                    1.5708 - head_joints[0],
+                ]
+                self.urdf_logger.log_joint(
+                    motor_yaw_joint, joint=motor_yaw, recording=self.recording
+                )
+            time.sleep(0.1)
 
     def log_rerun_info(self):
         """Log the Rerun application and recording IDs."""
