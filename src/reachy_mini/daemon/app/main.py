@@ -54,6 +54,8 @@ class Args:
 
     localhost_only: bool = True
 
+    webrtc: bool = False
+
 
 def create_app(args: Args) -> FastAPI:
     """Create and configure the FastAPI application."""
@@ -84,7 +86,7 @@ def create_app(args: Args) -> FastAPI:
         lifespan=lifespan,
     )
     app.state.args = args
-    app.state.daemon = Daemon()
+    app.state.daemon = Daemon(webrtc=args.webrtc)
     app.state.app_manager = AppManager()
 
     app.add_middleware(
@@ -198,6 +200,11 @@ def main():
         action="store_false",
         dest="goto_sleep_on_stop",
         help="Do not put the robot to sleep on daemon stop (default: False).",
+    )
+    parser.add_argument(
+        "--webrtc",
+        action="store_true",
+        help="Enable camera and microphone webrtc streaming",
     )
     # Zenoh server options
     parser.add_argument(

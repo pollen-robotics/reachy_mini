@@ -9,13 +9,14 @@ from threading import Thread
 from typing import Dict, List, Optional
 
 import gi
-from gi.repository import GLib, Gst
 from gst_signalling import GstSignallingListener
 
 from reachy_mini.media.audio_utils import get_respeaker_card_number
 
 gi.require_version("Gst", "1.0")
 gi.require_version("GstApp", "1.0")
+
+from gi.repository import GLib, Gst  # noqa: E402
 
 
 class GstWebRTC:
