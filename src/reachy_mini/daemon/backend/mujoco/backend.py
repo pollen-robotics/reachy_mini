@@ -77,23 +77,11 @@ class MujocoBackend(Backend):
             "eye_camera",
         )
 
-        self.head_id = mujoco.mj_name2id(  # type: ignore
+        self.head_site_id = mujoco.mj_name2id(  # type: ignore
             self.model,
-            mujoco.mjtObj.mjOBJ_BODY,  # type: ignore
-            "pp01063_stewart_plateform",
+            mujoco.mjtObj.mjOBJ_SITE,  # type: ignore
+            "head",
         )
-
-        self.platform_to_head_transform = np.array(
-            [
-                [8.66025292e-01, 5.00000194e-01, -1.83660327e-06, -1.34282000e-02],
-                [5.55111512e-16, -3.67320510e-06, -1.00000000e00, -1.20000000e-03],
-                [-5.00000194e-01, 8.66025292e-01, -3.18108852e-06, 3.65883000e-02],
-                [0, 0, 0, 1.00000000e00],
-            ]
-        )
-        # remove_z_offset  = np.eye(4)
-        # remove_z_offset[2, 3] = -0.177
-        # self.platform_to_head_transform = self.platform_to_head_transform @ remove_z_offset
 
         self.current_head_pose = np.eye(4)
 
@@ -247,9 +235,9 @@ class MujocoBackend(Backend):
 
         """
         mj_current_head_pose = np.eye(4)
-        mj_current_head_pose[:3, :3] = self.data.xmat[self.head_id].reshape(3, 3)
-        mj_current_head_pose[:3, 3] = self.data.xpos[self.head_id]
-        mj_current_head_pose = mj_current_head_pose @ self.platform_to_head_transform
+
+        mj_current_head_pose[:3, :3] = self.data.site_xmat[self.head_site_id].reshape(3, 3)
+        mj_current_head_pose[:3, 3] = self.data.site_xpos[self.head_site_id]
         mj_current_head_pose[2, 3] -= 0.177
         return mj_current_head_pose
 

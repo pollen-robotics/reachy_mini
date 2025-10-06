@@ -87,35 +87,35 @@ class PlacoKinematics:
         # Add the constraint between the rotated torso and the head
         # This will allow independent control of the torso and the head yaw
         # until this constraint is reached
-        yaw_constraint = self.ik_solver.add_yaw_constraint(
-            "dummy_torso_yaw", "head", np.deg2rad(65.0)
-        )
-        yaw_constraint.configure("rel_yaw", "hard")
+        # yaw_constraint = self.ik_solver.add_yaw_constraint(
+        #     "dummy_torso_yaw", "head", np.deg2rad(65.0)
+        # )
+        # yaw_constraint.configure("rel_yaw", "hard")
 
         # Add the constraint to avoid the head from looking too far behind
         # Mostly due to some numerical problems 180 is always a bit tricky
         # Not really constraining because the this 180 pose is almost not
         # reachable with the real robot anyway
         yaw_constraint_abs = self.ik_solver.add_yaw_constraint(
-            "pp01071_turning_bowl", "head", np.deg2rad(179.0)
+            "body_foot_3dprint", "head", np.deg2rad(179.0)
         )
         yaw_constraint_abs.configure("abs_yaw", "hard")
 
         # Add a cone constraint for the head to not exceed a certain angle
         # This is to avoid the head from looking too far up or down
         self.fk_cone = self.ik_solver.add_cone_constraint(
-            "pp01071_turning_bowl", "head", np.deg2rad(40.0)
+            "body_foot_3dprint", "head", np.deg2rad(40.0)
         )
         self.fk_cone.configure("cone", "hard")
-        self.fk_yaw_constraint = self.fk_solver.add_yaw_constraint(
-            "dummy_torso_yaw", "head", np.deg2rad(65.0)
-        )
-        self.fk_yaw_constraint.configure("rel_yaw", "hard")
+        # self.fk_yaw_constraint = self.fk_solver.add_yaw_constraint(
+        #     "dummy_torso_yaw", "head", np.deg2rad(65.0)
+        # )
+        # self.fk_yaw_constraint.configure("rel_yaw", "hard")
 
         # Add a cone constraint for the head to not exceed a certain angle
         # This is to avoid the head from looking too far up or down
         fk_cone = self.fk_solver.add_cone_constraint(
-            "pp01071_turning_bowl", "head", np.deg2rad(40.0)
+            "body_foot_3dprint", "head", np.deg2rad(40.0)
         )
         fk_cone.configure("cone", "hard")
 
@@ -140,7 +140,7 @@ class PlacoKinematics:
 
         # regularization
         self.ik_yaw_joint_task = self.ik_solver.add_joints_task()
-        self.ik_yaw_joint_task.set_joints({"all_yaw": 0})
+        self.ik_yaw_joint_task.set_joints({"yaw_body": 0})
         if self.automatic_body_yaw:
             self.ik_yaw_joint_task.configure("joints", "soft", 5e-5)
         else:
@@ -161,13 +161,13 @@ class PlacoKinematics:
 
         # Actuated DoFs
         self.joints_names = [
-            "all_yaw",
-            "1",
-            "2",
-            "3",
-            "4",
-            "5",
-            "6",
+            "yaw_body",
+            "stewart_1",
+            "stewart_2",
+            "stewart_3",
+            "stewart_4",
+            "stewart_5",
+            "stewart_6",
         ]
 
         # Passive DoFs to eliminate with constraint jacobian
@@ -213,12 +213,12 @@ class PlacoKinematics:
         # to enable faster convergence of the IK/FK solver
         max_vel = 13.0  # rad/s
         for joint_name in self.joints_names:
-            if joint_name != "all_yaw":
+            if joint_name != "yaw_body":
                 self.robot.set_velocity_limit(joint_name, max_vel)
                 self.robot_ik.set_velocity_limit(joint_name, max_vel)
 
-        self.robot.set_joint_limits("all_yaw", -2.8, 2.8)
-        self.robot_ik.set_joint_limits("all_yaw", -2.8, 2.8)
+        self.robot.set_joint_limits("yaw_body", -2.8, 2.8)
+        self.robot_ik.set_joint_limits("yaw_body", -2.8, 2.8)
 
         # initial state
         self._inital_q = self.robot.state.q.copy()
@@ -333,7 +333,7 @@ class PlacoKinematics:
         _pose[:3, 3][2] += self.head_z_offset  # offset the height of the head
         self.head_frame.T_world_frame = _pose
         # update the body_yaw task
-        self.ik_yaw_joint_task.set_joints({"all_yaw": body_yaw})
+        self.ik_yaw_joint_task.set_joints({"yaw_body": body_yaw})
 
         # check the starting configuration
         # if the poses are too far start from the initial configuration
@@ -341,7 +341,7 @@ class PlacoKinematics:
             _pose, self.robot_ik.get_T_world_frame("head")
         )
         # if distance too small 0.1mm and 0.1 deg and the QP has converged (almost 0 velocity)
-        _dist_by = np.abs(body_yaw - self.robot_ik.get_joint("all_yaw"))
+        _dist_by = np.abs(body_yaw - self.robot_ik.get_joint("yaw_body"))
         if (
             _dist_p < 0.1e-4
             and _dist_o < np.deg2rad(0.01)
@@ -440,13 +440,13 @@ class PlacoKinematics:
         # update the main task
         self.head_joints_task.set_joints(
             {
-                "all_yaw": joints_angles[0],
-                "1": joints_angles[1],
-                "2": joints_angles[2],
-                "3": joints_angles[3],
-                "4": joints_angles[4],
-                "5": joints_angles[5],
-                "6": joints_angles[6],
+                "yaw_body": joints_angles[0],
+                "stewart_1": joints_angles[1],
+                "stewart_2": joints_angles[2],
+                "stewart_3": joints_angles[3],
+                "stewart_4": joints_angles[4],
+                "stewart_5": joints_angles[5],
+                "stewart_6": joints_angles[6],
             }
         )
 
@@ -617,7 +617,7 @@ class PlacoKinematics:
         grav_torque_all_joints = np.array(
             list(
                 self.robot.static_gravity_compensation_torques_dict(
-                    "pp01071_turning_bowl"
+                    "body_foot_3dprint"
                 ).values()
             )
         )
