@@ -32,8 +32,8 @@ def main():
                     f"  Pointing to x={p_head[0]:.2f}, y={p_head[1]:.2f}, z={p_head[2]:.2f}"
                 )
                 T_world_head = mini.get_current_head_pose()
-                R_wc = T_world_head[:3, :3]
-                p_world = R_wc @ p_head
+                R_world_head = T_world_head[:3, :3]
+                p_world = R_world_head @ p_head
                 print(
                     f"  In world coordinates: x={p_world[0]:.2f}, y={p_world[1]:.2f}, z={p_world[2]:.2f}"
                 )
