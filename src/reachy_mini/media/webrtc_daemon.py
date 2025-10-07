@@ -12,6 +12,7 @@ import gi
 from gst_signalling import GstSignallingListener
 
 from reachy_mini.media.audio_utils import get_respeaker_card_number
+from reachy_mini.media.camera_constants import RPICameraResolution
 
 gi.require_version("Gst", "1.0")
 gi.require_version("GstApp", "1.0")
@@ -22,13 +23,14 @@ from gi.repository import GLib, Gst  # noqa: E402
 class GstWebRTC:
     """WebRTC pipeline using GStreamer."""
 
-    def __init__(self, log_level: str = "INFO"):
+    def __init__(self, log_level: str = "INFO", resolution: RPICameraResolution = RPICameraResolution.R1280x720) -> None:
         """Initialize the GStreamer WebRTC pipeline."""
         self._logger = logging.getLogger(__name__)
         self._logger.setLevel(log_level)
         Gst.init(None)
         self._loop = GLib.MainLoop()
         self._thread_bus_calls: Optional[Thread] = None
+        self._resolution = resolution
 
         self._id_audio_card = get_respeaker_card_number()
 
@@ -68,11 +70,22 @@ class GstWebRTC:
 
         return webrtcsink
 
+    @property
+    def resolution(self) -> tuple[int, int]:
+        """Get the current camera resolution as a tuple (width, height)."""
+        return (self._resolution.value[0], self._resolution.value[1])
+
+    @property
+    def framerate(self) -> int:
+        """Get the current camera framerate."""
+        return self._resolution.value[2]
+
     def _configure_video(self, pipeline, webrtcsink):
         self._logger.debug("Configuring video")
         libcamerasrc = Gst.ElementFactory.make("libcamerasrc")
+        
         caps = Gst.Caps.from_string(
-            "video/x-raw,width=1280,height=720,framerate=60/1,format=YUY2,colorimetry=bt709,interlace-mode=progressive"
+            f"video/x-raw,width={self.resolution[0]},height={self.resolution[1]},framerate={self.framerate}/1,format=YUY2,colorimetry=bt709,interlace-mode=progressive"
         )
         capsfilter = Gst.ElementFactory.make("capsfilter")
         capsfilter.set_property("caps", caps)
