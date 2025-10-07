@@ -1,6 +1,9 @@
 """Utilities for managing the Reachy Mini daemon."""
 
+import fcntl
 import os
+import socket
+import struct
 import subprocess
 import time
 
@@ -51,3 +54,19 @@ def daemon_check(spawn_daemon: bool, use_sim: bool) -> None:
             ["reachy-mini-daemon", "--sim"] if use_sim else ["reachy-mini-daemon"],
             start_new_session=True,
         )
+
+
+def get_ip_address(ifname: str = "wlan0") -> str | None:
+    """Get the IP address of a specific network interface (Linux Only)."""
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        return socket.inet_ntoa(
+            fcntl.ioctl(
+                s.fileno(),
+                0x8915,  # SIOCGIFADDR
+                struct.pack("256s", ifname[:15].encode("utf-8")),
+            )[20:24]
+        )
+    except OSError:
+        print(f"Could not get IP address for interface {ifname}.")
+        return None

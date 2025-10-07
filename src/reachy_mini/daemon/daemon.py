@@ -14,6 +14,7 @@ from typing import Any, Optional
 import serial.tools.list_ports
 
 from reachy_mini.daemon.backend.abstract import MotorControlMode
+from reachy_mini.daemon.utils import get_ip_address
 
 from ..io import Server
 from .backend.mujoco import MujocoBackend, MujocoBackendStatus
@@ -38,6 +39,7 @@ class Daemon:
             simulation_enabled=None,
             backend_status=None,
             error=None,
+            wlan_ip=None,
         )
 
     async def start(
@@ -72,6 +74,9 @@ class Daemon:
             return self._status.state
 
         self._status.simulation_enabled = sim
+
+        if not localhost_only:
+            self._status.wlan_ip = get_ip_address()
 
         self._start_params = {
             "sim": sim,
@@ -414,6 +419,7 @@ class DaemonStatus:
     simulation_enabled: Optional[bool]
     backend_status: Optional[RobotBackendStatus | MujocoBackendStatus]
     error: Optional[str] = None
+    wlan_ip: Optional[str] = None
 
 
 def find_serial_port(vid: str = "1a86", pid: str = "55d3") -> list[str]:
