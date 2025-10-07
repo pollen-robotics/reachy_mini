@@ -79,9 +79,9 @@ class MujocoBackend(Backend):
             "eye_camera",
         )
 
-        self.head_site_id = mujoco.mj_name2id(  # type: ignore
+        self.head_site_id = mujoco.mj_name2id(
             self.model,
-            mujoco.mjtObj.mjOBJ_SITE,  # type: ignore
+            mujoco.mjtObj.mjOBJ_SITE,
             "head",
         )
 
