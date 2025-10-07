@@ -4,6 +4,7 @@ import asyncio
 import logging
 import uuid
 from dataclasses import dataclass
+from typing import Any, Awaitable, Callable
 
 from fastapi import (
     APIRouter,
@@ -63,7 +64,7 @@ async def install_app(
     app_info: AppInfo,
     background_tasks: BackgroundTasks,
     app_manager: "AppManager" = Depends(get_app_manager),
-):
+) -> dict[str, str]:
     """Install a new app by its info (background, returns job_id)."""
     job_id = start_bg_job(
         "install", background_tasks, app_manager.install_new_app, app_info
@@ -76,7 +77,7 @@ async def remove_app(
     app_name: str,
     background_tasks: BackgroundTasks,
     app_manager: "AppManager" = Depends(get_app_manager),
-):
+) -> dict[str, str]:
     """Remove an installed app by its name (background, returns job_id)."""
     job_id = start_bg_job("remove", background_tasks, app_manager.remove_app, app_name)
     return {"job_id": job_id}
@@ -93,7 +94,7 @@ async def job_status(job_id: str) -> JobStatus:
 
 # WebSocket route for live job status/logs
 @router.websocket("/ws/apps-manager/{job_id}")
-async def ws_apps_manager(websocket: WebSocket, job_id: str):
+async def ws_apps_manager(websocket: WebSocket, job_id: str) -> None:
     """WebSocket route to stream live job status/logs for a job, sending updates as soon as new logs are available."""
     await websocket.accept()
     last_log_len = 0
@@ -178,7 +179,10 @@ async def current_app_status(
 
 
 def start_bg_job(
-    command: str, background_tasks: BackgroundTasks, coro_func, *args
+    command: str,
+    background_tasks: BackgroundTasks,
+    coro_func: Callable[..., Awaitable[None]],
+    *args: Any,
 ) -> str:
     """Start a background job, with a custom logger and return its job_id."""
     job_id = str(uuid.uuid4())
@@ -191,11 +195,11 @@ def start_bg_job(
         new_log_evt={},
     )
 
-    async def run_command():
+    async def run_command() -> None:
         jobs[job_id].status.status = "running"
 
         class JobLogger(logging.Handler):
-            def emit(self, record):
+            def emit(self, record: logging.LogRecord) -> None:
                 jobs[job_id].status.logs.append(self.format(record))
                 for ws in jobs[job_id].new_log_evt.values():
                     ws.set()

@@ -5,6 +5,8 @@ subsystem of the robot. It provides endpoints for retrieving URDF representation
 and other kinematics-related information.
 """
 
+from typing import Any
+
 from fastapi import APIRouter, Depends
 
 from ....daemon.backend.abstract import Backend
@@ -16,7 +18,9 @@ router = APIRouter(
 
 
 @router.get("/info")
-async def get_kinematics_info(backend: Backend = Depends(get_backend)):
+async def get_kinematics_info(
+    backend: Backend = Depends(get_backend),
+) -> dict[str, Any]:
     """Get the current information of the kinematics."""
     return {
         "info": {
@@ -27,6 +31,6 @@ async def get_kinematics_info(backend: Backend = Depends(get_backend)):
 
 
 @router.get("/urdf")
-async def get_urdf(backend: Backend = Depends(get_backend)):
+async def get_urdf(backend: Backend = Depends(get_backend)) -> dict[str, str]:
     """Get the URDF representation of the robot."""
     return {"urdf": backend.get_urdf()}

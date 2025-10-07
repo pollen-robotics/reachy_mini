@@ -9,7 +9,7 @@ import logging
 from dataclasses import dataclass
 from enum import Enum
 from threading import Thread
-from typing import Optional
+from typing import Any, Optional
 
 import serial.tools.list_ports
 
@@ -32,7 +32,7 @@ class Daemon:
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(self.log_level)
 
-        self.backend = None
+        self.backend: "RobotBackend | MujocoBackend | None" = None
         self._status = DaemonStatus(
             state=DaemonState.NOT_INITIALIZED,
             simulation_enabled=None,
@@ -101,7 +101,7 @@ class Daemon:
         self.server = Server(self.backend, localhost_only=localhost_only)
         self.server.start()
 
-        def backend_wrapped_run():
+        def backend_wrapped_run() -> None:
             assert self.backend is not None, (
                 "Backend should be initialized before running."
             )
@@ -254,7 +254,7 @@ class Daemon:
                 if goto_sleep_on_stop is not None
                 else False
             )
-            params = {
+            params: dict[str, Any] = {
                 "sim": sim if sim is not None else self._start_params["sim"],
                 "serialport": serialport
                 if serialport is not None
@@ -305,7 +305,7 @@ class Daemon:
         check_collision: bool = False,
         kinematics_engine: str = "AnalyticalKinematics",
         headless: bool = False,
-    ):
+    ) -> None:
         """Run the Reachy Mini daemon indefinitely.
 
         First, it starts the daemon, then it keeps checking the status and allows for graceful shutdown on user interrupt (Ctrl+C).
@@ -353,7 +353,13 @@ class Daemon:
         await self.stop(goto_sleep_on_stop)
 
     def _setup_backend(
-        self, sim, serialport, scene, check_collision, kinematics_engine, headless
+        self,
+        sim: bool,
+        serialport: str,
+        scene: str,
+        check_collision: bool,
+        kinematics_engine: str,
+        headless: bool,
     ) -> "RobotBackend | MujocoBackend":
         if sim:
             return MujocoBackend(

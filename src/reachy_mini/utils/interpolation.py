@@ -4,20 +4,20 @@ from enum import Enum
 from typing import Callable, Optional, Tuple
 
 import numpy as np
-from numpy.typing import NDArray
+import numpy.typing as npt
 from scipy.spatial.transform import Rotation as R
 
-InterpolationFunc = Callable[[float], np.ndarray]
+InterpolationFunc = Callable[[float], npt.NDArray[np.float64]]
 
 
 def minimum_jerk(
-    starting_position: np.ndarray,
-    goal_position: np.ndarray,
+    starting_position: npt.NDArray[np.float64],
+    goal_position: npt.NDArray[np.float64],
     duration: float,
-    starting_velocity: Optional[np.ndarray] = None,
-    starting_acceleration: Optional[np.ndarray] = None,
-    final_velocity: Optional[np.ndarray] = None,
-    final_acceleration: Optional[np.ndarray] = None,
+    starting_velocity: Optional[npt.NDArray[np.float64]] = None,
+    starting_acceleration: Optional[npt.NDArray[np.float64]] = None,
+    final_velocity: Optional[npt.NDArray[np.float64]] = None,
+    final_acceleration: Optional[npt.NDArray[np.float64]] = None,
 ) -> InterpolationFunc:
     """Compute the mimimum jerk interpolation function from starting position to goal position."""
     if starting_velocity is None:
@@ -47,17 +47,17 @@ def minimum_jerk(
 
     coeffs = [a0, a1, a2, X[0], X[1], X[2]]
 
-    def f(t: float) -> np.ndarray:
+    def f(t: float) -> npt.NDArray[np.float64]:
         if t > duration:
             return goal_position
-        return np.sum([c * t**i for i, c in enumerate(coeffs)], axis=0)
+        return np.sum([c * t**i for i, c in enumerate(coeffs)], axis=0)  # type: ignore[no-any-return]
 
     return f
 
 
 def linear_pose_interpolation(
-    start_pose: np.ndarray, target_pose: np.ndarray, t: float
-):
+    start_pose: npt.NDArray[np.float64], target_pose: npt.NDArray[np.float64], t: float
+) -> npt.NDArray[np.float64]:
     """Linearly interpolate between two poses in 6D space."""
     # Extract rotations
     rot_start = R.from_matrix(start_pose[:3, :3])
@@ -133,7 +133,7 @@ def time_trajectory(
 
 
 def delta_angle_between_mat_rot(
-    P: NDArray[np.float64], Q: NDArray[np.float64]
+    P: npt.NDArray[np.float64], Q: npt.NDArray[np.float64]
 ) -> float:
     """Compute the angle (in radians) between two 3x3 rotation matrices `P` and `Q`.
 
@@ -155,11 +155,11 @@ def delta_angle_between_mat_rot(
     R = np.dot(P, Q.T)
     tr = (np.trace(R) - 1) / 2
     tr = np.clip(tr, -1.0, 1.0)  # Ensure numerical stability
-    return np.arccos(tr)
+    return float(np.arccos(tr))
 
 
 def distance_between_poses(
-    pose1: NDArray[np.float64], pose2: NDArray[np.float64]
+    pose1: npt.NDArray[np.float64], pose2: npt.NDArray[np.float64]
 ) -> Tuple[float, float, float]:
     """Compute three types of distance between two 4x4 homogeneous transformation matrices.
 
@@ -177,7 +177,7 @@ def distance_between_poses(
         - unhinged distance in magic-mm (translation in mm + rotation in degrees).
 
     """
-    distance_translation = np.linalg.norm(pose1[:3, 3] - pose2[:3, 3])
+    distance_translation = float(np.linalg.norm(pose1[:3, 3] - pose2[:3, 3]))
     distance_angle = delta_angle_between_mat_rot(pose1[:3, :3], pose2[:3, :3])
     unhinged_distance = distance_translation * 1000 + np.rad2deg(distance_angle)
 
@@ -185,8 +185,10 @@ def distance_between_poses(
 
 
 def compose_world_offset(
-    T_abs: np.ndarray, T_off_world: np.ndarray, reorthonormalize: bool = False
-) -> np.ndarray:
+    T_abs: npt.NDArray[np.float64],
+    T_off_world: npt.NDArray[np.float64],
+    reorthonormalize: bool = False,
+) -> npt.NDArray[np.float64]:
     """Compose an absolute world-frame pose with a world-frame offset.
 
       - translations add in world:       t_final = t_abs + t_off
