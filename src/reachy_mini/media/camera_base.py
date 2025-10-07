@@ -6,16 +6,8 @@ interface for capturing images.
 
 import logging
 from abc import ABC, abstractmethod
-from enum import Enum
 
 from reachy_mini.media.camera_constants import CameraResolution
-
-
-class CameraBackend(Enum):
-    """Camera backends."""
-
-    OPENCV = "opencv"
-    GSTREAMER = "gstreamer"
 
 
 class CameraBase(ABC):
@@ -23,14 +15,12 @@ class CameraBase(ABC):
 
     def __init__(
         self,
-        backend: CameraBackend,
         log_level: str = "INFO",
         resolution: CameraResolution = CameraResolution.R1280x720,
     ) -> None:
         """Initialize the camera."""
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(log_level)
-        self.backend = backend
         self._resolution = resolution
 
     @property

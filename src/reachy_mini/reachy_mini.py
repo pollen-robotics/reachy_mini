@@ -108,18 +108,21 @@ class ReachyMini:
         )
 
         mbackend = MediaBackend.DEFAULT
-        if media_backend.lower() == "gstreamer":
-            mbackend = MediaBackend.GSTREAMER
-        elif media_backend.lower() == "default":
-            mbackend = MediaBackend.DEFAULT
-        elif media_backend.lower() == "no_media":
-            mbackend = MediaBackend.NO_MEDIA
-        elif media_backend.lower() == "default_no_video":
-            mbackend = MediaBackend.DEFAULT_NO_VIDEO
-        else:
-            raise ValueError(
-                f"Invalid media_backend '{media_backend}'. Supported values are 'default', 'gstreamer', 'no_media', and 'default_no_video'."
-            )
+        match media_backend.lower():
+            case "gstreamer":
+                mbackend = MediaBackend.GSTREAMER
+            case "default":
+                mbackend = MediaBackend.DEFAULT
+            case "no_media":
+                mbackend = MediaBackend.NO_MEDIA
+            case "default_no_video":
+                mbackend = MediaBackend.DEFAULT_NO_VIDEO
+            case "webrtc":
+                mbackend = MediaBackend.WEBRTC
+            case _:
+                raise ValueError(
+                    f"Invalid media_backend '{media_backend}'. Supported values are 'default', 'gstreamer', 'no_media', 'default_no_video', and 'webrtc'."
+                )
 
         self.media_manager = MediaManager(
             use_sim=use_sim,

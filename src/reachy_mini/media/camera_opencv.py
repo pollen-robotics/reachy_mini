@@ -8,7 +8,7 @@ import cv2
 from reachy_mini.media.camera_constants import CameraResolution
 from reachy_mini.media.camera_utils import find_camera
 
-from .camera_base import CameraBackend, CameraBase
+from .camera_base import CameraBase
 
 
 class OpenCVCamera(CameraBase):
@@ -20,9 +20,7 @@ class OpenCVCamera(CameraBase):
         resolution: CameraResolution = CameraResolution.R1280x720,
     ) -> None:
         """Initialize the OpenCV camera."""
-        super().__init__(
-            backend=CameraBackend.OPENCV, log_level=log_level, resolution=resolution
-        )
+        super().__init__(log_level=log_level, resolution=resolution)
         self.cap = None
 
     def open(

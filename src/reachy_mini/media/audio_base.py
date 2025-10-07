@@ -6,24 +6,15 @@ interface for audio input/output.
 
 import logging
 from abc import ABC, abstractmethod
-from enum import Enum
-
-
-class AudioBackend(Enum):
-    """Audio backends."""
-
-    SOUNDDEVICE = "sounddevice"
-    GSTREAMER = "gstreamer"
 
 
 class AudioBase(ABC):
     """Abstract class for opening and managing audio devices."""
 
-    def __init__(self, backend: AudioBackend, log_level: str = "INFO") -> None:
+    def __init__(self, log_level: str = "INFO") -> None:
         """Initialize the audio device."""
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(log_level)
-        self.backend = backend
 
     @abstractmethod
     def start_recording(self):

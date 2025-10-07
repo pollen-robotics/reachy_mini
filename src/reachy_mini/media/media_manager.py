@@ -23,6 +23,7 @@ class MediaBackend(Enum):
     DEFAULT = "default"
     DEFAULT_NO_VIDEO = "default_no_video"
     GSTREAMER = "gstreamer"
+    WEBRTC = "webrtc"
 
 
 class MediaManager:
@@ -40,14 +41,27 @@ class MediaManager:
         self.logger.setLevel(log_level)
         self.backend = backend
         self.camera: Optional[CameraBase] = None
-        if (
-            not backend == MediaBackend.DEFAULT_NO_VIDEO
-            and not backend == MediaBackend.NO_MEDIA
-        ):
-            self._init_camera(use_sim, log_level, resolution)
         self.audio: Optional[AudioBase] = None
-        if not backend == MediaBackend.NO_MEDIA:
-            self._init_audio(log_level)
+
+        match backend:
+            case MediaBackend.NO_MEDIA:
+                self.logger.info("No media backend selected.")
+            case MediaBackend.DEFAULT:
+                self.logger.info("Using default media backend (OpenCV + SoundDevice).")
+                self._init_camera(use_sim, log_level, resolution)
+                self._init_audio(log_level)
+            case MediaBackend.DEFAULT_NO_VIDEO:
+                self.logger.info("Using default media backend (SoundDevice only).")
+                self._init_audio(log_level)
+            case MediaBackend.GSTREAMER:
+                self.logger.info("Using GStreamer media backend.")
+                self._init_camera(use_sim, log_level, resolution)
+                self._init_audio(log_level)
+            case MediaBackend.WEBRTC:
+                self.logger.info("Using WebRTC GStreamer backend.")
+                self._init_webrtc(log_level)
+            case _:
+                raise NotImplementedError(f"Media backend {backend} not implemented.")
 
     def _init_camera(
         self,
@@ -107,6 +121,21 @@ class MediaManager:
             self.audio = GStreamerAudio(log_level=log_level)
         else:
             raise NotImplementedError(f"Audio backend {self.backend} not implemented.")
+
+    def _init_webrtc(self, log_level: str) -> None:
+        """Initialize the WebRTC system (not implemented yet)."""
+        self.logger.warning("WebRTC media backend is not implemented yet.")
+        from gst_signalling.utils import find_producer_peer_id_by_name
+
+        from reachy_mini.media.webrtc_client_gstreamer import GstWebRTCClient
+
+        peer_id = find_producer_peer_id_by_name(
+            signalling_host, signalling_port, "reachymini"
+        )
+
+        self.camera = GstWebRTCClient(log_level=log_level)
+        self.camera.open()
+        self.audio = self.camera  # GstWebRTCClient handles both audio and video
 
     def play_sound(self, sound_file: str) -> None:
         """Play a sound file.
