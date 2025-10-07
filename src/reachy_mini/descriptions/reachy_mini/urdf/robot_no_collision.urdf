@@ -2324,7 +2324,7 @@ https://cad.onshape.com/documents/7836ed39be931c6ece17e007/w/39d557f31a0ba179c9e
   </link>
   <!-- Joint from pp01071_turning_bowl to dc15_a01_case_b_dummy -->
   <joint name="dummy_yaw" type="fixed">
-    <origin xyz="0 0 0" rpy="3.14 0 1.57"/>
+    <origin xyz="0 0 0" rpy="3.14 0 -1.57"/>
     <!-- <origin xyz="4.85723e-17 -5.60663e-19 0.0339" rpy="3.14159 -2.22045e-16 1.5708"/> -->
     <parent link="body_down_3dprint"/>
     <!-- <parent link="dc15_a01_case_b_dummy"/>   -->

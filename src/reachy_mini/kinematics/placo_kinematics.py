@@ -87,10 +87,10 @@ class PlacoKinematics:
         # Add the constraint between the rotated torso and the head
         # This will allow independent control of the torso and the head yaw
         # until this constraint is reached
-        # yaw_constraint = self.ik_solver.add_yaw_constraint(
-        #     "dummy_torso_yaw", "head", np.deg2rad(65.0)
-        # )
-        # yaw_constraint.configure("rel_yaw", "hard")
+        yaw_constraint = self.ik_solver.add_yaw_constraint(
+            "dummy_torso_yaw", "head", np.deg2rad(65.0)
+        )
+        yaw_constraint.configure("rel_yaw", "hard")
 
         # Add the constraint to avoid the head from looking too far behind
         # Mostly due to some numerical problems 180 is always a bit tricky
@@ -107,10 +107,10 @@ class PlacoKinematics:
             "body_foot_3dprint", "head", np.deg2rad(40.0)
         )
         self.fk_cone.configure("cone", "hard")
-        # self.fk_yaw_constraint = self.fk_solver.add_yaw_constraint(
-        #     "dummy_torso_yaw", "head", np.deg2rad(65.0)
-        # )
-        # self.fk_yaw_constraint.configure("rel_yaw", "hard")
+        self.fk_yaw_constraint = self.fk_solver.add_yaw_constraint(
+            "dummy_torso_yaw", "head", np.deg2rad(65.0)
+        )
+        self.fk_yaw_constraint.configure("rel_yaw", "hard")
 
         # Add a cone constraint for the head to not exceed a certain angle
         # This is to avoid the head from looking too far up or down
