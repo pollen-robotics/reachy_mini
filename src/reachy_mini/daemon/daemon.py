@@ -11,10 +11,8 @@ from enum import Enum
 from threading import Thread
 from typing import Any, Optional
 
-import serial.tools.list_ports
-
 from reachy_mini.daemon.backend.abstract import MotorControlMode
-from reachy_mini.daemon.utils import get_ip_address
+from reachy_mini.daemon.utils import get_ip_address, find_serial_port
 
 from ..io import Server
 from .backend.mujoco import MujocoBackend, MujocoBackendStatus
@@ -422,17 +420,4 @@ class DaemonStatus:
     wlan_ip: Optional[str] = None
 
 
-def find_serial_port(vid: str = "1a86", pid: str = "55d3") -> list[str]:
-    """Find the serial port for Reachy Mini based on VID and PID.
 
-    Args:
-        vid (str): Vendor ID of the device. (eg. "1a86").
-        pid (str): Product ID of the device. (eg. "55d3").
-
-    """
-    ports = serial.tools.list_ports.comports()
-
-    vid = vid.upper()
-    pid = pid.upper()
-
-    return [p.device for p in ports if f"USB VID:PID={vid}:{pid}" in p.hwid]
