@@ -15,7 +15,7 @@ async def start_daemon(
     request: Request,
     wake_up: bool,
     daemon: Daemon = Depends(get_daemon),
-):
+) -> DaemonStatus:
     """Start the daemon."""
     await daemon.start(
         sim=request.app.state.args.sim,
@@ -36,7 +36,9 @@ async def stop_daemon(
 
 
 @router.post("/restart")
-async def restart_daemon(request: Request, daemon: Daemon = Depends(get_daemon)):
+async def restart_daemon(
+    request: Request, daemon: Daemon = Depends(get_daemon)
+) -> DaemonStatus:
     """Restart the daemon."""
     await daemon.restart(
         sim=request.app.state.args.sim,

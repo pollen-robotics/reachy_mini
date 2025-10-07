@@ -13,10 +13,12 @@ import os
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from pathlib import Path
+from typing import AsyncGenerator
 
 import uvicorn
 from fastapi import APIRouter, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -59,7 +61,7 @@ def create_app(args: Args) -> FastAPI:
     """Create and configure the FastAPI application."""
 
     @asynccontextmanager
-    async def lifespan(app: FastAPI):
+    async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         """Lifespan context manager for the FastAPI application."""
         args = app.state.args  # type: Args
 
@@ -106,7 +108,7 @@ def create_app(args: Args) -> FastAPI:
 
     # Route to list available HTML/JS/CSS examples with links using Jinja2 template
     @app.get("/")
-    async def list_examples(request: Request):
+    async def list_examples(request: Request) -> HTMLResponse:
         """Render the dashboard."""
         files = [f for f in os.listdir(DASHBOARD_PAGES) if f.endswith(".html")]
         return templates.TemplateResponse(
@@ -122,7 +124,7 @@ def create_app(args: Args) -> FastAPI:
     return app
 
 
-def run_app(args: Args):
+def run_app(args: Args) -> None:
     """Run the FastAPI app with Uvicorn."""
     logging.basicConfig(level=logging.INFO)
 
@@ -130,7 +132,7 @@ def run_app(args: Args):
     uvicorn.run(app, host=args.fastapi_host, port=args.fastapi_port)
 
 
-def main():
+def main() -> None:
     """Run the FastAPI app with Uvicorn."""
     default_args = Args()
 
@@ -248,8 +250,7 @@ def main():
     )
 
     args = parser.parse_args()
-    args = Args(**vars(args))
-    run_app(args)
+    run_app(Args(**vars(args)))
 
 
 if __name__ == "__main__":

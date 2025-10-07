@@ -7,6 +7,10 @@ interface for capturing images.
 import logging
 from abc import ABC, abstractmethod
 from enum import Enum
+from typing import Optional
+
+import numpy as np
+import numpy.typing as npt
 
 from reachy_mini.media.camera_constants import CameraResolution
 
@@ -39,18 +43,16 @@ class CameraBase(ABC):
         return (self._resolution.value[0], self._resolution.value[1])
 
     @abstractmethod
-    def open(
-        self,
-    ):
+    def open(self) -> None:
         """Open the camera."""
         pass
 
     @abstractmethod
-    def read(self):
+    def read(self) -> Optional[bytes | npt.NDArray[np.uint8]]:
         """Read an image from the camera. Returns the image or None if error."""
         pass
 
     @abstractmethod
-    def close(self):
+    def close(self) -> None:
         """Close the camera and release resources."""
         pass

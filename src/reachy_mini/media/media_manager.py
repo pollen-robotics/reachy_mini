@@ -8,6 +8,7 @@ from enum import Enum
 from typing import Optional
 
 import numpy as np
+import numpy.typing as npt
 
 from reachy_mini.media.audio_base import AudioBase
 from reachy_mini.media.camera_base import CameraBase
@@ -77,11 +78,11 @@ class MediaManager:
         else:
             raise NotImplementedError(f"Camera backend {self.backend} not implemented.")
 
-    def get_frame(self) -> Optional[np.ndarray]:
+    def get_frame(self) -> Optional[bytes | npt.NDArray[np.uint8]]:
         """Get a frame from the camera.
 
         Returns:
-            Optional[np.ndarray]: The captured frame, or None if the camera is not available.
+            Optional[bytes | npt.NDArray[np.uint8]]: The captured frame, or None if the camera is not available.
 
         """
         if self.camera is None:
@@ -122,9 +123,12 @@ class MediaManager:
 
     def start_recording(self) -> None:
         """Start recording audio."""
+        if self.audio is None:
+            self.logger.warning("Audio system is not initialized.")
+            return
         self.audio.start_recording()
 
-    def get_audio_sample(self) -> Optional[np.ndarray]:
+    def get_audio_sample(self) -> Optional[bytes | npt.NDArray[np.float32]]:
         """Get an audio sample from the audio device.
 
         Returns:
@@ -162,7 +166,7 @@ class MediaManager:
             return
         self.audio.start_playing()
 
-    def push_audio_sample(self, data) -> None:
+    def push_audio_sample(self, data: bytes) -> None:
         """Push audio data to the output device.
 
         Args:

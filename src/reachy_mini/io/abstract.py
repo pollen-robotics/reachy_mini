@@ -16,12 +16,12 @@ class AbstractServer(ABC):
     """Base class for server implementations."""
 
     @abstractmethod
-    def start(self):
+    def start(self) -> None:
         """Start the server."""
         pass
 
     @abstractmethod
-    def stop(self):
+    def stop(self) -> None:
         """Stop the server."""
         pass
 
@@ -35,7 +35,7 @@ class AbstractClient(ABC):
     """Base class for client implementations."""
 
     @abstractmethod
-    def wait_for_connection(self):
+    def wait_for_connection(self) -> None:
         """Wait for the client to connect to the server."""
         pass
 
@@ -45,12 +45,12 @@ class AbstractClient(ABC):
         pass
 
     @abstractmethod
-    def disconnect(self):
+    def disconnect(self) -> None:
         """Disconnect the client from the server."""
         pass
 
     @abstractmethod
-    def send_command(self, command: str):
+    def send_command(self, command: str) -> None:
         """Send a command to the server."""
         pass
 
@@ -65,6 +65,6 @@ class AbstractClient(ABC):
         pass
 
     @abstractmethod
-    def wait_for_task_completion(self, task_uid: UUID, timeout: float = 5.0):
+    def wait_for_task_completion(self, task_uid: UUID, timeout: float = 5.0) -> None:
         """Wait for the specified task to complete."""
         pass

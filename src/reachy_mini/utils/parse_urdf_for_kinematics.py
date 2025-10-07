@@ -5,15 +5,16 @@ The analytical kinematics need information from the URDF. This files computes th
 
 import json
 from importlib.resources import files
+from typing import Any, Dict
 
 import numpy as np  # noqa: D100
 from placo_utils.tf import tf
 
 import reachy_mini
-from reachy_mini.kinematics import PlacoKinematics
+from reachy_mini.kinematics.placo_kinematics import PlacoKinematics
 
 
-def get_data():
+def get_data() -> Dict[str, Any]:
     """Generate the urdf_kinematics.json file."""
     urdf_root_path: str = str(
         files(reachy_mini).joinpath("descriptions/reachy_mini/urdf")
@@ -22,7 +23,7 @@ def get_data():
     placo_kinematics = PlacoKinematics(urdf_root_path, 0.02)
     robot = placo_kinematics.robot
 
-    placo_kinematics.fk([0.0] * 7, no_iterations=20)
+    placo_kinematics.fk(np.array([0.0] * 7), no_iterations=20)
     robot.update_kinematics()
 
     # Measuring lengths for the arm and branch (constants could be used)
@@ -71,7 +72,7 @@ def get_data():
     return data
 
 
-def main():
+def main() -> None:
     """Generate the urdf_kinematics.json file."""
     assets_root_path: str = str(files(reachy_mini).joinpath("assets/"))
     data = get_data()

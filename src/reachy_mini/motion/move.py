@@ -3,6 +3,7 @@
 from abc import ABC, abstractmethod
 
 import numpy as np
+import numpy.typing as npt
 
 
 class Move(ABC):
@@ -18,7 +19,9 @@ class Move(ABC):
     def evaluate(
         self,
         t: float,
-    ) -> tuple[np.ndarray | None, np.ndarray | None, float | None]:
+    ) -> tuple[
+        npt.NDArray[np.float64] | None, npt.NDArray[np.float64] | None, float | None
+    ]:
         """Evaluate the move at time t, typically called at a high-frequency (eg. 100Hz).
 
         Arguments:

@@ -11,10 +11,12 @@ import time
 from dataclasses import dataclass
 from importlib.resources import files
 from threading import Thread
+from typing import Annotated
 
 import mujoco
 import mujoco.viewer
 import numpy as np
+import numpy.typing as npt
 
 import reachy_mini
 
@@ -32,11 +34,11 @@ class MujocoBackend(Backend):
 
     def __init__(
         self,
-        scene="empty",
+        scene: str = "empty",
         check_collision: bool = False,
         kinematics_engine: str = "AnalyticalKinematics",
         headless: bool = False,
-    ):
+    ) -> None:
         """Initialize the MujocoBackend with a specified scene.
 
         Args:
@@ -63,17 +65,17 @@ class MujocoBackend(Backend):
         mjcf_root_path = str(
             files(reachy_mini).joinpath("descriptions/reachy_mini/mjcf/")
         )
-        self.model = mujoco.MjModel.from_xml_path(  # type: ignore
+        self.model = mujoco.MjModel.from_xml_path(
             f"{mjcf_root_path}/scenes/{scene}.xml"
         )
-        self.data = mujoco.MjData(self.model)  # type: ignore
+        self.data = mujoco.MjData(self.model)
         self.model.opt.timestep = 0.002  # s, simulation timestep, 500hz
         self.decimation = 10  # -> 50hz control loop
         self.rendering_timestep = 0.04  # s, rendering loop # 25Hz
 
-        self.camera_id = mujoco.mj_name2id(  # type: ignore
+        self.camera_id = mujoco.mj_name2id(
             self.model,
-            mujoco.mjtObj.mjOBJ_CAMERA,  # type: ignore
+            mujoco.mjtObj.mjOBJ_CAMERA,
             "eye_camera",
         )
 
@@ -99,7 +101,7 @@ class MujocoBackend(Backend):
             get_joint_addr_from_name(self.model, n) for n in self.joint_names
         ]
 
-    def rendering_loop(self):
+    def rendering_loop(self) -> None:
         """Offline Rendering loop for the Mujoco simulation.
 
         Capture the image from the virtual Reachy's camera and send it over UDP.
@@ -118,7 +120,7 @@ class MujocoBackend(Backend):
             took = time.time() - start_t
             time.sleep(max(0, self.rendering_timestep - took))
 
-    def run(self):
+    def run(self) -> None:
         """Run the Mujoco simulation with a viewer.
 
         This method initializes the viewer and enters the main simulation loop.
@@ -130,14 +132,14 @@ class MujocoBackend(Backend):
                 self.model, self.data, show_left_ui=False, show_right_ui=False
             )
             with viewer.lock():
-                viewer.cam.type = mujoco.mjtCamera.mjCAMERA_FREE  # type: ignore
+                viewer.cam.type = mujoco.mjtCamera.mjCAMERA_FREE
                 viewer.cam.distance = 0.8  # ≃ ||pos - lookat||
                 viewer.cam.azimuth = 160  # degrees
                 viewer.cam.elevation = -20  # degrees
                 viewer.cam.lookat[:] = [0, 0, 0.15]
 
                 # force one render with your new camera
-                mujoco.mj_step(self.model, self.data)  # type: ignore
+                mujoco.mj_step(self.model, self.data)
                 viewer.sync()
 
                 # im = self.get_camera()
@@ -153,10 +155,10 @@ class MujocoBackend(Backend):
                 )
 
                 # recompute all kinematics, collisions, etc.
-                mujoco.mj_forward(self.model, self.data)  # type: ignore
+                mujoco.mj_forward(self.model, self.data)
 
         # one more frame so the viewer shows your startup pose
-        mujoco.mj_step(self.model, self.data)  # type: ignore
+        mujoco.mj_step(self.model, self.data)
         if not self.headless:
             viewer.sync()
 
@@ -200,8 +202,8 @@ class MujocoBackend(Backend):
                         self.joint_positions_publisher.put(
                             json.dumps(
                                 {
-                                    "head_joint_positions": self.current_head_joint_positions,
-                                    "antennas_joint_positions": self.current_antenna_joint_positions,
+                                    "head_joint_positions": self.current_head_joint_positions.tolist(),
+                                    "antennas_joint_positions": self.current_antenna_joint_positions.tolist(),
                                 }
                             ).encode("utf-8")
                         )
@@ -217,7 +219,7 @@ class MujocoBackend(Backend):
                 if not self.headless:
                     viewer.sync()
 
-            mujoco.mj_step(self.model, self.data)  # type: ignore
+            mujoco.mj_step(self.model, self.data)
 
             took = time.time() - start_t
             time.sleep(max(0, self.model.opt.timestep - took))
@@ -227,7 +229,7 @@ class MujocoBackend(Backend):
         if not self.headless:
             viewer.close()
 
-    def get_mj_present_head_pose(self) -> np.ndarray:
+    def get_mj_present_head_pose(self) -> Annotated[npt.NDArray[np.float64], (4, 4)]:
         """Get the current head pose from the Mujoco simulation.
 
         Returns:
@@ -255,13 +257,23 @@ class MujocoBackend(Backend):
         """
         return MujocoBackendStatus(motor_control_mode=self.get_motor_control_mode())
 
-    def get_present_head_joint_positions(self):
+    def get_present_head_joint_positions(
+        self,
+    ) -> Annotated[npt.NDArray[np.float64], (7,)]:
         """Get the current joint positions of the head."""
-        return self.data.qpos[self.joint_qpos_addr[:7]].flatten().tolist()
+        pos: npt.NDArray[np.float64] = self.data.qpos[
+            self.joint_qpos_addr[:7]
+        ].flatten()
+        return pos
 
-    def get_present_antenna_joint_positions(self):
+    def get_present_antenna_joint_positions(
+        self,
+    ) -> Annotated[npt.NDArray[np.float64], (2,)]:
         """Get the current joint positions of the antennas."""
-        return self.data.qpos[self.joint_qpos_addr[-2:]].flatten().tolist()
+        pos: npt.NDArray[np.float64] = self.data.qpos[
+            self.joint_qpos_addr[-2:]
+        ].flatten()
+        return pos
 
     def get_motor_control_mode(self) -> MotorControlMode:
         """Get the motor control mode."""
