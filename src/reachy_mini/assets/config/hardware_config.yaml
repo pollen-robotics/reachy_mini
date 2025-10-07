@@ -41,44 +41,44 @@ motors:
       shutdown_error: 52
   - stewart_platform_1:
       id: 11
-      offset: 626
-      lower_limit: 990
-      upper_limit: 2554
+      offset: 1024
+      lower_limit: 1338
+      upper_limit: 2952
       return_delay_time: 0
       shutdown_error: 52
   - stewart_platform_2:
       id: 12
-      offset: -626
-      lower_limit: 1542
-      upper_limit: 3264
+      offset: -1024
+      lower_limit: 1144
+      upper_limit: 2866
       return_delay_time: 0
       shutdown_error: 52
   - stewart_platform_3:
       id: 13
-      offset: 626
-      lower_limit: 1074
-      upper_limit: 2554
+      offset: 1024
+      lower_limit: 1472
+      upper_limit: 2950
       return_delay_time: 0
       shutdown_error: 52
   - stewart_platform_4:
       id: 14
-      offset: -626
-      lower_limit: 1542
-      upper_limit: 3022
+      offset: -1024
+      lower_limit: 1144
+      upper_limit: 2624
       return_delay_time: 0
       shutdown_error: 52
   - stewart_platform_5:
       id: 15
-      offset: 626
-      lower_limit: 832
-      upper_limit: 2554
+      offset: 1024
+      lower_limit: 1230
+      upper_limit: 2952
       return_delay_time: 0
       shutdown_error: 52
   - stewart_platform_6:
       id: 16
-      offset: -626
-      lower_limit: 1542
-      upper_limit: 3106
+      offset: -1024
+      lower_limit: 1144
+      upper_limit: 2708
       return_delay_time: 0
       shutdown_error: 52
   - right_antenna:
