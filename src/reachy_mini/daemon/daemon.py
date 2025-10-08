@@ -5,14 +5,20 @@ It includes methods to start, stop, and restart the daemon, as well as to check 
 It also provides a command-line interface for easy interaction.
 """
 
+import json
 import logging
-from dataclasses import dataclass
+import time
+from dataclasses import asdict, dataclass
 from enum import Enum
-from threading import Thread
+from threading import Event, Thread
 from typing import Any, Optional
 
 from reachy_mini.daemon.backend.abstract import MotorControlMode
-from reachy_mini.daemon.utils import get_ip_address, find_serial_port
+from reachy_mini.daemon.utils import (
+    convert_enum_to_dict,
+    find_serial_port,
+    get_ip_address,
+)
 
 from ..io import Server
 from .backend.mujoco import MujocoBackend, MujocoBackendStatus
@@ -39,6 +45,8 @@ class Daemon:
             error=None,
             wlan_ip=None,
         )
+        self._thread_publish_status = Thread(target=self._publish_status, daemon=True)
+        self._thread_event_publish_status = Event()
 
     async def start(
         self,
@@ -103,6 +111,7 @@ class Daemon:
 
         self.server = Server(self.backend, localhost_only=localhost_only)
         self.server.start()
+        self._thread_publish_status.start()
 
         def backend_wrapped_run() -> None:
             assert self.backend is not None, (
@@ -173,6 +182,7 @@ class Daemon:
             self.logger.info("Stopping Reachy Mini daemon...")
             self._status.state = DaemonState.STOPPING
             self.backend.is_shutting_down = True
+            self._thread_event_publish_status.set()
             self.server.stop()
 
             if not hasattr(self, "backend"):
@@ -297,6 +307,15 @@ class Daemon:
 
         return self._status
 
+    def _publish_status(self) -> None:
+        self._thread_event_publish_status.clear()
+        while self._thread_event_publish_status.is_set() is False:
+            json_str = json.dumps(
+                asdict(self.status(), dict_factory=convert_enum_to_dict)
+            )
+            self.server.pub_status.put(json_str)
+            time.sleep(1)
+
     async def run4ever(
         self,
         sim: bool = False,
@@ -418,6 +437,3 @@ class DaemonStatus:
     backend_status: Optional[RobotBackendStatus | MujocoBackendStatus]
     error: Optional[str] = None
     wlan_ip: Optional[str] = None
-
-
-

@@ -6,10 +6,10 @@ import socket
 import struct
 import subprocess
 import time
-
-import serial.tools.list_ports
+from enum import Enum
 
 import psutil
+import serial.tools.list_ports
 
 
 def daemon_check(spawn_daemon: bool, use_sim: bool) -> None:
@@ -57,6 +57,7 @@ def daemon_check(spawn_daemon: bool, use_sim: bool) -> None:
             start_new_session=True,
         )
 
+
 def find_serial_port(vid: str = "1a86", pid: str = "55d3") -> list[str]:
     """Find the serial port for Reachy Mini based on VID and PID.
 
@@ -71,6 +72,7 @@ def find_serial_port(vid: str = "1a86", pid: str = "55d3") -> list[str]:
     pid = pid.upper()
 
     return [p.device for p in ports if f"USB VID:PID={vid}:{pid}" in p.hwid]
+
 
 def get_ip_address(ifname: str = "wlan0") -> str | None:
     """Get the IP address of a specific network interface (Linux Only)."""
@@ -87,3 +89,13 @@ def get_ip_address(ifname: str = "wlan0") -> str | None:
         print(f"Could not get IP address for interface {ifname}.")
         return None
 
+
+def convert_enum_to_dict(data):
+    """Convert a dataclass containing Enums to a dictionary with enum values."""
+
+    def convert_value(obj):
+        if isinstance(obj, Enum):
+            return obj.value
+        return obj
+
+    return dict((k, convert_value(v)) for k, v in data)
