@@ -601,7 +601,7 @@ class Backend:
             sound_file (str): The name of the sound file to play (e.g., "proud2.wav").
 
         """
-        self.audio.play_sound(sound_file)
+        self.audio.play_sound(sound_file, autoclean=True)
 
     # Basic move definitions
     INIT_HEAD_POSE = np.eye(4)
@@ -616,7 +616,7 @@ class Backend:
         1.0032234352772091,
     ]
 
-    SLEEP_ANTENNAS_JOINT_POSITIONS = np.array((3.05, -3.05))
+    SLEEP_ANTENNAS_JOINT_POSITIONS = np.array((-3.05, 3.05))
     SLEEP_HEAD_POSE = np.array(
         [
             [0.911, 0.004, 0.413, -0.021],
