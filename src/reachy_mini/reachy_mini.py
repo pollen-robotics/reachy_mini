@@ -123,7 +123,7 @@ class ReachyMini:
             )
 
         self.media_manager = MediaManager(
-            use_sim=use_sim,
+            use_sim=self.client.get_status()["simulation_enabled"],
             backend=mbackend,
             log_level=log_level,
         )
