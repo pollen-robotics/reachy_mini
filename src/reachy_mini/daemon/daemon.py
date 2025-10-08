@@ -15,7 +15,7 @@ import serial.tools.list_ports
 
 from reachy_mini.daemon.backend.abstract import MotorControlMode
 
-from ..io import Server
+from ..io.zenoh_server import ZenohServer
 from .backend.mujoco import MujocoBackend, MujocoBackendStatus
 from .backend.robot import RobotBackend, RobotBackendStatus
 
@@ -98,7 +98,7 @@ class Daemon:
             self._status.error = str(e)
             raise e
 
-        self.server = Server(self.backend, localhost_only=localhost_only)
+        self.server = ZenohServer(self.backend, localhost_only=localhost_only)
         self.server.start()
 
         def backend_wrapped_run() -> None:

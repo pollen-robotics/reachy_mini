@@ -19,8 +19,8 @@ from asgiref.sync import async_to_sync
 from scipy.spatial.transform import Rotation as R
 
 from reachy_mini.daemon.utils import daemon_check
-from reachy_mini.io import Client
 from reachy_mini.io.protocol import GotoTaskRequest
+from reachy_mini.io.zenoh_client import ZenohClient
 from reachy_mini.media.media_manager import MediaBackend, MediaManager
 from reachy_mini.motion.move import Move
 from reachy_mini.utils.interpolation import InterpolationTechnique, minimum_jerk
@@ -87,7 +87,7 @@ class ReachyMini:
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(log_level)
         daemon_check(spawn_daemon, use_sim)
-        self.client = Client(localhost_only)
+        self.client = ZenohClient(localhost_only)
         self.client.wait_for_connection(timeout=timeout)
         self.set_automatic_body_yaw(automatic_body_yaw)
         self._last_head_pose: Optional[npt.NDArray[np.float64]] = None
