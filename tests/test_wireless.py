@@ -5,7 +5,7 @@ from reachy_mini.reachy_mini import ReachyMini
 
 @pytest.mark.wireless
 def test_daemon_wireless_client_disconnection() -> None:
-    with ReachyMini(media_backend="no_media") as mini:
+    with ReachyMini(media_backend="no_media", localhost_only=False) as mini:
         status = mini.client.get_status()
         assert status['state'] == "running"
         assert not status['simulation_enabled']
