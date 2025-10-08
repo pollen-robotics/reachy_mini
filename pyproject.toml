@@ -12,7 +12,7 @@ requires-python = ">=3.10"
 dependencies = [
     "numpy>=2.2.5,<2.3.0",
     "scipy==1.15.3",
-    "reachy_mini_motor_controller>=0.6.3",    
+    "reachy_mini_motor_controller>=1.0.0",    
     "eclipse-zenoh>=1.4.0",
     "opencv-python<=5.0",
     "cv2_enumerate_cameras>=1.2.1",
@@ -25,7 +25,7 @@ dependencies = [
     "sounddevice==0.5.1",
     "soundfile==0.13.1",
     "librosa==0.11.0",
-    "reachy-mini-rust-kinematics==0.1.1",
+    "reachy-mini-rust-kinematics==1.0.0",
     "asgiref",
     "aiohttp",
 ]
