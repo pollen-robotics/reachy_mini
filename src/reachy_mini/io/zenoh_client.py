@@ -64,7 +64,7 @@ class ZenohClient(AbstractClient):
         )
 
         self.status_sub = self.session.declare_subscriber(
-            "reachy_mini/status",
+            "reachy_mini/daemon_status",
             self._handle_status,
         )
 
