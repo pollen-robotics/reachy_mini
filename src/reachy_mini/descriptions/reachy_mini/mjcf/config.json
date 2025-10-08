@@ -1,10 +1,10 @@
 {
-  "url": "https://cad.onshape.com/documents/e305b26a84339af20c593973/w/ec7765eccdaa9a5960507125/e/251023ea04190ab16854eb80",
+  "url": "https://cad.onshape.com/documents/7836ed39be931c6ece17e007/w/39d557f31a0ba179c9e7bd5b/e/c82436d68c7d00e142abc581",
   "outputFormat": "mujoco",
   "robot_name": "reachy_mini",
   "output_filename": "reachy_mini",
   "simplify_stls": true,
-  "max_stl_size": 0.3,
+  "max_stl_size": 1.0,
   "ignore": {
     "*": "collision",
     "!turning_bowl": "collision"

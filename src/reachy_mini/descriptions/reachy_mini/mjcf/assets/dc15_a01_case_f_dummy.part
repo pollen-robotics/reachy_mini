@@ -1,13 +1,13 @@
 {
     "configuration": "default",
-    "documentId": "e305b26a84339af20c593973",
-    "documentMicroversion": "4913859d0d2ce0a13b3adb26",
-    "elementId": "f05b326e391ef37011cd1007",
+    "documentId": "7836ed39be931c6ece17e007",
+    "documentMicroversion": "9e69559f1f6208e19efa45ab",
+    "elementId": "2cfe27202252cfce42ed7ee4",
     "fullConfiguration": "default",
-    "id": "MzNAW97t7HwMX98P9",
+    "id": "MJyRwhvvOMia59Q6o",
     "isStandardContent": false,
     "name": "DC15_A01_CASE_F_DUMMY <1>",
-    "partId": "JbH",
+    "partId": "JFj",
     "suppressed": false,
     "type": "Part"
 }
