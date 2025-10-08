@@ -40,7 +40,7 @@ def main(backend):
                 print("Failed to grab frame.")
                 continue
 
-            if backend == "gstreamer":
+            if backend == "gstreamer" or backend == "webrtc":
                 frame = cv2.imdecode(
                     np.frombuffer(frame, dtype=np.uint8), cv2.IMREAD_COLOR
                 )
@@ -62,7 +62,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--backend",
         type=str,
-        choices=["default", "gstreamer"],
+        choices=["default", "gstreamer", "webrtc"],
         default="default",
         help="Media backend to use.",
     )

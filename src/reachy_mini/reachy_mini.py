@@ -128,6 +128,7 @@ class ReachyMini:
             use_sim=use_sim,
             backend=mbackend,
             log_level=log_level,
+            signalling_host="10.0.1.38",  # TODO get from args
         )
 
     def __del__(self):
