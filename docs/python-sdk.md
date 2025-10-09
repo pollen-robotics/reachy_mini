@@ -370,6 +370,8 @@ We provide tools to record and upload a dataset [here](https://github.com/pollen
 
 We provide a simple way to wrap your behavior in an application that can be run as a standalone script. This is useful to properly manage the start/stop of the app and to add discovery/install mechanisms to allow users to easily run your app. We are also working on a dashboard to manage the apps and their installation.
 
+**It is also a good way to share your app with the community and make it easily discoverable and installable!** See the [HF Spaces Reachy Mini Apps](https://huggingface.co/spaces/pollen-robotics/Reachy_Mini_Apps) for examples of apps shared by the community.
+
 To write your app, you simply need to define a class that inherits from `ReachyMiniApp` and implements the `run` method. This method will be called when the app is started, and you can use it to interact with the robot.
 
 ```python
@@ -386,6 +388,13 @@ class MyApp(ReachyMiniApp):
 ```
 
 The `stop_event` is a threading event that you should check periodically to know if the app should stop. You can use it to gracefully stop the app when the user wants to stop it.
+
+### Using the space template
+
+Directly go to [HF Spaces Reachy Mini App Example](https://huggingface.co/spaces/pollen-robotics/reachy_mini_app_example) and follow the instruction!
+
+
+### Using the app template generator
 
 We also provide a script to make all the basic boilerplate for you. You can run the following command to create a new app:
 
