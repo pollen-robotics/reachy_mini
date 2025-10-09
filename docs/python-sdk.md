@@ -210,10 +210,13 @@ The robot will not be able to follow the command exactly due to the safety limit
 Reachy mini will not throw an error if you exceed these limits, but it will move to the closest valid position within the limits. You can check the current position of the head using the `get_current_head_pose` method of the `ReachyMini` instance. For example:
 
 ```python
+import time 
+
 from reachy_mini import ReachyMini
 from reachy_mini.utils import create_head_pose
-import time 
+
 reachy = ReachyMini()
+
 # construct a head pose with roll -20 degrees
 pose = create_head_pose(roll=-20, degrees=True)
 reachy.goto_target(head=pose)
@@ -374,7 +377,7 @@ To write your app, you simply need to define a class that inherits from `ReachyM
 ```python
 import threading
 
-from reachy_mini.app import ReachyMiniApp
+from reachy_mini.apps.app import ReachyMiniApp
 from reachy_mini import ReachyMini
 
 
