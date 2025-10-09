@@ -59,20 +59,32 @@ def daemon_check(spawn_daemon: bool, use_sim: bool) -> None:
         )
 
 
-def find_serial_port(vid: str = "1a86", pid: str = "55d3") -> list[str]:
-    """Find the serial port for Reachy Mini based on VID and PID.
+def find_serial_port(
+    vid: str = "1a86",
+    pid: str = "55d3",
+    pi_uart: str = "/dev/ttyAMA3",
+) -> list[str]:
+    """Find the serial port for Reachy Mini based on VID and PID or the Raspberry Pi UART for the wireless version.
 
     Args:
         vid (str): Vendor ID of the device. (eg. "1a86").
         pid (str): Product ID of the device. (eg. "55d3").
+        pi_uart (str): Path to the Raspberry Pi UART device. (eg. "/dev/ttyAMA3").
 
     """
+    # If it's a lite version, we should find it using the VID and PID
+    # If it's a wireless version, we should use the Raspberry Pi UART
+
     ports = serial.tools.list_ports.comports()
 
     vid = vid.upper()
     pid = pid.upper()
 
-    return [p.device for p in ports if f"USB VID:PID={vid}:{pid}" in p.hwid]
+    return [
+        p.device
+        for p in ports
+        if f"USB VID:PID={vid}:{pid}" in p.hwid or p.device == pi_uart
+    ]
 
 
 def get_ip_address(ifname: str = "wlan0") -> str | None:
