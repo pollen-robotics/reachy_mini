@@ -10,6 +10,7 @@ It uses Jinja2 templates to generate the necessary files for the app project.
 import threading
 from abc import ABC, abstractmethod
 from pathlib import Path
+from typing import Dict
 
 from jinja2 import Environment, FileSystemLoader
 
@@ -43,7 +44,7 @@ class ReachyMiniApp(ABC):
         """
         pass
 
-    def stop(self):
+    def stop(self) -> None:
         """Stop the app gracefully."""
         self.stop_event.set()
         print("App is stopping...")
@@ -60,7 +61,7 @@ def make_app_project(app_name: str, path: Path) -> None:
     TEMPLATE_DIR = Path(__file__).parent / "templates"
     env = Environment(loader=FileSystemLoader(TEMPLATE_DIR))
 
-    def render_template(filename, context):
+    def render_template(filename: str, context: Dict[str, str]) -> str:
         template = env.get_template(filename)
         return template.render(context)
 
@@ -95,7 +96,7 @@ def make_app_project(app_name: str, path: Path) -> None:
     print(f"✅ Created app in {base_path}/")
 
 
-def main():
+def main() -> None:
     """Run the command line interface to create a new Reachy Mini app project."""
     import argparse
 

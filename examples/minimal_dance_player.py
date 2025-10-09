@@ -15,7 +15,7 @@ def main() -> None:
     recorded_moves = RecordedMoves("pollen-robotics/reachy-mini-dances-library")
 
     print("Connecting to Reachy Mini...")
-    with ReachyMini() as reachy:
+    with ReachyMini(use_sim=False) as reachy:
         print("Connection successful! Starting dance sequence...\n")
         try:
             while True:

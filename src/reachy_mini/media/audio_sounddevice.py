@@ -3,9 +3,11 @@
 import os
 import threading
 import time
+from typing import Any, List, Optional
 
 import librosa
 import numpy as np
+import numpy.typing as npt
 import sounddevice as sd
 
 from reachy_mini.utils.constants import ASSETS_ROOT_PATH
@@ -18,42 +20,49 @@ class SoundDeviceAudio(AudioBase):
 
     def __init__(
         self,
-        frames_per_buffer=1024,
-        log_level="INFO",
-        device=None,
-    ):
+        frames_per_buffer: int = 1024,
+        log_level: str = "INFO",
+    ) -> None:
         """Initialize the SoundDevice audio device."""
         super().__init__(backend=AudioBackend.SOUNDDEVICE, log_level=log_level)
         self.frames_per_buffer = frames_per_buffer
-        self.device = device
         self.stream = None
         self._output_stream = None
-        self._buffer = None
+        self._buffer: List[npt.NDArray[np.float32]] = []
         self._device_id = self.get_output_device_id("respeaker")
         self._samplerate = (
             -1
         )  # will be set on first use to avoid issues if device is not present (CI)
 
-    def start_recording(self):
+    def start_recording(self) -> None:
         """Open the audio input stream, using ReSpeaker card if available."""
         self.stream = sd.InputStream(
             blocksize=self.frames_per_buffer,
             device=self._device_id,
             callback=self._callback,
         )
-        self._buffer = []
+        if self.stream is None:
+            raise RuntimeError("Failed to open SoundDevice audio stream.")
+        self._buffer.clear()
         self.stream.start()
         self.logger.info("SoundDevice audio stream opened.")
 
-    def _callback(self, indata, frames, time, status):
+    def _callback(
+        self,
+        indata: npt.NDArray[np.float32],
+        frames: int,
+        time: int,
+        status: sd.CallbackFlags,
+    ) -> None:
         if status:
             self.logger.warning(f"SoundDevice status: {status}")
+
         self._buffer.append(indata.copy())
 
-    def get_audio_sample(self):
+    def get_audio_sample(self) -> Optional[bytes | npt.NDArray[np.float32]]:
         """Read audio data from the buffer. Returns numpy array or None if empty."""
         if self._buffer and len(self._buffer) > 0:
-            data = np.concatenate(self._buffer, axis=0)
+            data: npt.NDArray[np.float32] = np.concatenate(self._buffer, axis=0)
             self._buffer.clear()
             return data
         self.logger.debug("No audio data available in buffer.")
@@ -67,7 +76,7 @@ class SoundDeviceAudio(AudioBase):
             )
         return self._samplerate
 
-    def stop_recording(self):
+    def stop_recording(self) -> None:
         """Close the audio stream and release resources."""
         if self.stream is not None:
             self.stream.stop()
@@ -75,7 +84,7 @@ class SoundDeviceAudio(AudioBase):
             self.stream = None
             self.logger.info("SoundDevice audio stream closed.")
 
-    def push_audio_sample(self, data):
+    def push_audio_sample(self, data: bytes) -> None:
         """Push audio data to the output device."""
         if self._output_stream is not None:
             self._output_stream.write(data)
@@ -84,16 +93,18 @@ class SoundDeviceAudio(AudioBase):
                 "Output stream is not open. Call start_playing() first."
             )
 
-    def start_playing(self):
+    def start_playing(self) -> None:
         """Open the audio output stream."""
         self._output_stream = sd.OutputStream(
             samplerate=self.get_audio_samplerate(),
             device=self._device_id,
             channels=1,
         )
+        if self._output_stream is None:
+            raise RuntimeError("Failed to open SoundDevice audio output stream.")
         self._output_stream.start()
 
-    def stop_playing(self):
+    def stop_playing(self) -> None:
         """Close the audio output stream."""
         if self._output_stream is not None:
             self._output_stream.stop()
@@ -117,7 +128,12 @@ class SoundDeviceAudio(AudioBase):
         start = [0]  # using list to modify in callback
         length = len(data)
 
-        def callback(outdata, frames, time, status):
+        def callback(
+            outdata: npt.NDArray[np.float32],
+            frames: int,
+            time: Any,  # cdata 'struct PaStreamCallbackTimeInfo *
+            status: sd.CallbackFlags,
+        ) -> None:
             """Actual playback."""
             if status:
                 self.logger.warning(f"SoundDevice output status: {status}")
@@ -141,9 +157,11 @@ class SoundDeviceAudio(AudioBase):
             callback=callback,
             finished_callback=event.set,  # release the device when done
         )
+        if self._output_stream is None:
+            raise RuntimeError("Failed to open SoundDevice audio output stream.")
         self._output_stream.start()
 
-        def _clean_up_thread():
+        def _clean_up_thread() -> None:
             """Thread to clean up the output stream after playback.
 
             The daemon may play sound but should release the audio device.
@@ -180,4 +198,4 @@ class SoundDeviceAudio(AudioBase):
         self.logger.warning(
             f"No output device found containing '{name_contains}', using default."
         )
-        return sd.default.device[1]
+        return int(sd.default.device[1])
