@@ -74,6 +74,14 @@ or
 
 ### In simulation ([MuJoCo](https://mujoco.org))
 
+You first have to install the optional dependency `mujoco`.
+
+```bash
+pip install reachy-mini[mujoco]
+```
+
+Then run the daemon with the `--sim` argument.
+
 ```bash
 reachy-mini-daemon --sim
 ```

@@ -27,10 +27,14 @@ with ReachyMini() as mini:
 
 ### Moving the robot
 
-Then, the next step is to show how to move the robot. The `ReachyMini` class provides methods called `set_target` and `goto_target` that allows you to move the robot's joints to a specific target position. You can control:
+Then, the next step is to show how to move the robot. The `ReachyMini` class provides methods called `set_target` and `goto_target` that allows you to move the robot's head to a specific target position. You can control:
 * the head's position and orientation
 * the body's rotation angle
 * the antennas' position
+
+The `head_frame` is positioned at the base of the head, as you can see in the image below. This is the frame you are controling when using `set_target` and `goto_target`.
+
+[![Reachy Mini Head Frame](/docs/assets/head_frame.png)]()
 
 For instance, to move the head of the robot slightly to the left then go back, you can use the following code:
 
@@ -99,7 +103,7 @@ with ReachyMini() as reachy:
     reachy.goto_target(antennas=[0, 0], duration=1.0)
 ```
 
-You need to pass the angles in radians, so you can use `numpy.deg2rad` to convert degrees to radians. The first value in the list corresponds to the left antenna, and the second value corresponds to the right antenna.
+You need to pass the angles in radians, so you can use `numpy.deg2rad` to convert degrees to radians. The first value in the list corresponds to the right antenna, and the second value corresponds to the left antenna.
 
 You can also move the head, the body and the antennas at the same time by passing all three arguments to the `goto_target` method:
 
@@ -228,7 +232,9 @@ The `look_at_image` method allows the robot to look at a point in the image coor
 
 You can see the example in [look_at_image.py](../examples/look_at_image.py).
 
-There is also a `look_at_world` method that allows the robot to look at a point in the world coordinates. The world coordinates are defined as a 3D point in the robot's coordinate system. TODO add a schematic of this coordinate system.
+There is also a `look_at_world` method that allows the robot to look at a point in the world coordinates. The world coordinates are defined as a 3D point in the robot's coordinate system.
+
+[![Reachy Mini World Frame](/docs/assets/world_frame.png)]()
 
 ### Enable/disable motors and compliancy
 
@@ -352,6 +358,10 @@ print("Available moves:", list(AVAILABLE_MOVES.keys()))
 
 >>> Available moves: ['simple_nod', 'head_tilt_roll', 'side_to_side_sway', 'dizzy_spin', 'stumble_and_recover', 'headbanger_combo', 'interwoven_spirals', 'sharp_side_tilt', 'side_peekaboo', 'yeah_nod', 'uh_huh_tilt', 'neck_recoil', 'chin_lead', 'groovy_sway_and_roll', 'chicken_peck', 'side_glance_flick', 'polyrhythm_combo', 'grid_snap', 'pendulum_swing', 'jackson_square']
 ```
+
+The datasets are hosted on the Hugging Face Hub ([for example](https://huggingface.co/datasets/pollen-robotics/reachy-mini-emotions-library))
+
+We provide tools to record and upload a dataset [here](https://github.com/pollen-robotics/reachy_mini_toolbox/tree/main/tools/moves).
 
 ## Writing an App
 
