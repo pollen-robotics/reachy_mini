@@ -275,6 +275,9 @@ Below is the snippet of code that show how to start a recording, stop the record
             }
             data["set_target_data"].append(pose_info)
 ```
+
+We also provide [tools](https://github.com/pollen-robotics/reachy_mini_toolbox/tree/main/tools/moves) to record and upload a dataset to the hub, that can be easily replayed later. See [This section](#playing-moves)
+
 ## Accessing the sensors
 
 Reachy Mini comes with several sensors (camera, microphone, speaker) that are connected to your computer via USB through the robot. These devices are accessible via the `reachy_mini.media` object.
