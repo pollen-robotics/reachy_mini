@@ -1,6 +1,6 @@
 # Reachy Mini API Documentation
 
-*⚠️ All examples shown below suppose that you have already started the Reachy Mini daemon, either by running `reachy-mini-daemon` or by using the Python module `reachy_mini.daemon.cli`. ⚠️*
+*⚠️ All examples shown below suppose that you have already started the Reachy Mini daemon, either by running `reachy-mini-daemon` or by using the Python module `reachy_mini.daemon.app.main`. ⚠️*
 
 ## ReachyMini
 
@@ -285,6 +285,7 @@ A camera frame can be easily retrieved as follows:
 
 ```python
 from reachy_mini import ReachyMini
+
 with ReachyMini() as reachy_mini:
     while True:
         frame = reachy_mini.media.get_frame()
@@ -299,6 +300,7 @@ Audio samples from the microphone can be obtained as follows:
 
 ```python
 from reachy_mini import ReachyMini
+
 with ReachyMini() as reachy_mini:
     while True:
         sample = mini.media.get_audio_sample()
@@ -313,6 +315,7 @@ Audio samples can be pushed to the speaker as follows:
 
 ```python
 from reachy_mini import ReachyMini
+
 with ReachyMini() as reachy_mini:
     while True:
         # get audio chunk from mic / live source / file
@@ -327,7 +330,7 @@ To enable the use of the GStreamer backend, the package should be installed as f
 
 
 ```bash
-pip install -e .[gstreamer]
+pip install -e ".[gstreamer]"
 ```
 
 It is assumed that the [gstreamer binaires](https://gstreamer.freedesktop.org/download/) are properly installed on your system. You will likely want to configure your own pipeline. See [gstreamer camera](../src/reachy_mini/media/camera_gstreamer.py) for an example.
