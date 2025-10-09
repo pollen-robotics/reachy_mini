@@ -125,8 +125,8 @@ class SoundDeviceAudio(AudioBase):
             data = scipy.signal.resample(
                 data, int(len(data) * (self.get_audio_samplerate() / samplerate_in))
             )
-            if data.ndim > 1:  # convert to mono
-                data = np.mean(data, axis=1)
+        if data.ndim > 1:  # convert to mono
+            data = np.mean(data, axis=1)
 
         self.logger.debug(f"Playing sound '{file_path}' at {samplerate_in} Hz")
 

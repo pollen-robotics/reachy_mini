@@ -34,8 +34,8 @@ def main(backend: str) -> None:
                 data,
                 int(len(data) * (mini.media.get_audio_samplerate() / samplerate_in)),
             )
-            if data.ndim > 1:  # convert to mono
-                data = np.mean(data, axis=1)
+        if data.ndim > 1:  # convert to mono
+            data = np.mean(data, axis=1)
 
         mini.media.start_playing()
         print("Playing audio...")
