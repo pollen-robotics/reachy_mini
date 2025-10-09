@@ -27,10 +27,6 @@ def main(backend: str) -> None:
     )
 
     with ReachyMini(log_level="DEBUG", media_backend=backend) as mini:
-        # data, _ = librosa.load(
-        #    INPUT_FILE, sr=mini.media.get_audio_samplerate(), mono=True
-        # )
-
         data, samplerate_in = sf.read(INPUT_FILE, dtype="float32")
 
         if samplerate_in != mini.media.get_audio_samplerate():
