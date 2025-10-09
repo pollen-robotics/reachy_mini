@@ -337,30 +337,24 @@ It is assumed that the [gstreamer binaires](https://gstreamer.freedesktop.org/do
 
 ## Playing moves
 
-You can also play predefined moves simply. You can find an example on how to do this in the [Dance Player](../examples/minimal_dance_player.py) example. 
+You can also play predefined moves simply. You can find an example on how to do this in the [recorded moves example](../examples/recorded_moves_example.py) examples.
 
-Basically, you just need to load the move from the dataset you want. And run the `play_on` method on a `ReachyMini` instance.
+Basically, you just need to load the move from the dataset you want. And run the `play_move` method on a `ReachyMini` instance.
 
 ```python
-from reachy_mini.motion.dance_move import DanceMove
-from reachy_mini.reachy_mini import ReachyMini
-
-recorded_moves = RecordedMoves("pollen-robotics/reachy-mini-dances-library")
+from reachy_mini import ReachyMini
+from reachy_mini.motion.recorded_move import RecordedMoves
 
 with ReachyMini() as mini:
-    move = recorded_moves.get("dizzy_spin")
-    move.play_on(mini)
+    recorded_moves = RecordedMoves("pollen-robotics/reachy-mini-dances-library")
+    print(recorded_moves.list_moves())
+
+    for move_name in recorded_moves.list_moves():
+        print(f"Playing move: {move_name}")
+        mini.play_move(recorded_moves.get(move_name), initial_goto_duration=1.0)
 ```
 
-You can also list the available moves in a collection as follows:
-
-```python
-from reachy_mini.motion.collection.dance import AVAILABLE_MOVES
-
-print("Available moves:", list(AVAILABLE_MOVES.keys()))
-
->>> Available moves: ['simple_nod', 'head_tilt_roll', 'side_to_side_sway', 'dizzy_spin', 'stumble_and_recover', 'headbanger_combo', 'interwoven_spirals', 'sharp_side_tilt', 'side_peekaboo', 'yeah_nod', 'uh_huh_tilt', 'neck_recoil', 'chin_lead', 'groovy_sway_and_roll', 'chicken_peck', 'side_glance_flick', 'polyrhythm_combo', 'grid_snap', 'pendulum_swing', 'jackson_square']
-```
+The `initial_goto_duration` argument for `play_move()` allows you to smoothly go to the starting position of the move before starting to execute it.
 
 The datasets are hosted on the Hugging Face Hub ([for example](https://huggingface.co/datasets/pollen-robotics/reachy-mini-emotions-library))
 
