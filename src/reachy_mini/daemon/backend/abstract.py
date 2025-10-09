@@ -601,7 +601,7 @@ class Backend:
             sound_file (str): The name of the sound file to play (e.g., "proud2.wav").
 
         """
-        self.audio.play_sound(sound_file)
+        self.audio.play_sound(sound_file, autoclean=True)
 
     # Basic move definitions
     INIT_HEAD_POSE = np.eye(4)

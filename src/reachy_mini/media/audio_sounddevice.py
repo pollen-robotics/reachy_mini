@@ -1,7 +1,9 @@
 """Audio implementation using sounddevice backend."""
 
 import os
-from typing import List, Optional
+import threading
+import time
+from typing import Any, List, Optional
 
 import librosa
 import numpy as np
@@ -63,7 +65,7 @@ class SoundDeviceAudio(AudioBase):
             data: npt.NDArray[np.float32] = np.concatenate(self._buffer, axis=0)
             self._buffer.clear()
             return data
-        self.logger.warning("No audio data available in buffer.")
+        self.logger.debug("No audio data available in buffer.")
         return None
 
     def get_audio_samplerate(self) -> int:
@@ -110,7 +112,7 @@ class SoundDeviceAudio(AudioBase):
             self._output_stream = None
             self.logger.info("SoundDevice audio output stream closed.")
 
-    def play_sound(self, sound_file: str) -> None:
+    def play_sound(self, sound_file: str, autoclean: bool = False) -> None:
         """Play a sound file from the assets directory or a given path using sounddevice and soundfile."""
         file_path = f"{ASSETS_ROOT_PATH}/{sound_file}"
         if not os.path.exists(file_path):
@@ -122,9 +124,65 @@ class SoundDeviceAudio(AudioBase):
 
         self.logger.debug(f"Playing sound '{file_path}' at {samplerate_in} Hz")
 
-        sd.play(
-            data, self.get_audio_samplerate(), device=self._device_id, blocking=False
+        self.stop_playing()
+        start = [0]  # using list to modify in callback
+        length = len(data)
+
+        def callback(
+            outdata: npt.NDArray[np.float32],
+            frames: int,
+            time: Any,  # cdata 'struct PaStreamCallbackTimeInfo *
+            status: sd.CallbackFlags,
+        ) -> None:
+            """Actual playback."""
+            if status:
+                self.logger.warning(f"SoundDevice output status: {status}")
+
+            end = start[0] + frames
+            if end > length:
+                # Fill the output buffer with the audio data, or zeros if finished
+                outdata[: length - start[0], 0] = data[start[0] :]
+                outdata[length - start[0] :, 0] = 0
+                raise sd.CallbackStop()
+            else:
+                outdata[:, 0] = data[start[0] : end]
+            start[0] = end
+
+        event = threading.Event()
+
+        self._output_stream = sd.OutputStream(
+            samplerate=self.get_audio_samplerate(),
+            device=self._device_id,
+            channels=1,
+            callback=callback,
+            finished_callback=event.set,  # release the device when done
         )
+        if self._output_stream is None:
+            raise RuntimeError("Failed to open SoundDevice audio output stream.")
+        self._output_stream.start()
+
+        def _clean_up_thread() -> None:
+            """Thread to clean up the output stream after playback.
+
+            The daemon may play sound but should release the audio device.
+            """
+            event.wait()
+            timeout = 5  # seconds
+            waited = 0
+            while (
+                self._output_stream is not None
+                and self._output_stream.active
+                and waited < timeout
+            ):
+                time.sleep(0.1)
+                waited += 0.1
+            self.stop_playing()
+
+        if autoclean:
+            threading.Thread(
+                target=_clean_up_thread,
+                daemon=True,
+            ).start()
 
     def get_output_device_id(self, name_contains: str) -> int:
         """Return the output device id whose name contains the given string (case-insensitive).
