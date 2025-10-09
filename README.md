@@ -1,6 +1,6 @@
 # Reachy Mini
 
-[Reachy Mini](https://www.pollen-robotics.com/reachy-mini/) is the first open-source desktop robot designed to explore human-robot interaction and creative custom applications. We made it to be affordable, easy to use, hackable and cute, so that you can focus on building cool AI applications!
+[Reachy Mini](https://www.pollen-robotics.com/reachy-mini/) is an expressive, open-source robot designed for human-robot interaction, creative coding, and AI experimentation. We made it to be affordable, easy to use, hackable and cute, so that you can focus on building cool AI applications!
 
 [![Reachy Mini Hello](/docs/assets/reachy_mini_hello.gif)](https://www.pollen-robotics.com/reachy-mini/)
 
