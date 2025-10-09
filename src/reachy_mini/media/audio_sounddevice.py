@@ -56,7 +56,7 @@ class SoundDeviceAudio(AudioBase):
             data = np.concatenate(self._buffer, axis=0)
             self._buffer.clear()
             return data
-        self.logger.warning("No audio data available in buffer.")
+        self.logger.debug("No audio data available in buffer.")
         return None
 
     def get_audio_samplerate(self) -> int:
