@@ -10,6 +10,9 @@ import time
 
 from reachy_mini import ReachyMini
 
+print(
+    "This demo currently only works with Placo as the kinematics engine. Start the daemon with:\nreachy-mini-daemon --kinematics-engine Placo"
+)
 with ReachyMini(media_backend="no_media") as mini:
     try:
         mini.enable_gravity_compensation()
