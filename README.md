@@ -141,7 +141,7 @@ reachy-mini-daemon --help
 
 ## Run the demo
 
-TODO: TED AI demo style
+Looking for an out-of-the-box experience? Check out the [Reachy Mini conversation demo](https://github.com/pollen-robotics/reachy_mini_conversation_demo). It combines OpenAI's Realtime APIs, SmolVLM2 vision, and choreographed motion libraries to keep the robot engaged while you chat. The repo includes the full installation guide, a Gradio web UI with live transcripts, and the async tool plumbing that blends speech-reactive wobble, face tracking, and queued dances/emotes.
 
 ## Using the Python SDK
 
