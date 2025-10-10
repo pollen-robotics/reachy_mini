@@ -3,32 +3,54 @@ version: beta
 serial:
   baudrate: 1000000
 
-# Offset and angle limits are in raw units
-# Offset: +/- 626
-# Upper limit of the stewart platform +/- 120
-# Lower limit
-#    - 2 & 5 +/- 1842
-#    - 1 & 6 +/- 1684
-#    - 3 & 4 +/- 1600
+# Limits measured on the robot (in degrees)
+# s1 
+# lower : -48° : -546
+# upper : +70° : 796
 
-# s1
-#  lower: 2048 + 626 - 1684 = 990
-#  upper: 2048 + 626 - 120 = 2554
 # s2
-#  lower: 2048 - 626 + 120 = 1542
-#  upper: 2048 - 626 + 1842 = 3264
+# lower: +70° : 796
+# upper: -70° : -796
+
 # s3
-#  lower: 2048 + 626 - 1600 = 1074
-#  upper: 2048 + 626 - 120 = 2554
+# lower: -48° : -546
+# upper: +70° : 796
+
 # s4
-#  lower: 2048 - 626 + 120 = 1542
-#  upper: 2048 - 626 + 1600 = 3022
+# lower: +48° : 546
+# upper: -70° : -796
+
 # s5
-#  lower: 2048 + 626 - 1842 = 832
-#  upper: 2048 + 626 - 120 = 2554
+# lower: -70° : -796
+# upper: +70° : 796
+
 # s6
-#  lower: 2048 - 626 + 120 = 1542
-#  upper: 2048 - 626 + 1684 = 3106
+# lower : +48° : 546
+# upper : -70° : -796
+
+# s1:
+#     lower: 2048 - 546 : 1502
+#     upper: 2048 + 796 : 2844
+
+# s2: 
+#     lower: 2048 - 796 : 1252
+#     upper: 2048 + 796 : 2844
+
+# s3: 
+#     lower: 2048 - 546 : 1502
+#     upper: 2048 + 796 : 2844
+
+# s4: 
+#     lower: 2048 - 796 : 1252
+#     upper: 2048 + 546 : 2594
+
+# s5:
+#     lower: 2048 - 796 : 1252
+#     upper: 2048 + 796 : 2844
+
+# s6:
+#     lower: 2048 - 796 : 1252
+#     upper: 2048 + 546 : 2594
 
 
 motors:
@@ -42,43 +64,43 @@ motors:
   - stewart_platform_1:
       id: 11
       offset: 1024
-      lower_limit: 1338
-      upper_limit: 2952
+      lower_limit: 1502
+      upper_limit: 2844
       return_delay_time: 0
       shutdown_error: 52
   - stewart_platform_2:
       id: 12
       offset: -1024
-      lower_limit: 1144
-      upper_limit: 2866
+      lower_limit: 1252
+      upper_limit: 2844
       return_delay_time: 0
       shutdown_error: 52
   - stewart_platform_3:
       id: 13
       offset: 1024
-      lower_limit: 1472
-      upper_limit: 2950
+      lower_limit: 1502
+      upper_limit: 2844
       return_delay_time: 0
       shutdown_error: 52
   - stewart_platform_4:
       id: 14
       offset: -1024
-      lower_limit: 1144
-      upper_limit: 2624
+      lower_limit: 1252
+      upper_limit: 2594
       return_delay_time: 0
       shutdown_error: 52
   - stewart_platform_5:
       id: 15
       offset: 1024
-      lower_limit: 1230
-      upper_limit: 2952
+      lower_limit: 1252
+      upper_limit: 2844
       return_delay_time: 0
       shutdown_error: 52
   - stewart_platform_6:
       id: 16
       offset: -1024
-      lower_limit: 1144
-      upper_limit: 2708
+      lower_limit: 1252
+      upper_limit: 2594
       return_delay_time: 0
       shutdown_error: 52
   - right_antenna:
