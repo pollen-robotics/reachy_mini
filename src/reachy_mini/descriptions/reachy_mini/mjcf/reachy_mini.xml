@@ -20,7 +20,7 @@
     <default class="perfect_actuator">
       <geom contype="0" conaffinity="0"/>
       <joint damping="0.095" frictionloss="0.001" armature="0.001"/>
-      <position kp="10.0" kv="0.0" forcerange="-10.0 10.0"/>
+      <position kp="10.0" kv="0.18" forcerange="-10.0 10.0"/>
       <default class="chosen_actuator"/>
     </default>
     <default class="xc330m288t">
