@@ -68,6 +68,14 @@ class AnalyticalKinematics:
         _pose = pose.copy()
         _pose[:3, 3][2] += self.head_z_offset
 
+        # remove the body yaw from the pose yaw
+        # make the robot look at the same direction regardless 
+        # of its body yaw
+        # > this makes the solution compatible with the placo kinematics
+        c, s = np.cos(body_yaw), np.sin(body_yaw)
+        R_yaw = np.array([[c, -s, 0], [s, c, 0], [0, 0, 1]]) 
+        _pose[:3, :3] = R_yaw @ _pose[:3, :3]
+
         stewart_joints = self.kin.inverse_kinematics(_pose)  # type: ignore[arg-type]
         return np.array([body_yaw] + stewart_joints)
 
@@ -80,7 +88,6 @@ class AnalyticalKinematics:
         """Compute the forward kinematics for a given set of joint angles.
 
         check_collision is not used by AnalyticalKinematics.
-        For now, ignores the body yaw (first joint angle).
         """
         _joint_angles = joint_angles[1:].tolist()
 
@@ -94,4 +101,13 @@ class AnalyticalKinematics:
         assert T_world_platform is not None
 
         T_world_platform[:3, 3][2] -= self.head_z_offset
+        
+        # re-apply the body yaw to the pose
+        # > this makes the solution compatible with the placo kinematics
+        body_yaw = joint_angles[0]
+        T_yaw = np.eye(4)
+        c, s = np.cos(-body_yaw), np.sin(-body_yaw)
+        T_yaw[:3,:3] = np.array([[c, -s, 0], [s, c, 0], [0, 0, 1]])
+        T_world_platform = T_yaw @ T_world_platform
+        
         return T_world_platform
