@@ -15,7 +15,7 @@ from reachy_mini.utils.interpolation import InterpolationTechnique
 
 def main():
     """Run the different interpolation methods."""
-    with ReachyMini() as mini:
+    with ReachyMini(media_backend="no_media") as mini:
         for method in InterpolationTechnique:
             print(f"Testing method: {method}")
 

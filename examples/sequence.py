@@ -7,7 +7,7 @@ from scipy.spatial.transform import Rotation as R
 
 from reachy_mini import ReachyMini
 
-with ReachyMini() as reachy_mini:
+with ReachyMini(media_backend="no_media") as reachy_mini:
     try:
         while True:
             pose = np.eye(4)

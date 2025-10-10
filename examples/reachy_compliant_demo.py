@@ -10,7 +10,7 @@ import time
 
 from reachy_mini import ReachyMini
 
-with ReachyMini() as mini:
+with ReachyMini(media_backend="no_media") as mini:
     try:
         mini.enable_gravity_compensation()
 

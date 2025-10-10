@@ -11,7 +11,7 @@ from reachy_mini import ReachyMini
 
 def main():
     """Run a GUI to set the head position and orientation of Reachy Mini."""
-    with ReachyMini() as mini:
+    with ReachyMini(media_backend="no_media") as mini:
         t0 = time.time()
 
         root = tk.Tk()
