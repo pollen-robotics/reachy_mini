@@ -63,7 +63,7 @@ From the source code, you can install the package with:
 
 ```bash
 git clone https://github.com/pollen-robotics/reachy_mini
-pip install -e .
+pip install -e ./reachy_mini
 ```
 
 The same package provides both the daemon and the Python SDK.
@@ -141,7 +141,7 @@ reachy-mini-daemon --help
 
 ## Run the demo
 
-Looking for an out-of-the-box experience? Check out the [Reachy Mini conversation demo](https://github.com/pollen-robotics/reachy_mini_conversation_demo). It combines OpenAI's Realtime APIs, SmolVLM2 vision, and choreographed motion libraries to keep the robot engaged while you chat. The repo includes the full installation guide, a Gradio web UI with live transcripts, and the async tool plumbing that blends speech-reactive wobble, face tracking, and queued dances/emotes.
+Conversational demo for the Reachy Mini robot combining LLM realtime APIs, vision pipelines, and choreographed motion libraries: [reachy_mini_conversation_demo](https://github.com/pollen-robotics/reachy_mini_conversation_demo).
 
 ## Using the Python SDK
 
@@ -210,4 +210,3 @@ The robot design files are licensed under the [TODO](TODO) license.
 - https://polyhaven.com/a/croissant
 - https://polyhaven.com/a/wooden_table_02
 - https://polyhaven.com/a/rubber_duck_toy
-
