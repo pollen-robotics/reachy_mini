@@ -263,7 +263,7 @@ from reachy_mini import ReachyMini
 
 with ReachyMini() as mini:
     data = {
-        "description": "TODO: describe what you captured so future-you remembers.",
+        "description": "TODO: describe what you captured.",
         "time": [],
         "set_target_data": [],
     }
