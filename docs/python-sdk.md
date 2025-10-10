@@ -256,6 +256,18 @@ For example, this could be a teleoperation script, and you could be recording cu
 You can create another ReachyMini client (or use the same) and simply use `start_recording()` and `stop_recording()`.
 Below is the snippet of code that show how to start a recording, stop the recording and unpack the data:
 ```python
+import time
+
+from reachy_mini import ReachyMini
+
+
+with ReachyMini() as mini:
+    data = {
+        "description": "TODO: describe what you captured so future-you remembers.",
+        "time": [],
+        "set_target_data": [],
+    }
+
     try:
         # The daemon will start recording the set_target() calls
         mini.start_recording()
@@ -263,20 +275,19 @@ Below is the snippet of code that show how to start a recording, stop the record
 
         while True:
             # Keep the script alive to listen for Ctrl+C
-            time.sleep(0.01) 
+            time.sleep(0.01)
     except KeyboardInterrupt:
         # Stop recording and retrieve the logged data
         recorded_motion = mini.stop_recording()
-        
-        data = {}
-        for frame in recorded_motion:
-            data["time"].append(frame.get("time"))
-            pose_info = {
-                'head': frame.get('head'),
-                'antennas': frame.get('antennas'),
-                'body_yaw': frame.get('body_yaw'),
-            }
-            data["set_target_data"].append(pose_info)
+
+    for frame in recorded_motion:
+        data["time"].append(frame.get("time"))
+        pose_info = {
+            "head": frame.get("head"),
+            "antennas": frame.get("antennas"),
+            "body_yaw": frame.get("body_yaw"),
+        }
+        data["set_target_data"].append(pose_info)
 ```
 
 We also provide [tools](https://github.com/pollen-robotics/reachy_mini_toolbox/tree/main/tools/moves) to record and upload a dataset to the hub, that can be easily replayed later. See [This section](#playing-moves)
