@@ -105,7 +105,7 @@ class AnalyticalKinematics:
         # re-apply the body yaw to the pose
         # > this makes the solution compatible with the placo kinematics
         body_yaw = joint_angles[0]
-        T_yaw = np.eye(4)
+        T_yaw = np.eye(4, dtype=np.float64)
         c, s = np.cos(-body_yaw), np.sin(-body_yaw)
         T_yaw[:3,:3] = np.array([[c, -s, 0], [s, c, 0], [0, 0, 1]])
         T_world_platform = T_yaw @ T_world_platform
