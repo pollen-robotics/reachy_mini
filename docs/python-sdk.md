@@ -318,10 +318,10 @@ Audio samples from the microphone can be obtained as follows:
 ```python
 from reachy_mini import ReachyMini
 
-with ReachyMini() as reachy_mini:
+with ReachyMini() as mini:
     while True:
         sample = mini.media.get_audio_sample()
-        # sample is a numpy array as output by souddevice
+        # sample is a numpy array as output by sounddevice
 ```
 
 Please refer to the example [sound_record](../examples/debug/sound_record.py).
@@ -333,10 +333,10 @@ Audio samples can be pushed to the speaker as follows:
 ```python
 from reachy_mini import ReachyMini
 
-with ReachyMini() as reachy_mini:
+with ReachyMini() as mini:
     while True:
         # get audio chunk from mic / live source / file
-        mini.media.push_audio_sample(chunk)        
+        mini.media.push_audio_sample(chunk)
 ```
 Please refer to the example: [sound_play](../examples/debug/sound_play.py).
 
