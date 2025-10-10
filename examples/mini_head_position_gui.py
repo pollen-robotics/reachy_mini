@@ -7,6 +7,7 @@ import numpy as np
 from scipy.spatial.transform import Rotation as R
 
 from reachy_mini import ReachyMini
+from reachy_mini.utils import create_head_pose
 
 
 def main():
@@ -88,32 +89,39 @@ def main():
             row=7, column=1
         )
 
+        mini.goto_target(create_head_pose(), antennas=[0.0, 0.0], duration=1.0)
+
         # Run the GUI in a non-blocking way
         root.update()
 
-        while True:
-            t = time.time() - t0
-            target = np.deg2rad(30) * np.sin(2 * np.pi * 0.5 * t)
+        try:
+            while True:
+                t = time.time() - t0
+                target = np.deg2rad(30) * np.sin(2 * np.pi * 0.5 * t)
 
-            head = np.eye(4)
-            head[:3, 3] = [0, 0, 0.0]
+                head = np.eye(4)
+                head[:3, 3] = [0, 0, 0.0]
 
-            # Read values from the GUI
-            roll = np.deg2rad(roll_var.get())
-            pitch = np.deg2rad(pitch_var.get())
-            yaw = np.deg2rad(yaw_var.get())
-            head[:3, :3] = R.from_euler(
-                "xyz", [roll, pitch, yaw], degrees=False
-            ).as_matrix()
-            head[:3, 3] = [x_var.get(), y_var.get(), z_var.get()]
+                # Read values from the GUI
+                roll = np.deg2rad(roll_var.get())
+                pitch = np.deg2rad(pitch_var.get())
+                yaw = np.deg2rad(yaw_var.get())
+                head[:3, :3] = R.from_euler(
+                    "xyz", [roll, pitch, yaw], degrees=False
+                ).as_matrix()
+                head[:3, 3] = [x_var.get(), y_var.get(), z_var.get()]
 
-            root.update()
+                root.update()
 
-            mini.set_target(
-                head=head,
-                body_yaw=np.deg2rad(body_yaw_var.get()),
-                antennas=np.array([target, -target]),
-            )
+                mini.set_target(
+                    head=head,
+                    body_yaw=np.deg2rad(body_yaw_var.get()),
+                    antennas=np.array([target, -target]),
+                )
+        except KeyboardInterrupt:
+            pass
+        finally:
+            root.destroy()
 
 
 if __name__ == "__main__":
