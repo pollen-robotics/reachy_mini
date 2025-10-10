@@ -63,7 +63,7 @@ From the source code, you can install the package with:
 
 ```bash
 git clone https://github.com/pollen-robotics/reachy_mini
-pip install -e ./reachy_mini
+pip install -e .
 ```
 
 The same package provides both the daemon and the Python SDK.
