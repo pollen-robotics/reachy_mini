@@ -13,6 +13,7 @@ from setup_motor import (
     lookup_for_motor,
     parse_yaml_config,
     run,
+    light_led_up
 )
 
 assets_root_path = "../src/reachy_mini/assets/"
@@ -67,25 +68,26 @@ def main():
     while True:
         current_channel = (current_channel + 1) % 9
         select_channel(current_channel)
-        print("==")
-        for id, baudrate in zip([FACTORY_DEFAULT_ID, current_channel + 10], [FACTORY_DEFAULT_BAUDRATE, 1000000]):
-            print("looking for motor with ID", id)
-            if lookup_for_motor(
-                UART_PORT, id, baudrate, silent=True
-            ):
-                print(f"Found motor on channel {current_channel}!")
-                target_id = CHANNEL_TO_ID[current_channel]
-                target_name = id_to_motor_name[target_id]
-                args = argparse.Namespace(
-                    config_file=CONFIG_FILE_PATH,
-                    motor_name=target_name,
-                    serialport=UART_PORT,
-                    check_only=False,
-                    from_id=id,
-                    from_baudrate=baudrate,
-                    update_config=False,
-                )
-                run(args)
+        if lookup_for_motor(
+            UART_PORT, FACTORY_DEFAULT_ID, FACTORY_DEFAULT_BAUDRATE, silent=True
+        ):
+            print(f"Found motor on channel {current_channel}!")
+            target_id = CHANNEL_TO_ID[current_channel]
+            target_name = id_to_motor_name[target_id]
+            args = argparse.Namespace(
+                config_file=CONFIG_FILE_PATH,
+                motor_name=target_name,
+                serialport=UART_PORT,
+                check_only=False,
+                from_id=FACTORY_DEFAULT_ID,
+                from_baudrate=FACTORY_DEFAULT_BAUDRATE,
+                update_config=False,
+            )
+            run(args)
+
+        elif lookup_for_motor(UART_PORT, current_channel+10, 1000000, silent=True):
+            print(f"Motor on channel {current_channel} already set up.")
+            light_led_up(UART_PORT, current_channel+10, 1000000)
 
         time.sleep(0.01)
 
