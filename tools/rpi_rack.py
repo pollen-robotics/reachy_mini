@@ -66,9 +66,14 @@ if __name__ == "__main__":
     select_channel(channel)
     print(f"Selected channel {channel}")
     baudrates = [57600, 1_000_000]
+    ok = False
     for baudrate in baudrates:
+        if ok:
+            break
         print("Trying baudrate:", baudrate)
         for i in range(255):
+            if ok:
+                break
             ret = lookup_for_motor(args.serial, i, baudrate=baudrate)
             if ret:
-                break
+                ok = True
