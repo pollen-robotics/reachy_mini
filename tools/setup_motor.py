@@ -328,6 +328,7 @@ def run(args):
     config = parse_yaml_config(args.config_file)
 
     if args.motor_name == "all":
+        print("aaaaaa")
         motors = list(config.motors.keys())
     else:
         motors = [args.motor_name]
@@ -356,15 +357,13 @@ def run(args):
             )
         except RuntimeError as e:
             print(f"❌ Configuration check failed for motor '{motor_name}': {e}")
-            return False
+            return
 
         light_led_up(
             args.serialport,
             motor_config.id,
             baudrate=config.serial.baudrate,
         )
-
-        return True
 
 
 if __name__ == "__main__":
