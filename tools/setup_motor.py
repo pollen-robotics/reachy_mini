@@ -277,7 +277,7 @@ def light_led_up(serial_port: str, id: int, baudrate: int):
             c.write_led(id, 1)
             break
         except RuntimeError as e:
-            print(f"Error while turning off LED for motor ID {id}: {e}")
+            print(f"Error while turning on LED for motor ID {id}: {e}")
 
 
 def light_led_down(serial_port: str, id: int, baudrate: int):
