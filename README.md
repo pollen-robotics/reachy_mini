@@ -163,6 +163,22 @@ with ReachyMini() as reachy_mini:
 
 For a full description of the SDK, please refer to the [Python SDK documentation](./docs/python-sdk.md).
 
+## Motion repeatability regression tests
+
+We provide a high-level test that replays a subset of dances, records the dynamic precision metrics, and compares them to a saved reference run. The workflow is:
+
+1. Generate reference files for your hardware or simulator (the script auto-detects whether the daemon runs in simulation):
+   ```bash
+   python tests/tools/generate_motion_references.py
+   ```
+   The recordings for `simple_nod` and `side_to_side_sway` are saved under `tests/data/dance_references/<mode>/`.
+2. Run the test when you want to validate performance:
+   ```bash
+   pytest tests/test_motion_repeatability.py
+   ```
+   The test re-runs the selected dances, compares the requested trajectories against the reference to within floating point precision, and asserts that precision, loop frequency, and latency stay within the recorded thresholds. Set the optional `REACHY_MINI_REFERENCE_MODE=hardware|simulation` environment variable only if you want to override the auto-detected mode.
+
+
 ## Using the REST API
 
 The daemon also provides a REST API via [fastapi](https://fastapi.tiangolo.com/) that you can use to control the robot and get its state. The API is accessible via HTTP and WebSocket.

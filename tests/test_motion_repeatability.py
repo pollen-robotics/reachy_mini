@@ -19,12 +19,11 @@ from reachy_mini.testing.motion_capture import (
 
 _DEFAULT_MOVES = ("simple_nod", "side_to_side_sway")
 _REFERENCE_ROOT = Path(__file__).parent / "data" / "dance_references"
-_ENV_ENABLE = "REACHY_MINI_RUN_MOTION_TESTS"
 _ENV_MODE = "REACHY_MINI_REFERENCE_MODE"
 
+pytestmark = pytest.mark.robot
 
-def _environment_enabled() -> bool:
-    return os.getenv(_ENV_ENABLE, "0") == "1"
+
 
 
 def _resolve_mode(mini: ReachyMini, requested: str | None) -> MeasurementMode:
@@ -32,21 +31,32 @@ def _resolve_mode(mini: ReachyMini, requested: str | None) -> MeasurementMode:
         return MeasurementMode.HARDWARE
     if requested == "simulation":
         return MeasurementMode.SIMULATION
-    # Transition plan: when the daemon exposes simulation status via
-    # ``mini.client.get_status()["simulation_enabled"]`` swap this attribute
-    # access for the new API so we always rely on the backend's ground truth.
+    sim_flag = _read_simulation_status(mini)
+    if sim_flag is not None:
+        return MeasurementMode.SIMULATION if sim_flag else MeasurementMode.HARDWARE
     inferred = getattr(mini, "use_sim", None)
     if inferred is None:
         raise RuntimeError(
-            "ReachyMini instance does not expose 'use_sim'; specify mode via REACHY_MINI_REFERENCE_MODE."
+            "Unable to infer mode automatically; set REACHY_MINI_REFERENCE_MODE to 'hardware' or 'simulation'."
         )
     return MeasurementMode.SIMULATION if inferred else MeasurementMode.HARDWARE
+
+
+def _read_simulation_status(mini: ReachyMini) -> bool | None:
+    try:
+        status = mini.client.get_status(wait=True, timeout=2.0)
+    except TimeoutError:
+        return None
+    sim_enabled = status.get("simulation_enabled") if isinstance(status, dict) else None
+    if isinstance(sim_enabled, bool):
+        return sim_enabled
+    return None
 
 
 def _load_reference(path: Path) -> DanceReference:
     if not path.exists():
         raise FileNotFoundError(
-            f"Reference file {path} missing. Regenerate with reachy-mini-generate-motion-reference."
+            f"Reference file {path} missing. Regenerate with python tests/tools/generate_motion_references.py."
         )
     with np.load(path, allow_pickle=False) as data:
         return DanceReference.from_npz(dict(data.items()))
@@ -122,20 +132,20 @@ def _describe_task_axes(values: np.ndarray) -> str:
     return f"axis '{labels[idx]}'"
 
 
-@pytest.mark.robot
-@pytest.mark.skipif(  # type: ignore[arg-type]
-    not _environment_enabled(),
-    reason=f"Set {_ENV_ENABLE}=1 to enable motion repeatability tests.",
-)
 def test_dance_repeatability() -> None:
     requested_mode = os.getenv(_ENV_MODE)
-    mode_dir = None
-    with ReachyMini() as mini:
+
+    try:
+        mini = ReachyMini()
+    except (TimeoutError, ConnectionError) as exc:  # type: ignore[misc]
+        pytest.skip(f"Unable to connect to Reachy Mini daemon: {exc}")
+
+    with mini:
         mode = _resolve_mode(mini, requested_mode)
         mode_dir = _REFERENCE_ROOT / mode.value
         if not mode_dir.exists():
             pytest.skip(
-                f"Reference directory {mode_dir} missing. Run reachy-mini-generate-motion-reference first."
+                f"Reference directory {mode_dir} missing. Run python tests/tools/generate_motion_references.py first."
             )
         moves = _select_moves(mode_dir, _DEFAULT_MOVES)
         if not moves:
