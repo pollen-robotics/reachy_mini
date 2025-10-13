@@ -39,6 +39,8 @@ class Args:
 
     serialport: str = "auto"
 
+    wireless_version: bool = False
+
     sim: bool = False
     scene: str = "empty"
     headless: bool = False
@@ -85,8 +87,9 @@ def create_app(args: Args) -> FastAPI:
     app = FastAPI(
         lifespan=lifespan,
     )
+
     app.state.args = args
-    app.state.daemon = Daemon()
+    app.state.daemon = Daemon(args.wireless_version)
     app.state.app_manager = AppManager()
 
     app.add_middleware(
@@ -144,6 +147,12 @@ def main() -> None:
         type=str,
         default=default_args.serialport,
         help="Serial port for real motors (default: will try to automatically find the port).",
+    )
+    parser.add_argument(
+        "--wireless-version",
+        action="store_true",
+        default=default_args.wireless_version,
+        help="Use the wireless version of Reachy Mini (default: False).",
     )
     # Simulation mode
     parser.add_argument(

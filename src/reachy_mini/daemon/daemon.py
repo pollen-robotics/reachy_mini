@@ -31,16 +31,19 @@ class Daemon:
     Runs the server with the appropriate backend (Mujoco for simulation or RobotBackend for real hardware).
     """
 
-    def __init__(self, log_level: str = "INFO"):
+    def __init__(self, wireless_version: bool = False, log_level: str = "INFO"):
         """Initialize the Reachy Mini daemon."""
         self.log_level = log_level
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(self.log_level)
 
+        self.wireless_version = wireless_version
+
         self.backend: "RobotBackend | MujocoBackend | None" = None
         self._status = DaemonStatus(
             state=DaemonState.NOT_INITIALIZED,
             simulation_enabled=None,
+            wireless_version=wireless_version,
             backend_status=None,
             error=None,
             wlan_ip=None,
@@ -434,6 +437,7 @@ class DaemonStatus:
 
     state: DaemonState
     simulation_enabled: Optional[bool]
+    wireless_version: Optional[bool]
     backend_status: Optional[RobotBackendStatus | MujocoBackendStatus]
     error: Optional[str] = None
     wlan_ip: Optional[str] = None
