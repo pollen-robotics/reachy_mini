@@ -48,8 +48,12 @@ class Daemon:
         self._thread_publish_status = Thread(target=self._publish_status, daemon=True)
         self._thread_event_publish_status = Event()
 
-        self._webrtc: Optional[GstWebRTC] = None
+        self._webrtc: Optional[Any] = (
+            None  # type GstWebRTC imported for wireless version only
+        )
         if webrtc:
+            from reachy_mini.media.webrtc_daemon import GstWebRTC
+
             self._webrtc = GstWebRTC(log_level)
 
     async def start(

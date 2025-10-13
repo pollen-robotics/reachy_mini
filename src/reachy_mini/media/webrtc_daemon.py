@@ -23,7 +23,11 @@ from gi.repository import GLib, Gst  # noqa: E402
 class GstWebRTC:
     """WebRTC pipeline using GStreamer."""
 
-    def __init__(self, log_level: str = "INFO", resolution: RPICameraResolution = RPICameraResolution.R1280x720) -> None:
+    def __init__(
+        self,
+        log_level: str = "INFO",
+        resolution: RPICameraResolution = RPICameraResolution.R1280x720,
+    ) -> None:
         """Initialize the GStreamer WebRTC pipeline."""
         self._logger = logging.getLogger(__name__)
         self._logger.setLevel(log_level)
@@ -53,7 +57,7 @@ class GstWebRTC:
             target=self._webrtcsrc_manager, daemon=True
         )
 
-    def _configure_webrtc(self, pipeline) -> Gst.Element:
+    def _configure_webrtc(self, pipeline: Gst.Pipeline) -> Gst.Element:
         self._logger.debug("Configuring WebRTC")
         webrtcsink = Gst.ElementFactory.make("webrtcsink")
         if not webrtcsink:
@@ -80,10 +84,10 @@ class GstWebRTC:
         """Get the current camera framerate."""
         return self._resolution.value[2]
 
-    def _configure_video(self, pipeline, webrtcsink):
+    def _configure_video(self, pipeline: Gst.Pipeline, webrtcsink: Gst.Element) -> None:
         self._logger.debug("Configuring video")
         libcamerasrc = Gst.ElementFactory.make("libcamerasrc")
-        
+
         caps = Gst.Caps.from_string(
             f"video/x-raw,width={self.resolution[0]},height={self.resolution[1]},framerate={self.framerate}/1,format=YUY2,colorimetry=bt709,interlace-mode=progressive"
         )
@@ -125,7 +129,7 @@ class GstWebRTC:
         v4l2h264enc.link(capsfilter_h264)
         capsfilter_h264.link(webrtcsink)
 
-    def _configure_audio(self, pipeline, webrtcsink):
+    def _configure_audio(self, pipeline: Gst.Pipeline, webrtcsink: Gst.Element) -> None:
         self._logger.debug("Configuring audio")
         alsasrc = Gst.ElementFactory.make("alsasrc")
         alsasrc.set_property("device", f"hw:{self._id_audio_card},0")
@@ -187,11 +191,11 @@ class GstWebRTC:
         self._logger.debug("starting bus message loop")
         bus = self.pipeline.get_bus()
         bus.add_watch(GLib.PRIORITY_DEFAULT, self._on_bus_message, self._loop)
-        self._loop.run()  # type: ignore[no-untyped-call]
+        self._loop.run()
         bus.remove_watch()
         self._logger.debug("bus message loop stopped")
 
-    def start(self):
+    def start(self) -> None:
         """Start the WebRTC pipeline."""
         self._logger.debug("Starting WebRTC")
         self.pipeline.set_state(Gst.State.PLAYING)
@@ -200,12 +204,12 @@ class GstWebRTC:
             self._thread_bus_calls = Thread(target=self._handle_bus_calls, daemon=True)
             self._thread_bus_calls.start()
 
-    def pause(self):
+    def pause(self) -> None:
         """Pause the WebRTC pipeline."""
         self._logger.debug("Pausing WebRTC")
         self.pipeline.set_state(Gst.State.PAUSED)
 
-    def stop(self):
+    def stop(self) -> None:
         """Stop the WebRTC pipeline."""
         self._logger.debug("Stopping WebRTC")
 
@@ -260,7 +264,7 @@ class GstWebRTC:
             self._receiver_elements.append(webrtcbin)
 
     def _webrtcsrc_pad_added_cb(self, webrtcsrc: Gst.Element, pad: Gst.Pad) -> None:
-        if pad is not None and pad.get_name().startswith("audio"):  # type: ignore[union-attr]
+        if pad is not None and pad.get_name().startswith("audio"):
             self._logger.info("Connecting audio client")
 
             self._configure_webrtcbin(webrtcsrc)
@@ -278,7 +282,7 @@ class GstWebRTC:
             self._receiver_elements.append(sink)
 
             volume.link(sink)
-            pad.link(volume.get_static_pad("sink"))  # type: ignore[arg-type]
+            pad.link(volume.get_static_pad("sink"))
 
             volume.sync_state_with_parent()
             sink.sync_state_with_parent()
@@ -288,7 +292,7 @@ class GstWebRTC:
             assert fakesink is not None
             self.pipeline.add(fakesink)
             fakesink.sync_state_with_parent()
-            pad.link(fakesink.get_static_pad("sink"))  # type: ignore[arg-type]
+            pad.link(fakesink.get_static_pad("sink"))
         else:
             self._logger.warning(f"Unhandled pad type: {pad.get_name()}")
 

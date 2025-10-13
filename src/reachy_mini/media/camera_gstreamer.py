@@ -7,6 +7,9 @@ By default the module directly returns JPEG images as output by the camera.
 from threading import Thread
 from typing import Optional
 
+import numpy as np
+import numpy.typing as npt
+
 from reachy_mini.media.camera_constants import CameraResolution
 
 try:

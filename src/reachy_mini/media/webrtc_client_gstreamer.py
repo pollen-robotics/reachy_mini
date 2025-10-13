@@ -51,9 +51,7 @@ class GstWebRTCClient(CameraBase, AudioBase):
         self.pipeline.add(self._appsink_audio)
 
         self._appsink_video = Gst.ElementFactory.make("appsink")
-        caps_video = Gst.Caps.from_string(
-            f"video/x-raw,format=BGR,width={self.resolution[0]},height={self.resolution[1]},framerate={self.framerate}/1"
-        )
+        caps_video = Gst.Caps.from_string("video/x-raw,format=BGR")
         self._appsink_video.set_property("caps", caps_video)
         self._appsink_video.set_property("drop", True)  # avoid overflow
         self._appsink_video.set_property("max-buffers", 1)  # keep last image only
@@ -74,7 +72,7 @@ class GstWebRTCClient(CameraBase, AudioBase):
 
     def _configure_webrtcsrc(
         self, signaling_host: str, signaling_port: int, peer_id: str
-    ):
+    ) -> Gst.Element:
         source = Gst.ElementFactory.make("webrtcsrc")
         if not source:
             raise RuntimeError(
@@ -97,7 +95,7 @@ class GstWebRTCClient(CameraBase, AudioBase):
 
     def _webrtcsrc_pad_added_cb(self, webrtcsrc: Gst.Element, pad: Gst.Pad) -> None:
         self._configure_webrtcbin(webrtcsrc)
-        if pad.get_name().startswith("video"):  # type: ignore[union-attr]
+        if pad.get_name().startswith("video"):
             # the pipeline should be adapted to the app needs
 
             """
@@ -110,37 +108,32 @@ class GstWebRTCClient(CameraBase, AudioBase):
             sink.sync_state_with_parent()
             """
 
-            self.logger.debug("outputing video frames as jpeg")
             queue = Gst.ElementFactory.make("queue")
 
             videoconvert = Gst.ElementFactory.make("videoconvert")
             videoscale = Gst.ElementFactory.make("videoscale")
             videorate = Gst.ElementFactory.make("videorate")
-            # jpegenc = Gst.ElementFactory.make("jpegenc")
+
             sink = self._appsink_video
             self.pipeline.add(queue)
             self.pipeline.add(videoconvert)
             self.pipeline.add(videoscale)
             self.pipeline.add(videorate)
-            # self.pipeline.add(jpegenc)
-            pad.link(queue.get_static_pad("sink"))  # type: ignore[arg-type]
+            pad.link(queue.get_static_pad("sink"))
 
             queue.link(videoconvert)
             videoconvert.link(videoscale)
             videoscale.link(videorate)
-            # videorate.link(jpegenc)
-            # jpegenc.link(sink)
             videorate.link(sink)
 
             queue.sync_state_with_parent()
             videoconvert.sync_state_with_parent()
             videoscale.sync_state_with_parent()
             videorate.sync_state_with_parent()
-            # jpegenc.sync_state_with_parent()
             sink.sync_state_with_parent()
 
-        elif pad.get_name().startswith("audio"):  # type: ignore[union-attr]
-            pad.link(self._appsink_audio.get_static_pad("sink"))  # type: ignore[arg-type]
+        elif pad.get_name().startswith("audio"):
+            pad.link(self._appsink_audio.get_static_pad("sink"))
             self._appsink_audio.sync_state_with_parent()
 
     def _on_bus_message(self, bus: Gst.Bus, msg: Gst.Message, loop) -> bool:  # type: ignore[no-untyped-def]
@@ -160,17 +153,17 @@ class GstWebRTCClient(CameraBase, AudioBase):
         self.logger.debug("starting bus message loop")
         bus = self.pipeline.get_bus()
         bus.add_watch(GLib.PRIORITY_DEFAULT, self._on_bus_message, self._loop)
-        self._loop.run()  # type: ignore[no-untyped-call]
+        self._loop.run()
         bus.remove_watch()
         self.logger.debug("bus message loop stopped")
 
-    def open(self):
+    def open(self) -> None:
         """Open the video stream."""
         self.pipeline.set_state(Gst.State.PLAYING)
         self._thread_bus_calls = Thread(target=self._handle_bus_calls, daemon=True)
         self._thread_bus_calls.start()
 
-    def _get_sample(self, appsink):
+    def _get_sample(self, appsink: Gst.AppSink) -> Optional[bytes]:
         sample = appsink.try_pull_sample(20_000_000)
         if sample is None:
             return None
@@ -208,7 +201,7 @@ class GstWebRTCClient(CameraBase, AudioBase):
         )
         return arr
 
-    def close(self):
+    def close(self) -> None:
         """Stop the pipeline."""
         self._loop.quit()
         self.pipeline.set_state(Gst.State.NULL)
@@ -217,22 +210,31 @@ class GstWebRTCClient(CameraBase, AudioBase):
         """Return the samplerate of the audio device."""
         return self.SAMPLERATE
 
-    def start_recording(self):
+    def start_recording(self) -> None:
         """Open the audio card using GStreamer."""
         self.logger.warning("start_recording() is not implemented.")
 
-    def stop_recording(self):
+    def stop_recording(self) -> None:
         """Release the camera resource."""
         self.logger.warning("stop_recording() is not implemented.")
 
-    def start_playing(self):
+    def start_playing(self) -> None:
         """Open the audio output using GStreamer."""
         self.logger.warning("Use open() to start the WebRTC client.")
 
-    def stop_playing(self):
+    def stop_playing(self) -> None:
         """Stop playing audio and release resources."""
         self.logger.warning("Use close() to stop the WebRTC client.")
 
-    def push_audio_sample(self, data: bytes):
+    def push_audio_sample(self, data: bytes) -> None:
         """Push audio data to the output device."""
+        self.logger.warning("Audio playback not implemented in WebRTC client.")
+
+    def play_sound(self, sound_file: str) -> None:
+        """Play a sound file.
+
+        Args:
+            sound_file (str): Path to the sound file to play.
+
+        """
         self.logger.warning("Audio playback not implemented in WebRTC client.")

@@ -6,23 +6,25 @@ interface for capturing images.
 
 import logging
 from abc import ABC, abstractmethod
+from typing import Optional
 
+import numpy as np
+import numpy.typing as npt
 
 from reachy_mini.media.camera_constants import CameraResolution
-
 
 
 class CameraBase(ABC):
     """Abstract class for opening and managing a camera."""
 
     def __init__(
-        self,        
+        self,
         log_level: str = "INFO",
         resolution: CameraResolution = CameraResolution.R1280x720,
     ) -> None:
         """Initialize the camera."""
         self.logger = logging.getLogger(__name__)
-        self.logger.setLevel(log_level)        
+        self.logger.setLevel(log_level)
         self._resolution = resolution
 
     @property
