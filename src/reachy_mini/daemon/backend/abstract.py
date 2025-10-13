@@ -280,7 +280,7 @@ class Backend:
         self,
         head: Annotated[NDArray[np.float64], (4, 4)] | None = None,  # 4x4 pose matrix
         antennas: Annotated[NDArray[np.float64], (2,)]
-        | None = None,  # [left_angle, right_angle] (in rads)
+        | None = None,  # [right_angle, left_angle] (in rads)
         body_yaw: float = 0.0,  # Body yaw angle in radians
     ) -> None:
         """Set the target head pose and/or antenna positions."""
@@ -364,7 +364,7 @@ class Backend:
         self,
         head: Annotated[NDArray[np.float64], (4, 4)] | None = None,  # 4x4 pose matrix
         antennas: Annotated[NDArray[np.float64], (2,)]
-        | None = None,  # [left_angle, right_angle] (in rads)
+        | None = None,  # [right_angle, left_angle] (in rads)
         duration: float = 0.5,  # Duration in seconds for the movement, default is 0.5 seconds.
         method: InterpolationTechnique = InterpolationTechnique.MIN_JERK,  # can be "linear", "minjerk", "ease" or "cartoon", default is "minjerk"
         body_yaw: float | None = 0.0,  # Body yaw angle in radians
@@ -400,7 +400,7 @@ class Backend:
         head_joint_positions: list[float]
         | None = None,  # [yaw, stewart_platform x 6] length 7
         antennas_joint_positions: list[float]
-        | None = None,  # [left_angle, right_angle] length 2
+        | None = None,  # [right_angle, left_angle] length 2
         duration: float = 0.5,  # Duration in seconds for the movement
         method: InterpolationTechnique = InterpolationTechnique.MIN_JERK,  # can be "linear", "minjerk", "ease" or "cartoon", default is "minjerk"
     ) -> None:

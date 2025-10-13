@@ -10,7 +10,10 @@ import time
 
 from reachy_mini import ReachyMini
 
-with ReachyMini() as mini:
+print(
+    "This demo currently only works with Placo as the kinematics engine. Start the daemon with:\nreachy-mini-daemon --kinematics-engine Placo"
+)
+with ReachyMini(media_backend="no_media") as mini:
     try:
         mini.enable_gravity_compensation()
 
@@ -18,7 +21,8 @@ with ReachyMini() as mini:
         while True:
             # do nothing, just keep the program running
             time.sleep(0.02)
-
     except KeyboardInterrupt:
+        pass
+    finally:
         mini.disable_gravity_compensation()
         print("Exiting... Reachy Mini is stiff again.")

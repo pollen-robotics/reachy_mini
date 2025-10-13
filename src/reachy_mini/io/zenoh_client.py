@@ -9,7 +9,7 @@ import threading
 import time
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 from uuid import UUID, uuid4
 
 import numpy as np
@@ -43,6 +43,7 @@ class ZenohClient(AbstractClient):
 
         self.joint_position_received = threading.Event()
         self.head_pose_received = threading.Event()
+        self.status_received = threading.Event()
 
         self.session = zenoh.open(c)
         self.cmd_pub = self.session.declare_publisher("reachy_mini/command")
@@ -61,6 +62,12 @@ class ZenohClient(AbstractClient):
             "reachy_mini/recorded_data",
             self._handle_recorded_data,
         )
+
+        self.status_sub = self.session.declare_subscriber(
+            "reachy_mini/daemon_status",
+            self._handle_status,
+        )
+
         self._last_head_joint_positions = None
         self._last_antennas_joint_positions = None
         self._last_head_pose: Optional[npt.NDArray[np.float64]] = None
@@ -69,6 +76,7 @@ class ZenohClient(AbstractClient):
         ] = None
         self._recorded_data_ready = threading.Event()
         self._is_alive = False
+        self._last_status: Dict[str, Any] = {}  # contains a DaemonStatus
 
         self.tasks: dict[UUID, TaskState] = {}
         self.task_request_pub = self.session.declare_publisher("reachy_mini/task")
@@ -146,6 +154,13 @@ class ZenohClient(AbstractClient):
         if self._recorded_data is not None:
             print(f"Recorded data: {len(self._recorded_data)} frames received.")
 
+    def _handle_status(self, sample: zenoh.Sample) -> None:
+        """Handle incoming status updates."""
+        if sample.payload:
+            status = json.loads(sample.payload.to_string())
+            self._last_status = status
+            self.status_received.set()
+
     def get_current_joints(self) -> tuple[list[float], list[float]]:
         """Get the current joint positions."""
         assert (
@@ -174,6 +189,13 @@ class ZenohClient(AbstractClient):
         if self._recorded_data is not None:
             return self._recorded_data.copy()
         return None
+
+    def get_status(self, wait: bool = True, timeout: float = 5.0) -> Dict[str, Any]:
+        """Get the last received status. Returns DaemonStatus as a dict."""
+        if wait and not self.status_received.wait(timeout):
+            raise TimeoutError("Status not received in time.")
+        self.status_received.clear()  # ready for next run
+        return self._last_status
 
     def _handle_head_pose(self, sample: zenoh.Sample) -> None:
         """Handle incoming head pose."""

@@ -85,6 +85,8 @@ class ZenohServer(AbstractServer):
             "reachy_mini/task_progress"
         )
 
+        self.pub_status = self.session.declare_publisher("reachy_mini/daemon_status")
+
     def stop(self) -> None:
         """Stop the Zenoh server."""
         self.session.close()  # type: ignore[no-untyped-call]

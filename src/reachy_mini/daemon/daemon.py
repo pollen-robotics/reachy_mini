@@ -5,15 +5,20 @@ It includes methods to start, stop, and restart the daemon, as well as to check 
 It also provides a command-line interface for easy interaction.
 """
 
+import json
 import logging
-from dataclasses import dataclass
+import time
+from dataclasses import asdict, dataclass
 from enum import Enum
-from threading import Thread
+from threading import Event, Thread
 from typing import Any, Optional
 
-import serial.tools.list_ports
-
 from reachy_mini.daemon.backend.abstract import MotorControlMode
+from reachy_mini.daemon.utils import (
+    convert_enum_to_dict,
+    find_serial_port,
+    get_ip_address,
+)
 
 from ..io.zenoh_server import ZenohServer
 from .backend.mujoco import MujocoBackend, MujocoBackendStatus
@@ -38,7 +43,10 @@ class Daemon:
             simulation_enabled=None,
             backend_status=None,
             error=None,
+            wlan_ip=None,
         )
+        self._thread_publish_status = Thread(target=self._publish_status, daemon=True)
+        self._thread_event_publish_status = Event()
 
     async def start(
         self,
@@ -73,6 +81,9 @@ class Daemon:
 
         self._status.simulation_enabled = sim
 
+        if not localhost_only:
+            self._status.wlan_ip = get_ip_address()
+
         self._start_params = {
             "sim": sim,
             "serialport": serialport,
@@ -100,6 +111,7 @@ class Daemon:
 
         self.server = ZenohServer(self.backend, localhost_only=localhost_only)
         self.server.start()
+        self._thread_publish_status.start()
 
         def backend_wrapped_run() -> None:
             assert self.backend is not None, (
@@ -170,6 +182,7 @@ class Daemon:
             self.logger.info("Stopping Reachy Mini daemon...")
             self._status.state = DaemonState.STOPPING
             self.backend.is_shutting_down = True
+            self._thread_event_publish_status.set()
             self.server.stop()
 
             if not hasattr(self, "backend"):
@@ -294,6 +307,15 @@ class Daemon:
 
         return self._status
 
+    def _publish_status(self) -> None:
+        self._thread_event_publish_status.clear()
+        while self._thread_event_publish_status.is_set() is False:
+            json_str = json.dumps(
+                asdict(self.status(), dict_factory=convert_enum_to_dict)
+            )
+            self.server.pub_status.put(json_str)
+            time.sleep(1)
+
     async def run4ever(
         self,
         sim: bool = False,
@@ -414,19 +436,4 @@ class DaemonStatus:
     simulation_enabled: Optional[bool]
     backend_status: Optional[RobotBackendStatus | MujocoBackendStatus]
     error: Optional[str] = None
-
-
-def find_serial_port(vid: str = "1a86", pid: str = "55d3") -> list[str]:
-    """Find the serial port for Reachy Mini based on VID and PID.
-
-    Args:
-        vid (str): Vendor ID of the device. (eg. "1a86").
-        pid (str): Product ID of the device. (eg. "55d3").
-
-    """
-    ports = serial.tools.list_ports.comports()
-
-    vid = vid.upper()
-    pid = pid.upper()
-
-    return [p.device for p in ports if f"USB VID:PID={vid}:{pid}" in p.hwid]
+    wlan_ip: Optional[str] = None

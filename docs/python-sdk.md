@@ -1,6 +1,6 @@
 # Reachy Mini API Documentation
 
-*⚠️ All examples shown below suppose that you have already started the Reachy Mini daemon, either by running `reachy-mini-daemon` or by using the Python module `reachy_mini.daemon.cli`. ⚠️*
+*⚠️ All examples shown below suppose that you have already started the Reachy Mini daemon, either by running `reachy-mini-daemon` or by using the Python module `reachy_mini.daemon.app.main`. ⚠️*
 
 ## ReachyMini
 
@@ -27,10 +27,14 @@ with ReachyMini() as mini:
 
 ### Moving the robot
 
-Then, the next step is to show how to move the robot. The `ReachyMini` class provides methods called `set_target` and `goto_target` that allows you to move the robot's joints to a specific target position. You can control:
+Then, the next step is to show how to move the robot. The `ReachyMini` class provides methods called `set_target` and `goto_target` that allows you to move the robot's head to a specific target position. You can control:
 * the head's position and orientation
 * the body's rotation angle
 * the antennas' position
+
+The `head_frame` is positioned at the base of the head, as you can see in the image below. This is the frame you are controling when using `set_target` and `goto_target`.
+
+[![Reachy Mini Head Frame](/docs/assets/head_frame.png)]()
 
 For instance, to move the head of the robot slightly to the left then go back, you can use the following code:
 
@@ -99,7 +103,7 @@ with ReachyMini() as reachy:
     reachy.goto_target(antennas=[0, 0], duration=1.0)
 ```
 
-You need to pass the angles in radians, so you can use `numpy.deg2rad` to convert degrees to radians. The first value in the list corresponds to the left antenna, and the second value corresponds to the right antenna.
+You need to pass the angles in radians, so you can use `numpy.deg2rad` to convert degrees to radians. The first value in the list corresponds to the right antenna, and the second value corresponds to the left antenna.
 
 You can also move the head, the body and the antennas at the same time by passing all three arguments to the `goto_target` method:
 
@@ -206,10 +210,13 @@ The robot will not be able to follow the command exactly due to the safety limit
 Reachy mini will not throw an error if you exceed these limits, but it will move to the closest valid position within the limits. You can check the current position of the head using the `get_current_head_pose` method of the `ReachyMini` instance. For example:
 
 ```python
+import time 
+
 from reachy_mini import ReachyMini
 from reachy_mini.utils import create_head_pose
-import time 
+
 reachy = ReachyMini()
+
 # construct a head pose with roll -20 degrees
 pose = create_head_pose(roll=-20, degrees=True)
 reachy.goto_target(head=pose)
@@ -228,7 +235,9 @@ The `look_at_image` method allows the robot to look at a point in the image coor
 
 You can see the example in [look_at_image.py](../examples/look_at_image.py).
 
-There is also a `look_at_world` method that allows the robot to look at a point in the world coordinates. The world coordinates are defined as a 3D point in the robot's coordinate system. TODO add a schematic of this coordinate system.
+There is also a `look_at_world` method that allows the robot to look at a point in the world coordinates. The world coordinates are defined as a 3D point in the robot's coordinate system.
+
+[![Reachy Mini World Frame](/docs/assets/world_frame.png)]()
 
 ### Enable/disable motors and compliancy
 
@@ -247,6 +256,18 @@ For example, this could be a teleoperation script, and you could be recording cu
 You can create another ReachyMini client (or use the same) and simply use `start_recording()` and `stop_recording()`.
 Below is the snippet of code that show how to start a recording, stop the recording and unpack the data:
 ```python
+import time
+
+from reachy_mini import ReachyMini
+
+
+with ReachyMini() as mini:
+    data = {
+        "description": "TODO: describe what you captured.",
+        "time": [],
+        "set_target_data": [],
+    }
+
     try:
         # The daemon will start recording the set_target() calls
         mini.start_recording()
@@ -254,21 +275,23 @@ Below is the snippet of code that show how to start a recording, stop the record
 
         while True:
             # Keep the script alive to listen for Ctrl+C
-            time.sleep(0.01) 
+            time.sleep(0.01)
     except KeyboardInterrupt:
         # Stop recording and retrieve the logged data
         recorded_motion = mini.stop_recording()
-        
-        data = {}
-        for frame in recorded_motion:
-            data["time"].append(frame.get("time"))
-            pose_info = {
-                'head': frame.get('head'),
-                'antennas': frame.get('antennas'),
-                'body_yaw': frame.get('body_yaw'),
-            }
-            data["set_target_data"].append(pose_info)
+
+    for frame in recorded_motion:
+        data["time"].append(frame.get("time"))
+        pose_info = {
+            "head": frame.get("head"),
+            "antennas": frame.get("antennas"),
+            "body_yaw": frame.get("body_yaw"),
+        }
+        data["set_target_data"].append(pose_info)
 ```
+
+We also provide [tools](https://github.com/pollen-robotics/reachy_mini_toolbox/tree/main/tools/moves) to record and upload a dataset to the hub, that can be easily replayed later. See [This section](#playing-moves)
+
 ## Accessing the sensors
 
 Reachy Mini comes with several sensors (camera, microphone, speaker) that are connected to your computer via USB through the robot. These devices are accessible via the `reachy_mini.media` object.
@@ -279,13 +302,14 @@ A camera frame can be easily retrieved as follows:
 
 ```python
 from reachy_mini import ReachyMini
+
 with ReachyMini() as reachy_mini:
     while True:
         frame = reachy_mini.media.get_frame()
         # frame is a numpy array as output by opencv
 ```
 
-Please refer to the examples: [look_at_image](../examples/look_at_images.py) and  [security_camera](../examples/security_camera.py).
+Please refer to the examples: [look_at_image](../examples/look_at_image.py) and  [security_camera](../examples/security_camera.py).
 
 ### Microphone
 
@@ -293,10 +317,11 @@ Audio samples from the microphone can be obtained as follows:
 
 ```python
 from reachy_mini import ReachyMini
-with ReachyMini() as reachy_mini:
+
+with ReachyMini() as mini:
     while True:
         sample = mini.media.get_audio_sample()
-        # sample is a numpy array as output by souddevice
+        # sample is a numpy array as output by sounddevice
 ```
 
 Please refer to the example [sound_record](../examples/debug/sound_record.py).
@@ -307,10 +332,11 @@ Audio samples can be pushed to the speaker as follows:
 
 ```python
 from reachy_mini import ReachyMini
-with ReachyMini() as reachy_mini:
+
+with ReachyMini() as mini:
     while True:
         # get audio chunk from mic / live source / file
-        mini.media.push_audio_sample(chunk)        
+        mini.media.push_audio_sample(chunk)
 ```
 Please refer to the example: [sound_play](../examples/debug/sound_play.py).
 
@@ -321,48 +347,48 @@ To enable the use of the GStreamer backend, the package should be installed as f
 
 
 ```bash
-pip install -e .[gstreamer]
+pip install -e ".[gstreamer]"
 ```
 
 It is assumed that the [gstreamer binaires](https://gstreamer.freedesktop.org/download/) are properly installed on your system. You will likely want to configure your own pipeline. See [gstreamer camera](../src/reachy_mini/media/camera_gstreamer.py) for an example.
 
 ## Playing moves
 
-You can also play predefined moves simply. You can find an example on how to do this in the [Dance Player](../examples/minimal_dance_player.py) example. 
+You can also play predefined moves simply. You can find an example on how to do this in the [recorded moves example](../examples/recorded_moves_example.py) examples.
 
-Basically, you just need to load the move from the dataset you want. And run the `play_on` method on a `ReachyMini` instance.
+Basically, you just need to load the move from the dataset you want. And run the `play_move` method on a `ReachyMini` instance.
 
 ```python
-from reachy_mini.motion.dance_move import DanceMove
-from reachy_mini.reachy_mini import ReachyMini
-
-recorded_moves = RecordedMoves("pollen-robotics/reachy-mini-dances-library")
+from reachy_mini import ReachyMini
+from reachy_mini.motion.recorded_move import RecordedMoves
 
 with ReachyMini() as mini:
-    move = recorded_moves.get("dizzy_spin")
-    move.play_on(mini)
+    recorded_moves = RecordedMoves("pollen-robotics/reachy-mini-dances-library")
+    print(recorded_moves.list_moves())
+
+    for move_name in recorded_moves.list_moves():
+        print(f"Playing move: {move_name}")
+        mini.play_move(recorded_moves.get(move_name), initial_goto_duration=1.0)
 ```
 
-You can also list the available moves in a collection as follows:
+The `initial_goto_duration` argument for `play_move()` allows you to smoothly go to the starting position of the move before starting to execute it.
 
-```python
-from reachy_mini.motion.collection.dance import AVAILABLE_MOVES
+The datasets are hosted on the Hugging Face Hub ([for example](https://huggingface.co/datasets/pollen-robotics/reachy-mini-emotions-library))
 
-print("Available moves:", list(AVAILABLE_MOVES.keys()))
-
->>> Available moves: ['simple_nod', 'head_tilt_roll', 'side_to_side_sway', 'dizzy_spin', 'stumble_and_recover', 'headbanger_combo', 'interwoven_spirals', 'sharp_side_tilt', 'side_peekaboo', 'yeah_nod', 'uh_huh_tilt', 'neck_recoil', 'chin_lead', 'groovy_sway_and_roll', 'chicken_peck', 'side_glance_flick', 'polyrhythm_combo', 'grid_snap', 'pendulum_swing', 'jackson_square']
-```
+We provide tools to record and upload a dataset [here](https://github.com/pollen-robotics/reachy_mini_toolbox/tree/main/tools/moves).
 
 ## Writing an App
 
 We provide a simple way to wrap your behavior in an application that can be run as a standalone script. This is useful to properly manage the start/stop of the app and to add discovery/install mechanisms to allow users to easily run your app. We are also working on a dashboard to manage the apps and their installation.
+
+**It is also a good way to share your app with the community and make it easily discoverable and installable!** See the [HF Spaces Reachy Mini Apps](https://huggingface.co/spaces/pollen-robotics/Reachy_Mini_Apps) for examples of apps shared by the community.
 
 To write your app, you simply need to define a class that inherits from `ReachyMiniApp` and implements the `run` method. This method will be called when the app is started, and you can use it to interact with the robot.
 
 ```python
 import threading
 
-from reachy_mini.app import ReachyMiniApp
+from reachy_mini.apps.app import ReachyMiniApp
 from reachy_mini import ReachyMini
 
 
@@ -373,6 +399,13 @@ class MyApp(ReachyMiniApp):
 ```
 
 The `stop_event` is a threading event that you should check periodically to know if the app should stop. You can use it to gracefully stop the app when the user wants to stop it.
+
+### Using the space template
+
+Directly go to [HF Spaces Reachy Mini App Example](https://huggingface.co/spaces/pollen-robotics/reachy_mini_app_example) and follow the instruction!
+
+
+### Using the app template generator
 
 We also provide a script to make all the basic boilerplate for you. You can run the following command to create a new app:
 
