@@ -31,7 +31,7 @@ class Daemon:
     Runs the server with the appropriate backend (Mujoco for simulation or RobotBackend for real hardware).
     """
 
-    def __init__(self, wireless_version: bool = False, log_level: str = "INFO"):
+    def __init__(self, log_level: str = "INFO", wireless_version: bool = False) -> None:
         """Initialize the Reachy Mini daemon."""
         self.log_level = log_level
         self.logger = logging.getLogger(__name__)
@@ -100,6 +100,7 @@ class Daemon:
 
         try:
             self.backend = self._setup_backend(
+                wireless_version=self.wireless_version,
                 sim=sim,
                 serialport=serialport,
                 scene=scene,
@@ -379,6 +380,7 @@ class Daemon:
 
     def _setup_backend(
         self,
+        wireless_version: bool,
         sim: bool,
         serialport: str,
         scene: str,
@@ -395,7 +397,7 @@ class Daemon:
             )
         else:
             if serialport == "auto":
-                ports = find_serial_port()
+                ports = find_serial_port(wireless_version=wireless_version)
 
                 if len(ports) == 0:
                     raise RuntimeError(

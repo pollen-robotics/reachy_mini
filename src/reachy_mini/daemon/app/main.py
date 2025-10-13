@@ -37,6 +37,8 @@ class Args:
 
     log_level: str = "INFO"
 
+    wireless_version: bool = False
+
     serialport: str = "auto"
 
     wireless_version: bool = False
@@ -89,7 +91,7 @@ def create_app(args: Args) -> FastAPI:
     )
 
     app.state.args = args
-    app.state.daemon = Daemon(args.wireless_version)
+    app.state.daemon = Daemon(wireless_version=args.wireless_version)
     app.state.app_manager = AppManager()
 
     app.add_middleware(
@@ -145,6 +147,13 @@ def main() -> None:
     default_args = Args()
 
     parser = argparse.ArgumentParser(description="Run the Reachy Mini daemon.")
+    parser.add_argument(
+        "--wireless-version",
+        action="store_true",
+        default=default_args.wireless_version,
+        help="Use the wireless version of Reachy Mini (default: False).",
+    )
+
     # Real robot mode
     parser.add_argument(
         "-p",
