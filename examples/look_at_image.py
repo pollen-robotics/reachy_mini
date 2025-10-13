@@ -32,27 +32,32 @@ def main(backend):
 
     print("Click on the image to make ReachyMini look at that point.")
     print("Press 'q' to quit the camera feed.")
-    with ReachyMini(media_backend=backend) as reachy_mini:
-        while True:
-            frame = reachy_mini.media.get_frame()
+    with ReachyMini(use_sim=False, media_backend=backend) as reachy_mini:
+        try:
+            while True:
+                frame = reachy_mini.media.get_frame()
 
-            if frame is None:
-                print("Failed to grab frame.")
-                continue
+                if frame is None:
+                    print("Failed to grab frame.")
+                    continue
 
-            if backend == "gstreamer":
-                frame = cv2.imdecode(
-                    np.frombuffer(frame, dtype=np.uint8), cv2.IMREAD_COLOR
-                )
+                if backend == "gstreamer":
+                    frame = cv2.imdecode(
+                        np.frombuffer(frame, dtype=np.uint8), cv2.IMREAD_COLOR
+                    )
 
-            cv2.imshow("Reachy Mini Camera", frame)
-            if cv2.waitKey(1) & 0xFF == ord("q"):
-                print("Exiting...")
-                break
+                cv2.imshow("Reachy Mini Camera", frame)
+                if cv2.waitKey(1) & 0xFF == ord("q"):
+                    print("Exiting...")
+                    break
 
-            if state["just_clicked"]:
-                reachy_mini.look_at_image(state["x"], state["y"], duration=0.3)
-                state["just_clicked"] = False
+                if state["just_clicked"]:
+                    reachy_mini.look_at_image(state["x"], state["y"], duration=0.3)
+                    state["just_clicked"] = False
+        except KeyboardInterrupt:
+            print("Interrupted. Closing viewer...")
+        finally:
+            cv2.destroyAllWindows()
 
 
 if __name__ == "__main__":

@@ -9,9 +9,11 @@ import threading
 import time
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Any, Dict, List, Optional
 from uuid import UUID, uuid4
 
 import numpy as np
+import numpy.typing as npt
 import zenoh
 
 from reachy_mini.io.abstract import AbstractClient
@@ -41,6 +43,7 @@ class ZenohClient(AbstractClient):
 
         self.joint_position_received = threading.Event()
         self.head_pose_received = threading.Event()
+        self.status_received = threading.Event()
 
         self.session = zenoh.open(c)
         self.cmd_pub = self.session.declare_publisher("reachy_mini/command")
@@ -59,12 +62,21 @@ class ZenohClient(AbstractClient):
             "reachy_mini/recorded_data",
             self._handle_recorded_data,
         )
+
+        self.status_sub = self.session.declare_subscriber(
+            "reachy_mini/daemon_status",
+            self._handle_status,
+        )
+
         self._last_head_joint_positions = None
         self._last_antennas_joint_positions = None
-        self._last_head_pose = None
-        self._recorded_data = None
+        self._last_head_pose: Optional[npt.NDArray[np.float64]] = None
+        self._recorded_data: Optional[
+            List[Dict[str, float | List[float] | List[List[float]]]]
+        ] = None
         self._recorded_data_ready = threading.Event()
         self._is_alive = False
+        self._last_status: Dict[str, Any] = {}  # contains a DaemonStatus
 
         self.tasks: dict[UUID, TaskState] = {}
         self.task_request_pub = self.session.declare_publisher("reachy_mini/task")
@@ -73,7 +85,7 @@ class ZenohClient(AbstractClient):
             self._handle_task_progress,
         )
 
-    def wait_for_connection(self, timeout: float = 5.0):
+    def wait_for_connection(self, timeout: float = 5.0) -> None:
         """Wait for the client to connect to the server.
 
         Args:
@@ -111,18 +123,18 @@ class ZenohClient(AbstractClient):
             timeout=1.0
         ) and self.head_pose_received.wait(timeout=1.0)
 
-    def disconnect(self):
+    def disconnect(self) -> None:
         """Disconnect the client from the server."""
-        self.session.close()
+        self.session.close()  # type: ignore[no-untyped-call]
 
-    def send_command(self, command: str):
+    def send_command(self, command: str) -> None:
         """Send a command to the server."""
         if not self._is_alive:
             raise ConnectionError("Lost connection with the server.")
 
         self.cmd_pub.put(command.encode("utf-8"))
 
-    def _handle_joint_positions(self, sample):
+    def _handle_joint_positions(self, sample: zenoh.Sample) -> None:
         """Handle incoming joint positions."""
         if sample.payload:
             positions = json.loads(sample.payload.to_string())
@@ -132,14 +144,22 @@ class ZenohClient(AbstractClient):
             )
             self.joint_position_received.set()
 
-    def _handle_recorded_data(self, sample):
+    def _handle_recorded_data(self, sample: zenoh.Sample) -> None:
         """Handle incoming recorded data."""
         print("Received recorded data.")
         if sample.payload:
             data = json.loads(sample.payload.to_string())
             self._recorded_data = data
             self._recorded_data_ready.set()
-        print(f"Recorded data: {len(self._recorded_data)} frames received.")
+        if self._recorded_data is not None:
+            print(f"Recorded data: {len(self._recorded_data)} frames received.")
+
+    def _handle_status(self, sample: zenoh.Sample) -> None:
+        """Handle incoming status updates."""
+        if sample.payload:
+            status = json.loads(sample.payload.to_string())
+            self._last_status = status
+            self.status_received.set()
 
     def get_current_joints(self) -> tuple[list[float], list[float]]:
         """Get the current joint positions."""
@@ -156,7 +176,9 @@ class ZenohClient(AbstractClient):
         """Block until the daemon publishes the frames (or timeout)."""
         return self._recorded_data_ready.wait(timeout)
 
-    def get_recorded_data(self, wait: bool = True, timeout: float = 5.0) -> list[dict]:
+    def get_recorded_data(
+        self, wait: bool = True, timeout: float = 5.0
+    ) -> Optional[List[Dict[str, float | List[float] | List[List[float]]]]]:
         """Return the cached recording, optionally blocking until it arrives.
 
         Raises `TimeoutError` if nothing shows up in time.
@@ -164,16 +186,25 @@ class ZenohClient(AbstractClient):
         if wait and not self._recorded_data_ready.wait(timeout):
             raise TimeoutError("Recording not received in time.")
         self._recorded_data_ready.clear()  # ready for next run
-        return self._recorded_data.copy()
+        if self._recorded_data is not None:
+            return self._recorded_data.copy()
+        return None
 
-    def _handle_head_pose(self, sample):
+    def get_status(self, wait: bool = True, timeout: float = 5.0) -> Dict[str, Any]:
+        """Get the last received status. Returns DaemonStatus as a dict."""
+        if wait and not self.status_received.wait(timeout):
+            raise TimeoutError("Status not received in time.")
+        self.status_received.clear()  # ready for next run
+        return self._last_status
+
+    def _handle_head_pose(self, sample: zenoh.Sample) -> None:
         """Handle incoming head pose."""
         if sample.payload:
             pose = json.loads(sample.payload.to_string())
             self._last_head_pose = np.array(pose.get("head_pose")).reshape(4, 4)
             self.head_pose_received.set()
 
-    def get_current_head_pose(self) -> np.ndarray:
+    def get_current_head_pose(self) -> npt.NDArray[np.float64]:
         """Get the current head pose."""
         assert self._last_head_pose is not None, "No head pose received yet."
         return self._last_head_pose.copy()
@@ -191,7 +222,7 @@ class ZenohClient(AbstractClient):
 
         return task.uuid
 
-    def wait_for_task_completion(self, task_uid: UUID, timeout: float = 5.0):
+    def wait_for_task_completion(self, task_uid: UUID, timeout: float = 5.0) -> None:
         """Wait for the specified task to complete."""
         if task_uid not in self.tasks:
             raise ValueError("Task not found.")
@@ -205,7 +236,7 @@ class ZenohClient(AbstractClient):
 
         del self.tasks[task_uid]
 
-    def _handle_task_progress(self, sample):
+    def _handle_task_progress(self, sample: zenoh.Sample) -> None:
         if sample.payload:
             progress = TaskProgress.model_validate_json(sample.payload.to_string())
             assert progress.uuid in self.tasks, "Unknown task UUID."

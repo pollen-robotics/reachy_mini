@@ -13,14 +13,21 @@ import json
 import logging
 import threading
 import time
+import typing
 from abc import abstractmethod
 from enum import Enum
 from pathlib import Path
-from typing import List
+from typing import Annotated, Any
 
 import numpy as np
+import zenoh
+from numpy.typing import NDArray
 from scipy.spatial.transform import Rotation as R
 
+if typing.TYPE_CHECKING:
+    from reachy_mini.daemon.backend.mujoco.backend import MujocoBackendStatus
+    from reachy_mini.daemon.backend.robot.backend import RobotBackendStatus
+    from reachy_mini.kinematics import AnyKinematics
 from reachy_mini.media.audio_sounddevice import SoundDeviceAudio
 from reachy_mini.motion.goto import GotoMove
 from reachy_mini.motion.move import Move
@@ -78,7 +85,7 @@ class Backend:
         if self.kinematics_engine == "Placo":
             from reachy_mini.kinematics import PlacoKinematics
 
-            self.head_kinematics = PlacoKinematics(
+            self.head_kinematics: AnyKinematics = PlacoKinematics(
                 URDF_ROOT_PATH, check_collision=self.check_collision
             )
         elif self.kinematics_engine == "NN":
@@ -94,27 +101,46 @@ class Backend:
                 f"Unknown kinematics engine: {self.kinematics_engine}. Use 'Placo', 'NN' or 'AnalyticalKinematics'."
             )
 
-        self.current_head_pose = None  # 4x4 pose matrix
-        self.target_head_pose = None  # 4x4 pose matrix
-        self.target_body_yaw = None  # Last body yaw used in IK computations
+        self.current_head_pose: Annotated[NDArray[np.float64], (4, 4)] | None = (
+            None  # 4x4 pose matrix
+        )
+        self.target_head_pose: Annotated[NDArray[np.float64], (4, 4)] | None = (
+            None  # 4x4 pose matrix
+        )
+        self.target_body_yaw: float | None = (
+            None  # Last body yaw used in IK computations
+        )
 
-        self.target_head_joint_positions = None  # [yaw, 0, 1, 2, 3, 4, 5]
-        self.current_head_joint_positions = None  # [yaw, 0, 1, 2, 3, 4, 5]
-        self.target_antenna_joint_positions = None  # [0, 1]
-        self.current_antenna_joint_positions = None  # [0, 1]
+        self.target_head_joint_positions: (
+            Annotated[NDArray[np.float64], (7,)] | None
+        ) = None  # [yaw, 0, 1, 2, 3, 4, 5]
+        self.current_head_joint_positions: (
+            Annotated[NDArray[np.float64], (7,)] | None
+        ) = None  # [yaw, 0, 1, 2, 3, 4, 5]
+        self.target_antenna_joint_positions: (
+            Annotated[NDArray[np.float64], (2,)] | None
+        ) = None  # [0, 1]
+        self.current_antenna_joint_positions: (
+            Annotated[NDArray[np.float64], (2,)] | None
+        ) = None  # [0, 1]
 
-        self.joint_positions_publisher = None  # Placeholder for a publisher object
-        self.pose_publisher = None  # Placeholder for a pose publisher object
-        self.recording_publisher = None  # Placeholder for a recording publisher object
-        self.error = None  # To store any error that occurs during execution
+        self.joint_positions_publisher: zenoh.Publisher | None = None
+        self.pose_publisher: zenoh.Publisher | None = None
+        self.recording_publisher: zenoh.Publisher | None = None
+        self.error: str | None = None  # To store any error that occurs during execution
         self.is_recording = False  # Flag to indicate if recording is active
-        self.recorded_data = []  # List to store recorded data
+        self.recorded_data: list[dict[str, Any]] = []  # List to store recorded data
 
         # variables to store the last computed head joint positions and pose
-        self._last_target_body_yaw = None  # Last body yaw used in IK computations
-        self._last_target_head_pose = None  # Last head pose used in IK computations
-        self.target_head_joint_current = None  # Placeholder for head joint torque
-        self.target_head_operation_mode = None  # Placeholder for head operation mode
+        self._last_target_body_yaw: float | None = (
+            None  # Last body yaw used in IK computations
+        )
+        self._last_target_head_pose: Annotated[NDArray[np.float64], (4, 4)] | None = (
+            None  # Last head pose used in IK computations
+        )
+        self.target_head_joint_current: Annotated[NDArray[np.float64], (7,)] | None = (
+            None  # Placeholder for head joint torque
+        )
         self.ik_required = False  # Flag to indicate if IK computation is required
 
         self.is_shutting_down = False
@@ -136,7 +162,7 @@ class Backend:
         self.audio = SoundDeviceAudio(log_level=log_level)
 
     # Life cycle methods
-    def wrapped_run(self):
+    def wrapped_run(self) -> None:
         """Run the backend in a try-except block to store errors."""
         try:
             self.run()
@@ -145,7 +171,7 @@ class Backend:
             self.close()
             raise e
 
-    def run(self):
+    def run(self) -> None:
         """Run the backend.
 
         This method is a placeholder and should be overridden by subclasses.
@@ -161,7 +187,7 @@ class Backend:
             "The method close should be overridden by subclasses."
         )
 
-    def get_status(self):
+    def get_status(self) -> "RobotBackendStatus | MujocoBackendStatus":
         """Return backend statistics.
 
         This method is a placeholder and should be overridden by subclasses.
@@ -171,7 +197,7 @@ class Backend:
         )
 
     # Present/Target joint positions
-    def set_joint_positions_publisher(self, publisher) -> None:
+    def set_joint_positions_publisher(self, publisher: zenoh.Publisher) -> None:
         """Set the publisher for joint positions.
 
         Args:
@@ -180,7 +206,7 @@ class Backend:
         """
         self.joint_positions_publisher = publisher
 
-    def set_pose_publisher(self, publisher) -> None:
+    def set_pose_publisher(self, publisher: zenoh.Publisher) -> None:
         """Set the publisher for head pose.
 
         Args:
@@ -190,7 +216,9 @@ class Backend:
         self.pose_publisher = publisher
 
     def update_target_head_joints_from_ik(
-        self, pose: np.ndarray | None = None, body_yaw: float | None = None
+        self,
+        pose: Annotated[NDArray[np.float64], (4, 4)] | None = None,
+        body_yaw: float | None = None,
     ) -> None:
         """Update the target head joint positions from inverse kinematics.
 
@@ -222,7 +250,7 @@ class Backend:
 
     def set_target_head_pose(
         self,
-        pose: np.ndarray,
+        pose: Annotated[NDArray[np.float64], (4, 4)],
         body_yaw: float = 0.0,
     ) -> None:
         """Set the target head pose for the robot.
@@ -236,7 +264,9 @@ class Backend:
         self.target_body_yaw = body_yaw
         self.ik_required = True
 
-    def set_target_head_joint_positions(self, positions: List[float]) -> None:
+    def set_target_head_joint_positions(
+        self, positions: Annotated[NDArray[np.float64], (7,)] | None
+    ) -> None:
         """Set the head joint positions.
 
         Args:
@@ -248,10 +278,9 @@ class Backend:
 
     def set_target(
         self,
-        head: np.ndarray | None = None,  # 4x4 pose matrix
-        antennas: np.ndarray
-        | list[float]
-        | None = None,  # [left_angle, right_angle] (in rads)
+        head: Annotated[NDArray[np.float64], (4, 4)] | None = None,  # 4x4 pose matrix
+        antennas: Annotated[NDArray[np.float64], (2,)]
+        | None = None,  # [right_angle, left_angle] (in rads)
         body_yaw: float = 0.0,  # Body yaw angle in radians
     ) -> None:
         """Set the target head pose and/or antenna positions."""
@@ -259,13 +288,11 @@ class Backend:
             self.set_target_head_pose(head, body_yaw)
 
         if antennas is not None:
-            if isinstance(antennas, np.ndarray):
-                antennas = antennas.tolist()
             self.set_target_antenna_joint_positions(antennas)
 
     def set_target_antenna_joint_positions(
         self,
-        positions: List[float],
+        positions: Annotated[NDArray[np.float64], (2,)],
     ) -> None:
         """Set the antenna joint positions.
 
@@ -275,11 +302,14 @@ class Backend:
         """
         self.target_antenna_joint_positions = positions
 
-    def set_target_head_joint_current(self, current: List[float]) -> None:
+    def set_target_head_joint_current(
+        self,
+        current: Annotated[NDArray[np.float64], (7,)],
+    ) -> None:
         """Set the head joint current.
 
         Args:
-            current (List[float]): A list of current values for the head motors.
+            current (Annotated[NDArray[np.float64], (7,)]): A list of current values for the head motors.
 
         """
         self.target_head_joint_current = current
@@ -322,7 +352,7 @@ class Backend:
                     body_yaw=body_yaw if body_yaw is not None else 0.0,
                 )
             if antennas is not None:
-                self.set_target_antenna_joint_positions(list(antennas))
+                self.set_target_antenna_joint_positions(antennas)
 
             elapsed = time.time() - t0 - t
             if elapsed < sleep_period:
@@ -332,14 +362,13 @@ class Backend:
 
     async def goto_target(
         self,
-        head: np.ndarray | None = None,  # 4x4 pose matrix
-        antennas: np.ndarray
-        | list[float]
-        | None = None,  # [left_angle, right_angle] (in rads)
+        head: Annotated[NDArray[np.float64], (4, 4)] | None = None,  # 4x4 pose matrix
+        antennas: Annotated[NDArray[np.float64], (2,)]
+        | None = None,  # [right_angle, left_angle] (in rads)
         duration: float = 0.5,  # Duration in seconds for the movement, default is 0.5 seconds.
         method: InterpolationTechnique = InterpolationTechnique.MIN_JERK,  # can be "linear", "minjerk", "ease" or "cartoon", default is "minjerk"
-        body_yaw: float = 0.0,  # Body yaw angle in radians
-    ):
+        body_yaw: float | None = 0.0,  # Body yaw angle in radians
+    ) -> None:
         """Asynchronously go to a target head pose and/or antennas position using task space interpolation, in "duration" seconds.
 
         Args:
@@ -347,7 +376,7 @@ class Backend:
             antennas (np.ndarray | list[float] | None): 1D array with two elements representing the angles of the antennas in radians.
             duration (float): Duration of the movement in seconds.
             method (str): Interpolation method to use ("linear", "minjerk", "ease", "cartoon"). Default is "minjerk".
-            body_yaw (float): Body yaw angle in radians.
+            body_yaw (float | None): Body yaw angle in radians.
 
         Raises:
             ValueError: If neither head nor antennas are provided, or if duration is not positive.
@@ -371,7 +400,7 @@ class Backend:
         head_joint_positions: list[float]
         | None = None,  # [yaw, stewart_platform x 6] length 7
         antennas_joint_positions: list[float]
-        | None = None,  # [left_angle, right_angle] length 2
+        | None = None,  # [right_angle, left_angle] length 2
         duration: float = 0.5,  # Duration in seconds for the movement
         method: InterpolationTechnique = InterpolationTechnique.MIN_JERK,  # can be "linear", "minjerk", "ease" or "cartoon", default is "minjerk"
     ) -> None:
@@ -419,11 +448,11 @@ class Backend:
                 start_antennas + (target_antennas - start_antennas) * interp_time
             )
 
-            self.set_target_head_joint_positions(head_joint.tolist())
-            self.set_target_antenna_joint_positions(antennas_joint.tolist())
+            self.set_target_head_joint_positions(head_joint)
+            self.set_target_antenna_joint_positions(antennas_joint)
             await asyncio.sleep(0.01)
 
-    def set_recording_publisher(self, publisher) -> None:
+    def set_recording_publisher(self, publisher: zenoh.Publisher) -> None:
         """Set the publisher for recording data.
 
         Args:
@@ -432,7 +461,7 @@ class Backend:
         """
         self.recording_publisher = publisher
 
-    def append_record(self, record: dict) -> None:
+    def append_record(self, record: dict[str, Any]) -> None:
         """Append a record to the recorded data.
 
         Args:
@@ -466,7 +495,7 @@ class Backend:
                 "stop_recording called but recording_publisher is not set; dropping data."
             )
 
-    def get_present_head_joint_positions(self) -> List[float]:
+    def get_present_head_joint_positions(self) -> Annotated[NDArray[np.float64], (7,)]:
         """Return the present head joint positions.
 
         This method is a placeholder and should be overridden by subclasses.
@@ -477,20 +506,23 @@ class Backend:
 
     def get_present_body_yaw(self) -> float:
         """Return the present body yaw."""
-        return self.get_present_head_joint_positions()[0]
+        yaw: float = self.get_present_head_joint_positions()[0]
+        return yaw
 
-    def get_present_head_pose(self) -> np.ndarray:
+    def get_present_head_pose(self) -> Annotated[NDArray[np.float64], (4, 4)]:
         """Return the present head pose as a 4x4 matrix."""
         assert self.current_head_pose is not None, (
             "The current head pose is not set. Please call the update_head_kinematics_model method first."
         )
         return self.current_head_pose
 
-    def get_current_head_pose(self) -> np.ndarray:
+    def get_current_head_pose(self) -> Annotated[NDArray[np.float64], (4, 4)]:
         """Return the present head pose as a 4x4 matrix."""
         return self.get_present_head_pose()
 
-    def get_present_antenna_joint_positions(self) -> List[float]:
+    def get_present_antenna_joint_positions(
+        self,
+    ) -> Annotated[NDArray[np.float64], (2,)]:
         """Return the present antenna joint positions.
 
         This method is a placeholder and should be overridden by subclasses.
@@ -502,8 +534,8 @@ class Backend:
     # Kinematics methods
     def update_head_kinematics_model(
         self,
-        head_joint_positions: List[float] | None = None,
-        antennas_joint_positions: List[float] | None = None,
+        head_joint_positions: Annotated[NDArray[np.float64], (7,)] | None = None,
+        antennas_joint_positions: Annotated[NDArray[np.float64], (2,)] | None = None,
     ) -> None:
         """Update the placo kinematics of the robot.
 
@@ -554,7 +586,7 @@ class Backend:
 
     def get_urdf(self) -> str:
         """Get the URDF representation of the robot."""
-        urdf_path = Path(self.urdf_root_path) / "robot.urdf"
+        urdf_path = Path(URDF_ROOT_PATH) / "robot.urdf"
 
         with open(urdf_path, "r") as f:
             return f.read()
@@ -566,10 +598,10 @@ class Backend:
         If the file is not found in the assets directory, try to load the path itself.
 
         Args:
-            sound_file (str): The name of the sound file to play (e.g., "proud2.wav").
+            sound_file (str): The name of the sound file to play (e.g., "wake_up.wav").
 
         """
-        self.audio.play_sound(sound_file)
+        self.audio.play_sound(sound_file, autoclean=True)
 
     # Basic move definitions
     INIT_HEAD_POSE = np.eye(4)
@@ -584,7 +616,7 @@ class Backend:
         1.0032234352772091,
     ]
 
-    SLEEP_ANTENNAS_JOINT_POSITIONS = [3.05, -3.05]
+    SLEEP_ANTENNAS_JOINT_POSITIONS = np.array((-3.05, 3.05))
     SLEEP_HEAD_POSE = np.array(
         [
             [0.911, 0.004, 0.413, -0.021],
@@ -604,13 +636,13 @@ class Backend:
 
         await self.goto_target(
             self.INIT_HEAD_POSE,
-            antennas=[0.0, 0.0],
+            antennas=np.array((0.0, 0.0)),
             duration=magic_distance * 20 / 1000,  # ms_per_magic_mm = 10
         )
         await asyncio.sleep(0.1)
 
         # Toudoum
-        self.play_sound("proud2.wav")
+        self.play_sound("wake_up.wav")
 
         # Roll 20° to the left
         pose = self.INIT_HEAD_POSE.copy()
@@ -642,7 +674,7 @@ class Backend:
             if dist_to_init_pose > 30:
                 # Move to the initial position
                 await self.goto_target(
-                    self.INIT_HEAD_POSE, antennas=[0.0, 0.0], duration=1
+                    self.INIT_HEAD_POSE, antennas=np.array((0.0, 0.0)), duration=1
                 )
                 await asyncio.sleep(0.2)
 

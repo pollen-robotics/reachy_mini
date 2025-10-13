@@ -34,7 +34,7 @@ async def get_motor_status(backend: Backend = Depends(get_backend)) -> MotorStat
 async def set_motor_mode(
     mode: MotorControlMode,
     backend: Backend = Depends(get_backend),
-):
+) -> dict[str, str]:
     """Set the motor control mode."""
     backend.set_motor_control_mode(mode)
 

@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from enum import Enum
 from importlib.metadata import entry_points
 from threading import Thread
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from pydantic import BaseModel
 
@@ -52,7 +52,7 @@ class AppManager:
         self.current_app = None  # type: RunningApp | None
         self.logger = logging.getLogger("reachy_mini.apps.manager")
 
-    async def close(self):
+    async def close(self) -> None:
         """Clean up the AppManager, stopping any running app."""
         if self.is_app_running():
             await self.stop_current_app()
@@ -75,7 +75,7 @@ class AppManager:
         (ep,) = entry_points(group="reachy_mini_apps", name=app_name)
         app = ep.load()()
 
-        def wrapped_run():
+        def wrapped_run() -> None:
             assert self.current_app is not None
 
             try:
@@ -105,7 +105,7 @@ class AppManager:
 
         return self.current_app.status
 
-    async def stop_current_app(self, timeout: float | None = 5.0):
+    async def stop_current_app(self, timeout: float | None = 5.0) -> None:
         """Stop the current app."""
         if not self.is_app_running():
             raise RuntimeError("No app is currently running")
@@ -142,10 +142,11 @@ class AppManager:
 
         return self.current_app.status
 
-    async def current_app_status(self) -> AppStatus | None:
+    async def current_app_status(self) -> Optional[AppStatus]:
         """Get the current status of the app."""
         if self.current_app is not None:
             return self.current_app.status
+        return None
 
     # Apps management interface
     async def list_all_available_apps(self) -> list[AppInfo]:

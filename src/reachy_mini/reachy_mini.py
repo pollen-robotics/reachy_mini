@@ -14,12 +14,13 @@ from typing import Dict, List, Optional, Union
 
 import cv2
 import numpy as np
+import numpy.typing as npt
 from asgiref.sync import async_to_sync
 from scipy.spatial.transform import Rotation as R
 
 from reachy_mini.daemon.utils import daemon_check
-from reachy_mini.io import Client
 from reachy_mini.io.protocol import GotoTaskRequest
+from reachy_mini.io.zenoh_client import ZenohClient
 from reachy_mini.media.media_manager import MediaBackend, MediaManager
 from reachy_mini.motion.move import Move
 from reachy_mini.utils.interpolation import InterpolationTechnique, minimum_jerk
@@ -38,7 +39,7 @@ SLEEP_HEAD_JOINT_POSITIONS = [
 ]
 
 
-SLEEP_ANTENNAS_JOINT_POSITIONS = [3.05, -3.05]
+SLEEP_ANTENNAS_JOINT_POSITIONS = [-3.05, 3.05]
 SLEEP_HEAD_POSE = np.array(
     [
         [0.911, 0.004, 0.413, -0.021],
@@ -86,10 +87,10 @@ class ReachyMini:
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(log_level)
         daemon_check(spawn_daemon, use_sim)
-        self.client = Client(localhost_only)
+        self.client = ZenohClient(localhost_only)
         self.client.wait_for_connection(timeout=timeout)
         self.set_automatic_body_yaw(automatic_body_yaw)
-        self._last_head_pose = None
+        self._last_head_pose: Optional[npt.NDArray[np.float64]] = None
         self.is_recording = False
 
         self.K = np.array(
@@ -125,13 +126,13 @@ class ReachyMini:
                 )
 
         self.media_manager = MediaManager(
-            use_sim=use_sim,
+            use_sim=self.client.get_status()["simulation_enabled"],
             backend=mbackend,
             log_level=log_level,
             signalling_host="10.0.1.38",  # TODO get from args
         )
 
-    def __del__(self):
+    def __del__(self) -> None:
         """Destroy the Reachy Mini instance.
 
         The client is disconnected explicitly to avoid a thread pending issue.
@@ -143,7 +144,7 @@ class ReachyMini:
         """Context manager entry point for Reachy Mini."""
         return self
 
-    def __exit__(self, exc_type, exc_value, traceback) -> None:
+    def __exit__(self, exc_type, exc_value, traceback) -> None:  # type: ignore [no-untyped-def]
         """Context manager exit point for Reachy Mini."""
         self.client.disconnect()
 
@@ -154,10 +155,10 @@ class ReachyMini:
 
     def set_target(
         self,
-        head: Optional[np.ndarray] = None,  # 4x4 pose matrix
+        head: Optional[npt.NDArray[np.float64]] = None,  # 4x4 pose matrix
         antennas: Optional[
-            Union[np.ndarray, List[float]]
-        ] = None,  # [left_angle, right_angle] (in rads)
+            Union[npt.NDArray[np.float64], List[float]]
+        ] = None,  # [right_angle, left_angle] (in rads)
         body_yaw: float = 0.0,  # Body yaw angle in radians
     ) -> None:
         """Set the target pose of the head and/or the target position of the antennas.
@@ -190,24 +191,26 @@ class ReachyMini:
             self.set_target_head_pose(head, body_yaw)
         self._last_head_pose = head
 
-        record = {
+        record: Dict[str, float | List[float] | List[List[float]]] = {
             "time": time.time(),
-            "head": head.tolist() if head is not None else None,
-            "antennas": list(antennas) if antennas is not None else None,
             "body_yaw": body_yaw,
         }
+        if head is not None:
+            record["head"] = head.tolist()
+        if antennas is not None:
+            record["antennas"] = list(antennas)
         self._set_record_data(record)
 
     def goto_target(
         self,
-        head: Optional[np.ndarray] = None,  # 4x4 pose matrix
+        head: Optional[npt.NDArray[np.float64]] = None,  # 4x4 pose matrix
         antennas: Optional[
-            Union[np.ndarray, List[float]]
-        ] = None,  # [left_angle, right_angle] (in rads)
+            Union[npt.NDArray[np.float64], List[float]]
+        ] = None,  # [right_angle, left_angle] (in rads)
         duration: float = 0.5,  # Duration in seconds for the movement, default is 0.5 seconds.
-        method=InterpolationTechnique.MIN_JERK,  # can be "linear", "minjerk", "ease" or "cartoon", default is "minjerk")
-        body_yaw: float = 0.0,  # Body yaw angle in radians
-    ):
+        method: InterpolationTechnique = InterpolationTechnique.MIN_JERK,  # can be "linear", "minjerk", "ease" or "cartoon", default is "minjerk")
+        body_yaw: float | None = 0.0,  # Body yaw angle in radians
+    ) -> None:
         """Go to a target head pose and/or antennas position using task space interpolation, in "duration" seconds.
 
         Args:
@@ -215,7 +218,7 @@ class ReachyMini:
             antennas (Optional[Union[np.ndarray, List[float]]]): 1D array with two elements representing the angles of the antennas in radians.
             duration (float): Duration of the movement in seconds.
             method (InterpolationTechnique): Interpolation method to use ("linear", "minjerk", "ease", "cartoon"). Default is "minjerk".
-            body_yaw (float): Body yaw angle in radians.
+            body_yaw (float | None): Body yaw angle in radians. Use None to keep the current yaw.
 
         Raises:
             ValueError: If neither head nor antennas are provided, or if duration is not positive.
@@ -250,7 +253,7 @@ class ReachyMini:
         time.sleep(0.1)
 
         # Toudoum
-        self.media.play_sound("proud2.wav")
+        self.media.play_sound("wake_up.wav")
 
         # Roll 20° to the left
         pose = INIT_HEAD_POSE.copy()
@@ -294,7 +297,7 @@ class ReachyMini:
 
     def look_at_image(
         self, u: int, v: int, duration: float = 1.0, perform_movement: bool = True
-    ) -> np.ndarray:
+    ) -> npt.NDArray[np.float64]:
         """Make the robot head look at a point defined by a pixel position (u,v).
 
         # TODO image of reachy mini coordinate system
@@ -341,7 +344,11 @@ class ReachyMini:
         P_world = t_wc + ray_world
 
         return self.look_at_world(
-            *P_world, duration=duration, perform_movement=perform_movement
+            x=P_world[0],
+            y=P_world[1],
+            z=P_world[2],
+            duration=duration,
+            perform_movement=perform_movement,
         )
 
     def look_at_world(
@@ -351,7 +358,7 @@ class ReachyMini:
         z: float,
         duration: float = 1.0,
         perform_movement: bool = True,
-    ) -> np.ndarray:
+    ) -> npt.NDArray[np.float64]:
         """Look at a specific point in 3D space in Reachy Mini's reference frame.
 
         TODO include image of reachy mini coordinate system
@@ -425,7 +432,7 @@ class ReachyMini:
         ] = None,  # [yaw, stewart_platform x 6] length 7
         antennas_joint_positions: Optional[
             List[float]
-        ] = None,  # [left_angle, right_angle] length 2
+        ] = None,  # [right_angle, left_angle] length 2
         duration: float = 0.5,  # Duration in seconds for the movement
     ) -> None:
         """Go to a target head joint positions and/or antennas joint positions using joint space interpolation, in "duration" seconds.
@@ -459,9 +466,7 @@ class ReachyMini:
         else:
             target.extend(cur_antennas)
 
-        current = np.array(current)
-        target = np.array(target)
-        traj = minimum_jerk(current, target, duration)
+        traj = minimum_jerk(np.array(current), np.array(target), duration)
 
         t0 = time.time()
         while time.time() - t0 < duration:
@@ -498,7 +503,7 @@ class ReachyMini:
         """
         return self.get_current_joint_positions()[1]
 
-    def get_current_head_pose(self) -> np.ndarray:
+    def get_current_head_pose(self) -> npt.NDArray[np.float64]:
         """Get the current head pose as a 4x4 matrix.
 
         Get the current head pose as a 4x4 matrix.
@@ -513,7 +518,7 @@ class ReachyMini:
         self,
         head_joint_positions: list[float] | None = None,
         antennas_joint_positions: list[float] | None = None,
-    ):
+    ) -> None:
         """Set the joint positions of the head and/or antennas.
 
         [Internal] Set the joint positions of the head and/or antennas.
@@ -545,7 +550,7 @@ class ReachyMini:
 
     def set_target_head_pose(
         self,
-        pose: np.ndarray,
+        pose: npt.NDArray[np.float64],
         body_yaw: float = 0.0,
     ) -> None:
         """Set the head pose to a specific 4x4 matrix.
@@ -582,7 +587,9 @@ class ReachyMini:
         self.client.send_command(json.dumps({"start_recording": True}))
         self.is_recording = True
 
-    def stop_recording(self) -> List[Dict]:
+    def stop_recording(
+        self,
+    ) -> Optional[List[Dict[str, float | List[float] | List[List[float]]]]]:
         """Stop recording data and return the recorded data."""
         self.client.send_command(json.dumps({"stop_recording": True}))
         self.is_recording = False
@@ -592,7 +599,9 @@ class ReachyMini:
 
         return recorded_data
 
-    def _set_record_data(self, record: Dict) -> None:
+    def _set_record_data(
+        self, record: Dict[str, float | List[float] | List[List[float]]]
+    ) -> None:
         """Set the record data to be logged by the backend.
 
         Args:
@@ -613,7 +622,7 @@ class ReachyMini:
         """Disable the motors."""
         self._set_torque(False)
 
-    def _set_torque(self, on: bool):
+    def _set_torque(self, on: bool) -> None:
         self.client.send_command(json.dumps({"torque": on}))
 
     def enable_gravity_compensation(self) -> None:

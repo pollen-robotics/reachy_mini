@@ -10,9 +10,10 @@ This exposes:
 import asyncio
 import json
 from enum import Enum
-from typing import Coroutine
+from typing import Any, Coroutine
 from uuid import UUID, uuid4
 
+import numpy as np
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
@@ -46,6 +47,31 @@ class GotoModelRequest(BaseModel):
     duration: float
     interpolation: InterpolationMode = InterpolationMode.MINJERK
 
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "head_pose": {
+                        "x": 0.0,
+                        "y": 0.0,
+                        "z": 0.0,
+                        "roll": 0.0,
+                        "pitch": 0.0,
+                        "yaw": 0.0,
+                    },
+                    "antennas": [0.0, 0.0],
+                    "duration": 2.0,
+                    "interpolation": "minjerk",
+                },
+                {
+                    "antennas": [0.0, 0.0],
+                    "duration": 1.0,
+                    "interpolation": "linear",
+                },
+            ],
+        }
+    }
+
 
 class MoveUUID(BaseModel):
     """Model representing a unique identifier for a move task."""
@@ -53,10 +79,10 @@ class MoveUUID(BaseModel):
     uuid: UUID
 
 
-move_tasks: dict[UUID, asyncio.Task] = {}
+move_tasks: dict[UUID, asyncio.Task[None]] = {}
 
 
-def create_move_task(coro: Coroutine) -> MoveUUID:
+def create_move_task(coro: Coroutine[Any, Any, None]) -> MoveUUID:
     """Create a new move task using async task coroutine."""
     uuid = uuid4()
 
@@ -68,7 +94,7 @@ def create_move_task(coro: Coroutine) -> MoveUUID:
     return MoveUUID(uuid=uuid)
 
 
-async def stop_move_task(uuid: UUID):
+async def stop_move_task(uuid: UUID) -> dict[str, str]:
     """Stop a running move task by cancelling it."""
     if uuid not in move_tasks:
         raise KeyError(f"Running move with UUID {uuid} not found")
@@ -102,7 +128,7 @@ async def goto(
     return create_move_task(
         backend.goto_target(
             head=goto_req.head_pose.to_pose_array() if goto_req.head_pose else None,
-            antennas=list(goto_req.antennas) if goto_req.antennas else None,
+            antennas=np.array(goto_req.antennas) if goto_req.antennas else None,
             duration=goto_req.duration,
         )
     )
@@ -132,7 +158,7 @@ async def play_recorded_move_dataset(
 
 
 @router.post("/stop")
-async def stop_move(uuid: MoveUUID):
+async def stop_move(uuid: MoveUUID) -> dict[str, str]:
     """Stop a running move task."""
     return await stop_move_task(uuid.uuid)
 
@@ -142,13 +168,13 @@ async def stop_move(uuid: MoveUUID):
 async def set_target(
     target: FullBodyTarget,
     backend: Backend = Depends(get_backend),
-) -> dict:
+) -> dict[str, str]:
     """POST route to set a single FullBodyTarget."""
     backend.set_target(
         head=target.target_head_pose.to_pose_array()
         if target.target_head_pose
         else None,
-        antennas=list(target.target_antennas) if target.target_antennas else None,
+        antennas=np.array(target.target_antennas) if target.target_antennas else None,
     )
     return {"status": "ok"}
 
@@ -156,7 +182,7 @@ async def set_target(
 @router.websocket("/ws/set_target")
 async def ws_set_target(
     websocket: WebSocket, backend: Backend = Depends(ws_get_backend)
-):
+) -> None:
     """WebSocket route to stream FullBodyTarget set_target calls."""
     await websocket.accept()
     try:

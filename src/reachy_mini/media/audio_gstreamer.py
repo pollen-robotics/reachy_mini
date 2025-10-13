@@ -53,7 +53,7 @@ class GStreamerAudio(AudioBase):
             GLib.PRIORITY_DEFAULT, self._on_bus_message, self._loop
         )
 
-    def _init_pipeline_record(self, pipeline):
+    def _init_pipeline_record(self, pipeline: Gst.Pipeline) -> None:
         self._appsink_audio = Gst.ElementFactory.make("appsink")
         caps = Gst.Caps.from_string(
             f"audio/x-raw,channels=1,rate={self._samplerate},format=S16LE"
@@ -87,13 +87,13 @@ class GStreamerAudio(AudioBase):
         audioconvert.link(audioresample)
         audioresample.link(self._appsink_audio)
 
-    def __del__(self):
+    def __del__(self) -> None:
         """Destructor to ensure gstreamer resources are released."""
         self._loop.quit()
         self._bus_record.remove_watch()
         self._bus_playback.remove_watch()
 
-    def _init_pipeline_playback(self, pipeline):
+    def _init_pipeline_playback(self, pipeline: Gst.Pipeline) -> None:
         self._appsrc = Gst.ElementFactory.make("appsrc")
         self._appsrc.set_property("format", Gst.Format.TIME)
         self._appsrc.set_property("is-live", True)
@@ -132,11 +132,11 @@ class GStreamerAudio(AudioBase):
 
         return True
 
-    def start_recording(self):
+    def start_recording(self) -> None:
         """Open the audio card using GStreamer."""
         self._pipeline_record.set_state(Gst.State.PLAYING)
 
-    def _get_sample(self, appsink):
+    def _get_sample(self, appsink: Gst.AppSink) -> Optional[bytes]:
         sample = appsink.try_pull_sample(20_000_000)
         if sample is None:
             return None
@@ -162,19 +162,19 @@ class GStreamerAudio(AudioBase):
         """Return the samplerate of the audio device."""
         return self._samplerate
 
-    def stop_recording(self):
+    def stop_recording(self) -> None:
         """Release the camera resource."""
         self._pipeline_record.set_state(Gst.State.NULL)
 
-    def start_playing(self):
+    def start_playing(self) -> None:
         """Open the audio output using GStreamer."""
         self._pipeline_playback.set_state(Gst.State.PLAYING)
 
-    def stop_playing(self):
+    def stop_playing(self) -> None:
         """Stop playing audio and release resources."""
         self._pipeline_playback.set_state(Gst.State.NULL)
 
-    def push_audio_sample(self, data: bytes):
+    def push_audio_sample(self, data: bytes) -> None:
         """Push audio data to the output device."""
         if self._appsrc is not None:
             buf = Gst.Buffer.new_wrapped(data)
@@ -183,3 +183,12 @@ class GStreamerAudio(AudioBase):
             self.logger.warning(
                 "AppSrc is not initialized. Call start_playing() first."
             )
+
+    def play_sound(self, sound_file: str) -> None:
+        """Play a sound file.
+
+        Args:
+            sound_file (str): Path to the sound file to play.
+
+        """
+        self.logger.warning("play_sound is not implemented for GStreamerAudio.")
