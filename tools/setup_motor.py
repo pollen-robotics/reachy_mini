@@ -77,7 +77,7 @@ def parse_yaml_config(filename: str) -> ReachyMiniConfig:
 
 FACTORY_DEFAULT_ID = 1
 FACTORY_DEFAULT_BAUDRATE = 57600
-SERIAL_TIMEOUT = 0.002  # seconds
+SERIAL_TIMEOUT = 0.1  # seconds
 MOTOR_SETUP_DELAY = 0.1  # seconds
 
 XL_BAUDRATE_CONV_TABLE = {
