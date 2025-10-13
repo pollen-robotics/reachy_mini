@@ -168,14 +168,16 @@ def setup_motor(
     time.sleep(MOTOR_SETUP_DELAY)
 
 
-def lookup_for_motor(serial_port: str, id: int, baudrate: int) -> bool:
+def lookup_for_motor(serial_port: str, id: int, baudrate: int, silent:bool=False) -> bool:
     """Check if a motor with the given ID is reachable on the specified serial port."""
-    print(
-        f"Looking for motor with ID {id} on port {serial_port}...", end="", flush=True
-    )
+    if not silent:
+        print(
+            f"Looking for motor with ID {id} on port {serial_port}...", end="", flush=True
+        )
     c = Xl330PyController(serial_port, baudrate=baudrate, timeout=SERIAL_TIMEOUT)
     ret = c.ping(id)
-    print(f"{'✅' if ret else '❌'}")
+    if not silent:
+        print(f"{'✅' if ret else '❌'}")
     return ret
 
 
