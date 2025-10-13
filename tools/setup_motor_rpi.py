@@ -65,7 +65,7 @@ def main():
     current_channel = 0
     while True:
         current_channel = (current_channel + 1) % 9
-        # select_channel(current_channel)
+        select_channel(current_channel)
         if lookup_for_motor(
             UART_PORT, FACTORY_DEFAULT_ID, FACTORY_DEFAULT_BAUDRATE, silent=True
         ):
@@ -79,7 +79,7 @@ def main():
             )
             run(args)
 
-        time.sleep(0.1)
+        time.sleep(0.01)
 
 
 if __name__ == "__main__":
