@@ -98,6 +98,7 @@ def main():
                 update_config=False,
             )
             run(args)
+            time.sleep(2)
 
         time.sleep(0.01)
 
