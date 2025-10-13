@@ -4,13 +4,29 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+import sys
 from typing import Iterable
 
 import numpy as np
 import pytest
 
-from reachy_mini import ReachyMini
-from reachy_mini.testing.motion_capture import (
+REPO_ROOT = Path(__file__).resolve().parents[1]
+SRC_ROOT = REPO_ROOT / "src"
+if str(SRC_ROOT) not in sys.path:
+    sys.path.insert(0, str(SRC_ROOT))
+TOOLS_ROOT = REPO_ROOT / "tests" / "tools"
+if TOOLS_ROOT.exists() and str(TOOLS_ROOT) not in sys.path:
+    sys.path.insert(0, str(TOOLS_ROOT))
+
+try:
+    from reachy_mini import ReachyMini
+except ModuleNotFoundError as exc:  # pragma: no cover
+    pytest.skip(
+        f"reachy_mini is not importable: {exc}. Install the project dependencies (pip install -e .).",
+        allow_module_level=True,
+    )
+
+from dance_measurement import (
     DanceMeasurementResult,
     DanceReference,
     MeasurementMode,
@@ -58,8 +74,13 @@ def _load_reference(path: Path) -> DanceReference:
         raise FileNotFoundError(
             f"Reference file {path} missing. Regenerate with python tests/tools/generate_motion_references.py."
         )
-    with np.load(path, allow_pickle=False) as data:
-        return DanceReference.from_npz(dict(data.items()))
+    try:
+        with np.load(path, allow_pickle=False) as data:
+            return DanceReference.from_npz(dict(data.items()))
+    except ValueError as exc:
+        raise RuntimeError(
+            f"Reference file {path} uses a legacy format. Regenerate it with python tests/tools/generate_motion_references.py."
+        ) from exc
 
 
 def _assert_shapes(current: DanceMeasurementResult, reference: DanceReference) -> None:

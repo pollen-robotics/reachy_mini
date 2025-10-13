@@ -14,12 +14,16 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SRC_ROOT = REPO_ROOT / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
+TOOLS_ROOT = Path(__file__).resolve().parent
+if str(TOOLS_ROOT) not in sys.path:
+    sys.path.insert(0, str(TOOLS_ROOT))
 
 from reachy_mini import ReachyMini
-from reachy_mini.testing.motion_capture import (
+from dance_measurement import (
     DanceMeasurementConfig,
     MeasurementMode,
     measure_dances,
+    reference_to_npz_payload,
 )
 
 _DEFAULT_MOVES = ("simple_nod", "side_to_side_sway")
@@ -132,9 +136,9 @@ def main(argv: Sequence[str] | None = None) -> None:
             result.metrics.average_update_frequency_hz - ref_thresholds["frequency_drop_hz"],
         )
         ref_thresholds["baseline_avg_frequency_hz"] = result.metrics.average_update_frequency_hz
-        reference = result.to_reference(ref_thresholds)
+        payload = reference_to_npz_payload(result, ref_thresholds)
         npz_path = target_dir / f"{move_name}.npz"
-        np.savez_compressed(npz_path, **reference.to_npz_payload())
+        np.savez_compressed(npz_path, **payload)
         print(
             f"Saved reference for {move_name} in {mode.value} mode -> {npz_path} "
             f"(samples={len(result.timestamps_s)})"
