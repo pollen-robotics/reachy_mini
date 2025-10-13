@@ -13,7 +13,8 @@ from setup_motor import (
     lookup_for_motor,
     parse_yaml_config,
     run,
-    light_led_up
+    light_led_up,
+    light_led_down
 )
 
 assets_root_path = "../src/reachy_mini/assets/"
@@ -88,6 +89,8 @@ def main():
         elif lookup_for_motor(UART_PORT, current_channel+10, 1000000, silent=True):
             print(f"Motor on channel {current_channel} already set up.")
             # light_led_up(UART_PORT, current_channel+10, 1000000)
+            time.sleep(2)
+            light_led_down(UART_PORT, current_channel+10, 1000000)
             args = argparse.Namespace(
                 config_file=CONFIG_FILE_PATH,
                 motor_name=target_name,
@@ -98,7 +101,6 @@ def main():
                 update_config=False,
             )
             run(args)
-            time.sleep(2)
 
         time.sleep(0.01)
 
