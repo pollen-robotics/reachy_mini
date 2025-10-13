@@ -5,10 +5,11 @@ import threading
 import time
 from typing import Any, List, Optional
 
-import librosa
 import numpy as np
 import numpy.typing as npt
+import scipy
 import sounddevice as sd
+import soundfile as sf
 
 from reachy_mini.utils.constants import ASSETS_ROOT_PATH
 
@@ -118,9 +119,14 @@ class SoundDeviceAudio(AudioBase):
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"Sound file {file_path} not found.")
 
-        data, samplerate_in = librosa.load(
-            file_path, sr=self.get_audio_samplerate(), mono=True
-        )
+        data, samplerate_in = sf.read(file_path, dtype="float32")
+
+        if samplerate_in != self.get_audio_samplerate():
+            data = scipy.signal.resample(
+                data, int(len(data) * (self.get_audio_samplerate() / samplerate_in))
+            )
+        if data.ndim > 1:  # convert to mono
+            data = np.mean(data, axis=1)
 
         self.logger.debug(f"Playing sound '{file_path}' at {samplerate_in} Hz")
 
