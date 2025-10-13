@@ -107,6 +107,11 @@ def create_app(args: Args) -> FastAPI:
     router.include_router(move.router)
     router.include_router(state.router)
 
+    if args.wireless_version:
+        from .routers import wifi_config
+
+        router.include_router(wifi_config.router)
+
     app.include_router(router)
 
     # Route to list available HTML/JS/CSS examples with links using Jinja2 template
