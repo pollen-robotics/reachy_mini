@@ -57,7 +57,7 @@ channel_to_id = {v: k for k, v in id_to_channel.items()}
 
 if __name__ == "__main__":
     args = argparse.ArgumentParser()
-    args.add_argument("--id", type=int, default=0, help="Motor ID (10-18)")
+    args.add_argument("--id", type=int, default=10, help="Motor ID (10-18)")
     args.add_argument("--serial", type=str, default="/dev/ttyUSB0", help="Serial port")
     args = args.parse_args()
 
