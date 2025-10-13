@@ -67,7 +67,9 @@ def main():
     while True:
         current_channel = (current_channel + 1) % 9
         select_channel(current_channel)
+        print("==")
         for id in [FACTORY_DEFAULT_ID, current_channel + 10]:
+            print("looking for motor with ID", id)
             if lookup_for_motor(
                 UART_PORT, id, FACTORY_DEFAULT_BAUDRATE, silent=True
             ):
