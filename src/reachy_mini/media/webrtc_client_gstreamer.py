@@ -12,7 +12,6 @@ import numpy.typing as npt
 
 from reachy_mini.media.audio_base import AudioBase
 from reachy_mini.media.camera_base import CameraBase
-from reachy_mini.media.camera_constants import RPICameraResolution
 
 gi.require_version("Gst", "1.0")
 gi.require_version("GstApp", "1.0")
@@ -30,14 +29,12 @@ class GstWebRTCClient(CameraBase, AudioBase):
         peer_id: str = "",
         signaling_host: str = "",
         signaling_port: int = 8443,
-        resolution: RPICameraResolution = RPICameraResolution.R1280x720,
     ):
         """Initialize the GStreamer WebRTC client."""
         super().__init__(log_level=log_level)
         Gst.init(None)
         self._loop = GLib.MainLoop()
         self._thread_bus_calls: Optional[Thread] = None
-        self._resolution = resolution
 
         self.pipeline = Gst.Pipeline.new("audio_recorder")
 
@@ -59,16 +56,6 @@ class GstWebRTCClient(CameraBase, AudioBase):
 
         webrtcsrc = self._configure_webrtcsrc(signaling_host, signaling_port, peer_id)
         self.pipeline.add(webrtcsrc)
-
-    @property
-    def resolution(self) -> tuple[int, int]:
-        """Get the current camera resolution as a tuple (width, height)."""
-        return (self._resolution.value[0], self._resolution.value[1])
-
-    @property
-    def framerate(self) -> int:
-        """Get the current camera framerate."""
-        return self._resolution.value[2]
 
     def _configure_webrtcsrc(
         self, signaling_host: str, signaling_port: int, peer_id: str
@@ -163,7 +150,7 @@ class GstWebRTCClient(CameraBase, AudioBase):
         self._thread_bus_calls = Thread(target=self._handle_bus_calls, daemon=True)
         self._thread_bus_calls.start()
 
-    def _get_sample(self, appsink: Gst.AppSink) -> Optional[bytes]:
+    def _get_sample(self, appsink: GstApp.AppSink) -> Optional[bytes]:
         sample = appsink.try_pull_sample(20_000_000)
         if sample is None:
             return None
