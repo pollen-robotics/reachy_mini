@@ -77,6 +77,10 @@ def main():
                 config_file=CONFIG_FILE_PATH,
                 motor_name=target_name,
                 serialport=UART_PORT,
+                check_only=False,
+                from_id=FACTORY_DEFAULT_ID,
+                from_baudrate=FACTORY_DEFAULT_BAUDRATE,
+                update_config=False,
             )
             run(args)
 
