@@ -1,12 +1,12 @@
+"""You need to `pip install gpiozero lgpio`."""
+
 import argparse
 import os
 import time
-from importlib.resources import files
 from typing import List
 
 import numpy as np
 from gpiozero import DigitalOutputDevice
-from rustypot import Xl330PyController
 from setup_motor import (
     FACTORY_DEFAULT_BAUDRATE,
     FACTORY_DEFAULT_ID,
@@ -57,6 +57,7 @@ def select_channel(channel: int):
 
 
 def main():
+    """Scan all channels of the multiplexer to find motors in factory default state, and set them up one by one."""
     config = parse_yaml_config(CONFIG_FILE_PATH)
     motor_name_to_id = {m: config.motors[m].id for m in config.motors}
     id_to_motor_name = {v: k for k, v in motor_name_to_id.items()}
