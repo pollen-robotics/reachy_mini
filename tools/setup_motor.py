@@ -272,6 +272,12 @@ def light_led_up(serial_port: str, id: int, baudrate: int):
     c.write_led(id, 1)
 
 
+def light_led_down(serial_port: str, id: int, baudrate: int):
+    """Light the LED of the motor with the given ID on the specified serial port."""
+    c = Xl330PyController(serial_port, baudrate=baudrate, timeout=SERIAL_TIMEOUT)
+    c.write_led(id, 0)
+
+
 def check_configuration(motor_config: MotorConfig, serial_port: str, baudrate: int):
     """Check the configuration of the motor with the given ID on the specified serial port."""
     c = Xl330PyController(serial_port, baudrate=baudrate, timeout=SERIAL_TIMEOUT)
