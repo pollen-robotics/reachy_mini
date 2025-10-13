@@ -309,7 +309,7 @@ with ReachyMini() as reachy_mini:
         # frame is a numpy array as output by opencv
 ```
 
-Please refer to the examples: [look_at_image](../examples/look_at_image.py) and  [security_camera](../examples/security_camera.py).
+Please refer to the example: [look_at_image](../examples/look_at_image.py).
 
 ### Microphone
 
