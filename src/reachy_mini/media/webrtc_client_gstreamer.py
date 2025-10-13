@@ -3,14 +3,16 @@
 The class is a client for the webrtc server hosted on the Reachy Mini Wireless robot.
 """
 
-import logging
 from threading import Thread
 from typing import Optional
 
 import gi
+import numpy as np
+import numpy.typing as npt
 
 from reachy_mini.media.audio_base import AudioBase
 from reachy_mini.media.camera_base import CameraBase
+from reachy_mini.media.camera_constants import RPICameraResolution
 
 gi.require_version("Gst", "1.0")
 gi.require_version("GstApp", "1.0")
@@ -28,12 +30,14 @@ class GstWebRTCClient(CameraBase, AudioBase):
         peer_id: str = "",
         signaling_host: str = "",
         signaling_port: int = 8443,
+        resolution: RPICameraResolution = RPICameraResolution.R1280x720,
     ):
         """Initialize the GStreamer WebRTC client."""
         super().__init__(log_level=log_level)
         Gst.init(None)
         self._loop = GLib.MainLoop()
         self._thread_bus_calls: Optional[Thread] = None
+        self._resolution = resolution
 
         self.pipeline = Gst.Pipeline.new("audio_recorder")
 
@@ -48,7 +52,7 @@ class GstWebRTCClient(CameraBase, AudioBase):
 
         self._appsink_video = Gst.ElementFactory.make("appsink")
         caps_video = Gst.Caps.from_string(
-            "image/jpeg, width=1280, height=720, framerate=30/1"
+            f"video/x-raw,format=BGR,width={self.resolution[0]},height={self.resolution[1]},framerate={self.framerate}/1"
         )
         self._appsink_video.set_property("caps", caps_video)
         self._appsink_video.set_property("drop", True)  # avoid overflow
@@ -57,6 +61,16 @@ class GstWebRTCClient(CameraBase, AudioBase):
 
         webrtcsrc = self._configure_webrtcsrc(signaling_host, signaling_port, peer_id)
         self.pipeline.add(webrtcsrc)
+
+    @property
+    def resolution(self) -> tuple[int, int]:
+        """Get the current camera resolution as a tuple (width, height)."""
+        return (self._resolution.value[0], self._resolution.value[1])
+
+    @property
+    def framerate(self) -> int:
+        """Get the current camera framerate."""
+        return self._resolution.value[2]
 
     def _configure_webrtcsrc(
         self, signaling_host: str, signaling_port: int, peer_id: str
@@ -102,26 +116,27 @@ class GstWebRTCClient(CameraBase, AudioBase):
             videoconvert = Gst.ElementFactory.make("videoconvert")
             videoscale = Gst.ElementFactory.make("videoscale")
             videorate = Gst.ElementFactory.make("videorate")
-            jpegenc = Gst.ElementFactory.make("jpegenc")
+            # jpegenc = Gst.ElementFactory.make("jpegenc")
             sink = self._appsink_video
             self.pipeline.add(queue)
             self.pipeline.add(videoconvert)
             self.pipeline.add(videoscale)
             self.pipeline.add(videorate)
-            self.pipeline.add(jpegenc)
+            # self.pipeline.add(jpegenc)
             pad.link(queue.get_static_pad("sink"))  # type: ignore[arg-type]
 
             queue.link(videoconvert)
             videoconvert.link(videoscale)
             videoscale.link(videorate)
-            videorate.link(jpegenc)
-            jpegenc.link(sink)
+            # videorate.link(jpegenc)
+            # jpegenc.link(sink)
+            videorate.link(sink)
 
             queue.sync_state_with_parent()
             videoconvert.sync_state_with_parent()
             videoscale.sync_state_with_parent()
             videorate.sync_state_with_parent()
-            jpegenc.sync_state_with_parent()
+            # jpegenc.sync_state_with_parent()
             sink.sync_state_with_parent()
 
         elif pad.get_name().startswith("audio"):  # type: ignore[union-attr]
@@ -177,14 +192,21 @@ class GstWebRTCClient(CameraBase, AudioBase):
         """
         return self._get_sample(self._appsink_audio)
 
-    def read(self) -> Optional[bytes]:
+    def read(self) -> Optional[npt.NDArray[np.uint8]]:
         """Read a frame from the camera. Returns the frame or None if error.
 
         Returns:
-            Optional[bytes]: The captured frame in JPEG format, or None if error.
+            Optional[npt.NDArray[np.uint8]]: The captured frame in BGR format, or None if error.
 
         """
-        return self._get_sample(self._appsink_video)
+        data = self._get_sample(self._appsink_video)
+        if data is None:
+            return None
+
+        arr = np.frombuffer(data, dtype=np.uint8).reshape(
+            (self.resolution[1], self.resolution[0], 3)
+        )
+        return arr
 
     def close(self):
         """Stop the pipeline."""
@@ -214,58 +236,3 @@ class GstWebRTCClient(CameraBase, AudioBase):
     def push_audio_sample(self, data: bytes):
         """Push audio data to the output device."""
         self.logger.warning("Audio playback not implemented in WebRTC client.")
-
-
-if __name__ == "__main__":
-    import argparse
-    import time
-
-    from gst_signalling.utils import find_producer_peer_id_by_name
-
-    parser = argparse.ArgumentParser(description="GStreamer Recorder")
-    parser.add_argument(
-        "--mode",
-        choices=["local", "webrtc"],
-        default="local",
-        help="Select player mode: local or webrtc",
-    )
-    parser.add_argument(
-        "--peer-id", type=str, default="reachymini", help="Peer ID for WebRTC mode"
-    )
-    parser.add_argument(
-        "--signaling-host",
-        type=str,
-        default="localhost",
-        help="Signaling host for WebRTC",
-    )
-    parser.add_argument(
-        "--signaling-port", type=int, default=8443, help="Signaling port for WebRTC"
-    )
-    args = parser.parse_args()
-
-    peer_id = ""
-    if args.mode == "local":
-        mode = PlayerMode.LOCAL
-    else:
-        mode = PlayerMode.WEBRTC
-        peer_id = find_producer_peer_id_by_name(
-            args.signaling_host, args.signaling_port, "reachymini"
-        )
-    logging.basicConfig(level=logging.INFO)
-    recorder = GstRecorder(
-        mode=mode,
-        peer_id=peer_id,
-        signaling_host=args.signaling_host,
-        signaling_port=args.signaling_port,
-    )
-    recorder.record()
-    # Wait for the pipeline to start and capture a frame
-    time.sleep(5)
-    jpeg_data = recorder.get_video_sample()
-    if jpeg_data:
-        with open("frame.jpg", "wb") as f:
-            f.write(jpeg_data)
-        logging.info("Image saved as frame.jpg")
-    else:
-        logging.error("No image captured")
-    recorder.stop()
