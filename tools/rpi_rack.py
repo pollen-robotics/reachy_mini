@@ -5,7 +5,7 @@ import numpy as np
 from gpiozero import DigitalOutputDevice
 from rustypot import Xl330PyController
 
-SERIAL_TIMEOUT = 0.1  # seconds
+SERIAL_TIMEOUT = 0.5  # seconds
 
 S0 = DigitalOutputDevice(25)
 S1 = DigitalOutputDevice(8)
@@ -23,6 +23,11 @@ def get_channel_binary(channel) -> List[int]:
 def select_channel(channel: int):
     """Select a channel on the multiplexer."""
     bits = get_channel_binary(channel)
+    # S0.value = bits[0]
+    # S1.value = bits[1]
+    # S2.value = bits[2]
+    # S3.value = bits[3]
+
     S0.on() if bits[0] else S0.off()
     S1.on() if bits[1] else S1.off()
     S2.on() if bits[2] else S2.off()
@@ -57,25 +62,10 @@ channel_to_id = {v: k for k, v in id_to_channel.items()}
 
 if __name__ == "__main__":
     args = argparse.ArgumentParser()
-    args.add_argument("--id", type=int, default=10, help="Motor ID (10-18)")
+    # args.add_argument("--id", type=int, default=10, help="Motor ID (10-18)")
     args.add_argument("--serial", type=str, default="/dev/ttyAMA3", help="Serial port")
     args = args.parse_args()
-
-    channel = id_to_channel.get(args.id, None)
 
     select_channel(0)
     print(f"Selected channel {0}")
     ret = lookup_for_motor(args.serial, 30, baudrate=10000000)
-    exit()
-    baudrates = [57600, 1_000_000]
-    ok = False
-    for baudrate in baudrates:
-        if ok:
-            break
-        print("Trying baudrate:", baudrate)
-        for i in range(255):
-            if ok:
-                break
-            ret = lookup_for_motor(args.serial, i, baudrate=baudrate)
-            if ret:
-                ok = True
