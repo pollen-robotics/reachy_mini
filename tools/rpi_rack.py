@@ -3,6 +3,9 @@ from typing import List
 
 import numpy as np
 from gpiozero import DigitalOutputDevice
+from rustypot import Xl330PyController
+
+SERIAL_TIMEOUT = 0.5  # seconds
 
 S0 = DigitalOutputDevice(25)
 S1 = DigitalOutputDevice(8)
@@ -26,10 +29,41 @@ def select_channel(channel: int):
     S3.value = bits[3]
 
 
+def lookup_for_motor(serial_port: str, id: int, baudrate: int) -> bool:
+    """Check if a motor with the given ID is reachable on the specified serial port."""
+    print(
+        f"Looking for motor with ID {id} on port {serial_port}...",
+        end="",
+        flush=True,
+    )
+    c = Xl330PyController(serial_port, baudrate=baudrate, timeout=SERIAL_TIMEOUT)
+    ret = c.ping(id)
+    print(f"{'✅' if ret else '❌'}")
+    return ret
+
+
+id_to_channel = {
+    10: 0,
+    11: 1,
+    12: 2,
+    13: 3,
+    14: 4,
+    15: 5,
+    16: 6,
+    17: 7,
+    18: 8,
+}
+channel_to_id = {v: k for k, v in id_to_channel.items()}
+
 if __name__ == "__main__":
     args = argparse.ArgumentParser()
-    args.add_argument("--channel", type=int, default=0, help="Channel number (0-8)")
+    args.add_argument("--id", type=int, default=0, help="Motor ID (10-18)")
+    args.add_argument("--serial", type=str, default="/dev/ttyUSB0", help="Serial port")
     args = args.parse_args()
 
-    select_channel(args.channel)
-    print(f"Selected channel {args.channel}")
+    channel = id_to_channel.get(args.id, None)
+
+    select_channel(channel)
+    print(f"Selected channel {channel}")
+
+    lookup_for_motor(args.serial, args.id, baudrate=1000000)
