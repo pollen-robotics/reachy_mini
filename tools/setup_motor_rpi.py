@@ -61,6 +61,7 @@ def main():
     motor_name_to_id = {m: config.motors[m].id for m in config.motors}
     id_to_motor_name = {v: k for k, v in motor_name_to_id.items()}
 
+    print("Starting motor setup...")
     current_channel = 0
     while True:
         current_channel = (current_channel + 1) % 9
