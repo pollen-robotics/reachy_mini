@@ -21,6 +21,8 @@ WorkingDirectory=$(dirname "$LAUNCHER_PATH")
 WantedBy=multi-user.target
 EOF
 
+chmod +x $LAUNCHER_PATH
+
 # Reload systemd, enable and start the service
 sudo systemctl daemon-reload
 sudo systemctl enable --now $SERVICE_NAME
