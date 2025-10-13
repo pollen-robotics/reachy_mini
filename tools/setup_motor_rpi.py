@@ -82,7 +82,7 @@ def main():
                     serialport=UART_PORT,
                     check_only=False,
                     from_id=id,
-                    from_baudrate=FACTORY_DEFAULT_BAUDRATE,
+                    from_baudrate=baudrate,
                     update_config=False,
                 )
                 run(args)
