@@ -278,6 +278,7 @@ def light_led_up(serial_port: str, id: int, baudrate: int):
             break
         except RuntimeError as e:
             print(f"Error while turning on LED for motor ID {id}: {e}")
+        trials += 1
 
 
 def light_led_down(serial_port: str, id: int, baudrate: int):
@@ -291,6 +292,7 @@ def light_led_down(serial_port: str, id: int, baudrate: int):
             break
         except RuntimeError as e:
             print(f"Error while turning off LED for motor ID {id}: {e}")
+        trials += 1
 
 
 def check_configuration(motor_config: MotorConfig, serial_port: str, baudrate: int):
