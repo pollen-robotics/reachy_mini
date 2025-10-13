@@ -13,7 +13,7 @@ HOTSPOT_PASSWORD = "reachy-mini"
 import nmcli
 
 router = APIRouter(
-    prefix="/wifi_config",
+    prefix="/wifi",
 )
 
 busy_lock = Lock()

@@ -101,6 +101,12 @@ def create_app(args: Args) -> FastAPI:
         allow_headers=["*"],
     )
 
+    app.mount(
+        "/assets",
+        StaticFiles(directory=os.path.join(os.path.dirname(__file__), "dashboard")),
+        name="assets",
+    )
+
     router = APIRouter(prefix="/api")
     router.include_router(apps.router)
     router.include_router(daemon.router)
@@ -112,7 +118,7 @@ def create_app(args: Args) -> FastAPI:
     if args.wireless_version:
         from .routers import wifi_config
 
-        router.include_router(wifi_config.router)
+        app.include_router(wifi_config.router)
 
     app.include_router(router)
 
@@ -161,12 +167,6 @@ def main() -> None:
         type=str,
         default=default_args.serialport,
         help="Serial port for real motors (default: will try to automatically find the port).",
-    )
-    parser.add_argument(
-        "--wireless-version",
-        action="store_true",
-        default=default_args.wireless_version,
-        help="Use the wireless version of Reachy Mini (default: False).",
     )
     # Simulation mode
     parser.add_argument(
