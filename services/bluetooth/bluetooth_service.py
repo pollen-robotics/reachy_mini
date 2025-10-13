@@ -12,6 +12,8 @@ import dbus
 import dbus.mainloop.glib
 import dbus.service
 from gi.repository import GLib
+import subprocess
+import os
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -258,7 +260,30 @@ class BluetoothCommandService:
         if command_str.upper() == "PING":
             return "PONG"
         elif command_str.upper() == "STATUS":
+            # exec a "sudo ls" command and print the result
+            try:
+                result = subprocess.run(["sudo", "ls"], capture_output=True, text=True)
+                logger.info(f"Command output: {result.stdout}")
+            except Exception as e:
+                logger.error(f"Error executing command: {e}")
             return "OK: System running"
+
+        # else if command starts with "CMD_xxxxx" check if  commands directory contains the said named script command xxxx.sh and run its, show output or/and send to read
+        elif command_str.startswith("CMD_"):
+            try:
+                script_name = command_str[4:].strip() + ".sh"
+                script_path = os.path.join("commands", script_name)
+                if os.path.isfile(script_path):
+                    try:
+                        result = subprocess.run(["sudo", script_path], capture_output=True, text=True)
+                        logger.info(f"Command output: {result.stdout}")
+                    except Exception as e:
+                        logger.error(f"Error executing command: {e}")
+                else:
+                    return f"ERROR: Command '{script_name}' not found"
+            except Exception as e:
+                logger.error(f"Error processing command: {e}")
+                return "ERROR: Command execution failed"
         else:
             return f"ECHO: {command_str}"
 
