@@ -598,7 +598,7 @@ class Backend:
         If the file is not found in the assets directory, try to load the path itself.
 
         Args:
-            sound_file (str): The name of the sound file to play (e.g., "proud2.wav").
+            sound_file (str): The name of the sound file to play (e.g., "wake_up.wav").
 
         """
         self.audio.play_sound(sound_file, autoclean=True)
@@ -642,7 +642,7 @@ class Backend:
         await asyncio.sleep(0.1)
 
         # Toudoum
-        self.play_sound("proud2.wav")
+        self.play_sound("wake_up.wav")
 
         # Roll 20° to the left
         pose = self.INIT_HEAD_POSE.copy()

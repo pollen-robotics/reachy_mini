@@ -249,7 +249,7 @@ class ReachyMini:
         time.sleep(0.1)
 
         # Toudoum
-        self.media.play_sound("proud2.wav")
+        self.media.play_sound("wake_up.wav")
 
         # Roll 20° to the left
         pose = INIT_HEAD_POSE.copy()

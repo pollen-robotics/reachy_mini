@@ -59,7 +59,11 @@ class MujocoBackend(Backend):
             SLEEP_HEAD_JOINT_POSITIONS,
         )
 
-        self._SLEEP_ANTENNAS_JOINT_POSITIONS = SLEEP_ANTENNAS_JOINT_POSITIONS
+        # Real robot convention for the order of the antennas joints is [right, left], but in mujoco it's [left, right]
+        self._SLEEP_ANTENNAS_JOINT_POSITIONS = [
+            SLEEP_ANTENNAS_JOINT_POSITIONS[1],
+            SLEEP_ANTENNAS_JOINT_POSITIONS[0],
+        ]
         self._SLEEP_HEAD_JOINT_POSITIONS = SLEEP_HEAD_JOINT_POSITIONS
 
         mjcf_root_path = str(
@@ -238,7 +242,9 @@ class MujocoBackend(Backend):
         """
         mj_current_head_pose = np.eye(4)
 
-        mj_current_head_pose[:3, :3] = self.data.site_xmat[self.head_site_id].reshape(3, 3)
+        mj_current_head_pose[:3, :3] = self.data.site_xmat[self.head_site_id].reshape(
+            3, 3
+        )
         mj_current_head_pose[:3, 3] = self.data.site_xpos[self.head_site_id]
         mj_current_head_pose[2, 3] -= 0.177
         return mj_current_head_pose
