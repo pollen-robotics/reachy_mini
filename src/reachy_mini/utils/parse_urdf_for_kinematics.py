@@ -28,7 +28,7 @@ def get_data() -> Dict[str, Any]:
 
     # Measuring lengths for the arm and branch (constants could be used)
     T_world_head_home = robot.get_T_world_frame("head").copy()
-    T_world_1 = robot.get_T_world_frame("1")
+    T_world_1 = robot.get_T_world_frame("stewart_1")
     T_world_arm1 = robot.get_T_world_frame("passive_1_link_x")
     T_1_arm1 = np.linalg.inv(T_world_1) @ T_world_arm1
     arm_z = T_1_arm1[2, 3]
@@ -39,13 +39,13 @@ def get_data() -> Dict[str, Any]:
     rod_length = np.linalg.norm(T_arm1_branch1[:3, 3])
 
     motors = [
-        {"name": "1", "branch_frame": "closing_1_2", "offset": 0, "solution": 0},
-        {"name": "2", "branch_frame": "closing_2_2", "offset": 0, "solution": 1},
-        {"name": "3", "branch_frame": "closing_3_2", "offset": 0, "solution": 0},
-        {"name": "4", "branch_frame": "closing_4_2", "offset": 0, "solution": 1},
-        {"name": "5", "branch_frame": "closing_5_2", "offset": 0, "solution": 0},
+        {"name": "stewart_1", "branch_frame": "closing_1_2", "offset": 0, "solution": 0},
+        {"name": "stewart_2", "branch_frame": "closing_2_2", "offset": 0, "solution": 1},
+        {"name": "stewart_3", "branch_frame": "closing_3_2", "offset": 0, "solution": 0},
+        {"name": "stewart_4", "branch_frame": "closing_4_2", "offset": 0, "solution": 1},
+        {"name": "stewart_5", "branch_frame": "closing_5_2", "offset": 0, "solution": 0},
         {
-            "name": "6",
+            "name": "stewart_6",
             "branch_frame": "passive_7_link_y",
             "offset": 0,
             "solution": 1,
