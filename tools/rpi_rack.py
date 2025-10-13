@@ -66,4 +66,7 @@ if __name__ == "__main__":
     select_channel(channel)
     print(f"Selected channel {channel}")
 
-    lookup_for_motor(args.serial, args.id, baudrate=1000000)
+    for i in range(255):
+        ret = lookup_for_motor(args.serial, i, baudrate=1000000)
+        if ret:
+            break
