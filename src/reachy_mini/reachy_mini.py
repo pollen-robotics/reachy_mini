@@ -8,34 +8,22 @@ It also includes methods for multimedia interactions like playing sounds and loo
 
 import asyncio
 import json
-import os
+import logging
 import time
 from typing import Dict, List, Optional, Union
 
-from asgiref.sync import async_to_sync
-
-from reachy_mini.io.protocol import GotoTaskRequest
-from reachy_mini.motion.move import Move
-
-os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "hide"
-
-from importlib.resources import files
-
 import cv2
 import numpy as np
-import pygame
+import numpy.typing as npt
+from asgiref.sync import async_to_sync
 from scipy.spatial.transform import Rotation as R
 
-import reachy_mini
 from reachy_mini.daemon.utils import daemon_check
-from reachy_mini.io import Client
+from reachy_mini.io.protocol import GotoTaskRequest
+from reachy_mini.io.zenoh_client import ZenohClient
+from reachy_mini.media.media_manager import MediaBackend, MediaManager
+from reachy_mini.motion.move import Move
 from reachy_mini.utils.interpolation import InterpolationTechnique, minimum_jerk
-
-try:
-    pygame.mixer.init()
-except (AttributeError, pygame.error) as e:
-    print(f"Failed to initialize pygame mixer: {e}")
-    pygame.mixer = None
 
 # Behavior definitions
 INIT_HEAD_POSE = np.eye(4)
@@ -51,7 +39,7 @@ SLEEP_HEAD_JOINT_POSITIONS = [
 ]
 
 
-SLEEP_ANTENNAS_JOINT_POSITIONS = [3.05, -3.05]
+SLEEP_ANTENNAS_JOINT_POSITIONS = [-3.05, 3.05]
 SLEEP_HEAD_POSE = np.array(
     [
         [0.911, 0.004, 0.413, -0.021],
@@ -60,8 +48,6 @@ SLEEP_HEAD_POSE = np.array(
         [0.0, 0.0, 0.0, 1.0],
     ]
 )
-
-IMAGE_SIZE = (1280, 720)  # Width, Height in pixels
 
 
 class ReachyMini:
@@ -74,18 +60,15 @@ class ReachyMini:
 
     """
 
-    urdf_root_path: str = str(
-        files(reachy_mini).joinpath("descriptions/reachy_mini/urdf")
-    )
-    assets_root_path: str = str(files(reachy_mini).joinpath("assets/"))
-
     def __init__(
         self,
         localhost_only: bool = True,
         spawn_daemon: bool = False,
-        use_sim: bool = True,
+        use_sim: bool = False,
         timeout: float = 5.0,
         automatic_body_yaw: bool = False,
+        log_level: str = "INFO",
+        media_backend: str = "default",
     ) -> None:
         """Initialize the Reachy Mini robot.
 
@@ -95,15 +78,19 @@ class ReachyMini:
             use_sim (bool): If True and spawn_daemon is True, will spawn a simulated robot, defaults to True.
             timeout (float): Timeout for the client connection, defaults to 5.0 seconds.
             automatic_body_yaw (bool): If True, the body yaw will be used to compute the IK and FK. Default is False.
+            log_level (str): Logging level, defaults to "INFO".
+            media_backend (str): Media backend to use, either "default" (OpenCV) or "gstreamer", defaults to "default".
 
         It will try to connect to the daemon, and if it fails, it will raise an exception.
 
         """
+        self.logger = logging.getLogger(__name__)
+        self.logger.setLevel(log_level)
         daemon_check(spawn_daemon, use_sim)
-        self.client = Client(localhost_only)
+        self.client = ZenohClient(localhost_only)
         self.client.wait_for_connection(timeout=timeout)
         self.set_automatic_body_yaw(automatic_body_yaw)
-        self._last_head_pose = None
+        self._last_head_pose: Optional[npt.NDArray[np.float64]] = None
         self.is_recording = False
 
         self.K = np.array(
@@ -121,7 +108,27 @@ class ReachyMini:
             ]
         )
 
-    def __del__(self):
+        mbackend = MediaBackend.DEFAULT
+        if media_backend.lower() == "gstreamer":
+            mbackend = MediaBackend.GSTREAMER
+        elif media_backend.lower() == "default":
+            mbackend = MediaBackend.DEFAULT
+        elif media_backend.lower() == "no_media":
+            mbackend = MediaBackend.NO_MEDIA
+        elif media_backend.lower() == "default_no_video":
+            mbackend = MediaBackend.DEFAULT_NO_VIDEO
+        else:
+            raise ValueError(
+                f"Invalid media_backend '{media_backend}'. Supported values are 'default', 'gstreamer', 'no_media', and 'default_no_video'."
+            )
+
+        self.media_manager = MediaManager(
+            use_sim=self.client.get_status()["simulation_enabled"],
+            backend=mbackend,
+            log_level=log_level,
+        )
+
+    def __del__(self) -> None:
         """Destroy the Reachy Mini instance.
 
         The client is disconnected explicitly to avoid a thread pending issue.
@@ -133,16 +140,21 @@ class ReachyMini:
         """Context manager entry point for Reachy Mini."""
         return self
 
-    def __exit__(self, exc_type, exc_value, traceback) -> None:
+    def __exit__(self, exc_type, exc_value, traceback) -> None:  # type: ignore [no-untyped-def]
         """Context manager exit point for Reachy Mini."""
         self.client.disconnect()
 
+    @property
+    def media(self) -> MediaManager:
+        """Expose the MediaManager instance used by ReachyMini."""
+        return self.media_manager
+
     def set_target(
         self,
-        head: Optional[np.ndarray] = None,  # 4x4 pose matrix
+        head: Optional[npt.NDArray[np.float64]] = None,  # 4x4 pose matrix
         antennas: Optional[
-            Union[np.ndarray, List[float]]
-        ] = None,  # [left_angle, right_angle] (in rads)
+            Union[npt.NDArray[np.float64], List[float]]
+        ] = None,  # [right_angle, left_angle] (in rads)
         body_yaw: float = 0.0,  # Body yaw angle in radians
     ) -> None:
         """Set the target pose of the head and/or the target position of the antennas.
@@ -175,24 +187,26 @@ class ReachyMini:
             self.set_target_head_pose(head, body_yaw)
         self._last_head_pose = head
 
-        record = {
+        record: Dict[str, float | List[float] | List[List[float]]] = {
             "time": time.time(),
-            "head": head.tolist() if head is not None else None,
-            "antennas": list(antennas) if antennas is not None else None,
             "body_yaw": body_yaw,
         }
+        if head is not None:
+            record["head"] = head.tolist()
+        if antennas is not None:
+            record["antennas"] = list(antennas)
         self._set_record_data(record)
 
     def goto_target(
         self,
-        head: Optional[np.ndarray] = None,  # 4x4 pose matrix
+        head: Optional[npt.NDArray[np.float64]] = None,  # 4x4 pose matrix
         antennas: Optional[
-            Union[np.ndarray, List[float]]
-        ] = None,  # [left_angle, right_angle] (in rads)
+            Union[npt.NDArray[np.float64], List[float]]
+        ] = None,  # [right_angle, left_angle] (in rads)
         duration: float = 0.5,  # Duration in seconds for the movement, default is 0.5 seconds.
-        method=InterpolationTechnique.MIN_JERK,  # can be "linear", "minjerk", "ease" or "cartoon", default is "minjerk")
-        body_yaw: float = 0.0,  # Body yaw angle in radians
-    ):
+        method: InterpolationTechnique = InterpolationTechnique.MIN_JERK,  # can be "linear", "minjerk", "ease" or "cartoon", default is "minjerk")
+        body_yaw: float | None = 0.0,  # Body yaw angle in radians
+    ) -> None:
         """Go to a target head pose and/or antennas position using task space interpolation, in "duration" seconds.
 
         Args:
@@ -200,7 +214,7 @@ class ReachyMini:
             antennas (Optional[Union[np.ndarray, List[float]]]): 1D array with two elements representing the angles of the antennas in radians.
             duration (float): Duration of the movement in seconds.
             method (InterpolationTechnique): Interpolation method to use ("linear", "minjerk", "ease", "cartoon"). Default is "minjerk".
-            body_yaw (float): Body yaw angle in radians.
+            body_yaw (float | None): Body yaw angle in radians. Use None to keep the current yaw.
 
         Raises:
             ValueError: If neither head nor antennas are provided, or if duration is not positive.
@@ -235,7 +249,7 @@ class ReachyMini:
         time.sleep(0.1)
 
         # Toudoum
-        self.play_sound("proud2.wav")
+        self.media.play_sound("wake_up.wav")
 
         # Roll 20° to the left
         pose = INIT_HEAD_POSE.copy()
@@ -267,7 +281,7 @@ class ReachyMini:
             time.sleep(0.2)
 
         # Pfiou
-        self.play_sound("go_sleep.wav")
+        self.media.play_sound("go_sleep.wav")
 
         # # Move to the sleep position
         self.goto_target(
@@ -279,7 +293,7 @@ class ReachyMini:
 
     def look_at_image(
         self, u: int, v: int, duration: float = 1.0, perform_movement: bool = True
-    ) -> np.ndarray:
+    ) -> npt.NDArray[np.float64]:
         """Make the robot head look at a point defined by a pixel position (u,v).
 
         # TODO image of reachy mini coordinate system
@@ -297,8 +311,15 @@ class ReachyMini:
             ValueError: If duration is negative.
 
         """
-        assert 0 < u < IMAGE_SIZE[0], f"u must be in [0, {IMAGE_SIZE[0]}], got {u}."
-        assert 0 < v < IMAGE_SIZE[1], f"v must be in [0, {IMAGE_SIZE[1]}], got {v}."
+        if self.media_manager.camera is None:
+            raise RuntimeError("Camera is not initialized.")
+
+        assert 0 < u < self.media_manager.camera.resolution[0], (
+            f"u must be in [0, {self.media_manager.camera.resolution[0]}], got {u}."
+        )
+        assert 0 < v < self.media_manager.camera.resolution[1], (
+            f"v must be in [0, {self.media_manager.camera.resolution[1]}], got {v}."
+        )
 
         if duration < 0:
             raise ValueError("Duration can't be negative.")
@@ -319,7 +340,11 @@ class ReachyMini:
         P_world = t_wc + ray_world
 
         return self.look_at_world(
-            *P_world, duration=duration, perform_movement=perform_movement
+            x=P_world[0],
+            y=P_world[1],
+            z=P_world[2],
+            duration=duration,
+            perform_movement=perform_movement,
         )
 
     def look_at_world(
@@ -329,7 +354,7 @@ class ReachyMini:
         z: float,
         duration: float = 1.0,
         perform_movement: bool = True,
-    ) -> np.ndarray:
+    ) -> npt.NDArray[np.float64]:
         """Look at a specific point in 3D space in Reachy Mini's reference frame.
 
         TODO include image of reachy mini coordinate system
@@ -396,32 +421,6 @@ class ReachyMini:
 
         return target_head_pose
 
-    # Multimedia methods
-    def play_sound(self, sound_file: str) -> None:
-        """Play a sound file from the assets directory.
-
-        If the file is not found in the assets directory, try to load the path itself.
-
-        Args:
-            sound_file (str): The name of the sound file to play (e.g., "proud2.wav").
-
-        """
-        if pygame.mixer is None:
-            print("Pygame mixer is not initialized. Cannot play sound.")
-            return
-
-        # first check if the name exists in the asset sound directory
-        file_path = f"{ReachyMini.assets_root_path}/{sound_file}"
-        if not os.path.exists(file_path):
-            # If not, check if the raw_path exists
-            if not os.path.exists(sound_file):
-                raise FileNotFoundError(f"Sound file {sound_file} not found.")
-            else:
-                file_path = sound_file
-
-        pygame.mixer.music.load(file_path)
-        pygame.mixer.music.play()
-
     def _goto_joint_positions(
         self,
         head_joint_positions: Optional[
@@ -429,7 +428,7 @@ class ReachyMini:
         ] = None,  # [yaw, stewart_platform x 6] length 7
         antennas_joint_positions: Optional[
             List[float]
-        ] = None,  # [left_angle, right_angle] length 2
+        ] = None,  # [right_angle, left_angle] length 2
         duration: float = 0.5,  # Duration in seconds for the movement
     ) -> None:
         """Go to a target head joint positions and/or antennas joint positions using joint space interpolation, in "duration" seconds.
@@ -463,9 +462,7 @@ class ReachyMini:
         else:
             target.extend(cur_antennas)
 
-        current = np.array(current)
-        target = np.array(target)
-        traj = minimum_jerk(current, target, duration)
+        traj = minimum_jerk(np.array(current), np.array(target), duration)
 
         t0 = time.time()
         while time.time() - t0 < duration:
@@ -502,7 +499,7 @@ class ReachyMini:
         """
         return self.get_current_joint_positions()[1]
 
-    def get_current_head_pose(self) -> np.ndarray:
+    def get_current_head_pose(self) -> npt.NDArray[np.float64]:
         """Get the current head pose as a 4x4 matrix.
 
         Get the current head pose as a 4x4 matrix.
@@ -517,7 +514,7 @@ class ReachyMini:
         self,
         head_joint_positions: list[float] | None = None,
         antennas_joint_positions: list[float] | None = None,
-    ):
+    ) -> None:
         """Set the joint positions of the head and/or antennas.
 
         [Internal] Set the joint positions of the head and/or antennas.
@@ -549,7 +546,7 @@ class ReachyMini:
 
     def set_target_head_pose(
         self,
-        pose: np.ndarray,
+        pose: npt.NDArray[np.float64],
         body_yaw: float = 0.0,
     ) -> None:
         """Set the head pose to a specific 4x4 matrix.
@@ -586,7 +583,9 @@ class ReachyMini:
         self.client.send_command(json.dumps({"start_recording": True}))
         self.is_recording = True
 
-    def stop_recording(self) -> List[Dict]:
+    def stop_recording(
+        self,
+    ) -> Optional[List[Dict[str, float | List[float] | List[List[float]]]]]:
         """Stop recording data and return the recorded data."""
         self.client.send_command(json.dumps({"stop_recording": True}))
         self.is_recording = False
@@ -596,7 +595,9 @@ class ReachyMini:
 
         return recorded_data
 
-    def _set_record_data(self, record: Dict) -> None:
+    def _set_record_data(
+        self, record: Dict[str, float | List[float] | List[List[float]]]
+    ) -> None:
         """Set the record data to be logged by the backend.
 
         Args:
@@ -617,7 +618,7 @@ class ReachyMini:
         """Disable the motors."""
         self._set_torque(False)
 
-    def _set_torque(self, on: bool):
+    def _set_torque(self, on: bool) -> None:
         self.client.send_command(json.dumps({"torque": on}))
 
     def enable_gravity_compensation(self) -> None:

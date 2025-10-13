@@ -27,15 +27,15 @@ from typing import Dict, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
+from reachy_mini_dances_library.collection.dance import AVAILABLE_MOVES
 from scipy.spatial.transform import Rotation as R
 
 from reachy_mini import ReachyMini, utils
-from reachy_mini.motion.collection.dance import AVAILABLE_MOVES
 from reachy_mini.utils.interpolation import distance_between_poses
 
 # ---------------- Configuration (tweak as needed) ----------------
 BPM: float = 120.0  # tempo for all moves
-BEATS_PER_MOVE: float = 8.0  # duration per move
+BEATS_PER_MOVE: float = 30.0  # duration per move
 SAMPLE_HZ: float = 200.0  # control + measurement rate
 NEUTRAL_POS = np.array([0.0, 0.0, 0.0])  # meters
 NEUTRAL_EUL = np.zeros(3)  # radians
@@ -64,6 +64,7 @@ def plot_errors_stack(
     magic_mm: np.ndarray,
     title_suffix: str,
     out_png: Path,
+    beat_period_s: float | None = None,
 ) -> None:
     """Create a 3-row vertical stack with shared X axis and save as PNG."""
     if t_abs.size == 0:
@@ -93,6 +94,8 @@ def plot_errors_stack(
     ax.grid(True, which="both", alpha=0.3)
     ax.legend()
 
+    _draw_period_markers(axes, t, beat_period_s)
+
     fig.suptitle(f"Pose tracking errors vs time - {title_suffix}", fontsize=14)
     fig.savefig(out_png, dpi=150)
     plt.close(fig)
@@ -106,6 +109,7 @@ def plot_xyzrpy_stack(
     present_rpy_deg: np.ndarray,
     title_suffix: str,
     out_png: Path,
+    beat_period_s: float | None = None,
 ) -> None:
     """Create a 6-row vertical stack (X/Y/Z in mm, Roll/Pitch/Yaw in deg), goal vs present."""
     if t_abs.size == 0:
@@ -157,9 +161,33 @@ def plot_xyzrpy_stack(
         ax.legend()
 
     axes[-1].set_xlabel("Time [s]")
+    _draw_period_markers(axes, t, beat_period_s)
     fig.suptitle(f"Head position and orientation vs time - {title_suffix}", fontsize=14)
     fig.savefig(out_png, dpi=150)
     plt.close(fig)
+
+
+def _draw_period_markers(
+    axes: np.ndarray, t: np.ndarray, beat_period_s: float | None
+) -> None:
+    if beat_period_s is None or beat_period_s <= 0.0 or t.size == 0:
+        return
+    duration = float(t[-1])
+    if duration <= 0.0:
+        return
+    markers = np.arange(0.0, duration + 1e-9, beat_period_s)
+    if markers.size == 0:
+        markers = np.array([0.0])
+    for ax in np.atleast_1d(axes):
+        for marker in markers:
+            ax.axvline(
+                marker,
+                color="tab:purple",
+                linewidth=1.2,
+                alpha=0.6,
+                linestyle="--",
+                zorder=3.0,
+            )
 
 
 def estimate_present_update_rate(
@@ -389,6 +417,7 @@ def main() -> None:
                     present_rpy_deg,
                 )
                 t, _target, _current, trans_mm, ang_deg, magic_mm = data
+                beat_period_s = 60.0 / BPM if BPM > 0 else None
 
                 plot_errors_stack(
                     t_abs=t,
@@ -397,6 +426,7 @@ def main() -> None:
                     magic_mm=magic_mm,
                     title_suffix=move_name,
                     out_png=png_errors,
+                    beat_period_s=beat_period_s,
                 )
                 plot_xyzrpy_stack(
                     t_abs=t,
@@ -406,6 +436,7 @@ def main() -> None:
                     present_rpy_deg=present_rpy_deg,
                     title_suffix=move_name,
                     out_png=png_xyzrpy,
+                    beat_period_s=beat_period_s,
                 )
 
                 logging.info("Saved %s, %s and %s", npz_path, png_errors, png_xyzrpy)

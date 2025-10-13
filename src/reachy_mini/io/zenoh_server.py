@@ -28,7 +28,7 @@ from reachy_mini.io.protocol import (
 class ZenohServer(AbstractServer):
     """Zenoh server for Reachy Mini."""
 
-    def __init__(self, backend: Backend, localhost_only: bool = True):  # type: ignore
+    def __init__(self, backend: Backend, localhost_only: bool = True):
         """Initialize the Zenoh server."""
         self.localhost_only = localhost_only
         self.backend = backend
@@ -36,7 +36,7 @@ class ZenohServer(AbstractServer):
         self._lock = threading.Lock()
         self._cmd_event = threading.Event()
 
-    def start(self):
+    def start(self) -> None:
         """Start the Zenoh server."""
         if self.localhost_only:
             c = zenoh.Config.from_json5(
@@ -85,15 +85,17 @@ class ZenohServer(AbstractServer):
             "reachy_mini/task_progress"
         )
 
-    def stop(self):
+        self.pub_status = self.session.declare_publisher("reachy_mini/daemon_status")
+
+    def stop(self) -> None:
         """Stop the Zenoh server."""
-        self.session.close()
+        self.session.close()  # type: ignore[no-untyped-call]
 
     def command_received_event(self) -> threading.Event:
         """Wait for a new command and return it."""
         return self._cmd_event
 
-    def _handle_command(self, sample: zenoh.Sample):
+    def _handle_command(self, sample: zenoh.Sample) -> None:
         data = sample.payload.to_string()
         command = json.loads(data)
         with self._lock:
@@ -104,7 +106,7 @@ class ZenohServer(AbstractServer):
                     self.backend.set_motor_control_mode(MotorControlMode.Disabled)
             if "head_joint_positions" in command:
                 self.backend.set_target_head_joint_positions(
-                    command["head_joint_positions"]
+                    np.array(command["head_joint_positions"])
                 )
             if "head_pose" in command:
                 self.backend.set_target_head_pose(
@@ -113,7 +115,7 @@ class ZenohServer(AbstractServer):
                 )
             if "antennas_joint_positions" in command:
                 self.backend.set_target_antenna_joint_positions(
-                    command["antennas_joint_positions"],
+                    np.array(command["antennas_joint_positions"]),
                 )
             if "gravity_compensation" in command:
                 try:
@@ -138,17 +140,17 @@ class ZenohServer(AbstractServer):
                 self.backend.stop_recording()
         self._cmd_event.set()
 
-    def _handle_task_request(self, sample: zenoh.Sample):
+    def _handle_task_request(self, sample: zenoh.Sample) -> None:
         task_req = TaskRequest.model_validate_json(sample.payload.to_string())
 
         if isinstance(task_req.req, GotoTaskRequest):
             req = task_req.req
 
-            def task():
+            def task() -> None:
                 asyncio.run(
                     self.backend.goto_target(
                         head=np.array(req.head).reshape(4, 4) if req.head else None,
-                        antennas=req.antennas,
+                        antennas=np.array(req.antennas) if req.antennas else None,
                         duration=req.duration,
                         method=req.method,
                         body_yaw=req.body_yaw,
@@ -156,13 +158,13 @@ class ZenohServer(AbstractServer):
                 )
         elif isinstance(task_req.req, PlayMoveTaskRequest):
 
-            def task():
+            def task() -> None:
                 print("PLAY MOVE")
 
         else:
             assert False, f"Unknown task request type {task_req.req.__class__.__name__}"
 
-        def wrapped_task():
+        def wrapped_task() -> None:
             error = None
             try:
                 task()

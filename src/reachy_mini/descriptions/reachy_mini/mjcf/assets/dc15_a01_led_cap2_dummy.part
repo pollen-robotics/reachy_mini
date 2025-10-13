@@ -1,0 +1,13 @@
+{
+    "configuration": "default",
+    "documentId": "7836ed39be931c6ece17e007",
+    "documentMicroversion": "f51d93713ed29e451f21af5e",
+    "elementId": "2cfe27202252cfce42ed7ee4",
+    "fullConfiguration": "default",
+    "id": "MFvbXu4svYiIz5iLO",
+    "isStandardContent": false,
+    "name": "DC15_A01_LED_CAP2_DUMMY <1>",
+    "partId": "JFv",
+    "suppressed": false,
+    "type": "Part"
+}
