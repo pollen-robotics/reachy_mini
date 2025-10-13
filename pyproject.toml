@@ -41,6 +41,7 @@ dev = [
     "mujoco==3.3.0",
     "placo==0.9.14",
     "pre-commit",
+    "mypy==1.18.2"
 ]
 examples = ["pynput"]
 mujoco = ["mujoco==3.3.0"]
@@ -82,5 +83,15 @@ lint.ignore = [
 testpaths = ["tests"]
 markers = [
     "audio: mark test as requiring audio hardware",
+    "audio_gstreamer: mark test as requiring GStreamer for audio",
     "video: mark test as requiring video hardware",
+    "video_gstreamer: mark test as requiring GStreamer for video",
+    "wireless: mark test as requiring wireless Reachy Mini",
 ]
+
+[tool.mypy]
+python_version = "3.10"
+files = ["src/"]
+ignore_missing_imports = true
+strict = true
+

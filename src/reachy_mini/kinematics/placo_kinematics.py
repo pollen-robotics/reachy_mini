@@ -4,9 +4,10 @@ This module provides the PlacoKinematics class for performing inverse and forwar
 """
 
 import logging
-from typing import List, Optional
+from typing import Annotated, List, Optional
 
 import numpy as np
+import numpy.typing as npt
 import pinocchio as pin
 import placo
 
@@ -22,7 +23,7 @@ class PlacoKinematics:
         urdf_path: str,
         dt: float = 0.02,
         automatic_body_yaw: bool = False,
-        check_collision=False,
+        check_collision: bool = False,
         log_level: str = "INFO",
     ) -> None:
         """Initialize the PlacoKinematics class.
@@ -256,7 +257,7 @@ class PlacoKinematics:
         robot.state.qdd = self._inital_qdd
 
     def _pose_distance(
-        self, pose1: np.ndarray, pose2: np.ndarray
+        self, pose1: npt.NDArray[np.float64], pose2: npt.NDArray[np.float64]
     ) -> tuple[float, float]:
         """Compute the orientation distance between two poses.
 
@@ -272,7 +273,7 @@ class PlacoKinematics:
         euler2 = pin.rpy.matrixToRpy(pose2[:3, :3])
         p1 = pose1[:3, 3]
         p2 = pose2[:3, 3]
-        return np.linalg.norm(euler1 - euler2), np.linalg.norm(p1 - p2)
+        return float(np.linalg.norm(euler1 - euler2)), float(np.linalg.norm(p1 - p2))
 
     def _closed_loop_constraints_valid(
         self, robot: placo.RobotWrapper, tol: float = 1e-2
@@ -312,10 +313,10 @@ class PlacoKinematics:
 
     def ik(
         self,
-        pose: np.ndarray,
+        pose: npt.NDArray[np.float64],
         body_yaw: float = 0.0,
         no_iterations: int = 2,
-    ) -> Optional[List[float]]:
+    ) -> Annotated[npt.NDArray[np.float64], (7,)] | None:
         """Compute the inverse kinematics for the head for a given pose.
 
         Args:
@@ -349,7 +350,9 @@ class PlacoKinematics:
             and np.linalg.norm(self.robot_ik.state.qd) < 1e-4
         ):
             # no need to recalculate - return the current joint values
-            return self._get_joint_values(self.robot_ik)  # no need to solve IK
+            return np.array(
+                self._get_joint_values(self.robot_ik)
+            )  # no need to solve IK
         if _dist_o >= np.pi:
             # distance too big between the current and the target pose
             # start the optim from zero position
@@ -404,13 +407,13 @@ class PlacoKinematics:
             return None
 
         # Get the joint angles
-        return self._get_joint_values(self.robot_ik)
+        return np.array(self._get_joint_values(self.robot_ik))
 
     def fk(
         self,
-        joints_angles: List[float],
+        joints_angles: Annotated[npt.NDArray[np.float64], (7,)],
         no_iterations: int = 2,
-    ) -> Optional[np.ndarray]:
+    ) -> Optional[npt.NDArray[np.float64]]:
         """Compute the forward kinematics for the head given joint angles.
 
         Args:
@@ -431,7 +434,7 @@ class PlacoKinematics:
             and self.robot.state.qd.max() < 1e-4
         ):
             # no need to compute FK
-            T_world_head = self.robot.get_T_world_frame("head")
+            T_world_head: npt.NDArray[np.float64] = self.robot.get_T_world_frame("head")
             T_world_head[:3, 3][2] -= (
                 self.head_z_offset
             )  # offset the height of the head
@@ -497,7 +500,7 @@ class PlacoKinematics:
 
         return T_world_head
 
-    def config_collision_model(self):
+    def config_collision_model(self) -> None:
         """Configure the collision model for the robot.
 
         Add collision pairs between the torso and the head colliders.
@@ -518,7 +521,7 @@ class PlacoKinematics:
                 pin.CollisionPair(id_torso_collider, i)
             )  # torso with head colliders
 
-    def compute_collision(self, margin=0.005):
+    def compute_collision(self, margin: float = 0.005) -> bool:
         """Compute the collision between the robot and the environment.
 
         Args:
@@ -547,7 +550,9 @@ class PlacoKinematics:
 
         return False  # Safe
 
-    def compute_jacobian(self, q: Optional[np.ndarray] = None) -> np.ndarray:
+    def compute_jacobian(
+        self, q: Optional[npt.NDArray[np.float64]] = None
+    ) -> npt.NDArray[np.float64]:
         """Compute the Jacobian of the head frame with respect to the actuated DoFs.
 
         The jacobian in local world aligned.
@@ -565,7 +570,9 @@ class PlacoKinematics:
 
         # Computing the platform Jacobian
         # dx = Jp.dq
-        Jp = self.robot.frame_jacobian("head", "local_world_aligned")
+        Jp: npt.NDArray[np.float64] = self.robot.frame_jacobian(
+            "head", "local_world_aligned"
+        )
 
         # Computing the constraints Jacobian
         # 0 = Jc.dq
@@ -592,11 +599,13 @@ class PlacoKinematics:
         #       dq_p = - (Jc_p)^(⁻1) @ Jc_a @ dq_a
         # Then we can substitute dq_p in the first equation and get
         # This new jacobian
-        J = Jp_a - Jp_p @ np.linalg.inv(Jc_p) @ Jc_a
+        J: npt.NDArray[np.float64] = Jp_a - Jp_p @ np.linalg.inv(Jc_p) @ Jc_a
 
         return J[:, self.actuated_idx_in_active]
 
-    def compute_gravity_torque(self, q: Optional[np.ndarray] = None) -> np.ndarray:
+    def compute_gravity_torque(
+        self, q: Optional[npt.NDArray[np.float64]] = None
+    ) -> npt.NDArray[np.float64]:
         """Compute the gravity torque vector for the actuated joints of the robot.
 
         This method uses the static gravity compensation torques from the robot's dictionary.
@@ -630,15 +639,15 @@ class PlacoKinematics:
         #       wrench_eq = np.linalg.pinv(J_all_joints.T) @ torque_all_joints
         # And then we can compute the actuated torques as:
         #       torque_actuated = J_actuated.T @ wrench_eq
-        J_all_joints = self.robot.frame_jacobian("head", "local_world_aligned")[
-            :, 6:
-        ]  # all joints except the mobile base 6dofs
+        J_all_joints: npt.NDArray[np.float64] = self.robot.frame_jacobian(
+            "head", "local_world_aligned"
+        )[:, 6:]  # all joints except the mobile base 6dofs
         J_actuated = self.compute_jacobian()
         # using a single matrix G to compute the actuated torques
         G = J_actuated.T @ np.linalg.pinv(J_all_joints.T)
 
         # torques of actuated joints
-        grav_torque_actuated = G @ grav_torque_all_joints
+        grav_torque_actuated: npt.NDArray[np.float64] = G @ grav_torque_all_joints
 
         # Compute the gravity torque
         return grav_torque_actuated

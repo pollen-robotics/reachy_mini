@@ -7,6 +7,13 @@ By default the module directly returns JPEG images as output by the camera.
 from threading import Thread
 from typing import Optional
 
+import numpy as np
+import numpy.typing as npt
+
+from reachy_mini.media.camera_constants import CameraResolution
+
+from .camera_base import CameraBackend, CameraBase
+
 try:
     import gi
 except ImportError as e:
@@ -21,15 +28,19 @@ gi.require_version("GstApp", "1.0")
 
 from gi.repository import GLib, Gst, GstApp  # noqa: E402
 
-from .camera_base import CameraBackend, CameraBase  # noqa: E402
-
 
 class GStreamerCamera(CameraBase):
     """Camera implementation using GStreamer."""
 
-    def __init__(self, log_level: str = "INFO") -> None:
+    def __init__(
+        self,
+        log_level: str = "INFO",
+        resolution: CameraResolution = CameraResolution.R1280x720,
+    ) -> None:
         """Initialize the GStreamer camera."""
-        super().__init__(backend=CameraBackend.GSTREAMER, log_level=log_level)
+        super().__init__(
+            backend=CameraBackend.GSTREAMER, log_level=log_level, resolution=resolution
+        )
         Gst.init(None)
         self._loop = GLib.MainLoop()
         self._thread_bus_calls: Optional[Thread] = None
@@ -38,7 +49,7 @@ class GStreamerCamera(CameraBase):
 
         self._appsink_video: GstApp = Gst.ElementFactory.make("appsink")
         caps_video = Gst.Caps.from_string(
-            "image/jpeg, width=1280, height=720, framerate=30/1"
+            f"image/jpeg, width={self.resolution[0]}, height={self.resolution[1]}, framerate=30/1"
         )
         self._appsink_video.set_property("caps", caps_video)
         self._appsink_video.set_property("drop", True)  # avoid overflow
@@ -72,17 +83,17 @@ class GStreamerCamera(CameraBase):
         self.logger.debug("starting bus message loop")
         bus = self.pipeline.get_bus()
         bus.add_watch(GLib.PRIORITY_DEFAULT, self._on_bus_message, self._loop)
-        self._loop.run()  # type: ignore[no-untyped-call]
+        self._loop.run()
         bus.remove_watch()
         self.logger.debug("bus message loop stopped")
 
-    def open(self):
+    def open(self) -> None:
         """Open the camera using GStreamer."""
         self.pipeline.set_state(Gst.State.PLAYING)
         self._thread_bus_calls = Thread(target=self._handle_bus_calls, daemon=True)
         self._thread_bus_calls.start()
 
-    def _get_sample(self, appsink):
+    def _get_sample(self, appsink: Gst.AppSink) -> Optional[bytes]:
         sample = appsink.try_pull_sample(20_000_000)
         if sample is None:
             return None
@@ -95,7 +106,7 @@ class GStreamerCamera(CameraBase):
             data = buf.extract_dup(0, buf.get_size())
         return data
 
-    def read(self) -> Optional[bytes]:
+    def read(self) -> Optional[bytes | npt.NDArray[np.uint8]]:
         """Read a frame from the camera. Returns the frame or None if error.
 
         Returns:
@@ -104,7 +115,7 @@ class GStreamerCamera(CameraBase):
         """
         return self._get_sample(self._appsink_video)
 
-    def close(self):
+    def close(self) -> None:
         """Release the camera resource."""
         self._loop.quit()
         self.pipeline.set_state(Gst.State.NULL)
@@ -127,7 +138,7 @@ class GStreamerCamera(CameraBase):
                     device_path = device_props.get_string("api.v4l2.path")
                     self.logger.debug(f"Found Arducam_12MP at {device_path}")
                     monitor.stop()
-                    return device_path
+                    return str(device_path)
         monitor.stop()
         self.logger.warning("Arducam_12MP webcam not found.")
         return ""

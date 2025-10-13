@@ -1,6 +1,7 @@
 """A goto move to a target head pose and/or antennas position."""
 
-from numpy import ndarray
+import numpy as np
+import numpy.typing as npt
 
 from reachy_mini.utils.interpolation import (
     InterpolationTechnique,
@@ -16,10 +17,10 @@ class GotoMove(Move):
 
     def __init__(
         self,
-        start_head_pose: ndarray,
-        target_head_pose: ndarray | None,
-        start_antennas: ndarray,
-        target_antennas: ndarray | None,
+        start_head_pose: npt.NDArray[np.float64],
+        target_head_pose: npt.NDArray[np.float64] | None,
+        start_antennas: npt.NDArray[np.float64],
+        target_antennas: npt.NDArray[np.float64] | None,
         start_body_yaw: float,
         target_body_yaw: float | None,
         duration: float,
@@ -47,7 +48,11 @@ class GotoMove(Move):
         """Duration of the goto in seconds."""
         return self._duration
 
-    def evaluate(self, t: float) -> tuple[ndarray | None, ndarray | None, float | None]:
+    def evaluate(
+        self, t: float
+    ) -> tuple[
+        npt.NDArray[np.float64] | None, npt.NDArray[np.float64] | None, float | None
+    ]:
         """Evaluate the goto at time t."""
         interp_time = time_trajectory(t / self.duration, method=self.method)
 

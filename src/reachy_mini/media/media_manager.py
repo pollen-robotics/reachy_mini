@@ -8,9 +8,11 @@ from enum import Enum
 from typing import Optional
 
 import numpy as np
+import numpy.typing as npt
 
 from reachy_mini.media.audio_base import AudioBase
 from reachy_mini.media.camera_base import CameraBase
+from reachy_mini.media.camera_constants import CameraResolution
 
 # actual backends are dynamically imported
 
@@ -32,6 +34,7 @@ class MediaManager:
         backend: MediaBackend = MediaBackend.DEFAULT,
         log_level: str = "INFO",
         use_sim: bool = False,
+        resolution: CameraResolution = CameraResolution.R1280x720,
     ) -> None:
         """Initialize the audio device."""
         self.logger = logging.getLogger(__name__)
@@ -42,21 +45,24 @@ class MediaManager:
             not backend == MediaBackend.DEFAULT_NO_VIDEO
             and not backend == MediaBackend.NO_MEDIA
         ):
-            self._init_camera(
-                use_sim, log_level
-            )  # Todo: automatically detect simulation
+            self._init_camera(use_sim, log_level, resolution)
         self.audio: Optional[AudioBase] = None
         if not backend == MediaBackend.NO_MEDIA:
             self._init_audio(log_level)
 
-    def _init_camera(self, use_sim: bool, log_level: str) -> None:
+    def _init_camera(
+        self,
+        use_sim: bool,
+        log_level: str,
+        resolution: CameraResolution,
+    ) -> None:
         """Initialize the camera."""
         self.logger.debug("Initializing camera...")
         if self.backend == MediaBackend.DEFAULT:
             self.logger.info("Using OpenCV camera backend.")
             from reachy_mini.media.camera_opencv import OpenCVCamera
 
-            self.camera = OpenCVCamera(log_level=log_level)
+            self.camera = OpenCVCamera(log_level=log_level, resolution=resolution)
             if use_sim:
                 self.camera.open(udp_camera="udp://@127.0.0.1:5005")
             else:
@@ -65,18 +71,18 @@ class MediaManager:
             self.logger.info("Using GStreamer camera backend.")
             from reachy_mini.media.camera_gstreamer import GStreamerCamera
 
-            self.camera = GStreamerCamera(log_level=log_level)
+            self.camera = GStreamerCamera(log_level=log_level, resolution=resolution)
             self.camera.open()
             # Todo: use simulation with gstreamer?
 
         else:
             raise NotImplementedError(f"Camera backend {self.backend} not implemented.")
 
-    def get_frame(self) -> Optional[np.ndarray]:
+    def get_frame(self) -> Optional[bytes | npt.NDArray[np.uint8]]:
         """Get a frame from the camera.
 
         Returns:
-            Optional[np.ndarray]: The captured frame, or None if the camera is not available.
+            Optional[bytes | npt.NDArray[np.uint8]]: The captured frame, or None if the camera is not available.
 
         """
         if self.camera is None:
@@ -117,9 +123,12 @@ class MediaManager:
 
     def start_recording(self) -> None:
         """Start recording audio."""
+        if self.audio is None:
+            self.logger.warning("Audio system is not initialized.")
+            return
         self.audio.start_recording()
 
-    def get_audio_sample(self) -> Optional[np.ndarray]:
+    def get_audio_sample(self) -> Optional[bytes | npt.NDArray[np.float32]]:
         """Get an audio sample from the audio device.
 
         Returns:
@@ -157,7 +166,7 @@ class MediaManager:
             return
         self.audio.start_playing()
 
-    def push_audio_sample(self, data) -> None:
+    def push_audio_sample(self, data: bytes) -> None:
         """Push audio data to the output device.
 
         Args:
