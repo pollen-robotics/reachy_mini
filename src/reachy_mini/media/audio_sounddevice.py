@@ -3,12 +3,13 @@
 import os
 import threading
 import time
-from typing import List, Optional
+from typing import Any, List, Optional
 
-import librosa
 import numpy as np
 import numpy.typing as npt
+import scipy
 import sounddevice as sd
+import soundfile as sf
 
 from reachy_mini.utils.constants import ASSETS_ROOT_PATH
 
@@ -65,7 +66,7 @@ class SoundDeviceAudio(AudioBase):
             data: npt.NDArray[np.float32] = np.concatenate(self._buffer, axis=0)
             self._buffer.clear()
             return data
-        self.logger.warning("No audio data available in buffer.")
+        self.logger.debug("No audio data available in buffer.")
         return None
 
     def get_audio_samplerate(self) -> int:
@@ -118,9 +119,14 @@ class SoundDeviceAudio(AudioBase):
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"Sound file {file_path} not found.")
 
-        data, samplerate_in = librosa.load(
-            file_path, sr=self.get_audio_samplerate(), mono=True
-        )
+        data, samplerate_in = sf.read(file_path, dtype="float32")
+
+        if samplerate_in != self.get_audio_samplerate():
+            data = scipy.signal.resample(
+                data, int(len(data) * (self.get_audio_samplerate() / samplerate_in))
+            )
+        if data.ndim > 1:  # convert to mono
+            data = np.mean(data, axis=1)
 
         self.logger.debug(f"Playing sound '{file_path}' at {samplerate_in} Hz")
 
@@ -128,7 +134,12 @@ class SoundDeviceAudio(AudioBase):
         start = [0]  # using list to modify in callback
         length = len(data)
 
-        def callback(outdata, frames, time, status):
+        def callback(
+            outdata: npt.NDArray[np.float32],
+            frames: int,
+            time: Any,  # cdata 'struct PaStreamCallbackTimeInfo *
+            status: sd.CallbackFlags,
+        ) -> None:
             """Actual playback."""
             if status:
                 self.logger.warning(f"SoundDevice output status: {status}")
@@ -152,9 +163,11 @@ class SoundDeviceAudio(AudioBase):
             callback=callback,
             finished_callback=event.set,  # release the device when done
         )
+        if self._output_stream is None:
+            raise RuntimeError("Failed to open SoundDevice audio output stream.")
         self._output_stream.start()
 
-        def _clean_up_thread():
+        def _clean_up_thread() -> None:
             """Thread to clean up the output stream after playback.
 
             The daemon may play sound but should release the audio device.
