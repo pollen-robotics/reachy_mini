@@ -47,6 +47,31 @@ class GotoModelRequest(BaseModel):
     duration: float
     interpolation: InterpolationMode = InterpolationMode.MINJERK
 
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "head_pose": {
+                        "x": 0.0,
+                        "y": 0.0,
+                        "z": 0.0,
+                        "roll": 0.0,
+                        "pitch": 0.0,
+                        "yaw": 0.0,
+                    },
+                    "antennas": [0.0, 0.0],
+                    "duration": 2.0,
+                    "interpolation": "minjerk",
+                },
+                {
+                    "antennas": [0.0, 0.0],
+                    "duration": 1.0,
+                    "interpolation": "linear",
+                },
+            ],
+        }
+    }
+
 
 class MoveUUID(BaseModel):
     """Model representing a unique identifier for a move task."""

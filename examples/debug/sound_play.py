@@ -17,7 +17,7 @@ import soundfile as sf
 from reachy_mini import ReachyMini
 from reachy_mini.utils.constants import ASSETS_ROOT_PATH
 
-INPUT_FILE = os.path.join(ASSETS_ROOT_PATH, "proud2.wav")
+INPUT_FILE = os.path.join(ASSETS_ROOT_PATH, "wake_up.wav")
 
 
 def main(backend: str) -> None:

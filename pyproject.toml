@@ -12,7 +12,7 @@ requires-python = ">=3.10"
 dependencies = [
     "numpy>=2.2.5,<2.3.0",
     "scipy==1.15.3",
-    "reachy_mini_motor_controller>=0.6.3",    
+    "reachy_mini_motor_controller>=1.0.0",    
     "eclipse-zenoh>=1.4.0",
     "opencv-python<=5.0",
     "cv2_enumerate_cameras>=1.2.1",
@@ -24,7 +24,7 @@ dependencies = [
     "huggingface-hub==0.34.4",
     "sounddevice==0.5.1",
     "soundfile==0.13.1",    
-    "reachy-mini-rust-kinematics==0.1.1",
+    "reachy-mini-rust-kinematics>=1.0.0",
     "asgiref",
     "aiohttp",
 ]
@@ -39,7 +39,8 @@ dev = [
     "mujoco==3.3.0",
     "placo==0.9.14",
     "pre-commit",
-    "mypy==1.18.2"
+    "mypy==1.18.2",
+    "rustypot>=1.3.0",
 ]
 examples = ["pynput"]
 mujoco = ["mujoco==3.3.0"]
