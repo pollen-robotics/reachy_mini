@@ -39,7 +39,7 @@ SLEEP_HEAD_JOINT_POSITIONS = [
 ]
 
 
-SLEEP_ANTENNAS_JOINT_POSITIONS = [3.05, -3.05]
+SLEEP_ANTENNAS_JOINT_POSITIONS = [-3.05, 3.05]
 SLEEP_HEAD_POSE = np.array(
     [
         [0.911, 0.004, 0.413, -0.021],
@@ -154,7 +154,7 @@ class ReachyMini:
         head: Optional[npt.NDArray[np.float64]] = None,  # 4x4 pose matrix
         antennas: Optional[
             Union[npt.NDArray[np.float64], List[float]]
-        ] = None,  # [left_angle, right_angle] (in rads)
+        ] = None,  # [right_angle, left_angle] (in rads)
         body_yaw: float = 0.0,  # Body yaw angle in radians
     ) -> None:
         """Set the target pose of the head and/or the target position of the antennas.
@@ -202,7 +202,7 @@ class ReachyMini:
         head: Optional[npt.NDArray[np.float64]] = None,  # 4x4 pose matrix
         antennas: Optional[
             Union[npt.NDArray[np.float64], List[float]]
-        ] = None,  # [left_angle, right_angle] (in rads)
+        ] = None,  # [right_angle, left_angle] (in rads)
         duration: float = 0.5,  # Duration in seconds for the movement, default is 0.5 seconds.
         method: InterpolationTechnique = InterpolationTechnique.MIN_JERK,  # can be "linear", "minjerk", "ease" or "cartoon", default is "minjerk")
         body_yaw: float | None = 0.0,  # Body yaw angle in radians
@@ -249,7 +249,7 @@ class ReachyMini:
         time.sleep(0.1)
 
         # Toudoum
-        self.media.play_sound("proud2.wav")
+        self.media.play_sound("wake_up.wav")
 
         # Roll 20° to the left
         pose = INIT_HEAD_POSE.copy()
@@ -428,7 +428,7 @@ class ReachyMini:
         ] = None,  # [yaw, stewart_platform x 6] length 7
         antennas_joint_positions: Optional[
             List[float]
-        ] = None,  # [left_angle, right_angle] length 2
+        ] = None,  # [right_angle, left_angle] length 2
         duration: float = 0.5,  # Duration in seconds for the movement
     ) -> None:
         """Go to a target head joint positions and/or antennas joint positions using joint space interpolation, in "duration" seconds.
