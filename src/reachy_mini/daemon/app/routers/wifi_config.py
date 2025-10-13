@@ -4,13 +4,12 @@ import logging
 from enum import Enum
 from threading import Lock, Thread
 
+import nmcli
 from fastapi import APIRouter, HTTPException
 
 HOTSPOT_SSID = "reachy-mini-ap"
 HOTSPOT_PASSWORD = "reachy-mini"
 
-
-import nmcli
 
 router = APIRouter(
     prefix="/wifi",
@@ -46,7 +45,7 @@ def get_current_wifi_mode() -> WifiMode:
 
 
 @router.get("/error")
-def get_last_wifi_error():
+def get_last_wifi_error() -> dict[str, str | None]:
     """Get the last WiFi error."""
     global error
     if error is None:
@@ -55,7 +54,7 @@ def get_last_wifi_error():
 
 
 @router.post("/reset_error")
-def reset_last_wifi_error():
+def reset_last_wifi_error() -> dict[str, str]:
     """Reset the last WiFi error."""
     global error
     error = None
@@ -66,12 +65,12 @@ def reset_last_wifi_error():
 def setup_hotspot(
     ssid: str = HOTSPOT_SSID,
     password: str = HOTSPOT_PASSWORD,
-):
+) -> None:
     """Set up a WiFi hotspot. It will create a new hotspot using nmcli if one does not already exist."""
     if busy_lock.locked():
         raise HTTPException(status_code=409, detail="Another operation is in progress.")
 
-    def hotspot():
+    def hotspot() -> None:
         with busy_lock:
             setup_wifi_connection(
                 name="Hotspot", ssid=ssid, password=password, is_hotspot=True
@@ -85,14 +84,14 @@ def setup_hotspot(
 def connect_to_wifi_network(
     ssid: str,
     password: str,
-):
+) -> None:
     """Connect to a WiFi network. It will create a new connection using nmcli if the specified SSID is not already configured."""
     logger.warning(f"Request to connect to WiFi network '{ssid}' received.")
 
     if busy_lock.locked():
         raise HTTPException(status_code=409, detail="Another operation is in progress.")
 
-    def connect():
+    def connect() -> None:
         global error
         with busy_lock:
             try:
@@ -132,7 +131,7 @@ def check_if_connection_active(name: str) -> bool:
 
 def setup_wifi_connection(
     name: str, ssid: str, password: str, is_hotspot: bool = False
-):
+) -> None:
     """Set up a WiFi connection using nmcli."""
     logger.info(f"Setting up WiFi connection (ssid='{ssid}')...")
 
@@ -153,7 +152,7 @@ def setup_wifi_connection(
     logger.info(f"Connection {name} is already active.")
 
 
-def remove_connection(name: str):
+def remove_connection(name: str) -> None:
     """Remove a WiFi connection using nmcli."""
     if check_if_connection_exists(name):
         logger.info(f"Removing WiFi connection '{name}'...")

@@ -41,8 +41,6 @@ class Args:
 
     serialport: str = "auto"
 
-    wireless_version: bool = False
-
     sim: bool = False
     scene: str = "empty"
     headless: bool = False
