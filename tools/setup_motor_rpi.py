@@ -68,10 +68,10 @@ def main():
         current_channel = (current_channel + 1) % 9
         select_channel(current_channel)
         print("==")
-        for id in [FACTORY_DEFAULT_ID, current_channel + 10]:
+        for id, baudrate in zip([FACTORY_DEFAULT_ID, current_channel + 10], [FACTORY_DEFAULT_BAUDRATE, 1000000]):
             print("looking for motor with ID", id)
             if lookup_for_motor(
-                UART_PORT, id, FACTORY_DEFAULT_BAUDRATE, silent=True
+                UART_PORT, id, baudrate, silent=True
             ):
                 print(f"Found motor on channel {current_channel}!")
                 target_id = CHANNEL_TO_ID[current_channel]
