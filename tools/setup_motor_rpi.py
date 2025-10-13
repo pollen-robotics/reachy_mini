@@ -1,0 +1,87 @@
+import argparse
+import os
+import time
+from importlib.resources import files
+from typing import List
+
+import numpy as np
+from gpiozero import DigitalOutputDevice
+from rustypot import Xl330PyController
+from setup_motor import (
+    FACTORY_DEFAULT_BAUDRATE,
+    FACTORY_DEFAULT_ID,
+    lookup_for_motor,
+    parse_yaml_config,
+    run,
+)
+
+import reachy_mini
+
+assets_root_path = files(reachy_mini).joinpath("assets")
+
+
+UART_PORT = "/dev/ttyAMA3"
+CONFIG_FILE_PATH = os.path.join(assets_root_path, "config", "hardware_config.yaml")
+
+ID_TO_CHANNEL = {
+    10: 0,
+    11: 1,
+    12: 2,
+    13: 3,
+    14: 4,
+    15: 5,
+    16: 6,
+    17: 7,
+    18: 8,
+}
+CHANNEL_TO_ID = {v: k for k, v in ID_TO_CHANNEL.items()}
+
+# S0 = DigitalOutputDevice(25)
+# S1 = DigitalOutputDevice(8)
+# S2 = DigitalOutputDevice(7)
+# S3 = DigitalOutputDevice(1)
+
+
+def get_channel_binary(channel) -> List[int]:
+    """Convert channel number (0-8) to 4-bit binary representation."""
+    assert channel in np.arange(9), "Channel must be between 0 and 8"
+    bits = [int(b) for b in f"{channel:04b}"]  # 4-bit binary
+    return bits[::-1]  # flip the order
+
+
+# def select_channel(channel: int):
+#     """Select a channel on the multiplexer."""
+#     bits = get_channel_binary(channel)
+#     S0.on() if bits[0] else S0.off()
+#     S1.on() if bits[1] else S1.off()
+#     S2.on() if bits[2] else S2.off()
+#     S3.on() if bits[3] else S3.off()
+
+
+def main():
+    config = parse_yaml_config(CONFIG_FILE_PATH)
+    motor_name_to_id = {m: config.motors[m].id for m in config.motors}
+    id_to_motor_name = {v: k for k, v in motor_name_to_id.items()}
+
+    current_channel = 0
+    while True:
+        current_channel = (current_channel + 1) % 9
+        # select_channel(current_channel)
+        if lookup_for_motor(
+            UART_PORT, FACTORY_DEFAULT_ID, FACTORY_DEFAULT_BAUDRATE, silent=True
+        ):
+            print(f"Found motor on channel {current_channel}!")
+            target_id = CHANNEL_TO_ID[current_channel]
+            target_name = id_to_motor_name[target_id]
+            args = argparse.Namespace(
+                config_file=CONFIG_FILE_PATH,
+                motor_name=target_name,
+                serialport=UART_PORT,
+            )
+            run(args)
+
+        time.sleep(0.1)
+
+
+if __name__ == "__main__":
+    main()

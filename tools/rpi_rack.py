@@ -23,11 +23,6 @@ def get_channel_binary(channel) -> List[int]:
 def select_channel(channel: int):
     """Select a channel on the multiplexer."""
     bits = get_channel_binary(channel)
-    # S0.value = bits[0]
-    # S1.value = bits[1]
-    # S2.value = bits[2]
-    # S3.value = bits[3]
-
     S0.on() if bits[0] else S0.off()
     S1.on() if bits[1] else S1.off()
     S2.on() if bits[2] else S2.off()
