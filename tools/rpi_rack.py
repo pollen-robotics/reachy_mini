@@ -5,7 +5,7 @@ import numpy as np
 from gpiozero import DigitalOutputDevice
 from rustypot import Xl330PyController
 
-SERIAL_TIMEOUT = 0.5  # seconds
+SERIAL_TIMEOUT = 0.1  # seconds
 
 S0 = DigitalOutputDevice(25)
 S1 = DigitalOutputDevice(8)
@@ -58,15 +58,17 @@ channel_to_id = {v: k for k, v in id_to_channel.items()}
 if __name__ == "__main__":
     args = argparse.ArgumentParser()
     args.add_argument("--id", type=int, default=10, help="Motor ID (10-18)")
-    args.add_argument("--serial", type=str, default="/dev/ttyUSB0", help="Serial port")
+    args.add_argument("--serial", type=str, default="/dev/ttyAMA3", help="Serial port")
     args = args.parse_args()
 
     channel = id_to_channel.get(args.id, None)
 
     select_channel(channel)
     print(f"Selected channel {channel}")
-
-    for i in range(255):
-        ret = lookup_for_motor(args.serial, i, baudrate=1000000)
-        if ret:
-            break
+    baudrates = [57600, 1_000_000]
+    for baudrate in baudrates:
+        print("Trying baudrate:", baudrate)
+        for i in range(255):
+            ret = lookup_for_motor(args.serial, i, baudrate=baudrate)
+            if ret:
+                break
