@@ -15,9 +15,7 @@ from setup_motor import (
     run,
 )
 
-import reachy_mini
-
-assets_root_path = files(reachy_mini).joinpath("assets")
+assets_root_path = "../src/reachy_mini/assets/"
 
 
 UART_PORT = "/dev/ttyAMA3"
