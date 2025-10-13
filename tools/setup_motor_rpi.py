@@ -34,10 +34,10 @@ ID_TO_CHANNEL = {
 }
 CHANNEL_TO_ID = {v: k for k, v in ID_TO_CHANNEL.items()}
 
-# S0 = DigitalOutputDevice(25)
-# S1 = DigitalOutputDevice(8)
-# S2 = DigitalOutputDevice(7)
-# S3 = DigitalOutputDevice(1)
+S0 = DigitalOutputDevice(25)
+S1 = DigitalOutputDevice(8)
+S2 = DigitalOutputDevice(7)
+S3 = DigitalOutputDevice(1)
 
 
 def get_channel_binary(channel) -> List[int]:
@@ -47,13 +47,13 @@ def get_channel_binary(channel) -> List[int]:
     return bits[::-1]  # flip the order
 
 
-# def select_channel(channel: int):
-#     """Select a channel on the multiplexer."""
-#     bits = get_channel_binary(channel)
-#     S0.on() if bits[0] else S0.off()
-#     S1.on() if bits[1] else S1.off()
-#     S2.on() if bits[2] else S2.off()
-#     S3.on() if bits[3] else S3.off()
+def select_channel(channel: int):
+    """Select a channel on the multiplexer."""
+    bits = get_channel_binary(channel)
+    S0.on() if bits[0] else S0.off()
+    S1.on() if bits[1] else S1.off()
+    S2.on() if bits[2] else S2.off()
+    S3.on() if bits[3] else S3.off()
 
 
 def main():
