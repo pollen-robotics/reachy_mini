@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+from typing import Callable
 
 
 async def call(command: list[str], logger: logging.Logger) -> None:
@@ -18,7 +19,10 @@ async def call(command: list[str], logger: logging.Logger) -> None:
         stderr=asyncio.subprocess.PIPE,
     )
 
-    async def stream_output(stream, log_func):
+    async def stream_output(
+        stream: asyncio.StreamReader,
+        log_func: Callable[[str], None],
+    ) -> None:
         while True:
             line = await stream.readline()
             if not line:

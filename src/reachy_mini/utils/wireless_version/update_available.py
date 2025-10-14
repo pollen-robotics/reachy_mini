@@ -27,7 +27,8 @@ def get_pypi_version(package_name: str) -> str:
     response = requests.get(url)
     response.raise_for_status()
     data = response.json()
-    return data["info"]["version"]
+    version: str = data["info"]["version"]
+    return version
 
 
 def get_local_version(package_name: str) -> str:

@@ -64,7 +64,7 @@ def start_update() -> dict[str, str]:
         new_log_evt={},
     )
 
-    async def wrapper():
+    async def wrapper() -> None:
         with busy_lock:
             logger = logging.getLogger(f"update_logs_{job_id}")
 
@@ -110,7 +110,7 @@ def get_update_status(job_id: str) -> dict[str, str | list[str]]:
 
 
 @router.websocket("/ws/logs")
-async def websocket_logs(websocket: WebSocket, job_id: str):
+async def websocket_logs(websocket: WebSocket, job_id: str) -> None:
     """WebSocket endpoint to stream update logs in real time."""
     await websocket.accept()
     last_log_len = 0
