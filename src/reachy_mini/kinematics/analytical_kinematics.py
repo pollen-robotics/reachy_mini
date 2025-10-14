@@ -25,6 +25,7 @@ SLEEP_HEAD_POSE = np.array(
 )
 
 
+import time
 class AnalyticalKinematics:
     """Reachy Mini Analytical Kinematics class, implemented in Rust with python bindings."""
 
@@ -54,6 +55,7 @@ class AnalyticalKinematics:
         sleep_head_pose[:3, 3][2] += self.head_z_offset
         self.kin.reset_forward_kinematics(sleep_head_pose)  # type: ignore[arg-type]
 
+
     def ik(
         self,
         pose: Annotated[NDArray[np.float64], (4, 4)],
@@ -67,16 +69,9 @@ class AnalyticalKinematics:
         """
         _pose = pose.copy()
         _pose[:3, 3][2] += self.head_z_offset
-
-        # remove the body yaw from the pose yaw
-        # make the robot look at the same direction regardless 
-        # of its body yaw
-        # > this makes the solution compatible with the placo kinematics
-        c, s = np.cos(body_yaw), np.sin(body_yaw)
-        R_yaw = np.array([[c, -s, 0], [s, c, 0], [0, 0, 1]]) 
-        _pose[:3, :3] = R_yaw @ _pose[:3, :3]
-
-        stewart_joints = self.kin.inverse_kinematics(_pose)  # type: ignore[arg-type]
+        
+        stewart_joints = self.kin.inverse_kinematics(_pose, body_yaw)  # type: ignore[arg-type]
+        
         return np.array([body_yaw] + stewart_joints)
 
     def fk(
@@ -89,6 +84,9 @@ class AnalyticalKinematics:
 
         check_collision is not used by AnalyticalKinematics.
         """
+        
+        body_yaw = joint_angles[0]
+        
         _joint_angles = joint_angles[1:].tolist()
 
         if no_iterations < 1:
@@ -96,18 +94,10 @@ class AnalyticalKinematics:
 
         T_world_platform = None
         for _ in range(no_iterations):
-            T_world_platform = np.array(self.kin.forward_kinematics(_joint_angles))
+            T_world_platform = np.array(self.kin.forward_kinematics(_joint_angles, body_yaw))
 
         assert T_world_platform is not None
 
         T_world_platform[:3, 3][2] -= self.head_z_offset
         
-        # re-apply the body yaw to the pose
-        # > this makes the solution compatible with the placo kinematics
-        body_yaw = joint_angles[0]
-        T_yaw = np.eye(4)
-        c, s = np.cos(-body_yaw), np.sin(-body_yaw)
-        T_yaw[:3,:3] = np.array([[c, -s, 0], [s, c, 0], [0, 0, 1]])
-        T_world_platform = np.array(T_yaw @ T_world_platform, dtype=np.float64)
-
         return T_world_platform
