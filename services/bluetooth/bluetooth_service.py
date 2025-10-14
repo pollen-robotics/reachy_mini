@@ -1,19 +1,18 @@
 #!/usr/bin/env python3
-"""
-Bluetooth service for Reachy Mini using direct DBus API.
+"""Bluetooth service for Reachy Mini using direct DBus API.
 
 Includes a fixed NoInputNoOutput agent for automatic Just Works pairing.
 """
 
 import logging
+import os
+import subprocess
 from typing import Callable
 
 import dbus
 import dbus.mainloop.glib
 import dbus.service
 from gi.repository import GLib
-import subprocess
-import os
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -38,22 +37,28 @@ AGENT_PATH = "/org/bluez/agent"
 # BLE Agent for Just Works
 # =======================
 class NoInputAgent(dbus.service.Object):
+    """BLE Agent for Just Works pairing."""
+
     @dbus.service.method("org.bluez.Agent1", in_signature="", out_signature="")
     def Release(self, *args):
+        """Handle release of the agent."""
         logger.info("Agent released")
 
     @dbus.service.method("org.bluez.Agent1", in_signature="", out_signature="s")
     def RequestPinCode(self, *args):
+        """Automatically provide an empty pin code for Just Works pairing."""
         logger.info(f"RequestPinCode called with args: {args}, returning empty")
         return ""
 
     @dbus.service.method("org.bluez.Agent1", in_signature="", out_signature="u")
     def RequestPasskey(self, *args):
+        """Automatically provide a passkey of 0 for Just Works pairing."""
         logger.info(f"RequestPasskey called with args: {args}, returning 0")
         return dbus.UInt32(0)
 
     @dbus.service.method("org.bluez.Agent1", in_signature="", out_signature="")
     def RequestConfirmation(self, *args):
+        """Automatically confirm the pairing request."""
         logger.info(
             f"RequestConfirmation called with args: {args}, accepting automatically"
         )
@@ -61,18 +66,22 @@ class NoInputAgent(dbus.service.Object):
 
     @dbus.service.method("org.bluez.Agent1", in_signature="", out_signature="")
     def DisplayPinCode(self, *args):
+        """Handle displaying the pin code (not used in Just Works)."""
         logger.info(f"DisplayPinCode called with args: {args}")
 
     @dbus.service.method("org.bluez.Agent1", in_signature="", out_signature="")
     def DisplayPasskey(self, *args):
+        """Handle displaying the passkey (not used in Just Works)."""
         logger.info(f"DisplayPasskey called with args: {args}")
 
     @dbus.service.method("org.bluez.Agent1", in_signature="", out_signature="")
     def AuthorizeService(self, *args):
+        """Handle service authorization requests."""
         logger.info(f"AuthorizeService called with args: {args}")
 
     @dbus.service.method("org.bluez.Agent1", in_signature="", out_signature="")
     def Cancel(self, *args):
+        """Handle cancellation of the agent request."""
         logger.info("Agent request canceled")
 
 
@@ -80,9 +89,12 @@ class NoInputAgent(dbus.service.Object):
 # BLE Advertisement
 # =======================
 class Advertisement(dbus.service.Object):
+    """BLE Advertisement."""
+
     PATH_BASE = "/org/bluez/advertisement"
 
     def __init__(self, bus, index, advertising_type, local_name):
+        """Initialize the Advertisement."""
         self.path = self.PATH_BASE + str(index)
         self.bus = bus
         self.ad_type = advertising_type
@@ -92,6 +104,7 @@ class Advertisement(dbus.service.Object):
         dbus.service.Object.__init__(self, bus, self.path)
 
     def get_properties(self):
+        """Return the properties of the advertisement."""
         props = {"Type": self.ad_type}
         if self.local_name:
             props["LocalName"] = dbus.String(self.local_name)
@@ -103,10 +116,12 @@ class Advertisement(dbus.service.Object):
         return {LE_ADVERTISEMENT_IFACE: props}
 
     def get_path(self):
+        """Return the object path."""
         return dbus.ObjectPath(self.path)
 
     @dbus.service.method(DBUS_PROP_IFACE, in_signature="s", out_signature="a{sv}")
     def GetAll(self, interface):
+        """Return all properties of the advertisement."""
         if interface != LE_ADVERTISEMENT_IFACE:
             raise dbus.exceptions.DBusException(
                 "org.freedesktop.DBus.Error.InvalidArgs",
@@ -116,6 +131,7 @@ class Advertisement(dbus.service.Object):
 
     @dbus.service.method(LE_ADVERTISEMENT_IFACE, in_signature="", out_signature="")
     def Release(self):
+        """Handle release of the advertisement."""
         logger.info("Advertisement released")
 
 
@@ -123,7 +139,10 @@ class Advertisement(dbus.service.Object):
 # BLE Characteristics & Service
 # =======================
 class Characteristic(dbus.service.Object):
+    """GATT Characteristic."""
+
     def __init__(self, bus, index, uuid, flags, service):
+        """Initialize the Characteristic."""
         self.path = service.path + "/char" + str(index)
         self.bus = bus
         self.uuid = uuid
@@ -133,6 +152,7 @@ class Characteristic(dbus.service.Object):
         dbus.service.Object.__init__(self, bus, self.path)
 
     def get_properties(self):
+        """Return the properties of the characteristic."""
         return {
             GATT_CHRC_IFACE: {
                 "Service": self.service.get_path(),
@@ -142,10 +162,12 @@ class Characteristic(dbus.service.Object):
         }
 
     def get_path(self):
+        """Return the object path."""
         return dbus.ObjectPath(self.path)
 
     @dbus.service.method(DBUS_PROP_IFACE, in_signature="s", out_signature="a{sv}")
     def GetAll(self, interface):
+        """Return all properties of the characteristic."""
         if interface != GATT_CHRC_IFACE:
             raise dbus.exceptions.DBusException(
                 "org.freedesktop.DBus.Error.InvalidArgs", "Unknown interface"
@@ -154,19 +176,25 @@ class Characteristic(dbus.service.Object):
 
     @dbus.service.method(GATT_CHRC_IFACE, in_signature="a{sv}", out_signature="ay")
     def ReadValue(self, options):
+        """Handle read from the characteristic."""
         return dbus.Array(self.value, signature="y")
 
     @dbus.service.method(GATT_CHRC_IFACE, in_signature="aya{sv}")
     def WriteValue(self, value, options):
+        """Handle write to the characteristic."""
         self.value = value
 
 
 class CommandCharacteristic(Characteristic):
+    """Command Characteristic."""
+
     def __init__(self, bus, index, service, command_handler: Callable[[bytes], str]):
+        """Initialize the Command Characteristic."""
         super().__init__(bus, index, COMMAND_CHAR_UUID, ["write"], service)
         self.command_handler = command_handler
 
     def WriteValue(self, value, options):
+        """Handle write to the Command Characteristic."""
         command_bytes = bytes(value)
         response = self.command_handler(command_bytes)
         self.service.response_char.value = [
@@ -176,16 +204,22 @@ class CommandCharacteristic(Characteristic):
 
 
 class ResponseCharacteristic(Characteristic):
+    """Response Characteristic.""" ""
+
     def __init__(self, bus, index, service):
+        """Initialize the Response Characteristic."""
         super().__init__(bus, index, RESPONSE_CHAR_UUID, ["read", "notify"], service)
 
 
 class Service(dbus.service.Object):
+    """GATT Service."""
+
     PATH_BASE = "/org/bluez/service"
 
     def __init__(
         self, bus, index, uuid, primary, command_handler: Callable[[bytes], str]
     ):
+        """Initialize the GATT Service."""
         self.path = self.PATH_BASE + str(index)
         self.bus = bus
         self.uuid = uuid
@@ -199,6 +233,7 @@ class Service(dbus.service.Object):
         self.add_characteristic(CommandCharacteristic(bus, 0, self, command_handler))
 
     def get_properties(self):
+        """Return the properties of the service."""
         return {
             GATT_SERVICE_IFACE: {
                 "UUID": self.uuid,
@@ -208,13 +243,16 @@ class Service(dbus.service.Object):
         }
 
     def get_path(self):
+        """Return the object path."""
         return dbus.ObjectPath(self.path)
 
     def add_characteristic(self, ch):
+        """Add a characteristic to the service."""
         self.characteristics.append(ch)
 
     @dbus.service.method(DBUS_PROP_IFACE, in_signature="s", out_signature="a{sv}")
     def GetAll(self, interface):
+        """Return all properties of the service."""
         if interface != GATT_SERVICE_IFACE:
             raise dbus.exceptions.DBusException(
                 "org.freedesktop.DBus.Error.InvalidArgs", "Unknown interface"
@@ -223,17 +261,22 @@ class Service(dbus.service.Object):
 
 
 class Application(dbus.service.Object):
+    """GATT Application."""
+
     def __init__(self, bus, command_handler: Callable[[bytes], str]):
+        """Initialize the GATT Application."""
         self.path = "/"
         self.services = []
         dbus.service.Object.__init__(self, bus, self.path)
         self.services.append(Service(bus, 0, SERVICE_UUID, True, command_handler))
 
     def get_path(self):
+        """Return the object path."""
         return dbus.ObjectPath(self.path)
 
     @dbus.service.method(DBUS_OM_IFACE, out_signature="a{oa{sa{sv}}}")
     def GetManagedObjects(self):
+        """Return a dictionary of all managed objects."""
         resp = {}
         for service in self.services:
             resp[service.get_path()] = service.get_properties()
@@ -246,7 +289,10 @@ class Application(dbus.service.Object):
 # Bluetooth Command Server
 # =======================
 class BluetoothCommandService:
+    """Bluetooth Command Service."""
+
     def __init__(self, device_name="ReachyMini"):
+        """Initialize the Bluetooth Command Service."""
         self.device_name = device_name
         self.bus = None
         self.app = None
@@ -275,7 +321,9 @@ class BluetoothCommandService:
                 script_path = os.path.join("commands", script_name)
                 if os.path.isfile(script_path):
                     try:
-                        result = subprocess.run(["sudo", script_path], capture_output=True, text=True)
+                        result = subprocess.run(
+                            ["sudo", script_path], capture_output=True, text=True
+                        )
                         logger.info(f"Command output: {result.stdout}")
                     except Exception as e:
                         logger.error(f"Error executing command: {e}")
@@ -288,6 +336,7 @@ class BluetoothCommandService:
             return f"ECHO: {command_str}"
 
     def start(self):
+        """Start the Bluetooth Command Service."""
         dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
         self.bus = dbus.SystemBus()
 
@@ -295,7 +344,7 @@ class BluetoothCommandService:
         agent_manager = dbus.Interface(
             self.bus.get_object("org.bluez", "/org/bluez"), "org.bluez.AgentManager1"
         )
-        agent = NoInputAgent(self.bus, AGENT_PATH)
+        # agent = NoInputAgent(self.bus, AGENT_PATH)
         agent_manager.RegisterAgent(AGENT_PATH, "NoInputNoOutput")
         agent_manager.RequestDefaultAgent(AGENT_PATH)
         logger.info("BLE Agent registered for Just Works pairing")
@@ -347,6 +396,7 @@ class BluetoothCommandService:
         return None
 
     def run(self):
+        """Run the Bluetooth Command Service."""
         self.start()
         self.mainloop = GLib.MainLoop()
         try:
@@ -361,6 +411,7 @@ class BluetoothCommandService:
 # Main
 # =======================
 def main():
+    """Run the Bluetooth Command Service."""
     bt_service = BluetoothCommandService(device_name="ReachyMini")
     bt_service.run()
 

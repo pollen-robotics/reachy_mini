@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""
-BLE-only test client that forces Low Energy connections.
+"""BLE-only test client that forces Low Energy connections.
 
 This client explicitly uses BLE scanning and connects only via GATT/LE.
 """
@@ -25,11 +24,10 @@ RESPONSE_CHAR_UUID = "12345678-1234-5678-1234-56789abcdef2"
 async def scan_for_ble_device(
     device_name_or_address: str, duration: float = 15.0, max_attempts: int = 5
 ) -> BLEDevice:
-    """
-    Scan specifically for BLE devices only with multiple retry attempts.
+    """Scan specifically for BLE devices only with multiple retry attempts.
+
     This uses callback-based scanning which is more reliable.
     """
-
     for attempt in range(max_attempts):
         if attempt > 0:
             print(f"\n🔄 Retry attempt {attempt + 1}/{max_attempts}")
@@ -46,7 +44,7 @@ async def scan_for_ble_device(
         def detection_callback(
             device: BLEDevice, advertisement_data: AdvertisementData
         ):
-            """Callback for each detected device."""
+            """Call back for each detected device."""
             nonlocal found_device
 
             scan_count[0] += 1
@@ -127,7 +125,6 @@ async def scan_for_ble_device(
 
 async def send_command_ble(command: str, device_id: str = "ReachyMini"):
     """Send a command via BLE GATT."""
-
     print("=" * 60)
     print("  BLE-Only Bluetooth Client")
     print("=" * 60)
@@ -153,10 +150,10 @@ async def send_command_ble(command: str, device_id: str = "ReachyMini"):
         # Connect via BLE GATT
         # Using the device from BLE scan should force LE connection
         async with BleakClient(device, timeout=20.0) as client:
-            print(f"✅ Connected via BLE!")
+            print("✅ Connected via BLE!")
 
             # Discover services
-            print(f"🔍 Discovering GATT services...")
+            print("🔍 Discovering GATT services...")
 
             # Check if our service exists
             services = client.services
@@ -164,12 +161,12 @@ async def send_command_ble(command: str, device_id: str = "ReachyMini"):
             for service in services:
                 if SERVICE_UUID.lower() in service.uuid.lower():
                     our_service = service
-                    print(f"✓ Found command service")
+                    print("✓ Found command service")
                     break
 
             if not our_service:
                 print(f"⚠️  Service {SERVICE_UUID} not found!")
-                print(f"Available services:")
+                print("Available services:")
                 for svc in list(services)[:5]:
                     print(f"  • {svc.uuid}")
                 return 1
@@ -181,13 +178,13 @@ async def send_command_ble(command: str, device_id: str = "ReachyMini"):
             for char in our_service.characteristics:
                 if COMMAND_CHAR_UUID.lower() in char.uuid.lower():
                     command_char = char
-                    print(f"✓ Found command characteristic")
+                    print("✓ Found command characteristic")
                 elif RESPONSE_CHAR_UUID.lower() in char.uuid.lower():
                     response_char = char
-                    print(f"✓ Found response characteristic")
+                    print("✓ Found response characteristic")
 
             if not command_char or not response_char:
-                print(f"❌ Required characteristics not found!")
+                print("❌ Required characteristics not found!")
                 return 1
 
             # Send command
@@ -195,10 +192,10 @@ async def send_command_ble(command: str, device_id: str = "ReachyMini"):
             await client.write_gatt_char(
                 command_char, command.encode("utf-8"), response=False
             )
-            print(f"✓ Command sent")
+            print("✓ Command sent")
 
             # Wait for processing
-            print(f"⏳ Waiting for response...")
+            print("⏳ Waiting for response...")
             await asyncio.sleep(0.8)
 
             # Read response
@@ -206,21 +203,21 @@ async def send_command_ble(command: str, device_id: str = "ReachyMini"):
             response = response_bytes.decode("utf-8")
 
             print(f"\n📥 Response: '{response}'")
-            print(f"\n✅ Success!")
+            print("\n✅ Success!")
             return 0
 
     except Exception as e:
         error_str = str(e)
 
         if "br-connection-profile-unavailable" in error_str.lower():
-            print(f"\n❌ ERROR: Tried to connect via Bluetooth Classic instead of BLE!")
-            print(f"\nThis means BlueZ is confused about the device type.")
-            print(f"\nTry these solutions:")
-            print(f"  1. Remove the device from BlueZ cache:")
+            print("\n❌ ERROR: Tried to connect via Bluetooth Classic instead of BLE!")
+            print("\nThis means BlueZ is confused about the device type.")
+            print("\nTry these solutions:")
+            print("  1. Remove the device from BlueZ cache:")
             print(f"     bluetoothctl remove {device.address}")
-            print(f"  2. Restart Bluetooth:")
-            print(f"     sudo systemctl restart bluetooth")
-            print(f"  3. Disable BR/EDR on the server (see docs)")
+            print("  2. Restart Bluetooth:")
+            print("     sudo systemctl restart bluetooth")
+            print("  3. Disable BR/EDR on the server (see docs)")
             return 1
         else:
             print(f"❌ Error: {e}")
@@ -229,7 +226,7 @@ async def send_command_ble(command: str, device_id: str = "ReachyMini"):
 
 
 def main():
-    """Main entry point."""
+    """Run main entry point."""
     if len(sys.argv) < 2:
         print(
             "Usage: python test_bluetooth_client_ble_only.py <command> [device_name_or_mac]"
