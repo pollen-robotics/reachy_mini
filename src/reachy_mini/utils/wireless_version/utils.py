@@ -5,7 +5,7 @@ import logging
 from typing import Callable
 
 
-async def call(command: list[str], logger: logging.Logger) -> None:
+async def call_logger_wrapper(command: list[str], logger: logging.Logger) -> None:
     """Run a command asynchronously, streaming stdout and stderr to logger in real time.
 
     Args:
