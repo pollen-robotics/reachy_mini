@@ -13,7 +13,7 @@ import numpy as np
 from reachy_mini import ReachyMini
 
 
-def main():
+def main() -> None:
     """Play a wav file by pushing samples to the audio device."""
     logging.basicConfig(
         level=logging.DEBUG, format="%(asctime)s [%(levelname)s] %(message)s"
@@ -21,13 +21,13 @@ def main():
 
     with ReachyMini(log_level="DEBUG", automatic_body_yaw=True) as mini:
         last_doa = -1
-        THRESHOLD = 2  # degrees
+        THRESHOLD = 0.004  # ~2 degrees
         while True:
             doa = mini.media.audio.get_DoA()
             print(f"DOA: {doa}")
             if doa[1] and np.abs(doa[0] - last_doa) > THRESHOLD:
                 print(f"  Speech detected at {doa[0]:.1f}°")
-                p_head = [np.sin(np.deg2rad(doa[0])), np.cos(np.deg2rad(doa[0])), 0.0]
+                p_head = [np.sin(doa[0]), np.cos(doa[0]), 0.0]
                 print(
                     f"  Pointing to x={p_head[0]:.2f}, y={p_head[1]:.2f}, z={p_head[2]:.2f}"
                 )

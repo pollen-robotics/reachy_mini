@@ -30,6 +30,7 @@ class AudioBase(ABC):
         "VERSION": (48, 0, 4, "ro", "uint8"),
         "AEC_AZIMUTH_VALUES": (33, 75, 16 + 1, "ro", "radians"),
         "DOA_VALUE": (20, 18, 4 + 1, "ro", "uint16"),
+        "DOA_VALUE_RADIANS": (20, 19, 8 + 1, "ro", "radians"),
     }
 
     def __init__(self, backend: AudioBackend, log_level: str = "INFO") -> None:
@@ -130,19 +131,19 @@ class AudioBase(ABC):
             result = response.tolist()
         elif data[4] == "radians":
             byte_data = response.tobytes()
-            float1, float2, float3, float4 = struct.unpack("<ffff", byte_data[1:17])
+            num_values = (data[2] - 1) / 4
+            match_str = "<"
+            for i in range(int(num_values)):
+                match_str += "f"
             result = [
-                np.rad2deg(float1),
-                np.rad2deg(float2),
-                np.rad2deg(float3),
-                np.rad2deg(float4),
+                float(x) for x in struct.unpack(match_str, byte_data[1 : data[2]])
             ]
         elif data[4] == "uint16":
             result = response.tolist()
 
         return result
 
-    def get_DoA(self) -> tuple[int, bool] | None:
+    def get_DoA(self) -> tuple[float, bool] | None:
         """Get the Direction of Arrival (DoA) value from the ReSpeaker device.
 
         0° is left, 90° is front/back, 180° is right
@@ -154,7 +155,7 @@ class AudioBase(ABC):
         if not self._respeaker:
             self.logger.warning("ReSpeaker device not found.")
             return None
-        result = self._read_usb("DOA_VALUE")
+        result = self._read_usb("DOA_VALUE_RADIANS")
         if result is None:
             return None
-        return int(result[1]), bool(result[3])
+        return float(result[0]), bool(result[1])
