@@ -10,11 +10,10 @@ from gpiozero import DigitalOutputDevice
 from setup_motor import (
     FACTORY_DEFAULT_BAUDRATE,
     FACTORY_DEFAULT_ID,
+    light_led_down,
     lookup_for_motor,
     parse_yaml_config,
     run,
-    light_led_up,
-    light_led_down
 )
 
 assets_root_path = "../src/reachy_mini/assets/"
