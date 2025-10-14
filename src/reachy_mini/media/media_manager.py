@@ -128,7 +128,6 @@ class MediaManager:
         self, log_level: str, signalling_host: str, signalling_port: int
     ) -> None:
         """Initialize the WebRTC system (not implemented yet)."""
-        self.logger.warning("WebRTC media backend is not implemented yet.")
         from gst_signalling.utils import find_producer_peer_id_by_name
 
         from reachy_mini.media.webrtc_client_gstreamer import GstWebRTCClient

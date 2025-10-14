@@ -91,7 +91,7 @@ class GStreamerCamera(CameraBase):
         self._thread_bus_calls = Thread(target=self._handle_bus_calls, daemon=True)
         self._thread_bus_calls.start()
 
-    def _get_sample(self, appsink: Gst.AppSink) -> Optional[bytes]:
+    def _get_sample(self, appsink: GstApp.AppSink) -> Optional[bytes]:
         sample = appsink.try_pull_sample(20_000_000)
         if sample is None:
             return None

@@ -23,7 +23,7 @@ def click(event, x, y, flags, param):
         param["y"] = y
 
 
-def main(backend):
+def main(backend: str) -> None:
     """Show the camera feed from Reachy Mini and make it look at clicked points."""
     state = {"x": 0, "y": 0, "just_clicked": False}
 
@@ -32,8 +32,9 @@ def main(backend):
 
     print("Click on the image to make ReachyMini look at that point.")
     print("Press 'q' to quit the camera feed.")
-    with ReachyMini(use_sim=False, media_backend=backend) as reachy_mini:
+    with ReachyMini(media_backend=backend) as reachy_mini:
         try:
+            is_wireless = reachy_mini.client.get_status()["wireless_version"]
             while True:
                 frame = reachy_mini.media.get_frame()
 
@@ -41,7 +42,7 @@ def main(backend):
                     print("Failed to grab frame.")
                     continue
 
-                if backend == "gstreamer":
+                if backend == "gstreamer" and not is_wireless:
                     frame = cv2.imdecode(
                         np.frombuffer(frame, dtype=np.uint8), cv2.IMREAD_COLOR
                     )
@@ -67,7 +68,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--backend",
         type=str,
-        choices=["default", "gstreamer", "webrtc"],
+        choices=["default", "gstreamer"],
         default="default",
         help="Media backend to use.",
     )

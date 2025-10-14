@@ -136,7 +136,7 @@ class GStreamerAudio(AudioBase):
         """Open the audio card using GStreamer."""
         self._pipeline_record.set_state(Gst.State.PLAYING)
 
-    def _get_sample(self, appsink: Gst.AppSink) -> Optional[bytes]:
+    def _get_sample(self, appsink: GstApp.AppSink) -> Optional[bytes]:
         sample = appsink.try_pull_sample(20_000_000)
         if sample is None:
             return None

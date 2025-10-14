@@ -22,7 +22,7 @@ def test_daemon_wireless_client_disconnection() -> None:
 
 @pytest.mark.wireless_gstreamer
 def test_daemon_wireless_gstreamer() -> None:
-    with ReachyMini(media_backend="webrtc", localhost_only=False) as mini:
+    with ReachyMini(media_backend="gstreamer") as mini:
         time.sleep(3)  # Give some time for the camera to initialize
         frame = mini.media.get_frame()
         assert frame is not None, "No frame was retrieved from the camera."
