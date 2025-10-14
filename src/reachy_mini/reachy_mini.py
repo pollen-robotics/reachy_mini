@@ -155,7 +155,7 @@ class ReachyMini:
         antennas: Optional[
             Union[npt.NDArray[np.float64], List[float]]
         ] = None,  # [right_angle, left_angle] (in rads)
-        body_yaw: float = None,  # Body yaw angle in radians
+        body_yaw: Optional[float] = None,  # Body yaw angle in radians
     ) -> None:
         """Set the target pose of the head and/or the target position of the antennas.
 
