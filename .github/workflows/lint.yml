@@ -23,4 +23,6 @@ jobs:
           python -m pip install --upgrade pip
           pip install .[dev]
       - name : Lint with mypy
-        run : mypy -v
+        run : |
+          mypy --install-types
+          mypy -v
