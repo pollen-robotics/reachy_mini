@@ -1,3 +1,8 @@
+"""Update router for Reachy Mini Daemon API.
+
+This module provides endpoints to check for updates, start updates, and monitor update status.
+"""
+
 import asyncio
 import logging
 import threading
@@ -46,6 +51,7 @@ def available() -> dict[str, dict[str, bool]]:
 
 @router.post("/start")
 def start_update() -> dict[str, str]:
+    """Start the update process for Reachy Mini Wireless version."""
     if busy_lock.locked():
         raise HTTPException(status_code=400, detail="Update already in progress")
 
@@ -94,6 +100,7 @@ def start_update() -> dict[str, str]:
 
 @router.get("/status")
 def get_update_status(job_id: str) -> dict[str, str | list[str]]:
+    """Get the status and logs of an update job."""
     if job_id not in jobs:
         raise HTTPException(status_code=404, detail="Job ID not found")
     return {
@@ -104,6 +111,7 @@ def get_update_status(job_id: str) -> dict[str, str | list[str]]:
 
 @router.websocket("/ws/logs")
 async def websocket_logs(websocket: WebSocket, job_id: str):
+    """WebSocket endpoint to stream update logs in real time."""
     await websocket.accept()
     last_log_len = 0
 

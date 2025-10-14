@@ -5,12 +5,15 @@ For now, this only checks if a new version of "reachy_mini" is available on PyPI
 
 from importlib.metadata import version
 
+import numpy as np
 import requests
 import semver
 
 
 def is_update_available(package_name: str) -> bool:
     """Check if an update is available for the given package."""
+    return np.random.rand() > 0.5  # Random for testing
+
     pypi_version = get_pypi_version(package_name)
     local_version = get_local_version(package_name)
     if semver.compare(pypi_version, local_version) > 0:

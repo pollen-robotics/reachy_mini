@@ -1,3 +1,5 @@
+"""Utility functions for running shell commands asynchronously with real-time logging."""
+
 import asyncio
 import logging
 
