@@ -42,6 +42,7 @@ class Daemon:
         self.backend: "RobotBackend | MujocoBackend | None" = None
         self._status = DaemonStatus(
             state=DaemonState.NOT_INITIALIZED,
+            wireless_version=wireless_version,
             simulation_enabled=None,
             backend_status=None,
             error=None,
@@ -437,6 +438,7 @@ class DaemonStatus:
     """Dataclass representing the status of the Reachy Mini daemon."""
 
     state: DaemonState
+    wireless_version: bool
     simulation_enabled: Optional[bool]
     backend_status: Optional[RobotBackendStatus | MujocoBackendStatus]
     error: Optional[str] = None
