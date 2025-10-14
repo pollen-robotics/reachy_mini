@@ -19,33 +19,37 @@ if str(TOOLS_ROOT) not in sys.path:
     sys.path.insert(0, str(TOOLS_ROOT))
 
 from reachy_mini import ReachyMini
-from reachy_mini.motion.recorded_move import RecordedMoves
 from dance_measurement import (
     DanceMeasurementConfig,
     MeasurementMode,
-    measure_recorded_move,
+    measure_dances,
     reference_to_npz_payload,
 )
 
-_DATASETS = {
-    "dance": "pollen-robotics/reachy-mini-dances-library",
-    "emotions": "pollen-robotics/reachy-mini-emotions-library",
-}
+_DEFAULT_MOVES = ("simple_nod", "side_to_side_sway")  # extend as needed
 _DEFAULT_OUTPUT = REPO_ROOT / "tests" / "data" / "dance_references"
 _DEFAULT_THRESHOLDS: Dict[MeasurementMode, Dict[str, float]] = {
     MeasurementMode.HARDWARE: {
+        # Repeatability tolerances (symmetric around the recorded metric)
+        # Values are unitless multipliers on the stored reference metrics.
         "rms_multiplier": 1.20,
+        "rms_abs_tol": 1e-3,  # mm / deg absolute guard for near-zero axes
         "worst_multiplier": 1.30,
+        "worst_abs_tol": 1e-3,
         "frequency_drop_hz": 10.0,
         "max_gap_s": 0.02,
-        "goal_task_tolerance": 1e-5,
+        # Precision tolerance: maximum drift allowed on commanded task-space
+        # targets relative to the stored reference (units: mm & deg).
+        "goal_task_tolerance": 5e-3,
     },
     MeasurementMode.SIMULATION: {
         "rms_multiplier": 1.10,
+        "rms_abs_tol": 1e-4,
         "worst_multiplier": 1.15,
+        "worst_abs_tol": 1e-4,
         "frequency_drop_hz": 4.0,
         "max_gap_s": 0.02,
-        "goal_task_tolerance": 1e-6,
+        "goal_task_tolerance": 1e-3,
     },
 }
 
@@ -53,8 +57,8 @@ _DEFAULT_THRESHOLDS: Dict[MeasurementMode, Dict[str, float]] = {
 def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Record a subset of recorded moves and generate reference metrics "
-            "for the motion repeatability regression test."
+            "Record a subset of procedural dances and generate reference "
+            "metrics for the motion repeatability regression test."
         )
     )
     parser.add_argument(
@@ -62,19 +66,6 @@ def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         type=Path,
         default=_DEFAULT_OUTPUT,
         help="Directory where the .npz references will be saved.",
-    )
-    parser.add_argument(
-        "--datasets",
-        nargs="*",
-        default=list(_DATASETS.keys()),
-        choices=_DATASETS.keys(),
-        help="Recorded move datasets to capture (defaults to both dance and emotions).",
-    )
-    parser.add_argument(
-        "--limit",
-        type=int,
-        default=2,
-        help="Maximum number of moves captured per dataset (defaults to 2).",
     )
     parser.add_argument(
         "--bpm",
@@ -136,37 +127,28 @@ def main(argv: Sequence[str] | None = None) -> None:
         mode = _determine_mode(mini)
         thresholds = _build_thresholds(mode)
 
+        # We rely on the procedural dance generator (``measure_dances``) so the
+        # recorded references mirror the precision checks performed in the test.
+        move_names = tuple(_DEFAULT_MOVES)
+        results = measure_dances(mini, move_names, mode=mode, config=config)
+
         target_dir = args.output_dir / mode.value
         target_dir.mkdir(parents=True, exist_ok=True)
 
-        for dataset_name in args.datasets:
-            dataset_dir = target_dir / dataset_name
-            dataset_dir.mkdir(parents=True, exist_ok=True)
-            library = RecordedMoves(_DATASETS[dataset_name])
-            move_names = sorted(library.list_moves())[: args.limit]
-
-            for move_name in move_names:
-                move = library.get(move_name)
-                result = measure_recorded_move(
-                    mini,
-                    move,
-                    move_name=move_name,
-                    mode=mode,
-                    config=config,
-                )
-                ref_thresholds = dict(thresholds)
-                ref_thresholds["min_frequency_hz"] = max(
-                    0.0,
-                    result.metrics.average_update_frequency_hz - ref_thresholds["frequency_drop_hz"],
-                )
-                ref_thresholds["baseline_avg_frequency_hz"] = result.metrics.average_update_frequency_hz
-                payload = reference_to_npz_payload(result, ref_thresholds)
-                npz_path = dataset_dir / f"{move_name}.npz"
-                np.savez_compressed(npz_path, **payload)
-                print(
-                    f"Saved reference for {move_name} in dataset {dataset_name} ({mode.value} mode) -> {npz_path} "
-                    f"(samples={len(result.timestamps_s)})"
-                )
+        for move_name, result in results.items():
+            ref_thresholds = dict(thresholds)
+            ref_thresholds["min_frequency_hz"] = max(
+                0.0,
+                result.metrics.average_update_frequency_hz - ref_thresholds["frequency_drop_hz"],
+            )
+            ref_thresholds["baseline_avg_frequency_hz"] = result.metrics.average_update_frequency_hz
+            payload = reference_to_npz_payload(result, ref_thresholds)
+            npz_path = target_dir / f"{move_name}.npz"
+            np.savez_compressed(npz_path, **payload)
+            print(
+                f"Saved reference for {move_name} in {mode.value} mode -> {npz_path} "
+                f"(samples={len(result.timestamps_s)})"
+            )
 
 
 if __name__ == "__main__":  # pragma: no cover

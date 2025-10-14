@@ -15,7 +15,6 @@ from reachy_mini_dances_library.collection.dance import AVAILABLE_MOVES
 from scipy.spatial.transform import Rotation as R
 
 from reachy_mini import ReachyMini, utils
-from reachy_mini.motion.recorded_move import RecordedMove
 
 _NEUTRAL_POS = np.array([0.0, 0.0, 0.0], dtype=float)
 _NEUTRAL_EUL = np.zeros(3, dtype=float)
@@ -263,114 +262,6 @@ def measure_single_dance(
     )
 
 
-def measure_recorded_move(
-    mini: ReachyMini,
-    move: RecordedMove,
-    *,
-    move_name: str,
-    mode: MeasurementMode,
-    config: DanceMeasurementConfig | None = None,
-) -> DanceMeasurementResult:
-    cfg = config or DanceMeasurementConfig()
-    sample_period = 1.0 / cfg.sample_hz
-
-    timestamps: list[float] = []
-    goal_poses: list[npt.NDArray[np.float64]] = []
-    present_poses: list[npt.NDArray[np.float64]] = []
-    goal_antennas: list[npt.NDArray[np.float64]] = []
-    present_antennas: list[npt.NDArray[np.float64]] = []
-    goal_task: list[npt.NDArray[np.float64]] = []
-    present_task: list[npt.NDArray[np.float64]] = []
-    update_timestamps: list[float] = []
-
-    prev_present_pose: npt.NDArray[np.float64] | None = None
-    prev_present_ant: npt.NDArray[np.float64] | None = None
-
-    start_pose, start_antennas, start_body_yaw = move.evaluate(0.0)
-    if cfg.initial_goto_duration > 0.0:
-        mini.goto_target(
-            head=start_pose,
-            antennas=start_antennas,
-            duration=cfg.initial_goto_duration,
-            body_yaw=start_body_yaw,
-        )
-
-    start_time = time.perf_counter()
-    sample_index = 0
-
-    while True:
-        now = time.perf_counter()
-        elapsed = now - start_time
-        if elapsed >= move.duration:
-            break
-
-        eval_time = min(elapsed, move.duration - 1e-6)
-        target_pose, target_antennas, target_body_yaw = move.evaluate(eval_time)
-
-        mini.set_target(
-            head=target_pose,
-            antennas=target_antennas,
-            body_yaw=target_body_yaw,
-        )
-
-        present_pose = np.asarray(mini.get_current_head_pose(), dtype=float)
-        present_ant = np.asarray(mini.get_present_antenna_joint_positions(), dtype=float)
-
-        timestamps.append(elapsed)
-        goal_poses.append(np.asarray(target_pose, dtype=np.float64))
-        present_poses.append(present_pose)
-        goal_antennas.append(np.asarray(target_antennas, dtype=np.float64))
-        present_antennas.append(present_ant)
-
-        goal_task_vec = _pose_to_task_vector(target_pose, target_antennas)
-        present_task_vec = _pose_to_task_vector(present_pose, present_ant)
-        goal_task.append(goal_task_vec)
-        present_task.append(present_task_vec)
-
-        if _is_new_update(
-            present_pose,
-            present_ant,
-            prev_present_pose,
-            prev_present_ant,
-            position_tol=cfg.position_update_tol_m,
-            orientation_tol=cfg.orientation_update_tol_rad,
-            antenna_tol=cfg.antenna_update_tol_rad,
-        ):
-            update_timestamps.append(elapsed)
-        prev_present_pose = present_pose
-        prev_present_ant = present_ant
-
-        sample_index += 1
-        target_next = start_time + sample_index * sample_period
-        sleep_duration = target_next - time.perf_counter()
-        if sleep_duration > 0.0:
-            time.sleep(sleep_duration)
-
-    timestamps_arr = np.asarray(timestamps, dtype=np.float64)
-    goal_pose_arr = np.asarray(goal_poses, dtype=np.float64)
-    present_pose_arr = np.asarray(present_poses, dtype=np.float64)
-    goal_ant_arr = np.asarray(goal_antennas, dtype=np.float64)
-    present_ant_arr = np.asarray(present_antennas, dtype=np.float64)
-    goal_task_arr = np.asarray(goal_task, dtype=np.float64)
-    present_task_arr = np.asarray(present_task, dtype=np.float64)
-    update_arr = np.asarray(update_timestamps, dtype=np.float64)
-
-    metrics = _compute_metrics(goal_task_arr, present_task_arr, timestamps_arr, update_arr)
-
-    return DanceMeasurementResult(
-        move_name=move_name,
-        config=cfg,
-        mode=mode,
-        timestamps_s=timestamps_arr,
-        goal_pose_matrices=goal_pose_arr,
-        present_pose_matrices=present_pose_arr,
-        goal_antennas_rad=goal_ant_arr,
-        present_antennas_rad=present_ant_arr,
-        goal_task_space=goal_task_arr,
-        present_task_space=present_task_arr,
-        metrics=metrics,
-        update_timestamps_s=update_arr,
-    )
 
 
 def reference_to_npz_payload(
