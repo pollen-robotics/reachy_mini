@@ -437,7 +437,6 @@ class DaemonStatus:
     state: DaemonState
     wireless_version: bool
     simulation_enabled: Optional[bool]
-    wireless_version: Optional[bool]
     backend_status: Optional[RobotBackendStatus | MujocoBackendStatus]
     error: Optional[str] = None
     wlan_ip: Optional[str] = None
