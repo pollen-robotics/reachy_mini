@@ -83,25 +83,12 @@ class GstWebRTCClient(CameraBase, AudioBase):
     def _webrtcsrc_pad_added_cb(self, webrtcsrc: Gst.Element, pad: Gst.Pad) -> None:
         self._configure_webrtcbin(webrtcsrc)
         if pad.get_name().startswith("video"):
-            # the pipeline should be adapted to the app needs
-
-            """
-            self._logger.warning("Ignoring video pad")
-            sink = Gst.ElementFactory.make("fakesink")
-            # sink = Gst.ElementFactory.make("fpsdisplaysink")            
-            assert sink is not None
-            self.pipeline.add(sink)
-            pad.link(sink.get_static_pad("sink"))  # type: ignore[arg-type]
-            sink.sync_state_with_parent()
-            """
-
             queue = Gst.ElementFactory.make("queue")
 
             videoconvert = Gst.ElementFactory.make("videoconvert")
             videoscale = Gst.ElementFactory.make("videoscale")
             videorate = Gst.ElementFactory.make("videorate")
 
-            sink = self._appsink_video
             self.pipeline.add(queue)
             self.pipeline.add(videoconvert)
             self.pipeline.add(videoscale)
@@ -111,13 +98,13 @@ class GstWebRTCClient(CameraBase, AudioBase):
             queue.link(videoconvert)
             videoconvert.link(videoscale)
             videoscale.link(videorate)
-            videorate.link(sink)
+            videorate.link(self._appsink_video)
 
             queue.sync_state_with_parent()
             videoconvert.sync_state_with_parent()
             videoscale.sync_state_with_parent()
             videorate.sync_state_with_parent()
-            sink.sync_state_with_parent()
+            self._appsink_video.sync_state_with_parent()
 
         elif pad.get_name().startswith("audio"):
             pad.link(self._appsink_audio.get_static_pad("sink"))
