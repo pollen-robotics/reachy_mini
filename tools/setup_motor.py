@@ -111,61 +111,64 @@ def setup_motor(
 
     # Make sure the torque is disabled to be able to write EEPROM
     disable_torque(serial_port, from_id, from_baudrate)
+    try:
+        if from_baudrate != target_baudrate:
+            change_baudrate(
+                serial_port,
+                id=from_id,
+                base_baudrate=from_baudrate,
+                target_baudrate=target_baudrate,
+            )
+            time.sleep(MOTOR_SETUP_DELAY)
 
-    if from_baudrate != target_baudrate:
-        change_baudrate(
-            serial_port,
-            id=from_id,
-            base_baudrate=from_baudrate,
-            target_baudrate=target_baudrate,
-        )
-        time.sleep(MOTOR_SETUP_DELAY)
+        if from_id != motor_config.id:
+            change_id(
+                serial_port,
+                current_id=from_id,
+                new_id=motor_config.id,
+                baudrate=target_baudrate,
+            )
+            time.sleep(MOTOR_SETUP_DELAY)
 
-    if from_id != motor_config.id:
-        change_id(
+        change_offset(
             serial_port,
-            current_id=from_id,
-            new_id=motor_config.id,
+            id=motor_config.id,
+            offset=motor_config.offset,
             baudrate=target_baudrate,
         )
+
         time.sleep(MOTOR_SETUP_DELAY)
 
-    change_offset(
-        serial_port,
-        id=motor_config.id,
-        offset=motor_config.offset,
-        baudrate=target_baudrate,
-    )
+        change_angle_limits(
+            serial_port,
+            id=motor_config.id,
+            angle_limit_min=motor_config.angle_limit_min,
+            angle_limit_max=motor_config.angle_limit_max,
+            baudrate=target_baudrate,
+        )
 
-    time.sleep(MOTOR_SETUP_DELAY)
+        time.sleep(MOTOR_SETUP_DELAY)
 
-    change_angle_limits(
-        serial_port,
-        id=motor_config.id,
-        angle_limit_min=motor_config.angle_limit_min,
-        angle_limit_max=motor_config.angle_limit_max,
-        baudrate=target_baudrate,
-    )
+        change_shutdown_error(
+            serial_port,
+            id=motor_config.id,
+            baudrate=target_baudrate,
+            shutdown_error=motor_config.shutdown_error,
+        )
 
-    time.sleep(MOTOR_SETUP_DELAY)
+        time.sleep(MOTOR_SETUP_DELAY)
 
-    change_shutdown_error(
-        serial_port,
-        id=motor_config.id,
-        baudrate=target_baudrate,
-        shutdown_error=motor_config.shutdown_error,
-    )
+        change_return_delay_time(
+            serial_port,
+            id=motor_config.id,
+            return_delay_time=motor_config.return_delay_time,
+            baudrate=target_baudrate,
+        )
 
-    time.sleep(MOTOR_SETUP_DELAY)
-
-    change_return_delay_time(
-        serial_port,
-        id=motor_config.id,
-        return_delay_time=motor_config.return_delay_time,
-        baudrate=target_baudrate,
-    )
-
-    time.sleep(MOTOR_SETUP_DELAY)
+        time.sleep(MOTOR_SETUP_DELAY)
+    except Exception as e:
+        print(f"Error while setting up motor ID {from_id}: {e}")
+        raise e
 
 
 def lookup_for_motor(
