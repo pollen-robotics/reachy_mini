@@ -44,7 +44,6 @@ class Daemon:
             state=DaemonState.NOT_INITIALIZED,
             wireless_version=wireless_version,
             simulation_enabled=None,
-            wireless_version=wireless_version,
             backend_status=None,
             error=None,
             wlan_ip=None,
