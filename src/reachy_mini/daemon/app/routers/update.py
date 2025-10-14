@@ -18,30 +18,30 @@ busy_lock = threading.Lock()
 
 
 @router.get("/available")
-def available() -> dict[str, dict[str, bool]]:
+def available(pre_release: bool = False) -> dict[str, dict[str, bool]]:
     """Check if an update is available for Reachy Mini Wireless."""
     if busy_lock.locked():
         raise HTTPException(status_code=400, detail="Update is in progress")
 
     return {
         "update": {
-            "reachy_mini": is_update_available("reachy_mini"),
+            "reachy_mini": is_update_available("reachy_mini", pre_release),
         }
     }
 
 
 @router.post("/start")
-def start_update() -> dict[str, str]:
+def start_update(pre_release: bool = False) -> dict[str, str]:
     """Start the update process for Reachy Mini Wireless version."""
     if busy_lock.locked():
         raise HTTPException(status_code=400, detail="Update already in progress")
 
-    if not is_update_available("reachy_mini"):
+    if not is_update_available("reachy_mini", pre_release):
         raise HTTPException(status_code=400, detail="No update available")
 
     async def update_wrapper(logger: logging.Logger) -> None:
         with busy_lock:
-            await update_reachy_mini(logger)
+            await update_reachy_mini(pre_release, logger)
 
     job_uuid = bg_job_register.run_command(
         "update_reachy_mini",
