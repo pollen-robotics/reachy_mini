@@ -56,11 +56,16 @@ class Args:
     fastapi_host: str = "0.0.0.0"
     fastapi_port: int = 8000
 
-    localhost_only: bool = True
+    localhost_only: bool | None = None
 
 
 def create_app(args: Args) -> FastAPI:
     """Create and configure the FastAPI application."""
+    localhost_only = (
+        args.localhost_only
+        if args.localhost_only is not None
+        else (False if args.wireless_version else True)
+    )
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
@@ -76,7 +81,7 @@ def create_app(args: Args) -> FastAPI:
                 kinematics_engine=args.kinematics_engine,
                 check_collision=args.check_collision,
                 wake_up_on_start=args.wake_up_on_start,
-                localhost_only=args.localhost_only,
+                localhost_only=localhost_only,
             )
         yield
         await app.state.app_manager.close()
