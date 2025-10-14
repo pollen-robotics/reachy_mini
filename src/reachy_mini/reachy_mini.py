@@ -159,7 +159,7 @@ class ReachyMini:
         antennas: Optional[
             Union[npt.NDArray[np.float64], List[float]]
         ] = None,  # [right_angle, left_angle] (in rads)
-        body_yaw: float = 0.0,  # Body yaw angle in radians
+        body_yaw: Optional[float] = None,  # Body yaw angle in radians
     ) -> None:
         """Set the target pose of the head and/or the target position of the antennas.
 
@@ -172,8 +172,10 @@ class ReachyMini:
             ValueError: If neither head nor antennas are provided, or if the shape of head is not (4, 4), or if antennas is not a 1D array with two elements.
 
         """
-        if head is None and antennas is None:
-            raise ValueError("At least one of head or antennas must be provided.")
+        if head is None and antennas is None and body_yaw is None:
+            raise ValueError(
+                "At least one of head, antennas or body_yaw must be provided."
+            )
 
         if head is not None and not head.shape == (4, 4):
             raise ValueError(f"Head pose must be a 4x4 matrix, got shape {head.shape}.")
@@ -183,22 +185,33 @@ class ReachyMini:
                 "Antennas must be a list or 1D np array with two elements."
             )
 
-        if antennas is not None:
-            self._set_joint_positions(
-                antennas_joint_positions=list(antennas),
-            )
+        if body_yaw is not None and not isinstance(body_yaw, (int, float)):
+            raise ValueError("body_yaw must be a float.")
+
         if head is not None:
-            self.set_target_head_pose(head, body_yaw)
+            self.set_target_head_pose(head)
+
+        if antennas is not None:
+            self.set_target_antenna_joint_positions(list(antennas))
+            # self._set_joint_positions(
+            #     antennas_joint_positions=list(antennas),
+            # )
+
+        if body_yaw is not None:
+            self.set_target_body_yaw(body_yaw)
+
         self._last_head_pose = head
 
         record: Dict[str, float | List[float] | List[List[float]]] = {
             "time": time.time(),
-            "body_yaw": body_yaw,
+            "body_yaw": body_yaw if body_yaw is not None else 0.0,
         }
         if head is not None:
             record["head"] = head.tolist()
         if antennas is not None:
             record["antennas"] = list(antennas)
+        if body_yaw is not None:
+            record["body_yaw"] = body_yaw
         self._set_record_data(record)
 
     def goto_target(
@@ -224,8 +237,10 @@ class ReachyMini:
             ValueError: If neither head nor antennas are provided, or if duration is not positive.
 
         """
-        if head is None and antennas is None:
-            raise ValueError("At least one of head or antennas must be provided.")
+        if head is None and antennas is None and body_yaw is None:
+            raise ValueError(
+                "At least one of head, antennas or body_yaw must be provided."
+            )
 
         if duration <= 0.0:
             raise ValueError(
@@ -548,11 +563,7 @@ class ReachyMini:
 
         self.client.send_command(json.dumps(cmd))
 
-    def set_target_head_pose(
-        self,
-        pose: npt.NDArray[np.float64],
-        body_yaw: float = 0.0,
-    ) -> None:
+    def set_target_head_pose(self, pose: npt.NDArray[np.float64]) -> None:
         """Set the head pose to a specific 4x4 matrix.
 
         Args:
@@ -573,13 +584,21 @@ class ReachyMini:
         else:
             raise ValueError("Pose must be provided as a 4x4 matrix.")
 
-        cmd["body_yaw"] = body_yaw
-
         self.client.send_command(json.dumps(cmd))
 
     def set_target_antenna_joint_positions(self, antennas: List[float]) -> None:
         """Set the target joint positions of the antennas."""
         cmd = {"antennas_joint_positions": antennas}
+        self.client.send_command(json.dumps(cmd))
+
+    def set_target_body_yaw(self, body_yaw: float) -> None:
+        """Set the target body yaw.
+
+        Args:
+            body_yaw (float): The yaw angle of the body in radians.
+
+        """
+        cmd = {"body_yaw": body_yaw}
         self.client.send_command(json.dumps(cmd))
 
     def start_recording(self) -> None:
@@ -675,10 +694,9 @@ class ReachyMini:
 
             head, antennas, body_yaw = move.evaluate(t)
             if head is not None:
-                self.set_target_head_pose(
-                    head,
-                    body_yaw=body_yaw if body_yaw is not None else 0.0,
-                )
+                self.set_target_head_pose(head)
+            if body_yaw is not None:
+                self.set_target_body_yaw(body_yaw)
             if antennas is not None:
                 self.set_target_antenna_joint_positions(list(antennas))
 
