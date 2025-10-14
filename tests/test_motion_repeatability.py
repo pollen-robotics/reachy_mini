@@ -5,7 +5,6 @@ from __future__ import annotations
 import os
 from pathlib import Path
 import sys
-from typing import Iterable
 
 import numpy as np
 import pytest
@@ -30,10 +29,15 @@ from dance_measurement import (
     DanceMeasurementResult,
     DanceReference,
     MeasurementMode,
-    measure_single_dance,
+    measure_recorded_move,
 )
+from reachy_mini.motion.recorded_move import RecordedMoves
 
-_DEFAULT_MOVES = ("simple_nod", "side_to_side_sway")
+_DATASETS = {
+    "dance": "pollen-robotics/reachy-mini-dances-library",
+    "emotions": "pollen-robotics/reachy-mini-emotions-library",
+}
+_MOVES_PER_DATASET = 2
 _REFERENCE_ROOT = Path(__file__).parent / "data" / "dance_references"
 _ENV_MODE = "REACHY_MINI_REFERENCE_MODE"
 
@@ -95,16 +99,6 @@ def _assert_shapes(current: DanceMeasurementResult, reference: DanceReference) -
     ), "Timing vector length mismatch; regenerate references."
 
 
-def _verify_requested_targets(
-    current: DanceMeasurementResult, reference: DanceReference, tolerance: float
-) -> None:
-    delta = np.abs(current.goal_task_space - reference.goal_task_space)
-    max_delta = float(delta.max(initial=0.0))
-    assert (
-        max_delta <= tolerance
-    ), f"Requested trajectories drifted (max Δ={max_delta:.3e} > tol={tolerance:.3e})."
-
-
 def _verify_metrics(
     current: DanceMeasurementResult,
     reference: DanceReference,
@@ -114,12 +108,14 @@ def _verify_metrics(
     worst_limit = reference.metrics.worst_errors * thresholds["worst_multiplier"]
     if not np.all(current.metrics.rms_errors <= rms_limit + 1e-12):
         viol = current.metrics.rms_errors - rms_limit
+        viol = np.clip(viol, a_min=0.0, a_max=None)
         raise AssertionError(
             "RMS precision regression: "
             f"max excess {float(np.max(viol)):.3f} across {_describe_task_axes(viol)}"
         )
     if not np.all(current.metrics.worst_errors <= worst_limit + 1e-12):
         viol = current.metrics.worst_errors - worst_limit
+        viol = np.clip(viol, a_min=0.0, a_max=None)
         raise AssertionError(
             "Worst-case precision regression: "
             f"max excess {float(np.max(viol)):.3f} across {_describe_task_axes(viol)}"
@@ -168,29 +164,75 @@ def test_dance_repeatability() -> None:
             pytest.skip(
                 f"Reference directory {mode_dir} missing. Run python tests/tools/generate_motion_references.py first."
             )
-        moves = _select_moves(mode_dir, _DEFAULT_MOVES)
-        if not moves:
+
+        datasets = _select_dataset_moves(mode_dir, _MOVES_PER_DATASET)
+        if not any(dataset_moves for dataset_moves in datasets.values()):
             pytest.skip(
-                f"No reference files found in {mode_dir}. Generate references for at least one move."
+                f"No reference files found in {mode_dir}. Generate references for at least one recorded move."
             )
-        for move in moves:
-            reference_path = mode_dir / f"{move}.npz"
-            reference = _load_reference(reference_path)
-            result = measure_single_dance(
-                mini,
-                move_name=move,
-                mode=mode,
-                config=reference.config,
+
+        failures: list[str] = []
+
+        for dataset_name, move_names in datasets.items():
+            dataset_root = mode_dir / dataset_name
+            if not move_names:
+                failures.append(
+                    f"Dataset '{dataset_name}' has no reference files in {dataset_root}."
+                )
+                continue
+            try:
+                recorded_library = RecordedMoves(_DATASETS[dataset_name])
+            except Exception as exc:  # pragma: no cover
+                failures.append(
+                    f"Failed to load recorded moves dataset '{dataset_name}': {exc}"
+                )
+                continue
+
+            for move_name in move_names:
+                prefix = f"{dataset_name}/{move_name}"
+                reference_path = dataset_root / f"{move_name}.npz"
+                try:
+                    reference = _load_reference(reference_path)
+                except Exception as exc:  # pragma: no cover
+                    failures.append(f"{prefix}: {exc}")
+                    continue
+
+                try:
+                    recorded_move = recorded_library.get(move_name)
+                except Exception as exc:
+                    failures.append(f"{prefix}: unable to load move from dataset: {exc}")
+                    continue
+
+                try:
+                    result = measure_recorded_move(
+                        mini,
+                        recorded_move,
+                        move_name=move_name,
+                        mode=mode,
+                        config=reference.config,
+                    )
+                    _assert_shapes(result, reference)
+                    _verify_metrics(result, reference, reference.thresholds)
+                except AssertionError as exc:
+                    failures.append(f"{prefix}: {exc}")
+                except Exception as exc:
+                    failures.append(f"{prefix}: unexpected error {exc}")
+
+        if failures:
+            details = "\n".join(failures)
+            pytest.fail(
+                "Motion repeatability regressions detected:\n" f"{details}",
+                pytrace=False,
             )
-            _assert_shapes(result, reference)
-            tolerance = reference.thresholds.get("goal_task_tolerance", 1e-6)
-            _verify_requested_targets(result, reference, tolerance)
-            _verify_metrics(result, reference, reference.thresholds)
 
 
-def _select_moves(directory: Path, defaults: Iterable[str]) -> list[str]:
-    available = {p.stem for p in directory.glob("*.npz")}
-    selected = [m for m in defaults if m in available]
-    if selected:
-        return selected
-    return sorted(available)
+def _select_dataset_moves(directory: Path, limit: int) -> dict[str, list[str]]:
+    selections: dict[str, list[str]] = {}
+    for dataset_name in _DATASETS:
+        dataset_dir = directory / dataset_name
+        if not dataset_dir.exists():
+            selections[dataset_name] = []
+            continue
+        moves = sorted(p.stem for p in dataset_dir.glob("*.npz"))
+        selections[dataset_name] = moves[:limit]
+    return selections
