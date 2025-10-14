@@ -99,12 +99,6 @@ def create_app(args: Args) -> FastAPI:
         allow_headers=["*"],
     )
 
-    app.mount(
-        "/assets",
-        StaticFiles(directory=os.path.join(os.path.dirname(__file__), "dashboard")),
-        name="assets",
-    )
-
     router = APIRouter(prefix="/api")
     router.include_router(apps.router)
     router.include_router(daemon.router)
