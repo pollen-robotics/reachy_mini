@@ -7,5 +7,5 @@ from .utils import call
 
 async def update_reachy_mini(logger: logging.Logger) -> None:
     """Perform a software update by upgrading the reachy_mini package and restarting the daemon."""
-    await call(["pip", "install", "--upgrade", "reachy_mini"], logger)
+    await call(["pip", "install", "--upgrade", "reachy_mini[wireless-version]"], logger)
     await call(["sudo", "systemctl", "restart", "reachy-mini-daemon"], logger)
