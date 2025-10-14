@@ -110,9 +110,10 @@ class ZenohServer(AbstractServer):
                 )
             if "head_pose" in command:
                 self.backend.set_target_head_pose(
-                    np.array(command["head_pose"]).reshape(4, 4),
-                    command["body_yaw"],
+                    np.array(command["head_pose"]).reshape(4, 4)
                 )
+            if "body_yaw" in command:
+                self.backend.set_target_body_yaw(command["body_yaw"])
             if "antennas_joint_positions" in command:
                 self.backend.set_target_antenna_joint_positions(
                     np.array(command["antennas_joint_positions"]),
