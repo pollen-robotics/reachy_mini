@@ -200,12 +200,14 @@ class ReachyMini:
 
         record: Dict[str, float | List[float] | List[List[float]]] = {
             "time": time.time(),
-            "body_yaw": body_yaw,
+            "body_yaw": body_yaw if body_yaw is not None else 0.0,
         }
         if head is not None:
             record["head"] = head.tolist()
         if antennas is not None:
             record["antennas"] = list(antennas)
+        if body_yaw is not None:
+            record["body_yaw"] = body_yaw
         self._set_record_data(record)
 
     def goto_target(
