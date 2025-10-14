@@ -3,6 +3,7 @@
 This module provides endpoints to check for updates, start updates, and monitor update status.
 """
 
+import logging
 import threading
 
 from fastapi import APIRouter, HTTPException, WebSocket
@@ -38,7 +39,7 @@ def start_update() -> dict[str, str]:
     if not is_update_available("reachy_mini"):
         raise HTTPException(status_code=400, detail="No update available")
 
-    async def update_wrapper(logger) -> None:
+    async def update_wrapper(logger: logging.Logger) -> None:
         with busy_lock:
             await update_reachy_mini(logger)
 

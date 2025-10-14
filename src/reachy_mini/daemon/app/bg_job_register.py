@@ -6,6 +6,7 @@ import threading
 import uuid
 from dataclasses import dataclass
 from enum import Enum
+from typing import Any, Awaitable, Callable
 
 from fastapi import WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
@@ -42,8 +43,8 @@ register: dict[str, JobHandler] = {}
 
 def run_command(
     command: str,
-    coro_func,
-    *args,
+    coro_func: Callable[..., Awaitable[None]],
+    *args: Any,
 ) -> str:
     """Start a background job, with a custom logger and return its job_id."""
     job_uuid = str(uuid.uuid4())
