@@ -246,6 +246,7 @@ class Rerun:
             "with_antenna_positions": "true",
             "with_target_antenna_positions": "false",
             "use_pose_matrix": "false",
+            "with_passive_joints": "true",
         }
 
         while not self.running.is_set():

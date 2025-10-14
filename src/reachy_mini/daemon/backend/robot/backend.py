@@ -457,6 +457,11 @@ class RobotBackend(Backend):
         else:
             raise ValueError(f"Unknown motor control mode: {mode}")
 
+    def get_present_passive_joint_positions(self):
+        if self.kinematics_engine != "Placo":
+            return None
+        # ToDO
+
 
 @dataclass
 class RobotBackendStatus:
