@@ -171,9 +171,10 @@ class Daemon:
             self.logger.warning("Daemon is already stopped.")
             return self._status.state
 
-        assert self.backend is not None, (
-            "Backend should be initialized before stopping."
-        )
+        if self.backend is None:
+            self.logger.info("Daemon backend is not initialized.")
+            self._status.state = DaemonState.STOPPED
+            return self._status.state
 
         try:
             if self._status.state in (DaemonState.STOPPING, DaemonState.ERROR):
@@ -184,10 +185,6 @@ class Daemon:
             self.backend.is_shutting_down = True
             self._thread_event_publish_status.set()
             self.server.stop()
-
-            if not hasattr(self, "backend"):
-                self._status.state = DaemonState.STOPPED
-                return self._status.state
 
             if goto_sleep_on_stop:
                 try:
