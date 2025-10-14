@@ -231,8 +231,8 @@ class ReachyMini:
             ValueError: If neither head nor antennas are provided, or if duration is not positive.
 
         """
-        if head is None and antennas is None:
-            raise ValueError("At least one of head or antennas must be provided.")
+        if head is None and antennas is None and body_yaw is None:
+            raise ValueError("At least one of head, antennas or body_yaw must be provided.")
 
         if duration <= 0.0:
             raise ValueError(
