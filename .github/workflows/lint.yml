@@ -24,5 +24,4 @@ jobs:
           pip install .[dev]
       - name : Lint with mypy
         run : |
-          mypy --install-types
-          mypy
+          mypy --install-types --non-interactive
