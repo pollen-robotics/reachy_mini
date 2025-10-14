@@ -2,10 +2,14 @@
 
 import logging
 
-from .utils import call
+from .utils import call_logger_wrapper
 
 
 async def update_reachy_mini(logger: logging.Logger) -> None:
     """Perform a software update by upgrading the reachy_mini package and restarting the daemon."""
-    await call(["pip", "install", "--upgrade", "reachy_mini[wireless-version]"], logger)
-    await call(["sudo", "systemctl", "restart", "reachy-mini-daemon"], logger)
+    await call_logger_wrapper(
+        ["pip", "install", "--upgrade", "reachy_mini[wireless-version]"], logger
+    )
+    await call_logger_wrapper(
+        ["sudo", "systemctl", "restart", "reachy-mini-daemon"], logger
+    )

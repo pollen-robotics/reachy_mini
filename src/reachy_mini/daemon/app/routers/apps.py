@@ -2,7 +2,6 @@
 
 from fastapi import (
     APIRouter,
-    BackgroundTasks,
     Depends,
     HTTPException,
     WebSocket,
@@ -10,7 +9,7 @@ from fastapi import (
 
 from reachy_mini.apps import AppInfo, SourceKind
 from reachy_mini.apps.manager import AppManager, AppStatus
-from reachy_mini.daemon.app import background_tasks_wrapper
+from reachy_mini.daemon.app import bg_job_register
 from reachy_mini.daemon.app.dependencies import get_app_manager
 
 router = APIRouter(prefix="/apps")
@@ -36,12 +35,11 @@ async def list_all_available_apps(
 @router.post("/install")
 async def install_app(
     app_info: AppInfo,
-    background_tasks: BackgroundTasks,
     app_manager: "AppManager" = Depends(get_app_manager),
 ) -> dict[str, str]:
     """Install a new app by its info (background, returns job_id)."""
-    job_id = background_tasks_wrapper.run_command(
-        background_tasks, "install", app_manager.install_new_app, app_info
+    job_id = bg_job_register.run_command(
+        "install", app_manager.install_new_app, app_info
     )
     return {"job_id": job_id}
 
@@ -49,21 +47,18 @@ async def install_app(
 @router.post("/remove/{app_name}")
 async def remove_app(
     app_name: str,
-    background_tasks: BackgroundTasks,
     app_manager: "AppManager" = Depends(get_app_manager),
 ) -> dict[str, str]:
     """Remove an installed app by its name (background, returns job_id)."""
-    job_id = background_tasks_wrapper.run_command(
-        background_tasks, "remove", app_manager.remove_app, app_name
-    )
+    job_id = bg_job_register.run_command("remove", app_manager.remove_app, app_name)
     return {"job_id": job_id}
 
 
 @router.get("/job-status/{job_id}")
-async def job_status(job_id: str) -> background_tasks_wrapper.JobInfo:
+async def job_status(job_id: str) -> bg_job_register.JobInfo:
     """Get status/logs for a job."""
     try:
-        return background_tasks_wrapper.get_info(job_id)
+        return bg_job_register.get_info(job_id)
     except Exception as e:
         raise HTTPException(status_code=404, detail=str(e))
 
@@ -73,7 +68,7 @@ async def job_status(job_id: str) -> background_tasks_wrapper.JobInfo:
 async def ws_apps_manager(websocket: WebSocket, job_id: str) -> None:
     """WebSocket route to stream live job status/logs for a job, sending updates as soon as new logs are available."""
     await websocket.accept()
-    await background_tasks_wrapper.ws_poll_info(websocket, job_id)
+    await bg_job_register.ws_poll_info(websocket, job_id)
     await websocket.close()
 
 

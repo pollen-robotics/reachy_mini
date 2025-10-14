@@ -7,7 +7,7 @@ import uuid
 from dataclasses import dataclass
 from enum import Enum
 
-from fastapi import BackgroundTasks, WebSocket, WebSocketDisconnect
+from fastapi import WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
 
@@ -41,7 +41,6 @@ register: dict[str, JobHandler] = {}
 
 
 def run_command(
-    background_tasks: BackgroundTasks,
     command: str,
     coro_func,
     *args,
@@ -82,7 +81,9 @@ def run_command(
             jh.info.status = JobStatus.FAILED
             logger.error(f"Job '{command}' failed with error: {e}")
 
-    background_tasks.add_task(wrapper)
+    t = threading.Thread(target=lambda: asyncio.run(wrapper()))
+    t.start()
+    # background_tasks.add_task(wrapper)
     start_evt.wait()
 
     return job_uuid
@@ -110,6 +111,7 @@ async def ws_poll_info(websocket: WebSocket, job_uuid: str) -> None:
 
     ws_uuid = str(uuid.uuid4())
     last_log_len = 0
+
     try:
         job.new_log_evt[ws_uuid] = asyncio.Event()
 
@@ -123,18 +125,17 @@ async def ws_poll_info(websocket: WebSocket, job_uuid: str) -> None:
                 for log_entry in new_logs:
                     await websocket.send_text(log_entry)
                 last_log_len = len(job.info.logs)
-                await websocket.send_json(
-                    {
-                        "command": job.info.command,
-                        "status": job.info.status,
-                        "logs": new_logs,
-                    }
+
+                await websocket.send_text(
+                    JobInfo(
+                        command=job.info.command,
+                        status=job.info.status,
+                        logs=new_logs,
+                    ).model_dump_json()
                 )
-                if job.info.status in ("done", "failed"):
-                    await websocket.close()
+                if job.info.status in (JobStatus.DONE, JobStatus.FAILED):
                     break
     except WebSocketDisconnect:
         pass
     finally:
         job.new_log_evt.pop(ws_uuid, None)
-        await websocket.close()
