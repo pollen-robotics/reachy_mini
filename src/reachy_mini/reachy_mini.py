@@ -232,7 +232,9 @@ class ReachyMini:
 
         """
         if head is None and antennas is None and body_yaw is None:
-            raise ValueError("At least one of head, antennas or body_yaw must be provided.")
+            raise ValueError(
+                "At least one of head, antennas or body_yaw must be provided."
+            )
 
         if duration <= 0.0:
             raise ValueError(
@@ -686,10 +688,9 @@ class ReachyMini:
 
             head, antennas, body_yaw = move.evaluate(t)
             if head is not None:
-                self.set_target_head_pose(
-                    head,
-                    body_yaw=body_yaw if body_yaw is not None else 0.0,
-                )
+                self.set_target_head_pose(head)
+            if body_yaw is not None:
+                self.set_target_body_yaw(body_yaw)
             if antennas is not None:
                 self.set_target_antenna_joint_positions(list(antennas))
 
