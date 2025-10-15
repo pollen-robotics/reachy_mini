@@ -77,7 +77,7 @@ def parse_yaml_config(filename: str) -> ReachyMiniConfig:
 
 FACTORY_DEFAULT_ID = 1
 FACTORY_DEFAULT_BAUDRATE = 57600
-SERIAL_TIMEOUT = 0.5  # seconds
+SERIAL_TIMEOUT = 0.01  # seconds
 MOTOR_SETUP_DELAY = 0.1  # seconds
 
 XL_BAUDRATE_CONV_TABLE = {
@@ -111,71 +111,80 @@ def setup_motor(
 
     # Make sure the torque is disabled to be able to write EEPROM
     disable_torque(serial_port, from_id, from_baudrate)
+    try:
+        if from_baudrate != target_baudrate:
+            change_baudrate(
+                serial_port,
+                id=from_id,
+                base_baudrate=from_baudrate,
+                target_baudrate=target_baudrate,
+            )
+            time.sleep(MOTOR_SETUP_DELAY)
 
-    if from_baudrate != target_baudrate:
-        change_baudrate(
-            serial_port,
-            id=from_id,
-            base_baudrate=from_baudrate,
-            target_baudrate=target_baudrate,
-        )
-        time.sleep(MOTOR_SETUP_DELAY)
+        if from_id != motor_config.id:
+            change_id(
+                serial_port,
+                current_id=from_id,
+                new_id=motor_config.id,
+                baudrate=target_baudrate,
+            )
+            time.sleep(MOTOR_SETUP_DELAY)
 
-    if from_id != motor_config.id:
-        change_id(
+        change_offset(
             serial_port,
-            current_id=from_id,
-            new_id=motor_config.id,
+            id=motor_config.id,
+            offset=motor_config.offset,
             baudrate=target_baudrate,
         )
+
         time.sleep(MOTOR_SETUP_DELAY)
 
-    change_offset(
-        serial_port,
-        id=motor_config.id,
-        offset=motor_config.offset,
-        baudrate=target_baudrate,
-    )
+        change_angle_limits(
+            serial_port,
+            id=motor_config.id,
+            angle_limit_min=motor_config.angle_limit_min,
+            angle_limit_max=motor_config.angle_limit_max,
+            baudrate=target_baudrate,
+        )
 
-    time.sleep(MOTOR_SETUP_DELAY)
+        time.sleep(MOTOR_SETUP_DELAY)
 
-    change_angle_limits(
-        serial_port,
-        id=motor_config.id,
-        angle_limit_min=motor_config.angle_limit_min,
-        angle_limit_max=motor_config.angle_limit_max,
-        baudrate=target_baudrate,
-    )
+        change_shutdown_error(
+            serial_port,
+            id=motor_config.id,
+            baudrate=target_baudrate,
+            shutdown_error=motor_config.shutdown_error,
+        )
 
-    time.sleep(MOTOR_SETUP_DELAY)
+        time.sleep(MOTOR_SETUP_DELAY)
 
-    change_shutdown_error(
-        serial_port,
-        id=motor_config.id,
-        baudrate=target_baudrate,
-        shutdown_error=motor_config.shutdown_error,
-    )
+        change_return_delay_time(
+            serial_port,
+            id=motor_config.id,
+            return_delay_time=motor_config.return_delay_time,
+            baudrate=target_baudrate,
+        )
 
-    time.sleep(MOTOR_SETUP_DELAY)
-
-    change_return_delay_time(
-        serial_port,
-        id=motor_config.id,
-        return_delay_time=motor_config.return_delay_time,
-        baudrate=target_baudrate,
-    )
-
-    time.sleep(MOTOR_SETUP_DELAY)
+        time.sleep(MOTOR_SETUP_DELAY)
+    except Exception as e:
+        print(f"Error while setting up motor ID {from_id}: {e}")
+        raise e
 
 
-def lookup_for_motor(serial_port: str, id: int, baudrate: int) -> bool:
+def lookup_for_motor(
+    serial_port: str, id: int, baudrate: int, silent: bool = False
+) -> bool:
     """Check if a motor with the given ID is reachable on the specified serial port."""
-    print(
-        f"Looking for motor with ID {id} on port {serial_port}...", end="", flush=True
-    )
+    if not silent:
+        print(
+            f"Looking for motor with ID {id} on port {serial_port}...",
+            end="",
+            flush=True,
+        )
     c = Xl330PyController(serial_port, baudrate=baudrate, timeout=SERIAL_TIMEOUT)
     ret = c.ping(id)
-    print(f"{'✅' if ret else '❌'}")
+    if not silent:
+        print(f"{'✅' if ret else '❌'}")
     return ret
 
 
@@ -260,6 +269,35 @@ def change_return_delay_time(
     print("✅")
 
 
+def light_led_up(serial_port: str, id: int, baudrate: int):
+    """Light the LED of the motor with the given ID on the specified serial port."""
+    c = Xl330PyController(serial_port, baudrate=baudrate, timeout=SERIAL_TIMEOUT)
+
+    trials = 0
+
+    while trials < 3:
+        try:
+            c.write_led(id, 1)
+            break
+        except RuntimeError as e:
+            print(f"Error while turning on LED for motor ID {id}: {e}")
+        trials += 1
+
+
+def light_led_down(serial_port: str, id: int, baudrate: int):
+    """Light the LED of the motor with the given ID on the specified serial port."""
+    c = Xl330PyController(serial_port, baudrate=baudrate, timeout=SERIAL_TIMEOUT)
+    trials = 0
+
+    while trials < 3:
+        try:
+            c.write_led(id, 0)
+            break
+        except RuntimeError as e:
+            print(f"Error while turning off LED for motor ID {id}: {e}")
+        trials += 1
+
+
 def check_configuration(motor_config: MotorConfig, serial_port: str, baudrate: int):
     """Check the configuration of the motor with the given ID on the specified serial port."""
     c = Xl330PyController(serial_port, baudrate=baudrate, timeout=SERIAL_TIMEOUT)
@@ -311,7 +349,50 @@ def check_configuration(motor_config: MotorConfig, serial_port: str, baudrate: i
     print("Configuration is correct ✅!")
 
 
-def main():
+def run(args):
+    """Entry point for the Reachy Mini motor configuration tool."""
+    config = parse_yaml_config(args.config_file)
+
+    if args.motor_name == "all":
+        print("aaaaaa")
+        motors = list(config.motors.keys())
+    else:
+        motors = [args.motor_name]
+
+    for motor_name in motors:
+        motor_config = config.motors[motor_name]
+
+        if args.update_config:
+            args.from_id = motor_config.id
+            args.from_baudrate = config.serial.baudrate
+
+        if not args.check_only:
+            setup_motor(
+                motor_config,
+                args.serialport,
+                from_id=args.from_id,
+                from_baudrate=args.from_baudrate,
+                target_baudrate=config.serial.baudrate,
+            )
+
+        try:
+            check_configuration(
+                motor_config,
+                args.serialport,
+                baudrate=config.serial.baudrate,
+            )
+        except RuntimeError as e:
+            print(f"❌ Configuration check failed for motor '{motor_name}': {e}")
+            return
+
+        light_led_up(
+            args.serialport,
+            motor_config.id,
+            baudrate=config.serial.baudrate,
+        )
+
+
+if __name__ == "__main__":
     """Entry point for the Reachy Mini motor configuration tool."""
     parser = argparse.ArgumentParser(description="Motor Configuration tool")
     parser.add_argument(
@@ -364,36 +445,4 @@ def main():
         help="Update a specific motor (assumes it already has the correct id and baudrate).",
     )
     args = parser.parse_args()
-
-    config = parse_yaml_config(args.config_file)
-
-    if args.motor_name == "all":
-        motors = list(config.motors.keys())
-    else:
-        motors = [args.motor_name]
-
-    for motor_name in motors:
-        motor_config = config.motors[motor_name]
-
-        if args.update_config:
-            args.from_id = motor_config.id
-            args.from_baudrate = config.serial.baudrate
-
-        if not args.check_only:
-            setup_motor(
-                motor_config,
-                args.serialport,
-                from_id=args.from_id,
-                from_baudrate=args.from_baudrate,
-                target_baudrate=config.serial.baudrate,
-            )
-
-        check_configuration(
-            motor_config,
-            args.serialport,
-            baudrate=config.serial.baudrate,
-        )
-
-
-if __name__ == "__main__":
-    main()
+    run(args)
