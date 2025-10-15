@@ -107,12 +107,14 @@ class ZenohClient(AbstractClient):
             print("Waiting for connection with the server...")
 
         self._is_alive = True
+        self._check_alive_evt = threading.Event()
         threading.Thread(target=self.check_alive, daemon=True).start()
 
     def check_alive(self) -> None:
         """Periodically check if the client is still connected to the server."""
         while True:
             self._is_alive = self.is_connected()
+            self._check_alive_evt.set()
             time.sleep(1.0)
 
     def is_connected(self) -> bool:
