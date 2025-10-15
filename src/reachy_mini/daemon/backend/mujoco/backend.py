@@ -199,7 +199,7 @@ class MujocoBackend(Backend):
                 if self.target_head_joint_positions is not None:
                     self.data.ctrl[:7] = self.target_head_joint_positions
                 if self.target_antenna_joint_positions is not None:
-                    self.data.ctrl[-2:] = self.target_antenna_joint_positions
+                    self.data.ctrl[-2:] = -self.target_antenna_joint_positions
 
                 if (
                     self.joint_positions_publisher is not None
@@ -282,7 +282,7 @@ class MujocoBackend(Backend):
         pos: npt.NDArray[np.float64] = self.data.qpos[
             self.joint_qpos_addr[-2:]
         ].flatten()
-        return pos
+        return -pos
 
     def get_motor_control_mode(self) -> MotorControlMode:
         """Get the motor control mode."""
