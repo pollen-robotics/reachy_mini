@@ -10,10 +10,11 @@ import logging
 import time
 from dataclasses import dataclass
 from datetime import timedelta
-from multiprocessing import Event  # It seems to be more accurate than threading.Event
-from typing import Dict, Optional
+from multiprocessing import Event   # It seems to be more accurate than threading.Event
+from typing import Annotated, Any, Dict, Optional
 
 import numpy as np
+import numpy.typing as npt
 from reachy_mini_motor_controller import ReachyMiniPyControlLoop
 
 from ..abstract import Backend, MotorControlMode
@@ -48,7 +49,7 @@ class RobotBackend(Backend):
         self.logger.setLevel(log_level)
 
         self.control_loop_frequency = 50.0  # Hz
-        self.c = ReachyMiniPyControlLoop(
+        self.c: ReachyMiniPyControlLoop | None = ReachyMiniPyControlLoop(
             serialport,
             read_position_loop_period=timedelta(
                 seconds=1.0 / self.control_loop_frequency
@@ -60,7 +61,7 @@ class RobotBackend(Backend):
         self.motor_control_mode = self._infer_control_mode()
         self._torque_enabled = self.motor_control_mode != MotorControlMode.Disabled
         self.logger.info(f"Motor control mode: {self.motor_control_mode}")
-        self.last_alive = None
+        self.last_alive: float | None = None
 
         self._status = RobotBackendStatus(
             motor_control_mode=self.motor_control_mode,
@@ -69,7 +70,7 @@ class RobotBackend(Backend):
             control_loop_stats={},
         )
         self._stats_record_period = 1.0  # seconds
-        self._stats = {
+        self._stats: dict[str, Any] = {
             "timestamps": [],
             "nb_error": 0,
             "record_period": self._stats_record_period,
@@ -80,7 +81,7 @@ class RobotBackend(Backend):
         self.target_antenna_joint_current = None  # Placeholder for antenna joint torque
         self.target_head_joint_current = None  # Placeholder for head joint torque
 
-    def run(self):
+    def run(self) -> None:
         """Run the control loop for the robot backend.
 
         This method continuously updates the motor controller at a specified frequency.
@@ -101,7 +102,7 @@ class RobotBackend(Backend):
         head_positions, _ = self.get_all_joint_positions()
         # make sure to converge fully (a lot of iterations)
         self.current_head_pose = self.head_kinematics.fk(
-            head_positions,
+            np.array(head_positions),
             no_iterations=20,
         )
         assert self.current_head_pose is not None
@@ -124,14 +125,14 @@ class RobotBackend(Backend):
             next_call_event.clear()
             next_call_event.wait(sleep_time)
 
-    def _update(self):
+    def _update(self) -> None:
         assert self.c is not None, "Motor controller not initialized or already closed."
 
         if self._torque_enabled:
             if self._current_head_operation_mode != 0:  # if position control mode
                 if self.target_head_joint_positions is not None:
                     self.c.set_stewart_platform_position(
-                        self.target_head_joint_positions[1:]
+                        self.target_head_joint_positions[1:].tolist()
                     )
                     self.c.set_body_rotation(self.target_head_joint_positions[0])
             else:  # it's in torque control mode
@@ -150,7 +151,9 @@ class RobotBackend(Backend):
 
             if self._current_antennas_operation_mode != 0:  # if position control mode
                 if self.target_antenna_joint_positions is not None:
-                    self.c.set_antennas_positions(self.target_antenna_joint_positions)
+                    self.c.set_antennas_positions(
+                        self.target_antenna_joint_positions.tolist()
+                    )
             # Antenna torque control is not supported with feetech motors
             # else:
             #     if self.target_antenna_joint_current is not None:
@@ -166,7 +169,10 @@ class RobotBackend(Backend):
                 head_positions, antenna_positions = self.get_all_joint_positions()
 
                 # Update the head kinematics model with the current head positions
-                self.update_head_kinematics_model(head_positions, antenna_positions)
+                self.update_head_kinematics_model(
+                    np.array(head_positions),
+                    np.array(antenna_positions),
+                )
 
                 # Update the target head joint positions from IK if necessary
                 # - does nothing if the targets did not change
@@ -233,7 +239,8 @@ class RobotBackend(Backend):
 
     def close(self) -> None:
         """Close the motor controller connection."""
-        self.c.close()
+        if self.c is not None:
+            self.c.close()
         self.c = None
 
     def get_status(self) -> "RobotBackendStatus":
@@ -293,9 +300,13 @@ class RobotBackend(Backend):
             # if the mode is not torque control, we need to set the head joint positions
             # to the current positions to avoid sudden movements
             motor_pos = self.c.get_last_position()
-            self.target_head_joint_positions = [motor_pos.body_yaw] + motor_pos.stewart
+            self.target_head_joint_positions = np.array(
+                [motor_pos.body_yaw] + motor_pos.stewart
+            )
 
-            self.c.set_stewart_platform_position(self.target_head_joint_positions[1:])
+            self.c.set_stewart_platform_position(
+                self.target_head_joint_positions[1:].tolist()
+            )
             self.c.set_body_rotation(self.target_head_joint_positions[0])
             self.c.enable_body_rotation(True)
             self.c.set_body_rotation_operating_mode(0)
@@ -331,17 +342,19 @@ class RobotBackend(Backend):
             if mode != 0:
                 # if the mode is not torque control, we need to set the head joint positions
                 # to the current positions to avoid sudden movements
-                self.target_antenna_joint_positions = (
+                self.target_antenna_joint_positions = np.array(
                     self.c.get_last_position().antennas
                 )
-                self.c.set_antennas_positions(self.target_antenna_joint_positions)
+                self.c.set_antennas_positions(
+                    self.target_antenna_joint_positions.tolist()
+                )
                 self.c.enable_antennas(True)
             else:
                 self.c.enable_antennas(False)
 
             self._current_antennas_operation_mode = mode
 
-    def get_all_joint_positions(self) -> tuple[list, list]:
+    def get_all_joint_positions(self) -> tuple[list[float], list[float]]:
         """Get the current joint positions of the robot.
 
         Returns:
@@ -358,23 +371,27 @@ class RobotBackend(Backend):
 
         return [yaw] + list(dofs), list(antennas)
 
-    def get_present_head_joint_positions(self) -> list:
+    def get_present_head_joint_positions(
+        self,
+    ) -> Annotated[npt.NDArray[np.float64], (7,)]:
         """Get the current joint positions of the head.
 
         Returns:
             list: A list of joint positions for the head, including the body rotation.
 
         """
-        return self.get_all_joint_positions()[0]
+        return np.array(self.get_all_joint_positions()[0])
 
-    def get_present_antenna_joint_positions(self) -> list:
+    def get_present_antenna_joint_positions(
+        self,
+    ) -> Annotated[npt.NDArray[np.float64], (2,)]:
         """Get the current joint positions of the antennas.
 
         Returns:
             list: A list of joint positions for the antennas.
 
         """
-        return self.get_all_joint_positions()[1]
+        return np.array(self.get_all_joint_positions()[1])
 
     def compensate_head_gravity(self) -> None:
         """Calculate the currents necessary to compensate for gravity."""
@@ -396,13 +413,13 @@ class RobotBackend(Backend):
         correction_factor = 3.0
         # Get the current head joint positions
         head_joints = self.get_present_head_joint_positions()
-        gravity_torque = self.head_kinematics.compute_gravity_torque(
+        gravity_torque = self.head_kinematics.compute_gravity_torque(  # type: ignore [union-attr]
             np.array(head_joints)
         )
         # Convert the torque from Nm to mA
         current = gravity_torque * from_Nm_to_mA / correction_factor
         # Set the head joint current
-        self.set_target_head_joint_current(current.tolist())
+        self.set_target_head_joint_current(current)
 
     def get_motor_control_mode(self) -> MotorControlMode:
         """Get the motor control mode."""
@@ -494,5 +511,5 @@ class RobotBackendStatus:
     ready: bool
     motor_control_mode: MotorControlMode
     last_alive: float | None
-    control_loop_stats: dict
+    control_loop_stats: dict[str, Any]
     error: str | None = None

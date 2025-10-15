@@ -3,7 +3,11 @@
 This module provides an implementation of the CameraBase class using OpenCV.
 """
 
+from typing import Optional
+
 import cv2
+import numpy as np
+import numpy.typing as npt
 
 from reachy_mini.media.camera_constants import CameraResolution
 from reachy_mini.media.camera_utils import find_camera
@@ -23,12 +27,9 @@ class OpenCVCamera(CameraBase):
         super().__init__(
             backend=CameraBackend.OPENCV, log_level=log_level, resolution=resolution
         )
-        self.cap = None
+        self.cap: Optional[cv2.VideoCapture] = None
 
-    def open(
-        self,
-        udp_camera: str = None,
-    ):
+    def open(self, udp_camera: Optional[str] = None) -> None:
         """Open the camera using OpenCV VideoCapture."""
         if udp_camera:
             self.cap = cv2.VideoCapture(udp_camera)
@@ -42,16 +43,18 @@ class OpenCVCamera(CameraBase):
         if not self.cap.isOpened():
             raise RuntimeError("Failed to open camera")
 
-    def read(self):
+    def read(self) -> Optional[bytes | npt.NDArray[np.uint8]]:
         """Read a frame from the camera. Returns the frame or None if error."""
         if self.cap is None:
             raise RuntimeError("Camera is not opened.")
+
         ret, frame = self.cap.read()
         if not ret:
             return None
-        return frame
 
-    def close(self):
+        return np.asarray(frame, dtype=np.uint8, copy=False)
+
+    def close(self) -> None:
         """Release the camera resource."""
         if self.cap is not None:
             self.cap.release()

@@ -13,10 +13,12 @@ import os
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from pathlib import Path
+from typing import AsyncGenerator
 
 import uvicorn
 from fastapi import APIRouter, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -35,6 +37,8 @@ class Args:
 
     log_level: str = "INFO"
 
+    wireless_version: bool = False
+
     serialport: str = "auto"
 
     sim: bool = False
@@ -52,14 +56,19 @@ class Args:
     fastapi_host: str = "0.0.0.0"
     fastapi_port: int = 8000
 
-    localhost_only: bool = True
+    localhost_only: bool | None = None
 
 
 def create_app(args: Args) -> FastAPI:
     """Create and configure the FastAPI application."""
+    localhost_only = (
+        args.localhost_only
+        if args.localhost_only is not None
+        else (False if args.wireless_version else True)
+    )
 
     @asynccontextmanager
-    async def lifespan(app: FastAPI):
+    async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         """Lifespan context manager for the FastAPI application."""
         args = app.state.args  # type: Args
 
@@ -72,7 +81,7 @@ def create_app(args: Args) -> FastAPI:
                 kinematics_engine=args.kinematics_engine,
                 check_collision=args.check_collision,
                 wake_up_on_start=args.wake_up_on_start,
-                localhost_only=args.localhost_only,
+                localhost_only=localhost_only,
             )
         yield
         await app.state.app_manager.close()
@@ -84,7 +93,7 @@ def create_app(args: Args) -> FastAPI:
         lifespan=lifespan,
     )
     app.state.args = args
-    app.state.daemon = Daemon()
+    app.state.daemon = Daemon(wireless_version=args.wireless_version)
     app.state.app_manager = AppManager()
 
     app.add_middleware(
@@ -106,7 +115,7 @@ def create_app(args: Args) -> FastAPI:
 
     # Route to list available HTML/JS/CSS examples with links using Jinja2 template
     @app.get("/")
-    async def list_examples(request: Request):
+    async def list_examples(request: Request) -> HTMLResponse:
         """Render the dashboard."""
         files = [f for f in os.listdir(DASHBOARD_PAGES) if f.endswith(".html")]
         return templates.TemplateResponse(
@@ -122,7 +131,7 @@ def create_app(args: Args) -> FastAPI:
     return app
 
 
-def run_app(args: Args):
+def run_app(args: Args) -> None:
     """Run the FastAPI app with Uvicorn."""
     logging.basicConfig(level=logging.INFO)
 
@@ -130,11 +139,18 @@ def run_app(args: Args):
     uvicorn.run(app, host=args.fastapi_host, port=args.fastapi_port)
 
 
-def main():
+def main() -> None:
     """Run the FastAPI app with Uvicorn."""
     default_args = Args()
 
     parser = argparse.ArgumentParser(description="Run the Reachy Mini daemon.")
+    parser.add_argument(
+        "--wireless-version",
+        action="store_true",
+        default=default_args.wireless_version,
+        help="Use the wireless version of Reachy Mini (default: False).",
+    )
+
     # Real robot mode
     parser.add_argument(
         "-p",
@@ -248,8 +264,7 @@ def main():
     )
 
     args = parser.parse_args()
-    args = Args(**vars(args))
-    run_app(args)
+    run_app(Args(**vars(args)))
 
 
 if __name__ == "__main__":
