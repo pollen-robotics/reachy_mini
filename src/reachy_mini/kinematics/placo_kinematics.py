@@ -661,6 +661,6 @@ class PlacoKinematics:
         """
         self.start_body_yaw = body_yaw
 
-    def get_joint(self, joint_name) -> float:
+    def get_joint(self, joint_name: str) -> float:
         """Get the joint object by its name."""
-        return self.robot.get_joint(joint_name)
+        return float(self.robot.get_joint(joint_name))

@@ -17,7 +17,7 @@ import typing
 from abc import abstractmethod
 from enum import Enum
 from pathlib import Path
-from typing import Annotated, Any, Dict, List, Optional
+from typing import Annotated, Any, Dict, Optional
 
 import numpy as np
 import zenoh

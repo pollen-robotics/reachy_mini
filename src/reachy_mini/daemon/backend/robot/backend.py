@@ -10,12 +10,14 @@ import logging
 import time
 from dataclasses import dataclass
 from datetime import timedelta
-from multiprocessing import Event   # It seems to be more accurate than threading.Event
+from multiprocessing import Event  # It seems to be more accurate than threading.Event
 from typing import Annotated, Any, Dict, Optional
 
 import numpy as np
 import numpy.typing as npt
 from reachy_mini_motor_controller import ReachyMiniPyControlLoop
+
+from reachy_mini.kinematics.placo_kinematics import PlacoKinematics
 
 from ..abstract import Backend, MotorControlMode
 
@@ -477,7 +479,7 @@ class RobotBackend(Backend):
 
     def get_present_passive_joint_positions(self) -> Optional[Dict[str, float]]:
         """Get the present passive joint positions."""
-        if self.kinematics_engine != "Placo":
+        if not isinstance(self.head_kinematics, PlacoKinematics):
             return None
         return {
             "passive_1_x": self.head_kinematics.get_joint("passive_1_x"),
