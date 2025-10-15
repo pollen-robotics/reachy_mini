@@ -20,7 +20,7 @@ def main():
 
     with ReachyMini(log_level="DEBUG") as mini:
         try:
-            # mini.enable_gravity_compensation()
+            mini.enable_gravity_compensation()
             rerun = Rerun(mini)
             rerun.start()
 
@@ -30,7 +30,7 @@ def main():
                 time.sleep(0.02)
 
         except KeyboardInterrupt:
-            # mini.disable_gravity_compensation()
+            mini.disable_gravity_compensation()
             rerun.stop()
             print("Exiting... Reachy Mini is stiff again.")
 

@@ -16,7 +16,7 @@ import time
 from abc import abstractmethod
 from enum import Enum
 from pathlib import Path
-from typing import List
+from typing import Dict, List, Optional
 
 import numpy as np
 from scipy.spatial.transform import Rotation as R
@@ -672,3 +672,13 @@ class Backend:
     def set_motor_control_mode(self, mode: MotorControlMode) -> None:
         """Set the motor control mode."""
         pass
+
+    @abstractmethod
+    def get_present_passive_joint_positions(self) -> Optional[Dict[str, float]]:
+        """Get the present passive joint positions.
+
+        This method is a placeholder and should be overridden by subclasses.
+        """
+        raise NotImplementedError(
+            "The method get_present_passive_joint_positions should be overridden by subclasses."
+        )

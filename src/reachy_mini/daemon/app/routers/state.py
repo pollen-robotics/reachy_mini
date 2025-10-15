@@ -93,7 +93,11 @@ async def get_full_state(
     if with_target_antenna_positions:
         result["target_antennas_position"] = backend.target_antenna_joint_positions
     if with_passive_joints:
-        result["passive_joints"] = backend.get_present_passive_joint_positions()
+        joints = backend.get_present_passive_joint_positions()
+        if joints is not None:
+            result["passive_joints"] = list(joints.values())
+        else:
+            result["passive_joints"] = None
 
     result["timestamp"] = datetime.now(timezone.utc)
     return FullState.model_validate(result)
