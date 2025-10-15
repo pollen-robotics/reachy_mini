@@ -469,7 +469,7 @@
                 <camera name="eye_camera"
                   mode="fixed"
                   resolution="1280 720"
-                  fovy="80"
+                  fovy="81"
                 />
               </body> 
               <!-- Frame head -->
