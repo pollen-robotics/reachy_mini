@@ -1,9 +1,12 @@
 #!/bin/bash
 
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 SERVICE_NAME="reachy-mini-bluetooth"
 SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
-LAUNCHER_PATH="$(pwd)/bluetooth_service.py"
-COMMANDS_DIR="$(pwd)/commands"
+LAUNCHER_PATH="$SCRIPT_DIR/bluetooth_service.py"
+COMMANDS_DIR="$SCRIPT_DIR/commands"
 SERVICE_PATH=/bluetooth/bluetooth_service.py
 
 sudo cp "$LAUNCHER_PATH" "$SERVICE_PATH"

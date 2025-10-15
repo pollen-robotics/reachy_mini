@@ -1,8 +1,11 @@
 #!/bin/bash
 
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 SERVICE_NAME="reachy-mini-daemon"
 SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
-LAUNCHER_PATH="$(pwd)/launcher.sh"
+LAUNCHER_PATH="$SCRIPT_DIR/launcher.sh"
 
 # Create the service file
 cat <<EOF | sudo tee $SERVICE_FILE > /dev/null
