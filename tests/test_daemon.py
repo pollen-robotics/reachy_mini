@@ -64,7 +64,8 @@ async def test_daemon_early_stop() -> None:
             await daemon_stopped.wait()
 
             # Make sure the keep-alive check runs at least once
-            await asyncio.sleep(1.1)
+            reachy.client._check_alive_evt.clear()
+            reachy.client._check_alive_evt.wait(timeout=2.0)
 
             with pytest.raises(ConnectionError, match="Lost connection with the server."):
                 reachy.set_target(head=np.eye(4))
