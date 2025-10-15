@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Dict
+from typing import Any, Dict
 
 
 class SourceKind(str, Enum):
@@ -20,4 +20,4 @@ class AppInfo:
     source_kind: SourceKind
     description: str = ""
     url: str | None = None
-    extra: Dict[str, str] = field(default_factory=dict)
+    extra: Dict[str, Any] = field(default_factory=dict)
