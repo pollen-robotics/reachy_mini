@@ -464,7 +464,13 @@
               <!-- Frame camera_optical -->
               <site group="3" name="camera_optical" pos="-0.0321159 -0.05047 0.00257878" quat="0.44884 0.458499 0.740682 -0.199279"/>
               <!-- Frame camera -->
-              <site group="3" name="camera" pos="-0.0321159 -0.05047 0.00257878" quat="0.465151 0.724371 -0.182968 -0.474809"/>
+              <body pos="-0.0321159 -0.05047 0.00257878" quat="0.45849885704787313 -0.44883986005938376 0.19927893786822465 0.7406817690680519">
+                <site group="3" name="camera"/>
+                <camera name="eye_camera"
+                  mode="fixed"
+                  resolution="1280 720"
+                />
+              </body> 
               <!-- Frame head -->
               <site group="3" name="head" pos="-0.00611127 0.00370522 0.0291364" quat="0.465151 0.724371 -0.182968 -0.474809"/>
               <!-- Link dc15_a01_horn_dummy_7 -->
