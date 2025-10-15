@@ -1,6 +1,5 @@
 """Utilities for managing the Reachy Mini daemon."""
 
-import fcntl
 import os
 import socket
 import struct
@@ -91,6 +90,7 @@ def get_ip_address(ifname: str = "wlan0") -> str | None:
     """Get the IP address of a specific network interface (Linux Only)."""
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
+        import fcntl
         return socket.inet_ntoa(
             fcntl.ioctl(
                 s.fileno(),
