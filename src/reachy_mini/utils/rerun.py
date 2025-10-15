@@ -12,7 +12,7 @@ import os
 import tempfile
 import time
 from threading import Event, Thread
-from typing import List
+from typing import List, Optional
 
 import cv2
 import numpy as np
@@ -22,6 +22,7 @@ from rerun_loader_urdf import URDFLogger
 from urdf_parser_py import urdf
 
 from reachy_mini.kinematics.placo_kinematics import PlacoKinematics
+from reachy_mini.media.media_manager import MediaBackend
 from reachy_mini.reachy_mini import ReachyMini
 
 
@@ -48,6 +49,10 @@ class Rerun:
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(reachymini.logger.getEffectiveLevel())
 
+        self._robot_ip = "localhost"
+        if self._reachymini.client.get_status()["wireless_version"]:
+            self._robot_ip = self._reachymini.client.get_status()["wlan_ip"]
+
         self.recording = rr.get_global_data_recording()
 
         script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -68,7 +73,12 @@ class Rerun:
         self.urdf_logger.log(recording=self.recording)
 
         self.running = Event()
-        self.thread_log_camera = Thread(target=self.log_camera, daemon=True)
+        self.thread_log_camera: Optional[Thread] = None
+        if (
+            reachymini.media.backend == MediaBackend.GSTREAMER
+            or reachymini.media.backend == MediaBackend.DEFAULT
+        ):
+            self.thread_log_camera = Thread(target=self.log_camera, daemon=True)
         self.thread_log_movements = Thread(target=self.log_movements, daemon=True)
 
     def set_absolute_path_to_urdf(self, urdf_path: str, abs_path: str) -> str:
@@ -83,7 +93,8 @@ class Rerun:
 
     def start(self) -> None:
         """Start the Rerun logging thread."""
-        self.thread_log_camera.start()
+        if self.thread_log_camera is not None:
+            self.thread_log_camera.start()
         self.thread_log_movements.start()
 
     def stop(self) -> None:
@@ -240,7 +251,7 @@ class Rerun:
         passive_7_z = self._get_joint("passive_7_z")
         passive_7_z_joint = self.urdf_logger.joint_entity_path(passive_7_z)
 
-        url = "http://localhost:8000/api/state/full"
+        url = f"http://{self._robot_ip}:8000/api/state/full"
 
         params = {
             "with_control_mode": "false",
