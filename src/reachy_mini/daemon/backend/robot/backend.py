@@ -11,13 +11,11 @@ import time
 from dataclasses import dataclass
 from datetime import timedelta
 from multiprocessing import Event  # It seems to be more accurate than threading.Event
-from typing import Annotated, Any, Dict, Optional
+from typing import Annotated, Any
 
 import numpy as np
 import numpy.typing as npt
 from reachy_mini_motor_controller import ReachyMiniPyControlLoop
-
-from reachy_mini.kinematics.placo_kinematics import PlacoKinematics
 
 from ..abstract import Backend, MotorControlMode
 
@@ -476,34 +474,6 @@ class RobotBackend(Backend):
             return MotorControlMode.GravityCompensation
         else:
             raise ValueError(f"Unknown motor control mode: {mode}")
-
-    def get_present_passive_joint_positions(self) -> Optional[Dict[str, float]]:
-        """Get the present passive joint positions."""
-        if not isinstance(self.head_kinematics, PlacoKinematics):
-            return None
-        return {
-            "passive_1_x": self.head_kinematics.get_joint("passive_1_x"),
-            "passive_1_y": self.head_kinematics.get_joint("passive_1_y"),
-            "passive_1_z": self.head_kinematics.get_joint("passive_1_z"),
-            "passive_2_x": self.head_kinematics.get_joint("passive_2_x"),
-            "passive_2_y": self.head_kinematics.get_joint("passive_2_y"),
-            "passive_2_z": self.head_kinematics.get_joint("passive_2_z"),
-            "passive_3_x": self.head_kinematics.get_joint("passive_3_x"),
-            "passive_3_y": self.head_kinematics.get_joint("passive_3_y"),
-            "passive_3_z": self.head_kinematics.get_joint("passive_3_z"),
-            "passive_4_x": self.head_kinematics.get_joint("passive_4_x"),
-            "passive_4_y": self.head_kinematics.get_joint("passive_4_y"),
-            "passive_4_z": self.head_kinematics.get_joint("passive_4_z"),
-            "passive_5_x": self.head_kinematics.get_joint("passive_5_x"),
-            "passive_5_y": self.head_kinematics.get_joint("passive_5_y"),
-            "passive_5_z": self.head_kinematics.get_joint("passive_5_z"),
-            "passive_6_x": self.head_kinematics.get_joint("passive_6_x"),
-            "passive_6_y": self.head_kinematics.get_joint("passive_6_y"),
-            "passive_6_z": self.head_kinematics.get_joint("passive_6_z"),
-            "passive_7_x": self.head_kinematics.get_joint("passive_7_x"),
-            "passive_7_y": self.head_kinematics.get_joint("passive_7_y"),
-            "passive_7_z": self.head_kinematics.get_joint("passive_7_z"),
-        }
 
 
 @dataclass
