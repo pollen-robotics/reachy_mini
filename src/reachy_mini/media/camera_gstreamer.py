@@ -47,9 +47,10 @@ class GStreamerCamera(CameraBase):
 
         self.pipeline = Gst.Pipeline.new("camera_recorder")
 
+        # note for some applications the jpeg image could be directly used
         self._appsink_video: GstApp = Gst.ElementFactory.make("appsink")
         caps_video = Gst.Caps.from_string(
-            f"image/jpeg, width={self.resolution[0]}, height={self.resolution[1]}, framerate=30/1"
+            f"video/x-raw,format=BGR, width={self.resolution[0]},height={self.resolution[1]},framerate=30/1"
         )
         self._appsink_video.set_property("caps", caps_video)
         self._appsink_video.set_property("drop", True)  # avoid overflow
@@ -64,7 +65,17 @@ class GStreamerCamera(CameraBase):
             camsrc = Gst.ElementFactory.make("v4l2src")
             camsrc.set_property("device", cam_path)
             self.pipeline.add(camsrc)
-            camsrc.link(self._appsink_video)
+            queue = Gst.ElementFactory.make("queue")
+            self.pipeline.add(queue)
+            # use vaapijpegdec or nvjpegdec for hardware acceleration
+            jpegdec = Gst.ElementFactory.make("jpegdec")
+            self.pipeline.add(jpegdec)
+            videoconvert = Gst.ElementFactory.make("videoconvert")
+            self.pipeline.add(videoconvert)
+            camsrc.link(queue)
+            queue.link(jpegdec)
+            jpegdec.link(videoconvert)
+            videoconvert.link(self._appsink_video)
 
     def _on_bus_message(self, bus: Gst.Bus, msg: Gst.Message, loop) -> bool:  # type: ignore[no-untyped-def]
         t = msg.type
@@ -93,7 +104,7 @@ class GStreamerCamera(CameraBase):
         self._thread_bus_calls = Thread(target=self._handle_bus_calls, daemon=True)
         self._thread_bus_calls.start()
 
-    def _get_sample(self, appsink: Gst.AppSink) -> Optional[bytes]:
+    def _get_sample(self, appsink: GstApp.AppSink) -> Optional[bytes]:
         sample = appsink.try_pull_sample(20_000_000)
         if sample is None:
             return None
@@ -106,14 +117,21 @@ class GStreamerCamera(CameraBase):
             data = buf.extract_dup(0, buf.get_size())
         return data
 
-    def read(self) -> Optional[bytes | npt.NDArray[np.uint8]]:
+    def read(self) -> Optional[npt.NDArray[np.uint8]]:
         """Read a frame from the camera. Returns the frame or None if error.
 
         Returns:
-            Optional[bytes]: The captured frame in JPEG format, or None if error.
+            Optional[npt.NDArray[np.uint8]]: The captured BGR frame as a NumPy array, or None if error.
 
         """
-        return self._get_sample(self._appsink_video)
+        data = self._get_sample(self._appsink_video)
+        if data is None:
+            return None
+
+        arr = np.frombuffer(data, dtype=np.uint8).reshape(
+            (self.resolution[1], self.resolution[0], 3)
+        )
+        return arr
 
     def close(self) -> None:
         """Release the camera resource."""

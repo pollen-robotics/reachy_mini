@@ -48,7 +48,7 @@ class CameraBase(ABC):
         pass
 
     @abstractmethod
-    def read(self) -> Optional[bytes | npt.NDArray[np.uint8]]:
+    def read(self) -> Optional[npt.NDArray[np.uint8]]:
         """Read an image from the camera. Returns the image or None if error."""
         pass
 
