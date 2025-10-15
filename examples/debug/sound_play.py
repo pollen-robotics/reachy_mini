@@ -43,9 +43,6 @@ def main(backend: str) -> None:
         chunk_size = 1024
         for i in range(0, len(data), chunk_size):
             chunk = data[i : i + chunk_size]
-            if backend == "gstreamer":
-                chunk = chunk.tobytes()
-
             mini.media.push_audio_sample(chunk)
 
         time.sleep(1)  # wait a bit to ensure all samples are played

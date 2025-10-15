@@ -7,6 +7,9 @@ By default the module directly returns JPEG images as output by the camera.
 from threading import Thread
 from typing import Optional
 
+import numpy as np
+import numpy.typing as npt
+
 try:
     import gi
 except ImportError as e:
@@ -174,10 +177,10 @@ class GStreamerAudio(AudioBase):
         """Stop playing audio and release resources."""
         self._pipeline_playback.set_state(Gst.State.NULL)
 
-    def push_audio_sample(self, data: bytes) -> None:
+    def push_audio_sample(self, data: npt.NDArray[np.float32]) -> None:
         """Push audio data to the output device."""
         if self._appsrc is not None:
-            buf = Gst.Buffer.new_wrapped(data)
+            buf = Gst.Buffer.new_wrapped(data.tobytes())
             self._appsrc.push_buffer(buf)
         else:
             self.logger.warning(

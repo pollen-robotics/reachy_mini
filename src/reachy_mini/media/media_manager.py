@@ -174,11 +174,11 @@ class MediaManager:
             return
         self.audio.start_playing()
 
-    def push_audio_sample(self, data: bytes) -> None:
+    def push_audio_sample(self, data: npt.NDArray[np.float32]) -> None:
         """Push audio data to the output device.
 
         Args:
-            data: The audio data to push to the output device.
+            data (npt.NDArray[np.float32]): The audio data to push to the output device (mono format).
 
         """
         if self.audio is None:

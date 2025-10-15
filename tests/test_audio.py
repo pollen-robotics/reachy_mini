@@ -6,7 +6,7 @@ import soundfile as sf
 from reachy_mini.media.media_manager import MediaManager, MediaBackend
 
 @pytest.mark.audio
-def test_play_sound_default_backend():
+def test_play_sound_default_backend() -> None:
     """Test playing a sound with the default backend."""
     media = MediaManager(backend=MediaBackend.DEFAULT_NO_VIDEO)
     # Use a short sound file present in your assets directory
@@ -19,7 +19,7 @@ def test_play_sound_default_backend():
     # Sound should be audible if the audio device is correctly set up.
 
 @pytest.mark.audio
-def test_record_audio_and_file_exists():
+def test_record_audio_and_file_exists() -> None:
     """Test recording audio and check that the file exists and is not empty."""
     media = MediaManager(backend=MediaBackend.DEFAULT_NO_VIDEO)
     duration = 2  # seconds
@@ -40,9 +40,10 @@ def test_record_audio_and_file_exists():
 
 '''
 @pytest.mark.audio_gstreamer
-def test_play_sound_gstreamer_backend():
+def test_play_sound_gstreamer_backend() -> None:
     """Test playing a sound with the GStreamer backend."""
     media = MediaManager(backend=MediaBackend.GSTREAMER)
+    time.sleep(2)  # Give some time for the audio system to initialize
     # Use a short sound file present in your assets directory
     sound_file = "wake_up.wav"  # Change to a valid file if needed
     media.play_sound(sound_file)
@@ -52,8 +53,9 @@ def test_play_sound_gstreamer_backend():
     # No assertion: test passes if no exception is raised.
     # Sound should be audible if the audio device is correctly set up.
 '''
+
 @pytest.mark.audio_gstreamer
-def test_record_audio_and_file_exists():
+def test_record_audio_and_file_exists_gstreamer() -> None:
     """Test recording audio and check that the file exists and is not empty."""
     media = MediaManager(backend=MediaBackend.GSTREAMER)
     duration = 2  # seconds

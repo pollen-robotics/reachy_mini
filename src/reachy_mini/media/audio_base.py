@@ -55,7 +55,7 @@ class AudioBase(ABC):
         pass
 
     @abstractmethod
-    def push_audio_sample(self, data: bytes) -> None:
+    def push_audio_sample(self, data: npt.NDArray[np.float32]) -> None:
         """Push audio data to the output device."""
         pass
 

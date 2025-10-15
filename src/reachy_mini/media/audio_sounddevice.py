@@ -85,7 +85,7 @@ class SoundDeviceAudio(AudioBase):
             self.stream = None
             self.logger.info("SoundDevice audio stream closed.")
 
-    def push_audio_sample(self, data: bytes) -> None:
+    def push_audio_sample(self, data: npt.NDArray[np.float32]) -> None:
         """Push audio data to the output device."""
         if self._output_stream is not None:
             self._output_stream.write(data)
