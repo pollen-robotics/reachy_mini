@@ -60,7 +60,7 @@ class SoundDeviceAudio(AudioBase):
 
         self._buffer.append(indata.copy())
 
-    def get_audio_sample(self) -> Optional[bytes | npt.NDArray[np.float32]]:
+    def get_audio_sample(self) -> Optional[npt.NDArray[np.float32]]:
         """Read audio data from the buffer. Returns numpy array or None if empty."""
         if self._buffer and len(self._buffer) > 0:
             data: npt.NDArray[np.float32] = np.concatenate(self._buffer, axis=0)
