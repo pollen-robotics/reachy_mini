@@ -50,6 +50,7 @@ placo_kinematics = ["placo==0.9.14"]
 gstreamer = ["PyGObject>=3.42.2,<=3.46.0"]
 wireless-version = [
     "semver>=3,<4",
+    "nmcli>=1.5",
 ]
 
 [project.scripts]

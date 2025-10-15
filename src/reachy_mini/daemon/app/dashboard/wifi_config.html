@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Basic HTML Page</title>
+    <script src="/dashboard/js/setup_wifi.js"></script>
+</head>
+
+<body>
+    <h1>Setup your WiFi</h1>
+
+    <h3>Current Status:</h3>
+    <div id="status">Loading...</div>
+
+    <div id="add-wifi" hidden>
+        <h2>Add your WiFi</h2>
+
+        <form id="wifi-form">
+            <label for="ssid">SSID:</label>
+            <input type="text" id="ssid" name="ssid" required><br><br>
+            <label for="password">Password:</label>
+            <input type="password" id="password" name="password" required><br><br>
+            <input type="button" onclick="connectToWifi(event)" target="_blank" formtarget="_blank" value="Connect">
+        </form>
+    </div>
+
+    <div id="busy" hidden>
+        <h2>Operation in progress...</h2>
+        <p>Please wait while we set up your connection.</p>
+    </div>
+
+    <div id="connected" hidden>
+        <h2>Connected!</h2>
+        <p>Your device is now connected to the WiFi network.</p>
+    </div>
+
+</body>
+
+</html>

@@ -92,6 +92,7 @@ def create_app(args: Args) -> FastAPI:
     app = FastAPI(
         lifespan=lifespan,
     )
+
     app.state.args = args
     app.state.daemon = Daemon(wireless_version=args.wireless_version)
     app.state.app_manager = AppManager()
@@ -113,9 +114,10 @@ def create_app(args: Args) -> FastAPI:
     app.include_router(router)
 
     if args.wireless_version:
-        from .routers import update
+        from .routers import update, wifi_config
 
         app.include_router(update.router)
+        app.include_router(wifi_config.router)
 
     # Route to list available HTML/JS/CSS examples with links using Jinja2 template
     @app.get("/")
