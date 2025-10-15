@@ -50,6 +50,14 @@ class MediaManager:
         if not backend == MediaBackend.NO_MEDIA:
             self._init_audio(log_level)
 
+    def __del__(self) -> None:
+        """Destructor to ensure resources are released."""
+        if self.camera is not None:
+            self.camera.close()
+        if self.audio is not None:
+            self.audio.stop_recording()
+            self.audio.stop_playing()
+
     def _init_camera(
         self,
         use_sim: bool,
@@ -78,11 +86,11 @@ class MediaManager:
         else:
             raise NotImplementedError(f"Camera backend {self.backend} not implemented.")
 
-    def get_frame(self) -> Optional[bytes | npt.NDArray[np.uint8]]:
+    def get_frame(self) -> Optional[npt.NDArray[np.uint8]]:
         """Get a frame from the camera.
 
         Returns:
-            Optional[bytes | npt.NDArray[np.uint8]]: The captured frame, or None if the camera is not available.
+            Optional[npt.NDArray[np.uint8]]: The captured BGR frame, or None if the camera is not available.
 
         """
         if self.camera is None:

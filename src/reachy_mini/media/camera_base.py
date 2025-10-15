@@ -42,6 +42,11 @@ class CameraBase(ABC):
         """Get the current camera resolution as a tuple (width, height)."""
         return (self._resolution.value[0], self._resolution.value[1])
 
+    @property
+    def framerate(self) -> int:
+        """Get the current camera frames per second."""
+        return self._resolution.value[2]
+
     @abstractmethod
     def open(self) -> None:
         """Open the camera."""

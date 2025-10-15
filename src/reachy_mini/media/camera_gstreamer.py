@@ -50,7 +50,7 @@ class GStreamerCamera(CameraBase):
         # note for some applications the jpeg image could be directly used
         self._appsink_video: GstApp = Gst.ElementFactory.make("appsink")
         caps_video = Gst.Caps.from_string(
-            f"video/x-raw,format=BGR, width={self.resolution[0]},height={self.resolution[1]},framerate=30/1"
+            f"video/x-raw,format=BGR, width={self.resolution[0]},height={self.resolution[1]},framerate={self.framerate}/1"
         )
         self._appsink_video.set_property("caps", caps_video)
         self._appsink_video.set_property("drop", True)  # avoid overflow
