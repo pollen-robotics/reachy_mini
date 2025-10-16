@@ -65,12 +65,21 @@ class AnalyticalKinematics:
 
         check_collision and no_iterations are not used by AnalyticalKinematics. We keep them for compatibility with the other kinematics engines
         """
+        # import time
+        # k = time.time()
         _pose = pose.copy()
         _pose[:3, 3][2] += self.head_z_offset
-
-        stewart_joints = self.kin.inverse_kinematics(_pose, body_yaw)  # type: ignore[arg-type]
-
-        return np.array([body_yaw] + stewart_joints)
+           
+        # inverse kinematics solution that modulates the body yaw to 
+        # stay within the mechanical limits (max_body_yaw) 
+        # additionally it makes sure the the relative yaw between the body and the head
+        # stays within the mechanical limits (max_relative_yaw)
+        reachy_joints = self.kin.inverse_kinematics_safe(_pose, 
+                                                         body_yaw = body_yaw, 
+                                                         max_relative_yaw = np.deg2rad(65), 
+                                                         max_body_yaw = np.deg2rad(160))  # type: ignore[arg-type]
+        # print("IK time {0:.3f}us".format((time.time() - k)*1e6))
+        return np.array(reachy_joints)  # type: ignore[arg-type]
 
     def fk(
         self,
