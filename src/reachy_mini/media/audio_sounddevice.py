@@ -13,7 +13,7 @@ import soundfile as sf
 
 from reachy_mini.utils.constants import ASSETS_ROOT_PATH
 
-from .audio_base import AudioBackend, AudioBase
+from .audio_base import AudioBase
 
 
 class SoundDeviceAudio(AudioBase):
@@ -25,7 +25,7 @@ class SoundDeviceAudio(AudioBase):
         log_level: str = "INFO",
     ) -> None:
         """Initialize the SoundDevice audio device."""
-        super().__init__(backend=AudioBackend.SOUNDDEVICE, log_level=log_level)
+        super().__init__(log_level=log_level)
         self.frames_per_buffer = frames_per_buffer
         self.stream = None
         self._output_stream = None

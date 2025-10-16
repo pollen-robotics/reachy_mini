@@ -12,7 +12,7 @@ import numpy.typing as npt
 from reachy_mini.media.camera_constants import CameraResolution
 from reachy_mini.media.camera_utils import find_camera
 
-from .camera_base import CameraBackend, CameraBase
+from .camera_base import CameraBase
 
 
 class OpenCVCamera(CameraBase):
@@ -24,9 +24,7 @@ class OpenCVCamera(CameraBase):
         resolution: CameraResolution = CameraResolution.R1280x720,
     ) -> None:
         """Initialize the OpenCV camera."""
-        super().__init__(
-            backend=CameraBackend.OPENCV, log_level=log_level, resolution=resolution
-        )
+        super().__init__(log_level=log_level, resolution=resolution)
         self.cap: Optional[cv2.VideoCapture] = None
 
     def open(self, udp_camera: Optional[str] = None) -> None:
@@ -47,7 +45,6 @@ class OpenCVCamera(CameraBase):
         """Read a frame from the camera. Returns the frame or None if error."""
         if self.cap is None:
             raise RuntimeError("Camera is not opened.")
-
         ret, frame = self.cap.read()
         if not ret:
             return None

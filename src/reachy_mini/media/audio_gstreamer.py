@@ -21,7 +21,7 @@ gi.require_version("GstApp", "1.0")
 
 from gi.repository import GLib, Gst, GstApp  # noqa: E402
 
-from .audio_base import AudioBackend, AudioBase  # noqa: E402
+from .audio_base import AudioBase  # noqa: E402
 
 
 class GStreamerAudio(AudioBase):
@@ -29,7 +29,7 @@ class GStreamerAudio(AudioBase):
 
     def __init__(self, log_level: str = "INFO") -> None:
         """Initialize the GStreamer audio."""
-        super().__init__(backend=AudioBackend.GSTREAMER, log_level=log_level)
+        super().__init__(log_level=log_level)
         Gst.init(None)
         self._loop = GLib.MainLoop()
         self._thread_bus_calls = Thread(target=lambda: self._loop.run(), daemon=True)
@@ -136,7 +136,7 @@ class GStreamerAudio(AudioBase):
         """Open the audio card using GStreamer."""
         self._pipeline_record.set_state(Gst.State.PLAYING)
 
-    def _get_sample(self, appsink: Gst.AppSink) -> Optional[bytes]:
+    def _get_sample(self, appsink: GstApp.AppSink) -> Optional[bytes]:
         sample = appsink.try_pull_sample(20_000_000)
         if sample is None:
             return None
