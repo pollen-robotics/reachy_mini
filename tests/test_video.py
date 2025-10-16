@@ -53,12 +53,43 @@ def test_get_frame_exists_4608() -> None:
 @pytest.mark.video_gstreamer
 def test_get_frame_exists_gstreamer() -> None:
     """Test that a frame can be retrieved from the camera and is not None."""
-    media = MediaManager(backend=MediaBackend.GSTREAMER)
+    resolution = CameraResolution.R1280x720
+    media = MediaManager(backend=MediaBackend.GSTREAMER, resolution=resolution)
     time.sleep(2)  # Give some time for the camera to initialize
     frame = media.get_frame()
     assert frame is not None, "No frame was retrieved from the camera."
-    assert isinstance(frame, bytes), "Frame is not a bytes object."
-    assert len(frame) > 0, "Frame is empty."
-    # with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as tmp_file:
-    #    tmp_file.write(frame)
-    #    print(f"Frame saved for inspection: {tmp_file.name}")
+    assert isinstance(frame, np.ndarray), "Frame is not a numpy array."
+    assert frame.size > 0, "Frame is empty."
+    assert frame.shape[0] == resolution.value[1] and frame.shape[1] == resolution.value[0], f"Frame has incorrect dimensions: {frame.shape}"
+
+@pytest.mark.video_gstreamer
+def test_get_frame_exists_gstreamer_1600() -> None:
+    resolution = CameraResolution.R1600x1200
+    media = MediaManager(backend=MediaBackend.GSTREAMER, resolution=resolution)
+    time.sleep(2)  # Give some time for the camera to initialize
+    frame = media.get_frame()
+    assert frame.shape[0] == resolution.value[1] and frame.shape[1] == resolution.value[0], f"Frame has incorrect dimensions: {frame.shape}"
+
+@pytest.mark.video_gstreamer
+def test_get_frame_exists_gstreamer_1920() -> None:
+    resolution = CameraResolution.R1920x1080
+    media = MediaManager(backend=MediaBackend.GSTREAMER, resolution=resolution)
+    time.sleep(2)  # Give some time for the camera to initialize
+    frame = media.get_frame()
+    assert frame.shape[0] == resolution.value[1] and frame.shape[1] == resolution.value[0], f"Frame has incorrect dimensions: {frame.shape}"
+
+@pytest.mark.video_gstreamer
+def test_get_frame_exists_gstreamer_2304() -> None:
+    resolution = CameraResolution.R2304x1296
+    media = MediaManager(backend=MediaBackend.GSTREAMER, resolution=resolution)
+    time.sleep(2)  # Give some time for the camera to initialize
+    frame = media.get_frame()
+    assert frame.shape[0] == resolution.value[1] and frame.shape[1] == resolution.value[0], f"Frame has incorrect dimensions: {frame.shape}"
+
+@pytest.mark.video_gstreamer
+def test_get_frame_exists_gstreamer_4608() -> None:
+    resolution = CameraResolution.R4608x2592
+    media = MediaManager(backend=MediaBackend.GSTREAMER, resolution=resolution)
+    time.sleep(2)  # Give some time for the camera to initialize
+    frame = media.get_frame()
+    assert frame.shape[0] == resolution.value[1] and frame.shape[1] == resolution.value[0], f"Frame has incorrect dimensions: {frame.shape}"
