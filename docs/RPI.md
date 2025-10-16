@@ -9,7 +9,7 @@ It is recommended to setup a wifi password and a ssh connection.
 ## Gstreamer
 
 ```bash
-sudo apt-get install libgstreamer-plugins-bad1.0-dev libgstreamer-plugins-base1.0-dev libgstreamer1.0-dev libglib2.0-dev libssl-dev git libgirepository1.0-dev libcairo2-dev libportaudio2  gstreamer1.0-libcamera librpicam-app1
+sudo apt-get install libgstreamer-plugins-bad1.0-dev libgstreamer-plugins-base1.0-dev libgstreamer1.0-dev libglib2.0-dev libssl-dev git libgirepository1.0-dev libcairo2-dev libportaudio2  gstreamer1.0-libcamera librpicam-app1 libssl-dev libnice10
 ```
 
 ## Install Rust
