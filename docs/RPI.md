@@ -9,7 +9,7 @@ It is recommended to setup a wifi password and a ssh connection.
 ## Gstreamer
 
 ```bash
-sudo apt-get install libgstreamer-plugins-bad1.0-dev libgstreamer-plugins-base1.0-dev libgstreamer1.0-dev libglib2.0-dev libssl-dev git libgirepository1.0-dev libcairo2-dev libportaudio2
+sudo apt-get install libgstreamer-plugins-bad1.0-dev libgstreamer-plugins-base1.0-dev libgstreamer1.0-dev libglib2.0-dev libssl-dev git libgirepository1.0-dev libcairo2-dev libportaudio2  gstreamer1.0-libcamera librpicam-app1
 ```
 
 ## Install Rust
@@ -39,14 +39,20 @@ cargo cinstall -p gst-plugin-webrtc --prefix=/opt/gst-plugins-rs --release
 echo 'export GST_PLUGIN_PATH=/opt/gst-plugins-rs/lib/aarch64-linux-gnu/' >> ~/.bashrc
 ```
 
+## Install Daemon
+
+Install with gstreamer extra dependencies
+
+pip install -e .[gstreamer]
+
 ## Usage
 
 ### Daemon
 
-Start with webrtc mode
+The webrtc streaming will start automatically with the wireless option:
 
 ```bash
-reachy-mini-daemon --webrtc
+reachy-mini-daemon --wireless-version
 ```
 
 ### Client
