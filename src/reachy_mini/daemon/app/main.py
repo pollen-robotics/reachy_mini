@@ -128,6 +128,85 @@ def create_app(args: Args) -> FastAPI:
         name="dashboard",
     )
 
+    # Mount WASM files - always use bin directory
+    wasm_bin_dir = Path(__file__).parent / "wasm" / "bin"
+    original_mjcf_dir = Path(__file__).parent.parent.parent / "descriptions" / "reachy_mini" / "mjcf"
+
+    if wasm_bin_dir.exists():
+        # Mount original model files from descriptions directory
+        if original_mjcf_dir.exists():
+            app.mount(
+                "/wasm/dist/examples/scenes/reachy",
+                StaticFiles(directory=str(original_mjcf_dir)),
+                name="wasm_original_models",
+            )
+
+        # Mount general path last
+        app.mount(
+            "/wasm/dist",
+            StaticFiles(directory=str(wasm_bin_dir)),
+            name="wasm",
+        )
+
+        # Add redirects for React app assets when accessed from iframe
+        from fastapi.responses import RedirectResponse
+
+        @app.get("/assets/{file_path}")
+        async def get_asset_redirect(file_path: str):
+            # Handle versioned files by mapping to generic names
+            if file_path.startswith("mujoco_wasm-") and file_path.endswith(".wasm"):
+                return RedirectResponse(url="/wasm/dist/assets/mujoco_wasm.wasm")
+            elif file_path.startswith("mujoco_wasm-") and file_path.endswith(".js"):
+                return RedirectResponse(url="/wasm/dist/assets/mujoco_wasm.js")
+            elif file_path.startswith("index-") and file_path.endswith(".js"):
+                return RedirectResponse(url="/wasm/dist/assets/index.js")
+            elif file_path.startswith("index-") and file_path.endswith(".css"):
+                return RedirectResponse(url="/wasm/dist/assets/index.css")
+            else:
+                return RedirectResponse(url=f"/wasm/dist/assets/{file_path}")
+
+        @app.get("/vite.svg")
+        async def get_vite_svg():
+            return RedirectResponse(url="/wasm/dist/vite.svg")
+
+        # Also add direct redirects for the full paths
+        @app.get("/wasm/dist/assets/mujoco_wasm-{hash}.wasm")
+        async def get_versioned_mujoco_wasm(hash: str):
+            return RedirectResponse(url="/wasm/dist/assets/mujoco_wasm.wasm")
+
+        @app.get("/wasm/dist/assets/mujoco_wasm-{hash}.js")
+        async def get_versioned_mujoco_js(hash: str):
+            return RedirectResponse(url="/wasm/dist/assets/mujoco_wasm.js")
+
+        @app.get("/wasm/dist/assets/index-{hash}.js")
+        async def get_versioned_index_js(hash: str):
+            return RedirectResponse(url="/wasm/dist/assets/index.js")
+
+        @app.get("/wasm/dist/assets/index-{hash}.css")
+        async def get_versioned_index_css(hash: str):
+            return RedirectResponse(url="/wasm/dist/assets/index.css")
+
+        # Add proper MIME types and COOP/COEP headers for WASM
+        @app.middleware("http")
+        async def add_wasm_headers(request: Request, call_next):
+            response = await call_next(request)
+
+            # Add MIME types
+            if request.url.path.endswith('.wasm'):
+                response.headers["content-type"] = "application/wasm"
+            elif request.url.path.endswith('.js') and '/wasm/' in request.url.path:
+                response.headers["content-type"] = "text/javascript"
+
+            # Add Cross-Origin headers for WASM Web Workers
+            response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
+            response.headers["Cross-Origin-Embedder-Policy"] = "require-corp"
+
+            return response
+
+    else:
+        print(f"Warning: WASM bin directory not found at {wasm_bin_dir}")
+        print("Run the build script to generate the bin directory with generic asset names")
+
     return app
 
 
