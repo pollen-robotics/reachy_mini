@@ -5,7 +5,6 @@ const daemon = {
     currentStatus: {},
 
     start: async (wakeUp) => {
-        console.log('Starting daemon...');
         fetch(`/api/daemon/start?wake_up=${wakeUp}`, {
             method: 'POST',
         })
@@ -24,8 +23,6 @@ const daemon = {
     },
 
     stop: async (gotoSleep) => {
-        console.log('Stopping daemon...');
-
         fetch(`/api/daemon/stop?goto_sleep=${gotoSleep}`, {
             method: 'POST',
         })
@@ -66,9 +63,6 @@ const daemon = {
             initialState = daemon.currentStatus.state;
         }
 
-        console.log('Checking status update...');
-        console.log(`Current daemon state: ${daemon.currentStatus.state}`);
-
         let currentState = daemon.currentStatus.state;
 
         if (currentState === initialState || currentState === "starting" || currentState === "stopping") {
@@ -99,7 +93,6 @@ const daemon = {
         const backendStatusText = document.getElementById('backend-status-text');
 
         let daemonState = daemon.currentStatus.state;
-        console.log(`Updating UI. Daemon state: ${daemonState}`);
 
         toggleDaemonSwitch.disabled = false;
         backendStatusIcon.classList.remove('bg-green-500', 'bg-yellow-500', 'bg-red-500');
