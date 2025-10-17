@@ -28,6 +28,7 @@ dependencies = [
     "asgiref",
     "aiohttp",
     "log-throttling==0.0.3",
+    "pyusb>=1.2.1",
 ]
 
 

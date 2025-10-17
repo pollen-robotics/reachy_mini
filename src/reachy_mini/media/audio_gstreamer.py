@@ -87,6 +87,7 @@ class GStreamerAudio(AudioBase):
 
     def __del__(self) -> None:
         """Destructor to ensure gstreamer resources are released."""
+        super().__del__()
         self._loop.quit()
         self._bus_record.remove_watch()
         self._bus_playback.remove_watch()
