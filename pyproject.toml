@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "reachy_mini"
-version = "0.1.0"
+version = "1.0.0rc5"
 authors = [{ name = "Pollen Robotics", email = "contact@pollen-robotics.com" }]
 description = ""
 readme = "README.md"
@@ -27,6 +27,8 @@ dependencies = [
     "reachy-mini-rust-kinematics>=1.0.1",
     "asgiref",
     "aiohttp",
+    "log-throttling==0.0.3",
+    "pyusb>=1.2.1",
 ]
 
 
