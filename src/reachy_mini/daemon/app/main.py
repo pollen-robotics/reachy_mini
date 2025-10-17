@@ -266,14 +266,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
-app = create_app(
-    Args(
-        sim=True,
-        headless=True,
-        autostart=False,
-        wake_up_on_start=False,
-        goto_sleep_on_stop=False,
-        wireless_version=False,
-    )
-)
