@@ -19,6 +19,19 @@ async def test_daemon_start_stop() -> None:
 
 
 @pytest.mark.asyncio
+async def test_daemon_multiple_start_stop() -> None:    
+    daemon = Daemon()
+    
+    for _ in range(3):
+        await daemon.start(
+            sim=True,
+            headless=True,
+            wake_up_on_start=False,
+        )
+        await daemon.stop(goto_sleep_on_stop=False)
+
+
+@pytest.mark.asyncio
 async def test_daemon_client_disconnection() -> None:
     daemon = Daemon()
     await daemon.start(

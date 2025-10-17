@@ -48,7 +48,6 @@ class Daemon:
             error=None,
             wlan_ip=None,
         )
-        self._thread_publish_status = Thread(target=self._publish_status, daemon=True)
         self._thread_event_publish_status = Event()
 
     async def start(
@@ -115,6 +114,8 @@ class Daemon:
 
         self.server = ZenohServer(self.backend, localhost_only=localhost_only)
         self.server.start()
+
+        self._thread_publish_status = Thread(target=self._publish_status, daemon=True)
         self._thread_publish_status.start()
 
         def backend_wrapped_run() -> None:
