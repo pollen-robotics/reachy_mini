@@ -1,0 +1,17 @@
+.daemon-status-title {
+    font-family: Archivo;
+    font-weight: 700;
+    font-style: Bold;
+    font-size: 48px;
+    line-height: 120%;
+    letter-spacing: 0.3px;
+}
+
+.daemon-status-collapse {
+    font-family: Asap;
+    font-weight: 400;
+    font-style: Regular;
+    font-size: 18px;
+    line-height: 140%;
+    letter-spacing: 0%;
+}
