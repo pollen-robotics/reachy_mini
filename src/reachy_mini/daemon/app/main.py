@@ -37,6 +37,8 @@ class Args:
 
     log_level: str = "INFO"
 
+    wireless_version: bool = False
+
     serialport: str = "auto"
 
     sim: bool = False
@@ -54,11 +56,16 @@ class Args:
     fastapi_host: str = "0.0.0.0"
     fastapi_port: int = 8000
 
-    localhost_only: bool = True
+    localhost_only: bool | None = None
 
 
 def create_app(args: Args) -> FastAPI:
     """Create and configure the FastAPI application."""
+    localhost_only = (
+        args.localhost_only
+        if args.localhost_only is not None
+        else (False if args.wireless_version else True)
+    )
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
@@ -74,7 +81,7 @@ def create_app(args: Args) -> FastAPI:
                 kinematics_engine=args.kinematics_engine,
                 check_collision=args.check_collision,
                 wake_up_on_start=args.wake_up_on_start,
-                localhost_only=args.localhost_only,
+                localhost_only=localhost_only,
             )
         yield
         await app.state.app_manager.close()
@@ -86,7 +93,7 @@ def create_app(args: Args) -> FastAPI:
         lifespan=lifespan,
     )
     app.state.args = args
-    app.state.daemon = Daemon()
+    app.state.daemon = Daemon(wireless_version=args.wireless_version)
     app.state.app_manager = AppManager()
 
     app.add_middleware(
@@ -137,6 +144,13 @@ def main() -> None:
     default_args = Args()
 
     parser = argparse.ArgumentParser(description="Run the Reachy Mini daemon.")
+    parser.add_argument(
+        "--wireless-version",
+        action="store_true",
+        default=default_args.wireless_version,
+        help="Use the wireless version of Reachy Mini (default: False).",
+    )
+
     # Real robot mode
     parser.add_argument(
         "-p",

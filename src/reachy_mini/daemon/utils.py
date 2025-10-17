@@ -1,6 +1,5 @@
 """Utilities for managing the Reachy Mini daemon."""
 
-import fcntl
 import os
 import socket
 import struct
@@ -59,14 +58,26 @@ def daemon_check(spawn_daemon: bool, use_sim: bool) -> None:
         )
 
 
-def find_serial_port(vid: str = "1a86", pid: str = "55d3") -> list[str]:
-    """Find the serial port for Reachy Mini based on VID and PID.
+def find_serial_port(
+    wireless_version: bool = False,
+    vid: str = "1a86",
+    pid: str = "55d3",
+    pi_uart: str = "/dev/ttyAMA3",
+) -> list[str]:
+    """Find the serial port for Reachy Mini based on VID and PID or the Raspberry Pi UART for the wireless version.
 
     Args:
+        wireless_version (bool): Whether to look for the wireless version using the Raspberry Pi UART.
         vid (str): Vendor ID of the device. (eg. "1a86").
         pid (str): Product ID of the device. (eg. "55d3").
+        pi_uart (str): Path to the Raspberry Pi UART device. (eg. "/dev/ttyAMA3").
 
     """
+    # If it's a wireless version, we should use the Raspberry Pi UART
+    if wireless_version:
+        return [pi_uart] if os.path.exists(pi_uart) else []
+
+    # If it's a lite version, we should find it using the VID and PID
     ports = serial.tools.list_ports.comports()
 
     vid = vid.upper()
@@ -79,6 +90,7 @@ def get_ip_address(ifname: str = "wlan0") -> str | None:
     """Get the IP address of a specific network interface (Linux Only)."""
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
+        import fcntl
         return socket.inet_ntoa(
             fcntl.ioctl(
                 s.fileno(),

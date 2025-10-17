@@ -13,7 +13,7 @@ DURATION = 5  # seconds
 OUTPUT_FILE = "recorded_audio.wav"
 
 
-def main(backend: str):
+def main(backend: str) -> None:
     """Record audio for 5 seconds and save to a WAV file."""
     logging.basicConfig(
         level=logging.DEBUG, format="%(asctime)s [%(levelname)s] %(message)s"
@@ -28,7 +28,7 @@ def main(backend: str):
             sample = mini.media.get_audio_sample()
             if sample is not None:
                 if backend == "gstreamer":
-                    sample = np.frombuffer(sample, dtype=np.int16).reshape(-1, 1)
+                    sample = np.frombuffer(sample, dtype=np.float32).reshape(-1, 1)
                 audio_samples.append(sample)
             else:
                 print("No audio data available yet...")

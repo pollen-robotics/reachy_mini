@@ -12,7 +12,7 @@ class GotoTaskRequest(BaseModel):
     """Class to represent a goto target task."""
 
     head: list[float] | None  # 4x4 flatten pose matrix
-    antennas: list[float] | None  # [left_angle, right_angle] (in rads)
+    antennas: list[float] | None  # [right_angle, left_angle] (in rads)
     duration: float
     method: InterpolationTechnique
     body_yaw: float | None

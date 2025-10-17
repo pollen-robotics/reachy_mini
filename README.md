@@ -1,15 +1,27 @@
 # Reachy Mini
 
-[Reachy Mini](https://www.pollen-robotics.com/reachy-mini/) is the first open-source desktop robot designed to explore human-robot interaction and creative custom applications. We made it to be affordable, easy to use, hackable and cute, so that you can focus on building cool AI applications!
+> ⚠️ Reachy Mini is still in beta. Expect bugs, some of them we won't fix right away if they are not a priority.
+
+[Reachy Mini](https://www.pollen-robotics.com/reachy-mini/) is an expressive, open-source robot designed for human-robot interaction, creative coding, and AI experimentation. We made it to be affordable, easy to use, hackable and cute, so that you can focus on building cool AI applications!
 
 [![Reachy Mini Hello](/docs/assets/reachy_mini_hello.gif)](https://www.pollen-robotics.com/reachy-mini/)
 
+### Versions Lite & Wireless
+
+Reachy Mini's hardware comes in two flavors:
+- **Reachy Mini lite**: where the robot is directly connected to your computer via USB. And the code that controls the robot (the daemon) runs on your computer.
+- **Reachy Mini wireless**: where an Raspberry Pi is embedded in the robot, and the code that controls the robot (the daemon) runs on the Raspberry Pi. You can connect to it via Wi-Fi from your computer. (TODO: add link to section on how to set it up)
+
+There is also a simulated version of Reachy Mini in [MuJoCo](https://mujoco.org) that you can use to prototype your applications before deploying them on the real robot. It behaves like the lite version where the daemon runs on your computer.
+
+## Software overview
+
 This repository provides everything you need to control Reachy Mini, both in simulation and on the real robot. It consists of two main parts:
 
-- **Daemon**: A background service that manages communication with the robot's motors and sensors, or with the simulation environment. 
-- **Python API**: A simple to use API to control the robot's features (head, antennas, camera, speakers, microphone, etc.) from your own Python scripts that you can connect with your AI experimentation.
+- **The 😈 Daemon 😈**: A background service that manages communication with the robot's motors and sensors, or with the simulation environment. It should be running before you can control the robot. It can run either for the simulation (MuJoCo) or for the real robot. 
+- **🐍 SDK & 🕸️ API** to control the robot's main features (head, antennas, camera, speakers, microphone, etc.) and connect with your AI experimentation. Depending on your preferences and needs, there is a [Python SDK](#using-the-python-sdk) and a [HTTP REST API](#using-the-rest-api).
 
-Making your robot move should only require a few lines of code, as illustrated in the example below:
+Using the [Python SDK](#using-the-python-sdk), making your robot move only require a few lines of code, as illustrated in the example below:
 
 ```python
 from reachy_mini import ReachyMini
@@ -25,9 +37,21 @@ with ReachyMini() as reachy_mini:
     reachy_mini.goto_target(head=pose, duration=2.0)
 ```
 
-## Installation
+and using the [REST API](#using-the-rest-api), reading the current state of the robot:
 
-We support and test on Linux and macOS. We are working on Windows support, but it is not yet available. Any Python 3.8+ environment should work.
+```bash
+curl 'http://localhost:8000/api/state/full'
+```
+
+Those two examples above assume that the daemon is already running (either in simulation or on the real robot) locally.
+
+## Installation of the daemon and Python SDK
+
+As mentioned above, before being able to use the robot, you need to run the daemon that will handle the communication with the motors.
+
+We support and test on Linux and macOS. It's also working on Windows, but it is less tested at the moment. Do not hesitate to open an issue if you encounter any problem. 
+
+The daemon is built in Python, so you need to have Python installed on your computer (versions from 3.10 to 3.13 are supported). We recommend using a virtual environment to avoid dependency conflicts with your other Python projects.
 
 You can install Reachy Mini from the source code or from PyPI.
 
@@ -44,7 +68,7 @@ git clone https://github.com/pollen-robotics/reachy_mini
 pip install -e ./reachy_mini
 ```
 
-It requires Python 3.10 or later.
+The same package provides both the daemon and the Python SDK.
 
 ## Run the reachy mini daemon
 
@@ -57,7 +81,7 @@ reachy-mini-daemon
 or run it via the Python module:
 
 ```bash
-python -m reachy_mini.daemon.cli
+python -m reachy_mini.daemon.app.main
 ```
 
 Additional argument for both simulation and real robot:
@@ -73,6 +97,14 @@ or
 ```
 
 ### In simulation ([MuJoCo](https://mujoco.org))
+
+You first have to install the optional dependency `mujoco`.
+
+```bash
+pip install reachy-mini[mujoco]
+```
+
+Then run the daemon with the `--sim` argument.
 
 ```bash
 reachy-mini-daemon --sim
@@ -90,10 +122,10 @@ Additional arguments:
 *Note: On OSX in order to run mujoco, you need to use mjpython (see [here](https://mujoco.readthedocs.io/en/stable/python.html#passive-viewer)). So, you should run the daemon with:*
 
 ```bash
- mjpython -m reachy_mini.daemon.cli --sim
+ mjpython -m reachy_mini.daemon.app.main --sim
  ```
 
-### On the real robot
+### For the lite version (connected via USB)
 
 It should automatically detect the serial port of the robot. If it does not, you can specify it manually with the `-p` option:
 
@@ -101,29 +133,19 @@ It should automatically detect the serial port of the robot. If it does not, you
 reachy-mini-daemon -p <serial_port>
 ```
 
-## Run the examples
+### Usage
 
-Once the daemon is running, you can run the examples.
+For more information about the daemon and its options, you can run:
 
-* To show the camera feed of the robot in a window, you can run:
+```bash
+reachy-mini-daemon --help
+```
 
-    ```bash
-    python examples/camera_viewer.py
-    ```
+## Run the demo
 
-* To show an example on how to use the look_at method to make the robot look at a point in 2D space, you can run:
+Conversational demo for the Reachy Mini robot combining LLM realtime APIs, vision pipelines, and choreographed motion libraries: [reachy_mini_conversation_demo](https://github.com/pollen-robotics/reachy_mini_conversation_demo).
 
-    ```bash
-    python examples/look_at_image.py
-    ```
-
-* To illustrate the differences between the interpolation methods when running the goto method (linear, minimum jerk, cartoon, etc).
-
-    ```bash
-    python examples/goto_interpolation_playground.py
-    ```
-
-## Reachy Mini's API
+## Using the Python SDK
 
 The API is designed to be simple and intuitive. You can control the robot's features such as the head, antennas, camera, speakers, and microphone. For instance, to move the head of the robot, you can use the `goto_target` method as shown in the example below:
 
@@ -141,10 +163,27 @@ with ReachyMini() as reachy_mini:
     reachy_mini.goto_target(head=pose, duration=2.0)
 ```
 
-For a full description of the SDK, please refer to the [documentation](./docs/API.md).
+For a full description of the SDK, please refer to the [Python SDK documentation](./docs/python-sdk.md).
 
+## Using the REST API
 
-## Contribute
+The daemon also provides a REST API via [fastapi](https://fastapi.tiangolo.com/) that you can use to control the robot and get its state. The API is accessible via HTTP and WebSocket.
+
+By default, the API server runs on `http://localhost:8000`. The API is documented using OpenAPI, and you can access the documentation at `http://localhost:8000/docs` when the daemon is running.
+
+More information about the API can be found in the [HTTP API documentation](./docs/rest-api.md).
+
+## Open source & contribution
+
+This project is actively developed and maintained by the [Pollen Robotics team](https://www.pollen-robotics.com) and the [Hugging Face team](https://huggingface.co/). 
+
+We welcome contributions from the community! If you want to report a bug or request a feature, please open an issue on GitHub. If you want to contribute code, please fork the repository and submit a pull request.
+
+### 3D models
+
+TODO
+
+### Contributing
 
 Development tools are available in the optional dependencies.
 
@@ -161,10 +200,15 @@ pre-commit run --all-files
 
 Checks are performed by Ruff. You may want to [configure your IDE to support it](https://docs.astral.sh/ruff/editors/setup/).
 
+## License
+
+This project is licensed under the Apache 2.0 License - see the [LICENSE](LICENSE) file for details.
+
+The robot design files are licensed under the [TODO](TODO) license.
+
 ### Simulation model used
 
 - https://polyhaven.com/a/food_apple_01
 - https://polyhaven.com/a/croissant
 - https://polyhaven.com/a/wooden_table_02
 - https://polyhaven.com/a/rubber_duck_toy
-

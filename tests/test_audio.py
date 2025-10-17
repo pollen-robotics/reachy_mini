@@ -10,7 +10,7 @@ def test_play_sound_default_backend():
     """Test playing a sound with the default backend."""
     media = MediaManager(backend=MediaBackend.DEFAULT_NO_VIDEO)
     # Use a short sound file present in your assets directory
-    sound_file = "proud2.wav"  # Change to a valid file if needed
+    sound_file = "wake_up.wav"  # Change to a valid file if needed
     media.play_sound(sound_file)
     print("Playing sound with default backend...")
     # Wait a bit to let the sound play (non-blocking backend)
@@ -56,7 +56,7 @@ def test_play_sound_gstreamer_backend():
     """Test playing a sound with the GStreamer backend."""
     media = MediaManager(backend=MediaBackend.GSTREAMER)
     # Use a short sound file present in your assets directory
-    sound_file = "proud2.wav"  # Change to a valid file if needed
+    sound_file = "wake_up.wav"  # Change to a valid file if needed
     media.play_sound(sound_file)
     print("Playing sound with GStreamer backend...")
     # Wait a bit to let the sound play (non-blocking backend)

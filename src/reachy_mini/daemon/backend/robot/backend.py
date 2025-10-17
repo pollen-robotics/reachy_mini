@@ -13,6 +13,7 @@ from datetime import timedelta
 from multiprocessing import Event
 from typing import Annotated, Any  # It seems to be more accurate than threading.Event
 
+import log_throttling
 import numpy as np
 import numpy.typing as npt
 from reachy_mini_motor_controller import ReachyMiniPyControlLoop
@@ -182,7 +183,9 @@ class RobotBackend(Backend):
                             self.target_head_pose, self.target_body_yaw
                         )
                     except ValueError as e:
-                        self.logger.warning(f"IK error: {e}")
+                        log_throttling.by_time(self.logger, interval=0.5).warning(
+                            f"IK error: {e}"
+                        )
 
                 if not self.is_shutting_down:
                     self.joint_positions_publisher.put(
@@ -408,9 +411,9 @@ class RobotBackend(Backend):
         # Conversion factor from Nm to mA for the Stewart platform motors
         # The torque constant is not linear, so we need to use a correction factor
         # This is a magic number that should be determined experimentally
-        # For currents under 30mA, the constant is around 3
+        # For currents under 30mA, the constant is around 4.0
         # Then it drops to 1.0 for currents above 1.5A
-        correction_factor = 3.0
+        correction_factor = 4.0
         # Get the current head joint positions
         head_joints = self.get_present_head_joint_positions()
         gravity_torque = self.head_kinematics.compute_gravity_torque(  # type: ignore [union-attr]

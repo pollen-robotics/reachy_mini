@@ -39,7 +39,7 @@ SLEEP_HEAD_JOINT_POSITIONS = [
 ]
 
 
-SLEEP_ANTENNAS_JOINT_POSITIONS = [3.05, -3.05]
+SLEEP_ANTENNAS_JOINT_POSITIONS = [-3.05, 3.05]
 SLEEP_HEAD_POSE = np.array(
     [
         [0.911, 0.004, 0.413, -0.021],
@@ -154,8 +154,8 @@ class ReachyMini:
         head: Optional[npt.NDArray[np.float64]] = None,  # 4x4 pose matrix
         antennas: Optional[
             Union[npt.NDArray[np.float64], List[float]]
-        ] = None,  # [left_angle, right_angle] (in rads)
-        body_yaw: float = 0.0,  # Body yaw angle in radians
+        ] = None,  # [right_angle, left_angle] (in rads)
+        body_yaw: Optional[float] = None,  # Body yaw angle in radians
     ) -> None:
         """Set the target pose of the head and/or the target position of the antennas.
 
@@ -168,8 +168,10 @@ class ReachyMini:
             ValueError: If neither head nor antennas are provided, or if the shape of head is not (4, 4), or if antennas is not a 1D array with two elements.
 
         """
-        if head is None and antennas is None:
-            raise ValueError("At least one of head or antennas must be provided.")
+        if head is None and antennas is None and body_yaw is None:
+            raise ValueError(
+                "At least one of head, antennas or body_yaw must be provided."
+            )
 
         if head is not None and not head.shape == (4, 4):
             raise ValueError(f"Head pose must be a 4x4 matrix, got shape {head.shape}.")
@@ -179,22 +181,33 @@ class ReachyMini:
                 "Antennas must be a list or 1D np array with two elements."
             )
 
-        if antennas is not None:
-            self._set_joint_positions(
-                antennas_joint_positions=list(antennas),
-            )
+        if body_yaw is not None and not isinstance(body_yaw, (int, float)):
+            raise ValueError("body_yaw must be a float.")
+
         if head is not None:
-            self.set_target_head_pose(head, body_yaw)
+            self.set_target_head_pose(head)
+
+        if antennas is not None:
+            self.set_target_antenna_joint_positions(list(antennas))
+            # self._set_joint_positions(
+            #     antennas_joint_positions=list(antennas),
+            # )
+
+        if body_yaw is not None:
+            self.set_target_body_yaw(body_yaw)
+
         self._last_head_pose = head
 
         record: Dict[str, float | List[float] | List[List[float]]] = {
             "time": time.time(),
-            "body_yaw": body_yaw,
+            "body_yaw": body_yaw if body_yaw is not None else 0.0,
         }
         if head is not None:
             record["head"] = head.tolist()
         if antennas is not None:
             record["antennas"] = list(antennas)
+        if body_yaw is not None:
+            record["body_yaw"] = body_yaw
         self._set_record_data(record)
 
     def goto_target(
@@ -202,7 +215,7 @@ class ReachyMini:
         head: Optional[npt.NDArray[np.float64]] = None,  # 4x4 pose matrix
         antennas: Optional[
             Union[npt.NDArray[np.float64], List[float]]
-        ] = None,  # [left_angle, right_angle] (in rads)
+        ] = None,  # [right_angle, left_angle] (in rads)
         duration: float = 0.5,  # Duration in seconds for the movement, default is 0.5 seconds.
         method: InterpolationTechnique = InterpolationTechnique.MIN_JERK,  # can be "linear", "minjerk", "ease" or "cartoon", default is "minjerk")
         body_yaw: float | None = 0.0,  # Body yaw angle in radians
@@ -220,8 +233,10 @@ class ReachyMini:
             ValueError: If neither head nor antennas are provided, or if duration is not positive.
 
         """
-        if head is None and antennas is None:
-            raise ValueError("At least one of head or antennas must be provided.")
+        if head is None and antennas is None and body_yaw is None:
+            raise ValueError(
+                "At least one of head, antennas or body_yaw must be provided."
+            )
 
         if duration <= 0.0:
             raise ValueError(
@@ -249,7 +264,7 @@ class ReachyMini:
         time.sleep(0.1)
 
         # Toudoum
-        self.media.play_sound("proud2.wav")
+        self.media.play_sound("wake_up.wav")
 
         # Roll 20° to the left
         pose = INIT_HEAD_POSE.copy()
@@ -428,7 +443,7 @@ class ReachyMini:
         ] = None,  # [yaw, stewart_platform x 6] length 7
         antennas_joint_positions: Optional[
             List[float]
-        ] = None,  # [left_angle, right_angle] length 2
+        ] = None,  # [right_angle, left_angle] length 2
         duration: float = 0.5,  # Duration in seconds for the movement
     ) -> None:
         """Go to a target head joint positions and/or antennas joint positions using joint space interpolation, in "duration" seconds.
@@ -544,11 +559,7 @@ class ReachyMini:
 
         self.client.send_command(json.dumps(cmd))
 
-    def set_target_head_pose(
-        self,
-        pose: npt.NDArray[np.float64],
-        body_yaw: float = 0.0,
-    ) -> None:
+    def set_target_head_pose(self, pose: npt.NDArray[np.float64]) -> None:
         """Set the head pose to a specific 4x4 matrix.
 
         Args:
@@ -569,13 +580,21 @@ class ReachyMini:
         else:
             raise ValueError("Pose must be provided as a 4x4 matrix.")
 
-        cmd["body_yaw"] = body_yaw
-
         self.client.send_command(json.dumps(cmd))
 
     def set_target_antenna_joint_positions(self, antennas: List[float]) -> None:
         """Set the target joint positions of the antennas."""
         cmd = {"antennas_joint_positions": antennas}
+        self.client.send_command(json.dumps(cmd))
+
+    def set_target_body_yaw(self, body_yaw: float) -> None:
+        """Set the target body yaw.
+
+        Args:
+            body_yaw (float): The yaw angle of the body in radians.
+
+        """
+        cmd = {"body_yaw": body_yaw}
         self.client.send_command(json.dumps(cmd))
 
     def start_recording(self) -> None:
@@ -671,10 +690,9 @@ class ReachyMini:
 
             head, antennas, body_yaw = move.evaluate(t)
             if head is not None:
-                self.set_target_head_pose(
-                    head,
-                    body_yaw=body_yaw if body_yaw is not None else 0.0,
-                )
+                self.set_target_head_pose(head)
+            if body_yaw is not None:
+                self.set_target_body_yaw(body_yaw)
             if antennas is not None:
                 self.set_target_antenna_joint_positions(list(antennas))
 

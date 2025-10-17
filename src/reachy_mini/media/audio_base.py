@@ -25,6 +25,7 @@ class AudioBackend(Enum):
 class AudioBase(ABC):
     """Abstract class for opening and managing audio devices."""
 
+    SAMPLE_RATE = 16000  # respeaker samplerate
     TIMEOUT = 100000
     PARAMETERS = {
         "VERSION": (48, 0, 4, "ro", "uint8"),
@@ -54,11 +55,6 @@ class AudioBase(ABC):
     @abstractmethod
     def get_audio_sample(self) -> Optional[bytes | npt.NDArray[np.float32]]:
         """Read audio data from the device. Returns the data or None if error."""
-        pass
-
-    @abstractmethod
-    def get_audio_samplerate(self) -> int:
-        """Return the samplerate of the audio device."""
         pass
 
     @abstractmethod
