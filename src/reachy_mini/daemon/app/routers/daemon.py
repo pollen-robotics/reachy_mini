@@ -27,9 +27,6 @@ async def start_daemon(
         raise HTTPException(status_code=409, detail="Daemon is busy.")
 
     async def start(logger: logging.Logger) -> None:
-        forward_handler = bg_job_register.ForwardHandler(logger)
-        daemon.logger.addHandler(forward_handler)
-
         with busy_lock:
             await daemon.start(
                 sim=request.app.state.args.sim,
