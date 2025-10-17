@@ -21,6 +21,8 @@ async def install_package(app: AppInfo, logger: logging.Logger) -> int:
     """Install a package given an AppInfo object, streaming logs."""
     target = f"git+{app.url}" if app.url is not None else app.name
     return await running_command(
+        # ["uv", "--python", sys.executable, "pip", "install", target],
+        # ["uv", "pip", "install", "--python", sys.executable, target],
         ["uv", "pip", "install", target],
         # [sys.executable, "-m", "pip", "install", target],
         logger=logger,
