@@ -92,6 +92,7 @@ class ReachyMini:
         self.set_automatic_body_yaw(automatic_body_yaw)
         self._last_head_pose: Optional[npt.NDArray[np.float64]] = None
         self.is_recording = False
+        self._move_cancelled = False
 
         self.K = np.array(
             [[550.3564, 0.0, 638.0112], [0.0, 549.1653, 364.589], [0.0, 0.0, 1.0]]
@@ -657,6 +658,15 @@ class ReachyMini:
         """
         self.client.send_command(json.dumps({"automatic_body_yaw": body_yaw}))
 
+    def cancel_move(self) -> None:
+        """Cancel the currently playing move.
+
+        This will cause any running play_move or async_play_move to stop
+        at the next iteration of the playback loop.
+        """
+        self._move_cancelled = True
+        self.logger.info("Move cancellation requested")
+
     async def async_play_move(
         self,
         move: Move,
@@ -671,6 +681,9 @@ class ReachyMini:
             initial_goto_duration (float): Duration for the initial goto to the starting position of the move (in seconds). If 0, no initial goto is performed.
 
         """
+        # Reset cancellation flag at the start of each move
+        self._move_cancelled = False
+
         if initial_goto_duration > 0.0:
             start_head_pose, start_antennas_positions, start_body_yaw = move.evaluate(
                 0.0
@@ -686,6 +699,11 @@ class ReachyMini:
 
         t0 = time.time()
         while time.time() - t0 < move.duration:
+            # Check for cancellation
+            if self._move_cancelled:
+                self.logger.info("Move cancelled, stopping playback")
+                break
+
             t = time.time() - t0
 
             head, antennas, body_yaw = move.evaluate(t)
