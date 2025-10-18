@@ -88,11 +88,11 @@ class AudioBase(ABC):
         pass
 
     def _init_respeaker_usb(self) -> Optional[usb.core.Device]:
-        dev = usb.core.find(idVendor=0x2886, idProduct=0x001A)
-        if not dev:
-            return None
-
-        return dev
+        try:
+            dev = usb.core.find(idVendor=0x2886, idProduct=0x001A)
+            return dev
+        except usb.core.NoBackendError:
+            raise usb.core.NoBackendError("No USB backend was found ! Make sure you have either libusb or OpenUSB installed.")
 
     def _read_usb(self, name: str) -> Optional[List[int] | List[float]]:
         try:
