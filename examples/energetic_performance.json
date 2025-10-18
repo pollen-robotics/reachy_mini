@@ -1,0 +1,50 @@
+{
+    "bpm": 160,
+    "sequence": [
+        {
+            "move": "enthusiastic1",
+            "cycles": 3,
+            "amplitude": 1.6
+        },
+        {
+            "move": "electric1",
+            "cycles": 4,
+            "amplitude": 1.8
+        },
+        {
+            "move": "headbanger_combo",
+            "cycles": 5,
+            "amplitude": 1.7
+        },
+        {
+            "move": "laughing1",
+            "cycles": 3,
+            "amplitude": 1.5
+        },
+        {
+            "move": "dizzy_spin",
+            "cycles": 3,
+            "amplitude": 1.4
+        },
+        {
+            "move": "success2",
+            "cycles": 4,
+            "amplitude": 1.6
+        },
+        {
+            "move": "polyrhythm_combo",
+            "cycles": 3,
+            "amplitude": 1.5
+        },
+        {
+            "move": "cheerful1",
+            "cycles": 4,
+            "amplitude": 1.7
+        },
+        {
+            "move": "dance3",
+            "cycles": 5,
+            "amplitude": 1.8
+        }
+    ]
+}

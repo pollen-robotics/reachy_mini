@@ -10,9 +10,10 @@ import json
 import time
 from dataclasses import dataclass
 from importlib.resources import files
-from threading import Thread
+from threading import Thread, Lock
 from typing import Annotated
 
+import cv2
 import log_throttling
 import mujoco
 import mujoco.viewer
@@ -106,6 +107,10 @@ class MujocoBackend(Backend):
             get_joint_addr_from_name(self.model, n) for n in self.joint_names
         ]
 
+        # For 3D viewer streaming
+        self.latest_viewer_frame: bytes | None = None
+        self.viewer_frame_lock = Lock()
+
     def rendering_loop(self) -> None:
         """Offline Rendering loop for the Mujoco simulation.
 
@@ -124,6 +129,50 @@ class MujocoBackend(Backend):
 
             took = time.time() - start_t
             time.sleep(max(0, self.rendering_timestep - took))
+
+    def viewer_rendering_loop(self) -> None:
+        """Render 3D external view for web streaming.
+
+        Captures the external 3D view (same perspective as passive viewer)
+        and stores it as JPEG for HTTP streaming.
+        """
+        viewer_size = (640, 480)
+        viewer_fps = 20  # Balanced performance
+        viewer_timestep = 1.0 / viewer_fps
+
+        offscreen_renderer = mujoco.Renderer(
+            self.model, height=viewer_size[1], width=viewer_size[0]
+        )
+
+        # Set camera to match passive viewer settings
+        camera = mujoco.MjvCamera()
+        camera.type = mujoco.mjtCamera.mjCAMERA_FREE
+        camera.distance = 0.8
+        camera.azimuth = 160
+        camera.elevation = -20
+        camera.lookat[:] = [0, 0, 0.15]
+
+        while not self.should_stop.is_set():
+            start_t = time.time()
+
+            # Update scene with free camera
+            offscreen_renderer.update_scene(self.data, camera=camera)
+            im = offscreen_renderer.render()
+
+            # Convert RGB to BGR for OpenCV
+            im_bgr = cv2.cvtColor(im, cv2.COLOR_RGB2BGR)
+
+            # Encode as JPEG
+            ret, jpeg_bytes = cv2.imencode(
+                ".jpg", im_bgr, [int(cv2.IMWRITE_JPEG_QUALITY), 75]
+            )
+
+            if ret:
+                with self.viewer_frame_lock:
+                    self.latest_viewer_frame = jpeg_bytes.tobytes()
+
+            took = time.time() - start_t
+            time.sleep(max(0, viewer_timestep - took))
 
     def run(self) -> None:
         """Run the Mujoco simulation with a viewer.
@@ -169,6 +218,10 @@ class MujocoBackend(Backend):
 
             rendering_thread = Thread(target=self.rendering_loop, daemon=True)
             rendering_thread.start()
+
+        # Start 3D viewer rendering thread (for web interface)
+        viewer_rendering_thread = Thread(target=self.viewer_rendering_loop, daemon=True)
+        viewer_rendering_thread.start()
 
         # 3) now enter your normal loop
         while not self.should_stop.is_set():

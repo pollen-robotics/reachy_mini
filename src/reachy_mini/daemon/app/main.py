@@ -10,6 +10,8 @@ managing the robot's state.
 import argparse
 import logging
 import os
+import signal
+import sys
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -23,7 +25,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from reachy_mini.apps.manager import AppManager
-from reachy_mini.daemon.app.routers import apps, daemon, kinematics, motors, move, state
+from reachy_mini.daemon.app.routers import apps, daemon, kinematics, motors, move, state, video
 from reachy_mini.daemon.daemon import Daemon
 
 DASHBOARD_PAGES = Path(__file__).parent / "dashboard"
@@ -110,6 +112,7 @@ def create_app(args: Args) -> FastAPI:
     router.include_router(motors.router)
     router.include_router(move.router)
     router.include_router(state.router)
+    router.include_router(video.router)
 
     app.include_router(router)
 
@@ -134,9 +137,28 @@ def create_app(args: Args) -> FastAPI:
 def run_app(args: Args) -> None:
     """Run the FastAPI app with Uvicorn."""
     logging.basicConfig(level=logging.INFO)
+    logger = logging.getLogger(__name__)
+
+    # Signal handler for graceful shutdown
+    def signal_handler(sig, frame):
+        logger.info(f"\nReceived signal {sig}, shutting down gracefully...")
+        sys.exit(0)
+
+    # Register signal handlers
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
 
     app = create_app(args)
-    uvicorn.run(app, host=args.fastapi_host, port=args.fastapi_port)
+
+    try:
+        uvicorn.run(app, host=args.fastapi_host, port=args.fastapi_port)
+    except KeyboardInterrupt:
+        logger.info("\nKeyboardInterrupt received, cleaning up...")
+    except Exception as e:
+        logger.error(f"Error during daemon execution: {e}")
+        raise
+    finally:
+        logger.info("Daemon shutdown complete.")
 
 
 def main() -> None:

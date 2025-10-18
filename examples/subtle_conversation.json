@@ -1,0 +1,45 @@
+{
+    "bpm": 80,
+    "sequence": [
+        {
+            "move": "attentive1",
+            "cycles": 3,
+            "amplitude": 0.8
+        },
+        {
+            "move": "simple_nod",
+            "cycles": 2,
+            "amplitude": 0.7
+        },
+        {
+            "move": "inquiring1",
+            "cycles": 2,
+            "amplitude": 0.9
+        },
+        {
+            "move": "uh_huh_tilt",
+            "cycles": 3,
+            "amplitude": 0.8
+        },
+        {
+            "move": "understanding2",
+            "cycles": 2,
+            "amplitude": 0.9
+        },
+        {
+            "move": "yeah_nod",
+            "cycles": 2,
+            "amplitude": 0.7
+        },
+        {
+            "move": "thoughtful2",
+            "cycles": 3,
+            "amplitude": 0.8
+        },
+        {
+            "move": "serenity1",
+            "cycles": 4,
+            "amplitude": 0.6
+        }
+    ]
+}

@@ -1,0 +1,20 @@
+{
+    "bpm": 100,
+    "sequence": [
+        {
+            "move": "welcoming1",
+            "cycles": 2,
+            "amplitude": 1.2
+        },
+        {
+            "move": "cheerful1",
+            "cycles": 3,
+            "amplitude": 1.0
+        },
+        {
+            "move": "yes1",
+            "cycles": 2,
+            "amplitude": 1.0
+        }
+    ]
+}

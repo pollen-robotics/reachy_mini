@@ -86,7 +86,7 @@ class Backend:
             from reachy_mini.kinematics import PlacoKinematics
 
             self.head_kinematics: AnyKinematics = PlacoKinematics(
-                URDF_ROOT_PATH, check_collision=self.check_collision
+                URDF_ROOT_PATH, check_collision=self.check_collision, automatic_body_yaw=True
             )
         elif self.kinematics_engine == "NN":
             from reachy_mini.kinematics import NNKinematics

@@ -44,6 +44,7 @@ class GotoModelRequest(BaseModel):
 
     head_pose: AnyPose | None = None
     antennas: tuple[float, float] | None = None
+    body_yaw: float | None = None
     duration: float
     interpolation: InterpolationMode = InterpolationMode.MINJERK
 
@@ -60,6 +61,7 @@ class GotoModelRequest(BaseModel):
                         "yaw": 0.0,
                     },
                     "antennas": [0.0, 0.0],
+                    "body_yaw": 0.0,
                     "duration": 2.0,
                     "interpolation": "minjerk",
                 },
@@ -129,6 +131,7 @@ async def goto(
         backend.goto_target(
             head=goto_req.head_pose.to_pose_array() if goto_req.head_pose else None,
             antennas=np.array(goto_req.antennas) if goto_req.antennas else None,
+            body_yaw=goto_req.body_yaw,
             duration=goto_req.duration,
         )
     )
