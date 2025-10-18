@@ -181,40 +181,56 @@ class SoundDeviceAudio(AudioBase):
                 daemon=True,
             ).start()
 
-    def get_output_device_id(self, name_contains: str) -> int:
-        """Return the output device id whose name contains the given string (case-insensitive).
+    def _find_device_id(
+        self, name_contains: str, device_type: str
+    ) -> int:
+        """Find device ID by name and type with fallback logic.
 
-        If not found, return the default output device id.
+        Args:
+            name_contains: Substring to search for in device name (case-insensitive)
+            device_type: Either "input" or "output"
+
+        Returns:
+            Device index
+
+        Raises:
+            RuntimeError: If no device with appropriate channels found
         """
         devices = sd.query_devices()
+        channel_key = f"max_{device_type}_channels"
 
+        # Search for device by name
         for idx, dev in enumerate(devices):
             if (
                 name_contains.lower() in dev["name"].lower()
-                and dev["max_output_channels"] > 0
+                and dev.get(channel_key, 0) > 0
             ):
                 return idx
-        # Return default output device if not found
+
+        # Log warning if named device not found
         self.logger.warning(
-            f"No output device found containing '{name_contains}', using default."
+            f"No {device_type} device found containing '{name_contains}', using fallback."
         )
-        return int(sd.default.device[1])
+
+        # Fallback: return first device with appropriate channels
+        for idx, dev in enumerate(devices):
+            if dev.get(channel_key, 0) > 0:
+                return idx
+
+        raise RuntimeError(
+            f"No {device_type} audio device with {device_type} channels found."
+        )
+
+    def get_output_device_id(self, name_contains: str) -> int:
+        """Return the output device id whose name contains the given string (case-insensitive).
+
+        If not found, return the first available output device.
+        """
+        return self._find_device_id(name_contains, "output")
 
     def get_input_device_id(self, name_contains: str) -> int:
         """Return the input device id whose name contains the given string (case-insensitive).
 
-        If not found, return the default input device id.
+        If not found, return the first available input device.
         """
-        devices = sd.query_devices()
-
-        for idx, dev in enumerate(devices):
-            if (
-                name_contains.lower() in dev["name"].lower()
-                and dev["max_input_channels"] > 0
-            ):
-                return idx
-        # Return default input device if not found
-        self.logger.warning(
-            f"No input device found containing '{name_contains}', using default."
-        )
-        return int(sd.default.device[1])
+        return self._find_device_id(name_contains, "input")
