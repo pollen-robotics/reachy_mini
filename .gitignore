@@ -1,7 +1,13 @@
+# Python
 __pycache__/
-reachy_mini.egg-info/
 *.egg-info/
+src/*.egg-info/
 build/*
 dist/*
+
+# Virtual environments
+/.venv/
+
+# Project-specific
 src/reachy_mini_dashboard/installed_apps/*
 examples/debug/measures/*
