@@ -117,6 +117,7 @@ async def ws_full_state(
     with_target_body_yaw: bool = False,
     with_antenna_positions: bool = True,
     with_target_antenna_positions: bool = False,
+    with_passive_joints: bool = False,
     use_pose_matrix: bool = False,
     backend: Backend = Depends(ws_get_backend),
 ) -> None:
@@ -135,6 +136,7 @@ async def ws_full_state(
                 with_target_body_yaw=with_target_body_yaw,
                 with_antenna_positions=with_antenna_positions,
                 with_target_antenna_positions=with_target_antenna_positions,
+                with_passive_joints=with_passive_joints,
                 use_pose_matrix=use_pose_matrix,
                 backend=backend,
             )
