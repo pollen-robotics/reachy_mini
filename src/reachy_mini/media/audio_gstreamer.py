@@ -7,9 +7,6 @@ By default the module directly returns JPEG images as output by the camera.
 from threading import Thread
 from typing import Optional
 
-import numpy as np
-import numpy.typing as npt
-
 try:
     import gi
 except ImportError as e:
@@ -38,8 +35,6 @@ class GStreamerAudio(AudioBase):
         self._thread_bus_calls = Thread(target=lambda: self._loop.run(), daemon=True)
         self._thread_bus_calls.start()
 
-        self._samplerate = 24000
-
         self._pipeline_record = Gst.Pipeline.new("audio_recorder")
         self._appsink_audio: Optional[GstApp] = None
         self._init_pipeline_record(self._pipeline_record)
@@ -59,7 +54,7 @@ class GStreamerAudio(AudioBase):
     def _init_pipeline_record(self, pipeline: Gst.Pipeline) -> None:
         self._appsink_audio = Gst.ElementFactory.make("appsink")
         caps = Gst.Caps.from_string(
-            f"audio/x-raw,channels=2,rate={self._samplerate},format=F32LE"
+            f"audio/x-raw,channels=2,rate={self.SAMPLE_RATE},format=F32LE"
         )
         self._appsink_audio.set_property("caps", caps)
         self._appsink_audio.set_property("drop", True)  # avoid overflow
@@ -92,6 +87,7 @@ class GStreamerAudio(AudioBase):
 
     def __del__(self) -> None:
         """Destructor to ensure gstreamer resources are released."""
+        super().__del__()
         self._loop.quit()
         self._bus_record.remove_watch()
         self._bus_playback.remove_watch()
@@ -101,7 +97,7 @@ class GStreamerAudio(AudioBase):
         self._appsrc.set_property("format", Gst.Format.TIME)
         self._appsrc.set_property("is-live", True)
         caps = Gst.Caps.from_string(
-            f"audio/x-raw,format=F32LE,channels=1,rate={self._samplerate},layout=interleaved"
+            f"audio/x-raw,format=F32LE,channels=1,rate={self.SAMPLE_RATE},layout=interleaved"
         )
         self._appsrc.set_property("caps", caps)
 
@@ -163,10 +159,6 @@ class GStreamerAudio(AudioBase):
         if sample is None:
             return None
         return np.frombuffer(sample, dtype=np.float32).reshape(-1, 2)
-
-    def get_audio_samplerate(self) -> int:
-        """Return the samplerate of the audio device."""
-        return self._samplerate
 
     def stop_recording(self) -> None:
         """Release the camera resource."""

@@ -158,7 +158,7 @@ class MediaManager:
         if self.audio is None:
             self.logger.warning("Audio system is not initialized.")
             return -1
-        return self.audio.get_audio_samplerate()
+        return self.audio.SAMPLE_RATE
 
     def stop_recording(self) -> None:
         """Stop recording audio."""
