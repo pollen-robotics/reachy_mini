@@ -121,7 +121,7 @@ const daemon = {
             daemonStatusAnim.setAttribute('data', '/static/assets/reachy-mini-sleeping.svg');
             toggleDaemonSwitch.checked = false;
             backendStatusIcon.classList.add('bg-yellow-500');
-            backendStatusText.textContent = 'Sleeping...';
+            backendStatusText.textContent = 'Stopped';
         }
         else if (daemonState === 'error') {
             daemonStatusAnim.setAttribute('data', '/static/assets/reachy-mini-ko-animation.svg');
