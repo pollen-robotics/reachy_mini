@@ -13,6 +13,7 @@ from typing import List, Optional
 import numpy as np
 import numpy.typing as npt
 import usb
+from libusb_package import get_libusb1_backend
 
 
 class AudioBackend(Enum):
@@ -89,10 +90,10 @@ class AudioBase(ABC):
 
     def _init_respeaker_usb(self) -> Optional[usb.core.Device]:
         try:
-            dev = usb.core.find(idVendor=0x2886, idProduct=0x001A)
+            dev = usb.core.find(idVendor=0x2886, idProduct=0x001A, backend=get_libusb1_backend())
             return dev
         except usb.core.NoBackendError:
-            raise usb.core.NoBackendError("No USB backend was found ! Make sure you have either libusb or OpenUSB installed.")
+            raise usb.core.NoBackendError("No USB backend was found ! Make sure libusb_package is correctly installed with `pip install libusb_package`.")
 
     def _read_usb(self, name: str) -> Optional[List[int] | List[float]]:
         try:
