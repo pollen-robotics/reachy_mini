@@ -46,11 +46,16 @@ const installedApps = {
         installedApps.setBusy(true);
 
         console.log(`Stopping app: ${appName}...`);
+
+        if (force) {
+            console.log(`Force stopping app: ${appName}...`);
+            installedApps.toggles[appName].setChecked(false);
+        }
+
         const endpoint = `/api/apps/stop-current-app`;
         const resp = await fetch(endpoint, { method: 'POST' });
         if (!resp.ok) {
             console.error(`Failed to stop app ${appName}: ${resp.statusText}`);
-            installedApps.toggles[appName].setChecked(true);
             installedApps.setBusy(false);
             return;
         } else {
