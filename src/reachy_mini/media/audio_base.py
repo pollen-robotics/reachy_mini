@@ -41,6 +41,7 @@ class AudioBase(ABC):
         self.logger.setLevel(log_level)
         self.backend = backend
         self._respeaker = self._init_respeaker_usb()
+        # name, resid, cmdid, length, type
 
     def __del__(self) -> None:
         """Destructor to ensure resources are released."""
@@ -89,15 +90,10 @@ class AudioBase(ABC):
 
     def _init_respeaker_usb(self) -> Optional[usb.core.Device]:
         try:
-            dev = usb.core.find(
-                idVendor=0x2886, idProduct=0x001A, backend=get_libusb1_backend()
-            )
+            dev = usb.core.find(idVendor=0x2886, idProduct=0x001A, backend=get_libusb1_backend())
             return dev
         except usb.core.NoBackendError:
-            self.logger.error(
-                "No USB backend was found ! Make sure libusb_package is correctly installed with `pip install libusb_package`."
-            )
-            return None
+            raise usb.core.NoBackendError("No USB backend was found ! Make sure libusb_package is correctly installed with `pip install libusb_package`.")
 
     def _read_usb(self, name: str) -> Optional[List[int] | List[float]]:
         try:
