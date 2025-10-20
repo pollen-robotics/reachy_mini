@@ -152,7 +152,7 @@ const daemon = {
 };
 
 
-window.onload = async () => {
+window.addEventListener('load', async () => {
     document.getElementById('daemon-toggle').onchange = daemon.toggleSwitch;
     await daemon.getStatus();
-};
+});
