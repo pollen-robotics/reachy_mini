@@ -54,7 +54,7 @@ class AudioBase(ABC):
         pass
 
     @abstractmethod
-    def get_audio_sample(self) -> Optional[bytes | npt.NDArray[np.float32]]:
+    def get_audio_sample(self) -> Optional[npt.NDArray[np.float32]]:
         """Read audio data from the device. Returns the data or None if error."""
         pass
 
@@ -69,7 +69,7 @@ class AudioBase(ABC):
         pass
 
     @abstractmethod
-    def push_audio_sample(self, data: bytes) -> None:
+    def push_audio_sample(self, data: npt.NDArray[np.float32]) -> None:
         """Push audio data to the output device."""
         pass
 
