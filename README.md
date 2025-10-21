@@ -14,6 +14,11 @@ Reachy Mini's hardware comes in two flavors:
 
 There is also a simulated version of Reachy Mini in [MuJoCo](https://mujoco.org) that you can use to prototype your applications before deploying them on the real robot. It behaves like the lite version where the daemon runs on your computer.
 
+## Assembly guide
+
+Follow our step-by-step Assembly Guide [here](https://www.pollen-robotics.com/wp-content/uploads/2025/10/Reachy_Mini_Assembly_BETA_v2_LOW-compresse.pdf).
+Most builders finish in about 3 hours, our current speed record is 43 minutes. The guide walks you through every step with clear visuals so you can assemble Reachy Mini confidently from start to finish. Enjoy the build!
+
 ## Software overview
 
 This repository provides everything you need to control Reachy Mini, both in simulation and on the real robot. It consists of two main parts:
