@@ -39,14 +39,14 @@ def test_record_audio_and_file_exists() -> None:
     # print(f"Recorded audio saved to {tmpfile.name}")
 
 @pytest.mark.audio
-def test_DoA():
+def test_DoA() -> None:
     """Test Direction of Arrival (DoA) estimation."""
     media = MediaManager(backend=MediaBackend.DEFAULT_NO_VIDEO)
     doa = media.audio.get_DoA()
     assert doa is not None
     assert isinstance(doa, tuple)
     assert len(doa) == 2
-    assert isinstance(doa[0], int)
+    assert isinstance(doa[0], float)
     assert isinstance(doa[1], bool)
 
 
@@ -80,7 +80,7 @@ def test_record_audio_and_file_exists_gstreamer() -> None:
     media.stop_recording()
 
 
-def test_no_media():
+def test_no_media() -> None:
     """Test that methods handle uninitialized media gracefully."""
     media = MediaManager(backend=MediaBackend.NO_MEDIA)
 
