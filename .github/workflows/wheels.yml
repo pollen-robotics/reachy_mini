@@ -1,0 +1,26 @@
+name: Publish
+
+on:
+  release:
+    types:
+      - created
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          lfs: true
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.10"
+      - name: Install build dependencies
+        run: pip install build
+      - name: Build distribution
+        run: python -m build
+      - name: Publish
+        uses: pypa/gh-action-pypi-publish@v1.13.0

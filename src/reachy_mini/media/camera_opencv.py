@@ -41,7 +41,7 @@ class OpenCVCamera(CameraBase):
         if not self.cap.isOpened():
             raise RuntimeError("Failed to open camera")
 
-    def read(self) -> Optional[bytes | npt.NDArray[np.uint8]]:
+    def read(self) -> Optional[npt.NDArray[np.uint8]]:
         """Read a frame from the camera. Returns the frame or None if error."""
         if self.cap is None:
             raise RuntimeError("Camera is not opened.")

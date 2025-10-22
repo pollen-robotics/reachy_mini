@@ -144,3 +144,4 @@ class FullState(BaseModel):
     body_yaw: float | None = None
     antennas_position: list[float] | None = None
     timestamp: datetime | None = None
+    passive_joints: list[float] | None = None

@@ -13,6 +13,7 @@ from importlib.resources import files
 from threading import Thread
 from typing import Annotated
 
+import log_throttling
 import mujoco
 import mujoco.viewer
 import numpy as np
@@ -191,12 +192,14 @@ class MujocoBackend(Backend):
                             self.target_head_pose, self.target_body_yaw
                         )
                     except ValueError as e:
-                        self.logger.warning(f"IK error: {e}")
+                        log_throttling.by_time(self.logger, interval=0.5).warning(
+                            f"IK error: {e}"
+                        )
 
                 if self.target_head_joint_positions is not None:
                     self.data.ctrl[:7] = self.target_head_joint_positions
                 if self.target_antenna_joint_positions is not None:
-                    self.data.ctrl[-2:] = self.target_antenna_joint_positions
+                    self.data.ctrl[-2:] = -self.target_antenna_joint_positions
 
                 if (
                     self.joint_positions_publisher is not None
@@ -279,7 +282,7 @@ class MujocoBackend(Backend):
         pos: npt.NDArray[np.float64] = self.data.qpos[
             self.joint_qpos_addr[-2:]
         ].flatten()
-        return pos
+        return -pos
 
     def get_motor_control_mode(self) -> MotorControlMode:
         """Get the motor control mode."""

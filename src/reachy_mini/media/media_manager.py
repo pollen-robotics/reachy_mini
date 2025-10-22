@@ -65,6 +65,14 @@ class MediaManager:
             case _:
                 raise NotImplementedError(f"Media backend {backend} not implemented.")
 
+    def __del__(self) -> None:
+        """Destructor to ensure resources are released."""
+        if self.camera is not None:
+            self.camera.close()
+        if self.audio is not None:
+            self.audio.stop_recording()
+            self.audio.stop_playing()
+
     def _init_camera(
         self,
         use_sim: bool,
@@ -93,11 +101,11 @@ class MediaManager:
         else:
             raise NotImplementedError(f"Camera backend {self.backend} not implemented.")
 
-    def get_frame(self) -> Optional[bytes | npt.NDArray[np.uint8]]:
+    def get_frame(self) -> Optional[npt.NDArray[np.uint8]]:
         """Get a frame from the camera.
 
         Returns:
-            Optional[bytes | npt.NDArray[np.uint8]]: The captured frame, or None if the camera is not available.
+            Optional[npt.NDArray[np.uint8]]: The captured BGR frame, or None if the camera is not available.
 
         """
         if self.camera is None:
@@ -188,7 +196,7 @@ class MediaManager:
         if self.audio is None:
             self.logger.warning("Audio system is not initialized.")
             return -1
-        return self.audio.get_audio_samplerate()
+        return self.audio.SAMPLE_RATE
 
     def stop_recording(self) -> None:
         """Stop recording audio."""
@@ -204,11 +212,11 @@ class MediaManager:
             return
         self.audio.start_playing()
 
-    def push_audio_sample(self, data: bytes) -> None:
+    def push_audio_sample(self, data: npt.NDArray[np.float32]) -> None:
         """Push audio data to the output device.
 
         Args:
-            data: The audio data to push to the output device.
+            data (npt.NDArray[np.float32]): The audio data to push to the output device (mono format).
 
         """
         if self.audio is None:

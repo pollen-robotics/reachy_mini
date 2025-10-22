@@ -10,7 +10,6 @@ Note: The daemon must be running before executing this script.
 import argparse
 
 import cv2
-import numpy as np
 
 from reachy_mini import ReachyMini
 
@@ -34,18 +33,12 @@ def main(backend: str) -> None:
     print("Press 'q' to quit the camera feed.")
     with ReachyMini(media_backend=backend) as reachy_mini:
         try:
-            is_wireless = reachy_mini.client.get_status()["wireless_version"]
             while True:
                 frame = reachy_mini.media.get_frame()
 
                 if frame is None:
                     print("Failed to grab frame.")
                     continue
-
-                if backend == "gstreamer" and not is_wireless:
-                    frame = cv2.imdecode(
-                        np.frombuffer(frame, dtype=np.uint8), cv2.IMREAD_COLOR
-                    )
 
                 cv2.imshow("Reachy Mini Camera", frame)
                 if cv2.waitKey(1) & 0xFF == ord("q"):

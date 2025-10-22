@@ -1,5 +1,7 @@
 # Reachy Mini
 
+> ⚠️ Reachy Mini is still in beta. Expect bugs, some of them we won't fix right away if they are not a priority.
+
 [Reachy Mini](https://www.pollen-robotics.com/reachy-mini/) is an expressive, open-source robot designed for human-robot interaction, creative coding, and AI experimentation. We made it to be affordable, easy to use, hackable and cute, so that you can focus on building cool AI applications!
 
 [![Reachy Mini Hello](/docs/assets/reachy_mini_hello.gif)](https://www.pollen-robotics.com/reachy-mini/)
@@ -11,6 +13,11 @@ Reachy Mini's hardware comes in two flavors:
 - **Reachy Mini wireless**: where an Raspberry Pi is embedded in the robot, and the code that controls the robot (the daemon) runs on the Raspberry Pi. You can connect to it via Wi-Fi from your computer. (TODO: add link to section on how to set it up)
 
 There is also a simulated version of Reachy Mini in [MuJoCo](https://mujoco.org) that you can use to prototype your applications before deploying them on the real robot. It behaves like the lite version where the daemon runs on your computer.
+
+## Assembly guide
+
+Follow our step-by-step [Assembly Guide](https://www.pollen-robotics.com/wp-content/uploads/2025/10/Reachy_Mini_Assembly_BETA_v2_LOW-compresse.pdf).
+Most builders finish in about 3 hours, our current speed record is 43 minutes. The guide walks you through every step with clear visuals so you can assemble Reachy Mini confidently from start to finish. Enjoy the build!
 
 ## Software overview
 
