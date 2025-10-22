@@ -97,7 +97,7 @@ class AnalyticalKinematics:
 
         if no_iterations < 1:
             raise ValueError("no_iterations must be at least 1")
-
+    
         T_world_platform = None
         for _ in range(no_iterations):
             T_world_platform = np.array(
