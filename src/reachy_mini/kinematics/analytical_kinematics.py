@@ -46,13 +46,13 @@ class AnalyticalKinematics:
         for motor in self.motors:
             self.kin.add_branch(
                 motor["branch_position"],
-                np.linalg.inv(motor["T_motor_world"]),  # type: ignore[arg-type]
+                np.linalg.inv(motor["T_motor_world"]), 
                 1 if motor["solution"] else -1,
             )
 
         sleep_head_pose = SLEEP_HEAD_POSE.copy()
         sleep_head_pose[:3, 3][2] += self.head_z_offset
-        self.kin.reset_forward_kinematics(sleep_head_pose)  # type: ignore[arg-type]
+        self.kin.reset_forward_kinematics(sleep_head_pose)  
 
     def ik(
         self,
@@ -65,8 +65,6 @@ class AnalyticalKinematics:
 
         check_collision and no_iterations are not used by AnalyticalKinematics. We keep them for compatibility with the other kinematics engines
         """
-        # import time
-        # k = time.time()
         _pose = pose.copy()
         _pose[:3, 3][2] += self.head_z_offset
            
@@ -77,9 +75,9 @@ class AnalyticalKinematics:
         reachy_joints = self.kin.inverse_kinematics_safe(_pose, 
                                                          body_yaw = body_yaw, 
                                                          max_relative_yaw = np.deg2rad(65), 
-                                                         max_body_yaw = np.deg2rad(160))  # type: ignore[arg-type]
-        # print("IK time {0:.3f}us".format((time.time() - k)*1e6))
-        return np.array(reachy_joints)  # type: ignore[arg-type]
+                                                         max_body_yaw = np.deg2rad(160))  
+        
+        return np.array(reachy_joints)  
 
     def fk(
         self,
@@ -97,7 +95,7 @@ class AnalyticalKinematics:
 
         if no_iterations < 1:
             raise ValueError("no_iterations must be at least 1")
-    
+
         T_world_platform = None
         for _ in range(no_iterations):
             T_world_platform = np.array(
