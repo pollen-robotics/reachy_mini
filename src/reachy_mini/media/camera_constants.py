@@ -12,6 +12,7 @@ class CameraResolution(Enum):
     R1600x1200 = (1600, 1200, 30)
     R1280x720 = (1280, 720, 30)
 
+
 class RPICameraResolution(Enum):
     """Camera resolutions. Raspberry Pi Camera.
 

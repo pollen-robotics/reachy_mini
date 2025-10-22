@@ -40,11 +40,11 @@ class GstWebRTCClient(CameraBase, AudioBase):
 
         self._appsink_audio = Gst.ElementFactory.make("appsink")
         caps = Gst.Caps.from_string(
-            f"audio/x-raw,channels=1,rate={self.SAMPLERATE},format=S16LE"
+            f"audio/x-raw,channels=2,rate={self.SAMPLE_RATE},format=F32LE"
         )
         self._appsink_audio.set_property("caps", caps)
         self._appsink_audio.set_property("drop", True)  # avoid overflow
-        self._appsink_audio.set_property("max-buffers", 200)
+        self._appsink_audio.set_property("max-buffers", 500)
         self.pipeline.add(self._appsink_audio)
 
         self._appsink_video = Gst.ElementFactory.make("appsink")
@@ -61,6 +61,7 @@ class GstWebRTCClient(CameraBase, AudioBase):
         self.pipeline.add(webrtcsrc)
 
         self._webrtcsink: Optional[Gst.Element] = None
+        self._appsrc: Optional[Gst.Element] = None
 
     def _configure_webrtcsrc(
         self, signaling_host: str, signaling_port: int, peer_id: str
@@ -112,8 +113,18 @@ class GstWebRTCClient(CameraBase, AudioBase):
             self._appsink_video.sync_state_with_parent()
 
         elif pad.get_name().startswith("audio"):
-            pad.link(self._appsink_audio.get_static_pad("sink"))
+            audioconvert = Gst.ElementFactory.make("audioconvert")
+            audioresample = Gst.ElementFactory.make("audioresample")
+            self.pipeline.add(audioconvert)
+            self.pipeline.add(audioresample)
+
+            pad.link(audioconvert.get_static_pad("sink"))
+            audioconvert.link(audioresample)
+            audioresample.link(self._appsink_audio)
+
             self._appsink_audio.sync_state_with_parent()
+            audioconvert.sync_state_with_parent()
+            audioresample.sync_state_with_parent()
 
     def _on_bus_message(self, bus: Gst.Bus, msg: Gst.Message, loop) -> bool:  # type: ignore[no-untyped-def]
         t = msg.type
@@ -155,14 +166,17 @@ class GstWebRTCClient(CameraBase, AudioBase):
             data = buf.extract_dup(0, buf.get_size())
         return data
 
-    def get_audio_sample(self) -> Optional[bytes]:
+    def get_audio_sample(self) -> Optional[npt.NDArray[np.float32]]:
         """Read a sample from the audio card. Returns the sample or None if error.
 
         Returns:
-            Optional[bytes]: The captured sample in raw format, or None if error.
+            Optional[npt.NDArray[np.float32]]: The captured sample in raw format, or None if error.
 
         """
-        return self._get_sample(self._appsink_audio)
+        sample = self._get_sample(self._appsink_audio)
+        if sample is None:
+            return None
+        return np.frombuffer(sample, dtype=np.float32).reshape(-1, 2)
 
     def read(self) -> Optional[npt.NDArray[np.uint8]]:
         """Read a frame from the camera. Returns the frame or None if error.
@@ -191,11 +205,11 @@ class GstWebRTCClient(CameraBase, AudioBase):
 
     def start_recording(self) -> None:
         """Open the audio card using GStreamer."""
-        self.logger.warning("start_recording() is not implemented.")
+        pass  # already started in open()
 
     def stop_recording(self) -> None:
         """Release the camera resource."""
-        self.logger.warning("stop_recording() is not implemented.")
+        pass  # managed in close()
 
     def start_playing(self) -> None:
         """Open the audio output using GStreamer."""
@@ -216,7 +230,7 @@ class GstWebRTCClient(CameraBase, AudioBase):
         self._appsrc.set_property("format", Gst.Format.TIME)
         self._appsrc.set_property("is-live", True)
         caps = Gst.Caps.from_string(
-            f"audio/x-raw,format=F32LE,channels=1,rate={self._samplerate},layout=interleaved"
+            f"audio/x-raw,format=F32LE,channels=1,rate={self.SAMPLE_RATE},layout=interleaved"
         )
         self._appsrc.set_property("caps", caps)
 

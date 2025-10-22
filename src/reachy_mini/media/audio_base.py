@@ -7,7 +7,6 @@ interface for audio input/output.
 import logging
 import struct
 from abc import ABC, abstractmethod
-from enum import Enum
 from typing import List, Optional
 
 import numpy as np
@@ -31,7 +30,7 @@ class AudioBase(ABC):
     def __init__(self, log_level: str = "INFO") -> None:
         """Initialize the audio device."""
         self.logger = logging.getLogger(__name__)
-        self.logger.setLevel(log_level)        
+        self.logger.setLevel(log_level)
         self._respeaker = self._init_respeaker_usb()
         # name, resid, cmdid, length, type
 
