@@ -46,13 +46,13 @@ class AnalyticalKinematics:
         for motor in self.motors:
             self.kin.add_branch(
                 motor["branch_position"],
-                np.linalg.inv(motor["T_motor_world"]), 
+                np.linalg.inv(motor["T_motor_world"]),  # type: ignore[arg-type]
                 1 if motor["solution"] else -1,
             )
 
         sleep_head_pose = SLEEP_HEAD_POSE.copy()
         sleep_head_pose[:3, 3][2] += self.head_z_offset
-        self.kin.reset_forward_kinematics(sleep_head_pose)  
+        self.kin.reset_forward_kinematics(sleep_head_pose)  # type: ignore[arg-type]
 
     def ik(
         self,
@@ -72,7 +72,7 @@ class AnalyticalKinematics:
         # stay within the mechanical limits (max_body_yaw) 
         # additionally it makes sure the the relative yaw between the body and the head
         # stays within the mechanical limits (max_relative_yaw)
-        reachy_joints = self.kin.inverse_kinematics_safe(_pose, 
+        reachy_joints = self.kin.inverse_kinematics_safe(_pose,  # type: ignore[arg-type]
                                                          body_yaw = body_yaw, 
                                                          max_relative_yaw = np.deg2rad(65), 
                                                          max_body_yaw = np.deg2rad(160))  
