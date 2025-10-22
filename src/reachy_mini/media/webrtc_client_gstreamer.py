@@ -54,8 +54,13 @@ class GstWebRTCClient(CameraBase, AudioBase):
         self._appsink_video.set_property("max-buffers", 1)  # keep last image only
         self.pipeline.add(self._appsink_video)
 
+        self._signaling_host = signaling_host
+        self._signaling_port = signaling_port
+
         webrtcsrc = self._configure_webrtcsrc(signaling_host, signaling_port, peer_id)
         self.pipeline.add(webrtcsrc)
+
+        self._webrtcsink: Optional[Gst.Element] = None
 
     def _configure_webrtcsrc(
         self, signaling_host: str, signaling_port: int, peer_id: str
@@ -194,15 +199,51 @@ class GstWebRTCClient(CameraBase, AudioBase):
 
     def start_playing(self) -> None:
         """Open the audio output using GStreamer."""
-        self.logger.warning("Use open() to start the WebRTC client.")
+        if self._appsrc is not None and self._webrtcsink is not None:
+            self.logger.warning("Audio playback already started.")
+            return
+
+        self._webrtcsink = Gst.ElementFactory.make("webrtcsink")
+        signaller = self._webrtcsink.get_property("signaller")
+        signaller.set_property(
+            "uri", f"ws://{self._signaling_host}:{self._signaling_port}"
+        )
+        meta_structure = Gst.Structure.new_empty("meta")
+        meta_structure.set_value("name", "reachymini_client")
+        self._webrtcsink.set_property("meta", meta_structure)
+
+        self._appsrc = Gst.ElementFactory.make("appsrc")
+        self._appsrc.set_property("format", Gst.Format.TIME)
+        self._appsrc.set_property("is-live", True)
+        caps = Gst.Caps.from_string(
+            f"audio/x-raw,format=F32LE,channels=1,rate={self._samplerate},layout=interleaved"
+        )
+        self._appsrc.set_property("caps", caps)
+
+        self.pipeline.add(self._appsrc)
+        self.pipeline.add(self._webrtcsink)
+        self._appsrc.link(self._webrtcsink)
+        self._webrtcsink.sync_state_with_parent()
+        self._appsrc.sync_state_with_parent()
 
     def stop_playing(self) -> None:
         """Stop playing audio and release resources."""
-        self.logger.warning("Use close() to stop the WebRTC client.")
+        if self._appsrc is not None and self._webrtcsink is not None:
+            self._appsrc.set_state(Gst.State.NULL)
+            self.pipeline.remove(self._appsrc)
+            self._webrtcsink.send_event(Gst.Event.new_eos())
+            self._webrtcsink.set_state(Gst.State.NULL)
+            self.pipeline.remove(self._webrtcsink)
 
     def push_audio_sample(self, data: bytes) -> None:
         """Push audio data to the output device."""
-        self.logger.warning("Audio playback not implemented in WebRTC client.")
+        if self._appsrc is not None:
+            buf = Gst.Buffer.new_wrapped(data)
+            self._appsrc.push_buffer(buf)
+        else:
+            self.logger.warning(
+                "AppSrc is not initialized. Call start_playing() first."
+            )
 
     def play_sound(self, sound_file: str) -> None:
         """Play a sound file.
