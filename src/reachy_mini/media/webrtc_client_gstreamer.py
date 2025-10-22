@@ -4,7 +4,7 @@ The class is a client for the webrtc server hosted on the Reachy Mini Wireless r
 """
 
 from threading import Thread
-from typing import Optional
+from typing import List, Optional
 
 import gi
 import numpy as np
@@ -62,6 +62,7 @@ class GstWebRTCClient(CameraBase, AudioBase):
 
         self._webrtcsink: Optional[Gst.Element] = None
         self._appsrc: Optional[Gst.Element] = None
+        self._player_elements: List[Gst.Element] = []
 
     def _configure_webrtcsrc(
         self, signaling_host: str, signaling_port: int, peer_id: str
@@ -211,6 +212,38 @@ class GstWebRTCClient(CameraBase, AudioBase):
         """Release the camera resource."""
         pass  # managed in close()
 
+    def _on_consumer_pipeline_created(
+        self, webrtcsink: Gst.Element, session_id: str, consumer_pipe: Gst.Pipeline
+    ) -> None:
+        self.logger.info(f"Consumer pipeline created {session_id}")
+
+        def configure_clocksync(elem: Gst.Element) -> None:
+            elem.set_property("sync", False)
+
+        webrtcsink.iterate_all_by_element_factory_name("clocksync").foreach(
+            configure_clocksync
+        )
+
+        def configure_appsink(elem: Gst.Element) -> None:
+            elem.set_property("processing-deadline", 0)
+            elem.set_property("sync", False)
+
+        webrtcsink.iterate_all_by_element_factory_name("appsink").foreach(
+            configure_appsink
+        )
+
+        def on_consumer_element_added(
+            cpipe: Gst.Pipeline, subpipe: Gst.Pipeline, elem: Gst.Element
+        ) -> None:
+            factory = elem.get_factory()
+            if factory is None:
+                return
+
+            if factory.name == "clocksync":
+                configure_clocksync(elem)
+
+        consumer_pipe.connect("deep-element-added", on_consumer_element_added)
+
     def start_playing(self) -> None:
         """Open the audio output using GStreamer."""
         if self._appsrc is not None and self._webrtcsink is not None:
@@ -225,6 +258,9 @@ class GstWebRTCClient(CameraBase, AudioBase):
         meta_structure = Gst.Structure.new_empty("meta")
         meta_structure.set_value("name", "reachymini_client")
         self._webrtcsink.set_property("meta", meta_structure)
+        # self._webrtcsink.connect(
+        #    "consumer-pipeline-created", self._on_consumer_pipeline_created
+        # )
 
         self._appsrc = Gst.ElementFactory.make("appsrc")
         self._appsrc.set_property("format", Gst.Format.TIME)
@@ -234,22 +270,39 @@ class GstWebRTCClient(CameraBase, AudioBase):
         )
         self._appsrc.set_property("caps", caps)
 
+        audioconvert = Gst.ElementFactory.make("audioconvert")
+        audioresample = Gst.ElementFactory.make("audioresample")
+        self._player_elements.append(audioconvert)
+        self._player_elements.append(audioresample)
+
         self.pipeline.add(self._appsrc)
+        self.pipeline.add(audioconvert)
+        self.pipeline.add(audioresample)
         self.pipeline.add(self._webrtcsink)
-        self._appsrc.link(self._webrtcsink)
+        self._appsrc.link(audioconvert)
+        audioconvert.link(audioresample)
+        audioresample.link(self._webrtcsink)
         self._webrtcsink.sync_state_with_parent()
+        audioresample.sync_state_with_parent()
+        audioconvert.sync_state_with_parent()
         self._appsrc.sync_state_with_parent()
 
     def stop_playing(self) -> None:
         """Stop playing audio and release resources."""
         if self._appsrc is not None and self._webrtcsink is not None:
-            self._appsrc.set_state(Gst.State.NULL)
             self.pipeline.remove(self._appsrc)
+            self._appsrc.set_state(Gst.State.NULL)
+            self._appsrc = None
             self._webrtcsink.send_event(Gst.Event.new_eos())
             self._webrtcsink.set_state(Gst.State.NULL)
             self.pipeline.remove(self._webrtcsink)
+            self._webrtcsink = None
+            for elt in self._player_elements:
+                self.pipeline.remove(elt)
+                elt.set_state(Gst.State.NULL)
+            self._player_elements.clear()
 
-    def push_audio_sample(self, data: bytes) -> None:
+    def push_audio_sample(self, data: npt.NDArray[np.float32]) -> None:
         """Push audio data to the output device."""
         if self._appsrc is not None:
             buf = Gst.Buffer.new_wrapped(data)
