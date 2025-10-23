@@ -199,22 +199,22 @@ class SoundDeviceAudio(AudioBase):
         devices = sd.query_devices()
         channel_key = f"max_{device_type}_channels"
 
-        # return default device with appropriate channels
-        for idx, dev in enumerate(devices):
-            if dev.get(channel_key, 0) > 0:
-                return idx
-
-        # Log warning if default device not found
-        self.logger.warning(
-            f"No default {device_type} found. Trying another device containing '{name_contains}'."
-        )
-
-        # Fallback: Search for device by specific name
+        # First try: Search for device by specific name (e.g., "respeaker")
         for idx, dev in enumerate(devices):
             if (
                 name_contains.lower() in dev["name"].lower()
                 and dev.get(channel_key, 0) > 0
             ):
+                return idx
+
+        # Log warning if device with specific name not found
+        self.logger.warning(
+            f"No {device_type} device containing '{name_contains}' found. Using first available {device_type} device."
+        )
+
+        # Fallback: Return first device with appropriate channels
+        for idx, dev in enumerate(devices):
+            if dev.get(channel_key, 0) > 0:
                 return idx
 
         raise RuntimeError(
