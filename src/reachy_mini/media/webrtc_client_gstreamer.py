@@ -3,8 +3,9 @@
 The class is a client for the webrtc server hosted on the Reachy Mini Wireless robot.
 """
 
+import queue
 from threading import Thread
-from typing import List, Optional
+from typing import Optional
 
 import gi
 import numpy as np
@@ -34,9 +35,14 @@ class GstWebRTCClient(CameraBase, AudioBase):
         super().__init__(log_level=log_level)
         Gst.init(None)
         self._loop = GLib.MainLoop()
-        self._thread_bus_calls: Optional[Thread] = None
+        self._thread_bus_calls = Thread(target=lambda: self._loop.run(), daemon=True)
+        self._thread_bus_calls.start()
 
-        self.pipeline = Gst.Pipeline.new("audio_recorder")
+        self._pipeline_record = Gst.Pipeline.new("audio_recorder")
+        self._bus_record = self._pipeline_record.get_bus()
+        self._bus_record.add_watch(
+            GLib.PRIORITY_DEFAULT, self._on_bus_message, self._loop
+        )
 
         self._appsink_audio = Gst.ElementFactory.make("appsink")
         caps = Gst.Caps.from_string(
@@ -45,24 +51,34 @@ class GstWebRTCClient(CameraBase, AudioBase):
         self._appsink_audio.set_property("caps", caps)
         self._appsink_audio.set_property("drop", True)  # avoid overflow
         self._appsink_audio.set_property("max-buffers", 500)
-        self.pipeline.add(self._appsink_audio)
+        self._pipeline_record.add(self._appsink_audio)
 
         self._appsink_video = Gst.ElementFactory.make("appsink")
         caps_video = Gst.Caps.from_string("video/x-raw,format=BGR")
         self._appsink_video.set_property("caps", caps_video)
         self._appsink_video.set_property("drop", True)  # avoid overflow
         self._appsink_video.set_property("max-buffers", 1)  # keep last image only
-        self.pipeline.add(self._appsink_video)
-
-        self._signaling_host = signaling_host
-        self._signaling_port = signaling_port
+        self._pipeline_record.add(self._appsink_video)
 
         webrtcsrc = self._configure_webrtcsrc(signaling_host, signaling_port, peer_id)
-        self.pipeline.add(webrtcsrc)
+        self._pipeline_record.add(webrtcsrc)
 
-        self._webrtcsink: Optional[Gst.Element] = None
-        self._appsrc: Optional[Gst.Element] = None
-        self._player_elements: List[Gst.Element] = []
+        self._queue_data_appsrc = queue.Queue()
+        self._pipeline_playback = Gst.Pipeline.new("audio_player")
+        self._init_pipeline_playback(
+            self._pipeline_playback, signaling_host, signaling_port
+        )
+        self._bus_playback = self._pipeline_playback.get_bus()
+        self._bus_playback.add_watch(
+            GLib.PRIORITY_DEFAULT, self._on_bus_message, self._loop
+        )
+
+    def __del__(self) -> None:
+        """Destructor to ensure gstreamer resources are released."""
+        super().__del__()
+        self._loop.quit()
+        self._bus_record.remove_watch()
+        self._bus_playback.remove_watch()
 
     def _configure_webrtcsrc(
         self, signaling_host: str, signaling_port: int, peer_id: str
@@ -96,10 +112,10 @@ class GstWebRTCClient(CameraBase, AudioBase):
             videoscale = Gst.ElementFactory.make("videoscale")
             videorate = Gst.ElementFactory.make("videorate")
 
-            self.pipeline.add(queue)
-            self.pipeline.add(videoconvert)
-            self.pipeline.add(videoscale)
-            self.pipeline.add(videorate)
+            self._pipeline_record.add(queue)
+            self._pipeline_record.add(videoconvert)
+            self._pipeline_record.add(videoscale)
+            self._pipeline_record.add(videorate)
             pad.link(queue.get_static_pad("sink"))
 
             queue.link(videoconvert)
@@ -116,8 +132,8 @@ class GstWebRTCClient(CameraBase, AudioBase):
         elif pad.get_name().startswith("audio"):
             audioconvert = Gst.ElementFactory.make("audioconvert")
             audioresample = Gst.ElementFactory.make("audioresample")
-            self.pipeline.add(audioconvert)
-            self.pipeline.add(audioresample)
+            self._pipeline_record.add(audioconvert)
+            self._pipeline_record.add(audioresample)
 
             pad.link(audioconvert.get_static_pad("sink"))
             audioconvert.link(audioresample)
@@ -140,19 +156,19 @@ class GstWebRTCClient(CameraBase, AudioBase):
 
         return True
 
+    """
     def _handle_bus_calls(self) -> None:
         self.logger.debug("starting bus message loop")
-        bus = self.pipeline.get_bus()
+        bus = self.pipeline_record.get_bus()
         bus.add_watch(GLib.PRIORITY_DEFAULT, self._on_bus_message, self._loop)
         self._loop.run()
         bus.remove_watch()
         self.logger.debug("bus message loop stopped")
+    """
 
     def open(self) -> None:
         """Open the video stream."""
-        self.pipeline.set_state(Gst.State.PLAYING)
-        self._thread_bus_calls = Thread(target=self._handle_bus_calls, daemon=True)
-        self._thread_bus_calls.start()
+        self._pipeline_record.set_state(Gst.State.PLAYING)
 
     def _get_sample(self, appsink: GstApp.AppSink) -> Optional[bytes]:
         sample = appsink.try_pull_sample(20_000_000)
@@ -197,8 +213,8 @@ class GstWebRTCClient(CameraBase, AudioBase):
 
     def close(self) -> None:
         """Stop the pipeline."""
-        self._loop.quit()
-        self.pipeline.set_state(Gst.State.NULL)
+        # self._loop.quit()
+        self._pipeline_record.set_state(Gst.State.NULL)
 
     def get_audio_samplerate(self) -> int:
         """Return the samplerate of the audio device."""
@@ -211,6 +227,108 @@ class GstWebRTCClient(CameraBase, AudioBase):
     def stop_recording(self) -> None:
         """Release the camera resource."""
         pass  # managed in close()
+
+    def _init_pipeline_playback(
+        self, pipeline: Gst.Pipeline, signaling_host: str, signaling_port: int
+    ) -> None:
+        """Initialize the audio playback pipeline."""
+        """self._appsrc = Gst.ElementFactory.make("appsrc")
+        self._appsrc.set_property("format", Gst.Format.TIME)
+        self._appsrc.set_property("is-live", True)
+        caps = Gst.Caps.from_string(
+            f"audio/x-raw,format=F32LE,channels=1,rate={self.SAMPLE_RATE},layout=interleaved"
+        )
+        self._appsrc.set_property("caps", caps)
+
+        audioconvert = Gst.ElementFactory.make("audioconvert")
+        audioresample = Gst.ElementFactory.make("audioresample")
+
+        queue = Gst.ElementFactory.make("queue")
+        audiosink = Gst.ElementFactory.make("autoaudiosink")  # use default speaker
+
+        pipeline.add(queue)
+        pipeline.add(audiosink)
+        pipeline.add(self._appsrc)
+        pipeline.add(audioconvert)
+        pipeline.add(audioresample)
+
+
+        self._appsrc.link(queue)
+        queue.link(audioconvert)
+        audioconvert.link(audioresample)
+        audioresample.link(audiosink)
+        """
+        self._webrtcsink = Gst.ElementFactory.make("webrtcsink")
+        # self._webrtcsink.set_property("do-clock-signalling", True)
+        signaller = self._webrtcsink.get_property("signaller")
+        signaller.set_property("uri", f"ws://{signaling_host}:{signaling_port}")
+        meta_structure = Gst.Structure.new_empty("meta")
+        meta_structure.set_value("name", "reachymini_client")
+        self._webrtcsink.set_property("meta", meta_structure)
+
+        self._webrtcsink.connect(
+            "consumer-pipeline-created", self._on_consumer_pipeline_created
+        )
+
+        self._appsrc = Gst.ElementFactory.make("appsrc")
+        self._appsrc.set_property("format", Gst.Format.TIME)
+        self._appsrc.set_property("is-live", True)
+        self._appsrc.set_property("do-timestamp", True)
+        caps = Gst.Caps.from_string(
+            f"audio/x-raw,format=F32LE,channels=1,rate={self.SAMPLE_RATE},layout=interleaved"
+        )
+        self._appsrc.set_property("caps", caps)
+        # self._appsrc.connect("need-data", self._on_need_data, self._queue_data_appsrc)
+
+        audiotestsrc = Gst.ElementFactory.make("audiotestsrc")
+        audiotestsrc.set_property("wave", "silence")
+        audiomixer = Gst.ElementFactory.make("audiomixer")
+
+        audioconvert = Gst.ElementFactory.make("audioconvert")
+        audioresample = Gst.ElementFactory.make("audioresample")
+        queue = Gst.ElementFactory.make("queue")
+        opusenc = Gst.ElementFactory.make("opusenc")
+        capsfilter = Gst.ElementFactory.make("capsfilter")
+        caps_opus = Gst.Caps.from_string("audio/x-opus,rate=48000,channels=1")
+        capsfilter.set_property("caps", caps_opus)
+
+        pipeline.add(self._appsrc)
+        pipeline.add(audiotestsrc)
+        pipeline.add(audiomixer)
+        pipeline.add(audioconvert)
+        pipeline.add(audioresample)
+        pipeline.add(queue)
+        pipeline.add(opusenc)
+        pipeline.add(capsfilter)
+        pipeline.add(self._webrtcsink)
+
+        audiotestsrc.link(audiomixer)
+        self._appsrc.link(audioconvert)
+        audioconvert.link(audioresample)
+        audioresample.link(audiomixer)
+        audiomixer.link(queue)
+        queue.link(opusenc)
+        opusenc.link(capsfilter)
+        capsfilter.link(self._webrtcsink)
+
+    def _on_need_data(
+        self, src: Gst.Element, length: int, queue_data: queue.Queue
+    ) -> None:
+        """Callback when appsrc needs data."""
+        # Generate silence for now
+        # print(f"AppSrc needs data {length}")
+        try:
+            buf = queue_data.get_nowait()
+            print(f"Pushing audio buffer of size {buf.get_size()}")
+            src.push_buffer(buf)
+        except queue.Empty:
+            num_frames = int(self.SAMPLERATE * (length / Gst.SECOND))
+            buffer_size = num_frames * 4  # float32 = 4 bytes
+            buf = Gst.Buffer.new_allocate(None, buffer_size, None)
+            buf.fill(0, b"\x00" * buffer_size)
+            # buf.set_duration(length)
+            print(f"Pushing silence buffer of size {buf.get_size()}")
+            src.push_buffer(buf)
 
     def _on_consumer_pipeline_created(
         self, webrtcsink: Gst.Element, session_id: str, consumer_pipe: Gst.Pipeline
@@ -246,67 +364,19 @@ class GstWebRTCClient(CameraBase, AudioBase):
 
     def start_playing(self) -> None:
         """Open the audio output using GStreamer."""
-        if self._appsrc is not None and self._webrtcsink is not None:
-            self.logger.warning("Audio playback already started.")
-            return
-
-        self._webrtcsink = Gst.ElementFactory.make("webrtcsink")
-        signaller = self._webrtcsink.get_property("signaller")
-        signaller.set_property(
-            "uri", f"ws://{self._signaling_host}:{self._signaling_port}"
-        )
-        meta_structure = Gst.Structure.new_empty("meta")
-        meta_structure.set_value("name", "reachymini_client")
-        self._webrtcsink.set_property("meta", meta_structure)
-        # self._webrtcsink.connect(
-        #    "consumer-pipeline-created", self._on_consumer_pipeline_created
-        # )
-
-        self._appsrc = Gst.ElementFactory.make("appsrc")
-        self._appsrc.set_property("format", Gst.Format.TIME)
-        self._appsrc.set_property("is-live", True)
-        caps = Gst.Caps.from_string(
-            f"audio/x-raw,format=F32LE,channels=1,rate={self.SAMPLE_RATE},layout=interleaved"
-        )
-        self._appsrc.set_property("caps", caps)
-
-        audioconvert = Gst.ElementFactory.make("audioconvert")
-        audioresample = Gst.ElementFactory.make("audioresample")
-        self._player_elements.append(audioconvert)
-        self._player_elements.append(audioresample)
-
-        self.pipeline.add(self._appsrc)
-        self.pipeline.add(audioconvert)
-        self.pipeline.add(audioresample)
-        self.pipeline.add(self._webrtcsink)
-        self._appsrc.link(audioconvert)
-        audioconvert.link(audioresample)
-        audioresample.link(self._webrtcsink)
-        self._webrtcsink.sync_state_with_parent()
-        audioresample.sync_state_with_parent()
-        audioconvert.sync_state_with_parent()
-        self._appsrc.sync_state_with_parent()
+        self._pipeline_playback.set_state(Gst.State.PLAYING)
 
     def stop_playing(self) -> None:
         """Stop playing audio and release resources."""
-        if self._appsrc is not None and self._webrtcsink is not None:
-            self.pipeline.remove(self._appsrc)
-            self._appsrc.set_state(Gst.State.NULL)
-            self._appsrc = None
-            self._webrtcsink.send_event(Gst.Event.new_eos())
-            self._webrtcsink.set_state(Gst.State.NULL)
-            self.pipeline.remove(self._webrtcsink)
-            self._webrtcsink = None
-            for elt in self._player_elements:
-                self.pipeline.remove(elt)
-                elt.set_state(Gst.State.NULL)
-            self._player_elements.clear()
+        self._pipeline_playback.set_state(Gst.State.NULL)
 
     def push_audio_sample(self, data: npt.NDArray[np.float32]) -> None:
         """Push audio data to the output device."""
         if self._appsrc is not None:
-            buf = Gst.Buffer.new_wrapped(data)
+            buf = Gst.Buffer.new_wrapped(data.tobytes())
+            print(f"Pushing audio buffer of size {buf.get_size()}")
             self._appsrc.push_buffer(buf)
+            # self._queue_data_appsrc.put(buf)
         else:
             self.logger.warning(
                 "AppSrc is not initialized. Call start_playing() first."

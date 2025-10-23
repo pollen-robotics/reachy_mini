@@ -64,10 +64,7 @@ class GStreamerAudio(AudioBase):
         self._appsink_audio.set_property("max-buffers", 500)
 
         autoaudiosrc = Gst.ElementFactory.make("autoaudiosrc")  # use default mic
-        # caps_respeaker = Gst.Caps.from_string(
-        #    "audio/x-raw, layout=interleaved, format=S16LE, rate=16000, channels=2"
-        # )
-        # autoaudiosrc.set_property("filter-caps", caps_respeaker)
+
         queue = Gst.ElementFactory.make("queue")
         audioconvert = Gst.ElementFactory.make("audioconvert")
         audioresample = Gst.ElementFactory.make("audioresample")

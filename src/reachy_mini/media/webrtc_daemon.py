@@ -33,18 +33,25 @@ class GstWebRTC:
         self._logger.setLevel(log_level)
         Gst.init(None)
         self._loop = GLib.MainLoop()
-        self._thread_bus_calls: Optional[Thread] = None
+        self._thread_bus_calls = Thread(target=lambda: self._loop.run(), daemon=True)
+        self._thread_bus_calls.start()
         self._resolution = resolution
 
         self._id_audio_card = get_respeaker_card_number()
 
-        self.pipeline = Gst.Pipeline.new("reachymini_webrtc")
+        self._pipeline_sender = Gst.Pipeline.new("reachymini_webrtc_sender")
+        self._bus_sender = self._pipeline_sender.get_bus()
+        self._bus_sender.add_watch(
+            GLib.PRIORITY_DEFAULT, self._on_bus_message, self._loop
+        )
 
-        webrtcsink = self._configure_webrtc(self.pipeline)
+        webrtcsink = self._configure_webrtc(self._pipeline_sender)
 
-        self._configure_video(self.pipeline, webrtcsink)
-        self._configure_audio(self.pipeline, webrtcsink)
+        self._configure_video(self._pipeline_sender, webrtcsink)
+        self._configure_audio(self._pipeline_sender, webrtcsink)
 
+        self._pipeline_receiver: Optional[Gst.Pipeline] = None
+        self._bus_receiver = None
         self._webrtcsrc: Optional[Gst.Element] = None
         self._webrtcsrc_count = -1
         self._peer_audio_id = ""
@@ -56,6 +63,14 @@ class GstWebRTC:
         self._thread_webrtcsrc_manager = Thread(
             target=self._webrtcsrc_manager, daemon=True
         )
+
+    def __del__(self) -> None:
+        """Destructor to ensure gstreamer resources are released."""
+        super().__del__()
+        self._loop.quit()
+        self._bus_sender.remove_watch()
+        if self._bus_receiver:
+            self._bus_receiver.remove_watch()
 
     def _configure_webrtc(self, pipeline: Gst.Pipeline) -> Gst.Element:
         self._logger.debug("Configuring WebRTC")
@@ -178,36 +193,36 @@ class GstWebRTC:
             self._logger.error(f"Error: {err} {debug}")
             return False
 
-        elif t == Gst.MessageType.LOST_CLOCK:
-            self._logger.warning("Clock lost")
-            return False
-
         else:
             self._logger.warning(f"Unhandled message type: {t}")
 
         return True
 
+    """"
     def _handle_bus_calls(self) -> None:
         self._logger.debug("starting bus message loop")
-        bus = self.pipeline.get_bus()
+        bus = self._pipeline_sender.get_bus()
         bus.add_watch(GLib.PRIORITY_DEFAULT, self._on_bus_message, self._loop)
         self._loop.run()
         bus.remove_watch()
         self._logger.debug("bus message loop stopped")
+    """
 
     def start(self) -> None:
         """Start the WebRTC pipeline."""
         self._logger.debug("Starting WebRTC")
-        self.pipeline.set_state(Gst.State.PLAYING)
+        self._pipeline_sender.set_state(Gst.State.PLAYING)
         self._thread_webrtcsrc_manager.start()
+        """
         if self._thread_bus_calls is not None:
             self._thread_bus_calls = Thread(target=self._handle_bus_calls, daemon=True)
             self._thread_bus_calls.start()
+        """
 
     def pause(self) -> None:
         """Pause the WebRTC pipeline."""
         self._logger.debug("Pausing WebRTC")
-        self.pipeline.set_state(Gst.State.PAUSED)
+        self._pipeline_sender.set_state(Gst.State.PAUSED)
 
     def stop(self) -> None:
         """Stop the WebRTC pipeline."""
@@ -219,8 +234,8 @@ class GstWebRTC:
             )
             future.result()  # Wait for the close coroutine to finish
 
-        self._loop.quit()
-        self.pipeline.set_state(Gst.State.NULL)
+        # self._loop.quit()
+        self._pipeline_sender.set_state(Gst.State.NULL)
 
     def _webrtcsrc_manager(self) -> None:
         # there is asyncio in the daemon for now. we'll limit its usage here.
@@ -243,15 +258,20 @@ class GstWebRTC:
 
     def _removing_webrtcsrc(self) -> None:
         self._peer_audio_id = ""
+        self._pipeline_receiver.set_state(Gst.State.NULL)
+        del self._pipeline_receiver
+        self._pipeline_receiver = None
+        """
         if self._webrtcsrc is not None:
             self._webrtcsrc.send_event(Gst.Event.new_eos())
             self._webrtcsrc.set_state(Gst.State.NULL)
-            self.pipeline.remove(self._webrtcsrc)
+            self._pipeline_sender.remove(self._webrtcsrc)
             self._webrtcsrc = None
             for elt in self._receiver_elements:
-                self.pipeline.remove(elt)
+                self._pipeline_sender.remove(elt)
                 elt.set_state(Gst.State.NULL)
             self._receiver_elements.clear()
+        """
         self._logger.debug("webrtcsrc removed")
 
     def _configure_webrtcbin(self, webrtcsrc: Gst.Element) -> None:
@@ -267,19 +287,20 @@ class GstWebRTC:
         if pad is not None and pad.get_name().startswith("audio"):
             self._logger.info("Connecting audio client")
 
-            self._configure_webrtcbin(webrtcsrc)
+            # self._configure_webrtcbin(webrtcsrc)
 
             volume = Gst.ElementFactory.make("volume")
             assert volume is not None
             volume.set_property("volume", 0.2)
             sink = Gst.ElementFactory.make("alsasink")
             sink.set_property("device", f"hw:{self._id_audio_card},0")
+            # sink.set_property("sync", False)
             assert sink is not None
 
-            self.pipeline.add(volume)
-            self.pipeline.add(sink)
-            self._receiver_elements.append(volume)
-            self._receiver_elements.append(sink)
+            self._pipeline_receiver.add(volume)
+            self._pipeline_receiver.add(sink)
+            # self._receiver_elements.append(volume)
+            # self._receiver_elements.append(sink)
 
             volume.link(sink)
             pad.link(volume.get_static_pad("sink"))
@@ -290,13 +311,14 @@ class GstWebRTC:
             self._logger.warning("Ignoring video element")
             fakesink = Gst.ElementFactory.make("fakesink")
             assert fakesink is not None
-            self.pipeline.add(fakesink)
+            self._pipeline_receiver.add(fakesink)
             fakesink.sync_state_with_parent()
             pad.link(fakesink.get_static_pad("sink"))
         else:
             self._logger.warning(f"Unhandled pad type: {pad.get_name()}")
 
     def _add_webrtcsrc(self, peer_audio_id: str) -> Gst.Element:
+        self._pipeline_receiver = Gst.Pipeline.new("reachymini_webrtc_receiver")
         webrtcsrc = Gst.ElementFactory.make("webrtcsrc")
         assert webrtcsrc is not None
         self._webrtcsrc_count += 1
@@ -307,13 +329,13 @@ class GstWebRTC:
 
         webrtcsrc.connect("pad-added", self._webrtcsrc_pad_added_cb)
 
-        self.pipeline.add(webrtcsrc)
-        webrtcsrc.sync_state_with_parent()
+        self._pipeline_receiver.add(webrtcsrc)
+        self._pipeline_receiver.set_state(Gst.State.PLAYING)
         return webrtcsrc
 
     async def _adding_webrtcsrc(self, peer_audio_id: str) -> None:
         while True:
-            state_change_return, state, pending = self.pipeline.get_state(
+            state_change_return, state, pending = self._pipeline_sender.get_state(
                 Gst.CLOCK_TIME_NONE
             )
             if (

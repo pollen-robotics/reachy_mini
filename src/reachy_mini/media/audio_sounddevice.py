@@ -21,7 +21,7 @@ class SoundDeviceAudio(AudioBase):
 
     def __init__(
         self,
-        frames_per_buffer: int = 1024,
+        frames_per_buffer: int = 256,
         log_level: str = "INFO",
     ) -> None:
         """Initialize the SoundDevice audio device."""
