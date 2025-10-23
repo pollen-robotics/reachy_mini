@@ -1,50 +1,41 @@
+@import url('https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Asap:wght@400;500;700&display=swap');
+
+body {
+    font-family: 'Archivo', 'Asap', sans-serif;
+}
+
 .daemon-status-title {
-    font-family: Archivo;
+    font-size: 36px;
     font-weight: 700;
-    font-style: Bold;
-    font-size: 48px;
-    line-height: 120%;
     letter-spacing: 0.3px;
 }
 
 .daemon-status-collapse {
-    font-family: Asap;
+    font-family: 'Asap', sans-serif;
     font-weight: 400;
-    font-style: Regular;
-    font-size: 18px;
-    line-height: 140%;
-    letter-spacing: 0%;
+    color: rgba(0, 0, 0, 0.7);
 }
 
 /* APPs styles */
 
 .app-section {
-    width: 1916;
-    height: 645;
-    opacity: 1;
-    top: 1421px;
-    left: 516px;
-    border-radius: 13.94px;
-    border-width: 1.74px;
+    border-radius: 8px;
+    border-width: 1px;
     padding: 16px;
     gap: 16px;
     background: #FFFFFF;
 }
 
 .installed-app-title {
-    font-family: Archivo;
-    font-weight: 500;
-    font-size: 24px;
+    font-weight: 600;
 }
 
 /* Hugging Face App Store Styles */
 
 .app-section-title {
-    font-family: Archivo;
     font-weight: 700;
-    font-style: Bold;
-    font-size: 28px;
-    line-height: 130%;
+    font-size: 18px;
     letter-spacing: 0px;
 }
 
@@ -55,34 +46,31 @@
 .hf-app-icon {
     width: 42px;
     height: 42px;
-    border-radius: 2px;
+    border-radius: 10px;
     text-align: center;
     font-size: 31px;
     background-color: rgba(0, 0, 0, 0.1);
-    line-height: 150%;
+
 }
 
 .hf-app-title {
-    font-family: Archivo;
     font-weight: 500;
-    font-size: 24px;
+    font-size: 18px;
 }
 
 .hf-app-description {
-    font-family: Asap;
-    font-weight: 500;
-    font-size: 20px;
-    line-height: 80%;
+    font-family: 'Asap', sans-serif;
+    font-weight: 400;
+    font-size: 16px;
+    line-height: 75%;
     color: rgba(0, 0, 0, 0.4);
 }
 
 .hf-app-install-button {
-    font-family: Archivo;
     font-weight: 500;
     font-size: 20px;
     font-style: Bold;
     text-align: center;
-    border: 1px solid rgba(255, 97, 112, 1);
     border-radius: 8px;
     display: flex;
     align-items: center;

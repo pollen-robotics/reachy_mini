@@ -109,10 +109,10 @@ const installedApps = {
 
     createAppElement: (app, isRunning) => {
         const container = document.createElement('div');
-        container.className = 'grid grid-cols-[auto_8rem_2rem] justify-stretch gap-x-6';
+        container.className = 'grid grid-cols-[auto_6rem_2rem] justify-stretch gap-x-2';
 
         const title = document.createElement('div');
-        title.className = 'installed-app-title';
+        title.className = 'installed-app-title top-1/2 ';
         title.innerHTML = app.name;
         container.appendChild(title);
 
@@ -219,11 +219,11 @@ class ToggleSlider {
         // Off label
         this.offLabel = document.createElement('span');
         this.offLabel.textContent = 'Off';
-        this.offLabel.className = 'absolute left-0 top-1/2 -translate-x-8 -translate-y-1/2 text-base font-semibold select-none transition-colors duration-200 text-blue-500 peer-checked:text-gray-400';
+        this.offLabel.className = 'absolute left-0 top-1/2 -translate-x-8 -translate-y-1/2 text-base select-none transition-colors duration-200 text-gray-900 peer-checked:text-gray-400';
         this.label.appendChild(this.offLabel);
 
         this.track = document.createElement('div');
-        this.track.className = 'absolute top-0 left-0 w-20 h-8 bg-gray-200 rounded-full transition-colors duration-200 peer-checked:bg-blue-500 dark:bg-red-400 dark:peer-checked:bg-blue-500';
+        this.track.className = 'absolute top-0 left-0 w-16 h-8 bg-gray-200 rounded-full transition-colors duration-200 peer-checked:bg-blue-800 dark:bg-gray-400 dark:peer-checked:bg-blue-800';
         this.label.appendChild(this.track);
 
         this.thumb = document.createElement('div');
@@ -233,34 +233,34 @@ class ToggleSlider {
         // On label
         this.onLabel = document.createElement('span');
         this.onLabel.textContent = 'On';
-        this.onLabel.className = 'absolute right-0 top-1/2 -translate-y-1/2 text-base font-semibold select-none transition-colors duration-200 text-gray-400 peer-checked:text-blue-500';
+        this.onLabel.className = 'absolute right-0 top-1/2 -translate-y-1/2 -translate-x-4 text-base select-none transition-colors duration-200 text-gray-400 peer-checked:text-gray-900';
         this.label.appendChild(this.onLabel);
 
 
         this.input.addEventListener('change', () => {
             if (this.input.checked) {
-                this.thumb.style.transform = 'translateX(48px)';
+                this.thumb.style.transform = 'translateX(31px)';
                 this.onLabel.classList.remove('text-gray-400');
-                this.onLabel.classList.add('text-blue-500');
-                this.offLabel.classList.remove('text-blue-500');
+                this.onLabel.classList.add('text-gray-900');
+                this.offLabel.classList.remove('text-gray-900');
                 this.offLabel.classList.add('text-gray-400');
             } else {
                 this.thumb.style.transform = 'translateX(0)';
-                this.onLabel.classList.remove('text-blue-500');
+                this.onLabel.classList.remove('text-gray-900');
                 this.onLabel.classList.add('text-gray-400');
                 this.offLabel.classList.remove('text-gray-400');
-                this.offLabel.classList.add('text-blue-500');
+                this.offLabel.classList.add('text-gray-900');
             }
             if (onChange) onChange(this.input.checked);
         });
 
         // Set initial thumb and label color
         if (checked) {
-            this.thumb.style.transform = 'translateX(48px)';
+            this.thumb.style.transform = 'translateX(31px)';
             this.onLabel.classList.remove('text-gray-400');
-            this.onLabel.classList.add('text-blue-500');
+            this.onLabel.classList.add('text-gray-900');
         } else {
-            this.onLabel.classList.remove('text-blue-500');
+            this.onLabel.classList.remove('text-gray-900');
             this.onLabel.classList.add('text-gray-400');
         }
 
@@ -272,15 +272,15 @@ class ToggleSlider {
         if (this.input.checked) {
             this.thumb.style.transform = 'translateX(48px)';
             this.onLabel.classList.remove('text-gray-400');
-            this.onLabel.classList.add('text-blue-500');
-            this.offLabel.classList.remove('text-blue-500');
+            this.onLabel.classList.add('text-gray-900');
+            this.offLabel.classList.remove('text-gray-900');
             this.offLabel.classList.add('text-gray-400');
         } else {
             this.thumb.style.transform = 'translateX(0)';
-            this.onLabel.classList.remove('text-blue-500');
+            this.onLabel.classList.remove('text-gray-900');
             this.onLabel.classList.add('text-gray-400');
             this.offLabel.classList.remove('text-gray-400');
-            this.offLabel.classList.add('text-blue-500');
+            this.offLabel.classList.add('text-gray-900');
         }
     }
 

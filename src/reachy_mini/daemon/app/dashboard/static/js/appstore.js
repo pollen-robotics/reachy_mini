@@ -63,21 +63,31 @@ const hfAppsStore = {
         iconDiv.textContent = app.extra.cardData.emoji || '📦';
         container.appendChild(iconDiv);
 
+        const nameDiv = document.createElement('div');
+        nameDiv.className = 'flex flex-col';
+
         const titleDiv = document.createElement('a');
         titleDiv.href = app.url;
         titleDiv.target = '_blank';
         titleDiv.rel = 'noopener noreferrer';
         titleDiv.className = 'hf-app-title';
         titleDiv.textContent = app.extra.cardData.title || app.name;
-        container.appendChild(titleDiv);
+        nameDiv.appendChild(titleDiv);
+        const descriptionDiv = document.createElement('span');
+        descriptionDiv.className = 'hf-app-description';
+        descriptionDiv.textContent = app.description || 'No description available.';
+        nameDiv.appendChild(descriptionDiv);
+        container.appendChild(nameDiv);
 
         const installButtonDiv = document.createElement('button');
         installButtonDiv.className = 'row-span-2 my-2 hf-app-install-button';
 
         if (isInstalled) {
-            installButtonDiv.textContent = '✅ Installed';
+            installButtonDiv.classList.add('bg-gray-400', 'cursor-not-allowed');
+            installButtonDiv.textContent = 'Installed';
             installButtonDiv.disabled = true;
         } else {
+            installButtonDiv.classList.add('border', 'border-red-600');
             installButtonDiv.textContent = 'Install';
             installButtonDiv.onclick = async () => {
                 hfAppsStore.installApp(app);
@@ -85,11 +95,6 @@ const hfAppsStore = {
         }
 
         container.appendChild(installButtonDiv);
-
-        const descriptionDiv = document.createElement('div');
-        descriptionDiv.className = 'hf-app-description col-start-2 col-span-1';
-        descriptionDiv.textContent = app.description || 'No description available.';
-        container.appendChild(descriptionDiv);
 
         return container;
     },
