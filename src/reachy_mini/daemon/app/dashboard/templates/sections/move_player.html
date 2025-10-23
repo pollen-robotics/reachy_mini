@@ -1,0 +1,27 @@
+<div class="grid app-section py-2">
+    <div class="flex flex-row gap-4">
+        <div class="text-xl">Move player</div>
+        <div class="flex flex-row gap-2 py-1">
+            <button id="move-play-btn"
+                class="px-2 py-1 rounded bg-blue-500 text-white font-semibold shadow hover:bg-blue-600 transition-colors duration-150 flex items-center justify-center disabled:bg-gray-300 disabled:text-gray-500">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path d="M6.5 5.5v9l7-4.5-7-4.5z" />
+                </svg>
+            </button>
+            <button id="move-stop-btn" class="px-2 py-1 rounded bg-red-500 text-white font-semibold shadow hover:bg-red-600 transition-colors duration-150 flex items-center justify-center
+                disabled:bg-gray-300 disabled:text-gray-500">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <rect x="5" y="5" width="10" height="10" rx="2" />
+                </svg>
+            </button>
+        </div>
+    </div>
+    <div class="flex flex-row gap-4 justify-center">
+        <select id="move-dataset-toggle" class="px-2 py-1 rounded border border-gray-300 bg-white">
+            <option value="pollen-robotics/reachy-mini-dances-library">Dances</option>
+            <option value="pollen-robotics/reachy-mini-emotions-library">Emotions</option>
+        </select>
+        <select id="move-select-toggle" class="px-2 py-1 rounded border border-gray-300 bg-white">
+        </select>
+    </div>
+</div>

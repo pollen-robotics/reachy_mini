@@ -1,6 +1,6 @@
 <section class="flex flex-col md:flex-row gap-4">
     <!-- Daemon Status Animation -->
-    <div class="flex-1 min-w-0">
+    <div class="flex-1 min-w-0 py-4">
         <object id="daemon-status-anim" data="" type="image/svg+xml" class="w-full h-auto"></object>
     </div>
     <div class="flex-1 px-4 py-2 md:px-8">
@@ -30,4 +30,22 @@
             </div>
         </div>
 
+        <div class="mt-2">
+            {% include 'sections/move_player.html' %}
+
+            <div class="w-full flex justify-center pt-4 gap-4">
+                <button id="daemon-doc-btn"
+                    class="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-300 rounded shadow border border-gray-300">
+                    Doc
+                </button>
+                <button id="daemon-settings-btn"
+                    class="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-300 rounded shadow border border-gray-300">
+                    Settings
+                </button>
+                <button id="daemon-update-btn"
+                    class="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-300 rounded shadow border border-gray-300">
+                    Update
+                </button>
+            </div>
+        </div>
 </section>
