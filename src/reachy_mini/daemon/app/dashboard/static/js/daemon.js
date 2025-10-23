@@ -98,33 +98,38 @@ const daemon = {
         backendStatusIcon.classList.remove('bg-green-500', 'bg-yellow-500', 'bg-red-500');
 
         if (daemonState === 'starting') {
-            daemonStatusAnim.setAttribute('data', '/static/assets/reachy-mini-wake-up-animation.svg');
+            // daemonStatusAnim.setAttribute('data', '/static/assets/reachy-mini-wake-up-animation.svg');
+            daemonStatusAnim.setAttribute('data', '/static/assets/awake-cartoon.svg');
             toggleDaemonSwitch.disabled = true;
             toggleDaemonSwitch.checked = true;
             backendStatusIcon.classList.add('bg-yellow-500');
             backendStatusText.textContent = 'Waking up...';
         }
         else if (daemonState === 'running') {
-            daemonStatusAnim.setAttribute('data', '/static/assets/reachy-mini-awake.svg');
+            // daemonStatusAnim.setAttribute('data', '/static/assets/reachy-mini-awake.svg');
+            daemonStatusAnim.setAttribute('data', '/static/assets/awake-cartoon-static.svg');
             toggleDaemonSwitch.checked = true;
             backendStatusIcon.classList.add('bg-green-500');
             backendStatusText.textContent = 'Up and ready';
         }
         else if (daemonState === 'stopping') {
-            daemonStatusAnim.setAttribute('data', '/static/assets/reachy-mini-go-to-sleep-animation.svg');
+            // daemonStatusAnim.setAttribute('data', '/static/assets/reachy-mini-go-to-sleep-animation.svg');
+            daemonStatusAnim.setAttribute('data', '/static/assets/go-to-sleep-cartoon.svg');
             toggleDaemonSwitch.disabled = true;
             toggleDaemonSwitch.checked = false;
             backendStatusIcon.classList.add('bg-yellow-500');
             backendStatusText.textContent = 'Going to sleep...';
         }
         else if (daemonState === 'stopped' || daemonState === 'not_initialized') {
-            daemonStatusAnim.setAttribute('data', '/static/assets/reachy-mini-sleeping.svg');
+            // daemonStatusAnim.setAttribute('data', '/static/assets/reachy-mini-sleeping.svg');
+            daemonStatusAnim.setAttribute('data', '/static/assets/reachy-mini-sleeping-static.svg');
             toggleDaemonSwitch.checked = false;
             backendStatusIcon.classList.add('bg-yellow-500');
             backendStatusText.textContent = 'Stopped';
         }
         else if (daemonState === 'error') {
-            daemonStatusAnim.setAttribute('data', '/static/assets/reachy-mini-ko-animation.svg');
+            // daemonStatusAnim.setAttribute('data', '/static/assets/reachy-mini-ko-animation.svg');
+            daemonStatusAnim.setAttribute('data', '/static/assets/no-wifi-cartoon.svg');
             toggleDaemonSwitch.checked = false;
             backendStatusIcon.classList.add('bg-red-500');
             backendStatusText.textContent = 'Error occurred';
