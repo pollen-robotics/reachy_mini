@@ -63,7 +63,10 @@ const hfAppsStore = {
         iconDiv.textContent = app.extra.cardData.emoji || '📦';
         container.appendChild(iconDiv);
 
-        const titleDiv = document.createElement('div');
+        const titleDiv = document.createElement('a');
+        titleDiv.href = app.url;
+        titleDiv.target = '_blank';
+        titleDiv.rel = 'noopener noreferrer';
         titleDiv.className = 'hf-app-title';
         titleDiv.textContent = app.extra.cardData.title || app.name;
         container.appendChild(titleDiv);
