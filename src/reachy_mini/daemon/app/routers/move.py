@@ -208,7 +208,7 @@ async def stop_move(uuid: MoveUUID) -> dict[str, str]:
 
 @router.websocket("/ws/updates")
 async def ws_move_updates(
-    websocket: WebSocket, backend: Backend = Depends(ws_get_backend)
+    websocket: WebSocket,
 ) -> None:
     """WebSocket route to stream move updates."""
     await websocket.accept()
