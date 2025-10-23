@@ -1,0 +1,4 @@
+[submodule "src/reachy_mini/daemon/app/wasm/mujoco_web"]
+	path = src/reachy_mini/daemon/app/wasm/mujoco_web
+	url = git@github.com:pollen-robotics/mujoco_web.git
+	branch = mirror

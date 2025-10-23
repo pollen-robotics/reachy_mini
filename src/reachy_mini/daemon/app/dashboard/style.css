@@ -35,3 +35,96 @@ ul#examples-list li a {
 ul#examples-list li a:hover {
     text-decoration: underline;
 }
+
+/* Tab styles */
+.tab-container {
+    margin: 0 2em;
+}
+
+.tab-nav {
+    display: flex;
+    border-bottom: 2px solid #ddd;
+    margin-bottom: 1em;
+}
+
+.tab-button {
+    padding: 0.8em 1.5em;
+    border: none;
+    background: #f0f0f0;
+    cursor: pointer;
+    margin-right: 2px;
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+    font-size: 0.9em;
+    transition: background-color 0.2s;
+}
+
+.tab-button:hover {
+    background: #e0e0e0;
+}
+
+.tab-button.active {
+    background: #2d3e50;
+    color: white;
+}
+
+.tab-content {
+    display: none;
+    padding: 1em 0;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+/* MuJoCo container styles */
+#mujoco-container {
+    background: #000;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid #ddd;
+}
+
+/* Daemon control styles */
+#daemon-control {
+    background: #fff;
+    padding: 1.5em;
+    border-radius: 8px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.07);
+    margin-bottom: 1em;
+}
+
+#daemon-control h2 {
+    margin-top: 0;
+    color: #2d3e50;
+}
+
+#daemon-control button {
+    padding: 0.5em 1em;
+    margin-right: 0.5em;
+    margin-bottom: 0.5em;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9em;
+}
+
+#start-daemon {
+    background: #27ae60;
+    color: white;
+}
+
+#stop-daemon {
+    background: #e74c3c;
+    color: white;
+}
+
+#restart-daemon {
+    background: #f39c12;
+    color: white;
+}
+
+#daemon-control label {
+    display: block;
+    margin: 0.5em 0;
+}
