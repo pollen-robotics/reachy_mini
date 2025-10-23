@@ -105,6 +105,20 @@ class MujocoBackend(Backend):
         self.joint_qpos_addr = [
             get_joint_addr_from_name(self.model, n) for n in self.joint_names
         ]
+        
+        self.col_inds = []
+        for i,type in enumerate(self.model.geom_contype):
+            if type != 0:
+                print(f"Geom {i} : contype={self.model.geom_contype[i]}, conaffinity={self.model.geom_conaffinity[i]}")
+                self.col_inds.append(i)
+                self.model.geom_contype[i] = 0
+                self.model.geom_conaffinity[i] = 0
+
+        # # disable the collisions by default
+        # self.model.geom_contype[13] = 0 # head capsule
+        # self.model.geom_conaffinity[13] = 0 
+        # self.model.geom_contype[80] = 0 # top of the torso 
+        # self.model.geom_conaffinity[80] = 0
 
     def rendering_loop(self) -> None:
         """Offline Rendering loop for the Mujoco simulation.
@@ -161,6 +175,14 @@ class MujocoBackend(Backend):
 
                 # recompute all kinematics, collisions, etc.
                 mujoco.mj_forward(self.model, self.data)
+
+        for i in range(100):
+            mujoco.mj_step(self.model, self.data)
+        
+        # enable collisions
+        for i in self.col_inds:
+            self.model.geom_contype[i] = 1
+            self.model.geom_conaffinity[i] = 1
 
         # one more frame so the viewer shows your startup pose
         mujoco.mj_step(self.model, self.data)

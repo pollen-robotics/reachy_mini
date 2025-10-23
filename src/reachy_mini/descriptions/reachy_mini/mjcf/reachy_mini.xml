@@ -11,7 +11,7 @@
         <geom type="mesh" contype="0" conaffinity="0" group="2"/>
       </default>
       <default class="collision">
-        <geom group="3"/>
+        <geom type="mesh" contype="1" conaffinity="1"  group="3"/>
       </default>
     </default>
   </default>
@@ -75,6 +75,11 @@
         <!-- Part bearing_85x110x13 -->
         <geom type="mesh" class="visual" pos="3.79972e-17 -3.70588e-18 -0.0115" quat="0.5 0.5 0.5 0.5" mesh="bearing_85x110x13" material="bearing_85x110x13_material"/>
         <!-- Part body_top_3dprint -->
+        <geom type="box" class="collision" name="body_front_collider" size="0.035 0.01 0.08" pos="0 0.06 0.07" euler="0 0 0"/>
+        <geom type="box" class="collision" name="body_back_collider" size="0.025 0.01 0.03" pos="0 -0.06 0.1" euler="0 0 0"/>
+        <geom type="box" class="collision" name="body_eft_collider" size="0.025 0.01 0.06" pos="-0.06 0 0.05" euler="0 0 1.57"/>
+        <geom type="box" class="collision" name="body_right_collider" size="0.025 0.01 0.06" pos="0.06 0 0.05" euler="0 0 -1.57"/>
+        <!-- <geom type="mesh" class="collision" pos="6.43558e-16 9.98888e-16 0.195" quat="1.38781e-17 -0 1.67393e-17 1" mesh="body_top_3dprint" material="body_top_3dprint_material"/> -->
         <geom type="mesh" class="visual" pos="6.43558e-16 9.98888e-16 0.195" quat="1.38781e-17 -0 1.67393e-17 1" mesh="body_top_3dprint" material="body_top_3dprint_material"/>
         <!-- Part stewart_main_plate_3dprint -->
         <geom type="mesh" class="visual" pos="-3.07628e-26 -5.29396e-23 0.195" quat="1.38846e-17 0 1.67459e-17 1" mesh="stewart_main_plate_3dprint" material="stewart_main_plate_3dprint_material"/>
@@ -471,9 +476,14 @@
                   resolution="1280 720"
                   fovy="80"
                 />
+                <geom type="capsule" class="collision" name="head_collider" size="0.048 0.022" pos="0 0 0.039" euler="0 1.57 0"/>
+        
               </body> 
               <!-- Frame head -->
               <site group="3" name="head" pos="-0.00611127 0.00370522 0.0291364" quat="0.465151 0.724371 -0.182968 -0.474809"/>
+              <!-- <geom type="capsule" class="collision" name="head_collider"  quat="0.612372 0.612372 -0.353553 0.353553" size="0.05"/> -->
+              <!-- <geom type="capsule" class="collision" name="head_collider" size="0.048 0.01" pos="-0.00611127 0.00370522 0.0291364" quat="0.465151 0.724371 -0.182968 -0.474809" /> -->
+                  
               <!-- Link dc15_a01_horn_dummy_7 -->
               <body name="dc15_a01_horn_dummy_7" pos="-0.0948524 0.0197779 -0.00445785" quat="0.652996 0.376401 0.603671 -0.259807">
                 <!-- Joint from xl_330 to dc15_a01_horn_dummy_7 -->
