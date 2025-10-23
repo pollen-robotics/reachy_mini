@@ -219,7 +219,7 @@ class SoundDeviceAudio(AudioBase):
         )
         return self._safe_query_device('input')
 
-    def _safe_query_device(self, kind: str) -> int | None:
+    def _safe_query_device(self, kind: str) -> int:
         try:
             return int(sd.query_devices(None, kind)['index'])
         except sd.PortAudioError:
