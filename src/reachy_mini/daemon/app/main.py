@@ -101,12 +101,6 @@ def create_app(args: Args) -> FastAPI:
     router.include_router(state.router)
     app.include_router(router)
 
-    if args.wireless_version:
-        from .routers import update, wifi_config
-
-        app.include_router(update.router)
-        app.include_router(wifi_config.router)
-
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],  # or restrict to your HF domain
