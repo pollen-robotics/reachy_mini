@@ -86,10 +86,13 @@ class AppManager:
                 self.logger.getChild("runner").info(f"App {app_name} finished")
             except Exception as e:
                 self.logger.getChild("runner").error(
-                    f"An error occurred in the app {app_name}: {e.with_traceback(None)}"
+                    f"An error occurred in the app {app_name}: {e}"
+                )
+                self.logger.getChild("runner").error(
+                    f"Exception details: '{app.error}'",
                 )
                 self.current_app.status.state = AppState.ERROR
-                self.current_app.status.error = str(e)
+                self.current_app.status.error = str(app.error)
 
         self.current_app = RunningApp(
             status=AppStatus(

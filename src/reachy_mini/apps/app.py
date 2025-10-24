@@ -8,6 +8,7 @@ It uses Jinja2 templates to generate the necessary files for the app project.
 """
 
 import threading
+import traceback
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Dict
@@ -23,14 +24,15 @@ class ReachyMiniApp(ABC):
     def __init__(self) -> None:
         """Initialize the Reachy Mini app."""
         self.stop_event = threading.Event()
+        self.error: str = ""
 
     def wrapped_run(self, *args, **kwargs) -> None:
         """Wrap the run method with Reachy Mini context management."""
         try:
             with ReachyMini(*args, **kwargs) as reachy_mini:
                 self.run(reachy_mini, self.stop_event)
-        except Exception as e:
-            print(f"An error occurred: {e}")
+        except Exception:
+            self.error = traceback.format_exc()
             raise
 
     @abstractmethod
