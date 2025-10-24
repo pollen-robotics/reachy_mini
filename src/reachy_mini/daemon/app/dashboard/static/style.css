@@ -1,5 +1,10 @@
-@import url('https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,100..900;1,100..900&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Asap:wght@400;500;700&display=swap');
+
+html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
 
 body {
     font-family: 'Archivo', 'Asap', sans-serif;
@@ -7,7 +12,7 @@ body {
 
 .daemon-status-title {
     font-size: 36px;
-    font-weight: 700;
+    font-weight: 500;
     letter-spacing: 0.3px;
 }
 
@@ -34,8 +39,8 @@ body {
 /* Hugging Face App Store Styles */
 
 .app-section-title {
-    font-weight: 700;
-    font-size: 18px;
+    font-weight: 500;
+    font-size: 24px;
     letter-spacing: 0px;
 }
 

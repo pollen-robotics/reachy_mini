@@ -59,7 +59,7 @@ class SoundDeviceAudio(AudioBase):
 
         self._buffer.append(indata.copy())
 
-    def get_audio_sample(self) -> Optional[bytes | npt.NDArray[np.float32]]:
+    def get_audio_sample(self) -> Optional[npt.NDArray[np.float32]]:
         """Read audio data from the buffer. Returns numpy array or None if empty."""
         if self._buffer and len(self._buffer) > 0:
             data: npt.NDArray[np.float32] = np.concatenate(self._buffer, axis=0)
@@ -76,7 +76,7 @@ class SoundDeviceAudio(AudioBase):
             self.stream = None
             self.logger.info("SoundDevice audio stream closed.")
 
-    def push_audio_sample(self, data: bytes) -> None:
+    def push_audio_sample(self, data: npt.NDArray[np.float32]) -> None:
         """Push audio data to the output device."""
         if self._output_stream is not None:
             self._output_stream.write(data)

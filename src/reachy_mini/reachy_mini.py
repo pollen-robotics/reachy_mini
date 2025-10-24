@@ -686,7 +686,7 @@ class ReachyMini:
 
         t0 = time.time()
         while time.time() - t0 < move.duration:
-            t = time.time() - t0
+            t = min(time.time() - t0, move.duration - 1e-2)
 
             head, antennas, body_yaw = move.evaluate(t)
             if head is not None:

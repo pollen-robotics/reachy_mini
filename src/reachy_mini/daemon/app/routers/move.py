@@ -99,7 +99,7 @@ def create_move_task(coro: Coroutine[Any, Any, None]) -> MoveUUID:
             except (RuntimeError, WebSocketDisconnect):
                 move_listeners.remove(ws)
 
-    async def wrap_coro():
+    async def wrap_coro() -> None:
         try:
             await notify_listeners("move_started")
             await coro

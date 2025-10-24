@@ -85,16 +85,16 @@ def main():
             )
             run(args)
 
-        elif lookup_for_motor(UART_PORT, current_channel+10, 1000000, silent=True):
+        elif lookup_for_motor(UART_PORT, current_channel + 10, 1000000, silent=True):
             print(f"Motor on channel {current_channel} already set up.")
             # light_led_up(UART_PORT, current_channel+10, 1000000)
-            light_led_down(UART_PORT, current_channel+10, 1000000)
+            light_led_down(UART_PORT, current_channel + 10, 1000000)
             args = argparse.Namespace(
                 config_file=CONFIG_FILE_PATH,
                 motor_name=target_name,
                 serialport=UART_PORT,
                 check_only=False,
-                from_id=current_channel+10,
+                from_id=current_channel + 10,
                 from_baudrate=1000000,
                 update_config=False,
             )

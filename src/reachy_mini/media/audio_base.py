@@ -13,6 +13,7 @@ from typing import List, Optional
 import numpy as np
 import numpy.typing as npt
 import usb
+from libusb_package import get_libusb1_backend
 
 
 class AudioBackend(Enum):
@@ -53,7 +54,7 @@ class AudioBase(ABC):
         pass
 
     @abstractmethod
-    def get_audio_sample(self) -> Optional[bytes | npt.NDArray[np.float32]]:
+    def get_audio_sample(self) -> Optional[npt.NDArray[np.float32]]:
         """Read audio data from the device. Returns the data or None if error."""
         pass
 
@@ -68,7 +69,7 @@ class AudioBase(ABC):
         pass
 
     @abstractmethod
-    def push_audio_sample(self, data: bytes) -> None:
+    def push_audio_sample(self, data: npt.NDArray[np.float32]) -> None:
         """Push audio data to the output device."""
         pass
 
@@ -88,11 +89,16 @@ class AudioBase(ABC):
         pass
 
     def _init_respeaker_usb(self) -> Optional[usb.core.Device]:
-        dev = usb.core.find(idVendor=0x2886, idProduct=0x001A)
-        if not dev:
+        try:
+            dev = usb.core.find(
+                idVendor=0x2886, idProduct=0x001A, backend=get_libusb1_backend()
+            )
+            return dev
+        except usb.core.NoBackendError:
+            self.logger.error(
+                "No USB backend was found ! Make sure libusb_package is correctly installed with `pip install libusb_package`."
+            )
             return None
-
-        return dev
 
     def _read_usb(self, name: str) -> Optional[List[int] | List[float]]:
         try:
