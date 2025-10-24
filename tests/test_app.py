@@ -101,7 +101,7 @@ async def test_faulty_app() -> None:
 
     for _ in range(10):
         status = await app_mngr.current_app_status()
-        if status is None:
+        if status is None or status.state in (AppState.STARTING, AppState.RUNNING):
             await asyncio.sleep(1.0)
             continue
         assert status is not None and status.state == AppState.ERROR
