@@ -24,10 +24,10 @@ class ReachyMiniApp(ABC):
         """Initialize the Reachy Mini app."""
         self.stop_event = threading.Event()
 
-    def wrapped_run(self) -> None:
+    def wrapped_run(self, *args, **kwargs) -> None:
         """Wrap the run method with Reachy Mini context management."""
         try:
-            with ReachyMini() as reachy_mini:
+            with ReachyMini(*args, **kwargs) as reachy_mini:
                 self.run(reachy_mini, self.stop_event)
         except Exception as e:
             print(f"An error occurred: {e}")
