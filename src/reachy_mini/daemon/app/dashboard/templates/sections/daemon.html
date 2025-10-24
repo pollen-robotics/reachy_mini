@@ -33,19 +33,20 @@
         <div class="mt-2">
             {% include 'sections/move_player.html' %}
 
-            <div class="w-full flex justify-center pt-4 gap-4">
-                <button id="daemon-doc-btn"
-                    class="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-300 rounded shadow border border-gray-300">
-                    Doc
-                </button>
-                <button id="daemon-settings-btn"
-                    class="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-300 rounded shadow border border-gray-300">
+            {% if args.wireless_version %}
+            <div class="w-full flex  pt-4 gap-4">
+                <a id="daemon-settings-btn"
+                    class="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-300 rounded-lg shadow border border-gray-300"
+                    href="/settings">
                     Settings
-                </button>
-                <button id="daemon-update-btn"
-                    class="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-300 rounded shadow border border-gray-300">
+                </a>
+                <a id="daemon-update-btn"
+                    class="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-300 rounded-lg shadow border border-gray-300"
+                    href="/update">
                     Update
-                </button>
+                </a>
             </div>
+            {% endif %}
+
         </div>
 </section>

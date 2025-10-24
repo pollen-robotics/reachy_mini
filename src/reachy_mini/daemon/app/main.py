@@ -123,7 +123,21 @@ def create_app(args: Args) -> FastAPI:
     @app.get("/")
     async def dashboard(request: Request) -> HTMLResponse:
         """Render the dashboard."""
-        return templates.TemplateResponse("index.html", {"request": request})
+        return templates.TemplateResponse(
+            "index.html", {"request": request, "args": args}
+        )
+
+    if args.wireless_version:
+
+        @app.get("/settings")
+        async def settings(request: Request) -> HTMLResponse:
+            """Render the settings page."""
+            return templates.TemplateResponse("settings.html", {"request": request})
+
+        @app.get("/update")
+        async def update_page(request: Request) -> HTMLResponse:
+            """Render the update page."""
+            return templates.TemplateResponse("update.html", {"request": request})
 
     return app
 
