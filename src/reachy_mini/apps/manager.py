@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from enum import Enum
 from importlib.metadata import entry_points
 from threading import Thread
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from pydantic import BaseModel
 
@@ -67,7 +67,7 @@ class AppManager:
             AppState.ERROR,
         )
 
-    async def start_app(self, app_name: str, *args, **kwargs) -> AppStatus:
+    async def start_app(self, app_name: str, *args: Any, **kwargs: Any) -> AppStatus:
         """Start the app, raises RuntimeError if an app is already running."""
         if self.is_app_running():
             raise RuntimeError("An app is already running")

@@ -11,7 +11,7 @@ import threading
 import traceback
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Dict
+from typing import Any, Dict
 
 from jinja2 import Environment, FileSystemLoader
 
@@ -26,7 +26,7 @@ class ReachyMiniApp(ABC):
         self.stop_event = threading.Event()
         self.error: str = ""
 
-    def wrapped_run(self, *args, **kwargs) -> None:
+    def wrapped_run(self, *args: Any, **kwargs: Any) -> None:
         """Wrap the run method with Reachy Mini context management."""
         try:
             with ReachyMini(*args, **kwargs) as reachy_mini:
