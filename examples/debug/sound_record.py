@@ -26,9 +26,8 @@ def main(backend: str) -> None:
         mini.media.start_recording()
         while time.time() - t0 < DURATION:
             sample = mini.media.get_audio_sample()
+
             if sample is not None:
-                if backend == "gstreamer":
-                    sample = np.frombuffer(sample, dtype=np.float32).reshape(-1, 1)
                 audio_samples.append(sample)
             else:
                 print("No audio data available yet...")

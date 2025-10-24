@@ -10,7 +10,6 @@ Note: The daemon must be running before executing this script.
 import argparse
 
 import cv2
-import numpy as np
 
 from reachy_mini import ReachyMini
 
@@ -23,7 +22,7 @@ def click(event, x, y, flags, param):
         param["y"] = y
 
 
-def main(backend):
+def main(backend: str) -> None:
     """Show the camera feed from Reachy Mini and make it look at clicked points."""
     state = {"x": 0, "y": 0, "just_clicked": False}
 
@@ -32,7 +31,7 @@ def main(backend):
 
     print("Click on the image to make ReachyMini look at that point.")
     print("Press 'q' to quit the camera feed.")
-    with ReachyMini(use_sim=False, media_backend=backend) as reachy_mini:
+    with ReachyMini(media_backend=backend) as reachy_mini:
         try:
             while True:
                 frame = reachy_mini.media.get_frame()
@@ -40,11 +39,6 @@ def main(backend):
                 if frame is None:
                     print("Failed to grab frame.")
                     continue
-
-                if backend == "gstreamer":
-                    frame = cv2.imdecode(
-                        np.frombuffer(frame, dtype=np.uint8), cv2.IMREAD_COLOR
-                    )
 
                 cv2.imshow("Reachy Mini Camera", frame)
                 if cv2.waitKey(1) & 0xFF == ord("q"):

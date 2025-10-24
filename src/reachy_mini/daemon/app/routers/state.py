@@ -65,6 +65,7 @@ async def get_full_state(
     with_target_body_yaw: bool = False,
     with_antenna_positions: bool = True,
     with_target_antenna_positions: bool = False,
+    with_passive_joints: bool = False,
     use_pose_matrix: bool = False,
     backend: Backend = Depends(get_backend),
 ) -> FullState:
@@ -93,6 +94,12 @@ async def get_full_state(
         result["antennas_position"] = backend.get_present_antenna_joint_positions()
     if with_target_antenna_positions:
         result["target_antennas_position"] = backend.target_antenna_joint_positions
+    if with_passive_joints:
+        joints = backend.get_present_passive_joint_positions()
+        if joints is not None:
+            result["passive_joints"] = list(joints.values())
+        else:
+            result["passive_joints"] = None
 
     result["timestamp"] = datetime.now(timezone.utc)
     return FullState.model_validate(result)
@@ -110,6 +117,7 @@ async def ws_full_state(
     with_target_body_yaw: bool = False,
     with_antenna_positions: bool = True,
     with_target_antenna_positions: bool = False,
+    with_passive_joints: bool = False,
     use_pose_matrix: bool = False,
     backend: Backend = Depends(ws_get_backend),
 ) -> None:
@@ -128,6 +136,7 @@ async def ws_full_state(
                 with_target_body_yaw=with_target_body_yaw,
                 with_antenna_positions=with_antenna_positions,
                 with_target_antenna_positions=with_target_antenna_positions,
+                with_passive_joints=with_passive_joints,
                 use_pose_matrix=use_pose_matrix,
                 backend=backend,
             )
