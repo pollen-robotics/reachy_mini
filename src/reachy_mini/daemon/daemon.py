@@ -5,6 +5,7 @@ It includes methods to start, stop, and restart the daemon, as well as to check 
 It also provides a command-line interface for easy interaction.
 """
 
+import asyncio
 import json
 import logging
 import time
@@ -167,6 +168,9 @@ class Daemon:
                 return self._status.state
 
         if self._webrtc:
+            await asyncio.sleep(
+                0.2
+            )  # Give some time for the backend to release the audio device
             self._webrtc.start()
 
         self.logger.info("Daemon started successfully.")
