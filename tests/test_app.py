@@ -99,9 +99,15 @@ async def test_faulty_app() -> None:
 
     status = await app_mngr.start_app("faulty_app", media_backend="no_media")
 
-    await asyncio.sleep(1)  # Give some time for the app to run and fail
-    status = await app_mngr.current_app_status()
-    assert status is not None and status.state == AppState.ERROR
+    for _ in range(10):
+        status = await app_mngr.current_app_status()
+        if status is None:
+            await asyncio.sleep(1.0)
+            continue
+        assert status is not None and status.state == AppState.ERROR
+        break
+    else:
+        pytest.fail("Faulty app did not reach ERROR state in time")
 
     await app_mngr.remove_app("faulty_app", daemon.logger)
 
