@@ -104,7 +104,6 @@ class MujocoBackend(Backend):
         self.col_inds = []
         for i,type in enumerate(self.model.geom_contype):
             if type != 0:
-                print(f"Geom {i} : contype={self.model.geom_contype[i]}, conaffinity={self.model.geom_conaffinity[i]}")
                 self.col_inds.append(i)
                 self.model.geom_contype[i] = 0
                 self.model.geom_conaffinity[i] = 0
