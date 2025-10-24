@@ -20,6 +20,7 @@ def get_backend(request: Request) -> Backend:
     if backend is None or not backend.ready.is_set():
         raise HTTPException(status_code=503, detail="Backend not running")
 
+    assert isinstance(backend, Backend)
     return backend
 
 
@@ -36,4 +37,5 @@ def ws_get_backend(websocket: WebSocket) -> Backend:
     if backend is None or not backend.ready.is_set():
         raise HTTPException(status_code=503, detail="Backend not running")
 
+    assert isinstance(backend, Backend)
     return backend
