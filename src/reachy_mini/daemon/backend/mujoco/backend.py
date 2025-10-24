@@ -92,11 +92,6 @@ class MujocoBackend(Backend):
 
         self.current_head_pose = np.eye(4)
 
-        # print("Joints in the model:")
-        # for i in range(self.model.njoint):
-        #     name = mujoco.mj_id2joint(self.model, i)
-        #     print(f"  {i}: {name}")
-
         self.joint_names = get_actuator_names(self.model)
 
         self.joint_ids = [
@@ -114,11 +109,6 @@ class MujocoBackend(Backend):
                 self.model.geom_contype[i] = 0
                 self.model.geom_conaffinity[i] = 0
 
-        # # disable the collisions by default
-        # self.model.geom_contype[13] = 0 # head capsule
-        # self.model.geom_conaffinity[13] = 0 
-        # self.model.geom_contype[80] = 0 # top of the torso 
-        # self.model.geom_conaffinity[80] = 0
 
     def rendering_loop(self) -> None:
         """Offline Rendering loop for the Mujoco simulation.
@@ -183,6 +173,10 @@ class MujocoBackend(Backend):
         for i in self.col_inds:
             self.model.geom_contype[i] = 1
             self.model.geom_conaffinity[i] = 1
+            
+            
+        for i in range(100):
+            mujoco.mj_step(self.model, self.data)
 
         # one more frame so the viewer shows your startup pose
         mujoco.mj_step(self.model, self.data)
@@ -252,7 +246,7 @@ class MujocoBackend(Backend):
 
             took = time.time() - start_t
             time.sleep(max(0, self.model.opt.timestep - took))
-            # print(f"Step {step}: took {took*1000:.1f}ms")
+            #print(f"Step {step}: took {took*1e6:.1f}us")
             step += 1
 
         if not self.headless:

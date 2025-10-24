@@ -89,7 +89,7 @@ class PlacoKinematics:
         # This will allow independent control of the torso and the head yaw
         # until this constraint is reached
         yaw_constraint = self.ik_solver.add_yaw_constraint(
-            "dummy_torso_yaw", "head", np.deg2rad(65.0)
+            "dummy_torso_yaw", "head", np.deg2rad(55.0)
         )
         yaw_constraint.configure("rel_yaw", "hard")
 
@@ -105,18 +105,18 @@ class PlacoKinematics:
         # Add a cone constraint for the head to not exceed a certain angle
         # This is to avoid the head from looking too far up or down
         self.fk_cone = self.ik_solver.add_cone_constraint(
-            "body_foot_3dprint", "head", np.deg2rad(40.0)
+            "body_foot_3dprint", "head", np.deg2rad(30.0)
         )
         self.fk_cone.configure("cone", "hard")
         self.fk_yaw_constraint = self.fk_solver.add_yaw_constraint(
-            "dummy_torso_yaw", "head", np.deg2rad(65.0)
+            "dummy_torso_yaw", "head", np.deg2rad(55.0)
         )
         self.fk_yaw_constraint.configure("rel_yaw", "hard")
 
         # Add a cone constraint for the head to not exceed a certain angle
         # This is to avoid the head from looking too far up or down
         fk_cone = self.fk_solver.add_cone_constraint(
-            "body_foot_3dprint", "head", np.deg2rad(40.0)
+            "body_foot_3dprint", "head", np.deg2rad(30.0)
         )
         fk_cone.configure("cone", "hard")
 
@@ -142,7 +142,7 @@ class PlacoKinematics:
         # regularization
         self.ik_yaw_joint_task = self.ik_solver.add_joints_task()
         self.ik_yaw_joint_task.set_joints({"yaw_body": 0})
-        if self.automatic_body_yaw:
+        if not self.automatic_body_yaw:
             self.ik_yaw_joint_task.configure("joints", "soft", 5e-5)
         else:
             self.ik_yaw_joint_task.configure("joints", "soft", 1.0)
