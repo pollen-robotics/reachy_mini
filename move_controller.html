@@ -1,0 +1,2063 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reachy Mini Choreography Builder</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- Import Maps for ES6 Module Loading -->
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.149.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.149.0/examples/jsm/",
+            "three/examples/jsm/": "https://cdn.jsdelivr.net/npm/three@0.149.0/examples/jsm/",
+            "urdf-loader": "./urdf-loader.js"
+        }
+    }
+    </script>
+
+    <style>
+        /* Pollen Robotics Color Palette */
+        :root {
+            --pink: #ff6170;          /* Bad/danger zones */
+            --yellow-gold: #ffc261;   /* Accents, highlights */
+            --light-blue: #3bb0d1;    /* Good zones, info */
+            --light-green: #3dde99;   /* Success, connected */
+            --navy-blue: #2B4C7E;     /* Primary brand color */
+            --white: #FFFFFF;
+
+            /* Derived colors for hover/active states */
+            --navy-blue-dark: #1E3A5F;
+            --navy-blue-darker: #153251;
+            --light-blue-dark: #2a9dbd;
+            --light-green-dark: #2bc985;
+            --pink-dark: #e5475c;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            margin: 0;
+            padding: 10px;
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        }
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+            margin: 0 0 10px 0;
+            font-size: 22px;
+            font-weight: 600;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        }
+        .top-bar {
+            background: linear-gradient(135deg, var(--white) 0%, #f8f9fa 100%);
+            padding: 8px 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+            border: 2px solid var(--navy-blue);
+        }
+        .top-bar label {
+            font-size: 13px;
+            color: #495057;
+            font-weight: 500;
+        }
+        .top-bar input {
+            padding: 5px 10px;
+            font-size: 13px;
+            border: 1px solid var(--light-blue);
+            border-radius: 4px;
+            transition: border-color 0.2s;
+        }
+        .top-bar input:focus {
+            outline: none;
+            border-color: var(--navy-blue);
+            box-shadow: 0 0 0 3px rgba(59, 176, 209, 0.2);
+        }
+        .main-layout {
+            display: grid;
+            grid-template-columns: 4fr 3fr 3fr;
+            gap: 10px;
+        }
+        .left-column {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .section {
+            background: linear-gradient(135deg, var(--white) 0%, #fafbfc 100%);
+            padding: 12px;
+            border-radius: 8px;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.08);
+            border: 2px solid transparent;
+        }
+        /* Section-specific border colors */
+        .left-column .section:nth-child(1) { border-color: var(--light-blue); }
+        .left-column .section:nth-child(2) { border-color: var(--light-green); }
+        .main-layout > .section:nth-child(2) { border-color: var(--yellow-gold); }
+        .main-layout > .section:nth-child(3) { border-color: var(--pink); }
+
+        .section h2 {
+            margin: 0 0 10px 0;
+            color: var(--navy-blue);
+            border-bottom: 3px solid currentColor;
+            padding-bottom: 6px;
+            font-size: 16px;
+            font-weight: 600;
+            letter-spacing: 0.3px;
+        }
+        /* Section-specific heading colors */
+        .left-column .section:nth-child(1) h2 { color: var(--light-blue); }
+        .left-column .section:nth-child(2) h2 { color: var(--light-green); }
+        .main-layout > .section:nth-child(2) h2 { color: var(--yellow-gold); }
+        .main-layout > .section:nth-child(3) h2 { color: var(--pink); }
+        #robot-viewer {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+        #robot-viewer-container {
+            box-shadow: 0 4px 12px rgba(59, 176, 209, 0.3);
+        }
+        .video-status, .chart-status {
+            margin-top: 6px;
+            padding: 6px 8px;
+            border-radius: 6px;
+            font-size: 11px;
+            text-align: center;
+            font-weight: 500;
+        }
+        .video-status.connected, .chart-status.connected {
+            background: linear-gradient(135deg, rgba(61, 222, 153, 0.2) 0%, rgba(61, 222, 153, 0.1) 100%);
+            color: #1d8f5e;
+            border: 2px solid var(--light-green);
+        }
+        .video-status.disconnected, .chart-status.disconnected {
+            background: linear-gradient(135deg, rgba(255, 97, 112, 0.2) 0%, rgba(255, 97, 112, 0.1) 100%);
+            color: #c23d4d;
+            border: 2px solid var(--pink);
+        }
+        .moves-list {
+            max-height: 220px;
+            overflow-y: auto;
+            padding: 6px;
+        }
+        .move-item {
+            display: flex;
+            align-items: center;
+            padding: 4px;
+            margin: 2px 0;
+            border-radius: 3px;
+            transition: background-color 0.2s;
+        }
+        .move-item:hover {
+            background-color: #f0f0f0;
+        }
+        .move-item input[type="radio"] {
+            margin-right: 6px;
+            cursor: pointer;
+        }
+        .move-item label {
+            cursor: pointer;
+            flex-grow: 1;
+            font-size: 12px;
+        }
+        .goto-form {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 6px;
+            margin-bottom: 8px;
+        }
+        .goto-form label {
+            font-size: 11px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .goto-form input[type="number"] {
+            width: 55px;
+            padding: 3px;
+            font-size: 11px;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+        }
+        .goto-form select {
+            padding: 3px;
+            font-size: 11px;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+        }
+        .goto-form input[type="checkbox"] {
+            margin-left: 4px;
+        }
+        .slider-container {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+        .slider-row {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .slider-row label {
+            min-width: 50px;
+            font-size: 11px;
+        }
+        .slider-row input[type="range"] {
+            flex: 1;
+            height: 6px;
+            -webkit-appearance: none;
+            appearance: none;
+            background: linear-gradient(90deg, #ddd 0%, #ddd 100%);
+            border-radius: 3px;
+            outline: none;
+            box-shadow: inset 0 1px 3px rgba(0,0,0,0.1);
+        }
+        /* Antenna sliders - light blue (safe) to pink (danger) gradient */
+        /* Left antenna: blend at 67% (danger past 1 toward 3) */
+        .slider-row input[type="range"]#gotoAntLSlider {
+            background: linear-gradient(90deg, var(--light-blue) 0%, var(--light-blue) 67%, var(--pink) 100%);
+        }
+        /* Right antenna: blend at 67% (danger past -1, will be flipped by scaleX) */
+        .slider-row input[type="range"]#gotoAntRSlider {
+            background: linear-gradient(90deg, var(--light-blue) 0%, var(--light-blue) 67%, var(--pink) 100%);
+        }
+        .slider-row input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            background: linear-gradient(135deg, var(--navy-blue) 0%, var(--navy-blue-dark) 100%);
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+            border: 2px solid var(--white);
+        }
+        .slider-row input[type="range"]::-moz-range-thumb {
+            width: 18px;
+            height: 18px;
+            background: linear-gradient(135deg, var(--navy-blue) 0%, var(--navy-blue-dark) 100%);
+            border-radius: 50%;
+            cursor: pointer;
+            border: 2px solid var(--white);
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+        }
+        .slider-row input[type="number"] {
+            width: 60px;
+            padding: 3px 5px;
+            font-size: 11px;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        .slider-row input[type="number"]:focus {
+            outline: none;
+            border-color: var(--light-blue);
+            box-shadow: 0 0 0 3px rgba(59, 176, 209, 0.2);
+        }
+        /* Reversed slider for right antenna - flips direction */
+        .reversed-slider {
+            transform: scaleX(-1);
+        }
+        /* Global select styling */
+        select {
+            border: 1px solid #ced4da !important;
+            border-radius: 6px !important;
+            transition: border-color 0.2s, box-shadow 0.2s;
+            background-color: white;
+        }
+        select:focus {
+            outline: none;
+            border-color: var(--yellow-gold) !important;
+            box-shadow: 0 0 0 3px rgba(255, 194, 97, 0.2);
+        }
+        /* H3 headings */
+        h3 {
+            color: #495057;
+            font-weight: 600;
+        }
+        .button-group {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            margin-top: 8px;
+        }
+        button {
+            padding: 6px 12px;
+            font-size: 12px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        button:hover:not(:disabled) {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        /* Individual button color classes */
+        .btn-navy {
+            background: linear-gradient(135deg, var(--navy-blue) 0%, var(--navy-blue-dark) 100%);
+            color: var(--white);
+            font-weight: 500;
+            box-shadow: 0 2px 6px rgba(43, 76, 126, 0.3);
+        }
+        .btn-navy:hover:not(:disabled) {
+            background: linear-gradient(135deg, var(--navy-blue-dark) 0%, var(--navy-blue-darker) 100%);
+            box-shadow: 0 3px 10px rgba(43, 76, 126, 0.4);
+            transform: translateY(-1px);
+        }
+
+        .btn-yellow {
+            background: linear-gradient(135deg, var(--yellow-gold) 0%, #f0b554 100%);
+            color: #2c3e50;
+            font-weight: 500;
+            box-shadow: 0 2px 6px rgba(255, 194, 97, 0.4);
+        }
+        .btn-yellow:hover:not(:disabled) {
+            background: linear-gradient(135deg, #f0b554 0%, #e0a544 100%);
+            box-shadow: 0 3px 10px rgba(255, 194, 97, 0.5);
+            transform: translateY(-1px);
+        }
+
+        .btn-blue {
+            background: linear-gradient(135deg, var(--light-blue) 0%, var(--light-blue-dark) 100%);
+            color: var(--white);
+            font-weight: 500;
+            box-shadow: 0 2px 6px rgba(59, 176, 209, 0.3);
+        }
+        .btn-blue:hover:not(:disabled) {
+            background: linear-gradient(135deg, var(--light-blue-dark) 0%, #1f8aa9 100%);
+            box-shadow: 0 3px 10px rgba(59, 176, 209, 0.4);
+            transform: translateY(-1px);
+        }
+
+        .btn-pink {
+            background: linear-gradient(135deg, var(--pink) 0%, var(--pink-dark) 100%);
+            color: var(--white);
+            font-weight: 500;
+            box-shadow: 0 2px 6px rgba(255, 97, 112, 0.3);
+        }
+        .btn-pink:hover:not(:disabled) {
+            background: linear-gradient(135deg, var(--pink-dark) 0%, #d13548 100%);
+            box-shadow: 0 3px 10px rgba(255, 97, 112, 0.4);
+            transform: translateY(-1px);
+        }
+
+        .btn-green {
+            background: linear-gradient(135deg, var(--light-green) 0%, var(--light-green-dark) 100%);
+            color: var(--white);
+            font-weight: 500;
+            box-shadow: 0 2px 6px rgba(61, 222, 153, 0.3);
+        }
+        .btn-green:hover:not(:disabled) {
+            background: linear-gradient(135deg, var(--light-green-dark) 0%, #1fba75 100%);
+            box-shadow: 0 3px 10px rgba(61, 222, 153, 0.4);
+            transform: translateY(-1px);
+        }
+
+        /* Legacy class names for backwards compatibility */
+        .btn-primary { background: linear-gradient(135deg, var(--navy-blue) 0%, var(--navy-blue-dark) 100%); color: var(--white); font-weight: 500; box-shadow: 0 2px 6px rgba(43, 76, 126, 0.3); }
+        .btn-primary:hover:not(:disabled) { background: linear-gradient(135deg, var(--navy-blue-dark) 0%, var(--navy-blue-darker) 100%); box-shadow: 0 3px 10px rgba(43, 76, 126, 0.4); transform: translateY(-1px); }
+        .btn-danger { background: linear-gradient(135deg, var(--pink) 0%, var(--pink-dark) 100%); color: var(--white); font-weight: 500; box-shadow: 0 2px 6px rgba(255, 97, 112, 0.3); }
+        .btn-danger:hover:not(:disabled) { background: linear-gradient(135deg, var(--pink-dark) 0%, #d13548 100%); box-shadow: 0 3px 10px rgba(255, 97, 112, 0.4); transform: translateY(-1px); }
+        .btn-secondary { background: linear-gradient(135deg, var(--light-blue) 0%, var(--light-blue-dark) 100%); color: var(--white); font-weight: 500; box-shadow: 0 2px 6px rgba(59, 176, 209, 0.3); }
+        .btn-secondary:hover:not(:disabled) { background: linear-gradient(135deg, var(--light-blue-dark) 0%, #1f8aa9 100%); box-shadow: 0 3px 10px rgba(59, 176, 209, 0.4); transform: translateY(-1px); }
+        .status {
+            margin-top: 8px;
+            padding: 8px 10px;
+            border-radius: 6px;
+            font-size: 11px;
+            text-align: center;
+            font-weight: 500;
+        }
+        .status.success {
+            background: linear-gradient(135deg, rgba(61, 222, 153, 0.15) 0%, rgba(61, 222, 153, 0.05) 100%);
+            color: #1d8f5e;
+            border: 2px solid var(--light-green);
+        }
+        .status.error {
+            background: linear-gradient(135deg, rgba(255, 97, 112, 0.15) 0%, rgba(255, 97, 112, 0.05) 100%);
+            color: #c23d4d;
+            border: 2px solid var(--pink);
+        }
+        .status.info {
+            background: linear-gradient(135deg, rgba(255, 194, 97, 0.15) 0%, rgba(255, 194, 97, 0.05) 100%);
+            color: #d9941f;
+            border: 2px solid var(--yellow-gold);
+        }
+        #poseChart {
+            max-height: 180px;
+        }
+        .look-pad-container {
+            margin-top: 10px;
+        }
+        .look-pad {
+            position: relative;
+            width: 100%;
+            height: 150px;
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            border: 3px solid var(--light-blue);
+            border-radius: 8px;
+            cursor: crosshair;
+            overflow: hidden;
+            box-shadow: inset 0 2px 8px rgba(0,0,0,0.1), 0 2px 8px rgba(59, 176, 209, 0.3);
+        }
+        .look-pad-grid {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-image:
+                linear-gradient(to right, rgba(0,0,0,0.1) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(0,0,0,0.1) 1px, transparent 1px);
+            background-size: 25% 25%;
+        }
+        .look-pad-center {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 12px;
+            height: 12px;
+            background: var(--yellow-gold);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 0 8px rgba(255, 194, 97, 0.6);
+        }
+        .look-pad-labels {
+            position: absolute;
+            font-size: 10px;
+            color: #495057;
+            font-weight: 600;
+            pointer-events: none;
+            text-shadow: 0 1px 2px rgba(255,255,255,0.8);
+        }
+        .look-pad-labels.top { top: 5px; left: 50%; transform: translateX(-50%); }
+        .look-pad-labels.bottom { bottom: 5px; left: 50%; transform: translateX(-50%); }
+        .look-pad-labels.left { left: 5px; top: 50%; transform: translateY(-50%); }
+        .look-pad-labels.right { right: 5px; top: 50%; transform: translateY(-50%); }
+        .click-indicator {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            border: 3px solid var(--yellow-gold);
+            border-radius: 50%;
+            pointer-events: none;
+            transform: translate(-50%, -50%);
+            animation: clickPulse 0.5s ease-out;
+            box-shadow: 0 0 12px rgba(255, 194, 97, 0.7);
+        }
+        @keyframes clickPulse {
+            0% {
+                opacity: 1;
+                transform: translate(-50%, -50%) scale(0.5);
+            }
+            100% {
+                opacity: 0;
+                transform: translate(-50%, -50%) scale(2);
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>🎭 Reachy Mini Choreography Builder</h1>
+
+    <div class="top-bar">
+        <label>Server URL:</label>
+        <input type="text" id="serverUrl" value="http://localhost:8100" size="25">
+    </div>
+
+    <div class="main-layout">
+        <!-- Left Column: Video + Look Pad + Head Pose -->
+        <div class="left-column">
+            <div class="section">
+                <h2>📹 3D Robot Viewer</h2>
+                <div id="robot-viewer-container" style="width: 100%; height: 500px; background: #222; border-radius: 8px; overflow: hidden;">
+                    <canvas id="robot-viewer"></canvas>
+                </div>
+                <div id="videoStatus" class="video-status disconnected">Loading 3D model...</div>
+            </div>
+
+            <div class="section">
+                <h2>📊 Controls & Data</h2>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                    <!-- Look Pad -->
+                    <div>
+                        <h3 style="margin: 0 0 8px 0; font-size: 13px; color: #495057; font-weight: 600;">👁️ Quick Look Direction</h3>
+                        <div class="look-pad" id="lookPad">
+                            <div class="look-pad-grid"></div>
+                            <div class="look-pad-center"></div>
+                            <div class="look-pad-labels top">↑ Up -20°</div>
+                            <div class="look-pad-labels bottom">↓ Down +20°</div>
+                            <div class="look-pad-labels left">← Left +40°</div>
+                            <div class="look-pad-labels right">Right -40° →</div>
+                        </div>
+                        <div id="lookStatus" class="status" style="display:none; margin-top: 4px;"></div>
+                    </div>
+
+                    <!-- Live Chart -->
+                    <div>
+                        <h3 style="margin: 0 0 8px 0; font-size: 13px; color: #495057; font-weight: 600;">📈 Live Head Pose</h3>
+                        <canvas id="poseChart"></canvas>
+                        <div id="chartStatus" class="chart-status disconnected">Connecting WebSocket...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Middle Column: Manual Control + Move Tester -->
+        <div class="section">
+            <h2>🎮 Manual Control</h2>
+
+            <!-- Manual Positioning with Sliders -->
+            <form id="gotoForm" class="slider-container">
+                <div class="slider-row">
+                    <label title="Left antenna position (range: -3 to 3)">L ant:</label>
+                    <input type="range" id="gotoAntLSlider" min="-3" max="3" step="0.2" value="0">
+                    <input type="number" step="0.01" id="gotoAntL" value="0" min="-3" max="3" title="Left antenna position (range: -3 to 3)">
+                </div>
+                <div class="slider-row">
+                    <label title="Right antenna position (range: -3 to 3)">R ant:</label>
+                    <input type="range" id="gotoAntRSlider" min="-3" max="3" step="0.2" value="0" class="reversed-slider">
+                    <input type="number" step="0.01" id="gotoAntR" value="0" min="-3" max="3" title="Right antenna position (range: -3 to 3)">
+                </div>
+                <div class="slider-row">
+                    <label title="X position in meters (±0.1m safe range)">x:</label>
+                    <input type="range" id="gotoXSlider" min="-0.1" max="0.1" step="0.001" value="0">
+                    <input type="number" step="0.001" id="gotoX" value="0" title="X position in meters (±0.1m safe range)">
+                </div>
+                <div class="slider-row">
+                    <label title="Y position in meters (±0.1m safe range)">y:</label>
+                    <input type="range" id="gotoYSlider" min="-0.1" max="0.1" step="0.001" value="0">
+                    <input type="number" step="0.001" id="gotoY" value="0" title="Y position in meters (±0.1m safe range)">
+                </div>
+                <div class="slider-row">
+                    <label title="Z position in meters (±0.1m safe range, -0.02 is neutral)">z:</label>
+                    <input type="range" id="gotoZSlider" min="-0.1" max="0.1" step="0.001" value="-0.02">
+                    <input type="number" step="0.001" id="gotoZ" value="-0.02" title="Z position in meters (±0.1m safe range, -0.02 is neutral)">
+                </div>
+                <div class="slider-row">
+                    <label title="Roll rotation (tilt left/right)">roll:</label>
+                    <input type="range" id="gotoRollSlider" min="-90" max="90" step="1" value="0">
+                    <input type="number" step="1" id="gotoRoll" value="0" title="Roll rotation (tilt left/right)">
+                </div>
+                <div class="slider-row">
+                    <label title="Pitch rotation (tilt up/down)">pitch:</label>
+                    <input type="range" id="gotoPitchSlider" min="-90" max="90" step="1" value="0">
+                    <input type="number" step="1" id="gotoPitch" value="0" title="Pitch rotation (tilt up/down)">
+                </div>
+                <div class="slider-row">
+                    <label title="Yaw rotation (turn left/right)">yaw:</label>
+                    <input type="range" id="gotoYawSlider" min="-180" max="180" step="1" value="0">
+                    <input type="number" step="1" id="gotoYaw" value="0" title="Yaw rotation (turn left/right)">
+                </div>
+                <div class="slider-row">
+                    <label title="Body yaw - spin the base (±160° range)">Body:</label>
+                    <input type="range" id="gotoBodyYawSlider" min="-160" max="160" step="1" value="0">
+                    <input type="number" step="1" id="gotoBodyYaw" value="0" title="Body yaw - spin the base (±160° range)">
+                </div>
+                <div style="margin-top: 8px; padding-top: 8px; border-top: 2px solid rgba(255, 194, 97, 0.3); display: grid; grid-template-columns: 1fr 1fr 1fr 1fr 1fr; gap: 6px;">
+                    <label style="font-size: 11px;"><input type="checkbox" id="bindYaw"> Bind yaw</label>
+                    <label style="font-size: 11px;"><input type="checkbox" id="bindAnt"> Bind ant</label>
+                    <label style="font-size: 11px;"><input type="checkbox" id="invAnt"> Inv ant</label>
+                    <label style="font-size: 11px;"><input type="checkbox" id="gotoDeg" checked> Degrees</label>
+                    <label style="font-size: 11px;" title="Movement duration in seconds">Dur: <input type="number" step="0.1" id="gotoDuration" value="0.2" style="width: 50px; padding: 2px;" title="Movement duration in seconds"></label>
+                </div>
+                <div style="margin-top: 4px;">
+                    <label style="font-size: 11px;" title="Motion interpolation method">
+                        Interp:
+                        <select id="gotoInterp" style="font-size: 11px; padding: 2px;" title="linear=constant speed, minjerk=smooth (recommended), ease=ease-in-out, cartoon=exaggerated">
+                            <option value="linear">linear</option>
+                            <option value="minjerk" selected>minjerk</option>
+                            <option value="ease">ease</option>
+                            <option value="cartoon">cartoon</option>
+                        </select>
+                    </label>
+                </div>
+            </form>
+            <div style="font-size: 10px; color: #495057; margin-top: 5px; line-height: 1.4; background: #f8f9fa; padding: 8px; border-radius: 6px; border-left: 3px solid var(--yellow-gold);">
+                💡 Hover over fields for info. Position in meters (±0.1m). Angles in degrees/radians. Body yaw ±160°.<br>
+                🎚️ <strong>Antennas:</strong> Both -3 to 3. Right slider is reversed. Bind ant: same values. Inv ant: mirrored values.
+            </div>
+            <div class="button-group">
+                <button type="submit" form="gotoForm" class="btn-navy" id="sendGotoBtn">Send Goto</button>
+                <button class="btn-yellow" id="wakeUpBtn">Wake Up</button>
+                <button class="btn-blue" id="sleepBtn">Sleep</button>
+                <button class="btn-pink" id="turnLeftBtn">⬅️ Turn Left</button>
+                <button class="btn-yellow" id="turnRightBtn">Turn Right ➡️</button>
+                <button class="btn-pink" id="stopManualBtn" disabled>Stop</button>
+            </div>
+            <div id="manualStatus" class="status" style="display:none;"></div>
+
+            <!-- Move Tester -->
+            <div style="margin-top: 20px; padding-top: 15px; border-top: 2px solid rgba(255, 194, 97, 0.3);">
+                <h3 style="margin: 0 0 10px 0; font-size: 14px; color: #495057; font-weight: 600;">🧪 Test Individual Moves</h3>
+
+                <div style="margin-bottom: 15px;">
+                    <label style="display: block; margin-bottom: 5px; font-weight: 600; font-size: 13px; color: #495057;">🕺 Dance Move</label>
+                    <select id="danceSelect" style="width: 100%; padding: 8px; font-size: 13px;">
+                        <option value="">-- Select Dance Move --</option>
+                    </select>
+                </div>
+
+                <div style="margin-bottom: 15px;">
+                    <label style="display: block; margin-bottom: 5px; font-weight: 600; font-size: 13px; color: #495057;">😊 Emotion Move</label>
+                    <select id="emotionSelect" style="width: 100%; padding: 8px; font-size: 13px;">
+                        <option value="">-- Select Emotion Move --</option>
+                    </select>
+                </div>
+
+                <div class="button-group">
+                    <button class="btn-navy" id="executeSelectedBtn" style="flex: 1;">▶️ Execute</button>
+                    <button class="btn-pink" id="stopMoveBtn">⏹️ Stop</button>
+                </div>
+
+                <div id="choreographyStatus" class="status" style="display:none; margin-top: 10px;"></div>
+            </div>
+
+            <!-- Move Information -->
+            <div style="margin-top: 20px; padding-top: 15px; border-top: 2px solid rgba(255, 194, 97, 0.3);">
+                <h3 style="margin: 0 0 10px 0; font-size: 14px; color: #495057; font-weight: 600;">ℹ️ Current Move</h3>
+                <div id="moveInfo" style="font-size: 13px; line-height: 1.6;">
+                    <p style="color: #6c757d; font-style: italic;">Select a move to see details</p>
+                </div>
+            </div>
+
+            <!-- Move Library Stats -->
+            <div style="margin-top: 20px; padding-top: 15px; border-top: 2px solid rgba(255, 194, 97, 0.3);">
+                <h3 style="margin: 0 0 10px 0; font-size: 14px; color: #495057; font-weight: 600;">📊 Move Library Stats</h3>
+                <div style="font-size: 12px; color: #495057;">
+                    <div style="display: flex; justify-content: space-between; margin: 5px 0;">
+                        <span>Dance Moves:</span>
+                        <strong style="color: var(--light-blue);" id="danceCount">20</strong>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; margin: 5px 0;">
+                        <span>Emotion Moves:</span>
+                        <strong style="color: var(--pink);" id="emotionCount">81</strong>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; margin: 5px 0; padding-top: 5px; border-top: 2px solid rgba(255, 194, 97, 0.3);">
+                        <span>Total Moves:</span>
+                        <strong style="color: var(--navy-blue);" id="totalCount">101</strong>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Column: Routine Builder -->
+        <div class="section">
+            <h2>🎭 Routine Builder</h2>
+
+            <!-- Quick Presets -->
+            <div style="margin-bottom: 20px;">
+                <h3 style="margin: 0 0 10px 0; font-size: 14px; color: #495057; font-weight: 600;">🎵 Quick Presets</h3>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                    <button class="btn-green" onclick="loadPreset('happy')" style="font-size: 11px; padding: 8px;">😊 Happy Greeting</button>
+                    <button class="btn-blue" onclick="loadPreset('confused')" style="font-size: 11px; padding: 8px;">🤔 Confused Look</button>
+                    <button class="btn-yellow" onclick="loadPreset('dance')" style="font-size: 11px; padding: 8px;">💃 Dance Party</button>
+                    <button class="btn-pink" onclick="loadPreset('sleepy')" style="font-size: 11px; padding: 8px;">😴 Sleepy Time</button>
+                </div>
+            </div>
+
+            <!-- Add Moves to Routine -->
+            <div style="padding-top: 15px; border-top: 2px solid rgba(255, 97, 112, 0.3);">
+                <h3 style="margin: 0 0 10px 0; font-size: 14px; color: #495057; font-weight: 600;">➕ Add Moves</h3>
+
+                <div style="margin-bottom: 15px;">
+                    <label style="display: block; margin-bottom: 5px; font-weight: 600; font-size: 13px; color: #495057;">🕺 Dance Move</label>
+                    <select id="routineDanceSelect" style="width: 100%; padding: 8px; font-size: 13px;">
+                        <option value="">-- Select Dance Move --</option>
+                    </select>
+                </div>
+
+                <div style="margin-bottom: 15px;">
+                    <label style="display: block; margin-bottom: 5px; font-weight: 600; font-size: 13px; color: #495057;">😊 Emotion Move</label>
+                    <select id="routineEmotionSelect" style="width: 100%; padding: 8px; font-size: 13px;">
+                        <option value="">-- Select Emotion Move --</option>
+                    </select>
+                </div>
+
+                <button class="btn-secondary" id="addToRoutineBtn" style="width: 100%;">➕ Add to Routine</button>
+            </div>
+
+            <!-- Routine Sequence -->
+            <div style="margin-top: 20px; padding-top: 15px; border-top: 2px solid var(--pink);">
+                <h3 style="margin: 0 0 10px 0; font-size: 15px; color: var(--pink); font-weight: 600;">📝 Routine Sequence</h3>
+
+                <!-- BPM Control -->
+                <div style="margin-bottom: 10px;">
+                    <label style="display: block; margin-bottom: 5px; font-weight: 600; font-size: 13px; color: #495057;">🎵 BPM (Beats Per Minute)</label>
+                    <input type="number" id="choreographyBPM" value="120" min="40" max="200" step="1" style="width: 100%; padding: 8px; font-size: 13px; border: 1px solid #ced4da; border-radius: 6px;">
+                </div>
+
+                <div id="routineList" style="min-height: 100px; max-height: 200px; overflow-y: auto; background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%); border: 2px solid rgba(255, 97, 112, 0.3); border-radius: 8px; padding: 8px; font-size: 12px;">
+                    <em style="color: #6c757d;">Add moves to build a routine...</em>
+                </div>
+                <div class="button-group" style="margin-top: 8px;">
+                    <button class="btn-pink" id="clearRoutineBtn">🗑️ Clear</button>
+                    <button class="btn-navy" id="playRoutineBtn" style="flex: 1;">🎬 Play Routine</button>
+                </div>
+                <div class="button-group" style="margin-top: 8px;">
+                    <button class="btn-yellow" id="exportChoreographyBtn">💾 Export JSON</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        // ES6 Module Imports
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import URDFLoader from 'urdf-loader'; // Default export, not named
+
+        const serverUrl = () => document.getElementById('serverUrl').value;
+
+        // Move libraries - loaded from JSON
+        let danceMoves = [];
+        let emotionMoves = [];
+
+        // Routine storage
+        let routine = [];
+
+        // Load moves from JSON file
+        async function loadMovesFromJSON() {
+            try {
+                const response = await fetch('moves.json');
+                const data = await response.json();
+
+                // Sort alphabetically by name
+                danceMoves = data.dances.sort((a, b) => a.name.localeCompare(b.name));
+                emotionMoves = data.emotions.sort((a, b) => a.name.localeCompare(b.name));
+
+                console.log(`Loaded ${danceMoves.length} dance moves and ${emotionMoves.length} emotion moves`);
+
+                // Populate dropdowns after loading
+                populateMoves();
+            } catch (error) {
+                console.error('Failed to load moves.json:', error);
+                // Fallback to empty arrays if JSON fails to load
+                danceMoves = [];
+                emotionMoves = [];
+            }
+        }
+
+        // Populate dropdown menus
+        function populateMoves() {
+            const danceSelect = document.getElementById('danceSelect');
+            const emotionSelect = document.getElementById('emotionSelect');
+            const routineDanceSelect = document.getElementById('routineDanceSelect');
+            const routineEmotionSelect = document.getElementById('routineEmotionSelect');
+
+            // Clear existing options (keep default option)
+            danceSelect.innerHTML = '<option value="">-- Select Dance Move --</option>';
+            emotionSelect.innerHTML = '<option value="">-- Select Emotion Move --</option>';
+            routineDanceSelect.innerHTML = '<option value="">-- Select Dance Move --</option>';
+            routineEmotionSelect.innerHTML = '<option value="">-- Select Emotion Move --</option>';
+
+            // Populate dance moves (already sorted from JSON)
+            danceMoves.forEach(move => {
+                const displayName = move.name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                const displayText = move.description ? `${move.name} - ${move.description}` : move.name;
+
+                const option = document.createElement('option');
+                option.value = move.name;
+                option.textContent = displayText;
+                danceSelect.appendChild(option);
+
+                // Also populate routine builder dropdown
+                const routineOption = document.createElement('option');
+                routineOption.value = move.name;
+                routineOption.textContent = displayText;
+                routineDanceSelect.appendChild(routineOption);
+            });
+
+            // Populate emotion moves (already sorted from JSON)
+            emotionMoves.forEach(move => {
+                const displayName = move.name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                const displayText = move.description ? `${move.name} - ${move.description}` : move.name;
+
+                const option = document.createElement('option');
+                option.value = move.name;
+                option.textContent = displayText;
+                emotionSelect.appendChild(option);
+
+                // Also populate routine builder dropdown
+                const routineOption = document.createElement('option');
+                routineOption.value = move.name;
+                routineOption.textContent = displayText;
+                routineEmotionSelect.appendChild(routineOption);
+            });
+
+            // Update counts
+            document.getElementById('danceCount').textContent = danceMoves.length;
+            document.getElementById('emotionCount').textContent = emotionMoves.length;
+            document.getElementById('totalCount').textContent = danceMoves.length + emotionMoves.length;
+        }
+
+        // Update move info display
+        function updateMoveInfo(moveName, type) {
+            if (!moveName) {
+                document.getElementById('moveInfo').innerHTML = '<p style="color: #999; font-style: italic;">Select a move to see details</p>';
+                return;
+            }
+
+            const displayName = moveName.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+            const library = type === 'dance' ? 'Dance Library' : 'Emotion Library';
+
+            // Find description from loaded moves
+            const moveList = type === 'dance' ? danceMoves : emotionMoves;
+            const moveData = moveList.find(m => m.name === moveName);
+            const description = moveData && moveData.description ? moveData.description : 'No description available';
+
+            document.getElementById('moveInfo').innerHTML = `
+                <div style="background: #f9f9f9; padding: 10px; border-radius: 4px; border-left: 4px solid var(--yellow-gold);">
+                    <h4 style="margin: 0 0 8px 0; color: var(--navy-blue);">${displayName}</h4>
+                    <p style="margin: 4px 0;"><strong>Library:</strong> ${library}</p>
+                    <p style="margin: 4px 0;"><strong>Type:</strong> ${type === 'dance' ? 'Choreographed Movement' : 'Expressive Pose'}</p>
+                    <p style="margin: 4px 0;"><strong>Move ID:</strong> <code style="background: #fff; padding: 2px 6px; border-radius: 3px; font-size: 11px;">${moveName}</code></p>
+                    <p style="margin: 8px 0 4px 0; color: #666; font-style: italic;">${description}</p>
+                </div>
+            `;
+        }
+
+        // Listen for dropdown changes
+        document.addEventListener('DOMContentLoaded', () => {
+            const danceSelect = document.getElementById('danceSelect');
+            const emotionSelect = document.getElementById('emotionSelect');
+            const routineDanceSelect = document.getElementById('routineDanceSelect');
+            const routineEmotionSelect = document.getElementById('routineEmotionSelect');
+
+            // Test move dropdowns (middle column)
+            danceSelect.addEventListener('change', (e) => {
+                if (e.target.value) {
+                    emotionSelect.value = '';
+                    updateMoveInfo(e.target.value, 'dance');
+                }
+            });
+
+            emotionSelect.addEventListener('change', (e) => {
+                if (e.target.value) {
+                    danceSelect.value = '';
+                    updateMoveInfo(e.target.value, 'emotion');
+                }
+            });
+
+            // Routine builder dropdowns (right column)
+            routineDanceSelect.addEventListener('change', (e) => {
+                if (e.target.value) {
+                    routineEmotionSelect.value = '';
+                }
+            });
+
+            routineEmotionSelect.addEventListener('change', (e) => {
+                if (e.target.value) {
+                    routineDanceSelect.value = '';
+                }
+            });
+        });
+
+        // 3D Robot Viewer Setup
+        let scene, camera, renderer, robotModel;
+        let controls; // For mouse camera control
+
+        function init3DViewer() {
+            const container = document.getElementById('robot-viewer-container');
+            const videoStatus = document.getElementById('videoStatus');
+
+            // 1. The Scene: The "world" that holds everything
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x222222);
+
+            // 2. The Camera: Your "eyes"
+            camera = new THREE.PerspectiveCamera(
+                75, // Field of view
+                container.clientWidth / container.clientHeight, // Aspect ratio
+                0.1, // Near clip
+                1000 // Far clip
+            );
+            camera.position.set(0.8, 0.8, 0.5); // Move camera back and up a bit
+            camera.lookAt(0, 0, 0.25); // Look at the robot's base
+
+            // 3. The Lights: So you can see the model
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(1, 1, 1);
+            scene.add(directionalLight);
+            const directionalLight2 = new THREE.DirectionalLight(0xffffff, 0.4);
+            directionalLight2.position.set(-1, -1, 0.5);
+            scene.add(directionalLight2);
+
+            // 4. The Renderer: The "painter" that draws on the canvas
+            renderer = new THREE.WebGLRenderer({
+                canvas: document.getElementById('robot-viewer'),
+                antialias: true
+            });
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+
+            // Create checkerboard floor
+            const floorSize = 2;
+            const divisions = 20;
+            const squareSize = floorSize / divisions;
+
+            // Create canvas for checkerboard texture
+            const canvas = document.createElement('canvas');
+            canvas.width = 512;
+            canvas.height = 512;
+            const ctx = canvas.getContext('2d');
+
+            const squaresPerSide = 20;
+            const pixelsPerSquare = canvas.width / squaresPerSide;
+
+            for (let i = 0; i < squaresPerSide; i++) {
+                for (let j = 0; j < squaresPerSide; j++) {
+                    // Alternating pattern
+                    const isLight = (i + j) % 2 === 0;
+                    ctx.fillStyle = isLight ? '#3a3a3a' : '#2a2a2a';
+                    ctx.fillRect(i * pixelsPerSquare, j * pixelsPerSquare, pixelsPerSquare, pixelsPerSquare);
+                }
+            }
+
+            const floorTexture = new THREE.CanvasTexture(canvas);
+            floorTexture.wrapS = THREE.RepeatWrapping;
+            floorTexture.wrapT = THREE.RepeatWrapping;
+
+            const floorGeometry = new THREE.PlaneGeometry(floorSize, floorSize);
+            const floorMaterial = new THREE.MeshStandardMaterial({
+                map: floorTexture,
+                roughness: 0.8,
+                metalness: 0.2
+            });
+
+            const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+            floor.rotation.x = -Math.PI / 2; // Rotate to horizontal
+            floor.position.y = 0; // At ground level
+            floor.receiveShadow = true;
+            scene.add(floor);
+
+            // 5. OrbitControls: Mouse interaction for camera
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true; // Smooth movement
+            controls.dampingFactor = 0.05;
+            controls.target.set(0, 0.2, 0); // Look at robot center
+            controls.update();
+
+            // Handle window resize
+            window.addEventListener('resize', () => {
+                const width = container.clientWidth;
+                const height = container.clientHeight;
+                camera.aspect = width / height;
+                camera.updateProjectionMatrix();
+                renderer.setSize(width, height);
+            });
+
+            // Start the animation loop
+            animate();
+
+            // Load the robot model
+            loadRobot();
+        }
+
+        async function loadRobot() {
+            const videoStatus = document.getElementById('videoStatus');
+
+            videoStatus.textContent = 'Loading URDF model...';
+            videoStatus.className = 'video-status';
+
+            try {
+                // Fetch URDF from API
+                const response = await fetch(`${serverUrl()}/api/kinematics/urdf`);
+                const data = await response.json();
+
+                // Parse URDF XML
+                const loader = new URDFLoader();
+                loader.packages = {
+                    'assets': 'http://localhost:8080/assets'
+                };
+
+                // Load the URDF model
+                robotModel = loader.parse(data.urdf);
+
+                // URDF uses Z-up, Three.js uses Y-up
+                // Rotate -90 degrees around X to convert Z-up to Y-up
+                robotModel.rotation.x = -Math.PI / 2;
+
+                // Position above the floor
+                robotModel.position.y = 0;
+
+                // Add to scene
+                scene.add(robotModel);
+
+                // Expose to console for debugging
+                window.robotModel = robotModel;
+                window.scene = scene;
+                window.camera = camera;
+
+                // Find important links for animation
+                robotModel.headLink = robotModel.getObjectByName('head');
+                robotModel.bodyLink = robotModel.getObjectByName('body_down_3dprint');
+
+                videoStatus.textContent = '3D URDF model loaded ✓';
+                videoStatus.className = 'video-status connected';
+
+                console.log("URDF model loaded successfully");
+                console.log("Robot joints:", Object.keys(robotModel.joints));
+                console.log("Robot links:", Object.keys(robotModel.links));
+                console.log("Head link found:", robotModel.headLink);
+                console.log("Body link found:", robotModel.bodyLink);
+
+                // Fetch and apply current robot state
+                await updateRobotPose();
+
+            } catch (error) {
+                console.error("Failed to load URDF:", error);
+                videoStatus.textContent = '⚠ URDF load failed - using placeholder';
+                videoStatus.className = 'video-status';
+
+                // Fallback to simple geometric robot
+                loadFallbackRobot();
+            }
+        }
+
+        function loadFallbackRobot() {
+            // Simple geometric robot (original placeholder)
+            robotModel = new THREE.Group();
+            robotModel.name = 'reachy_mini_fallback';
+
+            // Base (body)
+            const bodyGeometry = new THREE.CylinderGeometry(0.08, 0.08, 0.2, 16);
+            const bodyMaterial = new THREE.MeshPhongMaterial({ color: 0xFFFFFF });
+            const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+            body.position.y = 0.1;
+            robotModel.add(body);
+
+            // Head (sphere that will tilt/rotate)
+            const headGroup = new THREE.Group();
+            headGroup.position.y = 0.25;
+
+            const headGeometry = new THREE.SphereGeometry(0.06, 16, 16);
+            const headMaterial = new THREE.MeshPhongMaterial({ color: 0x3bb0d1 });
+            const head = new THREE.Mesh(headGeometry, headMaterial);
+            headGroup.add(head);
+
+            // Eyes (to show orientation)
+            const eyeGeometry = new THREE.SphereGeometry(0.01, 8, 8);
+            const eyeMaterial = new THREE.MeshPhongMaterial({ color: 0x000000 });
+            const leftEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
+            leftEye.position.set(-0.02, 0.01, 0.05);
+            headGroup.add(leftEye);
+            const rightEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
+            rightEye.position.set(0.02, 0.01, 0.05);
+            headGroup.add(rightEye);
+
+            robotModel.add(headGroup);
+
+            // Antennae - NOW CHILDREN OF HEAD so they move with it
+            const antennaGeometry = new THREE.CylinderGeometry(0.005, 0.005, 0.08, 8);
+            const antennaMaterial = new THREE.MeshPhongMaterial({ color: 0xffc261 });
+
+            const leftAntenna = new THREE.Mesh(antennaGeometry, antennaMaterial);
+            leftAntenna.position.set(-0.04, 0.04, 0); // Relative to head
+            headGroup.add(leftAntenna); // Child of head now!
+
+            const rightAntenna = new THREE.Mesh(antennaGeometry, antennaMaterial);
+            rightAntenna.position.set(0.04, 0.04, 0); // Relative to head
+            headGroup.add(rightAntenna); // Child of head now!
+
+            // Store references for animation
+            robotModel.headGroup = headGroup;
+            robotModel.leftAntenna = leftAntenna;
+            robotModel.rightAntenna = rightAntenna;
+
+            // Add to scene
+            scene.add(robotModel);
+
+            // Expose to console for debugging
+            window.robotModel = robotModel;
+            window.scene = scene;
+            window.camera = camera;
+
+            console.log("Fallback robot visualization created");
+        }
+
+        // Fetch current robot state and apply to model
+        async function updateRobotPose() {
+            try {
+                const response = await fetch(`${serverUrl()}/api/state`);
+                const state = await response.json();
+
+                if (state.head_pose && robotModel) {
+                    console.log("Initial robot state:", state.head_pose);
+
+                    if (robotModel.headLink) {
+                        // URDF model - apply with correct coordinate transformation
+                        robotModel.headLink.rotation.set(
+                            state.head_pose.roll,   // URDF roll → Three.js X
+                            state.head_pose.yaw,    // URDF yaw → Three.js Y
+                            state.head_pose.pitch   // URDF pitch → Three.js Z
+                        );
+                    } else if (robotModel.headGroup) {
+                        // Fallback model
+                        robotModel.headGroup.rotation.set(
+                            state.head_pose.pitch,
+                            state.head_pose.yaw,
+                            state.head_pose.roll
+                        );
+                    }
+                }
+            } catch (error) {
+                console.warn("Could not fetch initial robot state:", error);
+            }
+        }
+
+        // The animation loop: re-draws the scene 60x per second
+        let frameCount = 0;
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // Update controls for smooth damping
+            if (controls) controls.update();
+
+            // Debug: Log every 300 frames (once per 5 seconds at 60fps)
+            if (frameCount % 300 === 0 && robotModel && robotModel.headGroup) {
+                console.log("Frame:", frameCount, "| Head rotation (radians):", {
+                    pitch: robotModel.headGroup.rotation.x.toFixed(4),
+                    yaw: robotModel.headGroup.rotation.y.toFixed(4),
+                    roll: robotModel.headGroup.rotation.z.toFixed(4)
+                });
+            }
+            frameCount++;
+
+            renderer.render(scene, camera);
+        }
+
+        // Look pad click-to-look functionality
+        function initLookPad() {
+            const lookPad = document.getElementById('lookPad');
+            const lookStatus = document.getElementById('lookStatus');
+
+            lookPad.onclick = async (e) => {
+                const rect = lookPad.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+
+                // Show click indicator
+                const indicator = document.createElement('div');
+                indicator.className = 'click-indicator';
+                indicator.style.left = x + 'px';
+                indicator.style.top = y + 'px';
+                lookPad.appendChild(indicator);
+                setTimeout(() => indicator.remove(), 500);
+
+                // Convert to normalized coordinates (-1 to 1)
+                const normX = (x / rect.width) * 2 - 1;  // -1 (left) to 1 (right)
+                const normY = (y / rect.height) * 2 - 1; // -1 (top) to 1 (bottom)
+
+                // Map to head rotation (degrees) - signs inverted to match expected behavior
+                // Yaw: +40 to -40 degrees (left to right)
+                // Pitch: -20 to +20 degrees (top to bottom)
+                const yawDeg = -normX * 40;
+                const pitchDeg = normY * 20;
+
+                // Send look-at command
+                try {
+                    const toRad = (val) => val * Math.PI / 180;
+
+                    // Use current position values from form
+                    const currentZ = parseFloat(document.getElementById('gotoZ').value) || -0.02;
+
+                    const headPose = {
+                        x: 0,
+                        y: 0,
+                        z: currentZ,
+                        roll: 0,
+                        pitch: toRad(pitchDeg),
+                        yaw: toRad(yawDeg)
+                    };
+
+                    await fetch(`${serverUrl()}/api/move/goto`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            head_pose: headPose,
+                            duration: 0.3,
+                            interpolation: 'minjerk'
+                        })
+                    });
+
+                    // Visual feedback
+                    lookStatus.textContent = `Looking: Yaw ${Math.round(yawDeg)}°, Pitch ${Math.round(pitchDeg)}°`;
+                    lookStatus.className = 'status success';
+                    lookStatus.style.display = 'block';
+                    setTimeout(() => {
+                        lookStatus.style.display = 'none';
+                    }, 2000);
+                } catch (error) {
+                    lookStatus.textContent = `Error: ${error.message}`;
+                    lookStatus.className = 'status error';
+                    lookStatus.style.display = 'block';
+                    console.error('Look-at error:', error);
+                }
+            };
+        }
+
+        // Head pose chart with multi-color bars
+        const poseChart = new Chart(document.getElementById('poseChart'), {
+            type: 'bar',
+            data: {
+                labels: ['x', 'y', 'z', 'roll', 'pitch', 'yaw'],
+                datasets: [{
+                    label: 'Head Pose',
+                    data: [0, 0, 0, 0, 0, 0],
+                    backgroundColor: [
+                        'rgba(59, 176, 209, 0.7)',   // x - light blue
+                        'rgba(61, 222, 153, 0.7)',   // y - light green
+                        'rgba(255, 194, 97, 0.7)',   // z - yellow gold
+                        'rgba(255, 97, 112, 0.7)',   // roll - pink
+                        'rgba(43, 76, 126, 0.7)',    // pitch - navy
+                        'rgba(61, 222, 153, 0.7)'    // yaw - light green
+                    ],
+                    borderColor: [
+                        'rgba(59, 176, 209, 1)',     // x - light blue
+                        'rgba(61, 222, 153, 1)',     // y - light green
+                        'rgba(255, 194, 97, 1)',     // z - yellow gold
+                        'rgba(255, 97, 112, 1)',     // roll - pink
+                        'rgba(43, 76, 126, 1)',      // pitch - navy
+                        'rgba(61, 222, 153, 1)'      // yaw - light green
+                    ],
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: { y: { beginAtZero: true } }
+            }
+        });
+
+        // WebSocket for live updates
+        let ws;
+        let lastMoveUUID = null;
+
+        function connectWebSocket() {
+            const chartStatus = document.getElementById('chartStatus');
+            try {
+                ws = new WebSocket(`ws://${serverUrl().replace('http://', '')}/api/state/ws/full`);
+
+                ws.onopen = () => {
+                    chartStatus.textContent = 'Live data connected ✓';
+                    chartStatus.className = 'chart-status connected';
+                };
+
+                ws.onmessage = (event) => {
+                    try {
+                        const data = JSON.parse(event.data);
+
+                        if (data.head_pose) {
+                            // Update chart
+                            poseChart.data.datasets[0].data = [
+                                data.head_pose.x,
+                                data.head_pose.y,
+                                data.head_pose.z,
+                                data.head_pose.roll,
+                                data.head_pose.pitch,
+                                data.head_pose.yaw
+                            ];
+                            poseChart.update('none'); // No animation for better performance
+
+                            // Update 3D model if loaded
+                            if (robotModel) {
+                                // Debug: Log WebSocket data (throttled)
+                                if (frameCount % 300 === 0) {
+                                    console.log("WebSocket data (already in radians):", {
+                                        pitch: data.head_pose.pitch.toFixed(4),
+                                        yaw: data.head_pose.yaw.toFixed(4),
+                                        roll: data.head_pose.roll.toFixed(4)
+                                    });
+                                }
+
+                                // Check if we have URDF model or fallback model
+                                if (robotModel.headLink) {
+                                    // URDF model - apply rotation to head link
+                                    // Account for the -90 degree rotation we applied to robotModel
+
+                                    // Debug: log before/after
+                                    if (frameCount % 300 === 0) {
+                                        console.log("Before update - headLink rotation:", {
+                                            x: robotModel.headLink.rotation.x.toFixed(4),
+                                            y: robotModel.headLink.rotation.y.toFixed(4),
+                                            z: robotModel.headLink.rotation.z.toFixed(4)
+                                        });
+                                    }
+
+                                    // Apply rotation with correct coordinate system mapping
+                                    // After rotating model -90° around X (Z-up to Y-up):
+                                    // URDF roll (X-axis) → Three.js X-axis
+                                    // URDF yaw (Z-axis) → Three.js Y-axis
+                                    // URDF pitch (Y-axis) → Three.js Z-axis
+                                    robotModel.headLink.rotation.x = data.head_pose.roll;
+                                    robotModel.headLink.rotation.y = data.head_pose.yaw;
+                                    robotModel.headLink.rotation.z = data.head_pose.pitch;
+
+                                    // CRITICAL: Force Three.js to update the world matrix
+                                    robotModel.headLink.updateMatrixWorld(true);
+
+                                    if (frameCount % 300 === 0) {
+                                        console.log("After update - headLink rotation:", {
+                                            x: robotModel.headLink.rotation.x.toFixed(4),
+                                            y: robotModel.headLink.rotation.y.toFixed(4),
+                                            z: robotModel.headLink.rotation.z.toFixed(4)
+                                        });
+                                    }
+                                } else if (robotModel.headGroup) {
+                                    // Fallback model - update headGroup rotation
+                                    robotModel.headGroup.rotation.set(
+                                        data.head_pose.pitch,  // X axis (pitch)
+                                        data.head_pose.yaw,    // Y axis (yaw)
+                                        data.head_pose.roll    // Z axis (roll)
+                                    );
+
+                                    // Update antenna rotations if available
+                                    if (data.antenna) {
+                                        if (robotModel.leftAntenna && data.antenna.left !== undefined) {
+                                            robotModel.leftAntenna.rotation.x = data.antenna.left * 0.5;
+                                        }
+                                        if (robotModel.rightAntenna && data.antenna.right !== undefined) {
+                                            robotModel.rightAntenna.rotation.x = data.antenna.right * 0.5;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } catch (e) {
+                        console.error("WebSocket message error:", e);
+                    }
+                };
+
+                ws.onclose = () => {
+                    chartStatus.textContent = 'Reconnecting...';
+                    chartStatus.className = 'chart-status disconnected';
+                    setTimeout(connectWebSocket, 2000);
+                };
+            } catch (e) {
+                chartStatus.textContent = 'WebSocket unavailable';
+                chartStatus.className = 'chart-status disconnected';
+            }
+        }
+
+        // Show status helper
+        function showStatus(elementId, message, type = 'info') {
+            const statusEl = document.getElementById(elementId);
+            statusEl.textContent = message;
+            statusEl.className = `status ${type}`;
+            statusEl.style.display = 'block';
+        }
+
+        // Execute selected move
+        document.getElementById('executeSelectedBtn').onclick = async () => {
+            const danceMove = document.getElementById('danceSelect').value;
+            const emotionMove = document.getElementById('emotionSelect').value;
+
+            const move = danceMove || emotionMove;
+            const library = danceMove ? 'pollen-robotics/reachy-mini-dances-library' : 'pollen-robotics/reachy-mini-emotions-library';
+
+            if (!move) {
+                showStatus('choreographyStatus', 'Please select a move from either dropdown', 'error');
+                return;
+            }
+
+            showStatus('choreographyStatus', `Executing: ${move.replace(/_/g, ' ')}...`, 'info');
+            try {
+                const res = await fetch(`${serverUrl()}/api/move/play/recorded-move-dataset/${library}/${move}`, {
+                    method: 'POST'
+                });
+                const data = await res.json();
+                showStatus('choreographyStatus', `✓ ${move.replace(/_/g, ' ')}`, 'success');
+                lastMoveUUID = data.uuid;
+            } catch (error) {
+                showStatus('choreographyStatus', `Error: ${error.message}`, 'error');
+            }
+        };
+
+        // Stop move
+        document.getElementById('stopMoveBtn').onclick = async () => {
+            if (!lastMoveUUID) return;
+            try {
+                await fetch(`${serverUrl()}/api/move/stop`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ uuid: lastMoveUUID })
+                });
+                showStatus('choreographyStatus', 'Move stopped', 'info');
+            } catch (error) {
+                showStatus('choreographyStatus', `Error: ${error.message}`, 'error');
+            }
+        };
+
+        // Add to routine
+        document.getElementById('addToRoutineBtn').onclick = () => {
+            const danceMove = document.getElementById('routineDanceSelect').value;
+            const emotionMove = document.getElementById('routineEmotionSelect').value;
+            const move = danceMove || emotionMove;
+            const type = danceMove ? 'dance' : 'emotion';
+
+            if (!move) {
+                alert('Please select a move from the routine builder dropdowns');
+                return;
+            }
+
+            routine.push({ move, type, cycles: 4, amplitude: 1.0 });
+            updateRoutineDisplay();
+
+            // Clear the routine builder dropdowns after adding
+            document.getElementById('routineDanceSelect').value = '';
+            document.getElementById('routineEmotionSelect').value = '';
+        };
+
+        // Export choreography as JSON
+        document.getElementById('exportChoreographyBtn').onclick = () => {
+            if (routine.length === 0) {
+                alert('Routine is empty. Add moves before exporting.');
+                return;
+            }
+
+            const bpm = parseInt(document.getElementById('choreographyBPM').value) || 120;
+
+            // Build choreography JSON
+            const choreography = {
+                bpm: bpm,
+                sequence: routine.map(item => ({
+                    move: item.move,
+                    cycles: item.cycles || 4,
+                    amplitude: item.amplitude || 1.0
+                }))
+            };
+
+            // Create download
+            const jsonStr = JSON.stringify(choreography, null, 4);
+            const blob = new Blob([jsonStr], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `choreography_${bpm}bpm.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            showStatus('choreographyStatus', `Exported choreography (${routine.length} moves, ${bpm} BPM)`, 'success');
+        };
+
+        // Clear routine
+        document.getElementById('clearRoutineBtn').onclick = () => {
+            routine = [];
+            updateRoutineDisplay();
+            showStatus('choreographyStatus', 'Routine cleared', 'info');
+        };
+
+        // Play routine
+        document.getElementById('playRoutineBtn').onclick = async () => {
+            if (routine.length === 0) {
+                showStatus('choreographyStatus', 'Routine is empty', 'error');
+                return;
+            }
+
+            showStatus('choreographyStatus', `Playing routine (${routine.length} moves)...`, 'info');
+
+            for (let i = 0; i < routine.length; i++) {
+                const item = routine[i];
+                const library = item.type === 'dance'
+                    ? 'pollen-robotics/reachy-mini-dances-library'
+                    : 'pollen-robotics/reachy-mini-emotions-library';
+
+                try {
+                    showStatus('choreographyStatus', `Move ${i + 1}/${routine.length}: ${item.move.replace(/_/g, ' ')}`, 'info');
+
+                    const res = await fetch(`${serverUrl()}/api/move/play/recorded-move-dataset/${library}/${item.move}`, {
+                        method: 'POST'
+                    });
+                    const data = await res.json();
+                    lastMoveUUID = data.uuid;
+
+                    // Wait for move to complete
+                    await waitForMoveComplete();
+                    // No delay - moves flow immediately
+
+                } catch (error) {
+                    showStatus('choreographyStatus', `Error on move ${i + 1}: ${error.message}`, 'error');
+                    return;
+                }
+            }
+
+            showStatus('choreographyStatus', '✓ Routine complete!', 'success');
+        };
+
+        // Wait for move to complete
+        async function waitForMoveComplete() {
+            for (let i = 0; i < 60; i++) {
+                try {
+                    const res = await fetch(`${serverUrl()}/api/move/running`);
+                    const runningMoves = await res.json();
+                    if (!runningMoves || runningMoves.length === 0) return;
+                } catch (e) {}
+                await new Promise(r => setTimeout(r, 500));
+            }
+        }
+
+        // Update routine display
+        function updateRoutineDisplay() {
+            const routineList = document.getElementById('routineList');
+            if (routine.length === 0) {
+                routineList.innerHTML = '<em style="color: #999;">Add moves to build a routine...</em>';
+                return;
+            }
+
+            routineList.innerHTML = routine.map((item, i) => `
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 4px 0; border-bottom: 1px solid rgba(255, 97, 112, 0.2);">
+                    <span style="flex: 1;">
+                        <strong>${i + 1}.</strong>
+                        ${item.type === 'dance' ? '🕺' : '😊'}
+                        ${item.move.replace(/_/g, ' ')}
+                    </span>
+                    <span style="font-size: 10px; color: #6c757d; margin-right: 8px;">
+                        cycles: ${item.cycles || 4}, amp: ${item.amplitude || 1.0}
+                    </span>
+                    <button onclick="removeFromRoutine(${i})" style="background: none; border: none; color: var(--pink); cursor: pointer; font-size: 14px; font-weight: bold;">✖</button>
+                </div>
+            `).join('');
+        }
+
+        // Remove from routine
+        function removeFromRoutine(index) {
+            routine.splice(index, 1);
+            updateRoutineDisplay();
+        }
+
+        // Load presets
+        function loadPreset(presetName) {
+            routine = [];
+
+            if (presetName === 'happy') {
+                routine = [
+                    { move: 'cheerful1', type: 'emotion', cycles: 4, amplitude: 1.0 },
+                    { move: 'welcoming1', type: 'emotion', cycles: 4, amplitude: 1.0 },
+                    { move: 'yeah_nod', type: 'dance', cycles: 4, amplitude: 1.0 }
+                ];
+            } else if (presetName === 'confused') {
+                routine = [
+                    { move: 'confused1', type: 'emotion', cycles: 4, amplitude: 1.0 },
+                    { move: 'head_tilt_roll', type: 'dance', cycles: 4, amplitude: 1.0 },
+                    { move: 'thoughtful1', type: 'emotion', cycles: 4, amplitude: 1.0 }
+                ];
+            } else if (presetName === 'dance') {
+                routine = [
+                    { move: 'side_to_side_sway', type: 'dance', cycles: 4, amplitude: 1.0 },
+                    { move: 'jackson_square', type: 'dance', cycles: 2, amplitude: 1.0 },
+                    { move: 'dizzy_spin', type: 'dance', cycles: 4, amplitude: 1.0 },
+                    { move: 'headbanger_combo', type: 'dance', cycles: 4, amplitude: 1.0 }
+                ];
+            } else if (presetName === 'sleepy') {
+                routine = [
+                    { move: 'tired1', type: 'emotion', cycles: 4, amplitude: 1.0 },
+                    { move: 'exhausted1', type: 'emotion', cycles: 4, amplitude: 1.0 },
+                    { move: 'sleep1', type: 'emotion', cycles: 4, amplitude: 1.0 }
+                ];
+            }
+
+            updateRoutineDisplay();
+            alert(`Loaded ${presetName} preset (${routine.length} moves)`);
+        }
+
+        // Manual goto
+        document.getElementById('gotoForm').onsubmit = async (e) => {
+            e.preventDefault();
+            const useDeg = document.getElementById('gotoDeg').checked;
+            const toRad = (val) => useDeg ? val * Math.PI / 180 : val;
+
+            // Helper to parse and default to 0 if NaN, but accept actual 0 values
+            const parseOrZero = (val) => {
+                const parsed = parseFloat(val);
+                return isNaN(parsed) ? 0 : parsed;
+            };
+
+            const headPose = {
+                x: parseOrZero(document.getElementById('gotoX').value),
+                y: parseOrZero(document.getElementById('gotoY').value),
+                z: parseOrZero(document.getElementById('gotoZ').value) || -0.02,
+                roll: toRad(parseOrZero(document.getElementById('gotoRoll').value)),
+                pitch: toRad(parseOrZero(document.getElementById('gotoPitch').value)),
+                yaw: toRad(parseOrZero(document.getElementById('gotoYaw').value))
+            };
+
+            // Cap antenna values (both -3 to 3)
+            const capAntenna = (val) => Math.max(-3, Math.min(3, val));
+            const antennas = [
+                capAntenna(parseOrZero(document.getElementById('gotoAntL').value)),
+                capAntenna(parseOrZero(document.getElementById('gotoAntR').value))
+            ];
+
+            const bodyYawValue = parseOrZero(document.getElementById('gotoBodyYaw').value);
+            const bodyYaw = toRad(bodyYawValue);
+
+            const duration = parseOrZero(document.getElementById('gotoDuration').value) || 0.2;
+            const interpolation = document.getElementById('gotoInterp').value;
+
+            showStatus('manualStatus', 'Sending goto command...', 'info');
+            try {
+                const payload = {
+                    head_pose: headPose,
+                    antennas,
+                    body_yaw: bodyYaw,  // Always include body_yaw (including 0)
+                    duration,
+                    interpolation
+                };
+
+                console.log('Sending payload:', payload);
+
+                const res = await fetch(`${serverUrl()}/api/move/goto`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                console.log('Response:', data);
+                showStatus('manualStatus', 'Goto command sent ✓', 'success');
+                lastMoveUUID = data.uuid;
+                document.getElementById('stopManualBtn').disabled = false;
+            } catch (error) {
+                console.error('Goto error:', error);
+                showStatus('manualStatus', `Error: ${error.message}`, 'error');
+            }
+        };
+
+        // Wake up
+        document.getElementById('wakeUpBtn').onclick = async () => {
+            showStatus('manualStatus', 'Waking up...', 'info');
+            try {
+                await fetch(`${serverUrl()}/api/move/play/wake_up`, { method: 'POST' });
+                showStatus('manualStatus', 'Wake up sent ✓', 'success');
+            } catch (error) {
+                showStatus('manualStatus', `Error: ${error.message}`, 'error');
+            }
+        };
+
+        // Sleep
+        document.getElementById('sleepBtn').onclick = async () => {
+            showStatus('manualStatus', 'Going to sleep...', 'info');
+            try {
+                await fetch(`${serverUrl()}/api/move/play/goto_sleep`, { method: 'POST' });
+                showStatus('manualStatus', 'Sleep sent ✓', 'success');
+            } catch (error) {
+                showStatus('manualStatus', `Error: ${error.message}`, 'error');
+            }
+        };
+
+        // Turn Left (subtract 90° from both yaws)
+        document.getElementById('turnLeftBtn').onclick = async () => {
+            const currentHeadYaw = parseFloat(document.getElementById('gotoYaw').value) || 0;
+            const currentBodyYaw = parseFloat(document.getElementById('gotoBodyYaw').value) || 0;
+
+            // Subtract 90 degrees and clamp to limits
+            let newHeadYaw = Math.max(-180, Math.min(180, currentHeadYaw - 90));
+            let newBodyYaw = Math.max(-160, Math.min(160, currentBodyYaw - 90));
+
+            // Update UI
+            document.getElementById('gotoYaw').value = newHeadYaw;
+            document.getElementById('gotoYawSlider').value = newHeadYaw;
+            document.getElementById('gotoBodyYaw').value = newBodyYaw;
+            document.getElementById('gotoBodyYawSlider').value = newBodyYaw;
+
+            // Send command
+            const useDeg = document.getElementById('gotoDeg').checked;
+            const toRad = (val) => useDeg ? val * Math.PI / 180 : val;
+
+            showStatus('manualStatus', 'Turning left 90°...', 'info');
+            try {
+                const res = await fetch(`${serverUrl()}/api/move/goto`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        head_pose: {
+                            x: parseFloat(document.getElementById('gotoX').value) || 0,
+                            y: parseFloat(document.getElementById('gotoY').value) || 0,
+                            z: parseFloat(document.getElementById('gotoZ').value) || -0.02,
+                            roll: toRad(parseFloat(document.getElementById('gotoRoll').value) || 0),
+                            pitch: toRad(parseFloat(document.getElementById('gotoPitch').value) || 0),
+                            yaw: toRad(newHeadYaw)
+                        },
+                        antennas: [
+                            Math.max(-3, Math.min(3, parseFloat(document.getElementById('gotoAntL').value) || 0)),
+                            Math.max(-3, Math.min(3, parseFloat(document.getElementById('gotoAntR').value) || 0))
+                        ],
+                        body_yaw: toRad(newBodyYaw),
+                        duration: parseFloat(document.getElementById('gotoDuration').value) || 0.2,
+                        interpolation: document.getElementById('gotoInterp').value
+                    })
+                });
+                const data = await res.json();
+                showStatus('manualStatus', 'Turn left sent ✓', 'success');
+                lastMoveUUID = data.uuid;
+            } catch (error) {
+                showStatus('manualStatus', `Error: ${error.message}`, 'error');
+            }
+        };
+
+        // Turn Right (add 90° to both yaws)
+        document.getElementById('turnRightBtn').onclick = async () => {
+            const currentHeadYaw = parseFloat(document.getElementById('gotoYaw').value) || 0;
+            const currentBodyYaw = parseFloat(document.getElementById('gotoBodyYaw').value) || 0;
+
+            // Add 90 degrees and clamp to limits
+            let newHeadYaw = Math.max(-180, Math.min(180, currentHeadYaw + 90));
+            let newBodyYaw = Math.max(-160, Math.min(160, currentBodyYaw + 90));
+
+            // Update UI
+            document.getElementById('gotoYaw').value = newHeadYaw;
+            document.getElementById('gotoYawSlider').value = newHeadYaw;
+            document.getElementById('gotoBodyYaw').value = newBodyYaw;
+            document.getElementById('gotoBodyYawSlider').value = newBodyYaw;
+
+            // Send command
+            const useDeg = document.getElementById('gotoDeg').checked;
+            const toRad = (val) => useDeg ? val * Math.PI / 180 : val;
+
+            showStatus('manualStatus', 'Turning right 90°...', 'info');
+            try {
+                const res = await fetch(`${serverUrl()}/api/move/goto`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        head_pose: {
+                            x: parseFloat(document.getElementById('gotoX').value) || 0,
+                            y: parseFloat(document.getElementById('gotoY').value) || 0,
+                            z: parseFloat(document.getElementById('gotoZ').value) || -0.02,
+                            roll: toRad(parseFloat(document.getElementById('gotoRoll').value) || 0),
+                            pitch: toRad(parseFloat(document.getElementById('gotoPitch').value) || 0),
+                            yaw: toRad(newHeadYaw)
+                        },
+                        antennas: [
+                            Math.max(-3, Math.min(3, parseFloat(document.getElementById('gotoAntL').value) || 0)),
+                            Math.max(-3, Math.min(3, parseFloat(document.getElementById('gotoAntR').value) || 0))
+                        ],
+                        body_yaw: toRad(newBodyYaw),
+                        duration: parseFloat(document.getElementById('gotoDuration').value) || 0.2,
+                        interpolation: document.getElementById('gotoInterp').value
+                    })
+                });
+                const data = await res.json();
+                showStatus('manualStatus', 'Turn right sent ✓', 'success');
+                lastMoveUUID = data.uuid;
+            } catch (error) {
+                showStatus('manualStatus', `Error: ${error.message}`, 'error');
+            }
+        };
+
+        // Stop manual
+        document.getElementById('stopManualBtn').onclick = async () => {
+            if (!lastMoveUUID) return;
+            try {
+                await fetch(`${serverUrl()}/api/move/stop`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ uuid: lastMoveUUID })
+                });
+                showStatus('manualStatus', 'Move stopped', 'info');
+                document.getElementById('stopManualBtn').disabled = true;
+            } catch (error) {
+                showStatus('manualStatus', `Error: ${error.message}`, 'error');
+            }
+        };
+
+        // Load current state and populate form
+        async function loadCurrentState() {
+            try {
+                const res = await fetch(`${serverUrl()}/api/state/full`);
+                const state = await res.json();
+
+                if (state.head_pose) {
+                    const pose = state.head_pose;
+                    const toDeg = (val) => Math.round(val * 180 / Math.PI);
+
+                    // Populate position fields and sliders (3 decimal places for position)
+                    document.getElementById('gotoX').value = pose.x.toFixed(3);
+                    document.getElementById('gotoXSlider').value = pose.x.toFixed(3);
+                    document.getElementById('gotoY').value = pose.y.toFixed(3);
+                    document.getElementById('gotoYSlider').value = pose.y.toFixed(3);
+                    document.getElementById('gotoZ').value = pose.z.toFixed(3);
+                    document.getElementById('gotoZSlider').value = pose.z.toFixed(3);
+
+                    // Populate rotation fields and sliders (whole numbers for degrees)
+                    document.getElementById('gotoRoll').value = toDeg(pose.roll);
+                    document.getElementById('gotoRollSlider').value = toDeg(pose.roll);
+                    document.getElementById('gotoPitch').value = toDeg(pose.pitch);
+                    document.getElementById('gotoPitchSlider').value = toDeg(pose.pitch);
+                    document.getElementById('gotoYaw').value = toDeg(pose.yaw);
+                    document.getElementById('gotoYawSlider').value = toDeg(pose.yaw);
+                }
+
+                if (state.antennas_position) {
+                    // Antennas can have decimals
+                    const antL = state.antennas_position[0].toFixed(2);
+                    const antR = state.antennas_position[1].toFixed(2);
+
+                    document.getElementById('gotoAntL').value = antL;
+                    document.getElementById('gotoAntLSlider').value = antL;
+                    document.getElementById('gotoAntR').value = antR;
+                    // scaleX(-1) handles visual flip, no need to negate
+                    document.getElementById('gotoAntRSlider').value = antR;
+                }
+
+                if (state.body_yaw !== undefined && state.body_yaw !== null) {
+                    const toDeg = (val) => Math.round(val * 180 / Math.PI);
+                    // Body yaw: whole number
+                    document.getElementById('gotoBodyYaw').value = toDeg(state.body_yaw);
+                    document.getElementById('gotoBodyYawSlider').value = toDeg(state.body_yaw);
+                }
+            } catch (error) {
+                console.log('Could not load current state:', error);
+                // Keep default values if fetch fails
+            }
+        }
+
+        // Slider synchronization - sync sliders with number inputs
+        function setupSliderSync() {
+            const sliderPairs = [
+                ['gotoXSlider', 'gotoX'],
+                ['gotoYSlider', 'gotoY'],
+                ['gotoZSlider', 'gotoZ'],
+                ['gotoRollSlider', 'gotoRoll'],
+                ['gotoPitchSlider', 'gotoPitch'],
+                ['gotoYawSlider', 'gotoYaw'],
+                ['gotoAntLSlider', 'gotoAntL'],
+                ['gotoAntRSlider', 'gotoAntR'],
+                ['gotoBodyYawSlider', 'gotoBodyYaw']
+            ];
+
+            sliderPairs.forEach(([sliderId, inputId]) => {
+                const slider = document.getElementById(sliderId);
+                const input = document.getElementById(inputId);
+                const isReversed = slider.classList.contains('reversed-slider');
+
+                // Slider changes number input
+                slider.addEventListener('input', () => {
+                    // Don't invert the value - scaleX(-1) handles visual flip
+                    let value = parseFloat(slider.value);
+                    input.value = value;
+
+                    // Bidirectional yaw binding
+                    if (document.getElementById('bindYaw').checked) {
+                        if (inputId === 'gotoYaw') {
+                            updateBodyYawFromHead(value);
+                        } else if (inputId === 'gotoBodyYaw') {
+                            updateHeadYawFromBody(value);
+                        }
+                    }
+
+                    // Normal antenna binding - same values
+                    if (document.getElementById('bindAnt').checked) {
+                        if (inputId === 'gotoAntL') {
+                            document.getElementById('gotoAntR').value = value;
+                            document.getElementById('gotoAntRSlider').value = value;
+                        } else if (inputId === 'gotoAntR') {
+                            document.getElementById('gotoAntL').value = value;
+                            document.getElementById('gotoAntLSlider').value = value;
+                        }
+                    }
+
+                    // Inverse antenna binding - mirrored values
+                    if (document.getElementById('invAnt').checked) {
+                        if (inputId === 'gotoAntL') {
+                            const invValue = -value;
+                            document.getElementById('gotoAntR').value = invValue;
+                            document.getElementById('gotoAntRSlider').value = invValue;
+                        } else if (inputId === 'gotoAntR') {
+                            const invValue = -value;
+                            document.getElementById('gotoAntL').value = invValue;
+                            document.getElementById('gotoAntLSlider').value = invValue;
+                        }
+                    }
+                });
+
+                // Number input changes slider
+                input.addEventListener('input', () => {
+                    let value = parseFloat(input.value) || 0;
+
+                    // Clamp to slider range
+                    const min = parseFloat(slider.min);
+                    const max = parseFloat(slider.max);
+                    value = Math.max(min, Math.min(max, value));
+
+                    // Don't invert - scaleX(-1) handles visual flip
+                    slider.value = value;
+
+                    // Bidirectional yaw binding
+                    if (document.getElementById('bindYaw').checked) {
+                        if (inputId === 'gotoYaw') {
+                            updateBodyYawFromHead(value);
+                        } else if (inputId === 'gotoBodyYaw') {
+                            updateHeadYawFromBody(value);
+                        }
+                    }
+
+                    // Normal antenna binding - same values
+                    if (document.getElementById('bindAnt').checked) {
+                        if (inputId === 'gotoAntL') {
+                            document.getElementById('gotoAntR').value = value;
+                            document.getElementById('gotoAntRSlider').value = value;
+                        } else if (inputId === 'gotoAntR') {
+                            document.getElementById('gotoAntL').value = value;
+                            document.getElementById('gotoAntLSlider').value = value;
+                        }
+                    }
+
+                    // Inverse antenna binding - mirrored values
+                    if (document.getElementById('invAnt').checked) {
+                        if (inputId === 'gotoAntL') {
+                            const invValue = -value;
+                            document.getElementById('gotoAntR').value = invValue;
+                            document.getElementById('gotoAntRSlider').value = invValue;
+                        } else if (inputId === 'gotoAntR') {
+                            const invValue = -value;
+                            document.getElementById('gotoAntL').value = invValue;
+                            document.getElementById('gotoAntLSlider').value = invValue;
+                        }
+                    }
+                });
+            });
+        }
+
+        // Track previous yaw values for delta calculation
+        let previousHeadYaw = 0;
+        let previousBodyYaw = 0;
+
+        // Body/Head Yaw Binding - move body yaw by same delta as head yaw
+        function updateBodyYawFromHead(currentHeadYaw) {
+            // Calculate how much the head yaw changed
+            const delta = currentHeadYaw - previousHeadYaw;
+
+            // Get current body yaw
+            const currentBodyYaw = parseFloat(document.getElementById('gotoBodyYaw').value) || 0;
+
+            // Calculate new body yaw
+            let newBodyYaw = currentBodyYaw + delta;
+
+            // Check if body yaw would exceed limits
+            if (newBodyYaw > 160) {
+                // Body yaw capped at 160, reduce head yaw delta to compensate
+                const overflow = newBodyYaw - 160;
+                newBodyYaw = 160;
+                // Don't move head beyond what body can follow
+                currentHeadYaw = previousHeadYaw + (delta - overflow);
+                document.getElementById('gotoYaw').value = Math.round(currentHeadYaw);
+                document.getElementById('gotoYawSlider').value = Math.round(currentHeadYaw);
+            } else if (newBodyYaw < -160) {
+                // Body yaw capped at -160
+                const overflow = -160 - newBodyYaw;
+                newBodyYaw = -160;
+                currentHeadYaw = previousHeadYaw + (delta + overflow);
+                document.getElementById('gotoYaw').value = Math.round(currentHeadYaw);
+                document.getElementById('gotoYawSlider').value = Math.round(currentHeadYaw);
+            }
+
+            // Update body yaw (no decimals)
+            newBodyYaw = Math.round(newBodyYaw);
+            document.getElementById('gotoBodyYaw').value = newBodyYaw;
+            document.getElementById('gotoBodyYawSlider').value = newBodyYaw;
+
+            // Update previous values
+            previousHeadYaw = Math.round(currentHeadYaw);
+            previousBodyYaw = newBodyYaw;
+        }
+
+        // Head Yaw Binding - move head yaw by same delta as body yaw
+        function updateHeadYawFromBody(currentBodyYaw) {
+            // Calculate how much the body yaw changed
+            const delta = currentBodyYaw - previousBodyYaw;
+
+            // Get current head yaw
+            const currentHeadYaw = parseFloat(document.getElementById('gotoYaw').value) || 0;
+
+            // Calculate new head yaw
+            let newHeadYaw = currentHeadYaw + delta;
+
+            // Check if head yaw would exceed limits
+            if (newHeadYaw > 180) {
+                // Head yaw capped at 180, reduce body yaw delta to compensate
+                const overflow = newHeadYaw - 180;
+                newHeadYaw = 180;
+                // Don't move body beyond what head can follow
+                currentBodyYaw = previousBodyYaw + (delta - overflow);
+                document.getElementById('gotoBodyYaw').value = Math.round(currentBodyYaw);
+                document.getElementById('gotoBodyYawSlider').value = Math.round(currentBodyYaw);
+            } else if (newHeadYaw < -180) {
+                // Head yaw capped at -180
+                const overflow = -180 - newHeadYaw;
+                newHeadYaw = -180;
+                currentBodyYaw = previousBodyYaw + (delta + overflow);
+                document.getElementById('gotoBodyYaw').value = Math.round(currentBodyYaw);
+                document.getElementById('gotoBodyYawSlider').value = Math.round(currentBodyYaw);
+            }
+
+            // Update head yaw (no decimals)
+            newHeadYaw = Math.round(newHeadYaw);
+            document.getElementById('gotoYaw').value = newHeadYaw;
+            document.getElementById('gotoYawSlider').value = newHeadYaw;
+
+            // Update previous values
+            previousBodyYaw = Math.round(currentBodyYaw);
+            previousHeadYaw = newHeadYaw;
+        }
+
+        // Initialize
+        loadMovesFromJSON();  // Load moves from JSON, which will call populateMoves()
+        init3DViewer();
+        initLookPad();
+        connectWebSocket();
+        loadCurrentState();
+        setupSliderSync();
+
+        // Bind yaw checkbox listener
+        document.getElementById('bindYaw').addEventListener('change', (e) => {
+            if (e.target.checked) {
+                // Initialize both previous values when binding is enabled
+                previousHeadYaw = parseFloat(document.getElementById('gotoYaw').value) || 0;
+                previousBodyYaw = parseFloat(document.getElementById('gotoBodyYaw').value) || 0;
+            }
+        });
+
+        // Bind antenna checkbox listeners - mutual exclusion
+        document.getElementById('bindAnt').addEventListener('change', (e) => {
+            if (e.target.checked) {
+                document.getElementById('invAnt').checked = false;
+            }
+        });
+
+        document.getElementById('invAnt').addEventListener('change', (e) => {
+            if (e.target.checked) {
+                document.getElementById('bindAnt').checked = false;
+            }
+        });
+
+        // Reinit on server change
+        document.getElementById('serverUrl').addEventListener('change', () => {
+            init3DViewer();
+            if (ws) ws.close();
+            connectWebSocket();
+            loadCurrentState();
+        });
+    </script>
+</body>
+</html>

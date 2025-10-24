@@ -71,61 +71,37 @@
         <mesh name="rubber_duck_toy_mesh" file="rubber_duck_toy_1k.blend/rubber_duck_toy_1k.obj"
             scale="0.4 0.4 0.4" />
 
+        <!-- CUSTOM FLOOR TEXTURE -->
+        <texture type="2d" name="floor_texture" file="floor_texture.png" />
+        <material name="custom_floor_material"
+            texture="floor_texture"
+            texrepeat="5 5"
+            rgba="1 1 1 1" />
+
+        <!-- RED CURTAIN BACKDROP -->
+        <texture type="2d" name="red_curtain" file="red_curtain.png" />
+        <material name="curtain_material"
+            texture="red_curtain"
+            texuniform="false"
+            texrepeat="0.5 0.5"
+            rgba="1 1 1 1"
+            shininess="0.1"
+            specular="0.05"
+            reflectance="0.1" />
+
     </asset>
 
     <worldbody>
         <light pos="-0.5 0 3.5" dir="0 0 -1" directional="true" />
-        <geom name="floor" size="0 0 0.05" pos="0 0 -0.8" type="plane" material="groundplane" />
+        <geom name="floor" size="0 0 0.05" pos="0 0 -0.005" type="plane" material="custom_floor_material" />
 
-        <body name="croissant" pos="0.6 0.1 0.03" euler="0 0 1.57">
-            <geom name="croissant_geom"
-                type="mesh"
-                mesh="croissant_mesh"
-                material="croissant_material"
-                mass="0.07"
-                friction="0.8 0.4 0.1" />
-            <joint name="croissant_joint" type="free" />
-        </body>
-        <body name="apple" pos="0.6 -0.2 0.03" euler="0 0.78  0.78 ">
-            <geom name="apple_geom"
-                type="mesh"
-                mesh="food_apple_01_mesh"
-                material="food_apple_01_material"
-                mass="0.1"
-                friction="0.8 0.4 0.1" />
-            <joint name="apple_joint" type="free" />
-        </body>
+        <!-- CURTAIN WALLS (2 sides using boxes) -->
+        <!-- Back wall: width=8m (size 4), thickness=0.1m (size 0.05), height=5m (size 2.5) -->
+        <!-- Center at z=2.5 so bottom edge is at floor (z=0) -->
+        <geom name="back_wall" type="box" size="3 0.05 2.5" pos="0 3.05 2.5" material="curtain_material" />
 
-
-        <body name="table" pos="0.35 0 -0.8" euler="1.57 0 0">
-            <geom name="table_geom"
-                class="visual"
-                type="mesh"
-                mesh="wooden_table_02_mesh"
-                material="wooden_table_02_material"
-                mass="1.0"
-                friction="0.8 0.4 0.1" />
-            <!-- <joint name="table_joint" type="free" /> -->
-            <!-- replace the table top collision with a box -->
-            <geom class="collision"
-                type="box"
-                size="0.56 0.03 0.35"
-                pos="0 0.77 0"
-                friction="1.0 1 1"
-            />
-
-        </body>
-
-
-        <body name="duck" pos="0.6 0.3 0.0" euler="1.57 -1.57 0">
-            <geom name="duck_geom"
-                type="mesh"
-                mesh="rubber_duck_toy_mesh"
-                material="rubber_duck_toy_material"
-                mass="0.1"
-                friction="0.8 0.4 0.1" />
-            <joint name="duck_joint" type="free" />
-        </body>
+        <!-- Left wall: same dimensions, rotated 90° to face right -->
+        <geom name="left_wall" type="box" size="3 0.05 2.5" pos="-3.05 0 2.5" quat="0.707 0 0 0.707" material="curtain_material" />
 
     </worldbody>
 </mujoco>

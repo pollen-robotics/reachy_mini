@@ -81,6 +81,9 @@ class MoveUUID(BaseModel):
 
 move_tasks: dict[UUID, asyncio.Task[None]] = {}
 
+# Cache for RecordedMoves datasets to avoid re-fetching from HuggingFace
+_dataset_cache: dict[str, RecordedMoves] = {}
+
 
 def create_move_task(coro: Coroutine[Any, Any, None]) -> MoveUUID:
     """Create a new move task using async task coroutine."""
@@ -153,7 +156,14 @@ async def play_recorded_move_dataset(
     backend: Backend = Depends(get_backend),
 ) -> MoveUUID:
     """Request the robot to play a predefined recorded move from a dataset."""
-    move = RecordedMoves(dataset_name).get(move_name)
+    # Use cached RecordedMoves to avoid re-fetching from HuggingFace
+    if dataset_name not in _dataset_cache:
+        print(f"[MoveRouter] Loading dataset: {dataset_name}")
+        _dataset_cache[dataset_name] = RecordedMoves(dataset_name)
+    else:
+        print(f"[MoveRouter] Using cached dataset: {dataset_name}")
+
+    move = _dataset_cache[dataset_name].get(move_name)
     return create_move_task(backend.play_move(move))
 
 

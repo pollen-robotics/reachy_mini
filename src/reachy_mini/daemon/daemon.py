@@ -19,6 +19,7 @@ from reachy_mini.daemon.utils import (
     find_serial_port,
     get_ip_address,
 )
+from reachy_mini.media.media_manager import MediaManager, MediaBackend
 
 from ..io.zenoh_server import ZenohServer
 from .backend.mujoco import MujocoBackend, MujocoBackendStatus
@@ -40,6 +41,7 @@ class Daemon:
         self.wireless_version = wireless_version
 
         self.backend: "RobotBackend | MujocoBackend | None" = None
+        self.media_manager: "MediaManager | None" = None
         self._status = DaemonStatus(
             state=DaemonState.NOT_INITIALIZED,
             wireless_version=wireless_version,
@@ -117,6 +119,14 @@ class Daemon:
 
         self._thread_publish_status = Thread(target=self._publish_status, daemon=True)
         self._thread_publish_status.start()
+
+        # Initialize MediaManager for camera access
+        self.logger.info("Initializing MediaManager...")
+        self.media_manager = MediaManager(
+            use_sim=sim,
+            backend=MediaBackend.DEFAULT,  # Use OpenCV backend for compatibility
+            log_level=self.log_level,
+        )
 
         def backend_wrapped_run() -> None:
             assert self.backend is not None, (
@@ -213,6 +223,12 @@ class Daemon:
 
             self.backend.close()
             self.backend.ready.clear()
+
+            # Clean up MediaManager
+            if self.media_manager is not None:
+                self.logger.info("Closing MediaManager...")
+                self.media_manager.close()
+                self.media_manager = None
 
             if self._status.state != DaemonState.ERROR:
                 self.logger.info("Daemon stopped successfully.")

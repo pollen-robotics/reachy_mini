@@ -271,6 +271,7 @@ class Backend:
 
         """
         self.target_body_yaw = body_yaw
+        self._last_target_body_yaw = body_yaw  # Track last set value
         self.ik_required = True  # Do we need that here?
 
     def set_target_head_joint_positions(
@@ -517,8 +518,13 @@ class Backend:
 
     def get_present_body_yaw(self) -> float:
         """Return the present body yaw."""
-        yaw: float = self.get_present_head_joint_positions()[0]
-        return yaw
+        # Return the last set body yaw, not head yaw joint
+        if self._last_target_body_yaw is not None:
+            return self._last_target_body_yaw
+        elif self.target_body_yaw is not None:
+            return self.target_body_yaw
+        else:
+            return 0.0
 
     def get_present_head_pose(self) -> Annotated[NDArray[np.float64], (4, 4)]:
         """Return the present head pose as a 4x4 matrix."""

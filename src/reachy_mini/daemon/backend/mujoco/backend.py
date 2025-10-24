@@ -252,6 +252,22 @@ class MujocoBackend(Backend):
         mj_current_head_pose[2, 3] -= 0.177
         return mj_current_head_pose
 
+    def get_present_head_pose(self) -> Annotated[npt.NDArray[np.float64], (4, 4)]:
+        """Override to return last target head pose for interpolation.
+
+        Returns:
+            np.ndarray: The last target head pose as a 4x4 transformation matrix.
+
+        """
+        # Return last target pose for smooth interpolation
+        if self._last_target_head_pose is not None:
+            return self._last_target_head_pose
+        elif self.target_head_pose is not None:
+            return self.target_head_pose
+        else:
+            # Fallback to MuJoCo position only if no target set
+            return self.get_mj_present_head_pose()
+
     def close(self) -> None:
         """Close the Mujoco backend."""
         # TODO Do something in mujoco here ?

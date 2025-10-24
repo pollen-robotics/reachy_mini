@@ -105,6 +105,7 @@ def create_app(args: Args) -> FastAPI:
 
     router = APIRouter(prefix="/api")
     router.include_router(apps.router)
+    router.include_router(camera.router)
     router.include_router(daemon.router)
     router.include_router(kinematics.router)
     router.include_router(motors.router)

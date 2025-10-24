@@ -1,0 +1,512 @@
+{
+  "stumble_and_recover": {
+    "duration": 1.8503332138061523,
+    "type": "dance",
+    "library": "pollen-robotics/reachy-mini-dances-library"
+  },
+  "chin_lead": {
+    "duration": 1.8557090759277344,
+    "type": "dance",
+    "library": "pollen-robotics/reachy-mini-dances-library"
+  },
+  "head_tilt_roll": {
+    "duration": 1.8507463932037354,
+    "type": "dance",
+    "library": "pollen-robotics/reachy-mini-dances-library"
+  },
+  "jackson_square": {
+    "duration": 5.006231784820557,
+    "type": "dance",
+    "library": "pollen-robotics/reachy-mini-dances-library"
+  },
+  "pendulum_swing": {
+    "duration": 1.8400006294250488,
+    "type": "dance",
+    "library": "pollen-robotics/reachy-mini-dances-library"
+  },
+  "side_glance_flick": {
+    "duration": 1.8600971698760984,
+    "type": "dance",
+    "library": "pollen-robotics/reachy-mini-dances-library"
+  },
+  "grid_snap": {
+    "duration": 1.8503527641296387,
+    "type": "dance",
+    "library": "pollen-robotics/reachy-mini-dances-library"
+  },
+  "simple_nod": {
+    "duration": 1.8382775783538818,
+    "type": "dance",
+    "library": "pollen-robotics/reachy-mini-dances-library"
+  },
+  "side_to_side_sway": {
+    "duration": 1.8634185791015625,
+    "type": "dance",
+    "library": "pollen-robotics/reachy-mini-dances-library"
+  },
+  "polyrhythm_combo": {
+    "duration": 2.8991050720214844,
+    "type": "dance",
+    "library": "pollen-robotics/reachy-mini-dances-library"
+  },
+  "interwoven_spirals": {
+    "duration": 3.9641306400299072,
+    "type": "dance",
+    "library": "pollen-robotics/reachy-mini-dances-library"
+  },
+  "uh_huh_tilt": {
+    "duration": 1.8368854522705078,
+    "type": "dance",
+    "library": "pollen-robotics/reachy-mini-dances-library"
+  },
+  "chicken_peck": {
+    "duration": 1.8485124111175537,
+    "type": "dance",
+    "library": "pollen-robotics/reachy-mini-dances-library"
+  },
+  "yeah_nod": {
+    "duration": 1.8636415004730225,
+    "type": "dance",
+    "library": "pollen-robotics/reachy-mini-dances-library"
+  },
+  "headbanger_combo": {
+    "duration": 1.8444292545318604,
+    "type": "dance",
+    "library": "pollen-robotics/reachy-mini-dances-library"
+  },
+  "side_peekaboo": {
+    "duration": 5.006170749664307,
+    "type": "dance",
+    "library": "pollen-robotics/reachy-mini-dances-library"
+  },
+  "dizzy_spin": {
+    "duration": 1.8563573360443117,
+    "type": "dance",
+    "library": "pollen-robotics/reachy-mini-dances-library"
+  },
+  "neck_recoil": {
+    "duration": 1.862900972366333,
+    "type": "dance",
+    "library": "pollen-robotics/reachy-mini-dances-library"
+  },
+  "groovy_sway_and_roll": {
+    "duration": 1.8431787490844727,
+    "type": "dance",
+    "library": "pollen-robotics/reachy-mini-dances-library"
+  },
+  "sharp_side_tilt": {
+    "duration": 2.8966782093048096,
+    "type": "dance",
+    "library": "pollen-robotics/reachy-mini-dances-library"
+  },
+  "fear1": {
+    "duration": 3.4823462963104252,
+    "type": "emotion",
+    "library": "pollen-robotics/reachy-mini-emotions-library"
+  },
+  "exhausted1": {
+    "duration": 18.263383626937866,
+    "type": "emotion",
+    "library": "pollen-robotics/reachy-mini-emotions-library"
+  },
+  "loving1": {
+    "duration": 5.614666700363159,
+    "type": "emotion",
+    "library": "pollen-robotics/reachy-mini-emotions-library"
+  },
+  "dance3": {
+    "duration": 18.37626886367798,
+    "type": "emotion",
+    "library": "pollen-robotics/reachy-mini-emotions-library"
+  },
+  "boredom2": {
+    "duration": 14.18795132637024,
+    "type": "emotion",
+    "library": "pollen-robotics/reachy-mini-emotions-library"
+  },
+  "relief1": {
+    "duration": 5.011729955673218,
+    "type": "emotion",
+    "library": "pollen-robotics/reachy-mini-emotions-library"
+  },
+  "anxiety1": {
+    "duration": 8.120742082595825,
+    "type": "emotion",
+    "library": "pollen-robotics/reachy-mini-emotions-library"
+  },
+  "disgusted1": {
+    "duration": 6.952827453613282,
+    "type": "emotion",
+    "library": "pollen-robotics/reachy-mini-emotions-library"
+  },
+  "welcoming1": {
+    "duration": 3.4616851806640625,
+    "type": "emotion",
+    "library": "pollen-robotics/reachy-mini-emotions-library"
+  },
+  "impatient1": {
+    "duration": 4.0247414112091064,
+    "type": "emotion",
+    "library": "pollen-robotics/reachy-mini-emotions-library"
+  },
+  "sad1": {
+    "duration": 9.026247024536133,
+    "type": "emotion",
+    "library": "pollen-robotics/reachy-mini-emotions-library"
+  },
+  "helpful2": {
+    "duration": 3.8440709114074707,
+    "type": "emotion",
+    "library": "pollen-robotics/reachy-mini-emotions-library"
+  },
+  "resigned1": {
+    "duration": 4.749156951904297,
+    "type": "emotion",
+    "library": "pollen-robotics/reachy-mini-emotions-library"
+  },
+  "amazed1": {
+    "duration": 3.431898355484009,
+    "type": "emotion",
+    "library": "pollen-robotics/reachy-mini-emotions-library"
+  },
+  "thoughtful2": {
+    "duration": 5.46445369720459,
+    "type": "emotion",
+    "library": "pollen-robotics/reachy-mini-emotions-library"
+  },
+  "lost1": {
+    "duration": 8.130611658096313,
+    "type": "emotion",
+    "library": "pollen-robotics/reachy-mini-emotions-library"
+  },
+  "surprised1": {
+    "duration": 2.4849777221679688,
+    "type": "emotion",
+    "library": "pollen-robotics/reachy-mini-emotions-library"
+  },
+  "serenity1": {
+    "duration": 4.598057985305786,
+    "type": "emotion",
+    "library": "pollen-robotics/reachy-mini-emotions-library"
+  },
+  "displeased1": {
+    "duration": 3.3708302974700928,
+    "type": "emotion",
+    "library": "pollen-robotics/reachy-mini-emotions-library"
+  },
+  "incomprehensible2": {
+    "duration": 3.442003488540649,
+    "type": "emotion",
+    "library": "pollen-robotics/reachy-mini-emotions-library"
+  },
+  "irritated2": {
+    "duration": 5.272380828857422,
+    "type": "emotion",
+    "library": "pollen-robotics/reachy-mini-emotions-library"
+  },
+  "yes_sad1": {
+    "duration": 5.091651916503906,
+    "type": "emotion",
+    "library": "pollen-robotics/reachy-mini-emotions-library"
+  },
+  "dance2": {
+    "duration": 17.276817083358765,
+    "type": "emotion",
+    "library": "pollen-robotics/reachy-mini-emotions-library"
+  },
+  "understanding1": {
+    "duration": 3.9541707038879395,
+    "type": "emotion",
+    "library": "pollen-robotics/reachy-mini-emotions-library"
+  },
+  "contempt1": {
+    "duration": 3.5624616146087646,
+    "type": "emotion",
+    "library": "pollen-robotics/reachy-mini-emotions-library"
+  },
+  "inquiring1": {
+    "duration": 2.1538288593292236,
+    "type": "emotion",
+    "library": "pollen-robotics/reachy-mini-emotions-library"
+  },
+  "rage1": {
+    "duration": 5.081502914428711,
+    "type": "emotion",
+    "library": "pollen-robotics/reachy-mini-emotions-library"
+  },
+  "attentive2": {
+    "duration": 6.461090803146362,
+    "type": "emotion",
+    "library": "pollen-robotics/reachy-mini-emotions-library"
+  },
+  "no1": {
+    "duration": 2.6970388889312744,
+    "type": "emotion",
+    "library": "pollen-robotics/reachy-mini-emotions-library"
+  },
+  "oops1": {
+    "duration": 2.465099811553955,
+    "type": "emotion",
+    "library": "pollen-robotics/reachy-mini-emotions-library"
+  },
+  "proud3": {
+    "duration": 3.36069393157959,
+    "type": "emotion",
+    "library": "pollen-robotics/reachy-mini-emotions-library"
+  },
+  "reprimand3": {
+    "duration": 4.296041488647461,
+    "type": "emotion",
+    "library": "pollen-robotics/reachy-mini-emotions-library"
+  },
+  "reprimand2": {
+    "duration": 11.159969568252563,
+    "type": "emotion",
+    "library": "pollen-robotics/reachy-mini-emotions-library"
+  },
+  "scared1": {
+    "duration": 7.214080333709717,
+    "type": "emotion",
+    "library": "pollen-robotics/reachy-mini-emotions-library"
+  },
+  "no_excited1": {
+    "duration": 4.498217344284058,
+    "type": "emotion",
+    "library": "pollen-robotics/reachy-mini-emotions-library"
+  },
+  "come1": {
+    "duration": 3.1698014736175537,
+    "type": "emotion",
+    "library": "pollen-robotics/reachy-mini-emotions-library"
+  },
+  "proud2": {
+    "duration": 3.1993610858917236,
+    "type": "emotion",
+    "library": "pollen-robotics/reachy-mini-emotions-library"
+  },
+  "success1": {
+    "duration": 2.2740845680236816,
+    "type": "emotion",
+    "library": "pollen-robotics/reachy-mini-emotions-library"
+  },
+  "enthusiastic2": {
+    "duration": 3.431185960769653,
+    "type": "emotion",
+    "library": "pollen-robotics/reachy-mini-emotions-library"
+  },
+  "idle": {
+    "duration": 0.1,
+    "type": "emotion",
+    "library": "pollen-robotics/reachy-mini-emotions-library"
+  },
+  "laughing1": {
+    "duration": 4.658566236495972,
+    "type": "emotion",
+    "library": "pollen-robotics/reachy-mini-emotions-library"
+  },
+  "dying1": {
+    "duration": 5.695227861404419,
+    "type": "emotion",
+    "library": "pollen-robotics/reachy-mini-emotions-library"
+  },
+  "success2": {
+    "duration": 2.425105094909668,
+    "type": "emotion",
+    "library": "pollen-robotics/reachy-mini-emotions-library"
+  },
+  "enthusiastic1": {
+    "duration": 2.7266201972961426,
+    "type": "emotion",
+    "library": "pollen-robotics/reachy-mini-emotions-library"
+  },
+  "curious1": {
+    "duration": 11.794962882995605,
+    "type": "emotion",
+    "library": "pollen-robotics/reachy-mini-emotions-library"
+  },
+  "laughing2": {
+    "duration": 2.927704334259033,
+    "type": "emotion",
+    "library": "pollen-robotics/reachy-mini-emotions-library"
+  },
+  "tired1": {
+    "duration": 7.456466436386109,
+    "type": "emotion",
+    "library": "pollen-robotics/reachy-mini-emotions-library"
+  },
+  "reprimand1": {
+    "duration": 4.710043668746948,
+    "type": "emotion",
+    "library": "pollen-robotics/reachy-mini-emotions-library"
+  },
+  "proud1": {
+    "duration": 3.7734873294830322,
+    "type": "emotion",
+    "library": "pollen-robotics/reachy-mini-emotions-library"
+  },
+  "grateful1": {
+    "duration": 2.516026496887207,
+    "type": "emotion",
+    "library": "pollen-robotics/reachy-mini-emotions-library"
+  },
+  "frustrated1": {
+    "duration": 5.976291656494141,
+    "type": "emotion",
+    "library": "pollen-robotics/reachy-mini-emotions-library"
+  },
+  "calming1": {
+    "duration": 6.066950082778931,
+    "type": "emotion",
+    "library": "pollen-robotics/reachy-mini-emotions-library"
+  },
+  "attentive1": {
+    "duration": 4.286602258682251,
+    "type": "emotion",
+    "library": "pollen-robotics/reachy-mini-emotions-library"
+  },
+  "furious1": {
+    "duration": 5.725651264190674,
+    "type": "emotion",
+    "library": "pollen-robotics/reachy-mini-emotions-library"
+  },
+  "oops2": {
+    "duration": 2.7171120643615723,
+    "type": "emotion",
+    "library": "pollen-robotics/reachy-mini-emotions-library"
+  },
+  "irritated1": {
+    "duration": 2.484901189804077,
+    "type": "emotion",
+    "library": "pollen-robotics/reachy-mini-emotions-library"
+  },
+  "yes1": {
+    "duration": 3.411271572113037,
+    "type": "emotion",
+    "library": "pollen-robotics/reachy-mini-emotions-library"
+  },
+  "confused1": {
+    "duration": 7.890226364135741,
+    "type": "emotion",
+    "library": "pollen-robotics/reachy-mini-emotions-library"
+  },
+  "understanding2": {
+    "duration": 2.6264939308166504,
+    "type": "emotion",
+    "library": "pollen-robotics/reachy-mini-emotions-library"
+  },
+  "dance1": {
+    "duration": 3.2401268482208248,
+    "type": "emotion",
+    "library": "pollen-robotics/reachy-mini-emotions-library"
+  },
+  "shy1": {
+    "duration": 7.809322595596314,
+    "type": "emotion",
+    "library": "pollen-robotics/reachy-mini-emotions-library"
+  },
+  "inquiring2": {
+    "duration": 2.595691442489624,
+    "type": "emotion",
+    "library": "pollen-robotics/reachy-mini-emotions-library"
+  },
+  "uncertain1": {
+    "duration": 6.15791916847229,
+    "type": "emotion",
+    "library": "pollen-robotics/reachy-mini-emotions-library"
+  },
+  "thoughtful1": {
+    "duration": 5.9166975021362305,
+    "type": "emotion",
+    "library": "pollen-robotics/reachy-mini-emotions-library"
+  },
+  "surprised2": {
+    "duration": 3.038564443588257,
+    "type": "emotion",
+    "library": "pollen-robotics/reachy-mini-emotions-library"
+  },
+  "displeased2": {
+    "duration": 2.957369804382324,
+    "type": "emotion",
+    "library": "pollen-robotics/reachy-mini-emotions-library"
+  },
+  "impatient2": {
+    "duration": 3.9041597843170166,
+    "type": "emotion",
+    "library": "pollen-robotics/reachy-mini-emotions-library"
+  },
+  "welcoming2": {
+    "duration": 4.326314449310303,
+    "type": "emotion",
+    "library": "pollen-robotics/reachy-mini-emotions-library"
+  },
+  "indifferent1": {
+    "duration": 2.577057361602783,
+    "type": "emotion",
+    "library": "pollen-robotics/reachy-mini-emotions-library"
+  },
+  "sad2": {
+    "duration": 7.355913400650024,
+    "type": "emotion",
+    "library": "pollen-robotics/reachy-mini-emotions-library"
+  },
+  "helpful1": {
+    "duration": 4.365979433059692,
+    "type": "emotion",
+    "library": "pollen-robotics/reachy-mini-emotions-library"
+  },
+  "lonely1": {
+    "duration": 10.233729600906372,
+    "type": "emotion",
+    "library": "pollen-robotics/reachy-mini-emotions-library"
+  },
+  "cheerful1": {
+    "duration": 2.807887315750122,
+    "type": "emotion",
+    "library": "pollen-robotics/reachy-mini-emotions-library"
+  },
+  "inquiring3": {
+    "duration": 2.9387073516845703,
+    "type": "emotion",
+    "library": "pollen-robotics/reachy-mini-emotions-library"
+  },
+  "downcast1": {
+    "duration": 5.896173477172851,
+    "type": "emotion",
+    "library": "pollen-robotics/reachy-mini-emotions-library"
+  },
+  "sleep1": {
+    "duration": 19.773632049560547,
+    "type": "emotion",
+    "library": "pollen-robotics/reachy-mini-emotions-library"
+  },
+  "boredom1": {
+    "duration": 15.709056377410889,
+    "type": "emotion",
+    "library": "pollen-robotics/reachy-mini-emotions-library"
+  },
+  "uncomfortable1": {
+    "duration": 6.036857843399048,
+    "type": "emotion",
+    "library": "pollen-robotics/reachy-mini-emotions-library"
+  },
+  "go_away1": {
+    "duration": 4.850226402282715,
+    "type": "emotion",
+    "library": "pollen-robotics/reachy-mini-emotions-library"
+  },
+  "electric1": {
+    "duration": 3.502049207687378,
+    "type": "emotion",
+    "library": "pollen-robotics/reachy-mini-emotions-library"
+  },
+  "relief2": {
+    "duration": 6.90372371673584,
+    "type": "emotion",
+    "library": "pollen-robotics/reachy-mini-emotions-library"
+  },
+  "no_sad1": {
+    "duration": 7.053982973098755,
+    "type": "emotion",
+    "library": "pollen-robotics/reachy-mini-emotions-library"
+  }
+}

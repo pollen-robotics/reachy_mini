@@ -52,8 +52,10 @@
     <equality solref="0.002 1" solimp="0.99 0.999 0.0005 0.5 2"/>
   </default>
   <worldbody>
+    <!-- <geom name="custom_floor" type="plane" size="2 2 0.1" material="mat_floor"/> -->
+    <!-- Custom floor disabled - using scene-defined floor instead -->
     <!-- Link body_foot_3dprint -->
-    <body name="body_foot_3dprint" pos="0 0 0" quat="1 0 0 0" childclass="reachy_mini">
+    <body name="body_foot_3dprint" pos="0 0 0" euler="0 0 -45" childclass="reachy_mini">
       <inertial pos="0.00290221 0.000112574 0.0132607" mass="0.0617881" fullinertia="6.91521e-05 6.07324e-05 0.000110345 -1.98794e-07 -4.91678e-08 -3.02441e-08"/>
       <!-- Part body_foot_3dprint -->
       <geom type="mesh" class="visual" pos="-2.45997e-07 6.93889e-18 0.2298" quat="0.707107 -2.36704e-18 2.77556e-17 0.707107" mesh="body_foot_3dprint" material="body_foot_3dprint_material"/>
@@ -509,6 +511,8 @@
     </body>
   </worldbody>
   <asset>
+    <texture name="tex_floor" type="2d" file="floor_texture.png"/>
+    <material name="mat_floor" texture="tex_floor" texrepeat="16 16" specular="0" shininess="0"/>
     <mesh file="body_down_3dprint.stl"/>
     <mesh file="antenna_holder_r_3dprint.stl"/>
     <mesh file="dc15_a01_led_cap2_dummy.stl"/>
