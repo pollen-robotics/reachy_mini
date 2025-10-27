@@ -224,11 +224,12 @@ class Daemon:
         except KeyboardInterrupt:
             self.logger.warning("Daemon already stopping...")
 
-        backend_status = self.backend.get_status()
-        if backend_status.error:
-            self._status.state = DaemonState.ERROR
+        if self.backend is not None:
+            backend_status = self.backend.get_status()
+            if backend_status.error:
+                self._status.state = DaemonState.ERROR
 
-        self.backend = None
+            self.backend = None
 
         return self._status.state
 
