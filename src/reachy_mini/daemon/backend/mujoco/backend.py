@@ -185,6 +185,11 @@ class MujocoBackend(Backend):
             rendering_thread = Thread(target=self.rendering_loop, daemon=True)
             rendering_thread.start()
 
+        # Update the internal states of the IK and FK to the current configuration
+        # This is important to avoid jumps when starting the robot (beore wake-up)
+        self.head_kinematics.ik(self.get_mj_present_head_pose(), no_iterations=20)
+        self.head_kinematics.fk(self.get_present_head_joint_positions(), no_iterations=20)
+
         # 3) now enter your normal loop
         while not self.should_stop.is_set():
             start_t = time.time()

@@ -105,7 +105,7 @@ class PlacoKinematics:
         # Add a cone constraint for the head to not exceed a certain angle
         # This is to avoid the head from looking too far up or down
         self.fk_cone = self.ik_solver.add_cone_constraint(
-            "body_foot_3dprint", "head", np.deg2rad(30.0)
+            "body_foot_3dprint", "head", np.deg2rad(35.0)
         )
         self.fk_cone.configure("cone", "hard")
         self.fk_yaw_constraint = self.fk_solver.add_yaw_constraint(
@@ -116,7 +116,7 @@ class PlacoKinematics:
         # Add a cone constraint for the head to not exceed a certain angle
         # This is to avoid the head from looking too far up or down
         fk_cone = self.fk_solver.add_cone_constraint(
-            "body_foot_3dprint", "head", np.deg2rad(30.0)
+            "body_foot_3dprint", "head", np.deg2rad(35.0)
         )
         fk_cone.configure("cone", "hard")
 
