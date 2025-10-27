@@ -60,6 +60,12 @@ The daemon is built in Python, so you need to have Python installed on your comp
 
 You can install Reachy Mini from the source code or from PyPI.
 
+First, make sure `git-lfs` is installed on your system:
+
+- On Linux: `sudo apt install git-lfs`
+- On macOS: `brew install git-lfs`
+- On Windows: [Follow the instructions here](https://docs.github.com/en/repositories/working-with-files/managing-large-files/installing-git-large-file-storage?platform=windows)
+
 From PyPI, you can install the package with:
 
 ```bash
