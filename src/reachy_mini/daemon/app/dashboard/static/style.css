@@ -1,0 +1,83 @@
+@import url('https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,100..900;1,100..900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Asap:wght@400;500;700&display=swap');
+
+html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+    font-family: 'Archivo', 'Asap', sans-serif;
+}
+
+.daemon-status-title {
+    font-size: 36px;
+    font-weight: 500;
+    letter-spacing: 0.3px;
+}
+
+.daemon-status-collapse {
+    font-family: 'Asap', sans-serif;
+    font-weight: 400;
+    color: rgba(0, 0, 0, 0.7);
+}
+
+/* APPs styles */
+
+.app-section {
+    border-radius: 8px;
+    border-width: 1px;
+    padding: 16px;
+    gap: 16px;
+    background: #FFFFFF;
+}
+
+.installed-app-title {
+    font-weight: 600;
+}
+
+/* Hugging Face App Store Styles */
+
+.app-section-title {
+    font-weight: 500;
+    font-size: 24px;
+    letter-spacing: 0px;
+}
+
+.app-list-item {
+    padding: 4px;
+}
+
+.hf-app-icon {
+    width: 42px;
+    height: 42px;
+    border-radius: 10px;
+    text-align: center;
+    font-size: 31px;
+    background-color: rgba(0, 0, 0, 0.1);
+
+}
+
+.hf-app-title {
+    font-weight: 500;
+    font-size: 18px;
+}
+
+.hf-app-description {
+    font-family: 'Asap', sans-serif;
+    font-weight: 400;
+    font-size: 16px;
+    line-height: 75%;
+    color: rgba(0, 0, 0, 0.4);
+}
+
+.hf-app-install-button {
+    font-weight: 500;
+    font-size: 20px;
+    font-style: Bold;
+    text-align: center;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
