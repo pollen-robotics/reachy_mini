@@ -48,7 +48,6 @@ class Daemon:
             error=None,
             wlan_ip=None,
         )
-        self._thread_publish_status = Thread(target=self._publish_status, daemon=True)
         self._thread_event_publish_status = Event()
 
     async def start(
@@ -115,6 +114,8 @@ class Daemon:
 
         self.server = ZenohServer(self.backend, localhost_only=localhost_only)
         self.server.start()
+
+        self._thread_publish_status = Thread(target=self._publish_status, daemon=True)
         self._thread_publish_status.start()
 
         def backend_wrapped_run() -> None:
@@ -223,11 +224,12 @@ class Daemon:
         except KeyboardInterrupt:
             self.logger.warning("Daemon already stopping...")
 
-        backend_status = self.backend.get_status()
-        if backend_status.error:
-            self._status.state = DaemonState.ERROR
+        if self.backend is not None:
+            backend_status = self.backend.get_status()
+            if backend_status.error:
+                self._status.state = DaemonState.ERROR
 
-        self.backend = None
+            self.backend = None
 
         return self._status.state
 

@@ -3267,7 +3267,6 @@
       <geometry>
         <box size="0 0 0"/>
       </geometry>
-      <material name="blue"/>
     </visual>
   </link>
   <!-- Joint from pp01071_turning_bowl to dc15_a01_case_b_dummy -->

@@ -7,6 +7,9 @@ By default the module directly returns JPEG images as output by the camera.
 from threading import Thread
 from typing import Optional
 
+import numpy as np
+import numpy.typing as npt
+
 try:
     import gi
 except ImportError as e:
@@ -35,8 +38,6 @@ class GStreamerAudio(AudioBase):
         self._thread_bus_calls = Thread(target=lambda: self._loop.run(), daemon=True)
         self._thread_bus_calls.start()
 
-        self._samplerate = 24000
-
         self._pipeline_record = Gst.Pipeline.new("audio_recorder")
         self._appsink_audio: Optional[GstApp] = None
         self._init_pipeline_record(self._pipeline_record)
@@ -56,11 +57,11 @@ class GStreamerAudio(AudioBase):
     def _init_pipeline_record(self, pipeline: Gst.Pipeline) -> None:
         self._appsink_audio = Gst.ElementFactory.make("appsink")
         caps = Gst.Caps.from_string(
-            f"audio/x-raw,channels=1,rate={self._samplerate},format=S16LE"
+            f"audio/x-raw,channels=2,rate={self.SAMPLE_RATE},format=F32LE"
         )
         self._appsink_audio.set_property("caps", caps)
         self._appsink_audio.set_property("drop", True)  # avoid overflow
-        self._appsink_audio.set_property("max-buffers", 200)
+        self._appsink_audio.set_property("max-buffers", 500)
 
         autoaudiosrc = Gst.ElementFactory.make("autoaudiosrc")  # use default mic
         # caps_respeaker = Gst.Caps.from_string(
@@ -89,6 +90,7 @@ class GStreamerAudio(AudioBase):
 
     def __del__(self) -> None:
         """Destructor to ensure gstreamer resources are released."""
+        super().__del__()
         self._loop.quit()
         self._bus_record.remove_watch()
         self._bus_playback.remove_watch()
@@ -98,7 +100,7 @@ class GStreamerAudio(AudioBase):
         self._appsrc.set_property("format", Gst.Format.TIME)
         self._appsrc.set_property("is-live", True)
         caps = Gst.Caps.from_string(
-            f"audio/x-raw,format=F32LE,channels=1,rate={self._samplerate},layout=interleaved"
+            f"audio/x-raw,format=F32LE,channels=1,rate={self.SAMPLE_RATE},layout=interleaved"
         )
         self._appsrc.set_property("caps", caps)
 
@@ -136,7 +138,7 @@ class GStreamerAudio(AudioBase):
         """Open the audio card using GStreamer."""
         self._pipeline_record.set_state(Gst.State.PLAYING)
 
-    def _get_sample(self, appsink: Gst.AppSink) -> Optional[bytes]:
+    def _get_sample(self, appsink: GstApp.AppSink) -> Optional[bytes]:
         sample = appsink.try_pull_sample(20_000_000)
         if sample is None:
             return None
@@ -149,18 +151,17 @@ class GStreamerAudio(AudioBase):
             data = buf.extract_dup(0, buf.get_size())
         return data
 
-    def get_audio_sample(self) -> Optional[bytes]:
+    def get_audio_sample(self) -> Optional[npt.NDArray[np.float32]]:
         """Read a sample from the audio card. Returns the sample or None if error.
 
         Returns:
-            Optional[bytes]: The captured sample in raw format, or None if error.
+            Optional[npt.NDArray[np.float32]]: The captured sample in raw format, or None if error.
 
         """
-        return self._get_sample(self._appsink_audio)
-
-    def get_audio_samplerate(self) -> int:
-        """Return the samplerate of the audio device."""
-        return self._samplerate
+        sample = self._get_sample(self._appsink_audio)
+        if sample is None:
+            return None
+        return np.frombuffer(sample, dtype=np.float32).reshape(-1, 2)
 
     def stop_recording(self) -> None:
         """Release the camera resource."""
@@ -174,10 +175,10 @@ class GStreamerAudio(AudioBase):
         """Stop playing audio and release resources."""
         self._pipeline_playback.set_state(Gst.State.NULL)
 
-    def push_audio_sample(self, data: bytes) -> None:
+    def push_audio_sample(self, data: npt.NDArray[np.float32]) -> None:
         """Push audio data to the output device."""
         if self._appsrc is not None:
-            buf = Gst.Buffer.new_wrapped(data)
+            buf = Gst.Buffer.new_wrapped(data.tobytes())
             self._appsrc.push_buffer(buf)
         else:
             self.logger.warning(

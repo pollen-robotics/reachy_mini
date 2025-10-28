@@ -1,0 +1,1 @@
+# faulty_app - A ReachyMini application

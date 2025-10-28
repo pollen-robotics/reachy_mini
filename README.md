@@ -14,6 +14,11 @@ Reachy Mini's hardware comes in two flavors:
 
 There is also a simulated version of Reachy Mini in [MuJoCo](https://mujoco.org) that you can use to prototype your applications before deploying them on the real robot. It behaves like the lite version where the daemon runs on your computer.
 
+## Assembly guide
+
+Follow our step-by-step [Assembly Guide](https://www.pollen-robotics.com/wp-content/uploads/2025/10/Reachy_Mini_Assembly_BETA_v2_LOW-compresse.pdf).
+Most builders finish in about 3 hours, our current speed record is 43 minutes. The guide walks you through every step with clear visuals so you can assemble Reachy Mini confidently from start to finish. Enjoy the build!
+
 ## Software overview
 
 This repository provides everything you need to control Reachy Mini, both in simulation and on the real robot. It consists of two main parts:
@@ -54,6 +59,12 @@ We support and test on Linux and macOS. It's also working on Windows, but it is 
 The daemon is built in Python, so you need to have Python installed on your computer (versions from 3.10 to 3.13 are supported). We recommend using a virtual environment to avoid dependency conflicts with your other Python projects.
 
 You can install Reachy Mini from the source code or from PyPI.
+
+First, make sure `git-lfs` is installed on your system:
+
+- On Linux: `sudo apt install git-lfs`
+- On macOS: `brew install git-lfs`
+- On Windows: [Follow the instructions here](https://docs.github.com/en/repositories/working-with-files/managing-large-files/installing-git-large-file-storage?platform=windows)
 
 From PyPI, you can install the package with:
 
@@ -141,9 +152,11 @@ For more information about the daemon and its options, you can run:
 reachy-mini-daemon --help
 ```
 
-## Run the demo
+## Run the demo & awesome apps
 
 Conversational demo for the Reachy Mini robot combining LLM realtime APIs, vision pipelines, and choreographed motion libraries: [reachy_mini_conversation_demo](https://github.com/pollen-robotics/reachy_mini_conversation_demo).
+
+You can find more awesome apps and demos in the [Awesome Reachy Mini Apps](./docs/awesome-apps.md).
 
 ## Using the Python SDK
 
