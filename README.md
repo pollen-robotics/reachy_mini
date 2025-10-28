@@ -152,9 +152,11 @@ For more information about the daemon and its options, you can run:
 reachy-mini-daemon --help
 ```
 
-## Run the demo
+## Run the demo & awesome apps
 
 Conversational demo for the Reachy Mini robot combining LLM realtime APIs, vision pipelines, and choreographed motion libraries: [reachy_mini_conversation_demo](https://github.com/pollen-robotics/reachy_mini_conversation_demo).
+
+You can find more awesome apps and demos in the [Awesome Reachy Mini Apps](./docs/awesome-apps.md).
 
 ## Using the Python SDK
 
