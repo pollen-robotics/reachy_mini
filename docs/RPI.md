@@ -74,8 +74,10 @@ gst-launch-1.0 webrtcsink run-signalling-server=true meta="meta,name=reachymini"
 
 ### Send sound to Reachy Mini
 
+Send an audio RTP stream to the port 5000
+
 ```bash
-gst-launch-1.0 webrtcsink signaller::uri="ws://10.0.1.38:8443" name=ws meta="meta,name=reachymini_client"  audiotestsrc ! opusenc ! audio/x-opus, rate=48000, channels=2 ! ws.
+gst-launch-1.0     audiotestsrc !     audioconvert !     audioresample !     opusenc !  audio/x-opus, rate=48000, channels=2 !   rtpopuspay pt=96 !          udpsink host=10.0.1.38 port=5000
 ```
 
 
