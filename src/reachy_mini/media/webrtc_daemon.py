@@ -78,7 +78,6 @@ class GstWebRTC:
         return webrtcsink
 
     def _configure_receiver(self, pipeline: Gst.Pipeline) -> None:
-        # gst-launch-1.0     udpsrc port=5000 !     "application/x-rtp,media=audio,encoding-name=OPUS,payload=96" ! rtpjitterbuffer !     rtpopusdepay !     opusdec !     queue! audioconvert !     audioresample !     alsasink device=hw:3
         udpsrc = Gst.ElementFactory.make("udpsrc")
         udpsrc.set_property("port", 5000)
         caps = Gst.Caps.from_string(
@@ -141,13 +140,13 @@ class GstWebRTC:
         v4l2h264enc = Gst.ElementFactory.make("v4l2h264enc")
         extra_controls_structure = Gst.Structure.new_empty("extra-controls")
         extra_controls_structure.set_value("repeat_sequence_header", 1)
+        extra_controls_structure.set_value("video_bitrate", 5_000_000)
         v4l2h264enc.set_property("extra-controls", extra_controls_structure)
         caps_h264 = Gst.Caps.from_string(
             "video/x-h264,stream-format=byte-stream,alignment=au,level=(string)4"
         )
         capsfilter_h264 = Gst.ElementFactory.make("capsfilter")
         capsfilter_h264.set_property("caps", caps_h264)
-        h264parse = Gst.ElementFactory.make("h264parse")
 
         if not all(
             [
@@ -156,7 +155,6 @@ class GstWebRTC:
                 queue,
                 v4l2h264enc,
                 capsfilter_h264,
-                h264parse,
             ]
         ):
             raise RuntimeError("Failed to create GStreamer video elements")
@@ -181,6 +179,7 @@ class GstWebRTC:
         audioconvert = Gst.ElementFactory.make("audioconvert")
         audioresample = Gst.ElementFactory.make("audioresample")
         opusenc = Gst.ElementFactory.make("opusenc")
+        opusenc.set_property("audio-type", "restricted-lowdelay")
         caps = Gst.Caps.from_string("audio/x-opus,channels=1,rate=48000")
         capsfilter = Gst.ElementFactory.make("capsfilter")
         capsfilter.set_property("caps", caps)
