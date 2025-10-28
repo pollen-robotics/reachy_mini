@@ -27,6 +27,8 @@ class MotorConfig:
     angle_limit_max: int
     return_delay_time: int
     shutdown_error: int
+    current_limit: int
+    operating_mode: int
 
 
 @dataclass
@@ -64,6 +66,8 @@ def parse_yaml_config(filename: str) -> ReachyMiniConfig:
                 angle_limit_max=params["upper_limit"],
                 return_delay_time=params["return_delay_time"],
                 shutdown_error=params["shutdown_error"],
+                current_limit=params["current_limit"],
+                operating_mode=params["operating_mode"],
             )
 
     serial = SerialConfig(baudrate=conf["serial"]["baudrate"])
@@ -162,6 +166,24 @@ def setup_motor(
             serial_port,
             id=motor_config.id,
             return_delay_time=motor_config.return_delay_time,
+            baudrate=target_baudrate,
+        )
+
+        time.sleep(MOTOR_SETUP_DELAY)
+
+        change_current_limit(
+            serial_port,
+            id=motor_config.id,
+            current_limit=motor_config.current_limit,
+            baudrate=target_baudrate,
+        )
+
+        time.sleep(MOTOR_SETUP_DELAY)
+
+        change_operating_mode(
+            serial_port,
+            id=motor_config.id,
+            operating_mode=motor_config.operating_mode,
             baudrate=target_baudrate,
         )
 
@@ -269,6 +291,40 @@ def change_return_delay_time(
     print("✅")
 
 
+def change_current_limit(serial_port: str, id: int, current_limit: int, baudrate: int):
+    """Change the current limit of the motor with the given ID on the specified serial port."""
+    print(
+        f"Changing current limit for motor with ID {id} to {current_limit}...",
+        end="",
+        flush=True,
+    )
+    c = Xl330PyController(serial_port, baudrate=baudrate, timeout=SERIAL_TIMEOUT)
+    c.write_current_limit(id, current_limit)
+    print("✅")
+
+
+def change_operating_mode(
+    serial_port: str, id: int, operating_mode: int, baudrate: int
+):
+    """Change the operating mode of the motor with the given ID on the specified serial port."""
+    print(
+        f"Changing operating mode for motor with ID {id} to {operating_mode}...",
+        end="",
+        flush=True,
+    )
+    c = Xl330PyController(serial_port, baudrate=baudrate, timeout=SERIAL_TIMEOUT)
+    c.write_operating_mode(id, operating_mode)
+    print("✅")
+
+
+def reboot_motor(serial_port: str, id: int, baudrate: int):
+    """Reboot the motor with the given ID on the specified serial port."""
+    print(f"Rebooting motor with ID {id}...", end="", flush=True)
+    c = Xl330PyController(serial_port, baudrate=baudrate, timeout=SERIAL_TIMEOUT)
+    c.reboot(id)
+    print("✅")
+
+
 def light_led_up(serial_port: str, id: int, baudrate: int):
     """Light the LED of the motor with the given ID on the specified serial port."""
     c = Xl330PyController(serial_port, baudrate=baudrate, timeout=SERIAL_TIMEOUT)
@@ -346,6 +402,26 @@ def check_configuration(motor_config: MotorConfig, serial_port: str, baudrate: i
         )
     print(f"Shutdown error is correct: {shutdown} ✅.")
 
+    # Read current limit
+    current_limit = c.read_current_limit(motor_config.id)[0]
+    if current_limit != motor_config.current_limit:
+        raise RuntimeError(
+            f"Current limit is {current_limit}, expected {motor_config.current_limit}"
+        )
+    print(f"Current limit is correct: {current_limit} ✅.")
+
+    # Read operating mode
+    operating_mode = c.read_operating_mode(motor_config.id)[0]
+    if operating_mode != motor_config.operating_mode:
+        raise RuntimeError(
+            f"Operating mode is {operating_mode}, expected {motor_config.operating_mode}"
+        )
+    print(f"Operating mode is correct: {operating_mode} ✅.")
+
+    print("Rebooting motor to apply settings...")
+    c.reboot(motor_config.id)
+    print("===")
+
     print("Configuration is correct ✅!")
 
 
@@ -354,7 +430,6 @@ def run(args):
     config = parse_yaml_config(args.config_file)
 
     if args.motor_name == "all":
-        print("aaaaaa")
         motors = list(config.motors.keys())
     else:
         motors = [args.motor_name]
