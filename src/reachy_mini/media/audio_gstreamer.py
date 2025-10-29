@@ -10,6 +10,8 @@ from typing import Optional
 import numpy as np
 import numpy.typing as npt
 
+from reachy_mini.media.audio_utils import get_respeaker_card_number
+
 try:
     import gi
 except ImportError as e:
@@ -38,6 +40,8 @@ class GStreamerAudio(AudioBase):
         self._thread_bus_calls = Thread(target=lambda: self._loop.run(), daemon=True)
         self._thread_bus_calls.start()
 
+        self._id_audio_card = get_respeaker_card_number()
+
         self._pipeline_record = Gst.Pipeline.new("audio_recorder")
         self._appsink_audio: Optional[GstApp] = None
         self._init_pipeline_record(self._pipeline_record)
@@ -63,7 +67,8 @@ class GStreamerAudio(AudioBase):
         self._appsink_audio.set_property("drop", True)  # avoid overflow
         self._appsink_audio.set_property("max-buffers", 500)
 
-        autoaudiosrc = Gst.ElementFactory.make("autoaudiosrc")  # use default mic
+        alsasrc = Gst.ElementFactory.make("alsasrc")
+        alsasrc.set_property("device", f"hw:{self._id_audio_card},0")
         # caps_respeaker = Gst.Caps.from_string(
         #    "audio/x-raw, layout=interleaved, format=S16LE, rate=16000, channels=2"
         # )
@@ -72,18 +77,16 @@ class GStreamerAudio(AudioBase):
         audioconvert = Gst.ElementFactory.make("audioconvert")
         audioresample = Gst.ElementFactory.make("audioresample")
 
-        if not all(
-            [autoaudiosrc, queue, audioconvert, audioresample, self._appsink_audio]
-        ):
+        if not all([alsasrc, queue, audioconvert, audioresample, self._appsink_audio]):
             raise RuntimeError("Failed to create GStreamer elements")
 
-        pipeline.add(autoaudiosrc)
+        pipeline.add(alsasrc)
         pipeline.add(queue)
         pipeline.add(audioconvert)
         pipeline.add(audioresample)
         pipeline.add(self._appsink_audio)
 
-        autoaudiosrc.link(queue)
+        alsasrc.link(queue)
         queue.link(audioconvert)
         audioconvert.link(audioresample)
         audioresample.link(self._appsink_audio)
@@ -108,10 +111,11 @@ class GStreamerAudio(AudioBase):
         audioresample = Gst.ElementFactory.make("audioresample")
 
         queue = Gst.ElementFactory.make("queue")
-        audiosink = Gst.ElementFactory.make("autoaudiosink")  # use default speaker
+        alsasink = Gst.ElementFactory.make("alsasink")
+        alsasink.set_property("device", f"hw:{self._id_audio_card},0")
 
         pipeline.add(queue)
-        pipeline.add(audiosink)
+        pipeline.add(alsasink)
         pipeline.add(self._appsrc)
         pipeline.add(audioconvert)
         pipeline.add(audioresample)
@@ -119,7 +123,7 @@ class GStreamerAudio(AudioBase):
         self._appsrc.link(queue)
         queue.link(audioconvert)
         audioconvert.link(audioresample)
-        audioresample.link(audiosink)
+        audioresample.link(alsasink)
 
     def _on_bus_message(self, bus: Gst.Bus, msg: Gst.Message, loop) -> bool:  # type: ignore[no-untyped-def]
         t = msg.type
