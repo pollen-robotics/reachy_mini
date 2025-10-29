@@ -57,25 +57,22 @@ class GStreamerCamera(CameraBase):
         self._appsink_video.set_property("max-buffers", 1)  # keep last image only
         self.pipeline.add(self._appsink_video)
 
-        cam_path = self.get_arducam_video_device()
-        if cam_path == "":
-            self.logger.warning("Recording pipeline set without camera.")
-            self.pipeline.remove(self._appsink_video)
-        else:
-            camsrc = Gst.ElementFactory.make("v4l2src")
-            camsrc.set_property("device", cam_path)
-            self.pipeline.add(camsrc)
-            queue = Gst.ElementFactory.make("queue")
-            self.pipeline.add(queue)
-            # use vaapijpegdec or nvjpegdec for hardware acceleration
-            jpegdec = Gst.ElementFactory.make("jpegdec")
-            self.pipeline.add(jpegdec)
-            videoconvert = Gst.ElementFactory.make("videoconvert")
-            self.pipeline.add(videoconvert)
-            camsrc.link(queue)
-            queue.link(jpegdec)
-            jpegdec.link(videoconvert)
-            videoconvert.link(self._appsink_video)
+        camsrc = Gst.ElementFactory.make("libcamerasrc")
+        self.pipeline.add(camsrc)
+        caps = Gst.Caps.from_string(
+            f"video/x-raw,width={self.resolution[0]},height={self.resolution[1]},framerate={self.framerate}/1,format=YUY2,colorimetry=bt709,interlace-mode=progressive"
+        )
+        capsfilter = Gst.ElementFactory.make("capsfilter")
+        capsfilter.set_property("caps", caps)
+        self.pipeline.add(capsfilter)
+        queue = Gst.ElementFactory.make("queue")
+        self.pipeline.add(queue)
+        videoconvert = Gst.ElementFactory.make("videoconvert")
+        self.pipeline.add(videoconvert)
+        camsrc.link(capsfilter)
+        capsfilter.link(queue)
+        queue.link(videoconvert)
+        videoconvert.link(self._appsink_video)
 
     def _on_bus_message(self, bus: Gst.Bus, msg: Gst.Message, loop) -> bool:  # type: ignore[no-untyped-def]
         t = msg.type
