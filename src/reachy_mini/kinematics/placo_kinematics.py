@@ -451,9 +451,6 @@ class PlacoKinematics:
             }
         )
 
-        # save the initial configuration
-        q = self.robot.state.q.copy()
-
         done = True
         # do the inital ik with 2 iterations
         for i in range(no_iterations):
