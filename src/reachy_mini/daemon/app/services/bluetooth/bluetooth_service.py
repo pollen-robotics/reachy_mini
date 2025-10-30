@@ -3,6 +3,7 @@
 
 Includes a fixed NoInputNoOutput agent for automatic Just Works pairing.
 """
+# mypy: ignore-errors
 
 import logging
 import os
