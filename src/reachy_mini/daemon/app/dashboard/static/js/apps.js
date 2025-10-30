@@ -31,6 +31,7 @@ const installedApps = {
             installedApps.setBusy(false);
             return;
         } else {
+            installedApps.monitorAppStatus();
             console.log(`App ${appName} started successfully.`);
         }
 
@@ -67,6 +68,23 @@ const installedApps = {
             installedApps.currentlyRunningApp = null;
         }
         installedApps.setBusy(false);
+    },
+
+    monitorAppStatus: async () => {
+        const resp = await fetch(`/api/apps/current-app-status`);
+        const status = await resp.json();
+
+        if (status.state === 'starting' || status.state === 'running' || status.state === 'stopping') {
+            setTimeout(installedApps.monitorAppStatus, 2000);
+        } else if (status.state === 'error') {
+            window.alert(`App ${status.info.name} encountered an error: ${status.error}`);
+            await installedApps.stopApp(status.info.name);
+        }
+        else if (status.state === 'done') {
+            console.log(`App ${status.info.name} has stopped.`);
+            installedApps.toggles[status.info.name].setChecked(false);
+            installedApps.currentlyRunningApp = null;
+        }
     },
 
     setBusy: (isBusy) => {
