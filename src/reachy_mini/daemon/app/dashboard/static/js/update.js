@@ -3,8 +3,6 @@ const updateManager = {
     preRelease: false,
 
     isUpdateAvailable: async () => {
-        return Math.random() < 0.5;
-
         fetch('/update/available?pre_release=' + updateManager.preRelease)
             .then(response => response.json())
             .then(data => {
