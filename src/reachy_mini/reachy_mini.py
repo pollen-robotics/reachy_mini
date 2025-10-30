@@ -329,6 +329,7 @@ class ReachyMini:
         if self.media_manager.camera is None:
             raise RuntimeError("Camera is not initialized.")
 
+        # TODO this is false for the raspicam for now
         assert 0 < u < self.media_manager.camera.resolution[0], (
             f"u must be in [0, {self.media_manager.camera.resolution[0]}], got {u}."
         )
