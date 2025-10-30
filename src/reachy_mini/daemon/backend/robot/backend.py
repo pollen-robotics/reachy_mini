@@ -514,7 +514,7 @@ class RobotBackend(Backend):
             return [bits_to_error[b] for b in err_bits if b in bits_to_error]
 
         def check_voltage(
-            id,
+            id: int,
             allowed_max_voltage: float = 7.3,
         ) -> bool:
             assert self.c is not None, (
@@ -522,8 +522,8 @@ class RobotBackend(Backend):
             )
             # https://emanual.robotis.com/docs/en/dxl/x/xl330-m288/#present-input-voltage
             resp_bytes = self.c.async_read_raw_bytes(id, 144, 2)
-            voltage = struct.unpack("h", bytes(resp_bytes))
-            voltage = voltage[0] / 10.0  # in Volts
+            resp = struct.unpack("h", bytes(resp_bytes))[0]
+            voltage: float = resp / 10.0  # in Volts
 
             return voltage > allowed_max_voltage
 
