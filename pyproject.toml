@@ -57,6 +57,10 @@ rerun = [
     # See https://github.com/rerun-io/rerun-loader-python-example-urdf/issues/12
     # "rerun-loader-urdf @ git+https://github.com/rerun-io/rerun-loader-python-example-urdf.git",
 ]
+wireless-version = [
+    "semver>=3,<4",
+    "nmcli>=1.5",
+]
 
 [project.scripts]
 reachy-mini-daemon = "reachy_mini.daemon.app.main:main"
