@@ -13,7 +13,11 @@ def is_update_available(package_name: str, pre_release: bool) -> bool:
     """Check if an update is available for the given package."""
     pypi_version = get_pypi_version(package_name, pre_release)
     local_version = get_local_version(package_name)
-    return pypi_version > local_version
+
+    is_update_available = pypi_version > local_version
+    assert isinstance(is_update_available, bool)
+
+    return is_update_available
 
 
 def get_pypi_version(package_name: str, pre_release: bool) -> semver.Version:
