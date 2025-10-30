@@ -142,7 +142,7 @@ def run_app(args: Args) -> None:
     config = uvicorn.Config(app, host=args.fastapi_host, port=args.fastapi_port)
     server = uvicorn.Server(config)
 
-    async def health_check_timeout(timeout_seconds):
+    async def health_check_timeout(timeout_seconds: float) -> None:
         while True:
             try:
                 await asyncio.wait_for(
