@@ -517,8 +517,7 @@ class RobotBackend(Backend):
             # https://emanual.robotis.com/docs/en/dxl/x/xl330-m288/#hardware-error-status
             err_byte = self.c.async_read_raw_bytes(id, 70, 1)
             assert len(err_byte) == 1
-            err_byte = err_byte[0]
-            err = decode_hardware_error_byte(err_byte)
+            err = decode_hardware_error_byte(err_byte[0])
             if err:
                 errors[name] = err
 
