@@ -99,6 +99,13 @@ def create_app(args: Args) -> FastAPI:
     router.include_router(motors.router)
     router.include_router(move.router)
     router.include_router(state.router)
+
+    if args.wireless_version:
+        from .routers import update, wifi_config
+
+        app.include_router(update.router)
+        app.include_router(wifi_config.router)
+
     app.include_router(router)
 
     app.add_middleware(
