@@ -198,7 +198,7 @@ class SoundDeviceAudio(AudioBase):
         self.logger.warning(
             f"No output device found containing '{name_contains}', using default."
         )
-        return self._safe_query_device('output')
+        return self._safe_query_device("output")
 
     def get_input_device_id(self, name_contains: str) -> int:
         """Return the input device id whose name contains the given string (case-insensitive).
@@ -217,10 +217,10 @@ class SoundDeviceAudio(AudioBase):
         self.logger.warning(
             f"No input device found containing '{name_contains}', using default."
         )
-        return self._safe_query_device('input')
+        return self._safe_query_device("input")
 
     def _safe_query_device(self, kind: str) -> int:
         try:
-            return int(sd.query_devices(None, kind)['index'])
+            return int(sd.query_devices(None, kind)["index"])
         except sd.PortAudioError:
             return int(sd.default.device[1])

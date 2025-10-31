@@ -537,7 +537,7 @@ class RobotBackend(Backend):
                 if "Input Voltage Error" in err:
                     if voltage_ok(id):
                         err.remove("Input Voltage Error")
-                        
+
                 # To avoid logging empty errors like "Motor 1: []"
                 if len(err) > 0:
                     errors[name] = err
