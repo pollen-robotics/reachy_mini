@@ -1,0 +1,36 @@
+<section class="flex flex-col md:flex-row gap-4">
+    <!-- Daemon Status Animation -->
+    <div class="flex-1 min-w-[50%] justify-center items-center flex">
+        <object id="daemon-status-anim" data="" type="image/svg+xml" class="w-full h-auto"></object>
+    </div>
+    <div class="flex-1 py-2">
+        <div class="flex justify-between items-center">
+            <div class="daemon-status-title">Reachy Mini</div>
+            <!-- Toggle Daemon slider -->
+            <span>
+                <label>
+                    <input id="daemon-toggle" type="checkbox" value="" class="sr-only peer">
+                    <div id="daemon-toggle-slider"
+                        class="relative w-20 h-8 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-gray-100 dark:peer-focus:ring-gray-100 rounded-full peer dark:bg-red-400 peer-checked:after:translate-x-[46px] rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-7 after:w-7 after:transition-all dark:border-gray-600 peer-checked:bg-green-400 dark:peer-checked:bg-green-400 hidden">
+                        <span id="daemon-toggle-on"
+                            class="absolute top-1/2 start-1.5 -translate-y-1/2 flex justify-center items-center size-7 text-white peer-checked:text-white transition-colors duration-200 hidden">ON</span>
+                        <span id="daemon-toggle-off"
+                            class="absolute top-1/2 end-2.5 -translate-y-1/2 flex justify-center items-center size-7 text-white">
+                            OFF
+                        </span>
+                    </div>
+                </label>
+            </span>
+        </div>
+        <!-- Daemon status: -->
+        <div id="backend-status" class="">
+            <div class="flex items-center pt-1 w-full">
+                <span id="backend-status-icon" class="inline-block w-4 h-4 rounded-full align-middle mr-2"></span>
+                <span id="backend-status-text" class="daemon-status-collapse"></span>
+            </div>
+        </div>
+
+        <div class="mt-4">
+            {% include 'sections/move_player.html' %}
+        </div>
+</section>

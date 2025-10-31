@@ -60,6 +60,12 @@ The daemon is built in Python, so you need to have Python installed on your comp
 
 You can install Reachy Mini from the source code or from PyPI.
 
+First, make sure `git-lfs` is installed on your system:
+
+- On Linux: `sudo apt install git-lfs`
+- On macOS: `brew install git-lfs`
+- On Windows: [Follow the instructions here](https://docs.github.com/en/repositories/working-with-files/managing-large-files/installing-git-large-file-storage?platform=windows)
+
 From PyPI, you can install the package with:
 
 ```bash
@@ -146,9 +152,17 @@ For more information about the daemon and its options, you can run:
 reachy-mini-daemon --help
 ```
 
-## Run the demo
+### Dashboard
+
+You can access a simple dashboard to monitor the robot's status at [http://localhost:8000/](http://localhost:8000/) when the daemon is running. This lets you turn your robot on and off, run some basic movements, and browse spaces for Reachy Mini!
+
+![Reachy Mini Dashboard](docs/assets/dashboard.png)
+
+## Run the demo & awesome apps
 
 Conversational demo for the Reachy Mini robot combining LLM realtime APIs, vision pipelines, and choreographed motion libraries: [reachy_mini_conversation_demo](https://github.com/pollen-robotics/reachy_mini_conversation_demo).
+
+You can find more awesome apps and demos for Reachy Mini on [Hugging Face spaces](https://huggingface.co/spaces?q=reachy_mini)!
 
 ## Using the Python SDK
 

@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Checking Updates</title>
+    <script src="/dashboard/js/update.js"></script>
+</head>
+
+<body>
+    <div class="container">
+        <h1>Checking Updates:</h1>
+        <div class="status" id="status">Checking for updates...</div>
+        <button onclick="checkUpdates()">Refresh</button>
+        <button id="update-btn" onclick="triggerUpdate()" style="display:none;">Update Now</button>
+        <div id="logs"
+            style="margin-top:2em; padding:1em; background:#222; color:#eee; font-family:monospace; height:200px; overflow-y:auto; border-radius:4px;">
+        </div>
+    </div>
+</body>
+
+</html>

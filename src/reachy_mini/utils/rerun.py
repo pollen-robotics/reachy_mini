@@ -18,7 +18,15 @@ import cv2
 import numpy as np
 import requests
 import rerun as rr
-from rerun_loader_urdf import URDFLogger
+
+try:
+    from rerun_loader_urdf import URDFLogger
+except ImportError:
+    raise ImportError(
+        "The 'rerun-loader-urdf' package is required for this module. "
+        "Please install it from the GitHub repository: "
+        "pip install git+https://github.com/rerun-io/rerun-loader-python-example-urdf.git"
+    )
 from urdf_parser_py import urdf
 
 from reachy_mini.kinematics.placo_kinematics import PlacoKinematics

@@ -12,7 +12,7 @@ requires-python = ">=3.10"
 dependencies = [
     "numpy>=2.2.5,<2.3.0",
     "scipy==1.15.3",
-    "reachy_mini_motor_controller>=1.0.0",    
+    "reachy_mini_motor_controller>=1.2.0",    
     "eclipse-zenoh>=1.4.0",
     "opencv-python<=5.0",
     "cv2_enumerate_cameras>=1.2.1",
@@ -29,7 +29,8 @@ dependencies = [
     "aiohttp",
     "log-throttling==0.0.3",
     "pyusb>=1.2.1",
-    "libusb_package>=1.0.26.3"
+    "libusb_package>=1.0.26.3",
+    "pip>=25",
 ]
 
 
@@ -44,20 +45,22 @@ dev = [
     "pre-commit",
     "mypy==1.18.2",
     "rustypot>=1.3.0",
-    "types-requests"
+    "types-requests",
 ]
 examples = ["pynput"]
 mujoco = ["mujoco==3.3.0"]
 nn_kinematics = ["onnxruntime==1.22.1"]
 placo_kinematics = ["placo==0.9.14"]
 gstreamer = ["PyGObject>=3.42.2,<=3.46.0", "gst-signalling==1.1.1"]
-rerun = ["rerun-sdk>=0.23.4",
-         "rerun-loader-urdf @ git+https://github.com/rerun-io/rerun-loader-python-example-urdf.git",
+rerun = [
+    "rerun-sdk>=0.23.4",
+    # See https://github.com/rerun-io/rerun-loader-python-example-urdf/issues/12
+    # "rerun-loader-urdf @ git+https://github.com/rerun-io/rerun-loader-python-example-urdf.git",
 ]
 
 [project.scripts]
 reachy-mini-daemon = "reachy_mini.daemon.app.main:main"
-reachy-mini-make-app = "reachy_mini.apps.apps.app:main"
+reachy-mini-make-app = "reachy_mini.apps.app:main"
 
 [tool.setuptools]
 package-dir = { "" = "src" }
