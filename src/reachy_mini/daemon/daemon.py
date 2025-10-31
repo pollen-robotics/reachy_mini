@@ -5,6 +5,7 @@ It includes methods to start, stop, and restart the daemon, as well as to check 
 It also provides a command-line interface for easy interaction.
 """
 
+import asyncio
 import json
 import logging
 import time
@@ -49,6 +50,14 @@ class Daemon:
             wlan_ip=None,
         )
         self._thread_event_publish_status = Event()
+
+        self._webrtc: Optional[Any] = (
+            None  # type GstWebRTC imported for wireless version only
+        )
+        if wireless_version:
+            from reachy_mini.media.webrtc_daemon import GstWebRTC
+
+            self._webrtc = GstWebRTC(log_level)
 
     async def start(
         self,
@@ -158,6 +167,12 @@ class Daemon:
                 self._status.state = DaemonState.STOPPING
                 return self._status.state
 
+        if self._webrtc:
+            await asyncio.sleep(
+                0.2
+            )  # Give some time for the backend to release the audio device
+            self._webrtc.start()
+
         self.logger.info("Daemon started successfully.")
         self._status.state = DaemonState.RUNNING
         return self._status.state
@@ -190,6 +205,9 @@ class Daemon:
             self.backend.is_shutting_down = True
             self._thread_event_publish_status.set()
             self.server.stop()
+
+            if self._webrtc:
+                self._webrtc.stop()
 
             if goto_sleep_on_stop:
                 try:

@@ -13,7 +13,7 @@ import soundfile as sf
 
 from reachy_mini.utils.constants import ASSETS_ROOT_PATH
 
-from .audio_base import AudioBackend, AudioBase
+from .audio_base import AudioBase
 
 
 class SoundDeviceAudio(AudioBase):
@@ -21,11 +21,11 @@ class SoundDeviceAudio(AudioBase):
 
     def __init__(
         self,
-        frames_per_buffer: int = 1024,
+        frames_per_buffer: int = 256,
         log_level: str = "INFO",
     ) -> None:
         """Initialize the SoundDevice audio device."""
-        super().__init__(backend=AudioBackend.SOUNDDEVICE, log_level=log_level)
+        super().__init__(log_level=log_level)
         self.frames_per_buffer = frames_per_buffer
         self.stream = None
         self._output_stream = None
@@ -198,7 +198,7 @@ class SoundDeviceAudio(AudioBase):
         self.logger.warning(
             f"No output device found containing '{name_contains}', using default."
         )
-        return self._safe_query_device('output')
+        return self._safe_query_device("output")
 
     def get_input_device_id(self, name_contains: str) -> int:
         """Return the input device id whose name contains the given string (case-insensitive).
@@ -217,10 +217,10 @@ class SoundDeviceAudio(AudioBase):
         self.logger.warning(
             f"No input device found containing '{name_contains}', using default."
         )
-        return self._safe_query_device('input')
+        return self._safe_query_device("input")
 
     def _safe_query_device(self, kind: str) -> int:
         try:
-            return int(sd.query_devices(None, kind)['index'])
+            return int(sd.query_devices(None, kind)["index"])
         except sd.PortAudioError:
             return int(sd.default.device[1])

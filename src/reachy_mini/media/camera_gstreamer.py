@@ -12,8 +12,6 @@ import numpy.typing as npt
 
 from reachy_mini.media.camera_constants import CameraResolution
 
-from .camera_base import CameraBackend, CameraBase
-
 try:
     import gi
 except ImportError as e:
@@ -28,6 +26,8 @@ gi.require_version("GstApp", "1.0")
 
 from gi.repository import GLib, Gst, GstApp  # noqa: E402
 
+from .camera_base import CameraBase  # noqa: E402
+
 
 class GStreamerCamera(CameraBase):
     """Camera implementation using GStreamer."""
@@ -38,9 +38,7 @@ class GStreamerCamera(CameraBase):
         resolution: CameraResolution = CameraResolution.R1280x720,
     ) -> None:
         """Initialize the GStreamer camera."""
-        super().__init__(
-            backend=CameraBackend.GSTREAMER, log_level=log_level, resolution=resolution
-        )
+        super().__init__(log_level=log_level, resolution=resolution)
         Gst.init(None)
         self._loop = GLib.MainLoop()
         self._thread_bus_calls: Optional[Thread] = None
