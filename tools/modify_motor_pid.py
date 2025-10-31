@@ -6,8 +6,7 @@ A utility for reading and modifying PID (Proportional-Integral-Derivative) gains
 on Reachy Mini robot motors. Supports auto-detection of serial ports and includes
 validation to ensure sane PID values.
 
-Author: Daniel Ritchie
-GitHub: @brainwavecoder9
+Author: Daniel Ritchie (@brainwavecoder9)
 Discord: LeDaniel (quantumpoet)
 
 Usage:
@@ -85,9 +84,9 @@ safe, validated access to motor PID parameters with automatic serial port detect
 and clear before/after reporting.
 
 PID Parameters:
-  P (Proportional): Determines response to current error (typical: 400)
-  I (Integral):     Determines response to accumulated error (typical: 0)
-  D (Derivative):   Determines response to rate of error change (typical: 0-200)
+  P (Proportional): Determines response to current error (e.g.: 400)
+  I (Integral):     Determines response to accumulated error (e.g.: 0)
+  D (Derivative):   Determines response to rate of error change (e.g.: 200)
 
 Register Addresses:
   P Gain: Address 84 (Kpp = P / 128)
@@ -131,9 +130,6 @@ Safety Notes:
   - Changes are verified after writing
   - Torque is re-enabled after successful changes
 
-For issues or questions:
-  GitHub: https://github.com/brainwavecollective/reachy_mini
-  Discord: LeDaniel (quantumpoet)
         """
     )
     
