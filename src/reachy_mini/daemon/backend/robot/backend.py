@@ -513,7 +513,7 @@ class RobotBackend(Backend):
             err_bits = [i for i in range(8) if (err_byte & (1 << i)) != 0]
             return [bits_to_error[b] for b in err_bits if b in bits_to_error]
 
-        def check_voltage(
+        def voltage_ok(
             id: int,
             allowed_max_voltage: float = 7.3,
         ) -> bool:
@@ -525,7 +525,7 @@ class RobotBackend(Backend):
             resp = struct.unpack("h", bytes(resp_bytes))[0]
             voltage: float = resp / 10.0  # in Volts
 
-            return voltage > allowed_max_voltage
+            return voltage <= allowed_max_voltage
 
         errors = {}
         for name, id in self.c.get_motor_name_id().items():
@@ -535,9 +535,12 @@ class RobotBackend(Backend):
             err = decode_hardware_error_byte(err_byte[0])
             if err:
                 if "Input Voltage Error" in err:
-                    if check_voltage(id):
+                    if voltage_ok(id):
                         err.remove("Input Voltage Error")
-                errors[name] = err
+                        
+                # To avoid logging empty errors like "Motor 1: []"
+                if len(err) > 0:
+                    errors[name] = err
 
         return errors
 
