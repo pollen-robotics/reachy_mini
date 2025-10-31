@@ -1,8 +1,8 @@
 
-window.onload = () => {
+window.addEventListener('load', () => {
     refreshStatus();
     setInterval(refreshStatus, 1000);
-};
+});
 
 
 const refreshStatus = () => {

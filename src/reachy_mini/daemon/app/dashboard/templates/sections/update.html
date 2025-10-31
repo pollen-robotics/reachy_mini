@@ -1,0 +1,34 @@
+<div class="app-section">
+    <div class="app-section-title">Reachy Mini Update</div>
+
+    <div id="update-status" class="pt-4"></div>
+
+    <button id="check-again-btn" class="mt-4 px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg shadow hidden"
+        onclick="updateManager.updateUI()">Check
+        Again</button>
+
+    <button id="start-update-btn"
+        class="mt-4 px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg shadow hidden bg-green-400 hover:bg-green-500 text-white"
+        onclick="updateManager.startUpdate()">Start Update</button>
+
+    <div id="update-modal" tabindex="-1" aria-hidden="true"
+        class="hidden fixed inset-0 z-50 flex items-center justify-center w-full h-full">
+        <div class="relative p-4 w-full max-w-2xl max-h-full">
+            <div class="relative bg-white rounded-lg shadow-sm dark:bg-gray-700">
+                <div
+                    class="flex items-center justify-between p-4 md:p-5 border-b rounded-t dark:border-gray-600 border-gray-200">
+                    <h3 id="update-modal-title" class="text-xl font-semibold text-gray-900 dark:text-white"></h3>
+                </div>
+                <div class="p-4 md:p-5 space-y-4">
+                    <div id="update-logs" class="overflow-y-auto max-h-48 text-gray-500 dark:text-gray-400">
+                    </div>
+                </div>
+                <div
+                    class="flex items-center justify-center p-4 md:p-5 border-t border-gray-200 rounded-b dark:border-gray-600">
+                    <button id="update-modal-close-button" data-modal-hide="default-modal" type="button"
+                        class="hidden"></button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
