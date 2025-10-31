@@ -7,6 +7,7 @@ It uses the `ReachyMiniMotorController` to communicate with the robot's motors.
 
 import json
 import logging
+import struct
 import time
 from dataclasses import dataclass
 from datetime import timedelta
@@ -512,6 +513,20 @@ class RobotBackend(Backend):
             err_bits = [i for i in range(8) if (err_byte & (1 << i)) != 0]
             return [bits_to_error[b] for b in err_bits if b in bits_to_error]
 
+        def check_voltage(
+            id: int,
+            allowed_max_voltage: float = 7.3,
+        ) -> bool:
+            assert self.c is not None, (
+                "Motor controller not initialized or already closed."
+            )
+            # https://emanual.robotis.com/docs/en/dxl/x/xl330-m288/#present-input-voltage
+            resp_bytes = self.c.async_read_raw_bytes(id, 144, 2)
+            resp = struct.unpack("h", bytes(resp_bytes))[0]
+            voltage: float = resp / 10.0  # in Volts
+
+            return voltage > allowed_max_voltage
+
         errors = {}
         for name, id in self.c.get_motor_name_id().items():
             # https://emanual.robotis.com/docs/en/dxl/x/xl330-m288/#hardware-error-status
@@ -519,6 +534,9 @@ class RobotBackend(Backend):
             assert len(err_byte) == 1
             err = decode_hardware_error_byte(err_byte[0])
             if err:
+                if "Input Voltage Error" in err:
+                    if check_voltage(id):
+                        err.remove("Input Voltage Error")
                 errors[name] = err
 
         return errors
