@@ -1,0 +1,1 @@
+Created with: https://github.com/pollen-robotics/reachy_mini_stl_convexify
