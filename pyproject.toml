@@ -60,6 +60,7 @@ rerun = [
 wireless-version = [
     "semver>=3,<4",
     "nmcli>=1.5",
+    "pollen_BMI088_imu_library"
 ]
 
 [project.scripts]
