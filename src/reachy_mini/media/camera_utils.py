@@ -21,7 +21,7 @@ def find_camera(apiPreference: int = cv2.CAP_ANY) -> cv2.VideoCapture | None:
     """
     cap = find_camera_by_vid_pid(RPICAM[0], RPICAM[1], apiPreference)
     if cap is not None:
-        fourcc = cv2.VideoWriter_fourcc('M', 'J', 'P', 'G')
+        fourcc = cv2.VideoWriter_fourcc('M', 'J', 'P', 'G')  # type: ignore
         cap.set(cv2.CAP_PROP_FOURCC, fourcc)
         return cap
 
