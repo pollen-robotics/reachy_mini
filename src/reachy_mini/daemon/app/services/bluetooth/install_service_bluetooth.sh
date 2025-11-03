@@ -23,7 +23,7 @@ Requires=bluetooth.target
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/python3 $SERVICE_PATH
+ExecStart=/bin/bash -c 'sudo /usr/sbin/rfkill unblock bluetooth && sleep 2 && /usr/bin/python3 /bluetooth/bluetooth_service.py'
 Restart=on-failure
 User=$(whoami)
 WorkingDirectory=$(dirname "$SERVICE_PATH")
