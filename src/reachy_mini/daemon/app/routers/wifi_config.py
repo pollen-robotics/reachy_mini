@@ -114,6 +114,12 @@ def connect_to_wifi_network(
 
 
 # NMCLI WRAPPERS
+def scan_available_wifi() -> list[nmcli.data.device.DeviceWifi]:
+    """Scan for available WiFi networks."""
+    nmcli.device.wifi_rescan()
+    return nmcli.device.wifi()
+
+
 def get_wifi_connections() -> list[nmcli.data.connection.Connection]:
     """Get the list of WiFi connection."""
     return [conn for conn in nmcli.connection() if conn.conn_type == "wifi"]
@@ -159,6 +165,12 @@ def remove_connection(name: str) -> None:
         nmcli.connection.delete(name)
 
 
+# Setup WiFi connection on startup
+
+# This make sure the wlan0 is up and running
+scan_available_wifi()
+
+# On startup, if no WiFi connection is active, set up the default hotspot
 if get_current_wifi_mode() == WifiMode.DISCONNECTED:
     logger.info("No WiFi connection active. Setting up hotspot...")
 
