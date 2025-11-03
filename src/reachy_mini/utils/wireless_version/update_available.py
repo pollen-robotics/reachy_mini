@@ -27,12 +27,13 @@ def get_pypi_version(package_name: str, pre_release: bool) -> semver.Version:
     response.raise_for_status()
     data = response.json()
 
+    version = data["info"]["version"]
+
     if pre_release:
         releases = list(data["releases"].keys())
-        version = releases[-1]
-
-    else:
-        version = data["info"]["version"]
+        pre_version = _semver_version(releases[-1])
+        if pre_version > version:
+            version = pre_version
 
     return _semver_version(version)
 
