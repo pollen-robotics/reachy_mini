@@ -117,7 +117,8 @@ def connect_to_wifi_network(
 def scan_available_wifi() -> list[nmcli.data.device.DeviceWifi]:
     """Scan for available WiFi networks."""
     nmcli.device.wifi_rescan()
-    return nmcli.device.wifi()
+    devices: list[nmcli.data.device.DeviceWifi] = nmcli.device.wifi()
+    return devices
 
 
 def get_wifi_connections() -> list[nmcli.data.connection.Connection]:
