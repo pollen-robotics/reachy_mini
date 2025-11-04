@@ -413,6 +413,9 @@ class Daemon:
                 serialport = ports[0]
                 self.logger.info(f"Found Reachy Mini serial port: {serialport}")
 
+            self.logger.info(
+                f"Creating RobotBackend with parameters: serialport={serialport}, check_collision={check_collision}, kinematics_engine={kinematics_engine}"
+            )
             return RobotBackend(
                 serialport=serialport,
                 log_level=self.log_level,
