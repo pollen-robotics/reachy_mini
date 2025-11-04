@@ -4,7 +4,6 @@ import os
 import threading
 import time
 from collections import deque
-from queue import Queue, Empty
 from typing import Any, List, Optional
 
 import numpy as np
@@ -15,18 +14,20 @@ import soundfile as sf
 
 from reachy_mini.utils.constants import ASSETS_ROOT_PATH
 
-from .audio_base import AudioBackend, AudioBase
+from .audio_base import AudioBase  # NOTE: AudioBackend is NOT present in head
 
 
 class SoundDeviceAudio(AudioBase):
     """Audio device implementation using sounddevice."""
-    
+
     def __init__(
         self,
         frames_per_buffer: int = 1024,
         log_level: str = "INFO",
     ) -> None:
-        super().__init__(backend=AudioBackend.SOUNDDEVICE, log_level=log_level)
+        # audio_base.AudioBase in head takes only log_level
+        super().__init__(log_level=log_level)
+
         self.frames_per_buffer = frames_per_buffer
         self.stream = None
         self._output_stream = None
@@ -36,6 +37,7 @@ class SoundDeviceAudio(AudioBase):
         self._output_device_id = self.get_output_device_id("respeaker")
         self._input_device_id = self.get_input_device_id("respeaker")
 
+        # Streaming state (replaces queue/accumulation approach)
         self._streaming_active = False
         self._chunk_fifo: deque[npt.NDArray[np.float32]] = deque()
         self._queued_samples: int = 0
@@ -44,8 +46,11 @@ class SoundDeviceAudio(AudioBase):
         self._underflows: int = 0
         self._overflows: int = 0
 
+    # ---------- Input (recording) ----------
+
     def start_recording(self) -> None:
         """Open the audio input stream, using ReSpeaker card if available."""
+        # Make channel/dtype explicit to avoid hidden conversions
         self.stream = sd.InputStream(
             blocksize=self.frames_per_buffer,
             device=self._input_device_id,
@@ -69,7 +74,6 @@ class SoundDeviceAudio(AudioBase):
     ) -> None:
         if status:
             self.logger.warning(f"SoundDevice status: {status}")
-
         self._buffer.append(indata.copy())
 
     def get_audio_sample(self) -> Optional[npt.NDArray[np.float32]]:
@@ -89,6 +93,8 @@ class SoundDeviceAudio(AudioBase):
             self.stream = None
             self.logger.info("SoundDevice audio stream closed.")
 
+    # ---------- Output (streaming TTS/audio) ----------
+
     def push_audio_sample(self, data: npt.NDArray[np.float32]) -> None:
         """Push PCM mono float32 audio into the output FIFO."""
         if not self._streaming_active or self._output_stream is None:
@@ -107,17 +113,10 @@ class SoundDeviceAudio(AudioBase):
         self._chunk_fifo.append(data)
         self._queued_samples += data.shape[0]
 
-    # --- helper: compute target watermark in samples ---
     def _target_buffer_samples(self) -> int:
+        """Watermark in samples for small prebuffer to smooth bursty input."""
         return int(self.SAMPLE_RATE * (self._target_buffer_ms / 1000.0))
-        
-        # A modest prebuffer (start at 120 ms) smooths bursty input. Tune 80–200 ms depending on your device/OS. Lower = snappier, higher = safer.
-       
-        # Try self._target_buffer_ms = 150 and/or frames_per_buffer = 512 (lower latency) or 2048 (more stable).
-        
-        # FYI: On Windows with ReSpeaker, WASAPI shared mode can be finicky. Try larger frames_per_buffer (e.g., 2048) first; if still choppy, bump _target_buffer_ms to ~200 ms.
-        
-    # --- improved callback: drain multiple chunks + carry-over ---
+
     def _streaming_callback(
         self,
         outdata: npt.NDArray[np.float32],
@@ -125,9 +124,8 @@ class SoundDeviceAudio(AudioBase):
         time: Any,
         status: sd.CallbackFlags,
     ) -> None:
-        # Handle PortAudio status flags
+        # Track under/overflow for diagnostics
         if status:
-            # Track under/over flows for debugging
             if status.input_overflow or status.output_underflow:
                 if status.output_underflow:
                     self._underflows += 1
@@ -135,15 +133,12 @@ class SoundDeviceAudio(AudioBase):
                     self._overflows += 1
                 self.logger.debug(f"Audio status: {status} (uf={self._underflows}, of={self._overflows})")
 
-        # Ensure we don't leave stale data in other channels
-        # outdata shape: (frames, channels)
         out = outdata[:, 0]
-        out[:] = 0.0  # default to silence; we’ll fill what we can
+        out[:] = 0.0  # default to silence
 
-        # Keep a small prebuffer to avoid stutter right after starts or small gaps
         target = self._target_buffer_samples()
 
-        # ---- read from tail first
+        # 1) Drain carry-over tail first
         written = 0
         if self._tail is not None and self._tail.size:
             take = min(frames, self._tail.size)
@@ -154,14 +149,13 @@ class SoundDeviceAudio(AudioBase):
             else:
                 self._tail = None
 
-        # ---- then drain FIFO until we fill this block
+        # 2) Drain FIFO; allow multiple chunks to fill the block
         while written < frames:
             try:
                 if self._queued_samples < target:
-                    # Not enough buffered audio—leave remaining zeros (silence)
+                    # Not enough buffered audio—keep remaining zeros
                     break
 
-                # Pull next chunk from local FIFO (not the Queue; producer pushes here)
                 chunk = self._chunk_fifo.popleft()
                 self._queued_samples -= chunk.shape[0]
 
@@ -170,17 +164,14 @@ class SoundDeviceAudio(AudioBase):
                     out[written:written + chunk.shape[0]] = chunk
                     written += chunk.shape[0]
                 else:
-                    # Partially consume; keep remainder as tail
                     out[written:frames] = chunk[:need]
-                    self._tail = chunk[need:]  # carry over to next callback
+                    self._tail = chunk[need:]  # carry remainder to next callback
                     written = frames
-
             except IndexError:
-                # FIFO empty
-                break
+                break  # FIFO empty
 
-    # --- start_playing: reset tracking, explicit dtype ---
     def start_playing(self) -> None:
+        """Open the audio output stream (callback mode with smoothing)."""
         self._streaming_active = True
         self._chunk_fifo.clear()
         self._queued_samples = 0
@@ -202,6 +193,7 @@ class SoundDeviceAudio(AudioBase):
         self.logger.info("SoundDevice audio output stream opened (callback mode w/ smoothing).")
 
     def stop_playing(self) -> None:
+        """Close the audio output stream."""
         self._streaming_active = False
         if self._output_stream is not None:
             try:
@@ -213,6 +205,8 @@ class SoundDeviceAudio(AudioBase):
         self._queued_samples = 0
         self._tail = None
         self.logger.info("SoundDevice audio output stream closed.")
+
+    # ---------- One-shot file playback (unchanged, but explicit mono) ----------
 
     def play_sound(self, sound_file: str, autoclean: bool = False) -> None:
         """Play a sound file from the assets directory or a given path using sounddevice and soundfile."""
@@ -232,22 +226,20 @@ class SoundDeviceAudio(AudioBase):
         self.logger.debug(f"Playing sound '{file_path}' at {samplerate_in} Hz")
 
         self.stop_playing()
-        start = [0]  # using list to modify in callback
+        start = [0]
         length = len(data)
 
         def callback(
             outdata: npt.NDArray[np.float32],
             frames: int,
-            time: Any,  # cdata 'struct PaStreamCallbackTimeInfo *
+            time: Any,
             status: sd.CallbackFlags,
         ) -> None:
-            """Actual playback."""
             if status:
                 self.logger.warning(f"SoundDevice output status: {status}")
 
             end = start[0] + frames
             if end > length:
-                # Fill the output buffer with the audio data, or zeros if finished
                 outdata[: length - start[0], 0] = data[start[0] :]
                 outdata[length - start[0] :, 0] = 0
                 raise sd.CallbackStop()
@@ -262,19 +254,15 @@ class SoundDeviceAudio(AudioBase):
             device=self._output_device_id,
             channels=1,
             callback=callback,
-            finished_callback=event.set,  # release the device when done
+            finished_callback=event.set,
         )
         if self._output_stream is None:
             raise RuntimeError("Failed to open SoundDevice audio output stream.")
         self._output_stream.start()
 
         def _clean_up_thread() -> None:
-            """Thread to clean up the output stream after playback.
-
-            The daemon may play sound but should release the audio device.
-            """
             event.wait()
-            timeout = 5  # seconds
+            timeout = 5
             waited = 0
             while (
                 self._output_stream is not None
@@ -286,61 +274,45 @@ class SoundDeviceAudio(AudioBase):
             self.stop_playing()
 
         if autoclean:
-            threading.Thread(
-                target=_clean_up_thread,
-                daemon=True,
-            ).start()
+            threading.Thread(target=_clean_up_thread, daemon=True).start()
 
-    def _find_device_id(
-        self, name_contains: str, device_type: str
-    ) -> int:
-        """Find device ID by name and type with fallback logic.
-
-        Args:
-            name_contains: Substring to search for in device name (case-insensitive)
-            device_type: Either "input" or "output"
-
-        Returns:
-            Device index
-
-        Raises:
-            RuntimeError: If no device with appropriate channels found
-        """
-        devices = sd.query_devices()
-        channel_key = f"max_{device_type}_channels"
-
-        # First try: Search for device by specific name (e.g., "respeaker")
-        for idx, dev in enumerate(devices):
-            if (
-                name_contains.lower() in dev["name"].lower()
-                and dev.get(channel_key, 0) > 0
-            ):
-                return idx
-
-        # Log warning if device with specific name not found
-        self.logger.warning(
-            f"No {device_type} device containing '{name_contains}' found. Using first available {device_type} device."
-        )
-
-        # Fallback: Return first device with appropriate channels
-        for idx, dev in enumerate(devices):
-            if dev.get(channel_key, 0) > 0:
-                return idx
-
-        raise RuntimeError(
-            f"No {device_type} audio device with {device_type} channels found."
-        )
+    # ---------- Device selection (kept compatible with head) ----------
 
     def get_output_device_id(self, name_contains: str) -> int:
         """Return the output device id whose name contains the given string (case-insensitive).
-
-        If not found, return the first available output device.
+        If not found, return the default output device id.
         """
-        return self._find_device_id(name_contains, "output")
+        devices = sd.query_devices()
+        for idx, dev in enumerate(devices):
+            if (
+                name_contains.lower() in dev["name"].lower()
+                and dev["max_output_channels"] > 0
+            ):
+                return idx
+        self.logger.warning(
+            f"No output device found containing '{name_contains}', using default."
+        )
+        return self._safe_query_device("output")
 
     def get_input_device_id(self, name_contains: str) -> int:
         """Return the input device id whose name contains the given string (case-insensitive).
-
-        If not found, return the first available input device.
+        If not found, return the default input device id.
         """
-        return self._find_device_id(name_contains, "input")
+        devices = sd.query_devices()
+        for idx, dev in enumerate(devices):
+            if (
+                name_contains.lower() in dev["name"].lower()
+                and dev["max_input_channels"] > 0
+            ):
+                return idx
+        self.logger.warning(
+            f"No input device found containing '{name_contains}', using default."
+        )
+        return self._safe_query_device("input")
+
+    def _safe_query_device(self, kind: str) -> int:
+        try:
+            return int(sd.query_devices(None, kind)["index"])
+        except sd.PortAudioError:
+            # Fallback: sd.default.device = (input, output)
+            return int(sd.default.device[1 if kind == "output" else 0])
