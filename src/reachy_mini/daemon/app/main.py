@@ -9,7 +9,6 @@ managing the robot's state.
 
 import argparse
 import logging
-import os
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -25,10 +24,6 @@ from fastapi.templating import Jinja2Templates
 from reachy_mini.apps.manager import AppManager
 from reachy_mini.daemon.app.routers import apps, daemon, kinematics, motors, move, state
 from reachy_mini.daemon.daemon import Daemon
-
-DASHBOARD_PAGES = Path(__file__).parent / "dashboard"
-TEMPLATES_DIR = Path(__file__).parent / "templates"
-templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
 
 @dataclass
@@ -92,16 +87,10 @@ def create_app(args: Args) -> FastAPI:
     app = FastAPI(
         lifespan=lifespan,
     )
+
     app.state.args = args
     app.state.daemon = Daemon(wireless_version=args.wireless_version)
     app.state.app_manager = AppManager()
-
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=["*"],  # or restrict to your HF domain
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
 
     router = APIRouter(prefix="/api")
     router.include_router(apps.router)
@@ -110,23 +99,25 @@ def create_app(args: Args) -> FastAPI:
     router.include_router(motors.router)
     router.include_router(move.router)
     router.include_router(state.router)
-
     app.include_router(router)
 
-    # Route to list available HTML/JS/CSS examples with links using Jinja2 template
-    @app.get("/")
-    async def list_examples(request: Request) -> HTMLResponse:
-        """Render the dashboard."""
-        files = [f for f in os.listdir(DASHBOARD_PAGES) if f.endswith(".html")]
-        return templates.TemplateResponse(
-            "dashboard.html", {"request": request, "files": files}
-        )
-
-    app.mount(
-        "/dashboard",
-        StaticFiles(directory=str(DASHBOARD_PAGES), html=True),
-        name="dashboard",
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],  # or restrict to your HF domain
+        allow_methods=["*"],
+        allow_headers=["*"],
     )
+
+    STATIC_DIR = Path(__file__).parent / "dashboard" / "static"
+    TEMPLATES_DIR = Path(__file__).parent / "dashboard" / "templates"
+
+    app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+    templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
+
+    @app.get("/")
+    async def dashboard(request: Request) -> HTMLResponse:
+        """Render the dashboard."""
+        return templates.TemplateResponse("index.html", {"request": request})
 
     return app
 
