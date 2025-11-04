@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
-rm -rf /venvs/mini_daemon/
-cp -r /restore/mini_daemon /venvs/
-chown -R pollen:pollen /venvs/mini_daemon/
+rm -rf /venvs/
+cp -r /restore/ /venvs/
+chown -R pollen:pollen /venvs
 systemctl restart reachy-mini-daemon.service
 
