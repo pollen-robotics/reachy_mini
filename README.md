@@ -79,7 +79,13 @@ git clone https://github.com/pollen-robotics/reachy_mini
 pip install -e ./reachy_mini
 ```
 
+*Note that uv users can directly run the daemon with:*
+```bash
+uv run reachy-mini-daemon
+```
+
 The same package provides both the daemon and the Python SDK.
+
 
 ## Run the reachy mini daemon
 
