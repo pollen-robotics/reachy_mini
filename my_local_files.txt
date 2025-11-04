@@ -1,3 +1,0 @@
-
-src/reachy_mini/media/audio_sounddevice.py
-tests/test_audio_methods.py
