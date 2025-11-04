@@ -108,25 +108,7 @@ class ReachyMini:
             ]
         )
 
-        mbackend = MediaBackend.DEFAULT
-        if media_backend.lower() == "gstreamer":
-            mbackend = MediaBackend.GSTREAMER
-        elif media_backend.lower() == "default":
-            mbackend = MediaBackend.DEFAULT
-        elif media_backend.lower() == "no_media":
-            mbackend = MediaBackend.NO_MEDIA
-        elif media_backend.lower() == "default_no_video":
-            mbackend = MediaBackend.DEFAULT_NO_VIDEO
-        else:
-            raise ValueError(
-                f"Invalid media_backend '{media_backend}'. Supported values are 'default', 'gstreamer', 'no_media', and 'default_no_video'."
-            )
-
-        self.media_manager = MediaManager(
-            use_sim=self.client.get_status()["simulation_enabled"],
-            backend=mbackend,
-            log_level=log_level,
-        )
+        self.media_manager = self._configure_mediamanager(media_backend, log_level)
 
     def __del__(self) -> None:
         """Destroy the Reachy Mini instance.
@@ -148,6 +130,43 @@ class ReachyMini:
     def media(self) -> MediaManager:
         """Expose the MediaManager instance used by ReachyMini."""
         return self.media_manager
+
+    def _configure_mediamanager(
+        self, media_backend: str, log_level: str
+    ) -> MediaManager:
+        if (
+            self.client.get_status()["wireless_version"]
+            and media_backend != "gstreamer"
+        ):
+            self.logger.warning(
+                "Wireless version detected, media backend should be set to 'gstreamer'. Reverting to no_media"
+            )
+            media_backend = "no_media"
+
+        mbackend = MediaBackend.DEFAULT
+        match media_backend.lower():
+            case "gstreamer":
+                if self.client.get_status()["wireless_version"]:
+                    mbackend = MediaBackend.WEBRTC
+                else:
+                    mbackend = MediaBackend.GSTREAMER
+            case "default":
+                mbackend = MediaBackend.DEFAULT
+            case "no_media":
+                mbackend = MediaBackend.NO_MEDIA
+            case "default_no_video":
+                mbackend = MediaBackend.DEFAULT_NO_VIDEO
+            case _:
+                raise ValueError(
+                    f"Invalid media_backend '{media_backend}'. Supported values are 'default', 'gstreamer', 'no_media', 'default_no_video', and 'webrtc'."
+                )
+
+        return MediaManager(
+            use_sim=self.client.get_status()["simulation_enabled"],
+            backend=mbackend,
+            log_level=log_level,
+            signalling_host=self.client.get_status()["wlan_ip"],
+        )
 
     def set_target(
         self,

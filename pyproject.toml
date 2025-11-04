@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "reachy_mini"
-version = "1.0.0"
+version = "1.0.0rc5"
 authors = [{ name = "Pollen Robotics", email = "contact@pollen-robotics.com" }]
 description = ""
 readme = "README.md"
@@ -51,9 +51,11 @@ examples = ["pynput"]
 mujoco = ["mujoco==3.3.0"]
 nn_kinematics = ["onnxruntime==1.22.1"]
 placo_kinematics = ["placo==0.9.14"]
-gstreamer = ["PyGObject>=3.42.2,<=3.46.0"]
-rerun = ["rerun-sdk>=0.23.4",
-         "rerun-loader-urdf @ git+https://github.com/rerun-io/rerun-loader-python-example-urdf.git",
+gstreamer = ["PyGObject>=3.42.2,<=3.46.0", "gst-signalling==1.1.1"]
+rerun = [
+    "rerun-sdk>=0.23.4",
+    # See https://github.com/rerun-io/rerun-loader-python-example-urdf/issues/12
+    # "rerun-loader-urdf @ git+https://github.com/rerun-io/rerun-loader-python-example-urdf.git",
 ]
 
 [project.scripts]
@@ -94,6 +96,7 @@ markers = [
     "video: mark test as requiring video hardware",
     "video_gstreamer: mark test as requiring GStreamer for video",
     "wireless: mark test as requiring wireless Reachy Mini",
+    "wireless_gstreamer: mark test as requiring GStreamer for wireless Reachy Mini",
 ]
 
 [tool.mypy]

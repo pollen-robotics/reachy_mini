@@ -7,20 +7,12 @@ interface for audio input/output.
 import logging
 import struct
 from abc import ABC, abstractmethod
-from enum import Enum
 from typing import List, Optional
 
 import numpy as np
 import numpy.typing as npt
 import usb
 from libusb_package import get_libusb1_backend
-
-
-class AudioBackend(Enum):
-    """Audio backends."""
-
-    SOUNDDEVICE = "sounddevice"
-    GSTREAMER = "gstreamer"
 
 
 class AudioBase(ABC):
@@ -35,11 +27,10 @@ class AudioBase(ABC):
         "DOA_VALUE_RADIANS": (20, 19, 8 + 1, "ro", "radians"),
     }
 
-    def __init__(self, backend: AudioBackend, log_level: str = "INFO") -> None:
+    def __init__(self, log_level: str = "INFO") -> None:
         """Initialize the audio device."""
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(log_level)
-        self.backend = backend
         self._respeaker = self._init_respeaker_usb()
         # name, resid, cmdid, length, type
 
