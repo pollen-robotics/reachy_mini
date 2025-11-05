@@ -94,3 +94,60 @@ body {
     font-weight: 400;
     color: rgba(0, 0, 0, 0.7);
 }
+
+
+.notification-modal {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    z-index: 9999;
+    min-width: 300px;
+    max-width: 400px;
+    background: #fff;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+    border-radius: 8px;
+    display: none;
+    animation: fadeInUp 0.3s;
+}
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(40px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.notification-content {
+    padding: 20px 28px;
+    border-radius: 8px;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+/* Notification variants */
+.notification-content.info {
+    background: #fff;
+    border: 1px solid #e0e0e0;
+}
+
+.notification-content.error {
+    background: #ffeaea;
+    border: 1px solid #ff4d4f;
+    color: #b71c1c;
+}
+
+
+.close-btn {
+    background: none;
+    border: none;
+    font-size: 1.5em;
+    cursor: pointer;
+    color: #888;
+}
