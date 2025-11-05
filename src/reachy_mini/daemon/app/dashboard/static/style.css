@@ -81,3 +81,16 @@ body {
     align-items: center;
     justify-content: center;
 }
+
+.wifi-status {
+    font-family: 'Asap', sans-serif;
+    font-weight: 500;
+    color: rgba(0, 0, 0, 0.9);
+
+}
+
+.wifi-status-info {
+    font-family: 'Asap', sans-serif;
+    font-weight: 400;
+    color: rgba(0, 0, 0, 0.7);
+}

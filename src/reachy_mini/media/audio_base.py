@@ -139,10 +139,15 @@ class AudioBase(ABC):
     def get_DoA(self) -> tuple[float, bool] | None:
         """Get the Direction of Arrival (DoA) value from the ReSpeaker device.
 
-        0° is left, 90° is front/back, 180° is right
+        The spatial angle is given in radians:
+        0 radians is left, π/2 radians is front/back, π radians is right.
+
+        Note: The microphone array requires firmware version 2.1.0 or higher to support this feature.
+        The firmware is located in src/reachy_mini/assets/firmware/*.bin.
+        Refer to https://wiki.seeedstudio.com/respeaker_xvf3800_introduction/#update-firmware for the upgrade process.
 
         Returns:
-            tuple: A tuple containing the DoA value as an integer and the speech detection, or None if the device is not found.
+            tuple: A tuple containing the DoA value as a float (radians) and the speech detection as a bool, or None if the device is not found.
 
         """
         if not self._respeaker:

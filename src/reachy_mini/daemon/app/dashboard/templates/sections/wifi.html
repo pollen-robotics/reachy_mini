@@ -1,0 +1,40 @@
+<div class="app-section">
+    <div class="app-section-title">Setup your WiFi</div>
+
+    <div class="flex p-4 gap-4">
+        <div class="wifi-status">Current Status:</div>
+        <div id="wifi-status" class="wifi-status-info">Loading...</div>
+    </div>
+    <div id="add-wifi" class="hidden">
+        <div class="py-4 flex flex-col max-w-md">
+            <div class="app-section-title mb-2">Add your WiFi</div>
+
+            <div class="flex flex-row p-4">
+                <form id="wifi-form" class="max-w-md" onsubmit="return false;">
+                    <div class="mb-4">
+                        <label for="ssid" class="block mb-2 text-sm">SSID</label>
+                        <input type="text" id="ssid" name="ssid"
+                            class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5"
+                            required>
+                    </div>
+                    <div class="mb-4">
+                        <label for="password" class="block mb-2 text-sm">Password</label>
+                        <input type="password" id="password" name="password"
+                            class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5"
+                            required>
+                    </div>
+                    <div class="">
+                        <input type="button" onclick="connectToWifi(event)" target="_blank" formtarget="_blank"
+                            value="Connect"
+                            class="text-white bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:outline-none focus:ring-blue-300 font-medium rounded-lg text-sm w-full sm:w-auto px-5 py-2.5 text-center dark:bg-blue-600 dark:hover:bg-blue-700 dark:focus:ring-blue-800">
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div id="busy" hidden>
+            <h2>Operation in progress...</h2>
+            <p>Please wait while we set up your connection.</p>
+        </div>
+    </div>
+</div>

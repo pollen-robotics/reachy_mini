@@ -1,23 +1,13 @@
 
-window.onload = () => {
-    refreshStatus();
-    setInterval(refreshStatus, 1000);
-};
-
-
 const refreshStatus = () => {
-    const statusDiv = document.getElementById('status');
-
     fetch('/wifi/status')
         .then(response => response.json())
         .then(data => {
-            statusDiv.innerText = `Status: ${data}`;
-
             handleStatus(data);
         })
         .catch(error => {
             console.error('Error fetching WiFi status:', error);
-            statusDiv.innerText = 'Make sure you are connected on the right WiFi.\n Attempt to reconnect...';
+            handleStatus('error');
         });
 
     fetch('/wifi/error')
@@ -32,7 +22,7 @@ const refreshStatus = () => {
         .catch(error => {
             console.error('Error fetching WiFi error:', error);
         });
-}
+};
 
 const connectToWifi = (_) => {
     const ssid = document.getElementById('ssid').value;
@@ -66,29 +56,35 @@ const connectToWifi = (_) => {
             alert(`Error connecting to WiFi: ${error.message}`);
         });
     return false; // Prevent form submission
-}
+};
 
 const handleStatus = (status) => {
+    const statusDiv = document.getElementById('wifi-status');
     const addWifiDiv = document.getElementById('add-wifi');
-    addWifiDiv.hidden = true;
-
     const busyDiv = document.getElementById('busy');
-    busyDiv.hidden = true;
 
-    const connectedDiv = document.getElementById('connected');
-    connectedDiv.hidden = true;
+    addWifiDiv.classList = 'hidden';
 
-    if (status === 'hotspot') {
-        addWifiDiv.hidden = false;
-    } else if (status === 'wlan') {
-        connectedDiv.hidden = false;
-    }
-    else if (status === 'busy') {
+    if (status == 'hotspot') {
+        statusDiv.innerText = 'Hotspot mode active. 🔌';
+        addWifiDiv.classList.remove('hidden');
+    } else if (status == 'wlan') {
+        statusDiv.innerText = 'Connected to WiFi. 📶';
+    } else if (status == 'disconnected') {
+        statusDiv.innerText = 'WiFi disconnected. ❌';
+    } else if (status == 'busy') {
+        statusDiv.innerText = 'Changing your WiFi configuration... Please wait ⏳';
         busyDiv.hidden = false;
-    }
-    else {
+    } else if (status == 'error') {
+        statusDiv.innerText = 'Error connecting to WiFi. ⚠️';
+    } else {
         console.warn(`Unknown status: ${status}`);
     }
 
     currentStatus = status;
 };
+
+window.addEventListener('load', () => {
+    refreshStatus();
+    setInterval(refreshStatus, 1000);
+});

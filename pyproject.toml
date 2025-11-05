@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "reachy_mini"
-version = "1.0.0"
+version = "1.1.0rc2"
 authors = [{ name = "Pollen Robotics", email = "contact@pollen-robotics.com" }]
 description = ""
 readme = "README.md"
@@ -56,6 +56,11 @@ rerun = [
     "rerun-sdk>=0.23.4",
     # See https://github.com/rerun-io/rerun-loader-python-example-urdf/issues/12
     # "rerun-loader-urdf @ git+https://github.com/rerun-io/rerun-loader-python-example-urdf.git",
+]
+wireless-version = [
+    "semver>=3,<4",
+    "nmcli>=1.5",
+    "pollen_BMI088_imu_library"
 ]
 
 [project.scripts]
