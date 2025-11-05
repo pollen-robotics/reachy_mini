@@ -96,22 +96,25 @@ class SoundDeviceAudio(AudioBase):
     # ---------- Output (streaming TTS/audio) ----------
 
     def push_audio_sample(self, data: npt.NDArray[np.float32]) -> None:
-        """Push PCM mono float32 audio into the output FIFO."""
         if not self._streaming_active or self._output_stream is None:
             self.logger.warning("Output stream is not active. Call start_playing() first.")
             return
 
-        # Ensure shape (n,) float32 mono
-        if data.ndim == 2:
-            if data.shape[1] > 1:
-                data = np.mean(data, axis=1)
-            else:
-                data = data[:, 0]
-        data = np.asarray(data, dtype=np.float32, order="C")
+        a = np.asarray(data, dtype=np.float32, order="C")
 
-        # Push into local FIFO; keep sample count
-        self._chunk_fifo.append(data)
-        self._queued_samples += data.shape[0]
+        # Accept (N,), (1,N), (N,1), (C,N), (N,C)
+        if a.ndim == 2:
+            if 1 in a.shape:
+                a = a.reshape(-1)                        # (1,N) or (N,1) -> (N,)
+            else:
+                chan_axis = 0 if a.shape[0] <= a.shape[1] else 1  # smaller dim = channels
+                a = a.mean(axis=chan_axis)              # (C,N) or (N,C) -> (N,)
+        elif a.ndim > 2:
+            a = a.reshape(-1)
+
+        self._chunk_fifo.append(a)
+        self._queued_samples += int(a.shape[0])
+
 
     def _target_buffer_samples(self) -> int:
         """Watermark in samples for small prebuffer to smooth bursty input."""
