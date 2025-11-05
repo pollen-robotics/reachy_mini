@@ -290,7 +290,7 @@ class Backend:
         head: Annotated[NDArray[np.float64], (4, 4)] | None = None,  # 4x4 pose matrix
         antennas: Annotated[NDArray[np.float64], (2,)]
         | None = None,  # [right_angle, left_angle] (in rads)
-        body_yaw: float = 0.0,  # Body yaw angle in radians
+        body_yaw: float | None = 0.0,  # Body yaw angle in radians
     ) -> None:
         """Set the target head pose and/or antenna positions and/or body_yaw."""
         if head is not None:
