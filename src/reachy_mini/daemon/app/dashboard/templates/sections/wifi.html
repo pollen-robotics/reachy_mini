@@ -3,7 +3,7 @@
 
     <div class="flex p-4 gap-4">
         <div class="wifi-status">Current Status:</div>
-        <div id="wifi-status" class="wifi-status-info">Loading...</div>
+        <div id="wifi-status" class="wifi-status-info">Checking WiFi configuration...</div>
     </div>
     <div id="add-wifi" class="hidden">
         <div class="py-4 flex flex-col max-w-md">
@@ -13,9 +13,11 @@
                 <form id="wifi-form" class="max-w-md" onsubmit="return false;">
                     <div class="mb-4">
                         <label for="ssid" class="block mb-2 text-sm">SSID</label>
-                        <input type="text" id="ssid" name="ssid"
+                        <select id="ssid" name="ssid"
                             class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5"
                             required>
+                            <option value="" disabled selected>Select your WiFi network</option>
+                        </select>
                     </div>
                     <div class="mb-4">
                         <label for="password" class="block mb-2 text-sm">Password</label>

@@ -113,6 +113,17 @@ def connect_to_wifi_network(
     # TODO: wait for it to be really connected
 
 
+@router.post("/scan_and_list")
+def scan_wifi() -> list[str]:
+    """Scan for available WiFi networks ordered by signal power."""
+    wifi = scan_available_wifi()
+
+    seen = set()
+    ssids = [x.ssid for x in wifi if x.ssid not in seen and not seen.add(x.ssid)]
+
+    return ssids
+
+
 # NMCLI WRAPPERS
 def scan_available_wifi() -> list[nmcli.data.device.DeviceWifi]:
     """Scan for available WiFi networks."""

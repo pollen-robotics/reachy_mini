@@ -24,6 +24,27 @@ const refreshStatus = () => {
         });
 };
 
+const scanAndListWifiNetworks = async () => {
+    await fetch('/wifi/scan_and_list', { method: 'POST' })
+        .then(response => response.json())
+        .then(data => {
+            const ssidSelect = document.getElementById('ssid');
+            data.forEach(ssid => {
+                const option = document.createElement('option');
+                option.value = ssid;
+                option.textContent = ssid;
+                ssidSelect.appendChild(option);
+            });
+        })
+        .catch(() => {
+            const ssidSelect = document.getElementById('ssid');
+            const option = document.createElement('option');
+            option.value = "";
+            option.textContent = "Unable to load networks";
+            ssidSelect.appendChild(option);
+        });
+};
+
 const connectToWifi = (_) => {
     const ssid = document.getElementById('ssid').value;
     const password = document.getElementById('password').value;
@@ -84,7 +105,8 @@ const handleStatus = (status) => {
     currentStatus = status;
 };
 
-window.addEventListener('load', () => {
-    refreshStatus();
+window.addEventListener('load', async () => {
+    await scanAndListWifiNetworks();
+    await refreshStatus();
     setInterval(refreshStatus, 1000);
 });
