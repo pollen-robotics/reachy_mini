@@ -119,7 +119,7 @@ def scan_wifi() -> list[str]:
     wifi = scan_available_wifi()
 
     seen = set()
-    ssids = [x.ssid for x in wifi if x.ssid not in seen and not seen.add(x.ssid)]
+    ssids = [x.ssid for x in wifi if x.ssid not in seen and not seen.add(x.ssid)]  # type: ignore
 
     return ssids
 
