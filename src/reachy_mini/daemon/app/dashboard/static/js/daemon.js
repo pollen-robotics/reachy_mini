@@ -41,7 +41,7 @@ const daemon = {
     },
 
     getStatus: async () => {
-        fetch('/api/daemon/status')
+        await fetch('/api/daemon/status')
             .then((response) => response.json())
             .then(async (data) => {
                 daemon.currentStatus = data;
