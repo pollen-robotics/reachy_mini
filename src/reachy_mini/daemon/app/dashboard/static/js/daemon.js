@@ -5,7 +5,7 @@ const daemon = {
     currentStatus: {},
 
     start: async (wakeUp) => {
-        fetch(`/api/daemon/start?wake_up=${wakeUp}`, {
+        await fetch(`/api/daemon/start?wake_up=${wakeUp}`, {
             method: 'POST',
         })
             .then((response) => {
@@ -23,7 +23,7 @@ const daemon = {
     },
 
     stop: async (gotoSleep) => {
-        fetch(`/api/daemon/stop?goto_sleep=${gotoSleep}`, {
+        await fetch(`/api/daemon/stop?goto_sleep=${gotoSleep}`, {
             method: 'POST',
         })
             .then((response) => {
