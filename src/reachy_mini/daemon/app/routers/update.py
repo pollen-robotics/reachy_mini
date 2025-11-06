@@ -23,11 +23,14 @@ def available(pre_release: bool = False) -> dict[str, dict[str, bool]]:
     if busy_lock.locked():
         raise HTTPException(status_code=400, detail="Update is in progress")
 
-    return {
-        "update": {
-            "reachy_mini": is_update_available("reachy_mini", pre_release),
+    try:
+        return {
+            "update": {
+                "reachy_mini": is_update_available("reachy_mini", pre_release),
+            }
         }
-    }
+    except ConnectionError:
+        raise HTTPException(status_code=503, detail="Unable to check for updates")
 
 
 @router.post("/start")
