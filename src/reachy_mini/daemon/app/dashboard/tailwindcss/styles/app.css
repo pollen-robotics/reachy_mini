@@ -1,5 +1,37 @@
-@import url('https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,100..900;1,100..900&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Asap:wght@400;500;700&display=swap');
+@import "tailwindcss";
+
+@source "../../templates/**/*.html";
+@source "../../static/js/**/*.js";
+
+@font-face {
+    font-family: 'Asap';
+    src: url('/static/fonts/Asap-VariableFont_wdth,wght.ttf') format('truetype');
+    font-weight: 100 900;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'Asap';
+    src: url('/static/fonts/Asap-Italic-VariableFont_wdth,wght.ttf') format('truetype');
+    font-weight: 100 900;
+    font-style: italic;
+}
+
+@font-face {
+    font-family: 'Archivo';
+    src: url('/static/fonts/Archivo-VariableFont_wdth,wght.ttf') format('truetype');
+    font-weight: 100 900;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'Archivo';
+    src: url('/static/fonts/Archivo-Italic-VariableFont_wdth,wght.ttf') format('truetype');
+    font-weight: 100 900;
+    font-style: italic;
+}
+
+
 
 html {
     -webkit-font-smoothing: antialiased;
