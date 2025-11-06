@@ -68,6 +68,11 @@ const connectToWifi = (_) => {
                     throw new Error(errData.detail || 'Failed to connect to WiFi');
                 });
             }
+
+            // Clear the form fields
+            document.getElementById('ssid').value = '';
+            document.getElementById('password').value = '';
+
             return response.json();
         })
         .then(data => {
