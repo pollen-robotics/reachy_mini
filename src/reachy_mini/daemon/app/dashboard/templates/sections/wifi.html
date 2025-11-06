@@ -1,13 +1,22 @@
 <div class="app-section">
-    <div class="app-section-title">Setup your WiFi</div>
+    <div class="flex flex-row items-center gap-2">
+        <div class="app-section-title">Setup your WiFi</div>
+        <button id="refresh-wifi" title="Refresh" class="p-1 rounded hover:bg-gray-200 focus:outline-none"
+            onclick="cleanAndRefresh()">
+            🔄
+        </button>
+    </div>
 
-    <div class="flex p-4 gap-4">
-        <div class="wifi-status">Current Status:</div>
-        <div id="wifi-status" class="wifi-status-info">Checking WiFi configuration...</div>
+    <div class="flex flex-col p-4 gap-4">
+        <div id="wifi-status" class="wifi-status-info w-full">Checking WiFi configuration...</div>
+        <div id="known-networks" class="wifi-status-info hidden w-full">
+            Known Networks:
+            <ul id="known-networks-list" class="list-disc list-inside px-4"></ul>
+        </div>
     </div>
     <div id="add-wifi" class="hidden">
         <div class="py-4 flex flex-col max-w-md">
-            <div class="app-section-title mb-2">Add your WiFi</div>
+            <div class="app-section-title mb-2">Add new WiFi</div>
 
             <div class="flex flex-row p-4">
                 <form id="wifi-form" class="max-w-md" onsubmit="return false;">
@@ -32,11 +41,6 @@
                     </div>
                 </form>
             </div>
-        </div>
-
-        <div id="busy" hidden>
-            <h2>Operation in progress...</h2>
-            <p>Please wait while we set up your connection.</p>
         </div>
     </div>
 </div>
