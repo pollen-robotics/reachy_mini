@@ -121,7 +121,7 @@ const handleStatus = (status) => {
 
     } else if (mode == 'wlan') {
         if (currentMode !== null && currentMode !== 'wlan') {
-            alert(`Connected to WiFi network: ${status.connected_network}`);
+            alert(`Successfully connected to WiFi network: ${status.connected_network} ✅`);
         }
 
         statusDiv.innerText = `Connected to WiFi (SSID: ${status.connected_network}). 📶`;
