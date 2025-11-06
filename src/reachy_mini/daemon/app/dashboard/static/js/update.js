@@ -3,9 +3,12 @@ const updateManager = {
     preRelease: false,
 
     isUpdateAvailable: async () => {
-        fetch('/update/available?pre_release=' + updateManager.preRelease)
-            .then(response => response.json())
-            .then(data => {
+        await fetch('/update/available?pre_release=' + updateManager.preRelease)
+            .then(async response => {
+                if (!response.ok) {
+                    return false;
+                }
+                const data = await response.json();
                 return data.update.reachy_mini;
             }).catch(error => {
                 console.error('Error checking for updates:', error);
