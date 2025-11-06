@@ -6,6 +6,7 @@ This module provides endpoints to check for updates, start updates, and monitor 
 import logging
 import threading
 
+import requests
 from fastapi import APIRouter, HTTPException, WebSocket
 
 from reachy_mini.daemon.app import bg_job_register
@@ -23,11 +24,14 @@ def available(pre_release: bool = False) -> dict[str, dict[str, bool]]:
     if busy_lock.locked():
         raise HTTPException(status_code=400, detail="Update is in progress")
 
-    return {
-        "update": {
-            "reachy_mini": is_update_available("reachy_mini", pre_release),
+    try:
+        return {
+            "update": {
+                "reachy_mini": is_update_available("reachy_mini", pre_release),
+            }
         }
-    }
+    except (ConnectionError, requests.exceptions.ConnectionError):
+        raise HTTPException(status_code=503, detail="Unable to check for updates")
 
 
 @router.post("/start")

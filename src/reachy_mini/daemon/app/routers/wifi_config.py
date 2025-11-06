@@ -6,6 +6,7 @@ from threading import Lock, Thread
 
 import nmcli
 from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
 
 HOTSPOT_SSID = "reachy-mini-ap"
 HOTSPOT_PASSWORD = "reachy-mini"
@@ -29,7 +30,14 @@ class WifiMode(Enum):
     BUSY = "busy"
 
 
-@router.get("/status")
+class WifiStatus(BaseModel):
+    """WiFi status model."""
+
+    mode: WifiMode
+    known_networks: list[str]
+    connected_network: str | None
+
+
 def get_current_wifi_mode() -> WifiMode:
     """Get the current WiFi mode."""
     if busy_lock.locked():
@@ -42,6 +50,23 @@ def get_current_wifi_mode() -> WifiMode:
         return WifiMode.WLAN
     else:
         return WifiMode.DISCONNECTED
+
+
+@router.get("/status")
+def get_wifi_status() -> WifiStatus:
+    """Get the current WiFi status."""
+    mode = get_current_wifi_mode()
+
+    connections = get_wifi_connections()
+    known_networks = [c.name for c in connections if c.name != "Hotspot"]
+
+    connected_network = next((c.name for c in connections if c.device != "--"), None)
+
+    return WifiStatus(
+        mode=mode,
+        known_networks=known_networks,
+        connected_network=connected_network,
+    )
 
 
 @router.get("/error")
@@ -111,6 +136,17 @@ def connect_to_wifi_network(
 
     Thread(target=connect).start()
     # TODO: wait for it to be really connected
+
+
+@router.post("/scan_and_list")
+def scan_wifi() -> list[str]:
+    """Scan for available WiFi networks ordered by signal power."""
+    wifi = scan_available_wifi()
+
+    seen = set()
+    ssids = [x.ssid for x in wifi if x.ssid not in seen and not seen.add(x.ssid)]  # type: ignore
+
+    return ssids
 
 
 # NMCLI WRAPPERS
