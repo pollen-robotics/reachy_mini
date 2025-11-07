@@ -226,10 +226,10 @@ class GstWebRTCClient(CameraBase, AudioBase):
         opusenc = Gst.ElementFactory.make("opusenc")
         queue = Gst.ElementFactory.make("queue")
         rtpopuspay = Gst.ElementFactory.make("rtpopuspay")
-        udpsink = Gst.ElementFactory.make("udpsink")
+        rtpsink = Gst.ElementFactory.make("rtpsink")
 
-        udpsink.set_property("host", signaling_host)
-        udpsink.set_property("port", 5000)
+        rtpsink.set_property("address", signaling_host)
+        rtpsink.set_property("port", 5000)
 
         pipeline.add(self._appsrc)
         pipeline.add(audioconvert)
@@ -237,14 +237,14 @@ class GstWebRTCClient(CameraBase, AudioBase):
         pipeline.add(opusenc)
         pipeline.add(queue)
         pipeline.add(rtpopuspay)
-        pipeline.add(udpsink)
+        pipeline.add(rtpsink)
 
         self._appsrc.link(audioconvert)
         audioconvert.link(audioresample)
         audioresample.link(opusenc)
         opusenc.link(queue)
         queue.link(rtpopuspay)
-        rtpopuspay.link(udpsink)
+        rtpopuspay.link(rtpsink)
 
     def start_playing(self) -> None:
         """Open the audio output using GStreamer."""

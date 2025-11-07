@@ -78,17 +78,13 @@ class GstWebRTC:
         return webrtcsink
 
     def _configure_receiver(self, pipeline: Gst.Pipeline) -> None:
-        udpsrc = Gst.ElementFactory.make("udpsrc")
-        udpsrc.set_property("port", 5000)
+        rtpsrc = Gst.ElementFactory.make("rtpsrc")
+        rtpsrc.set_property("port", 5000)
         caps = Gst.Caps.from_string(
             "application/x-rtp,media=audio,encoding-name=OPUS,payload=96"
         )
-        capsfilter = Gst.ElementFactory.make("capsfilter")
-        capsfilter.set_property("caps", caps)
-        rtpjitterbuffer = Gst.ElementFactory.make("rtpjitterbuffer")
-        rtpjitterbuffer.set_property(
-            "latency", 200
-        )  # configure latency depending on network conditions
+        rtpsrc.set_property("caps", caps)
+        rtpsrc.set_property("latency", 100)
         rtpopusdepay = Gst.ElementFactory.make("rtpopusdepay")
         opusdec = Gst.ElementFactory.make("opusdec")
         queue = Gst.ElementFactory.make("queue")
@@ -98,9 +94,7 @@ class GstWebRTC:
         alsasink.set_property("device", f"hw:{self._id_audio_card},0")
         alsasink.set_property("sync", False)
 
-        pipeline.add(udpsrc)
-        pipeline.add(capsfilter)
-        pipeline.add(rtpjitterbuffer)
+        pipeline.add(rtpsrc)
         pipeline.add(rtpopusdepay)
         pipeline.add(opusdec)
         pipeline.add(queue)
@@ -108,9 +102,7 @@ class GstWebRTC:
         pipeline.add(audioresample)
         pipeline.add(alsasink)
 
-        udpsrc.link(capsfilter)
-        capsfilter.link(rtpjitterbuffer)
-        rtpjitterbuffer.link(rtpopusdepay)
+        rtpsrc.link(rtpopusdepay)
         rtpopusdepay.link(opusdec)
         opusdec.link(queue)
         queue.link(audioconvert)
