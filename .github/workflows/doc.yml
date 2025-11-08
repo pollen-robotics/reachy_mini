@@ -25,10 +25,8 @@ jobs:
           done
       - name: Install GitHub CLI
         run: sudo apt-get update && sudo apt-get install -y gh
-      - name: Authenticate GitHub CLI
+      - name: Upload doc_reachy_mini_full.md to Gist
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
-        run: echo "$GH_TOKEN" | gh auth login --with-token
-      - name: Upload doc_reachy_mini_full.md to Gist
         run: |
           gh gist edit 919e1d7468fb16e70dbe984bdc277bba docs/doc_reachy_mini_full.md --desc "Reachy Mini documentation and examples"
