@@ -16,8 +16,10 @@ jobs:
           pip install pydoc-markdown
       - name: Generate documentation and examples
         run: |
-          pydoc-markdown -I src -p reachy_mini --render-toc > doc.md
-          cat README.md doc.md > docs/doc_reachy_mini_full.md
+          VERSION=$(grep '^version =' pyproject.toml | head -n1 | cut -d'"' -f2)
+          DATE=$(date -u +'%Y-%m-%d %H:%M UTC')
+          echo -e "# Reachy Mini Documentation\n\n**Version:** $VERSION\n**Generated:** $DATE\n" > docs/doc_reachy_mini_full.md
+          cat README.md doc.md >> docs/doc_reachy_mini_full.md
           echo -e "\n# Examples\n" >> docs/doc_reachy_mini_full.md
           for f in $(find examples -type f -name '*.py' | sort); do
             echo -e "\n## $(basename "$f")\n" >> docs/doc_reachy_mini_full.md
