@@ -2,7 +2,7 @@ name: Documentation
 on:
   push:
     branches:
-      - '*'
+      - main
 jobs:
   ai_doc:
     runs-on: ubuntu-latest
