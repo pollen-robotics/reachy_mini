@@ -22,12 +22,12 @@ jobs:
           pydoc-markdown -I src -p reachy_mini --render-toc > doc.md
           VERSION=$(grep '^version =' pyproject.toml | head -n1 | cut -d'"' -f2)
           DATE=$(date -u +'%Y-%m-%d %H:%M UTC')
-          echo -e "# Reachy Mini Documentation\n\n**Version:** $VERSION\n**Generated:** $DATE\n" > docs/doc_reachy_mini_full.md
-          cat README.md doc.md $(find docs -type f -name '*.md' | sort) >> docs/doc_reachy_mini_full.md
-          echo -e "\n# Examples\n" >> docs/doc_reachy_mini_full.md
+          echo -e "# Reachy Mini Documentation\n\n**Version:** $VERSION\n**Generated:** $DATE\n" > doc_reachy_mini_full.md
+          cat README.md doc.md $(find docs -type f -name '*.md' | sort) >> doc_reachy_mini_full.md
+          echo -e "\n# Examples\n" >> doc_reachy_mini_full.md
           for f in $(find examples -type f -name '*.py' | sort); do
-            echo -e "\n## $(basename "$f")\n" >> docs/doc_reachy_mini_full.md
-            cat "$f" >> docs/doc_reachy_mini_full.md
+            echo -e "\n## $(basename "$f")\n" >> doc_reachy_mini_full.md
+            cat "$f" >> doc_reachy_mini_full.md
           done
       - name: Install GitHub CLI
         run: sudo apt-get update && sudo apt-get install -y gh
@@ -35,4 +35,4 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
-          gh gist edit 919e1d7468fb16e70dbe984bdc277bba docs/doc_reachy_mini_full.md --desc "Reachy Mini documentation and examples"
+          gh gist edit 919e1d7468fb16e70dbe984bdc277bba doc_reachy_mini_full.md --desc "Reachy Mini documentation and examples"
