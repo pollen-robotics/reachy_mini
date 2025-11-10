@@ -218,16 +218,6 @@ class DefaultWebRTCClient(CameraBase, AudioBase):
             Optional[npt.NDArray[np.uint8]]: The captured frame in BGR format, or None if error.
 
         """
-        """
-        data = self._get_sample(self._appsink_video)
-        if data is None:
-            return None
-
-        arr = np.frombuffer(data, dtype=np.uint8).reshape(
-            (self.resolution[1], self.resolution[0], 3)
-        )
-        return arr
-        """
         return self._client.get_frame()
 
     def close(self) -> None:
