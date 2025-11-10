@@ -1,31 +1,5 @@
 # Troubleshooting
 
-## No microphone input
-*For beta only*
-
-There is a known issue where the microphone can be badly initialized. The best way to solve this is to reboot the microphone array using [xvf_host](https://github.com/respeaker/reSpeaker_XVF3800_USB_4MIC_ARRAY/tree/master/host_control):
-
-```bash
-xvf_host(.exe) REBOOT 1
-```
-
-Then run [examples/debug/sound_record.py](../examples/debug/sound_record.py) to check that eveything is fine.
-
-If the problem persist, you may want to check the connection of the flex cables ([slides 45 to 47](https://huggingface.co/spaces/pollen-robotics/Reachy_Mini_Assembly_Guide)).
-
-## Sound Direction of Arrival is not working
-
-*For beta only*
-
-The microphone array requires firmware version 2.1.0 or higher to support this feature. The firmware is located in src/reachy_mini/assets/firmware/*.bin.
-
-Refer to [Seeed documentation](https://wiki.seeedstudio.com/respeaker_xvf3800_introduction/#update-firmware) for the upgrade process.
-
-## Volume is too low
-
-
-# Troubleshooting
-
 ## No Microphone Input
 *For beta only*
 
