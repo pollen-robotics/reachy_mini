@@ -24,7 +24,8 @@ class MediaBackend(Enum):
     DEFAULT = "default"
     DEFAULT_NO_VIDEO = "default_no_video"
     GSTREAMER = "gstreamer"
-    WEBRTC = "webrtc"
+    WEBRTC_GSTREAMER = "webrtc_gstreamer"
+    WEBRTC_DEFAULT = "webrtc_default"
 
 
 class MediaManager:
@@ -59,9 +60,12 @@ class MediaManager:
                 self.logger.info("Using GStreamer media backend.")
                 self._init_camera(use_sim, log_level, resolution)
                 self._init_audio(log_level)
-            case MediaBackend.WEBRTC:
+            case MediaBackend.WEBRTC_GSTREAMER:
                 self.logger.info("Using WebRTC GStreamer backend.")
-                self._init_webrtc(log_level, signalling_host, 8443)
+                self._init_webrtc_gstreamer(log_level, signalling_host, 8443)
+            case MediaBackend.WEBRTC_DEFAULT:
+                self.logger.info("Using WebRTC default backend.")
+                self._init_webrtc_gstreamer(log_level, signalling_host, 8443)
             case _:
                 raise NotImplementedError(f"Media backend {backend} not implemented.")
 
@@ -132,7 +136,30 @@ class MediaManager:
         else:
             raise NotImplementedError(f"Audio backend {self.backend} not implemented.")
 
-    def _init_webrtc(
+    def _init_webrtc_gstreamer(
+        self, log_level: str, signalling_host: str, signalling_port: int
+    ) -> None:
+        """Initialize the WebRTC system (not implemented yet)."""
+        from gst_signalling.utils import find_producer_peer_id_by_name
+
+        from reachy_mini.media.webrtc_client_gstreamer import GstWebRTCClient
+
+        peer_id = find_producer_peer_id_by_name(
+            signalling_host, signalling_port, "reachymini"
+        )
+
+        webrtc_media: GstWebRTCClient = GstWebRTCClient(
+            log_level=log_level,
+            peer_id=peer_id,
+            signaling_host=signalling_host,
+            signaling_port=signalling_port,
+        )
+
+        self.camera = webrtc_media
+        self.audio = webrtc_media  # GstWebRTCClient handles both audio and video
+        self.camera.open()
+
+    def _init_webrtc_default(
         self, log_level: str, signalling_host: str, signalling_port: int
     ) -> None:
         """Initialize the WebRTC system (not implemented yet)."""

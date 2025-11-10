@@ -136,10 +136,10 @@ class ReachyMini:
     ) -> MediaManager:
         if (
             self.client.get_status()["wireless_version"]
-            and media_backend != "gstreamer"
+            and media_backend == "default_no_video"
         ):
             self.logger.warning(
-                "Wireless version detected, media backend should be set to 'gstreamer'. Reverting to no_media"
+                "Wireless version detected, media backend should be set to 'gstreamer' or 'default'. Reverting to no_media"
             )
             media_backend = "no_media"
 
@@ -147,11 +147,14 @@ class ReachyMini:
         match media_backend.lower():
             case "gstreamer":
                 if self.client.get_status()["wireless_version"]:
-                    mbackend = MediaBackend.WEBRTC
+                    mbackend = MediaBackend.WEBRTC_GSTREAMER
                 else:
                     mbackend = MediaBackend.GSTREAMER
             case "default":
-                mbackend = MediaBackend.DEFAULT
+                if self.client.get_status()["wireless_version"]:
+                    mbackend = MediaBackend.WEBRTC_DEFAULT
+                else:
+                    mbackend = MediaBackend.DEFAULT
             case "no_media":
                 mbackend = MediaBackend.NO_MEDIA
             case "default_no_video":
@@ -161,6 +164,7 @@ class ReachyMini:
                     f"Invalid media_backend '{media_backend}'. Supported values are 'default', 'gstreamer', 'no_media', 'default_no_video', and 'webrtc'."
                 )
 
+        self.logger.debug(f"Using media backend: {mbackend}")
         return MediaManager(
             use_sim=self.client.get_status()["simulation_enabled"],
             backend=mbackend,
