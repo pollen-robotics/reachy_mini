@@ -2,7 +2,7 @@ name: Documentation
 on:
   push:
     branches:
-      - main
+      - '*'
 jobs:
   ai_doc:
     runs-on: ubuntu-latest
@@ -23,7 +23,7 @@ jobs:
           VERSION=$(grep '^version =' pyproject.toml | head -n1 | cut -d'"' -f2)
           DATE=$(date -u +'%Y-%m-%d %H:%M UTC')
           echo -e "# Reachy Mini Documentation\n\n**Version:** $VERSION\n**Generated:** $DATE\n" > docs/doc_reachy_mini_full.md
-          cat README.md doc.md >> docs/doc_reachy_mini_full.md
+          cat README.md doc.md $(find docs -type f -name '*.md' | sort) >> docs/doc_reachy_mini_full.md
           echo -e "\n# Examples\n" >> docs/doc_reachy_mini_full.md
           for f in $(find examples -type f -name '*.py' | sort); do
             echo -e "\n## $(basename "$f")\n" >> docs/doc_reachy_mini_full.md
