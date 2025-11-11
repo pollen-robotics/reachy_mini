@@ -9,7 +9,8 @@ import struct
 import cv2
 import numpy as np
 import numpy.typing as npt
-
+from PIL import Image
+import io
 
 class UDPJPEGFrameSender:
     """A class to send JPEG frames over UDP."""
@@ -51,3 +52,39 @@ class UDPJPEGFrameSender:
             start = i * self.max_packet_size
             end = min(start + self.max_packet_size, total_size)
             self.sock.sendto(data[start:end], self.addr)
+
+
+class UDPJPEGFrameReceiver:
+    def __init__(self, listen_ip="127.0.0.1", listen_port=5005, timeout=1.0):
+        self.addr = (listen_ip, listen_port)
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.sock.bind(self.addr)
+        self.sock.settimeout(timeout)
+
+    def recv_frame(self):
+        """Receive and reconstruct one JPEG frame."""
+        try:
+            # Receive header: number of chunks, total size
+            header, _ = self.sock.recvfrom(8)  # 2x uint32
+            n_chunks, total_size = struct.unpack("!II", header)
+
+            chunks = []
+            received = 0
+            while len(chunks) < n_chunks:
+                packet, _ = self.sock.recvfrom(65536)
+                chunks.append(packet)
+                received += len(packet)
+
+            if received != total_size:
+                # corrupted / missing chunks
+                return None
+
+            jpeg_bytes = b"".join(chunks)
+            img = Image.open(io.BytesIO(jpeg_bytes)).convert("RGB")
+            return np.array(img)
+
+        except socket.timeout:
+            return None
+        except Exception:
+            # partial/corrupted frame, skip it
+            return None

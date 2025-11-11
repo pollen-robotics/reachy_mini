@@ -30,6 +30,11 @@ from .utils import (
 from .video_udp import UDPJPEGFrameSender
 
 
+CAMERA_REACHY = 'eye_camera'
+CAMERA_STUDIO_CLOSE = 'studio_close'
+CAMERA_SIZES = {CAMERA_REACHY: (1280, 720), CAMERA_STUDIO_CLOSE: (640, 640)}
+
+
 class MujocoBackend(Backend):
     """Simulated Reachy Mini using MuJoCo."""
 
@@ -39,6 +44,7 @@ class MujocoBackend(Backend):
         check_collision: bool = False,
         kinematics_engine: str = "AnalyticalKinematics",
         headless: bool = False,
+        stream_robot_view: bool = False,
     ) -> None:
         """Initialize the MujocoBackend with a specified scene.
 
@@ -47,6 +53,7 @@ class MujocoBackend(Backend):
             check_collision (bool): If True, enable collision checking. Default is False.
             kinematics_engine (str): Kinematics engine to use. Defaults to "AnalyticalKinematics".
             headless (bool): If True, run Mujoco in headless mode (no GUI). Default is False.
+            stream_robot_view (bool): If True, stream the robot view to the port 5010. Default is False.
 
         """
         super().__init__(
@@ -54,6 +61,7 @@ class MujocoBackend(Backend):
         )
 
         self.headless = headless
+        self.stream_robot_view = stream_robot_view
 
         from reachy_mini.reachy_mini import (
             SLEEP_ANTENNAS_JOINT_POSITIONS,
@@ -78,12 +86,6 @@ class MujocoBackend(Backend):
         self.decimation = 10  # -> 50hz control loop
         self.rendering_timestep = 0.04  # s, rendering loop # 25Hz
 
-        self.camera_id = mujoco.mj_name2id(
-            self.model,
-            mujoco.mjtObj.mjOBJ_CAMERA,
-            "eye_camera",
-        )
-
         self.head_site_id = mujoco.mj_name2id(
             self.model,
             mujoco.mjtObj.mjOBJ_SITE,
@@ -106,19 +108,24 @@ class MujocoBackend(Backend):
             get_joint_addr_from_name(self.model, n) for n in self.joint_names
         ]
 
-    def rendering_loop(self) -> None:
+    def rendering_loop(self, camera_name: str, port: int) -> None:
         """Offline Rendering loop for the Mujoco simulation.
 
-        Capture the image from the virtual Reachy's camera and send it over UDP.
+        Capture the image from the virtual camera_id and send it over UDP to the port.
         """
-        streamer_udp = UDPJPEGFrameSender()
-        camera_size = (1280, 720)
+        streamer_udp = UDPJPEGFrameSender(dest_port=port)
+        camera_id = mujoco.mj_name2id(
+            self.model,
+            mujoco.mjtObj.mjOBJ_CAMERA,
+            camera_name,
+        )
+        camera_size = CAMERA_SIZES[camera_name]
         offscreen_renderer = mujoco.Renderer(
             self.model, height=camera_size[1], width=camera_size[0]
         )
         while not self.should_stop.is_set():
             start_t = time.time()
-            offscreen_renderer.update_scene(self.data, self.camera_id)
+            offscreen_renderer.update_scene(self.data, camera_id)
             im = offscreen_renderer.render()
             streamer_udp.send_frame(im)
 
@@ -132,6 +139,10 @@ class MujocoBackend(Backend):
         It updates the joint positions at a rate and publishes the joint positions.
         """
         step = 1
+        if self.stream_robot_view:
+            robot_view_rendering_thread = Thread(target=self.rendering_loop, args=(CAMERA_STUDIO_CLOSE, 5010), daemon=True)
+            robot_view_rendering_thread.start()
+
         if not self.headless:
             viewer = mujoco.viewer.launch_passive(
                 self.model, self.data, show_left_ui=False, show_right_ui=False
@@ -150,24 +161,24 @@ class MujocoBackend(Backend):
                 # im = self.get_camera()
                 # self.streamer_udp.send_frame(im)
 
-                self.data.qpos[self.joint_qpos_addr] = np.array(
-                    self._SLEEP_HEAD_JOINT_POSITIONS
-                    + self._SLEEP_ANTENNAS_JOINT_POSITIONS
-                ).reshape(-1, 1)
-                self.data.ctrl[:] = np.array(
-                    self._SLEEP_HEAD_JOINT_POSITIONS
-                    + self._SLEEP_ANTENNAS_JOINT_POSITIONS
-                )
+        self.data.qpos[self.joint_qpos_addr] = np.array(
+            self._SLEEP_HEAD_JOINT_POSITIONS
+            + self._SLEEP_ANTENNAS_JOINT_POSITIONS
+        ).reshape(-1, 1)
+        self.data.ctrl[:] = np.array(
+            self._SLEEP_HEAD_JOINT_POSITIONS
+            + self._SLEEP_ANTENNAS_JOINT_POSITIONS
+        )
 
-                # recompute all kinematics, collisions, etc.
-                mujoco.mj_forward(self.model, self.data)
+        # recompute all kinematics, collisions, etc.
+        mujoco.mj_forward(self.model, self.data)
 
         # one more frame so the viewer shows your startup pose
         mujoco.mj_step(self.model, self.data)
         if not self.headless:
             viewer.sync()
 
-            rendering_thread = Thread(target=self.rendering_loop, daemon=True)
+            rendering_thread = Thread(target=self.rendering_loop, args=(CAMERA_REACHY, 5005), daemon=True)
             rendering_thread.start()
 
         # 3) now enter your normal loop
@@ -235,6 +246,9 @@ class MujocoBackend(Backend):
 
         if not self.headless:
             viewer.close()
+            rendering_thread.join()
+        if self.stream_robot_view:
+            robot_view_rendering_thread.join()
 
     def get_mj_present_head_pose(self) -> Annotated[npt.NDArray[np.float64], (4, 4)]:
         """Get the current head pose from the Mujoco simulation.

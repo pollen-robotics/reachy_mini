@@ -69,6 +69,7 @@ class Daemon:
         check_collision: bool = False,
         kinematics_engine: str = "AnalyticalKinematics",
         headless: bool = False,
+        stream_robot_view: bool = False,
     ) -> "DaemonState":
         """Start the Reachy Mini daemon.
 
@@ -81,6 +82,7 @@ class Daemon:
             check_collision (bool): If True, enable collision checking. Defaults to False.
             kinematics_engine (str): Kinematics engine to use. Defaults to "AnalyticalKinematics".
             headless (bool): If True, run Mujoco in headless mode (no GUI). Defaults to False.
+            stream_robot_view (bool): If True, stream the robot view to the port 5010. Defaults to False.
 
         Returns:
             DaemonState: The current state of the daemon after attempting to start it.
@@ -99,6 +101,7 @@ class Daemon:
             "sim": sim,
             "serialport": serialport,
             "headless": headless,
+            "stream_robot_view": stream_robot_view,
             "scene": scene,
             "localhost_only": localhost_only,
         }
@@ -115,6 +118,7 @@ class Daemon:
                 check_collision=check_collision,
                 kinematics_engine=kinematics_engine,
                 headless=headless,
+                stream_robot_view=stream_robot_view,
             )
         except Exception as e:
             self._status.state = DaemonState.ERROR
@@ -257,6 +261,7 @@ class Daemon:
         serialport: Optional[str] = None,
         scene: Optional[str] = None,
         headless: Optional[bool] = None,
+        stream_robot_view: Optional[bool] = None,
         localhost_only: Optional[bool] = None,
         wake_up_on_start: Optional[bool] = None,
         goto_sleep_on_stop: Optional[bool] = None,
@@ -268,6 +273,7 @@ class Daemon:
             serialport (str): Serial port for real motors. Defaults to None (uses the previous value).
             scene (str): Name of the scene to load in simulation mode ("empty" or "minimal"). Defaults to None (uses the previous value).
             headless (bool): If True, run Mujoco in headless mode (no GUI). Defaults to None (uses the previous value).
+            stream_robot_view (bool): If True, stream the robot view to the port 5010. Defaults to None (uses the previous value).
             localhost_only (bool): If True, restrict the server to localhost only clients. Defaults to None (uses the previous value).
             wake_up_on_start (bool): If True, wake up Reachy Mini on start. Defaults to None (don't wake up).
             goto_sleep_on_stop (bool): If True, put Reachy Mini to sleep on stop. Defaults to None (don't go to sleep).
@@ -297,6 +303,9 @@ class Daemon:
                 "headless": headless
                 if headless is not None
                 else self._start_params["headless"],
+                "stream_robot_view": stream_robot_view
+                if stream_robot_view is not None
+                else self._start_params["stream_robot_view"],
                 "localhost_only": localhost_only
                 if localhost_only is not None
                 else self._start_params["localhost_only"],
@@ -348,6 +357,7 @@ class Daemon:
         check_collision: bool = False,
         kinematics_engine: str = "AnalyticalKinematics",
         headless: bool = False,
+        stream_robot_view: bool = False,
     ) -> None:
         """Run the Reachy Mini daemon indefinitely.
 
@@ -363,6 +373,7 @@ class Daemon:
             check_collision (bool): If True, enable collision checking. Defaults to False.
             kinematics_engine (str): Kinematics engine to use. Defaults to "AnalyticalKinematics".
             headless (bool): If True, run Mujoco in headless mode (no GUI). Defaults to False.
+            stream_robot_view (bool): If True, stream the robot view to the port 5010. Defaults to False.
 
         """
         await self.start(
@@ -374,6 +385,7 @@ class Daemon:
             check_collision=check_collision,
             kinematics_engine=kinematics_engine,
             headless=headless,
+            stream_robot_view=stream_robot_view,
         )
 
         if self._status.state == DaemonState.RUNNING:
@@ -404,6 +416,7 @@ class Daemon:
         check_collision: bool,
         kinematics_engine: str,
         headless: bool,
+        stream_robot_view: bool,
     ) -> "RobotBackend | MujocoBackend":
         if sim:
             return MujocoBackend(
@@ -411,6 +424,7 @@ class Daemon:
                 check_collision=check_collision,
                 kinematics_engine=kinematics_engine,
                 headless=headless,
+                stream_robot_view=stream_robot_view,
             )
         else:
             if serialport == "auto":

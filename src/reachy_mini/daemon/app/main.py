@@ -39,6 +39,7 @@ class Args:
     sim: bool = False
     scene: str = "empty"
     headless: bool = False
+    stream_robot_view: bool = False
 
     kinematics_engine: str = "AnalyticalKinematics"
     check_collision: bool = False
@@ -73,6 +74,7 @@ def create_app(args: Args) -> FastAPI:
                 sim=args.sim,
                 scene=args.scene,
                 headless=args.headless,
+                stream_robot_view=args.stream_robot_view,
                 kinematics_engine=args.kinematics_engine,
                 check_collision=args.check_collision,
                 wake_up_on_start=args.wake_up_on_start,
@@ -184,6 +186,12 @@ def main() -> None:
         action="store_true",
         default=default_args.headless,
         help="Run the daemon in headless mode (default: False).",
+    )
+    parser.add_argument(
+        "--stream-robot-view",
+        action="store_true",
+        default=default_args.stream_robot_view,
+        help="Stream the robot view to the port 5010 (default: False).",
     )
     # Daemon options
     parser.add_argument(
