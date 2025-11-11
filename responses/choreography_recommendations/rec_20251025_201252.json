@@ -1,0 +1,53 @@
+{
+  "bpm": 120.00725555419922,
+  "sequence": [
+    {
+      "move": "side_glance_flick",
+      "cycles": 2
+    },
+    {
+      "move": "sharp_side_tilt",
+      "cycles": 3
+    },
+    {
+      "move": "jackson_square",
+      "cycles": 2
+    },
+    {
+      "move": "polyrhythm_combo",
+      "cycles": 2
+    },
+    {
+      "move": "sharp_side_tilt",
+      "cycles": 2
+    },
+    {
+      "move": "dizzy_spin",
+      "cycles": 2
+    },
+    {
+      "move": "interwoven_spirals",
+      "cycles": 1
+    },
+    {
+      "move": "jackson_square",
+      "cycles": 2
+    },
+    {
+      "move": "groovy_sway_and_roll",
+      "cycles": 2
+    },
+    {
+      "move": "head_tilt_roll",
+      "cycles": 1
+    },
+    {
+      "move": "side_to_side_sway",
+      "cycles": 1
+    },
+    {
+      "move": "uh_huh_tilt",
+      "cycles": 1
+    }
+  ]
+}

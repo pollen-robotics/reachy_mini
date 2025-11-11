@@ -1,0 +1,162 @@
+{
+  "bpm": 104.383544921875,
+  "sequence": [
+    {
+      "move": "welcoming1",
+      "cycles": 1,
+      "amplitude": 0.7,
+      "section": "intro",
+      "reasoning": "Gentle greeting to establish peaceful, relaxed opening"
+    },
+    {
+      "move": "idle",
+      "duration": 1.0,
+      "section": "intro",
+      "reasoning": "Pause for anticipation and breathing space"
+    },
+    {
+      "move": "serenity1",
+      "cycles": 1,
+      "amplitude": 0.8,
+      "section": "intro",
+      "reasoning": "Calm emotional expression matching sad/relaxed mood"
+    },
+    {
+      "move": "simple_nod",
+      "cycles": 3,
+      "amplitude": 0.6,
+      "section": "intro",
+      "reasoning": "Soft continuous nodding for intro tranquility"
+    },
+    {
+      "move": "idle",
+      "duration": 0.5,
+      "section": "intro",
+      "reasoning": "Brief pause to transition to main section"
+    },
+    {
+      "move": "side_to_side_sway",
+      "cycles": 6,
+      "amplitude": 0.75,
+      "section": "main",
+      "reasoning": "Smooth swaying introduces main section with relaxed groove"
+    },
+    {
+      "move": "thoughtful1",
+      "cycles": 1,
+      "amplitude": 0.7,
+      "section": "main",
+      "reasoning": "Contemplative gesture matching melancholic mood"
+    },
+    {
+      "move": "pendulum_swing",
+      "cycles": 8,
+      "amplitude": 0.8,
+      "section": "main",
+      "reasoning": "Rhythmic pendulum motion sustained throughout main verse"
+    },
+    {
+      "move": "idle",
+      "duration": 0.8,
+      "section": "main",
+      "reasoning": "Rest moment before emotional transition"
+    },
+    {
+      "move": "understanding1",
+      "cycles": 1,
+      "amplitude": 0.7,
+      "section": "main",
+      "reasoning": "Affirming nod to acknowledge the music's message"
+    },
+    {
+      "move": "head_tilt_roll",
+      "cycles": 6,
+      "amplitude": 0.75,
+      "section": "main",
+      "reasoning": "Gentle continuous side-to-side tilt for sustained groove"
+    },
+    {
+      "move": "idle",
+      "duration": 0.6,
+      "section": "main",
+      "reasoning": "Pause for musical breathing"
+    },
+    {
+      "move": "groovy_sway_and_roll",
+      "cycles": 4,
+      "amplitude": 0.85,
+      "section": "main",
+      "reasoning": "Side-to-side sway with roll adds complexity and flow"
+    },
+    {
+      "move": "calm_emotional_pause",
+      "cycles": 1,
+      "amplitude": 0.6,
+      "section": "main",
+      "reasoning": "Emotional recenter matching relaxed mood"
+    },
+    {
+      "move": "relief1",
+      "cycles": 1,
+      "amplitude": 0.7,
+      "section": "main",
+      "reasoning": "Peaceful resolution emotion"
+    },
+    {
+      "move": "pendulum_swing",
+      "cycles": 7,
+      "amplitude": 0.8,
+      "section": "main",
+      "reasoning": "Return to rhythmic pendulum for consistency"
+    },
+    {
+      "move": "idle",
+      "duration": 1.2,
+      "section": "main",
+      "reasoning": "Extended pause allowing music to breathe"
+    },
+    {
+      "move": "serenity1",
+      "cycles": 1,
+      "amplitude": 0.75,
+      "section": "main",
+      "reasoning": "Calming gesture for final section"
+    },
+    {
+      "move": "side_glance_flick",
+      "cycles": 4,
+      "amplitude": 0.7,
+      "section": "main",
+      "reasoning": "Gentle glances maintain engagement without high energy"
+    },
+    {
+      "move": "idle",
+      "duration": 0.9,
+      "section": "main",
+      "reasoning": "Final pause before conclusion"
+    },
+    {
+      "move": "grateful1",
+      "cycles": 1,
+      "amplitude": 0.8,
+      "section": "main",
+      "reasoning": "Grateful expression acknowledging the performance"
+    },
+    {
+      "move": "simple_nod",
+      "cycles": 2,
+      "amplitude": 0.65,
+      "section": "main",
+      "reasoning": "Soft final nodding to conclude peacefully"
+    },
+    {
+      "move": "idle",
+      "duration": 0.65,
+      "section": "main",
+      "reasoning": "Final resting moment"
+    }
+  ],
+  "recommendation_id": "rec_20251020_182458",
+  "generated_by": "anthropic/claude-haiku-4-5",
+  "timestamp": "2025-10-20T18:24:58.429836"
+}

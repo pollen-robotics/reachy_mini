@@ -1,0 +1,129 @@
+{
+  "audio_file": "/Users/lauras/Downloads/Ghost_Waltz_2025-10-19T215634-2.wav",
+  "audio_duration": 30.0,
+  "bpm": 98.7,
+  "choreography": [
+    {
+      "index": 0,
+      "timestamp": 0.0,
+      "section": "intro",
+      "move_type": "emotion",
+      "move_name": "serenity1",
+      "duration": 2.0,
+      "description": "Calm, peaceful facial expression with relaxed posture",
+      "reasoning": "Establishes the sad/relaxed mood of the piece. Sets contemplative atmosphere for introspective opening."
+    },
+    {
+      "index": 1,
+      "timestamp": 2.0,
+      "section": "intro",
+      "move_type": "dance",
+      "move_name": "pendulum_swing",
+      "cycles": 6,
+      "duration": 3.65,
+      "description": "Slow, rhythmic side-to-side swinging motion like a pendulum",
+      "reasoning": "Low energy movement matches intro section. Pendulum motion reflects melancholic, meditative quality. Highly danceable (0.96) but low energy (0.00) suggests slow, controlled execution."
+    },
+    {
+      "index": 2,
+      "timestamp": 5.65,
+      "section": "intro",
+      "move_type": "dance",
+      "move_name": "side_to_side_sway",
+      "cycles": 4,
+      "duration": 2.44,
+      "description": "Gentle side-to-side swaying with minimal vertical movement",
+      "reasoning": "Completes intro with smooth, relaxed motion. Fills remaining intro time while maintaining low-energy aesthetic."
+    },
+    {
+      "index": 3,
+      "timestamp": 8.09,
+      "section": "main",
+      "move_type": "emotion",
+      "move_name": "thoughtful1",
+      "duration": 1.5,
+      "description": "Contemplative pose with head slightly tilted, introspective expression",
+      "reasoning": "Emotional transition into main section. Reinforces the sad/relaxed mood and high danceability contrast."
+    },
+    {
+      "index": 4,
+      "timestamp": 9.59,
+      "section": "main",
+      "move_type": "dance",
+      "move_name": "groovy_sway_and_roll",
+      "cycles": 12,
+      "duration": 4.86,
+      "description": "Smooth, undulating body motion combining sway with gentle rolling movements",
+      "reasoning": "High danceability (0.96) demands groovy, flowing motion. Sway and roll captures the relaxed yet highly danceable paradox of the track."
+    },
+    {
+      "index": 5,
+      "timestamp": 14.45,
+      "section": "main",
+      "move_type": "dance",
+      "move_name": "head_tilt_roll",
+      "cycles": 10,
+      "duration": 4.06,
+      "description": "Head tilting side-to-side with gentle rolling neck motion",
+      "reasoning": "Maintains main section groove while offering directional variety. Medium energy execution suits the moderate intensity portion."
+    },
+    {
+      "index": 6,
+      "timestamp": 18.51,
+      "section": "main",
+      "move_type": "dance",
+      "move_name": "side_peekaboo",
+      "cycles": 8,
+      "duration": 3.25,
+      "description": "Alternating side-to-side head movements with slight shoulder rotation, playful peeking motion",
+      "reasoning": "Introduces subtle playfulness while maintaining sad/relaxed emotional framework. High danceability supports repeated cycles at 98.7 BPM."
+    },
+    {
+      "index": 7,
+      "timestamp": 21.76,
+      "section": "main",
+      "move_type": "dance",
+      "move_name": "grid_snap",
+      "cycles": 6,
+      "duration": 2.44,
+      "description": "Sharp, precise snapping motions with angular joint articulation on beat",
+      "reasoning": "Provides rhythmic punctuation. Grid snap adds mechanical precision that contrasts with flowing movements, creating dynamic variation while respecting the 98.7 BPM structure."
+    },
+    {
+      "index": 8,
+      "timestamp": 24.2,
+      "section": "main",
+      "move_type": "emotion",
+      "move_name": "calm1",
+      "duration": 1.8,
+      "description": "Peaceful, composed expression with neutral relaxed posture",
+      "reasoning": "Mid-main emotional beat reinforces the relaxed mood before final section build."
+    },
+    {
+      "index": 9,
+      "timestamp": 26.0,
+      "section": "main",
+      "move_type": "dance",
+      "move_name": "simple_nod",
+      "cycles": 4,
+      "duration": 1.63,
+      "description": "Basic vertical nodding motion at moderate tempo",
+      "reasoning": "Wind-down movement leading toward conclusion. Simple nod provides grounding, repetitive comfort element."
+    },
+    {
+      "index": 10,
+      "timestamp": 27.63,
+      "section": "main",
+      "move_type": "dance",
+      "move_name": "idle",
+      "duration": 2.37,
+      "description": "Neutral resting position with minimal motion, gentle breathing",
+      "reasoning": "Fills final seconds with contemplative stillness. Returns to serene baseline, matching the sad/relaxed/low-energy aesthetic throughout the entire 30-second piece."
+    }
+  ],
+  "total_duration_filled": 30.0,
+  "coverage": 1.0,
+  "recommendation_id": "rec_20251020_165345",
+  "generated_by": "anthropic/claude-haiku-4-5",
+  "timestamp": "2025-10-20T16:53:45.165253"
+}

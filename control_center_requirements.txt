@@ -1,0 +1,10 @@
+# Reachy Mini Control Center Requirements
+
+# Web UI framework
+gradio>=4.0.0
+
+# HTTP client
+requests>=2.31.0
+
+# Optional: For better themes
+gradio-theme-soft>=0.0.1

@@ -1,0 +1,87 @@
+{
+  "bpm": 104.383544921875,
+  "sequence": [
+    {
+      "move": "welcoming1",
+      "cycles": 1,
+      "amplitude": 0.7,
+      "section": "intro",
+      "reasoning": "Gentle greeting to open the performance with warmth"
+    },
+    {
+      "move": "idle",
+      "duration": 1.2,
+      "section": "intro",
+      "reasoning": "Brief pause for anticipation"
+    },
+    {
+      "move": "serenity1",
+      "cycles": 1,
+      "amplitude": 0.6,
+      "section": "intro",
+      "reasoning": "Calming presence matching the relaxed, sad mood of intro"
+    },
+    {
+      "move": "simple_nod",
+      "cycles": 3,
+      "amplitude": 0.5,
+      "section": "intro",
+      "reasoning": "Gentle nodding to establish steady presence"
+    },
+    {
+      "move": "idle",
+      "duration": 1.625,
+      "section": "intro",
+      "reasoning": "Transition pause before main section begins"
+    },
+    {
+      "move": "side_to_side_sway",
+      "cycles": 6,
+      "amplitude": 0.8,
+      "section": "main",
+      "reasoning": "Smooth swaying introduces gentle movement into main section"
+    },
+    {
+      "move": "idle",
+      "duration": 0.6,
+      "section": "main",
+      "reasoning": "Brief breath between movements"
+    },
+    {
+      "move": "thoughtful1",
+      "cycles": 1,
+      "amplitude": 0.7,
+      "section": "main",
+      "reasoning": "Reflective moment matching contemplative mood"
+    },
+    {
+      "move": "pendulum_swing",
+      "cycles": 8,
+      "amplitude": 0.9,
+      "section": "main",
+      "reasoning": "Rhythmic, meditative swinging sustains relaxed energy"
+    },
+    {
+      "move": "idle",
+      "duration": 1.15,
+      "section": "main",
+      "reasoning": "Pause for artistic spacing"
+    },
+    {
+      "move": "head_tilt_roll",
+      "cycles": 3,
+      "amplitude": 0.75,
+      "section": "main",
+      "reasoning": "Continuous rolling motion maintains flow with low-energy mood"
+    },
+    {
+      "move": "idle",
+      "duration": 0.71,
+      "section": "outro",
+      "reasoning": "Auto-added to fill remaining duration"
+    }
+  ],
+  "recommendation_id": "rec_20251020_191026",
+  "generated_by": "anthropic/claude-haiku-4-5",
+  "timestamp": "2025-10-20T19:10:26.328676"
+}

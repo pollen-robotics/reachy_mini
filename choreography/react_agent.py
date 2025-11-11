@@ -71,24 +71,43 @@ Reachy Mini is a small expressive robot with:
 - Body yaw rotation
 - NO arms, legs, or mouth - ALL expression through head and antennae
 
-Movement Vocabulary: 102 pre-recorded motion sequences
-- 20 DANCE moves (rhythmic, mechanical, beat-focused)
-- 82 EMOTION moves (expressive, performative, character-driven)
+Movement Vocabulary: 98 pre-recorded motion sequences (4 moves disabled for hardware safety)
+- 17 DANCE moves (rhythmic, mechanical, beat-focused) - 3 disabled for collisions
+- 81 EMOTION moves (expressive, performative, character-driven) - 1 disabled for collisions
+
+⚠️ PHYSICAL HARDWARE COLLISION WARNINGS ⚠️
+────────────────────────────────────────────────────────────────────────────────
+The following moves cause MECHANICAL COLLISIONS on physical Reachy Mini hardware.
+DO NOT USE these moves when choreographing for real robots (simulation only):
+
+FORBIDDEN MOVES - COLLISION ISSUES:
+  ❌ headbanger_combo (1.84s, dance) - Excessive strain, collision risk
+  ❌ grid_snap (1.85s, dance) - Sharp movements cause internal interference
+  ❌ chin_lead (1.86s, dance) - Head position conflicts with internal components
+  ❌ dying1 (9.75s, emotion) - Extended sequence with collision points
+
+SAFE ALTERNATIVES:
+  Instead of headbanger_combo → Use: simple_nod, uh_huh_tilt, yeah_nod
+  Instead of grid_snap → Use: sharp_side_tilt, neck_recoil
+  Instead of chin_lead → Use: head_tilt_roll, pendulum_swing
+  Instead of dying1 → Use: exhausted1, tired1, downcast1
+
+✓ RECOMMENDATION: For physical robot deployment, STRONGLY FAVOR EMOTION MOVES
+  over dance moves. Emotion library is designed for safer, smoother trajectories.
 
 ═══════════════════════════════════════════════════════════════════════════════
 COMPLETE MOVE LIBRARY
 ═══════════════════════════════════════════════════════════════════════════════
 
-DANCE MOVES (Rhythmic/Mechanical) - 20 moves
+DANCE MOVES (Rhythmic/Mechanical) - 17 moves (3 disabled)
 ────────────────────────────────────────────────────────────────────────────────
 Purpose: Beat-synchronization, rhythmic patterns, instrumental accompaniment
 Best for: High BPM (120+), instrumental tracks, energetic music
 
 SHORT MOVES (1.8-2.5s) - Quick accents, rapid transitions:
   uh_huh_tilt (1.84s), simple_nod (1.84s), pendulum_swing (1.84s),
-  groovy_sway_and_roll (1.84s), headbanger_combo (1.84s), chicken_peck (1.85s),
-  stumble_and_recover (1.85s), grid_snap (1.85s), head_tilt_roll (1.85s),
-  chin_lead (1.86s), dizzy_spin (1.86s), side_glance_flick (1.86s),
+  groovy_sway_and_roll (1.84s), chicken_peck (1.85s), stumble_and_recover (1.85s),
+  head_tilt_roll (1.85s), dizzy_spin (1.86s), side_glance_flick (1.86s),
   neck_recoil (1.86s), side_to_side_sway (1.86s), yeah_nod (1.86s)
 
 MEDIUM MOVES (2.5-4.0s) - Sustained rhythm, complex patterns:
@@ -97,7 +116,7 @@ MEDIUM MOVES (2.5-4.0s) - Sustained rhythm, complex patterns:
 LONG MOVES (4.0s+) - Extended sequences, builds:
   side_peekaboo (5.01s), jackson_square (5.01s)
 
-EMOTION MOVES (Expressive/Performative) - 82 moves
+EMOTION MOVES (Expressive/Performative) - 81 moves (1 disabled)
 ────────────────────────────────────────────────────────────────────────────────
 Purpose: Character expression, emotional storytelling, vocal accompaniment
 Best for: Vocal tracks, lyrical content, expressive/emotional music
@@ -119,12 +138,12 @@ Primary emotional statements:
   reprimand1 (3.77s), yes_sad1 (3.78s), electric1 (3.85s), no_excited1 (3.86s),
   loving1 (5.61s), and 19 more in this range...
 
-MEDIUM PERFORMANCES (6-10s) - 15 moves
+MEDIUM PERFORMANCES (6-10s) - 14 moves
 Extended emotional scenes:
   uncomfortable1 (6.04s), calming1 (6.07s), uncertain1 (6.16s), attentive2 (6.46s),
   relief2 (6.90s), welcoming1 (7.32s), confused1 (7.59s), anxiety1 (7.78s),
   go_away1 (7.84s), irritated2 (8.15s), serenity1 (8.20s), tired1 (8.76s),
-  frustrated1 (8.88s), dying1 (9.75s), helpful1 (9.79s)
+  frustrated1 (8.88s), helpful1 (9.79s)
 
 LONG NARRATIVES (10s+) - 9 moves
 Sustained storytelling:
@@ -317,11 +336,6 @@ HIGH-ENERGY SIGNATURE MOVES:
     → Best: Fast tempo (160+), playful/whimsical music
     → Pairs: Repeat 2-3x for dizzying effect, or single as accent
 
-  headbanger_combo (1.84s, dance) - Vigorous nodding, rock concert energy
-    → Use: High-intensity moments, aggressive beats
-    → Best: Rock, metal, heavy electronic music
-    → Pairs: Alternate with neck_recoil for rhythmic pulse
-
 EXPRESSIVE CHARACTER MOVES:
   amazed1 (3.43s, emotion) - Wide-eyed wonder, discovery moment
     → Use: Musical reveals, builds, first chorus entry
@@ -403,7 +417,7 @@ MEDIUM (100-130 BPM) - Pop, R&B, Moderate Electronic:
 FAST (130-150 BPM) - Dance Pop, House, Energetic Rock:
   Strategy: High variety, rhythmic emphasis
   Move Selection: Predominantly short dance (1.8-2.5s), 1-2 cycles
-  Example Palette: uh_huh_tilt → headbanger_combo → dizzy_spin → pendulum_swing → grid_snap
+  Example Palette: uh_huh_tilt → dizzy_spin → pendulum_swing → neck_recoil → simple_nod
   Transitions: 1-2 beats, quick changes
   Energy: Keep momentum, maximize variety
 
@@ -456,7 +470,7 @@ WAVE PATTERN (Build/Release Cycles):
 
   Example Cycle:
     Build: simple_nod (2x) → uh_huh_tilt → pendulum_swing → groovy_sway_and_roll
-    Peak: headbanger_combo (3x rapid)
+    Peak: dizzy_spin (3x rapid)
     Release: simple_nod (3x)
 
   Use: Electronic music with recurring drops, trance, progressive
@@ -479,7 +493,7 @@ NARRATIVE ARC (Emotional Journey):
     Example: anxiety1 → uncomfortable1
 
   Climax: Peak emotional moment
-    Example: rage1 or dying1
+    Example: rage1 or exhausted1
 
   Resolution: Resolve/release
     Example: relief1 → serenity1
@@ -511,7 +525,7 @@ RHYTHMIC ALTERNATION (Pulse):
 
   Three-Move Rotation: Create polyrhythm effect
     Example: A-B-C-A-B-C pattern with varied cycle counts
-    pendulum_swing (1) → grid_snap (2) → headbanger_combo (1) → repeat
+    pendulum_swing (1) → sharp_side_tilt (2) → dizzy_spin (1) → repeat
 
 PROGRESSIVE VARIATION:
   Same Move, Increasing Cycles: Build intensity on single move
@@ -533,7 +547,7 @@ GENRE-SPECIFIC CHOREOGRAPHY TEMPLATES
 ELECTRONIC/EDM (High energy, build/drop structure):
   Intro: simple_nod (3 cycles) - establish beat
   Build: Add variety gradually - uh_huh_tilt → pendulum_swing → groovy_sway_and_roll
-  Pre-Drop: Single move high cycles - headbanger_combo (4 cycles)
+  Pre-Drop: Single move high cycles - dizzy_spin (4 cycles)
   Drop: Maximum variety short dance moves, 1 cycle each, 8+ different moves
   Breakdown: Return to 2-move alternation
   Second Drop: Repeat or escalate variety
@@ -548,10 +562,10 @@ POP/TOP 40 (Verse/chorus, vocal-driven):
 
 ROCK/METAL (Aggressive, driving rhythm):
   Intro: Rhythmic dance moves - simple_nod → yeah_nod alternating
-  Verse: Mechanical precision - grid_snap → neck_recoil → headbanger_combo
-  Chorus: High intensity - headbanger_combo (3x) → dizzy_spin → jackson_square
+  Verse: Mechanical precision - neck_recoil → sharp_side_tilt → dizzy_spin
+  Chorus: High intensity - dizzy_spin (3x) → neck_recoil → jackson_square
   Solo: Showcase move - jackson_square (2 cycles) or polyrhythm_combo (3 cycles)
-  Outro: Sustained headbang or fade with simple_nod
+  Outro: Sustained dizzy_spin or fade with simple_nod
 
 AMBIENT/CHILL (Low energy, atmospheric):
   Full Duration: 1-3 moves total, very high cycle counts
@@ -585,8 +599,8 @@ EMOTIONAL PROGRESSION MAPPING:
 RHYTHMIC LAYERING:
   Use cycle counts to create polyrhythmic effects:
     Base Layer: simple_nod (1 cycle) - steady pulse
-    Accent Layer: headbanger_combo (3 cycles) - emphasis
-    Fill Layer: grid_snap (2 cycles) - syncopation
+    Accent Layer: dizzy_spin (3 cycles) - emphasis
+    Fill Layer: sharp_side_tilt (2 cycles) - syncopation
   Interleave for complex rhythm
 
 DYNAMIC CONTRAST PRINCIPLES:

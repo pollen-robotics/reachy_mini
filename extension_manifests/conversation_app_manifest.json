@@ -1,0 +1,231 @@
+{
+  "extension": {
+    "name": "AI Conversation Mode",
+    "version": "1.0.0",
+    "author": "Pollen Robotics / Carson",
+    "description": "OpenAI Realtime or Gemini Live conversation with vision and movement",
+    "requires_daemon": true,
+    "requires_camera": true,
+    "api_base_url": "http://localhost:5300"
+  },
+
+  "display": {
+    "enabled": true,
+    "url": "/display",
+    "title": "Conversation History",
+    "description": "Live conversation log and camera feed"
+  },
+
+  "sidebar_panel": {
+    "title": "Conversation",
+    "icon": "🗣️",
+
+    "controls": [
+      {
+        "type": "dropdown",
+        "id": "ai_backend",
+        "label": "AI Backend",
+        "endpoint": "/config/backend",
+        "method": "POST",
+        "options": [
+          {"label": "OpenAI Realtime", "value": "openai"},
+          {"label": "Gemini Live", "value": "gemini"}
+        ],
+        "default": "gemini",
+        "disabled_when": "running"
+      },
+      {
+        "type": "dropdown",
+        "id": "voice",
+        "label": "Voice",
+        "endpoint": "/config/voice",
+        "method": "POST",
+        "options": [
+          {"label": "Alloy", "value": "alloy"},
+          {"label": "Echo", "value": "echo"},
+          {"label": "Shimmer", "value": "shimmer"}
+        ],
+        "default": "shimmer",
+        "visible_when": "backend_openai"
+      },
+      {
+        "type": "separator"
+      },
+      {
+        "type": "button",
+        "id": "start",
+        "label": "Start Conversation",
+        "endpoint": "/start",
+        "method": "POST",
+        "color": "green",
+        "disabled_when": "running"
+      },
+      {
+        "type": "button",
+        "id": "stop",
+        "label": "Stop Conversation",
+        "endpoint": "/stop",
+        "method": "POST",
+        "color": "red",
+        "enabled_when": "running"
+      },
+      {
+        "type": "separator"
+      },
+      {
+        "type": "section_header",
+        "label": "Features"
+      },
+      {
+        "type": "toggle",
+        "id": "vision_enabled",
+        "label": "Vision (Camera)",
+        "endpoint": "/config/vision",
+        "method": "POST",
+        "default": true,
+        "description": "Send camera frames to AI"
+      },
+      {
+        "type": "toggle",
+        "id": "face_tracking",
+        "label": "Face Tracking",
+        "endpoint": "/config/face_tracking",
+        "method": "POST",
+        "default": true,
+        "description": "Track and look at faces"
+      },
+      {
+        "type": "toggle",
+        "id": "expressive_moves",
+        "label": "Expressive Moves",
+        "endpoint": "/config/expressive",
+        "method": "POST",
+        "default": true,
+        "description": "Play emotion moves during conversation"
+      },
+      {
+        "type": "separator"
+      },
+      {
+        "type": "section_header",
+        "label": "Personality"
+      },
+      {
+        "type": "dropdown",
+        "id": "personality",
+        "label": "Personality Mode",
+        "endpoint": "/config/personality",
+        "method": "POST",
+        "options": [
+          {"label": "Friendly Assistant", "value": "friendly"},
+          {"label": "Curious Explorer", "value": "curious"},
+          {"label": "Enthusiastic Teacher", "value": "teacher"},
+          {"label": "Playful Companion", "value": "playful"},
+          {"label": "Custom", "value": "custom"}
+        ],
+        "default": "friendly"
+      },
+      {
+        "type": "text_area",
+        "id": "custom_instructions",
+        "label": "Custom Instructions",
+        "endpoint": "/config/instructions",
+        "method": "POST",
+        "visible_when": "personality_custom",
+        "placeholder": "You are a...",
+        "rows": 4
+      },
+      {
+        "type": "separator"
+      },
+      {
+        "type": "section_header",
+        "label": "Status"
+      },
+      {
+        "type": "status_indicator",
+        "id": "connection_status",
+        "label": "AI Connection",
+        "endpoint": "/status",
+        "field": "ai_connected",
+        "states": {
+          "connected": {"color": "green", "icon": "●"},
+          "disconnected": {"color": "red", "icon": "○"},
+          "connecting": {"color": "yellow", "icon": "◐"}
+        }
+      },
+      {
+        "type": "status_text",
+        "id": "current_state",
+        "label": "State",
+        "endpoint": "/status",
+        "field": "state",
+        "default": "Idle"
+      },
+      {
+        "type": "status_text",
+        "id": "turn_count",
+        "label": "Turns",
+        "endpoint": "/status",
+        "field": "turn_count",
+        "format": "{:d}",
+        "default": "0"
+      },
+      {
+        "type": "separator"
+      },
+      {
+        "type": "button",
+        "id": "clear_history",
+        "label": "Clear Conversation History",
+        "endpoint": "/clear",
+        "method": "POST",
+        "color": "gray",
+        "confirm": "Are you sure you want to clear the conversation history?"
+      }
+    ]
+  },
+
+  "status_polling": {
+    "endpoint": "/status",
+    "interval_ms": 500,
+    "fields": {
+      "running": "boolean",
+      "ai_connected": "string",
+      "state": "string",
+      "turn_count": "integer",
+      "backend_openai": "boolean",
+      "personality_custom": "boolean",
+      "face_detected": "boolean"
+    }
+  },
+
+  "lifecycle": {
+    "on_install": {
+      "commands": [
+        "pip install -r requirements.txt"
+      ]
+    },
+    "on_start": {
+      "command": "python -m reachy_mini_conversation_app.api_server --port 5300",
+      "environment": {
+        "OPENAI_API_KEY": "${env:OPENAI_API_KEY}",
+        "GEMINI_API_KEY": "${env:GEMINI_API_KEY}"
+      }
+    },
+    "on_stop": {
+      "endpoint": "/shutdown",
+      "method": "POST"
+    },
+    "healthcheck": {
+      "endpoint": "/health",
+      "interval_ms": 5000
+    }
+  },
+
+  "viewport_priority": {
+    "auto_claim": true,
+    "release_on_stop": true,
+    "conflicts_with": ["mujoco_viewer", "dance_dance_reachy"]
+  }
+}

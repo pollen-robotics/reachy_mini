@@ -1,0 +1,187 @@
+{
+  "bpm": 108.0,
+  "sequence": [
+    {
+      "move": "welcoming1",
+      "cycles": 1,
+      "amplitude": 0.8,
+      "section": "intro",
+      "reasoning": "Gentle welcoming gesture to open the performance, sets calm mood for relaxed audio"
+    },
+    {
+      "move": "manual",
+      "head_pose": {
+        "yaw": -30,
+        "pitch": 10,
+        "roll": 0
+      },
+      "body_yaw": -20,
+      "duration": 1.2,
+      "section": "intro",
+      "reasoning": "Curious head tilt left with subtle body rotation to engage with calm energy"
+    },
+    {
+      "move": "serenity1",
+      "cycles": 1,
+      "amplitude": 0.7,
+      "section": "intro",
+      "reasoning": "Calming centering motion, matches relaxed mood perfectly (1 cycle = 1.11s)"
+    },
+    {
+      "move": "manual",
+      "head_pose": {
+        "yaw": 30,
+        "pitch": 5,
+        "roll": -15
+      },
+      "body_yaw": 15,
+      "duration": 1.2,
+      "section": "intro",
+      "reasoning": "Gentle head tilt right with small body adjustment, maintains peaceful intro flow"
+    },
+    {
+      "move": "side_to_side_sway",
+      "cycles": 2,
+      "amplitude": 0.6,
+      "section": "intro",
+      "reasoning": "Smooth swaying motion to close intro section (2 cycles = 2.22s), prepares for main"
+    },
+    {
+      "move": "side_glance_flick",
+      "cycles": 2,
+      "amplitude": 0.5,
+      "section": "main",
+      "reasoning": "Quick side glances for engagement, gentle energy (2 cycles = 2.22s)"
+    },
+    {
+      "move": "manual",
+      "head_pose": {
+        "yaw": 0,
+        "pitch": -15,
+        "roll": 0
+      },
+      "body_yaw": 0,
+      "duration": 1.3,
+      "section": "main",
+      "reasoning": "Contemplative head tilt down, introspective moment matching sad mood component"
+    },
+    {
+      "move": "thoughtful1",
+      "cycles": 1,
+      "amplitude": 0.7,
+      "section": "main",
+      "reasoning": "Thoughtful upward gaze, 1 cycle = 1.11s, reflects on the melancholy"
+    },
+    {
+      "move": "manual",
+      "head_pose": {
+        "yaw": -45,
+        "pitch": 0,
+        "roll": 20
+      },
+      "body_yaw": -35,
+      "duration": 1.5,
+      "section": "main",
+      "reasoning": "Dynamic head turn with body rotation left, adds subtle movement variety"
+    },
+    {
+      "move": "pendulum_swing",
+      "cycles": 3,
+      "amplitude": 0.8,
+      "section": "main",
+      "reasoning": "Rhythmic pendulum motion, 3 cycles = 3.33s, maintains calm groove with sway"
+    },
+    {
+      "move": "manual",
+      "head_pose": {
+        "yaw": 45,
+        "pitch": 8,
+        "roll": -20
+      },
+      "body_yaw": 35,
+      "duration": 1.5,
+      "section": "main",
+      "reasoning": "Mirror motion turning right with slight head lift, balances left turn"
+    },
+    {
+      "move": "head_tilt_roll",
+      "cycles": 2,
+      "amplitude": 0.6,
+      "section": "main",
+      "reasoning": "Gentle rolling motion ear-to-shoulder, 2 cycles = 2.22s, smooth continuous movement"
+    },
+    {
+      "move": "manual",
+      "head_pose": {
+        "yaw": 0,
+        "pitch": 12,
+        "roll": 0
+      },
+      "body_yaw": 0,
+      "duration": 1.2,
+      "section": "main",
+      "reasoning": "Center with head tilt up, return to neutral orientation"
+    },
+    {
+      "move": "calming1",
+      "cycles": 1,
+      "amplitude": 0.7,
+      "section": "main",
+      "reasoning": "Calming gesture to soothe and center, 1 cycle = 1.11s, reinforces relaxed mood"
+    },
+    {
+      "move": "side_to_side_sway",
+      "cycles": 3,
+      "amplitude": 0.7,
+      "section": "main",
+      "reasoning": "Extended smooth swaying, 3 cycles = 3.33s, maintains rhythmic flow"
+    },
+    {
+      "move": "manual",
+      "head_pose": {
+        "yaw": -20,
+        "pitch": -10,
+        "roll": 15
+      },
+      "body_yaw": 25,
+      "duration": 1.4,
+      "section": "main",
+      "reasoning": "Asymmetrical pose with body right turn, adds dynamic complexity"
+    },
+    {
+      "move": "simple_nod",
+      "cycles": 2,
+      "amplitude": 0.5,
+      "section": "main",
+      "reasoning": "Gentle continuous nodding, 2 cycles = 1.11s, affirms the peaceful moment"
+    },
+    {
+      "move": "manual",
+      "head_pose": {
+        "yaw": 20,
+        "pitch": 10,
+        "roll": -12
+      },
+      "body_yaw": -25,
+      "duration": 1.3,
+      "section": "main",
+      "reasoning": "Final dynamic adjustment turning left with head engagement, builds toward close"
+    },
+    {
+      "move": "manual",
+      "duration": 0.46,
+      "section": "outro",
+      "reasoning": "Auto-added neutral pause to fill remaining duration"
+    }
+  ],
+  "total_duration": 30.0,
+  "duration_breakdown": {
+    "intro": 5.54,
+    "main": 23.47,
+    "outro": 0.99
+  },
+  "notes": "Choreography emphasizes calm, relaxed movements matching the audio's sad=1.00, relaxed=1.00, and energy=0.00 profile. Heavy use of swaying, gentle head tilts, and contemplative poses. 50% manual moves for dynamic body positioning, 50% recorded emotions/dances for expressiveness. No high-energy moves\u2014maintains serenity throughout. Total = exactly 30.0 seconds.",
+  "recommendation_id": "rec_20251020_200517",
+  "generated_by": "anthropic/claude-haiku-4-5",
+  "timestamp": "2025-10-20T20:05:17.372509"
+}

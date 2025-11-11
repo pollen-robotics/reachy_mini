@@ -4,11 +4,6 @@
     "type": "dance",
     "library": "pollen-robotics/reachy-mini-dances-library"
   },
-  "chin_lead": {
-    "duration": 1.8557090759277344,
-    "type": "dance",
-    "library": "pollen-robotics/reachy-mini-dances-library"
-  },
   "head_tilt_roll": {
     "duration": 1.8507463932037354,
     "type": "dance",
@@ -26,11 +21,6 @@
   },
   "side_glance_flick": {
     "duration": 1.8600971698760984,
-    "type": "dance",
-    "library": "pollen-robotics/reachy-mini-dances-library"
-  },
-  "grid_snap": {
-    "duration": 1.8503527641296387,
     "type": "dance",
     "library": "pollen-robotics/reachy-mini-dances-library"
   },
@@ -66,11 +56,6 @@
   },
   "yeah_nod": {
     "duration": 1.8636415004730225,
-    "type": "dance",
-    "library": "pollen-robotics/reachy-mini-dances-library"
-  },
-  "headbanger_combo": {
-    "duration": 1.8444292545318604,
     "type": "dance",
     "library": "pollen-robotics/reachy-mini-dances-library"
   },
@@ -301,11 +286,6 @@
   },
   "laughing1": {
     "duration": 4.658566236495972,
-    "type": "emotion",
-    "library": "pollen-robotics/reachy-mini-emotions-library"
-  },
-  "dying1": {
-    "duration": 5.695227861404419,
     "type": "emotion",
     "library": "pollen-robotics/reachy-mini-emotions-library"
   },

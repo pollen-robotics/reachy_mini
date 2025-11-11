@@ -1,0 +1,169 @@
+{
+  "bpm": 104.383544921875,
+  "sequence": [
+    {
+      "move": "welcoming1",
+      "cycles": 1,
+      "amplitude": 0.7,
+      "section": "intro",
+      "reasoning": "Gentle greeting establishes calm, relaxed mood matching audio energy=0.00"
+    },
+    {
+      "move": "idle",
+      "duration": 1.2,
+      "section": "intro",
+      "reasoning": "Brief breathing pause to transition into opening movement"
+    },
+    {
+      "move": "side_to_side_sway",
+      "cycles": 4,
+      "amplitude": 0.6,
+      "section": "intro",
+      "reasoning": "Smooth, gentle sway matches relaxed mood and low danceability context"
+    },
+    {
+      "move": "serene1",
+      "cycles": 1,
+      "amplitude": 0.8,
+      "section": "intro",
+      "reasoning": "Emotional moment expressing inner calm at 5.52s mark"
+    },
+    {
+      "move": "idle",
+      "duration": 0.8,
+      "section": "intro",
+      "reasoning": "Micro-pause to complete intro section smoothly into main"
+    },
+    {
+      "move": "pendulum_swing",
+      "cycles": 6,
+      "amplitude": 0.7,
+      "section": "main",
+      "reasoning": "Establish rhythmic foundation for main section with smooth pendulum motion"
+    },
+    {
+      "move": "head_tilt_roll",
+      "cycles": 4,
+      "amplitude": 0.8,
+      "section": "main",
+      "reasoning": "Continuous gentle roll adds texture, maintains relaxed energy"
+    },
+    {
+      "move": "simple_nod",
+      "cycles": 5,
+      "amplitude": 0.6,
+      "section": "main",
+      "reasoning": "Calm nodding reinforces peaceful, contemplative mood"
+    },
+    {
+      "move": "idle",
+      "duration": 2.0,
+      "section": "main",
+      "reasoning": "Contemplative pause allows space for emotional reflection matching sad=1.00 mood"
+    },
+    {
+      "move": "understanding1",
+      "cycles": 1,
+      "amplitude": 0.7,
+      "section": "main",
+      "reasoning": "Emotional acknowledgment of the music's introspective nature"
+    },
+    {
+      "move": "side_glance_flick",
+      "cycles": 3,
+      "amplitude": 0.6,
+      "section": "main",
+      "reasoning": "Curious glances add gentle variety without disrupting relaxed mood"
+    },
+    {
+      "move": "chin_lead",
+      "cycles": 4,
+      "amplitude": 0.7,
+      "section": "main",
+      "reasoning": "Forward motion led by chin provides subtle dynamic while maintaining composure"
+    },
+    {
+      "move": "idle",
+      "duration": 1.5,
+      "section": "main",
+      "reasoning": "Brief stillness creates breathing room in narrative arc"
+    },
+    {
+      "move": "head_tilt_roll",
+      "cycles": 5,
+      "amplitude": 0.8,
+      "section": "main",
+      "reasoning": "Return to rolling motion with slightly longer cycle for meditative effect"
+    },
+    {
+      "move": "thoughtful1",
+      "cycles": 1,
+      "amplitude": 0.8,
+      "section": "main",
+      "reasoning": "Emotional pause looking upward, introspective moment"
+    },
+    {
+      "move": "idle",
+      "duration": 2.5,
+      "section": "main",
+      "reasoning": "Extended contemplative pause for maximum emotional impact and pacing variation"
+    },
+    {
+      "move": "simple_nod",
+      "cycles": 6,
+      "amplitude": 0.7,
+      "section": "main",
+      "reasoning": "Extended nodding creates hypnotic, meditative quality"
+    },
+    {
+      "move": "pendulum_swing",
+      "cycles": 4,
+      "amplitude": 0.6,
+      "section": "main",
+      "reasoning": "Return to pendulum for gentle rhythmic reinforcement"
+    },
+    {
+      "move": "uh_huh_tilt",
+      "cycles": 2,
+      "amplitude": 0.7,
+      "section": "main",
+      "reasoning": "Quick agreement gesture adds conversational, relatable element"
+    },
+    {
+      "move": "side_to_side_sway",
+      "cycles": 5,
+      "amplitude": 0.8,
+      "section": "main",
+      "reasoning": "Extended sway carries through to section conclusion"
+    },
+    {
+      "move": "idle",
+      "duration": 1.8,
+      "section": "main",
+      "reasoning": "Final pause before wind-down, allows emotional resonance"
+    },
+    {
+      "move": "grateful1",
+      "cycles": 1,
+      "amplitude": 0.8,
+      "section": "main",
+      "reasoning": "Emotional gratitude expressed as performance conclusion approaches"
+    },
+    {
+      "move": "serenity1",
+      "cycles": 1,
+      "amplitude": 0.9,
+      "section": "main",
+      "reasoning": "Final emotional moment seeking inner peace, matches overall sad/relaxed mood"
+    },
+    {
+      "move": "idle",
+      "duration": 0.67,
+      "section": "main",
+      "reasoning": "Final micro-pause to reach exactly 30.0s total duration"
+    }
+  ],
+  "recommendation_id": "rec_20251020_184109",
+  "generated_by": "anthropic/claude-haiku-4-5",
+  "timestamp": "2025-10-20T18:41:09.093326"
+}

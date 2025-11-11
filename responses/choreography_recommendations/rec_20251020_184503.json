@@ -1,0 +1,147 @@
+{
+  "bpm": 128.1,
+  "sequence": [
+    {
+      "move": "welcoming1",
+      "cycles": 1,
+      "amplitude": 0.7,
+      "section": "intro",
+      "reasoning": "Gentle welcoming gesture to establish calm, relaxed opening"
+    },
+    {
+      "move": "idle",
+      "duration": 1.2,
+      "section": "intro",
+      "reasoning": "Brief pause to settle into relaxed mood"
+    },
+    {
+      "move": "serenity1",
+      "cycles": 1,
+      "amplitude": 0.6,
+      "section": "intro",
+      "reasoning": "Calming emotion to reinforce peaceful, sad mood"
+    },
+    {
+      "move": "side_to_side_sway",
+      "cycles": 3,
+      "amplitude": 0.8,
+      "section": "intro",
+      "reasoning": "Smooth swaying matches relaxed mood and high danceability"
+    },
+    {
+      "move": "idle",
+      "duration": 0.9,
+      "section": "intro",
+      "reasoning": "Transition into main section"
+    },
+    {
+      "move": "pendulum_swing",
+      "cycles": 6,
+      "amplitude": 0.9,
+      "section": "main",
+      "reasoning": "Smooth pendulum motion establishes relaxed groove for main section"
+    },
+    {
+      "move": "idle",
+      "duration": 0.7,
+      "section": "main",
+      "reasoning": "Subtle breathing space"
+    },
+    {
+      "move": "groovy_sway_and_roll",
+      "cycles": 5,
+      "amplitude": 1.0,
+      "section": "main",
+      "reasoning": "Side-to-side sway with roll complements high danceability (0.93) and relaxed vibe"
+    },
+    {
+      "move": "idle",
+      "duration": 1.1,
+      "section": "main",
+      "reasoning": "Build anticipation for next phrase"
+    },
+    {
+      "move": "head_tilt_roll",
+      "cycles": 5,
+      "amplitude": 0.85,
+      "section": "main",
+      "reasoning": "Continuous gentle roll motion maintains groove"
+    },
+    {
+      "move": "idle",
+      "duration": 0.8,
+      "section": "main",
+      "reasoning": "Transition moment"
+    },
+    {
+      "move": "side_glance_flick",
+      "cycles": 4,
+      "amplitude": 0.7,
+      "section": "main",
+      "reasoning": "Quick side glances add playful interaction to relaxed mood"
+    },
+    {
+      "move": "idle",
+      "duration": 1.3,
+      "section": "main",
+      "reasoning": "Contemplative pause - using silence as artistic tool"
+    },
+    {
+      "move": "polyrhythm_combo",
+      "cycles": 4,
+      "amplitude": 0.9,
+      "section": "main",
+      "reasoning": "Complex polyrhythmic movement adds subtle complexity while maintaining relaxation"
+    },
+    {
+      "move": "idle",
+      "duration": 0.9,
+      "section": "main",
+      "reasoning": "Breathing space between movements"
+    },
+    {
+      "move": "pendulum_swing",
+      "cycles": 5,
+      "amplitude": 0.95,
+      "section": "main",
+      "reasoning": "Return to smooth pendulum for musical resolution"
+    },
+    {
+      "move": "idle",
+      "duration": 1.0,
+      "section": "main",
+      "reasoning": "Brief rest before finale"
+    },
+    {
+      "move": "grateful1",
+      "cycles": 1,
+      "amplitude": 0.8,
+      "section": "main",
+      "reasoning": "Gratitude gesture to acknowledge completion of musical journey"
+    },
+    {
+      "move": "idle",
+      "duration": 0.7,
+      "section": "main",
+      "reasoning": "Gentle wind-down"
+    },
+    {
+      "move": "serenity1",
+      "cycles": 1,
+      "amplitude": 0.7,
+      "section": "main",
+      "reasoning": "Return to calm, serene state as music concludes"
+    },
+    {
+      "move": "idle",
+      "duration": 2.1,
+      "section": "main",
+      "reasoning": "Final extended pause - sustained stillness for reflective ending"
+    }
+  ],
+  "total_duration": 30.0,
+  "notes": "Choreography emphasizes the audio's relaxed (1.0), sad (1.0), and highly danceable (0.93) qualities. Low energy (0.00) demands gentle, flowing movements rather than sharp, aggressive motions. Sequence uses extended idle moments as artistic pauses that complement the melancholic mood while maintaining engagement through smooth, hypnotic sway patterns and gentle emotional expressions. The choreography prioritizes continuous, flowing motion typical of relaxed yet engaging dance styles.",
+  "recommendation_id": "rec_20251020_184513",
+  "generated_by": "anthropic/claude-haiku-4-5",
+  "timestamp": "2025-10-20T18:45:13.838289"
+}

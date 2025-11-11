@@ -1,0 +1,88 @@
+/* Reachy Control Center Custom Styling
+ * Based on Pollen Robotics color palette
+ */
+
+:root {
+    --navy-blue: #2B4C7E;
+    --light-blue: #3bb0d1;
+    --light-green: #3dde99;
+    --yellow-gold: #ffc261;
+    --pink: #ff6170;
+    --white: #FFFFFF;
+    --gray-light: #f0f0f0;
+    --gray-dark: #666;
+}
+
+/* Status indicators */
+.status-led {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-weight: bold;
+    font-size: 0.9em;
+}
+
+.status-led.online {
+    background-color: var(--light-green);
+    color: white;
+}
+
+.status-led.offline {
+    background-color: var(--gray-dark);
+    color: white;
+}
+
+.status-led.warning {
+    background-color: var(--yellow-gold);
+    color: var(--navy-blue);
+}
+
+.status-led.error {
+    background-color: var(--pink);
+    color: white;
+}
+
+/* Video stream container */
+.video-container {
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+/* Custom button styles */
+.btn-primary {
+    background-color: var(--light-blue) !important;
+}
+
+.btn-success {
+    background-color: var(--light-green) !important;
+}
+
+.btn-danger {
+    background-color: var(--pink) !important;
+}
+
+.btn-warning {
+    background-color: var(--yellow-gold) !important;
+    color: var(--navy-blue) !important;
+}
+
+/* Accordion headers */
+.gradio-accordion {
+    border-left: 3px solid var(--light-blue);
+}
+
+/* Slider tracks */
+.gradio-slider input[type="range"]::-webkit-slider-thumb {
+    background-color: var(--light-blue);
+}
+
+.gradio-slider input[type="range"]::-moz-range-thumb {
+    background-color: var(--light-blue);
+}
+
+/* Tab styling */
+.gradio-tabs .tab-nav button.selected {
+    border-bottom-color: var(--light-blue);
+    color: var(--navy-blue);
+}

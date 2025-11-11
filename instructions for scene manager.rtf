@@ -1,0 +1,50 @@
+{\rtf1\ansi\ansicpg1252\cocoartf2865
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fnil\fcharset0 Menlo-Regular;}
+{\colortbl;\red255\green255\blue255;\red0\green0\blue0;\red162\green168\blue247;}
+{\*\expandedcolortbl;;\csgray\c0;\cssrgb\c69412\c72549\c97647;}
+\margl1440\margr1440\vieww18660\viewh17400\viewkind0
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\pardirnatural\partightenfactor0
+
+\f0\fs22 \cf2 \CocoaLigature0   1. User Starts Scene: iPhone API call to mac_hub_bridge\
+  2. Hub Forwards to Scene Server: mac_hub_bridge forwards request to scene_server\
+  3. Scene Server Starts TurnManager: scene_server initializes TurnManager orchestrator\
+  4. TurnManager Requests Turn 1 Text (C1): TurnManager sends HTTP request to claude_agent.py for Turn 1 text\
+  5. Claude Agent Responds with Turn 1 Text: claude_agent.py returns Turn 1 text to TurnManager\
+  6. TurnManager Distributes Turn 1 (C1): TurnManager sends Claude's Turn 1 text to mac_hub_bridge\
+  7. TurnManager Requests Turn 2 Text (L1): TurnManager sends HTTP request to laura_agent.py for Turn 2 text\
+  8. Hub Sends Turn 1 (C1) to Claude Device: mac_hub_bridge sends Claude's Turn 1 to Claude's device. (Async processing begins on gameboy device)\
+  9. Claude Device Receives Turn 1, Generates TTS Audio: Device receives text, generates audio file, and fucking plays it immediately\'85 (previously wrong: waits for play signal.). Meanwhile step 10 is occurring in parallel \
+  10. Laura Agent Responds with Turn 2 Text: laura_agent.py returns Turn 2 text to TurnManager\
+  \
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\pardirnatural\partightenfactor0
+ *changed*** 12. TurnManager Distributes Turn 2 (L1): TurnManager sends Laura's Turn 2 text to mac_hub_bridge\
+ *changed*** 13. Hub Sends Turn 2 (L1) to Laura Device: mac_hub_bridge sends Laura's Turn 2 to Laura's device (async processing begins on gameboy which will await a notification from the Mac hub bridge to play the TTS audio that it generated as soon as the dialogue is received from the Mac hub bridge  \
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\pardirnatural\partightenfactor0
+\
+(Now occurs after proper notice is sent to second gameboy)  11. TurnManager Requests Turn 3 Text (C2): TurnManager sends HTTP request to claude_agent.py for Turn 3 text (triggered by Turn 2 text completion)\
+\
+\
+  **** delete these redundant steps *** 14. Laura Device Receives Turn 2, Generates TTS Audio: Device receives text, generates audio file, waits for play signal  ****delete through here*****\
+  15. Hub Sends Play Signal to Claude: mac_hub_bridge tells Claude device to play Turn 1\
+  16. Claude Device Plays Turn 1 Audio: Claude's device plays Turn 1 audio.  ***** delete through here *****\
+  17. Claude Device Finishes Turn 1 Playback: Audio completes.  (Finishes step 9)\
+  18. Claude Device Sends Turn 1 Completion: Claude sends playback_complete for Turn 1 to mac_hub_bridge\
+  19. Hub Processes Turn 1 Completion: mac_hub_bridge receives completion notification\
+  20. Hub Sends Play Signal to Laura: mac_hub_bridge tells Laura device to play Turn 2 (this finishes step 13 that was changed)\
+  21. (Continued from step 11 which has been modified) Claude Agent Responds with Turn 3 Text: claude_agent.py returns Turn 3 text to TurnManager\
+*** changed ****  23. TurnManager Distributes Turn 3 (C2): TurnManager sends Claude's Turn 3 text to mac_hub_bridge (async processing, TTS generation and await signal from Mac hub bridge  \
+\
+*** changed **** 24. Hub Sends Turn 3 (C2) to Claude Device: mac_hub_bridge sends Claude's Turn 3 to Claude's device\
+\
+*** now later in the process ****   22. TurnManager Requests Turn 4 Text (L2): TurnManager sends HTTP request to laura_agent.py for Turn 4 text (triggered by Turn 3 text completion)\
+ \
+  \
+**** delete *****  25. Claude Device Receives Turn 3, Generates TTS Audio: Device receives text, generates audio file, waits for play signal\
+  26. Laura Device Plays Turn 2 Audio: Laura's device plays Turn 2 audio.  ***** delete through here ****.  \
+  27. Laura Device Finishes Turn 2 Playback: Audio completes.  \
+  28. Laura Device Sends Turn 2 Completion: Laura sends playback_complete for Turn 2 to mac_hub_bridge\
+  29. Hub Processes Turn 2 Completion: mac_hub_bridge receives completion notification\
+  30. Hub Sends Play Signal to Claude: mac_hub_bridge tells Claude device to play Turn 3\
+\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\pardirnatural\partightenfactor0
+\cf3 Here\'92s the marketplace.json file for the Claude-to-Speech plugin: https://raw.githubusercontent.com/LAURA-agent/Claude-to-Speech/master/.c\cf2 laude-plugin/marketplace.json}

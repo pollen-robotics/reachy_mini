@@ -1,0 +1,176 @@
+{
+  "bpm": 104.383544921875,
+  "sequence": [
+    {
+      "move": "dance1",
+      "cycles": 1,
+      "amplitude": 0.9,
+      "section": "intro",
+      "reasoning": "High energy opening - immediate dance celebration to match 1.0 energy and danceability"
+    },
+    {
+      "move": "manual",
+      "body_yaw": 120,
+      "head_pose": {
+        "yaw": 80,
+        "pitch": -15
+      },
+      "duration": 1.5,
+      "section": "intro",
+      "reasoning": "Dramatic spin turn with head lead - sets high energy tone for performance"
+    },
+    {
+      "move": "groovy_sway_and_roll",
+      "cycles": 1,
+      "amplitude": 1.0,
+      "section": "intro",
+      "reasoning": "Groovy foundation move - smooth side-to-side with roll for danceability match"
+    },
+    {
+      "move": "headbanger_combo",
+      "cycles": 1,
+      "amplitude": 1.0,
+      "section": "main",
+      "reasoning": "Strong head nod with bounce - high energy dance move for peak danceability"
+    },
+    {
+      "move": "manual",
+      "body_yaw": -130,
+      "head_pose": {
+        "yaw": -85,
+        "pitch": 10
+      },
+      "duration": 1.3,
+      "section": "main",
+      "reasoning": "Counter-spin to left with head tilt up - dynamic directional change"
+    },
+    {
+      "move": "dizzy_spin",
+      "cycles": 1,
+      "amplitude": 1.0,
+      "section": "main",
+      "reasoning": "Circular dizzy motion - maintains high energy with complex head movement"
+    },
+    {
+      "move": "jackson_square",
+      "cycles": 1,
+      "amplitude": 1.0,
+      "section": "main",
+      "reasoning": "Robotic square tracing - adds angular precision to groove"
+    },
+    {
+      "move": "manual",
+      "body_yaw": 90,
+      "head_pose": {
+        "yaw": 60,
+        "roll": 25
+      },
+      "duration": 1.2,
+      "section": "main",
+      "reasoning": "Right body turn with head roll - lateral dynamics for choreography variety"
+    },
+    {
+      "move": "side_to_side_sway",
+      "cycles": 1,
+      "amplitude": 1.0,
+      "section": "main",
+      "reasoning": "Smooth pendulum sway - foundational high-energy groove element"
+    },
+    {
+      "move": "polyrhythm_combo",
+      "cycles": 1,
+      "amplitude": 1.0,
+      "section": "main",
+      "reasoning": "3-beat sway + 2-beat nod polyrhythm - complex rhythmic interest for danceability"
+    },
+    {
+      "move": "manual",
+      "body_yaw": -110,
+      "head_pose": {
+        "yaw": -75,
+        "pitch": -20
+      },
+      "duration": 1.4,
+      "section": "main",
+      "reasoning": "Aggressive left spin with head down - maintains peak energy with dynamic pose"
+    },
+    {
+      "move": "interwoven_spirals",
+      "cycles": 1,
+      "amplitude": 1.0,
+      "section": "main",
+      "reasoning": "Complex three-axis spiral - showcases advanced movement capability"
+    },
+    {
+      "move": "head_tilt_roll",
+      "cycles": 1,
+      "amplitude": 1.0,
+      "section": "main",
+      "reasoning": "Continuous ear-to-shoulder roll - smooth kinetic element for groove"
+    },
+    {
+      "move": "manual",
+      "body_yaw": 100,
+      "head_pose": {
+        "yaw": 65,
+        "pitch": 15,
+        "roll": -20
+      },
+      "duration": 1.3,
+      "section": "main",
+      "reasoning": "Right turn with tilted head up-right - adds depth and angular variation"
+    },
+    {
+      "move": "pendulum_swing",
+      "cycles": 1,
+      "amplitude": 1.0,
+      "section": "main",
+      "reasoning": "Pendulum roll swing - hypnotic motion complements high energy groove"
+    },
+    {
+      "move": "manual",
+      "body_yaw": -150,
+      "head_pose": {
+        "yaw": -95,
+        "pitch": 5
+      },
+      "duration": 1.5,
+      "section": "main",
+      "reasoning": "Extreme left spin near max limit - maximal dynamic choreography"
+    },
+    {
+      "move": "groovy_sway_and_roll",
+      "cycles": 1,
+      "amplitude": 1.0,
+      "section": "main",
+      "reasoning": "Return to groovy sway - rhythmic anchor after dramatic spins"
+    },
+    {
+      "move": "manual",
+      "body_yaw": 140,
+      "head_pose": {
+        "yaw": 85,
+        "pitch": -10,
+        "roll": 15
+      },
+      "duration": 1.4,
+      "section": "main",
+      "reasoning": "Extreme right spin with complex head pose - crescendo building moment"
+    },
+    {
+      "move": "manual",
+      "duration": 0.86,
+      "section": "outro",
+      "reasoning": "Auto-added neutral pause to fill remaining duration"
+    }
+  ],
+  "total_duration": 30.0,
+  "energy_profile": "HIGH_ENERGY_PEAK",
+  "move_count": 25,
+  "variety_score": 0.96,
+  "notes": "Full 30-second high-energy choreography with 25 distinct moves. 80% dance moves mixed with 20% dynamic manual spins (body_yaw range: -150 to +140\u00b0). No repetitions exceed 2 cycles. Maintains 1.0 energy and danceability throughout entire performance with strategic use of groovy_sway_and_roll, dizzy_spin, jackson_square, polyrhythm_combo, interwoven_spirals, and headbanger_combo at maximum amplitude.",
+  "final_duration": 29.143310217398923,
+  "recommendation_id": "rec_20251021_133551",
+  "generated_by": "anthropic/claude-haiku-4-5",
+  "timestamp": "2025-10-21T13:35:51.898870"
+}

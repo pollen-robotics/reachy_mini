@@ -155,6 +155,7 @@ windowed_ypos = 100
 
 # Daemon connection
 daemon_url = "http://localhost:8100"
+conversation_app_url = "http://localhost:5000"  # Conversation app for breathing coordination
 daemon_connected = False
 last_move_uuid = None
 
@@ -186,10 +187,11 @@ manual_roll = 0.0  # Head roll in degrees
 manual_body_yaw = 0.0  # Body yaw in degrees
 manual_left_antenna = 0.0  # Antenna in radians (kept as radians)
 manual_right_antenna = 0.0  # Antenna in radians (kept as radians)
-manual_duration = 0.2  # Default movement duration in seconds
+manual_duration = 0.5  # Default movement duration in seconds
 
 # Yaw binding state
 bind_yaw = False  # Synchronize head and body yaw movement
+bind_antennas = False # Synchronize antennas movement
 
 # Yaw safety constants (in degrees)
 MAX_YAW_DIFF_DEG = 65.0  # Maximum safe head-body yaw difference
@@ -314,7 +316,7 @@ def start_state_websocket():
     """Start WebSocket connection in background thread."""
     global ws_app, ws_thread
 
-    ws_url = f"ws://localhost:8100/api/state/ws/full?with_head_joints=true&with_antenna_positions=true&frequency=30"
+    ws_url = f"ws://localhost:8100/api/state/ws/full?with_head_joints=true&with_antenna_positions=true&with_body_yaw=true&frequency=30"
 
     ws_app = WebSocketApp(
         ws_url,
@@ -333,7 +335,7 @@ def get_latest_daemon_state():
         return latest_daemon_state
 
 def execute_move(dataset, move_name):
-    """Execute a move via daemon API."""
+    """Execute a move via daemon API with breathing coordination."""
     global last_move_uuid, status_message, status_message_time
     try:
         url = f"{daemon_url}/api/move/play/recorded-move-dataset/{dataset}/{move_name}"
@@ -407,7 +409,7 @@ def update_manual_controls_from_state():
         return False
 
 def send_manual_position():
-    """Send manual position to daemon via goto endpoint with step lock validation."""
+    """Send manual position to daemon via goto endpoint with step lock validation and breathing coordination."""
     global status_message, status_message_time, last_move_uuid
     try:
         # Validate yaw step lock before sending (fail-safe check)
@@ -420,6 +422,13 @@ def send_manual_position():
             status_message_time = time.time()
             print(f"SAFETY FAIL-SAFE: Head-body yaw difference {diff:.1f}° exceeds 65° limit!")
             return False
+
+        # Signal conversation app to pause breathing
+        try:
+            requests.post(f"{conversation_app_url}/api/external_control/start", timeout=0.5)
+            print("Breathing paused for manual position")
+        except:
+            print("Warning: Could not pause breathing (conversation app not running)")
 
         url = f"{daemon_url}/api/move/goto"
         payload = {
@@ -453,9 +462,16 @@ def send_manual_position():
         status_message_time = time.time()
         print(f"Error sending manual position: {e}")
         return False
+    finally:
+        # Resume breathing after manual position completes
+        try:
+            requests.post(f"{conversation_app_url}/api/external_control/stop", timeout=0.5)
+            print("Breathing resumed after manual position")
+        except:
+            pass
 
 def stop_move():
-    """Stop current move via daemon API."""
+    """Stop current move via daemon API and resume breathing."""
     global status_message, status_message_time, last_move_uuid
     if not last_move_uuid:
         status_message = "No move to stop"
@@ -469,6 +485,7 @@ def stop_move():
             status_message_time = time.time()
             print(f"Stopped move {last_move_uuid}")
             last_move_uuid = None
+
             return True
         else:
             status_message = f"✗ Stop failed: {response.status_code}"
@@ -991,7 +1008,7 @@ def initialize_sdk_in_background():
 
 
 def main():
-    global backend, model, data, cam, opt, scn, ctx, daemon_connected
+    global backend, model, data, cam, opt, scn, ctx, daemon_connected, bind_antennas
 
     # Parse command-line arguments
     parser = argparse.ArgumentParser(description='MuJoCo Desktop Viewer for Reachy Mini')
@@ -1094,6 +1111,10 @@ def main():
                     # Antenna actuators (daemon sends [left, right], MuJoCo expects negated)
                     data.ctrl[-2:] = -np.array(antenna_positions)
 
+                body_yaw = daemon_state.get('body_yaw')
+                if body_yaw is not None:
+                    data.ctrl[0] = body_yaw
+
         # Run multiple physics steps to make tracking more responsive
         for _ in range(5):  # Run 5 sub-steps per frame for faster convergence
             mujoco.mj_step(model, data)
@@ -1171,13 +1192,13 @@ def main():
                     imgui.text_colored("Head Position (meters):", 0.3, 1.0, 1.0)
 
                     # X position
-                    changed, manual_x = imgui.slider_float("X##pos", manual_x, -0.3, 0.3, "%.3f")
+                    changed, manual_x = imgui.slider_float("X##pos", manual_x, -0.025, 0.025, "%.3f")
 
                     # Y position
-                    changed, manual_y = imgui.slider_float("Y##pos", manual_y, -0.3, 0.3, "%.3f")
+                    changed, manual_y = imgui.slider_float("Y##pos", manual_y, -0.025, 0.025, "%.3f")
 
                     # Z position (realistic range for Reachy's neck)
-                    changed, manual_z = imgui.slider_float("Z##pos", manual_z, -0.05, 0.05, "%.3f")
+                    changed, manual_z = imgui.slider_float("Z##pos", manual_z, -0.025, 0.023, "%.3f")
 
                     imgui.spacing()
                     imgui.text_colored("Head Rotation (degrees):", 0.3, 1.0, 1.0)
@@ -1188,14 +1209,14 @@ def main():
                         manual_yaw,
                         -HEAD_YAW_LIMIT,
                         HEAD_YAW_LIMIT,
-                        "%.1f°"
+                        "%.0f°"
                     )
 
                     # Pitch (±40° from docs)
-                    changed, manual_pitch = imgui.slider_float("Pitch##rot", manual_pitch, -40.0, 40.0, "%.1f°")
+                    changed, manual_pitch = imgui.slider_float("Pitch##rot", manual_pitch, -40.0, 40.0, "%.0f°")
 
                     # Roll (±40° from docs)
-                    changed, manual_roll = imgui.slider_float("Roll##rot", manual_roll, -40.0, 40.0, "%.1f°")
+                    changed, manual_roll = imgui.slider_float("Roll##rot", manual_roll, -40.0, 40.0, "%.0f°")
 
                     imgui.spacing()
                     imgui.text_colored("Body Rotation (degrees):", 0.3, 1.0, 1.0)
@@ -1206,7 +1227,7 @@ def main():
                         manual_body_yaw,
                         -BODY_YAW_LIMIT,
                         BODY_YAW_LIMIT,
-                        "%.1f°"
+                        "%.0f°"
                     )
 
                     # Handle slider changes with sync lock and safety auto-follow
@@ -1267,16 +1288,26 @@ def main():
                     imgui.text_colored("Antennas (radians):", 0.3, 1.0, 1.0)
 
                     # Left antenna
-                    changed, manual_left_antenna = imgui.slider_float("Left Ant##ant", manual_left_antenna, -3.0, 3.0, "%.3f")
+                    changed_left, manual_left_antenna = imgui.slider_float("Left Ant##ant", manual_left_antenna, -3.0, 3.0, "%.1f")
 
                     # Right antenna
-                    changed, manual_right_antenna = imgui.slider_float("Right Ant##ant", manual_right_antenna, -3.0, 3.0, "%.3f")
+                    changed_right, manual_right_antenna = imgui.slider_float("Right Ant##ant", manual_right_antenna, -3.0, 3.0, "%.1f")
+
+                    if bind_antennas:
+                        if changed_left:
+                            manual_right_antenna = -manual_left_antenna
+                        elif changed_right:
+                            manual_left_antenna = -manual_right_antenna
+
+                    # Sync lock checkbox
+                    imgui.spacing()
+                    changed_bind, bind_antennas = imgui.checkbox("Sync Lock##antennas", bind_antennas)
 
                     imgui.spacing()
                     imgui.text_colored("Movement Duration:", 0.3, 1.0, 1.0)
 
                     # Duration slider
-                    changed, manual_duration = imgui.slider_float("Duration (s)##duration", manual_duration, 0.05, 3.0, "%.2f")
+                    changed, manual_duration = imgui.slider_float("Duration (s)##duration", manual_duration, 0.05, 3.0, "%.1f")
 
                     imgui.spacing()
 
@@ -1299,14 +1330,13 @@ def main():
                     if imgui.button("Reset", 70, 35):
                         manual_x = 0.0
                         manual_y = 0.0
-                        manual_z = 0.0  # Neutral position
+                        manual_z = 0.01  # Neutral position
                         manual_yaw = 0.0
                         manual_pitch = 0.0
                         manual_roll = 0.0
                         manual_body_yaw = 0.0  # Reset body yaw too
                         manual_left_antenna = 0.0
                         manual_right_antenna = 0.0
-                        manual_duration = 0.2  # Reset to default duration
 
             imgui.separator()
 

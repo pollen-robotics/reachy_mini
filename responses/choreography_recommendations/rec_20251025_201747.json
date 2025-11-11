@@ -1,0 +1,69 @@
+{
+  "bpm": 110.0259780883789,
+  "sequence": [
+    {
+      "move": "jackson_square",
+      "cycles": 1
+    },
+    {
+      "move": "sharp_side_tilt",
+      "cycles": 2
+    },
+    {
+      "move": "interwoven_spirals",
+      "cycles": 1
+    },
+    {
+      "move": "sharp_side_tilt",
+      "cycles": 2
+    },
+    {
+      "move": "groovy_sway_and_roll",
+      "cycles": 2
+    },
+    {
+      "move": "jackson_square",
+      "cycles": 1
+    },
+    {
+      "move": "side_to_side_sway",
+      "cycles": 2
+    },
+    {
+      "move": "side_glance_flick",
+      "cycles": 1
+    },
+    {
+      "move": "sharp_side_tilt",
+      "cycles": 2
+    },
+    {
+      "move": "interwoven_spirals",
+      "cycles": 1
+    },
+    {
+      "move": "yeah_nod",
+      "cycles": 2
+    },
+    {
+      "move": "polyrhythm_combo",
+      "cycles": 1
+    },
+    {
+      "move": "stumble_and_recover",
+      "cycles": 2
+    },
+    {
+      "move": "jackson_square",
+      "cycles": 1
+    },
+    {
+      "move": "sharp_side_tilt",
+      "cycles": 1
+    },
+    {
+      "move": "side_to_side_sway",
+      "cycles": 1
+    }
+  ]
+}

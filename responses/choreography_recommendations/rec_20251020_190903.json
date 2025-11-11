@@ -1,0 +1,94 @@
+{
+  "bpm": 98.7,
+  "sequence": [
+    {
+      "move": "welcoming1",
+      "cycles": 1,
+      "amplitude": 0.7,
+      "section": "intro",
+      "reasoning": "Gentle greeting opens performance, matches relaxed mood"
+    },
+    {
+      "move": "idle",
+      "duration": 1.2,
+      "section": "intro",
+      "reasoning": "Brief pause for welcoming gesture to settle"
+    },
+    {
+      "move": "serenity1",
+      "cycles": 1,
+      "amplitude": 0.8,
+      "section": "intro",
+      "reasoning": "Calming presence, emphasizes sad/relaxed mood blend"
+    },
+    {
+      "move": "idle",
+      "duration": 1.0,
+      "section": "intro",
+      "reasoning": "Contemplative pause before main section"
+    },
+    {
+      "move": "simple_nod",
+      "cycles": 2,
+      "amplitude": 0.6,
+      "section": "intro",
+      "reasoning": "Soft nodding to close intro gently"
+    },
+    {
+      "move": "idle",
+      "duration": 0.6,
+      "section": "intro",
+      "reasoning": "Transition into main section"
+    },
+    {
+      "move": "side_to_side_sway",
+      "cycles": 6,
+      "amplitude": 0.9,
+      "section": "main",
+      "reasoning": "Smooth swaying matches high danceability (0.96) and relaxed mood"
+    },
+    {
+      "move": "idle",
+      "duration": 0.8,
+      "section": "main",
+      "reasoning": "Brief breathing space"
+    },
+    {
+      "move": "pendulum_swing",
+      "cycles": 6,
+      "amplitude": 0.85,
+      "section": "main",
+      "reasoning": "Rhythmic pendulum complements sway, maintains groove"
+    },
+    {
+      "move": "idle",
+      "duration": 0.7,
+      "section": "main",
+      "reasoning": "Transition pause"
+    },
+    {
+      "move": "head_tilt_roll",
+      "cycles": 6,
+      "amplitude": 1.0,
+      "section": "main",
+      "reasoning": "Extended head roll adds variation to sway patterns"
+    },
+    {
+      "move": "idle",
+      "duration": 0.12,
+      "section": "outro",
+      "reasoning": "Auto-added to fill remaining duration"
+    }
+  ],
+  "total_duration": 30.0,
+  "duration_breakdown": {
+    "intro_section": 6.0,
+    "main_section": 24.0,
+    "dance_moves_total": 18.87,
+    "emotion_moves_total": 3.66,
+    "idle_total": 7.47
+  },
+  "recommendation_id": "rec_20251020_190913",
+  "generated_by": "anthropic/claude-haiku-4-5",
+  "timestamp": "2025-10-20T19:09:13.318379"
+}

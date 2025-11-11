@@ -1,0 +1,33 @@
+{
+  "bpm": 109.81401062011719,
+  "sequence": [
+    {
+      "move": "interwoven_spirals",
+      "cycles": 1
+    },
+    {
+      "move": "side_glance_flick",
+      "cycles": 1
+    },
+    {
+      "move": "polyrhythm_combo",
+      "cycles": 1
+    },
+    {
+      "move": "grid_snap",
+      "cycles": 2
+    },
+    {
+      "move": "side_glance_flick",
+      "cycles": 3
+    },
+    {
+      "move": "polyrhythm_combo",
+      "cycles": 3
+    },
+    {
+      "move": "groovy_sway_and_roll",
+      "cycles": 1
+    }
+  ]
+}

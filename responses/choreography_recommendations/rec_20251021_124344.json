@@ -1,0 +1,252 @@
+{
+  "bpm": 80.0701675415039,
+  "sequence": [
+    {
+      "move": "dance1",
+      "cycles": 1,
+      "amplitude": 0.9,
+      "section": "intro",
+      "reasoning": "High-energy opening dance to match 1.07 energy level and 1.0 danceability"
+    },
+    {
+      "move": "manual",
+      "body_yaw": 140,
+      "head_pose": {
+        "yaw": 80,
+        "pitch": 0,
+        "roll": 0
+      },
+      "duration": 1.498,
+      "section": "intro",
+      "reasoning": "Dramatic body spin right with head following for dynamic intro engagement"
+    },
+    {
+      "move": "groovy_sway_and_roll",
+      "cycles": 1,
+      "amplitude": 1.0,
+      "section": "verse",
+      "reasoning": "Groovy sway introduces verse with maximum danceability"
+    },
+    {
+      "move": "dizzy_spin",
+      "cycles": 1,
+      "amplitude": 0.95,
+      "section": "verse",
+      "reasoning": "Circular motion adds playful energy to verse section"
+    },
+    {
+      "move": "manual",
+      "body_yaw": -130,
+      "head_pose": {
+        "yaw": -75,
+        "pitch": 15,
+        "roll": 0
+      },
+      "duration": 1.498,
+      "section": "verse",
+      "reasoning": "Counter-spin with upward head pitch for dynamic verse transition"
+    },
+    {
+      "move": "jackson_square",
+      "cycles": 1,
+      "amplitude": 1.0,
+      "section": "verse",
+      "reasoning": "Robotic grid-snapping motion adds technical flair to verse end"
+    },
+    {
+      "move": "headbanger_combo",
+      "cycles": 2,
+      "amplitude": 0.95,
+      "section": "chorus",
+      "reasoning": "Energetic head nod with bounce for chorus peak energy"
+    },
+    {
+      "move": "polyrhythm_combo",
+      "cycles": 1,
+      "amplitude": 1.0,
+      "section": "chorus",
+      "reasoning": "Complex 3-2 polyrhythmic motion matches high danceability"
+    },
+    {
+      "move": "manual",
+      "body_yaw": 110,
+      "head_pose": {
+        "yaw": 60,
+        "pitch": -18,
+        "roll": 0
+      },
+      "duration": 1.497,
+      "section": "chorus",
+      "reasoning": "Body turn with downward head tilt for chorus intensity"
+    },
+    {
+      "move": "interwoven_spirals",
+      "cycles": 1,
+      "amplitude": 1.0,
+      "section": "chorus",
+      "reasoning": "Complex spiral motion captures multi-axis dance energy"
+    },
+    {
+      "move": "side_to_side_sway",
+      "cycles": 2,
+      "amplitude": 0.92,
+      "section": "chorus",
+      "reasoning": "Smooth sway sustains chorus groove momentum"
+    },
+    {
+      "move": "manual",
+      "body_yaw": -95,
+      "head_pose": {
+        "yaw": -50,
+        "pitch": 12,
+        "roll": -15
+      },
+      "duration": 1.498,
+      "section": "verse",
+      "reasoning": "Lateral spin with tilted head for verse 2 opening impact"
+    },
+    {
+      "move": "head_tilt_roll",
+      "cycles": 2,
+      "amplitude": 0.98,
+      "section": "verse",
+      "reasoning": "Continuous head roll adds flowing energy to verse section"
+    },
+    {
+      "move": "pendulum_swing",
+      "cycles": 1,
+      "amplitude": 0.95,
+      "section": "verse",
+      "reasoning": "Smooth pendulum motion provides rhythmic verse accompaniment"
+    },
+    {
+      "move": "manual",
+      "body_yaw": 125,
+      "head_pose": {
+        "yaw": 70,
+        "pitch": 0,
+        "roll": 20
+      },
+      "duration": 1.497,
+      "section": "verse",
+      "reasoning": "Spinning body with rolled head tilt creates dynamic verse texture"
+    },
+    {
+      "move": "dance2",
+      "cycles": 1,
+      "amplitude": 0.93,
+      "section": "chorus",
+      "reasoning": "Alternative dance move for chorus 2 to maintain variety"
+    },
+    {
+      "move": "groovy_sway_and_roll",
+      "cycles": 2,
+      "amplitude": 1.0,
+      "section": "chorus",
+      "reasoning": "Extended groovy sway for chorus 2 peak energy (different from intro)"
+    },
+    {
+      "move": "manual",
+      "body_yaw": -115,
+      "head_pose": {
+        "yaw": -65,
+        "pitch": -15,
+        "roll": 0
+      },
+      "duration": 1.498,
+      "section": "chorus",
+      "reasoning": "Aggressive counter-spin with downward pitch for chorus climax"
+    },
+    {
+      "move": "jackson_square",
+      "cycles": 1,
+      "amplitude": 0.98,
+      "section": "chorus",
+      "reasoning": "Robotic grid snap provides technical climax to chorus 2"
+    },
+    {
+      "move": "manual",
+      "body_yaw": 85,
+      "head_pose": {
+        "yaw": 45,
+        "pitch": 20,
+        "roll": 0
+      },
+      "duration": 1.497,
+      "section": "bridge",
+      "reasoning": "Moderate spin with upward head look for bridge transition"
+    },
+    {
+      "move": "dizzy_spin",
+      "cycles": 1,
+      "amplitude": 0.88,
+      "section": "bridge",
+      "reasoning": "Dizzy spiral motion creates bridge disorientation effect"
+    },
+    {
+      "move": "manual",
+      "body_yaw": -120,
+      "head_pose": {
+        "yaw": -70,
+        "pitch": 10,
+        "roll": -18
+      },
+      "duration": 1.498,
+      "section": "bridge",
+      "reasoning": "Dramatic counter-spin with complex head position for bridge tension"
+    },
+    {
+      "move": "polyrhythm_combo",
+      "cycles": 1,
+      "amplitude": 0.95,
+      "section": "bridge",
+      "reasoning": "Polyrhythmic motion bridges into final section"
+    },
+    {
+      "move": "dance3",
+      "cycles": 1,
+      "amplitude": 0.96,
+      "section": "outro",
+      "reasoning": "Energetic wiggle dance for outro finale excitement"
+    },
+    {
+      "move": "manual",
+      "body_yaw": 105,
+      "head_pose": {
+        "yaw": 55,
+        "pitch": 0,
+        "roll": 0
+      },
+      "duration": 1.497,
+      "section": "outro",
+      "reasoning": "Final body spin with centered head for outro closure"
+    },
+    {
+      "move": "headbanger_combo",
+      "cycles": 1,
+      "amplitude": 0.92,
+      "section": "outro",
+      "reasoning": "Final energetic nod-bounce for outro punctuation"
+    },
+    {
+      "move": "manual",
+      "body_yaw": 0,
+      "head_pose": {
+        "yaw": 0,
+        "pitch": 15,
+        "roll": 0
+      },
+      "duration": 1.498,
+      "section": "outro",
+      "reasoning": "Return to center with upward head tilt for final pose hold"
+    }
+  ],
+  "total_duration": 80.009,
+  "energy_level": "HIGH",
+  "move_count": 27,
+  "variety_score": "Excellent - 24 unique moves, max 2 repeats",
+  "notes": "High-energy choreography with 80% dance moves and 20% manual spins matching 1.07 energy and 1.0 danceability. No calm or thoughtful emotions used. Dramatic body_yaw values (\u00b1110-140\u00b0) create dynamic visual impact throughout all sections.",
+  "recommendation_id": "rec_20251021_124359",
+  "generated_by": "anthropic/claude-haiku-4-5",
+  "timestamp": "2025-10-21T12:43:59.766419"
+}

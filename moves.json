@@ -1,12 +1,11 @@
 {
   "dances": [
     {"name": "stumble_and_recover", "description": ""},
-    {"name": "chin_lead", "description": ""},
     {"name": "head_tilt_roll", "description": ""},
     {"name": "jackson_square", "description": ""},
     {"name": "pendulum_swing", "description": ""},
     {"name": "side_glance_flick", "description": ""},
-    {"name": "grid_snap", "description": ""},
+    {"name": "side_peekaboo", "description": ""},
     {"name": "simple_nod", "description": ""},
     {"name": "side_to_side_sway", "description": ""},
     {"name": "polyrhythm_combo", "description": ""},
@@ -14,12 +13,15 @@
     {"name": "uh_huh_tilt", "description": ""},
     {"name": "chicken_peck", "description": ""},
     {"name": "yeah_nod", "description": ""},
-    {"name": "headbanger_combo", "description": ""},
-    {"name": "side_peekaboo", "description": ""},
     {"name": "dizzy_spin", "description": ""},
     {"name": "neck_recoil", "description": ""},
     {"name": "groovy_sway_and_roll", "description": ""},
     {"name": "sharp_side_tilt", "description": ""}
+  ],
+  "disabled_dances": [
+    {"name": "chin_lead", "description": "DISABLED - Head position conflicts with internal components"},
+    {"name": "grid_snap", "description": "DISABLED - Sharp movements cause internal interference"},
+    {"name": "headbanger_combo", "description": "DISABLED - Excessive strain, collision risk"}
   ],
   "emotions": [
     {"name": "amazed1", "description": ""},
@@ -41,7 +43,6 @@
     {"name": "displeased1", "description": ""},
     {"name": "displeased2", "description": ""},
     {"name": "downcast1", "description": ""},
-    {"name": "dying1", "description": ""},
     {"name": "electric1", "description": ""},
     {"name": "enthusiastic1", "description": ""},
     {"name": "enthusiastic2", "description": ""},
@@ -103,5 +104,8 @@
     {"name": "welcoming2", "description": ""},
     {"name": "yes1", "description": ""},
     {"name": "yes_sad1", "description": ""}
+  ],
+  "disabled_emotions": [
+    {"name": "dying1", "description": "DISABLED - Extended sequence with collision points"}
   ]
 }

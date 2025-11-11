@@ -1,0 +1,159 @@
+{
+  "bpm": 108.0,
+  "sequence": [
+    {
+      "move": "welcoming1",
+      "cycles": 1,
+      "amplitude": 0.7,
+      "section": "intro",
+      "reasoning": "Gentle greeting to open, matches relaxed mood (1 cycle = 1.11s)"
+    },
+    {
+      "move": "manual",
+      "head_pose": {
+        "yaw": 0,
+        "pitch": 5,
+        "roll": 0
+      },
+      "body_yaw": 0,
+      "duration": 1.5,
+      "section": "intro",
+      "reasoning": "Subtle head tilt to settle into relaxed posture"
+    },
+    {
+      "move": "serenity1",
+      "cycles": 1,
+      "amplitude": 0.6,
+      "section": "intro",
+      "reasoning": "Calming gesture to match sad/relaxed mood (1 cycle = 1.11s)"
+    },
+    {
+      "move": "manual",
+      "head_pose": {
+        "yaw": -25,
+        "pitch": 0,
+        "roll": 0
+      },
+      "body_yaw": 0,
+      "duration": 1.34,
+      "section": "intro",
+      "reasoning": "Gentle look to the side, natural intro transition"
+    },
+    {
+      "move": "side_to_side_sway",
+      "cycles": 2,
+      "amplitude": 0.7,
+      "section": "main",
+      "reasoning": "Smooth sway for main section, relaxed energy (2 cycles = 2.22s)"
+    },
+    {
+      "move": "manual",
+      "head_pose": {
+        "yaw": 25,
+        "pitch": 0,
+        "roll": 0
+      },
+      "body_yaw": 0,
+      "duration": 1.34,
+      "section": "main",
+      "reasoning": "Return gaze to center with gentle head motion"
+    },
+    {
+      "move": "pendulum_swing",
+      "cycles": 3,
+      "amplitude": 0.8,
+      "section": "main",
+      "reasoning": "Rhythmic pendulum motion maintains relaxed groove (3 cycles = 3.33s)"
+    },
+    {
+      "move": "manual",
+      "head_pose": {
+        "pitch": 10,
+        "roll": -15
+      },
+      "body_yaw": 0,
+      "duration": 1.5,
+      "section": "main",
+      "reasoning": "Tilted head pose adds gentle variation to movement"
+    },
+    {
+      "move": "head_tilt_roll",
+      "cycles": 2,
+      "amplitude": 0.7,
+      "section": "main",
+      "reasoning": "Continuous side-to-side roll, matches danceability (2 cycles = 2.22s)"
+    },
+    {
+      "move": "manual",
+      "head_pose": {
+        "yaw": 0,
+        "pitch": 0,
+        "roll": 0
+      },
+      "body_yaw": 0,
+      "duration": 1.11,
+      "section": "main",
+      "reasoning": "Reset to neutral center position"
+    },
+    {
+      "move": "simple_nod",
+      "cycles": 4,
+      "amplitude": 0.6,
+      "section": "main",
+      "reasoning": "Gentle nodding acknowledges the relaxed nature (4 cycles = 2.22s)"
+    },
+    {
+      "move": "manual",
+      "head_pose": {
+        "pitch": -8,
+        "roll": 0
+      },
+      "body_yaw": 0,
+      "duration": 1.11,
+      "section": "main",
+      "reasoning": "Slight downward tilt adds emotional depth"
+    },
+    {
+      "move": "side_glance_flick",
+      "cycles": 2,
+      "amplitude": 0.7,
+      "section": "main",
+      "reasoning": "Quick side glance maintains engagement (2 cycles = 2.22s)"
+    },
+    {
+      "move": "manual",
+      "head_pose": {
+        "yaw": 0,
+        "pitch": 0,
+        "roll": 0
+      },
+      "body_yaw": 0,
+      "duration": 1.11,
+      "section": "main",
+      "reasoning": "Return to center, preparation for closing"
+    },
+    {
+      "move": "calm_sway",
+      "cycles": 1,
+      "amplitude": 0.6,
+      "section": "main",
+      "reasoning": "Final gentle sway as wind-down (1 cycle = 1.11s)"
+    },
+    {
+      "move": "understanding1",
+      "cycles": 1,
+      "amplitude": 0.7,
+      "section": "main",
+      "reasoning": "Concluding nod of understanding to close performance (1 cycle = 1.11s)"
+    }
+  ],
+  "total_duration": 30.0,
+  "duration_breakdown": {
+    "intro": 6.0,
+    "main": 24.0
+  },
+  "notes": "Choreography emphasizes smooth, relaxed movements reflecting sad/relaxed mood (BPM 108). Minimal high-energy dances due to low energy (0.0) and danceability (1.1) scores. Focus on gentle swaying, side-to-side movements, and emotional expressions. No idle moments\u2014continuous motion through manual head tilts and recorded moves. Total sequence exactly 30.0 seconds.",
+  "recommendation_id": "rec_20251020_195756",
+  "generated_by": "anthropic/claude-haiku-4-5",
+  "timestamp": "2025-10-20T19:57:56.105436"
+}

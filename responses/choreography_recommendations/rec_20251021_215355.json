@@ -1,0 +1,31 @@
+{
+  "bpm": 163.39341735839844,
+  "sequence": [
+    {
+      "move": "groovy_sway_and_roll",
+      "cycles": 2
+    },
+    {
+      "move": "headbanger_combo",
+      "cycles": 2
+    },
+    {
+      "move": "polyrhythm_combo",
+      "cycles": 2
+    },
+    {
+      "move": "jackson_square"
+    },
+    {
+      "move": "interwoven_spirals"
+    },
+    {
+      "move": "grid_snap",
+      "cycles": 2
+    },
+    {
+      "move": "dizzy_spin",
+      "cycles": 2
+    }
+  ]
+}

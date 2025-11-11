@@ -1,0 +1,222 @@
+{
+  "extension": {
+    "name": "Dance Dance Reachy",
+    "version": "1.0.0",
+    "author": "ElGrorg",
+    "description": "Mirror human poses with Reachy Mini using webcam pose detection",
+    "repository": "https://github.com/ElGrorg/dance-dance-reachy",
+    "requires_daemon": true,
+    "requires_camera": true,
+    "api_base_url": "http://localhost:5050"
+  },
+
+  "display": {
+    "enabled": true,
+    "url": "/display",
+    "title": "Pose Detection Feed",
+    "description": "Live webcam feed with pose annotations"
+  },
+
+  "sidebar_panel": {
+    "title": "Dance Dance Reachy",
+    "icon": "🕺",
+
+    "controls": [
+      {
+        "type": "button",
+        "id": "start",
+        "label": "Start Mirroring",
+        "endpoint": "/start",
+        "method": "POST",
+        "color": "green",
+        "disabled_when": "running"
+      },
+      {
+        "type": "button",
+        "id": "stop",
+        "label": "Stop Mirroring",
+        "endpoint": "/stop",
+        "method": "POST",
+        "color": "red",
+        "enabled_when": "running"
+      },
+      {
+        "type": "button",
+        "id": "calibrate",
+        "label": "Calibrate (C)",
+        "endpoint": "/calibrate",
+        "method": "POST",
+        "color": "blue",
+        "enabled_when": "running",
+        "description": "Set current pose as neutral position"
+      },
+      {
+        "type": "separator"
+      },
+      {
+        "type": "section_header",
+        "label": "Sensitivity Controls"
+      },
+      {
+        "type": "slider",
+        "id": "sway_sensitivity",
+        "label": "Hip Sway",
+        "endpoint": "/config/sway_sensitivity",
+        "method": "POST",
+        "min": 0.5,
+        "max": 2.0,
+        "default": 1.0,
+        "step": 0.1,
+        "unit": "x"
+      },
+      {
+        "type": "slider",
+        "id": "arm_sensitivity",
+        "label": "Arm Movement",
+        "endpoint": "/config/arm_sensitivity",
+        "method": "POST",
+        "min": 0.5,
+        "max": 2.0,
+        "default": 1.0,
+        "step": 0.1,
+        "unit": "x"
+      },
+      {
+        "type": "separator"
+      },
+      {
+        "type": "section_header",
+        "label": "Current Pose"
+      },
+      {
+        "type": "status_text",
+        "id": "hip_sway",
+        "label": "Hip Sway",
+        "endpoint": "/status",
+        "field": "hip_sway",
+        "format": "{:.1f} px",
+        "color_range": {
+          "green": [-10, 10],
+          "yellow": [-40, 40],
+          "red": "outside"
+        }
+      },
+      {
+        "type": "status_text",
+        "id": "left_arm",
+        "label": "Left Arm",
+        "endpoint": "/status",
+        "field": "left_arm_angle",
+        "format": "{:.0f}°"
+      },
+      {
+        "type": "status_text",
+        "id": "right_arm",
+        "label": "Right Arm",
+        "endpoint": "/status",
+        "field": "right_arm_angle",
+        "format": "{:.0f}°"
+      },
+      {
+        "type": "separator"
+      },
+      {
+        "type": "section_header",
+        "label": "Settings"
+      },
+      {
+        "type": "dropdown",
+        "id": "camera_source",
+        "label": "Camera Source",
+        "endpoint": "/config/camera",
+        "method": "POST",
+        "options": [
+          {"label": "Default Webcam (0)", "value": 0},
+          {"label": "External Camera (1)", "value": 1},
+          {"label": "External Camera (2)", "value": 2}
+        ],
+        "default": 0,
+        "disabled_when": "running"
+      },
+      {
+        "type": "toggle",
+        "id": "show_skeleton",
+        "label": "Show Skeleton Overlay",
+        "endpoint": "/config/overlay",
+        "method": "POST",
+        "default": true
+      },
+      {
+        "type": "toggle",
+        "id": "mirror_mode",
+        "label": "Mirror Mode",
+        "endpoint": "/config/mirror",
+        "method": "POST",
+        "default": true,
+        "description": "Your right = Reachy's right"
+      },
+      {
+        "type": "separator"
+      },
+      {
+        "type": "status_text",
+        "id": "fps",
+        "label": "FPS",
+        "endpoint": "/status",
+        "field": "fps",
+        "format": "{:.1f}",
+        "default": "0.0"
+      },
+      {
+        "type": "status_indicator",
+        "id": "pose_detected",
+        "label": "Pose Detected",
+        "endpoint": "/status",
+        "field": "pose_detected",
+        "states": {
+          "true": {"color": "green", "icon": "✓", "label": "Yes"},
+          "false": {"color": "red", "icon": "✗", "label": "No"}
+        }
+      }
+    ]
+  },
+
+  "status_polling": {
+    "endpoint": "/status",
+    "interval_ms": 100,
+    "fields": {
+      "running": "boolean",
+      "hip_sway": "float",
+      "left_arm_angle": "float",
+      "right_arm_angle": "float",
+      "fps": "float",
+      "pose_detected": "boolean"
+    }
+  },
+
+  "lifecycle": {
+    "on_install": {
+      "commands": [
+        "pip install -r requirements.txt",
+        "python -c 'from ultralytics import YOLO; YOLO(\"yolov8n-pose.pt\")'"
+      ]
+    },
+    "on_start": {
+      "command": "python main.py --api-mode --port 5050"
+    },
+    "on_stop": {
+      "endpoint": "/shutdown",
+      "method": "POST"
+    },
+    "healthcheck": {
+      "endpoint": "/health",
+      "interval_ms": 5000
+    }
+  },
+
+  "viewport_priority": {
+    "auto_claim": true,
+    "release_on_stop": true,
+    "conflicts_with": ["mujoco_viewer", "conversation_app"]
+  }
+}

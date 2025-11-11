@@ -1,0 +1,155 @@
+{
+  "bpm": 98.7,
+  "sequence": [
+    {
+      "move": "welcoming1",
+      "cycles": 1,
+      "amplitude": 0.7,
+      "section": "intro",
+      "reasoning": "Gentle greeting to open performance, matches relaxed mood"
+    },
+    {
+      "move": "idle",
+      "duration": 0.8,
+      "section": "intro",
+      "reasoning": "Pause for anticipation before main movement"
+    },
+    {
+      "move": "side_to_side_sway",
+      "cycles": 6,
+      "amplitude": 0.8,
+      "section": "intro",
+      "reasoning": "Smooth swaying motion matches high danceability and relaxed mood"
+    },
+    {
+      "move": "serene1",
+      "cycles": 1,
+      "amplitude": 0.6,
+      "section": "intro",
+      "reasoning": "Calming presence to complete intro transition"
+    },
+    {
+      "move": "idle",
+      "duration": 0.5,
+      "section": "intro",
+      "reasoning": "Brief pause before main section"
+    },
+    {
+      "move": "pendulum_swing",
+      "cycles": 8,
+      "amplitude": 1.0,
+      "section": "main",
+      "reasoning": "Rhythmic pendulum motion exploits high danceability"
+    },
+    {
+      "move": "groovy_sway_and_roll",
+      "cycles": 6,
+      "amplitude": 1.1,
+      "section": "main",
+      "reasoning": "Groovy combined motion matches relaxed yet highly danceable mood"
+    },
+    {
+      "move": "idle",
+      "duration": 0.6,
+      "section": "main",
+      "reasoning": "Breathing pause for artistic effect"
+    },
+    {
+      "move": "head_tilt_roll",
+      "cycles": 8,
+      "amplitude": 0.9,
+      "section": "main",
+      "reasoning": "Continuous head roll adds fluid rhythmic element"
+    },
+    {
+      "move": "side_glance_flick",
+      "cycles": 4,
+      "amplitude": 0.8,
+      "section": "main",
+      "reasoning": "Quick glance movements add variety to choreography"
+    },
+    {
+      "move": "idle",
+      "duration": 0.7,
+      "section": "main",
+      "reasoning": "Pause before polyrhythmic section"
+    },
+    {
+      "move": "polyrhythm_combo",
+      "cycles": 5,
+      "amplitude": 1.2,
+      "section": "main",
+      "reasoning": "Complex polyrhythmic feel showcases danceability peak"
+    },
+    {
+      "move": "simple_nod",
+      "cycles": 6,
+      "amplitude": 0.7,
+      "section": "main",
+      "reasoning": "Simple nodding provides grounding rhythmic anchor"
+    },
+    {
+      "move": "idle",
+      "duration": 0.5,
+      "section": "main",
+      "reasoning": "Momentary stillness before final sequence"
+    },
+    {
+      "move": "cheerful1",
+      "cycles": 1,
+      "amplitude": 0.8,
+      "section": "main",
+      "reasoning": "Cheerful emotion acknowledges happy undertones despite sad classification"
+    },
+    {
+      "move": "interwoven_spirals",
+      "cycles": 4,
+      "amplitude": 1.0,
+      "section": "main",
+      "reasoning": "Complex spiral motion creates visual interest in main section"
+    },
+    {
+      "move": "side_to_side_sway",
+      "cycles": 8,
+      "amplitude": 0.9,
+      "section": "main",
+      "reasoning": "Return to core swaying motion for consistency"
+    },
+    {
+      "move": "idle",
+      "duration": 0.4,
+      "section": "main",
+      "reasoning": "Final pause before wind-down"
+    },
+    {
+      "move": "success2",
+      "cycles": 1,
+      "amplitude": 0.8,
+      "section": "main",
+      "reasoning": "Celebratory gesture near conclusion"
+    },
+    {
+      "move": "pendulum_swing",
+      "cycles": 5,
+      "amplitude": 0.8,
+      "section": "main",
+      "reasoning": "Final swaying motion returns to core rhythmic element"
+    },
+    {
+      "move": "idle",
+      "duration": 1.2,
+      "section": "main",
+      "reasoning": "Extended final pause for graceful conclusion"
+    }
+  ],
+  "total_duration_seconds": 30.0,
+  "verification": {
+    "intro_duration": 6.0,
+    "main_duration": 24.0,
+    "all_moves_calculated": true,
+    "bpm_matched": true
+  },
+  "recommendation_id": "rec_20251020_183624",
+  "generated_by": "anthropic/claude-haiku-4-5",
+  "timestamp": "2025-10-20T18:36:24.928739"
+}

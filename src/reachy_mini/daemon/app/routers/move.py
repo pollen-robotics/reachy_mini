@@ -9,11 +9,13 @@ This exposes:
 
 import asyncio
 import json
+import logging
 from enum import Enum
 from typing import Any, Coroutine
 from uuid import UUID, uuid4
 
 import numpy as np
+import requests
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
@@ -22,6 +24,11 @@ from reachy_mini.motion.recorded_move import RecordedMoves
 from ....daemon.backend.abstract import Backend
 from ..dependencies import get_backend, ws_get_backend
 from ..models import AnyPose, FullBodyTarget
+
+logger = logging.getLogger(__name__)
+
+# Conversation app breathing coordination
+CONVERSATION_APP_URL = "http://localhost:7860"
 
 router = APIRouter(
     prefix="/move",
@@ -44,6 +51,7 @@ class GotoModelRequest(BaseModel):
 
     head_pose: AnyPose | None = None
     antennas: tuple[float, float] | None = None
+    body_yaw: float | None = None
     duration: float
     interpolation: InterpolationMode = InterpolationMode.MINJERK
 
@@ -83,6 +91,49 @@ move_tasks: dict[UUID, asyncio.Task[None]] = {}
 
 # Cache for RecordedMoves datasets to avoid re-fetching from HuggingFace
 _dataset_cache: dict[str, RecordedMoves] = {}
+
+
+def scale_conversation_breathing_down() -> bool:
+    """Scale conversation app breathing amplitude down before executing move."""
+    try:
+        response = requests.post(
+            f"{CONVERSATION_APP_URL}/api/breathing/scale_down",
+            json={"target_scale": 0.2, "duration": 0.5},
+            timeout=1.0,
+        )
+        response.raise_for_status()
+        logger.info("Conversation app breathing scaled down to 20%")
+        return True
+    except Exception as e:
+        logger.warning(f"Failed to scale down conversation app breathing: {e}")
+        return False
+
+
+def scale_conversation_breathing_up() -> None:
+    """Scale conversation app breathing amplitude back up after move completes."""
+    try:
+        requests.post(
+            f"{CONVERSATION_APP_URL}/api/breathing/scale_up",
+            json={"target_scale": 1.0, "duration": 1.0},
+            timeout=1.0,
+        )
+        logger.info("Conversation app breathing scaled up to 100%")
+    except Exception as e:
+        logger.warning(f"Failed to scale up conversation app breathing: {e}")
+
+
+async def coordinated_move(coro: Coroutine[Any, Any, None]) -> None:
+    """Execute move with breathing coordination.
+
+    Scales breathing amplitude down to 20% during external moves,
+    then scales back up to 100% when complete. This keeps the robot
+    looking alive during moves instead of completely frozen.
+    """
+    scale_conversation_breathing_down()
+    try:
+        await coro
+    finally:
+        scale_conversation_breathing_up()
 
 
 def create_move_task(coro: Coroutine[Any, Any, None]) -> MoveUUID:
@@ -129,10 +180,13 @@ async def goto(
 ) -> MoveUUID:
     """Request a movement to a specific target."""
     return create_move_task(
-        backend.goto_target(
-            head=goto_req.head_pose.to_pose_array() if goto_req.head_pose else None,
-            antennas=np.array(goto_req.antennas) if goto_req.antennas else None,
-            duration=goto_req.duration,
+        coordinated_move(
+            backend.goto_target(
+                head=goto_req.head_pose.to_pose_array() if goto_req.head_pose else None,
+                antennas=np.array(goto_req.antennas) if goto_req.antennas else None,
+                body_yaw=goto_req.body_yaw,
+                duration=goto_req.duration,
+            )
         )
     )
 
@@ -140,13 +194,13 @@ async def goto(
 @router.post("/play/wake_up")
 async def play_wake_up(backend: Backend = Depends(get_backend)) -> MoveUUID:
     """Request the robot to wake up."""
-    return create_move_task(backend.wake_up())
+    return create_move_task(coordinated_move(backend.wake_up()))
 
 
 @router.post("/play/goto_sleep")
 async def play_goto_sleep(backend: Backend = Depends(get_backend)) -> MoveUUID:
     """Request the robot to go to sleep."""
-    return create_move_task(backend.goto_sleep())
+    return create_move_task(coordinated_move(backend.goto_sleep()))
 
 
 @router.post("/play/recorded-move-dataset/{dataset_name:path}/{move_name}")
@@ -164,7 +218,7 @@ async def play_recorded_move_dataset(
         print(f"[MoveRouter] Using cached dataset: {dataset_name}")
 
     move = _dataset_cache[dataset_name].get(move_name)
-    return create_move_task(backend.play_move(move))
+    return create_move_task(coordinated_move(backend.play_move(move)))
 
 
 @router.post("/stop")
@@ -185,6 +239,7 @@ async def set_target(
         if target.target_head_pose
         else None,
         antennas=np.array(target.target_antennas) if target.target_antennas else None,
+        body_yaw=target.target_body_yaw if target.target_body_yaw is not None else 0.0,
     )
     return {"status": "ok"}
 

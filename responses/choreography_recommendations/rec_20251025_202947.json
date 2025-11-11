@@ -1,0 +1,33 @@
+{
+  "bpm": 98.72969055175781,
+  "sequence": [
+    {
+      "move": "simple_nod",
+      "cycles": 2
+    },
+    {
+      "move": "neck_recoil",
+      "cycles": 1
+    },
+    {
+      "move": "groovy_sway_and_roll",
+      "cycles": 2
+    },
+    {
+      "move": "side_to_side_sway",
+      "cycles": 1
+    },
+    {
+      "move": "polyrhythm_combo",
+      "cycles": 3
+    },
+    {
+      "move": "interwoven_spirals",
+      "cycles": 2
+    },
+    {
+      "move": "pendulum_swing",
+      "cycles": 1
+    }
+  ]
+}

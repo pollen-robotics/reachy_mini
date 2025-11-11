@@ -1,0 +1,207 @@
+{
+  "bpm": 128.1,
+  "sequence": [
+    {
+      "move": "welcoming1",
+      "cycles": 1,
+      "amplitude": 1.0,
+      "section": "intro",
+      "reasoning": "Energetic greeting to open the high-energy performance, sets positive tone"
+    },
+    {
+      "move": "manual",
+      "body_yaw": 120,
+      "head_pose": {
+        "yaw": 80,
+        "pitch": 0,
+        "roll": 0
+      },
+      "duration": 1.5,
+      "section": "intro",
+      "reasoning": "Dramatic body spin right with head follow for maximum energy engagement"
+    },
+    {
+      "move": "headbanger_combo",
+      "cycles": 1,
+      "amplitude": 1.0,
+      "section": "intro",
+      "reasoning": "Strong emphatic nod with bounce to match high danceability"
+    },
+    {
+      "move": "manual",
+      "body_yaw": -140,
+      "head_pose": {
+        "yaw": -90,
+        "pitch": 15,
+        "roll": 0
+      },
+      "duration": 1.5,
+      "section": "intro",
+      "reasoning": "Dramatic counter-spin left with head pitched up for dynamic contrast"
+    },
+    {
+      "move": "groovy_sway_and_roll",
+      "cycles": 1,
+      "amplitude": 1.0,
+      "section": "main",
+      "reasoning": "High-energy groovy movement with roll, perfect for 0.93 danceability"
+    },
+    {
+      "move": "jackson_square",
+      "cycles": 1,
+      "amplitude": 1.0,
+      "section": "main",
+      "reasoning": "Complex robotic square path with sharp twitches, matches high energy"
+    },
+    {
+      "move": "manual",
+      "body_yaw": 0,
+      "head_pose": {
+        "yaw": 0,
+        "pitch": -35,
+        "roll": 25
+      },
+      "duration": 1.2,
+      "section": "main",
+      "reasoning": "Sharp head roll with downward pitch for dynamic variation"
+    },
+    {
+      "move": "dizzy_spin",
+      "cycles": 1,
+      "amplitude": 1.0,
+      "section": "main",
+      "reasoning": "Circular dizzy motion combining roll and pitch, high-energy crowd pleaser"
+    },
+    {
+      "move": "polyrhythm_combo",
+      "cycles": 1,
+      "amplitude": 1.0,
+      "section": "main",
+      "reasoning": "3-beat sway with 2-beat nod creates polyrhythmic complexity"
+    },
+    {
+      "move": "manual",
+      "body_yaw": 100,
+      "head_pose": {
+        "yaw": 65,
+        "pitch": -20,
+        "roll": 0
+      },
+      "duration": 1.3,
+      "section": "main",
+      "reasoning": "Energetic body turn with head looking down-right for dynamic pose"
+    },
+    {
+      "move": "interwoven_spirals",
+      "cycles": 1,
+      "amplitude": 1.0,
+      "section": "main",
+      "reasoning": "Complex 3-axis spiral motion shows off sophisticated choreography"
+    },
+    {
+      "move": "headbanger_combo",
+      "cycles": 1,
+      "amplitude": 1.0,
+      "section": "main",
+      "reasoning": "Second use of strong nod combo, but spaced far from first usage"
+    },
+    {
+      "move": "manual",
+      "body_yaw": -120,
+      "head_pose": {
+        "yaw": -75,
+        "pitch": 25,
+        "roll": -15
+      },
+      "duration": 1.4,
+      "section": "main",
+      "reasoning": "Dramatic left spin with head tilt up and roll for maximum visual impact"
+    },
+    {
+      "move": "side_to_side_sway",
+      "cycles": 2,
+      "amplitude": 1.0,
+      "section": "main",
+      "reasoning": "Smooth side sway repeated twice for groovy continuous motion"
+    },
+    {
+      "move": "pendulum_swing",
+      "cycles": 2,
+      "amplitude": 1.0,
+      "section": "main",
+      "reasoning": "Rhythmic pendulum swings maintain high-energy momentum"
+    },
+    {
+      "move": "manual",
+      "body_yaw": 0,
+      "head_pose": {
+        "yaw": 45,
+        "pitch": 0,
+        "roll": -30
+      },
+      "duration": 1.2,
+      "section": "main",
+      "reasoning": "Extreme roll tilt with head turn for dramatic asymmetrical pose"
+    },
+    {
+      "move": "head_tilt_roll",
+      "cycles": 2,
+      "amplitude": 1.0,
+      "section": "main",
+      "reasoning": "Continuous ear-to-shoulder roll maintains rhythmic energy"
+    },
+    {
+      "move": "manual",
+      "body_yaw": 150,
+      "head_pose": {
+        "yaw": 100,
+        "pitch": -15,
+        "roll": 10
+      },
+      "duration": 1.3,
+      "section": "main",
+      "reasoning": "Maximum body rotation right with head fully following for climactic spin"
+    },
+    {
+      "move": "chicken_peck",
+      "cycles": 4,
+      "amplitude": 1.0,
+      "section": "main",
+      "reasoning": "Sharp pecking motions in rapid succession for percussive energy hit"
+    },
+    {
+      "move": "manual",
+      "body_yaw": -160,
+      "head_pose": {
+        "yaw": -110,
+        "pitch": 20,
+        "roll": -20
+      },
+      "duration": 1.4,
+      "section": "main",
+      "reasoning": "Near-maximum body rotation counter-clockwise with complex head pose for finale",
+      "cycles": 1
+    },
+    {
+      "move": "manual",
+      "duration": 0.46,
+      "section": "outro",
+      "reasoning": "Auto-added neutral pause to fill remaining duration"
+    }
+  ],
+  "total_duration": 30.0,
+  "duration_breakdown": {
+    "intro_section": 6.0,
+    "main_section": 24.0,
+    "high_energy_dances": 16.3,
+    "manual_dynamic_moves": 10.9,
+    "sharp_percussive_accents": 1.87,
+    "move_count": 22,
+    "variety_score": "High - each move used 1-2 times maximum"
+  },
+  "energy_adherence": "FULL HIGH-ENERGY PROFILE: 0.97 energy matched with dramatic body_yaw spins (\u00b1120-160\u00b0), all high-energy dances included, NO calm/serenity emotions, polyrhythmic complexity, and rapid-fire percussive accents. Danceability 0.93 satisfied with groovy_sway_and_roll, jackson_square, and continuous rhythmic flows.",
+  "final_duration": 29.54051522248243,
+  "recommendation_id": "rec_20251021_181810",
+  "generated_by": "anthropic/claude-haiku-4-5",
+  "timestamp": "2025-10-21T18:18:10.982014"
+}

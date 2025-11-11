@@ -1,0 +1,37 @@
+{
+  "bpm": 109.86015319824219,
+  "sequence": [
+    {
+      "move": "side_peekaboo",
+      "cycles": 3
+    },
+    {
+      "move": "side_peekaboo",
+      "cycles": 3
+    },
+    {
+      "move": "polyrhythm_combo",
+      "cycles": 1
+    },
+    {
+      "move": "sharp_side_tilt",
+      "cycles": 2
+    },
+    {
+      "move": "polyrhythm_combo",
+      "cycles": 1
+    },
+    {
+      "move": "jackson_square",
+      "cycles": 2
+    },
+    {
+      "move": "interwoven_spirals",
+      "cycles": 1
+    },
+    {
+      "move": "stumble_and_recover",
+      "cycles": 2
+    }
+  ]
+}

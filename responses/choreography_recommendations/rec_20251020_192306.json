@@ -1,0 +1,127 @@
+{
+  "bpm": 128.1,
+  "sequence": [
+    {
+      "move": "welcoming1",
+      "cycles": 1,
+      "amplitude": 0.7,
+      "section": "intro",
+      "reasoning": "Gentle welcoming gesture to open the performance with warmth"
+    },
+    {
+      "move": "idle",
+      "duration": 1.0,
+      "section": "intro",
+      "reasoning": "Brief pause for audience engagement"
+    },
+    {
+      "move": "manual",
+      "head_pose": {
+        "pitch": 15,
+        "roll": -20
+      },
+      "body_yaw": 0,
+      "duration": 1.5,
+      "section": "intro",
+      "reasoning": "Curious head tilt with gentle roll, setting contemplative mood"
+    },
+    {
+      "move": "serenity1",
+      "cycles": 1,
+      "amplitude": 0.6,
+      "section": "intro",
+      "reasoning": "Calming presence matching the relaxed mood of track"
+    },
+    {
+      "move": "side_to_side_sway",
+      "cycles": 2,
+      "amplitude": 0.7,
+      "section": "intro",
+      "reasoning": "Smooth sway introducing gentle movement, matches relaxed energy"
+    },
+    {
+      "move": "idle",
+      "duration": 0.94,
+      "section": "intro",
+      "reasoning": "Stillness before main section transition"
+    },
+    {
+      "move": "manual",
+      "body_yaw": 45,
+      "head_pose": {
+        "yaw": 25,
+        "pitch": -5
+      },
+      "duration": 1.87,
+      "section": "main",
+      "reasoning": "Body turn introducing main section with gentle orientation shift"
+    },
+    {
+      "move": "pendulum_swing",
+      "cycles": 4,
+      "amplitude": 0.8,
+      "section": "main",
+      "reasoning": "Smooth pendulum motion establishing groove for main section"
+    },
+    {
+      "move": "side_glance_flick",
+      "cycles": 3,
+      "amplitude": 0.7,
+      "section": "main",
+      "reasoning": "Quick side glances adding subtle variety to the sway"
+    },
+    {
+      "move": "groovy_sway_and_roll",
+      "cycles": 3,
+      "amplitude": 1.0,
+      "section": "main",
+      "reasoning": "Groovy sway with roll motion, high danceability match"
+    },
+    {
+      "move": "idle",
+      "duration": 1.4,
+      "section": "main",
+      "reasoning": "Breathing space in middle of main section"
+    },
+    {
+      "move": "manual",
+      "body_yaw": -60,
+      "head_pose": {
+        "yaw": -40,
+        "pitch": 10
+      },
+      "duration": 2.34,
+      "section": "main",
+      "reasoning": "Dramatic body turn with head following, building energy"
+    },
+    {
+      "move": "head_tilt_roll",
+      "cycles": 4,
+      "amplitude": 0.85,
+      "section": "main",
+      "reasoning": "Continuous rolling motion adding fluidity and groove"
+    },
+    {
+      "move": "simple_nod",
+      "cycles": 2,
+      "amplitude": 0.6,
+      "section": "main",
+      "reasoning": "Rhythmic nodding maintaining connection with beat"
+    },
+    {
+      "move": "idle",
+      "duration": 0.34,
+      "section": "outro",
+      "reasoning": "Auto-added to fill remaining duration"
+    }
+  ],
+  "total_duration": 30.0,
+  "timing_breakdown": {
+    "intro_total": 6.0,
+    "main_total": 24.0,
+    "verification": "All moves sum to exactly 30.0 seconds"
+  },
+  "recommendation_id": "rec_20251020_192318",
+  "generated_by": "anthropic/claude-haiku-4-5",
+  "timestamp": "2025-10-20T19:23:18.093250"
+}

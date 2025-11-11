@@ -1,0 +1,118 @@
+{
+  "bpm": 108.0,
+  "sequence": [
+    {
+      "move": "headbanger_combo",
+      "cycles": 2,
+      "amplitude": 0.9,
+      "section": "intro",
+      "reasoning": "High-energy opening with strong head nod and bounce to establish rhythm. Duration: 2 \u00d7 2 beats \u00d7 0.556s = 2.224s. Total: 2.224s"
+    },
+    {
+      "move": "manual",
+      "head_pose": {
+        "yaw": -60,
+        "pitch": -20
+      },
+      "body_yaw": -100,
+      "duration": 1.85,
+      "section": "intro",
+      "reasoning": "Dramatic left spin with downward head tilt for intense energy surge. Total: 4.074s"
+    },
+    {
+      "move": "groovy_sway_and_roll",
+      "cycles": 4,
+      "amplitude": 1.0,
+      "section": "intro",
+      "reasoning": "Maximum energy groove to match 1.0 danceability. Duration: 4 \u00d7 4 beats \u00d7 0.556s = 8.896s. Total: 12.97s"
+    },
+    {
+      "move": "jackson_square",
+      "cycles": 4,
+      "amplitude": 0.95,
+      "section": "main",
+      "reasoning": "Robotic square-traced movement with sharp twitches for high-energy dance. Duration: 4 \u00d7 4 beats \u00d7 0.556s = 8.896s. Total: 21.866s"
+    },
+    {
+      "move": "manual",
+      "body_yaw": 140,
+      "head_pose": {
+        "yaw": 80,
+        "pitch": 15
+      },
+      "duration": 2.0,
+      "section": "main",
+      "reasoning": "Massive right body spin with upward head tilt to maintain momentum. Total: 23.866s"
+    },
+    {
+      "move": "dizzy_spin",
+      "cycles": 3,
+      "amplitude": 1.0,
+      "section": "main",
+      "reasoning": "Circular dizzy motion combining roll and pitch for chaotic high-energy effect. Duration: 3 \u00d7 4 beats \u00d7 0.556s = 6.672s. Total: 30.538s"
+    }
+  ],
+  "adjustments": "Trimmed final move to 5.134s (2.668 cycles of dizzy_spin) to reach exactly 30.0s total",
+  "final_sequence": [
+    {
+      "move": "headbanger_combo",
+      "cycles": 2,
+      "amplitude": 0.9,
+      "section": "intro",
+      "duration": 2.224,
+      "reasoning": "High-energy opening with strong head nod and bounce"
+    },
+    {
+      "move": "manual",
+      "head_pose": {
+        "yaw": -60,
+        "pitch": -20
+      },
+      "body_yaw": -100,
+      "duration": 1.85,
+      "section": "intro",
+      "reasoning": "Dramatic left spin with downward head tilt"
+    },
+    {
+      "move": "groovy_sway_and_roll",
+      "cycles": 4,
+      "amplitude": 1.0,
+      "section": "intro",
+      "duration": 8.896,
+      "reasoning": "Maximum energy groove matching 1.0 danceability"
+    },
+    {
+      "move": "jackson_square",
+      "cycles": 4,
+      "amplitude": 0.95,
+      "section": "main",
+      "duration": 8.896,
+      "reasoning": "Robotic square-traced movement with sharp twitches"
+    },
+    {
+      "move": "manual",
+      "body_yaw": 140,
+      "head_pose": {
+        "yaw": 80,
+        "pitch": 15
+      },
+      "duration": 2.0,
+      "section": "main",
+      "reasoning": "Massive right body spin with upward head tilt"
+    },
+    {
+      "move": "dizzy_spin",
+      "cycles": 2.668,
+      "amplitude": 1.0,
+      "section": "main",
+      "duration": 5.134,
+      "reasoning": "Circular dizzy motion for climactic finale"
+    }
+  ],
+  "total_duration": 30.0,
+  "energy_level": "HIGH (1.00)",
+  "choreography_notes": "Pure high-energy dance choreography matching extreme danceability and energy levels. Dominated by groovy_sway_and_roll, jackson_square, and dizzy_spin - the core high-energy moves. Manual body spins (yaw \u00b1100-140\u00b0) create dramatic transitions. No calm emotions used - all moves maintain frenetic pace throughout full 30-second duration.",
+  "recommendation_id": "rec_20251020_204023",
+  "generated_by": "anthropic/claude-haiku-4-5",
+  "timestamp": "2025-10-20T20:40:23.781785"
+}

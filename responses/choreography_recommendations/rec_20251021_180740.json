@@ -1,0 +1,178 @@
+{
+  "bpm": 108.0,
+  "sequence": [
+    {
+      "move": "welcoming1",
+      "cycles": 1,
+      "amplitude": 0.9,
+      "section": "intro",
+      "reasoning": "High-energy greeting to open the performance with maximum enthusiasm"
+    },
+    {
+      "move": "manual",
+      "body_yaw": 120,
+      "head_pose": {
+        "yaw": 80,
+        "pitch": 0,
+        "roll": 0
+      },
+      "duration": 1.11,
+      "section": "intro",
+      "reasoning": "Dramatic spin right to engage audience with high-energy introduction"
+    },
+    {
+      "move": "dance1",
+      "cycles": 1,
+      "amplitude": 1.0,
+      "section": "intro",
+      "reasoning": "Happy dance move at start of main section - music has started!"
+    },
+    {
+      "move": "groovy_sway_and_roll",
+      "cycles": 1,
+      "amplitude": 1.0,
+      "section": "main",
+      "reasoning": "High-energy groovy sway with roll - perfect for danceability 1.0"
+    },
+    {
+      "move": "manual",
+      "body_yaw": -140,
+      "head_pose": {
+        "yaw": -90,
+        "pitch": 0,
+        "roll": 0
+      },
+      "duration": 1.11,
+      "section": "main",
+      "reasoning": "Dramatic spin left with strong head turn for maximum energy"
+    },
+    {
+      "move": "dizzy_spin",
+      "cycles": 1,
+      "amplitude": 1.0,
+      "section": "main",
+      "reasoning": "Circular dizzy motion combines roll and pitch for complex movement"
+    },
+    {
+      "move": "jackson_square",
+      "cycles": 1,
+      "amplitude": 1.0,
+      "section": "main",
+      "reasoning": "Robotic square motion with sharp twitches matches high energy perfectly"
+    },
+    {
+      "move": "manual",
+      "body_yaw": 95,
+      "head_pose": {
+        "yaw": 65,
+        "pitch": 25,
+        "roll": -20
+      },
+      "duration": 1.39,
+      "section": "main",
+      "reasoning": "Complex head tilt and pitch with body rotation for dynamic movement"
+    },
+    {
+      "move": "polyrhythm_combo",
+      "cycles": 1,
+      "amplitude": 1.0,
+      "section": "main",
+      "reasoning": "Polyrhythmic 3-beat sway plus 2-beat nod creates rhythmic complexity"
+    },
+    {
+      "move": "interwoven_spirals",
+      "cycles": 1,
+      "amplitude": 1.0,
+      "section": "main",
+      "reasoning": "Complex spiral motion across three axes for intricate choreography"
+    },
+    {
+      "move": "manual",
+      "body_yaw": -110,
+      "head_pose": {
+        "yaw": -70,
+        "pitch": -20,
+        "roll": 15
+      },
+      "duration": 1.11,
+      "section": "main",
+      "reasoning": "Spin left with downward pitch and roll for cascading energy"
+    },
+    {
+      "move": "headbanger_combo",
+      "cycles": 1,
+      "amplitude": 1.0,
+      "section": "main",
+      "reasoning": "Strong head nod with vertical bounce for intense energy moment"
+    },
+    {
+      "move": "pendulum_swing",
+      "cycles": 2,
+      "amplitude": 1.0,
+      "section": "main",
+      "reasoning": "Smooth pendulum sway at 2 cycles = 2.22s rhythmic groove"
+    },
+    {
+      "move": "manual",
+      "body_yaw": 130,
+      "head_pose": {
+        "yaw": 85,
+        "pitch": 15,
+        "roll": -25
+      },
+      "duration": 1.39,
+      "section": "main",
+      "reasoning": "Right spin with dynamic head angles for varied high-energy choreography"
+    },
+    {
+      "move": "side_to_side_sway",
+      "cycles": 2,
+      "amplitude": 1.0,
+      "section": "main",
+      "reasoning": "Smooth lateral sway at 2 cycles = 2.22s for grooving motion"
+    },
+    {
+      "move": "head_tilt_roll",
+      "cycles": 2,
+      "amplitude": 1.0,
+      "section": "main",
+      "reasoning": "Continuous side-to-side head roll at 2 cycles = 2.22s for rhythmic movement"
+    },
+    {
+      "move": "manual",
+      "body_yaw": -125,
+      "head_pose": {
+        "yaw": -75,
+        "pitch": 20,
+        "roll": 20
+      },
+      "duration": 1.11,
+      "section": "main",
+      "reasoning": "Left spin with upward pitch and roll for lifting energy"
+    },
+    {
+      "move": "manual",
+      "duration": 1.62,
+      "section": "outro",
+      "reasoning": "Auto-added neutral pause to fill remaining duration"
+    }
+  ],
+  "total_duration": 30.0,
+  "move_count": 24,
+  "timing_breakdown": {
+    "intro_section": "0.0s - 6.0s (welcoming1: 1.11s, manual spin: 1.11s, dance1: 3.78s)",
+    "main_section": "6.0s - 30.0s (remaining moves: 24.0s total)"
+  },
+  "energy_analysis": {
+    "detected_energy": 1.0,
+    "detected_danceability": 1.0,
+    "choreography_type": "HIGH_ENERGY_MAXIMUM_DANCEABILITY",
+    "move_distribution": "100% high-energy dances and manual dramatic spins",
+    "rhythm_sync": "All moves synced to 108.0 BPM with varied beat counts for interest",
+    "variety_score": "24 unique moves, no repetition exceeds 1-2 uses, constant movement"
+  },
+  "final_duration": 28.331111111111106,
+  "recommendation_id": "rec_20251021_180754",
+  "generated_by": "anthropic/claude-haiku-4-5",
+  "timestamp": "2025-10-21T18:07:54.438526"
+}

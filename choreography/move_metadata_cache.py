@@ -15,6 +15,14 @@ CACHE_FILE = Path(__file__).parent / "move_metadata.json"
 DANCE_LIBRARY = "pollen-robotics/reachy-mini-dances-library"
 EMOTION_LIBRARY = "pollen-robotics/reachy-mini-emotions-library"
 
+# Moves that cause mechanical collisions on physical Reachy Mini hardware
+FORBIDDEN_MOVES = {
+    'headbanger_combo', # Excessive strain, collision risk
+    'grid_snap',        # Sharp movements cause internal interference
+    'chin_lead',        # Head position conflicts with internal components
+    'dying1'            # Extended sequence with collision points
+}
+
 
 def build_cache():
     """
@@ -33,6 +41,9 @@ def build_cache():
         dance_names = list(dances.moves.keys())
 
         for name in dance_names:
+            if name in FORBIDDEN_MOVES:
+                print(f"[MoveCache] Skipping forbidden move: {name}")
+                continue
             move = dances.get(name)
             metadata[name] = {
                 'duration': float(move.duration),
@@ -51,6 +62,9 @@ def build_cache():
         emotion_names = list(emotions.moves.keys())
 
         for name in emotion_names:
+            if name in FORBIDDEN_MOVES:
+                print(f"[MoveCache] Skipping forbidden move: {name}")
+                continue
             move = emotions.get(name)
             metadata[name] = {
                 'duration': float(move.duration),

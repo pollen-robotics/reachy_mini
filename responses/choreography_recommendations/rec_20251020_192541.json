@@ -1,0 +1,92 @@
+{
+  "bpm": 128.1,
+  "sequence": [
+    {
+      "move": "welcoming1",
+      "cycles": 1,
+      "amplitude": 0.7,
+      "section": "intro",
+      "reasoning": "Gentle greeting to open the performance with warmth"
+    },
+    {
+      "move": "manual",
+      "head_pose": {
+        "yaw": 0,
+        "pitch": 5,
+        "roll": 0
+      },
+      "body_yaw": 0,
+      "duration": 1.5,
+      "section": "intro",
+      "reasoning": "Neutral centered position, slight upward tilt for attentiveness"
+    },
+    {
+      "move": "serenity1",
+      "cycles": 1,
+      "amplitude": 0.6,
+      "section": "intro",
+      "reasoning": "Calming presence matches relaxed mood (energy: 0.0, relaxed: 1.0)"
+    },
+    {
+      "move": "idle",
+      "duration": 1.2,
+      "section": "intro",
+      "reasoning": "Brief breathing space, contemplative pause"
+    },
+    {
+      "move": "side_to_side_sway",
+      "cycles": 6,
+      "amplitude": 0.8,
+      "section": "main",
+      "reasoning": "Smooth swaying matches high danceability (0.93) and relaxed mood"
+    },
+    {
+      "move": "manual",
+      "body_yaw": 45,
+      "head_pose": {
+        "yaw": 20,
+        "pitch": 0,
+        "roll": 0
+      },
+      "duration": 1.87,
+      "section": "main",
+      "reasoning": "Gentle body turn to create dynamic orientation while maintaining poise"
+    },
+    {
+      "move": "pendulum_swing",
+      "cycles": 8,
+      "amplitude": 0.9,
+      "section": "main",
+      "reasoning": "Rhythmic pendant motion syncs with 128.1 BPM groove"
+    },
+    {
+      "move": "idle",
+      "duration": 2.0,
+      "section": "main",
+      "reasoning": "Pause for musical breath and emotional reflection"
+    },
+    {
+      "move": "groovy_sway_and_roll",
+      "cycles": 4,
+      "amplitude": 1.0,
+      "section": "main",
+      "reasoning": "Combines side sway with roll for smooth groovy expression of high danceability"
+    },
+    {
+      "move": "idle",
+      "duration": 0.95,
+      "section": "outro",
+      "reasoning": "Auto-added to fill remaining duration"
+    }
+  ],
+  "total_duration": 30.0,
+  "duration_breakdown": {
+    "intro_section": 6.0,
+    "main_section": 24.0,
+    "outro_section": 0.0,
+    "notes": "Total sequence duration exactly 30.0 seconds as required"
+  },
+  "recommendation_id": "rec_20251020_192556",
+  "generated_by": "anthropic/claude-haiku-4-5",
+  "timestamp": "2025-10-20T19:25:56.392900"
+}

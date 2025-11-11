@@ -1,0 +1,352 @@
+{
+  "bpm": 80.1,
+  "sequence": [
+    {
+      "move": "dance1",
+      "cycles": 1,
+      "amplitude": 0.9,
+      "section": "intro",
+      "reasoning": "High energy opening - celebrate the music immediately at 0.0s"
+    },
+    {
+      "move": "manual",
+      "body_yaw": 120,
+      "head_pose": {
+        "yaw": 80,
+        "pitch": 0,
+        "roll": 0
+      },
+      "duration": 1.5,
+      "section": "intro",
+      "reasoning": "Dramatic spin right for intro energy peak, total: 1.5s"
+    },
+    {
+      "move": "groovy_sway_and_roll",
+      "cycles": 1,
+      "amplitude": 1.0,
+      "section": "intro",
+      "reasoning": "High-energy sway to groove into verse, total: 1.5 + 2.996 = 4.496s"
+    },
+    {
+      "move": "headbanger_combo",
+      "cycles": 1,
+      "amplitude": 0.95,
+      "section": "verse",
+      "reasoning": "Intense head nod with bounce for verse momentum, total: 4.496 + 1.498 = 5.994s"
+    },
+    {
+      "move": "manual",
+      "body_yaw": -100,
+      "head_pose": {
+        "yaw": -70,
+        "pitch": -15,
+        "roll": 0
+      },
+      "duration": 1.4,
+      "section": "verse",
+      "reasoning": "Spin left with aggressive head tilt, total: 5.994 + 1.4 = 7.394s"
+    },
+    {
+      "move": "dizzy_spin",
+      "cycles": 1,
+      "amplitude": 1.0,
+      "section": "verse",
+      "reasoning": "Circular dizzying motion for verse energy, total: 7.394 + 2.996 = 10.39s"
+    },
+    {
+      "move": "jackson_square",
+      "cycles": 1,
+      "amplitude": 0.95,
+      "section": "verse",
+      "reasoning": "Robotic jerky square trace to verse climax, total: 10.39 + 2.996 = 13.386s"
+    },
+    {
+      "move": "manual",
+      "body_yaw": 140,
+      "head_pose": {
+        "yaw": 90,
+        "pitch": 20,
+        "roll": -20
+      },
+      "duration": 1.6,
+      "section": "verse",
+      "reasoning": "Hard spin right with head tilt up-right, total: 13.386 + 1.6 = 14.986s"
+    },
+    {
+      "move": "side_to_side_sway",
+      "cycles": 2,
+      "amplitude": 0.9,
+      "section": "verse-to-chorus",
+      "reasoning": "Smooth sway builds into chorus, total: 14.986 + 2.996 = 17.982s"
+    },
+    {
+      "move": "polyrhythm_combo",
+      "cycles": 1,
+      "amplitude": 1.0,
+      "section": "chorus",
+      "reasoning": "Complex polyrhythmic motion to open chorus at 20.0s mark, total: 17.982 + 2.996 = 20.978s"
+    },
+    {
+      "move": "interwoven_spirals",
+      "cycles": 1,
+      "amplitude": 0.95,
+      "section": "chorus",
+      "reasoning": "Multi-axis spiral for chorus complexity, total: 20.978 + 2.996 = 23.974s"
+    },
+    {
+      "move": "manual",
+      "body_yaw": -130,
+      "head_pose": {
+        "yaw": -85,
+        "pitch": 0,
+        "roll": 25
+      },
+      "duration": 1.7,
+      "section": "chorus",
+      "reasoning": "Spin left with aggressive roll for chorus peak, total: 23.974 + 1.7 = 25.674s"
+    },
+    {
+      "move": "head_tilt_roll",
+      "cycles": 1,
+      "amplitude": 0.98,
+      "section": "chorus",
+      "reasoning": "Continuous ear-to-shoulder roll keeps energy high, total: 25.674 + 1.498 = 27.172s"
+    },
+    {
+      "move": "dance2",
+      "cycles": 1,
+      "amplitude": 1.0,
+      "section": "chorus",
+      "reasoning": "Alternative dance move for chorus energy variety, total: 27.172 + 1.498 = 28.67s"
+    },
+    {
+      "move": "manual",
+      "body_yaw": 110,
+      "head_pose": {
+        "yaw": 75,
+        "pitch": -20,
+        "roll": -15
+      },
+      "duration": 1.5,
+      "section": "chorus",
+      "reasoning": "Spin right with head down-left for dramatic effect, total: 28.67 + 1.5 = 30.17s"
+    },
+    {
+      "move": "pendulum_swing",
+      "cycles": 2,
+      "amplitude": 0.95,
+      "section": "chorus-bridge",
+      "reasoning": "Rhythmic swinging bridges into verse, total: 30.17 + 2.996 = 33.166s"
+    },
+    {
+      "move": "dizzy_spin",
+      "cycles": 1,
+      "amplitude": 0.9,
+      "section": "verse",
+      "reasoning": "Reprise dizzy spin for second verse energy, total: 33.166 + 2.996 = 36.162s"
+    },
+    {
+      "move": "manual",
+      "body_yaw": -115,
+      "head_pose": {
+        "yaw": -80,
+        "pitch": 15,
+        "roll": 0
+      },
+      "duration": 1.6,
+      "section": "verse",
+      "reasoning": "Spin left with head up for verse momentum, total: 36.162 + 1.6 = 37.762s"
+    },
+    {
+      "move": "headbanger_combo",
+      "cycles": 1,
+      "amplitude": 0.92,
+      "section": "verse",
+      "reasoning": "Secondary headbanger for verse continuation, total: 37.762 + 1.498 = 39.26s"
+    },
+    {
+      "move": "groovy_sway_and_roll",
+      "cycles": 1,
+      "amplitude": 0.95,
+      "section": "verse",
+      "reasoning": "Groovy motion for verse groove continuation, total: 39.26 + 2.996 = 42.256s"
+    },
+    {
+      "move": "manual",
+      "body_yaw": 125,
+      "head_pose": {
+        "yaw": 85,
+        "pitch": -12,
+        "roll": 20
+      },
+      "duration": 1.5,
+      "section": "verse-to-chorus",
+      "reasoning": "Dramatic spin right with complex head position leads into second chorus, total: 42.256 + 1.5 = 43.756s"
+    },
+    {
+      "move": "jackson_square",
+      "cycles": 1,
+      "amplitude": 0.98,
+      "section": "chorus",
+      "reasoning": "Repeat robotic square trace for second chorus (48s mark), total: 43.756 + 2.996 = 46.752s"
+    },
+    {
+      "move": "polyrhythm_combo",
+      "cycles": 1,
+      "amplitude": 0.95,
+      "section": "chorus",
+      "reasoning": "Polyrhythmic motion reprise for second chorus, total: 46.752 + 2.996 = 49.748s"
+    },
+    {
+      "move": "manual",
+      "body_yaw": -140,
+      "head_pose": {
+        "yaw": -95,
+        "pitch": 0,
+        "roll": -25
+      },
+      "duration": 1.8,
+      "section": "chorus",
+      "reasoning": "Maximum spin left for chorus climax, total: 49.748 + 1.8 = 51.548s"
+    },
+    {
+      "move": "interwoven_spirals",
+      "cycles": 1,
+      "amplitude": 0.93,
+      "section": "chorus",
+      "reasoning": "Spiral motion for complex chorus energy, total: 51.548 + 2.996 = 54.544s"
+    },
+    {
+      "move": "dance3",
+      "cycles": 1,
+      "amplitude": 1.0,
+      "section": "chorus",
+      "reasoning": "Energetic dance3 for explosive chorus ending, total: 54.544 + 1.498 = 56.042s"
+    },
+    {
+      "move": "manual",
+      "body_yaw": 100,
+      "head_pose": {
+        "yaw": 70,
+        "pitch": 18,
+        "roll": 15
+      },
+      "duration": 1.7,
+      "section": "bridge",
+      "reasoning": "Spin right with complex head tilt for bridge transition (64s mark), total: 56.042 + 1.7 = 57.742s"
+    },
+    {
+      "move": "head_tilt_roll",
+      "cycles": 1,
+      "amplitude": 0.88,
+      "section": "bridge",
+      "reasoning": "Continuous roll maintains bridge momentum, total: 57.742 + 1.498 = 59.24s"
+    },
+    {
+      "move": "side_to_side_sway",
+      "cycles": 1,
+      "amplitude": 0.85,
+      "section": "bridge",
+      "reasoning": "Smooth sway during bridge section, total: 59.24 + 1.498 = 60.738s"
+    },
+    {
+      "move": "manual",
+      "body_yaw": -95,
+      "head_pose": {
+        "yaw": -65,
+        "pitch": -15,
+        "roll": 0
+      },
+      "duration": 1.5,
+      "section": "bridge",
+      "reasoning": "Spin left to bridge finale, total: 60.738 + 1.5 = 62.238s"
+    },
+    {
+      "move": "pendulum_swing",
+      "cycles": 1,
+      "amplitude": 0.8,
+      "section": "bridge-to-outro",
+      "reasoning": "Rhythmic pendulum bridges to outro, total: 62.238 + 1.498 = 63.736s"
+    },
+    {
+      "move": "dizzy_spin",
+      "cycles": 1,
+      "amplitude": 0.85,
+      "section": "outro",
+      "reasoning": "Final dizzy spin for outro celebration (72s mark), total: 63.736 + 2.996 = 66.732s"
+    },
+    {
+      "move": "manual",
+      "body_yaw": 130,
+      "head_pose": {
+        "yaw": 85,
+        "pitch": 0,
+        "roll": -20
+      },
+      "duration": 1.6,
+      "section": "outro",
+      "reasoning": "Dramatic final spin right for outro peak, total: 66.732 + 1.6 = 68.332s"
+    },
+    {
+      "move": "groovy_sway_and_roll",
+      "cycles": 1,
+      "amplitude": 0.9,
+      "section": "outro",
+      "reasoning": "Final groovy sway to close performance, total: 68.332 + 2.996 = 71.328s"
+    },
+    {
+      "move": "manual",
+      "body_yaw": -50,
+      "head_pose": {
+        "yaw": -35,
+        "pitch": 10,
+        "roll": 0
+      },
+      "duration": 1.2,
+      "section": "outro",
+      "reasoning": "Subtle final turn left for outro wind-down, total: 71.328 + 1.2 = 72.528s"
+    },
+    {
+      "move": "headbanger_combo",
+      "cycles": 1,
+      "amplitude": 0.75,
+      "section": "outro",
+      "reasoning": "Final headbanger reduced amplitude for outro fade, total: 72.528 + 1.498 = 74.026s"
+    },
+    {
+      "move": "manual",
+      "body_yaw": 40,
+      "head_pose": {
+        "yaw": 30,
+        "pitch": -8,
+        "roll": 10
+      },
+      "duration": 1.4,
+      "section": "outro",
+      "reasoning": "Gentle final right turn to center position, total: 74.026 + 1.4 = 75.426s"
+    },
+    {
+      "move": "side_to_side_sway",
+      "cycles": 1,
+      "amplitude": 0.7,
+      "section": "outro",
+      "reasoning": "Gentle final sway to conclude performance, total: 75.426 + 1.498 = 76.924s"
+    },
+    {
+      "move": "manual",
+      "body_yaw": 0,
+      "head_pose": {
+        "yaw": 0,
+        "pitch": 5,
+        "roll": 0
+      },
+      "duration": 3.076,
+      "section": "outro",
+      "reasoning": "Return to neutral center position for finale bow, total: 76.924 + 3.076 = 80.0s",
+      "cycles": 1
+    }
+  ],
+  "recommendation_id": "rec_20251021_132202",
+  "generated_by": "anthropic/claude-haiku-4-5",
+  "timestamp": "2025-10-21T13:22:02.378505"
+}

@@ -1,0 +1,140 @@
+{
+  "bpm": 108.0,
+  "sequence": [
+    {
+      "move": "welcoming1",
+      "cycles": 1,
+      "amplitude": 0.7,
+      "section": "intro",
+      "reasoning": "Gentle welcoming gesture to open, sets calm tone for sad/relaxed mood"
+    },
+    {
+      "move": "manual",
+      "head_pose": {
+        "pitch": 15,
+        "roll": 0
+      },
+      "body_yaw": 0,
+      "duration": 1.5,
+      "section": "intro",
+      "reasoning": "Thoughtful head tilt upward, contemplative pose matching sad mood"
+    },
+    {
+      "move": "serenity1",
+      "cycles": 1,
+      "amplitude": 0.8,
+      "section": "intro",
+      "reasoning": "Calming movement to establish peaceful, relaxed energy"
+    },
+    {
+      "move": "idle",
+      "duration": 1.0,
+      "section": "intro",
+      "reasoning": "Breathing space at end of intro (total intro: 6.0s)"
+    },
+    {
+      "move": "side_to_side_sway",
+      "cycles": 3,
+      "amplitude": 0.9,
+      "section": "main",
+      "reasoning": "Smooth gentle sway, 3 cycles \u00d7 2 beats \u00d7 0.556s = 3.33s, matches relaxed mood"
+    },
+    {
+      "move": "manual",
+      "body_yaw": 45,
+      "head_pose": {
+        "yaw": -25,
+        "pitch": 5
+      },
+      "duration": 2.0,
+      "section": "main",
+      "reasoning": "Subtle body turn with introspective head angle, explores space thoughtfully"
+    },
+    {
+      "move": "pendulum_swing",
+      "cycles": 2,
+      "amplitude": 0.7,
+      "section": "main",
+      "reasoning": "Gentle rhythmic swing, 2 cycles \u00d7 2 beats \u00d7 0.556s = 2.22s"
+    },
+    {
+      "move": "thoughtful1",
+      "cycles": 1,
+      "amplitude": 0.8,
+      "section": "main",
+      "reasoning": "Looking upward in contemplation, matches sad/thoughtful mood"
+    },
+    {
+      "move": "manual",
+      "body_yaw": -45,
+      "head_pose": {
+        "yaw": 25,
+        "pitch": 5
+      },
+      "duration": 2.0,
+      "section": "main",
+      "reasoning": "Turn to opposite direction, exploring with gentle head movement"
+    },
+    {
+      "move": "head_tilt_roll",
+      "cycles": 2,
+      "amplitude": 0.6,
+      "section": "main",
+      "reasoning": "Soft rolling motion side-to-side, 2 cycles \u00d7 2 beats \u00d7 0.556s = 2.22s"
+    },
+    {
+      "move": "idle",
+      "duration": 2.5,
+      "section": "main",
+      "reasoning": "Contemplative pause, stillness emphasizes melancholic mood"
+    },
+    {
+      "move": "manual",
+      "body_yaw": 0,
+      "head_pose": {
+        "pitch": -10,
+        "yaw": 0
+      },
+      "duration": 1.5,
+      "section": "main",
+      "reasoning": "Slight downward gaze, reflective posture"
+    },
+    {
+      "move": "side_peekaboo",
+      "cycles": 1,
+      "amplitude": 0.7,
+      "section": "main",
+      "reasoning": "Gentle peekaboo, adds subtle emotional expressiveness, 1 cycle \u00d7 2 beats \u00d7 0.556s = 1.11s"
+    },
+    {
+      "move": "calming1",
+      "cycles": 1,
+      "amplitude": 0.8,
+      "section": "main",
+      "reasoning": "Soothing calming gesture to reinforce relaxed, peaceful state"
+    },
+    {
+      "move": "idle",
+      "duration": 1.5,
+      "section": "main",
+      "reasoning": "Final stillness, gentle ending resolution"
+    },
+    {
+      "move": "idle",
+      "duration": 4.62,
+      "section": "outro",
+      "reasoning": "Auto-added to fill audio duration"
+    }
+  ],
+  "total_duration": 30.0,
+  "duration_breakdown": {
+    "intro": 6.0,
+    "main": 24.0,
+    "moves_count": 15,
+    "average_move_duration": 2.0
+  },
+  "choreography_notes": "This choreography emphasizes the sad (1.0) and relaxed (1.0) mood with minimal energy (0.0). The sequence prioritizes gentle swaying, contemplative poses, and calm emotional expressions. Manual body rotations (body_yaw \u00b145\u00b0) are subtle and thoughtful rather than energetic, creating a melancholic exploration of space. Idle pauses are used strategically for dramatic effect and emotional resonance. The danceability (1.10) is satisfied through smooth, flowing movements rather than sharp, rhythmic bursts.",
+  "recommendation_id": "rec_20251020_195059",
+  "generated_by": "anthropic/claude-haiku-4-5",
+  "timestamp": "2025-10-20T19:50:59.665751"
+}

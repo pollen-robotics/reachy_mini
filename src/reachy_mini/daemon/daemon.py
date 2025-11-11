@@ -122,9 +122,10 @@ class Daemon:
 
         # Initialize MediaManager for camera access
         self.logger.info("Initializing MediaManager...")
+        media_backend = MediaBackend.DEFAULT_NO_VIDEO if headless else MediaBackend.DEFAULT
         self.media_manager = MediaManager(
             use_sim=sim,
-            backend=MediaBackend.DEFAULT,  # Use OpenCV backend for compatibility
+            backend=media_backend,
             log_level=self.log_level,
         )
 

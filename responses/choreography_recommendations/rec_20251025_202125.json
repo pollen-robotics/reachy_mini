@@ -1,0 +1,77 @@
+{
+  "bpm": 110.0259780883789,
+  "sequence": [
+    {
+      "move": "polyrhythm_combo",
+      "cycles": 1
+    },
+    {
+      "move": "dizzy_spin",
+      "cycles": 1
+    },
+    {
+      "move": "polyrhythm_combo",
+      "cycles": 1
+    },
+    {
+      "move": "groovy_sway_and_roll",
+      "cycles": 2
+    },
+    {
+      "move": "chicken_peck",
+      "cycles": 2
+    },
+    {
+      "move": "yeah_nod",
+      "cycles": 1
+    },
+    {
+      "move": "jackson_square",
+      "cycles": 2
+    },
+    {
+      "move": "jackson_square",
+      "cycles": 1
+    },
+    {
+      "move": "sharp_side_tilt",
+      "cycles": 1
+    },
+    {
+      "move": "yeah_nod",
+      "cycles": 2
+    },
+    {
+      "move": "yeah_nod",
+      "cycles": 3
+    },
+    {
+      "move": "polyrhythm_combo",
+      "cycles": 1
+    },
+    {
+      "move": "jackson_square",
+      "cycles": 2
+    },
+    {
+      "move": "side_glance_flick",
+      "cycles": 1
+    },
+    {
+      "move": "interwoven_spirals",
+      "cycles": 1
+    },
+    {
+      "move": "side_to_side_sway",
+      "cycles": 1
+    },
+    {
+      "move": "interwoven_spirals",
+      "cycles": 1
+    },
+    {
+      "move": "neck_recoil",
+      "cycles": 1
+    }
+  ]
+}

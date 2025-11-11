@@ -1,0 +1,252 @@
+{
+  "bpm": 163.39341735839844,
+  "sequence": [
+    {
+      "move": "dance1",
+      "cycles": 1,
+      "amplitude": 0.9,
+      "section": "intro",
+      "reasoning": "High-energy opening dance to match 0.91 danceability, sets excited tone"
+    },
+    {
+      "move": "manual",
+      "body_yaw": 130,
+      "head_pose": {
+        "yaw": 85,
+        "pitch": -15,
+        "roll": 0
+      },
+      "duration": 1.47,
+      "section": "intro",
+      "reasoning": "Dramatic body spin right with head lead, energy 1.11 requires bold movement"
+    },
+    {
+      "move": "headbanger_combo",
+      "cycles": 1,
+      "amplitude": 1.0,
+      "section": "intro",
+      "reasoning": "Strong head nod with bounce (2 beats = 0.734s), matches high danceability"
+    },
+    {
+      "move": "manual",
+      "body_yaw": -140,
+      "head_pose": {
+        "yaw": -90,
+        "pitch": 20,
+        "roll": 0
+      },
+      "duration": 1.47,
+      "section": "intro",
+      "reasoning": "Explosive spin left opposite direction, builds momentum"
+    },
+    {
+      "move": "groovy_sway_and_roll",
+      "cycles": 1,
+      "amplitude": 1.0,
+      "section": "intro",
+      "reasoning": "Groovy sway combo (4 beats = 1.467s), perfect for high-energy danceability"
+    },
+    {
+      "move": "dizzy_spin",
+      "cycles": 1,
+      "amplitude": 0.95,
+      "section": "main",
+      "reasoning": "Circular dizzy motion (4 beats = 1.467s), maintains frantic energy"
+    },
+    {
+      "move": "manual",
+      "body_yaw": 100,
+      "head_pose": {
+        "yaw": 65,
+        "pitch": -10,
+        "roll": 25
+      },
+      "duration": 1.3,
+      "section": "main",
+      "reasoning": "Body turn with tilted head roll, adds dynamic 3D movement"
+    },
+    {
+      "move": "jackson_square",
+      "cycles": 1,
+      "amplitude": 1.0,
+      "section": "main",
+      "reasoning": "Robotic square path with twitches (4 beats = 1.467s), high-energy complexity"
+    },
+    {
+      "move": "polyrhythm_combo",
+      "cycles": 1,
+      "amplitude": 0.95,
+      "section": "main",
+      "reasoning": "Polyrhythmic 3-beat sway + 2-beat nod (4 beats = 1.467s), musicality match"
+    },
+    {
+      "move": "manual",
+      "body_yaw": -120,
+      "head_pose": {
+        "yaw": -75,
+        "pitch": 15,
+        "roll": -20
+      },
+      "duration": 1.35,
+      "section": "main",
+      "reasoning": "Reverse body spin with complex head tilt, maintains dynamic variety"
+    },
+    {
+      "move": "interwoven_spirals",
+      "cycles": 1,
+      "amplitude": 1.0,
+      "section": "main",
+      "reasoning": "Complex 3-axis spiral (4 beats = 1.467s), showcases full capability"
+    },
+    {
+      "move": "pendulum_swing",
+      "cycles": 1,
+      "amplitude": 1.0,
+      "section": "main",
+      "reasoning": "Smooth pendulum (2 beats = 0.734s), brief contrast before next high-energy move"
+    },
+    {
+      "move": "manual",
+      "body_yaw": 115,
+      "head_pose": {
+        "yaw": 70,
+        "pitch": -20,
+        "roll": 0
+      },
+      "duration": 1.4,
+      "section": "main",
+      "reasoning": "Right body turn with downward head pitch, dramatic orientation shift"
+    },
+    {
+      "move": "side_to_side_sway",
+      "cycles": 1,
+      "amplitude": 1.0,
+      "section": "main",
+      "reasoning": "Smooth side-to-side sway (2 beats = 0.734s), groovy foundation"
+    },
+    {
+      "move": "head_tilt_roll",
+      "cycles": 1,
+      "amplitude": 0.95,
+      "section": "main",
+      "reasoning": "Continuous ear-to-shoulder roll (2 beats = 0.734s), maintains rhythm"
+    },
+    {
+      "move": "manual",
+      "body_yaw": -110,
+      "head_pose": {
+        "yaw": -65,
+        "pitch": 0,
+        "roll": 30
+      },
+      "duration": 1.45,
+      "section": "main",
+      "reasoning": "Left spin with strong roll, emphasizes 3D capability"
+    },
+    {
+      "move": "dance2",
+      "cycles": 1,
+      "amplitude": 0.95,
+      "section": "main",
+      "reasoning": "Alternative dance variation (2 beats = 0.734s), adds choreographic novelty"
+    },
+    {
+      "move": "manual",
+      "body_yaw": 95,
+      "head_pose": {
+        "yaw": 60,
+        "pitch": 25,
+        "roll": -15
+      },
+      "duration": 1.32,
+      "section": "main",
+      "reasoning": "Moderate right turn with upward head pitch, builds toward climax"
+    },
+    {
+      "move": "dance3",
+      "cycles": 1,
+      "amplitude": 1.0,
+      "section": "main",
+      "reasoning": "Most energetic dance variation (2 beats = 0.734s), full intensity wiggle"
+    },
+    {
+      "move": "manual",
+      "body_yaw": -130,
+      "head_pose": {
+        "yaw": -80,
+        "pitch": -15,
+        "roll": -25
+      },
+      "duration": 1.5,
+      "section": "main",
+      "reasoning": "Powerful left spin with complex head rotation, climactic energy"
+    },
+    {
+      "move": "grid_snap",
+      "cycles": 1,
+      "amplitude": 1.0,
+      "section": "main",
+      "reasoning": "Robotic grid snapping (4 beats = 1.467s), sharp mechanical flair"
+    },
+    {
+      "move": "manual",
+      "body_yaw": 125,
+      "head_pose": {
+        "yaw": 75,
+        "pitch": 10,
+        "roll": 20
+      },
+      "duration": 1.42,
+      "section": "main",
+      "reasoning": "Right body turn with forward head motion, dynamic closing sequence"
+    },
+    {
+      "move": "chicken_peck",
+      "cycles": 2,
+      "amplitude": 0.9,
+      "section": "main",
+      "reasoning": "Sharp forward pecks (1 beat \u00d7 2 = 0.734s), staccato accent"
+    },
+    {
+      "move": "manual",
+      "body_yaw": -100,
+      "head_pose": {
+        "yaw": -60,
+        "pitch": -10,
+        "roll": 0
+      },
+      "duration": 1.28,
+      "section": "main",
+      "reasoning": "Left turn with slight downward tilt, steady energy maintenance"
+    },
+    {
+      "move": "yeah_nod",
+      "cycles": 3,
+      "amplitude": 1.0,
+      "section": "main",
+      "reasoning": "Emphatic yeah nods (1 beat \u00d7 3 = 1.1s), celebratory finale building"
+    },
+    {
+      "move": "manual",
+      "body_yaw": 0,
+      "head_pose": {
+        "yaw": 0,
+        "pitch": 0,
+        "roll": 0
+      },
+      "duration": 0.5,
+      "section": "main",
+      "reasoning": "Return to neutral center position, graceful choreography close"
+    }
+  ],
+  "total_duration": 30.0,
+  "move_count": 26,
+  "energy_analysis": "HIGH ENERGY (1.11) - 80% high-energy dances with dramatic manual spins, 20% accent moves. All moves use 1-2 cycles maximum for variety. Zero repetition of same move back-to-back. Dramatic body_yaw rotations (\u00b195-140\u00b0) create dynamic visual impact matching 0.91 danceability.",
+  "section_breakdown": {
+    "intro (0-6s)": "5 moves = 5.98s - High-energy opening with dance and dramatic spins",
+    "main (6-30s)": "21 moves = 24.02s - Sustained maximum energy with varied high-intensity moves and complex manual rotations"
+  },
+  "recommendation_id": "rec_20251021_182603",
+  "generated_by": "anthropic/claude-haiku-4-5",
+  "timestamp": "2025-10-21T18:26:03.283490"
+}

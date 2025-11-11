@@ -1,0 +1,586 @@
+{\rtf1\ansi\ansicpg1252\cocoartf2865
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fnil\fcharset0 Menlo-Regular;\f1\fnil\fcharset0 Menlo-Bold;}
+{\colortbl;\red255\green255\blue255;\red0\green0\blue0;\red116\green116\blue116;\red162\green168\blue247;
+\red56\green185\blue199;\red202\green51\blue35;\red57\green192\blue38;}
+{\*\expandedcolortbl;;\csgray\c0;\csgenericrgb\c45371\c45371\c45371;\cssrgb\c69412\c72549\c97647;
+\cssrgb\c25546\c77007\c82023;\cssrgb\c83899\c28663\c18026;\cssrgb\c25706\c77963\c19557;}
+\margl1440\margr1440\vieww11520\viewh8400\viewkind0
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\pardirnatural\partightenfactor0
+
+\f0\fs22 \cf2 \CocoaLigature0 # Reachy Choreography Studio - iOS App\
+\
+  
+\f1\b **Status:**
+\f0\b0  Concept/Planning Phase\
+  
+\f1\b **Timeline:**
+\f0\b0  4-7 days to MVP\
+  
+\f1\b **Platform:**
+\f0\b0  iOS (iPhone/iPad)\
+\
+  ---\
+\
+  ## Overview\
+\
+  Reachy Choreography Studio is an iOS app for creating, visualizing, and sharing robot dance choreographies. The app combines a\
+   local MuJoCo physics simulator with robot control capabilities, audio synchronization, and video production tools.\
+\
+  ### Core Concept\
+\
+  Create dance routines for Reachy Mini robot using an intuitive mobile interface, preview them in real-time 3D simulation,\
+  choreograph cinematic camera movements, and export professional videos ready for social media.\
+\
+  ---\
+\
+  ## Key Features\
+\
+  ### 1. 
+\f1\b **Controller Module**
+\f0\b0 \
+  Remote control interface for physical Reachy Mini robot via daemon.\
+\
+  - View real-time robot state (positions, joints)\
+  - Browse available moves (dances/emotions)\
+  - Execute moves on physical robot\
+  - Manual position control\
+  - Text-to-speech commands\
+\
+  ### 2. 
+\f1\b **Choreography Studio Module**
+\f0\b0 \
+  Create custom dance moves and sequences with visual feedback.\
+\
+  - 
+\f1\b **Visual Editor:**
+\f0\b0  Adjust robot position with sliders, see changes in real-time 3D\
+  - 
+\f1\b **Keyframe System:**
+\f0\b0  Set poses at specific timestamps\
+  - 
+\f1\b **Audio Integration:**
+\f0\b0  Import music, detect BPM, tap tempo manually\
+  - 
+\f1\b **Sequence Builder:**
+\f0\b0  Arrange moves into choreographies\
+  - 
+\f1\b **Export:**
+\f0\b0  Save as standard move JSON format\
+\
+  ### 3. 
+\f1\b **Video Export Module**
+\f0\b0 \
+  Professional video production with choreographed camera movements.\
+\
+  - 
+\f1\b **Camera Choreography:**
+\f0\b0  Keyframe camera position (X/Y/Z) and angles (azimuth/elevation/distance)\
+  - 
+\f1\b **Preview:**
+\f0\b0  Scrub through camera path before recording\
+  - 
+\f1\b **Screen Recording:**
+\f0\b0  Capture MuJoCo viewport with choreography playback\
+  - 
+\f1\b **Audio Overlay:**
+\f0\b0  Sync music with robot movements\
+  - 
+\f1\b **Export & Share:**
+\f0\b0  MP4 export to Photos, direct share to Instagram/TikTok/YouTube\
+\
+  ### 4. 
+\f1\b **Remote Viewer Module**
+\f0\b0 \
+  Live camera feed from physical robot.\
+\
+  - Stream from robot's onboard camera\
+  - Take snapshots\
+  - Real-time monitoring during execution\
+\
+  ---\
+\
+  ## Architecture\
+\
+  ```mermaid\
+  graph LR\
+      subgraph User\
+          U[User Selects Mode]\
+      end\
+\
+      U --> iPhone\
+\
+      subgraph iPhone["iOS Device"]\
+          MODE\{Mode Selection\}\
+      end\
+\
+      MODE -->|Controller| Controller\
+      MODE -->|Studio| Studio\
+      MODE -->|Video| Video\
+      MODE -->|Remote| Remote\
+\
+      subgraph Controller["Controller Module"]\
+          CTRL_UI[Control Interface]\
+          CTRL_API[API Client]\
+          CTRL_UI --> CTRL_API\
+      end\
+\
+      subgraph Studio["Choreography Studio Module"]\
+          STUDIO_UI[Keyframe Editor<br/>Position Sliders<br/>Audio Import<br/>BPM Tools]\
+          STUDIO_MJ[MuJoCo Preview]\
+          STUDIO_SAVE[Save JSON]\
+\
+          STUDIO_UI --> STUDIO_MJ\
+          STUDIO_UI --> STUDIO_SAVE\
+      end\
+\
+      subgraph Video["Video Export Module"]\
+          VIDEO_CAM[Camera Choreography<br/>Position/Angle/Keyframes]\
+          VIDEO_MJ[MuJoCo Viewport]\
+          VIDEO_REC[Screen Recorder<br/>+ Audio Overlay]\
+          VIDEO_EXPORT[Export & Share]\
+\
+          VIDEO_CAM --> VIDEO_MJ\
+          VIDEO_MJ --> VIDEO_REC\
+          VIDEO_REC --> VIDEO_EXPORT\
+      end\
+\
+      subgraph Remote["Remote Viewer Module"]\
+          REMOTE_STREAM[Stream Display]\
+          REMOTE_SNAP[Snapshot]\
+      end\
+\
+      subgraph Storage["Local Storage"]\
+          FILES[JSON Files<br/>Audio Files<br/>Videos]\
+      end\
+\
+      subgraph Daemon["Mac/Linux Daemon"]\
+          API[FastAPI :8100]\
+          TELEMETRY[Telemetry Stream]\
+          EXECUTOR[Move Executor]\
+          CAM_STREAM[Camera Stream]\
+          ROBOT_CTRL[Robot Control]\
+\
+          API --> TELEMETRY\
+          API --> EXECUTOR\
+          API --> CAM_STREAM\
+          EXECUTOR --> ROBOT_CTRL\
+      end\
+\
+      subgraph Robot["Reachy Mini"]\
+          HARDWARE[Motors + Camera]\
+      end\
+\
+      CTRL_API -.HTTP/WebSocket.-> API\
+      TELEMETRY -.sync.-> STUDIO_MJ\
+      TELEMETRY -.sync.-> VIDEO_MJ\
+      CAM_STREAM -.MJPEG.-> REMOTE_STREAM\
+\
+      STUDIO_SAVE --> FILES\
+      VIDEO_EXPORT --> FILES\
+\
+      ROBOT_CTRL --> HARDWARE\
+\
+  ---\
+  
+\f1\b Technical Stack
+\f0\b0 \
+\
+  \cf3 iOS App\cf2 \
+\
+  - 
+\f1\b Language:
+\f0\b0  Swift 5.9+\
+  - 
+\f1\b UI Framework:
+\f0\b0  SwiftUI\
+  - 
+\f1\b 3D Rendering:
+\f0\b0  Metal (via MoltenVK for OpenGL compatibility)\
+  - 
+\f1\b Physics:
+\f0\b0  MuJoCo (compiled for iOS ARM64)\
+  - 
+\f1\b Audio:
+\f0\b0  AVFoundation (playback, recording, analysis)\
+  - 
+\f1\b Video:
+\f0\b0  ReplayKit (screen recording), AVFoundation (editing/export)\
+  - 
+\f1\b Network:
+\f0\b0  URLSession (HTTP), WebSocket (real-time state)\
+\
+  \cf3 Dependencies\cf2 \
+\
+  - 
+\f1\b MuJoCo:
+\f0\b0  C++ physics engine (needs iOS compilation)\
+  - 
+\f1\b MoltenVK:
+\f0\b0  OpenGL to Metal translation layer\
+  - 
+\f1\b AudioKit
+\f0\b0  (optional): BPM detection and analysis\
+\
+  \cf3 Backend (Existing)\cf2 \
+\
+  - 
+\f1\b Daemon:
+\f0\b0  Reachy Mini FastAPI server (Mac/Linux)\
+  - 
+\f1\b APIs Used:
+\f0\b0 \
+    - \uc0\u9989  \cf4 WebSocket /api/state/ws/full\cf2  - Telemetry stream\
+    - \uc0\u9989  \cf4 POST /api/move/play/recorded-move-dataset/\{dataset\}/\{move\}\cf2  - Execute move\
+    - \uc0\u9989  \cf4 POST /api/move/stop\cf2  - Stop execution\
+    - \uc0\u10060  Manual control endpoint (needs identification)\
+    - \uc0\u10067  \cf4 GET /api/camera/stream.mjpg\cf2  - Camera stream (to verify)\
+\
+  ---\
+  
+\f1\b Data Flow
+\f0\b0 \
+\
+  \cf3 Choreography Creation (Offline)\cf2 \
+\
+  User adjusts sliders\
+      \uc0\u8595 \
+  MuJoCo updates locally (instant feedback)\
+      \uc0\u8595 \
+  User sets keyframes (position + timestamp)\
+      \uc0\u8595 \
+  Save as move JSON\
+      \uc0\u8595 \
+  Local storage on iPhone\
+\
+  \cf3 Robot Execution (Online)\cf2 \
+\
+  User selects move from library\
+      \uc0\u8595 \
+  Send HTTP command to daemon\
+      \uc0\u8595 \
+  Daemon executes on physical robot\
+      \uc0\u8595 \
+  Daemon streams telemetry via WebSocket\
+      \uc0\u8595 \
+  iPhone MuJoCo syncs to show real robot state\
+\
+  \cf3 Video Production\cf2 \
+\
+  User creates choreography + imports music\
+      \uc0\u8595 \
+  User choreographs camera movements (keyframes)\
+      \uc0\u8595 \
+  Preview in MuJoCo\
+      \uc0\u8595 \
+  Record MuJoCo viewport with ReplayKit\
+      \uc0\u8595 \
+  Overlay audio track\
+      \uc0\u8595 \
+  Export as MP4\
+      \uc0\u8595 \
+  Share to social media\
+\
+  ---\
+  
+\f1\b File Formats
+\f0\b0 \
+\
+  \cf3 Move JSON (Compatible with Daemon)\cf2 \
+\
+  \{\
+    \cf5 "description"\cf2 : \cf6 "Custom dance move"\cf2 ,\
+    \cf5 "time"\cf2 : [\cf7 0.0\cf2 , \cf7 1.2\cf2 , \cf7 2.5\cf2 , \cf7 3.8\cf2 ],\
+    \cf5 "set_target_data"\cf2 : [\
+      \{\
+        \cf5 "head"\cf2 : [[\cf7 1\cf2 ,\cf7 0\cf2 ,\cf7 0\cf2 ,\cf7 0.15\cf2 ], [\cf7 0\cf2 ,\cf7 1\cf2 ,\cf7 0\cf2 ,\cf7 0\cf2 ], [\cf7 0\cf2 ,\cf7 0\cf2 ,\cf7 1\cf2 ,\cf7 0\cf2 ], [\cf7 0\cf2 ,\cf7 0\cf2 ,\cf7 0\cf2 ,\cf7 1\cf2 ]],\
+        \cf5 "antennas"\cf2 : [\cf7 0.5\cf2 , \cf7 -0.5\cf2 ],\
+        \cf5 "body_yaw"\cf2 : \cf7 0.0\cf2 \
+      \},\
+      ...\
+    ]\
+  \}\
+\
+  \cf3 Camera Choreography JSON (New Format)\cf2 \
+\
+  \{\
+    \cf5 "description"\cf2 : \cf6 "Camera path for dance video"\cf2 ,\
+    \cf5 "time"\cf2 : [\cf7 0.0\cf2 , \cf7 2.0\cf2 , \cf7 4.0\cf2 , \cf7 6.0\cf2 ],\
+    \cf5 "camera_keyframes"\cf2 : [\
+      \{\
+        \cf5 "position"\cf2 : \{\cf5 "x"\cf2 : \cf7 0.0\cf2 , \cf5 "y"\cf2 : \cf7 -2.0\cf2 , \cf5 "z"\cf2 : \cf7 1.0\cf2 \},\
+        \cf5 "rotation"\cf2 : \{\cf5 "azimuth"\cf2 : \cf7 160\cf2 , \cf5 "elevation"\cf2 : \cf7 -20\cf2 \},\
+        \cf5 "distance"\cf2 : \cf7 2.0\cf2 \
+      \},\
+      ...\
+    ]\
+  \}\
+\
+  ---\
+  
+\f1\b Development Roadmap
+\f0\b0 \
+\
+  \cf3 Phase 1: MuJoCo Foundation (Critical Path)\cf2 \
+\
+  
+\f1\b Goal:
+\f0\b0  Get MuJoCo rendering on iOS\
+\
+  - Compile MuJoCo C++ library for iOS ARM64\
+  - Integrate MoltenVK (OpenGL \uc0\u8594  Metal translation)\
+  - Create basic Metal rendering pipeline\
+  - Load Reachy Mini model and render static scene\
+  - Implement camera controls (pinch/pan gestures)\
+\
+  
+\f1\b Blockers:
+\f0\b0  MuJoCo iOS compilation, MoltenVK integration
+\f1\b Estimated:
+\f0\b0  2-3 days\
+\
+  ---\
+  \cf3 Phase 2: Choreography Studio (MVP Core)\cf2 \
+\
+  
+\f1\b Goal:
+\f0\b0  Create and preview moves locally\
+\
+  - Position sliders (X/Y/Z, yaw/pitch/roll, antennas)\
+  - Update MuJoCo model from slider values (real-time)\
+  - Keyframe system (timestamp + pose)\
+  - Timeline visualization\
+  - Save move as JSON to local storage\
+\
+  
+\f1\b Dependencies:
+\f0\b0  Phase 1 complete
+\f1\b Estimated:
+\f0\b0  1-2 days\
+\
+  ---\
+  \cf3 Phase 3: Video Export (MVP Feature)\cf2 \
+\
+  
+\f1\b Goal:
+\f0\b0  Record and export videos\
+\
+  - Camera position/angle sliders\
+  - Camera keyframe system\
+  - Preview camera path\
+  - ReplayKit screen recording integration\
+  - Audio import from Photos\
+  - Audio overlay on recorded video\
+  - Export to Photos as MP4\
+\
+  
+\f1\b Dependencies:
+\f0\b0  Phase 2 complete
+\f1\b Estimated:
+\f0\b0  1-2 days\
+\
+  ---\
+  \cf3 Phase 4: Controller Module (Robot Integration)\cf2 \
+\
+  
+\f1\b Goal:
+\f0\b0  Control physical robot from app\
+\
+  - WebSocket client for telemetry stream\
+  - Sync MuJoCo with daemon state\
+  - Move library UI (browse dances/emotions)\
+  - Execute move via HTTP API\
+  - Stop move command\
+  - Find/implement manual control endpoint\
+\
+  
+\f1\b Dependencies:
+\f0\b0  Phase 1 complete (can be parallel with Phase 2/3)
+\f1\b Estimated:
+\f0\b0  1 day\
+\
+  ---\
+  \cf3 Phase 5: Audio & BPM Tools (Enhancement)\cf2 \
+\
+  
+\f1\b Goal:
+\f0\b0  Music synchronization\
+\
+  - Audio file import (Music, Files, URL)\
+  - Waveform visualization\
+  - Auto BPM detection (AudioKit or manual algorithm)\
+  - Manual BPM tap tool\
+  - Beat grid on timeline\
+  - Snap keyframes to beats\
+\
+  
+\f1\b Dependencies:
+\f0\b0  Phase 2 complete
+\f1\b Estimated:
+\f0\b0  1-2 days\
+\
+  ---\
+  \cf3 Phase 6: Remote Viewer (Optional)\cf2 \
+\
+  
+\f1\b Goal:
+\f0\b0  Live camera feed\
+\
+  - Verify camera stream API endpoint\
+  - MJPEG stream display\
+  - Snapshot functionality\
+\
+  
+\f1\b Dependencies:
+\f0\b0  Phase 4 complete
+\f1\b Estimated:
+\f0\b0  0.5 day\
+\
+  ---\
+  \cf3 Phase 7: Polish & Social Sharing\cf2 \
+\
+  
+\f1\b Goal:
+\f0\b0  Production-ready export\
+\
+  - Social media share sheet integration\
+  - Instagram/TikTok direct sharing\
+  - Auto-generate captions\
+  - Video quality settings\
+  - UI/UX polish\
+\
+  
+\f1\b Dependencies:
+\f0\b0  Phase 3 complete
+\f1\b Estimated:
+\f0\b0  1 day\
+\
+  ---\
+  
+\f1\b MVP Timeline (4-7 Days)
+\f0\b0 \
+\
+  
+\f1\b Minimum Viable Product:
+\f0\b0 \
+  - Phase 1: MuJoCo rendering \uc0\u9989 \
+  - Phase 2: Choreography studio \uc0\u9989 \
+  - Phase 3: Video export \uc0\u9989 \
+\
+  
+\f1\b Total:
+\f0\b0  ~4-7 days (aggressive timeline, assumes no major blockers)\
+\
+  
+\f1\b Nice-to-Have (if time permits):
+\f0\b0 \
+  - Phase 4: Controller\
+  - Phase 5: BPM tools\
+  - Phase 6: Remote viewer\
+\
+  ---\
+  
+\f1\b Known Challenges
+\f0\b0 \
+\
+  \cf3 Critical Unknowns\cf2 \
+\
+  1. 
+\f1\b MuJoCo iOS Compilation:
+\f0\b0  Has anyone successfully compiled MuJoCo for iOS ARM64?\
+  2. 
+\f1\b MoltenVK Performance:
+\f0\b0  Will OpenGL \uc0\u8594  Metal translation be fast enough for 60fps?\
+  3. 
+\f1\b Manual Control API:
+\f0\b0  Need to identify correct endpoint (current \cf4 /api/joints/target\cf2  returns 404)\
+\
+  \cf3 Technical Risks\cf2 \
+\
+  - 
+\f1\b Metal Rendering Complexity:
+\f0\b0  Converting MuJoCo's OpenGL renderer to Metal is non-trivial\
+  - 
+\f1\b ReplayKit Limitations:
+\f0\b0  Screen recording may have performance impact on MuJoCo rendering\
+  - 
+\f1\b Audio Sync Accuracy:
+\f0\b0  Ensuring frame-perfect sync between video and audio\
+\
+  \cf3 Timeline Risks\cf2 \
+\
+  - 
+\f1\b 4-7 days is aggressive
+\f0\b0  - Assumes no major blockers in MuJoCo compilation\
+  - 
+\f1\b MoltenVK integration
+\f0\b0  could take longer than expected\
+  - 
+\f1\b Camera choreography
+\f0\b0  adds significant complexity\
+\
+  ---\
+  
+\f1\b Success Criteria
+\f0\b0 \
+\
+  \cf3 MVP Success\cf2 \
+\
+  - User can adjust robot position and see it move in MuJoCo (iPhone)\
+  - User can create keyframes and save as move JSON\
+  - User can import music and record video of choreography\
+  - Video exports to Photos as MP4\
+\
+  \cf3 Full Success\cf2 \
+\
+  - All 4 modules functional\
+  - Can control physical robot from iPhone\
+  - BPM detection and beat snapping works\
+  - Videos can be directly shared to Instagram/TikTok\
+  - Performance: 30+ fps in MuJoCo, smooth UI\
+\
+  ---\
+  
+\f1\b Next Steps
+\f0\b0 \
+\
+  1. 
+\f1\b Research MuJoCo iOS compilation
+\f0\b0  (check if anyone has done it)\
+  2. 
+\f1\b Set up Xcode project
+\f0\b0  with Metal template\
+  3. 
+\f1\b Test MoltenVK
+\f0\b0  with simple OpenGL demo\
+  4. 
+\f1\b Prototype WebSocket connection
+\f0\b0  to daemon\
+  5. 
+\f1\b Design UI mockups
+\f0\b0  in Figma (optional but helpful)\
+\
+  ---\
+  
+\f1\b Resources
+\f0\b0 \
+\
+  - 
+\f1\b MuJoCo Docs:
+\f0\b0  \cf4 https://mujoco.readthedocs.io/\cf2 \
+  - 
+\f1\b MoltenVK:
+\f0\b0  \cf4 https://github.com/KhronosGroup/MoltenVK\cf2 \
+  - 
+\f1\b Reachy Mini Daemon API:
+\f0\b0  (local documentation in \cf4 reachy_mini/src/reachy_mini/daemon/\cf2 )\
+  - 
+\f1\b ReplayKit Guide:
+\f0\b0  \cf4 https://developer.apple.com/documentation/replaykit\cf2 \
+\
+  ---\
+  
+\f1\b Last Updated:
+\f0\b0  2025-10-19
+\f1\b Author:
+\f0\b0  Carson (LAURA Project)\
+}

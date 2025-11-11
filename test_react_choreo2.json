@@ -1,0 +1,26 @@
+{
+  "bpm": 128.14881896972656,
+  "sequence": [
+    {
+      "move": "groovy_sway_and_roll"
+    },
+    {
+      "move": "jackson_square"
+    },
+    {
+      "move": "interwoven_spirals"
+    },
+    {
+      "move": "polyrhythm_combo"
+    },
+    {
+      "move": "side_peekaboo"
+    },
+    {
+      "move": "dizzy_spin"
+    },
+    {
+      "move": "pendulum_swing"
+    }
+  ]
+}

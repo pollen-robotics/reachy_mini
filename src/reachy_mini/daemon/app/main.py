@@ -23,7 +23,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from reachy_mini.apps.manager import AppManager
-from reachy_mini.daemon.app.routers import apps, daemon, kinematics, motors, move, state
+from reachy_mini.daemon.app.routers import apps, camera, daemon, kinematics, motors, move, state
 from reachy_mini.daemon.daemon import Daemon
 
 DASHBOARD_PAGES = Path(__file__).parent / "dashboard"
@@ -137,7 +137,13 @@ def run_app(args: Args) -> None:
     logging.basicConfig(level=logging.INFO)
 
     app = create_app(args)
-    uvicorn.run(app, host=args.fastapi_host, port=args.fastapi_port)
+    uvicorn.run(
+        app,
+        host=args.fastapi_host,
+        port=args.fastapi_port,
+        log_level="warning",  # Suppress INFO access logs
+        access_log=False,  # Disable HTTP request logging
+    )
 
 
 def main() -> None:

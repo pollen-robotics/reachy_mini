@@ -1,0 +1,25 @@
+{
+  "bpm": 128.14881896972656,
+  "sequence": [
+    {
+      "move": "interwoven_spirals",
+      "cycles": 1
+    },
+    {
+      "move": "uh_huh_tilt",
+      "cycles": 1
+    },
+    {
+      "move": "interwoven_spirals",
+      "cycles": 1
+    },
+    {
+      "move": "sharp_side_tilt",
+      "cycles": 3
+    },
+    {
+      "move": "side_to_side_sway",
+      "cycles": 2
+    }
+  ]
+}

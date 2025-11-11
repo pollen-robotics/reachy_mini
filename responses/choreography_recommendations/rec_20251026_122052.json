@@ -1,0 +1,77 @@
+{
+  "bpm": 114.68169403076172,
+  "sequence": [
+    {
+      "move": "polyrhythm_combo",
+      "cycles": 1
+    },
+    {
+      "move": "side_to_side_sway",
+      "cycles": 1
+    },
+    {
+      "move": "head_tilt_roll",
+      "cycles": 1
+    },
+    {
+      "move": "polyrhythm_combo",
+      "cycles": 1
+    },
+    {
+      "move": "yeah_nod",
+      "cycles": 2
+    },
+    {
+      "move": "uh_huh_tilt",
+      "cycles": 1
+    },
+    {
+      "move": "groovy_sway_and_roll",
+      "cycles": 1
+    },
+    {
+      "move": "polyrhythm_combo",
+      "cycles": 1
+    },
+    {
+      "move": "stumble_and_recover",
+      "cycles": 1
+    },
+    {
+      "move": "neck_recoil",
+      "cycles": 3
+    },
+    {
+      "move": "side_to_side_sway",
+      "cycles": 2
+    },
+    {
+      "move": "stumble_and_recover",
+      "cycles": 2
+    },
+    {
+      "move": "yeah_nod",
+      "cycles": 1
+    },
+    {
+      "move": "polyrhythm_combo",
+      "cycles": 2
+    },
+    {
+      "move": "sharp_side_tilt",
+      "cycles": 1
+    },
+    {
+      "move": "polyrhythm_combo",
+      "cycles": 1
+    },
+    {
+      "move": "polyrhythm_combo",
+      "cycles": 2
+    },
+    {
+      "move": "sharp_side_tilt",
+      "cycles": 2
+    }
+  ]
+}

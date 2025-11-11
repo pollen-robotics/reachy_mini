@@ -1,0 +1,197 @@
+{
+  "extension": {
+    "name": "AI Choreography Builder",
+    "version": "1.0.0",
+    "author": "Carson (LAURA Project)",
+    "description": "Generate AI-powered choreographies synced to music using audio analysis",
+    "requires_daemon": true,
+    "api_base_url": "http://localhost:5100"
+  },
+
+  "display": {
+    "enabled": true,
+    "url": "/display",
+    "title": "Choreography Timeline",
+    "description": "Visual timeline editor for choreography sequences"
+  },
+
+  "sidebar_panel": {
+    "title": "Choreography Builder",
+    "icon": "🎵",
+
+    "controls": [
+      {
+        "type": "file_upload",
+        "id": "music_file",
+        "label": "Upload Music",
+        "endpoint": "/upload",
+        "method": "POST",
+        "accept": ".mp3,.wav,.m4a",
+        "max_size_mb": 50
+      },
+      {
+        "type": "status_text",
+        "id": "current_song",
+        "label": "Current Song",
+        "endpoint": "/status",
+        "field": "song_name",
+        "default": "None"
+      },
+      {
+        "type": "separator"
+      },
+      {
+        "type": "dropdown",
+        "id": "mood",
+        "label": "Choreography Mood",
+        "endpoint": "/config/mood",
+        "method": "POST",
+        "options": [
+          {"label": "Energetic", "value": "energetic"},
+          {"label": "Calm", "value": "calm"},
+          {"label": "Playful", "value": "playful"},
+          {"label": "Dramatic", "value": "dramatic"},
+          {"label": "Auto-Detect", "value": "auto"}
+        ],
+        "default": "auto"
+      },
+      {
+        "type": "slider",
+        "id": "intensity",
+        "label": "Movement Intensity",
+        "endpoint": "/config/intensity",
+        "method": "POST",
+        "min": 0.3,
+        "max": 1.8,
+        "default": 1.0,
+        "step": 0.1
+      },
+      {
+        "type": "slider",
+        "id": "complexity",
+        "label": "Move Complexity",
+        "endpoint": "/config/complexity",
+        "method": "POST",
+        "min": 1,
+        "max": 10,
+        "default": 5,
+        "step": 1
+      },
+      {
+        "type": "separator"
+      },
+      {
+        "type": "button",
+        "id": "analyze",
+        "label": "Analyze Audio",
+        "endpoint": "/analyze",
+        "method": "POST",
+        "color": "blue",
+        "enabled_when": "song_uploaded"
+      },
+      {
+        "type": "button",
+        "id": "generate",
+        "label": "Generate Choreography",
+        "endpoint": "/generate",
+        "method": "POST",
+        "color": "green",
+        "enabled_when": "analyzed"
+      },
+      {
+        "type": "separator"
+      },
+      {
+        "type": "button",
+        "id": "play",
+        "label": "Play Choreography",
+        "endpoint": "/play",
+        "method": "POST",
+        "color": "green",
+        "enabled_when": "choreography_ready",
+        "disabled_when": "playing"
+      },
+      {
+        "type": "button",
+        "id": "stop",
+        "label": "Stop",
+        "endpoint": "/stop",
+        "method": "POST",
+        "color": "red",
+        "enabled_when": "playing"
+      },
+      {
+        "type": "separator"
+      },
+      {
+        "type": "status_text",
+        "id": "progress",
+        "label": "Status",
+        "endpoint": "/status",
+        "field": "progress_message",
+        "default": "Ready"
+      },
+      {
+        "type": "progress_bar",
+        "id": "generation_progress",
+        "label": "Generation",
+        "endpoint": "/status",
+        "field": "generation_percent",
+        "visible_when": "generating"
+      },
+      {
+        "type": "separator"
+      },
+      {
+        "type": "button",
+        "id": "export",
+        "label": "Export JSON",
+        "endpoint": "/export",
+        "method": "GET",
+        "color": "blue",
+        "enabled_when": "choreography_ready",
+        "download": true
+      }
+    ]
+  },
+
+  "status_polling": {
+    "endpoint": "/status",
+    "interval_ms": 500,
+    "fields": {
+      "song_uploaded": "boolean",
+      "song_name": "string",
+      "analyzed": "boolean",
+      "choreography_ready": "boolean",
+      "generating": "boolean",
+      "playing": "boolean",
+      "generation_percent": "integer",
+      "progress_message": "string"
+    }
+  },
+
+  "lifecycle": {
+    "on_install": {
+      "commands": [
+        "pip install -r requirements.txt"
+      ]
+    },
+    "on_start": {
+      "command": "python choreography_player.py --api-mode --port 5100"
+    },
+    "on_stop": {
+      "endpoint": "/shutdown",
+      "method": "POST"
+    },
+    "healthcheck": {
+      "endpoint": "/health",
+      "interval_ms": 5000
+    }
+  },
+
+  "viewport_priority": {
+    "auto_claim": false,
+    "manual_claim": true,
+    "conflicts_with": ["mujoco_viewer"]
+  }
+}

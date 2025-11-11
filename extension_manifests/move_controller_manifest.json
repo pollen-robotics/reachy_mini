@@ -1,0 +1,292 @@
+{
+  "extension": {
+    "name": "Manual Move Controller",
+    "version": "1.0.0",
+    "author": "Carson (LAURA Project)",
+    "description": "Manual position control with sliders and preset moves",
+    "requires_daemon": true,
+    "api_base_url": "http://localhost:5200"
+  },
+
+  "display": {
+    "enabled": false,
+    "description": "No display needed - uses main 3D viewer"
+  },
+
+  "sidebar_panel": {
+    "title": "Manual Control",
+    "icon": "🎮",
+
+    "controls": [
+      {
+        "type": "section_header",
+        "label": "Head Position (mm)"
+      },
+      {
+        "type": "slider",
+        "id": "head_x",
+        "label": "X (Forward/Back)",
+        "endpoint": "/position/head",
+        "method": "POST",
+        "min": -50,
+        "max": 50,
+        "default": 0,
+        "step": 1,
+        "unit": "mm",
+        "color_zones": {
+          "safe": [-30, 30],
+          "warning": [-50, 50]
+        }
+      },
+      {
+        "type": "slider",
+        "id": "head_y",
+        "label": "Y (Left/Right)",
+        "endpoint": "/position/head",
+        "method": "POST",
+        "min": -60,
+        "max": 60,
+        "default": 0,
+        "step": 1,
+        "unit": "mm",
+        "color_zones": {
+          "safe": [-40, 40],
+          "warning": [-60, 60]
+        }
+      },
+      {
+        "type": "slider",
+        "id": "head_z",
+        "label": "Z (Up/Down)",
+        "endpoint": "/position/head",
+        "method": "POST",
+        "min": -30,
+        "max": 80,
+        "default": 0,
+        "step": 1,
+        "unit": "mm",
+        "color_zones": {
+          "safe": [0, 50],
+          "warning": [-30, 80]
+        }
+      },
+      {
+        "type": "separator"
+      },
+      {
+        "type": "section_header",
+        "label": "Head Rotation (degrees)"
+      },
+      {
+        "type": "slider",
+        "id": "head_yaw",
+        "label": "Yaw (Left/Right)",
+        "endpoint": "/position/head",
+        "method": "POST",
+        "min": -90,
+        "max": 90,
+        "default": 0,
+        "step": 5,
+        "unit": "°",
+        "symmetric_gradient": true
+      },
+      {
+        "type": "slider",
+        "id": "head_pitch",
+        "label": "Pitch (Up/Down)",
+        "endpoint": "/position/head",
+        "method": "POST",
+        "min": -45,
+        "max": 45,
+        "default": 0,
+        "step": 5,
+        "unit": "°",
+        "symmetric_gradient": true
+      },
+      {
+        "type": "slider",
+        "id": "head_roll",
+        "label": "Roll (Tilt)",
+        "endpoint": "/position/head",
+        "method": "POST",
+        "min": -45,
+        "max": 45,
+        "default": 0,
+        "step": 5,
+        "unit": "°",
+        "symmetric_gradient": true
+      },
+      {
+        "type": "separator"
+      },
+      {
+        "type": "section_header",
+        "label": "Antennas"
+      },
+      {
+        "type": "slider",
+        "id": "left_antenna",
+        "label": "Left Antenna",
+        "endpoint": "/position/antennas",
+        "method": "POST",
+        "min": -3,
+        "max": 3,
+        "default": 0,
+        "step": 0.1,
+        "unit": "rad",
+        "color_zones": {
+          "safe": [-3, 1],
+          "danger": [1, 3]
+        }
+      },
+      {
+        "type": "slider",
+        "id": "right_antenna",
+        "label": "Right Antenna",
+        "endpoint": "/position/antennas",
+        "method": "POST",
+        "min": -3,
+        "max": 3,
+        "default": 0,
+        "step": 0.1,
+        "unit": "rad",
+        "visual_reverse": true,
+        "color_zones": {
+          "safe": [-3, 1],
+          "danger": [1, 3]
+        }
+      },
+      {
+        "type": "separator"
+      },
+      {
+        "type": "section_header",
+        "label": "Binding Controls"
+      },
+      {
+        "type": "toggle",
+        "id": "bind_yaw",
+        "label": "Bind Yaw",
+        "endpoint": "/config/bindings",
+        "method": "POST",
+        "default": false,
+        "description": "Synchronize left/right yaw"
+      },
+      {
+        "type": "toggle",
+        "id": "bind_antenna_normal",
+        "label": "Bind Antennas (Normal)",
+        "endpoint": "/config/bindings",
+        "method": "POST",
+        "default": false,
+        "exclusive_with": "bind_antenna_inverse"
+      },
+      {
+        "type": "toggle",
+        "id": "bind_antenna_inverse",
+        "label": "Bind Antennas (Inverse)",
+        "endpoint": "/config/bindings",
+        "method": "POST",
+        "default": false,
+        "exclusive_with": "bind_antenna_normal"
+      },
+      {
+        "type": "separator"
+      },
+      {
+        "type": "section_header",
+        "label": "Quick Presets"
+      },
+      {
+        "type": "button_grid",
+        "id": "look_presets",
+        "buttons": [
+          {"label": "↖", "endpoint": "/preset/look_up_left", "method": "POST"},
+          {"label": "↑", "endpoint": "/preset/look_up", "method": "POST"},
+          {"label": "↗", "endpoint": "/preset/look_up_right", "method": "POST"},
+          {"label": "←", "endpoint": "/preset/look_left", "method": "POST"},
+          {"label": "●", "endpoint": "/preset/look_center", "method": "POST"},
+          {"label": "→", "endpoint": "/preset/look_right", "method": "POST"},
+          {"label": "↙", "endpoint": "/preset/look_down_left", "method": "POST"},
+          {"label": "↓", "endpoint": "/preset/look_down", "method": "POST"},
+          {"label": "↘", "endpoint": "/preset/look_down_right", "method": "POST"}
+        ],
+        "columns": 3
+      },
+      {
+        "type": "separator"
+      },
+      {
+        "type": "button",
+        "id": "home",
+        "label": "Home Position",
+        "endpoint": "/preset/home",
+        "method": "POST",
+        "color": "blue"
+      },
+      {
+        "type": "button",
+        "id": "sleep",
+        "label": "Sleep Position",
+        "endpoint": "/preset/sleep",
+        "method": "POST",
+        "color": "gray"
+      },
+      {
+        "type": "separator"
+      },
+      {
+        "type": "slider",
+        "id": "duration",
+        "label": "Movement Duration",
+        "endpoint": "/config/duration",
+        "method": "POST",
+        "min": 0.1,
+        "max": 3.0,
+        "default": 0.5,
+        "step": 0.1,
+        "unit": "s"
+      }
+    ]
+  },
+
+  "status_polling": {
+    "endpoint": "/status",
+    "interval_ms": 100,
+    "fields": {
+      "current_head_x": "float",
+      "current_head_y": "float",
+      "current_head_z": "float",
+      "current_head_yaw": "float",
+      "current_head_pitch": "float",
+      "current_head_roll": "float",
+      "current_left_antenna": "float",
+      "current_right_antenna": "float"
+    }
+  },
+
+  "lifecycle": {
+    "on_install": {
+      "commands": [
+        "pip install reachy-mini"
+      ]
+    },
+    "on_start": {
+      "command": "python -m move_controller_api --port 5200"
+    },
+    "on_stop": {
+      "endpoint": "/shutdown",
+      "method": "POST"
+    },
+    "healthcheck": {
+      "endpoint": "/health",
+      "interval_ms": 5000
+    }
+  },
+
+  "viewport_priority": {
+    "auto_claim": false,
+    "prefers": "mujoco_viewer",
+    "description": "Works best with 3D viewer to see movement"
+  }
+}

@@ -1,0 +1,92 @@
+{
+  "bpm": 108.0,
+  "sequence": [
+    {
+      "move": "welcoming1",
+      "cycles": 1,
+      "amplitude": 0.8,
+      "section": "intro",
+      "reasoning": "Gentle greeting to open performance, sets welcoming tone"
+    },
+    {
+      "move": "manual",
+      "head_pose": {
+        "yaw": -40,
+        "pitch": 20,
+        "roll": 0
+      },
+      "body_yaw": -35,
+      "duration": 1.2,
+      "section": "intro",
+      "reasoning": "Curious head tilt left with body lean, despite lower energy engagement is still needed"
+    },
+    {
+      "move": "simple_nod",
+      "cycles": 2,
+      "amplitude": 0.7,
+      "section": "intro",
+      "reasoning": "Gentle nodding acknowledgement, matches relaxed mood (0.63)"
+    },
+    {
+      "move": "manual",
+      "head_pose": {
+        "yaw": 45,
+        "pitch": -15,
+        "roll": 0
+      },
+      "body_yaw": 40,
+      "duration": 1.4,
+      "section": "intro",
+      "reasoning": "Head tilt right with subtle body rotation, builds into main section"
+    },
+    {
+      "move": "headbanger_combo",
+      "cycles": 4,
+      "amplitude": 0.85,
+      "section": "main",
+      "reasoning": "4 cycles (2.224s) - despite low energy (0.37), perfect danceability (1.0) demands energetic moves; headbanger matches aggressive mood (0.37)"
+    },
+    {
+      "move": "groovy_sway_and_roll",
+      "cycles": 5,
+      "amplitude": 0.9,
+      "section": "main",
+      "reasoning": "5 cycles (2.780s) - high danceability requires groovy movement, sway+roll creates party energy despite sad mood (0.63)"
+    },
+    {
+      "move": "manual",
+      "head_pose": {
+        "yaw": -60,
+        "pitch": 0,
+        "roll": 25
+      },
+      "body_yaw": -100,
+      "duration": 2.1,
+      "section": "main",
+      "reasoning": "Dramatic body spin left (body_yaw -100) with head roll, injects dynamic energy mid-sequence"
+    },
+    {
+      "move": "dizzy_spin",
+      "cycles": 3,
+      "amplitude": 0.95,
+      "section": "main",
+      "reasoning": "4 cycles (2.224s) - circular dizzy motion matches perfect danceability, creates visual interest"
+    },
+    {
+      "move": "manual",
+      "duration": 0.81,
+      "section": "outro",
+      "reasoning": "Auto-added neutral pause to fill remaining duration"
+    }
+  ],
+  "timing_analysis": {
+    "intro_duration": "0.0-6.0s (6.0s total)",
+    "main_duration": "6.0-30.0s (24.0s total)",
+    "beat_duration_ms": 555.6,
+    "total_moves": 18,
+    "choreography_summary": "High-danceability (1.0) performance emphasizes energetic moves (headbanger, groovy_sway_and_roll, dizzy_spin, jackson_square, polyrhythm_combo, interwoven_spirals) despite low energy (0.37). Balanced with 5 manual position moves for dramatic body turns (spins ranging -100\u00b0 to 110\u00b0). Intro uses gentle gestures; main section launches into sustained high-energy dance combinations. Sad mood (0.63) acknowledged through mood transitions but overridden by perfect danceability requirement. All moves precisely timed to fill exactly 30.0 seconds."
+  },
+  "recommendation_id": "rec_20251020_202151",
+  "generated_by": "anthropic/claude-haiku-4-5",
+  "timestamp": "2025-10-20T20:21:51.260745"
+}

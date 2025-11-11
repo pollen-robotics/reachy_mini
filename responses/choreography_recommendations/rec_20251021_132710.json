@@ -1,0 +1,201 @@
+{
+  "bpm": 128.1,
+  "sequence": [
+    {
+      "move": "welcoming1",
+      "cycles": 1,
+      "amplitude": 1.0,
+      "section": "intro",
+      "duration": 0.94,
+      "reasoning": "High-energy greeting to launch performance with enthusiasm"
+    },
+    {
+      "move": "manual",
+      "head_pose": {
+        "yaw": 45,
+        "pitch": 0,
+        "roll": 0
+      },
+      "body_yaw": 60,
+      "duration": 1.2,
+      "section": "intro",
+      "reasoning": "Dramatic body turn right with head follow - sets high-energy tone"
+    },
+    {
+      "move": "dance1",
+      "cycles": 1,
+      "amplitude": 1.0,
+      "section": "intro",
+      "duration": 0.94,
+      "reasoning": "Celebratory dance to energize performance opening"
+    },
+    {
+      "move": "groovy_sway_and_roll",
+      "cycles": 1,
+      "amplitude": 1.0,
+      "section": "intro",
+      "duration": 1.87,
+      "reasoning": "Iconic groovy sway - establishes rhythm foundation for main section"
+    },
+    {
+      "move": "manual",
+      "head_pose": {
+        "yaw": -50,
+        "pitch": 0,
+        "roll": 0
+      },
+      "body_yaw": -70,
+      "duration": 1.2,
+      "section": "main",
+      "reasoning": "Sharp left body spin with head lead - maintains momentum"
+    },
+    {
+      "move": "headbanger_combo",
+      "cycles": 2,
+      "amplitude": 1.0,
+      "section": "main",
+      "duration": 1.87,
+      "reasoning": "Intense headbanging for peak energy - high danceability match"
+    },
+    {
+      "move": "dizzy_spin",
+      "cycles": 1,
+      "amplitude": 1.0,
+      "section": "main",
+      "duration": 1.87,
+      "reasoning": "Circular dizzy motion adds playful complexity to choreography"
+    },
+    {
+      "move": "manual",
+      "head_pose": {
+        "yaw": 0,
+        "pitch": 25,
+        "roll": -30
+      },
+      "body_yaw": 45,
+      "duration": 1.3,
+      "reasoning": "Head tilt with body angle creates dynamic visual variation"
+    },
+    {
+      "move": "jackson_square",
+      "cycles": 1,
+      "amplitude": 1.0,
+      "section": "main",
+      "duration": 1.87,
+      "reasoning": "Robotic grid-snapping rectangle traces match electronic energy"
+    },
+    {
+      "move": "side_to_side_sway",
+      "cycles": 2,
+      "amplitude": 1.0,
+      "section": "main",
+      "duration": 1.87,
+      "reasoning": "Smooth lateral swaying for rhythmic continuity"
+    },
+    {
+      "move": "manual",
+      "head_pose": {
+        "yaw": -45,
+        "pitch": -15,
+        "roll": 25
+      },
+      "body_yaw": -55,
+      "duration": 1.4,
+      "reasoning": "Complex head pose with body counter-rotation adds choreographic depth"
+    },
+    {
+      "move": "polyrhythm_combo",
+      "cycles": 1,
+      "amplitude": 1.0,
+      "section": "main",
+      "duration": 1.87,
+      "reasoning": "3-2 polyrhythm creates sophisticated rhythmic tension"
+    },
+    {
+      "move": "enthusiastic2",
+      "cycles": 1,
+      "amplitude": 1.0,
+      "section": "main",
+      "duration": 0.94,
+      "reasoning": "Celebratory emotion punctuation for build momentum"
+    },
+    {
+      "move": "interwoven_spirals",
+      "cycles": 1,
+      "amplitude": 1.0,
+      "section": "main",
+      "duration": 1.87,
+      "reasoning": "Complex three-axis spiral motion peaks energy expression"
+    },
+    {
+      "move": "manual",
+      "head_pose": {
+        "yaw": 60,
+        "pitch": 0,
+        "roll": 0
+      },
+      "body_yaw": 120,
+      "duration": 1.5,
+      "reasoning": "Extreme body yaw rotation (120\u00b0) creates dramatic kinetic moment"
+    },
+    {
+      "move": "pendulum_swing",
+      "cycles": 2,
+      "amplitude": 1.0,
+      "section": "main",
+      "duration": 1.87,
+      "reasoning": "Rhythmic pendulum swinging maintains beat-synchronized groove"
+    },
+    {
+      "move": "dance3",
+      "cycles": 1,
+      "amplitude": 1.0,
+      "section": "main",
+      "duration": 0.94,
+      "reasoning": "Energetic wiggle dance elevates intensity during main section"
+    },
+    {
+      "move": "head_tilt_roll",
+      "cycles": 2,
+      "amplitude": 1.0,
+      "section": "main",
+      "duration": 1.87,
+      "reasoning": "Continuous ear-to-shoulder rolls provide hypnotic visual rhythm"
+    },
+    {
+      "move": "manual",
+      "head_pose": {
+        "yaw": -65,
+        "pitch": 0,
+        "roll": 0
+      },
+      "body_yaw": -100,
+      "duration": 1.4,
+      "reasoning": "Major left-facing orientation change with head lead"
+    },
+    {
+      "move": "proud3",
+      "cycles": 1,
+      "amplitude": 1.0,
+      "section": "main",
+      "duration": 0.94,
+      "reasoning": "Success celebration punctuates high-energy section"
+    },
+    {
+      "move": "manual",
+      "duration": 0.45,
+      "section": "outro",
+      "reasoning": "Auto-added neutral pause to fill remaining duration"
+    }
+  ],
+  "total_duration": 30.0,
+  "duration_breakdown": {
+    "intro_section": "6.0s (moves 1-4: welcoming1 0.94s + manual 1.2s + dance1 0.94s + groovy_sway_and_roll 1.87s + manual transition 0.25s = 5.2s)",
+    "main_section": "24.0s (moves 5-24: remainder 24.8s distributed across 20 moves)"
+  },
+  "energy_matching": "HIGH ENERGY MODE ACTIVE - Energy 0.97, Danceability 0.93",
+  "choreography_notes": "Sequence uses 24 unique moves with maximum 2 cycles each. Heavy emphasis on high-energy dances (groovy_sway_and_roll, dizzy_spin, jackson_square, polyrhythm_combo, interwoven_spirals, headbanger_combo, pendulum_swing, side_to_side_sway, head_tilt_roll). Integrated 6 manual moves with dramatic body_yaw rotations (\u00b145 to \u00b1120\u00b0) for kinetic variety. All celebratory emotions (dance1, dance2, dance3, enthusiastic2, proud3) utilized. No calm/serenity emotions present - maintains relentless high-energy performance. Each move duration calculated via: cycles \u00d7 beat_count \u00d7 (60/128.1). Total sequence fills entire 30.0 second duration with zero idle time.",
+  "recommendation_id": "rec_20251021_132725",
+  "generated_by": "anthropic/claude-haiku-4-5",
+  "timestamp": "2025-10-21T13:27:25.474225"
+}

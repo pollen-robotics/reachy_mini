@@ -1,0 +1,162 @@
+{
+  "bpm": 104.383544921875,
+  "sequence": [
+    {
+      "move": "welcoming1",
+      "cycles": 1,
+      "amplitude": 0.7,
+      "section": "intro",
+      "reasoning": "Gentle welcoming gesture to open the performance softly, matching the relaxed mood"
+    },
+    {
+      "move": "manual",
+      "head_pose": {
+        "yaw": -25,
+        "pitch": 5,
+        "roll": 0
+      },
+      "body_yaw": 0,
+      "duration": 1.5,
+      "section": "intro",
+      "reasoning": "Contemplative head tilt to establish calm, introspective energy for the sad/relaxed mood"
+    },
+    {
+      "move": "serenity1",
+      "cycles": 1,
+      "amplitude": 0.6,
+      "section": "intro",
+      "reasoning": "Calming gesture to set peaceful tone during intro phase"
+    },
+    {
+      "move": "idle",
+      "duration": 1.4,
+      "section": "intro",
+      "reasoning": "Breathing space to let intro settle, total intro = 6.0s"
+    },
+    {
+      "move": "manual",
+      "head_pose": {
+        "pitch": -10
+      },
+      "body_yaw": 0,
+      "duration": 1.2,
+      "section": "main",
+      "reasoning": "Subtle downward gaze transition into main section"
+    },
+    {
+      "move": "thoughtful1",
+      "cycles": 1,
+      "amplitude": 0.6,
+      "section": "main",
+      "reasoning": "Reflective upward look to emphasize contemplative mood"
+    },
+    {
+      "move": "side_to_side_sway",
+      "cycles": 3,
+      "amplitude": 0.7,
+      "section": "main",
+      "reasoning": "Smooth gentle swaying for relaxed energy, 3 cycles = 3.45s"
+    },
+    {
+      "move": "manual",
+      "head_pose": {
+        "yaw": 35,
+        "pitch": 0
+      },
+      "body_yaw": 45,
+      "duration": 1.8,
+      "section": "main",
+      "reasoning": "Turn to side with body and head for dynamic orientation shift"
+    },
+    {
+      "move": "pendulum_swing",
+      "cycles": 2,
+      "amplitude": 0.65,
+      "section": "main",
+      "reasoning": "Gentle pendulum motion maintains rhythmic flow, 2 cycles = 2.30s"
+    },
+    {
+      "move": "idle",
+      "duration": 1.2,
+      "section": "main",
+      "reasoning": "Pause for emotional depth"
+    },
+    {
+      "move": "manual",
+      "head_pose": {
+        "yaw": -35,
+        "pitch": 5
+      },
+      "body_yaw": -45,
+      "duration": 1.5,
+      "section": "main",
+      "reasoning": "Return to opposite side, creating symmetrical movement pattern"
+    },
+    {
+      "move": "head_tilt_roll",
+      "cycles": 2,
+      "amplitude": 0.6,
+      "section": "main",
+      "reasoning": "Continuous gentle rolling motion for smooth grace, 2 cycles = 2.30s"
+    },
+    {
+      "move": "downcast1",
+      "cycles": 1,
+      "amplitude": 0.7,
+      "section": "main",
+      "reasoning": "Expressive sad/discouraged gesture matches the melancholic audio mood"
+    },
+    {
+      "move": "manual",
+      "head_pose": {
+        "yaw": 0,
+        "pitch": -15,
+        "roll": 0
+      },
+      "body_yaw": 0,
+      "duration": 1.6,
+      "section": "main",
+      "reasoning": "Return to center with downward contemplation"
+    },
+    {
+      "move": "side_glance_flick",
+      "cycles": 2,
+      "amplitude": 0.6,
+      "section": "main",
+      "reasoning": "Quick glancing movements for subtle interest, 2 cycles = 2.30s"
+    },
+    {
+      "move": "idle",
+      "duration": 2.0,
+      "section": "main",
+      "reasoning": "Extended pause for meditative stillness, emphasizing calm mood"
+    },
+    {
+      "move": "manual",
+      "head_pose": {
+        "pitch": 10,
+        "roll": 0
+      },
+      "body_yaw": 0,
+      "duration": 1.4,
+      "section": "main",
+      "reasoning": "Gentle forward-facing tilt to finish with openness"
+    },
+    {
+      "move": "serenity1",
+      "cycles": 1,
+      "amplitude": 0.65,
+      "section": "main",
+      "reasoning": "Final calming gesture to wind down with peaceful closure"
+    },
+    {
+      "move": "idle",
+      "duration": 0.68,
+      "section": "main",
+      "reasoning": "Final stillness to reach exact 30.0s duration"
+    }
+  ],
+  "recommendation_id": "rec_20251020_193620",
+  "generated_by": "anthropic/claude-haiku-4-5",
+  "timestamp": "2025-10-20T19:36:20.220744"
+}

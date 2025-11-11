@@ -1,0 +1,158 @@
+{
+  "bpm": 128.1,
+  "sequence": [
+    {
+      "move": "welcoming1",
+      "cycles": 1,
+      "amplitude": 0.7,
+      "section": "intro",
+      "reasoning": "Gentle greeting to open performance, matches relaxed mood"
+    },
+    {
+      "move": "idle",
+      "duration": 0.9,
+      "section": "intro",
+      "reasoning": "Pause for anticipation before movement begins"
+    },
+    {
+      "move": "serenity1",
+      "cycles": 1,
+      "amplitude": 0.8,
+      "section": "intro",
+      "reasoning": "Calming emotion to establish peaceful atmosphere"
+    },
+    {
+      "move": "side_to_side_sway",
+      "cycles": 4,
+      "amplitude": 0.6,
+      "section": "intro",
+      "reasoning": "Smooth, gentle sway matching relaxed energy and high danceability"
+    },
+    {
+      "move": "idle",
+      "duration": 1.2,
+      "section": "main",
+      "reasoning": "Transitional pause before main section begins"
+    },
+    {
+      "move": "dance1",
+      "cycles": 2,
+      "amplitude": 0.8,
+      "section": "main",
+      "reasoning": "Light dance emotion expressing happiness despite sad mood label"
+    },
+    {
+      "move": "pendulum_swing",
+      "cycles": 8,
+      "amplitude": 0.9,
+      "section": "main",
+      "reasoning": "Extended smooth swaying for main groove, high danceability"
+    },
+    {
+      "move": "head_tilt_roll",
+      "cycles": 6,
+      "amplitude": 0.7,
+      "section": "main",
+      "reasoning": "Rhythmic head roll adding variation while maintaining relaxed feel"
+    },
+    {
+      "move": "side_glance_flick",
+      "cycles": 4,
+      "amplitude": 0.8,
+      "section": "main",
+      "reasoning": "Quick engaging movement adding interest to main section"
+    },
+    {
+      "move": "idle",
+      "duration": 0.9,
+      "section": "main",
+      "reasoning": "Brief pause for dynamic contrast"
+    },
+    {
+      "move": "groovy_sway_and_roll",
+      "cycles": 6,
+      "amplitude": 1.0,
+      "section": "main",
+      "reasoning": "Complex groovy motion leveraging high danceability score"
+    },
+    {
+      "move": "simple_nod",
+      "cycles": 8,
+      "amplitude": 0.7,
+      "section": "main",
+      "reasoning": "Continuous rhythmic nodding maintaining engagement"
+    },
+    {
+      "move": "dance2",
+      "cycles": 2,
+      "amplitude": 0.9,
+      "section": "main",
+      "reasoning": "Alternative dance emotion keeping energy consistent"
+    },
+    {
+      "move": "idle",
+      "duration": 0.8,
+      "section": "main",
+      "reasoning": "Pause before final phrase"
+    },
+    {
+      "move": "side_peekaboo",
+      "cycles": 4,
+      "amplitude": 0.8,
+      "section": "main",
+      "reasoning": "Playful peeking motion adding personality"
+    },
+    {
+      "move": "pendulum_swing",
+      "cycles": 6,
+      "amplitude": 0.8,
+      "section": "main",
+      "reasoning": "Return to smooth swaying for continuity"
+    },
+    {
+      "move": "headbanger_combo",
+      "cycles": 4,
+      "amplitude": 0.7,
+      "section": "main",
+      "reasoning": "Moderate energy nod-bounce maintaining danceability"
+    },
+    {
+      "move": "grateful1",
+      "cycles": 1,
+      "amplitude": 0.8,
+      "section": "main",
+      "reasoning": "Gratitude emotion expressing satisfaction"
+    },
+    {
+      "move": "idle",
+      "duration": 1.0,
+      "section": "main",
+      "reasoning": "Calming pause before wind-down"
+    },
+    {
+      "move": "serenity1",
+      "cycles": 1,
+      "amplitude": 0.8,
+      "section": "main",
+      "reasoning": "Return to peaceful state for resolution"
+    },
+    {
+      "move": "side_to_side_sway",
+      "cycles": 5,
+      "amplitude": 0.6,
+      "section": "main",
+      "reasoning": "Gentle final sway to ease out of performance"
+    },
+    {
+      "move": "idle",
+      "duration": 0.7,
+      "section": "main",
+      "reasoning": "Final rest position"
+    }
+  ],
+  "total_duration": 30.0,
+  "notes": "Choreography emphasizes relaxed, smooth movements matching the sad/relaxed mood while celebrating the high danceability (0.93). Minimal BPM-calculated durations total 26.3s, with 3.7s of idle time strategically placed for dynamics and transitions. Intro (6.0s) uses welcoming, calming emotions with gentle swaying. Main section (24.0s) balances groovy complex movements with simple nodding and dance emotions, creating sustained engagement while respecting the zero-energy and relaxed mood profile.",
+  "recommendation_id": "rec_20251020_182005",
+  "generated_by": "anthropic/claude-haiku-4-5",
+  "timestamp": "2025-10-20T18:20:05.979089"
+}

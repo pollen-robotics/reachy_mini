@@ -1,0 +1,21 @@
+{
+  "bpm": 128.14881896972656,
+  "sequence": [
+    {
+      "move": "jackson_square",
+      "cycles": 2
+    },
+    {
+      "move": "dizzy_spin",
+      "cycles": 3
+    },
+    {
+      "move": "jackson_square",
+      "cycles": 1
+    },
+    {
+      "move": "groovy_sway_and_roll",
+      "cycles": 1
+    }
+  ]
+}
