@@ -14,7 +14,7 @@ def get_respeaker_card_number() -> int:
 
         lines = output.split("\n")
         for line in lines:
-            if "ReSpeaker" in line and "card" in line:
+            if "respeaker" in line.lower() and "card" in line:
                 card_number = line.split(":")[0].split("card ")[1].strip()
                 logging.debug(f"Found ReSpeaker sound card: {card_number}")
                 return int(card_number)

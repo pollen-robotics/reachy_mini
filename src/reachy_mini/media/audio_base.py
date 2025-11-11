@@ -7,20 +7,12 @@ interface for audio input/output.
 import logging
 import struct
 from abc import ABC, abstractmethod
-from enum import Enum
 from typing import List, Optional
 
 import numpy as np
 import numpy.typing as npt
 import usb
 from libusb_package import get_libusb1_backend
-
-
-class AudioBackend(Enum):
-    """Audio backends."""
-
-    SOUNDDEVICE = "sounddevice"
-    GSTREAMER = "gstreamer"
 
 
 class AudioBase(ABC):
@@ -35,11 +27,10 @@ class AudioBase(ABC):
         "DOA_VALUE_RADIANS": (20, 19, 8 + 1, "ro", "radians"),
     }
 
-    def __init__(self, backend: AudioBackend, log_level: str = "INFO") -> None:
+    def __init__(self, log_level: str = "INFO") -> None:
         """Initialize the audio device."""
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(log_level)
-        self.backend = backend
         self._respeaker = self._init_respeaker_usb()
         # name, resid, cmdid, length, type
 
@@ -148,10 +139,15 @@ class AudioBase(ABC):
     def get_DoA(self) -> tuple[float, bool] | None:
         """Get the Direction of Arrival (DoA) value from the ReSpeaker device.
 
-        0° is left, 90° is front/back, 180° is right
+        The spatial angle is given in radians:
+        0 radians is left, π/2 radians is front/back, π radians is right.
+
+        Note: The microphone array requires firmware version 2.1.0 or higher to support this feature.
+        The firmware is located in src/reachy_mini/assets/firmware/*.bin.
+        Refer to https://wiki.seeedstudio.com/respeaker_xvf3800_introduction/#update-firmware for the upgrade process.
 
         Returns:
-            tuple: A tuple containing the DoA value as an integer and the speech detection, or None if the device is not found.
+            tuple: A tuple containing the DoA value as a float (radians) and the speech detection as a bool, or None if the device is not found.
 
         """
         if not self._respeaker:

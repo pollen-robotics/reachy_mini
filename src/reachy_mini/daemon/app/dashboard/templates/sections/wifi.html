@@ -1,0 +1,46 @@
+<div class="app-section">
+    <div class="flex flex-row items-center gap-2">
+        <div class="app-section-title">Setup your WiFi</div>
+        <button id="refresh-wifi" title="Refresh" class="p-1 rounded hover:bg-gray-200 focus:outline-none"
+            onclick="cleanAndRefresh()">
+            🔄
+        </button>
+    </div>
+
+    <div class="flex flex-col p-4 gap-4">
+        <div id="wifi-status" class="wifi-status-info w-full">Checking WiFi configuration...</div>
+        <div id="known-networks" class="wifi-status-info hidden w-full">
+            Known Networks:
+            <ul id="known-networks-list" class="list-disc list-inside px-4"></ul>
+        </div>
+    </div>
+    <div id="add-wifi" class="hidden">
+        <div class="py-4 flex flex-col max-w-md">
+            <div class="app-section-title mb-2">Add new WiFi</div>
+
+            <div class="flex flex-row p-4">
+                <form id="wifi-form" class="max-w-md" onsubmit="return false;">
+                    <div class="mb-4">
+                        <label for="ssid" class="block mb-2 text-sm">SSID</label>
+                        <select id="ssid" name="ssid"
+                            class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5"
+                            required>
+                            <option value="" disabled selected>Select your WiFi network</option>
+                        </select>
+                    </div>
+                    <div class="mb-4">
+                        <label for="password" class="block mb-2 text-sm">Password</label>
+                        <input type="password" id="password" name="password"
+                            class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5"
+                            required>
+                    </div>
+                    <div class="">
+                        <input type="button" onclick="connectToWifi(event)" target="_blank" formtarget="_blank"
+                            value="Connect"
+                            class="text-white bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:outline-none focus:ring-blue-300 font-medium rounded-lg text-sm w-full sm:w-auto px-5 py-2.5 text-center dark:bg-blue-600 dark:hover:bg-blue-700 dark:focus:ring-blue-800">
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>

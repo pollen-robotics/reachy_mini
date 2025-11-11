@@ -9,7 +9,6 @@ managing the robot's state.
 
 import argparse
 import logging
-import os
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -25,10 +24,6 @@ from fastapi.templating import Jinja2Templates
 from reachy_mini.apps.manager import AppManager
 from reachy_mini.daemon.app.routers import apps, camera, daemon, kinematics, motors, move, state
 from reachy_mini.daemon.daemon import Daemon
-
-DASHBOARD_PAGES = Path(__file__).parent / "dashboard"
-TEMPLATES_DIR = Path(__file__).parent / "templates"
-templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
 
 @dataclass
@@ -92,16 +87,10 @@ def create_app(args: Args) -> FastAPI:
     app = FastAPI(
         lifespan=lifespan,
     )
+
     app.state.args = args
     app.state.daemon = Daemon(wireless_version=args.wireless_version)
     app.state.app_manager = AppManager()
-
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=["*"],  # or restrict to your HF domain
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
 
     router = APIRouter(prefix="/api")
     router.include_router(apps.router)
@@ -112,22 +101,40 @@ def create_app(args: Args) -> FastAPI:
     router.include_router(move.router)
     router.include_router(state.router)
 
+    if args.wireless_version:
+        from .routers import update, wifi_config
+
+        app.include_router(update.router)
+        app.include_router(wifi_config.router)
+
     app.include_router(router)
 
-    # Route to list available HTML/JS/CSS examples with links using Jinja2 template
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],  # or restrict to your HF domain
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+    STATIC_DIR = Path(__file__).parent / "dashboard" / "static"
+    TEMPLATES_DIR = Path(__file__).parent / "dashboard" / "templates"
+
+    app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+    templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
+
     @app.get("/")
-    async def list_examples(request: Request) -> HTMLResponse:
+    async def dashboard(request: Request) -> HTMLResponse:
         """Render the dashboard."""
-        files = [f for f in os.listdir(DASHBOARD_PAGES) if f.endswith(".html")]
         return templates.TemplateResponse(
-            "dashboard.html", {"request": request, "files": files}
+            "index.html", {"request": request, "args": args}
         )
 
-    app.mount(
-        "/dashboard",
-        StaticFiles(directory=str(DASHBOARD_PAGES), html=True),
-        name="dashboard",
-    )
+    if args.wireless_version:
+
+        @app.get("/settings")
+        async def settings(request: Request) -> HTMLResponse:
+            """Render the settings page."""
+            return templates.TemplateResponse("settings.html", {"request": request})
 
     return app
 

@@ -130,6 +130,7 @@ class FullBodyTarget(BaseModel):
                         "yaw": 0.0,
                     },
                     "target_antennas": [0.0, 0.0],
+                    "target_body_yaw": 0.0,
                 }
             ]
         }

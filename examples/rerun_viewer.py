@@ -3,6 +3,9 @@
 Open a wav and push samples to the speaker. This is a toy example, in real
 conditions output from a microphone or a text-to-speech engine would be
  pushed to the speaker instead.
+
+It requires the 'rerun-loader-urdf' package to be installed. It's not on PyPI,
+so you need to install it from the GitHub repository: pip install git+https://github.com/rerun-io/rerun-loader-python-example-urdf.git
 """
 
 import logging

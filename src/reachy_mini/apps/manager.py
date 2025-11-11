@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from enum import Enum
 from importlib.metadata import entry_points
 from threading import Thread
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from pydantic import BaseModel
 
@@ -67,7 +67,7 @@ class AppManager:
             AppState.ERROR,
         )
 
-    async def start_app(self, app_name: str) -> AppStatus:
+    async def start_app(self, app_name: str, *args: Any, **kwargs: Any) -> AppStatus:
         """Start the app, raises RuntimeError if an app is already running."""
         if self.is_app_running():
             raise RuntimeError("An app is already running")
@@ -81,15 +81,18 @@ class AppManager:
             try:
                 self.current_app.status.state = AppState.RUNNING
                 self.logger.getChild("runner").info(f"App {app_name} is running")
-                app.wrapped_run()
+                app.wrapped_run(*args, **kwargs)
                 self.current_app.status.state = AppState.DONE
                 self.logger.getChild("runner").info(f"App {app_name} finished")
             except Exception as e:
                 self.logger.getChild("runner").error(
                     f"An error occurred in the app {app_name}: {e}"
                 )
+                self.logger.getChild("runner").error(
+                    f"Exception details: '{app.error}'",
+                )
                 self.current_app.status.state = AppState.ERROR
-                self.current_app.status.error = str(e)
+                self.current_app.status.error = str(app.error)
 
         self.current_app = RunningApp(
             status=AppStatus(
@@ -162,6 +165,8 @@ class AppManager:
             return await hf_space.list_available_apps()
         elif source == SourceKind.INSTALLED:
             return await local_common_venv.list_available_apps()
+        elif source == SourceKind.LOCAL:
+            return []
         else:
             raise NotImplementedError(f"Unknown source kind: {source}")
 
