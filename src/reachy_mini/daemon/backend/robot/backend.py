@@ -502,6 +502,11 @@ class RobotBackend(Backend):
         if self.c is None:
             return {}
 
+        # Check if motor controller has get_motor_name_id method (added in later versions)
+        if not hasattr(self.c, 'get_motor_name_id'):
+            # Motor controller version doesn't support hardware error checking
+            return {}
+
         def decode_hardware_error_byte(err_byte: int) -> list[str]:
             # https://emanual.robotis.com/docs/en/dxl/x/xl330-m288/#hardware-error-status
             bits_to_error = {
