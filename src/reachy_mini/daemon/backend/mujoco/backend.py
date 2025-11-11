@@ -29,7 +29,6 @@ from .utils import (
 )
 from .video_udp import UDPJPEGFrameSender
 
-
 CAMERA_REACHY = 'eye_camera'
 CAMERA_STUDIO_CLOSE = 'studio_close'
 CAMERA_SIZES = {CAMERA_REACHY: (1280, 720), CAMERA_STUDIO_CLOSE: (640, 640)}
