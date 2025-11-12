@@ -55,6 +55,10 @@ class UDPJPEGFrameSender:
             end = min(start + self.max_packet_size, total_size)
             self.sock.sendto(data[start:end], self.addr)
 
+    def close(self) -> None:
+        """Close the socket."""
+        self.sock.close()
+
 
 class UDPJPEGFrameReceiver:
     """A class to receive JPEG frames over UDP."""
@@ -100,3 +104,7 @@ class UDPJPEGFrameReceiver:
         except Exception:
             # partial/corrupted frame, skip it
             return None
+
+    def close(self) -> None:
+        """Close the socket."""
+        self.sock.close()
