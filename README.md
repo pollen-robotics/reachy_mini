@@ -16,7 +16,7 @@ There is also a simulated version of Reachy Mini in [MuJoCo](https://mujoco.org)
 
 ## Assembly guide
 
-Follow our step-by-step [Assembly Guide](https://www.pollen-robotics.com/wp-content/uploads/2025/10/Reachy_Mini_Assembly_BETA_v2_LOW-compresse.pdf).
+Follow our step-by-step [Assembly Guide](https://huggingface.co/spaces/pollen-robotics/Reachy_Mini_Assembly_Guide).
 Most builders finish in about 3 hours, our current speed record is 43 minutes. The guide walks you through every step with clear visuals so you can assemble Reachy Mini confidently from start to finish. Enjoy the build!
 
 ## Software overview
@@ -79,7 +79,13 @@ git clone https://github.com/pollen-robotics/reachy_mini
 pip install -e ./reachy_mini
 ```
 
+*Note that uv users can directly run the daemon with:*
+```bash
+uv run reachy-mini-daemon
+```
+
 The same package provides both the daemon and the Python SDK.
+
 
 ## Run the reachy mini daemon
 

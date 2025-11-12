@@ -292,9 +292,11 @@ class Application(dbus.service.Object):
 class BluetoothCommandService:
     """Bluetooth Command Service."""
 
-    def __init__(self, device_name="ReachyMini"):
+    def __init__(self, device_name="ReachyMini", pin_code="00000"):
         """Initialize the Bluetooth Command Service."""
         self.device_name = device_name
+        self.pin_code = pin_code
+        self.connected = False
         self.bus = None
         self.app = None
         self.adv = None
@@ -314,9 +316,18 @@ class BluetoothCommandService:
             except Exception as e:
                 logger.error(f"Error executing command: {e}")
             return "OK: System running"
+        elif command_str.startswith("PIN_"):
+            pin = command_str[4:].strip()
+            if pin == self.pin_code:
+                self.connected = True
+                return "OK: Connected"
+            else:
+                return "ERROR: Incorrect PIN"
 
         # else if command starts with "CMD_xxxxx" check if  commands directory contains the said named script command xxxx.sh and run its, show output or/and send to read
         elif command_str.startswith("CMD_"):
+            if not self.connected:
+                return "ERROR: Not connected. Please authenticate first."
             try:
                 script_name = command_str[4:].strip() + ".sh"
                 script_path = os.path.join("commands", script_name)
@@ -333,6 +344,8 @@ class BluetoothCommandService:
             except Exception as e:
                 logger.error(f"Error processing command: {e}")
                 return "ERROR: Command execution failed"
+            finally:
+                self.connected = False  # reset connection after command
         else:
             return f"ECHO: {command_str}"
 
@@ -408,12 +421,32 @@ class BluetoothCommandService:
             self.mainloop.quit()
 
 
+def get_pin() -> str:
+    """Extract the last 5 digits of the serial number from dfu-util -l output."""
+    default_pin = "46879"
+    try:
+        result = subprocess.run(["dfu-util", "-l"], capture_output=True, text=True)
+        lines = result.stdout.splitlines()
+        for line in lines:
+            if "serial=" in line:
+                # Extract serial number
+                serial_part = line.split("serial=")[-1].strip().strip('"')
+                if len(serial_part) >= 5:
+                    return serial_part[-5:]
+        return default_pin  # fallback if not found
+    except Exception as e:
+        logger.error(f"Error getting pin from serial: {e}")
+        return default_pin
+
+
 # =======================
 # Main
 # =======================
 def main():
     """Run the Bluetooth Command Service."""
-    bt_service = BluetoothCommandService(device_name="ReachyMini")
+    pin = get_pin()
+
+    bt_service = BluetoothCommandService(device_name="ReachyMini", pin_code=pin)
     bt_service.run()
 
 

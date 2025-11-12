@@ -6,26 +6,44 @@ This module provides endpoints to check for updates, start updates, and monitor 
 import logging
 import threading
 
+import requests
 from fastapi import APIRouter, HTTPException, WebSocket
 
 from reachy_mini.daemon.app import bg_job_register
 from reachy_mini.daemon.app.bg_job_register import JobInfo
 from reachy_mini.utils.wireless_version.update import update_reachy_mini
-from reachy_mini.utils.wireless_version.update_available import is_update_available
+from reachy_mini.utils.wireless_version.update_available import (
+    get_local_version,
+    get_pypi_version,
+    is_update_available,
+)
 
 router = APIRouter(prefix="/update")
 busy_lock = threading.Lock()
 
 
 @router.get("/available")
-def available(pre_release: bool = False) -> dict[str, dict[str, bool]]:
+def available(pre_release: bool = False) -> dict[str, dict[str, dict[str, bool | str]]]:
     """Check if an update is available for Reachy Mini Wireless."""
     if busy_lock.locked():
         raise HTTPException(status_code=400, detail="Update is in progress")
 
+    current_version = str(get_local_version("reachy_mini"))
+
+    try:
+        is_available = is_update_available("reachy_mini", pre_release)
+        available = str(get_pypi_version("reachy_mini", pre_release))
+    except (ConnectionError, requests.exceptions.ConnectionError):
+        is_available = False
+        available = "unknown"
+
     return {
         "update": {
-            "reachy_mini": is_update_available("reachy_mini", pre_release),
+            "reachy_mini": {
+                "is_available": is_available,
+                "current_version": current_version,
+                "available_version": available,
+            }
         }
     }
 
