@@ -83,7 +83,7 @@ class MujocoBackend(Backend):
         self.data = mujoco.MjData(self.model)
         self.model.opt.timestep = 0.002  # s, simulation timestep, 500hz
         self.decimation = 10  # -> 50hz control loop
-        self.rendering_timestep = 0.04  # s, rendering loop # 25Hz
+        self.rendering_timestep = 0.02  # s, rendering loop # 50Hz
 
         self.head_site_id = mujoco.mj_name2id(
             self.model,
