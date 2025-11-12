@@ -110,7 +110,7 @@ class MujocoBackend(Backend):
     def rendering_loop(self, camera_name: str, port: int) -> None:
         """Offline Rendering loop for the Mujoco simulation.
 
-        Capture the image from the virtual camera_id and send it over UDP to the port.
+        Capture the image from the virtual camera_name and send it over UDP to the port.
         """
         streamer_udp = UDPJPEGFrameSender(dest_port=port)
         camera_id = mujoco.mj_name2id(
