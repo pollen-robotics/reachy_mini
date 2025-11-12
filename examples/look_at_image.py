@@ -8,6 +8,7 @@ Note: The daemon must be running before executing this script.
 """
 
 import argparse
+import logging
 
 import cv2
 
@@ -67,4 +68,9 @@ if __name__ == "__main__":
     )
 
     args = parser.parse_args()
+
+    logging.basicConfig(
+        level=logging.DEBUG, format="%(asctime)s [%(levelname)s] %(message)s"
+    )
+
     main(backend=args.backend)

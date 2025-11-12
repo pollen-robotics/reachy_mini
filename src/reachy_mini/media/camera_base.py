@@ -25,6 +25,7 @@ class CameraBase(ABC):
         """Initialize the camera."""
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(log_level)
+        self.logger.debug("Initializing CameraBase")
         self._resolution = resolution
 
     @property

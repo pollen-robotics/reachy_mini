@@ -9,6 +9,7 @@ import queue
 import threading
 from typing import Optional
 
+import av
 import numpy as np
 import numpy.typing as npt
 from aiortc import MediaStreamTrack
@@ -25,21 +26,47 @@ class AudioTrack(MediaStreamTrack):
 
     kind = "audio"
 
-    def __init__(self, track):
+    def __init__(self, track, sample_rate: int, log_level: str = "INFO"):
         """Initialize the AudioTrack with a given track."""
         super().__init__()  # don't forget this!
         self.track = track
+        self.sample_rate = sample_rate
         self.logger = logging.getLogger(__name__)
-        self.logger.info("Audio track created")
+        self.logger.setLevel(log_level)
+        self.logger.debug("Audio track created")
+        self.audio_queue = queue.Queue(maxsize=100)
+        self._resampler = av.audio.resampler.AudioResampler(
+            format="flt", layout="stereo", rate=sample_rate
+        )
 
     def stop(self):
         """Stop the audio track."""
-        self.logger.info("Audio stop")
+        self.logger.debug("Audio stop")
 
     async def recv(self):
         """Receive an audio frame asynchronously."""
         frame = await self.track.recv()
         self.logger.debug(f"Audio frame: {frame}")
+
+        try:
+            resampled_frame = self._resampler.resample(frame)
+            if len(resampled_frame) > 1:
+                self.logger.warning(f"Resampled frame: {resampled_frame}")
+            data = resampled_frame[0].to_ndarray()
+
+            if resampled_frame[0].format.is_planar is False:
+                data = data.reshape(
+                    (resampled_frame[0].samples, 2)
+                )  # len(data) == samples * 2
+                # data = np.array([data[:, 0], data[:, 1]])
+            else:
+                self.logger.warning("Planar data not supported")
+
+            self.audio_queue.put_nowait(data)  # ToDo keep last audio
+        except queue.Full:
+            self.logger.debug("Audio queue is full, dropping frame")
+        except Exception as e:
+            self.logger.error(f"Error putting audio data into queue: {e}")
         """
         if self.first_start:
             self.first_start = False
@@ -61,41 +88,49 @@ class AudioTrack(MediaStreamTrack):
             self.logger.warning("Planar data not supported")
     """
 
+    def get_audio_sample(self) -> Optional[npt.NDArray[np.float32]]:
+        """Get the latest audio sample from the queue.
+
+        Returns:
+            Optional[npt.NDArray[np.float32]]: The latest audio sample, or None if no sample is available.
+
+        """
+        try:
+            data = self.audio_queue.get_nowait()
+            return data
+        except queue.Empty:
+            return None
+
 
 class VideoTrack(MediaStreamTrack):
     """A tactile stream track that feeds a video rendering engine."""
 
     kind = "video"
 
-    def __init__(self, track):
+    def __init__(self, track, log_level: str = "INFO"):
         """Initialize the VideoTrack with a given track."""
         super().__init__()  # don't forget this!
         self.track = track
         self.logger = logging.getLogger(__name__)
-        self.logger.info("Video track created")
-        # Initialise le thread d'affichage une seule fois (pour tous les objets VideoTrack)
-        # if VideoTrack.image_queue is None:
-        #    VideoTrack.image_queue = queue.Queue(maxsize=2)
+        self.logger.setLevel(log_level)
+        self.logger.debug("Video track created")
         self.image_queue = queue.Queue(maxsize=2)
 
     def stop(self):
         """Stop the video track."""
-        self.logger.info("Video stop")
+        self.logger.debug("Video stop")
 
     async def recv(self):
         """Receive a video frame asynchronously."""
         frame = await self.track.recv()
         self.logger.debug(f"Video frame: {frame}")
-        # Décodage de la frame H264 avec OpenCV
         img = frame.to_ndarray(format="bgr24")
         self.logger.debug(f"Decoded frame shape: {img.shape}")
 
-        # Envoie l'image au thread d'affichage
         try:
-            self.image_queue.put_nowait(img)
+            self.image_queue.put_nowait(img)  # ToDo keep last image
         except queue.Full:
-            self.logger.warning("Image queue is full, dropping frame")
-        # return frame
+            self.logger.debug("Image queue is full, dropping frame")
 
     def get_frame(self) -> Optional[npt.NDArray[np.uint8]]:
         """Get the latest video frame from the queue.
@@ -114,9 +149,18 @@ class VideoTrack(MediaStreamTrack):
 class VideoClient:
     """Aiortc WebRTC client implementation."""
 
-    def __init__(self, signalling_url: str, signalling_port: int, peer_id: str):
+    def __init__(
+        self,
+        signalling_url: str,
+        signalling_port: int,
+        peer_id: str,
+        sample_rate: int,
+        log_level: str = "INFO",
+    ):
         """Initialize the AioRTC WebRTC client."""
         self.logger = logging.getLogger(__name__)
+        self.logger.setLevel(log_level)
+        self._log_level = log_level
         self.client = GstSignallingConsumer(signalling_url, signalling_port, peer_id)
         self.media = MediaBlackhole()
         self.audio_track = None
@@ -133,28 +177,43 @@ class VideoClient:
                     if self.audio_track is not None:
                         self.logger.warning("Already have an audio track, ignoring")
                         return
-                    self.audio_track = AudioTrack(track)
+                    self.audio_track = AudioTrack(
+                        track, sample_rate=sample_rate, log_level=self._log_level
+                    )
                     self.media.addTrack(self.audio_track)
                     await self.media.start()
                 elif track.kind == "video":
                     if self.video_track is not None:
                         self.logger.warning("Already have a video track, ignoring")
                         return
-                    self.video_track = VideoTrack(track)
+                    self.video_track = VideoTrack(track, log_level=self._log_level)
                     self.media.addTrack(self.video_track)
                     await self.media.start()
 
-        def get_frame(self) -> Optional[npt.NDArray[np.uint8]]:
-            """Get the latest video frame from the video track.
+    def get_frame(self) -> Optional[npt.NDArray[np.uint8]]:
+        """Get the latest video frame from the video track.
 
-            Returns:
-                Optional[npt.NDArray[np.uint8]]: The latest video frame in BGR format, or None if no frame is available.
+        Returns:
+            Optional[npt.NDArray[np.uint8]]: The latest video frame in BGR format, or None if no frame is available.
 
-            """
-            if self.video_track is None:
-                self.logger.warning("No video track available")
-                return None
-            return self.video_track.get_frame()
+        """
+        if self.video_track is None:
+            self.logger.warning("No video track available")
+            return None
+        return self.video_track.get_frame()
+
+    def get_audio_sample(self) -> Optional[npt.NDArray[np.int16]]:
+        """Get the latest audio sample from the audio track.
+
+        Returns:
+            Optional[npt.NDArray[np.int16]]: The latest audio sample, or None if no sample is available.
+
+        """
+        if self.audio_track is None:
+            self.logger.warning("No audio track available")
+            return None
+
+        return self.audio_track.get_audio_sample()
 
     async def start(self) -> None:
         """Start the WebRTC client and connect to the server."""
@@ -176,13 +235,21 @@ class DefaultWebRTCClient(CameraBase, AudioBase):
         signaling_port: int = 8443,
     ):
         """Initialize the GStreamer WebRTC client."""
-        super().__init__(log_level=log_level)
-        self._client = VideoClient(signaling_host, signaling_port, peer_id)
+        CameraBase.__init__(self, log_level=log_level)
+        AudioBase.__init__(self, log_level=log_level)
+        self.logger.info("Initializing Default WebRTC Client")
+        self._client = VideoClient(
+            signaling_host,
+            signaling_port,
+            peer_id,
+            AudioBase.SAMPLE_RATE,
+            log_level=log_level,
+        )
         self._thread_loop: Optional[threading.Thread] = None
 
     def __del__(self) -> None:
-        """Destructor to ensure gstreamer resources are released."""
-        super().__del__()
+        """Destructor to ensure resources are released."""
+        AudioBase.__del__(self)
 
     def open(self) -> None:
         """Open the video stream in a background thread."""
@@ -209,7 +276,7 @@ class DefaultWebRTCClient(CameraBase, AudioBase):
             Optional[npt.NDArray[np.float32]]: The captured sample in raw format, or None if error.
 
         """
-        return None  # Not implemented yet
+        return self._client.get_audio_sample()
 
     def read(self) -> Optional[npt.NDArray[np.uint8]]:
         """Read a frame from the camera. Returns the frame or None if error.

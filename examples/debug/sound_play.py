@@ -26,7 +26,7 @@ def main(backend: str) -> None:
         level=logging.DEBUG, format="%(asctime)s [%(levelname)s] %(message)s"
     )
 
-    with ReachyMini(log_level="DEBUG", media_backend=backend) as mini:
+    with ReachyMini(log_level="INFO", media_backend=backend) as mini:
         data, samplerate_in = sf.read(INPUT_FILE, dtype="float32")
 
         if samplerate_in != mini.media.get_audio_samplerate():

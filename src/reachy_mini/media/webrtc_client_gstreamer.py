@@ -29,7 +29,9 @@ class GstWebRTCClient(CameraBase, AudioBase):
         signaling_port: int = 8443,
     ):
         """Initialize the GStreamer WebRTC client."""
-        super().__init__(log_level=log_level)
+        CameraBase.__init__(self, log_level=log_level)
+        AudioBase.__init__(self, log_level=log_level)
+
         Gst.init(None)
         self._loop = GLib.MainLoop()
         self._thread_bus_calls = Thread(target=lambda: self._loop.run(), daemon=True)
@@ -71,7 +73,7 @@ class GstWebRTCClient(CameraBase, AudioBase):
 
     def __del__(self) -> None:
         """Destructor to ensure gstreamer resources are released."""
-        super().__del__()
+        AudioBase.__del__(self)
         self._loop.quit()
         self._bus_record.remove_watch()
         self._bus_playback.remove_watch()

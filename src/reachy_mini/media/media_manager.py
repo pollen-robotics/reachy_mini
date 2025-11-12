@@ -65,7 +65,7 @@ class MediaManager:
                 self._init_webrtc_gstreamer(log_level, signalling_host, 8443)
             case MediaBackend.WEBRTC_DEFAULT:
                 self.logger.info("Using WebRTC default backend.")
-                self._init_webrtc_gstreamer(log_level, signalling_host, 8443)
+                self._init_webrtc_default(log_level, signalling_host, 8443)
             case _:
                 raise NotImplementedError(f"Media backend {backend} not implemented.")
 
@@ -165,13 +165,13 @@ class MediaManager:
         """Initialize the WebRTC system (not implemented yet)."""
         from gst_signalling.utils import find_producer_peer_id_by_name
 
-        from reachy_mini.media.webrtc_client_gstreamer import GstWebRTCClient
+        from reachy_mini.media.webrtc_client_default import DefaultWebRTCClient
 
         peer_id = find_producer_peer_id_by_name(
             signalling_host, signalling_port, "reachymini"
         )
 
-        webrtc_media: GstWebRTCClient = GstWebRTCClient(
+        webrtc_media: DefaultWebRTCClient = DefaultWebRTCClient(
             log_level=log_level,
             peer_id=peer_id,
             signaling_host=signalling_host,

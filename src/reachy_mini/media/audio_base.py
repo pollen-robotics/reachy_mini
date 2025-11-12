@@ -31,6 +31,7 @@ class AudioBase(ABC):
         """Initialize the audio device."""
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(log_level)
+        self.logger.debug("Initializing AudioBase")
         self._respeaker = self._init_respeaker_usb()
         # name, resid, cmdid, length, type
 
