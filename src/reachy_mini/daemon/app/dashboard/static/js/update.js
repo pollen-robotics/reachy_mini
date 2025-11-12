@@ -46,32 +46,37 @@ const updateManager = {
 
     connectLogsWebSocket: (jobId) => {
         const updateModal = document.getElementById('update-modal');
-        const updateModalTitle = updateModal.queryElementById('update-modal-title');
+        const updateModalTitle = document.getElementById('update-modal-title');
         const logsDiv = document.getElementById('update-logs');
         const closeButton = document.getElementById('update-modal-close-button');
 
         updateModalTitle.textContent = 'Updating...';
 
         closeButton.onclick = () => {
-            installModal.classList.add('hidden');
+            updateModal.classList.add('hidden');
         };
-        closeButton.classList = "hidden";
-        closeButton.textContent = '';
 
-        updateModal.classList.removeAttribute('hidden');
+        updateModal.classList.remove('hidden');
 
-        const ws = new WebSocket(`ws://${location.host}/api/update/ws/logs?job_id=${jobId}`);
+        const ws = new WebSocket(`ws://${location.host}/update/ws/logs?job_id=${jobId}`);
 
         ws.onmessage = (event) => {
+            // console.log('Update log:', event);
+            logsDiv.innerHTML += event.data + '<br>';
+            logsDiv.scrollTop = logsDiv.scrollHeight;
         };
         ws.onclose = async () => {
+            console.log('Update logs WebSocket closed');
+            closeButton.classList.remove('hidden');
+            closeButton.textContent = 'Close';
+            updateModalTitle.textContent = 'Update Completed ✅';
+
             updateManager.busy = false;
-            updateManager.updateUI();
+            await updateManager.checkForUpdate();
         };
     },
 
     updateUI: async (update) => {
-
         // updateManager.updateMainPage(isUpdateAvailable);
         updateManager.updateUpdatePage(update);
     },

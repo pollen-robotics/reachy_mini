@@ -19,18 +19,14 @@
                 <div><span id="available-version" class="font-mono text-green-700"></span></div>
             </div>
         </div>
+
+        <div class="mt-4">
+            <button id="start-update-btn"
+                class="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg shadow hidden bg-green-400 hover:bg-green-500 text-white"
+                onclick="updateManager.startUpdate()">Start Update</button>
+        </div>
     </div>
 </div>
-
-
-
-<div class="mt-4">
-    <button id="start-update-btn"
-        class="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg shadow hidden bg-green-400 hover:bg-green-500 text-white"
-        onclick="updateManager.startUpdate()">Start Update</button>
-</div>
-
-
 
 
 <div id="update-modal" tabindex="-1" aria-hidden="true"
@@ -48,7 +44,9 @@
             <div
                 class="flex items-center justify-center p-4 md:p-5 border-t border-gray-200 rounded-b dark:border-gray-600">
                 <button id="update-modal-close-button" data-modal-hide="default-modal" type="button"
-                    class="hidden"></button>
+                    class="px-4 py-2 bg-blue-600 dark:bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow">
+                    Close
+                </button>
             </div>
         </div>
     </div>
