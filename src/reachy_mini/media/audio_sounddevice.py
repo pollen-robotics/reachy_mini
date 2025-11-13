@@ -208,7 +208,7 @@ class SoundDeviceAudio(AudioBase):
                     return idx
         # Return default output device if not found
         self.logger.warning(
-            f"No {device_io_type} device found containing '{name_contains}', using default."
+            f"No {device_io_type} device found containing '{names_contains}', using default."
         )
         return self._safe_query_device(device_io_type)
 
