@@ -16,8 +16,8 @@ from pydantic import BaseModel, Field
 
 from reachy_mini.utils.constants import ASSETS_ROOT_PATH
 
-from ..dependencies import get_backend
 from ....daemon.backend.abstract import Backend
+from ..dependencies import get_backend
 
 router = APIRouter(prefix="/volume")
 logger = logging.getLogger(__name__)
@@ -180,8 +180,8 @@ async def set_volume(
     # Play test sound
     try:
         test_sound = f"{ASSETS_ROOT_PATH}/impatient1.wav"
-        if backend.media_manager and backend.media_manager.audio:
-            backend.media_manager.audio.play_sound(test_sound, autoclean=True)
+        if backend.audio:
+            backend.audio.play_sound(test_sound, autoclean=True)
     except Exception as e:
         logger.warning(f"Failed to play test sound: {e}")
     
@@ -193,8 +193,8 @@ async def play_test_sound(backend: Backend = Depends(get_backend)) -> dict[str, 
     """Play a test sound."""
     try:
         test_sound = f"{ASSETS_ROOT_PATH}/impatient1.wav"
-        if backend.media_manager and backend.media_manager.audio:
-            backend.media_manager.audio.play_sound(test_sound, autoclean=True)
+        if backend.audio:
+            backend.audio.play_sound(test_sound, autoclean=True)
             return {"status": "ok", "message": "Test sound played"}
         else:
             raise HTTPException(status_code=503, detail="Audio device not available")

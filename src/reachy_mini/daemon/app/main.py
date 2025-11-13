@@ -23,7 +23,15 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from reachy_mini.apps.manager import AppManager
-from reachy_mini.daemon.app.routers import apps, daemon, kinematics, motors, move, state, volume
+from reachy_mini.daemon.app.routers import (
+    apps,
+    daemon,
+    kinematics,
+    motors,
+    move,
+    state,
+    volume,
+)
 from reachy_mini.daemon.daemon import Daemon
 
 
