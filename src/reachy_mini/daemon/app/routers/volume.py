@@ -14,11 +14,24 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from ....daemon.backend.abstract import Backend
-from ..dependencies import get_backend
+from reachy_mini.daemon.app.dependencies import get_backend
+from reachy_mini.daemon.backend.abstract import Backend
 
 router = APIRouter(prefix="/volume")
 logger = logging.getLogger(__name__)
+
+# Constants
+LINUX_AUDIO_DEVICE = "Array"  # Respeaker device name
+LINUX_MIC_DEVICE = "Array"  # Respeaker microphone device name
+AUDIO_COMMAND_TIMEOUT = 2  # Timeout in seconds for audio commands
+WINDOWS_TIMEOUT = 5  # Windows PowerShell needs slightly longer timeout
+
+# Windows CoreAudio constants
+AUDIO_VOLUME_GUID = "{5CDF2C82-841E-4546-9722-0CF74078229A}"
+ERENDER = 0  # Audio output device
+ECONSOLE = 0  # Console role
+ECAPTURE = 1  # Audio input device
+ECOMMUNICATIONS = 2  # Communications role
 
 
 class VolumeRequest(BaseModel):
@@ -35,6 +48,13 @@ class VolumeResponse(BaseModel):
     platform: str
 
 
+class TestSoundResponse(BaseModel):
+    """Response model for test sound operations."""
+
+    status: str
+    message: str
+
+
 def get_current_platform() -> str:
     """Get the current platform."""
     system = platform.system()
@@ -42,6 +62,8 @@ def get_current_platform() -> str:
         return "macOS"
     elif system == "Linux":
         return "Linux"
+    elif system == "Windows":
+        return "Windows"
     else:
         return system
 
@@ -57,7 +79,7 @@ def detect_audio_device() -> str:
                 ["aplay", "-l"],
                 capture_output=True,
                 text=True,
-                timeout=2,
+                timeout=AUDIO_COMMAND_TIMEOUT,
             )
             if "respeaker" in result.stdout.lower():
                 return "respeaker"
@@ -66,9 +88,13 @@ def detect_audio_device() -> str:
         return "default"
     elif system == "Darwin":
         return "system"
+    elif system == "Windows":
+        return "system"
     else:
         return "unknown"
 
+
+# macOS Volume Control
 
 def get_volume_macos() -> Optional[int]:
     """Get current system volume on macOS."""
@@ -77,7 +103,7 @@ def get_volume_macos() -> Optional[int]:
             ["osascript", "-e", "output volume of (get volume settings)"],
             capture_output=True,
             text=True,
-            timeout=2,
+            timeout=AUDIO_COMMAND_TIMEOUT,
         )
         if result.returncode == 0:
             return int(result.stdout.strip())
@@ -92,7 +118,7 @@ def set_volume_macos(volume: int) -> bool:
         subprocess.run(
             ["osascript", "-e", f"set volume output volume {volume}"],
             capture_output=True,
-            timeout=2,
+            timeout=AUDIO_COMMAND_TIMEOUT,
             check=True,
         )
         return True
@@ -101,38 +127,114 @@ def set_volume_macos(volume: int) -> bool:
         return False
 
 
+# Linux Volume Control
+
 def get_volume_linux() -> Optional[int]:
     """Get current volume on Linux using amixer."""
-    device_name = "Array" # Respeaker device
     try:
-        cmd = ["bash", "-c", f"amixer -c {device_name} sget PCM | awk -F'[][]' '/Left:/ {{ print $2 }}'"]
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=2)
+        result = subprocess.run(
+            ["amixer", "-c", LINUX_AUDIO_DEVICE, "sget", "PCM"],
+            capture_output=True,
+            text=True,
+            timeout=AUDIO_COMMAND_TIMEOUT,
+        )
         if result.returncode == 0:
-            # remove the % sign and convert to int
-            return int(result.stdout.strip().rstrip("%")) 
-                
-    except (subprocess.TimeoutExpired, FileNotFoundError) as e:
-        logger.error(f"Failed to get linux volume: {e}")
-
+            # Parse output to extract volume percentage
+            for line in result.stdout.splitlines():
+                if "Left:" in line and "[" in line:
+                    # Extract percentage between brackets
+                    parts = line.split("[")
+                    for part in parts:
+                        if "%" in part:
+                            volume_str = part.split("%")[0]
+                            return int(volume_str)
+    except (subprocess.TimeoutExpired, FileNotFoundError, ValueError) as e:
+        logger.error(f"Failed to get Linux volume: {e}")
     return None
 
 
 def set_volume_linux(volume: int) -> bool:
     """Set current volume on Linux using amixer."""
-    device_name = "Array"  # Respeaker device
     try:
         subprocess.run(
-            ["amixer", "-c", device_name, "sset", "PCM", f"{volume}%"],
+            ["amixer", "-c", LINUX_AUDIO_DEVICE, "sset", "PCM", f"{volume}%"],
             capture_output=True,
             text=True,
-            timeout=2,
+            timeout=AUDIO_COMMAND_TIMEOUT,
             check=True,
         )
         return True
-    except (subprocess.TimeoutExpired, FileNotFoundError, subprocess.CalledProcessError) as e:
+    except (subprocess.TimeoutExpired, FileNotFoundError, subprocess.CalledProcessError, ValueError) as e:
         logger.error(f"Failed to set Linux volume: {e}")
         return False
 
+
+# Windows Volume Control
+
+def get_volume_windows() -> Optional[int]:
+    """Get system volume on Windows using PowerShell."""
+    try:
+        ps_script = f"""
+        $enum = New-Object -ComObject MMDeviceEnumerator
+        $dev = $enum.GetDefaultAudioEndpoint({ERENDER}, {ECONSOLE})
+        $vol = $dev.Activate(
+            [System.Guid]"{AUDIO_VOLUME_GUID}",
+            1, $null
+        )
+        $scalar = $vol.GetMasterVolumeLevelScalar()
+        $scalar * 100
+        """.strip()
+        
+        result = subprocess.run(
+            ["powershell", "-NoProfile", "-Command", ps_script],
+            capture_output=True,
+            text=True,
+            timeout=WINDOWS_TIMEOUT,
+        )
+
+        if result.returncode != 0:
+            return None
+
+        # Extract number safely
+        for line in result.stdout.splitlines():
+            line = line.strip()
+            if line.replace(".", "", 1).isdigit():
+                return int(float(line))
+
+    except Exception as e:
+        logger.error(f"Failed to get Windows volume: {e}")
+
+    return None
+
+
+def set_volume_windows(volume: int) -> bool:
+    """Set system volume on Windows using PowerShell."""
+    try:
+        scalar = volume / 100.0
+        ps_script = f"""
+        $enum = New-Object -ComObject MMDeviceEnumerator
+        $dev = $enum.GetDefaultAudioEndpoint({ERENDER}, {ECONSOLE})
+        $vol = $dev.Activate(
+            [System.Guid]"{AUDIO_VOLUME_GUID}",
+            1, $null
+        )
+        $vol.SetMasterVolumeLevelScalar({scalar}, [guid]::Empty)
+        """.strip()
+        
+        subprocess.run(
+            ["powershell", "-NoProfile", "-Command", ps_script],
+            capture_output=True,
+            timeout=WINDOWS_TIMEOUT,
+            check=True,
+        )
+        return True
+
+    except Exception as e:
+        logger.error(f"Failed to set Windows volume: {e}")
+        return False
+
+
+# API Endpoints - Speaker Volume
 
 @router.get("/current")
 async def get_volume() -> VolumeResponse:
@@ -145,6 +247,8 @@ async def get_volume() -> VolumeResponse:
         volume = get_volume_macos()
     elif system == "Linux":
         volume = get_volume_linux()
+    elif system == "Windows":
+        volume = get_volume_windows()
     
     if volume is None:
         raise HTTPException(status_code=500, detail="Failed to get volume")
@@ -166,6 +270,8 @@ async def set_volume(
         success = set_volume_macos(volume_req.volume)
     elif system == "Linux":
         success = set_volume_linux(volume_req.volume)
+    elif system == "Windows":
+        success = set_volume_windows(volume_req.volume)
     else:
         raise HTTPException(
             status_code=501,
@@ -196,7 +302,7 @@ async def set_volume(
 
 
 @router.post("/test-sound")
-async def play_test_sound(backend: Backend = Depends(get_backend)) -> dict[str, str]:
+async def play_test_sound(backend: Backend = Depends(get_backend)) -> TestSoundResponse:
     """Play a test sound."""
     test_sound = "impatient1.wav"
 
@@ -205,7 +311,7 @@ async def play_test_sound(backend: Backend = Depends(get_backend)) -> dict[str, 
 
     try:
         backend.audio.play_sound(test_sound, autoclean=True)
-        return {"status": "ok", "message": "Test sound played"}
+        return TestSoundResponse(status="ok", message="Test sound played")
     except Exception as e:
         msg = str(e).lower()
 
@@ -216,10 +322,10 @@ async def play_test_sound(backend: Backend = Depends(get_backend)) -> dict[str, 
                 e,
             )
             # Still 200, but tell the caller it was skipped
-            return {
-                "status": "busy",
-                "message": "Audio device is currently in use, test sound was skipped.",
-            }
+            return TestSoundResponse(
+                status="busy",
+                message="Audio device is currently in use, test sound was skipped.",
+            )
 
         # Any other error is treated as a real failure
         logger.error("Failed to play test sound: %s", e, exc_info=True)
@@ -229,7 +335,7 @@ async def play_test_sound(backend: Backend = Depends(get_backend)) -> dict[str, 
         )
 
 
-# Microphone control endpoints
+# macOS Microphone Control
 
 def get_microphone_volume_macos() -> Optional[int]:
     """Get current microphone input volume on macOS."""
@@ -238,7 +344,7 @@ def get_microphone_volume_macos() -> Optional[int]:
             ["osascript", "-e", "input volume of (get volume settings)"],
             capture_output=True,
             text=True,
-            timeout=2,
+            timeout=AUDIO_COMMAND_TIMEOUT,
         )
         if result.returncode == 0:
             return int(result.stdout.strip())
@@ -253,7 +359,7 @@ def set_microphone_volume_macos(volume: int) -> bool:
         subprocess.run(
             ["osascript", "-e", f"set volume input volume {volume}"],
             capture_output=True,
-            timeout=2,
+            timeout=AUDIO_COMMAND_TIMEOUT,
             check=True,
         )
         return True
@@ -262,15 +368,26 @@ def set_microphone_volume_macos(volume: int) -> bool:
         return False
 
 
+# Linux Microphone Control
+
 def get_microphone_volume_linux() -> Optional[int]:
     """Get current microphone input volume on Linux using amixer."""
-    device_name = "Array"  # Respeaker device
     try:
-        cmd = ["bash", "-c", f"amixer -c {device_name} sget Headset | awk -F'[][]' '/Left:/ {{ print $2 }}'"]
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=2)
+        result = subprocess.run(
+            ["amixer", "-c", LINUX_MIC_DEVICE, "sget", "Headset"],
+            capture_output=True,
+            text=True,
+            timeout=AUDIO_COMMAND_TIMEOUT,
+        )
         if result.returncode == 0:
-            # remove the % sign and convert to int
-            return int(result.stdout.strip().rstrip("%"))
+            # Parse output to extract volume percentage
+            for line in result.stdout.splitlines():
+                if "Left:" in line and "[" in line:
+                    parts = line.split("[")
+                    for part in parts:
+                        if "%" in part:
+                            volume_str = part.split("%")[0]
+                            return int(volume_str)
     except (subprocess.TimeoutExpired, FileNotFoundError, ValueError) as e:
         logger.error(f"Failed to get Linux microphone volume: {e}")
     return None
@@ -278,20 +395,85 @@ def get_microphone_volume_linux() -> Optional[int]:
 
 def set_microphone_volume_linux(volume: int) -> bool:
     """Set microphone input volume on Linux using amixer."""
-    device_name = "Array"  # Respeaker device
     try:
         subprocess.run(
-            ["amixer", "-c", device_name, "sset", "Headset", f"{volume}%"],
+            ["amixer", "-c", LINUX_MIC_DEVICE, "sset", "Headset", f"{volume}%"],
             capture_output=True,
             text=True,
-            timeout=2,
+            timeout=AUDIO_COMMAND_TIMEOUT,
             check=True,
         )
         return True
-    except (subprocess.TimeoutExpired, FileNotFoundError, subprocess.CalledProcessError) as e:
+    except (subprocess.TimeoutExpired, FileNotFoundError, subprocess.CalledProcessError, ValueError) as e:
         logger.error(f"Failed to set Linux microphone volume: {e}")
         return False
 
+
+# Windows Microphone Control
+
+def get_microphone_volume_windows() -> Optional[int]:
+    """Get microphone volume using Windows CoreAudio."""
+    try:
+        ps_script = f"""
+        $enum = New-Object -ComObject MMDeviceEnumerator
+        $dev = $enum.GetDefaultAudioEndpoint({ECAPTURE}, {ECOMMUNICATIONS})
+        $vol = $dev.Activate(
+            [System.Guid]"{AUDIO_VOLUME_GUID}",
+            1, $null
+        )
+        $scalar = $vol.GetMasterVolumeLevelScalar()
+        $scalar * 100
+        """.strip()
+        
+        result = subprocess.run(
+            ["powershell", "-NoProfile", "-Command", ps_script],
+            capture_output=True,
+            text=True,
+            timeout=WINDOWS_TIMEOUT,
+        )
+
+        if result.returncode != 0:
+            return None
+
+        for line in result.stdout.splitlines():
+            line = line.strip()
+            if line.replace(".", "", 1).isdigit():
+                return int(float(line))
+
+    except Exception as e:
+        logger.error(f"Failed to get Windows microphone volume: {e}")
+
+    return None
+
+
+def set_microphone_volume_windows(volume: int) -> bool:
+    """Set microphone volume using Windows CoreAudio."""
+    try:
+        scalar = volume / 100.0
+        ps_script = f"""
+        $enum = New-Object -ComObject MMDeviceEnumerator
+        $dev = $enum.GetDefaultAudioEndpoint({ECAPTURE}, {ECOMMUNICATIONS})
+        $vol = $dev.Activate(
+            [System.Guid]"{AUDIO_VOLUME_GUID}",
+            1, $null
+        )
+        $vol.SetMasterVolumeLevelScalar({scalar}, [guid]::Empty)
+        """.strip()
+        
+        subprocess.run(
+            ["powershell", "-NoProfile", "-Command", ps_script],
+            capture_output=True,
+            timeout=WINDOWS_TIMEOUT,
+            check=True,
+        )
+        return True
+
+    except Exception as e:
+        logger.error(f"Failed to set Windows microphone volume: {e}")
+        return False
+
+
+# API Endpoints - Microphone Volume
 
 @router.get("/microphone/current")
 async def get_microphone_volume() -> VolumeResponse:
@@ -304,6 +486,8 @@ async def get_microphone_volume() -> VolumeResponse:
         volume = get_microphone_volume_macos()
     elif system == "Linux":
         volume = get_microphone_volume_linux()
+    elif system == "Windows":
+        volume = get_microphone_volume_windows()
     
     if volume is None:
         raise HTTPException(status_code=500, detail="Failed to get microphone volume")
@@ -324,6 +508,8 @@ async def set_microphone_volume(
         success = set_microphone_volume_macos(volume_req.volume)
     elif system == "Linux":
         success = set_microphone_volume_linux(volume_req.volume)
+    elif system == "Windows":
+        success = set_microphone_volume_windows(volume_req.volume)
     else:
         raise HTTPException(
             status_code=501,
