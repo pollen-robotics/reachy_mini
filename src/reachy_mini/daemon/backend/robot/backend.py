@@ -216,7 +216,6 @@ class RobotBackend(Backend):
                 self.ready.set()  # Mark the backend as ready
             except RuntimeError as e:
                 self._stats["nb_error"] += 1
-                # self.logger.warning(f"Error reading positions: {e}")
 
                 assert self.last_alive is not None
 

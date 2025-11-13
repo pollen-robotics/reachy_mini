@@ -30,9 +30,13 @@ async def start_daemon(
         with busy_lock:
             await daemon.start(
                 sim=request.app.state.args.sim,
+                serialport=request.app.state.args.serialport,
                 scene=request.app.state.args.scene,
-                headless=request.app.state.args.headless,
+                localhost_only=request.app.state.args.localhost_only,
                 wake_up_on_start=wake_up,
+                check_collision=request.app.state.args.check_collision,
+                kinematics_engine=request.app.state.args.kinematics_engine,
+                headless=request.app.state.args.headless,
             )
 
     job_id = bg_job_register.run_command("daemon-start", start)
@@ -65,10 +69,7 @@ async def restart_daemon(
 
     async def restart(logger: logging.Logger) -> None:
         with busy_lock:
-            await daemon.restart(
-                sim=request.app.state.args.sim,
-                scene=request.app.state.args.scene,
-            )
+            await daemon.restart()
 
     job_id = bg_job_register.run_command("daemon-restart", restart)
     return {"job_id": job_id}
