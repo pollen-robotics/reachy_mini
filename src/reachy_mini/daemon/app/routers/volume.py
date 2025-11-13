@@ -227,3 +227,110 @@ async def play_test_sound(backend: Backend = Depends(get_backend)) -> dict[str, 
             status_code=500,
             detail="Failed to play test sound (see logs for details)",
         )
+
+
+# Microphone control endpoints
+
+def get_microphone_volume_macos() -> Optional[int]:
+    """Get current microphone input volume on macOS."""
+    try:
+        result = subprocess.run(
+            ["osascript", "-e", "input volume of (get volume settings)"],
+            capture_output=True,
+            text=True,
+            timeout=2,
+        )
+        if result.returncode == 0:
+            return int(result.stdout.strip())
+    except (subprocess.TimeoutExpired, FileNotFoundError, ValueError) as e:
+        logger.error(f"Failed to get macOS microphone volume: {e}")
+    return None
+
+
+def set_microphone_volume_macos(volume: int) -> bool:
+    """Set microphone input volume on macOS using osascript."""
+    try:
+        subprocess.run(
+            ["osascript", "-e", f"set volume input volume {volume}"],
+            capture_output=True,
+            timeout=2,
+            check=True,
+        )
+        return True
+    except (subprocess.TimeoutExpired, FileNotFoundError, subprocess.CalledProcessError) as e:
+        logger.error(f"Failed to set macOS microphone volume: {e}")
+        return False
+
+
+def get_microphone_volume_linux() -> Optional[int]:
+    """Get current microphone input volume on Linux using amixer."""
+    device_name = "Array"  # Respeaker device
+    try:
+        cmd = ["bash", "-c", f"amixer -c {device_name} sget Capture | awk -F'[][]' '/Left:/ {{ print $2 }}'"]
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=2)
+        if result.returncode == 0:
+            # remove the % sign and convert to int
+            return int(result.stdout.strip().rstrip("%"))
+    except (subprocess.TimeoutExpired, FileNotFoundError, ValueError) as e:
+        logger.error(f"Failed to get Linux microphone volume: {e}")
+    return None
+
+
+def set_microphone_volume_linux(volume: int) -> bool:
+    """Set microphone input volume on Linux using amixer."""
+    device_name = "Array"  # Respeaker device
+    try:
+        subprocess.run(
+            ["amixer", "-c", device_name, "sset", "Capture", f"{volume}%"],
+            capture_output=True,
+            text=True,
+            timeout=2,
+            check=True,
+        )
+        return True
+    except (subprocess.TimeoutExpired, FileNotFoundError, subprocess.CalledProcessError) as e:
+        logger.error(f"Failed to set Linux microphone volume: {e}")
+        return False
+
+
+@router.get("/microphone/current")
+async def get_microphone_volume() -> VolumeResponse:
+    """Get the current microphone input volume level."""
+    system = get_current_platform()
+    device = detect_audio_device()
+    
+    volume = None
+    if system == "macOS":
+        volume = get_microphone_volume_macos()
+    elif system == "Linux":
+        volume = get_microphone_volume_linux()
+    
+    if volume is None:
+        raise HTTPException(status_code=500, detail="Failed to get microphone volume")
+    
+    return VolumeResponse(volume=volume, device=device, platform=system)
+
+
+@router.post("/microphone/set")
+async def set_microphone_volume(
+    volume_req: VolumeRequest,
+) -> VolumeResponse:
+    """Set the microphone input volume level."""
+    system = get_current_platform()
+    device = detect_audio_device()
+    
+    success = False
+    if system == "macOS":
+        success = set_microphone_volume_macos(volume_req.volume)
+    elif system == "Linux":
+        success = set_microphone_volume_linux(volume_req.volume)
+    else:
+        raise HTTPException(
+            status_code=501,
+            detail=f"Microphone volume control not supported on {system}",
+        )
+    
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to set microphone volume")
+    
+    return VolumeResponse(volume=volume_req.volume, device=device, platform=system)
