@@ -161,9 +161,12 @@ def run_app(args: Args) -> None:
         from reachy_mini.media.audio_control_utils import init_respeaker_usb
 
         respeaker = init_respeaker_usb()
-        respeaker.write("REBOOT", [1])
-        respeaker.close()
-        logging.debug("Respeaker rebooted.")
+        if respeaker is None:
+            logging.error("Respeaker device not found. Cannot apply audio fix.")
+        else:
+            respeaker.write("REBOOT", [1])
+            respeaker.close()
+            logging.debug("Respeaker rebooted.")
 
     health_check_event = asyncio.Event()
     app = create_app(args, health_check_event)

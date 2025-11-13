@@ -23,7 +23,7 @@ class AudioBase(ABC):
         """Initialize the audio device."""
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(log_level)
-        self._respeaker: ReSpeaker = init_respeaker_usb()
+        self._respeaker: Optional[ReSpeaker] = init_respeaker_usb()
 
     def __del__(self) -> None:
         """Destructor to ensure resources are released."""

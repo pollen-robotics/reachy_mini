@@ -30,10 +30,10 @@ class SoundDeviceAudio(AudioBase):
         self.stream = None
         self._output_stream = None
         self._buffer: List[npt.NDArray[np.float32]] = []
-        self._output_device_id = self.get_device_id(
+        self._output_device_id = self._get_device_id(
             ["Reachy Mini Audio", "respeaker"], device_io_type="output"
         )
-        self._input_device_id = self.get_device_id(
+        self._input_device_id = self._get_device_id(
             ["Reachy Mini Audio", "respeaker"], device_io_type="input"
         )
 
@@ -185,12 +185,17 @@ class SoundDeviceAudio(AudioBase):
                 daemon=True,
             ).start()
 
-    def get_device_id(
+    def _get_device_id(
         self, names_contains: List[str], device_io_type: str = "output"
     ) -> int:
-        """Return the output device id whose name contains the given string (case-insensitive).
+        """Return the output device id whose name contains the given strings (case-insensitive).
+
+        Args:
+            names_contains (List[str]): List of strings that should be contained in the device name.
+            device_io_type (str): 'input' or 'output' to specify device type.
 
         If not found, return the default output device id.
+
         """
         devices = sd.query_devices()
 
