@@ -14,8 +14,6 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from reachy_mini.utils.constants import ASSETS_ROOT_PATH
-
 from ....daemon.backend.abstract import Backend
 from ..dependencies import get_backend
 
