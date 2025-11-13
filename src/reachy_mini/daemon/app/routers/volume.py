@@ -3,7 +3,8 @@
 This exposes:
 - get current volume
 - set volume
-- play test sound
+- same for microphone
+- play test sound (optional)
 """
 
 import logging
