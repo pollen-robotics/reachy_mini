@@ -2,7 +2,9 @@
 
 
 const daemon = {
-    currentStatus: {},
+    currentStatus: {
+        state: null,
+    },
 
     start: async (wakeUp) => {
         await fetch(`/api/daemon/start?wake_up=${wakeUp}`, {
@@ -44,8 +46,15 @@ const daemon = {
         await fetch('/api/daemon/status')
             .then((response) => response.json())
             .then(async (data) => {
+                let currentState = daemon.currentStatus.state;
+                let newState = data.state || null;
+
                 daemon.currentStatus = data;
-                await daemon.updateUI();
+
+                if (currentState === null || currentState !== newState) {
+                    await daemon.updateUI();
+                }
+
             })
             .catch((error) => {
                 console.error('Error fetching daemon status:', error);
