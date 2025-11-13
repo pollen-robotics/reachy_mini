@@ -31,7 +31,7 @@ dependencies = [
     "pyusb>=1.2.1",
     "libusb_package>=1.0.26.3",
     "pip>=25",
-    "aiortc>=1.13.0"
+    "aiortc @ git+ssh://git@github.com/pollen-robotics/aiortc.git@cipher_gstreamer"
 ]
 
 
