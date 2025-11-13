@@ -60,7 +60,9 @@ rerun = [
 wireless-version = [
     "semver>=3,<4",
     "nmcli>=1.5",
-    "pollen_BMI088_imu_library"
+    "pollen_BMI088_imu_library",
+    "gpiozero>=2.0.0",
+    "lgpio>=0.2.0",
 ]
 
 [project.scripts]
