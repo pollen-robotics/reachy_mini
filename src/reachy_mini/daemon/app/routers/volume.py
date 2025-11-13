@@ -266,7 +266,7 @@ def get_microphone_volume_linux() -> Optional[int]:
     """Get current microphone input volume on Linux using amixer."""
     device_name = "Array"  # Respeaker device
     try:
-        cmd = ["bash", "-c", f"amixer -c {device_name} sget Capture | awk -F'[][]' '/Left:/ {{ print $2 }}'"]
+        cmd = ["bash", "-c", f"amixer -c {device_name} sget Headset | awk -F'[][]' '/Left:/ {{ print $2 }}'"]
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=2)
         if result.returncode == 0:
             # remove the % sign and convert to int
@@ -281,7 +281,7 @@ def set_microphone_volume_linux(volume: int) -> bool:
     device_name = "Array"  # Respeaker device
     try:
         subprocess.run(
-            ["amixer", "-c", device_name, "sset", "Capture", f"{volume}%"],
+            ["amixer", "-c", device_name, "sset", "Headset", f"{volume}%"],
             capture_output=True,
             text=True,
             timeout=2,
