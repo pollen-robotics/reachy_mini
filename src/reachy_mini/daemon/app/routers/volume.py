@@ -176,26 +176,54 @@ async def set_volume(
         raise HTTPException(status_code=500, detail="Failed to set volume")
     
     # Play test sound
-    try:
-        test_sound = "impatient1.wav"
-        if backend.audio:
+    test_sound = "impatient1.wav"
+    if backend.audio:
+        try:
             backend.audio.play_sound(test_sound, autoclean=True)
-    except Exception as e:
-        logger.warning(f"Failed to play test sound: {e}")
-    
+        except Exception as e:
+            msg = str(e).lower()
+            if "device unavailable" in msg or "-9985" in msg:
+                logger.warning(
+                    "Test sound not played: audio device busy (likely GStreamer): %s",
+                    e,
+                )
+            else:
+                logger.warning("Failed to play test sound: %s", e)
+    else:
+        logger.warning("No audio backend available, skipping test sound.")
+
     return VolumeResponse(volume=volume_req.volume, device=device, platform=system)
 
 
 @router.post("/test-sound")
 async def play_test_sound(backend: Backend = Depends(get_backend)) -> dict[str, str]:
     """Play a test sound."""
+    test_sound = "impatient1.wav"
+
+    if not backend.audio:
+        raise HTTPException(status_code=503, detail="Audio device not available")
+
     try:
-        test_sound = "impatient1.wav"
-        if backend.audio:
-            backend.audio.play_sound(test_sound, autoclean=True)
-            return {"status": "ok", "message": "Test sound played"}
-        else:
-            raise HTTPException(status_code=503, detail="Audio device not available")
+        backend.audio.play_sound(test_sound, autoclean=True)
+        return {"status": "ok", "message": "Test sound played"}
     except Exception as e:
-        logger.error(f"Failed to play test sound: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to play test sound: {e}")
+        msg = str(e).lower()
+
+        # Special-case ALSA / PortAudio device-busy situation
+        if "device unavailable" in msg or "-9985" in msg:
+            logger.warning(
+                "Test sound request while audio device is busy (likely GStreamer): %s",
+                e,
+            )
+            # Still 200, but tell the caller it was skipped
+            return {
+                "status": "busy",
+                "message": "Audio device is currently in use, test sound was skipped.",
+            }
+
+        # Any other error is treated as a real failure
+        logger.error("Failed to play test sound: %s", e, exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to play test sound (see logs for details)",
+        )
