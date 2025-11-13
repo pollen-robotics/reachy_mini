@@ -179,7 +179,7 @@ async def set_volume(
     
     # Play test sound
     try:
-        test_sound = f"{ASSETS_ROOT_PATH}/impatient1.wav"
+        test_sound = "impatient1.wav"
         if backend.audio:
             backend.audio.play_sound(test_sound, autoclean=True)
     except Exception as e:
@@ -192,7 +192,7 @@ async def set_volume(
 async def play_test_sound(backend: Backend = Depends(get_backend)) -> dict[str, str]:
     """Play a test sound."""
     try:
-        test_sound = f"{ASSETS_ROOT_PATH}/impatient1.wav"
+        test_sound = "impatient1.wav"
         if backend.audio:
             backend.audio.play_sound(test_sound, autoclean=True)
             return {"status": "ok", "message": "Test sound played"}
