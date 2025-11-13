@@ -1,104 +1,127 @@
 const volumeControl = {
-    currentVolume: 50,
-    device: 'unknown',
-    platform: 'unknown',
-    isUpdating: false,
+  currentVolume: 50,
+  device: 'unknown',
+  platform: 'unknown',
+  isUpdating: false,
 
-    init: async () => {
-        const volumeSlider = document.getElementById('volume-slider');
-        const volumeValue = document.getElementById('volume-value');
-        const volumeDeviceInfo = document.getElementById('volume-device-info');
+  init: async () => {
+    const slider = document.getElementById('volume-slider');
+    const valueLabel = document.getElementById('volume-value');
+    const deviceInfo = document.getElementById('volume-device-info');
 
-        if (!volumeSlider || !volumeValue || !volumeDeviceInfo) {
-            console.warn('Volume control elements not found in DOM');
-            return;
-        }
+    if (!slider || !valueLabel || !deviceInfo) {
+      console.warn('Volume control elements not found in DOM');
+      return;
+    }
 
-        // Load current volume
-        try {
-            await volumeControl.loadCurrentVolume();
-        } catch (error) {
-            console.error('Error loading current volume:', error);
-            volumeDeviceInfo.textContent = 'Error loading volume';
-        }
+    try {
+      await volumeControl.loadCurrentVolume();
+    } catch (error) {
+      console.error('Error loading current volume:', error);
+      deviceInfo.textContent = 'Error loading volume';
+    }
 
-        // Handle slider input (for live feedback)
-        volumeSlider.addEventListener('input', (e) => {
-            volumeValue.textContent = e.target.value;
-        });
+    slider.addEventListener('input', (e) => {
+      const v = Number(e.target.value);
+      valueLabel.textContent = String(v);
+    });
 
-        // Handle slider change (when user releases)
-        volumeSlider.addEventListener('change', async (e) => {
-            const newVolume = parseInt(e.target.value);
-            await volumeControl.setVolume(newVolume);
-        });
-    },
+    slider.addEventListener('change', async (e) => {
+      const newVolume = Number(e.target.value);
+      if (!Number.isFinite(newVolume)) return;
+      await volumeControl.setVolume(newVolume);
+    });
+  },
 
-    loadCurrentVolume: async () => {
-        try {
-            const response = await fetch('/api/volume/current');
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            const data = await response.json();
-            
-            volumeControl.currentVolume = data.volume;
-            volumeControl.device = data.device;
-            volumeControl.platform = data.platform;
+  loadCurrentVolume: async () => {
+    try {
+      const response = await fetch('/api/volume/current');
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const data = await response.json();
 
-            // Update UI
-            const volumeSlider = document.getElementById('volume-slider');
-            const volumeValue = document.getElementById('volume-value');
-            const volumeDeviceInfo = document.getElementById('volume-device-info');
+      const volume = Number(data.volume);
+      if (!Number.isFinite(volume)) {
+        throw new Error('Invalid volume in response');
+      }
 
-            if (volumeSlider) volumeSlider.value = data.volume;
-            if (volumeValue) volumeValue.textContent = data.volume;
-            if (volumeDeviceInfo) {
-                volumeDeviceInfo.textContent = `${data.platform} - ${data.device}`;
-            }
+      volumeControl.currentVolume = volume;
+      volumeControl.device = data.device ?? 'unknown';
+      volumeControl.platform = data.platform ?? 'unknown';
 
-            console.log('Loaded volume:', data);
-        } catch (error) {
-            console.error('Error loading current volume:', error);
-            throw error;
-        }
-    },
+      const slider = document.getElementById('volume-slider');
+      const valueLabel = document.getElementById('volume-value');
+      const deviceInfo = document.getElementById('volume-device-info');
 
-    setVolume: async (volume) => {
-        if (volumeControl.isUpdating) {
-            console.log('Volume update already in progress, skipping...');
-            return;
-        }
+      if (slider) slider.value = String(volume);
+      if (valueLabel) valueLabel.textContent = String(volume);
+      if (deviceInfo) {
+        deviceInfo.textContent = `${volumeControl.platform} - ${volumeControl.device}`;
+      }
 
-        volumeControl.isUpdating = true;
+      console.log('Loaded volume:', data);
+    } catch (error) {
+      console.error('Error loading current volume:', error);
+      throw error;
+    }
+  },
 
-        try {
-            const response = await fetch('/api/volume/set', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ volume: volume }),
-            });
+  setVolume: async (volume) => {
+    if (!Number.isFinite(volume)) {
+      console.warn('Ignoring invalid volume:', volume);
+      return;
+    }
 
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
+    const safeVolume = Math.max(0, Math.min(100, volume));
+    if (volumeControl.isUpdating) {
+      console.log('Volume update already in progress, skipping...');
+      return;
+    }
 
-            const data = await response.json();
-            volumeControl.currentVolume = data.volume;
+    volumeControl.isUpdating = true;
+    const slider = document.getElementById('volume-slider');
 
-            console.log('Volume set to:', data.volume);
-        } catch (error) {
-            console.error('Error setting volume:', error);
-            // Reload current volume in case of error
-            await volumeControl.loadCurrentVolume();
-        } finally {
-            volumeControl.isUpdating = false;
-        }
-    },
+    if (slider) slider.disabled = true;
+
+    try {
+      const response = await fetch('/api/volume/set', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ volume: safeVolume }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const serverVolume = Number(data.volume);
+
+      if (Number.isFinite(serverVolume)) {
+        volumeControl.currentVolume = serverVolume;
+        const s = document.getElementById('volume-slider');
+        const valueLabel = document.getElementById('volume-value');
+        if (s) s.value = String(serverVolume);
+        if (valueLabel) valueLabel.textContent = String(serverVolume);
+      }
+
+      console.log('Volume set to:', serverVolume);
+    } catch (error) {
+      console.error('Error setting volume:', error);
+      try {
+        await volumeControl.loadCurrentVolume();
+      } catch (loadError) {
+        console.error('Also failed to reload volume:', loadError);
+      }
+    } finally {
+      volumeControl.isUpdating = false;
+      const s = document.getElementById('volume-slider');
+      if (s) s.disabled = false;
+    }
+  },
 };
 
-window.addEventListener('DOMContentLoaded', (event) => {
-    volumeControl.init();
+window.addEventListener('DOMContentLoaded', () => {
+  volumeControl.init();
 });
