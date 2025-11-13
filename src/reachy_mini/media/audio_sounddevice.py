@@ -30,8 +30,12 @@ class SoundDeviceAudio(AudioBase):
         self.stream = None
         self._output_stream = None
         self._buffer: List[npt.NDArray[np.float32]] = []
-        self._output_device_id = self.get_output_device_id("respeaker")
-        self._input_device_id = self.get_input_device_id("respeaker")
+        self._output_device_id = self.get_device_id(
+            ["Reachy Mini Audio", "respeaker"], device_io_type="output"
+        )
+        self._input_device_id = self.get_device_id(
+            ["Reachy Mini Audio", "respeaker"], device_io_type="input"
+        )
 
     def start_recording(self) -> None:
         """Open the audio input stream, using ReSpeaker card if available."""
@@ -181,7 +185,9 @@ class SoundDeviceAudio(AudioBase):
                 daemon=True,
             ).start()
 
-    def get_output_device_id(self, name_contains: str) -> int:
+    def get_device_id(
+        self, names_contains: List[str], device_io_type: str = "output"
+    ) -> int:
         """Return the output device id whose name contains the given string (case-insensitive).
 
         If not found, return the default output device id.
@@ -189,35 +195,17 @@ class SoundDeviceAudio(AudioBase):
         devices = sd.query_devices()
 
         for idx, dev in enumerate(devices):
-            if (
-                name_contains.lower() in dev["name"].lower()
-                and dev["max_output_channels"] > 0
-            ):
-                return idx
+            for name_contains in names_contains:
+                if (
+                    name_contains.lower() in dev["name"].lower()
+                    and dev[f"max_{device_io_type}_channels"] > 0
+                ):
+                    return idx
         # Return default output device if not found
         self.logger.warning(
-            f"No output device found containing '{name_contains}', using default."
+            f"No {device_io_type} device found containing '{name_contains}', using default."
         )
-        return self._safe_query_device("output")
-
-    def get_input_device_id(self, name_contains: str) -> int:
-        """Return the input device id whose name contains the given string (case-insensitive).
-
-        If not found, return the default input device id.
-        """
-        devices = sd.query_devices()
-
-        for idx, dev in enumerate(devices):
-            if (
-                name_contains.lower() in dev["name"].lower()
-                and dev["max_input_channels"] > 0
-            ):
-                return idx
-        # Return default input device if not found
-        self.logger.warning(
-            f"No input device found containing '{name_contains}', using default."
-        )
-        return self._safe_query_device("input")
+        return self._safe_query_device(device_io_type)
 
     def _safe_query_device(self, kind: str) -> int:
         try:
