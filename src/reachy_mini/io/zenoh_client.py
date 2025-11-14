@@ -21,11 +21,39 @@ from reachy_mini.io.abstract import AbstractClient
 from reachy_mini.io.protocol import AnyTaskRequest, TaskProgress, TaskRequest
 
 
+def _parse_host_port(address: str) -> tuple[str, int]:
+    """Parse hostname:port or IP:port into components.
+
+    Args:
+        address: Address in format "host:port", "host", "ip:port", or "ip"
+
+    Returns:
+        Tuple of (resolved_ip, port)
+    """
+    # Split on last colon to handle potential edge cases
+    if ':' in address:
+        parts = address.rsplit(':', 1)
+        if len(parts) == 2 and parts[1].isdigit():
+            host, port_str = parts
+            port = int(port_str)
+        else:
+            # No valid port, use default
+            host = address
+            port = 7447
+    else:
+        host = address
+        port = 7447
+
+    # Resolve hostname to IP
+    resolved_ip = _resolve_host(host)
+    return resolved_ip, port
+
+
 def _resolve_host(host: str) -> str:
     """Resolve hostname to IP address if needed.
 
     Args:
-        host: Hostname or IP address
+        host: Hostname or IP address (without port)
 
     Returns:
         IP address as string
@@ -56,7 +84,8 @@ class ZenohClient(AbstractClient):
 
         Args:
             localhost_only: If True, connect to localhost only
-            external_ip: External IP address or hostname to connect to (e.g., "192.168.1.10" or "myhost.ngrok.io")
+            external_ip: External IP address or hostname to connect to.
+                        Supports formats: "192.168.1.10", "myhost.ngrok.io", or "myhost.ngrok.io:18951"
         """
         if localhost_only and external_ip is not None:
             raise ValueError("localhost_only and external_ip cannot be set at the same time.")
@@ -75,14 +104,15 @@ class ZenohClient(AbstractClient):
                 )
             )
         elif external_ip is not None:
-            # Resolve hostname to IP if necessary
-            resolved_ip = _resolve_host(external_ip)
+            # Parse hostname:port and resolve hostname to IP if necessary
+            resolved_ip, port = _parse_host_port(external_ip)
+            print(f"Connecting to {resolved_ip}:{port}")
             c = zenoh.Config.from_json5(
                 json.dumps(
                     {
                         "connect": {
                             "endpoints": {
-                                "peer": [f"tcp/{resolved_ip}:7447"],
+                                "peer": [f"tcp/{resolved_ip}:{port}"],
                                 "router": [],
                             },
                         },
