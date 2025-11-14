@@ -23,7 +23,6 @@ logger = logging.getLogger(__name__)
 
 # Constants
 AUDIO_COMMAND_TIMEOUT = 2  # Timeout in seconds for audio commands
-WINDOWS_TIMEOUT = 5  # Windows PowerShell needs slightly longer timeout
 
 # Device-specific card names for amixer
 DEVICE_CARD_NAMES = {
@@ -31,14 +30,6 @@ DEVICE_CARD_NAMES = {
     "respeaker": "Array",  # Legacy ReSpeaker device
     "default": "Audio",  # Default to Reachy Mini Audio
 }
-
-# Windows CoreAudio constants
-AUDIO_VOLUME_GUID = "{5CDF2C82-841E-4546-9722-0CF74078229A}"
-ERENDER = 0  # Audio output device
-ECONSOLE = 0  # Console role
-ECAPTURE = 1  # Audio input device
-ECOMMUNICATIONS = 2  # Communications role
-
 
 class VolumeRequest(BaseModel):
     """Request model for setting volume."""
@@ -68,8 +59,6 @@ def get_current_platform() -> str:
         return "macOS"
     elif system == "Linux":
         return "Linux"
-    elif system == "Windows":
-        return "Windows"
     else:
         return system
 
@@ -96,8 +85,6 @@ def detect_audio_device() -> str:
             pass
         return "default"
     elif system == "Darwin":
-        return "system"
-    elif system == "Windows":
         return "system"
     else:
         return "unknown"
@@ -186,71 +173,6 @@ def set_volume_linux(volume: int) -> bool:
         return False
 
 
-# Windows Volume Control
-
-def get_volume_windows() -> Optional[int]:
-    """Get system volume on Windows using PowerShell."""
-    try:
-        ps_script = f"""
-        $enum = New-Object -ComObject MMDeviceEnumerator
-        $dev = $enum.GetDefaultAudioEndpoint({ERENDER}, {ECONSOLE})
-        $vol = $dev.Activate(
-            [System.Guid]"{AUDIO_VOLUME_GUID}",
-            1, $null
-        )
-        $scalar = $vol.GetMasterVolumeLevelScalar()
-        $scalar * 100
-        """.strip()
-        
-        result = subprocess.run(
-            ["powershell", "-NoProfile", "-Command", ps_script],
-            capture_output=True,
-            text=True,
-            timeout=WINDOWS_TIMEOUT,
-        )
-
-        if result.returncode != 0:
-            return None
-
-        # Extract number safely
-        for line in result.stdout.splitlines():
-            line = line.strip()
-            if line.replace(".", "", 1).isdigit():
-                return int(float(line))
-
-    except Exception as e:
-        logger.error(f"Failed to get Windows volume: {e}")
-
-    return None
-
-
-def set_volume_windows(volume: int) -> bool:
-    """Set system volume on Windows using PowerShell."""
-    try:
-        scalar = volume / 100.0
-        ps_script = f"""
-        $enum = New-Object -ComObject MMDeviceEnumerator
-        $dev = $enum.GetDefaultAudioEndpoint({ERENDER}, {ECONSOLE})
-        $vol = $dev.Activate(
-            [System.Guid]"{AUDIO_VOLUME_GUID}",
-            1, $null
-        )
-        $vol.SetMasterVolumeLevelScalar({scalar}, [guid]::Empty)
-        """.strip()
-        
-        subprocess.run(
-            ["powershell", "-NoProfile", "-Command", ps_script],
-            capture_output=True,
-            timeout=WINDOWS_TIMEOUT,
-            check=True,
-        )
-        return True
-
-    except Exception as e:
-        logger.error(f"Failed to set Windows volume: {e}")
-        return False
-
-
 # API Endpoints - Speaker Volume
 
 @router.get("/current")
@@ -264,8 +186,6 @@ async def get_volume() -> VolumeResponse:
         volume = get_volume_macos()
     elif system == "Linux":
         volume = get_volume_linux()
-    elif system == "Windows":
-        volume = get_volume_windows()
     
     if volume is None:
         raise HTTPException(status_code=500, detail="Failed to get volume")
@@ -287,8 +207,6 @@ async def set_volume(
         success = set_volume_macos(volume_req.volume)
     elif system == "Linux":
         success = set_volume_linux(volume_req.volume)
-    elif system == "Windows":
-        success = set_volume_windows(volume_req.volume)
     else:
         raise HTTPException(
             status_code=501,
@@ -428,70 +346,6 @@ def set_microphone_volume_linux(volume: int) -> bool:
         return False
 
 
-# Windows Microphone Control
-
-def get_microphone_volume_windows() -> Optional[int]:
-    """Get microphone volume using Windows CoreAudio."""
-    try:
-        ps_script = f"""
-        $enum = New-Object -ComObject MMDeviceEnumerator
-        $dev = $enum.GetDefaultAudioEndpoint({ECAPTURE}, {ECOMMUNICATIONS})
-        $vol = $dev.Activate(
-            [System.Guid]"{AUDIO_VOLUME_GUID}",
-            1, $null
-        )
-        $scalar = $vol.GetMasterVolumeLevelScalar()
-        $scalar * 100
-        """.strip()
-        
-        result = subprocess.run(
-            ["powershell", "-NoProfile", "-Command", ps_script],
-            capture_output=True,
-            text=True,
-            timeout=WINDOWS_TIMEOUT,
-        )
-
-        if result.returncode != 0:
-            return None
-
-        for line in result.stdout.splitlines():
-            line = line.strip()
-            if line.replace(".", "", 1).isdigit():
-                return int(float(line))
-
-    except Exception as e:
-        logger.error(f"Failed to get Windows microphone volume: {e}")
-
-    return None
-
-
-def set_microphone_volume_windows(volume: int) -> bool:
-    """Set microphone volume using Windows CoreAudio."""
-    try:
-        scalar = volume / 100.0
-        ps_script = f"""
-        $enum = New-Object -ComObject MMDeviceEnumerator
-        $dev = $enum.GetDefaultAudioEndpoint({ECAPTURE}, {ECOMMUNICATIONS})
-        $vol = $dev.Activate(
-            [System.Guid]"{AUDIO_VOLUME_GUID}",
-            1, $null
-        )
-        $vol.SetMasterVolumeLevelScalar({scalar}, [guid]::Empty)
-        """.strip()
-        
-        subprocess.run(
-            ["powershell", "-NoProfile", "-Command", ps_script],
-            capture_output=True,
-            timeout=WINDOWS_TIMEOUT,
-            check=True,
-        )
-        return True
-
-    except Exception as e:
-        logger.error(f"Failed to set Windows microphone volume: {e}")
-        return False
-
-
 # API Endpoints - Microphone Volume
 
 @router.get("/microphone/current")
@@ -505,8 +359,6 @@ async def get_microphone_volume() -> VolumeResponse:
         volume = get_microphone_volume_macos()
     elif system == "Linux":
         volume = get_microphone_volume_linux()
-    elif system == "Windows":
-        volume = get_microphone_volume_windows()
     
     if volume is None:
         raise HTTPException(status_code=500, detail="Failed to get microphone volume")
@@ -527,8 +379,6 @@ async def set_microphone_volume(
         success = set_microphone_volume_macos(volume_req.volume)
     elif system == "Linux":
         success = set_microphone_volume_linux(volume_req.volume)
-    elif system == "Windows":
-        success = set_microphone_volume_windows(volume_req.volume)
     else:
         raise HTTPException(
             status_code=501,
