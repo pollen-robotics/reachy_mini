@@ -36,6 +36,12 @@ class OpenCVCamera(CameraBase):
             raise RuntimeError(
                 "Camera specs not set. Open the camera before setting the resolution."
             )
+
+        if isinstance(self.camera_specs, MujocoCameraSpecs):
+            raise RuntimeError(
+                "Cannot change resolution of Mujoco simulated camera for now."
+            )
+            
         if resolution not in self.camera_specs.available_resolutions:
             raise ValueError(
                 f"Resolution not supported by the camera. Available resolutions are : {self.camera_specs.available_resolutions}"
