@@ -5,7 +5,7 @@ from subprocess import call
 
 from gpiozero import Button
 
-shutdown_button = Button(24, pull_up=False)
+shutdown_button = Button(23, pull_up=False)
 
 # log_file = "/var/log/shutdown_button.log"
 log_file = "/vens/shutdown_button.log"
@@ -19,5 +19,5 @@ def released() -> None:
 
 shutdown_button.when_released = released
 
-print("Monitoring GPIO24 for shutdown signal...")
+print("Monitoring GPIO23 for shutdown signal...")
 pause()
