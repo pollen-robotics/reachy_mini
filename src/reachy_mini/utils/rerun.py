@@ -8,85 +8,21 @@ It includes methods to log joint positions, camera images, and other relevant da
 
 import json
 import logging
-import math
 import os
 import tempfile
 import time
 from threading import Event, Thread
 from typing import Dict, List, Optional
 
-import cv2
 import numpy as np
 import requests
 import rerun as rr
 from scipy.spatial.transform import Rotation as R
-
 from urdf_parser_py import urdf
 
 from reachy_mini.kinematics.placo_kinematics import PlacoKinematics
 from reachy_mini.media.media_manager import MediaBackend
 from reachy_mini.reachy_mini import ReachyMini
-
-
-def quat_xyzw_from_roll_pitch_yaw(roll: float, pitch: float, yaw: float) -> List[float]:
-    """Return a quaternion in xyzw order following the URDF roll-pitch-yaw convention (ZYX)."""
-    half_roll = roll * 0.5
-    half_pitch = pitch * 0.5
-    half_yaw = yaw * 0.5
-
-    cr = math.cos(half_roll)
-    sr = math.sin(half_roll)
-    cp = math.cos(half_pitch)
-    sp = math.sin(half_pitch)
-    cy = math.cos(half_yaw)
-    sy = math.sin(half_yaw)
-
-    qw = cr * cp * cy + sr * sp * sy
-    qx = sr * cp * cy - cr * sp * sy
-    qy = cr * sp * cy + sr * cp * sy
-    qz = cr * cp * sy - sr * sp * cy
-
-    return [qx, qy, qz, qw]
-
-
-class UrdfEntityPaths:
-    """Helper for constructing link/joint entity paths that match the native URDF logger."""
-
-    def __init__(self, model: urdf.URDF, entity_path_prefix: Optional[str]) -> None:
-        self._model = model
-        self._prefix = entity_path_prefix
-        self.link_paths: Dict[str, str] = {}
-        self.joint_paths: Dict[str, str] = {}
-
-        base_parts = [part for part in (self._prefix, model.name) if part]
-        self._base_path = "/".join(base_parts)
-
-        children_map: Dict[str, List[urdf.Joint]] = {}
-        for joint in model.joints:
-            children_map.setdefault(joint.parent, []).append(joint)
-
-        root_link = model.get_root()
-        self._build_paths(root_link, self._base_path, children_map)
-
-    def _build_paths(
-        self,
-        link_name: str,
-        parent_path: str,
-        children_map: Dict[str, List[urdf.Joint]],
-    ) -> None:
-        link_path = self._join(parent_path, link_name)
-        self.link_paths[link_name] = link_path
-
-        for joint in children_map.get(link_name, []):
-            joint_path = self._join(link_path, joint.name)
-            self.joint_paths[joint.name] = joint_path
-            self._build_paths(joint.child, joint_path, children_map)
-
-    @staticmethod
-    def _join(parent: str, child: str) -> str:
-        if parent:
-            return f"{parent}/{child}"
-        return child
 
 
 class Rerun:
@@ -138,9 +74,15 @@ class Rerun:
         }
         self._entity_paths = UrdfEntityPaths(self.urdf_model, "ReachyMini")
 
-        self.recording.set_time("reachymini", timestamp=time.time())
-        self.recording.log_file_from_path(
-            fixed_urdf, static=False, entity_path_prefix="ReachyMini"
+        rr.set_time("reachymini", timestamp=time.time(), recording=self.recording)
+
+        # Use the native URDF loader in Rerun to visualize Reachy Mini's model
+        # Logging as non-static to allow updating joint positions
+        rr.log_file_from_path(
+            fixed_urdf,
+            static=False,
+            entity_path_prefix=self._entity_paths.prefix,
+            recording=self.recording,
         )
 
         self.running = Event()
@@ -199,8 +141,6 @@ class Rerun:
                     )
                     return
 
-                cam_name = self._get_joint("camera_optical_frame")
-                cam_joint = self._joint_entity_path(cam_name)
             else:
                 return
 
@@ -212,8 +152,10 @@ class Rerun:
                 ]
             )
 
+            cam_joint = self._get_joint("camera_optical_frame")
+            cam_path = self._joint_entity_path(cam_joint)
             rr.log(
-                f"{cam_joint}/image",
+                f"{cam_path}/image",
                 rr.Pinhole(
                     image_from_camera=rr.datatypes.Mat3x3(K),
                     width=frame.shape[1],
@@ -221,16 +163,9 @@ class Rerun:
                     image_plane_distance=0.8,
                     camera_xyz=rr.ViewCoordinates.RDF,
                 ),
+                rr.Image(frame, color_model="bgr").compress(),
+                recording=self.recording,
             )
-
-            ret, encoded_image = cv2.imencode(".jpg", frame)
-            if ret:
-                rr.log(
-                    f"{cam_joint}/image",
-                    rr.EncodedImage(contents=encoded_image, media_type="image/jpeg"),
-                )
-            else:
-                self.logger.error("Failed to encode frame to JPEG.")
 
             time.sleep(0.03)  # ~30fps
 
@@ -255,16 +190,13 @@ class Rerun:
         target_euler = np.array(base_euler) + (effective_axis * angle)
         target_translation = joint.origin.xyz or [0.0, 0.0, 0.0]
 
-        self.recording.log(
+        rr.log(
             joint_path,
             rr.Transform3D(
                 translation=target_translation,
-                quaternion=rr.Quaternion(
-                    xyzw=quat_xyzw_from_roll_pitch_yaw(
-                        target_euler[0], target_euler[1], target_euler[2]
-                    )
-                ),
+                quaternion=R.from_euler("xyz", target_euler).as_quat(),
             ),
+            recording=self.recording,
         )
 
     def log_movements(self) -> None:
@@ -302,7 +234,6 @@ class Rerun:
 
             rr.set_time("reachymini", timestamp=time.time(), recording=self.recording)
 
-            # hardcoded offsets are from the URDF file
             if "antennas_position" in data and data["antennas_position"] is not None:
                 antennas = data["antennas_position"]
                 if antennas is not None:
@@ -312,6 +243,8 @@ class Rerun:
             if "head_joints" in data and data["head_joints"] is not None:
                 head_joints = data["head_joints"]
 
+                # The joint axis definitions in the URDF do not match the real axis of rotation
+                # due to URDF not supporting ball joints properly.
                 self._log_joint_angle("yaw_body", -head_joints[0], axis=[0, 0, 1])
                 self._log_joint_angle("stewart_1", -head_joints[1], axis=[0, 1, 0])
                 self._log_joint_angle("stewart_2", head_joints[2], axis=[0, 1, 0])
@@ -337,3 +270,50 @@ class Rerun:
                         )
 
             time.sleep(0.1)
+
+
+class UrdfEntityPaths:
+    """Helper for constructing link/joint entity paths that match the native URDF logger."""
+
+    def __init__(self, model: urdf.URDF, entity_path_prefix: Optional[str]) -> None:
+        """Construct a new `UrdfEntityPaths` instance.
+
+        Args:
+            model (urdf.URDF): The URDF model.
+            entity_path_prefix (Optional[str]): The prefix for entity paths.
+
+        """
+        self._model = model
+        self.prefix = entity_path_prefix
+        self.link_paths: Dict[str, str] = {}
+        self.joint_paths: Dict[str, str] = {}
+
+        base_parts = [part for part in (self.prefix, model.name) if part]
+        self._base_path = "/".join(base_parts)
+
+        children_map: Dict[str, List[urdf.Joint]] = {}
+        for joint in model.joints:
+            children_map.setdefault(joint.parent, []).append(joint)
+
+        root_link = model.get_root()
+        self._build_paths(root_link, self._base_path, children_map)
+
+    def _build_paths(
+        self,
+        link_name: str,
+        parent_path: str,
+        children_map: Dict[str, List[urdf.Joint]],
+    ) -> None:
+        link_path = self._join(parent_path, link_name)
+        self.link_paths[link_name] = link_path
+
+        for joint in children_map.get(link_name, []):
+            joint_path = self._join(link_path, joint.name)
+            self.joint_paths[joint.name] = joint_path
+            self._build_paths(joint.child, joint_path, children_map)
+
+    @staticmethod
+    def _join(parent: str, child: str) -> str:
+        if parent:
+            return f"{parent}/{child}"
+        return child
