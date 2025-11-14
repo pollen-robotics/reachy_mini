@@ -5,7 +5,7 @@ By default the module directly returns JPEG images as output by the camera.
 """
 
 from threading import Thread
-from typing import Optional
+from typing import Optional, cast
 
 import numpy as np
 import numpy.typing as npt
@@ -13,6 +13,7 @@ import numpy.typing as npt
 from reachy_mini.media.camera_constants import (
     ArducamSpecs,
     CameraResolution,
+    CameraSpecs,
     ReachyMiniCamSpecs,
 )
 
@@ -50,14 +51,16 @@ class GStreamerCamera(CameraBase):
 
         # TODO How do we hande video device not found ?
         cam_path = self.get_video_device()
+        if self.camera_specs is None:
+            raise RuntimeError("Camera specs not set")
         self._resolution = self.camera_specs.default_resolution
+
+        if self._resolution is None:
+            raise RuntimeError("Failed to get default camera resolution.")
 
         # note for some applications the jpeg image could be directly used
         self._appsink_video: GstApp = Gst.ElementFactory.make("appsink")
-        caps_video = Gst.Caps.from_string(
-            f"video/x-raw,format=BGR, width={self._resolution.value[0]},height={self._resolution.value[1]},framerate={self.framerate}/1"
-        )
-        self._appsink_video.set_property("caps", caps_video)
+        self.set_resolution(self._resolution)
         self._appsink_video.set_property("drop", True)  # avoid overflow
         self._appsink_video.set_property("max-buffers", 1)  # keep last image only
         self.pipeline.add(self._appsink_video)
@@ -103,7 +106,7 @@ class GStreamerCamera(CameraBase):
         bus.remove_watch()
         self.logger.debug("bus message loop stopped")
 
-    def set_resolution(self, resolution: CameraResolution):
+    def set_resolution(self, resolution: CameraResolution) -> None:
         """Set the camera resolution."""
         super().set_resolution(resolution)
 
@@ -180,9 +183,9 @@ class GStreamerCamera(CameraBase):
                     if device_props and device_props.has_field("api.v4l2.path"):
                         device_path = device_props.get_string("api.v4l2.path")
                         self.camera_specs = (
-                            ArducamSpecs
+                            cast(CameraSpecs, ArducamSpecs)
                             if cam_name == "Arducam_12MP"
-                            else ReachyMiniCamSpecs
+                            else cast(CameraSpecs, ReachyMiniCamSpecs)
                         )
                         self.logger.debug(f"Found {cam_name} camera at {device_path}")
                         monitor.stop()

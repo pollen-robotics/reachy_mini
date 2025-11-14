@@ -1,7 +1,7 @@
 """Camera utility for Reachy Mini."""
 
 import platform
-from typing import Optional, Tuple
+from typing import Optional, Tuple, cast
 
 import cv2
 from cv2_enumerate_cameras import enumerate_cameras
@@ -16,7 +16,7 @@ from reachy_mini.media.camera_constants import (
 
 def find_camera(
     apiPreference: int = cv2.CAP_ANY, no_cap: bool = False
-) -> Optional[Tuple[cv2.VideoCapture, CameraSpecs]]:
+) -> Tuple[Optional[cv2.VideoCapture], Optional[CameraSpecs]]:
     """Find and return the Reachy Mini camera.
 
     Looks for the Reachy Mini camera first, then Arducam, then older Raspberry Pi Camera. Returns None if no camera is found.
@@ -37,7 +37,7 @@ def find_camera(
         cap.set(cv2.CAP_PROP_FOURCC, fourcc)
         if no_cap:
             cap.release()
-        return cap, ReachyMiniCamSpecs
+        return cap, cast(CameraSpecs, ReachyMiniCamSpecs)
 
     cap = find_camera_by_vid_pid(
         OlderRPiCamSpecs.vid, OlderRPiCamSpecs.pid, apiPreference
@@ -47,13 +47,13 @@ def find_camera(
         cap.set(cv2.CAP_PROP_FOURCC, fourcc)
         if no_cap:
             cap.release()
-        return cap, OlderRPiCamSpecs
+        return cap, cast(CameraSpecs, OlderRPiCamSpecs)
 
     cap = find_camera_by_vid_pid(ArducamSpecs.vid, ArducamSpecs.pid, apiPreference)
     if cap is not None:
         if no_cap:
             cap.release()
-        return cap, ArducamSpecs
+        return cap, cast(CameraSpecs, ArducamSpecs)
 
     return None, None
 
@@ -92,21 +92,20 @@ def find_camera_by_vid_pid(
 
 
 if __name__ == "__main__":
-    from reachy_mini.media.camera_constants import CameraResolution
+    from reachy_mini.media.camera_constants import ArduCamResolution
 
-    cam = find_camera()
-
+    cam, _ = find_camera()
     if cam is None:
-        print("Camera not found")
-    else:
-        cam.set(cv2.CAP_PROP_FRAME_WIDTH, CameraResolution.R1280x720.value[0])
-        cam.set(cv2.CAP_PROP_FRAME_HEIGHT, CameraResolution.R1280x720.value[1])
+        exit("Camera not found")
 
-        while True:
-            ret, frame = cam.read()
-            if not ret:
-                print("Failed to grab frame")
-                break
-            cv2.imshow("Camera Feed", frame)
-            if cv2.waitKey(1) & 0xFF == ord("q"):
-                break
+    cam.set(cv2.CAP_PROP_FRAME_WIDTH, ArduCamResolution.R1280x720.value[0])
+    cam.set(cv2.CAP_PROP_FRAME_HEIGHT, ArduCamResolution.R1280x720.value[1])
+
+    while True:
+        ret, frame = cam.read()
+        if not ret:
+            print("Failed to grab frame")
+            break
+        cv2.imshow("Camera Feed", frame)
+        if cv2.waitKey(1) & 0xFF == ord("q"):
+            break

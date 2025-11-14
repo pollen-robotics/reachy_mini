@@ -3,7 +3,7 @@
 This module provides an implementation of the CameraBase class using OpenCV.
 """
 
-from typing import Optional
+from typing import Optional, cast
 
 import cv2
 import numpy as np
@@ -11,6 +11,7 @@ import numpy.typing as npt
 
 from reachy_mini.media.camera_constants import (
     CameraResolution,
+    CameraSpecs,
     MujocoCameraSpecs,
 )
 from reachy_mini.media.camera_utils import find_camera
@@ -29,7 +30,7 @@ class OpenCVCamera(CameraBase):
         super().__init__(log_level=log_level)
         self.cap: Optional[cv2.VideoCapture] = None
 
-    def set_resolution(self, resolution: CameraResolution):
+    def set_resolution(self, resolution: CameraResolution) -> None:
         """Set the camera resolution."""
         super().set_resolution(resolution)
 
@@ -42,7 +43,7 @@ class OpenCVCamera(CameraBase):
         """Open the camera using OpenCV VideoCapture."""
         if udp_camera:
             self.cap = cv2.VideoCapture(udp_camera)
-            self.camera_specs = MujocoCameraSpecs
+            self.camera_specs = cast(CameraSpecs, MujocoCameraSpecs)
             self._resolution = self.camera_specs.default_resolution
         else:
             self.cap, self.camera_specs = find_camera()
@@ -50,6 +51,9 @@ class OpenCVCamera(CameraBase):
                 raise RuntimeError("Camera not found")
 
             self._resolution = self.camera_specs.default_resolution
+            if self._resolution is None:
+                raise RuntimeError("Failed to get default camera resolution.")
+
             self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, self._resolution.value[0])
             self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self._resolution.value[1])
 

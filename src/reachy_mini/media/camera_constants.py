@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import List
+from typing import List, Optional
 
 import numpy as np
 
@@ -46,9 +46,9 @@ class CameraSpecs:
     """Base camera specifications."""
 
     available_resolutions: List[CameraResolution] = field(default_factory=list)
-    default_resolution: CameraResolution = None
-    vid = None
-    pid = None
+    default_resolution: Optional[CameraResolution] = None
+    vid = 0
+    pid = 0
     # TODO TEMPORARY
     K = np.array(
         [[550.3564, 0.0, 638.0112], [0.0, 549.1653, 364.589], [0.0, 0.0, 1.0]]

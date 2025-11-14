@@ -354,6 +354,9 @@ class ReachyMini:
         if duration < 0:
             raise ValueError("Duration can't be negative.")
 
+        if self.media.camera is None or self.media.camera.camera_specs is None:
+            raise RuntimeError("Camera specs not set.")
+
         x_n, y_n = cv2.undistortPoints(
             np.float32([[[u, v]]]),
             self.media.camera.camera_specs.K,

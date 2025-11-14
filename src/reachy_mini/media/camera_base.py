@@ -28,20 +28,24 @@ class CameraBase(ABC):
         """Initialize the camera."""
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(log_level)
-        self._resolution: CameraResolution = None
-        self.camera_specs: CameraSpecs = None
+        self._resolution: Optional[CameraResolution] = None
+        self.camera_specs: Optional[CameraSpecs] = None
 
     @property
     def resolution(self) -> tuple[int, int]:
         """Get the current camera resolution as a tuple (width, height)."""
+        if self._resolution is None:
+            raise RuntimeError("Camera resolution is not set.")
         return (self._resolution.value[0], self._resolution.value[1])
 
     @property
     def framerate(self) -> int:
         """Get the current camera frames per second."""
-        return self._resolution.value[2]
+        if self._resolution is None:
+            raise RuntimeError("Camera resolution is not set.")
+        return int(self._resolution.value[2])
 
-    def set_resolution(self, resolution: CameraResolution):
+    def set_resolution(self, resolution: CameraResolution) -> None:
         """Set the camera resolution."""
         if self.camera_specs is None:
             raise RuntimeError(
