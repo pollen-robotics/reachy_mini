@@ -25,6 +25,7 @@ class AudioTrack(MediaStreamTrack):
     """A tactile stream track that feeds a audio rendering engine."""
 
     kind = "audio"
+    QUEUE_MAXSIZE = 200
 
     def __init__(self, track, sample_rate: int, log_level: str = "INFO"):
         """Initialize the AudioTrack with a given track."""
@@ -34,7 +35,7 @@ class AudioTrack(MediaStreamTrack):
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(log_level)
         self.logger.debug("Audio track created")
-        self.audio_queue = queue.Queue(maxsize=100)
+        self.audio_queue = queue.Queue(maxsize=self.QUEUE_MAXSIZE)
         self._resampler = av.audio.resampler.AudioResampler(
             format="flt", layout="stereo", rate=sample_rate
         )
@@ -55,38 +56,15 @@ class AudioTrack(MediaStreamTrack):
             data = resampled_frame[0].to_ndarray()
 
             if resampled_frame[0].format.is_planar is False:
-                data = data.reshape(
-                    (resampled_frame[0].samples, 2)
-                )  # len(data) == samples * 2
-                # data = np.array([data[:, 0], data[:, 1]])
+                data = data.reshape((resampled_frame[0].samples, 2))
             else:
                 self.logger.warning("Planar data not supported")
 
-            self.audio_queue.put_nowait(data)  # ToDo keep last audio
+            self.audio_queue.put_nowait(data)
         except queue.Full:
             self.logger.debug("Audio queue is full, dropping frame")
         except Exception as e:
             self.logger.error(f"Error putting audio data into queue: {e}")
-        """
-        if self.first_start:
-            self.first_start = False
-            device_id = 15# GetDefaultDeviceID()
-            if device_id == -1:
-                self.logger.error("Audio device not found")
-            else:
-                self.logger.info("Start renderer")
-                if frame.format.name != "s16":
-                    self.logger.warning("audio sample format not supported")
-                self.audioR.run(
-                    sampling_rate=frame.rate, device_id=device_id, blocksize=frame.samples, dtype='s16')
-        data = frame.to_ndarray(format="s16")
-        if frame.format.is_planar is False:
-            data = data.reshape((frame.samples, 2))  # len(data) == samples * 2
-            # data = np.array([data[:, 0], data[:, 1]])
-            self.audioR.fill_data(data)
-        else:
-            self.logger.warning("Planar data not supported")
-    """
 
     def get_audio_sample(self) -> Optional[npt.NDArray[np.float32]]:
         """Get the latest audio sample from the queue.
