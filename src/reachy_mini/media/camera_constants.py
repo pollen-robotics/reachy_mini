@@ -29,7 +29,7 @@ class RPICameraResolution(CameraResolution):
     Camera supports higher resolutions but the h264 encoder won't follow.
     """
 
-    R1920x1080 = (1920, 1080, 30)
+    R1920x1080 = (1920, 1080, 60)
     R1600x1200 = (1600, 1200, 30)
     R1536x864 = (1536, 864, 40)
     R1280x720 = (1280, 720, 60)
