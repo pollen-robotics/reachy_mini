@@ -202,6 +202,11 @@ class MujocoBackend(Backend):
                 self.current_antenna_joint_positions = (
                     self.get_present_antenna_joint_positions()
                 )
+                # Update the Placo kinematics model to recompute passive joints
+                self.update_head_kinematics_model(
+                    self.current_head_joint_positions,
+                    self.current_antenna_joint_positions,
+                )
                 self.current_head_pose = self.get_mj_present_head_pose()
 
                 # Update the target head joint positions from IK if necessary
