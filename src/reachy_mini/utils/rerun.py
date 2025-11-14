@@ -179,8 +179,9 @@ class Rerun:
         joint = self._get_joint(joint_name)
         joint_path = self._joint_entity_path(joint)
 
-        # Update joint rotation around Y axis
         base_euler = joint.origin.rotation or [0.0, 0.0, 0.0]
+
+        # if we specify an axis override, use it; otherwise, use the joint's defined axis
         effective_axis = (
             np.array(axis)
             if axis is not None
