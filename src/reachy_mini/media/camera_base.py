@@ -11,7 +11,11 @@ from typing import Optional
 import numpy as np
 import numpy.typing as npt
 
-from reachy_mini.media.camera_constants import CameraResolution, CameraSpecs
+from reachy_mini.media.camera_constants import (
+    CameraResolution,
+    CameraSpecs,
+    MujocoCameraSpecs,
+)
 
 
 class CameraBase(ABC):
@@ -39,7 +43,20 @@ class CameraBase(ABC):
 
     def set_resolution(self, resolution: CameraResolution):
         """Set the camera resolution."""
-        pass
+        if self.camera_specs is None:
+            raise RuntimeError(
+                "Camera specs not set. Open the camera before setting the resolution."
+            )
+
+        if isinstance(self.camera_specs, MujocoCameraSpecs):
+            raise RuntimeError(
+                "Cannot change resolution of Mujoco simulated camera for now."
+            )
+
+        if resolution not in self.camera_specs.available_resolutions:
+            raise ValueError(
+                f"Resolution not supported by the camera. Available resolutions are : {self.camera_specs.available_resolutions}"
+            )
 
     @abstractmethod
     def open(self) -> None:

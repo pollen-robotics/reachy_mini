@@ -48,7 +48,7 @@ class GStreamerCamera(CameraBase):
 
         self.pipeline = Gst.Pipeline.new("camera_recorder")
 
-        # TODO How do we hande video device not found ? 
+        # TODO How do we hande video device not found ?
         cam_path = self.get_video_device()
         self._resolution = self.camera_specs.default_resolution
 
@@ -105,8 +105,19 @@ class GStreamerCamera(CameraBase):
 
     def set_resolution(self, resolution: CameraResolution):
         """Set the camera resolution."""
-        # TODO
-        raise NotImplementedError("Changing resolution is not implemented yet.")
+        super().set_resolution(resolution)
+
+        # Check if pipeline is not playing before changing resolution
+        if self.pipeline.get_state(0).state == Gst.State.PLAYING:
+            raise RuntimeError(
+                "Cannot change resolution while the camera is streaming. Please close the camera first."
+            )
+
+        self._resolution = resolution
+        caps_video = Gst.Caps.from_string(
+            f"video/x-raw,format=BGR, width={self._resolution.value[0]},height={self._resolution.value[1]},framerate={self.framerate}/1"
+        )
+        self._appsink_video.set_property("caps", caps_video)
 
     def open(self) -> None:
         """Open the camera using GStreamer."""

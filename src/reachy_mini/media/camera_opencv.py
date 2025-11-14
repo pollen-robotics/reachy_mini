@@ -11,7 +11,6 @@ import numpy.typing as npt
 
 from reachy_mini.media.camera_constants import (
     CameraResolution,
-    CameraSpecs,
     MujocoCameraSpecs,
 )
 from reachy_mini.media.camera_utils import find_camera
@@ -32,20 +31,8 @@ class OpenCVCamera(CameraBase):
 
     def set_resolution(self, resolution: CameraResolution):
         """Set the camera resolution."""
-        if self.camera_specs is None:
-            raise RuntimeError(
-                "Camera specs not set. Open the camera before setting the resolution."
-            )
+        super().set_resolution(resolution)
 
-        if isinstance(self.camera_specs, MujocoCameraSpecs):
-            raise RuntimeError(
-                "Cannot change resolution of Mujoco simulated camera for now."
-            )
-            
-        if resolution not in self.camera_specs.available_resolutions:
-            raise ValueError(
-                f"Resolution not supported by the camera. Available resolutions are : {self.camera_specs.available_resolutions}"
-            )
         self._resolution = resolution
         if self.cap is not None:
             self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, self._resolution.value[0])
