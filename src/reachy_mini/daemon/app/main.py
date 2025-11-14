@@ -110,13 +110,12 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
 
     app.include_router(router)
 
-    if health_check_event is not None:
-
-        @app.post("/health-check")
-        async def health_check() -> dict[str, str]:
-            """Health check endpoint to reset the health check timer."""
+    @app.post("/health-check")
+    async def health_check() -> dict[str, str]:
+        """Health check endpoint to reset the health check timer."""
+        if health_check_event is not None:
             health_check_event.set()
-            return {"status": "ok"}
+        return {"status": "ok"}
 
     app.add_middleware(
         CORSMiddleware,
