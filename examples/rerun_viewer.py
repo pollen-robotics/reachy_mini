@@ -18,10 +18,10 @@ from reachy_mini.utils.rerun import Rerun
 def main():
     """Play a wav file by pushing samples to the audio device."""
     logging.basicConfig(
-        level=logging.DEBUG, format="%(asctime)s [%(levelname)s] %(message)s"
+        level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s"
     )
 
-    with ReachyMini(log_level="DEBUG") as mini:
+    with ReachyMini(log_level="INFO") as mini:
         try:
             mini.enable_gravity_compensation()
             rerun = Rerun(mini)

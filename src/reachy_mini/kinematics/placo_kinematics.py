@@ -11,6 +11,8 @@ import numpy.typing as npt
 import pinocchio as pin
 import placo
 
+from scipy.spatial.transform import Rotation as R
+
 
 class PlacoKinematics:
     """Placo Kinematics class for Reachy Mini.
@@ -276,8 +278,8 @@ class PlacoKinematics:
             float: The Euler distance between the two poses.
 
         """
-        euler1 = pin.rpy.matrixToRpy(pose1[:3, :3])
-        euler2 = pin.rpy.matrixToRpy(pose2[:3, :3])
+        euler1 = R.from_matrix(pose1[:3, :3]).as_euler("xyz")
+        euler2 = R.from_matrix(pose2[:3, :3]).as_euler("xyz")
         p1 = pose1[:3, 3]
         p2 = pose2[:3, 3]
         return float(np.linalg.norm(euler1 - euler2)), float(np.linalg.norm(p1 - p2))
