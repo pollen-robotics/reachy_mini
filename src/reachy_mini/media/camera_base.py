@@ -11,7 +11,7 @@ from typing import Optional
 import numpy as np
 import numpy.typing as npt
 
-from reachy_mini.media.camera_constants import CameraResolution
+from reachy_mini.media.camera_constants import CameraResolution, CameraSpecs
 
 
 class CameraBase(ABC):
@@ -20,22 +20,26 @@ class CameraBase(ABC):
     def __init__(
         self,
         log_level: str = "INFO",
-        resolution: CameraResolution = CameraResolution.R1280x720,
     ) -> None:
         """Initialize the camera."""
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(log_level)
-        self._resolution = resolution
+        self.resolution: CameraResolution = None
+        self.camera_specs: CameraSpecs = None
 
     @property
     def resolution(self) -> tuple[int, int]:
         """Get the current camera resolution as a tuple (width, height)."""
-        return (self._resolution.value[0], self._resolution.value[1])
+        return (self.resolution.value[0], self.resolution.value[1])
 
     @property
     def framerate(self) -> int:
         """Get the current camera frames per second."""
-        return self._resolution.value[2]
+        return self.resolution.value[2]
+
+    def set_resolution(self, resolution: CameraResolution):
+        """Set the camera resolution."""
+        pass
 
     @abstractmethod
     def open(self) -> None:

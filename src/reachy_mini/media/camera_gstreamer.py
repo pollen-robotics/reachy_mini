@@ -35,15 +35,16 @@ class GStreamerCamera(CameraBase):
     def __init__(
         self,
         log_level: str = "INFO",
-        resolution: CameraResolution = CameraResolution.R1280x720,
     ) -> None:
         """Initialize the GStreamer camera."""
-        super().__init__(log_level=log_level, resolution=resolution)
+        super().__init__(log_level=log_level)
         Gst.init(None)
         self._loop = GLib.MainLoop()
         self._thread_bus_calls: Optional[Thread] = None
 
         self.pipeline = Gst.Pipeline.new("camera_recorder")
+
+        self.resolution = CameraResolution.R1280x720  # default resolution for gstreamer
 
         # note for some applications the jpeg image could be directly used
         self._appsink_video: GstApp = Gst.ElementFactory.make("appsink")
@@ -55,6 +56,7 @@ class GStreamerCamera(CameraBase):
         self._appsink_video.set_property("max-buffers", 1)  # keep last image only
         self.pipeline.add(self._appsink_video)
 
+        # TODO
         cam_path = self.get_arducam_video_device()
         if cam_path == "":
             self.logger.warning("Recording pipeline set without camera.")
@@ -95,6 +97,11 @@ class GStreamerCamera(CameraBase):
         self._loop.run()
         bus.remove_watch()
         self.logger.debug("bus message loop stopped")
+
+    def set_resolution(self, resolution: CameraResolution):
+        """Set the camera resolution."""
+        # TODO
+        pass
 
     def open(self) -> None:
         """Open the camera using GStreamer."""

@@ -93,11 +93,6 @@ class ReachyMini:
         self._last_head_pose: Optional[npt.NDArray[np.float64]] = None
         self.is_recording = False
 
-        self.K = np.array(
-            [[550.3564, 0.0, 638.0112], [0.0, 549.1653, 364.589], [0.0, 0.0, 1.0]]
-        )
-        self.D = np.array([-0.0694, 0.1565, -0.0004, 0.0003, -0.0983])
-
         self.T_head_cam = np.eye(4)
         self.T_head_cam[:3, 3][:] = [0.0437, 0, 0.0512]
         self.T_head_cam[:3, :3] = np.array(
@@ -359,7 +354,11 @@ class ReachyMini:
         if duration < 0:
             raise ValueError("Duration can't be negative.")
 
-        x_n, y_n = cv2.undistortPoints(np.float32([[[u, v]]]), self.K, self.D)[0, 0]  # type: ignore
+        x_n, y_n = cv2.undistortPoints(
+            np.float32([[[u, v]]]),
+            self.media.camera.camera_specs.K,
+            self.media.camera.camera_specs.D,
+        )[0, 0]  # type: ignore
 
         ray_cam = np.array([x_n, y_n, 1.0])
         ray_cam /= np.linalg.norm(ray_cam)

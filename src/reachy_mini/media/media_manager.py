@@ -35,7 +35,6 @@ class MediaManager:
         backend: MediaBackend = MediaBackend.DEFAULT,
         log_level: str = "INFO",
         use_sim: bool = False,
-        resolution: CameraResolution = CameraResolution.R1280x720,
         signalling_host: str = "localhost",
     ) -> None:
         """Initialize the audio device."""
@@ -50,14 +49,14 @@ class MediaManager:
                 self.logger.info("No media backend selected.")
             case MediaBackend.DEFAULT:
                 self.logger.info("Using default media backend (OpenCV + SoundDevice).")
-                self._init_camera(use_sim, log_level, resolution)
+                self._init_camera(use_sim, log_level)
                 self._init_audio(log_level)
             case MediaBackend.DEFAULT_NO_VIDEO:
                 self.logger.info("Using default media backend (SoundDevice only).")
                 self._init_audio(log_level)
             case MediaBackend.GSTREAMER:
                 self.logger.info("Using GStreamer media backend.")
-                self._init_camera(use_sim, log_level, resolution)
+                self._init_camera(use_sim, log_level)
                 self._init_audio(log_level)
             case MediaBackend.WEBRTC:
                 self.logger.info("Using WebRTC GStreamer backend.")
@@ -77,7 +76,6 @@ class MediaManager:
         self,
         use_sim: bool,
         log_level: str,
-        resolution: CameraResolution,
     ) -> None:
         """Initialize the camera."""
         self.logger.debug("Initializing camera...")
@@ -85,7 +83,7 @@ class MediaManager:
             self.logger.info("Using OpenCV camera backend.")
             from reachy_mini.media.camera_opencv import OpenCVCamera
 
-            self.camera = OpenCVCamera(log_level=log_level, resolution=resolution)
+            self.camera = OpenCVCamera(log_level=log_level)
             if use_sim:
                 self.camera.open(udp_camera="udp://@127.0.0.1:5005")
             else:
@@ -94,7 +92,7 @@ class MediaManager:
             self.logger.info("Using GStreamer camera backend.")
             from reachy_mini.media.camera_gstreamer import GStreamerCamera
 
-            self.camera = GStreamerCamera(log_level=log_level, resolution=resolution)
+            self.camera = GStreamerCamera(log_level=log_level)
             self.camera.open()
             # Todo: use simulation with gstreamer?
 

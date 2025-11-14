@@ -1,57 +1,72 @@
 """Camera utility for Reachy Mini."""
 
 import platform
+from typing import Optional, Tuple
 
 import cv2
 from cv2_enumerate_cameras import enumerate_cameras
 
-# VID, PID
-REACHY_CAMERA = (0x38FB, 0x1002)
-ARDUCAM = (0x0C45, 0x636D)
-OLDER_RPICAM = (0x1BCF, 0x28C4)  # Keeping for compatibility, but not used anymore
+from reachy_mini.media.camera_constants import (
+    ArducamSpecs,
+    CameraSpecs,
+    OlderRPiCamSpecs,
+    ReachyMiniCamSpecs,
+)
 
 
-def find_camera(apiPreference: int = cv2.CAP_ANY) -> cv2.VideoCapture | None:
+def find_camera(
+    apiPreference: int = cv2.CAP_ANY, no_cap: bool = False
+) -> Optional[Tuple[cv2.VideoCapture, CameraSpecs]]:
     """Find and return the Reachy Mini camera.
 
     Looks for the Reachy Mini camera first, then Arducam, then older Raspberry Pi Camera. Returns None if no camera is found.
 
     Args:
         apiPreference (int): Preferred API backend for the camera. Default is cv2.CAP_ANY.
+        no_cap (bool): If True, close the camera after finding it. Default is False.
 
     Returns:
         cv2.VideoCapture | None: A VideoCapture object if the camera is found and opened successfully, otherwise None.
 
     """
-    cap = find_camera_by_vid_pid(REACHY_CAMERA[0], REACHY_CAMERA[1], apiPreference)
+    cap = find_camera_by_vid_pid(
+        ReachyMiniCamSpecs.vid, ReachyMiniCamSpecs.pid, apiPreference
+    )
     if cap is not None:
         fourcc = cv2.VideoWriter_fourcc("M", "J", "P", "G")  # type: ignore
         cap.set(cv2.CAP_PROP_FOURCC, fourcc)
-        return cap
+        if no_cap:
+            cap.release()
+        return cap, ReachyMiniCamSpecs
 
-    cap = find_camera_by_vid_pid(ARDUCAM[0], ARDUCAM[1], apiPreference)
+    cap = find_camera_by_vid_pid(ArducamSpecs.vid, ArducamSpecs.pid, apiPreference)
     if cap is not None:
-        return cap
+        if no_cap:
+            cap.release()
+        return cap, ArducamSpecs
 
-    cap = find_camera_by_vid_pid(OLDER_RPICAM[0], OLDER_RPICAM[1], apiPreference)
+    cap = find_camera_by_vid_pid(
+        OlderRPiCamSpecs.vid, OlderRPiCamSpecs.pid, apiPreference
+    )
     if cap is not None:
         fourcc = cv2.VideoWriter_fourcc("M", "J", "P", "G")  # type: ignore
         cap.set(cv2.CAP_PROP_FOURCC, fourcc)
-        return cap
-
-    return None
+        if no_cap:
+            cap.release()
+        return cap, OlderRPiCamSpecs
+    return None, None
 
 
 def find_camera_by_vid_pid(
-    vid: int = REACHY_CAMERA[0],
-    pid: int = REACHY_CAMERA[1],
+    vid: int = ReachyMiniCamSpecs.vid,
+    pid: int = ReachyMiniCamSpecs.pid,
     apiPreference: int = cv2.CAP_ANY,
 ) -> cv2.VideoCapture | None:
     """Find and return a camera with the specified VID and PID.
 
     Args:
-        vid (int): Vendor ID of the camera. Default is 0x0C45 (Arducam).
-        pid (int): Product ID of the camera. Default is 0x636D (Arducam).
+        vid (int): Vendor ID of the camera. Default is ReachyMiniCamera
+        pid (int): Product ID of the camera. Default is ReachyMiniCamera
         apiPreference (int): Preferred API backend for the camera. Default is cv2.CAP_ANY.
 
     Returns:
