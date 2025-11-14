@@ -40,7 +40,7 @@ class OpenCVCamera(CameraBase):
             raise ValueError(
                 f"Resolution not supported by the camera. Available resolutions are : {self.camera_specs.available_resolutions}"
             )
-        self._resolution = resolution
+        self._resolution = resolution.value
         if self.cap is not None:
             self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, self._resolution[0])
             self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self._resolution[1])
