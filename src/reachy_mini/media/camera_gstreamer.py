@@ -160,11 +160,11 @@ class GStreamerCamera(CameraBase):
         cam_names = ["Reachy", "Arducam_12MP"]
 
         devices = monitor.get_devices()
-        for device in devices:
-            name = device.get_display_name()
-            device_props = device.get_properties()
+        for cam_name in cam_names:
+            for device in devices:
+                name = device.get_display_name()
+                device_props = device.get_properties()
 
-            for cam_name in cam_names:
                 if cam_name in name:
                     if device_props and device_props.has_field("api.v4l2.path"):
                         device_path = device_props.get_string("api.v4l2.path")
