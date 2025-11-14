@@ -1,7 +1,11 @@
+"""Camera streaming API routes."""
+
 import asyncio
+
 import cv2
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
+
 from ...backend.mujoco.backend import MujocoBackend
 from ...daemon import Daemon
 from reachy_mini.media.camera_constants import CameraResolution
@@ -34,6 +38,7 @@ async def stream_camera(
     backend=Depends(get_backend),
     daemon: Daemon=Depends(get_daemon),
 ) -> StreamingResponse:
+    """Stream camera feed as MJPEG."""
     async def _stream():
         is_sim = daemon.status().simulation_enabled and isinstance(backend, MujocoBackend)
         cam = await _get_shared_camera(is_sim)
