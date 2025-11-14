@@ -63,3 +63,36 @@ async def list_available_apps() -> list[AppInfo]:
             )
 
         return apps
+
+
+async def list_all_apps() -> list[AppInfo]:
+    """List all apps available on Hugging Face Spaces (including unofficial ones)."""
+    url = "https://huggingface.co/api/spaces?filter=reachy_mini&sort=likes&direction=-1&limit=50&full=true"
+
+    async with aiohttp.ClientSession() as session:
+        try:
+            async with session.get(url) as response:
+                response.raise_for_status()
+                data: list[Dict[str, Any]] = await response.json()
+        except (aiohttp.ClientError, json.JSONDecodeError):
+            return []
+
+        if not isinstance(data, list):
+            return []
+
+        apps = []
+        for item in data:
+            if item is None or "id" not in item:
+                continue
+
+            apps.append(
+                AppInfo(
+                    name=item["id"].split("/")[-1],
+                    description=item.get("cardData", {}).get("short_description", ""),
+                    url=f"https://huggingface.co/spaces/{item['id']}",
+                    source_kind=SourceKind.HF_SPACE,
+                    extra=item,
+                )
+            )
+
+        return apps
