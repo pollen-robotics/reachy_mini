@@ -225,6 +225,10 @@ pre-commit run --all-files
 
 Checks are performed by Ruff. You may want to [configure your IDE to support it](https://docs.astral.sh/ruff/editors/setup/).
 
+## Troubleshooting
+
+see [dedicated section](docs/troubleshooting.md)
+
 ## License
 
 This project is licensed under the Apache 2.0 License - see the [LICENSE](LICENSE) file for details.
