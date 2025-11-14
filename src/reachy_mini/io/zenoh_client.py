@@ -5,6 +5,7 @@ robot. It subscribes to joint positions updates and allows sending commands to t
 """
 
 import json
+import socket
 import threading
 import time
 from dataclasses import dataclass
@@ -20,14 +21,46 @@ from reachy_mini.io.abstract import AbstractClient
 from reachy_mini.io.protocol import AnyTaskRequest, TaskProgress, TaskRequest
 
 
+def _resolve_host(host: str) -> str:
+    """Resolve hostname to IP address if needed.
+
+    Args:
+        host: Hostname or IP address
+
+    Returns:
+        IP address as string
+    """
+    # Check if it's already an IP address
+    try:
+        socket.inet_aton(host)
+        return host  # Already an IP
+    except socket.error:
+        pass
+
+    # It's a hostname, resolve it
+    try:
+        ip = socket.gethostbyname(host)
+        print(f"Resolved {host} -> {ip}")
+        return ip
+    except socket.gaierror as e:
+        print(f"Warning: Could not resolve {host}: {e}")
+        # Return original host and let Zenoh try
+        return host
+
+
 class ZenohClient(AbstractClient):
     """Zenoh client for Reachy Mini."""
 
     def __init__(self, localhost_only: bool = True, external_ip: Optional[str] = None):
-        """Initialize the Zenoh client."""
+        """Initialize the Zenoh client.
+
+        Args:
+            localhost_only: If True, connect to localhost only
+            external_ip: External IP address or hostname to connect to (e.g., "192.168.1.10" or "myhost.ngrok.io")
+        """
         if localhost_only and external_ip is not None:
             raise ValueError("localhost_only and external_ip cannot be set at the same time.")
-        
+
         if localhost_only:
             c = zenoh.Config.from_json5(
                 json.dumps(
@@ -42,12 +75,14 @@ class ZenohClient(AbstractClient):
                 )
             )
         elif external_ip is not None:
+            # Resolve hostname to IP if necessary
+            resolved_ip = _resolve_host(external_ip)
             c = zenoh.Config.from_json5(
                 json.dumps(
                     {
                         "connect": {
                             "endpoints": {
-                                "peer": [f"tcp/{external_ip}:7447"],
+                                "peer": [f"tcp/{resolved_ip}:7447"],
                                 "router": [],
                             },
                         },
