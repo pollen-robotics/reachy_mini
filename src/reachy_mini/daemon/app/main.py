@@ -23,7 +23,15 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from reachy_mini.apps.manager import AppManager
-from reachy_mini.daemon.app.routers import apps, daemon, kinematics, motors, move, state
+from reachy_mini.daemon.app.routers import (
+    apps,
+    daemon,
+    kinematics,
+    motors,
+    move,
+    state,
+    volume,
+)
 from reachy_mini.daemon.daemon import Daemon
 
 
@@ -101,6 +109,7 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
     router.include_router(motors.router)
     router.include_router(move.router)
     router.include_router(state.router)
+    router.include_router(volume.router)
 
     if args.wireless_version:
         from .routers import update, wifi_config
