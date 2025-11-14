@@ -22,10 +22,15 @@ router = APIRouter(prefix="/volume")
 logger = logging.getLogger(__name__)
 
 # Constants
-LINUX_AUDIO_DEVICE = "Array"  # Respeaker device name
-LINUX_MIC_DEVICE = "Array"  # Respeaker microphone device name
 AUDIO_COMMAND_TIMEOUT = 2  # Timeout in seconds for audio commands
 WINDOWS_TIMEOUT = 5  # Windows PowerShell needs slightly longer timeout
+
+# Device-specific card names for amixer
+DEVICE_CARD_NAMES = {
+    "reachy_mini_audio": "Audio",  # Reachy Mini Audio device
+    "respeaker": "Array",  # Legacy ReSpeaker device
+    "default": "Audio",  # Default to Reachy Mini Audio
+}
 
 # Windows CoreAudio constants
 AUDIO_VOLUME_GUID = "{5CDF2C82-841E-4546-9722-0CF74078229A}"
@@ -74,7 +79,7 @@ def detect_audio_device() -> str:
     system = platform.system()
     
     if system == "Linux":
-        # Try to detect if Respeaker is available
+        # Try to detect if Reachy Mini Audio or legacy Respeaker is available
         try:
             result = subprocess.run(
                 ["aplay", "-l"],
@@ -82,7 +87,10 @@ def detect_audio_device() -> str:
                 text=True,
                 timeout=AUDIO_COMMAND_TIMEOUT,
             )
-            if "respeaker" in result.stdout.lower():
+            output_lower = result.stdout.lower()
+            if "reachy mini audio" in output_lower:
+                return "reachy_mini_audio"
+            elif "respeaker" in output_lower:
                 return "respeaker"
         except (subprocess.TimeoutExpired, FileNotFoundError):
             pass
@@ -93,6 +101,12 @@ def detect_audio_device() -> str:
         return "system"
     else:
         return "unknown"
+
+
+def get_linux_card_name() -> str:
+    """Get the appropriate card name for Linux amixer commands based on detected device."""
+    device = detect_audio_device()
+    return DEVICE_CARD_NAMES.get(device, DEVICE_CARD_NAMES["default"])
 
 
 # macOS Volume Control
@@ -132,9 +146,10 @@ def set_volume_macos(volume: int) -> bool:
 
 def get_volume_linux() -> Optional[int]:
     """Get current volume on Linux using amixer."""
+    card_name = get_linux_card_name()
     try:
         result = subprocess.run(
-            ["amixer", "-c", LINUX_AUDIO_DEVICE, "sget", "PCM"],
+            ["amixer", "-c", card_name, "sget", "PCM"],
             capture_output=True,
             text=True,
             timeout=AUDIO_COMMAND_TIMEOUT,
@@ -156,9 +171,10 @@ def get_volume_linux() -> Optional[int]:
 
 def set_volume_linux(volume: int) -> bool:
     """Set current volume on Linux using amixer."""
+    card_name = get_linux_card_name()
     try:
         subprocess.run(
-            ["amixer", "-c", LINUX_AUDIO_DEVICE, "sset", "PCM", f"{volume}%"],
+            ["amixer", "-c", card_name, "sset", "PCM", f"{volume}%"],
             capture_output=True,
             text=True,
             timeout=AUDIO_COMMAND_TIMEOUT,
@@ -373,9 +389,10 @@ def set_microphone_volume_macos(volume: int) -> bool:
 
 def get_microphone_volume_linux() -> Optional[int]:
     """Get current microphone input volume on Linux using amixer."""
+    card_name = get_linux_card_name()
     try:
         result = subprocess.run(
-            ["amixer", "-c", LINUX_MIC_DEVICE, "sget", "Headset"],
+            ["amixer", "-c", card_name, "sget", "Headset"],
             capture_output=True,
             text=True,
             timeout=AUDIO_COMMAND_TIMEOUT,
@@ -396,9 +413,10 @@ def get_microphone_volume_linux() -> Optional[int]:
 
 def set_microphone_volume_linux(volume: int) -> bool:
     """Set microphone input volume on Linux using amixer."""
+    card_name = get_linux_card_name()
     try:
         subprocess.run(
-            ["amixer", "-c", LINUX_MIC_DEVICE, "sset", "Headset", f"{volume}%"],
+            ["amixer", "-c", card_name, "sset", "Headset", f"{volume}%"],
             capture_output=True,
             text=True,
             timeout=AUDIO_COMMAND_TIMEOUT,
