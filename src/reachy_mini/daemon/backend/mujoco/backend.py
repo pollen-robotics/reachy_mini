@@ -167,8 +167,8 @@ class MujocoBackend(Backend):
         if not self.headless:
             viewer.sync()
 
-            rendering_thread = Thread(target=self.rendering_loop, daemon=True)
-            rendering_thread.start()
+        rendering_thread = Thread(target=self.rendering_loop, daemon=True)
+        rendering_thread.start()
 
         # 3) now enter your normal loop
         while not self.should_stop.is_set():
