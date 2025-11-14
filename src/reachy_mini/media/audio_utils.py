@@ -14,12 +14,20 @@ def get_respeaker_card_number() -> int:
 
         lines = output.split("\n")
         for line in lines:
-            if "respeaker" in line.lower() and "card" in line:
+            if "reachy mini audio" in line.lower() and "card" in line:
                 card_number = line.split(":")[0].split("card ")[1].strip()
-                logging.debug(f"Found ReSpeaker sound card: {card_number}")
+                logging.debug(f"Found Reachy Mini Audio sound card: {card_number}")
+                return int(card_number)
+            elif "respeaker" in line.lower() and "card" in line:
+                card_number = line.split(":")[0].split("card ")[1].strip()
+                logging.warning(
+                    f"Found ReSpeaker sound card: {card_number}. Please update firmware!"
+                )
                 return int(card_number)
 
-        logging.warning("ReSpeaker sound card not found. Returning default card")
+        logging.warning(
+            "Reachy Mini Audio sound card not found. Returning default card"
+        )
         return 0  # default sound card
 
     except subprocess.CalledProcessError as e:

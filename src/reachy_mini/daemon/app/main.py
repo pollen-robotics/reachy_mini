@@ -63,6 +63,8 @@ class Args:
 
     localhost_only: bool | None = None
 
+    fix_audio: bool = False
+
 
 def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> FastAPI:
     """Create and configure the FastAPI application."""
@@ -160,6 +162,23 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
 def run_app(args: Args) -> None:
     """Run the FastAPI app with Uvicorn."""
     logging.basicConfig(level=logging.INFO)
+
+    if args.fix_audio:
+        """Temporary fix for audio issues with beta version."""
+        logging.info("Applying audio fix for beta version.")
+
+        import time
+
+        from reachy_mini.media.audio_control_utils import init_respeaker_usb
+
+        respeaker = init_respeaker_usb()
+        if respeaker is None:
+            logging.error("Respeaker device not found. Cannot apply audio fix.")
+        else:
+            respeaker.write("REBOOT", [1])
+            respeaker.close()
+            time.sleep(1)
+            logging.debug("Respeaker rebooted.")
 
     health_check_event = asyncio.Event()
     app = create_app(args, health_check_event)
@@ -321,6 +340,12 @@ def main() -> None:
         default=default_args.log_level,
         choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
         help="Set the logging level (default: INFO).",
+    )
+
+    parser.add_argument(
+        "--fix-audio",
+        action="store_true",
+        help="Fix audio issues with beta version (default: False).",
     )
 
     args = parser.parse_args()
