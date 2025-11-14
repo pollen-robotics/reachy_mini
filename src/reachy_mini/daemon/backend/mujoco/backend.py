@@ -28,6 +28,7 @@ from .utils import (
     get_joint_id_from_name,
 )
 from .video_udp import UDPJPEGFrameSender
+from .video_tcp import TCPJPEGFrameServer
 
 CAMERA_REACHY = 'eye_camera'
 CAMERA_STUDIO_CLOSE = 'studio_close'
@@ -115,7 +116,10 @@ class MujocoBackend(Backend):
 
         Capture the image from the virtual camera_name and send it over UDP to the port.
         """
-        streamer_udp = UDPJPEGFrameSender(dest_port=port)
+        if port == 5010:
+            streamer = TCPJPEGFrameServer(listen_port=port)
+        else:
+            streamer = UDPJPEGFrameSender(dest_port=port)
         camera_id = mujoco.mj_name2id(
             self.model,
             mujoco.mjtObj.mjOBJ_CAMERA,
@@ -135,7 +139,7 @@ class MujocoBackend(Backend):
                 offscreen_renderer.scene.flags[mujoco.mjtRndFlag.mjRND_REFLECTION] = 0
 
             im = offscreen_renderer.render()
-            streamer_udp.send_frame(im)
+            streamer.send_frame(im)
 
             took = time.time() - start_t
             time.sleep(max(0, self.rendering_timestep - took))
