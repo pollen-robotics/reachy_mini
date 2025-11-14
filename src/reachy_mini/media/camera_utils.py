@@ -38,7 +38,7 @@ def find_camera(
         if no_cap:
             cap.release()
         return cap, ReachyMiniCamSpecs
-        
+
     cap = find_camera_by_vid_pid(
         OlderRPiCamSpecs.vid, OlderRPiCamSpecs.pid, apiPreference
     )
