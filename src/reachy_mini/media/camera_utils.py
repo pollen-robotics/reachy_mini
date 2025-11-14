@@ -38,13 +38,7 @@ def find_camera(
         if no_cap:
             cap.release()
         return cap, ReachyMiniCamSpecs
-
-    cap = find_camera_by_vid_pid(ArducamSpecs.vid, ArducamSpecs.pid, apiPreference)
-    if cap is not None:
-        if no_cap:
-            cap.release()
-        return cap, ArducamSpecs
-
+        
     cap = find_camera_by_vid_pid(
         OlderRPiCamSpecs.vid, OlderRPiCamSpecs.pid, apiPreference
     )
@@ -54,6 +48,13 @@ def find_camera(
         if no_cap:
             cap.release()
         return cap, OlderRPiCamSpecs
+
+    cap = find_camera_by_vid_pid(ArducamSpecs.vid, ArducamSpecs.pid, apiPreference)
+    if cap is not None:
+        if no_cap:
+            cap.release()
+        return cap, ArducamSpecs
+
     return None, None
 
 
