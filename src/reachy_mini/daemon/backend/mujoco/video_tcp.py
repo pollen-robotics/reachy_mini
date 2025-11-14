@@ -15,7 +15,7 @@ from PIL import Image
 
 
 class TCPJPEGFrameServer:
-    """Non-blocking, reconnect-safe JPEG-over-TCP server."""
+    """Non-blocking accept, blocking client socket, reconnect-safe."""
 
     def __init__(self, listen_ip="0.0.0.0", listen_port=5010):
         self.addr = (listen_ip, listen_port)
@@ -25,35 +25,35 @@ class TCPJPEGFrameServer:
         self.listen_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.listen_sock.bind(self.addr)
         self.listen_sock.listen(1)
-        self.listen_sock.setblocking(False)  # << non-blocking accept
+        self.listen_sock.setblocking(False)  # non-blocking accept
 
-        self.client_sock = None
+        self.client_sock: socket.socket | None = None
 
     def _accept_if_needed(self):
-        """Try to accept a new client (non-blocking)."""
         if self.client_sock is not None:
-            return  # Already have client
+            return
 
         try:
             client, addr = self.listen_sock.accept()
-            client.setblocking(False)
+            # DO NOT: client.setblocking(False)
+            client.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
             print(f"[TCPJPEGFrameServer] Client connected from {addr}")
             self.client_sock = client
         except BlockingIOError:
-            # No pending connection, normal
             pass
 
     def send_frame(self, frame: npt.NDArray[np.uint8]):
         """Send one frame to the connected client (if any)."""
-
-        # First: accept connections if someone is trying
         self._accept_if_needed()
-
         if self.client_sock is None:
-            return  # No client, nothing to do
+            return
 
         # Encode frame
-        ok, jpeg_bytes = cv2.imencode(".jpg", cv2.cvtColor(frame, cv2.COLOR_RGB2BGR), [int(cv2.IMWRITE_JPEG_QUALITY), 80])
+        ok, jpeg_bytes = cv2.imencode(
+            ".jpg",
+            cv2.cvtColor(frame, cv2.COLOR_RGB2BGR),
+            [int(cv2.IMWRITE_JPEG_QUALITY), 80],
+        )
         if not ok:
             return
 
@@ -63,8 +63,16 @@ class TCPJPEGFrameServer:
         try:
             self.client_sock.sendall(header)
             self.client_sock.sendall(data)
-        except (BrokenPipeError, ConnectionResetError, OSError):
-            print("[TCPJPEGFrameServer] Client disconnected")
+
+        except BlockingIOError:
+            # Kernel send buffer full (non-blocking socket). Just drop this frame.
+            # Do NOT close the connection.
+            # Next frame we try again.
+            # print("[TCPJPEGFrameServer] Send buffer full, dropping frame")
+            return
+
+        except (BrokenPipeError, ConnectionResetError) as e:
+            print(f"[TCPJPEGFrameServer] Client disconnected: {e}")
             self.client_sock.close()
             self.client_sock = None
 
@@ -91,25 +99,27 @@ class TCPJPEGFrameClient:
         print(f"[TCPJPEGFrameClient] Connected to {self.server_addr}")
 
     def _recv_exact(self, n: int) -> Optional[bytes]:
-        """Receive exactly n bytes or return None on error."""
+        """Receive exactly n bytes or return None on error/timeout."""
         buf = b""
         while len(buf) < n:
             try:
                 chunk = self.sock.recv(n - len(buf))
             except socket.timeout:
+                # no data in time
                 return None
+            except OSError as e:
+                print(f"[TCPJPEGFrameClient] OSError in recv: {e}")
+                return None
+
             if not chunk:
-                # Connection closed
+                # peer closed
+                print("[TCPJPEGFrameClient] Connection closed by peer")
                 return None
             buf += chunk
         return buf
 
     def recv_frame(self) -> Optional[npt.NDArray[np.uint8]]:
-        """Receive one JPEG frame.
-
-        Returns:
-            RGB numpy array or None on timeout / disconnect.
-        """
+        """Receive one JPEG frame. Returns RGB array or None."""
         # Read 4-byte length
         header = self._recv_exact(4)
         if header is None:
@@ -127,7 +137,8 @@ class TCPJPEGFrameClient:
         try:
             img = Image.open(io.BytesIO(data)).convert("RGB")
             return np.array(img)
-        except Exception:
+        except Exception as e:
+            print(f"[TCPJPEGFrameClient] Error decoding JPEG: {e}")
             return None
 
     def close(self) -> None:
