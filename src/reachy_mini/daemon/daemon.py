@@ -42,38 +42,12 @@ class Daemon:
         self.wireless_version = wireless_version
 
         self.backend: "RobotBackend | MujocoBackend | None" = None
-        # Get package version - try multiple methods
-        package_version = None
+        # Get package version
         try:
-            # Method 1: Try importlib.metadata (works when package is installed)
             package_version = version("reachy_mini")
-        except Exception:
-            try:
-                # Method 2: Try reading from pyproject.toml directly (fallback)
-                import os
-                import re
-                # Try to find pyproject.toml relative to this file
-                current_dir = os.path.dirname(__file__)
-                # Go up: daemon/ -> daemon/ -> reachy_mini/ -> src/ -> reachy_mini/
-                pyproject_path = os.path.join(
-                    current_dir, "..", "..", "..", "..", "pyproject.toml"
-                )
-                pyproject_path = os.path.abspath(pyproject_path)
-                if os.path.exists(pyproject_path):
-                    # Simple regex to extract version from pyproject.toml
-                    with open(pyproject_path, "r", encoding="utf-8") as f:
-                        content = f.read()
-                        match = re.search(r'version\s*=\s*["\']([^"\']+)["\']', content)
-                        if match:
-                            package_version = match.group(1)
-            except Exception as e:
-                # Method 3: Fallback to None
-                self.logger.debug(f"Could not get package version: {e}")
-                package_version = None
-        
-        if package_version:
             self.logger.info(f"Daemon version: {package_version}")
-        else:
+        except Exception:
+            package_version = None
             self.logger.warning("Could not determine daemon version")
         
         self._status = DaemonStatus(
