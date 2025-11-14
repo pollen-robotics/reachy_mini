@@ -114,7 +114,9 @@ class VideoTrack(MediaStreamTrack):
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(log_level)
         self.logger.debug("Video track created")
-        self.image_queue = queue.Queue(maxsize=2)
+
+        self._latest_image = None
+        self._image_lock = threading.Lock()
 
     def stop(self):
         """Stop the video track."""
@@ -126,23 +128,25 @@ class VideoTrack(MediaStreamTrack):
         self.logger.debug(f"Video frame: {frame}")
         img = frame.to_ndarray(format="bgr24")
         self.logger.debug(f"Decoded frame shape: {img.shape}")
-
-        try:
-            self.image_queue.put_nowait(img)  # ToDo keep last image
-        except queue.Full:
-            self.logger.debug("Image queue is full, dropping frame")
+        with self._image_lock:
+            self._latest_image = img
 
     def get_frame(self) -> Optional[npt.NDArray[np.uint8]]:
-        """Get the latest video frame from the queue.
+        """Get the latest video frame.
 
         Returns:
             Optional[npt.NDArray[np.uint8]]: The latest video frame in BGR format, or None if no frame is available.
 
         """
-        try:
-            frame = self.image_queue.get_nowait()
-            return frame
-        except queue.Empty:
+        if self._image_lock.acquire(blocking=False):
+            try:
+                if self._latest_image is not None:
+                    return self._latest_image.copy()
+                else:
+                    return None
+            finally:
+                self._image_lock.release()
+        else:
             return None
 
 
