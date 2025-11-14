@@ -163,6 +163,8 @@ class AppManager:
         """List available apps for given source kind."""
         if source == SourceKind.HF_SPACE:
             return await hf_space.list_available_apps()
+        elif source == SourceKind.UNOFFICIAL_HF_SPACE:
+            return await hf_space.list_all_apps()
         elif source == SourceKind.INSTALLED:
             return await local_common_venv.list_available_apps()
         elif source == SourceKind.LOCAL:

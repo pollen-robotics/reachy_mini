@@ -9,7 +9,6 @@ from fastapi import (
 
 from reachy_mini.apps import AppInfo, SourceKind
 from reachy_mini.apps.manager import AppManager, AppStatus
-from reachy_mini.apps.sources import hf_space
 from reachy_mini.daemon.app import bg_job_register
 from reachy_mini.daemon.app.dependencies import get_app_manager
 
@@ -31,12 +30,6 @@ async def list_all_available_apps(
 ) -> list[AppInfo]:
     """List all available apps (including not installed)."""
     return await app_manager.list_all_available_apps()
-
-
-@router.get("/list-all-apps")
-async def list_all_apps() -> list[AppInfo]:
-    """List all apps from Hugging Face Spaces (including unofficial ones)."""
-    return await hf_space.list_all_apps()
 
 
 @router.post("/install")
