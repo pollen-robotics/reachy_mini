@@ -21,7 +21,7 @@ def main():
         level=logging.DEBUG, format="%(asctime)s [%(levelname)s] %(message)s"
     )
 
-    with ReachyMini(log_level="INFO") as mini:
+    with ReachyMini(log_level="DEBUG") as mini:
         try:
             mini.enable_gravity_compensation()
             rerun = Rerun(mini)
