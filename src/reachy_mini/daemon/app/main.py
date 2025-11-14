@@ -158,6 +158,8 @@ def run_app(args: Args) -> None:
         """Temporary fix for audio issues with beta version."""
         logging.info("Applying audio fix for beta version.")
 
+        import time
+
         from reachy_mini.media.audio_control_utils import init_respeaker_usb
 
         respeaker = init_respeaker_usb()
@@ -166,6 +168,7 @@ def run_app(args: Args) -> None:
         else:
             respeaker.write("REBOOT", [1])
             respeaker.close()
+            time.sleep(1)
             logging.debug("Respeaker rebooted.")
 
     health_check_event = asyncio.Event()
