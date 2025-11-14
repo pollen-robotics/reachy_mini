@@ -12,7 +12,6 @@ import numpy.typing as npt
 
 from reachy_mini.media.audio_base import AudioBase
 from reachy_mini.media.camera_base import CameraBase
-from reachy_mini.media.camera_constants import CameraResolution
 
 # actual backends are dynamically imported
 
