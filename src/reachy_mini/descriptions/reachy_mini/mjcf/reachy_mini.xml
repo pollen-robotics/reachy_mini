@@ -52,6 +52,13 @@
     <equality solref="0.002 1" solimp="0.99 0.999 0.0005 0.5 2"/>
   </default>
   <worldbody>
+    <!-- World-fixed third-person camera in front of the robot -->
+    <camera name="studio_close"
+            mode="targetbodycom"
+          target="xl_330"
+          pos="0.8 -0.2 0.4"
+          resolution="640 640"
+          fovy="35"/>
     <!-- Link body_foot_3dprint -->
     <body name="body_foot_3dprint" pos="0 0 0" quat="1 0 0 0" childclass="reachy_mini">
       <inertial pos="0.00290221 0.000112574 0.0132607" mass="0.0617881" fullinertia="6.91521e-05 6.07324e-05 0.000110345 -1.98794e-07 -4.91678e-08 -3.02441e-08"/>

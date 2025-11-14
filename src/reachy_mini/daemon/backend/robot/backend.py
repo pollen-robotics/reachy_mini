@@ -32,6 +32,7 @@ class RobotBackend(Backend):
         check_collision: bool = False,
         kinematics_engine: str = "AnalyticalKinematics",
         hardware_error_check_frequency: float = 1.0,
+        use_audio: bool = True,
     ):
         """Initialize the RobotBackend.
 
@@ -46,7 +47,9 @@ class RobotBackend(Backend):
 
         """
         super().__init__(
-            check_collision=check_collision, kinematics_engine=kinematics_engine
+            check_collision=check_collision,
+            kinematics_engine=kinematics_engine,
+            use_audio=use_audio,
         )
 
         self.logger = logging.getLogger(__name__)
