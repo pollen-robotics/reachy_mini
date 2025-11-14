@@ -1,6 +1,6 @@
 """Camera constants for Reachy Mini."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from typing import List
 
@@ -39,7 +39,7 @@ class RPICameraResolution(CameraResolution):
 class CameraSpecs:
     """Base camera specifications."""
 
-    available_resolutions: List[CameraResolution] = []
+    available_resolutions: List[CameraResolution] = field(default_factory=list)
     default_resolution: CameraResolution = None
     vid = None
     pid = None
