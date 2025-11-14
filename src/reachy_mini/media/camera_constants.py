@@ -35,6 +35,12 @@ class RPICameraResolution(CameraResolution):
     R1280x720 = (1280, 720, 60)
 
 
+class MujocoCameraResolution(CameraResolution):
+    """Camera resolutions for Mujoco simulated camera."""
+
+    R1280x720 = (1280, 720, 60)
+
+
 @dataclass
 class CameraSpecs:
     """Base camera specifications."""
@@ -99,3 +105,13 @@ class OlderRPiCamSpecs(CameraSpecs):
     default_resolution = RPICameraResolution.R1920x1080
     vid = 0x1BCF
     pid = 0x28C4
+
+
+@dataclass
+class MujocoCameraSpecs(CameraSpecs):
+    """Mujoco simulated camera specifications."""
+
+    available_resolutions = [
+        MujocoCameraResolution.R1280x720,
+    ]
+    default_resolution = MujocoCameraResolution.R1280x720
