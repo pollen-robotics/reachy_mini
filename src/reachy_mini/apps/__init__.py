@@ -9,7 +9,7 @@ class SourceKind(str, Enum):
     """Kinds of app source."""
 
     HF_SPACE = "hf_space"
-    UNOFFICIAL_HF_SPACE = "unofficial_hf_space"
+    DASHBOARD_SELECTION = "dashboard_selection"
     LOCAL = "local"
     INSTALLED = "installed"
 

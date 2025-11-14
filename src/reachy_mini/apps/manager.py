@@ -162,9 +162,9 @@ class AppManager:
     async def list_available_apps(self, source: SourceKind) -> list[AppInfo]:
         """List available apps for given source kind."""
         if source == SourceKind.HF_SPACE:
-            return await hf_space.list_available_apps()
-        elif source == SourceKind.UNOFFICIAL_HF_SPACE:
             return await hf_space.list_all_apps()
+        elif source == SourceKind.DASHBOARD_SELECTION:
+            return await hf_space.list_available_apps()
         elif source == SourceKind.INSTALLED:
             return await local_common_venv.list_available_apps()
         elif source == SourceKind.LOCAL:
