@@ -157,7 +157,7 @@ class GStreamerCamera(CameraBase):
         monitor.add_filter("Video/Source")
         monitor.start()
 
-        cam_names = ["Arducam_12MP", "Reachy"]
+        cam_names = ["Reachy", "Arducam_12MP"]
 
         devices = monitor.get_devices()
         for device in devices:
