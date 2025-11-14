@@ -167,6 +167,8 @@ class AppManager:
             return await local_common_venv.list_available_apps()
         elif source == SourceKind.LOCAL:
             return []
+        elif source == SourceKind.DASHBOARD_SELECTION:
+            return await hf_space.get_dashboard_selection_apps()
         else:
             raise NotImplementedError(f"Unknown source kind: {source}")
 

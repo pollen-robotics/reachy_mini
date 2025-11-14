@@ -1,20 +1,22 @@
 """Metadata about apps."""
 
-from dataclasses import dataclass, field
+from dataclasses import field
 from enum import Enum
 from typing import Any, Dict
+
+from pydantic import BaseModel
 
 
 class SourceKind(str, Enum):
     """Kinds of app source."""
 
     HF_SPACE = "hf_space"
+    DASHBOARD_SELECTION = "dashboard_selection"
     LOCAL = "local"
     INSTALLED = "installed"
 
 
-@dataclass
-class AppInfo:
+class AppInfo(BaseModel):
     """Metadata about an app."""
 
     name: str
