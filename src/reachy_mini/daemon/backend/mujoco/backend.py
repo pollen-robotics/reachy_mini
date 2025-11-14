@@ -44,6 +44,7 @@ class MujocoBackend(Backend):
         kinematics_engine: str = "AnalyticalKinematics",
         headless: bool = False,
         stream_robot_view: bool = False,
+        use_audio: bool = False,
     ) -> None:
         """Initialize the MujocoBackend with a specified scene.
 
@@ -56,7 +57,9 @@ class MujocoBackend(Backend):
 
         """
         super().__init__(
-            check_collision=check_collision, kinematics_engine=kinematics_engine
+            check_collision=check_collision,
+            kinematics_engine=kinematics_engine,
+            use_audio=use_audio,
         )
 
         self.headless = headless
@@ -83,7 +86,7 @@ class MujocoBackend(Backend):
         self.data = mujoco.MjData(self.model)
         self.model.opt.timestep = 0.002  # s, simulation timestep, 500hz
         self.decimation = 10  # -> 50hz control loop
-        self.rendering_timestep = 0.02  # s, rendering loop # 50Hz
+        self.rendering_timestep = 0.04  # s, rendering loop # 25Hz
 
         self.head_site_id = mujoco.mj_name2id(
             self.model,
@@ -125,6 +128,12 @@ class MujocoBackend(Backend):
         while not self.should_stop.is_set():
             start_t = time.time()
             offscreen_renderer.update_scene(self.data, camera_id)
+            
+            if camera_name == CAMERA_STUDIO_CLOSE:
+                # OPTIMIZATION: Disable expensive rendering effects on the scene
+                offscreen_renderer.scene.flags[mujoco.mjtRndFlag.mjRND_SHADOW] = 0
+                offscreen_renderer.scene.flags[mujoco.mjtRndFlag.mjRND_REFLECTION] = 0
+
             im = offscreen_renderer.render()
             streamer_udp.send_frame(im)
 

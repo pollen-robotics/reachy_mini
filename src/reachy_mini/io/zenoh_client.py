@@ -23,8 +23,11 @@ from reachy_mini.io.protocol import AnyTaskRequest, TaskProgress, TaskRequest
 class ZenohClient(AbstractClient):
     """Zenoh client for Reachy Mini."""
 
-    def __init__(self, localhost_only: bool = True):
+    def __init__(self, localhost_only: bool = True, external_ip: Optional[str] = None):
         """Initialize the Zenoh client."""
+        if localhost_only and external_ip is not None:
+            raise ValueError("localhost_only and external_ip cannot be set at the same time.")
+        
         if localhost_only:
             c = zenoh.Config.from_json5(
                 json.dumps(
@@ -32,6 +35,19 @@ class ZenohClient(AbstractClient):
                         "connect": {
                             "endpoints": {
                                 "peer": ["tcp/localhost:7447"],
+                                "router": [],
+                            },
+                        },
+                    }
+                )
+            )
+        elif external_ip is not None:
+            c = zenoh.Config.from_json5(
+                json.dumps(
+                    {
+                        "connect": {
+                            "endpoints": {
+                                "peer": [f"tcp/{external_ip}:7447"],
                                 "router": [],
                             },
                         },

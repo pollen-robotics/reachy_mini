@@ -31,6 +31,7 @@ class Args:
     """Arguments for configuring the Reachy Mini daemon."""
 
     log_level: str = "INFO"
+    log_file: str | None = None
 
     wireless_version: bool = False
 
@@ -40,6 +41,7 @@ class Args:
     scene: str = "empty"
     headless: bool = False
     stream_robot_view: bool = False
+    use_audio: bool = True
 
     kinematics_engine: str = "AnalyticalKinematics"
     check_collision: bool = False
@@ -75,6 +77,7 @@ def create_app(args: Args) -> FastAPI:
                 scene=args.scene,
                 headless=args.headless,
                 stream_robot_view=args.stream_robot_view,
+                use_audio=args.use_audio,
                 kinematics_engine=args.kinematics_engine,
                 check_collision=args.check_collision,
                 wake_up_on_start=args.wake_up_on_start,
@@ -193,6 +196,13 @@ def main() -> None:
         default=default_args.stream_robot_view,
         help="Stream the robot view to the port 5010 (default: False).",
     )
+    parser.add_argument(
+        "--deactivate-audio",
+        action="store_false",
+        dest="use_audio",
+        default=default_args.use_audio,
+        help="Deactivate audio (default: True).",
+    )
     # Daemon options
     parser.add_argument(
         "--autostart",
@@ -277,8 +287,23 @@ def main() -> None:
         choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
         help="Set the logging level (default: INFO).",
     )
+    parser.add_argument(
+        "--log-file",
+        type=str,
+        default=default_args.log_file,
+        help="Path to a file to write logs to.",
+    )
 
     args = parser.parse_args()
+
+    if args.log_file:
+        file_handler = logging.FileHandler(args.log_file, mode="a")
+        file_handler.setFormatter(
+            logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+        )
+        logging.getLogger().addHandler(file_handler)
+        logging.getLogger().setLevel(args.log_level)
+
     run_app(Args(**vars(args)))
 
 
