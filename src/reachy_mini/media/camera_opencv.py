@@ -50,13 +50,13 @@ class OpenCVCamera(CameraBase):
         if udp_camera:
             self.cap = cv2.VideoCapture(udp_camera)
             self.camera_specs = MujocoCameraSpecs
-            self._resolution = self.camera_specs.default_resolution
+            self._resolution = self.camera_specs.default_resolution.value
         else:
             self.cap, self.camera_specs = find_camera()
             if self.cap is None or self.camera_specs is None:
                 raise RuntimeError("Camera not found")
 
-            self._resolution = self.camera_specs.default_resolution
+            self._resolution = self.camera_specs.default_resolution.value
             self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, self._resolution[0])
             self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self._resolution[1])
 
