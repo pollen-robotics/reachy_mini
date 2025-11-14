@@ -40,25 +40,25 @@ class OpenCVCamera(CameraBase):
             raise ValueError(
                 f"Resolution not supported by the camera. Available resolutions are : {self.camera_specs.available_resolutions}"
             )
-        self._resolution = resolution.value
+        self._resolution = resolution
         if self.cap is not None:
-            self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, self._resolution[0])
-            self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self._resolution[1])
+            self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, self._resolution.value[0])
+            self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self._resolution.value[1])
 
     def open(self, udp_camera: Optional[str] = None) -> None:
         """Open the camera using OpenCV VideoCapture."""
         if udp_camera:
             self.cap = cv2.VideoCapture(udp_camera)
             self.camera_specs = MujocoCameraSpecs
-            self._resolution = self.camera_specs.default_resolution.value
+            self._resolution = self.camera_specs.default_resolution
         else:
             self.cap, self.camera_specs = find_camera()
             if self.cap is None or self.camera_specs is None:
                 raise RuntimeError("Camera not found")
 
-            self._resolution = self.camera_specs.default_resolution.value
-            self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, self._resolution[0])
-            self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self._resolution[1])
+            self._resolution = self.camera_specs.default_resolution
+            self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, self._resolution.value[0])
+            self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self._resolution.value[1])
 
         if not self.cap.isOpened():
             raise RuntimeError("Failed to open camera")
