@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import List, Optional
+from typing import List
 
 import numpy as np
 import numpy.typing as npt
@@ -47,7 +47,7 @@ class CameraSpecs:
     """Base camera specifications."""
 
     available_resolutions: List[CameraResolution] = field(default_factory=list)
-    default_resolution: CameraResolution = (0, 0, 0)
+    default_resolution: CameraResolution = ArduCamResolution.R1280x720
     vid = 0
     pid = 0
     K: npt.NDArray[np.float64] = np.zeros((3, 3))

@@ -30,7 +30,7 @@ class CameraBase(ABC):
         self.logger.setLevel(log_level)
         self._resolution: Optional[CameraResolution] = None
         self.camera_specs: Optional[CameraSpecs] = None
-        self.resized_K: Optional[npt.NDArray[np.float64]] = None
+        self.resized_K: Optional[np.ndarray[np.float64, 2]] = None
 
     @property
     def resolution(self) -> tuple[int, int]:
@@ -47,12 +47,12 @@ class CameraBase(ABC):
         return int(self._resolution.value[2])
 
     @property
-    def K(self) -> Optional[npt.NDArray[np.float64]]:
+    def K(self) -> Optional[np.ndarray[np.float64, 2]]:
         """Get the camera intrinsic matrix for the current resolution."""
         return self.resized_K
 
     @property
-    def D(self) -> Optional[npt.NDArray[np.float64]]:
+    def D(self) -> Optional[np.ndarray[np.float64]]:
         """Get the camera distortion coefficients."""
         if self.camera_specs is not None:
             return self.camera_specs.D
@@ -77,7 +77,7 @@ class CameraBase(ABC):
 
         w_ratio = resolution.value[0] / self.camera_specs.default_resolution.value[0]
         h_ratio = resolution.value[1] / self.camera_specs.default_resolution.value[1]
-        self.resized_K = self.camera_specs.K.copy()  # type: ignore
+        self.resized_K = self.camera_specs.K.copy()
 
         self.resized_K[0, 0] *= w_ratio
         self.resized_K[1, 1] *= h_ratio
