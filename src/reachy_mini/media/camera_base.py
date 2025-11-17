@@ -54,7 +54,9 @@ class CameraBase(ABC):
     @property
     def D(self) -> Optional[npt.NDArray[np.float64]]:
         """Get the camera distortion coefficients."""
-        return self.camera_specs.D  #  type: ignore
+        if self.camera_specs is not None:
+            return self.camera_specs.D
+        return None
 
     def set_resolution(self, resolution: CameraResolution) -> None:
         """Set the camera resolution."""
