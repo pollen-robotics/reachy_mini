@@ -6,6 +6,7 @@ The class is a client for the webrtc server hosted on the Reachy Mini Wireless r
 import asyncio
 import logging
 import queue
+import random
 import socket
 import threading
 from typing import Optional
@@ -223,6 +224,7 @@ class DefaultWebRTCClient(CameraBase, AudioBase):
         CameraBase.__init__(self, log_level=log_level)
         AudioBase.__init__(self, log_level=log_level)
         self.logger.info("Initializing Default WebRTC Client")
+        self._signaling_host = signaling_host
         self._client = VideoClient(
             signaling_host,
             signaling_port,
@@ -232,6 +234,9 @@ class DefaultWebRTCClient(CameraBase, AudioBase):
         )
         self._thread_loop: Optional[threading.Thread] = None
         self._playback_pts = 0
+        self._rtp_seq = 0
+        self._rtp_ssrc = 0
+        self._sock_playback = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
     def __del__(self) -> None:
         """Destructor to ensure resources are released."""
@@ -288,11 +293,15 @@ class DefaultWebRTCClient(CameraBase, AudioBase):
 
     def start_playing(self) -> None:
         """Open the audio output using GStreamer."""
-        pass
+        self._rtp_seq = 0
+        self._playback_pts = 0
+        self._rtp_ssrc = random.getrandbits(32)
+        print(f"Playback SSRC: {self._rtp_ssrc}")
+        self._sock_playback.connect((self._signaling_host, 5000))
 
     def stop_playing(self) -> None:
         """Stop playing audio and release resources."""
-        pass
+        self._sock_playback.close()
 
     def push_audio_sample(self, data: npt.NDArray[np.float32]) -> None:
         """Push audio data to the output device."""
@@ -306,20 +315,27 @@ class DefaultWebRTCClient(CameraBase, AudioBase):
         print(f"Frame rate: {frame.rate}")
         encoder = OpusEncoder()
         encoded = encoder.encode(frame)
-        print(f"Opus encoded audio length: {len(encoded)} bytes")
+        # print(f"Opus encoded audio length: {len(encoded[0])} bytes")
+        # print(f"Opus encoded audio: {encoded}")
         # Now you can use 'frame' for further processing (encoding, streaming, etc.)
         # Example: print(frame)
         print(
             f"Created AudioFrame: samples={frame.samples}, sample_rate={frame.rate}, layout={frame.layout}"
         )
-        # 2. Create RTP packet
-        rtp = RtpPacket(payload_type=96, sequence_number=seq, timestamp=ts, ssrc=ssrc)
-        rtp.payload = encoded
-        packet_bytes = rtp.serialize()
+        print(f"  PTS: {frame.pts}, encoded packets: {(encoded[1])}")
+        for p in encoded[0]:
+            # print(f"Encoded packet length: {len(p)} bytes")
+            rtp = RtpPacket(
+                payload_type=96,
+                sequence_number=self._rtp_seq,
+                timestamp=self._playback_pts,
+                ssrc=self._rtp_ssrc,
+            )
+            rtp.payload = p
+            packet_bytes = rtp.serialize()
 
-        # 3. Send via UDP
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sock.sendto(packet_bytes, (dest_ip, dest_port))
+            self._sock_playback.send(packet_bytes)
+            self._rtp_seq += 1
 
     def play_sound(self, sound_file: str) -> None:
         """Play a sound file.
