@@ -30,7 +30,7 @@ class CameraBase(ABC):
         self.logger.setLevel(log_level)
         self._resolution: Optional[CameraResolution] = None
         self.camera_specs: Optional[CameraSpecs] = None
-        self.resized_K: Optional[np.ndarray[np.float64, 2]] = None
+        self.resized_K: Optional[npt.NDArray[np.float64]] = None
 
     @property
     def resolution(self) -> tuple[int, int]:
@@ -47,12 +47,12 @@ class CameraBase(ABC):
         return int(self._resolution.value[2])
 
     @property
-    def K(self) -> Optional[np.ndarray[np.float64, 2]]:
+    def K(self) -> Optional[npt.NDArray[np.float64]]:
         """Get the camera intrinsic matrix for the current resolution."""
         return self.resized_K
 
     @property
-    def D(self) -> Optional[np.ndarray[np.float64]]:
+    def D(self) -> Optional[npt.NDArray[np.float64]]:
         """Get the camera distortion coefficients."""
         if self.camera_specs is not None:
             return self.camera_specs.D
