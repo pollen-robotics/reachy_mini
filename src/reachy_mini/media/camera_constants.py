@@ -49,8 +49,10 @@ class CameraSpecs:
     default_resolution: Optional[CameraResolution] = None
     vid = 0
     pid = 0
-    K = None  # Values for default resolution. Has to be scaled if resolution changes.
-    D = None
+    K: Optional[np.ndarray[float]] = (
+        None  # Values for default resolution. Has to be scaled if resolution changes.
+    )
+    D: Optional[np.ndarray[float]] = None
 
 
 @dataclass
