@@ -5,6 +5,7 @@ from enum import Enum
 from typing import List, Optional
 
 import numpy as np
+import numpy.typing as npt
 
 
 class CameraResolution(Enum):
@@ -49,10 +50,10 @@ class CameraSpecs:
     default_resolution: Optional[CameraResolution] = None
     vid = 0
     pid = 0
-    K: Optional[np.ndarray[float]] = (
+    K: Optional[npt.NDArray[np.float64]] = (
         None  # Values for default resolution. Has to be scaled if resolution changes.
     )
-    D: Optional[np.ndarray[float]] = None
+    D: Optional[npt.NDArray[np.float64]] = None
 
 
 @dataclass
