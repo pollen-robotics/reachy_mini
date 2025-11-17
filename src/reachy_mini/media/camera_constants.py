@@ -11,8 +11,6 @@ import numpy.typing as npt
 class CameraResolution(Enum):
     """Base class for camera resolutions."""
 
-    DUMMY = (0, 0, 0)
-
     pass
 
 
@@ -49,11 +47,11 @@ class CameraSpecs:
     """Base camera specifications."""
 
     available_resolutions: List[CameraResolution] = field(default_factory=list)
-    default_resolution: Optional[CameraResolution] = CameraResolution.DUMMY
+    default_resolution: CameraResolution = (0, 0, 0)
     vid = 0
     pid = 0
-    K: Optional[npt.NDArray[np.float64]] = np.zeros((3, 3))
-    D: Optional[npt.NDArray[np.float64]] = np.zeros((5,))
+    K: npt.NDArray[np.float64] = np.zeros((3, 3))
+    D: npt.NDArray[np.float64] = np.zeros((5,))
 
 
 @dataclass
