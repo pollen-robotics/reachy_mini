@@ -362,7 +362,7 @@ class ReachyMini:
             points,
             self.media.camera.K,
             self.media.camera.D,
-        )[0, 0]
+        )[0, 0]  # type: ignore
 
         ray_cam = np.array([x_n, y_n, 1.0])
         ray_cam /= np.linalg.norm(ray_cam)

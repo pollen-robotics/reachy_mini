@@ -73,9 +73,9 @@ class CameraBase(ABC):
                 f"Resolution not supported by the camera. Available resolutions are : {self.camera_specs.available_resolutions}"
             )
 
-        w_ratio = resolution.value[0] / self.camera_specs.default_resolution.value[0]
-        h_ratio = resolution.value[1] / self.camera_specs.default_resolution.value[1]
-        self.resized_K = self.camera_specs.K.copy()
+        w_ratio = resolution.value[0] / self.camera_specs.default_resolution.value[0]  # type: ignore
+        h_ratio = resolution.value[1] / self.camera_specs.default_resolution.value[1]  # type: ignore
+        self.resized_K = self.camera_specs.K.copy()  # type: ignore
 
         self.resized_K[0, 0] *= w_ratio
         self.resized_K[1, 1] *= h_ratio
