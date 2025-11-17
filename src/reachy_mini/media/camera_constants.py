@@ -144,3 +144,20 @@ class MujocoCameraSpecs(CameraSpecs):
         MujocoCameraResolution.R1280x720,
     ]
     default_resolution = MujocoCameraResolution.R1280x720
+    # ideal camera matrix
+    K = np.array(
+        [
+            [
+                MujocoCameraResolution.R1280x720.value[0],
+                0.0,
+                MujocoCameraResolution.R1280x720.value[0] / 2,
+            ],
+            [
+                0.0,
+                MujocoCameraResolution.R1280x720.value[1],
+                MujocoCameraResolution.R1280x720.value[1] / 2,
+            ],
+            [0.0, 0.0, 1.0],
+        ]
+    )
+    D = np.zeros((5,))  # no distortion

@@ -12,7 +12,6 @@ import argparse
 import cv2
 
 from reachy_mini import ReachyMini
-from reachy_mini.media.camera_constants import ArduCamResolution
 
 
 def click(event, x, y, flags, param):
@@ -33,7 +32,6 @@ def main(backend: str) -> None:
     print("Click on the image to make ReachyMini look at that point.")
     print("Press 'q' to quit the camera feed.")
     with ReachyMini(media_backend=backend) as reachy_mini:
-        # reachy_mini.media.camera.set_resolution(ArduCamResolution.R1600x1200)
         try:
             while True:
                 frame = reachy_mini.media.get_frame()
