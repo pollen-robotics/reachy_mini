@@ -10,7 +10,6 @@ import numpy as np
 import numpy.typing as npt
 import pinocchio as pin
 import placo
-
 from scipy.spatial.transform import Rotation as R
 
 
