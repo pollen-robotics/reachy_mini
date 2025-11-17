@@ -357,8 +357,9 @@ class ReachyMini:
         if self.media.camera is None or self.media.camera.camera_specs is None:
             raise RuntimeError("Camera specs not set.")
 
+        points = np.array([[[u, v]]], dtype=np.float32)
         x_n, y_n = cv2.undistortPoints(
-            np.float32([[[u, v]]]), #  type: ignore
+            points,
             self.media.camera.camera_specs.K,
             self.media.camera.camera_specs.D,
         )[0, 0]  # type: ignore
