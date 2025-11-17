@@ -41,13 +41,15 @@ class PlacoKinematics:
         )  # 0.1 degrees tolerance for the FK reached condition
 
         if not urdf_path.endswith(".urdf"):
-            urdf_path = f"{urdf_path}/{'robot.urdf' if check_collision else 'robot_no_collision.urdf'}"
+            urdf_path = f"{urdf_path}/{'robot_simple_collision.urdf' if check_collision else 'robot_no_collision.urdf'}"
 
         self.robot = placo.RobotWrapper(
-            urdf_path, placo.Flags.ignore_collisions + placo.Flags.collision_as_visual
+            urdf_path, placo.Flags.collision_as_visual + placo.Flags.ignore_collisions 
         )
+        
+        flags = 0 if check_collision else placo.Flags.ignore_collisions + placo.Flags.collision_as_visual
         self.robot_ik = placo.RobotWrapper(
-            urdf_path, placo.Flags.ignore_collisions + placo.Flags.collision_as_visual
+            urdf_path, flags
         )
 
         self.ik_solver = placo.KinematicsSolver(self.robot_ik)
@@ -240,6 +242,11 @@ class PlacoKinematics:
         self.robot.update_kinematics()
 
         if self.check_collision:
+            ik_col = self.ik_solver.add_avoid_self_collisions_constraint()
+            ik_col.self_collisions_margin = 0.001 # 1mm
+            ik_col.self_collisions_trigger = 0.002 # 2mm
+            ik_col.configure("avoid_self_collisions", "hard")
+        
             # setup the collision model
             self.config_collision_model()
 
@@ -396,16 +403,7 @@ class PlacoKinematics:
                     self._logger.warning(f"IK solver failed: {e}, no solution found!")
                     return None
                 self.robot_ik.update_kinematics()
-
-        # verify that there is no collision
-        if self.check_collision and self.compute_collision():
-            self._logger.warning(
-                "IK: Collision detected, using the previous configuration..."
-            )
-            self._update_state_to_initial(self.robot_ik)  # revert to the inital state
-            self.robot_ik.update_kinematics()
-            return None
-
+                
         # Get the joint angles
         return np.array(self._get_joint_values(self.robot_ik))
 
@@ -453,9 +451,6 @@ class PlacoKinematics:
             }
         )
 
-        # save the initial configuration
-        q = self.robot.state.q.copy()
-
         done = True
         # do the inital ik with 2 iterations
         for i in range(no_iterations):
@@ -487,13 +482,6 @@ class PlacoKinematics:
                     return None
                 self.robot.update_kinematics()
 
-        if self.check_collision and self.compute_collision():
-            self._logger.warning("FK: Collision detected, using the previous config...")
-            self._update_state_to_initial(self.robot)  # revert to the previous state
-            self.robot.state.q = q
-            self.robot.update_kinematics()
-            # return None
-
         # Get the head frame transformation
         T_world_head = self.robot.get_T_world_frame("head")
         T_world_head[:3, 3][2] -= self.head_z_offset  # offset the height of the head
@@ -505,20 +493,14 @@ class PlacoKinematics:
 
         Add collision pairs between the torso and the head colliders.
         """
-        geom_model = self.robot.collision_model
+        geom_model = self.robot_ik.collision_model
 
-        # name_torso_collider = "dc15_a01_case_b_dummy_10"
-        # names_head_colliders = ["pp01063_stewart_plateform_7", "pp01063_stewart_plateform_11"]
+        id_torso_colliders = list(range(len(geom_model.geometryObjects)-1))
+        id_head_collider = len(geom_model.geometryObjects)-1 
 
-        id_torso_collider = 12  # geom_model.getGeometryObjectId(name_torso_collider)
-        id_head_colliders = [
-            74,
-            78,
-        ]  # [geom_model.getGeometryObjectId(name) for name in names_head_colliders]
-
-        for i in id_head_colliders:
+        for i in id_torso_colliders:
             geom_model.addCollisionPair(
-                pin.CollisionPair(id_torso_collider, i)
+                pin.CollisionPair(id_head_collider, i)
             )  # torso with head colliders
 
     def compute_collision(self, margin: float = 0.005) -> bool:
@@ -531,17 +513,18 @@ class PlacoKinematics:
             True if there is a collision, False otherwise.
 
         """
-        collision_data = self.robot.collision_model.createData()
-        data = self.robot.model.createData()
+        collision_data = self.robot_ik.collision_model.createData()
+        data = self.robot_ik.model.createData()
 
         # pin.computeCollisions(
         pin.computeDistances(
-            self.robot.model,
+            self.robot_ik.model,
             data,
-            self.robot.collision_model,
+            self.robot_ik.collision_model,
             collision_data,
-            self.robot.state.q,
+            self.robot_ik.state.q,
         )
+        
 
         # Iterate over all collision pairs
         for distance_result in collision_data.distanceResults:
