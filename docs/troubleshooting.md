@@ -4,13 +4,7 @@
 ## No Microphone Input
 *For beta only*
 
-There is a known issue where the microphone may not initialize correctly. You can use the `--fix-audio` argument to force the audio card to reset before starting the daemon.
-
-Make sure your firmware is updated to version 2.1.2. You may need to run the [update script](../src/reachy_mini/assets/firmware/update.sh). Linux users should also install the proper udev rules using [this script](../src/reachy_mini/assets/firmware/install_udev_rules.sh). Then run:
-
-```bash
-reachy-mini-daemon --fix-audio
-```
+There is a known issue where the microphone may not initialize correctly. Please update to [firmware 2.1.3](../src/reachy_mini/assets/firmware/reachymini_ua_io16_lin_v2.1.3.bin). You may need to run the [update script](../src/reachy_mini/assets/firmware/update.sh).
 
 Afterwards, run [examples/debug/sound_record.py](../examples/debug/sound_record.py) to check that everything is working properly.
 
