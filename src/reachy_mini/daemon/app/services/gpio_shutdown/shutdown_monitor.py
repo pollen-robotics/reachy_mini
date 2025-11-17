@@ -7,13 +7,10 @@ from gpiozero import Button
 
 shutdown_button = Button(23, pull_up=False)
 
-# log_file = "/var/log/shutdown_button.log"
-log_file = "/vens/shutdown_button.log"
-
 
 def released() -> None:
     """Handle shutdown button released."""
-    call(["sudo", "systemctl", "stop", "reachy-mini-daemon"])
+    print("Shutdown button released, shutting down...")
     call(["sudo", "shutdown", "-h", "now"])
 
 
