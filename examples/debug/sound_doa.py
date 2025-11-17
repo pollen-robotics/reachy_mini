@@ -26,7 +26,7 @@ def main() -> None:
             doa = mini.media.audio.get_DoA()
             print(f"DOA: {doa}")
             if doa[1] and np.abs(doa[0] - last_doa) > THRESHOLD:
-                print(f"  Speech detected at {doa[0]:.1f}°")
+                print(f"  Speech detected at {doa[0]:.1f} radians")
                 p_head = [np.sin(doa[0]), np.cos(doa[0]), 0.0]
                 print(
                     f"  Pointing to x={p_head[0]:.2f}, y={p_head[1]:.2f}, z={p_head[2]:.2f}"
