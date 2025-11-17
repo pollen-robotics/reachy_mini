@@ -4,6 +4,7 @@ import asyncio
 from typing import AsyncGenerator
 
 import cv2
+import numpy as np
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 
@@ -57,8 +58,8 @@ async def stream_camera(
             while True:
                 f = cam.read()
                 if f is not None:
-                    f = cv2.resize(f, (640, 480))
-                    _, j = cv2.imencode(".jpg", f, [cv2.IMWRITE_JPEG_QUALITY, 80])
+                    resized = np.asarray(cv2.resize(f, (640, 480)), dtype=np.uint8)
+                    _, j = cv2.imencode(".jpg", resized, [cv2.IMWRITE_JPEG_QUALITY, 80])
                     if _:
                         yield b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + j.tobytes() + b"\r\n"
                 await asyncio.sleep(0.04)
