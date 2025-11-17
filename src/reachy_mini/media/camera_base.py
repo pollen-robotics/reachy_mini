@@ -30,6 +30,7 @@ class CameraBase(ABC):
         self.logger.setLevel(log_level)
         self._resolution: Optional[CameraResolution] = None
         self.camera_specs: Optional[CameraSpecs] = None
+        self.resized_K = None
 
     @property
     def resolution(self) -> tuple[int, int]:
@@ -44,6 +45,16 @@ class CameraBase(ABC):
         if self._resolution is None:
             raise RuntimeError("Camera resolution is not set.")
         return int(self._resolution.value[2])
+
+    @property
+    def K(self) -> npt.NDArray[np.float64]:
+        """Get the camera intrinsic matrix for the current resolution."""
+        return self.resized_K
+
+    @property
+    def D(self) -> npt.NDArray[np.float64]:
+        """Get the camera distortion coefficients."""
+        return self.camera_specs.D
 
     def set_resolution(self, resolution: CameraResolution) -> None:
         """Set the camera resolution."""
@@ -61,6 +72,15 @@ class CameraBase(ABC):
             raise ValueError(
                 f"Resolution not supported by the camera. Available resolutions are : {self.camera_specs.available_resolutions}"
             )
+
+        w_ratio = resolution.value[0] / self.camera_specs.default_resolution.value[0]
+        h_ratio = resolution.value[1] / self.camera_specs.default_resolution.value[1]
+        self.resized_K = self.camera_specs.K.copy()
+
+        self.resized_K[0, 0] *= w_ratio
+        self.resized_K[1, 1] *= h_ratio
+        self.resized_K[0, 2] *= w_ratio
+        self.resized_K[1, 2] *= h_ratio
 
     @abstractmethod
     def open(self) -> None:

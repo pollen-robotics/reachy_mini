@@ -57,6 +57,8 @@ class OpenCVCamera(CameraBase):
             self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, self._resolution.value[0])
             self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self._resolution.value[1])
 
+        self.resized_K = self.camera_specs.K
+
         if not self.cap.isOpened():
             raise RuntimeError("Failed to open camera")
 

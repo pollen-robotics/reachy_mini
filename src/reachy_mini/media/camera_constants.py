@@ -49,11 +49,8 @@ class CameraSpecs:
     default_resolution: Optional[CameraResolution] = None
     vid = 0
     pid = 0
-    # TODO TEMPORARY
-    K = np.array(
-        [[550.3564, 0.0, 638.0112], [0.0, 549.1653, 364.589], [0.0, 0.0, 1.0]]
-    )  # FOR 1280x720
-    D = np.array([-0.0694, 0.1565, -0.0004, 0.0003, -0.0983])
+    K = None  # Values for default resolution. Has to be scaled if resolution changes.
+    D = None
 
 
 @dataclass
@@ -70,10 +67,7 @@ class ArducamSpecs(CameraSpecs):
     default_resolution = ArduCamResolution.R1280x720
     vid = 0x0C45
     pid = 0x636D
-    # TODO handle calibration depending on resolution ? How ?
-    K = np.array(
-        [[550.3564, 0.0, 638.0112], [0.0, 549.1653, 364.589], [0.0, 0.0, 1.0]]
-    )  # FOR 1280x720
+    K = np.array([[550.3564, 0.0, 638.0112], [0.0, 549.1653, 364.589], [0.0, 0.0, 1.0]])
     D = np.array([-0.0694, 0.1565, -0.0004, 0.0003, -0.0983])
 
 
@@ -90,6 +84,23 @@ class ReachyMiniCamSpecs(CameraSpecs):
     default_resolution = RPICameraResolution.R1920x1080
     vid = 0x38FB
     pid = 0x1002
+    K = np.array(
+        [
+            [821.515, 0.0, 962.241],
+            [0.0, 820.830, 542.459],
+            [0.0, 0.0, 1.0],
+        ]
+    )
+
+    D = np.array(
+        [
+            -2.94475669e-02,
+            6.00511974e-02,
+            3.57813971e-06,
+            -2.96459394e-04,
+            -3.79243988e-02,
+        ]
+    )
 
 
 @dataclass
@@ -105,6 +116,23 @@ class OlderRPiCamSpecs(CameraSpecs):
     default_resolution = RPICameraResolution.R1920x1080
     vid = 0x1BCF
     pid = 0x28C4
+    K = np.array(
+        [
+            [821.51459423, 0.0, 962.24086301],
+            [0.0, 820.82987265, 542.45854246],
+            [0.0, 0.0, 1.0],
+        ]
+    )
+
+    D = np.array(
+        [
+            -2.94475669e-02,
+            6.00511974e-02,
+            3.57813971e-06,
+            -2.96459394e-04,
+            -3.79243988e-02,
+        ]
+    )
 
 
 @dataclass

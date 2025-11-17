@@ -187,6 +187,7 @@ class GStreamerCamera(CameraBase):
                             if cam_name == "Arducam_12MP"
                             else cast(CameraSpecs, ReachyMiniCamSpecs)
                         )
+                        self.resized_K = self.camera_specs.K
                         self.logger.debug(f"Found {cam_name} camera at {device_path}")
                         monitor.stop()
                         return str(device_path)
