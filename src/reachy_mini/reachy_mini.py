@@ -93,11 +93,6 @@ class ReachyMini:
         self._last_head_pose: Optional[npt.NDArray[np.float64]] = None
         self.is_recording = False
 
-        self.K = np.array(
-            [[550.3564, 0.0, 638.0112], [0.0, 549.1653, 364.589], [0.0, 0.0, 1.0]]
-        )
-        self.D = np.array([-0.0694, 0.1565, -0.0004, 0.0003, -0.0983])
-
         self.T_head_cam = np.eye(4)
         self.T_head_cam[:3, 3][:] = [0.0437, 0, 0.0512]
         self.T_head_cam[:3, :3] = np.array(
@@ -348,6 +343,7 @@ class ReachyMini:
         if self.media_manager.camera is None:
             raise RuntimeError("Camera is not initialized.")
 
+        # TODO this is false for the raspicam for now
         assert 0 < u < self.media_manager.camera.resolution[0], (
             f"u must be in [0, {self.media_manager.camera.resolution[0]}], got {u}."
         )
@@ -358,7 +354,15 @@ class ReachyMini:
         if duration < 0:
             raise ValueError("Duration can't be negative.")
 
-        x_n, y_n = cv2.undistortPoints(np.float32([[[u, v]]]), self.K, self.D)[0, 0]  # type: ignore
+        if self.media.camera is None or self.media.camera.camera_specs is None:
+            raise RuntimeError("Camera specs not set.")
+
+        points = np.array([[[u, v]]], dtype=np.float32)
+        x_n, y_n = cv2.undistortPoints(
+            points,
+            self.media.camera.K,  # type: ignore
+            self.media.camera.D,  # type: ignore
+        )[0, 0]
 
         ray_cam = np.array([x_n, y_n, 1.0])
         ray_cam /= np.linalg.norm(ray_cam)
