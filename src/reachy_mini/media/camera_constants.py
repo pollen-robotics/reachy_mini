@@ -50,8 +50,8 @@ class CameraSpecs:
     default_resolution: CameraResolution = ArduCamResolution.R1280x720
     vid = 0
     pid = 0
-    K: npt.NDArray[np.float64] = np.zeros((3, 3))
-    D: npt.NDArray[np.float64] = np.zeros((5,))
+    K: npt.NDArray[np.float64] = field(default_factory=lambda: np.eye(3))
+    D: npt.NDArray[np.float64] = field(default_factory=lambda: np.zeros((5,)))
 
 
 @dataclass
