@@ -11,7 +11,7 @@ import logging
 import time
 from dataclasses import asdict, dataclass
 from enum import Enum
-from importlib.metadata import version
+from importlib.metadata import PackageNotFoundError, version
 from threading import Event, Thread
 from typing import Any, Optional
 
@@ -46,10 +46,10 @@ class Daemon:
         try:
             package_version = version("reachy_mini")
             self.logger.info(f"Daemon version: {package_version}")
-        except Exception:
+        except PackageNotFoundError:
             package_version = None
             self.logger.warning("Could not determine daemon version")
-        
+
         self._status = DaemonStatus(
             state=DaemonState.NOT_INITIALIZED,
             wireless_version=wireless_version,
