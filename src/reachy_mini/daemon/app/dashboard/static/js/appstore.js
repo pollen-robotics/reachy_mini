@@ -43,7 +43,7 @@ const hfAppsStore = {
         }
 
         const hfApps = appsData.filter(app => app.source_kind === 'hf_space');
-        const installedApps = appsData.filter(app => app.source_kind === 'installed');
+        const installedApps = await fetch('/api/apps/list-available/installed').then(res => res.json());
 
         hfApps.forEach(app => {
             const li = document.createElement('li');
