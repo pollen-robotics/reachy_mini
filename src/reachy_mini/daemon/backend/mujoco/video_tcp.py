@@ -17,33 +17,40 @@ from PIL import Image
 class TCPJPEGFrameServer:
     """Non-blocking accept, blocking client socket, reconnect-safe."""
 
-    def __init__(self, listen_ip="0.0.0.0", listen_port=5010):
+    def __init__(self, listen_ip: str = "0.0.0.0", listen_port: int = 5010):
         self.addr = (listen_ip, listen_port)
 
-        # Listening socket
+        # Listening socket: non-blocking so accept() never stalls your render loop
         self.listen_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.listen_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.listen_sock.bind(self.addr)
         self.listen_sock.listen(1)
-        self.listen_sock.setblocking(False)  # non-blocking accept
+        self.listen_sock.setblocking(False)
 
         self.client_sock: socket.socket | None = None
 
     def _accept_if_needed(self):
+        """Try to accept a new client (non-blocking)."""
         if self.client_sock is not None:
             return
 
         try:
             client, addr = self.listen_sock.accept()
-            # DO NOT: client.setblocking(False)
-            client.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-            print(f"[TCPJPEGFrameServer] Client connected from {addr}")
-            self.client_sock = client
         except BlockingIOError:
-            pass
+            # No pending connection
+            return
 
-    def send_frame(self, frame: npt.NDArray[np.uint8]):
+        # Very important: accepted sockets inherit non-blocking from listen_sock,
+        # so force them back to blocking mode.
+        client.setblocking(True)
+        client.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+
+        print(f"[TCPJPEGFrameServer] Client connected from {addr}")
+        self.client_sock = client
+
+    def send_frame(self, frame: npt.NDArray[np.uint8]) -> None:
         """Send one frame to the connected client (if any)."""
+        # Try to accept a waiting client if we do not have one
         self._accept_if_needed()
         if self.client_sock is None:
             return
@@ -61,26 +68,29 @@ class TCPJPEGFrameServer:
         header = struct.pack("!I", len(data))
 
         try:
+            # On a blocking socket, sendall either sends everything
+            # or raises on a real disconnect.
             self.client_sock.sendall(header)
             self.client_sock.sendall(data)
 
-        except BlockingIOError:
-            # Kernel send buffer full (non-blocking socket). Just drop this frame.
-            # Do NOT close the connection.
-            # Next frame we try again.
-            # print("[TCPJPEGFrameServer] Send buffer full, dropping frame")
-            return
-
-        except (BrokenPipeError, ConnectionResetError) as e:
-            print(f"[TCPJPEGFrameServer] Client disconnected: {e}")
-            self.client_sock.close()
+        except (BrokenPipeError, ConnectionResetError, OSError) as e:
+            # Treat ANY send error as "connection is broken" and reset.
+            # This guarantees we never leave half a frame in the stream.
+            print(f"[TCPJPEGFrameServer] Client disconnected during send: {e}")
+            try:
+                self.client_sock.close()
+            except Exception:
+                pass
             self.client_sock = None
 
-    def close(self):
-        if self.client_sock:
-            self.client_sock.close()
+    def close(self) -> None:
+        if self.client_sock is not None:
+            try:
+                self.client_sock.close()
+            except Exception:
+                pass
+            self.client_sock = None
         self.listen_sock.close()
-
 
 class TCPJPEGFrameClient:
     """Receive JPEG frames over TCP."""
