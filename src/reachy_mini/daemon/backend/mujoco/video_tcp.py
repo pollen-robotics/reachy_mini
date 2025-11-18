@@ -6,7 +6,7 @@ Simple length-prefixed JPEG over TCP for one client.
 import io
 import socket
 import struct
-from typing import Optional
+from typing import Any, Optional, Tuple
 
 import cv2
 import numpy as np
@@ -17,19 +17,26 @@ from PIL import Image
 class TCPJPEGFrameServer:
     """Non-blocking accept, blocking client socket, reconnect-safe."""
 
-    def __init__(self, listen_ip: str = "0.0.0.0", listen_port: int = 5010):
-        self.addr = (listen_ip, listen_port)
+    def __init__(self, listen_ip: str = "0.0.0.0", listen_port: int = 5010) -> None:
+        """Initialize the TCPJPEGFrameServer.
+
+        Args:
+            listen_ip (str): IP address to listen on.
+            listen_port (int): Port to listen on.
+
+        """
+        self.addr: Tuple[str, int] = (listen_ip, listen_port)
 
         # Listening socket: non-blocking so accept() never stalls your render loop
-        self.listen_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.listen_sock: socket.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.listen_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.listen_sock.bind(self.addr)
         self.listen_sock.listen(1)
         self.listen_sock.setblocking(False)
 
-        self.client_sock: socket.socket | None = None
+        self.client_sock: Optional[socket.socket] = None
 
-    def _accept_if_needed(self):
+    def _accept_if_needed(self) -> None:
         """Try to accept a new client (non-blocking)."""
         if self.client_sock is not None:
             return
@@ -56,6 +63,8 @@ class TCPJPEGFrameServer:
             return
 
         # Encode frame
+        ok: bool
+        jpeg_bytes: np.ndarray[Any, Any]
         ok, jpeg_bytes = cv2.imencode(
             ".jpg",
             cv2.cvtColor(frame, cv2.COLOR_RGB2BGR),
@@ -64,26 +73,29 @@ class TCPJPEGFrameServer:
         if not ok:
             return
 
-        data = jpeg_bytes.tobytes()
-        header = struct.pack("!I", len(data))
+        data: bytes = jpeg_bytes.tobytes()
+        header: bytes = struct.pack("!I", len(data))
 
         try:
             # On a blocking socket, sendall either sends everything
             # or raises on a real disconnect.
-            self.client_sock.sendall(header)
-            self.client_sock.sendall(data)
+            if self.client_sock is not None:
+                self.client_sock.sendall(header)
+                self.client_sock.sendall(data)
 
         except (BrokenPipeError, ConnectionResetError, OSError) as e:
             # Treat ANY send error as "connection is broken" and reset.
             # This guarantees we never leave half a frame in the stream.
             print(f"[TCPJPEGFrameServer] Client disconnected during send: {e}")
             try:
-                self.client_sock.close()
+                if self.client_sock is not None:
+                    self.client_sock.close()
             except Exception:
                 pass
             self.client_sock = None
 
     def close(self) -> None:
+        """Close the TCPJPEGFrameServer."""
         if self.client_sock is not None:
             try:
                 self.client_sock.close()
@@ -92,25 +104,28 @@ class TCPJPEGFrameServer:
             self.client_sock = None
         self.listen_sock.close()
 
+
 class TCPJPEGFrameClient:
     """Receive JPEG frames over TCP."""
 
-    def __init__(self, server_ip: str, server_port: int = 5010, timeout: float = 5.0):
-        """
+    def __init__(self, server_ip: str, server_port: int = 5010, timeout: float = 5.0) -> None:
+        """Initialize the TCPJPEGFrameClient.
+
         Args:
-            server_ip: IP or hostname of the TCPJPEGFrameServer.
-            server_port: Port where the server listens.
-            timeout: Socket timeout in seconds.
+            server_ip (str): IP or hostname of the TCPJPEGFrameServer.
+            server_port (int): Port where the server listens.
+            timeout (float): Socket timeout in seconds.
+
         """
-        self.server_addr = (server_ip, server_port)
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.server_addr: Tuple[str, int] = (server_ip, server_port)
+        self.sock: socket.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.settimeout(timeout)
         self.sock.connect(self.server_addr)
         print(f"[TCPJPEGFrameClient] Connected to {self.server_addr}")
 
     def _recv_exact(self, n: int) -> Optional[bytes]:
         """Receive exactly n bytes or return None on error/timeout."""
-        buf = b""
+        buf: bytes = b""
         while len(buf) < n:
             try:
                 chunk = self.sock.recv(n - len(buf))
@@ -135,7 +150,8 @@ class TCPJPEGFrameClient:
         if header is None:
             return None
 
-        (length,) = struct.unpack("!I", header)
+        length_tuple = struct.unpack("!I", header)
+        length: int = int(length_tuple[0])
         if length == 0:
             return None
 
@@ -152,4 +168,5 @@ class TCPJPEGFrameClient:
             return None
 
     def close(self) -> None:
+        """Close the TCPJPEGFrameClient."""
         self.sock.close()

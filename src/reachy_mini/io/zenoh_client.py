@@ -29,6 +29,7 @@ def _parse_host_port(address: str) -> tuple[str, int]:
 
     Returns:
         Tuple of (resolved_ip, port)
+
     """
     # Split on last colon to handle potential edge cases
     if ':' in address:
@@ -57,6 +58,7 @@ def _resolve_host(host: str) -> str:
 
     Returns:
         IP address as string
+
     """
     # Check if it's already an IP address
     try:
@@ -86,6 +88,7 @@ class ZenohClient(AbstractClient):
             localhost_only: If True, connect to localhost only
             external_ip: External IP address or hostname to connect to.
                         Supports formats: "192.168.1.10", "myhost.ngrok.io", or "myhost.ngrok.io:18951"
+
         """
         if localhost_only and external_ip is not None:
             raise ValueError("localhost_only and external_ip cannot be set at the same time.")

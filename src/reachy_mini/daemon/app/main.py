@@ -40,7 +40,7 @@ class Args:
     sim: bool = False
     scene: str = "empty"
     headless: bool = False
-    stream_robot_view: bool = False
+    websocket_uri: str | None = None
     use_audio: bool = True
 
     kinematics_engine: str = "AnalyticalKinematics"
@@ -76,7 +76,7 @@ def create_app(args: Args) -> FastAPI:
                 sim=args.sim,
                 scene=args.scene,
                 headless=args.headless,
-                stream_robot_view=args.stream_robot_view,
+                websocket_uri=args.websocket_uri,
                 use_audio=args.use_audio,
                 kinematics_engine=args.kinematics_engine,
                 check_collision=args.check_collision,
@@ -191,10 +191,10 @@ def main() -> None:
         help="Run the daemon in headless mode (default: False).",
     )
     parser.add_argument(
-        "--stream-robot-view",
-        action="store_true",
-        default=default_args.stream_robot_view,
-        help="Stream the robot view to the port 5010 (default: False).",
+        "--websocket-uri",
+        type=str,
+        default=default_args.websocket_uri,
+        help="WebSocket URI for remote control and streaming of the robot (default: None). Example: ws://localhost:8000",
     )
     parser.add_argument(
         "--deactivate-audio",

@@ -42,6 +42,7 @@ class RobotBackend(Backend):
             check_collision (bool): If True, enable collision checking. Default is False.
             kinematics_engine (str): Kinematics engine to use. Defaults to "AnalyticalKinematics".
             hardware_error_check_frequency (float): Frequency in seconds to check for hardware errors. Default is 1.0.
+            use_audio (bool): If True, use audio. Default is True.
 
         Tries to connect to the Reachy Mini motor controller and initializes the control loop.
 

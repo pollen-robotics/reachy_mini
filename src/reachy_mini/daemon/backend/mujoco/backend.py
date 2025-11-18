@@ -11,7 +11,7 @@ import time
 from dataclasses import dataclass
 from importlib.resources import files
 from threading import Thread
-from typing import Annotated
+from typing import Annotated, Optional
 
 import log_throttling
 import mujoco
@@ -28,7 +28,7 @@ from .utils import (
     get_joint_id_from_name,
 )
 from .video_udp import UDPJPEGFrameSender
-from .video_tcp import TCPJPEGFrameServer
+from .video_ws import AsyncWebSocketFrameSender
 
 CAMERA_REACHY = 'eye_camera'
 CAMERA_STUDIO_CLOSE = 'studio_close'
@@ -44,8 +44,8 @@ class MujocoBackend(Backend):
         check_collision: bool = False,
         kinematics_engine: str = "AnalyticalKinematics",
         headless: bool = False,
-        stream_robot_view: bool = False,
         use_audio: bool = False,
+        websocket_uri: Optional[str] = None,
     ) -> None:
         """Initialize the MujocoBackend with a specified scene.
 
@@ -54,7 +54,8 @@ class MujocoBackend(Backend):
             check_collision (bool): If True, enable collision checking. Default is False.
             kinematics_engine (str): Kinematics engine to use. Defaults to "AnalyticalKinematics".
             headless (bool): If True, run Mujoco in headless mode (no GUI). Default is False.
-            stream_robot_view (bool): If True, stream the robot view to the port 5010. Default is False.
+            use_audio (bool): If True, use audio. Default is False.
+            websocket_uri (Optional[str]): If set, allow streaming of the robot view through a WebSocket connection to the specified uri. Defaults to None.
 
         """
         super().__init__(
@@ -64,7 +65,7 @@ class MujocoBackend(Backend):
         )
 
         self.headless = headless
-        self.stream_robot_view = stream_robot_view
+        self.websocket_uri = websocket_uri
 
         from reachy_mini.reachy_mini import (
             SLEEP_ANTENNAS_JOINT_POSITIONS,
@@ -111,14 +112,17 @@ class MujocoBackend(Backend):
             get_joint_addr_from_name(self.model, n) for n in self.joint_names
         ]
 
-    def rendering_loop(self, camera_name: str, port: int) -> None:
+    def rendering_loop(self, camera_name: str, port: Optional[int] = None, ws_uri: Optional[str] = None) -> None:
         """Offline Rendering loop for the Mujoco simulation.
 
-        Capture the image from the virtual camera_name and send it over UDP to the port.
+        Capture the image from the virtual camera_name and send it over UDP to the port or over WebSocket to the ws_uri.
         """
-        if port == 5010:
-            streamer = TCPJPEGFrameServer(listen_port=port)
+        streamer: AsyncWebSocketFrameSender | UDPJPEGFrameSender
+        if ws_uri:
+            streamer = AsyncWebSocketFrameSender(ws_uri=ws_uri + "/mujoco_stream")
         else:
+            if port is None:
+                raise ValueError("Port is required when using UDP")
             streamer = UDPJPEGFrameSender(dest_port=port)
         camera_id = mujoco.mj_name2id(
             self.model,
@@ -151,8 +155,8 @@ class MujocoBackend(Backend):
         It updates the joint positions at a rate and publishes the joint positions.
         """
         step = 1
-        if self.stream_robot_view:
-            robot_view_rendering_thread = Thread(target=self.rendering_loop, args=(CAMERA_STUDIO_CLOSE, 5010), daemon=True)
+        if self.websocket_uri:
+            robot_view_rendering_thread = Thread(target=self.rendering_loop, args=(CAMERA_STUDIO_CLOSE, None, self.websocket_uri), daemon=True)
             robot_view_rendering_thread.start()
 
         if not self.headless:
@@ -190,7 +194,7 @@ class MujocoBackend(Backend):
         if not self.headless:
             viewer.sync()
 
-            rendering_thread = Thread(target=self.rendering_loop, args=(CAMERA_REACHY, 5005), daemon=True)
+            rendering_thread = Thread(target=self.rendering_loop, args=(CAMERA_REACHY, 5005, None), daemon=True)
             rendering_thread.start()
 
         # 3) now enter your normal loop
@@ -259,7 +263,7 @@ class MujocoBackend(Backend):
         if not self.headless:
             viewer.close()
             rendering_thread.join()
-        if self.stream_robot_view:
+        if self.websocket_uri:
             robot_view_rendering_thread.join()
 
     def get_mj_present_head_pose(self) -> Annotated[npt.NDArray[np.float64], (4, 4)]:
