@@ -5,14 +5,17 @@ By default the module directly returns JPEG images as output by the camera.
 """
 
 from threading import Thread
-from typing import Optional
+from typing import Optional, cast
 
 import numpy as np
 import numpy.typing as npt
 
-from reachy_mini.media.camera_constants import CameraResolution
-
-from .camera_base import CameraBackend, CameraBase
+from reachy_mini.media.camera_constants import (
+    ArducamSpecs,
+    CameraResolution,
+    CameraSpecs,
+    ReachyMiniCamSpecs,
+)
 
 try:
     import gi
@@ -28,6 +31,8 @@ gi.require_version("GstApp", "1.0")
 
 from gi.repository import GLib, Gst, GstApp  # noqa: E402
 
+from .camera_base import CameraBase  # noqa: E402
+
 
 class GStreamerCamera(CameraBase):
     """Camera implementation using GStreamer."""
@@ -35,29 +40,32 @@ class GStreamerCamera(CameraBase):
     def __init__(
         self,
         log_level: str = "INFO",
-        resolution: CameraResolution = CameraResolution.R1280x720,
     ) -> None:
         """Initialize the GStreamer camera."""
-        super().__init__(
-            backend=CameraBackend.GSTREAMER, log_level=log_level, resolution=resolution
-        )
+        super().__init__(log_level=log_level)
         Gst.init(None)
         self._loop = GLib.MainLoop()
         self._thread_bus_calls: Optional[Thread] = None
 
         self.pipeline = Gst.Pipeline.new("camera_recorder")
 
+        # TODO How do we hande video device not found ?
+        cam_path = self.get_video_device()
+        if self.camera_specs is None:
+            raise RuntimeError("Camera specs not set")
+        self._resolution = self.camera_specs.default_resolution
+
+        if self._resolution is None:
+            raise RuntimeError("Failed to get default camera resolution.")
+
         # note for some applications the jpeg image could be directly used
         self._appsink_video: GstApp = Gst.ElementFactory.make("appsink")
-        caps_video = Gst.Caps.from_string(
-            f"video/x-raw,format=BGR, width={self.resolution[0]},height={self.resolution[1]},framerate={self.framerate}/1"
-        )
-        self._appsink_video.set_property("caps", caps_video)
+        self.set_resolution(self._resolution)
         self._appsink_video.set_property("drop", True)  # avoid overflow
         self._appsink_video.set_property("max-buffers", 1)  # keep last image only
         self.pipeline.add(self._appsink_video)
 
-        cam_path = self.get_arducam_video_device()
+        # cam_path = self.get_video_device()
         if cam_path == "":
             self.logger.warning("Recording pipeline set without camera.")
             self.pipeline.remove(self._appsink_video)
@@ -97,6 +105,22 @@ class GStreamerCamera(CameraBase):
         self._loop.run()
         bus.remove_watch()
         self.logger.debug("bus message loop stopped")
+
+    def set_resolution(self, resolution: CameraResolution) -> None:
+        """Set the camera resolution."""
+        super().set_resolution(resolution)
+
+        # Check if pipeline is not playing before changing resolution
+        if self.pipeline.get_state(0).state == Gst.State.PLAYING:
+            raise RuntimeError(
+                "Cannot change resolution while the camera is streaming. Please close the camera first."
+            )
+
+        self._resolution = resolution
+        caps_video = Gst.Caps.from_string(
+            f"video/x-raw,format=BGR, width={self._resolution.value[0]},height={self._resolution.value[1]},framerate={self.framerate}/1"
+        )
+        self._appsink_video.set_property("caps", caps_video)
 
     def open(self) -> None:
         """Open the camera using GStreamer."""
@@ -138,8 +162,8 @@ class GStreamerCamera(CameraBase):
         self._loop.quit()
         self.pipeline.set_state(Gst.State.NULL)
 
-    def get_arducam_video_device(self) -> str:
-        """Use Gst.DeviceMonitor to find the unix camera path /dev/videoX of the Arducam_12MP webcam.
+    def get_video_device(self) -> str:
+        """Use Gst.DeviceMonitor to find the unix camera path /dev/videoX.
 
         Returns the device path (e.g., '/dev/video2'), or '' if not found.
         """
@@ -147,16 +171,26 @@ class GStreamerCamera(CameraBase):
         monitor.add_filter("Video/Source")
         monitor.start()
 
+        cam_names = ["Reachy", "Arducam_12MP"]
+
         devices = monitor.get_devices()
-        for device in devices:
-            name = device.get_display_name()
-            device_props = device.get_properties()
-            if name and "Arducam_12MP" in name:
-                if device_props and device_props.has_field("api.v4l2.path"):
-                    device_path = device_props.get_string("api.v4l2.path")
-                    self.logger.debug(f"Found Arducam_12MP at {device_path}")
-                    monitor.stop()
-                    return str(device_path)
+        for cam_name in cam_names:
+            for device in devices:
+                name = device.get_display_name()
+                device_props = device.get_properties()
+
+                if cam_name in name:
+                    if device_props and device_props.has_field("api.v4l2.path"):
+                        device_path = device_props.get_string("api.v4l2.path")
+                        self.camera_specs = (
+                            cast(CameraSpecs, ArducamSpecs)
+                            if cam_name == "Arducam_12MP"
+                            else cast(CameraSpecs, ReachyMiniCamSpecs)
+                        )
+                        self.resized_K = self.camera_specs.K
+                        self.logger.debug(f"Found {cam_name} camera at {device_path}")
+                        monitor.stop()
+                        return str(device_path)
         monitor.stop()
-        self.logger.warning("Arducam_12MP webcam not found.")
+        self.logger.warning("No camera found.")
         return ""

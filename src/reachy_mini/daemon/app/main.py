@@ -8,8 +8,8 @@ managing the robot's state.
 """
 
 import argparse
+import asyncio
 import logging
-import os
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -23,12 +23,16 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from reachy_mini.apps.manager import AppManager
-from reachy_mini.daemon.app.routers import apps, daemon, kinematics, motors, move, state
+from reachy_mini.daemon.app.routers import (
+    apps,
+    daemon,
+    kinematics,
+    motors,
+    move,
+    state,
+    volume,
+)
 from reachy_mini.daemon.daemon import Daemon
-
-DASHBOARD_PAGES = Path(__file__).parent / "dashboard"
-TEMPLATES_DIR = Path(__file__).parent / "templates"
-templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
 
 @dataclass
@@ -49,6 +53,7 @@ class Args:
     check_collision: bool = False
 
     autostart: bool = True
+    timeout_health_check: float | None = None
 
     wake_up_on_start: bool = True
     goto_sleep_on_stop: bool = True
@@ -59,7 +64,7 @@ class Args:
     localhost_only: bool | None = None
 
 
-def create_app(args: Args) -> FastAPI:
+def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> FastAPI:
     """Create and configure the FastAPI application."""
     localhost_only = (
         args.localhost_only
@@ -92,16 +97,10 @@ def create_app(args: Args) -> FastAPI:
     app = FastAPI(
         lifespan=lifespan,
     )
+
     app.state.args = args
     app.state.daemon = Daemon(wireless_version=args.wireless_version)
     app.state.app_manager = AppManager()
-
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=["*"],  # or restrict to your HF domain
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
 
     router = APIRouter(prefix="/api")
     router.include_router(apps.router)
@@ -110,23 +109,50 @@ def create_app(args: Args) -> FastAPI:
     router.include_router(motors.router)
     router.include_router(move.router)
     router.include_router(state.router)
+    router.include_router(volume.router)
+
+    if args.wireless_version:
+        from .routers import update, wifi_config
+
+        app.include_router(update.router)
+        app.include_router(wifi_config.router)
 
     app.include_router(router)
 
-    # Route to list available HTML/JS/CSS examples with links using Jinja2 template
+    if health_check_event is not None:
+
+        @app.post("/health-check")
+        async def health_check() -> dict[str, str]:
+            """Health check endpoint to reset the health check timer."""
+            health_check_event.set()
+            return {"status": "ok"}
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],  # or restrict to your HF domain
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+    STATIC_DIR = Path(__file__).parent / "dashboard" / "static"
+    TEMPLATES_DIR = Path(__file__).parent / "dashboard" / "templates"
+
+    app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+    templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
+
     @app.get("/")
-    async def list_examples(request: Request) -> HTMLResponse:
+    async def dashboard(request: Request) -> HTMLResponse:
         """Render the dashboard."""
-        files = [f for f in os.listdir(DASHBOARD_PAGES) if f.endswith(".html")]
         return templates.TemplateResponse(
-            "dashboard.html", {"request": request, "files": files}
+            "index.html", {"request": request, "args": args}
         )
 
-    app.mount(
-        "/dashboard",
-        StaticFiles(directory=str(DASHBOARD_PAGES), html=True),
-        name="dashboard",
-    )
+    if args.wireless_version:
+
+        @app.get("/settings")
+        async def settings(request: Request) -> HTMLResponse:
+            """Render the settings page."""
+            return templates.TemplateResponse("settings.html", {"request": request})
 
     return app
 
@@ -135,8 +161,36 @@ def run_app(args: Args) -> None:
     """Run the FastAPI app with Uvicorn."""
     logging.basicConfig(level=logging.INFO)
 
-    app = create_app(args)
-    uvicorn.run(app, host=args.fastapi_host, port=args.fastapi_port)
+    health_check_event = asyncio.Event()
+    app = create_app(args, health_check_event)
+
+    config = uvicorn.Config(app, host=args.fastapi_host, port=args.fastapi_port)
+    server = uvicorn.Server(config)
+
+    async def health_check_timeout(timeout_seconds: float) -> None:
+        while True:
+            try:
+                await asyncio.wait_for(
+                    health_check_event.wait(),
+                    timeout=timeout_seconds,
+                )
+                health_check_event.clear()
+            except asyncio.TimeoutError:
+                logging.warning("Health check timeout reached, stopping app.")
+                server.should_exit = True
+                break
+
+    loop = asyncio.get_event_loop()
+    if args.timeout_health_check is not None:
+        loop.create_task(health_check_timeout(args.timeout_health_check))
+
+    try:
+        loop.run_until_complete(server.serve())
+    except KeyboardInterrupt:
+        logging.info("Received Ctrl-C, shutting down gracefully.")
+    finally:
+        # Optional: additional cleanup here
+        pass
 
 
 def main() -> None:
@@ -190,6 +244,12 @@ def main() -> None:
         action="store_false",
         dest="autostart",
         help="Do not automatically start the daemon on launch (default: False).",
+    )
+    parser.add_argument(
+        "--timeout-health-check",
+        type=float,
+        default=None,
+        help="Set the health check timeout in seconds (default: None).",
     )
     parser.add_argument(
         "--wake-up-on-start",

@@ -93,11 +93,6 @@ class ReachyMini:
         self._last_head_pose: Optional[npt.NDArray[np.float64]] = None
         self.is_recording = False
 
-        self.K = np.array(
-            [[550.3564, 0.0, 638.0112], [0.0, 549.1653, 364.589], [0.0, 0.0, 1.0]]
-        )
-        self.D = np.array([-0.0694, 0.1565, -0.0004, 0.0003, -0.0983])
-
         self.T_head_cam = np.eye(4)
         self.T_head_cam[:3, 3][:] = [0.0437, 0, 0.0512]
         self.T_head_cam[:3, :3] = np.array(
@@ -108,25 +103,7 @@ class ReachyMini:
             ]
         )
 
-        mbackend = MediaBackend.DEFAULT
-        if media_backend.lower() == "gstreamer":
-            mbackend = MediaBackend.GSTREAMER
-        elif media_backend.lower() == "default":
-            mbackend = MediaBackend.DEFAULT
-        elif media_backend.lower() == "no_media":
-            mbackend = MediaBackend.NO_MEDIA
-        elif media_backend.lower() == "default_no_video":
-            mbackend = MediaBackend.DEFAULT_NO_VIDEO
-        else:
-            raise ValueError(
-                f"Invalid media_backend '{media_backend}'. Supported values are 'default', 'gstreamer', 'no_media', and 'default_no_video'."
-            )
-
-        self.media_manager = MediaManager(
-            use_sim=self.client.get_status()["simulation_enabled"],
-            backend=mbackend,
-            log_level=log_level,
-        )
+        self.media_manager = self._configure_mediamanager(media_backend, log_level)
 
     def __del__(self) -> None:
         """Destroy the Reachy Mini instance.
@@ -148,6 +125,43 @@ class ReachyMini:
     def media(self) -> MediaManager:
         """Expose the MediaManager instance used by ReachyMini."""
         return self.media_manager
+
+    def _configure_mediamanager(
+        self, media_backend: str, log_level: str
+    ) -> MediaManager:
+        if (
+            self.client.get_status()["wireless_version"]
+            and media_backend != "gstreamer"
+        ):
+            self.logger.warning(
+                "Wireless version detected, media backend should be set to 'gstreamer'. Reverting to no_media"
+            )
+            media_backend = "no_media"
+
+        mbackend = MediaBackend.DEFAULT
+        match media_backend.lower():
+            case "gstreamer":
+                if self.client.get_status()["wireless_version"]:
+                    mbackend = MediaBackend.WEBRTC
+                else:
+                    mbackend = MediaBackend.GSTREAMER
+            case "default":
+                mbackend = MediaBackend.DEFAULT
+            case "no_media":
+                mbackend = MediaBackend.NO_MEDIA
+            case "default_no_video":
+                mbackend = MediaBackend.DEFAULT_NO_VIDEO
+            case _:
+                raise ValueError(
+                    f"Invalid media_backend '{media_backend}'. Supported values are 'default', 'gstreamer', 'no_media', 'default_no_video', and 'webrtc'."
+                )
+
+        return MediaManager(
+            use_sim=self.client.get_status()["simulation_enabled"],
+            backend=mbackend,
+            log_level=log_level,
+            signalling_host=self.client.get_status()["wlan_ip"],
+        )
 
     def set_target(
         self,
@@ -329,6 +343,7 @@ class ReachyMini:
         if self.media_manager.camera is None:
             raise RuntimeError("Camera is not initialized.")
 
+        # TODO this is false for the raspicam for now
         assert 0 < u < self.media_manager.camera.resolution[0], (
             f"u must be in [0, {self.media_manager.camera.resolution[0]}], got {u}."
         )
@@ -339,7 +354,15 @@ class ReachyMini:
         if duration < 0:
             raise ValueError("Duration can't be negative.")
 
-        x_n, y_n = cv2.undistortPoints(np.float32([[[u, v]]]), self.K, self.D)[0, 0]  # type: ignore
+        if self.media.camera is None or self.media.camera.camera_specs is None:
+            raise RuntimeError("Camera specs not set.")
+
+        points = np.array([[[u, v]]], dtype=np.float32)
+        x_n, y_n = cv2.undistortPoints(
+            points,
+            self.media.camera.K,  # type: ignore
+            self.media.camera.D,  # type: ignore
+        )[0, 0]
 
         ray_cam = np.array([x_n, y_n, 1.0])
         ray_cam /= np.linalg.norm(ray_cam)
