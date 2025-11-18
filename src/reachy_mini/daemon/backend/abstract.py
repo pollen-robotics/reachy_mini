@@ -17,7 +17,7 @@ import typing
 from abc import abstractmethod
 from enum import Enum
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated, Any, Dict, Optional
 
 import numpy as np
 import zenoh
@@ -290,7 +290,7 @@ class Backend:
         head: Annotated[NDArray[np.float64], (4, 4)] | None = None,  # 4x4 pose matrix
         antennas: Annotated[NDArray[np.float64], (2,)]
         | None = None,  # [right_angle, left_angle] (in rads)
-        body_yaw: float = 0.0,  # Body yaw angle in radians
+        body_yaw: float | None = None,  # Body yaw angle in radians
     ) -> None:
         """Set the target head pose and/or antenna positions and/or body_yaw."""
         if head is not None:
@@ -715,3 +715,36 @@ class Backend:
     def set_motor_control_mode(self, mode: MotorControlMode) -> None:
         """Set the motor control mode."""
         pass
+
+    def get_present_passive_joint_positions(self) -> Optional[Dict[str, float]]:
+        """Get the present passive joint positions.
+
+        Requires the Placo kinematics engine.
+        """
+        # This is would be better, and fix mypy issues, but Placo is dynamically imported
+        # if not isinstance(self.head_kinematics, PlacoKinematics):
+        if self.kinematics_engine != "Placo":
+            return None
+        return {
+            "passive_1_x": self.head_kinematics.get_joint("passive_1_x"),  # type: ignore [union-attr]
+            "passive_1_y": self.head_kinematics.get_joint("passive_1_y"),  # type: ignore [union-attr]
+            "passive_1_z": self.head_kinematics.get_joint("passive_1_z"),  # type: ignore [union-attr]
+            "passive_2_x": self.head_kinematics.get_joint("passive_2_x"),  # type: ignore [union-attr]
+            "passive_2_y": self.head_kinematics.get_joint("passive_2_y"),  # type: ignore [union-attr]
+            "passive_2_z": self.head_kinematics.get_joint("passive_2_z"),  # type: ignore [union-attr]
+            "passive_3_x": self.head_kinematics.get_joint("passive_3_x"),  # type: ignore [union-attr]
+            "passive_3_y": self.head_kinematics.get_joint("passive_3_y"),  # type: ignore [union-attr]
+            "passive_3_z": self.head_kinematics.get_joint("passive_3_z"),  # type: ignore [union-attr]
+            "passive_4_x": self.head_kinematics.get_joint("passive_4_x"),  # type: ignore [union-attr]
+            "passive_4_y": self.head_kinematics.get_joint("passive_4_y"),  # type: ignore [union-attr]
+            "passive_4_z": self.head_kinematics.get_joint("passive_4_z"),  # type: ignore [union-attr]
+            "passive_5_x": self.head_kinematics.get_joint("passive_5_x"),  # type: ignore [union-attr]
+            "passive_5_y": self.head_kinematics.get_joint("passive_5_y"),  # type: ignore [union-attr]
+            "passive_5_z": self.head_kinematics.get_joint("passive_5_z"),  # type: ignore [union-attr]
+            "passive_6_x": self.head_kinematics.get_joint("passive_6_x"),  # type: ignore [union-attr]
+            "passive_6_y": self.head_kinematics.get_joint("passive_6_y"),  # type: ignore [union-attr]
+            "passive_6_z": self.head_kinematics.get_joint("passive_6_z"),  # type: ignore [union-attr]
+            "passive_7_x": self.head_kinematics.get_joint("passive_7_x"),  # type: ignore [union-attr]
+            "passive_7_y": self.head_kinematics.get_joint("passive_7_y"),  # type: ignore [union-attr]
+            "passive_7_z": self.head_kinematics.get_joint("passive_7_z"),  # type: ignore [union-attr]
+        }

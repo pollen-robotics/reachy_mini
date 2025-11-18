@@ -1,0 +1,121 @@
+<div class="grid app-section py-2">
+    <div class="flex flex-row gap-4">
+        <div class="text-xl">Move player</div>
+        <div class="flex flex-row gap-2 py-1">
+            <button id="move-play-btn"
+                class="px-2 py-1 rounded bg-blue-500 text-white font-semibold shadow hover:bg-blue-600 transition-colors duration-150 flex items-center justify-center disabled:bg-gray-300 disabled:text-gray-500">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path d="M6.5 5.5v9l7-4.5-7-4.5z" />
+                </svg>
+            </button>
+            <button id="move-stop-btn" class="px-2 py-1 rounded bg-red-500 text-white font-semibold shadow hover:bg-red-600 transition-colors duration-150 flex items-center justify-center
+                disabled:bg-gray-300 disabled:text-gray-500">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <rect x="5" y="5" width="10" height="10" rx="2" />
+                </svg>
+            </button>
+        </div>
+    </div>
+    <div class="flex flex-row gap-4 justify-center">
+        <select id="move-dataset-toggle" class="px-2 py-1 rounded border border-gray-300 bg-white">
+            <option value="pollen-robotics/reachy-mini-dances-library">Dances</option>
+            <option value="pollen-robotics/reachy-mini-emotions-library">Emotions</option>
+        </select>
+        <select id="move-select-toggle" class="px-2 py-1 rounded border border-gray-300 bg-white">
+        </select>
+    </div>
+</div>
+
+<div class="grid app-section py-2">
+    <div class="flex flex-row gap-4 items-center">
+        <div class="text-xl">Volume control</div>
+        <div class="text-sm text-gray-600" id="volume-device-info">Loading...</div>
+    </div>
+
+    <div class="flex flex-col gap-2 px-4">
+        <div class="flex flex-row gap-4 items-center">
+
+            <!-- volume down icon -->
+            <svg xmlns="http://www.w3.org/2000/svg" 
+                 class="h-5 w-5 text-gray-600" 
+                 viewBox="0 0 20 20" 
+                 fill="currentColor">
+                <path d="M9.383 3.076A1 1 0 0110 4v12a1 1 0 01-1.707.707L4.586 13H2a1 1 0 01-1-1V8a1 1 0 011-1h2.586l3.707-3.707a1 1 0 011.09-.217z"/>
+            </svg>
+
+            <!-- slider -->
+            <input 
+                type="range" 
+                id="volume-slider" 
+                min="0" 
+                max="100" 
+                step="1"
+                value="50"
+                aria-label="System volume"
+                class="flex-grow h-2 bg-gray-300 rounded-lg appearance-none cursor-pointer"
+            />
+
+            <!-- volume up icon -->
+            <svg xmlns="http://www.w3.org/2000/svg" 
+                 class="h-5 w-5 text-gray-600" 
+                 viewBox="0 0 20 20" 
+                 fill="currentColor">
+                <path d="M10 3.5a1 1 0 00-1.707-.707L4.586 6.5H2a1 1 0 00-1 1v5a1 1 0 001 1h2.586l3.707 3.707A1 1 0 0010 16.5v-13zM15.536 5.464a1 1 0 010 1.415 5 5 0 010 7.071 1 1 0 11-1.415-1.414 3 3 0 000-4.243 1 1 0 011.415-1.415z"/>
+            </svg>
+
+            <!-- numeric label -->
+            <span id="volume-value" class="text-lg font-semibold w-12 text-center">50</span>
+        </div>
+
+        <!-- Advanced settings dropdown -->
+        <details class="mt-2">
+            <summary class="cursor-pointer text-base font-medium text-gray-700 hover:text-gray-900 select-none">
+                Advanced settings
+            </summary>
+            <div class="mt-3 pl-4 pr-4 pb-2 border-l-2 border-gray-200">
+                <!-- Microphone control -->
+                <div class="flex flex-col gap-2">
+                    <div class="flex flex-row gap-2 items-center">
+                        <div class="text-base font-medium">Microphone</div>
+                        <div class="text-sm text-gray-600" id="microphone-device-info">Loading...</div>
+                    </div>
+                    <div class="flex flex-row gap-4 items-center">
+                        <!-- microphone icon (muted/off) -->
+                        <svg xmlns="http://www.w3.org/2000/svg" 
+                             class="h-5 w-5 text-gray-600" 
+                             viewBox="0 0 20 20" 
+                             fill="currentColor">
+                            <path d="M2.293 2.293a1 1 0 011.414 0l14 14a1 1 0 01-1.414 1.414l-14-14a1 1 0 010-1.414z"/>
+                            <path d="M13 8V4a3 3 0 10-6 0v1.293l6 6V8z"/>
+                            <path d="M8.707 13.707L7 12V8a3 3 0 013-3h.293l1.414 1.414A3 3 0 0113 8v4l-4.293-4.293z"/>
+                            <path d="M11 14.93V17h-2v-2.07A7.001 7.001 0 013 8a1 1 0 112 0 5 5 0 005 5 5.027 5.027 0 001-.101l1.414 1.414A6.956 6.956 0 0111 14.93zM15 8a1 1 0 10-2 0 3.001 3.001 0 01-.293 1.293l1.414 1.414A4.978 4.978 0 0015 8z"/>
+                        </svg>
+
+                        <!-- slider -->
+                        <input 
+                            type="range" 
+                            id="microphone-slider" 
+                            min="0" 
+                            max="100" 
+                            step="1"
+                            value="50"
+                            aria-label="Microphone input volume"
+                            class="flex-grow h-2 bg-gray-300 rounded-lg appearance-none cursor-pointer"
+                        />
+
+                        <!-- microphone icon (active/high) -->
+                        <svg xmlns="http://www.w3.org/2000/svg" 
+                             class="h-5 w-5 text-gray-600" 
+                             viewBox="0 0 20 20" 
+                             fill="currentColor">
+                            <path fill-rule="evenodd" d="M7 4a3 3 0 016 0v4a3 3 0 11-6 0V4zm4 10.93A7.001 7.001 0 0017 8a1 1 0 10-2 0A5 5 0 015 8a1 1 0 00-2 0 7.001 7.001 0 006 6.93V17H6a1 1 0 100 2h8a1 1 0 100-2h-3v-2.07z" clip-rule="evenodd"/>
+                        </svg>
+
+                        <!-- numeric label -->
+                        <span id="microphone-value" class="text-lg font-semibold w-12 text-center">50</span>
+                    </div>
+                </div>
+            </div>
+        </details>
+    </div>
+</div>

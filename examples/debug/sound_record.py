@@ -13,22 +13,21 @@ DURATION = 5  # seconds
 OUTPUT_FILE = "recorded_audio.wav"
 
 
-def main(backend: str):
+def main(backend: str) -> None:
     """Record audio for 5 seconds and save to a WAV file."""
     logging.basicConfig(
         level=logging.DEBUG, format="%(asctime)s [%(levelname)s] %(message)s"
     )
 
-    with ReachyMini(log_level="DEBUG", media_backend=backend) as mini:
+    with ReachyMini(log_level="INFO", media_backend=backend) as mini:
         print(f"Recording for {DURATION} seconds...")
         audio_samples = []
         t0 = time.time()
         mini.media.start_recording()
         while time.time() - t0 < DURATION:
             sample = mini.media.get_audio_sample()
+
             if sample is not None:
-                if backend == "gstreamer":
-                    sample = np.frombuffer(sample, dtype=np.int16).reshape(-1, 1)
                 audio_samples.append(sample)
             else:
                 print("No audio data available yet...")

@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<div class="grid gap-4">
+    {% include "sections/daemon.html" %}
+    {% include "sections/apps.html" %}
+    {% include "sections/appstore.html" %}
+    {% include "sections/notification.html" %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="/static/js/daemon.js"></script>
+<script src="/static/js/apps.js"></script>
+<script src="/static/js/appstore.js"></script>
+<script src="/static/js/move_player.js"></script>
+<script src="/static/js/notification.js"></script>
+<script src="/static/js/volume_control.js"></script>
+{% endblock %}

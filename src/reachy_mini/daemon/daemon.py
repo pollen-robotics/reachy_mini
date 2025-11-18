@@ -5,11 +5,13 @@ It includes methods to start, stop, and restart the daemon, as well as to check 
 It also provides a command-line interface for easy interaction.
 """
 
+import asyncio
 import json
 import logging
 import time
 from dataclasses import asdict, dataclass
 from enum import Enum
+from importlib.metadata import PackageNotFoundError, version
 from threading import Event, Thread
 from typing import Any, Optional
 
@@ -31,22 +33,41 @@ class Daemon:
     Runs the server with the appropriate backend (Mujoco for simulation or RobotBackend for real hardware).
     """
 
-    def __init__(self, log_level: str = "INFO"):
+    def __init__(self, log_level: str = "INFO", wireless_version: bool = False) -> None:
         """Initialize the Reachy Mini daemon."""
         self.log_level = log_level
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(self.log_level)
 
+        self.wireless_version = wireless_version
+
         self.backend: "RobotBackend | MujocoBackend | None" = None
+        # Get package version
+        try:
+            package_version = version("reachy_mini")
+            self.logger.info(f"Daemon version: {package_version}")
+        except PackageNotFoundError:
+            package_version = None
+            self.logger.warning("Could not determine daemon version")
+
         self._status = DaemonStatus(
             state=DaemonState.NOT_INITIALIZED,
+            wireless_version=wireless_version,
             simulation_enabled=None,
             backend_status=None,
             error=None,
             wlan_ip=None,
+            version=package_version,
         )
-        self._thread_publish_status = Thread(target=self._publish_status, daemon=True)
         self._thread_event_publish_status = Event()
+
+        self._webrtc: Optional[Any] = (
+            None  # type GstWebRTC imported for wireless version only
+        )
+        if wireless_version:
+            from reachy_mini.media.webrtc_daemon import GstWebRTC
+
+            self._webrtc = GstWebRTC(log_level)
 
     async def start(
         self,
@@ -97,6 +118,7 @@ class Daemon:
 
         try:
             self.backend = self._setup_backend(
+                wireless_version=self.wireless_version,
                 sim=sim,
                 serialport=serialport,
                 scene=scene,
@@ -111,6 +133,8 @@ class Daemon:
 
         self.server = ZenohServer(self.backend, localhost_only=localhost_only)
         self.server.start()
+
+        self._thread_publish_status = Thread(target=self._publish_status, daemon=True)
         self._thread_publish_status.start()
 
         def backend_wrapped_run() -> None:
@@ -153,6 +177,12 @@ class Daemon:
                 self._status.state = DaemonState.STOPPING
                 return self._status.state
 
+        if self._webrtc:
+            await asyncio.sleep(
+                0.2
+            )  # Give some time for the backend to release the audio device
+            self._webrtc.start()
+
         self.logger.info("Daemon started successfully.")
         self._status.state = DaemonState.RUNNING
         return self._status.state
@@ -185,6 +215,9 @@ class Daemon:
             self.backend.is_shutting_down = True
             self._thread_event_publish_status.set()
             self.server.stop()
+
+            if self._webrtc:
+                self._webrtc.stop()
 
             if goto_sleep_on_stop:
                 try:
@@ -219,11 +252,12 @@ class Daemon:
         except KeyboardInterrupt:
             self.logger.warning("Daemon already stopping...")
 
-        backend_status = self.backend.get_status()
-        if backend_status.error:
-            self._status.state = DaemonState.ERROR
+        if self.backend is not None:
+            backend_status = self.backend.get_status()
+            if backend_status.error:
+                self._status.state = DaemonState.ERROR
 
-        self.backend = None
+            self.backend = None
 
         return self._status.state
 
@@ -373,6 +407,7 @@ class Daemon:
 
     def _setup_backend(
         self,
+        wireless_version: bool,
         sim: bool,
         serialport: str,
         scene: str,
@@ -389,7 +424,7 @@ class Daemon:
             )
         else:
             if serialport == "auto":
-                ports = find_serial_port()
+                ports = find_serial_port(wireless_version=wireless_version)
 
                 if len(ports) == 0:
                     raise RuntimeError(
@@ -406,6 +441,9 @@ class Daemon:
                 serialport = ports[0]
                 self.logger.info(f"Found Reachy Mini serial port: {serialport}")
 
+            self.logger.info(
+                f"Creating RobotBackend with parameters: serialport={serialport}, check_collision={check_collision}, kinematics_engine={kinematics_engine}"
+            )
             return RobotBackend(
                 serialport=serialport,
                 log_level=self.log_level,
@@ -430,7 +468,9 @@ class DaemonStatus:
     """Dataclass representing the status of the Reachy Mini daemon."""
 
     state: DaemonState
+    wireless_version: bool
     simulation_enabled: Optional[bool]
     backend_status: Optional[RobotBackendStatus | MujocoBackendStatus]
     error: Optional[str] = None
     wlan_ip: Optional[str] = None
+    version: Optional[str] = None
