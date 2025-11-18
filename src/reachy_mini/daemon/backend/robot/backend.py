@@ -7,6 +7,7 @@ It uses the `ReachyMiniMotorController` to communicate with the robot's motors.
 
 import json
 import logging
+import struct
 import time
 from dataclasses import dataclass
 from datetime import timedelta
@@ -30,6 +31,7 @@ class RobotBackend(Backend):
         log_level: str = "INFO",
         check_collision: bool = False,
         kinematics_engine: str = "AnalyticalKinematics",
+        hardware_error_check_frequency: float = 1.0,
     ):
         """Initialize the RobotBackend.
 
@@ -38,6 +40,7 @@ class RobotBackend(Backend):
             log_level (str): The logging level for the backend. Default is "INFO".
             check_collision (bool): If True, enable collision checking. Default is False.
             kinematics_engine (str): Kinematics engine to use. Defaults to "AnalyticalKinematics".
+            hardware_error_check_frequency (float): Frequency in seconds to check for hardware errors. Default is 1.0.
 
         Tries to connect to the Reachy Mini motor controller and initializes the control loop.
 
@@ -82,6 +85,8 @@ class RobotBackend(Backend):
         self.target_antenna_joint_current = None  # Placeholder for antenna joint torque
         self.target_head_joint_current = None  # Placeholder for head joint torque
 
+        self.hardware_error_check_frequency = hardware_error_check_frequency  # seconds
+
     def run(self) -> None:
         """Run the control loop for the robot backend.
 
@@ -95,6 +100,8 @@ class RobotBackend(Backend):
 
         self.retries = 5
         self.stats_record_t0 = time.time()
+
+        self.last_hardware_error_check_time = time.time()
 
         next_call_event = Event()
 
@@ -209,7 +216,6 @@ class RobotBackend(Backend):
                 self.ready.set()  # Mark the backend as ready
             except RuntimeError as e:
                 self._stats["nb_error"] += 1
-                # self.logger.warning(f"Error reading positions: {e}")
 
                 assert self.last_alive is not None
 
@@ -239,6 +245,18 @@ class RobotBackend(Backend):
                 self._stats["timestamps"].clear()
                 self._stats["nb_error"] = 0
                 self.stats_record_t0 = time.time()
+
+            if (
+                time.time() - self.last_hardware_error_check_time
+                > self.hardware_error_check_frequency
+            ):
+                hardware_errors = self.read_hardware_errors()
+                if hardware_errors:
+                    for motor_name, errors in hardware_errors.items():
+                        self.logger.error(
+                            f"Motor '{motor_name}' hardware errors: {errors}"
+                        )
+                self.last_hardware_error_check_time = time.time()
 
     def close(self) -> None:
         """Close the motor controller connection."""
@@ -477,6 +495,53 @@ class RobotBackend(Backend):
             return MotorControlMode.GravityCompensation
         else:
             raise ValueError(f"Unknown motor control mode: {mode}")
+
+    def read_hardware_errors(self) -> dict[str, list[str]]:
+        """Read hardware errors from the motor controller."""
+        if self.c is None:
+            return {}
+
+        def decode_hardware_error_byte(err_byte: int) -> list[str]:
+            # https://emanual.robotis.com/docs/en/dxl/x/xl330-m288/#hardware-error-status
+            bits_to_error = {
+                0: "Input Voltage Error",
+                2: "Overheating Error",
+                4: "Electrical Shock Error",
+                5: "Overload Error",
+            }
+            err_bits = [i for i in range(8) if (err_byte & (1 << i)) != 0]
+            return [bits_to_error[b] for b in err_bits if b in bits_to_error]
+
+        def voltage_ok(
+            id: int,
+            allowed_max_voltage: float = 7.3,
+        ) -> bool:
+            assert self.c is not None, (
+                "Motor controller not initialized or already closed."
+            )
+            # https://emanual.robotis.com/docs/en/dxl/x/xl330-m288/#present-input-voltage
+            resp_bytes = self.c.async_read_raw_bytes(id, 144, 2)
+            resp = struct.unpack("h", bytes(resp_bytes))[0]
+            voltage: float = resp / 10.0  # in Volts
+
+            return voltage <= allowed_max_voltage
+
+        errors = {}
+        for name, id in self.c.get_motor_name_id().items():
+            # https://emanual.robotis.com/docs/en/dxl/x/xl330-m288/#hardware-error-status
+            err_byte = self.c.async_read_raw_bytes(id, 70, 1)
+            assert len(err_byte) == 1
+            err = decode_hardware_error_byte(err_byte[0])
+            if err:
+                if "Input Voltage Error" in err:
+                    if voltage_ok(id):
+                        err.remove("Input Voltage Error")
+
+                # To avoid logging empty errors like "Motor 1: []"
+                if len(err) > 0:
+                    errors[name] = err
+
+        return errors
 
 
 @dataclass

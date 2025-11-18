@@ -1,0 +1,19 @@
+<!-- Notification Modal (Bottom Right) -->
+<div id="notification-modal" class="notification-modal">
+    <div class="notification-content" id="notification-content">
+        <!-- Notification message will appear here -->
+        <span id="notification-message"></span>
+        <button class="close-btn" onclick="closeNotification()">×</button>
+    </div>
+</div>
+
+<script>
+    function showNotification(message) {
+        document.getElementById('notification-message').textContent = message;
+        document.getElementById('notification-modal').style.display = 'block';
+        setTimeout(closeNotification, 5000); // Auto-close after 5s
+    }
+    function closeNotification() {
+        document.getElementById('notification-modal').style.display = 'none';
+    }
+</script>

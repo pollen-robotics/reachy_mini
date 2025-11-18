@@ -19,7 +19,7 @@ def main(backend: str) -> None:
         level=logging.DEBUG, format="%(asctime)s [%(levelname)s] %(message)s"
     )
 
-    with ReachyMini(log_level="DEBUG", media_backend=backend) as mini:
+    with ReachyMini(log_level="INFO", media_backend=backend) as mini:
         print(f"Recording for {DURATION} seconds...")
         audio_samples = []
         t0 = time.time()
