@@ -87,6 +87,8 @@ const installedApps = {
     },
 
     displayInstalledApps: async (appsData) => {
+        console.log('Displaying installed apps:', appsData);
+
         const appsListElement = document.getElementById('installed-apps');
         appsListElement.innerHTML = '';
 
@@ -112,10 +114,20 @@ const installedApps = {
         container.className = 'grid grid-cols-[auto_6rem_2rem] justify-stretch gap-x-2';
 
         const title = document.createElement('div');
-        title.className = 'installed-app-title top-1/2 ';
-        title.innerHTML = app.name;
+        const titleSpan = document.createElement('span');
+        titleSpan.className = 'installed-app-title top-1/2 ';
+        titleSpan.innerHTML = app.name;
+        title.appendChild(titleSpan);
+        if (app.extra && app.extra.custom_app_url) {
+            const settingsLink = document.createElement('a');
+            settingsLink.className = 'installed-app-settings ml-2 text-gray-500 cursor-pointer';
+            settingsLink.innerHTML = '⚙️';
+            settingsLink.href = app.extra.custom_app_url;
+            settingsLink.target = '_blank';
+            settingsLink.rel = 'noopener noreferrer';
+            title.appendChild(settingsLink);
+        }
         container.appendChild(title);
-
         const slider = document.createElement('div');
         const toggle = new ToggleSlider({
             checked: isRunning,
