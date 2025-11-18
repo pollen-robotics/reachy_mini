@@ -5,7 +5,7 @@ const hfAppsStore = {
         await hfAppsStore.displayAvailableApps(appsData);
     },
     fetchAvailableApps: async () => {
-        const resAvailable = await fetch('/api/apps/list-available');
+        const resAvailable = await fetch('/api/apps/list-available/dashboard_selection');
         const appsData = await resAvailable.json();
         return appsData;
     },
