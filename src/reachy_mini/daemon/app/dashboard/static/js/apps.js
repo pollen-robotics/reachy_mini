@@ -87,8 +87,6 @@ const installedApps = {
     },
 
     displayInstalledApps: async (appsData) => {
-        console.log('Displaying installed apps:', appsData);
-
         const appsListElement = document.getElementById('installed-apps');
         appsListElement.innerHTML = '';
 
