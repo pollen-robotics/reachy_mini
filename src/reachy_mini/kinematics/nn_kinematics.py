@@ -1,9 +1,10 @@
 """Neural Network based FK/IK."""
 
 import time
-from typing import List
+from typing import Annotated
 
 import numpy as np
+import numpy.typing as npt
 import onnxruntime
 from scipy.spatial.transform import Rotation as R
 
@@ -22,11 +23,11 @@ class NNKinematics:
 
     def ik(
         self,
-        pose: np.ndarray,
+        pose: Annotated[npt.NDArray[np.float64], (4, 4)],
         body_yaw: float = 0.0,
         check_collision: bool = False,
         no_iterations: int = 0,
-    ):
+    ) -> Annotated[npt.NDArray[np.float64], (7,)]:
         """check_collision and no_iterations are not used by NNKinematics.
 
         We keep them for compatibility with the other kinematics engines
@@ -35,7 +36,7 @@ class NNKinematics:
         roll, pitch, yaw = R.from_matrix(pose[:3, :3]).as_euler("xyz")
 
         yaw += body_yaw
-        input = [x, y, z, roll, pitch, yaw]
+        input = np.array([x, y, z, roll, pitch, yaw])
 
         joints = self.ik_infer.infer(input)
         joints[0] += body_yaw
@@ -44,10 +45,10 @@ class NNKinematics:
 
     def fk(
         self,
-        joint_angles: List[float],
+        joint_angles: Annotated[npt.NDArray[np.float64], (7,)],
         check_collision: bool = False,
         no_iterations: int = 0,
-    ):
+    ) -> Annotated[npt.NDArray[np.float64], (4, 4)]:
         """check_collision and no_iterations are not used by NNKinematics.
 
         We keep them for compatibility with the other kinematics engines
@@ -62,17 +63,18 @@ class NNKinematics:
 class OnnxInfer:
     """Infer an onnx model."""
 
-    def __init__(self, onnx_model_path):
+    def __init__(self, onnx_model_path: str) -> None:
         """Initialize."""
         self.onnx_model_path = onnx_model_path
         self.ort_session = onnxruntime.InferenceSession(
             self.onnx_model_path, providers=["CPUExecutionProvider"]
         )
 
-    def infer(self, input):
+    def infer(self, input: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
         """Run inference on the input."""
         outputs = self.ort_session.run(None, {"input": [input]})
-        return outputs[0][0]
+        res: npt.NDArray[np.float64] = outputs[0][0]
+        return res
 
 
 if __name__ == "__main__":
@@ -80,11 +82,11 @@ if __name__ == "__main__":
         "assets/models",
     )
 
-    times_fk = []
-    times_ik = []
+    times_fk: list[float] = []
+    times_ik: list[float] = []
     for i in range(1000):
-        fk_input = np.random.random(7).astype(np.float32)
-        # ik_input = np.random.random(6).astype(np.float32)
+        fk_input = np.random.random(7).astype(np.float64)
+        # ik_input = np.random.random(6).astype(np.float64)
 
         fk_s = time.time()
         fk_output = nn_kin.fk(fk_input)

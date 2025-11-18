@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from enum import Enum
 from importlib.metadata import entry_points
 from threading import Thread
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Optional
 
 from pydantic import BaseModel
 
@@ -52,7 +52,7 @@ class AppManager:
         self.current_app = None  # type: RunningApp | None
         self.logger = logging.getLogger("reachy_mini.apps.manager")
 
-    async def close(self):
+    async def close(self) -> None:
         """Clean up the AppManager, stopping any running app."""
         if self.is_app_running():
             await self.stop_current_app()
@@ -67,7 +67,7 @@ class AppManager:
             AppState.ERROR,
         )
 
-    async def start_app(self, app_name: str) -> AppStatus:
+    async def start_app(self, app_name: str, *args: Any, **kwargs: Any) -> AppStatus:
         """Start the app, raises RuntimeError if an app is already running."""
         if self.is_app_running():
             raise RuntimeError("An app is already running")
@@ -75,21 +75,24 @@ class AppManager:
         (ep,) = entry_points(group="reachy_mini_apps", name=app_name)
         app = ep.load()()
 
-        def wrapped_run():
+        def wrapped_run() -> None:
             assert self.current_app is not None
 
             try:
                 self.current_app.status.state = AppState.RUNNING
                 self.logger.getChild("runner").info(f"App {app_name} is running")
-                app.wrapped_run()
+                app.wrapped_run(*args, **kwargs)
                 self.current_app.status.state = AppState.DONE
                 self.logger.getChild("runner").info(f"App {app_name} finished")
             except Exception as e:
                 self.logger.getChild("runner").error(
                     f"An error occurred in the app {app_name}: {e}"
                 )
+                self.logger.getChild("runner").error(
+                    f"Exception details: '{app.error}'",
+                )
                 self.current_app.status.state = AppState.ERROR
-                self.current_app.status.error = str(e)
+                self.current_app.status.error = str(app.error)
 
         self.current_app = RunningApp(
             status=AppStatus(
@@ -105,7 +108,7 @@ class AppManager:
 
         return self.current_app.status
 
-    async def stop_current_app(self, timeout: float | None = 5.0):
+    async def stop_current_app(self, timeout: float | None = 5.0) -> None:
         """Stop the current app."""
         if not self.is_app_running():
             raise RuntimeError("No app is currently running")
@@ -142,10 +145,11 @@ class AppManager:
 
         return self.current_app.status
 
-    async def current_app_status(self) -> AppStatus | None:
+    async def current_app_status(self) -> Optional[AppStatus]:
         """Get the current status of the app."""
         if self.current_app is not None:
             return self.current_app.status
+        return None
 
     # Apps management interface
     async def list_all_available_apps(self) -> list[AppInfo]:
@@ -158,9 +162,13 @@ class AppManager:
     async def list_available_apps(self, source: SourceKind) -> list[AppInfo]:
         """List available apps for given source kind."""
         if source == SourceKind.HF_SPACE:
+            return await hf_space.list_all_apps()
+        elif source == SourceKind.DASHBOARD_SELECTION:
             return await hf_space.list_available_apps()
         elif source == SourceKind.INSTALLED:
             return await local_common_venv.list_available_apps()
+        elif source == SourceKind.LOCAL:
+            return []
         else:
             raise NotImplementedError(f"Unknown source kind: {source}")
 

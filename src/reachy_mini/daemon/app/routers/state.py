@@ -7,6 +7,7 @@ This exposes:
 
 import asyncio
 from datetime import datetime, timezone
+from typing import Any
 
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 
@@ -64,11 +65,12 @@ async def get_full_state(
     with_target_body_yaw: bool = False,
     with_antenna_positions: bool = True,
     with_target_antenna_positions: bool = False,
+    with_passive_joints: bool = False,
     use_pose_matrix: bool = False,
     backend: Backend = Depends(get_backend),
 ) -> FullState:
     """Get the full robot state, with optional fields."""
-    result = {}
+    result: dict[str, Any] = {}
 
     if with_control_mode:
         result["control_mode"] = backend.get_motor_control_mode().value
@@ -78,6 +80,7 @@ async def get_full_state(
         result["head_pose"] = as_any_pose(pose, use_pose_matrix)
     if with_target_head_pose:
         target_pose = backend.target_head_pose
+        assert target_pose is not None
         result["target_head_pose"] = as_any_pose(target_pose, use_pose_matrix)
     if with_head_joints:
         result["head_joints"] = backend.get_present_head_joint_positions()
@@ -91,6 +94,12 @@ async def get_full_state(
         result["antennas_position"] = backend.get_present_antenna_joint_positions()
     if with_target_antenna_positions:
         result["target_antennas_position"] = backend.target_antenna_joint_positions
+    if with_passive_joints:
+        joints = backend.get_present_passive_joint_positions()
+        if joints is not None:
+            result["passive_joints"] = list(joints.values())
+        else:
+            result["passive_joints"] = None
 
     result["timestamp"] = datetime.now(timezone.utc)
     return FullState.model_validate(result)
@@ -108,9 +117,10 @@ async def ws_full_state(
     with_target_body_yaw: bool = False,
     with_antenna_positions: bool = True,
     with_target_antenna_positions: bool = False,
+    with_passive_joints: bool = False,
     use_pose_matrix: bool = False,
     backend: Backend = Depends(ws_get_backend),
-):
+) -> None:
     """WebSocket endpoint to stream the full state of the robot."""
     await websocket.accept()
     period = 1.0 / frequency
@@ -126,6 +136,7 @@ async def ws_full_state(
                 with_target_body_yaw=with_target_body_yaw,
                 with_antenna_positions=with_antenna_positions,
                 with_target_antenna_positions=with_target_antenna_positions,
+                with_passive_joints=with_passive_joints,
                 use_pose_matrix=use_pose_matrix,
                 backend=backend,
             )

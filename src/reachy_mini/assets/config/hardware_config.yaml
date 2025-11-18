@@ -1,0 +1,119 @@
+version: beta
+
+serial:
+  baudrate: 1000000
+
+# Limits measured on the robot (in degrees)
+# s1 
+# lower : -48° : -546
+# upper : +80° : 910
+
+# s2
+# lower: +70° : 796
+# upper: -80° : -910
+
+# s3
+# lower: -48° : -546
+# upper: +80° : 910
+
+# s4
+# lower: +48° : 546
+# upper: -80° : -910
+
+# s5
+# lower: -70° : -796
+# upper: +80° : 910
+
+# s6
+# lower : +48° : 546
+# upper : -80° : -910
+
+# s1:
+#     lower: 2048 - 546 : 1502
+#     upper: 2048 + 910 : 2958
+
+# s2: 
+#     lower: 2048 - 910 : 1138
+#     upper: 2048 + 796 : 2844
+
+# s3: 
+#     lower: 2048 - 546 : 1502
+#     upper: 2048 + 910 : 2958
+
+# s4: 
+#     lower: 2048 - 910 : 1138
+#     upper: 2048 + 546 : 2594
+
+# s5:
+#     lower: 2048 - 796 : 1252
+#     upper: 2048 + 910 : 2958
+
+# s6:
+#     lower: 2048 - 910 : 1138
+#     upper: 2048 + 546 : 2594
+
+
+motors:
+  - body_yaw:
+      id: 10
+      offset: 0
+      lower_limit: 0
+      upper_limit: 4095
+      return_delay_time: 0
+      shutdown_error: 52
+  - stewart_platform_1:
+      id: 11
+      offset: 1024
+      lower_limit: 1502
+      upper_limit: 2958
+      return_delay_time: 0
+      shutdown_error: 52
+  - stewart_platform_2:
+      id: 12
+      offset: -1024
+      lower_limit: 1138
+      upper_limit: 2844
+      return_delay_time: 0
+      shutdown_error: 52
+  - stewart_platform_3:
+      id: 13
+      offset: 1024
+      lower_limit: 1502
+      upper_limit: 2958
+      return_delay_time: 0
+      shutdown_error: 52
+  - stewart_platform_4:
+      id: 14
+      offset: -1024
+      lower_limit: 1138
+      upper_limit: 2594
+      return_delay_time: 0
+      shutdown_error: 52
+  - stewart_platform_5:
+      id: 15
+      offset: 1024
+      lower_limit: 1252
+      upper_limit: 2958
+      return_delay_time: 0
+      shutdown_error: 52
+  - stewart_platform_6:
+      id: 16
+      offset: -1024
+      lower_limit: 1138
+      upper_limit: 2594
+      return_delay_time: 0
+      shutdown_error: 52
+  - right_antenna:
+      id: 17
+      offset: 0
+      lower_limit: 0
+      upper_limit: 4095
+      return_delay_time: 0
+      shutdown_error: 52
+  - left_antenna:
+      id: 18
+      offset: 0
+      lower_limit: 0
+      upper_limit: 4095
+      return_delay_time: 0
+      shutdown_error: 52

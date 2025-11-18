@@ -10,10 +10,12 @@ This exposes:
 import asyncio
 import json
 from enum import Enum
-from typing import Coroutine
+from typing import Any, Coroutine
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
+import numpy as np
+from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
+from huggingface_hub.errors import RepositoryNotFoundError
 from pydantic import BaseModel
 
 from reachy_mini.motion.recorded_move import RecordedMoves
@@ -22,9 +24,11 @@ from ....daemon.backend.abstract import Backend
 from ..dependencies import get_backend, ws_get_backend
 from ..models import AnyPose, FullBodyTarget
 
-router = APIRouter(
-    prefix="/move",
-)
+move_tasks: dict[UUID, asyncio.Task[None]] = {}
+move_listeners: list[WebSocket] = []
+
+
+router = APIRouter(prefix="/move")
 
 
 class InterpolationMode(str, Enum):
@@ -43,8 +47,35 @@ class GotoModelRequest(BaseModel):
 
     head_pose: AnyPose | None = None
     antennas: tuple[float, float] | None = None
+    body_yaw: float | None = None
     duration: float
     interpolation: InterpolationMode = InterpolationMode.MINJERK
+
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "head_pose": {
+                        "x": 0.0,
+                        "y": 0.0,
+                        "z": 0.0,
+                        "roll": 0.0,
+                        "pitch": 0.0,
+                        "yaw": 0.0,
+                    },
+                    "antennas": [0.0, 0.0],
+                    "body_yaw": 0.0,
+                    "duration": 2.0,
+                    "interpolation": "minjerk",
+                },
+                {
+                    "antennas": [0.0, 0.0],
+                    "duration": 1.0,
+                    "interpolation": "linear",
+                },
+            ],
+        }
+    }
 
 
 class MoveUUID(BaseModel):
@@ -53,22 +84,42 @@ class MoveUUID(BaseModel):
     uuid: UUID
 
 
-move_tasks: dict[UUID, asyncio.Task] = {}
-
-
-def create_move_task(coro: Coroutine) -> MoveUUID:
+def create_move_task(coro: Coroutine[Any, Any, None]) -> MoveUUID:
     """Create a new move task using async task coroutine."""
     uuid = uuid4()
 
-    task = asyncio.create_task(coro)
+    async def notify_listeners(message: str, details: str = "") -> None:
+        for ws in move_listeners:
+            try:
+                await ws.send_json(
+                    {
+                        "type": message,
+                        "uuid": str(uuid),
+                        "details": details,
+                    }
+                )
+            except (RuntimeError, WebSocketDisconnect):
+                move_listeners.remove(ws)
 
-    task.add_done_callback(lambda t: move_tasks.pop(uuid, None))
+    async def wrap_coro() -> None:
+        try:
+            await notify_listeners("move_started")
+            await coro
+            await notify_listeners("move_completed")
+        except Exception as e:
+            await notify_listeners("move_failed", details=str(e))
+        except asyncio.CancelledError:
+            await notify_listeners("move_cancelled")
+        finally:
+            move_tasks.pop(uuid, None)
+
+    task = asyncio.create_task(wrap_coro())
     move_tasks[uuid] = task
 
     return MoveUUID(uuid=uuid)
 
 
-async def stop_move_task(uuid: UUID):
+async def stop_move_task(uuid: UUID) -> dict[str, str]:
     """Stop a running move task by cancelling it."""
     if uuid not in move_tasks:
         raise KeyError(f"Running move with UUID {uuid} not found")
@@ -102,7 +153,8 @@ async def goto(
     return create_move_task(
         backend.goto_target(
             head=goto_req.head_pose.to_pose_array() if goto_req.head_pose else None,
-            antennas=list(goto_req.antennas) if goto_req.antennas else None,
+            antennas=np.array(goto_req.antennas) if goto_req.antennas else None,
+            body_yaw=goto_req.body_yaw,
             duration=goto_req.duration,
         )
     )
@@ -120,6 +172,19 @@ async def play_goto_sleep(backend: Backend = Depends(get_backend)) -> MoveUUID:
     return create_move_task(backend.goto_sleep())
 
 
+@router.get("/recorded-move-datasets/list/{dataset_name:path}")
+async def list_recorded_move_dataset(
+    dataset_name: str,
+) -> list[str]:
+    """List available recorded moves in a dataset."""
+    try:
+        moves = RecordedMoves(dataset_name)
+    except RepositoryNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+    return moves.list_moves()
+
+
 @router.post("/play/recorded-move-dataset/{dataset_name:path}/{move_name}")
 async def play_recorded_move_dataset(
     dataset_name: str,
@@ -127,14 +192,35 @@ async def play_recorded_move_dataset(
     backend: Backend = Depends(get_backend),
 ) -> MoveUUID:
     """Request the robot to play a predefined recorded move from a dataset."""
-    move = RecordedMoves(dataset_name).get(move_name)
+    try:
+        recorded_moves = RecordedMoves(dataset_name)
+    except RepositoryNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    try:
+        move = recorded_moves.get(move_name)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     return create_move_task(backend.play_move(move))
 
 
 @router.post("/stop")
-async def stop_move(uuid: MoveUUID):
+async def stop_move(uuid: MoveUUID) -> dict[str, str]:
     """Stop a running move task."""
     return await stop_move_task(uuid.uuid)
+
+
+@router.websocket("/ws/updates")
+async def ws_move_updates(
+    websocket: WebSocket,
+) -> None:
+    """WebSocket route to stream move updates."""
+    await websocket.accept()
+    try:
+        move_listeners.append(websocket)
+        while True:
+            _ = await websocket.receive_text()
+    except WebSocketDisconnect:
+        move_listeners.remove(websocket)
 
 
 # --- FullBodyTarget streaming and single set_target ---
@@ -142,13 +228,14 @@ async def stop_move(uuid: MoveUUID):
 async def set_target(
     target: FullBodyTarget,
     backend: Backend = Depends(get_backend),
-) -> dict:
+) -> dict[str, str]:
     """POST route to set a single FullBodyTarget."""
     backend.set_target(
         head=target.target_head_pose.to_pose_array()
         if target.target_head_pose
         else None,
-        antennas=list(target.target_antennas) if target.target_antennas else None,
+        antennas=np.array(target.target_antennas) if target.target_antennas else None,
+        body_yaw=target.target_body_yaw,
     )
     return {"status": "ok"}
 
@@ -156,7 +243,7 @@ async def set_target(
 @router.websocket("/ws/set_target")
 async def ws_set_target(
     websocket: WebSocket, backend: Backend = Depends(ws_get_backend)
-):
+) -> None:
     """WebSocket route to stream FullBodyTarget set_target calls."""
     await websocket.accept()
     try:

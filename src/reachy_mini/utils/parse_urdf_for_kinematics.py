@@ -5,15 +5,16 @@ The analytical kinematics need information from the URDF. This files computes th
 
 import json
 from importlib.resources import files
+from typing import Any, Dict
 
 import numpy as np  # noqa: D100
 from placo_utils.tf import tf
 
 import reachy_mini
-from reachy_mini.kinematics import PlacoKinematics
+from reachy_mini.kinematics.placo_kinematics import PlacoKinematics
 
 
-def get_data():
+def get_data() -> Dict[str, Any]:
     """Generate the urdf_kinematics.json file."""
     urdf_root_path: str = str(
         files(reachy_mini).joinpath("descriptions/reachy_mini/urdf")
@@ -22,12 +23,12 @@ def get_data():
     placo_kinematics = PlacoKinematics(urdf_root_path, 0.02)
     robot = placo_kinematics.robot
 
-    placo_kinematics.fk([0.0] * 7, no_iterations=20)
+    placo_kinematics.fk(np.array([0.0] * 7), no_iterations=20)
     robot.update_kinematics()
 
     # Measuring lengths for the arm and branch (constants could be used)
     T_world_head_home = robot.get_T_world_frame("head").copy()
-    T_world_1 = robot.get_T_world_frame("1")
+    T_world_1 = robot.get_T_world_frame("stewart_1")
     T_world_arm1 = robot.get_T_world_frame("passive_1_link_x")
     T_1_arm1 = np.linalg.inv(T_world_1) @ T_world_arm1
     arm_z = T_1_arm1[2, 3]
@@ -38,13 +39,38 @@ def get_data():
     rod_length = np.linalg.norm(T_arm1_branch1[:3, 3])
 
     motors = [
-        {"name": "1", "branch_frame": "closing_1_2", "offset": 0, "solution": 0},
-        {"name": "2", "branch_frame": "closing_2_2", "offset": 0, "solution": 1},
-        {"name": "3", "branch_frame": "closing_3_2", "offset": 0, "solution": 0},
-        {"name": "4", "branch_frame": "closing_4_2", "offset": 0, "solution": 1},
-        {"name": "5", "branch_frame": "closing_5_2", "offset": 0, "solution": 0},
         {
-            "name": "6",
+            "name": "stewart_1",
+            "branch_frame": "closing_1_2",
+            "offset": 0,
+            "solution": 0,
+        },
+        {
+            "name": "stewart_2",
+            "branch_frame": "closing_2_2",
+            "offset": 0,
+            "solution": 1,
+        },
+        {
+            "name": "stewart_3",
+            "branch_frame": "closing_3_2",
+            "offset": 0,
+            "solution": 0,
+        },
+        {
+            "name": "stewart_4",
+            "branch_frame": "closing_4_2",
+            "offset": 0,
+            "solution": 1,
+        },
+        {
+            "name": "stewart_5",
+            "branch_frame": "closing_5_2",
+            "offset": 0,
+            "solution": 0,
+        },
+        {
+            "name": "stewart_6",
             "branch_frame": "passive_7_link_y",
             "offset": 0,
             "solution": 1,
@@ -71,7 +97,7 @@ def get_data():
     return data
 
 
-def main():
+def main() -> None:
     """Generate the urdf_kinematics.json file."""
     assets_root_path: str = str(files(reachy_mini).joinpath("assets/"))
     data = get_data()

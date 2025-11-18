@@ -8,6 +8,7 @@ import struct
 
 import cv2
 import numpy as np
+import numpy.typing as npt
 
 
 class UDPJPEGFrameSender:
@@ -31,16 +32,16 @@ class UDPJPEGFrameSender:
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.max_packet_size = max_packet_size
 
-    def send_frame(self, frame: np.ndarray) -> None:
+    def send_frame(self, frame: npt.NDArray[np.uint8]) -> None:
         """Send a frame as a JPEG image over UDP.
 
         Args:
             frame (np.ndarray): The frame to be sent, in RGB format.
 
         """
-        frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+        frame_cvt = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
         ret, jpeg_bytes = cv2.imencode(
-            ".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 80]
+            ".jpg", frame_cvt, [int(cv2.IMWRITE_JPEG_QUALITY), 80]
         )
         data = jpeg_bytes.tobytes()
         total_size = len(data)

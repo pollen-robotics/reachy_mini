@@ -7,6 +7,9 @@ By default the module directly returns JPEG images as output by the camera.
 from threading import Thread
 from typing import Optional
 
+import numpy as np
+import numpy.typing as npt
+
 try:
     import gi
 except ImportError as e:
@@ -21,7 +24,7 @@ gi.require_version("GstApp", "1.0")
 
 from gi.repository import GLib, Gst, GstApp  # noqa: E402
 
-from .audio_base import AudioBackend, AudioBase  # noqa: E402
+from .audio_base import AudioBase  # noqa: E402
 
 
 class GStreamerAudio(AudioBase):
@@ -29,13 +32,11 @@ class GStreamerAudio(AudioBase):
 
     def __init__(self, log_level: str = "INFO") -> None:
         """Initialize the GStreamer audio."""
-        super().__init__(backend=AudioBackend.GSTREAMER, log_level=log_level)
+        super().__init__(log_level=log_level)
         Gst.init(None)
         self._loop = GLib.MainLoop()
         self._thread_bus_calls = Thread(target=lambda: self._loop.run(), daemon=True)
         self._thread_bus_calls.start()
-
-        self._samplerate = 24000
 
         self._pipeline_record = Gst.Pipeline.new("audio_recorder")
         self._appsink_audio: Optional[GstApp] = None
@@ -53,20 +54,17 @@ class GStreamerAudio(AudioBase):
             GLib.PRIORITY_DEFAULT, self._on_bus_message, self._loop
         )
 
-    def _init_pipeline_record(self, pipeline):
+    def _init_pipeline_record(self, pipeline: Gst.Pipeline) -> None:
         self._appsink_audio = Gst.ElementFactory.make("appsink")
         caps = Gst.Caps.from_string(
-            f"audio/x-raw,channels=1,rate={self._samplerate},format=S16LE"
+            f"audio/x-raw,channels=2,rate={self.SAMPLE_RATE},format=F32LE"
         )
         self._appsink_audio.set_property("caps", caps)
         self._appsink_audio.set_property("drop", True)  # avoid overflow
-        self._appsink_audio.set_property("max-buffers", 200)
+        self._appsink_audio.set_property("max-buffers", 500)
 
         autoaudiosrc = Gst.ElementFactory.make("autoaudiosrc")  # use default mic
-        # caps_respeaker = Gst.Caps.from_string(
-        #    "audio/x-raw, layout=interleaved, format=S16LE, rate=16000, channels=2"
-        # )
-        # autoaudiosrc.set_property("filter-caps", caps_respeaker)
+
         queue = Gst.ElementFactory.make("queue")
         audioconvert = Gst.ElementFactory.make("audioconvert")
         audioresample = Gst.ElementFactory.make("audioresample")
@@ -87,18 +85,19 @@ class GStreamerAudio(AudioBase):
         audioconvert.link(audioresample)
         audioresample.link(self._appsink_audio)
 
-    def __del__(self):
+    def __del__(self) -> None:
         """Destructor to ensure gstreamer resources are released."""
+        super().__del__()
         self._loop.quit()
         self._bus_record.remove_watch()
         self._bus_playback.remove_watch()
 
-    def _init_pipeline_playback(self, pipeline):
+    def _init_pipeline_playback(self, pipeline: Gst.Pipeline) -> None:
         self._appsrc = Gst.ElementFactory.make("appsrc")
         self._appsrc.set_property("format", Gst.Format.TIME)
         self._appsrc.set_property("is-live", True)
         caps = Gst.Caps.from_string(
-            f"audio/x-raw,format=F32LE,channels=1,rate={self._samplerate},layout=interleaved"
+            f"audio/x-raw,format=F32LE,channels=1,rate={self.SAMPLE_RATE},layout=interleaved"
         )
         self._appsrc.set_property("caps", caps)
 
@@ -132,11 +131,11 @@ class GStreamerAudio(AudioBase):
 
         return True
 
-    def start_recording(self):
+    def start_recording(self) -> None:
         """Open the audio card using GStreamer."""
         self._pipeline_record.set_state(Gst.State.PLAYING)
 
-    def _get_sample(self, appsink):
+    def _get_sample(self, appsink: GstApp.AppSink) -> Optional[bytes]:
         sample = appsink.try_pull_sample(20_000_000)
         if sample is None:
             return None
@@ -149,37 +148,45 @@ class GStreamerAudio(AudioBase):
             data = buf.extract_dup(0, buf.get_size())
         return data
 
-    def get_audio_sample(self) -> Optional[bytes]:
+    def get_audio_sample(self) -> Optional[npt.NDArray[np.float32]]:
         """Read a sample from the audio card. Returns the sample or None if error.
 
         Returns:
-            Optional[bytes]: The captured sample in raw format, or None if error.
+            Optional[npt.NDArray[np.float32]]: The captured sample in raw format, or None if error.
 
         """
-        return self._get_sample(self._appsink_audio)
+        sample = self._get_sample(self._appsink_audio)
+        if sample is None:
+            return None
+        return np.frombuffer(sample, dtype=np.float32).reshape(-1, 2)
 
-    def get_audio_samplerate(self) -> int:
-        """Return the samplerate of the audio device."""
-        return self._samplerate
-
-    def stop_recording(self):
+    def stop_recording(self) -> None:
         """Release the camera resource."""
         self._pipeline_record.set_state(Gst.State.NULL)
 
-    def start_playing(self):
+    def start_playing(self) -> None:
         """Open the audio output using GStreamer."""
         self._pipeline_playback.set_state(Gst.State.PLAYING)
 
-    def stop_playing(self):
+    def stop_playing(self) -> None:
         """Stop playing audio and release resources."""
         self._pipeline_playback.set_state(Gst.State.NULL)
 
-    def push_audio_sample(self, data: bytes):
+    def push_audio_sample(self, data: npt.NDArray[np.float32]) -> None:
         """Push audio data to the output device."""
         if self._appsrc is not None:
-            buf = Gst.Buffer.new_wrapped(data)
+            buf = Gst.Buffer.new_wrapped(data.tobytes())
             self._appsrc.push_buffer(buf)
         else:
             self.logger.warning(
                 "AppSrc is not initialized. Call start_playing() first."
             )
+
+    def play_sound(self, sound_file: str) -> None:
+        """Play a sound file.
+
+        Args:
+            sound_file (str): Path to the sound file to play.
+
+        """
+        self.logger.warning("play_sound is not implemented for GStreamerAudio.")

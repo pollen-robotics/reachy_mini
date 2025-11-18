@@ -4,9 +4,10 @@ This module provides the PlacoKinematics class for performing inverse and forwar
 """
 
 import logging
-from typing import List, Optional
+from typing import Annotated, List, Optional
 
 import numpy as np
+import numpy.typing as npt
 import pinocchio as pin
 import placo
 
@@ -22,7 +23,7 @@ class PlacoKinematics:
         urdf_path: str,
         dt: float = 0.02,
         automatic_body_yaw: bool = False,
-        check_collision=False,
+        check_collision: bool = False,
         log_level: str = "INFO",
     ) -> None:
         """Initialize the PlacoKinematics class.
@@ -40,13 +41,15 @@ class PlacoKinematics:
         )  # 0.1 degrees tolerance for the FK reached condition
 
         if not urdf_path.endswith(".urdf"):
-            urdf_path = f"{urdf_path}/{'robot.urdf' if check_collision else 'robot_no_collision.urdf'}"
+            urdf_path = f"{urdf_path}/{'robot_simple_collision.urdf' if check_collision else 'robot_no_collision.urdf'}"
 
         self.robot = placo.RobotWrapper(
-            urdf_path, placo.Flags.ignore_collisions + placo.Flags.collision_as_visual
+            urdf_path, placo.Flags.collision_as_visual + placo.Flags.ignore_collisions 
         )
+        
+        flags = 0 if check_collision else placo.Flags.ignore_collisions + placo.Flags.collision_as_visual
         self.robot_ik = placo.RobotWrapper(
-            urdf_path, placo.Flags.ignore_collisions + placo.Flags.collision_as_visual
+            urdf_path, flags
         )
 
         self.ik_solver = placo.KinematicsSolver(self.robot_ik)
@@ -88,7 +91,7 @@ class PlacoKinematics:
         # This will allow independent control of the torso and the head yaw
         # until this constraint is reached
         yaw_constraint = self.ik_solver.add_yaw_constraint(
-            "dummy_torso_yaw", "head", np.deg2rad(65.0)
+            "dummy_torso_yaw", "head", np.deg2rad(55.0)
         )
         yaw_constraint.configure("rel_yaw", "hard")
 
@@ -97,25 +100,25 @@ class PlacoKinematics:
         # Not really constraining because the this 180 pose is almost not
         # reachable with the real robot anyway
         yaw_constraint_abs = self.ik_solver.add_yaw_constraint(
-            "pp01071_turning_bowl", "head", np.deg2rad(179.0)
+            "body_foot_3dprint", "head", np.deg2rad(179.0)
         )
         yaw_constraint_abs.configure("abs_yaw", "hard")
 
         # Add a cone constraint for the head to not exceed a certain angle
         # This is to avoid the head from looking too far up or down
         self.fk_cone = self.ik_solver.add_cone_constraint(
-            "pp01071_turning_bowl", "head", np.deg2rad(40.0)
+            "body_foot_3dprint", "head", np.deg2rad(35.0)
         )
         self.fk_cone.configure("cone", "hard")
         self.fk_yaw_constraint = self.fk_solver.add_yaw_constraint(
-            "dummy_torso_yaw", "head", np.deg2rad(65.0)
+            "dummy_torso_yaw", "head", np.deg2rad(55.0)
         )
         self.fk_yaw_constraint.configure("rel_yaw", "hard")
 
         # Add a cone constraint for the head to not exceed a certain angle
         # This is to avoid the head from looking too far up or down
         fk_cone = self.fk_solver.add_cone_constraint(
-            "pp01071_turning_bowl", "head", np.deg2rad(40.0)
+            "body_foot_3dprint", "head", np.deg2rad(35.0)
         )
         fk_cone.configure("cone", "hard")
 
@@ -140,8 +143,8 @@ class PlacoKinematics:
 
         # regularization
         self.ik_yaw_joint_task = self.ik_solver.add_joints_task()
-        self.ik_yaw_joint_task.set_joints({"all_yaw": 0})
-        if self.automatic_body_yaw:
+        self.ik_yaw_joint_task.set_joints({"yaw_body": 0})
+        if not self.automatic_body_yaw:
             self.ik_yaw_joint_task.configure("joints", "soft", 5e-5)
         else:
             self.ik_yaw_joint_task.configure("joints", "soft", 1.0)
@@ -161,13 +164,13 @@ class PlacoKinematics:
 
         # Actuated DoFs
         self.joints_names = [
-            "all_yaw",
-            "1",
-            "2",
-            "3",
-            "4",
-            "5",
-            "6",
+            "yaw_body",
+            "stewart_1",
+            "stewart_2",
+            "stewart_3",
+            "stewart_4",
+            "stewart_5",
+            "stewart_6",
         ]
 
         # Passive DoFs to eliminate with constraint jacobian
@@ -213,12 +216,12 @@ class PlacoKinematics:
         # to enable faster convergence of the IK/FK solver
         max_vel = 13.0  # rad/s
         for joint_name in self.joints_names:
-            if joint_name != "all_yaw":
+            if joint_name != "yaw_body":
                 self.robot.set_velocity_limit(joint_name, max_vel)
                 self.robot_ik.set_velocity_limit(joint_name, max_vel)
 
-        self.robot.set_joint_limits("all_yaw", -2.8, 2.8)
-        self.robot_ik.set_joint_limits("all_yaw", -2.8, 2.8)
+        self.robot.set_joint_limits("yaw_body", -2.8, 2.8)
+        self.robot_ik.set_joint_limits("yaw_body", -2.8, 2.8)
 
         # initial state
         self._inital_q = self.robot.state.q.copy()
@@ -239,6 +242,11 @@ class PlacoKinematics:
         self.robot.update_kinematics()
 
         if self.check_collision:
+            ik_col = self.ik_solver.add_avoid_self_collisions_constraint()
+            ik_col.self_collisions_margin = 0.001 # 1mm
+            ik_col.self_collisions_trigger = 0.002 # 2mm
+            ik_col.configure("avoid_self_collisions", "hard")
+        
             # setup the collision model
             self.config_collision_model()
 
@@ -256,7 +264,7 @@ class PlacoKinematics:
         robot.state.qdd = self._inital_qdd
 
     def _pose_distance(
-        self, pose1: np.ndarray, pose2: np.ndarray
+        self, pose1: npt.NDArray[np.float64], pose2: npt.NDArray[np.float64]
     ) -> tuple[float, float]:
         """Compute the orientation distance between two poses.
 
@@ -272,7 +280,7 @@ class PlacoKinematics:
         euler2 = pin.rpy.matrixToRpy(pose2[:3, :3])
         p1 = pose1[:3, 3]
         p2 = pose2[:3, 3]
-        return np.linalg.norm(euler1 - euler2), np.linalg.norm(p1 - p2)
+        return float(np.linalg.norm(euler1 - euler2)), float(np.linalg.norm(p1 - p2))
 
     def _closed_loop_constraints_valid(
         self, robot: placo.RobotWrapper, tol: float = 1e-2
@@ -312,10 +320,10 @@ class PlacoKinematics:
 
     def ik(
         self,
-        pose: np.ndarray,
+        pose: npt.NDArray[np.float64],
         body_yaw: float = 0.0,
         no_iterations: int = 2,
-    ) -> Optional[List[float]]:
+    ) -> Annotated[npt.NDArray[np.float64], (7,)] | None:
         """Compute the inverse kinematics for the head for a given pose.
 
         Args:
@@ -333,7 +341,7 @@ class PlacoKinematics:
         _pose[:3, 3][2] += self.head_z_offset  # offset the height of the head
         self.head_frame.T_world_frame = _pose
         # update the body_yaw task
-        self.ik_yaw_joint_task.set_joints({"all_yaw": body_yaw})
+        self.ik_yaw_joint_task.set_joints({"yaw_body": body_yaw})
 
         # check the starting configuration
         # if the poses are too far start from the initial configuration
@@ -341,7 +349,7 @@ class PlacoKinematics:
             _pose, self.robot_ik.get_T_world_frame("head")
         )
         # if distance too small 0.1mm and 0.1 deg and the QP has converged (almost 0 velocity)
-        _dist_by = np.abs(body_yaw - self.robot_ik.get_joint("all_yaw"))
+        _dist_by = np.abs(body_yaw - self.robot_ik.get_joint("yaw_body"))
         if (
             _dist_p < 0.1e-4
             and _dist_o < np.deg2rad(0.01)
@@ -349,7 +357,9 @@ class PlacoKinematics:
             and np.linalg.norm(self.robot_ik.state.qd) < 1e-4
         ):
             # no need to recalculate - return the current joint values
-            return self._get_joint_values(self.robot_ik)  # no need to solve IK
+            return np.array(
+                self._get_joint_values(self.robot_ik)
+            )  # no need to solve IK
         if _dist_o >= np.pi:
             # distance too big between the current and the target pose
             # start the optim from zero position
@@ -393,24 +403,15 @@ class PlacoKinematics:
                     self._logger.warning(f"IK solver failed: {e}, no solution found!")
                     return None
                 self.robot_ik.update_kinematics()
-
-        # verify that there is no collision
-        if self.check_collision and self.compute_collision():
-            self._logger.warning(
-                "IK: Collision detected, using the previous configuration..."
-            )
-            self._update_state_to_initial(self.robot_ik)  # revert to the inital state
-            self.robot_ik.update_kinematics()
-            return None
-
+                
         # Get the joint angles
-        return self._get_joint_values(self.robot_ik)
+        return np.array(self._get_joint_values(self.robot_ik))
 
     def fk(
         self,
-        joints_angles: List[float],
+        joints_angles: Annotated[npt.NDArray[np.float64], (7,)],
         no_iterations: int = 2,
-    ) -> Optional[np.ndarray]:
+    ) -> Optional[npt.NDArray[np.float64]]:
         """Compute the forward kinematics for the head given joint angles.
 
         Args:
@@ -431,7 +432,7 @@ class PlacoKinematics:
             and self.robot.state.qd.max() < 1e-4
         ):
             # no need to compute FK
-            T_world_head = self.robot.get_T_world_frame("head")
+            T_world_head: npt.NDArray[np.float64] = self.robot.get_T_world_frame("head")
             T_world_head[:3, 3][2] -= (
                 self.head_z_offset
             )  # offset the height of the head
@@ -440,18 +441,15 @@ class PlacoKinematics:
         # update the main task
         self.head_joints_task.set_joints(
             {
-                "all_yaw": joints_angles[0],
-                "1": joints_angles[1],
-                "2": joints_angles[2],
-                "3": joints_angles[3],
-                "4": joints_angles[4],
-                "5": joints_angles[5],
-                "6": joints_angles[6],
+                "yaw_body": joints_angles[0],
+                "stewart_1": joints_angles[1],
+                "stewart_2": joints_angles[2],
+                "stewart_3": joints_angles[3],
+                "stewart_4": joints_angles[4],
+                "stewart_5": joints_angles[5],
+                "stewart_6": joints_angles[6],
             }
         )
-
-        # save the initial configuration
-        q = self.robot.state.q.copy()
 
         done = True
         # do the inital ik with 2 iterations
@@ -484,41 +482,28 @@ class PlacoKinematics:
                     return None
                 self.robot.update_kinematics()
 
-        if self.check_collision and self.compute_collision():
-            self._logger.warning("FK: Collision detected, using the previous config...")
-            self._update_state_to_initial(self.robot)  # revert to the previous state
-            self.robot.state.q = q
-            self.robot.update_kinematics()
-            # return None
-
         # Get the head frame transformation
         T_world_head = self.robot.get_T_world_frame("head")
         T_world_head[:3, 3][2] -= self.head_z_offset  # offset the height of the head
 
         return T_world_head
 
-    def config_collision_model(self):
+    def config_collision_model(self) -> None:
         """Configure the collision model for the robot.
 
         Add collision pairs between the torso and the head colliders.
         """
-        geom_model = self.robot.collision_model
+        geom_model = self.robot_ik.collision_model
 
-        # name_torso_collider = "dc15_a01_case_b_dummy_10"
-        # names_head_colliders = ["pp01063_stewart_plateform_7", "pp01063_stewart_plateform_11"]
+        id_torso_colliders = list(range(len(geom_model.geometryObjects)-1))
+        id_head_collider = len(geom_model.geometryObjects)-1 
 
-        id_torso_collider = 12  # geom_model.getGeometryObjectId(name_torso_collider)
-        id_head_colliders = [
-            74,
-            78,
-        ]  # [geom_model.getGeometryObjectId(name) for name in names_head_colliders]
-
-        for i in id_head_colliders:
+        for i in id_torso_colliders:
             geom_model.addCollisionPair(
-                pin.CollisionPair(id_torso_collider, i)
+                pin.CollisionPair(id_head_collider, i)
             )  # torso with head colliders
 
-    def compute_collision(self, margin=0.005):
+    def compute_collision(self, margin: float = 0.005) -> bool:
         """Compute the collision between the robot and the environment.
 
         Args:
@@ -528,17 +513,18 @@ class PlacoKinematics:
             True if there is a collision, False otherwise.
 
         """
-        collision_data = self.robot.collision_model.createData()
-        data = self.robot.model.createData()
+        collision_data = self.robot_ik.collision_model.createData()
+        data = self.robot_ik.model.createData()
 
         # pin.computeCollisions(
         pin.computeDistances(
-            self.robot.model,
+            self.robot_ik.model,
             data,
-            self.robot.collision_model,
+            self.robot_ik.collision_model,
             collision_data,
-            self.robot.state.q,
+            self.robot_ik.state.q,
         )
+        
 
         # Iterate over all collision pairs
         for distance_result in collision_data.distanceResults:
@@ -547,7 +533,9 @@ class PlacoKinematics:
 
         return False  # Safe
 
-    def compute_jacobian(self, q: Optional[np.ndarray] = None) -> np.ndarray:
+    def compute_jacobian(
+        self, q: Optional[npt.NDArray[np.float64]] = None
+    ) -> npt.NDArray[np.float64]:
         """Compute the Jacobian of the head frame with respect to the actuated DoFs.
 
         The jacobian in local world aligned.
@@ -565,7 +553,9 @@ class PlacoKinematics:
 
         # Computing the platform Jacobian
         # dx = Jp.dq
-        Jp = self.robot.frame_jacobian("head", "local_world_aligned")
+        Jp: npt.NDArray[np.float64] = self.robot.frame_jacobian(
+            "head", "local_world_aligned"
+        )
 
         # Computing the constraints Jacobian
         # 0 = Jc.dq
@@ -592,11 +582,13 @@ class PlacoKinematics:
         #       dq_p = - (Jc_p)^(⁻1) @ Jc_a @ dq_a
         # Then we can substitute dq_p in the first equation and get
         # This new jacobian
-        J = Jp_a - Jp_p @ np.linalg.inv(Jc_p) @ Jc_a
+        J: npt.NDArray[np.float64] = Jp_a - Jp_p @ np.linalg.inv(Jc_p) @ Jc_a
 
         return J[:, self.actuated_idx_in_active]
 
-    def compute_gravity_torque(self, q: Optional[np.ndarray] = None) -> np.ndarray:
+    def compute_gravity_torque(
+        self, q: Optional[npt.NDArray[np.float64]] = None
+    ) -> npt.NDArray[np.float64]:
         """Compute the gravity torque vector for the actuated joints of the robot.
 
         This method uses the static gravity compensation torques from the robot's dictionary.
@@ -617,7 +609,7 @@ class PlacoKinematics:
         grav_torque_all_joints = np.array(
             list(
                 self.robot.static_gravity_compensation_torques_dict(
-                    "pp01071_turning_bowl"
+                    "body_foot_3dprint"
                 ).values()
             )
         )
@@ -630,15 +622,15 @@ class PlacoKinematics:
         #       wrench_eq = np.linalg.pinv(J_all_joints.T) @ torque_all_joints
         # And then we can compute the actuated torques as:
         #       torque_actuated = J_actuated.T @ wrench_eq
-        J_all_joints = self.robot.frame_jacobian("head", "local_world_aligned")[
-            :, 6:
-        ]  # all joints except the mobile base 6dofs
+        J_all_joints: npt.NDArray[np.float64] = self.robot.frame_jacobian(
+            "head", "local_world_aligned"
+        )[:, 6:]  # all joints except the mobile base 6dofs
         J_actuated = self.compute_jacobian()
         # using a single matrix G to compute the actuated torques
         G = J_actuated.T @ np.linalg.pinv(J_all_joints.T)
 
         # torques of actuated joints
-        grav_torque_actuated = G @ grav_torque_all_joints
+        grav_torque_actuated: npt.NDArray[np.float64] = G @ grav_torque_all_joints
 
         # Compute the gravity torque
         return grav_torque_actuated
@@ -651,3 +643,7 @@ class PlacoKinematics:
 
         """
         self.start_body_yaw = body_yaw
+
+    def get_joint(self, joint_name: str) -> float:
+        """Get the joint object by its name."""
+        return float(self.robot.get_joint(joint_name))
