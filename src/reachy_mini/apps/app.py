@@ -21,6 +21,8 @@ from reachy_mini.reachy_mini import ReachyMini
 class ReachyMiniApp(ABC):
     """Base class for Reachy Mini applications."""
 
+    custom_app_url: str | None = None
+
     def __init__(self) -> None:
         """Initialize the Reachy Mini app."""
         self.stop_event = threading.Event()
