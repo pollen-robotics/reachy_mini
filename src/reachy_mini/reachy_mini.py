@@ -548,6 +548,17 @@ class ReachyMini:
         """
         return self.client.get_current_head_pose()
 
+    def get_current_body_yaw(self) -> float:
+        """Get the current body yaw.
+
+        Get the current body yaw in radians.
+
+        Returns:
+            float: The current body yaw in radians.
+
+        """
+        return self.get_current_joint_positions()[0][0]
+
     def _set_joint_positions(
         self,
         head_joint_positions: list[float] | None = None,
@@ -686,7 +697,7 @@ class ReachyMini:
         play_frequency: float = 100.0,
         initial_goto_duration: float = 0.0,
         final_goto_duration: float = 0.0,
-        play_sound=False,
+        play_sound: bool = False,
     ) -> None:
         """Asynchronously play a Move.
 
@@ -699,9 +710,9 @@ class ReachyMini:
 
         """
         if final_goto_duration > 0.0:
-            initial_head_pose = self.get_present_head_pose()
+            initial_head_pose = self.get_current_head_pose()
             initial_antennas_positions = self.get_present_antenna_joint_positions()
-            initial_body_yaw = self.get_present_body_yaw()
+            initial_body_yaw = self.get_current_body_yaw()
 
         if initial_goto_duration > 0.0:
             start_head_pose, start_antennas_positions, start_body_yaw = move.evaluate(
@@ -717,7 +728,7 @@ class ReachyMini:
         sleep_period = 1.0 / play_frequency
 
         if play_sound and move.sound is not None:
-            self.media.play_sound(move.sound)
+            self.media.play_sound(str(move.sound))
 
         t0 = time.time()
         while time.time() - t0 < move.duration:

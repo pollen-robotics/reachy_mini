@@ -333,7 +333,7 @@ class Backend:
         play_frequency: float = 100.0,
         initial_goto_duration: float = 0.0,
         final_goto_duration: float = 0.0,
-        play_sound=False,
+        play_sound: bool = False,
     ) -> None:
         """Asynchronously play a Move.
 
@@ -364,7 +364,7 @@ class Backend:
         sleep_period = 1.0 / play_frequency
 
         if play_sound and move.sound is not None:
-            self.play_sound(move.sound)
+            self.play_sound(str(move.sound))
 
         t0 = time.time()
         while time.time() - t0 < move.duration:

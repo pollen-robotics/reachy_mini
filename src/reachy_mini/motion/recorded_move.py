@@ -23,7 +23,7 @@ class RecordedMove(Move):
     def __init__(self, move: Dict[str, Any], sound: Path | None = None) -> None:
         """Initialize RecordedMove."""
         self.move = move
-        self.sound = sound
+        self._sound = sound
 
         self.description: str = self.move["description"]
         self.timestamps: List[float] = self.move["time"]
@@ -34,6 +34,16 @@ class RecordedMove(Move):
         self.dt: float = (self.timestamps[-1] - self.timestamps[0]) / len(
             self.timestamps
         )
+
+    @property
+    def sound(self) -> Path | None:
+        """Sound associated with the move."""
+        return self._sound
+
+    @sound.setter
+    def sound(self, sound: Path | None) -> None:
+        """Set the sound associated with the move."""
+        self._sound = sound
 
     @property
     def duration(self) -> float:
@@ -106,7 +116,7 @@ class RecordedMoves:
         self.hf_dataset_name = hf_dataset_name
         self.local_path = snapshot_download(self.hf_dataset_name, repo_type="dataset")
         self.moves: Dict[str, Any] = {}
-        self.sounds: Dict[str, Path] = {}
+        self.sounds: Dict[str, Path | None] = {}
 
         self.process()
 
