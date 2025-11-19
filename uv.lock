@@ -938,7 +938,7 @@ wheels = [
 
 [[package]]
 name = "gst-signalling"
-version = "1.1.1"
+version = "1.1.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "numpy" },
@@ -946,9 +946,9 @@ dependencies = [
     { name = "pygobject" },
     { name = "websockets" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/7c/91/4a6d93e168a33d261c3b7e4b20aff04c8e774b8f11d284b2f0b1c7ad9d98/gst_signalling-1.1.1.tar.gz", hash = "sha256:6a343fdd520ca410634976122a310127c515cfe92ff6d2b9ba55dcb8aebf4b9a", size = 16497, upload-time = "2025-08-28T10:11:40.896Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/3f/77/0c45062d07bb6ad8f940a8a8bc3acd7968cc145be354a566e897d4a6753c/gst_signalling-1.1.2.tar.gz", hash = "sha256:45c7bb3d6801b2704cd4c743130f60d2991b39aa91b6220873ef53ffe9910b98", size = 16467, upload-time = "2025-11-18T13:36:35.935Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/5b/6c/ecb0ceeaf62c813b29b6dfdc0cbc0565437ab1787a41704edc9e196f864e/gst_signalling-1.1.1-py3-none-any.whl", hash = "sha256:cce268b70d284826b6811a37407be5a24ca65e7279b44a71a30db70cba578934", size = 19734, upload-time = "2025-08-28T10:11:39.849Z" },
+    { url = "https://files.pythonhosted.org/packages/84/7a/4ac380ce2e7e9ea1e055460648d6c562eb554cdc0dd9b6536b38934b9ef4/gst_signalling-1.1.2-py3-none-any.whl", hash = "sha256:39ebb6eac597933504334d4c1f835abd873cbd42fe31896515e3a0db368db78c", size = 19681, upload-time = "2025-11-18T13:36:34.567Z" },
 ]
 
 [[package]]
@@ -2778,7 +2778,7 @@ requires-dist = [
     { name = "cv2-enumerate-cameras", specifier = ">=1.2.1" },
     { name = "eclipse-zenoh", specifier = ">=1.4.0" },
     { name = "fastapi" },
-    { name = "gst-signalling", marker = "extra == 'gstreamer'", specifier = ">=1.1.1" },
+    { name = "gst-signalling", marker = "extra == 'gstreamer'", specifier = ">=1.1.2" },
     { name = "huggingface-hub", specifier = "==0.34.4" },
     { name = "jinja2" },
     { name = "libusb-package", specifier = ">=1.0.26.3" },
