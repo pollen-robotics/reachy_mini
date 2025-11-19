@@ -11,7 +11,7 @@ import time
 from dataclasses import dataclass
 from importlib.resources import files
 from threading import Thread
-from typing import Annotated, Optional
+from typing import Annotated, Any, Optional
 
 import cv2
 import log_throttling
@@ -90,7 +90,8 @@ class MujocoBackend(Backend):
         self.model.opt.timestep = 0.002  # s, simulation timestep, 500hz
         self.decimation = 10  # -> 50hz control loop
         self.rendering_timestep = 0.04  # s, rendering loop # 25Hz
-
+        self.streaming_timestep = 0.04  # s, streaming loop # 25Hz
+        
         self.head_site_id = mujoco.mj_name2id(
             self.model,
             mujoco.mjtObj.mjOBJ_SITE,
@@ -112,41 +113,59 @@ class MujocoBackend(Backend):
         self.joint_qpos_addr = [
             get_joint_addr_from_name(self.model, n) for n in self.joint_names
         ]
-
-    def rendering_loop(self, camera_name: str, port: Optional[int] = None, ws_uri: Optional[str] = None) -> None:
-        """Offline Rendering loop for the Mujoco simulation.
-
-        Capture the image from the virtual camera_name and send it over UDP to the port or over WebSocket to the ws_uri.
-        """
-        streamer: AsyncWebSocketFrameSender | UDPJPEGFrameSender
-        if ws_uri:
-            streamer = AsyncWebSocketFrameSender(ws_uri=ws_uri + "/mujoco_stream")
-        else:
-            if port is None:
-                raise ValueError("Port is required when using UDP")
-            streamer = UDPJPEGFrameSender(dest_port=port)
-        camera_id = mujoco.mj_name2id(
+    
+    def _get_camera_id(self, camera_name: str) -> Any:
+        """Get the id of the virtual camera."""
+        return mujoco.mj_name2id(
             self.model,
             mujoco.mjtObj.mjOBJ_CAMERA,
             camera_name,
         )
+
+    def _get_renderer(self, camera_name: str) -> mujoco.Renderer:
+        """Get the renderer for the virtual camera."""
         camera_size = CAMERA_SIZES[camera_name]
-        offscreen_renderer = mujoco.Renderer(
-            self.model, height=camera_size[1], width=camera_size[0]
-        )
+        return mujoco.Renderer(self.model, height=camera_size[1], width=camera_size[0])
+
+    def streaming_loop(self, camera_name: str, ws_uri: str) -> None:
+        """Streaming loop for the Mujoco simulation over WebSocket.
+
+        Capture the image from the virtual camera and send it over WebSocket to the ws_uri.
+        """
+        streamer = AsyncWebSocketFrameSender(ws_uri=ws_uri + "/mujoco_stream")
+        offscreen_renderer = self._get_renderer(camera_name)
+        camera_id = self._get_camera_id(camera_name)
+
         while not self.should_stop.is_set():
             start_t = time.time()
             offscreen_renderer.update_scene(self.data, camera_id)
             
-            if camera_name == CAMERA_STUDIO_CLOSE:
-                # OPTIMIZATION: Disable expensive rendering effects on the scene
-                offscreen_renderer.scene.flags[mujoco.mjtRndFlag.mjRND_SHADOW] = 0
-                offscreen_renderer.scene.flags[mujoco.mjtRndFlag.mjRND_REFLECTION] = 0
+            # OPTIMIZATION: Disable expensive rendering effects on the scene
+            offscreen_renderer.scene.flags[mujoco.mjtRndFlag.mjRND_SHADOW] = 0
+            offscreen_renderer.scene.flags[mujoco.mjtRndFlag.mjRND_REFLECTION] = 0
 
             im = offscreen_renderer.render()
 
-            if camera_name == CAMERA_STUDIO_CLOSE:
-                im = cv2.cvtColor(im, cv2.COLOR_RGB2BGR)
+            im = cv2.cvtColor(im, cv2.COLOR_RGB2BGR)
+            streamer.send_frame(im)
+
+            took = time.time() - start_t
+            time.sleep(max(0, self.streaming_timestep - took))
+
+    def rendering_loop(self, camera_name: str, port: int) -> None:
+        """Offline Rendering loop for the Mujoco simulation.
+
+        Capture the image from the virtual camera_name and send it over UDP to the port or over WebSocket to the ws_uri.
+        """
+        streamer = UDPJPEGFrameSender(dest_port=port)
+        offscreen_renderer = self._get_renderer(camera_name)
+        camera_id = self._get_camera_id(camera_name)
+        
+        while not self.should_stop.is_set():
+            start_t = time.time()
+            offscreen_renderer.update_scene(self.data, camera_id)
+            
+            im = offscreen_renderer.render()
             streamer.send_frame(im)
 
             took = time.time() - start_t
@@ -160,8 +179,8 @@ class MujocoBackend(Backend):
         """
         step = 1
         if self.websocket_uri:
-            robot_view_rendering_thread = Thread(target=self.rendering_loop, args=(CAMERA_STUDIO_CLOSE, None, self.websocket_uri), daemon=True)
-            robot_view_rendering_thread.start()
+            robot_view_streaming_thread = Thread(target=self.streaming_loop, args=(CAMERA_STUDIO_CLOSE, self.websocket_uri), daemon=True)
+            robot_view_streaming_thread.start()
 
         if not self.headless:
             viewer = mujoco.viewer.launch_passive(
@@ -198,7 +217,7 @@ class MujocoBackend(Backend):
         if not self.headless:
             viewer.sync()
 
-            rendering_thread = Thread(target=self.rendering_loop, args=(CAMERA_REACHY, 5005, None), daemon=True)
+            rendering_thread = Thread(target=self.rendering_loop, args=(CAMERA_REACHY, 5005), daemon=True)
             rendering_thread.start()
 
         # 3) now enter your normal loop
@@ -268,7 +287,7 @@ class MujocoBackend(Backend):
             viewer.close()
             rendering_thread.join()
         if self.websocket_uri:
-            robot_view_rendering_thread.join()
+            robot_view_streaming_thread.join()
 
     def get_mj_present_head_pose(self) -> Annotated[npt.NDArray[np.float64], (4, 4)]:
         """Get the current head pose from the Mujoco simulation.

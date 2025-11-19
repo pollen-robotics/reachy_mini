@@ -38,6 +38,8 @@ async def start_daemon(
                 kinematics_engine=request.app.state.args.kinematics_engine,
                 headless=request.app.state.args.headless,
                 websocket_uri=request.app.state.args.websocket_uri,
+                stream_media=request.app.state.args.stream_media,
+                use_audio=request.app.state.args.use_audio,
             )
 
     job_id = bg_job_register.run_command("daemon-start", start)
