@@ -62,24 +62,7 @@ class ZenohServer(AbstractServer):
                 )
             )
         else:
-            # Listen on all interfaces (0.0.0.0) for external connections
-            c = zenoh.Config.from_json5(
-                json.dumps(
-                    {
-                        "listen": {
-                            "endpoints": ["tcp/0.0.0.0:7447"],
-                        },
-                        "scouting": {
-                            "multicast": {
-                                "enabled": False,
-                            },
-                            "gossip": {
-                                "enabled": False,
-                            },
-                        },
-                    }
-                )
-            )
+            c = zenoh.Config()
 
         self.session = zenoh.open(c)
         self.sub = self.session.declare_subscriber(

@@ -69,7 +69,6 @@ class ReachyMini:
         automatic_body_yaw: bool = False,
         log_level: str = "INFO",
         media_backend: str = "default",
-        external_ip: Optional[str] = None,
     ) -> None:
         """Initialize the Reachy Mini robot.
 
@@ -81,7 +80,6 @@ class ReachyMini:
             automatic_body_yaw (bool): If True, the body yaw will be used to compute the IK and FK. Default is False.
             log_level (str): Logging level, defaults to "INFO".
             media_backend (str): Media backend to use, either "default" (OpenCV) or "gstreamer", defaults to "default".
-            external_ip (Optional[str]): External IP address to connect to the daemon, defaults to None.
 
         It will try to connect to the daemon, and if it fails, it will raise an exception.
 
@@ -89,7 +87,7 @@ class ReachyMini:
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(log_level)
         daemon_check(spawn_daemon, use_sim)
-        self.client = ZenohClient(localhost_only, external_ip)
+        self.client = ZenohClient(localhost_only)
         self.client.wait_for_connection(timeout=timeout)
         self.set_automatic_body_yaw(automatic_body_yaw)
         self._last_head_pose: Optional[npt.NDArray[np.float64]] = None

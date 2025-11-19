@@ -5,7 +5,6 @@ robot. It subscribes to joint positions updates and allows sending commands to t
 """
 
 import json
-import socket
 import threading
 import time
 from dataclasses import dataclass
@@ -21,78 +20,16 @@ from reachy_mini.io.abstract import AbstractClient
 from reachy_mini.io.protocol import AnyTaskRequest, TaskProgress, TaskRequest
 
 
-def _parse_host_port(address: str) -> tuple[str, int]:
-    """Parse hostname:port or IP:port into components.
-
-    Args:
-        address: Address in format "host:port", "host", "ip:port", or "ip"
-
-    Returns:
-        Tuple of (resolved_ip, port)
-
-    """
-    # Split on last colon to handle potential edge cases
-    if ':' in address:
-        parts = address.rsplit(':', 1)
-        if len(parts) == 2 and parts[1].isdigit():
-            host, port_str = parts
-            port = int(port_str)
-        else:
-            # No valid port, use default
-            host = address
-            port = 7447
-    else:
-        host = address
-        port = 7447
-
-    # Resolve hostname to IP
-    resolved_ip = _resolve_host(host)
-    return resolved_ip, port
-
-
-def _resolve_host(host: str) -> str:
-    """Resolve hostname to IP address if needed.
-
-    Args:
-        host: Hostname or IP address (without port)
-
-    Returns:
-        IP address as string
-
-    """
-    # Check if it's already an IP address
-    try:
-        socket.inet_aton(host)
-        return host  # Already an IP
-    except socket.error:
-        pass
-
-    # It's a hostname, resolve it
-    try:
-        ip = socket.gethostbyname(host)
-        print(f"Resolved {host} -> {ip}")
-        return ip
-    except socket.gaierror as e:
-        print(f"Warning: Could not resolve {host}: {e}")
-        # Return original host and let Zenoh try
-        return host
-
-
 class ZenohClient(AbstractClient):
     """Zenoh client for Reachy Mini."""
 
-    def __init__(self, localhost_only: bool = True, external_ip: Optional[str] = None):
+    def __init__(self, localhost_only: bool = True):
         """Initialize the Zenoh client.
 
         Args:
             localhost_only: If True, connect to localhost only
-            external_ip: External IP address or hostname to connect to.
-                        Supports formats: "192.168.1.10", "myhost.ngrok.io", or "myhost.ngrok.io:18951"
 
         """
-        if localhost_only and external_ip is not None:
-            raise ValueError("localhost_only and external_ip cannot be set at the same time.")
-
         if localhost_only:
             c = zenoh.Config.from_json5(
                 json.dumps(
@@ -100,22 +37,6 @@ class ZenohClient(AbstractClient):
                         "connect": {
                             "endpoints": {
                                 "peer": ["tcp/localhost:7447"],
-                                "router": [],
-                            },
-                        },
-                    }
-                )
-            )
-        elif external_ip is not None:
-            # Parse hostname:port and resolve hostname to IP if necessary
-            resolved_ip, port = _parse_host_port(external_ip)
-            print(f"Connecting to {resolved_ip}:{port}")
-            c = zenoh.Config.from_json5(
-                json.dumps(
-                    {
-                        "connect": {
-                            "endpoints": {
-                                "peer": [f"tcp/{resolved_ip}:{port}"],
                                 "router": [],
                             },
                         },
