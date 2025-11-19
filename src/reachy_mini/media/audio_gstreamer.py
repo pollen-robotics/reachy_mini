@@ -97,7 +97,7 @@ class GStreamerAudio(AudioBase):
         self._appsrc.set_property("format", Gst.Format.TIME)
         self._appsrc.set_property("is-live", True)
         caps = Gst.Caps.from_string(
-            f"audio/x-raw,format=F32LE,channels=1,rate={self.SAMPLE_RATE}"
+            f"audio/x-raw,format=F32LE,channels=1,rate={self.SAMPLE_RATE},layout=interleaved"
         )
         self._appsrc.set_property("caps", caps)
 
