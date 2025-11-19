@@ -44,6 +44,7 @@ class Args:
     wireless_version: bool = False
 
     serialport: str = "auto"
+    hardware_config_filepath: str | None = None
 
     sim: bool = False
     scene: str = "empty"
@@ -87,6 +88,7 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
                 check_collision=args.check_collision,
                 wake_up_on_start=args.wake_up_on_start,
                 localhost_only=localhost_only,
+                hardware_config_filepath=args.hardware_config_filepath,
             )
         yield
         await app.state.app_manager.close()
@@ -212,6 +214,20 @@ def main() -> None:
         type=str,
         default=default_args.serialport,
         help="Serial port for real motors (default: will try to automatically find the port).",
+    )
+    default_hw_config_path = str(
+        (
+            Path(__file__).parent.parent.parent
+            / "assets"
+            / "config"
+            / "hardware_config.yaml"
+        ).resolve()
+    )
+    parser.add_argument(
+        "--hardware-config-filepath",
+        type=str,
+        default=default_hw_config_path,
+        help=f"Path to the hardware configuration YAML file (default: {default_hw_config_path}).",
     )
     # Simulation mode
     parser.add_argument(

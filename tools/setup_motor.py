@@ -11,69 +11,11 @@ Please note that all values given in the configuration file are in the motor's r
 
 import argparse
 import time
-from dataclasses import dataclass
 from pathlib import Path
 
 from rustypot import Xl330PyController
 
-
-@dataclass
-class MotorConfig:
-    """Motor configuration."""
-
-    id: int
-    offset: int
-    angle_limit_min: int
-    angle_limit_max: int
-    return_delay_time: int
-    shutdown_error: int
-
-
-@dataclass
-class SerialConfig:
-    """Serial configuration."""
-
-    baudrate: int
-
-
-@dataclass
-class ReachyMiniConfig:
-    """Reachy Mini configuration."""
-
-    version: str
-    serial: SerialConfig
-    motors: dict[str, MotorConfig]
-
-
-def parse_yaml_config(filename: str) -> ReachyMiniConfig:
-    """Parse the YAML configuration file and return a ReachyMiniConfig."""
-    import yaml
-
-    with open(filename, "r") as file:
-        conf = yaml.load(file, Loader=yaml.FullLoader)
-
-    version = conf["version"]
-
-    motor_ids = {}
-    for motor in conf["motors"]:
-        for name, params in motor.items():
-            motor_ids[name] = MotorConfig(
-                id=params["id"],
-                offset=params["offset"],
-                angle_limit_min=params["lower_limit"],
-                angle_limit_max=params["upper_limit"],
-                return_delay_time=params["return_delay_time"],
-                shutdown_error=params["shutdown_error"],
-            )
-
-    serial = SerialConfig(baudrate=conf["serial"]["baudrate"])
-
-    return ReachyMiniConfig(
-        version=version,
-        serial=serial,
-        motors=motor_ids,
-    )
-
+from reachy_mini.utils.hardware_config.parser import MotorConfig, parse_yaml_config
 
 FACTORY_DEFAULT_ID = 1
 FACTORY_DEFAULT_BAUDRATE = 57600
@@ -354,7 +296,6 @@ def run(args):
     config = parse_yaml_config(args.config_file)
 
     if args.motor_name == "all":
-        print("aaaaaa")
         motors = list(config.motors.keys())
     else:
         motors = [args.motor_name]
@@ -405,13 +346,13 @@ if __name__ == "__main__":
         type=str,
         help="Name of the motor to configure.",
         choices=[
-            "body_yaw",
-            "stewart_platform_1",
-            "stewart_platform_2",
-            "stewart_platform_3",
-            "stewart_platform_4",
-            "stewart_platform_5",
-            "stewart_platform_6",
+            "body_rotation",
+            "stewart_1",
+            "stewart_2",
+            "stewart_3",
+            "stewart_4",
+            "stewart_5",
+            "stewart_6",
             "right_antenna",
             "left_antenna",
             "all",
