@@ -200,7 +200,11 @@ async def play_recorded_move_dataset(
         move = recorded_moves.get(move_name)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
-    return create_move_task(backend.play_move(move))
+    return create_move_task(
+        backend.play_move(
+            move, initial_goto_duration=1.0, final_goto_duration=1.0, play_sound=True
+        )
+    )
 
 
 @router.post("/stop")

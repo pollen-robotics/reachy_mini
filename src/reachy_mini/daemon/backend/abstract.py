@@ -332,15 +332,24 @@ class Backend:
         move: Move,
         play_frequency: float = 100.0,
         initial_goto_duration: float = 0.0,
+        final_goto_duration: float = 0.0,
+        play_sound=False,
     ) -> None:
         """Asynchronously play a Move.
 
         Args:
             move (Move): The Move object to be played.
             play_frequency (float): The frequency at which to evaluate the move (in Hz).
-            initial_goto_duration (float): Duration for an initial goto to the move's starting position. If 0.0, no initial goto is performed.
+            initial_goto_duration (float): Duration for the initial goto to the starting position of the move (in seconds). If 0, no initial goto is performed.
+            final_goto_duration (float): Duration for the final goto to the initial position (in seconds). If 0, no final goto is performed.
+            play_sound (bool): If True, the sound associated with the move is played.
 
         """
+        if final_goto_duration > 0.0:
+            initial_head_pose = self.get_present_head_pose()
+            initial_antennas_positions = self.get_present_antenna_joint_positions()
+            initial_body_yaw = self.get_present_body_yaw()
+
         if initial_goto_duration > 0.0:
             start_head_pose, start_antennas_positions, start_body_yaw = move.evaluate(
                 0.0
@@ -351,11 +360,15 @@ class Backend:
                 duration=initial_goto_duration,
                 body_yaw=start_body_yaw,
             )
+
         sleep_period = 1.0 / play_frequency
+
+        if play_sound and move.sound is not None:
+            self.play_sound(move.sound)
 
         t0 = time.time()
         while time.time() - t0 < move.duration:
-            t = time.time() - t0
+            t = min(time.time() - t0, move.duration - 1e-2)
 
             head, antennas, body_yaw = move.evaluate(t)
             if head is not None:
@@ -370,6 +383,14 @@ class Backend:
                 await asyncio.sleep(sleep_period - elapsed)
             else:
                 await asyncio.sleep(0.001)
+
+        if final_goto_duration > 0.0:
+            await self.goto_target(
+                head=initial_head_pose,
+                antennas=initial_antennas_positions,
+                body_yaw=initial_body_yaw,
+                duration=final_goto_duration,
+            )
 
     async def goto_target(
         self,

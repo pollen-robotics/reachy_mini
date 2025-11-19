@@ -20,9 +20,10 @@ def lerp(v0: float, v1: float, alpha: float) -> float:
 class RecordedMove(Move):
     """Represent a recorded move."""
 
-    def __init__(self, move: Dict[str, Any]) -> None:
+    def __init__(self, move: Dict[str, Any], sound: Path | None = None) -> None:
         """Initialize RecordedMove."""
         self.move = move
+        self.sound = sound
 
         self.description: str = self.move["description"]
         self.timestamps: List[float] = self.move["time"]
@@ -105,6 +106,7 @@ class RecordedMoves:
         self.hf_dataset_name = hf_dataset_name
         self.local_path = snapshot_download(self.hf_dataset_name, repo_type="dataset")
         self.moves: Dict[str, Any] = {}
+        self.sounds: Dict[str, Path] = {}
 
         self.process()
 
@@ -118,6 +120,11 @@ class RecordedMoves:
             move = json.load(open(move_path, "r"))
             self.moves[move_name] = move
 
+            if move_path.with_suffix(".wav").exists():
+                self.sounds[move_name] = move_path.with_suffix(".wav")
+            else:
+                self.sounds[move_name] = None
+
     def get(self, move_name: str) -> RecordedMove:
         """Get a recorded move by name."""
         if move_name not in self.moves:
@@ -125,7 +132,7 @@ class RecordedMoves:
                 f"Move {move_name} not found in recorded moves library {self.hf_dataset_name}"
             )
 
-        return RecordedMove(self.moves[move_name])
+        return RecordedMove(self.moves[move_name], self.sounds[move_name])
 
     def list_moves(self) -> List[str]:
         """List all moves in the loaded library."""
