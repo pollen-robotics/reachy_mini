@@ -147,6 +147,84 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
             "index.html", {"request": request, "args": args}
         )
 
+    @app.get("/mujoco")
+    async def mujoco_viewer(request: Request) -> HTMLResponse:
+        """Render the MuJoCo viewer."""
+        return templates.TemplateResponse(
+            "mujoco.html", {"request": request}
+        )
+
+    @app.get("/debug/assets")
+    async def debug_assets() -> dict:
+        """Debug endpoint to list all available WASM assets."""
+        import os
+
+        assets = {
+            "wasm_bin_dir": str(wasm_bin_dir),
+            "wasm_bin_exists": wasm_bin_dir.exists(),
+            "mjcf_dir": str(original_mjcf_dir),
+            "mjcf_exists": original_mjcf_dir.exists(),
+            "files": {}
+        }
+
+        # List files in WASM bin directory
+        if wasm_bin_dir.exists():
+            wasm_files = []
+            for root, dirs, files in os.walk(wasm_bin_dir):
+                for file in files:
+                    rel_path = os.path.relpath(os.path.join(root, file), wasm_bin_dir)
+                    wasm_files.append(rel_path)
+            assets["files"]["wasm_bin"] = sorted(wasm_files)
+
+        # List files in MJCF directory
+        if original_mjcf_dir.exists():
+            mjcf_files = []
+            for root, dirs, files in os.walk(original_mjcf_dir):
+                for file in files:
+                    rel_path = os.path.relpath(os.path.join(root, file), original_mjcf_dir)
+                    mjcf_files.append(rel_path)
+            assets["files"]["mjcf"] = sorted(mjcf_files)
+
+            # Also check specifically for asset files
+            asset_dir = original_mjcf_dir / "assets"
+            if asset_dir.exists():
+                asset_files = []
+                for root, dirs, files in os.walk(asset_dir):
+                    for file in files:
+                        rel_path = os.path.relpath(os.path.join(root, file), asset_dir)
+                        asset_files.append(rel_path)
+                assets["files"]["assets"] = sorted(asset_files)
+
+        return assets
+
+    @app.get("/debug/test-asset/{path:path}")
+    async def test_asset(path: str) -> dict:
+        """Test if a specific asset file exists and can be accessed."""
+        import os
+
+        # Try different base paths
+        test_paths = [
+            wasm_bin_dir / path,
+            original_mjcf_dir / path,
+        ]
+
+        results = {
+            "requested_path": path,
+            "tests": []
+        }
+
+        for test_path in test_paths:
+            result = {
+                "base": str(test_path.parent.parent if 'assets' in str(test_path) else test_path.parent),
+                "full_path": str(test_path),
+                "exists": test_path.exists(),
+                "is_file": test_path.is_file() if test_path.exists() else False,
+                "size": test_path.stat().st_size if test_path.exists() and test_path.is_file() else 0
+            }
+            results["tests"].append(result)
+
+        return results
+
     if args.wireless_version:
 
         @app.get("/settings")

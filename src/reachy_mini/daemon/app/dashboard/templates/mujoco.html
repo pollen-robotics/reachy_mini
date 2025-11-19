@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MuJoCo Viewer - Reachy Mini</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #1a1a1a;
+            color: #fff;
+            overflow: hidden;
+        }
+
+        .header {
+            background: #264059;
+            padding: 1rem 2rem;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header h1 {
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+
+        .header a {
+            color: #60a5fa;
+            text-decoration: none;
+            padding: 0.5rem 1rem;
+            border-radius: 0.375rem;
+            transition: background-color 0.2s;
+        }
+
+        .header a:hover {
+            background: rgba(96, 165, 250, 0.1);
+        }
+
+        .viewer-container {
+            width: 100vw;
+            height: calc(100vh - 4rem);
+            position: relative;
+        }
+
+        iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+
+        .loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            background: #264059;
+            padding: 2rem 3rem;
+            border-radius: 0.5rem;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+        }
+
+        .loading-spinner {
+            width: 48px;
+            height: 48px;
+            border: 4px solid rgba(255, 255, 255, 0.1);
+            border-top-color: #60a5fa;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1rem;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .error {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            background: #dc2626;
+            padding: 2rem 3rem;
+            border-radius: 0.5rem;
+            max-width: 500px;
+        }
+
+        .error h2 {
+            margin-bottom: 1rem;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="header">
+        <h1>MuJoCo Viewer</h1>
+        <a href="/">← Back to Dashboard</a>
+    </div>
+
+    <div class="viewer-container">
+        <div class="loading" id="loading">
+            <div class="loading-spinner"></div>
+            <div>Loading MuJoCo Renderer...</div>
+        </div>
+
+        <iframe id="mujoco-iframe" src="/wasm/dist/index.html" style="display: none;"></iframe>
+
+        <div class="error" id="error" style="display: none;">
+            <h2>Failed to load MuJoCo Viewer</h2>
+            <p id="error-message">An error occurred while loading the viewer.</p>
+        </div>
+    </div>
+
+    <script>
+        const iframe = document.getElementById('mujoco-iframe');
+        const loading = document.getElementById('loading');
+        const error = document.getElementById('error');
+        const errorMessage = document.getElementById('error-message');
+
+        // Load MuJoCo viewer
+        iframe.onload = function () {
+            console.log('MuJoCo viewer loaded successfully');
+            loading.style.display = 'none';
+            iframe.style.display = 'block';
+
+            // Try to sync robot state with the viewer
+            try {
+                setInterval(() => {
+                    if (iframe.contentWindow) {
+                        fetch('/api/state/full?with_head_joints=true&with_antenna_positions=true&with_head_pose=true')
+                            .then(response => response.json())
+                            .then(robotState => {
+                                iframe.contentWindow.postMessage({
+                                    type: 'robotState',
+                                    data: robotState
+                                }, '*');
+                            })
+                            .catch(err => {
+                                console.warn('Failed to fetch robot state:', err);
+                            });
+                    }
+                }, 100);
+            } catch (e) {
+                console.warn('Cannot sync robot state with viewer:', e);
+            }
+        };
+
+        iframe.onerror = function (e) {
+            console.error('Failed to load MuJoCo viewer:', e);
+            loading.style.display = 'none';
+            error.style.display = 'block';
+            errorMessage.textContent = 'Failed to load the MuJoCo viewer. Make sure the WASM files are built correctly.';
+        };
+
+        // Timeout fallback
+        setTimeout(() => {
+            if (loading.style.display !== 'none') {
+                console.warn('Loading timeout - viewer may not have loaded correctly');
+                loading.style.display = 'none';
+                iframe.style.display = 'block';
+            }
+        }, 10000);
+    </script>
+</body>
+
+</html>

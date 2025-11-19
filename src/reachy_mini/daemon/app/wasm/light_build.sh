@@ -116,7 +116,7 @@ pnpm run build
 print_success "React build completed"
 
 # Go back to original directory
-cd ../..
+cd ..
 
 # Set up production files
 print_step "Setting up production files..."
