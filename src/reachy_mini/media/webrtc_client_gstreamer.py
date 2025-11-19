@@ -49,7 +49,7 @@ class GstWebRTCClient(CameraBase, AudioBase):
 
         self._appsink_audio = Gst.ElementFactory.make("appsink")
         caps = Gst.Caps.from_string(
-            f"audio/x-raw,channels=2,rate={self.SAMPLE_RATE},format=F32LE"
+            f"audio/x-raw,rate={self.SAMPLE_RATE},format=F32LE,layout=interleaved"
         )
         self._appsink_audio.set_property("caps", caps)
         self._appsink_audio.set_property("drop", True)  # avoid overflow
