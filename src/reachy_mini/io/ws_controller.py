@@ -1,6 +1,7 @@
 """Async WebSocket Controller for remote control and streaming of the robot."""
 import asyncio
 import json
+import logging
 import threading
 from dataclasses import dataclass
 from typing import Any, Dict, Optional
@@ -10,6 +11,7 @@ import websockets
 
 from reachy_mini.daemon.backend.abstract import Backend
 
+logger = logging.getLogger("reachy_mini.ws_controller")
 
 @dataclass
 class Movement:
@@ -55,7 +57,9 @@ class AsyncWebSocketController:
         typ = cmd.get("type")
 
         if typ == "movement":
+            logger.debug("[Daemon] Movement command received")
             mov = cmd.get("movement", {})
+            logger.debug("[Daemon] Movement command: %s", mov)
 
             head = mov.get("head")
             if head is not None:
@@ -77,28 +81,31 @@ class AsyncWebSocketController:
                     body_yaw=mov.get("body_yaw", 0.0),
                 )
             except Exception as e:
-                print("[Daemon] Error in goto_target:", e)
+                logger.debug("[Daemon] Error in goto_target: %s", e)
+        elif typ == "ping":
+            logger.debug("[Daemon] Ping received")
+            return
         else:
-            print("[Daemon] Unknown command type:", typ)
+            logger.debug("[Daemon] Unknown command type: %s", typ)
 
     async def _run(self) -> None:
         """Run the WebSocket controller loop."""
         while not self.stop_flag:
             try:
                 async with websockets.connect(self.ws_uri) as ws:
-                    print("[WS] Connected to Space")
+                    logger.info("[WS] Connected to Space")
                     async for msg in ws:
                         try:
                             data = json.loads(msg)
                         except Exception as e:
-                            print("[WS] Bad JSON:", e, "raw:", msg)
+                            logger.debug("[WS] Bad JSON: %s raw: %s", e, msg)
                             continue
 
                         # Now this is awaited inside the same loop
                         await self.on_command(data)
 
             except Exception as e:
-                print("[WS] Connection failed:", e)
+                logger.info("[WS] Connection failed: %s", e)
                 # small backoff before reconnect
                 await asyncio.sleep(1)
 
