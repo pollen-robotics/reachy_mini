@@ -15,6 +15,7 @@ from reachy_mini.media.camera_constants import (
     CameraResolution,
     CameraSpecs,
     ReachyMiniCamSpecs,
+    ReachyMiniLiteCamSpecs,
 )
 
 try:
@@ -109,7 +110,7 @@ class GStreamerCamera(CameraBase):
     def set_resolution(self, resolution: CameraResolution) -> None:
         """Set the camera resolution."""
         super().set_resolution(resolution)
-
+        self.logger.debug(f"Setting resolution to {resolution.value}")
         # Check if pipeline is not playing before changing resolution
         if self.pipeline.get_state(0).state == Gst.State.PLAYING:
             raise RuntimeError(
@@ -182,11 +183,24 @@ class GStreamerCamera(CameraBase):
                 if cam_name in name:
                     if device_props and device_props.has_field("api.v4l2.path"):
                         device_path = device_props.get_string("api.v4l2.path")
-                        self.camera_specs = (
-                            cast(CameraSpecs, ArducamSpecs)
-                            if cam_name == "Arducam_12MP"
-                            else cast(CameraSpecs, ReachyMiniCamSpecs)
+                        device_product_id_str = device_props.get_string(
+                            "device.product.id"
                         )
+                        device_product_id = int(device_product_id_str, 0)
+
+                        if device_product_id == ArducamSpecs.pid:
+                            self.camera_specs = cast(CameraSpecs, ArducamSpecs)
+                        elif device_product_id == ReachyMiniLiteCamSpecs.pid:
+                            self.camera_specs = cast(
+                                CameraSpecs, ReachyMiniLiteCamSpecs
+                            )
+                        elif device_product_id == ReachyMiniCamSpecs.pid:
+                            self.camera_specs = cast(CameraSpecs, ReachyMiniCamSpecs)
+                        else:
+                            raise RuntimeError(
+                                f"Unknown camera product ID: {device_product_id}"
+                            )
+
                         self.resized_K = self.camera_specs.K
                         self.logger.debug(f"Found {cam_name} camera at {device_path}")
                         monitor.stop()

@@ -15,7 +15,7 @@ class CameraResolution(Enum):
 
 
 class ArduCamResolution(CameraResolution):
-    """Camera resolutions. Arducam_12MP."""
+    """Camera resolutions. Arducam_12MP of the Beta."""
 
     R2304x1296 = (2304, 1296, 30)
     R4608x2592 = (4608, 2592, 10)
@@ -25,7 +25,7 @@ class ArduCamResolution(CameraResolution):
 
 
 class RPICameraResolution(CameraResolution):
-    """Camera resolutions. Raspberry Pi Camera.
+    """Camera resolutions. Raspberry Pi Camera of the Wireless.
 
     Camera supports higher resolutions but the h264 encoder won't follow.
     """
@@ -34,6 +34,15 @@ class RPICameraResolution(CameraResolution):
     R1600x1200 = (1600, 1200, 30)
     R1536x864 = (1536, 864, 40)
     R1280x720 = (1280, 720, 60)
+
+
+class RPILiteCameraResolution(CameraResolution):
+    """Camera resolutions. Raspberry Pi Camera of the Lite."""
+
+    R1920x1080 = (1920, 1080, 60)
+    R3840x2592 = (3840, 2592, 30)
+    R3840x2160 = (3840, 2160, 30)
+    R3264x2448 = (3264, 2448, 30)
 
 
 class MujocoCameraResolution(CameraResolution):
@@ -105,16 +114,16 @@ class ReachyMiniCamSpecs(CameraSpecs):
 
 
 @dataclass
-class OlderRPiCamSpecs(CameraSpecs):
+class ReachyMiniLiteCamSpecs(CameraSpecs):
     """Older Raspberry Pi camera specifications."""
 
     available_resolutions = [
-        RPICameraResolution.R1920x1080,
-        RPICameraResolution.R1600x1200,
-        RPICameraResolution.R1536x864,
-        RPICameraResolution.R1280x720,
+        RPILiteCameraResolution.R1920x1080,
+        RPILiteCameraResolution.R3840x2592,
+        RPILiteCameraResolution.R3840x2160,
+        RPILiteCameraResolution.R3264x2448,
     ]
-    default_resolution = RPICameraResolution.R1920x1080
+    default_resolution = RPILiteCameraResolution.R1920x1080
     vid = 0x1BCF
     pid = 0x28C4
     K = np.array(

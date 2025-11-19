@@ -9,8 +9,8 @@ from cv2_enumerate_cameras import enumerate_cameras
 from reachy_mini.media.camera_constants import (
     ArducamSpecs,
     CameraSpecs,
-    OlderRPiCamSpecs,
     ReachyMiniCamSpecs,
+    ReachyMiniLiteCamSpecs,
 )
 
 
@@ -40,14 +40,14 @@ def find_camera(
         return cap, cast(CameraSpecs, ReachyMiniCamSpecs)
 
     cap = find_camera_by_vid_pid(
-        OlderRPiCamSpecs.vid, OlderRPiCamSpecs.pid, apiPreference
+        ReachyMiniLiteCamSpecs.vid, ReachyMiniLiteCamSpecs.pid, apiPreference
     )
     if cap is not None:
         fourcc = cv2.VideoWriter_fourcc("M", "J", "P", "G")  # type: ignore
         cap.set(cv2.CAP_PROP_FOURCC, fourcc)
         if no_cap:
             cap.release()
-        return cap, cast(CameraSpecs, OlderRPiCamSpecs)
+        return cap, cast(CameraSpecs, ReachyMiniLiteCamSpecs)
 
     cap = find_camera_by_vid_pid(ArducamSpecs.vid, ArducamSpecs.pid, apiPreference)
     if cap is not None:
