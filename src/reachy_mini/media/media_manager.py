@@ -23,6 +23,7 @@ class MediaBackend(Enum):
     DEFAULT = "default"
     DEFAULT_NO_VIDEO = "default_no_video"
     GSTREAMER = "gstreamer"
+    GSTREAMER_WIRELESS = "gstreamer_wireless"
     WEBRTC = "webrtc"
 
 
