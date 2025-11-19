@@ -19,7 +19,7 @@ jobs:
           pip install pydoc-markdown
       - name: Generate documentation and examples
         run: |
-          pydoc-markdown -I src -p reachy_mini --render-toc > doc.md
+          pydoc-markdown -I src -p reachy_mini --no-render-toc > doc.md
           VERSION=$(grep '^version =' pyproject.toml | head -n1 | cut -d'"' -f2)
           DATE=$(date -u +'%Y-%m-%d %H:%M UTC')
           echo -e "# Reachy Mini Documentation\n\n**Version:** $VERSION\n**Generated:** $DATE\n" > doc_reachy_mini_full.md
