@@ -139,6 +139,8 @@ class Daemon:
         self.zenoh_server.start()
         self._thread_publish_status = Thread(target=self._publish_status, daemon=True)
         self._thread_publish_status.start()
+
+        self.websocket_server: Optional[AsyncWebSocketController] = None
         if websocket_uri is not None:
             self.websocket_server = AsyncWebSocketController(ws_uri=websocket_uri + "/robot", backend=self.backend)
 
