@@ -4,6 +4,7 @@ The class is a client for the webrtc server hosted on the Reachy Mini Wireless r
 """
 
 import asyncio
+import fractions
 import logging
 import queue
 import random
@@ -16,7 +17,6 @@ import numpy.typing as npt
 from aiortc import MediaStreamTrack
 from aiortc.codecs.opus import OpusEncoder
 from aiortc.contrib.media import MediaBlackhole
-from aiortc.rtp import RtpPacket
 from av import AudioFrame, AudioResampler
 from gst_signalling.gst_abstract_role import GstSession
 from gst_signalling.gst_consumer import GstSignallingConsumer
@@ -295,6 +295,7 @@ class DefaultWebRTCClient(CameraBase, AudioBase):
         """Open the audio output using GStreamer."""
         self._rtp_seq = 0
         self._playback_pts = 0
+        self._rtp_timestamp = 0
         self._rtp_ssrc = random.getrandbits(32)
         print(f"Playback SSRC: {self._rtp_ssrc}")
         self._sock_playback.connect((self._signaling_host, 5000))
@@ -305,12 +306,15 @@ class DefaultWebRTCClient(CameraBase, AudioBase):
 
     def push_audio_sample(self, data: npt.NDArray[np.float32]) -> None:
         """Push audio data to the output device."""
+        print(data.dtype)
         data = data.reshape((1, -1))
-        data_s16 = (data * 32767).astype(np.int16)
+        data_s16 = (data * 32767.0).astype(np.int16)
+        samples = 1  # int(AudioBase.SAMPLE_RATE * AUDIO_PTIME)
         frame = AudioFrame.from_ndarray(data_s16, format="s16", layout="mono")
         frame.rate = AudioBase.SAMPLE_RATE
+        frame.time_base = fractions.Fraction(1, AudioBase.SAMPLE_RATE)
         frame.pts = self._playback_pts
-        self._playback_pts += frame.samples
+        self._playback_pts += samples
 
         print(f"Frame rate: {frame.rate}")
         encoder = OpusEncoder()
@@ -322,20 +326,27 @@ class DefaultWebRTCClient(CameraBase, AudioBase):
         print(
             f"Created AudioFrame: samples={frame.samples}, sample_rate={frame.rate}, layout={frame.layout}"
         )
-        print(f"  PTS: {frame.pts}, encoded packets: {(encoded[1])}")
-        for p in encoded[0]:
-            # print(f"Encoded packet length: {len(p)} bytes")
+        print(
+            f"  PTS: {frame.pts}, encoded packets: {(encoded[1])}, pts next: {self._playback_pts}"
+        )
+        for i, p in enumerate(encoded[0]):
+            print(f"Encoded packet length: {len(p)} bytes")
+            """
             rtp = RtpPacket(
                 payload_type=96,
                 sequence_number=self._rtp_seq,
-                timestamp=self._playback_pts,
+                timestamp=self._rtp_timestamp,
                 ssrc=self._rtp_ssrc,
+                payload=p,
             )
-            rtp.payload = p
             packet_bytes = rtp.serialize()
 
             self._sock_playback.send(packet_bytes)
             self._rtp_seq += 1
+            self._rtp_timestamp += 960 // len(encoded[0])
+            """
+
+            self._sock_playback.send(p)
 
     def play_sound(self, sound_file: str) -> None:
         """Play a sound file.
