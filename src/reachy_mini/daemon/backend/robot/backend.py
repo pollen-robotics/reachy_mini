@@ -19,6 +19,8 @@ import numpy as np
 import numpy.typing as npt
 from reachy_mini_motor_controller import ReachyMiniPyControlLoop
 
+from reachy_mini.utils.hardware_config.parser import parse_yaml_config
+
 from ..abstract import Backend, MotorControlMode
 
 
@@ -32,6 +34,7 @@ class RobotBackend(Backend):
         check_collision: bool = False,
         kinematics_engine: str = "AnalyticalKinematics",
         hardware_error_check_frequency: float = 1.0,
+        hardware_config_filepath: str | None = None,
     ):
         """Initialize the RobotBackend.
 
@@ -41,6 +44,7 @@ class RobotBackend(Backend):
             check_collision (bool): If True, enable collision checking. Default is False.
             kinematics_engine (str): Kinematics engine to use. Defaults to "AnalyticalKinematics".
             hardware_error_check_frequency (float): Frequency in seconds to check for hardware errors. Default is 1.0.
+            hardware_config_filepath (str | None): Path to the hardware configuration YAML file. Default is None.
 
         Tries to connect to the Reachy Mini motor controller and initializes the control loop.
 
@@ -61,6 +65,19 @@ class RobotBackend(Backend):
             allowed_retries=5,
             stats_pub_period=None,
         )
+
+        if hardware_config_filepath is not None:
+            name2id = self.c.get_motor_name_id()
+
+            config = parse_yaml_config(hardware_config_filepath)
+            for motor_name, motor_conf in config.motors.items():
+                if motor_conf.pid is not None:
+                    motor_id = name2id[motor_name]
+                    p, i, d = motor_conf.pid
+                    self.logger.info(
+                        f"Setting PID gains for motor '{motor_name}' (ID: {motor_id}): P={p}, I={i}, D={d}"
+                    )
+                    self.c.async_write_pid_gains(motor_id, p, i, d)
 
         self.motor_control_mode = self._infer_control_mode()
         self._torque_enabled = self.motor_control_mode != MotorControlMode.Disabled

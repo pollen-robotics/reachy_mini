@@ -112,10 +112,20 @@ const installedApps = {
         container.className = 'grid grid-cols-[auto_6rem_2rem] justify-stretch gap-x-2';
 
         const title = document.createElement('div');
-        title.className = 'installed-app-title top-1/2 ';
-        title.innerHTML = app.name;
+        const titleSpan = document.createElement('span');
+        titleSpan.className = 'installed-app-title top-1/2 ';
+        titleSpan.innerHTML = app.name;
+        title.appendChild(titleSpan);
+        if (app.extra && app.extra.custom_app_url) {
+            const settingsLink = document.createElement('a');
+            settingsLink.className = 'installed-app-settings ml-2 text-gray-500 cursor-pointer';
+            settingsLink.innerHTML = '⚙️';
+            settingsLink.href = app.extra.custom_app_url;
+            settingsLink.target = '_blank';
+            settingsLink.rel = 'noopener noreferrer';
+            title.appendChild(settingsLink);
+        }
         container.appendChild(title);
-
         const slider = document.createElement('div');
         const toggle = new ToggleSlider({
             checked: isRunning,
@@ -180,18 +190,23 @@ const installedApps = {
         const ws = new WebSocket(`ws://${location.host}/api/apps/ws/apps-manager/${jobId}`);
         ws.onmessage = (event) => {
             try {
-                const data = JSON.parse(event.data);
-                console.log(data.status);
+                if (event.data.startsWith('{') && event.data.endsWith('}')) {
 
-                if (data.status === "failed") {
-                    closeButton.classList = "text-white bg-red-700 hover:bg-red-800 focus:ring-4 focus:outline-none focus:ring-red-300 font-medium rounded-lg text-sm px-5 py-2.5 text-center dark:bg-red-600 dark:hover:bg-red-700 dark:focus:ring-red-800";
-                    closeButton.textContent = 'Close';
-                    console.error(`Uninstallation of ${appName} failed.`);
-                } else if (data.status === "done") {
-                    closeButton.classList = "text-white bg-green-700 hover:bg-green-800 focus:ring-4 focus:outline-none focus:ring-green-300 font-medium rounded-lg text-sm px-5 py-2.5 text-center dark:bg-green-600 dark:hover:bg-green-700 dark:focus:ring-green-800";
-                    closeButton.textContent = 'Uninstall done';
-                    console.log(`Uninstallation of ${appName} completed.`);
+                    const data = JSON.parse(event.data);
 
+                    if (data.status === "failed") {
+                        closeButton.classList = "text-white bg-red-700 hover:bg-red-800 focus:ring-4 focus:outline-none focus:ring-red-300 font-medium rounded-lg text-sm px-5 py-2.5 text-center dark:bg-red-600 dark:hover:bg-red-700 dark:focus:ring-red-800";
+                        closeButton.textContent = 'Close';
+                        console.error(`Uninstallation of ${appName} failed.`);
+                    } else if (data.status === "done") {
+                        closeButton.classList = "text-white bg-green-700 hover:bg-green-800 focus:ring-4 focus:outline-none focus:ring-green-300 font-medium rounded-lg text-sm px-5 py-2.5 text-center dark:bg-green-600 dark:hover:bg-green-700 dark:focus:ring-green-800";
+                        closeButton.textContent = 'Uninstall done';
+                        console.log(`Uninstallation of ${appName} completed.`);
+
+                    }
+                } else {
+                    logsDiv.innerHTML += event.data + '\n';
+                    logsDiv.scrollTop = logsDiv.scrollHeight;
                 }
             } catch {
                 logsDiv.innerHTML += event.data + '\n';

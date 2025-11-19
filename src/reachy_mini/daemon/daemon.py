@@ -11,6 +11,7 @@ import logging
 import time
 from dataclasses import asdict, dataclass
 from enum import Enum
+from importlib.metadata import PackageNotFoundError, version
 from threading import Event, Thread
 from typing import Any, Optional
 
@@ -41,6 +42,14 @@ class Daemon:
         self.wireless_version = wireless_version
 
         self.backend: "RobotBackend | MujocoBackend | None" = None
+        # Get package version
+        try:
+            package_version = version("reachy_mini")
+            self.logger.info(f"Daemon version: {package_version}")
+        except PackageNotFoundError:
+            package_version = None
+            self.logger.warning("Could not determine daemon version")
+
         self._status = DaemonStatus(
             state=DaemonState.NOT_INITIALIZED,
             wireless_version=wireless_version,
@@ -48,6 +57,7 @@ class Daemon:
             backend_status=None,
             error=None,
             wlan_ip=None,
+            version=package_version,
         )
         self._thread_event_publish_status = Event()
 
@@ -69,6 +79,7 @@ class Daemon:
         check_collision: bool = False,
         kinematics_engine: str = "AnalyticalKinematics",
         headless: bool = False,
+        hardware_config_filepath: str | None = None,
     ) -> "DaemonState":
         """Start the Reachy Mini daemon.
 
@@ -81,6 +92,7 @@ class Daemon:
             check_collision (bool): If True, enable collision checking. Defaults to False.
             kinematics_engine (str): Kinematics engine to use. Defaults to "AnalyticalKinematics".
             headless (bool): If True, run Mujoco in headless mode (no GUI). Defaults to False.
+            hardware_config_filepath (str | None): Path to the hardware configuration YAML file. Defaults to None.
 
         Returns:
             DaemonState: The current state of the daemon after attempting to start it.
@@ -115,6 +127,7 @@ class Daemon:
                 check_collision=check_collision,
                 kinematics_engine=kinematics_engine,
                 headless=headless,
+                hardware_config_filepath=hardware_config_filepath,
             )
         except Exception as e:
             self._status.state = DaemonState.ERROR
@@ -404,6 +417,7 @@ class Daemon:
         check_collision: bool,
         kinematics_engine: str,
         headless: bool,
+        hardware_config_filepath: str | None = None,
     ) -> "RobotBackend | MujocoBackend":
         if sim:
             return MujocoBackend(
@@ -439,6 +453,7 @@ class Daemon:
                 log_level=self.log_level,
                 check_collision=check_collision,
                 kinematics_engine=kinematics_engine,
+                hardware_config_filepath=hardware_config_filepath,
             )
 
 
@@ -463,3 +478,4 @@ class DaemonStatus:
     backend_status: Optional[RobotBackendStatus | MujocoBackendStatus]
     error: Optional[str] = None
     wlan_ip: Optional[str] = None
+    version: Optional[str] = None
