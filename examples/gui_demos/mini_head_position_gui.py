@@ -83,11 +83,6 @@ def main():
             length=200,
         ).grid(row=6, column=1)
 
-        # add a checkbox to enable/disable collision checking
-        collision_check_var = tk.BooleanVar(value=False)
-        tk.Checkbutton(root, text="Check Collision", variable=collision_check_var).grid(
-            row=7, column=1
-        )
 
         mini.goto_target(create_head_pose(), antennas=[0.0, 0.0], duration=1.0)
 

@@ -11,6 +11,7 @@ import logging
 import time
 from dataclasses import asdict, dataclass
 from enum import Enum
+from importlib.metadata import PackageNotFoundError, version
 from threading import Event, Thread
 from typing import Any, Optional
 
@@ -41,6 +42,14 @@ class Daemon:
         self.wireless_version = wireless_version
 
         self.backend: "RobotBackend | MujocoBackend | None" = None
+        # Get package version
+        try:
+            package_version = version("reachy_mini")
+            self.logger.info(f"Daemon version: {package_version}")
+        except PackageNotFoundError:
+            package_version = None
+            self.logger.warning("Could not determine daemon version")
+
         self._status = DaemonStatus(
             state=DaemonState.NOT_INITIALIZED,
             wireless_version=wireless_version,
@@ -48,6 +57,7 @@ class Daemon:
             backend_status=None,
             error=None,
             wlan_ip=None,
+            version=package_version,
         )
         self._thread_event_publish_status = Event()
 
@@ -463,3 +473,4 @@ class DaemonStatus:
     backend_status: Optional[RobotBackendStatus | MujocoBackendStatus]
     error: Optional[str] = None
     wlan_ip: Optional[str] = None
+    version: Optional[str] = None
