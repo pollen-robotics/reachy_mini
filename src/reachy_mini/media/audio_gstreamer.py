@@ -162,15 +162,11 @@ class GStreamerAudio(AudioBase):
 
     def get_input_audio_samplerate(self) -> int:
         """Get the input samplerate of the audio device."""
-        if self._appsink_audio is None:
-            raise RuntimeError("GStreamer record pipeline not initialized.")
-        return int(self._appsink_audio.get_property("rate"))
+        return self.SAMPLE_RATE
 
     def get_output_audio_samplerate(self) -> int:
         """Get the output samplerate of the audio device."""
-        if self._appsrc is None:
-            raise RuntimeError("Gstreamer playback pipeline not initialized.")
-        return int(self._appsrc.get_property("rate"))
+        return self.SAMPLE_RATE
 
     def stop_recording(self) -> None:
         """Release the camera resource."""
