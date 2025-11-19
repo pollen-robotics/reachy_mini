@@ -24,6 +24,7 @@ class Movement:
     roll: float = 0
     pitch: float = 0
     yaw: float = 0
+    body_yaw: float = 0
     left_antenna: Optional[float] = None
     right_antenna: Optional[float] = None
     duration: float = 1.0
