@@ -57,7 +57,7 @@ class GStreamerAudio(AudioBase):
     def _init_pipeline_record(self, pipeline: Gst.Pipeline) -> None:
         self._appsink_audio = Gst.ElementFactory.make("appsink")
         caps = Gst.Caps.from_string(
-            f"audio/x-raw,channels=2,rate={self.SAMPLE_RATE},format=F32LE"
+            f"audio/x-raw,rate={self.SAMPLE_RATE},format=F32LE,layout=interleaved"
         )
         self._appsink_audio.set_property("caps", caps)
         self._appsink_audio.set_property("drop", True)  # avoid overflow
@@ -97,7 +97,7 @@ class GStreamerAudio(AudioBase):
         self._appsrc.set_property("format", Gst.Format.TIME)
         self._appsrc.set_property("is-live", True)
         caps = Gst.Caps.from_string(
-            f"audio/x-raw,format=F32LE,channels=1,rate={self.SAMPLE_RATE},layout=interleaved"
+            f"audio/x-raw,format=F32LE,channels=1,rate={self.SAMPLE_RATE}"
         )
         self._appsrc.set_property("caps", caps)
 
@@ -159,6 +159,18 @@ class GStreamerAudio(AudioBase):
         if sample is None:
             return None
         return np.frombuffer(sample, dtype=np.float32).reshape(-1, 2)
+
+    def get_input_audio_samplerate(self) -> int:
+        """Get the input samplerate of the audio device."""
+        if self._appsink_audio is None:
+            raise RuntimeError("GStreamer record pipeline not initialized.")
+        return int(self._appsink_audio.get_property("rate"))
+
+    def get_output_audio_samplerate(self) -> int:
+        """Get the output samplerate of the audio device."""
+        if self._appsrc is None:
+            raise RuntimeError("Gstreamer playback pipeline not initialized.")
+        return int(self._appsrc.get_property("rate"))
 
     def stop_recording(self) -> None:
         """Release the camera resource."""

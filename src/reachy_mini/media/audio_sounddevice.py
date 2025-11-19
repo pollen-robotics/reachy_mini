@@ -43,7 +43,7 @@ class SoundDeviceAudio(AudioBase):
             blocksize=self.frames_per_buffer,
             device=self._input_device_id,
             callback=self._callback,
-            samplerate=self.SAMPLE_RATE,
+            samplerate=self.get_input_audio_samplerate(),
         )
         if self.stream is None:
             raise RuntimeError("Failed to open SoundDevice audio stream.")
@@ -72,6 +72,18 @@ class SoundDeviceAudio(AudioBase):
         self.logger.debug("No audio data available in buffer.")
         return None
 
+    def get_input_audio_samplerate(self) -> int:
+        """Get the input samplerate of the audio device."""
+        return int(
+            sd.query_devices(self._input_device_id, "input")["default_samplerate"]
+        )
+
+    def get_output_audio_samplerate(self) -> int:
+        """Get the output samplerate of the audio device."""
+        return int(
+            sd.query_devices(self._output_device_id, "output")["default_samplerate"]
+        )
+
     def stop_recording(self) -> None:
         """Close the audio stream and release resources."""
         if self.stream is not None:
@@ -92,7 +104,7 @@ class SoundDeviceAudio(AudioBase):
     def start_playing(self) -> None:
         """Open the audio output stream."""
         self._output_stream = sd.OutputStream(
-            samplerate=self.SAMPLE_RATE,
+            samplerate=self.get_output_audio_samplerate(),
             device=self._output_device_id,
             channels=1,
         )
@@ -115,10 +127,11 @@ class SoundDeviceAudio(AudioBase):
             raise FileNotFoundError(f"Sound file {file_path} not found.")
 
         data, samplerate_in = sf.read(file_path, dtype="float32")
+        samplerate_out = self.get_output_audio_samplerate()
 
-        if samplerate_in != self.SAMPLE_RATE:
+        if samplerate_in != samplerate_out:
             data = scipy.signal.resample(
-                data, int(len(data) * (self.SAMPLE_RATE / samplerate_in))
+                data, int(len(data) * (samplerate_out / samplerate_in))
             )
         if data.ndim > 1:  # convert to mono
             data = np.mean(data, axis=1)
@@ -152,7 +165,7 @@ class SoundDeviceAudio(AudioBase):
         event = threading.Event()
 
         self._output_stream = sd.OutputStream(
-            samplerate=self.SAMPLE_RATE,
+            samplerate=samplerate_out,
             device=self._output_device_id,
             channels=1,
             callback=callback,

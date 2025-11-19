@@ -40,6 +40,14 @@ class AudioBase(ABC):
         """Read audio data from the device. Returns the data or None if error."""
         pass
 
+    def get_input_audio_samplerate(self) -> int:
+        """Get the input samplerate of the audio device."""
+        return self.SAMPLE_RATE
+
+    def get_output_audio_samplerate(self) -> int:
+        """Get the outputsamplerate of the audio device."""
+        return self.SAMPLE_RATE
+
     @abstractmethod
     def stop_recording(self) -> None:
         """Close the audio device and release resources."""
