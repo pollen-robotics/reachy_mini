@@ -23,9 +23,10 @@ class AsyncWebSocketFrameSender:
     thread: threading.Thread
     connected: threading.Event
     stop_flag: bool
+    keep_alive_interval: float
     _last_frame: Optional[npt.NDArray[np.uint8]] # Store last frame for comparison
 
-    def __init__(self, ws_uri: str) -> None:
+    def __init__(self, ws_uri: str, keep_alive_interval: float = 2.0) -> None:
         """Initialize the WebSocket frame sender."""
         self.ws_uri = ws_uri
         self.queue = Queue()
@@ -33,6 +34,7 @@ class AsyncWebSocketFrameSender:
         self.thread = threading.Thread(target=self._run_loop, daemon=True)
         self.connected = threading.Event()
         self.stop_flag = False
+        self.keep_alive_interval = keep_alive_interval
         self._last_frame = None 
         self.thread.start()
 
@@ -51,7 +53,6 @@ class AsyncWebSocketFrameSender:
                     
                     # Track last time we sent data
                     last_activity = time.time() 
-                    keep_alive_interval = 5.0  # Seconds
 
                     while not self.stop_flag:
                         try:
@@ -65,7 +66,7 @@ class AsyncWebSocketFrameSender:
                         except Empty:
                             # No frame to send. Check if we need to ping.
                             now = time.time()
-                            if (now - last_activity) > keep_alive_interval:
+                            if (now - last_activity) > self.keep_alive_interval:
                                 try:
                                     # Send a text-based JSON ping
                                     await ws.send(json.dumps({"type": "ping"}))
