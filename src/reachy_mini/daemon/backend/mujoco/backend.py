@@ -13,6 +13,7 @@ from importlib.resources import files
 from threading import Thread
 from typing import Annotated, Optional
 
+import cv2
 import log_throttling
 import mujoco
 import mujoco.viewer
@@ -143,6 +144,9 @@ class MujocoBackend(Backend):
                 offscreen_renderer.scene.flags[mujoco.mjtRndFlag.mjRND_REFLECTION] = 0
 
             im = offscreen_renderer.render()
+
+            if camera_name == CAMERA_STUDIO_CLOSE:
+                im = cv2.cvtColor(im, cv2.COLOR_RGB2BGR)
             streamer.send_frame(im)
 
             took = time.time() - start_t

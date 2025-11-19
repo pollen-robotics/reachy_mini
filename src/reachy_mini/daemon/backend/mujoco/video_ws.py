@@ -113,7 +113,7 @@ class AsyncWebSocketFrameSender:
             jpeg_bytes: Any
             ok, jpeg_bytes = cv2.imencode(
                 ".jpg",
-                cv2.cvtColor(frame, cv2.COLOR_RGB2BGR),
+                frame,
                 [int(cv2.IMWRITE_JPEG_QUALITY), 80],
             )
             if not ok:

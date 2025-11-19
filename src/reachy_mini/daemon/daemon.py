@@ -20,7 +20,9 @@ from reachy_mini.daemon.utils import (
     find_serial_port,
     get_ip_address,
 )
+from reachy_mini.media.media_manager import MediaManager
 
+from ..daemon.backend.mujoco.video_ws import AsyncWebSocketFrameSender
 from ..io.ws_controller import AsyncWebSocketController
 from ..io.zenoh_server import ZenohServer
 from .backend.mujoco import MujocoBackend, MujocoBackendStatus
@@ -72,6 +74,7 @@ class Daemon:
         headless: bool = False,
         use_audio: bool = True,
         websocket_uri: Optional[str] = None,
+        stream_media: bool = False,
     ) -> "DaemonState":
         """Start the Reachy Mini daemon.
 
@@ -86,6 +89,7 @@ class Daemon:
             headless (bool): If True, run Mujoco in headless mode (no GUI). Defaults to False.
             websocket_uri (Optional[str]): If set, allow remote control and streaming of the robot through a WebSocket connection to the specified uri. Defaults to None.
             use_audio (bool): If True, enable audio. Defaults to True.
+            stream_media (bool): If True, stream media to the WebSocket. Defaults to False.
 
         Returns:
             DaemonState: The current state of the daemon after attempting to start it.
@@ -108,6 +112,7 @@ class Daemon:
             "use_audio": use_audio,
             "scene": scene,
             "localhost_only": localhost_only,
+            "stream_media": stream_media,
         }
 
         self.logger.info("Starting Reachy Mini daemon...")
@@ -130,14 +135,21 @@ class Daemon:
             self._status.error = str(e)
             raise e
 
-        self.server: ZenohServer | AsyncWebSocketController
-        if websocket_uri is None:
-            self.server = ZenohServer(self.backend, localhost_only=localhost_only)
-            self.server.start()
-            self._thread_publish_status = Thread(target=self._publish_status, daemon=True)
-            self._thread_publish_status.start()
-        else:
-            self.server = AsyncWebSocketController(ws_uri=websocket_uri + "/robot", backend=self.backend)
+        self.zenoh_server = ZenohServer(self.backend, localhost_only=localhost_only)
+        self.zenoh_server.start()
+        self._thread_publish_status = Thread(target=self._publish_status, daemon=True)
+        self._thread_publish_status.start()
+        if websocket_uri is not None:
+            self.websocket_server = AsyncWebSocketController(ws_uri=websocket_uri + "/robot", backend=self.backend)
+
+        if stream_media:
+            if websocket_uri is None:
+                raise ValueError("WebSocket URI is required when streaming media.")
+            self.media_manager = MediaManager()
+            self.websocket_frame_sender = AsyncWebSocketFrameSender(ws_uri=websocket_uri + "/mujoco_stream")
+            self._thread_publish_media = Thread(target=self._publish_media, daemon=True)
+            self._thread_event_publish_media = Event()
+            self._thread_publish_media.start()
 
         def backend_wrapped_run() -> None:
             assert self.backend is not None, (
@@ -150,7 +162,14 @@ class Daemon:
                 self.logger.error(f"Backend encountered an error: {e}")
                 self._status.state = DaemonState.ERROR
                 self._status.error = str(e)
-                self.server.stop()
+                self.zenoh_server.stop()
+                if self.websocket_server is not None:
+                    self.websocket_server.stop()
+                if self._thread_publish_media is not None and self._thread_publish_media.is_alive():
+                    self._thread_event_publish_media.set()
+                    self._thread_publish_media.join(timeout=2.0)
+                if self.websocket_frame_sender is not None and self.websocket_frame_sender.connected.is_set():
+                    self.websocket_frame_sender.stop_flag = True
                 self.backend = None
 
         self.backend_run_thread = Thread(target=backend_wrapped_run)
@@ -189,6 +208,14 @@ class Daemon:
         self._status.state = DaemonState.RUNNING
         return self._status.state
 
+    def _publish_media(self) -> None:
+        """Publish the media to the WebSocket."""
+        while self._thread_event_publish_media.is_set() is False:
+            frame = self.media_manager.get_frame()
+            if frame is not None:
+                self.websocket_frame_sender.send_frame(frame)
+            time.sleep(0.04)
+
     async def stop(self, goto_sleep_on_stop: bool = True) -> "DaemonState":
         """Stop the Reachy Mini daemon.
 
@@ -216,7 +243,9 @@ class Daemon:
             self._status.state = DaemonState.STOPPING
             self.backend.is_shutting_down = True
             self._thread_event_publish_status.set()
-            self.server.stop()
+            self.zenoh_server.stop()
+            if self.websocket_server is not None:
+                self.websocket_server.stop()
 
             if self._webrtc:
                 self._webrtc.stop()
@@ -271,6 +300,7 @@ class Daemon:
         headless: Optional[bool] = None,
         use_audio: Optional[bool] = None,
         websocket_uri: Optional[str] = None,
+        stream_media: Optional[bool] = None,
         localhost_only: Optional[bool] = None,
         wake_up_on_start: Optional[bool] = None,
         goto_sleep_on_stop: Optional[bool] = None,
@@ -284,6 +314,7 @@ class Daemon:
             headless (bool): If True, run Mujoco in headless mode (no GUI). Defaults to None (uses the previous value).
             use_audio (bool): If True, enable audio. Defaults to None (uses the previous value).
             websocket_uri (Optional[str]): If set, allow remote control and streaming of the robot through a WebSocket connection to the specified uri. Defaults to None (uses the previous value).
+            stream_media (bool): If True, stream media to the WebSocket. Defaults to None (uses the previous value).
             localhost_only (bool): If True, restrict the server to localhost only clients. Defaults to None (uses the previous value).
             wake_up_on_start (bool): If True, wake up Reachy Mini on start. Defaults to None (don't wake up).
             goto_sleep_on_stop (bool): If True, put Reachy Mini to sleep on stop. Defaults to None (don't go to sleep).
@@ -319,6 +350,9 @@ class Daemon:
                 "websocket_uri": websocket_uri
                 if websocket_uri is not None
                 else self._start_params["websocket_uri"],
+                "stream_media": stream_media
+                if stream_media is not None
+                else self._start_params["stream_media"],
                 "localhost_only": localhost_only
                 if localhost_only is not None
                 else self._start_params["localhost_only"],
@@ -356,7 +390,7 @@ class Daemon:
             json_str = json.dumps(
                 asdict(self.status(), dict_factory=convert_enum_to_dict)
             )
-            self.server.pub_status.put(json_str)  # type: ignore
+            self.zenoh_server.pub_status.put(json_str)
             time.sleep(1)
 
     async def run4ever(
@@ -372,6 +406,7 @@ class Daemon:
         headless: bool = False,
         use_audio: bool = True,
         websocket_uri: Optional[str] = None,
+        stream_media: bool = False,
     ) -> None:
         """Run the Reachy Mini daemon indefinitely.
 
@@ -389,6 +424,7 @@ class Daemon:
             headless (bool): If True, run Mujoco in headless mode (no GUI). Defaults to False.
             use_audio (bool): If True, enable audio. Defaults to True.
             websocket_uri (Optional[str]): If set, allow remote control and streaming of the robot through a WebSocket connection to the specified uri. Defaults to None.
+            stream_media (bool): If True, stream media to the WebSocket. Defaults to False.
 
         """
         await self.start(
@@ -402,6 +438,7 @@ class Daemon:
             headless=headless,
             websocket_uri=websocket_uri,
             use_audio=use_audio,
+            stream_media=stream_media,
         )
 
         if self._status.state == DaemonState.RUNNING:

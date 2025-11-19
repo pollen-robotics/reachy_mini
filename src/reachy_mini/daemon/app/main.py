@@ -41,6 +41,7 @@ class Args:
     scene: str = "empty"
     headless: bool = False
     websocket_uri: str | None = None
+    stream_media: bool = False
     use_audio: bool = True
 
     kinematics_engine: str = "AnalyticalKinematics"
@@ -77,6 +78,7 @@ def create_app(args: Args) -> FastAPI:
                 scene=args.scene,
                 headless=args.headless,
                 websocket_uri=args.websocket_uri,
+                stream_media=args.stream_media,
                 use_audio=args.use_audio,
                 kinematics_engine=args.kinematics_engine,
                 check_collision=args.check_collision,
@@ -195,6 +197,12 @@ def main() -> None:
         type=str,
         default=default_args.websocket_uri,
         help="WebSocket URI for remote control and streaming of the robot (default: None). Example: ws://localhost:8000",
+    )
+    parser.add_argument(
+        "--stream-media",
+        action="store_true",
+        default=default_args.stream_media,
+        help="Stream media to the WebSocket. Requires a WebSocket URI to be set. (default: False).",
     )
     parser.add_argument(
         "--deactivate-audio",
