@@ -132,7 +132,7 @@ class MujocoBackend(Backend):
 
         Capture the image from the virtual camera and send it over WebSocket to the ws_uri.
         """
-        streamer = AsyncWebSocketFrameSender(ws_uri=ws_uri + "/mujoco_stream")
+        streamer = AsyncWebSocketFrameSender(ws_uri=ws_uri + "/video_stream")
         offscreen_renderer = self._get_renderer(camera_name)
         camera_id = self._get_camera_id(camera_name)
 

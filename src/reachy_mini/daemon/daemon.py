@@ -148,7 +148,7 @@ class Daemon:
             if websocket_uri is None:
                 raise ValueError("WebSocket URI is required when streaming media.")
             self.media_manager = MediaManager()
-            self.websocket_frame_sender = AsyncWebSocketFrameSender(ws_uri=websocket_uri + "/mujoco_stream")
+            self.websocket_frame_sender = AsyncWebSocketFrameSender(ws_uri=websocket_uri + "/video_stream")
             self._thread_publish_media = Thread(target=self._publish_media, daemon=True)
             self._thread_event_publish_media = Event()
             self._thread_publish_media.start()
