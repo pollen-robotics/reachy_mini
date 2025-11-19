@@ -63,13 +63,17 @@ class MediaManager:
             case _:
                 raise NotImplementedError(f"Media backend {backend} not implemented.")
 
-    def __del__(self) -> None:
-        """Destructor to ensure resources are released."""
+    def close(self) -> None:
+        """Close the media manager and release resources."""
         if self.camera is not None:
             self.camera.close()
         if self.audio is not None:
             self.audio.stop_recording()
             self.audio.stop_playing()
+
+    def __del__(self) -> None:
+        """Destructor to ensure resources are released."""
+        self.close()
 
     def _init_camera(
         self,

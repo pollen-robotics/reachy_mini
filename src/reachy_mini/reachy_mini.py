@@ -119,6 +119,7 @@ class ReachyMini:
 
     def __exit__(self, exc_type, exc_value, traceback) -> None:  # type: ignore [no-untyped-def]
         """Context manager exit point for Reachy Mini."""
+        self.media_manager.close()
         self.client.disconnect()
 
     @property
