@@ -30,8 +30,8 @@ class SoundDeviceAudio(AudioBase):
         self.stream = None
         self._output_stream = None
         self._buffer: List[npt.NDArray[np.float32]] = []
-        self._output_device_id = self.get_output_device_id("respeaker")
-        self._input_device_id = self.get_input_device_id("respeaker")
+        self._output_device_id = self.get_output_device_id("reachy mini audio")
+        self._input_device_id = self.get_input_device_id("reachy mini audio")
 
     def start_recording(self) -> None:
         """Open the audio input stream, using ReSpeaker card if available."""

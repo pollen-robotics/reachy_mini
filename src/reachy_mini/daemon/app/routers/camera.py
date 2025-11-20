@@ -57,6 +57,55 @@ def generate_mjpeg_stream(daemon: Daemon):
         time.sleep(0.05)
 
 
+@router.get("/frame")
+async def get_frame(daemon: Daemon = Depends(get_daemon)) -> Response:
+    """Get single camera frame as JPEG.
+
+    Returns:
+        Response: JPEG image bytes for single frame capture
+
+    Raises:
+        HTTPException: If daemon not running or camera not available
+    """
+    # Check if media manager is available
+    if daemon.media_manager is None:
+        return Response(
+            content=b"",
+            media_type="image/jpeg",
+            status_code=503,
+        )
+
+    # Get latest frame from camera
+    frame = daemon.media_manager.get_frame()
+
+    if frame is None:
+        return Response(
+            content=b"",
+            media_type="image/jpeg",
+            status_code=503,
+        )
+
+    # Convert frame to JPEG bytes if needed
+    if isinstance(frame, np.ndarray):
+        # OpenCV backend returns numpy array, need to encode to JPEG
+        success, jpeg_bytes = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
+        if not success:
+            return Response(
+                content=b"",
+                media_type="image/jpeg",
+                status_code=500,
+            )
+        frame_bytes = jpeg_bytes.tobytes()
+    else:
+        # GStreamer backend returns JPEG bytes directly
+        frame_bytes = frame
+
+    return Response(
+        content=frame_bytes,
+        media_type="image/jpeg",
+    )
+
+
 @router.get("/stream.mjpg")
 async def stream_camera(daemon: Daemon = Depends(get_daemon)) -> StreamingResponse:
     """Stream real camera video as MJPEG.

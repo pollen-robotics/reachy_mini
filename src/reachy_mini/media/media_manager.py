@@ -73,6 +73,17 @@ class MediaManager:
             self.audio.stop_recording()
             self.audio.stop_playing()
 
+    def close(self) -> None:
+        """Explicitly close and clean up all media resources."""
+        if self.camera is not None:
+            self.camera.close()
+            self.camera = None
+        if self.audio is not None:
+            self.audio.stop_recording()
+            self.audio.stop_playing()
+            self.audio = None
+        self.logger.info("MediaManager closed successfully.")
+
     def _init_camera(
         self,
         use_sim: bool,
