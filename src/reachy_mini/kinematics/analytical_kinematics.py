@@ -102,6 +102,7 @@ class AnalyticalKinematics:
                 T_world_platform = np.array(
                     self.kin.forward_kinematics(_joint_angles, body_yaw)
                 )
+            assert T_world_platform is not None
             euler = R.from_matrix(T_world_platform[:3, :3]).as_euler(
                 "xyz", degrees=True
             )
