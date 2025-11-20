@@ -24,7 +24,7 @@ dependencies = [
     "huggingface-hub==0.34.4",
     "sounddevice==0.5.1",
     "soundfile==0.13.1",    
-    "reachy-mini-rust-kinematics>=1.0.2",
+    "reachy-mini-rust-kinematics>=1.0.1",
     "asgiref",
     "aiohttp",
     "log-throttling==0.0.3",
