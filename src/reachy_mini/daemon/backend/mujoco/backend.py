@@ -182,8 +182,8 @@ class MujocoBackend(Backend):
         if not self.headless:
             viewer.sync()
 
-            rendering_thread = Thread(target=self.rendering_loop, daemon=True)
-            rendering_thread.start()
+        rendering_thread = Thread(target=self.rendering_loop, daemon=True)
+        rendering_thread.start()
 
         # Update the internal states of the IK and FK to the current configuration
         # This is important to avoid jumps when starting the robot (beore wake-up)
