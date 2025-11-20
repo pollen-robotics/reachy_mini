@@ -2748,7 +2748,7 @@ wheels = [
 
 [[package]]
 name = "reachy-mini"
-version = "1.1.0rc4"
+version = "1.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "aiohttp" },
