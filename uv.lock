@@ -2849,7 +2849,7 @@ requires-dist = [
     { name = "pytest-asyncio", marker = "extra == 'dev'" },
     { name = "pyusb", specifier = ">=1.2.1" },
     { name = "reachy-mini-motor-controller", specifier = ">=1.4.1" },
-    { name = "reachy-mini-rust-kinematics", specifier = ">=1.0.2" },
+    { name = "reachy-mini-rust-kinematics", specifier = "==1.0.1" },
     { name = "rerun-sdk", marker = "extra == 'rerun'", specifier = ">=0.23.4" },
     { name = "ruff", marker = "extra == 'dev'", specifier = "==0.12.0" },
     { name = "rustypot", marker = "extra == 'dev'", specifier = ">=1.4.0" },
