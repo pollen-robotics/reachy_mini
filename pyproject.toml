@@ -67,7 +67,7 @@ wireless-version = [
 
 [project.scripts]
 reachy-mini-daemon = "reachy_mini.daemon.app.main:main"
-reachy-mini-make-app = "reachy_mini.apps.app:main"
+reachy-mini-apps-helper = "reachy_mini.apps.app:main"
 
 [tool.setuptools]
 package-dir = { "" = "src" }
