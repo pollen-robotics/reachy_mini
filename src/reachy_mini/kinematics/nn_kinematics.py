@@ -19,7 +19,7 @@ class NNKinematics:
         self.fk_infer = OnnxInfer(self.fk_model_path)
         self.ik_infer = OnnxInfer(self.ik_model_path)
 
-        self.start_body_yaw = 0.0  # No used, kept for compatibility
+        self.automatic_body_yaw = False  # No used, kept for canaompatibility
 
     def ik(
         self,
@@ -75,6 +75,16 @@ class OnnxInfer:
         outputs = self.ort_session.run(None, {"input": [input]})
         res: npt.NDArray[np.float64] = outputs[0][0]
         return res
+    
+    
+    def set_automatic_body_yaw(self, automatic_body_yaw: bool) -> None:
+        """Set the automatic body yaw.
+
+        Args:
+            automatic_body_yaw (bool): Whether to enable automatic body yaw.
+
+        """
+        self.automatic_body_yaw = automatic_body_yaw
 
 
 if __name__ == "__main__":

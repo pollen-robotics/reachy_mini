@@ -593,7 +593,7 @@ class Backend:
             body_yaw (float): The yaw angle of the body.
 
         """
-        self.head_kinematics.start_body_yaw = body_yaw
+        self.head_kinematics.set_automatic_body_yaw(automatic_body_yaw=body_yaw)
 
     def get_urdf(self) -> str:
         """Get the URDF representation of the robot."""
