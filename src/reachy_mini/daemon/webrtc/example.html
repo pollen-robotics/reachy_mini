@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reachy Mini WebRTC Control</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .card {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 { color: #333; }
+        h2 { color: #666; margin-top: 0; }
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 15px;
+        }
+        .status.connected { background: #d4edda; color: #155724; }
+        .status.disconnected { background: #f8d7da; color: #721c24; }
+        input, button {
+            padding: 10px 15px;
+            margin: 5px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        button:hover { background: #0056b3; }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+        button.danger { background: #dc3545; }
+        button.danger:hover { background: #c82333; }
+        button.success { background: #28a745; }
+        button.success:hover { background: #218838; }
+        pre {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+            max-height: 300px;
+        }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        @media (max-width: 600px) { .grid { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body>
+    <h1>Reachy Mini WebRTC Control</h1>
+
+    <div class="card">
+        <h2>Connection</h2>
+        <div id="status" class="status disconnected">Disconnected</div>
+        <input type="text" id="daemon-url" value="http://localhost:8000" placeholder="Daemon URL">
+        <button id="connect-btn" onclick="connect()">Connect</button>
+        <button id="disconnect-btn" onclick="disconnect()" disabled class="danger">Disconnect</button>
+    </div>
+
+    <div class="card">
+        <h2>Robot State</h2>
+        <button onclick="getState()" disabled class="state-btn">Get State</button>
+        <button onclick="ping()" disabled class="state-btn">Ping</button>
+        <pre id="state-output">-</pre>
+    </div>
+
+    <div class="card">
+        <h2>Motor Control</h2>
+        <div class="grid">
+            <button onclick="setMotorMode('enabled')" disabled class="state-btn success">Enable Motors</button>
+            <button onclick="setMotorMode('disabled')" disabled class="state-btn danger">Disable Motors</button>
+            <button onclick="setMotorMode('gravity_compensation')" disabled class="state-btn">Gravity Comp</button>
+            <button onclick="getMotorStatus()" disabled class="state-btn">Get Status</button>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Movement</h2>
+        <div class="grid">
+            <button onclick="wakeUp()" disabled class="state-btn success">Wake Up</button>
+            <button onclick="gotoSleep()" disabled class="state-btn">Go to Sleep</button>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Log</h2>
+        <pre id="log"></pre>
+    </div>
+
+    <script src="reachy_mini_client.js"></script>
+    <script>
+        let reachy = null;
+
+        function log(message) {
+            const logEl = document.getElementById('log');
+            const time = new Date().toLocaleTimeString();
+            logEl.textContent = `[${time}] ${message}\n` + logEl.textContent;
+        }
+
+        function updateStatus(state) {
+            const statusEl = document.getElementById('status');
+            const buttons = document.querySelectorAll('.state-btn');
+
+            if (state === ReachyMini.ConnectionState.CONNECTED) {
+                statusEl.textContent = `Connected (peer: ${reachy.peerId})`;
+                statusEl.className = 'status connected';
+                document.getElementById('connect-btn').disabled = true;
+                document.getElementById('disconnect-btn').disabled = false;
+                buttons.forEach(b => b.disabled = false);
+            } else {
+                statusEl.textContent = state.charAt(0).toUpperCase() + state.slice(1);
+                statusEl.className = 'status disconnected';
+                document.getElementById('connect-btn').disabled = false;
+                document.getElementById('disconnect-btn').disabled = true;
+                buttons.forEach(b => b.disabled = true);
+            }
+        }
+
+        async function connect() {
+            const url = document.getElementById('daemon-url').value;
+            reachy = new ReachyMini(url, { debug: true });
+
+            // Set up event handlers
+            reachy.on('connectionChange', updateStatus);
+            reachy.on('error', (err) => log(`Error: ${err.message}`));
+
+            try {
+                log('Connecting...');
+                await reachy.connect();
+                log('Connected successfully');
+            } catch (error) {
+                log(`Connection failed: ${error.message}`);
+                console.error(error);
+            }
+        }
+
+        async function disconnect() {
+            if (reachy) {
+                await reachy.disconnect();
+                log('Disconnected');
+            }
+        }
+
+        async function ping() {
+            try {
+                const result = await reachy.ping();
+                log('Ping: ' + JSON.stringify(result));
+            } catch (error) {
+                log('Ping failed: ' + error.message);
+            }
+        }
+
+        async function getState() {
+            try {
+                const state = await reachy.state.getFull();
+                document.getElementById('state-output').textContent =
+                    JSON.stringify(state, null, 2);
+                log('Got state');
+            } catch (error) {
+                log('Get state failed: ' + error.message);
+            }
+        }
+
+        async function setMotorMode(mode) {
+            try {
+                await reachy.motors.setMode(mode);
+                log(`Motor mode set to: ${mode}`);
+            } catch (error) {
+                log(`Set motor mode failed: ${error.message}`);
+            }
+        }
+
+        async function getMotorStatus() {
+            try {
+                const status = await reachy.motors.getStatus();
+                log('Motor status: ' + JSON.stringify(status));
+            } catch (error) {
+                log('Get motor status failed: ' + error.message);
+            }
+        }
+
+        async function wakeUp() {
+            try {
+                const result = await reachy.move.wakeUp();
+                log('Wake up: ' + JSON.stringify(result));
+            } catch (error) {
+                log('Wake up failed: ' + error.message);
+            }
+        }
+
+        async function gotoSleep() {
+            try {
+                const result = await reachy.move.gotoSleep();
+                log('Go to sleep: ' + JSON.stringify(result));
+            } catch (error) {
+                log('Go to sleep failed: ' + error.message);
+            }
+        }
+    </script>
+</body>
+</html>

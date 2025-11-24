@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reachy Mini Joint Control</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .card {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 { color: #333; margin-bottom: 10px; }
+        h2 { color: #666; margin-top: 0; margin-bottom: 15px; }
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 15px;
+        }
+        .status.connected { background: #d4edda; color: #155724; }
+        .status.disconnected { background: #f8d7da; color: #721c24; }
+        input[type="text"], button {
+            padding: 10px 15px;
+            margin: 5px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        button:hover { background: #0056b3; }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+        button.danger { background: #dc3545; }
+        button.success { background: #28a745; }
+
+        .joint-control {
+            display: flex;
+            align-items: center;
+            margin: 10px 0;
+            padding: 8px;
+            background: #f8f9fa;
+            border-radius: 4px;
+        }
+        .joint-label {
+            width: 120px;
+            font-weight: 500;
+            font-size: 14px;
+        }
+        .joint-slider {
+            flex: 1;
+            margin: 0 15px;
+        }
+        .joint-value {
+            width: 80px;
+            text-align: right;
+            font-family: monospace;
+            font-size: 14px;
+        }
+        .joint-current {
+            width: 80px;
+            text-align: right;
+            font-family: monospace;
+            font-size: 12px;
+            color: #666;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            height: 6px;
+            -webkit-appearance: none;
+            background: #ddd;
+            border-radius: 3px;
+            outline: none;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 18px;
+            height: 18px;
+            background: #007bff;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+
+        .controls-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        .refresh-indicator {
+            font-size: 12px;
+            color: #666;
+            margin-left: 10px;
+        }
+        .refresh-indicator.active {
+            color: #28a745;
+        }
+
+        pre {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            max-height: 150px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>Reachy Mini Joint Control</h1>
+
+    <div class="card">
+        <h2>Connection</h2>
+        <div id="status" class="status disconnected">Disconnected</div>
+        <input type="text" id="daemon-url" value="http://localhost:8000" placeholder="Daemon URL">
+        <button id="connect-btn" onclick="connect()">Connect</button>
+        <button id="disconnect-btn" onclick="disconnect()" disabled class="danger">Disconnect</button>
+        <span id="refresh-indicator" class="refresh-indicator"></span>
+    </div>
+
+    <div class="card">
+        <h2>Motor Control</h2>
+        <div class="controls-row">
+            <button onclick="enableMotors()" disabled class="state-btn success">Enable</button>
+            <button onclick="disableMotors()" disabled class="state-btn danger">Disable</button>
+            <button onclick="gravityComp()" disabled class="state-btn">Gravity Comp</button>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Head Pose (Cartesian)</h2>
+        <div id="head-pose-container"></div>
+    </div>
+
+    <div class="card">
+        <h2>Body & Antennas (Joint)</h2>
+        <div id="body-antenna-container"></div>
+    </div>
+
+    <div class="card">
+        <h2>Log</h2>
+        <pre id="log"></pre>
+    </div>
+
+    <script src="reachy_mini_client.js"></script>
+    <script>
+        let reachy = null;
+        let refreshInterval = null;
+        let isUpdating = false;
+
+        // Head pose configuration (Cartesian)
+        const headPoseControls = [
+            { name: 'X (forward)', key: 'x', min: -0.1, max: 0.1 },
+            { name: 'Y (left)', key: 'y', min: -0.1, max: 0.1 },
+            { name: 'Z (up)', key: 'z', min: -0.1, max: 0.1 },
+            { name: 'Roll', key: 'roll', min: -0.5, max: 0.5 },
+            { name: 'Pitch', key: 'pitch', min: -0.8, max: 0.8 },
+            { name: 'Yaw', key: 'yaw', min: -1.0, max: 1.0 },
+        ];
+
+        // Body and antenna configuration (Joint)
+        const bodyAntennaControls = [
+            { name: 'Body Yaw', key: 'body_yaw', min: -1.5, max: 1.5 },
+            { name: 'Left Antenna', key: 'antenna_left', min: -1.0, max: 1.0 },
+            { name: 'Right Antenna', key: 'antenna_right', min: -1.0, max: 1.0 },
+        ];
+
+        // Current pose values
+        let currentHeadPose = { x: 0, y: 0, z: 0, roll: 0, pitch: 0, yaw: 0 };
+        let currentBodyYaw = 0;
+        let currentAntennas = [0, 0];
+
+        function log(message) {
+            const logEl = document.getElementById('log');
+            const time = new Date().toLocaleTimeString();
+            logEl.textContent = `[${time}] ${message}\n` + logEl.textContent;
+            if (logEl.textContent.length > 5000) {
+                logEl.textContent = logEl.textContent.substring(0, 5000);
+            }
+        }
+
+        function createSlider(control, type) {
+            const container = document.createElement('div');
+            container.className = 'joint-control';
+            container.innerHTML = `
+                <span class="joint-label">${control.name}</span>
+                <input type="range" class="joint-slider"
+                    id="${type}-${control.key}"
+                    min="${control.min}" max="${control.max}" step="0.001" value="0"
+                    oninput="onSliderChange('${type}', '${control.key}', this.value)">
+                <span class="joint-value" id="${type}-${control.key}-value">0.000</span>
+                <span class="joint-current" id="${type}-${control.key}-current">(0.000)</span>
+            `;
+            return container;
+        }
+
+        function initSliders() {
+            const headContainer = document.getElementById('head-pose-container');
+            const bodyAntennaContainer = document.getElementById('body-antenna-container');
+
+            headPoseControls.forEach(control => {
+                headContainer.appendChild(createSlider(control, 'pose'));
+            });
+
+            bodyAntennaControls.forEach(control => {
+                bodyAntennaContainer.appendChild(createSlider(control, 'joint'));
+            });
+        }
+
+        function updateSliderDisplay(type, key, value) {
+            const valueEl = document.getElementById(`${type}-${key}-value`);
+            if (valueEl) {
+                valueEl.textContent = parseFloat(value).toFixed(3);
+            }
+        }
+
+        function updateCurrentDisplay(type, key, value) {
+            const currentEl = document.getElementById(`${type}-${key}-current`);
+            if (currentEl) {
+                currentEl.textContent = `(${parseFloat(value).toFixed(3)})`;
+            }
+        }
+
+        async function onSliderChange(type, key, value) {
+            if (!reachy || !reachy.isConnected) return;
+
+            updateSliderDisplay(type, key, value);
+            const val = parseFloat(value);
+
+            // Update local state based on type
+            if (type === 'pose') {
+                currentHeadPose[key] = val;
+            } else if (key === 'body_yaw') {
+                currentBodyYaw = val;
+            } else if (key === 'antenna_left') {
+                currentAntennas[0] = val;
+            } else if (key === 'antenna_right') {
+                currentAntennas[1] = val;
+            }
+
+            // Send to robot immediately using pose API
+            try {
+                await reachy.send('pose/set_target', {
+                    head_pose: currentHeadPose,
+                    body_yaw: currentBodyYaw,
+                    antennas: currentAntennas
+                });
+            } catch (error) {
+                log(`Error: ${error.message}`);
+            }
+        }
+
+        async function refreshState() {
+            if (!reachy || !reachy.isConnected || isUpdating) return;
+
+            try {
+                const pose = await reachy.send('pose/get');
+
+                // Update head pose displays
+                Object.keys(pose.head_pose).forEach(key => {
+                    updateCurrentDisplay('pose', key, pose.head_pose[key]);
+                });
+
+                // Update body and antenna displays
+                updateCurrentDisplay('joint', 'body_yaw', pose.body_yaw);
+                updateCurrentDisplay('joint', 'antenna_left', pose.antennas[0]);
+                updateCurrentDisplay('joint', 'antenna_right', pose.antennas[1]);
+
+                // Flash indicator
+                const indicator = document.getElementById('refresh-indicator');
+                indicator.textContent = '● 5Hz';
+                indicator.className = 'refresh-indicator active';
+                setTimeout(() => {
+                    indicator.className = 'refresh-indicator';
+                }, 100);
+
+            } catch (error) {
+                // Silently ignore refresh errors
+            }
+        }
+
+        function updateStatus(state) {
+            const statusEl = document.getElementById('status');
+            const buttons = document.querySelectorAll('.state-btn');
+
+            if (state === ReachyMini.ConnectionState.CONNECTED) {
+                statusEl.textContent = `Connected (peer: ${reachy.peerId})`;
+                statusEl.className = 'status connected';
+                document.getElementById('connect-btn').disabled = true;
+                document.getElementById('disconnect-btn').disabled = false;
+                buttons.forEach(b => b.disabled = false);
+
+                // Start refresh interval
+                refreshInterval = setInterval(refreshState, 200); // 5Hz
+                refreshState(); // Initial refresh
+            } else {
+                statusEl.textContent = state.charAt(0).toUpperCase() + state.slice(1);
+                statusEl.className = 'status disconnected';
+                document.getElementById('connect-btn').disabled = false;
+                document.getElementById('disconnect-btn').disabled = true;
+                buttons.forEach(b => b.disabled = true);
+
+                // Stop refresh interval
+                if (refreshInterval) {
+                    clearInterval(refreshInterval);
+                    refreshInterval = null;
+                }
+                document.getElementById('refresh-indicator').textContent = '';
+            }
+        }
+
+        async function connect() {
+            const url = document.getElementById('daemon-url').value;
+            reachy = new ReachyMini(url, { debug: false });
+
+            reachy.on('connectionChange', updateStatus);
+            reachy.on('error', (err) => log(`Error: ${err.message}`));
+
+            try {
+                log('Connecting...');
+                await reachy.connect();
+                log('Connected successfully');
+
+                // Get initial pose state
+                const pose = await reachy.send('pose/get');
+                currentHeadPose = pose.head_pose;
+                currentBodyYaw = pose.body_yaw;
+                currentAntennas = pose.antennas;
+
+                // Update head pose sliders
+                Object.keys(pose.head_pose).forEach(key => {
+                    const slider = document.getElementById(`pose-${key}`);
+                    if (slider) {
+                        slider.value = pose.head_pose[key];
+                        updateSliderDisplay('pose', key, pose.head_pose[key]);
+                        updateCurrentDisplay('pose', key, pose.head_pose[key]);
+                    }
+                });
+
+                // Update body yaw slider
+                const bodyYawSlider = document.getElementById('joint-body_yaw');
+                if (bodyYawSlider) {
+                    bodyYawSlider.value = pose.body_yaw;
+                    updateSliderDisplay('joint', 'body_yaw', pose.body_yaw);
+                    updateCurrentDisplay('joint', 'body_yaw', pose.body_yaw);
+                }
+
+                // Update antenna sliders
+                const leftAntennaSlider = document.getElementById('joint-antenna_left');
+                if (leftAntennaSlider) {
+                    leftAntennaSlider.value = pose.antennas[0];
+                    updateSliderDisplay('joint', 'antenna_left', pose.antennas[0]);
+                    updateCurrentDisplay('joint', 'antenna_left', pose.antennas[0]);
+                }
+                const rightAntennaSlider = document.getElementById('joint-antenna_right');
+                if (rightAntennaSlider) {
+                    rightAntennaSlider.value = pose.antennas[1];
+                    updateSliderDisplay('joint', 'antenna_right', pose.antennas[1]);
+                    updateCurrentDisplay('joint', 'antenna_right', pose.antennas[1]);
+                }
+
+            } catch (error) {
+                log(`Connection failed: ${error.message}`);
+                console.error(error);
+            }
+        }
+
+        async function disconnect() {
+            if (reachy) {
+                await reachy.disconnect();
+                log('Disconnected');
+            }
+        }
+
+        async function enableMotors() {
+            try {
+                await reachy.motors.enable();
+                log('Motors enabled');
+            } catch (error) {
+                log(`Error: ${error.message}`);
+            }
+        }
+
+        async function disableMotors() {
+            try {
+                await reachy.motors.disable();
+                log('Motors disabled');
+            } catch (error) {
+                log(`Error: ${error.message}`);
+            }
+        }
+
+        async function gravityComp() {
+            try {
+                await reachy.motors.gravityCompensation();
+                log('Gravity compensation enabled');
+            } catch (error) {
+                log(`Error: ${error.message}`);
+            }
+        }
+
+        // Initialize sliders on page load
+        initSliders();
+    </script>
+</body>
+</html>

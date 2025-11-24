@@ -31,6 +31,7 @@ from reachy_mini.daemon.app.routers import (
     move,
     state,
     volume,
+    webrtc,
 )
 from reachy_mini.daemon.daemon import Daemon
 
@@ -112,6 +113,7 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
     router.include_router(move.router)
     router.include_router(state.router)
     router.include_router(volume.router)
+    router.include_router(webrtc.router)
 
     if args.wireless_version:
         from .routers import update, wifi_config
