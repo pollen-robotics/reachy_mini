@@ -51,6 +51,7 @@ class GStreamerCamera(CameraBase):
 
         # TODO How do we hande video device not found ?
         cam_path = self.get_video_device()
+
         if self.camera_specs is None:
             raise RuntimeError("Camera specs not set")
         self._resolution = self.camera_specs.default_resolution
@@ -65,10 +66,26 @@ class GStreamerCamera(CameraBase):
         self._appsink_video.set_property("max-buffers", 1)  # keep last image only
         self.pipeline.add(self._appsink_video)
 
-        # cam_path = self.get_video_device()
         if cam_path == "":
             self.logger.warning("Recording pipeline set without camera.")
             self.pipeline.remove(self._appsink_video)
+        elif cam_path == "imx708":
+            camsrc = Gst.ElementFactory.make("libcamerasrc")
+            self.pipeline.add(camsrc)
+            caps = Gst.Caps.from_string(
+                f"video/x-raw,width={self.resolution[0]},height={self.resolution[1]},framerate={self.framerate}/1,format=YUY2,colorimetry=bt709,interlace-mode=progressive"
+            )
+            capsfilter = Gst.ElementFactory.make("capsfilter")
+            capsfilter.set_property("caps", caps)
+            self.pipeline.add(capsfilter)
+            queue = Gst.ElementFactory.make("queue")
+            self.pipeline.add(queue)
+            videoconvert = Gst.ElementFactory.make("videoconvert")
+            self.pipeline.add(videoconvert)
+            camsrc.link(capsfilter)
+            capsfilter.link(queue)
+            queue.link(videoconvert)
+            videoconvert.link(self._appsink_video)
         else:
             camsrc = Gst.ElementFactory.make("v4l2src")
             camsrc.set_property("device", cam_path)
@@ -171,7 +188,7 @@ class GStreamerCamera(CameraBase):
         monitor.add_filter("Video/Source")
         monitor.start()
 
-        cam_names = ["Reachy", "Arducam_12MP"]
+        cam_names = ["Reachy", "Arducam_12MP", "imx708"]
 
         devices = monitor.get_devices()
         for cam_name in cam_names:
@@ -191,6 +208,12 @@ class GStreamerCamera(CameraBase):
                         self.logger.debug(f"Found {cam_name} camera at {device_path}")
                         monitor.stop()
                         return str(device_path)
+                    elif cam_name == "imx708":
+                        self.camera_specs = cast(CameraSpecs, ReachyMiniCamSpecs)
+                        self.resized_K = self.camera_specs.K
+                        self.logger.debug(f"Found {cam_name} camera")
+                        monitor.stop()
+                        return cam_name
         monitor.stop()
         self.logger.warning("No camera found.")
         return ""
