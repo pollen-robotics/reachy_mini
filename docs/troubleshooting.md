@@ -4,7 +4,7 @@
 ## No Microphone Input
 *For beta only*
 
-There is a known issue where the microphone may not initialize correctly. Please update to [firmware 2.1.3](../src/reachy_mini/assets/firmware/reachymini_ua_io16_lin_v2.1.3.bin). You may need to run the [update script](../src/reachy_mini/assets/firmware/update.sh).
+There is a known issue where the microphone may not initialize correctly. Please update to [firmware 2.1.3](../src/reachy_mini/assets/firmware/reachymini_ua_io16_lin_v2.1.3.bin). You may need to run the [update script](../src/reachy_mini/assets/firmware/update.sh). Linux users may require to run the command as *sudo*.
 
 Afterwards, run [examples/debug/sound_record.py](../examples/debug/sound_record.py) to check that everything is working properly.
 
@@ -16,9 +16,7 @@ If the problem persists, check the connection of the flex cables ([see slides 45
 
 The microphone array requires firmware version 2.1.0 or higher to support this feature. The firmware files are located in `src/reachy_mini/assets/firmware/*.bin`.
 
-Refer to the [Seeed documentation](https://wiki.seeedstudio.com/respeaker_xvf3800_introduction/#update-firmware) for the upgrade process.
-
-A [helper script](../src/reachy_mini/assets/firmware/update.sh) is available for Unix users.
+A [helper script](../src/reachy_mini/assets/firmware/update.sh) is available for Unix users (see above). Refer to the [Seeed documentation](https://wiki.seeedstudio.com/respeaker_xvf3800_introduction/#update-firmware) for more details on the upgrade process. 
 
 
 ## Volume Is Too Low

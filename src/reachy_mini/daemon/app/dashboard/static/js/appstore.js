@@ -43,7 +43,7 @@ const hfAppsStore = {
         }
 
         const hfApps = appsData.filter(app => app.source_kind === 'hf_space');
-        const installedApps = appsData.filter(app => app.source_kind === 'installed');
+        const installedApps = await fetch('/api/apps/list-available/installed').then(res => res.json());
 
         hfApps.forEach(app => {
             const li = document.createElement('li');
@@ -118,19 +118,26 @@ const hfAppsStore = {
         const ws = new WebSocket(`ws://${location.host}/api/apps/ws/apps-manager/${jobId}`);
         ws.onmessage = (event) => {
             try {
-                const data = JSON.parse(event.data);
-                console.log(data.status);
+                if (event.data.startsWith('{') && event.data.endsWith('}')) {
+                    const data = JSON.parse(event.data);
 
-                if (data.status === "failed") {
-                    closeButton.classList = "text-white bg-red-700 hover:bg-red-800 focus:ring-4 focus:outline-none focus:ring-red-300 font-medium rounded-lg text-sm px-5 py-2.5 text-center dark:bg-red-600 dark:hover:bg-red-700 dark:focus:ring-red-800";
-                    closeButton.textContent = 'Close';
-                    console.error(`Installation of ${appName} failed.`);
-                } else if (data.status === "done") {
-                    closeButton.classList = "text-white bg-green-700 hover:bg-green-800 focus:ring-4 focus:outline-none focus:ring-green-300 font-medium rounded-lg text-sm px-5 py-2.5 text-center dark:bg-green-600 dark:hover:bg-green-700 dark:focus:ring-green-800";
-                    closeButton.textContent = 'Install done';
-                    console.log(`Installation of ${appName} completed.`);
+                    if (data.status === "failed") {
+                        closeButton.classList = "text-white bg-red-700 hover:bg-red-800 focus:ring-4 focus:outline-none focus:ring-red-300 font-medium rounded-lg text-sm px-5 py-2.5 text-center dark:bg-red-600 dark:hover:bg-red-700 dark:focus:ring-red-800";
+                        closeButton.textContent = 'Close';
+                        console.error(`Installation of ${appName} failed.`);
+                    } else if (data.status === "done") {
+                        closeButton.classList = "text-white bg-green-700 hover:bg-green-800 focus:ring-4 focus:outline-none focus:ring-green-300 font-medium rounded-lg text-sm px-5 py-2.5 text-center dark:bg-green-600 dark:hover:bg-green-700 dark:focus:ring-green-800";
+                        closeButton.textContent = 'Install done';
+                        console.log(`Installation of ${appName} completed.`);
 
+                    }
                 }
+                else {
+                    logsDiv.innerHTML += event.data + '\n';
+                    logsDiv.scrollTop = logsDiv.scrollHeight;
+                }
+
+
             } catch {
                 logsDiv.innerHTML += event.data + '\n';
                 logsDiv.scrollTop = logsDiv.scrollHeight;

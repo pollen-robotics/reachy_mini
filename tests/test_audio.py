@@ -29,7 +29,7 @@ def test_record_audio_and_file_exists() -> None:
     time.sleep(duration)
     media.stop_recording()
     audio = media.get_audio_sample()
-    samplerate = media.get_audio_samplerate()
+    samplerate = media.get_input_audio_samplerate()
     if audio is not None:
         sf.write(tmpfile.name, audio, samplerate)
     assert os.path.exists(tmpfile.name)
@@ -86,4 +86,5 @@ def test_no_media() -> None:
 
     assert media.get_frame() is None
     assert media.get_audio_sample() is None
-    assert media.get_audio_samplerate() == -1
+    assert media.get_input_audio_samplerate() == -1
+    assert media.get_output_audio_samplerate() == -1

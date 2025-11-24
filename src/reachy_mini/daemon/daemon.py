@@ -111,6 +111,10 @@ class Daemon:
             self.logger.warning("Daemon is already running.")
             return self._status.state
 
+        self.logger.info(
+            f"Daemon start parameters: sim={sim}, serialport={serialport}, scene={scene}, localhost_only={localhost_only}, wake_up_on_start={wake_up_on_start}, check_collision={check_collision}, kinematics_engine={kinematics_engine}, headless={headless}, hardware_config_filepath={hardware_config_filepath}"
+        )
+
         self._status.simulation_enabled = sim
 
         if not localhost_only:

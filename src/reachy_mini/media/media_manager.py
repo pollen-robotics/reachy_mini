@@ -64,13 +64,17 @@ class MediaManager:
             case _:
                 raise NotImplementedError(f"Media backend {backend} not implemented.")
 
-    def __del__(self) -> None:
-        """Destructor to ensure resources are released."""
+    def close(self) -> None:
+        """Close the media manager and release resources."""
         if self.camera is not None:
             self.camera.close()
         if self.audio is not None:
             self.audio.stop_recording()
             self.audio.stop_playing()
+
+    def __del__(self) -> None:
+        """Destructor to ensure resources are released."""
+        self.close()
 
     def _init_camera(
         self,
@@ -184,17 +188,19 @@ class MediaManager:
             return None
         return self.audio.get_audio_sample()
 
-    def get_audio_samplerate(self) -> int:
-        """Get the samplerate of the audio device.
-
-        Returns:
-            int: The samplerate of the audio device.
-
-        """
+    def get_input_audio_samplerate(self) -> int:
+        """Get the input samplerate of the audio device."""
         if self.audio is None:
             self.logger.warning("Audio system is not initialized.")
             return -1
-        return self.audio.SAMPLE_RATE
+        return self.audio.get_input_audio_samplerate()
+
+    def get_output_audio_samplerate(self) -> int:
+        """Get the output samplerate of the audio device."""
+        if self.audio is None:
+            self.logger.warning("Audio system is not initialized.")
+            return -1
+        return self.audio.get_output_audio_samplerate()
 
     def stop_recording(self) -> None:
         """Stop recording audio."""
