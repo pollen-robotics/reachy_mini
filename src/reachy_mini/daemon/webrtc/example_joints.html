@@ -122,9 +122,12 @@
 
     <div class="card">
         <h2>Connection</h2>
-        <div id="status" class="status disconnected">Disconnected</div>
-        <input type="text" id="daemon-url" value="http://localhost:8000" placeholder="Daemon URL">
-        <button id="connect-btn" onclick="connect()">Connect</button>
+        <div id="status" class="status disconnected">Ready to pair</div>
+        <p style="font-size: 14px; color: #666; margin: 10px 0;">
+            Use manual pairing: Open the daemon dashboard at <code>http://localhost:8000</code>,
+            copy the offer from "Connect Live App" section, paste it below, then copy the answer back to the dashboard.
+        </p>
+        <div id="pairing-container"></div>
         <button id="disconnect-btn" onclick="disconnect()" disabled class="danger">Disconnect</button>
         <span id="refresh-indicator" class="refresh-indicator"></span>
     </div>
@@ -297,7 +300,6 @@
             if (state === ReachyMini.ConnectionState.CONNECTED) {
                 statusEl.textContent = `Connected (peer: ${reachy.peerId})`;
                 statusEl.className = 'status connected';
-                document.getElementById('connect-btn').disabled = true;
                 document.getElementById('disconnect-btn').disabled = false;
                 buttons.forEach(b => b.disabled = false);
 
@@ -307,7 +309,6 @@
             } else {
                 statusEl.textContent = state.charAt(0).toUpperCase() + state.slice(1);
                 statusEl.className = 'status disconnected';
-                document.getElementById('connect-btn').disabled = false;
                 document.getElementById('disconnect-btn').disabled = true;
                 buttons.forEach(b => b.disabled = true);
 
@@ -320,18 +321,8 @@
             }
         }
 
-        async function connect() {
-            const url = document.getElementById('daemon-url').value;
-            reachy = new ReachyMini(url, { debug: false });
-
-            reachy.on('connectionChange', updateStatus);
-            reachy.on('error', (err) => log(`Error: ${err.message}`));
-
+        async function initializeSlidersFromState() {
             try {
-                log('Connecting...');
-                await reachy.connect();
-                log('Connected successfully');
-
                 // Get initial pose state
                 const pose = await reachy.send('pose/get');
                 currentHeadPose = pose.head_pose;
@@ -369,16 +360,38 @@
                     updateSliderDisplay('joint', 'antenna_right', pose.antennas[1]);
                     updateCurrentDisplay('joint', 'antenna_right', pose.antennas[1]);
                 }
-
             } catch (error) {
-                log(`Connection failed: ${error.message}`);
-                console.error(error);
+                log(`Error initializing sliders: ${error.message}`);
             }
         }
 
+        // Initialize pairing UI on page load
+        let pairingUI = null;
+        window.addEventListener('DOMContentLoaded', () => {
+            log('Ready to pair - waiting for daemon offer...');
+
+            pairingUI = ReachyMini.showPairingUI({
+                containerId: 'pairing-container',
+                onConnected: async (client) => {
+                    reachy = client;
+
+                    // Set up event handlers
+                    reachy.on('connectionChange', updateStatus);
+                    reachy.on('error', (err) => log(`Error: ${err.message}`));
+
+                    log('Connected successfully via manual pairing!');
+                    updateStatus(ReachyMini.ConnectionState.CONNECTED);
+
+                    // Initialize sliders with current robot state
+                    await initializeSlidersFromState();
+                }
+            });
+        });
+
         async function disconnect() {
-            if (reachy) {
-                await reachy.disconnect();
+            if (pairingUI) {
+                await pairingUI.disconnect();
+                reachy = null;
                 log('Disconnected');
             }
         }

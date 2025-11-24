@@ -4,7 +4,7 @@
  * A complete client library for controlling Reachy Mini robot via WebRTC.
  * Designed to work from HTTPS frontends connecting to HTTP robot daemon.
  *
- * @version 0.3.0
+ * @version 0.4.0
  * @license MIT
  *
  * @example
@@ -42,7 +42,7 @@
     /**
      * Library version - UPDATE THIS ON EVERY CHANGE
      */
-    const VERSION = '0.3.0';
+    const VERSION = '0.4.0';
 
     /**
      * Connection states
@@ -623,6 +623,169 @@
             return this.setMode(MotorMode.GRAVITY_COMPENSATION);
         }
     }
+
+    /**
+     * Show manual pairing UI for connecting to daemon without HTTP signaling
+     * @param {Object} options - Configuration options
+     * @param {string} [options.containerId='reachy-pairing'] - Container element ID
+     * @param {Function} [options.onConnected] - Callback when connected
+     * @returns {Object} Pairing controller with connect/disconnect methods
+     */
+    ReachyMini.showPairingUI = function(options = {}) {
+        const containerId = options.containerId || 'reachy-pairing';
+        const onConnected = options.onConnected || (() => {});
+
+        // Create or get container
+        let container = document.getElementById(containerId);
+        if (!container) {
+            container = document.createElement('div');
+            container.id = containerId;
+            document.body.appendChild(container);
+        }
+
+        // Inject pairing UI
+        container.innerHTML = `
+            <div style="max-width: 600px; margin: 20px auto; padding: 20px; border: 1px solid #ddd; border-radius: 8px; background: white; font-family: sans-serif;">
+                <h2 style="margin-top: 0;">Connect to Reachy Mini</h2>
+                <p style="color: #666; font-size: 14px;">Copy the offer from the daemon dashboard and paste it below.</p>
+
+                <div style="margin: 15px 0;">
+                    <label style="display: block; font-weight: 500; margin-bottom: 5px;">1. Paste Daemon Offer:</label>
+                    <textarea id="reachy-offer-input" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-family: monospace; font-size: 12px;" rows="4" placeholder="Paste the base64 offer here..."></textarea>
+                    <button id="reachy-generate-answer" style="margin-top: 8px; padding: 8px 16px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer;">Generate Answer</button>
+                </div>
+
+                <div id="reachy-answer-section" style="margin: 15px 0; display: none;">
+                    <label style="display: block; font-weight: 500; margin-bottom: 5px;">2. Copy Answer to Daemon:</label>
+                    <textarea id="reachy-answer-output" readonly style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-family: monospace; font-size: 12px; background: #f8f9fa;" rows="4"></textarea>
+                    <button id="reachy-copy-answer" style="margin-top: 8px; padding: 8px 16px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">Copy Answer</button>
+                </div>
+
+                <div id="reachy-status" style="margin-top: 15px; padding: 10px; border-radius: 4px; font-size: 14px; display: none;"></div>
+            </div>
+        `;
+
+        let pc = null;
+        let dc = null;
+        let reachyClient = null;
+
+        // Setup handlers
+        document.getElementById('reachy-generate-answer').onclick = async () => {
+            const offerBase64 = document.getElementById('reachy-offer-input').value.trim();
+
+            if (!offerBase64) {
+                showStatus('Please paste the daemon offer first.', 'error');
+                return;
+            }
+
+            try {
+                showStatus('Processing offer...', 'info');
+
+                // Decode offer
+                const offerStr = atob(offerBase64);
+                const offer = JSON.parse(offerStr);
+
+                // Create peer connection
+                pc = new RTCPeerConnection({
+                    iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+                });
+
+                // Setup data channel handler
+                pc.ondatachannel = (event) => {
+                    dc = event.channel;
+
+                    dc.onopen = () => {
+                        showStatus('Connected to Reachy Mini!', 'success');
+
+                        // Create ReachyMini client instance
+                        reachyClient = new ReachyMini('');
+                        reachyClient._pc = pc;
+                        reachyClient._dataChannel = dc;
+                        reachyClient._peerId = 'manual-pairing';
+                        reachyClient._state = ConnectionState.CONNECTED;
+                        reachyClient._setupDataChannel();
+
+                        onConnected(reachyClient);
+                    };
+
+                    dc.onclose = () => {
+                        showStatus('Connection closed.', 'info');
+                    };
+
+                    dc.onerror = (error) => {
+                        showStatus('Connection error: ' + error, 'error');
+                    };
+                };
+
+                // Set remote description
+                await pc.setRemoteDescription(offer);
+
+                // Create answer
+                const answer = await pc.createAnswer();
+                await pc.setLocalDescription(answer);
+
+                // Wait for ICE gathering
+                await new Promise((resolve) => {
+                    if (pc.iceGatheringState === 'complete') {
+                        resolve();
+                    } else {
+                        pc.addEventListener('icegatheringstatechange', () => {
+                            if (pc.iceGatheringState === 'complete') {
+                                resolve();
+                            }
+                        });
+                    }
+                });
+
+                // Encode answer
+                const answerStr = JSON.stringify({
+                    sdp: pc.localDescription.sdp,
+                    type: pc.localDescription.type
+                });
+                const answerBase64 = btoa(answerStr);
+
+                // Show answer
+                document.getElementById('reachy-answer-output').value = answerBase64;
+                document.getElementById('reachy-answer-section').style.display = 'block';
+                showStatus('Answer generated! Copy it back to the daemon.', 'success');
+
+            } catch (error) {
+                showStatus('Error: ' + error.message, 'error');
+                console.error(error);
+            }
+        };
+
+        document.getElementById('reachy-copy-answer').onclick = () => {
+            const answer = document.getElementById('reachy-answer-output').value;
+            navigator.clipboard.writeText(answer).then(() => {
+                showStatus('Answer copied! Paste it in the daemon dashboard.', 'success');
+            }).catch(() => {
+                document.getElementById('reachy-answer-output').select();
+            });
+        };
+
+        function showStatus(message, type) {
+            const statusEl = document.getElementById('reachy-status');
+            statusEl.style.display = 'block';
+
+            const colors = {
+                success: '#d4edda; color: #155724; border: 1px solid #c3e6cb',
+                error: '#f8d7da; color: #721c24; border: 1px solid #f5c6cb',
+                info: '#d1ecf1; color: #0c5460; border: 1px solid #bee5eb'
+            };
+
+            statusEl.style.background = colors[type] || colors.info;
+            statusEl.textContent = message;
+        }
+
+        return {
+            getClient: () => reachyClient,
+            disconnect: () => {
+                if (dc) dc.close();
+                if (pc) pc.close();
+            }
+        };
+    };
 
     // Export constants alongside the main class
     ReachyMini.VERSION = VERSION;

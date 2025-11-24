@@ -97,6 +97,28 @@ class WebRTCPeer:
                 if channel.readyState == "open":
                     channel.send(error_response)
 
+    async def create_offer(self) -> dict[str, str]:
+        """Create an SDP offer (for manual pairing flow).
+
+        In manual pairing, the server creates the offer and the client creates the answer.
+        This is the reverse of the typical WebRTC flow.
+
+        Returns:
+            Dictionary with "sdp" and "type" keys for the offer
+        """
+        # Create a data channel (required before creating offer)
+        self._data_channel = self._pc.createDataChannel("reachy-control")
+        self._setup_data_channel(self._data_channel)
+
+        # Create offer
+        offer = await self._pc.createOffer()
+        await self._pc.setLocalDescription(offer)
+
+        return {
+            "sdp": self._pc.localDescription.sdp,
+            "type": self._pc.localDescription.type
+        }
+
     async def handle_offer(self, sdp: str, sdp_type: str = "offer") -> dict[str, str]:
         """Handle an incoming SDP offer and return an answer.
 
@@ -117,6 +139,16 @@ class WebRTCPeer:
             "sdp": self._pc.localDescription.sdp,
             "type": self._pc.localDescription.type
         }
+
+    async def handle_answer(self, sdp: str, sdp_type: str = "answer") -> None:
+        """Handle an incoming SDP answer (for manual pairing flow).
+
+        Args:
+            sdp: The SDP answer string
+            sdp_type: The SDP type (usually "answer")
+        """
+        answer = RTCSessionDescription(sdp=sdp, type=sdp_type)
+        await self._pc.setRemoteDescription(answer)
 
     async def add_ice_candidate(self, candidate: dict[str, Any]) -> None:
         """Add an ICE candidate from the remote peer.

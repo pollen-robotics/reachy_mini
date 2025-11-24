@@ -1,0 +1,53 @@
+<div class="card">
+    <h2 class="text-xl font-bold mb-4">Connect Live App (WebRTC)</h2>
+    <p class="text-sm text-gray-600 mb-4">
+        Connect a web application securely via WebRTC. Copy the offer to your app, then paste the answer back here.
+    </p>
+
+    <div class="space-y-4">
+        <!-- Daemon Offer -->
+        <div>
+            <label class="block text-sm font-medium mb-2">1. Daemon Offer (copy this to your app)</label>
+            <div class="flex gap-2">
+                <textarea
+                    id="daemon-offer"
+                    readonly
+                    class="flex-1 p-2 border rounded font-mono text-xs bg-gray-50"
+                    rows="4"
+                    placeholder="Generating offer..."></textarea>
+                <button
+                    onclick="copyDaemonOffer()"
+                    class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">
+                    Copy
+                </button>
+            </div>
+        </div>
+
+        <!-- App Answer -->
+        <div>
+            <label class="block text-sm font-medium mb-2">2. App Answer (paste the answer from your app)</label>
+            <div class="flex gap-2">
+                <textarea
+                    id="app-answer"
+                    class="flex-1 p-2 border rounded font-mono text-xs"
+                    rows="4"
+                    placeholder="Paste app answer here..."></textarea>
+                <button
+                    onclick="connectWithAnswer()"
+                    class="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600">
+                    Connect
+                </button>
+            </div>
+        </div>
+
+        <!-- Status -->
+        <div id="webrtc-status" class="text-sm">
+            <span class="text-gray-500">Status: Waiting for connection...</span>
+        </div>
+
+        <!-- Connected peers -->
+        <div id="webrtc-peers" class="text-xs text-gray-500 hidden">
+            Connected peers: <span id="peer-count">0</span>
+        </div>
+    </div>
+</div>

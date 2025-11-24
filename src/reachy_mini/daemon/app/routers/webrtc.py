@@ -22,7 +22,7 @@ router = APIRouter(prefix="/webrtc", tags=["webrtc"])
 class SDPOffer(BaseModel):
     """SDP offer from client."""
 
-    sdp: str
+    sdp: str | None = None
     type: str = "offer"
     peer_id: str | None = None
 
@@ -82,39 +82,78 @@ def get_connection_manager(request: Request) -> ConnectionManager:
     return _connection_manager
 
 
-@router.post("/offer", response_model=SDPAnswer)
-async def handle_offer(offer: SDPOffer, request: Request) -> SDPAnswer:
-    """Handle WebRTC offer and return answer.
+@router.post("/offer")
+async def handle_offer(offer: SDPOffer, request: Request) -> dict[str, Any]:
+    """Handle WebRTC offer or create one.
 
-    This is the main signaling endpoint. The client sends an SDP offer,
-    and receives an SDP answer to complete the WebRTC handshake.
+    Two modes:
+    1. If sdp is provided: traditional flow - client sends offer, server returns answer
+    2. If sdp is None: manual pairing flow - server creates offer for client
 
     Args:
-        offer: The SDP offer from the client
+        offer: The SDP offer from the client (or empty for manual pairing)
         request: FastAPI request object
 
     Returns:
-        SDP answer for the client
+        SDP answer (mode 1) or SDP offer (mode 2)
     """
     manager = get_connection_manager(request)
 
     # Generate peer ID if not provided
     peer_id = offer.peer_id or str(uuid.uuid4())
 
-    logger.info(f"Received offer from peer {peer_id}")
+    logger.info(f"Processing request from peer {peer_id}, mode={'offer' if offer.sdp else 'manual pairing'}")
 
     try:
         peer = await manager.create_peer(peer_id)
-        answer = await peer.handle_offer(offer.sdp, offer.type)
 
-        return SDPAnswer(
-            sdp=answer["sdp"],
-            type=answer["type"],
-            peer_id=peer_id
-        )
+        if offer.sdp:
+            # Traditional flow: handle client offer, return server answer
+            answer = await peer.handle_offer(offer.sdp, offer.type)
+            return {
+                "sdp": answer["sdp"],
+                "type": answer["type"],
+                "peer_id": peer_id
+            }
+        else:
+            # Manual pairing flow: create server offer for client
+            offer_data = await peer.create_offer()
+            return {
+                "sdp": offer_data["sdp"],
+                "type": offer_data["type"],
+                "peer_id": peer_id
+            }
 
     except Exception as e:
         logger.error(f"Error handling offer: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/answer")
+async def handle_answer(answer: SDPAnswer, request: Request) -> dict[str, str]:
+    """Handle WebRTC answer from client (manual pairing flow).
+
+    Args:
+        answer: The SDP answer from the client
+        request: FastAPI request object
+
+    Returns:
+        Status message
+    """
+    manager = get_connection_manager(request)
+    peer = manager.get_peer(answer.peer_id)
+
+    if not peer:
+        raise HTTPException(status_code=404, detail=f"Peer {answer.peer_id} not found")
+
+    logger.info(f"Received answer from peer {answer.peer_id}")
+
+    try:
+        await peer.handle_answer(answer.sdp, answer.type)
+        return {"status": "ok", "peer_id": answer.peer_id}
+
+    except Exception as e:
+        logger.error(f"Error handling answer: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
