@@ -619,7 +619,7 @@ class Backend:
 
         """
         if self.audio:
-            self.audio.play_sound(sound_file, autoclean=True)
+            self.audio.play_sound(sound_file)
 
     # Basic move definitions
     INIT_HEAD_POSE = np.eye(4)

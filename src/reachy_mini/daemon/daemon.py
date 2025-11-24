@@ -23,6 +23,7 @@ from reachy_mini.daemon.utils import (
 from reachy_mini.media.media_manager import MediaManager
 
 from ..daemon.backend.mujoco.video_ws import AsyncWebSocketFrameSender
+from ..daemon.backend.mujoco.audio_ws import AsyncWebSocketAudioStreamer
 from ..io.ws_controller import AsyncWebSocketController
 from ..io.zenoh_server import ZenohServer
 from .backend.mujoco import MujocoBackend, MujocoBackendStatus
@@ -149,9 +150,15 @@ class Daemon:
                 raise ValueError("WebSocket URI is required when streaming media.")
             self.media_manager = MediaManager()
             self.websocket_frame_sender = AsyncWebSocketFrameSender(ws_uri=websocket_uri + "/video_stream")
-            self._thread_publish_media = Thread(target=self._publish_media, daemon=True)
-            self._thread_event_publish_media = Event()
-            self._thread_publish_media.start()
+            self._thread_publish_frames = Thread(target=self._publish_frames, daemon=True)
+            self._thread_event_publish_frames = Event()
+            self._thread_publish_frames.start()
+            self.websocket_audio_sender = AsyncWebSocketAudioStreamer(ws_uri=websocket_uri + "/audio_stream")
+            self._thread_publish_audio = Thread(target=self._publish_audio, daemon=True)
+            self._thread_event_publish_audio = Event()
+            self._thread_publish_audio.start()
+            self.media_manager.start_recording()
+            self.media_manager.start_playing()
 
         def backend_wrapped_run() -> None:
             assert self.backend is not None, (
@@ -167,11 +174,16 @@ class Daemon:
                 self.zenoh_server.stop()
                 if self.websocket_server is not None:
                     self.websocket_server.stop()
-                if self._thread_publish_media is not None and self._thread_publish_media.is_alive():
-                    self._thread_event_publish_media.set()
-                    self._thread_publish_media.join(timeout=2.0)
+                if self._thread_publish_frames is not None and self._thread_publish_frames.is_alive():
+                    self._thread_event_publish_frames.set()
+                    self._thread_publish_frames.join(timeout=2.0)
+                if self._thread_publish_audio is not None and self._thread_publish_audio.is_alive():
+                    self._thread_event_publish_audio.set()
+                    self._thread_publish_audio.join(timeout=2.0)
                 if self.websocket_frame_sender is not None and self.websocket_frame_sender.connected.is_set():
                     self.websocket_frame_sender.stop_flag = True
+                if self.websocket_audio_sender is not None and self.websocket_audio_sender.connected.is_set():
+                    self.websocket_audio_sender.stop_flag = True
                 self.backend = None
 
         self.backend_run_thread = Thread(target=backend_wrapped_run)
@@ -210,13 +222,24 @@ class Daemon:
         self._status.state = DaemonState.RUNNING
         return self._status.state
 
-    def _publish_media(self) -> None:
+    def _publish_frames(self) -> None:
         """Publish the media to the WebSocket."""
-        while self._thread_event_publish_media.is_set() is False:
+        while self._thread_event_publish_frames.is_set() is False:
             frame = self.media_manager.get_frame()
             if frame is not None:
                 self.websocket_frame_sender.send_frame(frame)
             time.sleep(0.04)
+
+    def _publish_audio(self) -> None:
+        """Publish the audio to the WebSocket."""
+        while self._thread_event_publish_audio.is_set() is False:
+            audio = self.media_manager.get_audio_sample()
+            if audio is not None:
+                self.websocket_audio_sender.send_audio_chunk(audio)
+            received_audio = self.websocket_audio_sender.get_audio_chunk()
+            if received_audio is not None:
+                self.media_manager.push_audio_sample(received_audio)
+            time.sleep(0.05)
 
     async def stop(self, goto_sleep_on_stop: bool = True) -> "DaemonState":
         """Stop the Reachy Mini daemon.
