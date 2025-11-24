@@ -1,8 +1,8 @@
 """Reachy Mini sound playback example.
 
-This script demonstrates how to use the microphone array to detect the 
-Direction of Arrival (DoA) of speech. It calculates the position of the 
-sound source relative to the head, transforms it into world coordinates, 
+This script demonstrates how to use the microphone array to detect the
+Direction of Arrival (DoA) of speech. It calculates the position of the
+sound source relative to the head, transforms it into world coordinates,
 and commands the robot to look towards the speaker.
 """
 

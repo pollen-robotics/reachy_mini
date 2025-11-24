@@ -100,14 +100,13 @@ class MujocoBackend(Backend):
         self.joint_qpos_addr = [
             get_joint_addr_from_name(self.model, n) for n in self.joint_names
         ]
-        
+
         self.col_inds = []
-        for i,type in enumerate(self.model.geom_contype):
+        for i, type in enumerate(self.model.geom_contype):
             if type != 0:
                 self.col_inds.append(i)
                 self.model.geom_contype[i] = 0
                 self.model.geom_conaffinity[i] = 0
-
 
     def rendering_loop(self) -> None:
         """Offline Rendering loop for the Mujoco simulation.
@@ -167,13 +166,12 @@ class MujocoBackend(Backend):
 
         for i in range(100):
             mujoco.mj_step(self.model, self.data)
-        
+
         # enable collisions
         for i in self.col_inds:
             self.model.geom_contype[i] = 1
             self.model.geom_conaffinity[i] = 1
-            
-            
+
         for i in range(100):
             mujoco.mj_step(self.model, self.data)
 
@@ -188,7 +186,9 @@ class MujocoBackend(Backend):
         # Update the internal states of the IK and FK to the current configuration
         # This is important to avoid jumps when starting the robot (beore wake-up)
         self.head_kinematics.ik(self.get_mj_present_head_pose(), no_iterations=20)
-        self.head_kinematics.fk(self.get_present_head_joint_positions(), no_iterations=20)
+        self.head_kinematics.fk(
+            self.get_present_head_joint_positions(), no_iterations=20
+        )
 
         # 3) now enter your normal loop
         while not self.should_stop.is_set():
@@ -255,7 +255,7 @@ class MujocoBackend(Backend):
 
             took = time.time() - start_t
             time.sleep(max(0, self.model.opt.timestep - took))
-            #print(f"Step {step}: took {took*1e6:.1f}us")
+            # print(f"Step {step}: took {took*1e6:.1f}us")
             step += 1
 
         if not self.headless:
