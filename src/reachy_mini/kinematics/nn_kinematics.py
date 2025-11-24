@@ -60,6 +60,15 @@ class NNKinematics:
         return pose
 
 
+    def set_automatic_body_yaw(self, automatic_body_yaw: bool) -> None:
+        """Set the automatic body yaw.
+
+        Args:
+            automatic_body_yaw (bool): Whether to enable automatic body yaw.
+
+        """
+        self.automatic_body_yaw = automatic_body_yaw
+        
 class OnnxInfer:
     """Infer an onnx model."""
 
@@ -77,14 +86,6 @@ class OnnxInfer:
         return res
     
     
-    def set_automatic_body_yaw(self, automatic_body_yaw: bool) -> None:
-        """Set the automatic body yaw.
-
-        Args:
-            automatic_body_yaw (bool): Whether to enable automatic body yaw.
-
-        """
-        self.automatic_body_yaw = automatic_body_yaw
 
 
 if __name__ == "__main__":
