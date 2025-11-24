@@ -31,7 +31,6 @@ DEVICE_CARD_NAMES = {
     "default": "Audio",  # Default to Reachy Mini Audio
 }
 
-
 class VolumeRequest(BaseModel):
     """Request model for setting volume."""
 
@@ -67,7 +66,7 @@ def get_current_platform() -> str:
 def detect_audio_device() -> str:
     """Detect the current audio output device."""
     system = platform.system()
-
+    
     if system == "Linux":
         # Try to detect if Reachy Mini Audio or legacy Respeaker is available
         try:
@@ -99,7 +98,6 @@ def get_linux_card_name() -> str:
 
 # macOS Volume Control
 
-
 def get_volume_macos() -> Optional[int]:
     """Get current system volume on macOS."""
     try:
@@ -126,17 +124,12 @@ def set_volume_macos(volume: int) -> bool:
             check=True,
         )
         return True
-    except (
-        subprocess.TimeoutExpired,
-        FileNotFoundError,
-        subprocess.CalledProcessError,
-    ) as e:
+    except (subprocess.TimeoutExpired, FileNotFoundError, subprocess.CalledProcessError) as e:
         logger.error(f"Failed to set macOS volume: {e}")
         return False
 
 
 # Linux Volume Control
-
 
 def get_volume_linux() -> Optional[int]:
     """Get current volume on Linux using amixer."""
@@ -175,34 +168,28 @@ def set_volume_linux(volume: int) -> bool:
             check=True,
         )
         return True
-    except (
-        subprocess.TimeoutExpired,
-        FileNotFoundError,
-        subprocess.CalledProcessError,
-        ValueError,
-    ) as e:
+    except (subprocess.TimeoutExpired, FileNotFoundError, subprocess.CalledProcessError, ValueError) as e:
         logger.error(f"Failed to set Linux volume: {e}")
         return False
 
 
 # API Endpoints - Speaker Volume
 
-
 @router.get("/current")
 async def get_volume() -> VolumeResponse:
     """Get the current volume level."""
     system = get_current_platform()
     device = detect_audio_device()
-
+    
     volume = None
     if system == "macOS":
         volume = get_volume_macos()
     elif system == "Linux":
         volume = get_volume_linux()
-
+    
     if volume is None:
         raise HTTPException(status_code=500, detail="Failed to get volume")
-
+    
     return VolumeResponse(volume=volume, device=device, platform=system)
 
 
@@ -214,7 +201,7 @@ async def set_volume(
     """Set the volume level and play a test sound."""
     system = get_current_platform()
     device = detect_audio_device()
-
+    
     success = False
     if system == "macOS":
         success = set_volume_macos(volume_req.volume)
@@ -225,10 +212,10 @@ async def set_volume(
             status_code=501,
             detail=f"Volume control not supported on {system}",
         )
-
+    
     if not success:
         raise HTTPException(status_code=500, detail="Failed to set volume")
-
+    
     # Play test sound
     test_sound = "impatient1.wav"
     if backend.audio:
@@ -285,7 +272,6 @@ async def play_test_sound(backend: Backend = Depends(get_backend)) -> TestSoundR
 
 # macOS Microphone Control
 
-
 def get_microphone_volume_macos() -> Optional[int]:
     """Get current microphone input volume on macOS."""
     try:
@@ -312,17 +298,12 @@ def set_microphone_volume_macos(volume: int) -> bool:
             check=True,
         )
         return True
-    except (
-        subprocess.TimeoutExpired,
-        FileNotFoundError,
-        subprocess.CalledProcessError,
-    ) as e:
+    except (subprocess.TimeoutExpired, FileNotFoundError, subprocess.CalledProcessError) as e:
         logger.error(f"Failed to set macOS microphone volume: {e}")
         return False
 
 
 # Linux Microphone Control
-
 
 def get_microphone_volume_linux() -> Optional[int]:
     """Get current microphone input volume on Linux using amixer."""
@@ -360,34 +341,28 @@ def set_microphone_volume_linux(volume: int) -> bool:
             check=True,
         )
         return True
-    except (
-        subprocess.TimeoutExpired,
-        FileNotFoundError,
-        subprocess.CalledProcessError,
-        ValueError,
-    ) as e:
+    except (subprocess.TimeoutExpired, FileNotFoundError, subprocess.CalledProcessError, ValueError) as e:
         logger.error(f"Failed to set Linux microphone volume: {e}")
         return False
 
 
 # API Endpoints - Microphone Volume
 
-
 @router.get("/microphone/current")
 async def get_microphone_volume() -> VolumeResponse:
     """Get the current microphone input volume level."""
     system = get_current_platform()
     device = detect_audio_device()
-
+    
     volume = None
     if system == "macOS":
         volume = get_microphone_volume_macos()
     elif system == "Linux":
         volume = get_microphone_volume_linux()
-
+    
     if volume is None:
         raise HTTPException(status_code=500, detail="Failed to get microphone volume")
-
+    
     return VolumeResponse(volume=volume, device=device, platform=system)
 
 
@@ -398,7 +373,7 @@ async def set_microphone_volume(
     """Set the microphone input volume level."""
     system = get_current_platform()
     device = detect_audio_device()
-
+    
     success = False
     if system == "macOS":
         success = set_microphone_volume_macos(volume_req.volume)
@@ -409,8 +384,8 @@ async def set_microphone_volume(
             status_code=501,
             detail=f"Microphone volume control not supported on {system}",
         )
-
+    
     if not success:
         raise HTTPException(status_code=500, detail="Failed to set microphone volume")
-
+    
     return VolumeResponse(volume=volume_req.volume, device=device, platform=system)
