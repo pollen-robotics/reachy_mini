@@ -83,7 +83,6 @@ def main():
             length=200,
         ).grid(row=6, column=1)
 
-
         mini.goto_target(create_head_pose(), antennas=[0.0, 0.0], duration=1.0)
 
         # Run the GUI in a non-blocking way

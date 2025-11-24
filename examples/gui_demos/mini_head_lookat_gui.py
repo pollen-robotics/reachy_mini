@@ -16,7 +16,7 @@ def main():
 
         root = tk.Tk()
         root.title("Set Look At XYZ Position")
-        
+
         # Add sliders for X, Y, Z position
         x_var = tk.DoubleVar(value=0.0)
         y_var = tk.DoubleVar(value=0.0)
@@ -78,7 +78,13 @@ def main():
                 head = np.eye(4)
                 head[:3, 3] = [0, 0, 0.0]
 
-                head = mini.look_at_world(x_var.get(), y_var.get(), z_var.get(), duration=0.3, perform_movement=False)
+                head = mini.look_at_world(
+                    x_var.get(),
+                    y_var.get(),
+                    z_var.get(),
+                    duration=0.3,
+                    perform_movement=False,
+                )
 
                 root.update()
 
@@ -88,8 +94,6 @@ def main():
                     antennas=np.array([target, -target]),
                 )
 
-                
-                
         except KeyboardInterrupt:
             pass
         finally:

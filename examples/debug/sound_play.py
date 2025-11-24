@@ -32,7 +32,10 @@ def main(backend: str) -> None:
         if samplerate_in != mini.media.get_output_audio_samplerate():
             data = scipy.signal.resample(
                 data,
-                int(len(data) * (mini.media.get_output_audio_samplerate() / samplerate_in)),
+                int(
+                    len(data)
+                    * (mini.media.get_output_audio_samplerate() / samplerate_in)
+                ),
             )
         if data.ndim > 1:  # convert to mono
             data = np.mean(data, axis=1)
