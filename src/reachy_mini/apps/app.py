@@ -76,6 +76,7 @@ def make_app_project(app_name: str, path: Path) -> None:
 
     module_name = app_name.replace("-", "_")
     class_name = "".join(word.capitalize() for word in module_name.split("_"))
+    class_name_display = " ".join(word.capitalize() for word in module_name.split("_"))
 
     base_path.mkdir()
     (base_path / module_name).mkdir()
@@ -86,6 +87,7 @@ def make_app_project(app_name: str, path: Path) -> None:
         "package_name": app_name,
         "module_name": module_name,
         "class_name": class_name,
+        "class_name_display": class_name_display,
     }
 
     (base_path / module_name / "__init__.py").touch()
@@ -96,6 +98,13 @@ def make_app_project(app_name: str, path: Path) -> None:
         render_template("pyproject.toml.j2", context)
     )
     (base_path / "README.md").write_text(render_template("README.md.j2", context))
+
+    (base_path / "index.html").write_text(
+        render_template("index.html.j2", context)
+    )
+    (base_path / "style.css").write_text(
+        render_template("style.css.j2", context)
+    )
 
     print(f"✅ Created app in {base_path}/")
 
