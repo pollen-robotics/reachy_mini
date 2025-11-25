@@ -653,16 +653,26 @@ class ReachyMini:
         # Send the record data to the backend
         self.client.send_command(json.dumps({"set_target_record": record}))
 
-    def enable_motors(self) -> None:
-        """Enable the motors."""
-        self._set_torque(True)
+    def enable_motors(self, ids: List[int] | None = None) -> None:
+        """Enable the motors.
 
-    def disable_motors(self) -> None:
-        """Disable the motors."""
-        self._set_torque(False)
+        Args:
+            ids (List[int] | None): List of motor IDs to enable. If None, all motors will be enabled.
 
-    def _set_torque(self, on: bool) -> None:
-        self.client.send_command(json.dumps({"torque": on}))
+        """
+        self._set_torque(True, ids=ids)
+
+    def disable_motors(self, ids: List[int] | None = None) -> None:
+        """Disable the motors.
+
+        Args:
+            ids (List[int] | None): List of motor IDs to disable. If None, all motors will be disabled.
+            
+        """
+        self._set_torque(False, ids=ids)
+
+    def _set_torque(self, on: bool, ids: List[int] | None = None) -> None:
+        self.client.send_command(json.dumps({"torque": on, "ids": ids}))
 
     def enable_gravity_compensation(self) -> None:
         """Enable gravity compensation for the head motors."""

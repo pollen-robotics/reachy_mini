@@ -497,6 +497,21 @@ class RobotBackend(Backend):
 
         self.motor_control_mode = mode
 
+    def set_motor_torque_ids(self, ids: list[int], on: bool) -> None:
+        """Set the torque state for specific motor IDs.
+
+        Args:
+            ids (list[int]): List of motor IDs to set the torque state for.
+            on (bool): True to enable torque, False to disable.
+
+        """
+        assert self.c is not None, "Motor controller not initialized or already closed."
+
+        if on:
+            self.c.enable_torque_on_ids(ids)
+        else:
+            self.c.disable_torque_on_ids(ids)
+
     def _infer_control_mode(self) -> MotorControlMode:
         assert self.c is not None, "Motor controller not initialized or already closed."
 

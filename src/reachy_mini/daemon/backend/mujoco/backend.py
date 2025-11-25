@@ -317,6 +317,10 @@ class MujocoBackend(Backend):
         """Set the motor control mode."""
         pass
 
+    def set_motor_torque_ids(self, ids: list[int], on: bool) -> None:
+        """Set the motor torque state for specific motor IDs."""
+        pass
+
 
 @dataclass
 class MujocoBackendStatus:
