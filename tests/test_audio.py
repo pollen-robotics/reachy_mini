@@ -23,11 +23,11 @@ def test_play_sound_default_backend() -> None:
 def test_record_audio_and_file_exists() -> None:
     """Test recording audio and check that the file exists and is not empty."""
     media = MediaManager(backend=MediaBackend.DEFAULT_NO_VIDEO)
-    duration = 2  # seconds
+    DURATION = 2  # seconds
     tmpfile = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
     tmpfile.close()
     media.start_recording()
-    time.sleep(duration)
+    time.sleep(DURATION)
     media.stop_recording()
     audio = media.get_audio_sample()
     samplerate = media.get_input_audio_samplerate()
@@ -85,10 +85,10 @@ def test_record_audio_and_file_exists_gstreamer() -> None:
             audio_samples.append(sample)
 
     media.stop_recording()
-    samplerate = media.get_input_audio_samplerate()
-
+    
     assert len(audio_samples) > 0
     audio_data = np.concatenate(audio_samples, axis=0)
+    assert audio_data.ndim == 2 and audio_data.shape[1] == 2
     samplerate = media.get_input_audio_samplerate()
     sf.write(tmpfile.name, audio_data, samplerate)
     assert os.path.exists(tmpfile.name)
