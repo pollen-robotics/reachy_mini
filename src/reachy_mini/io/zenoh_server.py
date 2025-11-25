@@ -100,10 +100,15 @@ class ZenohServer(AbstractServer):
         command = json.loads(data)
         with self._lock:
             if "torque" in command:
-                if command["torque"]:
-                    self.backend.set_motor_control_mode(MotorControlMode.Enabled)
+                if (
+                    command["ids"] is not None
+                ):  # If specific motor IDs are provided, just set torque for those motors
+                    self.backend.set_motor_torque_ids(command["ids"], command["torque"])
                 else:
-                    self.backend.set_motor_control_mode(MotorControlMode.Disabled)
+                    if command["torque"]:
+                        self.backend.set_motor_control_mode(MotorControlMode.Enabled)
+                    else:
+                        self.backend.set_motor_control_mode(MotorControlMode.Disabled)
             if "head_joint_positions" in command:
                 self.backend.set_target_head_joint_positions(
                     np.array(command["head_joint_positions"])
