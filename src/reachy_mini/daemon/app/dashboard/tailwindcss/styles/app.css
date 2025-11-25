@@ -1,0 +1,185 @@
+@import "tailwindcss";
+
+@source "../../templates/**/*.html";
+@source "../../static/js/**/*.js";
+
+@font-face {
+    font-family: 'Asap';
+    src: url('/static/fonts/Asap-VariableFont_wdth,wght.ttf') format('truetype');
+    font-weight: 100 900;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'Asap';
+    src: url('/static/fonts/Asap-Italic-VariableFont_wdth,wght.ttf') format('truetype');
+    font-weight: 100 900;
+    font-style: italic;
+}
+
+@font-face {
+    font-family: 'Archivo';
+    src: url('/static/fonts/Archivo-VariableFont_wdth,wght.ttf') format('truetype');
+    font-weight: 100 900;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'Archivo';
+    src: url('/static/fonts/Archivo-Italic-VariableFont_wdth,wght.ttf') format('truetype');
+    font-weight: 100 900;
+    font-style: italic;
+}
+
+
+
+html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+    font-family: 'Archivo', 'Asap', sans-serif;
+}
+
+.daemon-status-title {
+    font-size: 36px;
+    font-weight: 500;
+    letter-spacing: 0.3px;
+}
+
+.daemon-status-collapse {
+    font-family: 'Asap', sans-serif;
+    font-weight: 400;
+    color: rgba(0, 0, 0, 0.7);
+}
+
+/* APPs styles */
+
+.app-section {
+    border-radius: 8px;
+    border-width: 1px;
+    padding: 16px;
+    gap: 16px;
+    background: #FFFFFF;
+}
+
+.installed-app-title {
+    font-weight: 600;
+}
+
+/* Hugging Face App Store Styles */
+
+.app-section-title {
+    font-weight: 500;
+    font-size: 24px;
+    letter-spacing: 0px;
+}
+
+.app-list-item {
+    padding: 4px;
+}
+
+.hf-app-icon {
+    width: 42px;
+    height: 42px;
+    border-radius: 10px;
+    text-align: center;
+    font-size: 31px;
+    background-color: rgba(0, 0, 0, 0.1);
+
+}
+
+.hf-app-title {
+    font-weight: 500;
+    font-size: 18px;
+}
+
+.hf-app-description {
+    font-family: 'Asap', sans-serif;
+    font-weight: 400;
+    font-size: 16px;
+    line-height: 75%;
+    color: rgba(0, 0, 0, 0.4);
+}
+
+.hf-app-install-button {
+    font-weight: 500;
+    font-size: 20px;
+    font-style: Bold;
+    text-align: center;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.wifi-status {
+    font-family: 'Asap', sans-serif;
+    font-weight: 500;
+    color: rgba(0, 0, 0, 0.9);
+
+}
+
+.wifi-status-info {
+    font-family: 'Asap', sans-serif;
+    font-weight: 400;
+    color: rgba(0, 0, 0, 0.7);
+}
+
+
+.notification-modal {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    z-index: 9999;
+    min-width: 300px;
+    max-width: 400px;
+    background: #fff;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+    border-radius: 8px;
+    display: none;
+    animation: fadeInUp 0.3s;
+}
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(40px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.notification-content {
+    padding: 20px 28px;
+    border-radius: 8px;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+/* Notification variants */
+.notification-content.info {
+    background: #fff;
+    border: 1px solid #e0e0e0;
+}
+
+.notification-content.error {
+    background: #ffeaea;
+    border: 1px solid #ff4d4f;
+    color: #b71c1c;
+}
+
+
+.close-btn {
+    background: none;
+    border: none;
+    font-size: 1.5em;
+    cursor: pointer;
+    color: #888;
+}

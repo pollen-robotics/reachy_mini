@@ -10,14 +10,17 @@
 
 Reachy Mini's hardware comes in two flavors:
 - **Reachy Mini lite**: where the robot is directly connected to your computer via USB. And the code that controls the robot (the daemon) runs on your computer.
-- **Reachy Mini wireless**: where an Raspberry Pi is embedded in the robot, and the code that controls the robot (the daemon) runs on the Raspberry Pi. You can connect to it via Wi-Fi from your computer. (TODO: add link to section on how to set it up)
+- **Reachy Mini wireless**: where an Raspberry Pi is embedded in the robot, and the code that controls the robot (the daemon) runs on the Raspberry Pi. You can connect to it via Wi-Fi from your computer (see [Wireless Setup](./docs/wireless-version.md)).
 
 There is also a simulated version of Reachy Mini in [MuJoCo](https://mujoco.org) that you can use to prototype your applications before deploying them on the real robot. It behaves like the lite version where the daemon runs on your computer.
 
 ## Assembly guide
 
-Follow our step-by-step [Assembly Guide](https://www.pollen-robotics.com/wp-content/uploads/2025/10/Reachy_Mini_Assembly_BETA_v2_LOW-compresse.pdf).
+📖 Follow our step-by-step [Assembly Guide](https://huggingface.co/spaces/pollen-robotics/Reachy_Mini_Assembly_Guide).
+
 Most builders finish in about 3 hours, our current speed record is 43 minutes. The guide walks you through every step with clear visuals so you can assemble Reachy Mini confidently from start to finish. Enjoy the build!
+
+▶️ View the [Assembly Video](https://youtu.be/_r0cHySFbeY?si=6Mw4js8HSUs4cwoJ).
 
 ## Software overview
 
@@ -79,7 +82,13 @@ git clone https://github.com/pollen-robotics/reachy_mini
 pip install -e ./reachy_mini
 ```
 
+*Note that uv users can directly run the daemon with:*
+```bash
+uv run reachy-mini-daemon
+```
+
 The same package provides both the daemon and the Python SDK.
+
 
 ## Run the reachy mini daemon
 
@@ -152,11 +161,17 @@ For more information about the daemon and its options, you can run:
 reachy-mini-daemon --help
 ```
 
+### Dashboard
+
+You can access a simple dashboard to monitor the robot's status at [http://localhost:8000/](http://localhost:8000/) when the daemon is running. This lets you turn your robot on and off, run some basic movements, and browse spaces for Reachy Mini!
+
+![Reachy Mini Dashboard](docs/assets/dashboard.png)
+
 ## Run the demo & awesome apps
 
 Conversational demo for the Reachy Mini robot combining LLM realtime APIs, vision pipelines, and choreographed motion libraries: [reachy_mini_conversation_demo](https://github.com/pollen-robotics/reachy_mini_conversation_demo).
 
-You can find more awesome apps and demos in the [Awesome Reachy Mini Apps](./docs/awesome-apps.md).
+You can find more awesome apps and demos for Reachy Mini on [Hugging Face spaces](https://huggingface.co/spaces?q=reachy_mini)!
 
 ## Using the Python SDK
 
@@ -212,6 +227,10 @@ pre-commit run --all-files
 ```
 
 Checks are performed by Ruff. You may want to [configure your IDE to support it](https://docs.astral.sh/ruff/editors/setup/).
+
+## Troubleshooting
+
+see [dedicated section](docs/troubleshooting.md)
 
 ## License
 

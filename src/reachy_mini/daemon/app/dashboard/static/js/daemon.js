@@ -2,10 +2,12 @@
 
 
 const daemon = {
-    currentStatus: {},
+    currentStatus: {
+        state: null,
+    },
 
     start: async (wakeUp) => {
-        fetch(`/api/daemon/start?wake_up=${wakeUp}`, {
+        await fetch(`/api/daemon/start?wake_up=${wakeUp}`, {
             method: 'POST',
         })
             .then((response) => {
@@ -23,7 +25,7 @@ const daemon = {
     },
 
     stop: async (gotoSleep) => {
-        fetch(`/api/daemon/stop?goto_sleep=${gotoSleep}`, {
+        await fetch(`/api/daemon/stop?goto_sleep=${gotoSleep}`, {
             method: 'POST',
         })
             .then((response) => {
@@ -41,15 +43,18 @@ const daemon = {
     },
 
     getStatus: async () => {
-        fetch('/api/daemon/status')
+        await fetch('/api/daemon/status')
             .then((response) => response.json())
             .then(async (data) => {
-                let previousState = daemon.currentStatus.state;
+                let currentState = daemon.currentStatus.state;
+                let newState = data.state || null;
+
                 daemon.currentStatus = data;
 
-                if (previousState !== daemon.currentStatus.state) {
+                if (currentState === null || currentState !== newState) {
                     await daemon.updateUI();
                 }
+
             })
             .catch((error) => {
                 console.error('Error fetching daemon status:', error);
@@ -65,7 +70,7 @@ const daemon = {
 
         let currentState = daemon.currentStatus.state;
 
-        if (currentState === initialState || currentState === "starting" || currentState === "stopping") {
+        if (currentState !== "error" && (currentState === initialState || currentState === "starting" || currentState === "stopping")) {
             setTimeout(() => {
                 daemon.checkStatusUpdate(initialState);
             }, 500);
@@ -128,11 +133,12 @@ const daemon = {
             backendStatusText.textContent = 'Stopped';
         }
         else if (daemonState === 'error') {
-            // daemonStatusAnim.setAttribute('data', '/static/assets/reachy-mini-ko-animation.svg');
             daemonStatusAnim.setAttribute('data', '/static/assets/no-wifi-cartoon.svg');
             toggleDaemonSwitch.checked = false;
             backendStatusIcon.classList.add('bg-red-500');
             backendStatusText.textContent = 'Error occurred';
+
+            notificationCenter.showError(daemon.currentStatus.error);
         }
 
         await daemon.updateToggle();

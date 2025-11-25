@@ -19,7 +19,7 @@ def main(backend: str) -> None:
         level=logging.DEBUG, format="%(asctime)s [%(levelname)s] %(message)s"
     )
 
-    with ReachyMini(log_level="DEBUG", media_backend=backend) as mini:
+    with ReachyMini(log_level="INFO", media_backend=backend) as mini:
         print(f"Recording for {DURATION} seconds...")
         audio_samples = []
         t0 = time.time()
@@ -38,7 +38,7 @@ def main(backend: str) -> None:
         # Concatenate all samples and save
         if audio_samples:
             audio_data = np.concatenate(audio_samples, axis=0)
-            samplerate = mini.media.get_audio_samplerate()
+            samplerate = mini.media.get_input_audio_samplerate()
             sf.write(OUTPUT_FILE, audio_data, samplerate)
             print(f"Audio saved to {OUTPUT_FILE}")
         else:

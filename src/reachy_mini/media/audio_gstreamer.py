@@ -24,7 +24,7 @@ gi.require_version("GstApp", "1.0")
 
 from gi.repository import GLib, Gst, GstApp  # noqa: E402
 
-from .audio_base import AudioBackend, AudioBase  # noqa: E402
+from .audio_base import AudioBase  # noqa: E402
 
 
 class GStreamerAudio(AudioBase):
@@ -32,7 +32,7 @@ class GStreamerAudio(AudioBase):
 
     def __init__(self, log_level: str = "INFO") -> None:
         """Initialize the GStreamer audio."""
-        super().__init__(backend=AudioBackend.GSTREAMER, log_level=log_level)
+        super().__init__(log_level=log_level)
         Gst.init(None)
         self._loop = GLib.MainLoop()
         self._thread_bus_calls = Thread(target=lambda: self._loop.run(), daemon=True)
@@ -57,17 +57,14 @@ class GStreamerAudio(AudioBase):
     def _init_pipeline_record(self, pipeline: Gst.Pipeline) -> None:
         self._appsink_audio = Gst.ElementFactory.make("appsink")
         caps = Gst.Caps.from_string(
-            f"audio/x-raw,channels=2,rate={self.SAMPLE_RATE},format=F32LE"
+            f"audio/x-raw,rate={self.SAMPLE_RATE},format=F32LE,layout=interleaved"
         )
         self._appsink_audio.set_property("caps", caps)
         self._appsink_audio.set_property("drop", True)  # avoid overflow
         self._appsink_audio.set_property("max-buffers", 500)
 
         autoaudiosrc = Gst.ElementFactory.make("autoaudiosrc")  # use default mic
-        # caps_respeaker = Gst.Caps.from_string(
-        #    "audio/x-raw, layout=interleaved, format=S16LE, rate=16000, channels=2"
-        # )
-        # autoaudiosrc.set_property("filter-caps", caps_respeaker)
+
         queue = Gst.ElementFactory.make("queue")
         audioconvert = Gst.ElementFactory.make("audioconvert")
         audioresample = Gst.ElementFactory.make("audioresample")
@@ -162,6 +159,14 @@ class GStreamerAudio(AudioBase):
         if sample is None:
             return None
         return np.frombuffer(sample, dtype=np.float32).reshape(-1, 2)
+
+    def get_input_audio_samplerate(self) -> int:
+        """Get the input samplerate of the audio device."""
+        return self.SAMPLE_RATE
+
+    def get_output_audio_samplerate(self) -> int:
+        """Get the output samplerate of the audio device."""
+        return self.SAMPLE_RATE
 
     def stop_recording(self) -> None:
         """Release the camera resource."""

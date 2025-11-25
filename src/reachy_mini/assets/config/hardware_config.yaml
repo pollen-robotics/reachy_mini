@@ -54,55 +54,83 @@ serial:
 
 
 motors:
-  - body_yaw:
+  - body_rotation:
       id: 10
       offset: 0
       lower_limit: 0
       upper_limit: 4095
       return_delay_time: 0
       shutdown_error: 52
-  - stewart_platform_1:
+      pid: 
+        - 400
+        - 0
+        - 0
+  - stewart_1:
       id: 11
       offset: 1024
       lower_limit: 1502
       upper_limit: 2958
       return_delay_time: 0
       shutdown_error: 52
-  - stewart_platform_2:
+      pid:
+        - 400
+        - 0
+        - 0
+  - stewart_2:
       id: 12
       offset: -1024
       lower_limit: 1138
       upper_limit: 2844
       return_delay_time: 0
       shutdown_error: 52
-  - stewart_platform_3:
+      pid:
+        - 400
+        - 0
+        - 0
+  - stewart_3:
       id: 13
       offset: 1024
       lower_limit: 1502
       upper_limit: 2958
       return_delay_time: 0
       shutdown_error: 52
-  - stewart_platform_4:
+      pid:
+        - 400
+        - 0
+        - 0
+  - stewart_4:
       id: 14
       offset: -1024
       lower_limit: 1138
       upper_limit: 2594
       return_delay_time: 0
       shutdown_error: 52
-  - stewart_platform_5:
+      pid:
+        - 400
+        - 0
+        - 0
+  - stewart_5:
       id: 15
       offset: 1024
       lower_limit: 1252
       upper_limit: 2958
       return_delay_time: 0
       shutdown_error: 52
-  - stewart_platform_6:
+      pid:
+        - 400
+        - 0
+        - 0
+  - stewart_6:
       id: 16
       offset: -1024
       lower_limit: 1138
       upper_limit: 2594
       return_delay_time: 0
       shutdown_error: 52
+      pid:
+        - 400
+        - 0
+        - 0
   - right_antenna:
       id: 17
       offset: 0
@@ -110,6 +138,10 @@ motors:
       upper_limit: 4095
       return_delay_time: 0
       shutdown_error: 52
+      pid:
+        - 400
+        - 0
+        - 400
   - left_antenna:
       id: 18
       offset: 0
@@ -117,3 +149,7 @@ motors:
       upper_limit: 4095
       return_delay_time: 0
       shutdown_error: 52
+      pid:
+        - 400
+        - 0
+        - 400

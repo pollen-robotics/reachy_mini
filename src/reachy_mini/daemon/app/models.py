@@ -114,6 +114,7 @@ class FullBodyTarget(BaseModel):
 
     target_head_pose: AnyPose | None = None
     target_antennas: tuple[float, float] | None = None
+    target_body_yaw: float | None = None
     timestamp: datetime | None = None
 
     model_config = {
@@ -129,6 +130,7 @@ class FullBodyTarget(BaseModel):
                         "yaw": 0.0,
                     },
                     "target_antennas": [0.0, 0.0],
+                    "target_body_yaw": 0.0,
                 }
             ]
         }

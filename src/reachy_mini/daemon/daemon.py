@@ -5,11 +5,13 @@ It includes methods to start, stop, and restart the daemon, as well as to check 
 It also provides a command-line interface for easy interaction.
 """
 
+import asyncio
 import json
 import logging
 import time
 from dataclasses import asdict, dataclass
 from enum import Enum
+from importlib.metadata import PackageNotFoundError, version
 from threading import Event, Thread
 from typing import Any, Optional
 
@@ -40,6 +42,14 @@ class Daemon:
         self.wireless_version = wireless_version
 
         self.backend: "RobotBackend | MujocoBackend | None" = None
+        # Get package version
+        try:
+            package_version = version("reachy_mini")
+            self.logger.info(f"Daemon version: {package_version}")
+        except PackageNotFoundError:
+            package_version = None
+            self.logger.warning("Could not determine daemon version")
+
         self._status = DaemonStatus(
             state=DaemonState.NOT_INITIALIZED,
             wireless_version=wireless_version,
@@ -47,8 +57,17 @@ class Daemon:
             backend_status=None,
             error=None,
             wlan_ip=None,
+            version=package_version,
         )
         self._thread_event_publish_status = Event()
+
+        self._webrtc: Optional[Any] = (
+            None  # type GstWebRTC imported for wireless version only
+        )
+        if wireless_version:
+            from reachy_mini.media.webrtc_daemon import GstWebRTC
+
+            self._webrtc = GstWebRTC(log_level)
 
     async def start(
         self,
@@ -60,6 +79,7 @@ class Daemon:
         check_collision: bool = False,
         kinematics_engine: str = "AnalyticalKinematics",
         headless: bool = False,
+        hardware_config_filepath: str | None = None,
     ) -> "DaemonState":
         """Start the Reachy Mini daemon.
 
@@ -72,6 +92,7 @@ class Daemon:
             check_collision (bool): If True, enable collision checking. Defaults to False.
             kinematics_engine (str): Kinematics engine to use. Defaults to "AnalyticalKinematics".
             headless (bool): If True, run Mujoco in headless mode (no GUI). Defaults to False.
+            hardware_config_filepath (str | None): Path to the hardware configuration YAML file. Defaults to None.
 
         Returns:
             DaemonState: The current state of the daemon after attempting to start it.
@@ -80,6 +101,10 @@ class Daemon:
         if self._status.state == DaemonState.RUNNING:
             self.logger.warning("Daemon is already running.")
             return self._status.state
+
+        self.logger.info(
+            f"Daemon start parameters: sim={sim}, serialport={serialport}, scene={scene}, localhost_only={localhost_only}, wake_up_on_start={wake_up_on_start}, check_collision={check_collision}, kinematics_engine={kinematics_engine}, headless={headless}, hardware_config_filepath={hardware_config_filepath}"
+        )
 
         self._status.simulation_enabled = sim
 
@@ -106,6 +131,7 @@ class Daemon:
                 check_collision=check_collision,
                 kinematics_engine=kinematics_engine,
                 headless=headless,
+                hardware_config_filepath=hardware_config_filepath,
             )
         except Exception as e:
             self._status.state = DaemonState.ERROR
@@ -158,6 +184,12 @@ class Daemon:
                 self._status.state = DaemonState.STOPPING
                 return self._status.state
 
+        if self._webrtc:
+            await asyncio.sleep(
+                0.2
+            )  # Give some time for the backend to release the audio device
+            self._webrtc.start()
+
         self.logger.info("Daemon started successfully.")
         self._status.state = DaemonState.RUNNING
         return self._status.state
@@ -190,6 +222,9 @@ class Daemon:
             self.backend.is_shutting_down = True
             self._thread_event_publish_status.set()
             self.server.stop()
+
+            if self._webrtc:
+                self._webrtc.stop()
 
             if goto_sleep_on_stop:
                 try:
@@ -386,6 +421,7 @@ class Daemon:
         check_collision: bool,
         kinematics_engine: str,
         headless: bool,
+        hardware_config_filepath: str | None = None,
     ) -> "RobotBackend | MujocoBackend":
         if sim:
             return MujocoBackend(
@@ -413,11 +449,15 @@ class Daemon:
                 serialport = ports[0]
                 self.logger.info(f"Found Reachy Mini serial port: {serialport}")
 
+            self.logger.info(
+                f"Creating RobotBackend with parameters: serialport={serialport}, check_collision={check_collision}, kinematics_engine={kinematics_engine}"
+            )
             return RobotBackend(
                 serialport=serialport,
                 log_level=self.log_level,
                 check_collision=check_collision,
                 kinematics_engine=kinematics_engine,
+                hardware_config_filepath=hardware_config_filepath,
             )
 
 
@@ -442,3 +482,4 @@ class DaemonStatus:
     backend_status: Optional[RobotBackendStatus | MujocoBackendStatus]
     error: Optional[str] = None
     wlan_ip: Optional[str] = None
+    version: Optional[str] = None

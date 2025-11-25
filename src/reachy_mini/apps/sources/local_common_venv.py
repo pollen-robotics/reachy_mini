@@ -11,10 +11,27 @@ from ..utils import running_command
 async def list_available_apps() -> list[AppInfo]:
     """List apps available from entry points."""
     entry_point_apps = list(entry_points(group="reachy_mini_apps"))
-    return [
-        AppInfo(name=ep.name, source_kind=SourceKind.INSTALLED)
-        for ep in entry_point_apps
-    ]
+
+    apps = []
+
+    for ep in entry_point_apps:
+        custom_app_url = None
+        try:
+            app = ep.load()
+            custom_app_url = app.custom_app_url
+        except Exception as e:
+            logging.getLogger("reachy_mini.apps").warning(
+                f"Could not load app '{ep.name}' from entry point: {e}"
+            )
+        apps.append(
+            AppInfo(
+                name=ep.name,
+                source_kind=SourceKind.INSTALLED,
+                extra={"custom_app_url": custom_app_url},
+            )
+        )
+
+    return apps
 
 
 async def install_package(app: AppInfo, logger: logging.Logger) -> int:

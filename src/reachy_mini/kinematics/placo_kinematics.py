@@ -10,6 +10,7 @@ import numpy as np
 import numpy.typing as npt
 import pinocchio as pin
 import placo
+from scipy.spatial.transform import Rotation as R
 
 
 class PlacoKinematics:
@@ -41,14 +42,18 @@ class PlacoKinematics:
         )  # 0.1 degrees tolerance for the FK reached condition
 
         if not urdf_path.endswith(".urdf"):
-            urdf_path = f"{urdf_path}/{'robot.urdf' if check_collision else 'robot_no_collision.urdf'}"
+            urdf_path = f"{urdf_path}/{'robot_simple_collision.urdf' if check_collision else 'robot_no_collision.urdf'}"
 
         self.robot = placo.RobotWrapper(
-            urdf_path, placo.Flags.ignore_collisions + placo.Flags.collision_as_visual
+            urdf_path, placo.Flags.collision_as_visual + placo.Flags.ignore_collisions
         )
-        self.robot_ik = placo.RobotWrapper(
-            urdf_path, placo.Flags.ignore_collisions + placo.Flags.collision_as_visual
+
+        flags = (
+            0
+            if check_collision
+            else placo.Flags.ignore_collisions + placo.Flags.collision_as_visual
         )
+        self.robot_ik = placo.RobotWrapper(urdf_path, flags)
 
         self.ik_solver = placo.KinematicsSolver(self.robot_ik)
         self.ik_solver.mask_fbase(True)
@@ -89,7 +94,7 @@ class PlacoKinematics:
         # This will allow independent control of the torso and the head yaw
         # until this constraint is reached
         yaw_constraint = self.ik_solver.add_yaw_constraint(
-            "dummy_torso_yaw", "head", np.deg2rad(65.0)
+            "dummy_torso_yaw", "head", np.deg2rad(55.0)
         )
         yaw_constraint.configure("rel_yaw", "hard")
 
@@ -105,18 +110,18 @@ class PlacoKinematics:
         # Add a cone constraint for the head to not exceed a certain angle
         # This is to avoid the head from looking too far up or down
         self.fk_cone = self.ik_solver.add_cone_constraint(
-            "body_foot_3dprint", "head", np.deg2rad(40.0)
+            "body_foot_3dprint", "head", np.deg2rad(35.0)
         )
         self.fk_cone.configure("cone", "hard")
         self.fk_yaw_constraint = self.fk_solver.add_yaw_constraint(
-            "dummy_torso_yaw", "head", np.deg2rad(65.0)
+            "dummy_torso_yaw", "head", np.deg2rad(55.0)
         )
         self.fk_yaw_constraint.configure("rel_yaw", "hard")
 
         # Add a cone constraint for the head to not exceed a certain angle
         # This is to avoid the head from looking too far up or down
         fk_cone = self.fk_solver.add_cone_constraint(
-            "body_foot_3dprint", "head", np.deg2rad(40.0)
+            "body_foot_3dprint", "head", np.deg2rad(35.0)
         )
         fk_cone.configure("cone", "hard")
 
@@ -142,11 +147,11 @@ class PlacoKinematics:
         # regularization
         self.ik_yaw_joint_task = self.ik_solver.add_joints_task()
         self.ik_yaw_joint_task.set_joints({"yaw_body": 0})
-        if self.automatic_body_yaw:
+        if not self.automatic_body_yaw:
             self.ik_yaw_joint_task.configure("joints", "soft", 5e-5)
         else:
-            self.ik_yaw_joint_task.configure("joints", "soft", 1.0)
-
+            self.ik_yaw_joint_task.configure("joints", "soft", 3.0)
+            
         # joint limit tasks (values form URDF)
         self.ik_solver.enable_velocity_limits(True)
         self.ik_solver.enable_joint_limits(True)
@@ -240,6 +245,11 @@ class PlacoKinematics:
         self.robot.update_kinematics()
 
         if self.check_collision:
+            ik_col = self.ik_solver.add_avoid_self_collisions_constraint()
+            ik_col.self_collisions_margin = 0.001  # 1mm
+            ik_col.self_collisions_trigger = 0.002  # 2mm
+            ik_col.configure("avoid_self_collisions", "hard")
+
             # setup the collision model
             self.config_collision_model()
 
@@ -269,8 +279,8 @@ class PlacoKinematics:
             float: The Euler distance between the two poses.
 
         """
-        euler1 = pin.rpy.matrixToRpy(pose1[:3, :3])
-        euler2 = pin.rpy.matrixToRpy(pose2[:3, :3])
+        euler1 = R.from_matrix(pose1[:3, :3]).as_euler("xyz")
+        euler2 = R.from_matrix(pose2[:3, :3]).as_euler("xyz")
         p1 = pose1[:3, 3]
         p2 = pose2[:3, 3]
         return float(np.linalg.norm(euler1 - euler2)), float(np.linalg.norm(p1 - p2))
@@ -397,15 +407,6 @@ class PlacoKinematics:
                     return None
                 self.robot_ik.update_kinematics()
 
-        # verify that there is no collision
-        if self.check_collision and self.compute_collision():
-            self._logger.warning(
-                "IK: Collision detected, using the previous configuration..."
-            )
-            self._update_state_to_initial(self.robot_ik)  # revert to the inital state
-            self.robot_ik.update_kinematics()
-            return None
-
         # Get the joint angles
         return np.array(self._get_joint_values(self.robot_ik))
 
@@ -453,9 +454,6 @@ class PlacoKinematics:
             }
         )
 
-        # save the initial configuration
-        q = self.robot.state.q.copy()
-
         done = True
         # do the inital ik with 2 iterations
         for i in range(no_iterations):
@@ -487,13 +485,6 @@ class PlacoKinematics:
                     return None
                 self.robot.update_kinematics()
 
-        if self.check_collision and self.compute_collision():
-            self._logger.warning("FK: Collision detected, using the previous config...")
-            self._update_state_to_initial(self.robot)  # revert to the previous state
-            self.robot.state.q = q
-            self.robot.update_kinematics()
-            # return None
-
         # Get the head frame transformation
         T_world_head = self.robot.get_T_world_frame("head")
         T_world_head[:3, 3][2] -= self.head_z_offset  # offset the height of the head
@@ -505,20 +496,14 @@ class PlacoKinematics:
 
         Add collision pairs between the torso and the head colliders.
         """
-        geom_model = self.robot.collision_model
+        geom_model = self.robot_ik.collision_model
 
-        # name_torso_collider = "dc15_a01_case_b_dummy_10"
-        # names_head_colliders = ["pp01063_stewart_plateform_7", "pp01063_stewart_plateform_11"]
+        id_torso_colliders = list(range(len(geom_model.geometryObjects) - 1))
+        id_head_collider = len(geom_model.geometryObjects) - 1
 
-        id_torso_collider = 12  # geom_model.getGeometryObjectId(name_torso_collider)
-        id_head_colliders = [
-            74,
-            78,
-        ]  # [geom_model.getGeometryObjectId(name) for name in names_head_colliders]
-
-        for i in id_head_colliders:
+        for i in id_torso_colliders:
             geom_model.addCollisionPair(
-                pin.CollisionPair(id_torso_collider, i)
+                pin.CollisionPair(id_head_collider, i)
             )  # torso with head colliders
 
     def compute_collision(self, margin: float = 0.005) -> bool:
@@ -531,16 +516,16 @@ class PlacoKinematics:
             True if there is a collision, False otherwise.
 
         """
-        collision_data = self.robot.collision_model.createData()
-        data = self.robot.model.createData()
+        collision_data = self.robot_ik.collision_model.createData()
+        data = self.robot_ik.model.createData()
 
         # pin.computeCollisions(
         pin.computeDistances(
-            self.robot.model,
+            self.robot_ik.model,
             data,
-            self.robot.collision_model,
+            self.robot_ik.collision_model,
             collision_data,
-            self.robot.state.q,
+            self.robot_ik.state.q,
         )
 
         # Iterate over all collision pairs
@@ -652,14 +637,19 @@ class PlacoKinematics:
         # Compute the gravity torque
         return grav_torque_actuated
 
-    def set_automatic_body_yaw(self, body_yaw: float) -> None:
+    def set_automatic_body_yaw(self, automatic_body_yaw: bool) -> None:
         """Set the automatic body yaw.
 
         Args:
-            body_yaw (float): The yaw angle of the body.
+            automatic_body_yaw (bool): Whether to enable automatic body yaw.
 
         """
-        self.start_body_yaw = body_yaw
+        self.automatic_body_yaw = automatic_body_yaw
+        
+        if not self.automatic_body_yaw:
+            self.ik_yaw_joint_task.configure("joints", "soft", 3.0)
+        else:
+            self.ik_yaw_joint_task.configure("joints", "soft", 5e-5)
 
     def get_joint(self, joint_name: str) -> float:
         """Get the joint object by its name."""

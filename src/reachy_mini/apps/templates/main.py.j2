@@ -5,6 +5,10 @@ from reachy_mini.utils import create_head_pose
 
 
 class {{ class_name }}(ReachyMiniApp):
+    # Optional: URL to a custom configuration page for the app
+    # eg. "http://localhost:8042/settings"
+    custom_app_url: str | None = None 
+
     def run(self, reachy_mini: ReachyMini, stop_event: threading.Event):
         # Write your code here
         # ReachyMini is already initialized and connected
