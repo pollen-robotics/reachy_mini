@@ -1,0 +1,235 @@
+<!doctype html>
+<html>
+
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width" />
+	<title> {{ class_name_display }} </title>
+	<link rel="stylesheet" href="style.css" />
+</head>
+
+<body>
+	<div class="hero">
+		<div class="hero-content">
+			<div class="app-icon">🤖⚡</div>
+			<h1> {{ class_name_display }} </h1>
+			<p class="tagline">Enter your tagline here</p>
+		</div>
+	</div>
+
+	<div class="container">
+		<div class="main-card">
+			<div class="app-preview">
+				<div class="preview-image">
+					<div class="camera-feed">🛠️</div>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<div class="download-section">
+		<div class="download-card">
+			<h2>Install This App</h2>
+
+			<div class="dashboard-config">
+				<label for="dashboardUrl">Your Reachy Dashboard URL:</label>
+				<input type="url" id="dashboardUrl" value="http://localhost:8000"
+					placeholder="http://your-reachy-ip:8000" />
+			</div>
+
+			<button id="installBtn" class="install-btn primary">
+				<span class="btn-icon">📥</span>
+				Install {{ class_name_display }} to Reachy Mini
+			</button>
+
+			<div id="installStatus" class="install-status"></div>
+
+		</div>
+	</div>
+
+	<div class="footer">
+		<p>
+			🤖 {{ class_name_display }} •
+			<a href="https://github.com/pollen-robotics" target="_blank">Pollen Robotics</a> •
+			<a href="https://huggingface.co/spaces/pollen-robotics/Reachy_Mini_Apps" target="_blank">Browse More
+				Apps</a>
+		</p>
+	</div>
+	</div>
+
+	<script>
+		// Get the current Hugging Face Space URL as the repository URL
+		function getCurrentSpaceUrl() {
+			// Get current page URL and convert to repository format
+			const currentUrl = window.location.href;
+
+			// Remove any trailing slashes and query parameters
+			const cleanUrl = currentUrl.split('?')[0].replace(/\/$/, '');
+
+			return cleanUrl;
+		}
+
+		// Parse TOML content to extract project name
+		function parseTomlProjectName(tomlContent) {
+			try {
+				const lines = tomlContent.split('\n');
+				let inProjectSection = false;
+
+				for (const line of lines) {
+					const trimmedLine = line.trim();
+
+					// Check if we're entering the [project] section
+					if (trimmedLine === '[project]') {
+						inProjectSection = true;
+						continue;
+					}
+
+					// Check if we're entering a different section
+					if (trimmedLine.startsWith('[') && trimmedLine !== '[project]') {
+						inProjectSection = false;
+						continue;
+					}
+
+					// If we're in the project section, look for the name field
+					if (inProjectSection && trimmedLine.startsWith('name')) {
+						const match = trimmedLine.match(/name\s*=\s*["']([^"']+)["']/);
+						if (match) {
+							// Convert to lowercase and replace invalid characters for app naming
+							return match[1].toLowerCase().replace(/[^a-z0-9-_]/g, '-');
+						}
+					}
+				}
+
+				throw new Error('Project name not found in pyproject.toml');
+			} catch (error) {
+				console.error('Error parsing pyproject.toml:', error);
+				return 'unknown-app';
+			}
+		}
+
+		// Fetch and parse pyproject.toml from the current space
+		async function getAppNameFromCurrentSpace() {
+			try {
+				// Fetch pyproject.toml from the current space
+				const response = await fetch('./pyproject.toml');
+				if (!response.ok) {
+					throw new Error(`Failed to fetch pyproject.toml: ${response.status}`);
+				}
+
+				const tomlContent = await response.text();
+				return parseTomlProjectName(tomlContent);
+			} catch (error) {
+				console.error('Error fetching app name from current space:', error);
+				// Fallback to extracting from URL if pyproject.toml is not accessible
+				const url = getCurrentSpaceUrl();
+				const parts = url.split('/');
+				const spaceName = parts[parts.length - 1];
+				return spaceName.toLowerCase().replace(/[^a-z0-9-_]/g, '-');
+			}
+		}
+
+		async function installToReachy() {
+			const dashboardUrl = document.getElementById('dashboardUrl').value.trim();
+			const statusDiv = document.getElementById('installStatus');
+			const installBtn = document.getElementById('installBtn');
+
+			if (!dashboardUrl) {
+				showStatus('error', 'Please enter your Reachy dashboard URL');
+				return;
+			}
+
+			try {
+				installBtn.disabled = true;
+				installBtn.innerHTML = '<span class="btn-icon">⏳</span>Installing...';
+				showStatus('loading', 'Connecting to your Reachy dashboard...');
+
+				// Test connection
+				const testResponse = await fetch(`${dashboardUrl}/api/status`, {
+					method: 'GET',
+					mode: 'cors',
+				});
+
+				if (!testResponse.ok) {
+					throw new Error('Cannot connect to dashboard. Make sure the URL is correct and the dashboard is running.');
+				}
+
+				showStatus('loading', 'Reading app configuration...');
+
+				// Get app name from pyproject.toml in current space
+				const appName = await getAppNameFromCurrentSpace();
+
+				// Get current space URL as repository URL
+				const repoUrl = getCurrentSpaceUrl();
+
+				showStatus('loading', `Starting installation of "${appName}"...`);
+
+				// Start installation
+				const installResponse = await fetch(`${dashboardUrl}/api/install`, {
+					method: 'POST',
+					mode: 'cors',
+					headers: {
+						'Content-Type': 'application/json',
+					},
+					body: JSON.stringify({
+						url: repoUrl,
+						name: appName
+					})
+				});
+
+				const result = await installResponse.json();
+
+				if (installResponse.ok) {
+					showStatus('success', `✅ Installation started for "${appName}"! Check your dashboard for progress.`);
+					setTimeout(() => {
+						showStatus('info', `Open your dashboard at ${dashboardUrl} to see the installed app.`);
+					}, 3000);
+				} else {
+					throw new Error(result.detail || 'Installation failed');
+				}
+
+			} catch (error) {
+				console.error('Installation error:', error);
+				showStatus('error', `❌ ${error.message}`);
+			} finally {
+				installBtn.disabled = false;
+				installBtn.innerHTML = '<span class="btn-icon">📥</span>Install App to Reachy';
+			}
+		}
+
+		function showStatus(type, message) {
+			const statusDiv = document.getElementById('installStatus');
+			statusDiv.className = `install-status ${type}`;
+			statusDiv.textContent = message;
+			statusDiv.style.display = 'block';
+		}
+
+		function copyToClipboard() {
+			const repoUrl = document.getElementById('repoUrl').textContent;
+			navigator.clipboard.writeText(repoUrl).then(() => {
+				showStatus('success', '📋 Repository URL copied to clipboard!');
+			}).catch(() => {
+				showStatus('error', 'Failed to copy URL. Please copy manually.');
+			});
+		}
+
+		// Update the displayed repository URL on page load
+		document.addEventListener('DOMContentLoaded', () => {
+			// Auto-detect local dashboard
+			const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+			if (isLocalhost) {
+				document.getElementById('dashboardUrl').value = 'http://localhost:8000';
+			}
+
+			// Update the repository URL display if element exists
+			const repoUrlElement = document.getElementById('repoUrl');
+			if (repoUrlElement) {
+				repoUrlElement.textContent = getCurrentSpaceUrl();
+			}
+		});
+
+		// Event listeners
+		document.getElementById('installBtn').addEventListener('click', installToReachy);
+	</script>
+</body>
+
+</html>
