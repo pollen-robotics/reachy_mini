@@ -586,14 +586,14 @@ class Backend:
         if antennas_joint_positions is not None:
             self.current_antenna_joint_positions = antennas_joint_positions
 
-    def set_automatic_body_yaw(self, body_yaw: float) -> None:
+    def set_automatic_body_yaw(self, body_yaw: bool) -> None:
         """Set the automatic body yaw.
 
         Args:
-            body_yaw (float): The yaw angle of the body.
+            body_yaw (bool): The yaw angle of the body.
 
         """
-        self.head_kinematics.start_body_yaw = body_yaw
+        self.head_kinematics.set_automatic_body_yaw(automatic_body_yaw=body_yaw)
 
     def get_urdf(self) -> str:
         """Get the URDF representation of the robot."""

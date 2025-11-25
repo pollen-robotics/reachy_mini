@@ -150,8 +150,8 @@ class PlacoKinematics:
         if not self.automatic_body_yaw:
             self.ik_yaw_joint_task.configure("joints", "soft", 5e-5)
         else:
-            self.ik_yaw_joint_task.configure("joints", "soft", 1.0)
-
+            self.ik_yaw_joint_task.configure("joints", "soft", 3.0)
+            
         # joint limit tasks (values form URDF)
         self.ik_solver.enable_velocity_limits(True)
         self.ik_solver.enable_joint_limits(True)
@@ -637,14 +637,19 @@ class PlacoKinematics:
         # Compute the gravity torque
         return grav_torque_actuated
 
-    def set_automatic_body_yaw(self, body_yaw: float) -> None:
+    def set_automatic_body_yaw(self, automatic_body_yaw: bool) -> None:
         """Set the automatic body yaw.
 
         Args:
-            body_yaw (float): The yaw angle of the body.
+            automatic_body_yaw (bool): Whether to enable automatic body yaw.
 
         """
-        self.start_body_yaw = body_yaw
+        self.automatic_body_yaw = automatic_body_yaw
+        
+        if not self.automatic_body_yaw:
+            self.ik_yaw_joint_task.configure("joints", "soft", 3.0)
+        else:
+            self.ik_yaw_joint_task.configure("joints", "soft", 5e-5)
 
     def get_joint(self, joint_name: str) -> float:
         """Get the joint object by its name."""
