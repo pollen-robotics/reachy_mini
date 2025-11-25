@@ -66,13 +66,12 @@ class RobotBackend(Backend):
             stats_pub_period=None,
         )
 
+        self.name2id = self.c.get_motor_name_id()
         if hardware_config_filepath is not None:
-            name2id = self.c.get_motor_name_id()
-
             config = parse_yaml_config(hardware_config_filepath)
             for motor_name, motor_conf in config.motors.items():
                 if motor_conf.pid is not None:
-                    motor_id = name2id[motor_name]
+                    motor_id = self.name2id[motor_name]
                     p, i, d = motor_conf.pid
                     self.logger.info(
                         f"Setting PID gains for motor '{motor_name}' (ID: {motor_id}): P={p}, I={i}, D={d}"
@@ -497,8 +496,8 @@ class RobotBackend(Backend):
 
         self.motor_control_mode = mode
 
-    def set_motor_torque_ids(self, ids: list[int], on: bool) -> None:
-        """Set the torque state for specific motor IDs.
+    def set_motor_torque_ids(self, ids: list[str], on: bool) -> None:
+        """Set the torque state for specific motor names.
 
         Args:
             ids (list[int]): List of motor IDs to set the torque state for.
@@ -507,10 +506,14 @@ class RobotBackend(Backend):
         """
         assert self.c is not None, "Motor controller not initialized or already closed."
 
+        assert ids is not None and len(ids) > 0, "IDs list cannot be empty or None."
+
+        ids_int = [self.name2id[name] for name in ids]
+
         if on:
-            self.c.enable_torque_on_ids(ids)
+            self.c.enable_torque_on_ids(ids_int)
         else:
-            self.c.disable_torque_on_ids(ids)
+            self.c.disable_torque_on_ids(ids_int)
 
     def _infer_control_mode(self) -> MotorControlMode:
         assert self.c is not None, "Motor controller not initialized or already closed."

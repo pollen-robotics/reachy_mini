@@ -717,8 +717,8 @@ class Backend:
         pass
 
     @abstractmethod
-    def set_motor_torque_ids(self, ids: list[int], on: bool) -> None:
-        """Set the motor torque for specific motor IDs."""
+    def set_motor_torque_ids(self, ids: list[str], on: bool) -> None:
+        """Set the motor torque for specific motor names."""
         pass
 
     def get_present_passive_joint_positions(self) -> Optional[Dict[str, float]]:
