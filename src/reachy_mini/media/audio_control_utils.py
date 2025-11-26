@@ -338,7 +338,11 @@ def init_respeaker_usb() -> Optional[ReSpeaker]:
             dev = usb.core.find(
                 idVendor=0x2886, idProduct=0x001A, backend=get_libusb1_backend()
             )
-            logging.warning("Old firmware detected. Please update the firmware!")
+            if dev is None:
+                logging.error("No ReSpeaker USB device found !")
+                return None 
+            else:
+                logging.warning("Old firmware detected on ReSpeaker USB device. Please update the firmware!")
         return ReSpeaker(dev)
     except usb.core.NoBackendError:
         logging.error(

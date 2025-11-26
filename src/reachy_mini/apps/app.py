@@ -7,6 +7,7 @@ and creating a new app project with a specified name and path.
 It uses Jinja2 templates to generate the necessary files for the app project.
 """
 
+import os
 import threading
 import traceback
 from abc import ABC, abstractmethod
@@ -76,6 +77,7 @@ def make_app_project(app_name: str, path: Path) -> None:
 
     module_name = app_name.replace("-", "_")
     class_name = "".join(word.capitalize() for word in module_name.split("_"))
+    class_name_display = " ".join(word.capitalize() for word in module_name.split("_"))
 
     base_path.mkdir()
     (base_path / module_name).mkdir()
@@ -86,6 +88,7 @@ def make_app_project(app_name: str, path: Path) -> None:
         "package_name": app_name,
         "module_name": module_name,
         "class_name": class_name,
+        "class_name_display": class_name_display,
     }
 
     (base_path / module_name / "__init__.py").touch()
@@ -97,7 +100,27 @@ def make_app_project(app_name: str, path: Path) -> None:
     )
     (base_path / "README.md").write_text(render_template("README.md.j2", context))
 
+    (base_path / "index.html").write_text(render_template("index.html.j2", context))
+    (base_path / "style.css").write_text(render_template("style.css.j2", context))
+
     print(f"✅ Created app in {base_path}/")
+
+
+def publish_app(app_path: str, hf_space_url: Path) -> None:
+    """Publish the app to the Reachy Mini app store.
+
+    Args:
+        app_path (str): Local path to the app to publish.
+        hf_space_url (Path): Url to the space on Hugging Face.
+
+    """
+    # Placeholder for publishing logic
+    assert os.path.exists(app_path), f"App path {app_path} does not exist."
+    print(f"Publishing app from {app_path} to {hf_space_url}...")
+    os.system(
+        f"cd {app_path} && git init && git remote add space {hf_space_url} && git add . && git commit -m 'Initial commit' && git push -f space main:main"
+    )
+    print("✅ App published successfully.")
 
 
 def main() -> None:
@@ -107,16 +130,39 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="Create a new Reachy Mini app project."
     )
-    parser.add_argument("app_name", type=str, help="Name of the app to create.")
-    parser.add_argument(
-        "--path",
+    subparsers = parser.add_subparsers(
+        dest="command", help="Available commands", required=True
+    )
+
+    make_parser = subparsers.add_parser("make", help="Make a new app project")
+    make_parser.add_argument(
+        "--option", type=str, help="An option for the make command"
+    )
+    make_parser.add_argument("app_name", type=str, help="Name of the app to create.")
+    make_parser.add_argument(
+        "path",
         type=Path,
         default=Path.cwd(),
         help="Path where the app project will be created.",
     )
 
+    publish_parser = subparsers.add_parser(
+        "publish", help="Publish the app to the Reachy Mini app store"
+    )
+    publish_parser.add_argument(
+        "app_path", type=str, help="Local path to the app to publish."
+    )
+    publish_parser.add_argument(
+        "hf_space_url", type=Path, help="Url to the space on Hugging Face."
+    )
+
     args = parser.parse_args()
-    make_app_project(args.app_name, args.path)
+
+    if args.command == "make":
+        make_app_project(args.app_name, args.path)
+
+    elif args.command == "publish":
+        publish_app(args.app_path, args.hf_space_url)
 
 
 if __name__ == "__main__":
