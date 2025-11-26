@@ -78,23 +78,35 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
         """Lifespan context manager for the FastAPI application."""
         args = app.state.args  # type: Args
 
-        if args.autostart:
-            await app.state.daemon.start(
-                serialport=args.serialport,
-                sim=args.sim,
-                scene=args.scene,
-                headless=args.headless,
-                kinematics_engine=args.kinematics_engine,
-                check_collision=args.check_collision,
-                wake_up_on_start=args.wake_up_on_start,
-                localhost_only=localhost_only,
-                hardware_config_filepath=args.hardware_config_filepath,
-            )
-        yield
-        await app.state.app_manager.close()
-        await app.state.daemon.stop(
-            goto_sleep_on_stop=args.goto_sleep_on_stop,
-        )
+        try:
+            if args.autostart:
+                await app.state.daemon.start(
+                    serialport=args.serialport,
+                    sim=args.sim,
+                    scene=args.scene,
+                    headless=args.headless,
+                    kinematics_engine=args.kinematics_engine,
+                    check_collision=args.check_collision,
+                    wake_up_on_start=args.wake_up_on_start,
+                    localhost_only=localhost_only,
+                    hardware_config_filepath=args.hardware_config_filepath,
+                )
+            yield
+        finally:
+            # Ensure cleanup happens even if there's an exception
+            try:
+                logging.info("Shutting down app manager...")
+                await app.state.app_manager.close()
+            except Exception as e:
+                logging.error(f"Error closing app manager: {e}")
+            
+            try:
+                logging.info("Shutting down daemon...")
+                await app.state.daemon.stop(
+                    goto_sleep_on_stop=args.goto_sleep_on_stop,
+                )
+            except Exception as e:
+                logging.error(f"Error stopping daemon: {e}")
 
     app = FastAPI(
         lifespan=lifespan,
