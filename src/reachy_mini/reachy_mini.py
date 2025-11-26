@@ -140,7 +140,7 @@ class ReachyMini:
                         "Non-wireless version detected, daemon should use the flag '--wireless-version'. Reverting to default"
                     )
                     mbackend = MediaBackend.DEFAULT
-            case "gtreamer":
+            case "gstreamer":
                 mbackend = MediaBackend.GSTREAMER
             case "default":
                 mbackend = MediaBackend.DEFAULT
