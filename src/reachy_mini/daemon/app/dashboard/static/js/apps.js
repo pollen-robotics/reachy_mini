@@ -120,7 +120,11 @@ const installedApps = {
             const settingsLink = document.createElement('a');
             settingsLink.className = 'installed-app-settings ml-2 text-gray-500 cursor-pointer';
             settingsLink.innerHTML = '⚙️';
-            settingsLink.href = app.extra.custom_app_url;
+
+            const url = new URL(app.extra.custom_app_url);
+            url.hostname = window.location.host.split(':')[0];
+
+            settingsLink.href = url.toString();
             settingsLink.target = '_blank';
             settingsLink.rel = 'noopener noreferrer';
             title.appendChild(settingsLink);
