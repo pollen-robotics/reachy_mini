@@ -175,36 +175,55 @@ def run_app(args: Args) -> None:
     """Run the FastAPI app with Uvicorn."""
     logging.basicConfig(level=logging.INFO)
 
-    health_check_event = asyncio.Event()
-    app = create_app(args, health_check_event)
+    async def run_server() -> None:
+        health_check_event = asyncio.Event()
+        app = create_app(args, health_check_event)
 
-    config = uvicorn.Config(app, host=args.fastapi_host, port=args.fastapi_port)
-    server = uvicorn.Server(config)
+        config = uvicorn.Config(app, host=args.fastapi_host, port=args.fastapi_port)
+        server = uvicorn.Server(config)
 
-    async def health_check_timeout(timeout_seconds: float) -> None:
-        while True:
-            try:
-                await asyncio.wait_for(
-                    health_check_event.wait(),
-                    timeout=timeout_seconds,
+        health_check_task = None
+
+        async def health_check_timeout(timeout_seconds: float) -> None:
+            while True:
+                try:
+                    await asyncio.wait_for(
+                        health_check_event.wait(),
+                        timeout=timeout_seconds,
+                    )
+                    health_check_event.clear()
+                except asyncio.TimeoutError:
+                    logging.warning("Health check timeout reached, stopping app.")
+                    server.should_exit = True
+                    break
+                except asyncio.CancelledError:
+                    logging.info("Health check task cancelled.")
+                    break
+
+        try:
+            if args.timeout_health_check is not None:
+                health_check_task = asyncio.create_task(
+                    health_check_timeout(args.timeout_health_check)
                 )
-                health_check_event.clear()
-            except asyncio.TimeoutError:
-                logging.warning("Health check timeout reached, stopping app.")
-                server.should_exit = True
-                break
-
-    loop = asyncio.get_event_loop()
-    if args.timeout_health_check is not None:
-        loop.create_task(health_check_timeout(args.timeout_health_check))
+            await server.serve()
+        except KeyboardInterrupt:
+            logging.info("Received Ctrl-C, shutting down gracefully.")
+        finally:
+            # Cancel health check task if it exists
+            if health_check_task and not health_check_task.done():
+                health_check_task.cancel()
+                try:
+                    await health_check_task
+                except asyncio.CancelledError:
+                    pass
 
     try:
-        loop.run_until_complete(server.serve())
+        asyncio.run(run_server())
     except KeyboardInterrupt:
-        logging.info("Received Ctrl-C, shutting down gracefully.")
-    finally:
-        # Optional: additional cleanup here
-        pass
+        logging.info("Shutdown complete.")
+    except Exception as e:
+        logging.error(f"Error during shutdown: {e}")
+        raise
 
 
 def main() -> None:
