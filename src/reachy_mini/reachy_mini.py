@@ -130,15 +130,6 @@ class ReachyMini:
     def _configure_mediamanager(
         self, media_backend: str, log_level: str
     ) -> MediaManager:
-        if (
-            self.client.get_status()["wireless_version"]
-            and media_backend != "gstreamer"
-        ):
-            self.logger.warning(
-                "Wireless version detected, media backend should be set to 'gstreamer'. Reverting to no_media"
-            )
-            media_backend = "no_media"
-
         mbackend = MediaBackend.DEFAULT
         match media_backend.lower():
             case "webrtc":
