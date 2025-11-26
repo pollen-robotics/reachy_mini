@@ -215,9 +215,13 @@ class AsyncWebSocketAudioStreamer:
         """Retrieve a received audio chunk, if any."""
         try:
             if timeout == 0:
-                return self.recv_queue.get_nowait()
+                audio_bytes = self.recv_queue.get_nowait()
             else:
-                return self.recv_queue.get(timeout=timeout)
+                audio_bytes = self.recv_queue.get(timeout=timeout)
+            # bytes -> int16 -> float32 in [-1, 1]
+            int16_arr = np.frombuffer(audio_bytes, dtype=np.int16)
+            float_arr = (int16_arr.astype(np.float32) / 32767.0)
+            return float_arr
         except Empty:
             return None
 
