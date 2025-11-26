@@ -23,7 +23,8 @@ def daemon_check(spawn_daemon: bool, use_sim: bool) -> None:
         simluation_enabled = False
         for proc in psutil.process_iter(["pid", "name", "cmdline"]):
             try:
-                for cmd in proc.info["cmdline"]:
+                safe_cmdline = proc.info.get("cmdline") or []
+                for cmd in safe_cmdline:
                     if script_name in cmd:
                         found_script = True
                     if "--sim" in cmd:
