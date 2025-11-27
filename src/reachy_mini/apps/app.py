@@ -9,6 +9,7 @@ It uses Jinja2 templates to generate the necessary files for the app project.
 
 import argparse
 import os
+import sys
 import threading
 import traceback
 from abc import ABC, abstractmethod
@@ -71,7 +72,7 @@ def create_gui(console: Console, app_name: str | None, app_path: Path | None):
 
         if app_name is None:
             console.print("[red]Aborted.[/red]")
-            return
+            exit()
         app_name = app_name.strip()
 
     # 2) Language
@@ -83,12 +84,12 @@ def create_gui(console: Console, app_name: str | None, app_path: Path | None):
     ).ask()
     if language is None:
         console.print("[red]Aborted.[/red]")
-        return
+        exit()
 
     # js is not supported yet
     if language != "python":
         console.print("[red]Currently only Python apps are supported. Aborted.[/red]")
-        return
+        exit()
 
     if app_path is None:
         # 3) App path
@@ -99,8 +100,15 @@ def create_gui(console: Console, app_name: str | None, app_path: Path | None):
         ).ask()
         if app_path is None:
             console.print("[red]Aborted.[/red]")
-            return
+            exit()
         app_path = Path(app_path).expanduser().resolve()
+
+    name_of_repo = Path(app_path).name
+    if name_of_repo == "reachy_mini":
+        console.print(
+            "[red] Safeguard : You can't store your apps in the reachy_mini repo as it is already a git repo. Aborted.[/red]"
+        )
+        exit()
 
     return app_name, language, app_path
 
@@ -125,7 +133,7 @@ def create(console: Console, app_name: str, app_path: Path) -> None:
     base_path = Path(app_path).resolve() / app_name
     if base_path.exists():
         console.print(f"❌ Folder {base_path} already exists.", style="bold red")
-        return
+        exit()
 
     module_name = app_name.replace("-", "_")
     class_name = "".join(word.capitalize() for word in module_name.split("_"))
@@ -174,7 +182,7 @@ def check(console: Console, app_path: str) -> None:
     """
     if not os.path.exists(app_path):
         console.print(f"[red]App path {app_path} does not exist.[/red]")
-        return
+        exit()
     # Placeholder for checking logic
     print(f"Checking app at path '{app_path}'")
     pass
@@ -199,11 +207,17 @@ def publish(console: Console, app_path: str, commit_message: str) -> None:
         ).ask()
         if app_path is None:
             console.print("[red]Aborted.[/red]")
-            return
+            exit()
+        name_of_repo = Path(app_path).name
+        if name_of_repo == "reachy_mini":
+            console.print(
+                "[red] Safeguard : You may have selected reachy_mini repo as your app. Aborted.[/red]"
+            )
+            exit()
         app_path = Path(app_path).expanduser().resolve()
     if not os.path.exists(app_path):
         console.print(f"[red]App path {app_path} does not exist.[/red]")
-        return
+        sys.exit()
     if not hf.get_token():
         console.print(
             "[red]You need to be logged in to Hugging Face to publish an app.[/red]"
@@ -214,7 +228,7 @@ def publish(console: Console, app_path: str, commit_message: str) -> None:
             hf.login()
         else:
             console.print("[red]Aborted.[/red]")
-            return
+            exit()
 
     username = hf.whoami()["name"]
     repo_path = f"{username}/{Path(app_path).name}"
@@ -229,7 +243,7 @@ def publish(console: Console, app_path: str, commit_message: str) -> None:
         ).ask()
         if commit_message is None:
             console.print("[red]Aborted.[/red]")
-            return
+            exit()
         os.system(
             f"cd {app_path} && git add . && git commit -m '{commit_message}' && git push HEAD:main"
         )
@@ -242,7 +256,6 @@ def publish(console: Console, app_path: str, commit_message: str) -> None:
             default="public",
         ).ask()
 
-        # console.print(f"Publishing app at path '{app_path}'")
         hf.create_repo(
             repo_path,
             repo_type="space",
