@@ -16,3 +16,13 @@ keywords = ["reachy-mini-app"]
 
 [project.entry-points."reachy_mini_apps"]
 {{ app_name }} = "{{ module_name }}.main:{{ class_name }}"
+
+[tool.setuptools]
+package-dir = { "" = "." }
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["."]
+
+[tool.setuptools.package-data]
+{{ app_name }} = ["**/*"] # Includes all non-.py files

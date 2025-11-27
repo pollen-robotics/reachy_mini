@@ -102,6 +102,7 @@ def make_app_project(app_name: str, path: Path) -> None:
 
     (base_path / "index.html").write_text(render_template("index.html.j2", context))
     (base_path / "style.css").write_text(render_template("style.css.j2", context))
+    (base_path / ".gitignore").write_text(render_template(".gitignore.j2", context))
 
     print(f"✅ Created app in {base_path}/")
 
