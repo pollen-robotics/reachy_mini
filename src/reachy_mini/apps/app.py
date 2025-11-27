@@ -8,6 +8,7 @@ It uses Jinja2 templates to generate the necessary files for the app project.
 """
 
 import argparse
+import importlib
 import json
 import os
 import sys
@@ -17,8 +18,12 @@ import traceback
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any, Dict
+from urllib.parse import urlparse
 
 import questionary
+from fastapi import FastAPI
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from huggingface_hub import (
     CommitOperationAdd,
     HfApi,
@@ -41,14 +46,62 @@ class ReachyMiniApp(ABC):
         self.stop_event = threading.Event()
         self.error: str = ""
 
+        self.settings_app: FastAPI | None = None
+        if self.custom_app_url is not None:
+            self.settings_app = FastAPI()
+
+            static_dir = self._get_instance_path().parent / "static"
+            if static_dir.exists():
+                self.settings_app.mount(
+                    "/static", StaticFiles(directory=static_dir), name="static"
+                )
+
+                index_file = static_dir / "index.html"
+                if index_file.exists():
+
+                    @self.settings_app.get("/")
+                    async def index():
+                        """Serve the settings app index page."""
+                        return FileResponse(index_file)
+
     def wrapped_run(self, *args: Any, **kwargs: Any) -> None:
         """Wrap the run method with Reachy Mini context management."""
+        settings_app_t: threading.Thread | None = None
+        if self.settings_app is not None:
+            import uvicorn
+
+            assert self.custom_app_url is not None
+            url = urlparse(self.custom_app_url)
+            assert url.hostname is not None and url.port is not None
+
+            config = uvicorn.Config(
+                self.settings_app,
+                host=url.hostname,
+                port=url.port,
+            )
+            server = uvicorn.Server(config)
+
+            def _server_run():
+                """Run the settings FastAPI app."""
+                t = threading.Thread(target=server.run)
+                t.start()
+                self.stop_event.wait()
+                server.should_exit = True
+                t.join()
+
+            settings_app_t = threading.Thread(target=_server_run)
+            settings_app_t.start()
+
         try:
             with ReachyMini(*args, **kwargs) as reachy_mini:
                 self.run(reachy_mini, self.stop_event)
         except Exception:
             self.error = traceback.format_exc()
             raise
+        finally:
+            if settings_app_t is not None:
+                self.stop_event.set()
+                settings_app_t.join()
 
     @abstractmethod
     def run(self, reachy_mini: ReachyMini, stop_event: threading.Event) -> None:
@@ -65,6 +118,12 @@ class ReachyMiniApp(ABC):
         """Stop the app gracefully."""
         self.stop_event.set()
         print("App is stopping...")
+
+    def _get_instance_path(self) -> Path:
+        """Get the file path of the app instance."""
+        module_name = type(self).__module__
+        spec = importlib.util.find_spec(module_name)
+        return Path(spec.origin).resolve()
 
 
 def create_gui(console: Console, app_name: str | None, app_path: Path | None):
