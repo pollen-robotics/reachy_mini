@@ -231,7 +231,7 @@ def publish(console: Console, app_path: str, commit_message: str) -> None:
             console.print("[red]Aborted.[/red]")
             return
         os.system(
-            f"cd {app_path} && git add . && git commit -m '{commit_message}' && git push"
+            f"cd {app_path} && git add . && git commit -m '{commit_message}' && git push HEAD:main"
         )
         console.print("✅ App updated successfully.")
     else:

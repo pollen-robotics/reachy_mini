@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>{{ class_name_display }}</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            display: flex;
+            justify-content: center;
+            padding-top: 80px;
+            background: #f5f5f5;
+        }
+
+        .card {
+            background: white;
+            padding: 24px;
+            border-radius: 12px;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+            width: 320px;
+        }
+
+        input,
+        button {
+            width: 100%;
+            padding: 10px;
+            margin-top: 8px;
+            border-radius: 8px;
+            border: 1px solid #ccc;
+            font-size: 16px;
+        }
+
+        button {
+            background: #3a7afe;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #2d63d4;
+        }
+
+        #output {
+            margin-top: 16px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="card">
+        <input id="inputText" placeholder="Enter text" />
+        <button onclick="send()">Send</button>
+        <div id="output"></div>
+    </div>
+
+    <script>
+        async function send() {
+            const message = document.getElementById("inputText").value;
+
+            const res = await fetch("/api/process", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({message})
+            });
+
+            const data = await res.json();
+            document.getElementById("output").innerText = data.received;
+        }
+    </script>
+</body>
+
+</html>
