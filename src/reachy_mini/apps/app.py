@@ -147,6 +147,9 @@ def create(console: Console, app_name: str, app_path: Path) -> None:
     (base_path / module_name / "main.py").write_text(
         render_template("main.py.j2", context)
     )
+    # (base_path / module_name / "app_ui.html").write_text(
+    #     render_template("app_ui.html.j2", context)
+    # )
     (base_path / "pyproject.toml").write_text(
         render_template("pyproject.toml.j2", context)
     )
@@ -155,6 +158,8 @@ def create(console: Console, app_name: str, app_path: Path) -> None:
     (base_path / "index.html").write_text(render_template("index.html.j2", context))
     (base_path / "style.css").write_text(render_template("style.css.j2", context))
     (base_path / ".gitignore").write_text(render_template(".gitignore.j2", context))
+
+    # TODO assets dir with a .gif ?
 
     console.print(f"✅ Created app '{app_name}' in {base_path}/", style="bold green")
 
@@ -246,10 +251,10 @@ def publish(console: Console, app_path: str, commit_message: str) -> None:
             space_sdk="static",
         )
         os.system(
-            f"cd {app_path} && git init && git remote add space {repo_url} && git add . && git commit -m 'Initial commit' && git push --set-upstream -f space main:main"
+            f"cd {app_path} && git init && git remote add space {repo_url} && git add . && git commit -m 'Initial commit' && git push --set-upstream -f space HEAD:main"
         )
 
-    # print("✅ App published successfully.")
+    console.print("✅ App published successfully.", style="bold green")
 
 
 def parse_args():
