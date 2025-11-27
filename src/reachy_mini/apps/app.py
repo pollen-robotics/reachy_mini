@@ -8,8 +8,10 @@ It uses Jinja2 templates to generate the necessary files for the app project.
 """
 
 import argparse
+import json
 import os
 import sys
+import tempfile
 import threading
 import traceback
 from abc import ABC, abstractmethod
@@ -17,6 +19,12 @@ from pathlib import Path
 from typing import Any, Dict
 
 import questionary
+from huggingface_hub import (
+    CommitOperationAdd,
+    HfApi,
+    get_repo_discussions,
+    whoami,
+)
 from jinja2 import Environment, FileSystemLoader
 from rich.console import Console
 
@@ -188,13 +196,93 @@ def check(console: Console, app_path: str) -> None:
     pass
 
 
-def publish(console: Console, app_path: str, commit_message: str) -> None:
+def request_app_addition(new_app_repo_id: str):
+    """Request to add the new app to the official Reachy Mini app store."""
+    api = HfApi()
+
+    repo_id = "pollen-robotics/reachy-mini-official-app-store"
+    file_path = "app-list.json"
+
+    # 0. Detect current HF user
+    user = whoami()["name"]
+
+    # 1. Check if there is already an open PR by this user for this app
+    #    (we used commit_message=f"Add {new_app_repo_id} to app-list.json",
+    #     which becomes the PR title)
+    existing_prs = get_repo_discussions(
+        repo_id=repo_id,
+        repo_type="dataset",
+        author=user,
+        discussion_type="pull_request",
+        discussion_status="open",
+    )
+
+    for pr in existing_prs:
+        if new_app_repo_id in pr.title:
+            print(
+                f"An open PR already exists for {new_app_repo_id} by {user}: "
+                f"https://huggingface.co/{repo_id}/discussions/{pr.num}"
+            )
+            return False
+
+    # 2. Download current file from the dataset repo
+    local_downloaded = api.hf_hub_download(
+        repo_id=repo_id,
+        filename=file_path,
+        repo_type="dataset",
+    )
+
+    with open(local_downloaded, "r") as f:
+        app_list = json.load(f)
+
+    # 3. Modify JSON (append if not already present)
+    if new_app_repo_id not in app_list:
+        app_list.append(new_app_repo_id)
+    else:
+        print(f"{new_app_repo_id} is already in the app list.")
+        # You might still want to continue and create the PR, or early-return here.
+        return False
+
+    # 4. Save updated JSON to a temporary path
+    with tempfile.TemporaryDirectory() as tmpdir:
+        updated_path = os.path.join(tmpdir, file_path)
+        os.makedirs(os.path.dirname(updated_path), exist_ok=True)
+        with open(updated_path, "w") as f:
+            json.dump(app_list, f, indent=4)
+            f.write("\n")
+
+        # 5. Commit with create_pr=True
+        commit_info = api.create_commit(
+            repo_id=repo_id,
+            repo_type="dataset",
+            commit_message=f"Add {new_app_repo_id} to app-list.json",
+            commit_description=(
+                f"Append `{new_app_repo_id}` to the list of Reachy Mini apps."
+            ),
+            operations=[
+                CommitOperationAdd(
+                    path_in_repo=file_path,
+                    path_or_fileobj=updated_path,
+                )
+            ],
+            create_pr=True,
+        )
+
+    print("Commit URL:", commit_info.commit_url)
+    print("PR URL:", commit_info.pr_url)  # None if no PR was opened
+    return True
+
+
+def publish(
+    console: Console, app_path: str, commit_message: str, official: bool = False
+) -> None:
     """Publish the app to the Reachy Mini app store.
 
     Args:
         console (Console): The console object for printing messages.
         app_path (str): Local path to the app to publish.
         commit_message (str): Commit message for the app publish.
+        official (bool): Request to publish the app as an official Reachy Mini app.
 
     """
     import huggingface_hub as hf
@@ -267,7 +355,24 @@ def publish(console: Console, app_path: str, commit_message: str) -> None:
             f"cd {app_path} && git init && git remote add space {repo_url} && git add . && git commit -m 'Initial commit' && git push --set-upstream -f space HEAD:main"
         )
 
-    console.print("✅ App published successfully.", style="bold green")
+        console.print("✅ App published successfully.", style="bold green")
+
+    if official:
+        # ask for confirmation
+        if not questionary.confirm(
+            "Are you sure you want to ask to publish this app as an official Reachy Mini app?"
+        ).ask():
+            console.print("[red]Aborted.[/red]")
+            exit()
+
+        worked = request_app_addition(repo_path)
+        if worked:
+            console.print(
+                "\nYou have requested to publish your app as an official Reachy Mini app."
+            )
+            console.print(
+                "The Pollen and Hugging Face teams will review your app. Thank you for your contribution!"
+            )
 
 
 def parse_args():
@@ -322,6 +427,13 @@ def parse_args():
         default=None,
         help="Commit message for the app publish.",
     )
+    publish_parser.add_argument(
+        "--official",
+        action="store_true",
+        required=False,
+        default=False,
+        help="Request to publish the app as an official Reachy Mini app.",
+    )
 
     return parser.parse_args()
 
@@ -335,7 +447,12 @@ def main() -> None:
     elif args.command == "check":
         check(console, app_path=args.app_path)
     elif args.command == "publish":
-        publish(console, app_path=args.app_path, commit_message=args.commit_message)
+        publish(
+            console,
+            app_path=args.app_path,
+            commit_message=args.commit_message,
+            official=args.official,
+        )
 
 
 if __name__ == "__main__":
