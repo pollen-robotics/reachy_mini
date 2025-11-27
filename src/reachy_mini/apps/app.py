@@ -175,12 +175,13 @@ def check(console: Console, app_path: str) -> None:
     pass
 
 
-def publish(console: Console, app_path: str) -> None:
+def publish(console: Console, app_path: str, commit_message: str) -> None:
     """Publish the app to the Reachy Mini app store.
 
     Args:
         console (Console): The console object for printing messages.
         app_path (str): Local path to the app to publish.
+        commit_message (str): Commit message for the app publish.
 
     """
     import huggingface_hub as hf
@@ -217,8 +218,15 @@ def publish(console: Console, app_path: str) -> None:
     if hf.repo_exists(repo_path, repo_type="space"):
         os.system(f"cd {app_path} && git pull {repo_url} main")
         console.print("App already exists on Hugging Face Spaces. Updating...")
+        commit_message = questionary.text(
+            "\n$ Enter a commit message for the update:",
+            default="Update app",
+        ).ask()
+        if commit_message is None:
+            console.print("[red]Aborted.[/red]")
+            return
         os.system(
-            f"cd {app_path} && git add . && git commit -m 'Update app' && git push"
+            f"cd {app_path} && git add . && git commit -m '{commit_message}' && git push"
         )
         console.print("✅ App updated successfully.")
     else:
@@ -289,6 +297,13 @@ def parse_args():
         default=None,
         help="Local path to the app to publish.",
     )
+    publish_parser.add_argument(
+        "commit_message",
+        type=str,
+        nargs="?",
+        default=None,
+        help="Commit message for the app publish.",
+    )
 
     return parser.parse_args()
 
@@ -302,7 +317,7 @@ def main() -> None:
     elif args.command == "check":
         check(console, app_path=args.app_path)
     elif args.command == "publish":
-        publish(console, app_path=args.app_path)
+        publish(console, app_path=args.app_path, commit_message=args.commit_message)
 
 
 if __name__ == "__main__":
