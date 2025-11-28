@@ -213,8 +213,13 @@ class GStreamerAudio(AudioBase):
 
     def clear_player(self) -> None:
         """Flush the player's appsrc to drop any queued audio immediately."""
-        self._pipeline_playback.set_state(Gst.State.PAUSED)
-        self._appsrc.send_event(Gst.Event.new_flush_start())
-        self._appsrc.send_event(Gst.Event.new_flush_stop(reset_time=True))
-        self._pipeline_playback.set_state(Gst.State.PLAYING)
-        self.logger.info("Cleared player queue")
+        if self._appsrc is not None:
+            self._pipeline_playback.set_state(Gst.State.PAUSED)
+            self._appsrc.send_event(Gst.Event.new_flush_start())
+            self._appsrc.send_event(Gst.Event.new_flush_stop(reset_time=True))
+            self._pipeline_playback.set_state(Gst.State.PLAYING)
+            self.logger.info("Cleared player queue")
+        else:
+            self.logger.warning(
+                "AppSrc is not initialized. Call start_playing() first."
+            )
