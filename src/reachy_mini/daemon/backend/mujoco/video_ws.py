@@ -4,7 +4,7 @@ import json
 import logging
 import threading
 import time
-from queue import Empty, Queue
+from queue import Empty, Queue, Full  # Added Full
 from typing import Any, Optional
 
 import cv2
@@ -23,95 +23,96 @@ class AsyncWebSocketFrameSender:
     thread: threading.Thread
     connected: threading.Event
     stop_flag: bool
-    keep_alive_interval: float
-    _last_frame: Optional[npt.NDArray[np.uint8]] # Store last frame for comparison
+    _last_frame: Optional[npt.NDArray[np.uint8]]
 
-    def __init__(self, ws_uri: str, keep_alive_interval: float = 2.0) -> None:
+    def __init__(self, ws_uri: str) -> None:
         """Initialize the WebSocket frame sender."""
         self.ws_uri = ws_uri
-        self.queue = Queue()
+        self.queue = Queue(maxsize=2) 
         self.loop = asyncio.new_event_loop()
         self.thread = threading.Thread(target=self._run_loop, daemon=True)
         self.connected = threading.Event()
         self.stop_flag = False
-        self.keep_alive_interval = keep_alive_interval
         self._last_frame = None 
         self.thread.start()
 
     def _run_loop(self) -> None:
-        """Run the WebSocket frame sender loop."""
         asyncio.set_event_loop(self.loop)
         self.loop.run_until_complete(self._run())
+
+    def _clear_queue(self):
+        """Empty the queue so we don't send 10 seconds of old video on reconnect."""
+        while not self.queue.empty():
+            try:
+                self.queue.get_nowait()
+            except Empty:
+                break
 
     async def _run(self) -> None:
         """Run the WebSocket frame sender loop."""
         while not self.stop_flag:
             try:
-                async with websockets.connect(self.ws_uri) as ws:
-                    logger.info("[WS] Connected to Space")
+                async with websockets.connect(
+                    self.ws_uri, 
+                    ping_interval=5,      # Every 5 seconds is plenty
+                    ping_timeout=10,      # Give it 10s to respond
+                    close_timeout=1,      # Don't wait long for polite closes
+                ) as ws:
+                    print("[WS] Connected to Space")
                     self.connected.set()
-                    
-                    # Track last time we sent data
-                    last_activity = time.time() 
+                    self._clear_queue() # Ensure we start fresh
+
+                    frame_count = 0
+                    start_time = time.time()
 
                     while not self.stop_flag:
                         try:
-                            # Wait briefly for a frame
-                            frame = self.queue.get(timeout=0.1)
+                            frame = self.queue.get_nowait()
                             
-                            # If we get here, we have a frame
                             await ws.send(frame)
-                            last_activity = time.time()
                             
-                        except Empty:
-                            # No frame to send. Check if we need to ping.
-                            now = time.time()
-                            if (now - last_activity) > self.keep_alive_interval:
-                                try:
-                                    # Send a text-based JSON ping
-                                    await ws.send(json.dumps({"type": "ping"}))
-                                    last_activity = now
-                                    logger.debug("[WS] Sent keep-alive ping") 
-                                except Exception as e:
-                                    logger.info(f"[WS] Ping failed: {e}")
-                                    break
-                            
-                            await asyncio.sleep(0.01)
-                            continue
+                            # Update FPS stats
+                            frame_count += 1
+                            elapsed = time.time() - start_time
+                            if elapsed >= 1.0:
+                                fps = frame_count / elapsed
+                                print(f"[WS] Sending FPS: {fps:.2f}")
+                                frame_count = 0
+                                start_time = time.time()
 
+                        except Empty:
+                            # Queue is empty, just yield to event loop
+                            await asyncio.sleep(0.05)
+                            continue
+                        
                         except Exception as e:
-                            logger.info(f"[WS] Send error: {e}")
+                            print(f"[WS] Send error: {e}")
                             break
 
+            except (OSError, websockets.exceptions.ConnectionClosed) as e:
+                # Common network errors, retry quickly
+                print(f"[WS] Connection lost ({type(e).__name__}). Retrying...")
+                self.connected.clear()
+                self._last_frame = None
+                await asyncio.sleep(0.5) # Wait briefly before reconnecting
+
             except Exception as e:
-                logger.info(f"[WS] Connection failed: {e}")
+                print(f"[WS] Unexpected error: {e}")
                 await asyncio.sleep(1)
 
             self.connected.clear()
-            self._last_frame = None # Reset frame cache on disconnect
+            self._last_frame = None
 
     def send_frame(self, frame: npt.NDArray[np.uint8]) -> None:
-        """Send a frame to the WebSocket.
-
-        This method is called from the MuJoCo thread. It is non-blocking.
-
-        Args:
-            frame (np.ndarray): The frame to be sent, in RGB format.
-
-        """
+        """Send a frame to the WebSocket (Non-blocking)."""
         if not self.stop_flag:
             # 1. Frame Deduplication
-            # Check if this frame is identical to the last one sent
             if self._last_frame is not None:
                 if np.array_equal(frame, self._last_frame):
-                    return # Skip encoding and sending
-
-            # Store a copy for the next comparison
+                    return
             self._last_frame = frame.copy()
 
-            # 2. Encode and Queue
-            ok: bool
-            jpeg_bytes: Any
+            # 2. Encode
             ok, jpeg_bytes = cv2.imencode(
                 ".jpg",
                 frame,
@@ -121,9 +122,20 @@ class AsyncWebSocketFrameSender:
                 return
 
             data = jpeg_bytes.tobytes()
-            self.queue.put(data)
+
+            # CRITICAL FIX 3: Non-blocking Put
+            # If queue is full (network lagging), remove the old frame and put the new one.
+            try:
+                self.queue.put_nowait(data)
+            except Full:
+                # Queue is full, network is likely slower than camera.
+                # Drop the OLDEST frame to make room for the NEWEST.
+                try:
+                    self.queue.get_nowait() # Pop old frame
+                    self.queue.put_nowait(data) # Push new frame
+                except Empty:
+                    pass # Should not happen given logic above
 
     def close(self) -> None:
-        """Close the WebSocket frame sender."""
         self.stop_flag = True
         self.loop.call_soon_threadsafe(self.loop.stop)

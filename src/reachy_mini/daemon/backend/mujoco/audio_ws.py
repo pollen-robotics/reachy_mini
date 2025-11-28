@@ -127,9 +127,6 @@ class AsyncWebSocketAudioStreamer:
             # after 100ms instead of waiting forever for more data.
             is_timed_out = (len(batch_buffer) > 0) and ((now - batch_start_time) > self.BATCH_TIMEOUT)
             if is_full or is_timed_out:
-                print(f"[WS-AUDIO] Sending batch of {len(batch_buffer)} bytes")
-                print(f"Buffer was timed out: {is_timed_out} or is full: {is_full}")
-                print(f"It took {now - batch_start_time} seconds to fill the buffer")
                 try:
                     # Send the aggregated buffer
                     await ws.send(batch_buffer)
