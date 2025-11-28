@@ -23,8 +23,8 @@ from reachy_mini.daemon.utils import (
 )
 from reachy_mini.media.media_manager import MediaManager
 
-from ..daemon.backend.mujoco.video_ws import AsyncWebSocketFrameSender
 from ..daemon.backend.mujoco.audio_ws import AsyncWebSocketAudioStreamer
+from ..daemon.backend.mujoco.video_ws import AsyncWebSocketFrameSender
 from ..io.ws_controller import AsyncWebSocketController
 from ..io.zenoh_server import ZenohServer
 from .backend.mujoco import MujocoBackend, MujocoBackendStatus

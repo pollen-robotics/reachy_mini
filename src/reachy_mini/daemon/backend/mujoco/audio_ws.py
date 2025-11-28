@@ -1,6 +1,5 @@
 """Async WebSocket Audio Streamer for the Mujoco backend."""
 import asyncio
-import json
 import logging
 import threading
 import time
@@ -40,6 +39,7 @@ class AsyncWebSocketAudioStreamer:
             ws_uri: WebSocket URI to connect to.
             keep_alive_interval: Interval in seconds to send keep-alive pings
                 when no audio is flowing.
+
         """
         self.ws_uri = ws_uri
         self.send_queue = Queue()
@@ -57,7 +57,7 @@ class AsyncWebSocketAudioStreamer:
         self.loop.run_until_complete(self._run())
 
     async def _run(self) -> None:
-        """Main reconnect loop."""
+        """Run the main reconnect loop."""
         while not self.stop_flag:
             try:
                 async with websockets.connect(self.ws_uri) as ws:
@@ -89,7 +89,7 @@ class AsyncWebSocketAudioStreamer:
     async def _send_loop(self, ws: websockets.WebSocketClientProtocol) -> None:
         """Send outgoing audio chunks and keep-alive pings.
         
-        MODIFIED: Now aggregates small chunks into larger batches before sending.
+        To avoid audible artifacts, this method aggregates small chunks into larger batches before sending.
         """
         last_activity = time.time()
         
@@ -129,7 +129,7 @@ class AsyncWebSocketAudioStreamer:
             if is_full or is_timed_out:
                 try:
                     # Send the aggregated buffer
-                    await ws.send(batch_buffer)
+                    await ws.send(batch_buffer)  # type: ignore
                     
                     # Reset
                     batch_buffer = bytearray()
@@ -184,6 +184,7 @@ class AsyncWebSocketAudioStreamer:
             audio: Either raw bytes or a numpy array of int16 or float32.
                    Float32 arrays are assumed to be in [-1, 1] and will
                    be converted to int16 PCM.
+
         """
         if self.stop_flag:
             return
@@ -198,9 +199,13 @@ class AsyncWebSocketAudioStreamer:
                 arr = arr[:, 0]
                 
             if arr.dtype == np.float32 or arr.dtype == np.float64:
+                # If any value is above 1 or below -1, scale the entire array so the max abs value is 1 or less
+                max_abs = np.max(np.abs(arr))
+                if max_abs > 1.0:
+                    arr = arr / max_abs
                 # Convert float audio [-1,1] to int16 PCM
                 arr = np.clip(arr, -1.0, 1.0)
-                arr = (arr * 32767.0).astype(np.int16)
+                arr = (arr * 32767.0).astype(np.int16)  # type: ignore
             elif arr.dtype != np.int16:
                 arr = arr.astype(np.int16)
 
@@ -208,7 +213,7 @@ class AsyncWebSocketAudioStreamer:
 
         self.send_queue.put(data)
 
-    def get_audio_chunk(self, timeout: Optional[float] = 0.01) -> Optional[bytes]:
+    def get_audio_chunk(self, timeout: Optional[float] = 0.01) -> Optional[npt.NDArray[np.float32]]:
         """Retrieve a received audio chunk, if any."""
         try:
             if timeout == 0:

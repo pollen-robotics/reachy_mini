@@ -2,7 +2,7 @@
 
 import os
 import threading
-from typing import Any, List, Optional
+from typing import List, Optional
 
 import numpy as np
 import numpy.typing as npt
@@ -129,7 +129,7 @@ class SoundDeviceAudio(AudioBase):
         time: int,
         status: sd.CallbackFlags,
     ) -> None:
-        """Callback function for audio output stream."""
+        """Handle audio output stream callback."""
         if status:
             self.logger.warning(f"SoundDevice output status: {status}")
         

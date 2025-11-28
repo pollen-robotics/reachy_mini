@@ -1,11 +1,10 @@
 """Async WebSocket Frame Sender for the Mujoco backend."""
 import asyncio
-import json
 import logging
 import threading
 import time
-from queue import Empty, Queue, Full  # Added Full
-from typing import Any, Optional
+from queue import Empty, Full, Queue
+from typing import Optional
 
 import cv2
 import numpy as np
@@ -40,7 +39,7 @@ class AsyncWebSocketFrameSender:
         asyncio.set_event_loop(self.loop)
         self.loop.run_until_complete(self._run())
 
-    def _clear_queue(self):
+    def _clear_queue(self) -> None:
         """Empty the queue so we don't send 10 seconds of old video on reconnect."""
         while not self.queue.empty():
             try:
@@ -137,5 +136,6 @@ class AsyncWebSocketFrameSender:
                     pass # Should not happen given logic above
 
     def close(self) -> None:
+        """Close the WebSocket frame sender."""
         self.stop_flag = True
         self.loop.call_soon_threadsafe(self.loop.stop)
