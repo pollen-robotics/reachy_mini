@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
 import numpy as np
-from websockets.asyncio.client import connect, ClientConnection
+from websockets.asyncio.client import ClientConnection, connect
 
 from reachy_mini.daemon.backend.abstract import Backend
 

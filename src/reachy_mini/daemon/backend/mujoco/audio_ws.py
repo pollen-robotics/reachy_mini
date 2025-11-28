@@ -8,7 +8,7 @@ from typing import Optional, Union
 
 import numpy as np
 import numpy.typing as npt
-from websockets.asyncio.client import connect, ClientConnection
+from websockets.asyncio.client import ClientConnection, connect
 
 logger = logging.getLogger("reachy_mini.mujoco.audio_ws")
 

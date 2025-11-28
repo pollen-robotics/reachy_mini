@@ -9,7 +9,7 @@ from typing import Optional
 import cv2
 import numpy as np
 import numpy.typing as npt
-from websockets.asyncio.client import connect, ClientConnection
+from websockets.asyncio.client import ClientConnection, connect
 from websockets.exceptions import ConnectionClosed
 
 logger = logging.getLogger("reachy_mini.mujoco.video_ws")
