@@ -98,7 +98,7 @@ class Backend:
         elif self.kinematics_engine == "AnalyticalKinematics":
             from reachy_mini.kinematics import AnalyticalKinematics
 
-            self.head_kinematics = AnalyticalKinematics()
+            self.head_kinematics = AnalyticalKinematics(automatic_body_yaw=False)
         else:
             raise ValueError(
                 f"Unknown kinematics engine: {self.kinematics_engine}. Use 'Placo', 'NN' or 'AnalyticalKinematics'."
