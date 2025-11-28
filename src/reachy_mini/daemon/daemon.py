@@ -11,6 +11,7 @@ import logging
 import time
 from dataclasses import asdict, dataclass
 from enum import Enum
+from importlib.metadata import PackageNotFoundError, version
 from threading import Event, Thread
 from typing import Any, Optional
 
@@ -45,6 +46,14 @@ class Daemon:
         self.wireless_version = wireless_version
 
         self.backend: "RobotBackend | MujocoBackend | None" = None
+        # Get package version
+        try:
+            package_version = version("reachy_mini")
+            self.logger.info(f"Daemon version: {package_version}")
+        except PackageNotFoundError:
+            package_version = None
+            self.logger.warning("Could not determine daemon version")
+
         self._status = DaemonStatus(
             state=DaemonState.NOT_INITIALIZED,
             wireless_version=wireless_version,
@@ -52,6 +61,7 @@ class Daemon:
             backend_status=None,
             error=None,
             wlan_ip=None,
+            version=package_version,
         )
         self._thread_event_publish_status = Event()
 
@@ -76,6 +86,7 @@ class Daemon:
         use_audio: bool = True,
         websocket_uri: Optional[str] = None,
         stream_media: bool = False,
+        hardware_config_filepath: str | None = None,
     ) -> "DaemonState":
         """Start the Reachy Mini daemon.
 
@@ -91,6 +102,7 @@ class Daemon:
             websocket_uri (Optional[str]): If set, allow remote control and streaming of the robot through a WebSocket connection to the specified uri. Defaults to None.
             use_audio (bool): If True, enable audio. Defaults to True.
             stream_media (bool): If True, stream media to the WebSocket. Defaults to False.
+            hardware_config_filepath (str | None): Path to the hardware configuration YAML file. Defaults to None.
 
         Returns:
             DaemonState: The current state of the daemon after attempting to start it.
@@ -99,6 +111,10 @@ class Daemon:
         if self._status.state == DaemonState.RUNNING:
             self.logger.warning("Daemon is already running.")
             return self._status.state
+
+        self.logger.info(
+            f"Daemon start parameters: sim={sim}, serialport={serialport}, scene={scene}, localhost_only={localhost_only}, wake_up_on_start={wake_up_on_start}, check_collision={check_collision}, kinematics_engine={kinematics_engine}, headless={headless}, hardware_config_filepath={hardware_config_filepath}"
+        )
 
         self._status.simulation_enabled = sim
 
@@ -130,6 +146,7 @@ class Daemon:
                 headless=headless,
                 websocket_uri=websocket_uri,
                 use_audio=use_audio,
+                hardware_config_filepath=hardware_config_filepath,
             )
         except Exception as e:
             self._status.state = DaemonState.ERROR
@@ -496,6 +513,7 @@ class Daemon:
         headless: bool,
         use_audio: bool,
         websocket_uri: Optional[str],
+        hardware_config_filepath: str | None = None,
     ) -> "RobotBackend | MujocoBackend":
         if sim:
             return MujocoBackend(
@@ -534,6 +552,7 @@ class Daemon:
                 check_collision=check_collision,
                 kinematics_engine=kinematics_engine,
                 use_audio=use_audio,
+                hardware_config_filepath=hardware_config_filepath,
             )
 
 
@@ -558,3 +577,4 @@ class DaemonStatus:
     backend_status: Optional[RobotBackendStatus | MujocoBackendStatus]
     error: Optional[str] = None
     wlan_ip: Optional[str] = None
+    version: Optional[str] = None

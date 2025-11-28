@@ -33,7 +33,7 @@ def get_pypi_version(package_name: str, pre_release: bool) -> semver.Version:
         releases = list(data["releases"].keys())
         pre_version = _semver_version(releases[-1])
         if pre_version > version:
-            version = pre_version
+            return pre_version
 
     return _semver_version(version)
 

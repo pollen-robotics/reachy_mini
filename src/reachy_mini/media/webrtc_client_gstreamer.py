@@ -4,7 +4,7 @@ The class is a client for the webrtc server hosted on the Reachy Mini Wireless r
 """
 
 from threading import Thread
-from typing import Optional
+from typing import Optional, cast
 
 import gi
 import numpy as np
@@ -12,6 +12,12 @@ import numpy.typing as npt
 
 from reachy_mini.media.audio_base import AudioBase
 from reachy_mini.media.camera_base import CameraBase
+from reachy_mini.media.camera_constants import (
+    CameraResolution,
+    CameraSpecs,
+    ReachyMiniCamSpecs,
+    RPICameraResolution,
+)
 
 gi.require_version("Gst", "1.0")
 gi.require_version("GstApp", "1.0")
@@ -43,12 +49,15 @@ class GstWebRTCClient(CameraBase, AudioBase):
 
         self._appsink_audio = Gst.ElementFactory.make("appsink")
         caps = Gst.Caps.from_string(
-            f"audio/x-raw,channels=2,rate={self.SAMPLE_RATE},format=F32LE"
+            f"audio/x-raw,rate={self.SAMPLE_RATE},format=F32LE,layout=interleaved"
         )
         self._appsink_audio.set_property("caps", caps)
         self._appsink_audio.set_property("drop", True)  # avoid overflow
         self._appsink_audio.set_property("max-buffers", 500)
         self._pipeline_record.add(self._appsink_audio)
+
+        self.camera_specs = cast(CameraSpecs, ReachyMiniCamSpecs)
+        self.set_resolution(RPICameraResolution.R1280x720)
 
         self._appsink_video = Gst.ElementFactory.make("appsink")
         caps_video = Gst.Caps.from_string("video/x-raw,format=BGR")
@@ -75,6 +84,11 @@ class GstWebRTCClient(CameraBase, AudioBase):
         self._loop.quit()
         self._bus_record.remove_watch()
         self._bus_playback.remove_watch()
+
+    def set_resolution(self, resolution: CameraResolution) -> None:
+        """Set the camera resolution."""
+        super().set_resolution(resolution)
+        self._resolution = resolution
 
     def _configure_webrtcsrc(
         self, signaling_host: str, signaling_port: int, peer_id: str

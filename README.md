@@ -16,8 +16,11 @@ There is also a simulated version of Reachy Mini in [MuJoCo](https://mujoco.org)
 
 ## Assembly guide
 
-Follow our step-by-step [Assembly Guide](https://huggingface.co/spaces/pollen-robotics/Reachy_Mini_Assembly_Guide).
+📖 Follow our step-by-step [Assembly Guide](https://huggingface.co/spaces/pollen-robotics/Reachy_Mini_Assembly_Guide).
+
 Most builders finish in about 3 hours, our current speed record is 43 minutes. The guide walks you through every step with clear visuals so you can assemble Reachy Mini confidently from start to finish. Enjoy the build!
+
+▶️ View the [Assembly Video](https://youtu.be/_r0cHySFbeY?si=6Mw4js8HSUs4cwoJ).
 
 ## Software overview
 
@@ -224,6 +227,10 @@ pre-commit run --all-files
 ```
 
 Checks are performed by Ruff. You may want to [configure your IDE to support it](https://docs.astral.sh/ruff/editors/setup/).
+
+## Troubleshooting
+
+see [dedicated section](docs/troubleshooting.md)
 
 ## License
 

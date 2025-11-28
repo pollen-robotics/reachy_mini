@@ -100,11 +100,6 @@ class MujocoBackend(Backend):
 
         self.current_head_pose = np.eye(4)
 
-        # print("Joints in the model:")
-        # for i in range(self.model.njoint):
-        #     name = mujoco.mj_id2joint(self.model, i)
-        #     print(f"  {i}: {name}")
-
         self.joint_names = get_actuator_names(self.model)
 
         self.joint_ids = [
@@ -113,6 +108,13 @@ class MujocoBackend(Backend):
         self.joint_qpos_addr = [
             get_joint_addr_from_name(self.model, n) for n in self.joint_names
         ]
+
+        self.col_inds = []
+        for i, type in enumerate(self.model.geom_contype):
+            if type != 0:
+                self.col_inds.append(i)
+                self.model.geom_contype[i] = 0
+                self.model.geom_conaffinity[i] = 0
     
     def _get_camera_id(self, camera_name: str) -> Any:
         """Get the id of the virtual camera."""
@@ -212,6 +214,17 @@ class MujocoBackend(Backend):
         # recompute all kinematics, collisions, etc.
         mujoco.mj_forward(self.model, self.data)
 
+        for i in range(100):
+            mujoco.mj_step(self.model, self.data)
+
+        # enable collisions
+        for i in self.col_inds:
+            self.model.geom_contype[i] = 1
+            self.model.geom_conaffinity[i] = 1
+
+        for i in range(100):
+            mujoco.mj_step(self.model, self.data)
+
         # one more frame so the viewer shows your startup pose
         mujoco.mj_step(self.model, self.data)
         if not self.headless:
@@ -219,6 +232,13 @@ class MujocoBackend(Backend):
 
             rendering_thread = Thread(target=self.rendering_loop, args=(CAMERA_REACHY, 5005), daemon=True)
             rendering_thread.start()
+
+        # Update the internal states of the IK and FK to the current configuration
+        # This is important to avoid jumps when starting the robot (beore wake-up)
+        self.head_kinematics.ik(self.get_mj_present_head_pose(), no_iterations=20)
+        self.head_kinematics.fk(
+            self.get_present_head_joint_positions(), no_iterations=20
+        )
 
         # 3) now enter your normal loop
         while not self.should_stop.is_set():
@@ -231,6 +251,11 @@ class MujocoBackend(Backend):
                 )
                 self.current_antenna_joint_positions = (
                     self.get_present_antenna_joint_positions()
+                )
+                # Update the Placo kinematics model to recompute passive joints
+                self.update_head_kinematics_model(
+                    self.current_head_joint_positions,
+                    self.current_antenna_joint_positions,
                 )
                 self.current_head_pose = self.get_mj_present_head_pose()
 
@@ -280,7 +305,7 @@ class MujocoBackend(Backend):
 
             took = time.time() - start_t
             time.sleep(max(0, self.model.opt.timestep - took))
-            # print(f"Step {step}: took {took*1000:.1f}ms")
+            # print(f"Step {step}: took {took*1e6:.1f}us")
             step += 1
 
         if not self.headless:
@@ -343,6 +368,10 @@ class MujocoBackend(Backend):
 
     def set_motor_control_mode(self, mode: MotorControlMode) -> None:
         """Set the motor control mode."""
+        pass
+
+    def set_motor_torque_ids(self, ids: list[str], on: bool) -> None:
+        """Set the motor torque state for specific motor names."""
         pass
 
 

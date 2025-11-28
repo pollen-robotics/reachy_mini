@@ -2,7 +2,6 @@
 
 import os
 import threading
-import time
 from typing import Any, List, Optional
 
 import numpy as np
@@ -32,8 +31,12 @@ class SoundDeviceAudio(AudioBase):
         self._output_lock = threading.Lock()
         self._input_buffer: List[npt.NDArray[np.float32]] = []
         self._output_buffer: List[npt.NDArray[np.float32]] = []
-        self._output_device_id = self.get_output_device_id("respeaker")
-        self._input_device_id = self.get_input_device_id("respeaker")
+        self._output_device_id = self._get_device_id(
+            ["Reachy Mini Audio", "respeaker"], device_io_type="output"
+        )
+        self._input_device_id = self._get_device_id(
+            ["Reachy Mini Audio", "respeaker"], device_io_type="input"
+        )
 
     def start_recording(self) -> None:
         """Open the audio input stream, using ReSpeaker card if available."""
@@ -41,7 +44,7 @@ class SoundDeviceAudio(AudioBase):
             blocksize=self.frames_per_buffer,
             device=self._input_device_id,
             callback=self._input_callback,
-            samplerate=self.SAMPLE_RATE,
+            samplerate=self.get_input_audio_samplerate(),
         )
         if self.stream is None:
             raise RuntimeError("Failed to open SoundDevice audio stream.")
@@ -71,6 +74,18 @@ class SoundDeviceAudio(AudioBase):
         self.logger.debug("No audio data available in buffer.")
         return None
 
+    def get_input_audio_samplerate(self) -> int:
+        """Get the input samplerate of the audio device."""
+        return int(
+            sd.query_devices(self._input_device_id, "input")["default_samplerate"]
+        )
+
+    def get_output_audio_samplerate(self) -> int:
+        """Get the output samplerate of the audio device."""
+        return int(
+            sd.query_devices(self._output_device_id, "output")["default_samplerate"]
+        )
+
     def stop_recording(self) -> None:
         """Close the audio stream and release resources."""
         if self.stream is not None:
@@ -82,6 +97,8 @@ class SoundDeviceAudio(AudioBase):
     def push_audio_sample(self, data: npt.NDArray[np.float32]) -> None:
         """Push audio data to the output device."""
         if self._output_stream is not None:
+            if data.ndim > 1:  # convert to mono
+                data = np.mean(data, axis=1)
             with self._output_lock:
                 self._output_buffer.append(data.copy())
         else:
@@ -92,8 +109,10 @@ class SoundDeviceAudio(AudioBase):
     def start_playing(self) -> None:
         """Open the audio output stream."""
         self._output_buffer.clear()  # Clear any old data
+        if self._output_stream is not None:
+            self.stop_playing()
         self._output_stream = sd.OutputStream(
-            samplerate=self.SAMPLE_RATE,
+            samplerate=self.get_output_audio_samplerate(),
             device=self._output_device_id,
             channels=1,
             callback=self._output_callback,
@@ -146,16 +165,27 @@ class SoundDeviceAudio(AudioBase):
             self.logger.info("SoundDevice audio output stream closed.")
 
     def play_sound(self, sound_file: str) -> None:
-        """Play a sound file from the assets directory or a given path using sounddevice and soundfile."""
-        file_path = f"{ASSETS_ROOT_PATH}/{sound_file}"
-        if not os.path.exists(file_path):
-            raise FileNotFoundError(f"Sound file {file_path} not found.")
+        """Play a sound file.
+
+        Args:
+            sound_file (str): Path to the sound file to play. May be given relative to the assets directory or as an absolute path.
+
+        """
+        if not os.path.exists(sound_file):
+            file_path = f"{ASSETS_ROOT_PATH}/{sound_file}"
+            if not os.path.exists(file_path):
+                raise FileNotFoundError(
+                    f"Sound file {sound_file} not found in assets directory or given path."
+                )
+        else:
+            file_path = sound_file
 
         data, samplerate_in = sf.read(file_path, dtype="float32")
+        samplerate_out = self.get_output_audio_samplerate()
 
-        if samplerate_in != self.SAMPLE_RATE:
+        if samplerate_in != samplerate_out:
             data = scipy.signal.resample(
-                data, int(len(data) * (self.SAMPLE_RATE / samplerate_in))
+                data, int(len(data) * (samplerate_out / samplerate_in))
             )
         if data.ndim > 1:  # convert to mono
             data = np.mean(data, axis=1)
@@ -169,46 +199,41 @@ class SoundDeviceAudio(AudioBase):
             self.start_playing()
             self.push_audio_sample(data)
 
-    def get_output_device_id(self, name_contains: str) -> int:
-        """Return the output device id whose name contains the given string (case-insensitive).
+    def _get_device_id(
+        self, names_contains: List[str], device_io_type: str = "output"
+    ) -> int:
+        """Return the output device id whose name contains the given strings (case-insensitive).
+
+        Args:
+            names_contains (List[str]): List of strings that should be contained in the device name.
+            device_io_type (str): 'input' or 'output' to specify device type.
 
         If not found, return the default output device id.
+
         """
         devices = sd.query_devices()
 
         for idx, dev in enumerate(devices):
-            if (
-                name_contains.lower() in dev["name"].lower()
-                and dev["max_output_channels"] > 0
-            ):
-                return idx
+            for name_contains in names_contains:
+                if (
+                    name_contains.lower() in dev["name"].lower()
+                    and dev[f"max_{device_io_type}_channels"] > 0
+                ):
+                    return idx
         # Return default output device if not found
         self.logger.warning(
-            f"No output device found containing '{name_contains}', using default."
+            f"No {device_io_type} device found containing '{names_contains}', using default."
         )
-        return self._safe_query_device("output")
-
-    def get_input_device_id(self, name_contains: str) -> int:
-        """Return the input device id whose name contains the given string (case-insensitive).
-
-        If not found, return the default input device id.
-        """
-        devices = sd.query_devices()
-
-        for idx, dev in enumerate(devices):
-            if (
-                name_contains.lower() in dev["name"].lower()
-                and dev["max_input_channels"] > 0
-            ):
-                return idx
-        # Return default input device if not found
-        self.logger.warning(
-            f"No input device found containing '{name_contains}', using default."
-        )
-        return self._safe_query_device("input")
+        return self._safe_query_device(device_io_type)
 
     def _safe_query_device(self, kind: str) -> int:
         try:
             return int(sd.query_devices(None, kind)["index"])
         except sd.PortAudioError:
-            return int(sd.default.device[1])
+            return (
+                int(sd.default.device[1])
+                if kind == "input"
+                else int(sd.default.device[0])
+            )
+        except IndexError:
+            return 0

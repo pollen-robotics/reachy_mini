@@ -1,8 +1,9 @@
 """Reachy Mini sound playback example.
 
-Open a wav and push samples to the speaker. This is a toy example, in real
-conditions output from a microphone or a text-to-speech engine would be
- pushed to the speaker instead.
+This script demonstrates how to use the microphone array to detect the
+Direction of Arrival (DoA) of speech. It calculates the position of the
+sound source relative to the head, transforms it into world coordinates,
+and commands the robot to look towards the speaker.
 """
 
 import logging
@@ -14,7 +15,7 @@ from reachy_mini import ReachyMini
 
 
 def main() -> None:
-    """Play a wav file by pushing samples to the audio device."""
+    """Continuously monitor audio input and orient the head toward the speaker."""
     logging.basicConfig(
         level=logging.DEBUG, format="%(asctime)s [%(levelname)s] %(message)s"
     )
@@ -26,7 +27,7 @@ def main() -> None:
             doa = mini.media.audio.get_DoA()
             print(f"DOA: {doa}")
             if doa[1] and np.abs(doa[0] - last_doa) > THRESHOLD:
-                print(f"  Speech detected at {doa[0]:.1f}°")
+                print(f"  Speech detected at {doa[0]:.1f} radians")
                 p_head = [np.sin(doa[0]), np.cos(doa[0]), 0.0]
                 print(
                     f"  Pointing to x={p_head[0]:.2f}, y={p_head[1]:.2f}, z={p_head[2]:.2f}"

@@ -40,6 +40,7 @@ async def start_daemon(
                 websocket_uri=request.app.state.args.websocket_uri,
                 stream_media=request.app.state.args.stream_media,
                 use_audio=request.app.state.args.use_audio,
+                hardware_config_filepath=request.app.state.args.hardware_config_filepath,
             )
 
     job_id = bg_job_register.run_command("daemon-start", start)

@@ -8,6 +8,7 @@ managing the robot's state.
 """
 
 import argparse
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
@@ -22,7 +23,15 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from reachy_mini.apps.manager import AppManager
-from reachy_mini.daemon.app.routers import apps, daemon, kinematics, motors, move, state
+from reachy_mini.daemon.app.routers import (
+    apps,
+    daemon,
+    kinematics,
+    motors,
+    move,
+    state,
+    volume,
+)
 from reachy_mini.daemon.daemon import Daemon
 
 
@@ -36,6 +45,7 @@ class Args:
     wireless_version: bool = False
 
     serialport: str = "auto"
+    hardware_config_filepath: str | None = None
 
     sim: bool = False
     scene: str = "empty"
@@ -48,6 +58,7 @@ class Args:
     check_collision: bool = False
 
     autostart: bool = True
+    timeout_health_check: float | None = None
 
     wake_up_on_start: bool = True
     goto_sleep_on_stop: bool = True
@@ -58,7 +69,7 @@ class Args:
     localhost_only: bool | None = None
 
 
-def create_app(args: Args) -> FastAPI:
+def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> FastAPI:
     """Create and configure the FastAPI application."""
     localhost_only = (
         args.localhost_only
@@ -84,6 +95,7 @@ def create_app(args: Args) -> FastAPI:
                 check_collision=args.check_collision,
                 wake_up_on_start=args.wake_up_on_start,
                 localhost_only=localhost_only,
+                hardware_config_filepath=args.hardware_config_filepath,
             )
         yield
         await app.state.app_manager.close()
@@ -106,6 +118,7 @@ def create_app(args: Args) -> FastAPI:
     router.include_router(motors.router)
     router.include_router(move.router)
     router.include_router(state.router)
+    router.include_router(volume.router)
 
     if args.wireless_version:
         from .routers import update, wifi_config
@@ -114,6 +127,14 @@ def create_app(args: Args) -> FastAPI:
         app.include_router(wifi_config.router)
 
     app.include_router(router)
+
+    if health_check_event is not None:
+
+        @app.post("/health-check")
+        async def health_check() -> dict[str, str]:
+            """Health check endpoint to reset the health check timer."""
+            health_check_event.set()
+            return {"status": "ok"}
 
     app.add_middleware(
         CORSMiddleware,
@@ -149,8 +170,36 @@ def run_app(args: Args) -> None:
     """Run the FastAPI app with Uvicorn."""
     logging.basicConfig(level=logging.INFO)
 
-    app = create_app(args)
-    uvicorn.run(app, host=args.fastapi_host, port=args.fastapi_port)
+    health_check_event = asyncio.Event()
+    app = create_app(args, health_check_event)
+
+    config = uvicorn.Config(app, host=args.fastapi_host, port=args.fastapi_port)
+    server = uvicorn.Server(config)
+
+    async def health_check_timeout(timeout_seconds: float) -> None:
+        while True:
+            try:
+                await asyncio.wait_for(
+                    health_check_event.wait(),
+                    timeout=timeout_seconds,
+                )
+                health_check_event.clear()
+            except asyncio.TimeoutError:
+                logging.warning("Health check timeout reached, stopping app.")
+                server.should_exit = True
+                break
+
+    loop = asyncio.get_event_loop()
+    if args.timeout_health_check is not None:
+        loop.create_task(health_check_timeout(args.timeout_health_check))
+
+    try:
+        loop.run_until_complete(server.serve())
+    except KeyboardInterrupt:
+        logging.info("Received Ctrl-C, shutting down gracefully.")
+    finally:
+        # Optional: additional cleanup here
+        pass
 
 
 def main() -> None:
@@ -172,6 +221,20 @@ def main() -> None:
         type=str,
         default=default_args.serialport,
         help="Serial port for real motors (default: will try to automatically find the port).",
+    )
+    default_hw_config_path = str(
+        (
+            Path(__file__).parent.parent.parent
+            / "assets"
+            / "config"
+            / "hardware_config.yaml"
+        ).resolve()
+    )
+    parser.add_argument(
+        "--hardware-config-filepath",
+        type=str,
+        default=default_hw_config_path,
+        help=f"Path to the hardware configuration YAML file (default: {default_hw_config_path}).",
     )
     # Simulation mode
     parser.add_argument(
@@ -223,6 +286,12 @@ def main() -> None:
         action="store_false",
         dest="autostart",
         help="Do not automatically start the daemon on launch (default: False).",
+    )
+    parser.add_argument(
+        "--timeout-health-check",
+        type=float,
+        default=None,
+        help="Set the health check timeout in seconds (default: None).",
     )
     parser.add_argument(
         "--wake-up-on-start",

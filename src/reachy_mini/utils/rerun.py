@@ -12,21 +12,12 @@ import os
 import tempfile
 import time
 from threading import Event, Thread
-from typing import List, Optional
+from typing import Dict, List, Optional
 
-import cv2
 import numpy as np
 import requests
 import rerun as rr
-
-try:
-    from rerun_loader_urdf import URDFLogger
-except ImportError:
-    raise ImportError(
-        "The 'rerun-loader-urdf' package is required for this module. "
-        "Please install it from the GitHub repository: "
-        "pip install git+https://github.com/rerun-io/rerun-loader-python-example-urdf.git"
-    )
+from scipy.spatial.transform import Rotation as R
 from urdf_parser_py import urdf
 
 from reachy_mini.kinematics.placo_kinematics import PlacoKinematics
@@ -66,7 +57,7 @@ class Rerun:
         script_dir = os.path.dirname(os.path.abspath(__file__))
 
         urdf_path = os.path.join(
-            script_dir, "../descriptions/reachy_mini/urdf/robot.urdf"
+            script_dir, "../descriptions/reachy_mini/urdf/robot_no_collision.urdf"
         )
         asset_path = os.path.join(script_dir, "../descriptions/reachy_mini/urdf")
 
@@ -77,8 +68,22 @@ class Rerun:
 
         self.head_kinematics = PlacoKinematics(fixed_urdf)
 
-        self.urdf_logger = URDFLogger(fixed_urdf, "ReachyMini")
-        self.urdf_logger.log(recording=self.recording)
+        self.urdf_model = urdf.URDF.from_xml_file(fixed_urdf)
+        self._joints_by_name: Dict[str, urdf.Joint] = {
+            joint.name: joint for joint in self.urdf_model.joints
+        }
+        self._entity_paths = UrdfEntityPaths(self.urdf_model, "ReachyMini")
+
+        rr.set_time("reachymini", timestamp=time.time(), recording=self.recording)
+
+        # Use the native URDF loader in Rerun to visualize Reachy Mini's model
+        # Logging as non-static to allow updating joint positions
+        rr.log_file_from_path(
+            fixed_urdf,
+            static=False,
+            entity_path_prefix=self._entity_paths.prefix,
+            recording=self.recording,
+        )
 
         self.running = Event()
         self.thread_log_camera: Optional[Thread] = None
@@ -110,23 +115,13 @@ class Rerun:
         self.running.set()
 
     def _get_joint(self, joint_name: str) -> urdf.Joint:
-        for j in self.urdf_logger.urdf.joints:
-            if j.name == joint_name:
-                return j
-        raise RuntimeError("Invalid joint name")
+        try:
+            return self._joints_by_name[joint_name]
+        except KeyError as exc:
+            raise RuntimeError(f"Invalid joint name: {joint_name}") from exc
 
-    def _set_rod_rotation(
-        self,
-        joint_rot: float,
-        joint: urdf.Joint,
-        joint_path: str,
-        urdf_offset: List[float],
-        id_rotation: int,
-    ) -> None:
-        urdf_offset[id_rotation] += joint_rot
-        joint.origin.rotation = urdf_offset
-
-        self.urdf_logger.log_joint(joint_path, joint=joint, recording=self.recording)
+    def _joint_entity_path(self, joint: urdf.Joint) -> str:
+        return self._entity_paths.joint_paths[joint.name]
 
     def log_camera(self) -> None:
         """Log the camera image to Rerun."""
@@ -146,8 +141,6 @@ class Rerun:
                     )
                     return
 
-                cam_name = self._get_joint("camera_optical_frame")
-                cam_joint = self.urdf_logger.joint_entity_path(cam_name)
             else:
                 return
 
@@ -159,15 +152,10 @@ class Rerun:
                 ]
             )
 
-            # camera optical frame from URDF
-            cam_name.origin.rotation = [2.92045, 1.01151, 1.9102]
-            cam_name.origin.position = [-0.0321159, -0.05047, 0.00257878]
-            self.urdf_logger.log_joint(
-                cam_joint, joint=cam_name, recording=self.recording
-            )
-
+            cam_joint = self._get_joint("camera_optical_frame")
+            cam_path = self._joint_entity_path(cam_joint)
             rr.log(
-                f"{cam_joint}/image",
+                f"{cam_path}/image",
                 rr.Pinhole(
                     image_from_camera=rr.datatypes.Mat3x3(K),
                     width=frame.shape[1],
@@ -175,90 +163,45 @@ class Rerun:
                     image_plane_distance=0.8,
                     camera_xyz=rr.ViewCoordinates.RDF,
                 ),
+                rr.Image(frame, color_model="bgr").compress(),
+                recording=self.recording,
             )
 
-            ret, encoded_image = cv2.imencode(".jpg", frame)
-            if ret:
-                rr.log(
-                    f"{cam_joint}/image",
-                    rr.EncodedImage(contents=encoded_image, media_type="image/jpeg"),
-                )
-            else:
-                self.logger.error("Failed to encode frame to JPEG.")
+            time.sleep(0.03)  # ~30fps
 
-            time.sleep(0.3)  # ~30fps
+    def _log_joint_angle(
+        self,
+        joint_name: str,
+        angle: float,
+        axis: list[float] | None = None,
+    ) -> None:
+        """Log the joint angle to Rerun."""
+        joint = self._get_joint(joint_name)
+        joint_path = self._joint_entity_path(joint)
+
+        base_euler = joint.origin.rotation or [0.0, 0.0, 0.0]
+
+        # if we specify an axis override, use it; otherwise, use the joint's defined axis
+        effective_axis = (
+            np.array(axis)
+            if axis is not None
+            else np.array(joint.axis or [1.0, 0.0, 0.0])
+        )
+
+        target_euler = np.array(base_euler) + (effective_axis * angle)
+        target_translation = joint.origin.xyz or [0.0, 0.0, 0.0]
+
+        rr.log(
+            joint_path,
+            rr.Transform3D(
+                translation=target_translation,
+                quaternion=R.from_euler("xyz", target_euler).as_quat(),
+            ),
+            recording=self.recording,
+        )
 
     def log_movements(self) -> None:
         """Log the movement data to Rerun."""
-        antenna_left = self._get_joint("left_antenna")
-        antenna_left_joint = self.urdf_logger.joint_entity_path(antenna_left)
-        antenna_right = self._get_joint("right_antenna")
-        antenna_right_joint = self.urdf_logger.joint_entity_path(antenna_right)
-
-        motor_1 = self._get_joint("stewart_1")
-        motor_1_joint = self.urdf_logger.joint_entity_path(motor_1)
-        motor_2 = self._get_joint("stewart_2")
-        motor_2_joint = self.urdf_logger.joint_entity_path(motor_2)
-        motor_3 = self._get_joint("stewart_3")
-        motor_3_joint = self.urdf_logger.joint_entity_path(motor_3)
-        motor_4 = self._get_joint("stewart_4")
-        motor_4_joint = self.urdf_logger.joint_entity_path(motor_4)
-        motor_5 = self._get_joint("stewart_5")
-        motor_5_joint = self.urdf_logger.joint_entity_path(motor_5)
-        motor_6 = self._get_joint("stewart_6")
-        motor_6_joint = self.urdf_logger.joint_entity_path(motor_6)
-        motor_yaw = self._get_joint("yaw_body")
-        motor_yaw_joint = self.urdf_logger.joint_entity_path(motor_yaw)
-
-        passive_1_x = self._get_joint("passive_1_x")
-        passive_1_x_joint = self.urdf_logger.joint_entity_path(passive_1_x)
-        passive_1_y = self._get_joint("passive_1_y")
-        passive_1_y_joint = self.urdf_logger.joint_entity_path(passive_1_y)
-        passive_1_z = self._get_joint("passive_1_z")
-        passive_1_z_joint = self.urdf_logger.joint_entity_path(passive_1_z)
-
-        passive_2_x = self._get_joint("passive_2_x")
-        passive_2_x_joint = self.urdf_logger.joint_entity_path(passive_2_x)
-        passive_2_y = self._get_joint("passive_2_y")
-        passive_2_y_joint = self.urdf_logger.joint_entity_path(passive_2_y)
-        passive_2_z = self._get_joint("passive_2_z")
-        passive_2_z_joint = self.urdf_logger.joint_entity_path(passive_2_z)
-
-        passive_3_x = self._get_joint("passive_3_x")
-        passive_3_x_joint = self.urdf_logger.joint_entity_path(passive_3_x)
-        passive_3_y = self._get_joint("passive_3_y")
-        passive_3_y_joint = self.urdf_logger.joint_entity_path(passive_3_y)
-        passive_3_z = self._get_joint("passive_3_z")
-        passive_3_z_joint = self.urdf_logger.joint_entity_path(passive_3_z)
-
-        passive_4_x = self._get_joint("passive_4_x")
-        passive_4_x_joint = self.urdf_logger.joint_entity_path(passive_4_x)
-        passive_4_y = self._get_joint("passive_4_y")
-        passive_4_y_joint = self.urdf_logger.joint_entity_path(passive_4_y)
-        passive_4_z = self._get_joint("passive_4_z")
-        passive_4_z_joint = self.urdf_logger.joint_entity_path(passive_4_z)
-
-        passive_5_x = self._get_joint("passive_5_x")
-        passive_5_x_joint = self.urdf_logger.joint_entity_path(passive_5_x)
-        passive_5_y = self._get_joint("passive_5_y")
-        passive_5_y_joint = self.urdf_logger.joint_entity_path(passive_5_y)
-        passive_5_z = self._get_joint("passive_5_z")
-        passive_5_z_joint = self.urdf_logger.joint_entity_path(passive_5_z)
-
-        passive_6_x = self._get_joint("passive_6_x")
-        passive_6_x_joint = self.urdf_logger.joint_entity_path(passive_6_x)
-        passive_6_y = self._get_joint("passive_6_y")
-        passive_6_y_joint = self.urdf_logger.joint_entity_path(passive_6_y)
-        passive_6_z = self._get_joint("passive_6_z")
-        passive_6_z_joint = self.urdf_logger.joint_entity_path(passive_6_z)
-
-        passive_7_x = self._get_joint("passive_7_x")
-        passive_7_x_joint = self.urdf_logger.joint_entity_path(passive_7_x)
-        passive_7_y = self._get_joint("passive_7_y")
-        passive_7_y_joint = self.urdf_logger.joint_entity_path(passive_7_y)
-        passive_7_z = self._get_joint("passive_7_z")
-        passive_7_z_joint = self.urdf_logger.joint_entity_path(passive_7_z)
-
         url = f"http://{self._robot_ip}:8000/api/state/full"
 
         params = {
@@ -292,255 +235,86 @@ class Rerun:
 
             rr.set_time("reachymini", timestamp=time.time(), recording=self.recording)
 
-            # hardcoded offsets are from the URDF file
             if "antennas_position" in data and data["antennas_position"] is not None:
                 antennas = data["antennas_position"]
                 if antennas is not None:
-                    antenna_left.origin.rotation = [
-                        2.93649,
-                        0.508471,
-                        2.10225 + antennas[0],
-                    ]
-                    self.urdf_logger.log_joint(
-                        antenna_left_joint,
-                        joint=antenna_left,
-                        recording=self.recording,
-                    )
-                    antenna_right.origin.rotation = [
-                        1.63922,
-                        1.39152 + antennas[1],
-                        0.701924,
-                    ]
-                    self.urdf_logger.log_joint(
-                        antenna_right_joint,
-                        joint=antenna_right,
-                        recording=self.recording,
-                    )
+                    self._log_joint_angle("left_antenna", antennas[0])
+                    self._log_joint_angle("right_antenna", antennas[1])
+
             if "head_joints" in data and data["head_joints"] is not None:
                 head_joints = data["head_joints"]
-                motor_1.origin.rotation = [
-                    1.5708,
-                    5.91241e-14 - head_joints[1],
-                    1.0472,
-                ]
-                self.urdf_logger.log_joint(
-                    motor_1_joint, joint=motor_1, recording=self.recording
-                )
 
-                motor_2.origin.rotation = [
-                    -1.5708,
-                    1.47282e-13 + head_joints[2],
-                    -2.0944,
-                ]
-                self.urdf_logger.log_joint(
-                    motor_2_joint, joint=motor_2, recording=self.recording
-                )
-
-                motor_3.origin.rotation = [
-                    1.5708,
-                    5.72146e-14 - head_joints[3],
-                    3.14159,
-                ]
-                self.urdf_logger.log_joint(
-                    motor_3_joint, joint=motor_3, recording=self.recording
-                )
-                motor_4.origin.rotation = [
-                    -1.5708,
-                    -7.49452e-14 + head_joints[4],
-                    3.47181e-14,
-                ]
-                self.urdf_logger.log_joint(
-                    motor_4_joint, joint=motor_4, recording=self.recording
-                )
-                motor_5.origin.rotation = [
-                    1.5708,
-                    -1.79054e-13 - head_joints[5],
-                    -1.0472,
-                ]
-                self.urdf_logger.log_joint(
-                    motor_5_joint, joint=motor_5, recording=self.recording
-                )
-                motor_6.origin.rotation = [
-                    -1.5708,
-                    -5.32144e-14 + head_joints[6],
-                    2.0944,
-                ]
-                self.urdf_logger.log_joint(
-                    motor_6_joint, joint=motor_6, recording=self.recording
-                )
-
-                motor_yaw.origin.rotation = [
-                    -3.74039e-16,
-                    1.77636e-15,
-                    1.5708 - head_joints[0],
-                ]
-                self.urdf_logger.log_joint(
-                    motor_yaw_joint, joint=motor_yaw, recording=self.recording
-                )
+                # The joint axis definitions in the URDF do not match the real axis of rotation
+                # due to URDF not supporting ball joints properly.
+                self._log_joint_angle("yaw_body", -head_joints[0], axis=[0, 0, 1])
+                self._log_joint_angle("stewart_1", -head_joints[1], axis=[0, 1, 0])
+                self._log_joint_angle("stewart_2", head_joints[2], axis=[0, 1, 0])
+                self._log_joint_angle("stewart_3", -head_joints[3], axis=[0, 1, 0])
+                self._log_joint_angle("stewart_4", head_joints[4], axis=[0, 1, 0])
+                self._log_joint_angle("stewart_5", -head_joints[5], axis=[0, 1, 0])
+                self._log_joint_angle("stewart_6", head_joints[6], axis=[0, 1, 0])
 
             if "passive_joints" in data and data["passive_joints"] is not None:
                 passive_joints = data["passive_joints"]
-                self._set_rod_rotation(
-                    passive_joints[0],  # "passive_1_x",
-                    passive_1_x,
-                    passive_1_x_joint,
-                    [-0.13754, -0.0882156, 2.10349],
-                    0,
-                )
-                self._set_rod_rotation(
-                    passive_joints[1],  # "passive_1_y",
-                    passive_1_y,
-                    passive_1_y_joint,
-                    [-4.80812e-17, 3.69195e-17, -3.11194e-17],
-                    1,
-                )
-                self._set_rod_rotation(
-                    passive_joints[2],  # "passive_1_z",
-                    passive_1_z,
-                    passive_1_z_joint,
-                    [-4.80812e-17, 3.69195e-17, -3.11194e-17],
-                    2,
-                )
 
-                self._set_rod_rotation(
-                    passive_joints[3],  # "passive_2_x",
-                    passive_2_x,
-                    passive_2_x_joint,
-                    [-3.14159, 5.37396e-16, -3.14159],
-                    0,
-                )
+                for axis_idx, axis in enumerate(["x", "y", "z"]):
+                    for i in range(1, 8):
+                        joint_name = f"passive_{i}_{axis}"
+                        value_index = (i - 1) * 3 + axis_idx
 
-                self._set_rod_rotation(
-                    passive_joints[4],  # "passive_2_y",
-                    passive_2_y,
-                    passive_2_y_joint,
-                    [-4.29816e-30, 7.32263e-17, -8.42229e-30],
-                    1,
-                )
-                self._set_rod_rotation(
-                    passive_joints[5],  # "passive_2_z",
-                    passive_2_z,
-                    passive_2_z_joint,
-                    [-4.29816e-30, 7.32263e-17, -8.42229e-30],
-                    2,
-                )
-
-                self._set_rod_rotation(
-                    passive_joints[6],  # "passive_3_x",
-                    passive_3_x,
-                    passive_3_x_joint,
-                    [0.373569, 0.0882156, -1.0381],
-                    0,
-                )
-                self._set_rod_rotation(
-                    passive_joints[7],  # "passive_3_y",
-                    passive_3_y,
-                    passive_3_y_joint,
-                    [-4.71809e-17, -7.61919e-18, 5.54539e-17],
-                    1,
-                )
-                self._set_rod_rotation(
-                    passive_joints[8],  # "passive_3_z",
-                    passive_3_z,
-                    passive_3_z_joint,
-                    [-4.71809e-17, -7.61919e-18, 5.54539e-17],
-                    2,
-                )
-
-                self._set_rod_rotation(
-                    passive_joints[9],  # "passive_4_x",
-                    passive_4_x,
-                    passive_4_x_joint,
-                    [-0.0860846, 0.0882156, 1.0381],
-                    0,
-                )
-
-                self._set_rod_rotation(
-                    passive_joints[10],  # "passive_4_y",
-                    passive_4_y,
-                    passive_4_y_joint,
-                    [-3.54762e-18, 2.76754e-18, -1.40989e-17],
-                    1,
-                )
-
-                self._set_rod_rotation(
-                    passive_joints[11],  # "passive_4_z",
-                    passive_4_z,
-                    passive_4_z_joint,
-                    [-3.54762e-18, 2.76754e-18, -1.40989e-17],
-                    2,
-                )
-
-                self._set_rod_rotation(
-                    passive_joints[12],  # "passive_5_x",
-                    passive_5_x,
-                    passive_5_x_joint,
-                    [0.123977, 0.0882156, -1.0381],
-                    0,
-                )
-
-                self._set_rod_rotation(
-                    passive_joints[13],  # "passive_5_y",
-                    passive_5_y,
-                    passive_5_y_joint,
-                    [-1.10888e-16, -3.21444e-17, 3.55033e-17],
-                    1,
-                )
-
-                self._set_rod_rotation(
-                    passive_joints[14],  # "passive_5_z",
-                    passive_5_z,
-                    passive_5_z_joint,
-                    [-1.10888e-16, -3.21444e-17, 3.55033e-17],
-                    2,
-                )
-
-                self._set_rod_rotation(
-                    passive_joints[15],  # "passive_6_x",
-                    passive_6_x,
-                    passive_6_x_joint,
-                    [3.0613, 0.0882156, 1.0381],
-                    0,
-                )
-
-                self._set_rod_rotation(
-                    passive_joints[16],  # "passive_6_y",
-                    passive_6_y,
-                    passive_6_y_joint,
-                    [-7.27418e-17, 2.10388e-17, 4.15523e-17],
-                    1,
-                )
-
-                self._set_rod_rotation(
-                    passive_joints[17],  # "passive_6_z",
-                    passive_6_z,
-                    passive_6_z_joint,
-                    [-7.27418e-17, 2.10388e-17, 4.15523e-17],
-                    2,
-                )
-
-                self._set_rod_rotation(
-                    passive_joints[18],  # "passive_7_x",
-                    passive_7_x,
-                    passive_7_x_joint,
-                    [3.14159, 2.10388e-17, 4.15523e-17],
-                    0,
-                )
-
-                self._set_rod_rotation(
-                    passive_joints[19],  # "passive_7_y",
-                    passive_7_y,
-                    passive_7_y_joint,
-                    [-7.27418e-17, -2.10388e-17, -4.15523e-17],
-                    1,
-                )
-
-                self._set_rod_rotation(
-                    passive_joints[20],  # "passive_7_z",
-                    passive_7_z,
-                    passive_7_z_joint,
-                    [-7.27418e-17, -2.10388e-17, -4.15523e-17],
-                    2,
-                )
+                        override_axis = [0.0, 0.0, 0.0]
+                        override_axis[axis_idx] = 1.0
+                        self._log_joint_angle(
+                            joint_name,
+                            passive_joints[value_index],
+                            axis=override_axis,
+                        )
 
             time.sleep(0.1)
+
+
+class UrdfEntityPaths:
+    """Helper for constructing link/joint entity paths that match the native URDF logger."""
+
+    def __init__(self, model: urdf.URDF, entity_path_prefix: Optional[str]) -> None:
+        """Construct a new `UrdfEntityPaths` instance.
+
+        Args:
+            model (urdf.URDF): The URDF model.
+            entity_path_prefix (Optional[str]): The prefix for entity paths.
+
+        """
+        self._model = model
+        self.prefix = entity_path_prefix
+        self.link_paths: Dict[str, str] = {}
+        self.joint_paths: Dict[str, str] = {}
+
+        base_parts = [part for part in (self.prefix, model.name) if part]
+        self._base_path = "/".join(base_parts)
+
+        children_map: Dict[str, List[urdf.Joint]] = {}
+        for joint in model.joints:
+            children_map.setdefault(joint.parent, []).append(joint)
+
+        root_link = model.get_root()
+        self._build_paths(root_link, self._base_path, children_map)
+
+    def _build_paths(
+        self,
+        link_name: str,
+        parent_path: str,
+        children_map: Dict[str, List[urdf.Joint]],
+    ) -> None:
+        link_path = self._join(parent_path, link_name)
+        self.link_paths[link_name] = link_path
+
+        for joint in children_map.get(link_name, []):
+            joint_path = self._join(link_path, joint.name)
+            self.joint_paths[joint.name] = joint_path
+            self._build_paths(joint.child, joint_path, children_map)
+
+    @staticmethod
+    def _join(parent: str, child: str) -> str:
+        if parent:
+            return f"{parent}/{child}"
+        return child

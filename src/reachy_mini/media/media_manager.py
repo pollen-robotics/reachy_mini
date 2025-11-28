@@ -12,7 +12,6 @@ import numpy.typing as npt
 
 from reachy_mini.media.audio_base import AudioBase
 from reachy_mini.media.camera_base import CameraBase
-from reachy_mini.media.camera_constants import CameraResolution
 
 # actual backends are dynamically imported
 
@@ -36,7 +35,6 @@ class MediaManager:
         log_level: str = "INFO",
         use_sim: bool = False,
         use_audio: bool = True,
-        resolution: CameraResolution = CameraResolution.R1280x720,
         signalling_host: str = "localhost",
     ) -> None:
         """Initialize the audio device."""
@@ -52,7 +50,7 @@ class MediaManager:
                 self.logger.info("No media backend selected.")
             case MediaBackend.DEFAULT:
                 self.logger.info("Using default media backend (OpenCV + SoundDevice).")
-                self._init_camera(use_sim, log_level, resolution)
+                self._init_camera(use_sim, log_level)
                 if self.use_audio:
                     self._init_audio(log_level)
             case MediaBackend.DEFAULT_NO_VIDEO:
@@ -61,7 +59,7 @@ class MediaManager:
                     self._init_audio(log_level)
             case MediaBackend.GSTREAMER:
                 self.logger.info("Using GStreamer media backend.")
-                self._init_camera(use_sim, log_level, resolution)
+                self._init_camera(use_sim, log_level)
                 if self.use_audio:
                     self._init_audio(log_level)
             case MediaBackend.WEBRTC:
@@ -70,19 +68,22 @@ class MediaManager:
             case _:
                 raise NotImplementedError(f"Media backend {backend} not implemented.")
 
-    def __del__(self) -> None:
-        """Destructor to ensure resources are released."""
+    def close(self) -> None:
+        """Close the media manager and release resources."""
         if self.camera is not None:
             self.camera.close()
         if self.audio is not None:
             self.audio.stop_recording()
             self.audio.stop_playing()
 
+    def __del__(self) -> None:
+        """Destructor to ensure resources are released."""
+        self.close()
+
     def _init_camera(
         self,
         use_sim: bool,
         log_level: str,
-        resolution: CameraResolution,
     ) -> None:
         """Initialize the camera."""
         self.logger.debug("Initializing camera...")
@@ -90,7 +91,7 @@ class MediaManager:
             self.logger.info("Using OpenCV camera backend.")
             from reachy_mini.media.camera_opencv import OpenCVCamera
 
-            self.camera = OpenCVCamera(log_level=log_level, resolution=resolution)
+            self.camera = OpenCVCamera(log_level=log_level)
             if use_sim:
                 self.camera.open(udp_camera="udp://@127.0.0.1:5005")
             else:
@@ -99,7 +100,7 @@ class MediaManager:
             self.logger.info("Using GStreamer camera backend.")
             from reachy_mini.media.camera_gstreamer import GStreamerCamera
 
-            self.camera = GStreamerCamera(log_level=log_level, resolution=resolution)
+            self.camera = GStreamerCamera(log_level=log_level)
             self.camera.open()
             # Todo: use simulation with gstreamer?
 
@@ -191,17 +192,19 @@ class MediaManager:
             return None
         return self.audio.get_audio_sample()
 
-    def get_audio_samplerate(self) -> int:
-        """Get the samplerate of the audio device.
-
-        Returns:
-            int: The samplerate of the audio device.
-
-        """
+    def get_input_audio_samplerate(self) -> int:
+        """Get the input samplerate of the audio device."""
         if self.audio is None:
             self.logger.warning("Audio system is not initialized.")
             return -1
-        return self.audio.SAMPLE_RATE
+        return self.audio.get_input_audio_samplerate()
+
+    def get_output_audio_samplerate(self) -> int:
+        """Get the output samplerate of the audio device."""
+        if self.audio is None:
+            self.logger.warning("Audio system is not initialized.")
+            return -1
+        return self.audio.get_output_audio_samplerate()
 
     def stop_recording(self) -> None:
         """Stop recording audio."""

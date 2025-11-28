@@ -11,7 +11,7 @@
         <geom type="mesh" contype="0" conaffinity="0" group="2"/>
       </default>
       <default class="collision">
-        <geom group="3"/>
+        <geom type="mesh" contype="1" conaffinity="1"  group="3"/>
       </default>
     </default>
   </default>
@@ -19,8 +19,8 @@
   <default>
     <default class="perfect_actuator">
       <geom contype="0" conaffinity="0"/>
-      <joint damping="0.095" frictionloss="0.001" armature="0.001"/>
-      <position kp="10.0" kv="0.18" forcerange="-10.0 10.0"/>
+        <joint damping="0.15" frictionloss="0.1" armature="0.001"/>
+        <position kp="10.0" kv="0.1" forcerange="-20.0 20.0"/>
       <default class="chosen_actuator"/>
     </default>
     <default class="xc330m288t">
@@ -82,6 +82,14 @@
         <!-- Part bearing_85x110x13 -->
         <geom type="mesh" class="visual" pos="3.79972e-17 -3.70588e-18 -0.0115" quat="0.5 0.5 0.5 0.5" mesh="bearing_85x110x13" material="bearing_85x110x13_material"/>
         <!-- Part body_top_3dprint -->
+        <geom type="mesh" class="collision" pos="6.43558e-16 9.98888e-16 0.195" quat="1.38781e-17 -0 1.67393e-17 1" mesh="body_top_3dprint_collider_front_0"/>
+        <geom type="mesh" class="collision" pos="6.43558e-16 9.98888e-16 0.195" quat="1.38781e-17 -0 1.67393e-17 1" mesh="body_top_3dprint_collider_front_1"/>
+        <geom type="mesh" class="collision" pos="6.43558e-16 9.98888e-16 0.195" quat="1.38781e-17 -0 1.67393e-17 1" mesh="body_top_3dprint_collider_front_2"/>
+        <geom type="mesh" class="collision" pos="6.43558e-16 9.98888e-16 0.195" quat="1.38781e-17 -0 1.67393e-17 1" mesh="body_top_3dprint_collider_back_0"/>
+        <geom type="mesh" class="collision" pos="6.43558e-16 9.98888e-16 0.195" quat="1.38781e-17 -0 1.67393e-17 1" mesh="body_top_3dprint_collider_back_1"/>
+        <geom type="mesh" class="collision" pos="6.43558e-16 9.98888e-16 0.195" quat="1.38781e-17 -0 1.67393e-17 1" mesh="body_top_3dprint_collider_back_2"/>
+        <geom type="mesh" class="collision" pos="6.43558e-16 9.98888e-16 0.195" quat="1.38781e-17 -0 1.67393e-17 1" mesh="body_top_3dprint_collider_back_3"/>
+        
         <geom type="mesh" class="visual" pos="6.43558e-16 9.98888e-16 0.195" quat="1.38781e-17 -0 1.67393e-17 1" mesh="body_top_3dprint" material="body_top_3dprint_material"/>
         <!-- Part stewart_main_plate_3dprint -->
         <geom type="mesh" class="visual" pos="-3.07628e-26 -5.29396e-23 0.195" quat="1.38846e-17 0 1.67459e-17 1" mesh="stewart_main_plate_3dprint" material="stewart_main_plate_3dprint_material"/>
@@ -407,6 +415,7 @@
               <!-- Part glasses_dolder_3dprint -->
               <geom type="mesh" class="visual" pos="-0.0535717 -0.0190178 0.0256147" quat="0.664652 0.38283 -0.641585 -0.00682952" mesh="glasses_dolder_3dprint" material="glasses_dolder_3dprint_material"/>
               <!-- Part head_front_3dprint -->
+              <geom type="mesh" class="collision" pos="-0.0535717 -0.0190178 0.0256147" quat="0.664652 0.38283 -0.641585 -0.00682952" mesh="head_one_3dprint_collider_0"/>
               <geom type="mesh" class="visual" pos="-0.0535717 -0.0190178 0.0256147" quat="0.664652 0.38283 -0.641585 -0.00682952" mesh="head_front_3dprint" material="head_front_3dprint_material"/>
               <!-- Part head_mic_3dprint -->
               <geom type="mesh" class="visual" pos="-0.0535717 -0.0190178 0.0256147" quat="0.664652 0.38283 -0.641585 -0.00682952" mesh="head_mic_3dprint" material="head_mic_3dprint_material"/>
@@ -479,8 +488,10 @@
                   fovy="80"
                 />
               </body> 
+              
               <!-- Frame head -->
               <site group="3" name="head" pos="-0.00611127 0.00370522 0.0291364" quat="0.465151 0.724371 -0.182968 -0.474809"/>
+
               <!-- Link dc15_a01_horn_dummy_7 -->
               <body name="dc15_a01_horn_dummy_7" pos="-0.0948524 0.0197779 -0.00445785" quat="0.652996 0.376401 0.603671 -0.259807">
                 <!-- Joint from xl_330 to dc15_a01_horn_dummy_7 -->
@@ -557,6 +568,17 @@
     <mesh file="phs_1_7x20_5_dc10.stl"/>
     <mesh file="phs_1_7x20_5_dc10_1.stl"/>
     <mesh file="head_back_3dprint.stl"/>
+
+    <!-- Collision models defualt: coarse - there is also fine (but much more detailed models)-->
+    <mesh file="collision/coarse/head_one_3dprint_collider_0.stl"/>
+    <mesh file="collision/coarse/body_top_3dprint_collider_front_0.stl"/>
+    <mesh file="collision/coarse/body_top_3dprint_collider_front_1.stl"/>
+    <mesh file="collision/coarse/body_top_3dprint_collider_front_2.stl"/>
+    <mesh file="collision/coarse/body_top_3dprint_collider_back_0.stl"/>
+    <mesh file="collision/coarse/body_top_3dprint_collider_back_1.stl"/>
+    <mesh file="collision/coarse/body_top_3dprint_collider_back_2.stl"/>
+    <mesh file="collision/coarse/body_top_3dprint_collider_back_3.stl"/>
+
     <material name="body_foot_3dprint_material" rgba="0.301961 0.301961 0.301961 1"/>
     <material name="dc15_a01_horn_dummy_material" rgba="0.262745 0.282353 0.301961 1"/>
     <material name="body_turning_3dprint_material" rgba="0.301961 0.301961 0.301961 1"/>
