@@ -212,7 +212,7 @@ class GStreamerAudio(AudioBase):
         self.logger.warning("play_sound is not implemented for GStreamerAudio.")
 
     def clear_player(self) -> None:
-        """Flush the player's appsrc to drop any queued audio immediately"""
+        """Flush the player's appsrc to drop any queued audio immediately."""
         self._pipeline_playback.set_state(Gst.State.PAUSED)
         self._appsrc.send_event(Gst.Event.new_flush_start())
         self._appsrc.send_event(Gst.Event.new_flush_stop(reset_time=True))
