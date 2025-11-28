@@ -9,7 +9,8 @@ from typing import Optional
 import cv2
 import numpy as np
 import numpy.typing as npt
-import websockets
+from websockets.asyncio.client import connect, ClientConnection
+from websockets.exceptions import ConnectionClosed
 
 logger = logging.getLogger("reachy_mini.mujoco.video_ws")
 
@@ -51,7 +52,8 @@ class AsyncWebSocketFrameSender:
         """Run the WebSocket frame sender loop."""
         while not self.stop_flag:
             try:
-                async with websockets.connect(
+                ws: ClientConnection
+                async with connect(
                     self.ws_uri, 
                     ping_interval=5,      # Every 5 seconds is plenty
                     ping_timeout=10,      # Give it 10s to respond
@@ -88,7 +90,7 @@ class AsyncWebSocketFrameSender:
                             print(f"[WS] Send error: {e}")
                             break
 
-            except (OSError, websockets.exceptions.ConnectionClosed) as e:
+            except (OSError, ConnectionClosed) as e:
                 # Common network errors, retry quickly
                 print(f"[WS] Connection lost ({type(e).__name__}). Retrying...")
                 self.connected.clear()

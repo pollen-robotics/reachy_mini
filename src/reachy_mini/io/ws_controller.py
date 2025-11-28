@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
 import numpy as np
-import websockets
+from websockets.asyncio.client import connect, ClientConnection
 
 from reachy_mini.daemon.backend.abstract import Backend
 
@@ -93,7 +93,8 @@ class AsyncWebSocketController:
         """Run the WebSocket controller loop."""
         while not self.stop_flag:
             try:
-                async with websockets.connect(self.ws_uri) as ws:
+                ws: ClientConnection
+                async with connect(self.ws_uri, ping_interval=5, ping_timeout=10) as ws:
                     logger.info("[WS] Connected to Space")
                     async for msg in ws:
                         try:

@@ -8,7 +8,7 @@ from typing import Optional, Union
 
 import numpy as np
 import numpy.typing as npt
-import websockets
+from websockets.asyncio.client import connect, ClientConnection
 
 logger = logging.getLogger("reachy_mini.mujoco.audio_ws")
 
@@ -60,7 +60,7 @@ class AsyncWebSocketAudioStreamer:
         """Run the main reconnect loop."""
         while not self.stop_flag:
             try:
-                async with websockets.connect(self.ws_uri) as ws:
+                async with connect(self.ws_uri) as ws:
                     logger.info("[WS-AUDIO] Connected to Space")
                     self.connected.set()
 
@@ -86,7 +86,7 @@ class AsyncWebSocketAudioStreamer:
 
             self.connected.clear()
 
-    async def _send_loop(self, ws: websockets.WebSocketClientProtocol) -> None:
+    async def _send_loop(self, ws: ClientConnection) -> None:
         """Send outgoing audio chunks and keep-alive pings.
         
         To avoid audible artifacts, this method aggregates small chunks into larger batches before sending.
@@ -153,7 +153,7 @@ class AsyncWebSocketAudioStreamer:
             if len(batch_buffer) == 0:
                 await asyncio.sleep(0.001)
 
-    async def _recv_loop(self, ws: websockets.WebSocketClientProtocol) -> None:
+    async def _recv_loop(self, ws: ClientConnection) -> None:
         """Receive incoming audio chunks."""
         while not self.stop_flag:
             try:
