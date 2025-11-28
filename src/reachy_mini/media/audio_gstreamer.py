@@ -65,7 +65,7 @@ class GStreamerAudio(AudioBase):
         )
         self._appsink_audio.set_property("caps", caps)
         self._appsink_audio.set_property("drop", True)  # avoid overflow
-        self._appsink_audio.set_property("max-buffers", 500)
+        self._appsink_audio.set_property("max-buffers", 200)
 
         audiosrc: Optional[Gst.Element] = None
         if self._id_audio_card == -1:
@@ -210,3 +210,11 @@ class GStreamerAudio(AudioBase):
 
         """
         self.logger.warning("play_sound is not implemented for GStreamerAudio.")
+
+    def clear_player(self) -> None:
+        """Flush the player's appsrc to drop any queued audio immediately"""
+        self._pipeline_playback.set_state(Gst.State.PAUSED)
+        self._appsrc.send_event(Gst.Event.new_flush_start())
+        self._appsrc.send_event(Gst.Event.new_flush_stop(reset_time=True))
+        self._pipeline_playback.set_state(Gst.State.PLAYING)
+        self.logger.info("Cleared player queue")
