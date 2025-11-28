@@ -13,7 +13,9 @@ from jinja2 import Environment, FileSystemLoader
 from rich.console import Console
 
 
-def create_gui(console: Console, app_name: str | None, app_path: Path | None):
+def create_gui(
+    console: Console, app_name: str | None, app_path: Path | None
+) -> tuple[str, str, Path]:
     """Create a new Reachy Mini app project using a GUI."""
     if app_name is None:
         # 1) App name
@@ -142,7 +144,7 @@ def check(console: Console, app_path: str) -> None:
     pass
 
 
-def request_app_addition(new_app_repo_id: str):
+def request_app_addition(new_app_repo_id: str) -> bool:
     """Request to add the new app to the official Reachy Mini app store."""
     api = HfApi()
 

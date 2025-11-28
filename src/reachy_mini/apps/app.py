@@ -47,7 +47,7 @@ class ReachyMiniApp(ABC):
                 if index_file.exists():
 
                     @self.settings_app.get("/")
-                    async def index():
+                    async def index() -> FileResponse:
                         """Serve the settings app index page."""
                         return FileResponse(index_file)
 
@@ -68,7 +68,7 @@ class ReachyMiniApp(ABC):
             )
             server = uvicorn.Server(config)
 
-            def _server_run():
+            def _server_run() -> None:
                 """Run the settings FastAPI app."""
                 t = threading.Thread(target=server.run)
                 t.start()
@@ -109,11 +109,12 @@ class ReachyMiniApp(ABC):
     def _get_instance_path(self) -> Path:
         """Get the file path of the app instance."""
         module_name = type(self).__module__
-        spec = importlib.util.find_spec(module_name)  # type: ignore
+        spec = importlib.util.find_spec(module_name)
+        assert spec is not None and spec.origin is not None
         return Path(spec.origin).resolve()
 
 
-def parse_args():
+def parse_args() -> argparse.Namespace:
     """Parse command-line arguments."""
     parser = argparse.ArgumentParser(
         description="App creation and publishing assistant for Reachy Mini."
