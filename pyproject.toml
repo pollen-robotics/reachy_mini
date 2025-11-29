@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "reachy_mini"
-version = "1.1.1"
+version = "1.1.2"
 authors = [{ name = "Pollen Robotics", email = "contact@pollen-robotics.com" }]
 description = ""
 readme = "README.md"
@@ -31,6 +31,8 @@ dependencies = [
     "pyusb>=1.2.1",
     "libusb_package>=1.0.26.3",
     "pip>=25",
+    "rich",
+    "questionary",
 ]
 
 
@@ -65,7 +67,7 @@ wireless-version = [
 
 [project.scripts]
 reachy-mini-daemon = "reachy_mini.daemon.app.main:main"
-reachy-mini-apps-helper = "reachy_mini.apps.app:main"
+reachy-mini-app-assistant = "reachy_mini.apps.app:main"
 
 [tool.setuptools]
 package-dir = { "" = "src" }

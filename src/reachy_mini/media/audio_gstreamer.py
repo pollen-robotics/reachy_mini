@@ -57,7 +57,7 @@ class GStreamerAudio(AudioBase):
     def _init_pipeline_record(self, pipeline: Gst.Pipeline) -> None:
         self._appsink_audio = Gst.ElementFactory.make("appsink")
         caps = Gst.Caps.from_string(
-            f"audio/x-raw,rate={self.SAMPLE_RATE},format=F32LE,layout=interleaved"
+            f"audio/x-raw,rate={self.SAMPLE_RATE},channels=2,format=F32LE,layout=interleaved"
         )
         self._appsink_audio.set_property("caps", caps)
         self._appsink_audio.set_property("drop", True)  # avoid overflow
