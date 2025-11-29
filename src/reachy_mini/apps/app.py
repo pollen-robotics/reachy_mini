@@ -27,6 +27,7 @@ class ReachyMiniApp(ABC):
     """Base class for Reachy Mini applications."""
 
     custom_app_url: str | None = None
+    dont_start_webserver: bool = False
 
     def __init__(self) -> None:
         """Initialize the Reachy Mini app."""
@@ -34,7 +35,7 @@ class ReachyMiniApp(ABC):
         self.error: str = ""
 
         self.settings_app: FastAPI | None = None
-        if self.custom_app_url is not None:
+        if self.custom_app_url is not None and not self.dont_start_webserver:
             self.settings_app = FastAPI()
 
             static_dir = self._get_instance_path().parent / "static"
