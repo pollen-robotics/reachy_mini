@@ -1411,6 +1411,18 @@ wheels = [
 ]
 
 [[package]]
+name = "markdown-it-py"
+version = "4.0.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "mdurl" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/5b/f5/4ec618ed16cc4f8fb3b701563655a69816155e79e24a17b651541804721d/markdown_it_py-4.0.0.tar.gz", hash = "sha256:cb0a2b4aa34f932c007117b194e945bd74e0ec24133ceb5bac59009cda1cb9f3", size = 73070, upload-time = "2025-08-11T12:57:52.854Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/94/54/e7d793b573f298e1c9013b8c4dade17d481164aa517d1d7148619c2cedbf/markdown_it_py-4.0.0-py3-none-any.whl", hash = "sha256:87327c59b172c5011896038353a81343b6754500a08cd7a4973bb48c6d578147", size = 87321, upload-time = "2025-08-11T12:57:51.923Z" },
+]
+
+[[package]]
 name = "markupsafe"
 version = "3.0.2"
 source = { registry = "https://pypi.org/simple" }
@@ -1478,6 +1490,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/99/5b/a36a337438a14116b16480db471ad061c36c3694df7c2084a0da7ba538b7/matplotlib_inline-0.1.7.tar.gz", hash = "sha256:8423b23ec666be3d16e16b60bdd8ac4e86e840ebd1dd11a30b9f117f2fa0ab90", size = 8159, upload-time = "2024-04-15T13:44:44.803Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/8f/8e/9ad090d3553c280a8060fbf6e24dc1c0c29704ee7d1c372f0c174aa59285/matplotlib_inline-0.1.7-py3-none-any.whl", hash = "sha256:df192d39a4ff8f21b1895d72e6a13f5fcc5099f00fa84384e0ea28c2cc0653ca", size = 9899, upload-time = "2024-04-15T13:44:43.265Z" },
+]
+
+[[package]]
+name = "mdurl"
+version = "0.1.2"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/d6/54/cfe61301667036ec958cb99bd3efefba235e65cdeb9c84d24a8293ba1d90/mdurl-0.1.2.tar.gz", hash = "sha256:bb413d29f5eea38f31dd4754dd7377d4465116fb207585f97bf925588687c1ba", size = 8729, upload-time = "2022-08-14T12:40:10.846Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b3/38/89ba8ad64ae25be8de66a6d463314cf1eb366222074cfda9ee839c56a4b4/mdurl-0.1.2-py3-none-any.whl", hash = "sha256:84008a41e51615a49fc9966191ff91509e3c40b939176e643fd50a5c2196b8f8", size = 9979, upload-time = "2022-08-14T12:40:09.779Z" },
 ]
 
 [[package]]
@@ -2871,8 +2892,20 @@ wheels = [
 ]
 
 [[package]]
+name = "questionary"
+version = "2.1.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "prompt-toolkit" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/f6/45/eafb0bba0f9988f6a2520f9ca2df2c82ddfa8d67c95d6625452e97b204a5/questionary-2.1.1.tar.gz", hash = "sha256:3d7e980292bb0107abaa79c68dd3eee3c561b83a0f89ae482860b181c8bd412d", size = 25845, upload-time = "2025-08-28T19:00:20.851Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/3c/26/1062c7ec1b053db9e499b4d2d5bc231743201b74051c973dadeac80a8f43/questionary-2.1.1-py3-none-any.whl", hash = "sha256:a51af13f345f1cdea62347589fbb6df3b290306ab8930713bfae4d475a7d4a59", size = 36753, upload-time = "2025-08-28T19:00:19.56Z" },
+]
+
+[[package]]
 name = "reachy-mini"
-version = "1.1.0"
+version = "1.1.1"
 source = { editable = "." }
 dependencies = [
     { name = "aiohttp" },
@@ -2890,8 +2923,10 @@ dependencies = [
     { name = "psutil" },
     { name = "pyserial" },
     { name = "pyusb" },
+    { name = "questionary" },
     { name = "reachy-mini-motor-controller" },
     { name = "reachy-mini-rust-kinematics" },
+    { name = "rich" },
     { name = "scipy" },
     { name = "sounddevice" },
     { name = "soundfile" },
@@ -2975,10 +3010,12 @@ requires-dist = [
     { name = "pytest", marker = "extra == 'dev'" },
     { name = "pytest-asyncio", marker = "extra == 'dev'" },
     { name = "pyusb", specifier = ">=1.2.1" },
-    { name = "reachy-mini-motor-controller", specifier = ">=1.4.1" },
+    { name = "questionary" },
+    { name = "reachy-mini-motor-controller", specifier = ">=1.4.2" },
     { name = "reachy-mini-rust-kinematics", specifier = ">=1.0.2" },
     { name = "rerun-sdk", marker = "extra == 'dev'", specifier = ">=0.27.2" },
     { name = "rerun-sdk", marker = "extra == 'rerun'", specifier = ">=0.27.2" },
+    { name = "rich" },
     { name = "ruff", marker = "extra == 'dev'", specifier = "==0.12.0" },
     { name = "rustypot", marker = "extra == 'dev'", specifier = ">=1.4.0" },
     { name = "scipy", specifier = ">=1.15.3,<2.0.0" },
@@ -2994,66 +3031,66 @@ provides-extras = ["dev", "examples", "mujoco", "nn-kinematics", "placo-kinemati
 
 [[package]]
 name = "reachy-mini-motor-controller"
-version = "1.4.1"
+version = "1.4.2"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/36/86/4a6f424c2492d35b62802e0b2e4e2f2990c885e1258cb58da9a508a04680/reachy_mini_motor_controller-1.4.1.tar.gz", hash = "sha256:e576f0098b225210ad31c675a54cecc740788d60981fd88423784dc32acaab8f", size = 27994, upload-time = "2025-11-19T13:59:14.856Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/4a/8d/353b13636ebffae848c0d0b8c4bfc15c4673b059f62f9c310ee98986b0b7/reachy_mini_motor_controller-1.4.2.tar.gz", hash = "sha256:bd6e9f5c13394bc57478a09e76e01c28854ae0c80a9335a3a1b78dc80e0ee150", size = 28248, upload-time = "2025-11-25T17:56:55.263Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/80/8e/a36ca15767401c113fd6187a347bfb0e2dae463e9656756867a0b8dcbee7/reachy_mini_motor_controller-1.4.1-cp310-cp310-macosx_10_12_x86_64.whl", hash = "sha256:c1439f6f83cd95c39d66994e9500803258a09c67a615a8d1a68d6cc329f41b99", size = 587888, upload-time = "2025-11-19T13:58:41.61Z" },
-    { url = "https://files.pythonhosted.org/packages/e5/15/743ce56a304cf0196aa27ca52010c3d4d3d6234d8391e0678756096b5ff2/reachy_mini_motor_controller-1.4.1-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:c6509510a07c26d115922ac7298d8007adf91ca92265587e0035a507a1ba9d4d", size = 570913, upload-time = "2025-11-19T13:58:34.901Z" },
-    { url = "https://files.pythonhosted.org/packages/3d/eb/16f557af39ce3120199a471d529812883e45303c9a6a6584ebe82f8ffdd0/reachy_mini_motor_controller-1.4.1-cp310-cp310-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:27a4906a6ee8c805fd9a40925b2fc017113d08aad65bc4804369518ce19efdca", size = 638370, upload-time = "2025-11-19T13:58:13.278Z" },
-    { url = "https://files.pythonhosted.org/packages/9a/01/a34cf85309f733e906c347c075930652c0d51c6cb1f753ef81017073753a/reachy_mini_motor_controller-1.4.1-cp310-cp310-manylinux_2_17_armv7l.manylinux2014_armv7l.whl", hash = "sha256:7c9357de61e9bf4dea093290ed15ff9b6612e0df7e7519323ca0555464b0caa4", size = 644885, upload-time = "2025-11-19T13:58:18.72Z" },
-    { url = "https://files.pythonhosted.org/packages/8e/e9/e24d931bf868bc0c058f6c17a09ac0866b869a3809f960f86c1e94ce523b/reachy_mini_motor_controller-1.4.1-cp310-cp310-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:45f4adbe20188bbf1c7d41c2819884688236872f616dd56ebef0ad1874ae2de1", size = 691842, upload-time = "2025-11-19T13:58:24.422Z" },
-    { url = "https://files.pythonhosted.org/packages/1a/88/12a71382e0a1c2443e578596ff89601d5a295fa2cf2e95c481aa189ed260/reachy_mini_motor_controller-1.4.1-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:bd449ad3d753b3a1021391879619ccc0163f3e0f8ae049ba44b9a5d2079834fe", size = 657493, upload-time = "2025-11-19T13:58:29.924Z" },
-    { url = "https://files.pythonhosted.org/packages/74/85/08c3bb67c079c58896d20f699750ff8ffa6acb787b9df640f1ce990d81b6/reachy_mini_motor_controller-1.4.1-cp310-cp310-musllinux_1_2_aarch64.whl", hash = "sha256:8a25f8b2fb89052a9e7841f75bd1fc4cb1a2e522d5a9368f64faa5117d429c6b", size = 821242, upload-time = "2025-11-19T13:58:48.142Z" },
-    { url = "https://files.pythonhosted.org/packages/8f/89/8af8025afe193535cd3df1fa0e08054ffbe0b76599a1052c8f4ff77732a1/reachy_mini_motor_controller-1.4.1-cp310-cp310-musllinux_1_2_armv7l.whl", hash = "sha256:23328b0764c451652851fb21d521d07ec9f25784a9e9936d075ad08c40e8d8a3", size = 909299, upload-time = "2025-11-19T13:58:54.562Z" },
-    { url = "https://files.pythonhosted.org/packages/3f/93/dc42dfef12a0cb9307ce2a8f2ad65abee60701dbfc3181ecda8e87833ffd/reachy_mini_motor_controller-1.4.1-cp310-cp310-musllinux_1_2_i686.whl", hash = "sha256:f3a30f72878ddbb7cf1a19681a3f10d1e029a5f26ebedd23e8c6446ca1662dd9", size = 853175, upload-time = "2025-11-19T13:59:01.029Z" },
-    { url = "https://files.pythonhosted.org/packages/15/25/7088d4b32d8c3e7bb499aeb9b825e1f383ceb5f6a9697d09b69b139e8139/reachy_mini_motor_controller-1.4.1-cp310-cp310-musllinux_1_2_x86_64.whl", hash = "sha256:58908a2d4495d273131540248d9adec5385397fdb7638e7a1d0151bf4bbc322d", size = 813579, upload-time = "2025-11-19T13:59:08.918Z" },
-    { url = "https://files.pythonhosted.org/packages/00/bd/e82ed85ed7f777f18a17c3b620e73bdf2f1a8e06a100d1fd7df2c50c7f70/reachy_mini_motor_controller-1.4.1-cp310-cp310-win32.whl", hash = "sha256:8ee0ed54229911270b1891b4cb567398486f7f2b3abe54fbe7478f7187adc43c", size = 374658, upload-time = "2025-11-19T13:59:21.985Z" },
-    { url = "https://files.pythonhosted.org/packages/43/f1/cca089f44724fd8be64c472611778dda4a0b02beec0b01becab172ec8e13/reachy_mini_motor_controller-1.4.1-cp310-cp310-win_amd64.whl", hash = "sha256:f7cc7c0baeb64818c9d1db64ec4f2619431dc7dc60091085accfc0d0fedba735", size = 397350, upload-time = "2025-11-19T13:59:15.701Z" },
-    { url = "https://files.pythonhosted.org/packages/17/d1/5798908aa6459c4e25bafc0bd20898c2984d934096546460e34b7d97c6bf/reachy_mini_motor_controller-1.4.1-cp311-cp311-macosx_10_12_x86_64.whl", hash = "sha256:1b81eb4ede1b5b918bfc7765ee6ab841325b265fc10dd7b5f74425c2d3bd5f7c", size = 587547, upload-time = "2025-11-19T13:58:43.024Z" },
-    { url = "https://files.pythonhosted.org/packages/0d/0d/a2ebaf7108112932fec0bcefa30a7cebdfa568f09f98bfa2970eafac8775/reachy_mini_motor_controller-1.4.1-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:8b66f5de1193143fb3e187a5d411322af06d8ced89acf461330f35ecf956d66d", size = 571145, upload-time = "2025-11-19T13:58:36.239Z" },
-    { url = "https://files.pythonhosted.org/packages/db/25/2ec2ce3d5ea6e02f6469b05f4f6e94e8a318d9ed1d6440e623788236c015/reachy_mini_motor_controller-1.4.1-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:a05b38e43621d6a170b552173529c1440838fd5a6a0cfeecce77c7cc68ef68f0", size = 637980, upload-time = "2025-11-19T13:58:14.958Z" },
-    { url = "https://files.pythonhosted.org/packages/f6/53/75e3555dc51ead251082880c4ab9c77b4b789a1dc10dfd3dae3ab6f8dba0/reachy_mini_motor_controller-1.4.1-cp311-cp311-manylinux_2_17_armv7l.manylinux2014_armv7l.whl", hash = "sha256:04959de7a63a210be0cf6ddd65730985af0b8f8c45a5aeecb0b515a167b2e5e3", size = 644335, upload-time = "2025-11-19T13:58:20.417Z" },
-    { url = "https://files.pythonhosted.org/packages/d3/50/109f3a2713298b819f882963a8f774e157f6328df8cb95aa48f38794e7c3/reachy_mini_motor_controller-1.4.1-cp311-cp311-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:b9cfc3fb6a1ed7c85d373bcd1c23c52d5125b2b48b5fb0459964201ad1dbebbd", size = 691788, upload-time = "2025-11-19T13:58:26.078Z" },
-    { url = "https://files.pythonhosted.org/packages/8e/2d/bd92a99edee6a13320ab4249ba19270e8f7f9dc28044cd5e699c405aa336/reachy_mini_motor_controller-1.4.1-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:735a01f1cedb95252f02939bc839cae57c73f66b4d49a72b86022c560a85d5b8", size = 659594, upload-time = "2025-11-19T13:58:31.27Z" },
-    { url = "https://files.pythonhosted.org/packages/88/74/4905e265629832f1ad5e88661640f626fb27dee48c2ce0bc3ad7147211d8/reachy_mini_motor_controller-1.4.1-cp311-cp311-musllinux_1_2_aarch64.whl", hash = "sha256:b6325150c4fffc2b37503f3e3d2ac8015f38e0f8400c3e89fec7b54d11c5233d", size = 821273, upload-time = "2025-11-19T13:58:49.287Z" },
-    { url = "https://files.pythonhosted.org/packages/24/b1/9f67931c46af32f89418e9931e22b472b291242f281882c6f260549448b8/reachy_mini_motor_controller-1.4.1-cp311-cp311-musllinux_1_2_armv7l.whl", hash = "sha256:2357c1083c688dd3160097a80e96fb564bacf9c459898c45b4338b413abcd0db", size = 908236, upload-time = "2025-11-19T13:58:55.739Z" },
-    { url = "https://files.pythonhosted.org/packages/cb/92/267b542af99a9f03b20657ef6466bf92c20fa2a3cb23b4c16c4f855efd6e/reachy_mini_motor_controller-1.4.1-cp311-cp311-musllinux_1_2_i686.whl", hash = "sha256:14832d6deff09df202ec9f135b1b87d31cf00854680bfd371d7f72c31839c7c7", size = 852720, upload-time = "2025-11-19T13:59:02.31Z" },
-    { url = "https://files.pythonhosted.org/packages/61/4e/8119929437dc5c6b7086da531ef33188c3d7d486e9a48a309547280b0014/reachy_mini_motor_controller-1.4.1-cp311-cp311-musllinux_1_2_x86_64.whl", hash = "sha256:ba9072a8bc43899a2b526fa93c633d3533e3027f83feb3643b562dad0a96182e", size = 814661, upload-time = "2025-11-19T13:59:10.128Z" },
-    { url = "https://files.pythonhosted.org/packages/0d/21/c1a26aa65020cde87ec6dbcf36ab42fafa79fb1fd60f4dc756847c0f786e/reachy_mini_motor_controller-1.4.1-cp311-cp311-win32.whl", hash = "sha256:99dfaa86ea02a313be36c88d3db96cdb4a047529cb84a9a51db5f8055c2ded80", size = 374773, upload-time = "2025-11-19T13:59:23.155Z" },
-    { url = "https://files.pythonhosted.org/packages/a8/0c/582bc8ce4fc3d1c38f8e71c37f9e6b40ebfe1af8ebcb4c52c308b0c27283/reachy_mini_motor_controller-1.4.1-cp311-cp311-win_amd64.whl", hash = "sha256:6a76bd6a5bcb7f03992e82086da758679a810900d78a839d073be13833455333", size = 396962, upload-time = "2025-11-19T13:59:17.02Z" },
-    { url = "https://files.pythonhosted.org/packages/e1/35/0d9c56f34f134f67d95ca03f32806baad0af661a4464c365ee1524396aaa/reachy_mini_motor_controller-1.4.1-cp312-cp312-macosx_10_12_x86_64.whl", hash = "sha256:b93abec42795c33efe7abbc98817f9c266a971f4cde2e7fdb2a93559b87db33d", size = 585812, upload-time = "2025-11-19T13:58:44.436Z" },
-    { url = "https://files.pythonhosted.org/packages/63/54/73156ca53a157f4e1f6e8e0e5f0817ef5327a71449461d5fa0f5c0e49917/reachy_mini_motor_controller-1.4.1-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:d3a0c14a3dbab0b25f84da72b3c450de23a07a11fc48b365ae078fbfc088aab1", size = 567545, upload-time = "2025-11-19T13:58:37.636Z" },
-    { url = "https://files.pythonhosted.org/packages/a8/f7/7a7f7285c1deed5a63a0bdb265afe605b561e4289d7e0bb96124aba885ce/reachy_mini_motor_controller-1.4.1-cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:9c394133c9df2abb3086c6158d037f8b65abd81eb8534739ac9f4bdb9ceb8820", size = 638598, upload-time = "2025-11-19T13:58:16.173Z" },
-    { url = "https://files.pythonhosted.org/packages/1c/a0/7c974eac8fd5a444a37006efeedd872bea8401224a34b135ec01e90ef3b2/reachy_mini_motor_controller-1.4.1-cp312-cp312-manylinux_2_17_armv7l.manylinux2014_armv7l.whl", hash = "sha256:06ae660e3ba51d59254215162023fae4d48833b597991bd5f729144907f36768", size = 644133, upload-time = "2025-11-19T13:58:21.573Z" },
-    { url = "https://files.pythonhosted.org/packages/67/ed/0b94a1e3de66d446b69c88dbe45b139e0bcdbce431c164f1670b382600a2/reachy_mini_motor_controller-1.4.1-cp312-cp312-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:9b24aeeb994409ecade7ff9ed7a0dd9c26ac58cedfd64796d0cfeab5acdc317c", size = 692022, upload-time = "2025-11-19T13:58:27.409Z" },
-    { url = "https://files.pythonhosted.org/packages/42/cf/647e359c4da5b25110e49e0ae3d009259a7f0d76f04cec3f06324148bb6b/reachy_mini_motor_controller-1.4.1-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:ac80cca872a10b7a28f16acd90d9cc655061028e74767fdc5eae8d2a744af8cc", size = 657914, upload-time = "2025-11-19T13:58:32.625Z" },
-    { url = "https://files.pythonhosted.org/packages/88/c0/0005d225160ffcc068c50735c2aa97479aa4da8ee380dcce416f1f56716e/reachy_mini_motor_controller-1.4.1-cp312-cp312-musllinux_1_2_aarch64.whl", hash = "sha256:0e5d5b99e9552cc4d3f6706b83ed80a9cbed655392ed956aa8d87e7ae7b1f26f", size = 821808, upload-time = "2025-11-19T13:58:50.432Z" },
-    { url = "https://files.pythonhosted.org/packages/33/1a/579eb3e238b97678261c742da3aca5a6f4ce70f0c06096ddc34f62352b11/reachy_mini_motor_controller-1.4.1-cp312-cp312-musllinux_1_2_armv7l.whl", hash = "sha256:c50b9e89fcf9b8fc79700f5585727453e9c5bd03a82ac2222dc4388d75f18ff0", size = 907766, upload-time = "2025-11-19T13:58:56.893Z" },
-    { url = "https://files.pythonhosted.org/packages/1d/b5/e5566adfaf00f3fb0628277f070438a706f5184d8c071be98370fc55aca8/reachy_mini_motor_controller-1.4.1-cp312-cp312-musllinux_1_2_i686.whl", hash = "sha256:e14a5a2d6d633ea06bc2813c9918356ea0bed5c15683bc5dc9102fae6bfdbeb3", size = 851698, upload-time = "2025-11-19T13:59:04.584Z" },
-    { url = "https://files.pythonhosted.org/packages/1d/d3/b757500089951b9f7d7b395d56183c06338faa45a71f2f0d2346e3479e4d/reachy_mini_motor_controller-1.4.1-cp312-cp312-musllinux_1_2_x86_64.whl", hash = "sha256:d3f5d23ab6c183a1f4b6a6de7d638a0ed8154e4743eb276b86a1b57654d2b1ca", size = 813653, upload-time = "2025-11-19T13:59:11.456Z" },
-    { url = "https://files.pythonhosted.org/packages/5a/5f/87f2349acbf2ffabdbfc02043fb66ec21becbc857f3c39aa58ac341241f3/reachy_mini_motor_controller-1.4.1-cp312-cp312-win32.whl", hash = "sha256:949dd1411807d379dac00f978ffc92d27f1ef7e8660abe7fd5d076e96292bc5c", size = 374161, upload-time = "2025-11-19T13:59:24.305Z" },
-    { url = "https://files.pythonhosted.org/packages/5a/2a/3f66095fc6b9eb7962bb884870fd273f5a41308bc4974e555f60a411b22a/reachy_mini_motor_controller-1.4.1-cp312-cp312-win_amd64.whl", hash = "sha256:2dc281e549eadc6233e3a7d38c1246ab6ff2bd1b60e63652c7f3a4e9c92c2480", size = 397869, upload-time = "2025-11-19T13:59:18.646Z" },
-    { url = "https://files.pythonhosted.org/packages/c5/be/2a257978b6715f867a7035365b83142a7a7e6c81c9156c26f995e62b35a0/reachy_mini_motor_controller-1.4.1-cp313-cp313-macosx_10_12_x86_64.whl", hash = "sha256:3348aa673c13e5ff24e4f97d8b5c0ca173ed408472d6fb0eb64dd9170ded9625", size = 586018, upload-time = "2025-11-19T13:58:45.584Z" },
-    { url = "https://files.pythonhosted.org/packages/0a/a4/b6319df00e44a99ff5f09b9f9d7a96d9259a472c388882e8ebf69c5c819d/reachy_mini_motor_controller-1.4.1-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:ccda36dd54730fec7f7024be5782b0b43e24e43b3ed1d57c6f922216b54a2b5c", size = 567573, upload-time = "2025-11-19T13:58:38.707Z" },
-    { url = "https://files.pythonhosted.org/packages/02/22/42103f86b640f5061a148a0c5000a18e65c6003ba2a392f0132234518978/reachy_mini_motor_controller-1.4.1-cp313-cp313-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:ba1b234dffd39289572f223a20de748ee136537ecf68a0012be776ef7cbcc95c", size = 638776, upload-time = "2025-11-19T13:58:17.288Z" },
-    { url = "https://files.pythonhosted.org/packages/6d/ae/80e49f3b853fff8ef34555c461d9022920f73afe31f8231496fcea508901/reachy_mini_motor_controller-1.4.1-cp313-cp313-manylinux_2_17_armv7l.manylinux2014_armv7l.whl", hash = "sha256:43f0790d32f6b591683f793ffe8f85c103bb536f1b1112ad488c92a59fef1729", size = 644676, upload-time = "2025-11-19T13:58:22.996Z" },
-    { url = "https://files.pythonhosted.org/packages/18/c7/b3255fe7c70a02c8d29ff0c640b88545a1649f7efed9a55c3b29e16879b7/reachy_mini_motor_controller-1.4.1-cp313-cp313-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:7b5ceed7788772b2229cfd3ab3a412de69945e51281b576b899d47c8a45ea2a6", size = 692397, upload-time = "2025-11-19T13:58:28.752Z" },
-    { url = "https://files.pythonhosted.org/packages/ec/58/340c4923b5e390a5bdada7e56abaf7fafce868557f1e8f47887061945658/reachy_mini_motor_controller-1.4.1-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:5ca00b7b152ef80599fa0a7634f6946e9ca67d5f44704263d48d29e8acbfa727", size = 657363, upload-time = "2025-11-19T13:58:33.758Z" },
-    { url = "https://files.pythonhosted.org/packages/7a/5c/181d1b03da7514ff2a6ec0f4982ff94b19fb61fc85492b36c51979bdb7bd/reachy_mini_motor_controller-1.4.1-cp313-cp313-musllinux_1_2_aarch64.whl", hash = "sha256:1308f32322ffc9715e8fad846ba548be11b6ca2dc4806d68ec46bd814e09db83", size = 821787, upload-time = "2025-11-19T13:58:51.599Z" },
-    { url = "https://files.pythonhosted.org/packages/13/47/328144a15f6f396ad925a0ebc01f56462586ce43054919f2976bcdd41294/reachy_mini_motor_controller-1.4.1-cp313-cp313-musllinux_1_2_armv7l.whl", hash = "sha256:28211ebb2aa5550e1e7716c1251713664860b62cbc3151470f275d40edf2377b", size = 908466, upload-time = "2025-11-19T13:58:58.15Z" },
-    { url = "https://files.pythonhosted.org/packages/b8/bb/9422ce0a9ed06cd84823691995916fef783965f29173882f5beb3ac5eb45/reachy_mini_motor_controller-1.4.1-cp313-cp313-musllinux_1_2_i686.whl", hash = "sha256:d591936b51d2f7f387cde1241f4abed87717cfdc2912305d57ba5c03645564e5", size = 852337, upload-time = "2025-11-19T13:59:05.921Z" },
-    { url = "https://files.pythonhosted.org/packages/41/1e/384c45ef7c4ac5a8485c39de6fc04c546121b727357516e2050394f45580/reachy_mini_motor_controller-1.4.1-cp313-cp313-musllinux_1_2_x86_64.whl", hash = "sha256:a5c28e314c46b6f2763ec7ff347d4587447c88a298c5f0feca57984d72127a8e", size = 813294, upload-time = "2025-11-19T13:59:12.608Z" },
-    { url = "https://files.pythonhosted.org/packages/8f/b4/fb2d2b4c3bc3c3cc6dfd144deb1bda89bcca4207a2f90973324cd53c520b/reachy_mini_motor_controller-1.4.1-cp313-cp313-win32.whl", hash = "sha256:6fc7c516b29106fed94f154211912f4935f0c7916c73377c0ae9f2855d3dc0c5", size = 374438, upload-time = "2025-11-19T13:59:25.463Z" },
-    { url = "https://files.pythonhosted.org/packages/cd/12/5459df57ff83c55fb247eff176a3363776466e0cfc126a50dc423ec15397/reachy_mini_motor_controller-1.4.1-cp313-cp313-win_amd64.whl", hash = "sha256:c638a4fdc70748a90493b59ed6173a547a16a267abeaa05e2926b789a2216ac8", size = 397716, upload-time = "2025-11-19T13:59:19.724Z" },
-    { url = "https://files.pythonhosted.org/packages/0e/ba/c3984a19118bde1211893aed6b3c2365f317ef936725ee25616b53138433/reachy_mini_motor_controller-1.4.1-cp314-cp314-macosx_10_12_x86_64.whl", hash = "sha256:b71630be444af457f65d4652420dedcdbcd3d5fe5075aae6382c7e04e76f9282", size = 585014, upload-time = "2025-11-19T13:58:46.984Z" },
-    { url = "https://files.pythonhosted.org/packages/3b/8e/b18c7feee281e8be8a4d8d46313ca6f6b7a4eacd75d2aff2b7749fe72340/reachy_mini_motor_controller-1.4.1-cp314-cp314-macosx_11_0_arm64.whl", hash = "sha256:571766c78d4061df76eed3d996f9cb0c9792d00a0ff43d9115fd205cf799d0b6", size = 566638, upload-time = "2025-11-19T13:58:39.972Z" },
-    { url = "https://files.pythonhosted.org/packages/f8/5d/9a6cbd5f2e3730989eafc1420de021135eaf2573a4c5b0f0fa23813c482e/reachy_mini_motor_controller-1.4.1-cp314-cp314-musllinux_1_2_aarch64.whl", hash = "sha256:97c733aa682130408f181ae425e1f43d496474f377093b686d07b2e61eabe694", size = 820025, upload-time = "2025-11-19T13:58:53.302Z" },
-    { url = "https://files.pythonhosted.org/packages/be/58/618189746e643e4d8b5c55f424f2495de3f7abfb4ccf4b5a4c87a8f57f1d/reachy_mini_motor_controller-1.4.1-cp314-cp314-musllinux_1_2_armv7l.whl", hash = "sha256:78c8c3b1ccbb2938661d15fdc4c6cfe1814de360069f1490df8ed73626b5ebc6", size = 906601, upload-time = "2025-11-19T13:58:59.774Z" },
-    { url = "https://files.pythonhosted.org/packages/87/6c/84ddd9823d1706157931c2000d24a00285a414d70861a1a5d7941cd056b5/reachy_mini_motor_controller-1.4.1-cp314-cp314-musllinux_1_2_i686.whl", hash = "sha256:ef941626d9136ca60513ee3ed096112db1f29d9481d3c06da98298752581b887", size = 852729, upload-time = "2025-11-19T13:59:07.049Z" },
-    { url = "https://files.pythonhosted.org/packages/99/5f/f5e6c03e505b25bdd3351e313c8c5f2342285a9fe4778fcd165a9a8be03c/reachy_mini_motor_controller-1.4.1-cp314-cp314-musllinux_1_2_x86_64.whl", hash = "sha256:481b5536b5bb032248557d8e33ec5cbec0147477106e07ffc8f8edf9f0f13598", size = 813108, upload-time = "2025-11-19T13:59:13.762Z" },
-    { url = "https://files.pythonhosted.org/packages/e1/e2/62f50d37c31dc15f09885a273f9d49e45ce3435ad04256841e25fe683d33/reachy_mini_motor_controller-1.4.1-cp314-cp314-win32.whl", hash = "sha256:2c00311ca0c479eb175c47a390562a8c8be983998d00873d593d74c146667aaf", size = 374138, upload-time = "2025-11-19T13:59:26.555Z" },
-    { url = "https://files.pythonhosted.org/packages/3a/64/77f670ca853d0b730d4cfd1aa9d86bd07bf76014d365e395cf17edf87bb5/reachy_mini_motor_controller-1.4.1-cp314-cp314-win_amd64.whl", hash = "sha256:ae397e1d36330b1f839451aec217005b08997bfa8af1679deabe15c891171c54", size = 394989, upload-time = "2025-11-19T13:59:20.784Z" },
+    { url = "https://files.pythonhosted.org/packages/a3/54/1dfb498cea7c568a83878b77348abe4d93a1233dab22be566c45f89e154c/reachy_mini_motor_controller-1.4.2-cp310-cp310-macosx_10_12_x86_64.whl", hash = "sha256:193a11b9c5a3e85bb21305c09c67990c45c832bbb1d8ab836feb78700dadcd18", size = 586874, upload-time = "2025-11-25T17:56:23.296Z" },
+    { url = "https://files.pythonhosted.org/packages/3d/86/ca36d720dcc497c7557e467d6e891e26cd86ce0d44236750d689a6fa306d/reachy_mini_motor_controller-1.4.2-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:8226ed36f5391112a1b0f1ca2658eee24e0e12233b33637b9ece83fa7e0f3e94", size = 572458, upload-time = "2025-11-25T17:56:16.317Z" },
+    { url = "https://files.pythonhosted.org/packages/cd/46/41a03359e0c70cc34f73b569d3090d435c15ea248b01bf978a9eee259eaa/reachy_mini_motor_controller-1.4.2-cp310-cp310-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:83607921aa369c8e0b3a89bd845c7f6989fc29e1847d46f01eb3af2f27f04b99", size = 641152, upload-time = "2025-11-25T17:55:55.287Z" },
+    { url = "https://files.pythonhosted.org/packages/80/cb/9e395e02f47c301bc32ab085f48a9be9c741911b9d2fc0d1131d46a72660/reachy_mini_motor_controller-1.4.2-cp310-cp310-manylinux_2_17_armv7l.manylinux2014_armv7l.whl", hash = "sha256:a31e530b41514a81ad43db5ff31d4a77a6f91034d36d7646853beeaafa7a150d", size = 647600, upload-time = "2025-11-25T17:56:01.073Z" },
+    { url = "https://files.pythonhosted.org/packages/ee/45/81b45006257c6de17db7b8420d9039f23367db56ba9a29a78962dc6bcf42/reachy_mini_motor_controller-1.4.2-cp310-cp310-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:a5216ee318c9f20d5bc15e8aa8c96d60b989cf4e4ebf762edf20f6de2ee32ecb", size = 695967, upload-time = "2025-11-25T17:56:06.522Z" },
+    { url = "https://files.pythonhosted.org/packages/40/88/4db598e736ab2cf8528ac875982d60477a904949549d80ee25200e3559aa/reachy_mini_motor_controller-1.4.2-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:9e081f5960143880db1e900108a1065ebe789772de5fa2838a1fa9903dbec7d5", size = 662013, upload-time = "2025-11-25T17:56:11.125Z" },
+    { url = "https://files.pythonhosted.org/packages/99/00/839e6a9aa5005b239a0b06543f413421471550a0c660c54ab841805fa6ec/reachy_mini_motor_controller-1.4.2-cp310-cp310-musllinux_1_2_aarch64.whl", hash = "sha256:30acdae78c8ef86bbd28b86d644a13c3c3f5c1fafafc14af8de03e509f188c83", size = 824336, upload-time = "2025-11-25T17:56:29.28Z" },
+    { url = "https://files.pythonhosted.org/packages/75/64/cb81d550f1c36c2d14405622bb9fd666f2c6c100b504ac48c2af34ef0ad4/reachy_mini_motor_controller-1.4.2-cp310-cp310-musllinux_1_2_armv7l.whl", hash = "sha256:ebb98062d9894790a6028370c35e44e996b67bc5668bd0e4ba2973800056ca64", size = 911952, upload-time = "2025-11-25T17:56:35.665Z" },
+    { url = "https://files.pythonhosted.org/packages/af/b8/9187fe5a246d2643a65282e0ecf511e8abe88634054660b3611c883fee50/reachy_mini_motor_controller-1.4.2-cp310-cp310-musllinux_1_2_i686.whl", hash = "sha256:3a4283b91055fa66de52cedcce198f3fb262e4a1404346713c19f93d92a06f21", size = 854328, upload-time = "2025-11-25T17:56:41.999Z" },
+    { url = "https://files.pythonhosted.org/packages/35/92/3cd324b1f9934e1ca82af73addb54c0ed2e212e897b4b1e054c887672ce3/reachy_mini_motor_controller-1.4.2-cp310-cp310-musllinux_1_2_x86_64.whl", hash = "sha256:aa3c60cdbe6f7977a5fb6aaa11ced374b931c730f1ae8f68e87345012f810f53", size = 816960, upload-time = "2025-11-25T17:56:48.487Z" },
+    { url = "https://files.pythonhosted.org/packages/54/09/29e7bbfbdbb1de9001341219df98314b10887baf53d1580f3c3db51c6eca/reachy_mini_motor_controller-1.4.2-cp310-cp310-win32.whl", hash = "sha256:a391ca67ab2bcd981ea7139b6171f3ba7f5b3b495bd85655c8d804278cc2ea8e", size = 378120, upload-time = "2025-11-25T17:57:01.73Z" },
+    { url = "https://files.pythonhosted.org/packages/56/48/0b4a252484518e261377304c77327daa710b93b8a23c1b378a5c92337268/reachy_mini_motor_controller-1.4.2-cp310-cp310-win_amd64.whl", hash = "sha256:38a8c63167b1121a208a3fcae65c17b5222ae95acf80245791c3a51240506fff", size = 401212, upload-time = "2025-11-25T17:56:56.039Z" },
+    { url = "https://files.pythonhosted.org/packages/87/20/ac97ac49969c02e0384888c73cccf0b50a7bba48b18842a96b082a8c8e89/reachy_mini_motor_controller-1.4.2-cp311-cp311-macosx_10_12_x86_64.whl", hash = "sha256:f405d5f948abd26e423f156fc0d165b69ec964d3a4cbfa7d2d952313cc0ff972", size = 586684, upload-time = "2025-11-25T17:56:24.378Z" },
+    { url = "https://files.pythonhosted.org/packages/68/21/796b9fd0616600b93d5b74ce2b4eb0f525f2773aae8635a8c0506a4145d7/reachy_mini_motor_controller-1.4.2-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:835e1d7e9383615b2684fb97cf18065f80498bb7d7d9ba980f8fe295cda68109", size = 572449, upload-time = "2025-11-25T17:56:17.627Z" },
+    { url = "https://files.pythonhosted.org/packages/07/bd/661f6a44bd436c069d38ba0fdc1c1524178c4d039dcd4326fb1918bccf91/reachy_mini_motor_controller-1.4.2-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:d8403bb4b6c23c088493967c8445e5cd1ec4784f5c2ae1dab289fb9ba456055b", size = 642034, upload-time = "2025-11-25T17:55:56.725Z" },
+    { url = "https://files.pythonhosted.org/packages/cd/82/12b52b5eeee59387866db9370e43894f66dda8feedc15be38a6963be3e9a/reachy_mini_motor_controller-1.4.2-cp311-cp311-manylinux_2_17_armv7l.manylinux2014_armv7l.whl", hash = "sha256:b1cf6d2a6dc10b5f8acc4c61a89e2e201eca84c6be741becbf9775084d29fc6e", size = 647692, upload-time = "2025-11-25T17:56:02.499Z" },
+    { url = "https://files.pythonhosted.org/packages/f8/a0/4ad6ca320e303de61135219c3b9953b1ec1f7375181dbaaa98a43b65ecae/reachy_mini_motor_controller-1.4.2-cp311-cp311-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:0a366aa59f9bde4f80f6c03757e431a3cea80f0b18992401169b484cf8928d14", size = 696265, upload-time = "2025-11-25T17:56:07.722Z" },
+    { url = "https://files.pythonhosted.org/packages/8f/98/14cb24c497c295f91b11144bf639304116630de6862ba3095fe3a18dc3ff/reachy_mini_motor_controller-1.4.2-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:df475384deadcea1c8b430839addecb84126002d54649283cce5e6465d51b543", size = 660553, upload-time = "2025-11-25T17:56:12.631Z" },
+    { url = "https://files.pythonhosted.org/packages/c1/cb/9bc5c91075d5e551deb2d93fae89062bb94b5edd5f658b66c97c11c460d8/reachy_mini_motor_controller-1.4.2-cp311-cp311-musllinux_1_2_aarch64.whl", hash = "sha256:6e09e99bb325405f414013ce7d13f7ed36af5b9278dce2ee6bda9ea2affe6baf", size = 825331, upload-time = "2025-11-25T17:56:30.458Z" },
+    { url = "https://files.pythonhosted.org/packages/b9/2b/fd404636cb980604ed82dea5e7ec9c4de78a76324d36ff9efc55bb7549a7/reachy_mini_motor_controller-1.4.2-cp311-cp311-musllinux_1_2_armv7l.whl", hash = "sha256:2f35c0b54ed396b8d9eb98dfe6dcc6d3b059433c2181030591dc84483531a25b", size = 911925, upload-time = "2025-11-25T17:56:36.802Z" },
+    { url = "https://files.pythonhosted.org/packages/8a/1c/6d48c4c3c5c9705e20265db04f040f42d1955cb0ded817e8915684999386/reachy_mini_motor_controller-1.4.2-cp311-cp311-musllinux_1_2_i686.whl", hash = "sha256:af23d02daff28470be0e775ce63666bea06ad24ce948649751f7122996d5363d", size = 854410, upload-time = "2025-11-25T17:56:43.296Z" },
+    { url = "https://files.pythonhosted.org/packages/fc/b8/55955b7b47c8ed65bda69a221cd4805bad3d07c3c95b7002e67deec43dff/reachy_mini_motor_controller-1.4.2-cp311-cp311-musllinux_1_2_x86_64.whl", hash = "sha256:610d74c3cfc28854137d00d206a6b4c4942a371376611781a244376fe3175277", size = 815823, upload-time = "2025-11-25T17:56:50.274Z" },
+    { url = "https://files.pythonhosted.org/packages/12/7c/20672ab40d1d25cdddf49cb969bfa36043d9b760e4e82275a32853846192/reachy_mini_motor_controller-1.4.2-cp311-cp311-win32.whl", hash = "sha256:abe319839f78cc3e4e8ed0ced0bc519f97bfc1e6ff6b320dc8f84b772123237d", size = 377969, upload-time = "2025-11-25T17:57:02.781Z" },
+    { url = "https://files.pythonhosted.org/packages/b5/5e/0725df6e698fe9a83eff0f86d61c5e62878c864ce521c1a1c12645409bc5/reachy_mini_motor_controller-1.4.2-cp311-cp311-win_amd64.whl", hash = "sha256:d8f7ea29ca78ee86206989c30066e17b213f4cc8975f0a275f092588cd2debc8", size = 401027, upload-time = "2025-11-25T17:56:57.17Z" },
+    { url = "https://files.pythonhosted.org/packages/e6/6a/af2786310d5ccf84a48ff0153c7be2346ef3730ca540b20d998020c36cb8/reachy_mini_motor_controller-1.4.2-cp312-cp312-macosx_10_12_x86_64.whl", hash = "sha256:a41cc1bdc08b2fbba681804c6143319a6b4ef2d30093910f9776db01c5ba9595", size = 583808, upload-time = "2025-11-25T17:56:25.635Z" },
+    { url = "https://files.pythonhosted.org/packages/dc/d3/6354fd9b34b89d2b5a639c56ae05f393d2ae7cef187bfcce60a71a40202d/reachy_mini_motor_controller-1.4.2-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:af3cdd5197f57108044af81166dd755214f469c368e79221521b9a698da45223", size = 570332, upload-time = "2025-11-25T17:56:18.828Z" },
+    { url = "https://files.pythonhosted.org/packages/da/eb/d30bc7517a2f7c860b95978af73beede33819e717978d5560f4b5b8a2953/reachy_mini_motor_controller-1.4.2-cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:ed2537a512098664d73a7575af763acd5446fc2325f37cf3b9b84d37368b5f7f", size = 641541, upload-time = "2025-11-25T17:55:58.117Z" },
+    { url = "https://files.pythonhosted.org/packages/a4/63/8f9c091d0b210ebc6aa7762fa09155456a088df987d73dc39cda4fb9c241/reachy_mini_motor_controller-1.4.2-cp312-cp312-manylinux_2_17_armv7l.manylinux2014_armv7l.whl", hash = "sha256:554dd7392b9fef86cca8c12d5861d8f17e2eb7e1d69b49c65fbf54e1410f9567", size = 648054, upload-time = "2025-11-25T17:56:03.884Z" },
+    { url = "https://files.pythonhosted.org/packages/ac/15/a1bebc7acfcb02c12ba32e00dc1f9346fdf2468e441f983daf86ee4c7df3/reachy_mini_motor_controller-1.4.2-cp312-cp312-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:9e3f6ddd91e0228b3396f2c027f3e55eac0d3c4f280968ec73f2bdac37cdeda0", size = 696773, upload-time = "2025-11-25T17:56:08.895Z" },
+    { url = "https://files.pythonhosted.org/packages/06/9f/a3ab6942383198e4c105075582c2355350ef33f90ef4f877105ada181e88/reachy_mini_motor_controller-1.4.2-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:b0b357e49773bcd338e24ed17c4a93fb1890c97513c4cd07eec8c4f3ba06bc48", size = 660676, upload-time = "2025-11-25T17:56:13.77Z" },
+    { url = "https://files.pythonhosted.org/packages/4c/09/7da09c39d2722d6323ed719de95f2f7777699b0049b81d25aaff9b0cc2db/reachy_mini_motor_controller-1.4.2-cp312-cp312-musllinux_1_2_aarch64.whl", hash = "sha256:dd05b4bbf2aa30674b2955edf8fefbdb90b522077b3c549719afd4a1d2dd325b", size = 824841, upload-time = "2025-11-25T17:56:31.967Z" },
+    { url = "https://files.pythonhosted.org/packages/97/68/2c4e8160a3d8e0e20a61ad491dccb9d17febbaa434da83e38060a7517fc9/reachy_mini_motor_controller-1.4.2-cp312-cp312-musllinux_1_2_armv7l.whl", hash = "sha256:377d47674a0429a01f509d9fe9b52365a715ca132bfdf4956a3b5bb219723941", size = 912195, upload-time = "2025-11-25T17:56:38.275Z" },
+    { url = "https://files.pythonhosted.org/packages/14/5f/a547e59efd62518afbb616c9e3bc2f057662fdd209f75b218ef1917bcd7b/reachy_mini_motor_controller-1.4.2-cp312-cp312-musllinux_1_2_i686.whl", hash = "sha256:742c1e077669c198a4261acf3213789ed679846a25714e74e9774984862bbc7a", size = 855751, upload-time = "2025-11-25T17:56:44.595Z" },
+    { url = "https://files.pythonhosted.org/packages/76/58/8720be3e52e302052c6d10e3c0937271e8c376d6e5a10b2dac480c94c7f2/reachy_mini_motor_controller-1.4.2-cp312-cp312-musllinux_1_2_x86_64.whl", hash = "sha256:9b2eb49965f2dba93a1d251b0beb4b22b81f5b18946d53ff8761097011ffaa43", size = 815778, upload-time = "2025-11-25T17:56:51.74Z" },
+    { url = "https://files.pythonhosted.org/packages/aa/52/7af3228652ce3503243cbce68d736af00b11afd07f0f96effa6faaca677d/reachy_mini_motor_controller-1.4.2-cp312-cp312-win32.whl", hash = "sha256:e59bd6a1b89b94da835b1fbe3f483470ea0471fdb1b92d0d4bbb93a24ab7a1aa", size = 377018, upload-time = "2025-11-25T17:57:03.815Z" },
+    { url = "https://files.pythonhosted.org/packages/a0/7a/090705f6e62ec10107ea20e78fd8b8f26f6421b9db49f7bf5e275084aa02/reachy_mini_motor_controller-1.4.2-cp312-cp312-win_amd64.whl", hash = "sha256:ae99c65942130ce04a01d50dae359694a42fa91ede864ead0defd9a693b30b05", size = 399902, upload-time = "2025-11-25T17:56:58.351Z" },
+    { url = "https://files.pythonhosted.org/packages/e2/ac/fc016600786fbcdc8d048f7e42c946aa1a488e382e08b83e39934ee5f381/reachy_mini_motor_controller-1.4.2-cp313-cp313-macosx_10_12_x86_64.whl", hash = "sha256:43064e6c97be9f6fb2494ebf56dda18daa0366cd70b32ee548818c908d8b3564", size = 583599, upload-time = "2025-11-25T17:56:27.042Z" },
+    { url = "https://files.pythonhosted.org/packages/07/c7/c79c33cf46bbe6301fef5520445649ce10a85a30754fce975df41f7b80b7/reachy_mini_motor_controller-1.4.2-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:ebe3f763c011ecd3dc4bd017dfc886ecaf455d9866cab1ce8b81116d22eb6a3d", size = 570309, upload-time = "2025-11-25T17:56:20.391Z" },
+    { url = "https://files.pythonhosted.org/packages/78/e0/d301987769c1504549c06cf0ce8e132df48bde0f47d28a8768c25b7ed8ae/reachy_mini_motor_controller-1.4.2-cp313-cp313-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:c86146d3631dd73efb77d591f8a33c288b9ad394d3a6805c0685f3c5ec05266f", size = 641472, upload-time = "2025-11-25T17:55:59.645Z" },
+    { url = "https://files.pythonhosted.org/packages/ff/52/7884ee1c04b480f8e34b4c97697a0977d314a22f6766fd5e246dfbddb404/reachy_mini_motor_controller-1.4.2-cp313-cp313-manylinux_2_17_armv7l.manylinux2014_armv7l.whl", hash = "sha256:36052e08d331ae768f4b562e950eaa767ae4ee8a91e9334498c1bcbafe841514", size = 648510, upload-time = "2025-11-25T17:56:05.286Z" },
+    { url = "https://files.pythonhosted.org/packages/03/56/619bb25bb31f96d6172d1bfd5bbf516b5985b595f6e1c7c82481fff95c55/reachy_mini_motor_controller-1.4.2-cp313-cp313-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:5b2ac6712f7a5493bb3be276fa53bb9b9e4770f13783f26ff0a18e7fc6f800d4", size = 697241, upload-time = "2025-11-25T17:56:09.99Z" },
+    { url = "https://files.pythonhosted.org/packages/5a/b2/c82a31cf252ff6fb4d4c59a208d8375159cc796326812b7e946eea5c00a4/reachy_mini_motor_controller-1.4.2-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:3fcb404dc2021175d4339fb3a8f9334cd999bf8a0369e0dacb02c430edf46a0b", size = 660207, upload-time = "2025-11-25T17:56:15.23Z" },
+    { url = "https://files.pythonhosted.org/packages/83/6e/b2d9aecc4144cffcee14b023da20b8850a11cd35375561a7e60be7132e10/reachy_mini_motor_controller-1.4.2-cp313-cp313-musllinux_1_2_aarch64.whl", hash = "sha256:f482f61eecdeb72a7722399d0d549872a239023c263968f9e2ffac9ee69687dc", size = 824941, upload-time = "2025-11-25T17:56:33.129Z" },
+    { url = "https://files.pythonhosted.org/packages/c0/68/72b7d8a405fe7b1785b2caaaf917958dc6691015f6c15089bfee8b35f65d/reachy_mini_motor_controller-1.4.2-cp313-cp313-musllinux_1_2_armv7l.whl", hash = "sha256:88e1a5c1d4afe4e695d589715f0628536fe7399ec6d2751025dd785f4282a62e", size = 912805, upload-time = "2025-11-25T17:56:39.585Z" },
+    { url = "https://files.pythonhosted.org/packages/c0/62/4ce77e08ea5dc428835202723671026f52d46e20ee2642af24ecd2c64858/reachy_mini_motor_controller-1.4.2-cp313-cp313-musllinux_1_2_i686.whl", hash = "sha256:2d5c9e2645d7c6b29a8a46b4ecef72540bb2c0f983349cfcaf7c681386e7a002", size = 856256, upload-time = "2025-11-25T17:56:45.894Z" },
+    { url = "https://files.pythonhosted.org/packages/71/a6/c031586c9dd8fc735b427c5fcdd20d9360c02a6c61ab3cbb59589ad15d9d/reachy_mini_motor_controller-1.4.2-cp313-cp313-musllinux_1_2_x86_64.whl", hash = "sha256:ffb5331150c0cdfac9910d341e82d788bc173e473e893e3f8e54938ede1e3523", size = 815565, upload-time = "2025-11-25T17:56:52.837Z" },
+    { url = "https://files.pythonhosted.org/packages/c6/e3/5316b60491ecf3384b1b51db49317bc175561411edcc83fe1398b68736f4/reachy_mini_motor_controller-1.4.2-cp313-cp313-win32.whl", hash = "sha256:6edcf88f5d4c1bf3948328a6f65cd4518fda8cefbe55fb884fda088f363c2b60", size = 377394, upload-time = "2025-11-25T17:57:05.059Z" },
+    { url = "https://files.pythonhosted.org/packages/19/c7/41f4efca4abaf31bff5fa891ae0f594623539afd936abea51e0e546a6700/reachy_mini_motor_controller-1.4.2-cp313-cp313-win_amd64.whl", hash = "sha256:602cf3294f54ceae4fa84d006aa0e97dcfcd99f7ee556cbbcf3546ac42fe8fb3", size = 399788, upload-time = "2025-11-25T17:56:59.383Z" },
+    { url = "https://files.pythonhosted.org/packages/3a/0b/3b118d1ed20da22c3844c88247a78f6fdee679fff149d0e1ee64fc5d8aa8/reachy_mini_motor_controller-1.4.2-cp314-cp314-macosx_10_12_x86_64.whl", hash = "sha256:aedcbebb270c3e6ad8898aac321f82a3d3060898ee33d75ae181b0f1df278f93", size = 581082, upload-time = "2025-11-25T17:56:28.189Z" },
+    { url = "https://files.pythonhosted.org/packages/5a/e7/c24da5194f16714d6f2a67fefaba817e2a22f68f58269500fa4495d6a29e/reachy_mini_motor_controller-1.4.2-cp314-cp314-macosx_11_0_arm64.whl", hash = "sha256:4d8d7626e3655a96266cc88d9ae1327c8b42512b61e8acaeb782d8d3352125c2", size = 567918, upload-time = "2025-11-25T17:56:21.842Z" },
+    { url = "https://files.pythonhosted.org/packages/89/69/cc9a51e04c1523213a8f4121bb1c454293d287f8c0fc4998e2640d053169/reachy_mini_motor_controller-1.4.2-cp314-cp314-musllinux_1_2_aarch64.whl", hash = "sha256:8b27d6769f12a4bf75b8b6cb0e0dc20d154bc1422ff9e046f530434050552b86", size = 823910, upload-time = "2025-11-25T17:56:34.482Z" },
+    { url = "https://files.pythonhosted.org/packages/cd/76/1f283234ec0fb1b349a24930485a9c584d94f064eb4d3d2e32e5607ec64e/reachy_mini_motor_controller-1.4.2-cp314-cp314-musllinux_1_2_armv7l.whl", hash = "sha256:07118c8cafed873541fb716928a3d4f807ac6ac7f769d7307faa4cd9bead6e6d", size = 910812, upload-time = "2025-11-25T17:56:40.804Z" },
+    { url = "https://files.pythonhosted.org/packages/5c/22/771e3e02872c319f999c5e0830787c926d2b74b976c71f041d5429c4f785/reachy_mini_motor_controller-1.4.2-cp314-cp314-musllinux_1_2_i686.whl", hash = "sha256:d552fdf890c3040232b2db783fc03ffcee230b633208e62b7a4265fa5d076598", size = 856433, upload-time = "2025-11-25T17:56:47.095Z" },
+    { url = "https://files.pythonhosted.org/packages/b0/a3/c897ed4e7a43d205d43a985669dfbbc3943d1df8a101038c5384f34b9617/reachy_mini_motor_controller-1.4.2-cp314-cp314-musllinux_1_2_x86_64.whl", hash = "sha256:4b250a7763a72d6864ef4cdcec088d56e4d17947a10493f7347f2001502f05ed", size = 816617, upload-time = "2025-11-25T17:56:54.099Z" },
+    { url = "https://files.pythonhosted.org/packages/03/67/63dc13fe0fad1bafe12122b10479b2e22bb4562e58ed45e14f18b3f076c5/reachy_mini_motor_controller-1.4.2-cp314-cp314-win32.whl", hash = "sha256:d9a6be4852cb8cbec2e19d2037234dce39defce653f3af9d4a46cd56d624c617", size = 376862, upload-time = "2025-11-25T17:57:06.232Z" },
+    { url = "https://files.pythonhosted.org/packages/32/08/0c4b6fc4a761ad8bd362f571d3693c94aa0c15121e122f1c01e3f38bc873/reachy_mini_motor_controller-1.4.2-cp314-cp314-win_amd64.whl", hash = "sha256:aa7b6ca1b6db09e6249fdb5a31376974e82928292950cd7df4480cbd5707a425", size = 400104, upload-time = "2025-11-25T17:57:00.616Z" },
 ]
 
 [[package]]
@@ -3209,6 +3246,19 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/82/d1/e68942c2136ba7f16150d7174376df83f7b5034391605839a280c94b6b93/rhoban_cmeel_jsoncpp-1.9.4.9-0-cp313-cp313-musllinux_1_2_aarch64.whl", hash = "sha256:d2d289decd44461a22561353d26a4ebd94a35d7967de43a094cdf1d68afd47ce", size = 338462, upload-time = "2025-06-24T18:53:45.242Z" },
     { url = "https://files.pythonhosted.org/packages/ba/5b/97acff8d776ef2fca5d4e21893624dbb424095f1a4b66c3c0d1375854341/rhoban_cmeel_jsoncpp-1.9.4.9-0-cp313-cp313-musllinux_1_2_i686.whl", hash = "sha256:fe1165ea4390a4cfce698f1018b3305e27abf4f9db7f464116f7252ae27d16ae", size = 397779, upload-time = "2025-06-24T18:53:46.76Z" },
     { url = "https://files.pythonhosted.org/packages/11/7c/4f2cd6df47c6b83652e8f9ffafb25f056a1b01fa0050df4b4abf5f41dc12/rhoban_cmeel_jsoncpp-1.9.4.9-0-cp313-cp313-musllinux_1_2_x86_64.whl", hash = "sha256:f49041be98e0104856f8a0874936f50be435c514a8cd20ed5291b82d81912099", size = 363908, upload-time = "2025-06-24T18:53:48.05Z" },
+]
+
+[[package]]
+name = "rich"
+version = "14.2.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "markdown-it-py" },
+    { name = "pygments" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/fb/d2/8920e102050a0de7bfabeb4c4614a49248cf8d5d7a8d01885fbb24dc767a/rich-14.2.0.tar.gz", hash = "sha256:73ff50c7c0c1c77c8243079283f4edb376f0f6442433aecb8ce7e6d0b92d1fe4", size = 219990, upload-time = "2025-10-09T14:16:53.064Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/25/7a/b0178788f8dc6cafce37a212c99565fa1fe7872c70c6c9c1e1a372d9d88f/rich-14.2.0-py3-none-any.whl", hash = "sha256:76bc51fe2e57d2b1be1f96c524b890b816e334ab4c1e45888799bfaab0021edd", size = 243393, upload-time = "2025-10-09T14:16:51.245Z" },
 ]
 
 [[package]]

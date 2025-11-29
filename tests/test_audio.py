@@ -4,6 +4,7 @@ import tempfile
 import pytest
 import soundfile as sf
 from reachy_mini.media.media_manager import MediaManager, MediaBackend
+import numpy as np
 
 @pytest.mark.audio
 def test_play_sound_default_backend() -> None:
@@ -22,21 +23,21 @@ def test_play_sound_default_backend() -> None:
 def test_record_audio_and_file_exists() -> None:
     """Test recording audio and check that the file exists and is not empty."""
     media = MediaManager(backend=MediaBackend.DEFAULT_NO_VIDEO)
-    duration = 2  # seconds
+    DURATION = 2  # seconds
     tmpfile = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
     tmpfile.close()
     media.start_recording()
-    time.sleep(duration)
+    time.sleep(DURATION)
     media.stop_recording()
     audio = media.get_audio_sample()
     samplerate = media.get_input_audio_samplerate()
-    if audio is not None:
-        sf.write(tmpfile.name, audio, samplerate)
+    assert audio is not None
+    sf.write(tmpfile.name, audio, samplerate)
     assert os.path.exists(tmpfile.name)
     assert os.path.getsize(tmpfile.name) > 0
     # comment the following line if you want to keep the file for inspection
     os.remove(tmpfile.name)
-    # print(f"Recorded audio saved to {tmpfile.name}")
+    #print(f"Recorded audio saved to {tmpfile.name}")
 
 @pytest.mark.audio
 def test_DoA() -> None:
@@ -70,14 +71,30 @@ def test_play_sound_gstreamer_backend() -> None:
 def test_record_audio_and_file_exists_gstreamer() -> None:
     """Test recording audio and check that the file exists and is not empty."""
     media = MediaManager(backend=MediaBackend.GSTREAMER)
-    duration = 2  # seconds
+    DURATION = 2  # seconds
     tmpfile = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
     tmpfile.close()
+    audio_samples = []
+    t0 = time.time()
     media.start_recording()
-    time.sleep(duration)
-    audio = media.get_audio_sample()
-    assert audio is not None    
+
+    while time.time() - t0 < DURATION:
+        sample = media.get_audio_sample()
+
+        if sample is not None:
+            audio_samples.append(sample)
+
     media.stop_recording()
+    
+    assert len(audio_samples) > 0
+    audio_data = np.concatenate(audio_samples, axis=0)
+    assert audio_data.ndim == 2 and audio_data.shape[1] == 2
+    samplerate = media.get_input_audio_samplerate()
+    sf.write(tmpfile.name, audio_data, samplerate)
+    assert os.path.exists(tmpfile.name)
+    assert os.path.getsize(tmpfile.name) > 0
+    #os.remove(tmpfile.name)
+    print(f"Recorded audio saved to {tmpfile.name}")
 
 
 def test_no_media() -> None:

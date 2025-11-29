@@ -1,50 +1,64 @@
 import threading
-
 from reachy_mini import ReachyMini, ReachyMiniApp
 from reachy_mini.utils import create_head_pose
+import numpy as np
+import time
+from pydantic import BaseModel
 
 
 class {{ class_name }}(ReachyMiniApp):
     # Optional: URL to a custom configuration page for the app
-    # eg. "http://localhost:8042/settings"
-    custom_app_url: str | None = None 
+    # eg. "http://localhost:8042"
+    custom_app_url: str | None = "http://0.0.0.0:8042"
 
     def run(self, reachy_mini: ReachyMini, stop_event: threading.Event):
-        # Write your code here
-        # ReachyMini is already initialized and connected
-        # Check the stop_event to gracefully exit the loop
-        # Example:
-        # import time
-        # import numpy as np
-        #
-        # t0 = time.time()
-        #
-        # while not stop_event.is_set():
-        #     t = time.time() - t0
-        #
-        #     yaw = 30 * np.sin(2 * np.pi * 0.5 * t)
-        #     head_pose = create_head_pose(yaw=yaw, degrees=True) 
-        #
-        #     reachy_mini.set_target(head=head_pose)
-        #
-        #     time.sleep(0.01)
+        t0 = time.time()
 
-        print("This is a placeholder for your app logic.")
+        antennas_enabled = True
+        sound_play_requested = False
 
 
-if __name__ == "__main__":
-    # You can run the app directly from this script
-    with ReachyMini() as mini:
-        app = {{ class_name }}()
+        # You can ignore this part if you don't want to add settings to your app. If you set custom_app_url to None, you have to remove this part as well.
+        # === vvv ===
+        class AntennaState(BaseModel):
+            enabled: bool
 
-        stop = threading.Event()
+        @self.settings_app.post("/antennas")
+        def update_antennas_state(state: AntennaState):
+            nonlocal antennas_enabled
+            antennas_enabled = state.enabled
+            return {"antennas_enabled": antennas_enabled}
 
-        try:
-            print("Running '{{ app_name }}' a ReachyMiniApp...")
-            print("Press Ctrl+C to stop the app.")
-            app.run(mini, stop)
-            print("App has stopped.")
+        @self.settings_app.post("/play_sound")
+        def request_sound_play():
+            nonlocal sound_play_requested
+            sound_play_requested = True
+        # === ^^^ ===
 
-        except KeyboardInterrupt:
-            print("Stopping the app...")
-            stop.set()
+        # Main control loop
+        while not stop_event.is_set():
+            t = time.time() - t0
+
+            yaw_deg = 30.0 * np.sin(2.0 * np.pi * 0.2 * t)
+            head_pose = create_head_pose(yaw=yaw_deg, degrees=True)
+
+            if antennas_enabled:
+                amp_deg = 25.0
+                a = amp_deg * np.sin(2.0 * np.pi * 0.5 * t)
+                antennas_deg = np.array([a, -a])
+            else:
+                antennas_deg = np.array([0.0, 0.0])
+
+            if sound_play_requested:
+                print("Playing sound...")
+                reachy_mini.media.play_sound("wake_up.wav")
+                sound_play_requested = False
+
+            antennas_rad = np.deg2rad(antennas_deg)
+
+            reachy_mini.set_target(
+                head=head_pose,
+                antennas=antennas_rad,
+            )
+
+            time.sleep(0.02)
