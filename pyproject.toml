@@ -33,6 +33,7 @@ dependencies = [
     "pip>=25",
     "rich",
     "questionary",
+    "websockets>=12,<16",
 ]
 
 

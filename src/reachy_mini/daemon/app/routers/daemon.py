@@ -37,6 +37,9 @@ async def start_daemon(
                 check_collision=request.app.state.args.check_collision,
                 kinematics_engine=request.app.state.args.kinematics_engine,
                 headless=request.app.state.args.headless,
+                websocket_uri=request.app.state.args.websocket_uri,
+                stream_media=request.app.state.args.stream_media,
+                use_audio=request.app.state.args.use_audio,
                 hardware_config_filepath=request.app.state.args.hardware_config_filepath,
             )
 

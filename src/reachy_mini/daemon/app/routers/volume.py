@@ -233,7 +233,7 @@ async def set_volume(
     test_sound = "impatient1.wav"
     if backend.audio:
         try:
-            backend.audio.play_sound(test_sound, autoclean=True)
+            backend.audio.play_sound(test_sound)
         except Exception as e:
             msg = str(e).lower()
             if "device unavailable" in msg or "-9985" in msg:
@@ -258,7 +258,7 @@ async def play_test_sound(backend: Backend = Depends(get_backend)) -> TestSoundR
         raise HTTPException(status_code=503, detail="Audio device not available")
 
     try:
-        backend.audio.play_sound(test_sound, autoclean=True)
+        backend.audio.play_sound(test_sound)
         return TestSoundResponse(status="ok", message="Test sound played")
     except Exception as e:
         msg = str(e).lower()

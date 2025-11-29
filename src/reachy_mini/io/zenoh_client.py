@@ -24,7 +24,12 @@ class ZenohClient(AbstractClient):
     """Zenoh client for Reachy Mini."""
 
     def __init__(self, localhost_only: bool = True):
-        """Initialize the Zenoh client."""
+        """Initialize the Zenoh client.
+
+        Args:
+            localhost_only: If True, connect to localhost only
+
+        """
         if localhost_only:
             c = zenoh.Config.from_json5(
                 json.dumps(

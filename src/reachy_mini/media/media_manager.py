@@ -34,6 +34,7 @@ class MediaManager:
         backend: MediaBackend = MediaBackend.DEFAULT,
         log_level: str = "INFO",
         use_sim: bool = False,
+        use_audio: bool = True,
         signalling_host: str = "localhost",
     ) -> None:
         """Initialize the audio device."""
@@ -42,21 +43,25 @@ class MediaManager:
         self.backend = backend
         self.camera: Optional[CameraBase] = None
         self.audio: Optional[AudioBase] = None
-
+        self.use_audio = use_audio
+        
         match backend:
             case MediaBackend.NO_MEDIA:
                 self.logger.info("No media backend selected.")
             case MediaBackend.DEFAULT:
                 self.logger.info("Using default media backend (OpenCV + SoundDevice).")
                 self._init_camera(use_sim, log_level)
-                self._init_audio(log_level)
+                if self.use_audio:
+                    self._init_audio(log_level)
             case MediaBackend.DEFAULT_NO_VIDEO:
                 self.logger.info("Using default media backend (SoundDevice only).")
-                self._init_audio(log_level)
+                if self.use_audio:
+                    self._init_audio(log_level)
             case MediaBackend.GSTREAMER:
                 self.logger.info("Using GStreamer media backend.")
                 self._init_camera(use_sim, log_level)
-                self._init_audio(log_level)
+                if self.use_audio:
+                    self._init_audio(log_level)
             case MediaBackend.WEBRTC:
                 self.logger.info("Using WebRTC GStreamer backend.")
                 self._init_webrtc(log_level, signalling_host, 8443)
