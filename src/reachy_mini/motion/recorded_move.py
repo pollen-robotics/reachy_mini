@@ -26,6 +26,7 @@ class RecordedMove(Move):
         Args:
             move: Dictionary containing the move data.
             sound_path: Optional path to the sound file to play with this move.
+
         """
         self.move = move
         self.sound_path = sound_path
