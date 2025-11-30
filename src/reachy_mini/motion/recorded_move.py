@@ -2,7 +2,7 @@ import bisect  # noqa: D100
 import json
 from glob import glob
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 import numpy.typing as npt
@@ -20,9 +20,15 @@ def lerp(v0: float, v1: float, alpha: float) -> float:
 class RecordedMove(Move):
     """Represent a recorded move."""
 
-    def __init__(self, move: Dict[str, Any]) -> None:
-        """Initialize RecordedMove."""
+    def __init__(self, move: Dict[str, Any], sound_path: Optional[str] = None) -> None:
+        """Initialize RecordedMove.
+        
+        Args:
+            move: Dictionary containing the move data.
+            sound_path: Optional path to the sound file to play with this move.
+        """
         self.move = move
+        self.sound_path = sound_path
 
         self.description: str = self.move["description"]
         self.timestamps: List[float] = self.move["time"]
@@ -116,6 +122,12 @@ class RecordedMoves:
             move_name = move_path.stem
 
             move = json.load(open(move_path, "r"))
+            
+            # Check if there's a corresponding sound file
+            sound_path = Path(self.local_path) / f"{move_name}.wav"
+            if sound_path.exists():
+                move["sound_path"] = str(sound_path)
+            
             self.moves[move_name] = move
 
     def get(self, move_name: str) -> RecordedMove:
@@ -125,7 +137,9 @@ class RecordedMoves:
                 f"Move {move_name} not found in recorded moves library {self.hf_dataset_name}"
             )
 
-        return RecordedMove(self.moves[move_name])
+        move_data = self.moves[move_name]
+        sound_path = move_data.get("sound_path")
+        return RecordedMove(move_data, sound_path=sound_path)
 
     def list_moves(self) -> List[str]:
         """List all moves in the loaded library."""
