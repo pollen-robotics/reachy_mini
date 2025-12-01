@@ -114,6 +114,14 @@ class ReachyMiniWirelessCamSpecs(ReachyMiniLiteCamSpecs):
 
 
 @dataclass
+class OlderRPiCamSpecs(ReachyMiniLiteCamSpecs):
+    """Older Raspberry Pi camera specifications. Keeping for compatibility."""
+
+    vid = 0x1BCF
+    pid = 0x28C4
+
+
+@dataclass
 class MujocoCameraSpecs(CameraSpecs):
     """Mujoco simulated camera specifications."""
 
