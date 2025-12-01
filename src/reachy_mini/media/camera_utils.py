@@ -10,6 +10,7 @@ from cv2_enumerate_cameras import enumerate_cameras
 from reachy_mini.media.camera_constants import (
     ArducamSpecs,
     CameraSpecs,
+    OlderRPiCamSpecs,
     ReachyMiniLiteCamSpecs,
     ReachyMiniWirelessCamSpecs,
 )
