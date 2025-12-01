@@ -56,7 +56,7 @@ def find_camera(
         return cap, cast(CameraSpecs, ReachyMiniLiteCamSpecs)
 
     cap = find_camera_by_vid_pid(
-        ReachyMiniLiteCamSpecs.vid, OlderRPiCamSpecs.pid, apiPreference
+        OlderRPiCamSpecs.vid, OlderRPiCamSpecs.pid, apiPreference
     )
     if cap is not None:
         fourcc = cv2.VideoWriter_fourcc("M", "J", "P", "G")  # type: ignore
