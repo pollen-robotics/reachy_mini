@@ -35,8 +35,8 @@ class GstWebRTC:
         self._thread_bus_calls.start()
 
         # _, self.camera_specs = get_video_device(self._logger)
-        self._resolution = resolution
         # self._resolution = self.camera_specs.default_resolution
+        self._resolution = resolution
 
         self._id_audio_card = get_respeaker_card_number()
 
