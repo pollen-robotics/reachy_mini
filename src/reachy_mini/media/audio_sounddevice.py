@@ -60,7 +60,12 @@ class SoundDeviceAudio(AudioBase):
         if status:
             self.logger.warning(f"SoundDevice status: {status}")
 
-        self._buffer.append(indata.copy())
+        data = indata.copy()
+        
+        if data.ndim > 1:
+            data = data[:, :2].mean(axis=1)
+
+        self._buffer.append(data)
 
     def get_audio_sample(self) -> Optional[npt.NDArray[np.float32]]:
         """Read audio data from the buffer. Returns numpy array or None if empty."""
