@@ -110,9 +110,10 @@ class ReachyMiniApp(ABC):
     def _get_instance_path(self) -> Path:
         """Get the file path of the app instance."""
         module_name = type(self).__module__
-        spec = importlib.util.find_spec(module_name)
-        assert spec is not None and spec.origin is not None
-        return Path(spec.origin).resolve()
+        mod = importlib.import_module(module_name)
+        assert mod.__file__ is not None
+
+        return Path(mod.__file__).resolve()
 
 
 def parse_args() -> argparse.Namespace:
