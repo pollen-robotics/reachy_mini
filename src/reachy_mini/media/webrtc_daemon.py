@@ -9,6 +9,7 @@ from threading import Thread
 import gi
 
 from reachy_mini.media.audio_utils import get_respeaker_card_number
+
 # from reachy_mini.media.camera_constants import RPICameraResolution
 
 gi.require_version("Gst", "1.0")

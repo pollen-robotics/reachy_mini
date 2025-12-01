@@ -1,6 +1,7 @@
 """Camera utility for Reachy Mini."""
 
 import platform
+from logging import Logger
 from typing import Optional, Tuple, cast
 
 import cv2
@@ -9,9 +10,23 @@ from cv2_enumerate_cameras import enumerate_cameras
 from reachy_mini.media.camera_constants import (
     ArducamSpecs,
     CameraSpecs,
-    OlderRPiCamSpecs,
-    ReachyMiniCamSpecs,
+    ReachyMiniLiteCamSpecs,
+    ReachyMiniWirelessCamSpecs,
 )
+
+try:
+    import gi
+except ImportError as e:
+    raise ImportError(
+        "The 'gi' module is required for GStreamerCamera but could not be imported. \
+                      Please install the GStreamer backend: pip install .[gstreamer]."
+    ) from e
+
+gi.require_version("Gst", "1.0")
+gi.require_version("GstApp", "1.0")
+
+
+from gi.repository import Gst  # noqa: E402
 
 
 def find_camera(
@@ -30,24 +45,24 @@ def find_camera(
 
     """
     cap = find_camera_by_vid_pid(
-        ReachyMiniCamSpecs.vid, ReachyMiniCamSpecs.pid, apiPreference
+        ReachyMiniLiteCamSpecs.vid, ReachyMiniLiteCamSpecs.pid, apiPreference
     )
     if cap is not None:
         fourcc = cv2.VideoWriter_fourcc("M", "J", "P", "G")  # type: ignore
         cap.set(cv2.CAP_PROP_FOURCC, fourcc)
         if no_cap:
             cap.release()
-        return cap, cast(CameraSpecs, ReachyMiniCamSpecs)
+        return cap, cast(CameraSpecs, ReachyMiniLiteCamSpecs)
 
-    cap = find_camera_by_vid_pid(
-        OlderRPiCamSpecs.vid, OlderRPiCamSpecs.pid, apiPreference
-    )
-    if cap is not None:
-        fourcc = cv2.VideoWriter_fourcc("M", "J", "P", "G")  # type: ignore
-        cap.set(cv2.CAP_PROP_FOURCC, fourcc)
-        if no_cap:
-            cap.release()
-        return cap, cast(CameraSpecs, OlderRPiCamSpecs)
+    # cap = find_camera_by_vid_pid(
+    #     ReachyMiniLiteCamSpecs.vid, OlderRPiCamSpecs.pid, apiPreference
+    # )
+    # if cap is not None:
+    #     fourcc = cv2.VideoWriter_fourcc("M", "J", "P", "G")  # type: ignore
+    #     cap.set(cv2.CAP_PROP_FOURCC, fourcc)
+    #     if no_cap:
+    #         cap.release()
+    #     return cap, cast(CameraSpecs, OlderRPiCamSpecs)
 
     cap = find_camera_by_vid_pid(ArducamSpecs.vid, ArducamSpecs.pid, apiPreference)
     if cap is not None:
@@ -59,8 +74,8 @@ def find_camera(
 
 
 def find_camera_by_vid_pid(
-    vid: int = ReachyMiniCamSpecs.vid,
-    pid: int = ReachyMiniCamSpecs.pid,
+    vid: int = ReachyMiniLiteCamSpecs.vid,
+    pid: int = ReachyMiniLiteCamSpecs.pid,
     apiPreference: int = cv2.CAP_ANY,
 ) -> cv2.VideoCapture | None:
     """Find and return a camera with the specified VID and PID.
@@ -89,6 +104,44 @@ def find_camera_by_vid_pid(
             except Exception as e:
                 print(f"Error opening camera {c.index}: {e}")
     return selected_cap
+
+
+def get_video_device(logger: Logger) -> Tuple[str | Optional[CameraSpecs]]:
+    """Use Gst.DeviceMonitor to find the unix camera path /dev/videoX.
+
+    Returns the device path (e.g., '/dev/video2'), or '' if not found.
+    """
+    monitor = Gst.DeviceMonitor()
+    monitor.add_filter("Video/Source")
+    monitor.start()
+
+    cam_names = ["Reachy", "Arducam_12MP", "imx708"]
+
+    devices = monitor.get_devices()
+    for cam_name in cam_names:
+        for device in devices:
+            name = device.get_display_name()
+            device_props = device.get_properties()
+
+            if cam_name in name:
+                if device_props and device_props.has_field("api.v4l2.path"):
+                    device_path = device_props.get_string("api.v4l2.path")
+                    camera_specs = (
+                        cast(CameraSpecs, ArducamSpecs)
+                        if cam_name == "Arducam_12MP"
+                        else cast(CameraSpecs, ReachyMiniLiteCamSpecs)
+                    )
+                    logger.debug(f"Found {cam_name} camera at {device_path}")
+                    monitor.stop()
+                    return str(device_path), camera_specs
+                elif cam_name == "imx708":
+                    camera_specs = cast(CameraSpecs, ReachyMiniWirelessCamSpecs)
+                    logger.debug(f"Found {cam_name} camera")
+                    monitor.stop()
+                    return cam_name, camera_specs
+    monitor.stop()
+    logger.warning("No camera found.")
+    return "", None
 
 
 if __name__ == "__main__":
