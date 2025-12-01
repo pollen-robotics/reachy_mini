@@ -9,7 +9,8 @@ from threading import Thread
 import gi
 
 from reachy_mini.media.audio_utils import get_respeaker_card_number
-from reachy_mini.media.camera_constants import RPICameraResolution
+from reachy_mini.media.camera_constants import CameraResolution
+
 # from reachy_mini.media.camera_utils import get_video_device
 
 gi.require_version("Gst", "1.0")
@@ -24,7 +25,7 @@ class GstWebRTC:
     def __init__(
         self,
         log_level: str = "INFO",
-        resolution: RPICameraResolution = RPICameraResolution.R1920x1080at30fps,
+        resolution: CameraResolution = CameraResolution.R1920x1080at30fps,
     ) -> None:
         """Initialize the GStreamer WebRTC pipeline."""
         self._logger = logging.getLogger(__name__)
