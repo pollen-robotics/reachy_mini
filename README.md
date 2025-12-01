@@ -96,8 +96,8 @@ The same package provides both the daemon and the Python SDK.
 On Linux systems, you need to set up udev rules to allow non-root access to the Reachy Mini hardware. Create the udev rules file with:
 
 ```bash
-echo 'SUBSYSTEM=="usb", ATTR{idVendor}=="1a86", ATTR{idProduct}=="55d3", MODE="0666", GROUP="dialout" #Reachy Mini
-SUBSYSTEM=="usb", ATTR{idVendor}=="38fb", ATTR{idProduct}=="1001", MODE="0666", GROUP="dialout" #Reachy Mini soundcard' \
+echo 'SUBSYSTEM=="tty", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="55d3", MODE="0666", GROUP="dialout" #Reachy Mini
+SUBSYSTEM=="tty", ATTRS{idVendor}=="38fb", ATTRS{idProduct}=="1001", MODE="0666", GROUP="dialout" #Reachy Mini soundcard' \
 | sudo tee /etc/udev/rules.d/99-reachy-mini.rules
 ```
 
