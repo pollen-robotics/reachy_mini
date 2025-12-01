@@ -17,11 +17,11 @@ class CameraResolution(Enum):
 class ArduCamResolution(CameraResolution):
     """Camera resolutions. Arducam_12MP."""
 
-    R2304x1296 = (2304, 1296, 30)
-    R4608x2592 = (4608, 2592, 10)
-    R1920x1080 = (1920, 1080, 30)
-    R1600x1200 = (1600, 1200, 30)
-    R1280x720 = (1280, 720, 30)
+    R2304x1296at30fps = (2304, 1296, 30)
+    R4608x2592at10fps = (4608, 2592, 10)
+    R1920x1080at30fps = (1920, 1080, 30)
+    R1600x1200at30fps = (1600, 1200, 30)
+    R1280x720at30fps = (1280, 720, 30)
 
 
 class RPICameraResolution(CameraResolution):
@@ -30,16 +30,16 @@ class RPICameraResolution(CameraResolution):
     Camera supports higher resolutions but the h264 encoder won't follow.
     """
 
-    R1920x1080 = (1920, 1080, 60)
-    R1600x1200 = (1600, 1200, 30)
-    R1536x864 = (1536, 864, 40)
-    R1280x720 = (1280, 720, 60)
+    R1920x1080at60fps = (1920, 1080, 60)
+    R1920x1080at30fps = (1920, 1080, 30)
+    R1280x720at60fps = (1280, 720, 60)
+    R1280x720at30fps = (1280, 720, 30)
 
 
 class MujocoCameraResolution(CameraResolution):
     """Camera resolutions for Mujoco simulated camera."""
 
-    R1280x720 = (1280, 720, 60)
+    R1280x720at60fps = (1280, 720, 60)
 
 
 @dataclass
@@ -47,7 +47,7 @@ class CameraSpecs:
     """Base camera specifications."""
 
     available_resolutions: List[CameraResolution] = field(default_factory=list)
-    default_resolution: CameraResolution = ArduCamResolution.R1280x720
+    default_resolution: CameraResolution = ArduCamResolution.R1280x720at30fps
     vid = 0
     pid = 0
     K: npt.NDArray[np.float64] = field(default_factory=lambda: np.eye(3))
@@ -59,13 +59,13 @@ class ArducamSpecs(CameraSpecs):
     """Arducam camera specifications."""
 
     available_resolutions = [
-        ArduCamResolution.R2304x1296,
-        ArduCamResolution.R4608x2592,
-        ArduCamResolution.R1920x1080,
-        ArduCamResolution.R1600x1200,
-        ArduCamResolution.R1280x720,
+        ArduCamResolution.R2304x1296at30fps,
+        ArduCamResolution.R4608x2592at10fps,
+        ArduCamResolution.R1920x1080at30fps,
+        ArduCamResolution.R1600x1200at30fps,
+        ArduCamResolution.R1280x720at30fps,
     ]
-    default_resolution = ArduCamResolution.R1280x720
+    default_resolution = ArduCamResolution.R1280x720at30fps
     vid = 0x0C45
     pid = 0x636D
     K = np.array([[550.3564, 0.0, 638.0112], [0.0, 549.1653, 364.589], [0.0, 0.0, 1.0]])
@@ -73,16 +73,14 @@ class ArducamSpecs(CameraSpecs):
 
 
 @dataclass
-class ReachyMiniCamSpecs(CameraSpecs):
-    """Reachy Mini camera specifications."""
+class ReachyMiniLiteCamSpecs(CameraSpecs):
+    """Reachy Mini Lite camera specifications."""
 
     available_resolutions = [
-        RPICameraResolution.R1920x1080,
-        RPICameraResolution.R1600x1200,
-        RPICameraResolution.R1536x864,
-        RPICameraResolution.R1280x720,
+        RPICameraResolution.R1920x1080at60fps,
+        RPICameraResolution.R1280x720at60fps,
     ]
-    default_resolution = RPICameraResolution.R1920x1080
+    default_resolution = RPICameraResolution.R1920x1080at60fps
     vid = 0x38FB
     pid = 0x1002
     K = np.array(
@@ -105,35 +103,46 @@ class ReachyMiniCamSpecs(CameraSpecs):
 
 
 @dataclass
-class OlderRPiCamSpecs(CameraSpecs):
-    """Older Raspberry Pi camera specifications."""
+class ReachyMiniWirelessCamSpecs(ReachyMiniLiteCamSpecs):
+    """Reachy Mini Wireless camera specifications."""
 
     available_resolutions = [
-        RPICameraResolution.R1920x1080,
-        RPICameraResolution.R1600x1200,
-        RPICameraResolution.R1536x864,
-        RPICameraResolution.R1280x720,
+        RPICameraResolution.R1920x1080at30fps,
+        RPICameraResolution.R1280x720at30fps,
     ]
-    default_resolution = RPICameraResolution.R1920x1080
-    vid = 0x1BCF
-    pid = 0x28C4
-    K = np.array(
-        [
-            [821.51459423, 0.0, 962.24086301],
-            [0.0, 820.82987265, 542.45854246],
-            [0.0, 0.0, 1.0],
-        ]
-    )
+    default_resolution = RPICameraResolution.R1920x1080at30fps
 
-    D = np.array(
-        [
-            -2.94475669e-02,
-            6.00511974e-02,
-            3.57813971e-06,
-            -2.96459394e-04,
-            -3.79243988e-02,
-        ]
-    )
+
+# @dataclass
+# class OlderRPiCamSpecs(CameraSpecs):
+#     """Older Raspberry Pi camera specifications."""
+
+#     available_resolutions = [
+#         RPICameraResolution.R1920x1080,
+#         RPICameraResolution.R1600x1200,
+#         RPICameraResolution.R1536x864,
+#         RPICameraResolution.R1280x720,
+#     ]
+#     default_resolution = RPICameraResolution.R1920x1080
+#     vid = 0x1BCF
+#     pid = 0x28C4
+#     K = np.array(
+#         [
+#             [821.51459423, 0.0, 962.24086301],
+#             [0.0, 820.82987265, 542.45854246],
+#             [0.0, 0.0, 1.0],
+#         ]
+#     )
+
+#     D = np.array(
+#         [
+#             -2.94475669e-02,
+#             6.00511974e-02,
+#             3.57813971e-06,
+#             -2.96459394e-04,
+#             -3.79243988e-02,
+#         ]
+#     )
 
 
 @dataclass
@@ -141,21 +150,21 @@ class MujocoCameraSpecs(CameraSpecs):
     """Mujoco simulated camera specifications."""
 
     available_resolutions = [
-        MujocoCameraResolution.R1280x720,
+        MujocoCameraResolution.R1280x720at60fps,
     ]
-    default_resolution = MujocoCameraResolution.R1280x720
+    default_resolution = MujocoCameraResolution.R1280x720at60fps
     # ideal camera matrix
     K = np.array(
         [
             [
-                MujocoCameraResolution.R1280x720.value[0],
+                MujocoCameraResolution.R1280x720at60fps.value[0],
                 0.0,
-                MujocoCameraResolution.R1280x720.value[0] / 2,
+                MujocoCameraResolution.R1280x720at60fps.value[0] / 2,
             ],
             [
                 0.0,
-                MujocoCameraResolution.R1280x720.value[1],
-                MujocoCameraResolution.R1280x720.value[1] / 2,
+                MujocoCameraResolution.R1280x720at60fps.value[1],
+                MujocoCameraResolution.R1280x720at60fps.value[1] / 2,
             ],
             [0.0, 0.0, 1.0],
         ]
