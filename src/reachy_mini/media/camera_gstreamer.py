@@ -47,7 +47,7 @@ class GStreamerCamera(CameraBase):
 
         self.pipeline = Gst.Pipeline.new("camera_recorder")
 
-        cam_path, self.camera_specs = get_video_device()
+        cam_path, self.camera_specs = get_video_device(self.logger)
 
         if self.camera_specs is None:
             raise RuntimeError("Camera specs not set")
