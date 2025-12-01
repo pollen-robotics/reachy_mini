@@ -113,38 +113,6 @@ class ReachyMiniWirelessCamSpecs(ReachyMiniLiteCamSpecs):
     default_resolution = RPICameraResolution.R1920x1080at30fps
 
 
-# @dataclass
-# class OlderRPiCamSpecs(CameraSpecs):
-#     """Older Raspberry Pi camera specifications."""
-
-#     available_resolutions = [
-#         RPICameraResolution.R1920x1080,
-#         RPICameraResolution.R1600x1200,
-#         RPICameraResolution.R1536x864,
-#         RPICameraResolution.R1280x720,
-#     ]
-#     default_resolution = RPICameraResolution.R1920x1080
-#     vid = 0x1BCF
-#     pid = 0x28C4
-#     K = np.array(
-#         [
-#             [821.51459423, 0.0, 962.24086301],
-#             [0.0, 820.82987265, 542.45854246],
-#             [0.0, 0.0, 1.0],
-#         ]
-#     )
-
-#     D = np.array(
-#         [
-#             -2.94475669e-02,
-#             6.00511974e-02,
-#             3.57813971e-06,
-#             -2.96459394e-04,
-#             -3.79243988e-02,
-#         ]
-#     )
-
-
 @dataclass
 class MujocoCameraSpecs(CameraSpecs):
     """Mujoco simulated camera specifications."""
