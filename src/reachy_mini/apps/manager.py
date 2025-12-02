@@ -47,10 +47,14 @@ class RunningApp:
 class AppManager:
     """Manager for Reachy Mini apps."""
 
-    def __init__(self) -> None:
+    def __init__(
+        self, wireless_version: bool = False, desktop_version: bool = False
+    ) -> None:
         """Initialize the AppManager."""
         self.current_app = None  # type: RunningApp | None
         self.logger = logging.getLogger("reachy_mini.apps.manager")
+        self.wireless_version = wireless_version
+        self.desktop_version = desktop_version
 
     async def close(self) -> None:
         """Clean up the AppManager, stopping any running app."""
@@ -166,7 +170,10 @@ class AppManager:
         elif source == SourceKind.DASHBOARD_SELECTION:
             return await hf_space.list_available_apps()
         elif source == SourceKind.INSTALLED:
-            return await local_common_venv.list_available_apps()
+            return await local_common_venv.list_available_apps(
+                wireless_version=self.wireless_version,
+                desktop_version=self.desktop_version,
+            )
         elif source == SourceKind.LOCAL:
             return []
         else:
@@ -174,12 +181,22 @@ class AppManager:
 
     async def install_new_app(self, app: AppInfo, logger: logging.Logger) -> None:
         """Install a new app by name."""
-        success = await local_common_venv.install_package(app, logger)
+        success = await local_common_venv.install_package(
+            app,
+            logger,
+            wireless_version=self.wireless_version,
+            desktop_version=self.desktop_version,
+        )
         if success != 0:
             raise RuntimeError(f"Failed to install app '{app.name}'")
 
     async def remove_app(self, app_name: str, logger: logging.Logger) -> None:
         """Remove an installed app by name."""
-        success = await local_common_venv.uninstall_package(app_name, logger)
+        success = await local_common_venv.uninstall_package(
+            app_name,
+            logger,
+            wireless_version=self.wireless_version,
+            desktop_version=self.desktop_version,
+        )
         if success != 0:
             raise RuntimeError(f"Failed to uninstall app '{app_name}'")

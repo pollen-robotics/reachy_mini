@@ -42,6 +42,7 @@ class Args:
     log_level: str = "INFO"
 
     wireless_version: bool = False
+    desktop_version: bool = False
 
     serialport: str = "auto"
     hardware_config_filepath: str | None = None
@@ -113,8 +114,12 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
     )
 
     app.state.args = args
-    app.state.daemon = Daemon(wireless_version=args.wireless_version)
-    app.state.app_manager = AppManager()
+    app.state.daemon = Daemon(
+        wireless_version=args.wireless_version, desktop_version=args.desktop_version
+    )
+    app.state.app_manager = AppManager(
+        wireless_version=args.wireless_version, desktop_version=args.desktop_version
+    )
 
     router = APIRouter(prefix="/api")
     router.include_router(apps.router)
@@ -236,6 +241,12 @@ def main() -> None:
         action="store_true",
         default=default_args.wireless_version,
         help="Use the wireless version of Reachy Mini (default: False).",
+    )
+    parser.add_argument(
+        "--desktop-version",
+        action="store_true",
+        default=default_args.desktop_version,
+        help="Use the desktop version of Reachy Mini (default: False).",
     )
 
     # Real robot mode
