@@ -5,7 +5,7 @@ By default the module directly returns JPEG images as output by the camera.
 """
 
 from threading import Thread
-from typing import Optional, cast
+from typing import Optional, Tuple, cast
 
 import numpy as np
 import numpy.typing as npt
@@ -14,7 +14,8 @@ from reachy_mini.media.camera_constants import (
     ArducamSpecs,
     CameraResolution,
     CameraSpecs,
-    ReachyMiniCamSpecs,
+    ReachyMiniLiteCamSpecs,
+    ReachyMiniWirelessCamSpecs,
 )
 
 try:
@@ -49,12 +50,12 @@ class GStreamerCamera(CameraBase):
 
         self.pipeline = Gst.Pipeline.new("camera_recorder")
 
-        # TODO How do we hande video device not found ?
-        cam_path = self.get_video_device()
+        cam_path, self.camera_specs = self.get_video_device()
 
         if self.camera_specs is None:
             raise RuntimeError("Camera specs not set")
         self._resolution = self.camera_specs.default_resolution
+        self.resized_K = self.camera_specs.K
 
         if self._resolution is None:
             raise RuntimeError("Failed to get default camera resolution.")
@@ -72,18 +73,11 @@ class GStreamerCamera(CameraBase):
         elif cam_path == "imx708":
             camsrc = Gst.ElementFactory.make("libcamerasrc")
             self.pipeline.add(camsrc)
-            caps = Gst.Caps.from_string(
-                f"video/x-raw,width={self.resolution[0]},height={self.resolution[1]},framerate={self.framerate}/1,format=YUY2,colorimetry=bt709,interlace-mode=progressive"
-            )
-            capsfilter = Gst.ElementFactory.make("capsfilter")
-            capsfilter.set_property("caps", caps)
-            self.pipeline.add(capsfilter)
             queue = Gst.ElementFactory.make("queue")
             self.pipeline.add(queue)
             videoconvert = Gst.ElementFactory.make("videoconvert")
             self.pipeline.add(videoconvert)
-            camsrc.link(capsfilter)
-            capsfilter.link(queue)
+            camsrc.link(queue)
             queue.link(videoconvert)
             videoconvert.link(self._appsink_video)
         else:
@@ -179,7 +173,7 @@ class GStreamerCamera(CameraBase):
         self._loop.quit()
         self.pipeline.set_state(Gst.State.NULL)
 
-    def get_video_device(self) -> str:
+    def get_video_device(self) -> Tuple[str, Optional[CameraSpecs]]:
         """Use Gst.DeviceMonitor to find the unix camera path /dev/videoX.
 
         Returns the device path (e.g., '/dev/video2'), or '' if not found.
@@ -199,21 +193,19 @@ class GStreamerCamera(CameraBase):
                 if cam_name in name:
                     if device_props and device_props.has_field("api.v4l2.path"):
                         device_path = device_props.get_string("api.v4l2.path")
-                        self.camera_specs = (
+                        camera_specs = (
                             cast(CameraSpecs, ArducamSpecs)
                             if cam_name == "Arducam_12MP"
-                            else cast(CameraSpecs, ReachyMiniCamSpecs)
+                            else cast(CameraSpecs, ReachyMiniLiteCamSpecs)
                         )
-                        self.resized_K = self.camera_specs.K
                         self.logger.debug(f"Found {cam_name} camera at {device_path}")
                         monitor.stop()
-                        return str(device_path)
+                        return str(device_path), camera_specs
                     elif cam_name == "imx708":
-                        self.camera_specs = cast(CameraSpecs, ReachyMiniCamSpecs)
-                        self.resized_K = self.camera_specs.K
+                        camera_specs = cast(CameraSpecs, ReachyMiniWirelessCamSpecs)
                         self.logger.debug(f"Found {cam_name} camera")
                         monitor.stop()
-                        return cam_name
+                        return cam_name, camera_specs
         monitor.stop()
         self.logger.warning("No camera found.")
-        return ""
+        return "", None

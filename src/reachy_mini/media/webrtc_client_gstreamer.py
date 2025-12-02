@@ -15,8 +15,7 @@ from reachy_mini.media.camera_base import CameraBase
 from reachy_mini.media.camera_constants import (
     CameraResolution,
     CameraSpecs,
-    ReachyMiniCamSpecs,
-    RPICameraResolution,
+    ReachyMiniWirelessCamSpecs,
 )
 
 gi.require_version("Gst", "1.0")
@@ -56,8 +55,8 @@ class GstWebRTCClient(CameraBase, AudioBase):
         self._appsink_audio.set_property("max-buffers", 500)
         self._pipeline_record.add(self._appsink_audio)
 
-        self.camera_specs = cast(CameraSpecs, ReachyMiniCamSpecs)
-        self.set_resolution(RPICameraResolution.R1280x720)
+        self.camera_specs = cast(CameraSpecs, ReachyMiniWirelessCamSpecs)
+        self.set_resolution(CameraResolution.R1920x1080at30fps)
 
         self._appsink_video = Gst.ElementFactory.make("appsink")
         caps_video = Gst.Caps.from_string("video/x-raw,format=BGR")
