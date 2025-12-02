@@ -76,8 +76,18 @@ class AppManager:
         if self.is_app_running():
             raise RuntimeError("An app is already running")
 
-        (ep,) = entry_points(group="reachy_mini_apps", name=app_name)
-        app = ep.load()()
+        try:
+            app_cls = local_common_venv.load_app_from_venv(
+                app_name, self.wireless_version, self.desktop_version
+            )
+            app = app_cls()
+        except ValueError as e:
+            # Fallback to original method for backward compatibility
+            try:
+                (ep,) = entry_points(group="reachy_mini_apps", name=app_name)
+                app = ep.load()()
+            except ValueError:
+                raise RuntimeError(f"App '{app_name}' not found: {e}")
 
         def wrapped_run() -> None:
             assert self.current_app is not None

@@ -212,6 +212,39 @@ async def install_package(
         )
 
 
+def load_app_from_venv(
+    app_name: str,
+    wireless_version: bool = False,
+    desktop_version: bool = False,
+):
+    """Load an app class from its separate venv or current environment."""
+    if _should_use_separate_venvs(wireless_version, desktop_version):
+        # Load from separate venv
+        site_packages = _get_app_site_packages(app_name)
+        if not site_packages or not site_packages.exists():
+            raise ValueError(f"App '{app_name}' venv not found or invalid")
+        
+        sys.path.insert(0, str(site_packages))
+        try:
+            eps = entry_points(group="reachy_mini_apps")
+            ep = eps.select(name=app_name)
+            if not ep:
+                raise ValueError(f"No entry point found for app '{app_name}'")
+            app_cls = list(ep)[0].load()
+            return app_cls
+        except Exception as e:
+            raise ValueError(f"Could not load app '{app_name}' from venv: {e}")
+        finally:
+            sys.path.pop(0)
+    else:
+        # Original behavior: load from current environment
+        eps = entry_points(group="reachy_mini_apps", name=app_name)
+        ep_list = list(eps)
+        if not ep_list:
+            raise ValueError(f"No entry point found for app '{app_name}'")
+        return ep_list[0].load()
+
+
 async def uninstall_package(
     app_name: str,
     logger: logging.Logger,
