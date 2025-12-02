@@ -98,8 +98,8 @@ if __name__ == "__main__":
     if cam is None:
         exit("Camera not found")
 
-    cam.set(cv2.CAP_PROP_FRAME_WIDTH, CameraResolution.R1280x720.value[0])
-    cam.set(cv2.CAP_PROP_FRAME_HEIGHT, CameraResolution.R1280x720.value[1])
+    cam.set(cv2.CAP_PROP_FRAME_WIDTH, CameraResolution.R1280x720at30fps.value[0])
+    cam.set(cv2.CAP_PROP_FRAME_HEIGHT, CameraResolution.R1280x720at30fps.value[1])
 
     while True:
         ret, frame = cam.read()
