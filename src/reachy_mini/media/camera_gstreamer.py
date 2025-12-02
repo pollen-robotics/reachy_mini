@@ -70,18 +70,11 @@ class GStreamerCamera(CameraBase):
         elif cam_path == "imx708":
             camsrc = Gst.ElementFactory.make("libcamerasrc")
             self.pipeline.add(camsrc)
-            caps = Gst.Caps.from_string(
-                f"video/x-raw,width={self.resolution[0]},height={self.resolution[1]},framerate={self.framerate}/1,format=YUY2,colorimetry=bt709,interlace-mode=progressive"
-            )
-            capsfilter = Gst.ElementFactory.make("capsfilter")
-            capsfilter.set_property("caps", caps)
-            self.pipeline.add(capsfilter)
             queue = Gst.ElementFactory.make("queue")
             self.pipeline.add(queue)
             videoconvert = Gst.ElementFactory.make("videoconvert")
             self.pipeline.add(videoconvert)
-            camsrc.link(capsfilter)
-            capsfilter.link(queue)
+            camsrc.link(queue)
             queue.link(videoconvert)
             videoconvert.link(self._appsink_video)
         else:

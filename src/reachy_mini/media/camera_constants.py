@@ -23,9 +23,14 @@ class CameraResolution(Enum):
     R1600x1200at30fps = (1600, 1200, 30)
 
     R3264x2448at30fps = (3264, 2448, 30)
+    R3264x2448at10fps = (3264, 2448, 10)
 
     R3840x2592at30fps = (3840, 2592, 30)
+    R3840x2592at10fps = (3840, 2592, 10)
     R3840x2160at30fps = (3840, 2160, 30)
+    R3840x2160at10fps = (3840, 2160, 10)
+
+    R3072x1728at10fps = (3072, 1728, 10)
 
     R4608x2592at10fps = (4608, 2592, 10)
 
@@ -98,10 +103,11 @@ class ReachyMiniWirelessCamSpecs(ReachyMiniLiteCamSpecs):
 
     available_resolutions = [
         CameraResolution.R1920x1080at30fps,
-        CameraResolution.R1280x720at30fps,
-        CameraResolution.R3840x2592at30fps,
-        CameraResolution.R3840x2160at30fps,
-        CameraResolution.R3264x2448at30fps,
+        CameraResolution.R1280x720at60fps,
+        CameraResolution.R3840x2592at10fps,
+        CameraResolution.R3840x2160at10fps,
+        CameraResolution.R3264x2448at10fps,
+        CameraResolution.R3072x1728at10fps,
     ]
     default_resolution = CameraResolution.R1920x1080at30fps
 
