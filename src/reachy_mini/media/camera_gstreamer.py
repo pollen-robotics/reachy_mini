@@ -173,7 +173,7 @@ class GStreamerCamera(CameraBase):
         self._loop.quit()
         self.pipeline.set_state(Gst.State.NULL)
 
-    def get_video_device(self) -> Tuple[str | Optional[CameraSpecs]]:
+    def get_video_device(self) -> Tuple[str, Optional[CameraSpecs]]:
         """Use Gst.DeviceMonitor to find the unix camera path /dev/videoX.
 
         Returns the device path (e.g., '/dev/video2'), or '' if not found.
