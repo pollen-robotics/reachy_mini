@@ -80,7 +80,7 @@ class OpenCVCamera(CameraBase):
         # Validate frame type
         if not isinstance(frame, np.ndarray):
             raise RuntimeError("Expected numpy.ndarray from cv2.VideoCapture.read()")
-        # Ensure uint8 dtype without using deprecated np.asarray(copy=False)
+        # Ensure uint8 dtype
         if frame.dtype != np.uint8:
             frame = frame.astype(np.uint8, copy=False)
         return cast(npt.NDArray[np.uint8], frame)
