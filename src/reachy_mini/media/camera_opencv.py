@@ -69,7 +69,7 @@ class OpenCVCamera(CameraBase):
             The frame as a uint8 numpy array, or None if no frame could be read.
             
         Raises:
-            RuntimeError: If the camera is not opened or if the frame is not a valid numpy array.
+            RuntimeError: If the camera is not opened.
 
         """
         if self.cap is None:
@@ -77,9 +77,6 @@ class OpenCVCamera(CameraBase):
         ret, frame = self.cap.read()
         if not ret:
             return None
-        # Validate frame type
-        if not isinstance(frame, np.ndarray):
-            raise RuntimeError("Expected numpy.ndarray from cv2.VideoCapture.read()")
         # Ensure uint8 dtype
         if frame.dtype != np.uint8:
             frame = frame.astype(np.uint8, copy=False)
