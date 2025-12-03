@@ -14,18 +14,18 @@ from reachy_mini.utils.constants import ASSETS_ROOT_PATH
 
 from .audio_base import AudioBase
 
+MAX_INPUT_CHANNELS = 2
+MAX_OUTPUT_CHANNELS = 2
 
 class SoundDeviceAudio(AudioBase):
     """Audio device implementation using sounddevice."""
 
     def __init__(
         self,
-        frames_per_buffer: int = 256,
         log_level: str = "INFO",
     ) -> None:
         """Initialize the SoundDevice audio device."""
         super().__init__(log_level=log_level)
-        self.frames_per_buffer = frames_per_buffer
         self.stream = None
         self._output_stream = None
         self._buffer: List[npt.NDArray[np.float32]] = []
@@ -39,10 +39,10 @@ class SoundDeviceAudio(AudioBase):
     def start_recording(self) -> None:
         """Open the audio input stream, using ReSpeaker card if available."""
         self.stream = sd.InputStream(
-            blocksize=self.frames_per_buffer,
             device=self._input_device_id,
-            callback=self._callback,
             samplerate=self.get_input_audio_samplerate(),
+            dtype="float32",
+            callback=self._callback,
         )
         if self.stream is None:
             raise RuntimeError("Failed to open SoundDevice audio stream.")
@@ -59,8 +59,8 @@ class SoundDeviceAudio(AudioBase):
     ) -> None:
         if status:
             self.logger.warning(f"SoundDevice status: {status}")
-
-        self._buffer.append(indata.copy())
+            
+        self._buffer.append(indata[:, :MAX_INPUT_CHANNELS]) # Sounddevice callbacks always use 2D arrays. The slicing handles the reshaping and copying of the data.
 
     def get_audio_sample(self) -> Optional[npt.NDArray[np.float32]]:
         """Read audio data from the buffer. Returns numpy array or None if empty."""
@@ -94,8 +94,27 @@ class SoundDeviceAudio(AudioBase):
     def push_audio_sample(self, data: npt.NDArray[np.float32]) -> None:
         """Push audio data to the output device."""
         if self._output_stream is not None:
-            if data.ndim > 1:  # convert to mono
-                data = np.mean(data, axis=1)
+            if data.ndim > 2 or data.ndim == 0:
+                self.logger.warning(f"Audio samples arrays must have at most 2 dimensions and at least 1 dimension, got {data.ndim}")
+                return
+            
+            # Transpose data to match sounddevice channels last convention
+            if data.ndim == 2 and data.shape[1] > data.shape[0]:
+                data = data.T
+
+            # Fit data to match output stream channels
+            output_channels = min(MAX_OUTPUT_CHANNELS, self._output_stream.channels)
+
+            # Mono input to multiple channels output : duplicate to fit
+            if data.ndim == 1 and output_channels > 1:
+                data = np.column_stack((data,) * output_channels)
+            # Lower channels input to higher channels output : reduce to mono and duplicate to fit
+            elif data.ndim == 2 and data.shape[1] < output_channels:
+                data = np.column_stack((data[:,0],) * output_channels)
+            # Higher channels input to lower channels output : crop to fit
+            elif data.ndim == 2 and data.shape[1] > output_channels:
+                data = data[:, :output_channels]
+                
             self._output_stream.write(data)
         else:
             self.logger.warning(
@@ -109,7 +128,7 @@ class SoundDeviceAudio(AudioBase):
         self._output_stream = sd.OutputStream(
             samplerate=self.get_output_audio_samplerate(),
             device=self._output_device_id,
-            channels=1,
+            dtype="float32",
         )
         if self._output_stream is None:
             raise RuntimeError("Failed to open SoundDevice audio output stream.")
