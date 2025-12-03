@@ -82,7 +82,7 @@ class OpenCVCamera(CameraBase):
             raise RuntimeError("Expected numpy.ndarray from cv2.VideoCapture.read()")
         # Ensure uint8 dtype without using deprecated np.asarray(copy=False)
         if frame.dtype != np.uint8:
-            frame = frame.astype(np.uint8, copy=False)
+            frame = cast(npt.NDArray[np.uint8], frame.astype(np.uint8, copy=False))
         return frame
 
     def close(self) -> None:
