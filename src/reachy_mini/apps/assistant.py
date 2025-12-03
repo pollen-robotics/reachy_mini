@@ -129,7 +129,7 @@ def create(console: Console, app_name: str, app_path: Path) -> None:
 
     (base_path / "index.html").write_text(render_template("index.html.j2", context))
     (base_path / "style.css").write_text(render_template("style.css.j2", context))
-    (base_path / ".gitignore").write_text(render_template(".gitignore.j2", context))
+    (base_path / ".gitignore").write_text(render_template("gitignore.j2", context))
 
     # TODO assets dir with a .gif ?
 
