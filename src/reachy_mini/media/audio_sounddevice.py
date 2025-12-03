@@ -14,8 +14,8 @@ from reachy_mini.utils.constants import ASSETS_ROOT_PATH
 
 from .audio_base import AudioBase
 
-MAX_INPUT_CHANNELS = 2
-MAX_OUTPUT_CHANNELS = 2
+MAX_INPUT_CHANNELS = 4
+MAX_OUTPUT_CHANNELS = 4
 
 class SoundDeviceAudio(AudioBase):
     """Audio device implementation using sounddevice."""
