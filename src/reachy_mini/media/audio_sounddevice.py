@@ -61,9 +61,16 @@ class SoundDeviceAudio(AudioBase):
             self.logger.warning(f"SoundDevice status: {status}")
 
         data = indata.copy()
-        
-        if data.ndim > 1:
-            data = data[:, :2].mean(axis=1)
+
+        if data.ndim == 2:
+            channels = data.shape[1]
+            if channels > 4:
+                data = data[:, :2]
+        elif data.ndim == 1:
+            pass 
+        else:
+            self.logger.error(f"Unexpected audio data shape: {data.shape}")
+            return 
 
         self._buffer.append(data)
 
