@@ -41,7 +41,6 @@ class SoundDeviceAudio(AudioBase):
         self.stream = sd.InputStream(
             device=self._input_device_id,
             samplerate=self.get_input_audio_samplerate(),
-            dtype="float32",
             callback=self._callback,
         )
         if self.stream is None:
@@ -59,7 +58,7 @@ class SoundDeviceAudio(AudioBase):
     ) -> None:
         if status:
             self.logger.warning(f"SoundDevice status: {status}")
-            
+
         self._buffer.append(indata[:, :MAX_INPUT_CHANNELS]) # Sounddevice callbacks always use 2D arrays. The slicing handles the reshaping and copying of the data.
 
     def get_audio_sample(self) -> Optional[npt.NDArray[np.float32]]:
@@ -128,7 +127,6 @@ class SoundDeviceAudio(AudioBase):
         self._output_stream = sd.OutputStream(
             samplerate=self.get_output_audio_samplerate(),
             device=self._output_device_id,
-            dtype="float32",
         )
         if self._output_stream is None:
             raise RuntimeError("Failed to open SoundDevice audio output stream.")
