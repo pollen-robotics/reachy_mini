@@ -32,6 +32,7 @@ from .audio_base import AudioBase  # noqa: E402
 class GStreamerAudio(AudioBase):
     """Audio implementation using GStreamer."""
 
+
     def __init__(self, log_level: str = "INFO") -> None:
         """Initialize the GStreamer audio."""
         super().__init__(log_level=log_level)
@@ -57,6 +58,7 @@ class GStreamerAudio(AudioBase):
         self._bus_playback.add_watch(
             GLib.PRIORITY_DEFAULT, self._on_bus_message, self._loop
         )
+
 
     def _init_pipeline_record(self, pipeline: Gst.Pipeline) -> None:
         self._appsink_audio = Gst.ElementFactory.make("appsink")
@@ -114,6 +116,7 @@ class GStreamerAudio(AudioBase):
         if not capsfilter.link(self._appsink_audio):
              raise RuntimeError("Failed to link capsfilter -> appsink")
 
+
     def __del__(self) -> None:
         """Destructor to ensure gstreamer resources are released."""
         super().__del__()
@@ -121,6 +124,7 @@ class GStreamerAudio(AudioBase):
         self._bus_record.remove_watch()
         self._bus_playback.remove_watch()
 
+    
     def _init_pipeline_playback(self, pipeline: Gst.Pipeline) -> None:
         self._appsrc = Gst.ElementFactory.make("appsrc")
         self._appsrc.set_property("format", Gst.Format.TIME)
