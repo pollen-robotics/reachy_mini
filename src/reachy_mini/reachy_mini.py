@@ -79,7 +79,7 @@ class ReachyMini:
             timeout (float): Timeout for the client connection, defaults to 5.0 seconds.
             automatic_body_yaw (bool): If True, the body yaw will be used to compute the IK and FK. Default is False.
             log_level (str): Logging level, defaults to "INFO".
-            media_backend (str): Media backend to use, either "default" (OpenCV) or "gstreamer", defaults to "default".
+            media_backend (str): Media backend to use, either "default" (OpenCV), "gstreamer" or "webrtc", defaults to "default".
 
         It will try to connect to the daemon, and if it fails, it will raise an exception.
 
@@ -130,22 +130,18 @@ class ReachyMini:
     def _configure_mediamanager(
         self, media_backend: str, log_level: str
     ) -> MediaManager:
-        if (
-            self.client.get_status()["wireless_version"]
-            and media_backend != "gstreamer"
-        ):
-            self.logger.warning(
-                "Wireless version detected, media backend should be set to 'gstreamer'. Reverting to no_media"
-            )
-            media_backend = "no_media"
-
         mbackend = MediaBackend.DEFAULT
         match media_backend.lower():
-            case "gstreamer":
+            case "webrtc":
                 if self.client.get_status()["wireless_version"]:
                     mbackend = MediaBackend.WEBRTC
                 else:
-                    mbackend = MediaBackend.GSTREAMER
+                    self.logger.warning(
+                        "Non-wireless version detected, daemon should use the flag '--wireless-version'. Reverting to default"
+                    )
+                    mbackend = MediaBackend.DEFAULT
+            case "gstreamer":
+                mbackend = MediaBackend.GSTREAMER
             case "default":
                 mbackend = MediaBackend.DEFAULT
             case "no_media":
