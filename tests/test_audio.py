@@ -82,6 +82,26 @@ def test_record_audio_and_file_exists() -> None:
     #print(f"Recorded audio saved to {tmpfile.name}")
 
 @pytest.mark.audio
+def test_record_audio_without_start_recording() -> None:
+    """Test recording audio without starting recording."""
+    media = MediaManager(backend=MediaBackend.DEFAULT_NO_VIDEO)
+    audio = media.get_audio_sample()
+    assert audio is None
+
+@pytest.mark.audio
+def test_record_audio_above_max_queue_seconds() -> None:
+    """Test recording audio and check that the maximum queue seconds is respected."""
+    media = MediaManager(backend=MediaBackend.DEFAULT_NO_VIDEO)
+    media.audio._input_max_queue_seconds = 1
+    media.start_recording()
+    time.sleep(5)
+    audio = media.get_audio_sample()
+    media.stop_recording()
+
+    assert audio is not None
+    assert audio.shape[0] < media.audio._input_max_queue_samples
+
+@pytest.mark.audio
 def test_DoA() -> None:
     """Test Direction of Arrival (DoA) estimation."""
     media = MediaManager(backend=MediaBackend.DEFAULT_NO_VIDEO)
