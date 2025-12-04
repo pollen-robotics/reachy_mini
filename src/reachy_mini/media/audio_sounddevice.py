@@ -14,18 +14,17 @@ from reachy_mini.utils.constants import ASSETS_ROOT_PATH
 
 from .audio_base import AudioBase
 
+MAX_INPUT_CHANNELS = 4
 
 class SoundDeviceAudio(AudioBase):
     """Audio device implementation using sounddevice."""
 
     def __init__(
         self,
-        frames_per_buffer: int = 256,
         log_level: str = "INFO",
     ) -> None:
         """Initialize the SoundDevice audio device."""
         super().__init__(log_level=log_level)
-        self.frames_per_buffer = frames_per_buffer
         self.stream = None
         self._output_stream = None
         self._buffer: List[npt.NDArray[np.float32]] = []
@@ -39,10 +38,9 @@ class SoundDeviceAudio(AudioBase):
     def start_recording(self) -> None:
         """Open the audio input stream, using ReSpeaker card if available."""
         self.stream = sd.InputStream(
-            blocksize=self.frames_per_buffer,
             device=self._input_device_id,
-            callback=self._callback,
             samplerate=self.get_input_audio_samplerate(),
+            callback=self._callback,
         )
         if self.stream is None:
             raise RuntimeError("Failed to open SoundDevice audio stream.")
@@ -60,7 +58,7 @@ class SoundDeviceAudio(AudioBase):
         if status:
             self.logger.warning(f"SoundDevice status: {status}")
 
-        self._buffer.append(indata.copy())
+        self._buffer.append(indata[:, :MAX_INPUT_CHANNELS]) # Sounddevice callbacks always use 2D arrays. The slicing handles the reshaping and copying of the data.
 
     def get_audio_sample(self) -> Optional[npt.NDArray[np.float32]]:
         """Read audio data from the buffer. Returns numpy array or None if empty."""
@@ -83,6 +81,19 @@ class SoundDeviceAudio(AudioBase):
             sd.query_devices(self._output_device_id, "output")["default_samplerate"]
         )
 
+    def get_input_channels(self) -> int:
+        """Get the number of input channels of the audio device."""
+        return min(
+            int(sd.query_devices(self._input_device_id, "input")["max_input_channels"]),
+            MAX_INPUT_CHANNELS
+        )
+
+    def get_output_channels(self) -> int:
+        """Get the number of output channels of the audio device."""
+        return int(
+            sd.query_devices(self._output_device_id, "output")["max_output_channels"]
+        )
+
     def stop_recording(self) -> None:
         """Close the audio stream and release resources."""
         if self.stream is not None:
@@ -94,9 +105,7 @@ class SoundDeviceAudio(AudioBase):
     def push_audio_sample(self, data: npt.NDArray[np.float32]) -> None:
         """Push audio data to the output device."""
         if self._output_stream is not None:
-            if data.ndim > 1:  # convert to mono
-                data = np.mean(data, axis=1)
-            self._output_stream.write(data)
+            self._output_stream.write(np.ascontiguousarray(data))
         else:
             self.logger.warning(
                 "Output stream is not open. Call start_playing() first."
@@ -109,7 +118,6 @@ class SoundDeviceAudio(AudioBase):
         self._output_stream = sd.OutputStream(
             samplerate=self.get_output_audio_samplerate(),
             device=self._output_device_id,
-            channels=1,
         )
         if self._output_stream is None:
             raise RuntimeError("Failed to open SoundDevice audio output stream.")

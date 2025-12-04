@@ -39,6 +39,7 @@ class CameraResolution(Enum):
 class CameraSpecs:
     """Base camera specifications."""
 
+    name: str = ""
     available_resolutions: List[CameraResolution] = field(default_factory=list)
     default_resolution: CameraResolution = CameraResolution.R1280x720at30fps
     vid = 0
@@ -51,6 +52,7 @@ class CameraSpecs:
 class ArducamSpecs(CameraSpecs):
     """Arducam camera specifications."""
 
+    name = "arducam"
     available_resolutions = [
         CameraResolution.R2304x1296at30fps,
         CameraResolution.R4608x2592at10fps,
@@ -69,6 +71,7 @@ class ArducamSpecs(CameraSpecs):
 class ReachyMiniLiteCamSpecs(CameraSpecs):
     """Reachy Mini Lite camera specifications."""
 
+    name = "lite"
     available_resolutions = [
         CameraResolution.R1920x1080at60fps,
         CameraResolution.R3840x2592at30fps,
@@ -101,6 +104,7 @@ class ReachyMiniLiteCamSpecs(CameraSpecs):
 class ReachyMiniWirelessCamSpecs(ReachyMiniLiteCamSpecs):
     """Reachy Mini Wireless camera specifications."""
 
+    name = "wireless"
     available_resolutions = [
         CameraResolution.R1920x1080at30fps,
         CameraResolution.R1280x720at60fps,
@@ -116,6 +120,7 @@ class ReachyMiniWirelessCamSpecs(ReachyMiniLiteCamSpecs):
 class OlderRPiCamSpecs(ReachyMiniLiteCamSpecs):
     """Older Raspberry Pi camera specifications. Keeping for compatibility."""
 
+    name = "older_rpi"
     vid = 0x1BCF
     pid = 0x28C4
 
