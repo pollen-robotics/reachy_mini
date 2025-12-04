@@ -10,7 +10,7 @@ from reachy_mini.media.camera_constants import (
     ArducamSpecs,
     CameraSpecs,
     OlderRPiCamSpecs,
-    ReachyMiniCamSpecs,
+    ReachyMiniLiteCamSpecs,
 )
 
 
@@ -30,14 +30,14 @@ def find_camera(
 
     """
     cap = find_camera_by_vid_pid(
-        ReachyMiniCamSpecs.vid, ReachyMiniCamSpecs.pid, apiPreference
+        ReachyMiniLiteCamSpecs.vid, ReachyMiniLiteCamSpecs.pid, apiPreference
     )
     if cap is not None:
         fourcc = cv2.VideoWriter_fourcc("M", "J", "P", "G")  # type: ignore
         cap.set(cv2.CAP_PROP_FOURCC, fourcc)
         if no_cap:
             cap.release()
-        return cap, cast(CameraSpecs, ReachyMiniCamSpecs)
+        return cap, cast(CameraSpecs, ReachyMiniLiteCamSpecs)
 
     cap = find_camera_by_vid_pid(
         OlderRPiCamSpecs.vid, OlderRPiCamSpecs.pid, apiPreference
@@ -59,8 +59,8 @@ def find_camera(
 
 
 def find_camera_by_vid_pid(
-    vid: int = ReachyMiniCamSpecs.vid,
-    pid: int = ReachyMiniCamSpecs.pid,
+    vid: int = ReachyMiniLiteCamSpecs.vid,
+    pid: int = ReachyMiniLiteCamSpecs.pid,
     apiPreference: int = cv2.CAP_ANY,
 ) -> cv2.VideoCapture | None:
     """Find and return a camera with the specified VID and PID.
@@ -92,14 +92,14 @@ def find_camera_by_vid_pid(
 
 
 if __name__ == "__main__":
-    from reachy_mini.media.camera_constants import ArduCamResolution
+    from reachy_mini.media.camera_constants import CameraResolution
 
     cam, _ = find_camera()
     if cam is None:
         exit("Camera not found")
 
-    cam.set(cv2.CAP_PROP_FRAME_WIDTH, ArduCamResolution.R1280x720.value[0])
-    cam.set(cv2.CAP_PROP_FRAME_HEIGHT, ArduCamResolution.R1280x720.value[1])
+    cam.set(cv2.CAP_PROP_FRAME_WIDTH, CameraResolution.R1280x720at30fps.value[0])
+    cam.set(cv2.CAP_PROP_FRAME_HEIGHT, CameraResolution.R1280x720at30fps.value[1])
 
     while True:
         ret, frame = cam.read()

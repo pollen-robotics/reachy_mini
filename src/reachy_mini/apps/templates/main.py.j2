@@ -17,7 +17,6 @@ class {{ class_name }}(ReachyMiniApp):
         antennas_enabled = True
         sound_play_requested = False
 
-
         # You can ignore this part if you don't want to add settings to your app. If you set custom_app_url to None, you have to remove this part as well.
         # === vvv ===
         class AntennaState(BaseModel):
@@ -33,6 +32,7 @@ class {{ class_name }}(ReachyMiniApp):
         def request_sound_play():
             nonlocal sound_play_requested
             sound_play_requested = True
+            
         # === ^^^ ===
 
         # Main control loop
@@ -62,3 +62,8 @@ class {{ class_name }}(ReachyMiniApp):
             )
 
             time.sleep(0.02)
+
+
+if __name__ == "__main__":
+    app = {{ class_name }}()
+    app.wrapped_run()

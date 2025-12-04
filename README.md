@@ -1,5 +1,7 @@
 # Reachy Mini
 
+[![Ask on HuggingChat](https://img.shields.io/badge/Ask_on-HuggingChat-yellow?logo=huggingface&logoColor=yellow&style=for-the-badge)](https://huggingface.co/chat/?attachments=https%3A%2F%2Fgist.githubusercontent.com%2FFabienDanieau%2F919e1d7468fb16e70dbe984bdc277bba%2Fraw%2Fdoc_reachy_mini_full.md&prompt=Read%20this%20documentation%20about%20Reachy%20Mini%20so%20I%20can%20ask%20questions%20about%20it.)
+
 > ⚠️ Reachy Mini is still in beta. Expect bugs, some of them we won't fix right away if they are not a priority.
 
 [Reachy Mini](https://www.pollen-robotics.com/reachy-mini/) is an expressive, open-source robot designed for human-robot interaction, creative coding, and AI experimentation. We made it to be affordable, easy to use, hackable and cute, so that you can focus on building cool AI applications!
@@ -89,6 +91,29 @@ uv run reachy-mini-daemon
 
 The same package provides both the daemon and the Python SDK.
 
+### Linux udev rules setup
+
+On Linux systems, you need to set up udev rules to allow non-root access to the Reachy Mini hardware. Create the udev rules file with:
+
+```bash
+echo 'SUBSYSTEM=="tty", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="55d3", MODE="0666", GROUP="dialout" #Reachy Mini
+SUBSYSTEM=="tty", ATTRS{idVendor}=="38fb", ATTRS{idProduct}=="1001", MODE="0666", GROUP="dialout" #Reachy Mini soundcard' \
+| sudo tee /etc/udev/rules.d/99-reachy-mini.rules
+```
+
+After saving the file, refresh the udev rules:
+
+```bash
+sudo udevadm control --reload-rules && sudo udevadm trigger
+```
+
+Finally, add your current user to the `dialout` group:
+
+```bash
+sudo usermod -aG dialout $USER
+```
+
+You may need to log out and log back in for the group changes to take effect.
 
 ## Run the reachy mini daemon
 

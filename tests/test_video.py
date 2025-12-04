@@ -1,4 +1,4 @@
-from reachy_mini.media.camera_constants import ReachyMiniCamSpecs, ArduCamResolution, MujocoCameraSpecs
+from reachy_mini.media.camera_constants import ReachyMiniLiteCamSpecs, CameraResolution, MujocoCameraSpecs
 from reachy_mini.media.media_manager import MediaManager, MediaBackend
 import numpy as np
 import pytest
@@ -39,15 +39,14 @@ def test_change_resolution_errors() -> None:
     media = MediaManager(backend=MediaBackend.DEFAULT)
     media.camera.camera_specs = None
     with pytest.raises(RuntimeError):
-        media.camera.set_resolution(ArduCamResolution.R1280x720)
+        media.camera.set_resolution(CameraResolution.R1280x720)
 
     media.camera.camera_specs = MujocoCameraSpecs()
     with pytest.raises(RuntimeError):
-        media.camera.set_resolution(ArduCamResolution.R1280x720)
-
-    media.camera.camera_specs = ReachyMiniCamSpecs()
+        media.camera.set_resolution(CameraResolution.R1280x720)
+    media.camera.camera_specs = ReachyMiniLiteCamSpecs()
     with pytest.raises(ValueError):
-        media.camera.set_resolution(ArduCamResolution.R1280x720)
+        media.camera.set_resolution(CameraResolution.R1280x720)
 
 
 @pytest.mark.video_gstreamer

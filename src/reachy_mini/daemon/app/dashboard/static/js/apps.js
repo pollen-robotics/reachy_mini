@@ -122,7 +122,7 @@ const installedApps = {
             settingsLink.innerHTML = '⚙️';
 
             const url = new URL(app.extra.custom_app_url);
-            // url.hostname = window.location.host.split(':')[0]; // TODO ANTOINE do we need this ? 
+            url.hostname = window.location.host.split(':')[0];
 
             settingsLink.href = url.toString();
             settingsLink.target = '_blank';

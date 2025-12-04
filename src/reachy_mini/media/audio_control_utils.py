@@ -321,7 +321,7 @@ class ReSpeaker:
 
 def find(vid: int = 0x2886, pid: int = 0x001A) -> ReSpeaker | None:
     """Find and return the ReSpeaker USB device with the given Vendor ID and Product ID."""
-    dev = usb.core.find(idVendor=vid, idProduct=pid)
+    dev = usb.core.find(idVendor=vid, idProduct=pid, backend=get_libusb1_backend())
     if not dev:
         return None
 
@@ -331,22 +331,29 @@ def find(vid: int = 0x2886, pid: int = 0x001A) -> ReSpeaker | None:
 def init_respeaker_usb() -> Optional[ReSpeaker]:
     """Initialize the ReSpeaker USB device. Looks for both new and beta device IDs."""
     try:
+        # Try new firmware first
         dev = usb.core.find(
             idVendor=0x38FB, idProduct=0x1001, backend=get_libusb1_backend()
         )
+        
+        # If not found, try old firmware
         if dev is None:
             dev = usb.core.find(
                 idVendor=0x2886, idProduct=0x001A, backend=get_libusb1_backend()
             )
-            if dev is None:
-                logging.error("No ReSpeaker USB device found !")
-                return None 
-            else:
-                logging.warning("Old firmware detected on ReSpeaker USB device. Please update the firmware!")
+            if dev is not None:
+                logging.warning("Old firmware detected. Please update the firmware!")
+
+        # If still not found, raise error
+        if dev is None:
+            logging.error("No Reachy Mini Audio USB device found!")
+            return None
+        
         return ReSpeaker(dev)
+
     except usb.core.NoBackendError:
         logging.error(
-            "No USB backend was found ! Make sure libusb_package is correctly installed with `pip install libusb_package`."
+            "No USB backend was found! Make sure libusb_package is correctly installed with `pip install libusb_package`."
         )
         return None
 
@@ -382,7 +389,12 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    dev = find(vid=args.vid, pid=args.pid)
+    # Allow user overrides if provided, else use known defaults
+    if args.vid is not None and args.pid is not None:
+        dev = find(vid=args.vid, pid=args.pid)
+    else:
+        dev = init_respeaker_usb()
+        
     if not dev:
         print("No device found")
         sys.exit(1)
@@ -418,7 +430,14 @@ def main() -> None:
             print(f"{args.command}: {result}")
 
     except Exception as e:
-        print(f"Error executing command {args.command}: {e}")
+        error_msg = f"Error executing command {args.command}: {e}"
+        print(error_msg)
+        
+        # Check if it's a permission error, so far only seen on Linux
+        if "Errno 13" in str(e) or "Access denied" in str(e) or "insufficient permissions" in str(e):
+            print("\nThis looks like a permissions error.")
+            print("\n - You are most likely on Linux and need to adjust udev rules for USB permissions.")  
+            print("\n - If you are not on Linux or have additional questions contact the team.")  
         sys.exit(1)
     finally:
         dev.close()
