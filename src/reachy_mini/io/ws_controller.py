@@ -115,4 +115,4 @@ class AsyncWebSocketController:
         """Stop the WebSocket controller."""
         self.stop_flag = True
         if self.loop.is_running():
-            self.loop.call_soon_threadsafe(self.loop.stop)
+            self.loop.call_soon_threadsafe(lambda: None)

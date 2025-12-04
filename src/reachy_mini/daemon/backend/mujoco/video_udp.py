@@ -3,15 +3,12 @@
 This module provides a class to send JPEG frames over UDP. It encodes the frames as JPEG images and splits them into chunks to fit within the maximum packet size for UDP transmission.
 """
 
-import io
 import socket
 import struct
-from typing import List, Optional
 
 import cv2
 import numpy as np
 import numpy.typing as npt
-from PIL import Image
 
 
 class UDPJPEGFrameSender:
@@ -54,56 +51,6 @@ class UDPJPEGFrameSender:
             start = i * self.max_packet_size
             end = min(start + self.max_packet_size, total_size)
             self.sock.sendto(data[start:end], self.addr)
-
-    def close(self) -> None:
-        """Close the socket."""
-        self.sock.close()
-
-
-class UDPJPEGFrameReceiver:
-    """A class to receive JPEG frames over UDP."""
-
-    def __init__(self, listen_ip: str = "127.0.0.1", listen_port: int = 5005, timeout: float = 1.0) -> None:
-        """Initialize the UDPJPEGFrameReceiver.
-
-        Args:
-            listen_ip (str): The IP address to listen on.
-            listen_port (int): The port to listen on.
-            timeout (float): The timeout in seconds.
-
-        """
-        self.addr = (listen_ip, listen_port)
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.sock.bind(self.addr)
-        self.sock.settimeout(timeout)
-
-    def recv_frame(self) -> Optional[npt.NDArray[np.uint8]]:
-        """Receive and reconstruct one JPEG frame."""
-        try:
-            # Receive header: number of chunks, total size
-            header, _ = self.sock.recvfrom(8)  # 2x uint32
-            n_chunks, total_size = struct.unpack("!II", header)
-
-            chunks: List[bytes] = []
-            received = 0
-            while len(chunks) < n_chunks:
-                packet, _ = self.sock.recvfrom(65536)
-                chunks.append(packet)
-                received += len(packet)
-
-            if received != total_size:
-                # corrupted / missing chunks
-                return None
-
-            jpeg_bytes = b"".join(chunks)
-            img = Image.open(io.BytesIO(jpeg_bytes)).convert("RGB")
-            return np.array(img)
-
-        except socket.timeout:
-            return None
-        except Exception:
-            # partial/corrupted frame, skip it
-            return None
 
     def close(self) -> None:
         """Close the socket."""
