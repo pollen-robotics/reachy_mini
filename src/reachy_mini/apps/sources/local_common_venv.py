@@ -1,20 +1,30 @@
 """Utilities for local common venv apps source."""
 
 import logging
+import platform
 import shutil
 import sys
 from importlib.metadata import entry_points
 from pathlib import Path
+from typing import TYPE_CHECKING, cast
 
 from .. import AppInfo, SourceKind
 from ..utils import running_command
 
+if TYPE_CHECKING:
+    from ..app import ReachyMiniApp
+
+
+def _is_windows() -> bool:
+    """Check if the current platform is Windows."""
+    return platform.system() == "Windows"
+
 
 def _should_use_separate_venvs(
-    wireless_version: bool = False, desktop_version: bool = False
+    wireless_version: bool = False, desktop_app_daemon: bool = False
 ) -> bool:
     """Determine if we should use separate venvs based on version flags."""
-    return wireless_version or desktop_version
+    return wireless_version or desktop_app_daemon
 
 
 def _get_venv_parent_dir() -> Path:
@@ -23,8 +33,11 @@ def _get_venv_parent_dir() -> Path:
     # or: C:\path\to\venv\Scripts\python.exe (Windows)
     executable = Path(sys.executable)
 
+    # Determine expected subdirectory based on platform
+    expected_subdir = "Scripts" if _is_windows() else "bin"
+
     # Go up from bin/python or Scripts/python.exe to venv dir, then to parent
-    if executable.parent.name in ("bin", "Scripts"):
+    if executable.parent.name == expected_subdir:
         venv_dir = executable.parent.parent
         return venv_dir.parent
 
@@ -41,36 +54,46 @@ def _get_app_venv_path(app_name: str) -> Path:
 def _get_app_python(app_name: str) -> Path:
     """Get the Python executable path for a given app (OS-agnostic)."""
     venv_path = _get_app_venv_path(app_name)
-    # Check for both Linux/Mac (bin) and Windows (Scripts)
-    for subdir in ("bin", "Scripts"):
-        python_path = venv_path / subdir / "python"
-        if python_path.exists():
-            return python_path
-        # Try with .exe extension for Windows
-        python_exe = venv_path / subdir / "python.exe"
+
+    if _is_windows():
+        # Windows: Scripts/python.exe
+        python_exe = venv_path / "Scripts" / "python.exe"
         if python_exe.exists():
             return python_exe
-    # Default to bin/python
-    return venv_path / "bin" / "python"
+        # Fallback without .exe
+        python_path = venv_path / "Scripts" / "python"
+        if python_path.exists():
+            return python_path
+        # Default
+        return venv_path / "Scripts" / "python.exe"
+    else:
+        # Linux/Mac: bin/python
+        python_path = venv_path / "bin" / "python"
+        if python_path.exists():
+            return python_path
+        # Default
+        return venv_path / "bin" / "python"
 
 
 def _get_app_site_packages(app_name: str) -> Path | None:
     """Get the site-packages directory for a given app's venv (OS-agnostic)."""
     venv_path = _get_app_venv_path(app_name)
 
-    # Check for both Lib/site-packages (Windows) and lib/python3.x/site-packages (Linux/Mac)
-    site_packages_win = venv_path / "Lib" / "site-packages"
-    if site_packages_win.exists():
-        return site_packages_win
-
-    # Linux/Mac: lib/python3.x/site-packages
-    lib_dir = venv_path / "lib"
-    if not lib_dir.exists():
+    if _is_windows():
+        # Windows: Lib/site-packages
+        site_packages = venv_path / "Lib" / "site-packages"
+        if site_packages.exists():
+            return site_packages
         return None
-    python_dirs = list(lib_dir.glob("python3.*"))
-    if not python_dirs:
-        return None
-    return python_dirs[0] / "site-packages"
+    else:
+        # Linux/Mac: lib/python3.x/site-packages
+        lib_dir = venv_path / "lib"
+        if not lib_dir.exists():
+            return None
+        python_dirs = list(lib_dir.glob("python3.*"))
+        if not python_dirs:
+            return None
+        return python_dirs[0] / "site-packages"
 
 
 def get_app_site_packages(app_name: str) -> Path | None:
@@ -78,85 +101,80 @@ def get_app_site_packages(app_name: str) -> Path | None:
     return _get_app_site_packages(app_name)
 
 
+async def _list_apps_from_separate_venvs() -> list[AppInfo]:
+    """List apps by scanning sibling venv directories."""
+    parent_dir = _get_venv_parent_dir()
+    if not parent_dir.exists():
+        return []
+
+    apps = []
+    for venv_path in parent_dir.iterdir():
+        if not venv_path.is_dir() or not venv_path.name.endswith("_venv"):
+            continue
+
+        # Extract app name from venv directory name
+        app_name = venv_path.name[: -len("_venv")]
+
+        # Note: We don't load the app to get custom_app_url for separate venvs
+        # to avoid sys.path pollution and version conflicts. The custom_app_url
+        # will still work when the app actually runs (it uses its own class attribute).
+        # This only means the settings icon won't appear in the dashboard listing.
+        custom_app_url = None
+
+        apps.append(
+            AppInfo(
+                name=app_name,
+                source_kind=SourceKind.INSTALLED,
+                extra={
+                    "custom_app_url": custom_app_url,
+                    "venv_path": str(venv_path),
+                },
+            )
+        )
+
+    return apps
+
+
+async def _list_apps_from_entry_points() -> list[AppInfo]:
+    """List apps from current environment's entry points."""
+    entry_point_apps = entry_points(group="reachy_mini_apps")
+
+    apps = []
+    for ep in entry_point_apps:
+        custom_app_url = None
+        try:
+            app = ep.load()
+            custom_app_url = app.custom_app_url
+        except Exception as e:
+            logging.getLogger("reachy_mini.apps").warning(
+                f"Could not load app '{ep.name}' from entry point: {e}"
+            )
+        apps.append(
+            AppInfo(
+                name=ep.name,
+                source_kind=SourceKind.INSTALLED,
+                extra={"custom_app_url": custom_app_url},
+            )
+        )
+
+    return apps
+
+
 async def list_available_apps(
-    wireless_version: bool = False, desktop_version: bool = False
+    wireless_version: bool = False, desktop_app_daemon: bool = False
 ) -> list[AppInfo]:
     """List apps available from entry points or separate venvs."""
-    if _should_use_separate_venvs(wireless_version, desktop_version):
-        # List by scanning sibling venv directories
-        parent_dir = _get_venv_parent_dir()
-        if not parent_dir.exists():
-            return []
-
-        apps = []
-        for venv_path in parent_dir.iterdir():
-            if not venv_path.is_dir() or not venv_path.name.endswith("_venv"):
-                continue
-
-            # Extract app name from venv directory name
-            app_name = venv_path.name[: -len("_venv")]
-            custom_app_url = None
-
-            # Try to load app to get custom_app_url
-            site_packages = _get_app_site_packages(app_name)
-            if site_packages and site_packages.exists():
-                sys.path.insert(0, str(site_packages))
-                try:
-                    eps = entry_points(group="reachy_mini_apps")
-                    ep = eps.select(name=app_name)
-                    if ep:
-                        app_cls = list(ep)[0].load()
-                        custom_app_url = getattr(app_cls, "custom_app_url", None)
-                except Exception as e:
-                    logging.getLogger("reachy_mini.apps").warning(
-                        f"Could not load app '{app_name}': {e}"
-                    )
-                finally:
-                    sys.path.pop(0)
-
-            apps.append(
-                AppInfo(
-                    name=app_name,
-                    source_kind=SourceKind.INSTALLED,
-                    extra={
-                        "custom_app_url": custom_app_url,
-                        "venv_path": str(venv_path),
-                    },
-                )
-            )
-
-        return apps
+    if _should_use_separate_venvs(wireless_version, desktop_app_daemon):
+        return await _list_apps_from_separate_venvs()
     else:
-        # Original behavior: list from current environment's entry points
-        entry_point_apps = list(entry_points(group="reachy_mini_apps"))
-
-        apps = []
-
-        for ep in entry_point_apps:
-            custom_app_url = None
-            try:
-                app = ep.load()
-                custom_app_url = app.custom_app_url
-            except Exception as e:
-                logging.getLogger("reachy_mini.apps").warning(
-                    f"Could not load app '{ep.name}' from entry point: {e}"
-                )
-            apps.append(
-                AppInfo(
-                    name=ep.name,
-                    source_kind=SourceKind.INSTALLED,
-                    extra={"custom_app_url": custom_app_url},
-                )
-            )
-
-        return apps
+        return await _list_apps_from_entry_points()
 
 
 async def install_package(
     app: AppInfo,
     logger: logging.Logger,
     wireless_version: bool = False,
-    desktop_version: bool = False,
+    desktop_app_daemon: bool = False,
 ) -> int:
     """Install a package given an AppInfo object, streaming logs."""
     if app.source_kind == SourceKind.HF_SPACE:
@@ -166,7 +184,7 @@ async def install_package(
     else:
         raise ValueError(f"Cannot install app from source kind '{app.source_kind}'")
 
-    if _should_use_separate_venvs(wireless_version, desktop_version):
+    if _should_use_separate_venvs(wireless_version, desktop_app_daemon):
         # Create separate venv for this app
         app_name = app.name
         venv_path = _get_app_venv_path(app_name)
@@ -215,10 +233,10 @@ async def install_package(
 def load_app_from_venv(
     app_name: str,
     wireless_version: bool = False,
-    desktop_version: bool = False,
-):
+    desktop_app_daemon: bool = False,
+) -> type["ReachyMiniApp"]:
     """Load an app class from its separate venv or current environment."""
-    if _should_use_separate_venvs(wireless_version, desktop_version):
+    if _should_use_separate_venvs(wireless_version, desktop_app_daemon):
         # Load from separate venv
         site_packages = _get_app_site_packages(app_name)
         if not site_packages or not site_packages.exists():
@@ -231,7 +249,7 @@ def load_app_from_venv(
             if not ep:
                 raise ValueError(f"No entry point found for app '{app_name}'")
             app_cls = list(ep)[0].load()
-            return app_cls
+            return cast(type["ReachyMiniApp"], app_cls)
         except Exception as e:
             raise ValueError(f"Could not load app '{app_name}' from venv: {e}")
         finally:
@@ -242,17 +260,17 @@ def load_app_from_venv(
         ep_list = list(eps)
         if not ep_list:
             raise ValueError(f"No entry point found for app '{app_name}'")
-        return ep_list[0].load()
+        return cast(type["ReachyMiniApp"], ep_list[0].load())
 
 
 async def uninstall_package(
     app_name: str,
     logger: logging.Logger,
     wireless_version: bool = False,
-    desktop_version: bool = False,
+    desktop_app_daemon: bool = False,
 ) -> int:
     """Uninstall a package given an app name."""
-    if _should_use_separate_venvs(wireless_version, desktop_version):
+    if _should_use_separate_venvs(wireless_version, desktop_app_daemon):
         # Remove the venv directory
         venv_path = _get_app_venv_path(app_name)
 

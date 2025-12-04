@@ -37,7 +37,7 @@ class Daemon:
         self,
         log_level: str = "INFO",
         wireless_version: bool = False,
-        desktop_version: bool = False,
+        desktop_app_daemon: bool = False,
     ) -> None:
         """Initialize the Reachy Mini daemon."""
         self.log_level = log_level
@@ -45,7 +45,7 @@ class Daemon:
         self.logger.setLevel(self.log_level)
 
         self.wireless_version = wireless_version
-        self.desktop_version = desktop_version
+        self.desktop_app_daemon = desktop_app_daemon
 
         self.backend: "RobotBackend | MujocoBackend | None" = None
         # Get package version
@@ -59,7 +59,7 @@ class Daemon:
         self._status = DaemonStatus(
             state=DaemonState.NOT_INITIALIZED,
             wireless_version=wireless_version,
-            desktop_version=desktop_version,
+            desktop_app_daemon=desktop_app_daemon,
             simulation_enabled=None,
             backend_status=None,
             error=None,
@@ -485,7 +485,7 @@ class DaemonStatus:
 
     state: DaemonState
     wireless_version: bool
-    desktop_version: bool
+    desktop_app_daemon: bool
     simulation_enabled: Optional[bool]
     backend_status: Optional[RobotBackendStatus | MujocoBackendStatus]
     error: Optional[str] = None
