@@ -16,7 +16,7 @@ try:
     import gi
 except ImportError as e:
     raise ImportError(
-        "The 'gi' module is required for GStreamerCamera but could not be imported. \
+        "The 'gi' module is required for GStreamerAUdio but could not be imported. \
                       Please install the GStreamer backend: pip install .[gstreamer]."
     ) from e
 
@@ -213,7 +213,7 @@ def _init_pipeline_record(self, pipeline: Gst.Pipeline) -> None:
         return self.CHANNELS
 
     def stop_recording(self) -> None:
-        """Release the camera resource."""
+        """Release the audio resource."""
         self._pipeline_record.set_state(Gst.State.NULL)
 
     def start_playing(self) -> None:
