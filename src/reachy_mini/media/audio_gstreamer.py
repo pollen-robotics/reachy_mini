@@ -58,7 +58,7 @@ class GStreamerAudio(AudioBase):
             GLib.PRIORITY_DEFAULT, self._on_bus_message, self._loop
         )
 
-def _init_pipeline_record(self, pipeline: Gst.Pipeline) -> None:
+    def _init_pipeline_record(self, pipeline: Gst.Pipeline) -> None:
         self._appsink_audio = Gst.ElementFactory.make("appsink")
         
         # 1. Define the target caps (What we WANT: 16k, F32LE)
