@@ -79,9 +79,9 @@ class GStreamerAudio(AudioBase):
             self.logger.info("Using autoaudiosrc (Default System Device)")
             audiosrc = Gst.ElementFactory.make("autoaudiosrc")
         else:
-            self.logger.info(f"Using alsasrc device hw:{self._id_audio_card},0")
+            self.logger.info(f"Using alsasrc device plughw:{self._id_audio_card},0")
             audiosrc = Gst.ElementFactory.make("alsasrc")
-            audiosrc.set_property("device", f"hw:{self._id_audio_card},0")
+            audiosrc.set_property("device", f"plughw:{self._id_audio_card},0")
 
         # 3. Create Processing Elements
         queue = Gst.ElementFactory.make("queue")
@@ -139,7 +139,7 @@ class GStreamerAudio(AudioBase):
             audiosink = Gst.ElementFactory.make("autoaudiosink")  # use default speaker
         else:
             audiosink = Gst.ElementFactory.make("alsasink")
-            audiosink.set_property("device", f"hw:{self._id_audio_card},0")
+            audiosink.set_property("device", f"plughw:{self._id_audio_card},0")
 
         pipeline.add(queue)
         pipeline.add(audiosink)
