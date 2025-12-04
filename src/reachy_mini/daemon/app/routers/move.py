@@ -259,3 +259,20 @@ async def ws_set_target(
                 )
     except WebSocketDisconnect:
         pass
+
+
+@router.websocket("/ws/raw/write")
+async def write(
+    websocket: WebSocket,
+    backend: Backend = Depends(ws_get_backend),
+) -> None:
+    """WebSocket endpoint to stream the full state of the robot."""
+    await websocket.accept()
+
+    try:
+        while True:
+            data = await websocket.receive_bytes()
+            raw_response_packet: bytes = backend.write_raw_packet(data)
+            await websocket.send_bytes(raw_response_packet)
+    except WebSocketDisconnect:
+        pass
