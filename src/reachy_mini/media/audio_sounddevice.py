@@ -15,7 +15,6 @@ from reachy_mini.utils.constants import ASSETS_ROOT_PATH
 from .audio_base import AudioBase
 
 MAX_INPUT_CHANNELS = 4
-MAX_OUTPUT_CHANNELS = 4
 
 class SoundDeviceAudio(AudioBase):
     """Audio device implementation using sounddevice."""
@@ -102,17 +101,16 @@ class SoundDeviceAudio(AudioBase):
                 data = data.T
 
             # Fit data to match output stream channels
-            output_channels = min(MAX_OUTPUT_CHANNELS, self._output_stream.channels)
 
             # Mono input to multiple channels output : duplicate to fit
-            if data.ndim == 1 and output_channels > 1:
-                data = np.column_stack((data,) * output_channels)
+            if data.ndim == 1 and self._output_stream.channels > 1:
+                data = np.column_stack((data,) * self._output_stream.channels)
             # Lower channels input to higher channels output : reduce to mono and duplicate to fit
-            elif data.ndim == 2 and data.shape[1] < output_channels:
-                data = np.column_stack((data[:,0],) * output_channels)
+            elif data.ndim == 2 and data.shape[1] < self._output_stream.channels:
+                data = np.column_stack((data[:,0],) * self._output_stream.channels)
             # Higher channels input to lower channels output : crop to fit
-            elif data.ndim == 2 and data.shape[1] > output_channels:
-                data = data[:, :output_channels]
+            elif data.ndim == 2 and data.shape[1] > self._output_stream.channels:
+                data = data[:, :self._output_stream.channels]
 
             self._output_stream.write(np.ascontiguousarray(data))
         else:
