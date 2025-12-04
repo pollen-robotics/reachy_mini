@@ -44,6 +44,8 @@ class Args:
     wireless_version: bool = False
     desktop_app_daemon: bool = False
 
+    stream: bool = False
+
     serialport: str = "auto"
     hardware_config_filepath: str | None = None
 
@@ -247,6 +249,13 @@ def main() -> None:
         action="store_true",
         default=default_args.desktop_app_daemon,
         help="Use the desktop version of Reachy Mini (default: False).",
+    )
+
+    parser.add_argument(
+        "--stream",
+        action="store_true",
+        default=default_args.stream,
+        help="Enable webrtc streaming. For wireless version only (default: False).",
     )
 
     # Real robot mode

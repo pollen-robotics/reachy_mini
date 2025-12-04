@@ -37,6 +37,7 @@ class Daemon:
         self,
         log_level: str = "INFO",
         wireless_version: bool = False,
+        stream: bool = False,
         desktop_app_daemon: bool = False,
     ) -> None:
         """Initialize the Reachy Mini daemon."""
@@ -71,7 +72,11 @@ class Daemon:
         self._webrtc: Optional[Any] = (
             None  # type GstWebRTC imported for wireless version only
         )
-        if wireless_version:
+        if stream:
+            if not wireless_version:
+                raise RuntimeError(
+                    "WebRTC streaming is only supported for wireless version. Use --wireless-version flag."
+                )
             from reachy_mini.media.webrtc_daemon import GstWebRTC
 
             self._webrtc = GstWebRTC(log_level)
