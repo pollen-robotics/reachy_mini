@@ -693,18 +693,20 @@ wheels = [
 
 [[package]]
 name = "eclipse-zenoh"
-version = "1.5.1"
+version = "1.7.0"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/59/46/501fa9a336c12a0c6f59a296233e24c00e7f30189d75cb692cab90e0b39f/eclipse_zenoh-1.5.1.tar.gz", hash = "sha256:5525adfe368e548e9a80947dbb930eedb4ae3df139bafc70358306483949b591", size = 126895, upload-time = "2025-09-04T13:53:02.988Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/3e/de/d533bf1e2bcd6b406ba8d6f0e1f5a521918ae4dd6f0fc34b2e9b3100114b/eclipse_zenoh-1.7.0.tar.gz", hash = "sha256:3934b00e2aaa9f7da1c158b7a04c12e7b3dc2e9f0227ffc6b2cbf6160f3ddfd3", size = 160626, upload-time = "2025-12-04T19:16:05.05Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/86/63/d3beeb3bc882562bb6ea0a4caecd84a71d88662625bf20949b92371b2046/eclipse_zenoh-1.5.1-cp38-abi3-linux_armv6l.whl", hash = "sha256:c1d494012ef3c693a92980129857a73a4c3f3f0e2af0d0c0274c3615cd48ffda", size = 9084619, upload-time = "2025-09-04T13:52:46.991Z" },
-    { url = "https://files.pythonhosted.org/packages/7c/76/05de0c17972dc40adf083a23ea05b094a7ed238cb9f01af926d4f1947b99/eclipse_zenoh-1.5.1-cp38-abi3-macosx_10_12_x86_64.macosx_11_0_arm64.macosx_10_12_universal2.whl", hash = "sha256:7f124d00868a03640afaa63fdddbf9befc2ea385c83e8944ea62e029363941c4", size = 16904800, upload-time = "2025-09-04T13:52:49.111Z" },
-    { url = "https://files.pythonhosted.org/packages/ed/40/6106308e28595cf78bbc3d91fcc389cf6def17b36e5eded29c1db0945e60/eclipse_zenoh-1.5.1-cp38-abi3-macosx_10_12_x86_64.whl", hash = "sha256:5dcaa3a16dd0e8d517c7879f4b1dd6147ba48a15ffd12cc41ecb9b89e618f50b", size = 8652691, upload-time = "2025-09-04T13:52:51.382Z" },
-    { url = "https://files.pythonhosted.org/packages/8f/be/2128b27738576d9e80452690682170922cf576e782db8226d9309705bdf2/eclipse_zenoh-1.5.1-cp38-abi3-manylinux_2_17_armv7l.manylinux2014_armv7l.whl", hash = "sha256:8e9f2fc126fce777e12842c4cb62235e854fa6df73afea71c04a28d7471e0b0a", size = 8974218, upload-time = "2025-09-04T13:52:52.964Z" },
-    { url = "https://files.pythonhosted.org/packages/d3/fa/4eda37827209c7856d06e6df86f48b53c77291b158baaef4702c90fc3fe7/eclipse_zenoh-1.5.1-cp38-abi3-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:21239d912c758a0fe3dd8a76454d48f493b169de7795f050cf8045c5d8ea335f", size = 9771132, upload-time = "2025-09-04T13:52:55.008Z" },
-    { url = "https://files.pythonhosted.org/packages/aa/4f/a9150d237f6ef71489395127d9c5ddd77fe5fb64864b92e0746eb04dc8a8/eclipse_zenoh-1.5.1-cp38-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:76781bbfa61fdc1e9626a03202c7dd8fd103f34761dc7b94b5a2d99f5aae629e", size = 9264787, upload-time = "2025-09-04T13:52:56.761Z" },
-    { url = "https://files.pythonhosted.org/packages/a5/1d/9309130f890c6eb783703b5aa2c4718846900f810d123a1228c45416d871/eclipse_zenoh-1.5.1-cp38-abi3-manylinux_2_28_aarch64.whl", hash = "sha256:0f142a36241e50eb3b86f9c3b0149138d2d1d7b6dd2038589fe4c62e12e776ea", size = 9089753, upload-time = "2025-09-04T13:52:59.851Z" },
-    { url = "https://files.pythonhosted.org/packages/d4/8a/bec6c2e6fe808afab7e3c7c75eba3e3fa7e549d5028b1bdd7f983cd6d2eb/eclipse_zenoh-1.5.1-cp38-abi3-win_amd64.whl", hash = "sha256:eab374670fa9054e2500060ce33c8248f079208476defa5bb9f9a4b8317d6aac", size = 7581657, upload-time = "2025-09-04T13:53:01.467Z" },
+    { url = "https://files.pythonhosted.org/packages/83/38/875d7e0e480d66320acc3cfa3239b15305856bea41d469d2a45bf71e6c3a/eclipse_zenoh-1.7.0-cp39-abi3-linux_armv6l.whl", hash = "sha256:d4bcdc4dd8f656f102ca9b0d12d654194db11f85b4db1cc2a9cae514ed51347f", size = 9429917, upload-time = "2025-12-04T19:15:42.224Z" },
+    { url = "https://files.pythonhosted.org/packages/23/81/ceacc39f458c2b9238783e99f7ed93776a9aff43b996d24ea71f449ee979/eclipse_zenoh-1.7.0-cp39-abi3-macosx_10_12_x86_64.macosx_11_0_arm64.macosx_10_12_universal2.whl", hash = "sha256:e470bc953cd0b701d1b6d9a5eb513c87af5218f0ea8bdb1357c40114117f3a58", size = 17497415, upload-time = "2025-12-04T19:15:44.568Z" },
+    { url = "https://files.pythonhosted.org/packages/65/1d/063fe5b3860d4e5529bee72e571657b8d7b617f7f202df704270c0524474/eclipse_zenoh-1.7.0-cp39-abi3-macosx_10_12_x86_64.whl", hash = "sha256:37c54adf6ec2d61ebce12e50f70151297ec88c809fa32272c31cd39eccbe20bb", size = 8900373, upload-time = "2025-12-04T19:15:46.638Z" },
+    { url = "https://files.pythonhosted.org/packages/2f/c4/d1d65404da8860f05ab6830fa696029eaacf6848d89c0cc142be08d3338c/eclipse_zenoh-1.7.0-cp39-abi3-manylinux_2_17_armv7l.manylinux2014_armv7l.whl", hash = "sha256:1dceff9c15a015e317a8c13283c23f76ea1f4cadd433a88cf5e2c371b9acd4c3", size = 9284491, upload-time = "2025-12-04T19:15:48.418Z" },
+    { url = "https://files.pythonhosted.org/packages/64/0a/a4d796ed4ad1cf489649d422a51e18f845928b0e7d87984285d8b884a149/eclipse_zenoh-1.7.0-cp39-abi3-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:f566f5e2aaa8dcbc46ad6af4dc991ff5c52a9548a0b27f0d4dea5d684b0a0a88", size = 10114281, upload-time = "2025-12-04T19:15:50.142Z" },
+    { url = "https://files.pythonhosted.org/packages/d8/9e/3ec55aa9d64c3ceacfe3fe6df690c976ffcd0d7df5dfabde0b70b1d366dd/eclipse_zenoh-1.7.0-cp39-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:4ea0f562dc6390b7a91c7a7a79a948cf1a1fe12a2bf358861663f5d24b97f879", size = 9477534, upload-time = "2025-12-04T19:15:51.941Z" },
+    { url = "https://files.pythonhosted.org/packages/8c/f0/9cebf4dbf680bb0b28c98108fb6c4c9d5f2c66347da1a588bdc2a345b196/eclipse_zenoh-1.7.0-cp39-abi3-manylinux_2_28_aarch64.whl", hash = "sha256:4f06294a6f040f7b8a7f0667b6050a36595cb1d9124d7f0d2d3a8d211f7b0cf1", size = 9437561, upload-time = "2025-12-04T19:15:53.936Z" },
+    { url = "https://files.pythonhosted.org/packages/fd/5f/3067f2ab84e111dc1ba67dd8ed096553808e0693d8f7bbd7f15be582ee37/eclipse_zenoh-1.7.0-cp39-abi3-win_amd64.whl", hash = "sha256:99016058bc88b1a2f99e3ef6036493dea11bec54acff27ecce7f0c0e39a7308a", size = 7945719, upload-time = "2025-12-04T19:15:55.891Z" },
+    { url = "https://files.pythonhosted.org/packages/47/de/af288887aef92a3fc2f92ebe015be38a11bb14bae04c7ce162c49191972c/eclipse_zenoh-1.7.0-pp310-pypy310_pp73-manylinux_2_17_armv7l.manylinux2014_armv7l.whl", hash = "sha256:8026997f78b1bf0b199c90ffe2e45e156ee6f4f8778f3d8de84b1bef640a85d5", size = 9293623, upload-time = "2025-12-04T19:15:57.364Z" },
+    { url = "https://files.pythonhosted.org/packages/6c/4d/14fec9d0c5b211951bed3e96228d450c5bc1dd57ec9d8d7b9c0420f84a60/eclipse_zenoh-1.7.0-pp310-pypy310_pp73-manylinux_2_28_aarch64.whl", hash = "sha256:317d08cba118295160699267c3af879ac4e309dde7e8d16abf931520b0ffa8e1", size = 9433848, upload-time = "2025-12-04T19:15:59.245Z" },
 ]
 
 [[package]]
@@ -2905,7 +2907,7 @@ wheels = [
 
 [[package]]
 name = "reachy-mini"
-version = "1.1.1"
+version = "1.1.2"
 source = { editable = "." }
 dependencies = [
     { name = "aiohttp" },
@@ -2981,7 +2983,7 @@ requires-dist = [
     { name = "aiohttp" },
     { name = "asgiref" },
     { name = "cv2-enumerate-cameras", specifier = ">=1.2.1" },
-    { name = "eclipse-zenoh", specifier = ">=1.4.0" },
+    { name = "eclipse-zenoh", specifier = "~=1.7.0" },
     { name = "fastapi" },
     { name = "gpiozero", marker = "extra == 'wireless-version'", specifier = ">=2.0.0" },
     { name = "gst-signalling", marker = "extra == 'gstreamer'", specifier = ">=1.1.2" },
