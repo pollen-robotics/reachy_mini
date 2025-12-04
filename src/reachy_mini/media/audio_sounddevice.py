@@ -67,7 +67,7 @@ class SoundDeviceAudio(AudioBase):
         self._input_buffer.clear()
         self._input_queued_samples = 0
         self._input_stream.start()
-        self.logger.info("SoundDevice audio stream opened.")
+        self.logger.info("SoundDevice audio input stream opened.")
 
     def _input_callback(
         self,
@@ -155,6 +155,7 @@ class SoundDeviceAudio(AudioBase):
         if self._output_stream is None:
             raise RuntimeError("Failed to open SoundDevice audio output stream.")
         self._output_stream.start()
+        self.logger.info("SoundDevice audio output stream opened.")
 
     def _output_callback(
         self,
