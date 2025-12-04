@@ -113,8 +113,8 @@ class SoundDeviceAudio(AudioBase):
             # Higher channels input to lower channels output : crop to fit
             elif data.ndim == 2 and data.shape[1] > output_channels:
                 data = data[:, :output_channels]
-                
-            self._output_stream.write(data)
+
+            self._output_stream.write(np.ascontiguousarray(data))
         else:
             self.logger.warning(
                 "Output stream is not open. Call start_playing() first."
