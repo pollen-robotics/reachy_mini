@@ -28,6 +28,7 @@ if typing.TYPE_CHECKING:
     from reachy_mini.daemon.backend.mujoco.backend import MujocoBackendStatus
     from reachy_mini.daemon.backend.robot.backend import RobotBackendStatus
     from reachy_mini.kinematics import AnyKinematics
+from reachy_mini.reachy_mini import INIT_HEAD_POSE, SLEEP_HEAD_POSE, SLEEP_ANTENNAS_JOINT_POSITIONS
 from reachy_mini.media.audio_sounddevice import SoundDeviceAudio
 from reachy_mini.motion.goto import GotoMove
 from reachy_mini.motion.move import Move
@@ -614,39 +615,16 @@ class Backend:
         """
         self.audio.play_sound(sound_file, autoclean=True)
 
-    # Basic move definitions
-    INIT_HEAD_POSE = np.eye(4)
-
-    SLEEP_HEAD_JOINT_POSITIONS = [
-        0,
-        -0.9848156658225817,
-        1.2624661884298831,
-        -0.24390294527381684,
-        0.20555342557667577,
-        -1.2363885150358267,
-        1.0032234352772091,
-    ]
-
-    SLEEP_ANTENNAS_JOINT_POSITIONS = np.array((-3.05, 3.05))
-    SLEEP_HEAD_POSE = np.array(
-        [
-            [0.911, 0.004, 0.413, -0.021],
-            [-0.004, 1.0, -0.001, 0.001],
-            [-0.413, -0.001, 0.911, -0.044],
-            [0.0, 0.0, 0.0, 1.0],
-        ]
-    )
-
     async def wake_up(self) -> None:
         """Wake up the robot - go to the initial head position and play the wake up emote and sound."""
         await asyncio.sleep(0.1)
 
         _, _, magic_distance = distance_between_poses(
-            self.get_current_head_pose(), self.INIT_HEAD_POSE
+            self.get_current_head_pose(), INIT_HEAD_POSE
         )
 
         await self.goto_target(
-            self.INIT_HEAD_POSE,
+            INIT_HEAD_POSE,
             antennas=np.array((0.0, 0.0)),
             duration=magic_distance * 20 / 1000,  # ms_per_magic_mm = 10
         )
@@ -656,12 +634,12 @@ class Backend:
         self.play_sound("wake_up.wav")
 
         # Roll 20° to the left
-        pose = self.INIT_HEAD_POSE.copy()
+        pose = INIT_HEAD_POSE.copy()
         pose[:3, :3] = R.from_euler("xyz", [20, 0, 0], degrees=True).as_matrix()
         await self.goto_target(pose, duration=0.2)
 
         # Go back to the initial position
-        await self.goto_target(self.INIT_HEAD_POSE, duration=0.2)
+        await self.goto_target(INIT_HEAD_POSE, duration=0.2)
 
     async def goto_sleep(self) -> None:
         """Put the robot to sleep by moving the head and antennas to a predefined sleep position.
@@ -673,10 +651,10 @@ class Backend:
         """
         # Magic units
         _, _, dist_to_sleep_pose = distance_between_poses(
-            self.get_current_head_pose(), self.SLEEP_HEAD_POSE
+            self.get_current_head_pose(), SLEEP_HEAD_POSE
         )
         _, _, dist_to_init_pose = distance_between_poses(
-            self.get_current_head_pose(), self.INIT_HEAD_POSE
+            self.get_current_head_pose(), INIT_HEAD_POSE
         )
         sleep_time = 2.0
 
@@ -685,7 +663,7 @@ class Backend:
             if dist_to_init_pose > 30:
                 # Move to the initial position
                 await self.goto_target(
-                    self.INIT_HEAD_POSE, antennas=np.array((0.0, 0.0)), duration=1
+                    INIT_HEAD_POSE, antennas=np.array((0.0, 0.0)), duration=1
                 )
                 await asyncio.sleep(0.2)
 
@@ -693,8 +671,8 @@ class Backend:
 
             # Move to the sleep position
             await self.goto_target(
-                self.SLEEP_HEAD_POSE,
-                antennas=self.SLEEP_ANTENNAS_JOINT_POSITIONS,
+                SLEEP_HEAD_POSE,
+                antennas=SLEEP_ANTENNAS_JOINT_POSITIONS,
                 duration=2,
             )
         else:
@@ -702,7 +680,7 @@ class Backend:
             self.play_sound("go_sleep.wav")
             sleep_time += 3
 
-        self._last_head_pose = self.SLEEP_HEAD_POSE
+        self._last_head_pose = SLEEP_HEAD_POSE
         await asyncio.sleep(sleep_time)
 
     # Motor control modes

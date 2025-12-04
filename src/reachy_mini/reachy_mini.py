@@ -28,7 +28,7 @@ from reachy_mini.utils.interpolation import InterpolationTechnique, minimum_jerk
 # Behavior definitions
 INIT_HEAD_POSE = np.eye(4)
 
-SLEEP_HEAD_JOINT_POSITIONS = [
+SLEEP_HEAD_JOINT_POSITIONS = np.array([
     0,
     -0.9848156658225817,
     1.2624661884298831,
@@ -36,10 +36,10 @@ SLEEP_HEAD_JOINT_POSITIONS = [
     0.20555342557667577,
     -1.2363885150358267,
     1.0032234352772091,
-]
+])
 
 
-SLEEP_ANTENNAS_JOINT_POSITIONS = [-3.05, 3.05]
+SLEEP_ANTENNAS_JOINT_POSITIONS = np.array([-3.05, 3.05])
 SLEEP_HEAD_POSE = np.array(
     [
         [0.911, 0.004, 0.413, -0.021],
