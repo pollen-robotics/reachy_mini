@@ -127,8 +127,8 @@ class SoundDeviceAudio(AudioBase):
     def stop_recording(self) -> None:
         """Close the audio stream and release resources."""
         if self._is_recording:
-            self._input_stream.stop()
-            self._input_stream.close()
+            self._input_stream.stop()  # type: ignore[attr-defined]
+            self._input_stream.close()  # type: ignore[attr-defined]
             self._input_stream = None
             self.logger.info("SoundDevice audio stream closed.")
 
