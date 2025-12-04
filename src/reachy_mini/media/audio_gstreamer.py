@@ -1,7 +1,7 @@
-"""GStreamer camera backend.
+"""GStreamer audio backend.
 
-This module provides an implementation of the CameraBase class using GStreamer.
-By default the module directly returns JPEG images as output by the camera.
+This module provides an implementation of the AudioBase class using GStreamer.
+By default the module directly returns audio stream by ReStreamer
 """
 
 from threading import Thread
@@ -58,39 +58,61 @@ class GStreamerAudio(AudioBase):
             GLib.PRIORITY_DEFAULT, self._on_bus_message, self._loop
         )
 
-    def _init_pipeline_record(self, pipeline: Gst.Pipeline) -> None:
+def _init_pipeline_record(self, pipeline: Gst.Pipeline) -> None:
         self._appsink_audio = Gst.ElementFactory.make("appsink")
-        caps = Gst.Caps.from_string(
-            f"audio/x-raw,rate={self.SAMPLE_RATE},channels={self.CHANNELS},format=F32LE,layout=interleaved"
+        
+        # 1. Define the target caps (What we WANT: 16k, F32LE)
+        caps_string = (
+            f"audio/x-raw,rate={self.SAMPLE_RATE},"
+            f"channels={self.CHANNELS},"
+            f"format=F32LE,layout=interleaved"
         )
+        caps = Gst.Caps.from_string(caps_string)
+        
+        # Configure AppSink
         self._appsink_audio.set_property("caps", caps)
-        self._appsink_audio.set_property("drop", True)  # avoid overflow
+        self._appsink_audio.set_property("drop", True)
         self._appsink_audio.set_property("max-buffers", 200)
 
-        audiosrc: Optional[Gst.Element] = None
+        # 2. Select Source (Hardware vs Auto)
         if self._id_audio_card == -1:
-            audiosrc = Gst.ElementFactory.make("autoaudiosrc")  # use default mic
+            self.logger.info("Using autoaudiosrc (Default System Device)")
+            audiosrc = Gst.ElementFactory.make("autoaudiosrc")
         else:
+            self.logger.info(f"Using alsasrc device hw:{self._id_audio_card},0")
             audiosrc = Gst.ElementFactory.make("alsasrc")
             audiosrc.set_property("device", f"hw:{self._id_audio_card},0")
 
+        # 3. Create Processing Elements
         queue = Gst.ElementFactory.make("queue")
         audioconvert = Gst.ElementFactory.make("audioconvert")
         audioresample = Gst.ElementFactory.make("audioresample")
+        
+        # 4. CRITICAL FIX: Explicit CapsFilter
+        # This forces the audioresample to actually work before data hits the sink
+        capsfilter = Gst.ElementFactory.make("capsfilter")
+        capsfilter.set_property("caps", caps)
 
-        if not all([audiosrc, queue, audioconvert, audioresample, self._appsink_audio]):
-            raise RuntimeError("Failed to create GStreamer elements")
+        # Check creation
+        elements = [audiosrc, queue, audioconvert, audioresample, capsfilter, self._appsink_audio]
+        if not all(elements):
+            raise RuntimeError("Failed to create specific GStreamer elements")
 
-        pipeline.add(audiosrc)
-        pipeline.add(queue)
-        pipeline.add(audioconvert)
-        pipeline.add(audioresample)
-        pipeline.add(self._appsink_audio)
+        # Add all to pipeline
+        for elem in elements:
+            pipeline.add(elem)
 
-        audiosrc.link(queue)
-        queue.link(audioconvert)
-        audioconvert.link(audioresample)
-        audioresample.link(self._appsink_audio)
+        # 5. Link Them: Source -> Queue -> Convert -> Resample -> CapsFilter -> AppSink
+        if not audiosrc.link(queue):
+            raise RuntimeError("Failed to link audiosrc -> queue")
+        if not queue.link(audioconvert):
+             raise RuntimeError("Failed to link queue -> audioconvert")
+        if not audioconvert.link(audioresample):
+             raise RuntimeError("Failed to link audioconvert -> audioresample")
+        if not audioresample.link(capsfilter):
+             raise RuntimeError("Failed to link audioresample -> capsfilter")
+        if not capsfilter.link(self._appsink_audio):
+             raise RuntimeError("Failed to link capsfilter -> appsink")
 
     def __del__(self) -> None:
         """Destructor to ensure gstreamer resources are released."""
@@ -161,16 +183,18 @@ class GStreamerAudio(AudioBase):
         return data
 
     def get_audio_sample(self) -> Optional[npt.NDArray[np.float32]]:
-        """Read a sample from the audio card. Returns the sample or None if error.
-
-        Returns:
-            Optional[npt.NDArray[np.float32]]: The captured sample in raw format, or None if error.
-
-        """
+        """Read a sample from the audio card."""
         sample = self._get_sample(self._appsink_audio)
         if sample is None:
             return None
-        return np.frombuffer(sample, dtype=np.float32).reshape(-1, 2)
+            
+        # DYNAMIC FIX: Use self.CHANNELS instead of hardcoded '2'
+        # If channels=1 and you reshape to 2, you get chipmunk audio.
+        try:
+            return np.frombuffer(sample, dtype=np.float32).reshape(-1, self.CHANNELS)
+        except ValueError as e:
+            self.logger.error(f"Shape mismatch! Buffer size doesn't match channels. Error: {e}")
+            return None
 
     def get_input_audio_samplerate(self) -> int:
         """Get the input samplerate of the audio device."""
