@@ -23,43 +23,43 @@ def test_play_sound_default_backend() -> None:
 def test_push_audio_sample_default_backend() -> None:
     """Test pushing an audio sample with the default backend."""
     media = MediaManager(backend=MediaBackend.DEFAULT_NO_VIDEO)
-    media.audio.start_playing()
+    media.start_playing()
 
     #Stereo, channels last
     data = np.random.random((media.get_output_audio_samplerate(), 2)).astype(np.float32)
-    media.audio.push_audio_sample(data)
+    media.push_audio_sample(data)
     time.sleep(1)
 
     #Mono, channels last
     data = np.random.random((media.get_output_audio_samplerate(), 1)).astype(np.float32)
-    media.audio.push_audio_sample(data)
+    media.push_audio_sample(data)
     time.sleep(1)
 
     #Multiple channels, channels last
     data = np.random.random((media.get_output_audio_samplerate(), 10)).astype(np.float32)
-    media.audio.push_audio_sample(data)
+    media.push_audio_sample(data)
     time.sleep(1)
 
     #Stereo, channels first
     data = np.random.random((2, media.get_output_audio_samplerate())).astype(np.float32)
-    media.audio.push_audio_sample(data)
+    media.push_audio_sample(data)
     time.sleep(1)
 
     # No assertion: test passes if no exception is raised.
     # Sound should be audible if the audio device is correctly set up.
 
     data = np.array(0).astype(np.float32)
-    media.audio.push_audio_sample(data)
+    media.push_audio_sample(data)
     time.sleep(1)
 
     data = np.random.random((media.get_output_audio_samplerate(), 2, 2)).astype(np.float32)
-    media.audio.push_audio_sample(data)
+    media.push_audio_sample(data)
     time.sleep(1)
 
     # No assertion: test passes if no exception is raised.
     # No sound should be audible if the audio device is correctly set up.
 
-    media.audio.stop_playing()
+    media.stop_playing()
 
 @pytest.mark.audio
 def test_record_audio_and_file_exists() -> None:

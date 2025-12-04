@@ -81,6 +81,19 @@ class SoundDeviceAudio(AudioBase):
             sd.query_devices(self._output_device_id, "output")["default_samplerate"]
         )
 
+    def get_input_channels(self) -> int:
+        """Get the number of input channels of the audio device."""
+        return min(
+            int(sd.query_devices(self._input_device_id, "input")["max_input_channels"]),
+            MAX_INPUT_CHANNELS
+        )
+
+    def get_output_channels(self) -> int:
+        """Get the number of output channels of the audio device."""
+        return int(
+            sd.query_devices(self._output_device_id, "output")["max_output_channels"]
+        )
+
     def stop_recording(self) -> None:
         """Close the audio stream and release resources."""
         if self.stream is not None:
@@ -92,26 +105,6 @@ class SoundDeviceAudio(AudioBase):
     def push_audio_sample(self, data: npt.NDArray[np.float32]) -> None:
         """Push audio data to the output device."""
         if self._output_stream is not None:
-            if data.ndim > 2 or data.ndim == 0:
-                self.logger.warning(f"Audio samples arrays must have at most 2 dimensions and at least 1 dimension, got {data.ndim}")
-                return
-            
-            # Transpose data to match sounddevice channels last convention
-            if data.ndim == 2 and data.shape[1] > data.shape[0]:
-                data = data.T
-
-            # Fit data to match output stream channels
-
-            # Mono input to multiple channels output : duplicate to fit
-            if data.ndim == 1 and self._output_stream.channels > 1:
-                data = np.column_stack((data,) * self._output_stream.channels)
-            # Lower channels input to higher channels output : reduce to mono and duplicate to fit
-            elif data.ndim == 2 and data.shape[1] < self._output_stream.channels:
-                data = np.column_stack((data[:,0],) * self._output_stream.channels)
-            # Higher channels input to lower channels output : crop to fit
-            elif data.ndim == 2 and data.shape[1] > self._output_stream.channels:
-                data = data[:, :self._output_stream.channels]
-
             self._output_stream.write(np.ascontiguousarray(data))
         else:
             self.logger.warning(
