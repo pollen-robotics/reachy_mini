@@ -645,8 +645,6 @@ class Backend:
             self.get_current_head_pose(), self.INIT_HEAD_POSE
         )
 
-        self.head_kinematics.set_automatic_body_yaw(False)
-
         await self.goto_target(
             self.INIT_HEAD_POSE,
             antennas=np.array((0.0, 0.0)),
@@ -654,7 +652,6 @@ class Backend:
         )
         await asyncio.sleep(0.1)
 
-        self.head_kinematics.set_automatic_body_yaw(True)
         # Toudoum
         self.play_sound("wake_up.wav")
 
