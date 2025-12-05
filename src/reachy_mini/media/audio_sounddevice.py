@@ -33,8 +33,8 @@ class SoundDeviceAudio(AudioBase):
         self._output_lock = threading.Lock()
         self._input_buffer: Deque[npt.NDArray[np.float32]] = deque()
         self._output_buffer: List[npt.NDArray[np.float32]] = []
-        self._input_max_queue_seconds = MAX_INPUT_QUEUE_SECONDS
-        self._input_queued_samples = 0
+        self._input_max_queue_seconds: float = MAX_INPUT_QUEUE_SECONDS
+        self._input_queued_samples: int = 0
 
         self._output_device_id = self._get_device_id(
             ["Reachy Mini Audio", "respeaker"], device_io_type="output"
@@ -43,6 +43,11 @@ class SoundDeviceAudio(AudioBase):
             ["Reachy Mini Audio", "respeaker"], device_io_type="input"
         )
     
+        self._logs = {
+            "input_underflows": 0,
+            "input_overflows": 0,
+        }
+
     @property
     def _input_max_queue_samples(self) -> int:
         return int(self._input_max_queue_seconds * self.get_input_audio_samplerate())
@@ -62,7 +67,7 @@ class SoundDeviceAudio(AudioBase):
             callback=self._input_callback,
         )
         if self._input_stream is None:
-            raise RuntimeError("Failed to open SoundDevice audio stream.")
+            raise RuntimeError("Failed to open SoundDevice audio input stream.")
 
         self._input_buffer.clear()
         self._input_queued_samples = 0
@@ -76,14 +81,16 @@ class SoundDeviceAudio(AudioBase):
         time: int,
         status: sd.CallbackFlags,
     ) -> None:
-        # TODO: Handle OOM for never cleaning the input buffer
-        if status:
-            self.logger.warning(f"SoundDevice status: {status}")
+        if status and status.input_underflow:
+            self._logs["input_underflows"] += 1
+            if self._logs["input_underflows"] % 10 == 1:
+                self.logger.debug(f"Audio input underflow count: {self._logs['input_underflows']}")
 
         with self._input_lock:
             while self._input_queued_samples + indata.shape[0] > self._input_max_queue_samples:
                 dropped = self._input_buffer.popleft()
                 self._input_queued_samples -= dropped.shape[0]
+                self._logs["input_overflows"] += 1
 
             self._input_buffer.append(indata[:, :MAX_INPUT_CHANNELS].copy()) 
             self._input_queued_samples += indata.shape[0]
