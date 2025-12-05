@@ -1,4 +1,4 @@
-"""Async WebSocket Audio Streamer for the Mujoco backend."""
+"""Async WebSocket Audio Streamer."""
 import asyncio
 import logging
 import threading
@@ -10,7 +10,7 @@ import numpy as np
 import numpy.typing as npt
 from websockets.asyncio.client import ClientConnection, connect
 
-logger = logging.getLogger("reachy_mini.mujoco.audio_ws")
+logger = logging.getLogger("reachy_mini.io.audio_ws")
 
 
 class AsyncWebSocketAudioStreamer:

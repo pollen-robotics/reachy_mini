@@ -21,6 +21,7 @@ import numpy as np
 import numpy.typing as npt
 
 import reachy_mini
+from reachy_mini.io.video_ws import AsyncWebSocketFrameSender
 
 from ..abstract import Backend, MotorControlMode
 from .utils import (
@@ -29,7 +30,6 @@ from .utils import (
     get_joint_id_from_name,
 )
 from .video_udp import UDPJPEGFrameSender
-from .video_ws import AsyncWebSocketFrameSender
 
 CAMERA_REACHY = 'eye_camera'
 CAMERA_STUDIO_CLOSE = 'studio_close'

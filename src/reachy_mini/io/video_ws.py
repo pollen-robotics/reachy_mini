@@ -1,4 +1,4 @@
-"""Async WebSocket Frame Sender for the Mujoco backend."""
+"""Async WebSocket Frame Sender."""
 import asyncio
 import logging
 import threading
@@ -11,10 +11,10 @@ import numpy.typing as npt
 from websockets.asyncio.client import ClientConnection, connect
 from websockets.exceptions import ConnectionClosed
 
-logger = logging.getLogger("reachy_mini.mujoco.video_ws")
+logger = logging.getLogger("reachy_mini.io.video_ws")
 
 class AsyncWebSocketFrameSender:
-    """Async WebSocket frame sender for the Mujoco backend."""
+    """Async WebSocket frame sender."""
 
     ws_uri: str
     queue: "Queue[bytes]"
