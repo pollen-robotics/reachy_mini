@@ -55,10 +55,13 @@ class Backend:
         log_level: str = "INFO",
         check_collision: bool = False,
         kinematics_engine: str = "AnalyticalKinematics",
+        use_audio: bool = True,
     ) -> None:
         """Initialize the backend."""
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(log_level)
+
+        self.use_audio = use_audio
 
         self.should_stop = threading.Event()
         self.ready = threading.Event()
@@ -159,7 +162,10 @@ class Backend:
         # Recording lock to guard buffer swaps and appends
         self._rec_lock = threading.Lock()
 
-        self.audio = SoundDeviceAudio(log_level=log_level)
+        if self.use_audio:
+            self.audio = SoundDeviceAudio(log_level=log_level)
+        else:
+            self.audio = None  # type: ignore
 
     # Life cycle methods
     def wrapped_run(self) -> None:
@@ -612,7 +618,9 @@ class Backend:
             sound_file (str): The name of the sound file to play (e.g., "wake_up.wav").
 
         """
-        self.audio.play_sound(sound_file, autoclean=True)
+        if self.audio:
+            self.audio.start_playing()
+            self.audio.play_sound(sound_file)
 
     # Basic move definitions
     INIT_HEAD_POSE = np.eye(4)
@@ -662,6 +670,8 @@ class Backend:
 
         # Go back to the initial position
         await self.goto_target(self.INIT_HEAD_POSE, duration=0.2)
+        if self.audio:
+            self.audio.stop_playing()
 
     async def goto_sleep(self) -> None:
         """Put the robot to sleep by moving the head and antennas to a predefined sleep position.

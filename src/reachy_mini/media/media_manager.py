@@ -42,7 +42,7 @@ class MediaManager:
         self.backend = backend
         self.camera: Optional[CameraBase] = None
         self.audio: Optional[AudioBase] = None
-
+        
         match backend:
             case MediaBackend.NO_MEDIA:
                 self.logger.info("No media backend selected.")
@@ -60,6 +60,7 @@ class MediaManager:
             case MediaBackend.WEBRTC:
                 self.logger.info("Using WebRTC GStreamer backend.")
                 self._init_webrtc(log_level, signalling_host, 8443)
+                self._init_audio(log_level)
             case _:
                 raise NotImplementedError(f"Media backend {backend} not implemented.")
 

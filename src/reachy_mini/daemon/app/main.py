@@ -40,6 +40,7 @@ class Args:
     """Arguments for configuring the Reachy Mini daemon."""
 
     log_level: str = "INFO"
+    log_file: str | None = None
 
     wireless_version: bool = False
 
@@ -51,6 +52,9 @@ class Args:
     sim: bool = False
     scene: str = "empty"
     headless: bool = False
+    websocket_uri: str | None = None
+    stream_media: bool = False
+    use_audio: bool = True
 
     kinematics_engine: str = "AnalyticalKinematics"
     check_collision: bool = False
@@ -79,7 +83,7 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
     async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         """Lifespan context manager for the FastAPI application."""
         args = app.state.args  # type: Args
-
+        
         try:
             if args.autostart:
                 await app.state.daemon.start(
@@ -87,6 +91,9 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
                     sim=args.sim,
                     scene=args.scene,
                     headless=args.headless,
+                    websocket_uri=args.websocket_uri,
+                    stream_media=args.stream_media,
+                    use_audio=args.use_audio,
                     kinematics_engine=args.kinematics_engine,
                     check_collision=args.check_collision,
                     wake_up_on_start=args.wake_up_on_start,
@@ -290,6 +297,25 @@ def main() -> None:
         default=default_args.headless,
         help="Run the daemon in headless mode (default: False).",
     )
+    parser.add_argument(
+        "--websocket-uri",
+        type=str,
+        default=default_args.websocket_uri,
+        help="WebSocket URI for remote control and streaming of the robot (default: None). Example: ws://localhost:8000",
+    )
+    parser.add_argument(
+        "--stream-media",
+        action="store_true",
+        default=default_args.stream_media,
+        help="Stream media to the WebSocket. Requires a WebSocket URI to be set. (default: False).",
+    )
+    parser.add_argument(
+        "--deactivate-audio",
+        action="store_false",
+        dest="use_audio",
+        default=default_args.use_audio,
+        help="Deactivate audio (default: True).",
+    )
     # Daemon options
     parser.add_argument(
         "--autostart",
@@ -380,8 +406,23 @@ def main() -> None:
         choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
         help="Set the logging level (default: INFO).",
     )
+    parser.add_argument(
+        "--log-file",
+        type=str,
+        default=default_args.log_file,
+        help="Path to a file to write logs to.",
+    )
 
     args = parser.parse_args()
+
+    if args.log_file:
+        file_handler = logging.FileHandler(args.log_file, mode="a")
+        file_handler.setFormatter(
+            logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+        )
+        logging.getLogger().addHandler(file_handler)
+        logging.getLogger().setLevel(args.log_level)
+
     run_app(Args(**vars(args)))
 
 
