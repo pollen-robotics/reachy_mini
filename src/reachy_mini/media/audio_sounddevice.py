@@ -87,11 +87,14 @@ class SoundDeviceAudio(AudioBase):
                 self.logger.debug(f"Audio input underflow count: {self._logs['input_underflows']}")
 
         with self._input_lock:
-            while self._input_queued_samples + indata.shape[0] > self._input_max_queue_samples:
-                dropped = self._input_buffer.popleft()
-                self._input_queued_samples -= dropped.shape[0]
+            if self._input_queued_samples + indata.shape[0] > self._input_max_queue_samples:
+                while self._input_queued_samples + indata.shape[0] > self._input_max_queue_samples and len(self._input_buffer) > 0:
+                    dropped = self._input_buffer.popleft()
+                    self._input_queued_samples -= dropped.shape[0]
                 self._logs["input_overflows"] += 1
-
+                self.logger.warning(
+                    "Audio input buffer overflowed, dropped old chunks !"
+                )
             self._input_buffer.append(indata[:, :MAX_INPUT_CHANNELS].copy()) 
             self._input_queued_samples += indata.shape[0]
 
