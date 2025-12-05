@@ -43,7 +43,6 @@ class SoundDeviceAudio(AudioBase):
             device=self._input_device_id,
             callback=self._input_callback,
             samplerate=self.get_input_audio_samplerate(),
-            callback=self._callback,
         )
         if self.stream is None:
             raise RuntimeError("Failed to open SoundDevice audio stream.")
