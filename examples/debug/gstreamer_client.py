@@ -24,6 +24,8 @@ class GstConsumer:
         self.pipeline = Gst.Pipeline.new("webRTC-consumer")
         self.source = Gst.ElementFactory.make("webrtcsrc")
 
+        # self.source.set_property("video-codecs", "H264") # Todo
+
         if not self.pipeline:
             print("Pipeline could be created.")
             exit(-1)
@@ -59,7 +61,7 @@ class GstConsumer:
             webrtcbin = webrtcsrc.get_by_name(webrtcbin_name)
             assert webrtcbin is not None
             # jitterbuffer has a default 200 ms buffer.
-            webrtcbin.set_property("latency", 50)
+            webrtcbin.set_property("latency", 10)
 
     def webrtcsrc_pad_added_cb(self, webrtcsrc: Gst.Element, pad: Gst.Pad) -> None:
         """Add webrtcsrc elements when a new pad is added."""
