@@ -130,10 +130,6 @@ class SoundDeviceAudio(AudioBase):
             self.logger.warning("Output stream is not open. Call start_playing() first.")
             return
 
-        # Ensure C-contiguous array
-        data = np.ascontiguousarray(data, dtype=np.float32)
-
-        # Prevent unbounded queue growth
         with self._output_lock:
             if self._output_queued_samples + data.shape[0] > self._output_max_queue_samples:
                 while self._output_queued_samples + data.shape[0] > self._output_max_queue_samples and len(self._output_chunk_fifo) > 0:
