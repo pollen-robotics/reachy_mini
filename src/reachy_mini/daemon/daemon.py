@@ -21,9 +21,14 @@ from reachy_mini.daemon.utils import (
     find_serial_port,
     get_ip_address,
 )
+from reachy_mini.io import (
+    AsyncWebSocketAudioStreamer,
+    AsyncWebSocketController,
+    AsyncWebSocketFrameSender,
+    ZenohServer,
+)
 from reachy_mini.media.media_manager import MediaManager
 
-from reachy_mini.io import AsyncWebSocketAudioStreamer, AsyncWebSocketFrameSender, AsyncWebSocketController, ZenohServer
 from .backend.mujoco import MujocoBackend, MujocoBackendStatus
 from .backend.robot import RobotBackend, RobotBackendStatus
 
