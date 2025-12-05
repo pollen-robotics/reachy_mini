@@ -70,10 +70,10 @@ class Daemon:
             None  # type GstWebRTC imported for wireless version only
         )
         if stream:
-            if not wireless_version:
-                raise RuntimeError(
-                    "WebRTC streaming is only supported for wireless version. Use --wireless-version flag."
-                )
+            # if not wireless_version:
+            #    raise RuntimeError(
+            #        "WebRTC streaming is only supported for wireless version. Use --wireless-version flag."
+            #    )
             from reachy_mini.media.webrtc_daemon import GstWebRTC
 
             self._webrtc = GstWebRTC(log_level)

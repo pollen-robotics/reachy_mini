@@ -8,6 +8,7 @@ Note: The daemon must be running before executing this script.
 """
 
 import argparse
+import logging
 
 import cv2
 
@@ -65,6 +66,8 @@ if __name__ == "__main__":
         default="default",
         help="Media backend to use.",
     )
+
+    logging.basicConfig(level=logging.INFO)
 
     args = parser.parse_args()
     main(backend=args.backend)

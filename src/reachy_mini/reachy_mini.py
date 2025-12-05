@@ -133,6 +133,7 @@ class ReachyMini:
         mbackend = MediaBackend.DEFAULT
         match media_backend.lower():
             case "webrtc":
+                """
                 if self.client.get_status()["wireless_version"]:
                     mbackend = MediaBackend.WEBRTC
                 else:
@@ -140,6 +141,8 @@ class ReachyMini:
                         "Non-wireless version detected, daemon should use the flag '--wireless-version'. Reverting to default"
                     )
                     mbackend = MediaBackend.DEFAULT
+                """
+                mbackend = MediaBackend.WEBRTC
             case "gstreamer":
                 mbackend = MediaBackend.GSTREAMER
             case "default":
@@ -153,11 +156,13 @@ class ReachyMini:
                     f"Invalid media_backend '{media_backend}'. Supported values are 'default', 'gstreamer', 'no_media', 'default_no_video', and 'webrtc'."
                 )
 
+        self.logger.info(self.client.get_status()["wlan_ip"])
+
         return MediaManager(
             use_sim=self.client.get_status()["simulation_enabled"],
             backend=mbackend,
             log_level=log_level,
-            signalling_host=self.client.get_status()["wlan_ip"],
+            signalling_host=self.client.get_status()["wlan_ip"] or "localhost",
         )
 
     def set_target(
