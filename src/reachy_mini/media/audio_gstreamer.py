@@ -106,13 +106,13 @@ class GStreamerAudio(AudioBase):
         if not audiosrc.link(queue):
             raise RuntimeError("Failed to link audiosrc -> queue")
         if not queue.link(audioconvert):
-             raise RuntimeError("Failed to link queue -> audioconvert")
+            raise RuntimeError("Failed to link queue -> audioconvert")
         if not audioconvert.link(audioresample):
-             raise RuntimeError("Failed to link audioconvert -> audioresample")
+            raise RuntimeError("Failed to link audioconvert -> audioresample")
         if not audioresample.link(capsfilter):
-             raise RuntimeError("Failed to link audioresample -> capsfilter")
+            raise RuntimeError("Failed to link audioresample -> capsfilter")
         if not capsfilter.link(self._appsink_audio):
-             raise RuntimeError("Failed to link capsfilter -> appsink")
+            raise RuntimeError("Failed to link capsfilter -> appsink")
 
     def __del__(self) -> None:
         """Destructor to ensure gstreamer resources are released."""
