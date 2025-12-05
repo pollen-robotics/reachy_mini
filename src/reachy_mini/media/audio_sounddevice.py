@@ -47,7 +47,7 @@ class SoundDeviceAudio(AudioBase):
         self._output_max_queue_samples = int(self.get_output_audio_samplerate() * self._output_max_queue_seconds)
 
     @property
-    def _output_streaming_active(self) -> bool:
+    def _is_playing(self) -> bool:
         """Check if output stream is active."""
         return self._output_stream is not None and self._output_stream.active
 
@@ -124,8 +124,8 @@ class SoundDeviceAudio(AudioBase):
         Note: Channel conversion is handled by MediaManager before this is called.
         Data should already be in the correct format for the output device.
         """
-        if not self._output_streaming_active:
-            self.logger.warning("Output stream not active. Call start_playing() first.")
+        if not self._is_playing:
+            self.logger.warning("Output stream is not open. Call start_playing() first.")
             return
 
         # Ensure C-contiguous array
@@ -201,7 +201,7 @@ class SoundDeviceAudio(AudioBase):
                 
     def start_playing(self) -> None:
         """Open the audio output stream."""
-        if self._output_stream is not None:
+        if self._is_playing:
             self.stop_playing()
         self._output_stream = sd.OutputStream(
             samplerate=self.get_output_audio_samplerate(),
@@ -215,7 +215,7 @@ class SoundDeviceAudio(AudioBase):
 
     def stop_playing(self) -> None:
         """Close the audio output stream."""
-        if self._output_stream is not None:
+        if self._is_playing:
             self._output_stream.stop()
             self._output_stream.close()
             self._output_stream = None
