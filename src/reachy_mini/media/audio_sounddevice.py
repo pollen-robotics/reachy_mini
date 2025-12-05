@@ -44,7 +44,9 @@ class SoundDeviceAudio(AudioBase):
         self._output_underflows: int = 0
         self._output_overflows: int = 0
         self._output_lock = threading.Lock()
-        self._output_max_queue_samples = int(self.get_output_audio_samplerate() * self._output_max_queue_seconds)
+    @property
+    def _output_max_queue_samples(self) -> int:
+        return int(self.get_output_audio_samplerate() * self._output_max_queue_seconds)
 
     @property
     def _is_playing(self) -> bool:
