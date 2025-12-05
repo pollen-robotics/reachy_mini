@@ -619,6 +619,7 @@ class Backend:
 
         """
         if self.audio:
+            self.audio.start_playing()
             self.audio.play_sound(sound_file)
 
     # Basic move definitions
@@ -669,6 +670,8 @@ class Backend:
 
         # Go back to the initial position
         await self.goto_target(self.INIT_HEAD_POSE, duration=0.2)
+        if self.audio:
+            self.audio.stop_playing()
 
     async def goto_sleep(self) -> None:
         """Put the robot to sleep by moving the head and antennas to a predefined sleep position.
