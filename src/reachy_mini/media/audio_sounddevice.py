@@ -3,7 +3,7 @@
 import os
 import threading
 from collections import deque
-from typing import Any, Deque, List, Optional
+from typing import Deque, List, Optional
 
 import numpy as np
 import numpy.typing as npt
