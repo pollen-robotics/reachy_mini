@@ -110,8 +110,6 @@ class SoundDeviceAudio(AudioBase):
     def push_audio_sample(self, data: npt.NDArray[np.float32]) -> None:
         """Push audio data to the output device."""
         if self._output_stream is not None:
-            if data.ndim > 1:  # convert to mono
-                data = np.mean(data, axis=1)
             with self._output_lock:
                 self._output_buffer.append(data.copy())
         else:
