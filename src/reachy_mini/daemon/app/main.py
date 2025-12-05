@@ -44,6 +44,8 @@ class Args:
 
     wireless_version: bool = False
 
+    stream: bool = False
+
     serialport: str = "auto"
     hardware_config_filepath: str | None = None
 
@@ -120,7 +122,9 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
     )
 
     app.state.args = args
-    app.state.daemon = Daemon(wireless_version=args.wireless_version)
+    app.state.daemon = Daemon(
+        wireless_version=args.wireless_version, stream=args.stream
+    )
     app.state.app_manager = AppManager()
 
     router = APIRouter(prefix="/api")
@@ -243,6 +247,13 @@ def main() -> None:
         action="store_true",
         default=default_args.wireless_version,
         help="Use the wireless version of Reachy Mini (default: False).",
+    )
+
+    parser.add_argument(
+        "--stream",
+        action="store_true",
+        default=default_args.stream,
+        help="Enable webrtc streaming. For wireless version only (default: False).",
     )
 
     # Real robot mode

@@ -37,7 +37,12 @@ class Daemon:
     Runs the server with the appropriate backend (Mujoco for simulation or RobotBackend for real hardware).
     """
 
-    def __init__(self, log_level: str = "INFO", wireless_version: bool = False) -> None:
+    def __init__(
+        self,
+        log_level: str = "INFO",
+        wireless_version: bool = False,
+        stream: bool = False,
+    ) -> None:
         """Initialize the Reachy Mini daemon."""
         self.log_level = log_level
         self.logger = logging.getLogger(__name__)
@@ -68,7 +73,11 @@ class Daemon:
         self._webrtc: Optional[Any] = (
             None  # type GstWebRTC imported for wireless version only
         )
-        if wireless_version:
+        if stream:
+            if not wireless_version:
+                raise RuntimeError(
+                    "WebRTC streaming is only supported for wireless version. Use --wireless-version flag."
+                )
             from reachy_mini.media.webrtc_daemon import GstWebRTC
 
             self._webrtc = GstWebRTC(log_level)

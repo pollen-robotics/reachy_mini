@@ -97,6 +97,7 @@ def create(console: Console, app_name: str, app_path: Path) -> None:
 
     base_path.mkdir()
     (base_path / module_name).mkdir()
+    (base_path / module_name / "static").mkdir()
 
     # Generate files
     context = {
@@ -111,9 +112,16 @@ def create(console: Console, app_name: str, app_path: Path) -> None:
     (base_path / module_name / "main.py").write_text(
         render_template("main.py.j2", context)
     )
-    # (base_path / module_name / "app_ui.html").write_text(
-    #     render_template("app_ui.html.j2", context)
-    # )
+    (base_path / module_name / "static" / "index.html").write_text(
+        render_template("static/index.html.j2", context)
+    )
+    (base_path / module_name / "static" / "style.css").write_text(
+        render_template("static/style.css.j2", context)
+    )
+    (base_path / module_name / "static" / "main.js").write_text(
+        render_template("static/main.js.j2", context)
+    )
+
     (base_path / "pyproject.toml").write_text(
         render_template("pyproject.toml.j2", context)
     )
@@ -121,7 +129,7 @@ def create(console: Console, app_name: str, app_path: Path) -> None:
 
     (base_path / "index.html").write_text(render_template("index.html.j2", context))
     (base_path / "style.css").write_text(render_template("style.css.j2", context))
-    (base_path / ".gitignore").write_text(render_template(".gitignore.j2", context))
+    (base_path / ".gitignore").write_text(render_template("gitignore.j2", context))
 
     # TODO assets dir with a .gif ?
 
