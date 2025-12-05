@@ -76,7 +76,9 @@ class Daemon:
             #    )
             from reachy_mini.media.webrtc_daemon import GstWebRTC
 
-            self._webrtc = GstWebRTC(log_level)
+            self._webrtc = GstWebRTC(
+                localhost=not wireless_version, log_level=log_level
+            )
 
     async def start(
         self,
