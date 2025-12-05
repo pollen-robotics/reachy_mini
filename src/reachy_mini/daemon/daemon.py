@@ -36,6 +36,7 @@ class Daemon:
     def __init__(
         self,
         log_level: str = "INFO",
+        robot_name: str = "reachy_mini",
         wireless_version: bool = False,
         stream: bool = False,
     ) -> None:
@@ -43,6 +44,8 @@ class Daemon:
         self.log_level = log_level
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(self.log_level)
+
+        self.robot_name = robot_name
 
         self.wireless_version = wireless_version
 
@@ -56,6 +59,7 @@ class Daemon:
             self.logger.warning("Could not determine daemon version")
 
         self._status = DaemonStatus(
+            robot_name=robot_name,
             state=DaemonState.NOT_INITIALIZED,
             wireless_version=wireless_version,
             simulation_enabled=None,
@@ -147,7 +151,11 @@ class Daemon:
             self._status.error = str(e)
             raise e
 
-        self.server = ZenohServer(self.backend, localhost_only=localhost_only)
+        self.server = ZenohServer(
+            prefix=self.robot_name,
+            backend=self.backend,
+            localhost_only=localhost_only,
+        )
         self.server.start()
 
         self._thread_publish_status = Thread(target=self._publish_status, daemon=True)
@@ -485,6 +493,7 @@ class DaemonState(Enum):
 class DaemonStatus:
     """Dataclass representing the status of the Reachy Mini daemon."""
 
+    robot_name: str
     state: DaemonState
     wireless_version: bool
     simulation_enabled: Optional[bool]

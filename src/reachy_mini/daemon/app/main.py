@@ -61,6 +61,8 @@ class Args:
     wake_up_on_start: bool = True
     goto_sleep_on_stop: bool = True
 
+    robot_name: str = "reachy_mini"
+
     fastapi_host: str = "0.0.0.0"
     fastapi_port: int = 8000
 
@@ -116,7 +118,9 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
 
     app.state.args = args
     app.state.daemon = Daemon(
-        wireless_version=args.wireless_version, stream=args.stream
+        robot_name=args.robot_name,
+        wireless_version=args.wireless_version,
+        stream=args.stream,
     )
     app.state.app_manager = AppManager()
 
@@ -247,6 +251,13 @@ def main() -> None:
         action="store_true",
         default=default_args.stream,
         help="Enable webrtc streaming. For wireless version only (default: False).",
+    )
+
+    parser.add_argument(
+        "--robot-name",
+        type=str,
+        default=default_args.robot_name,
+        help="Name of the robot (default: reachy_mini).",
     )
 
     # Real robot mode
