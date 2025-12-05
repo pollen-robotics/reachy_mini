@@ -110,8 +110,6 @@ class SoundDeviceAudio(AudioBase):
     def push_audio_sample(self, data: npt.NDArray[np.float32]) -> None:
         """Push audio data to the output device."""
         if self._output_stream is not None:
-            if data.ndim > 1:  # convert to mono
-                data = np.mean(data, axis=1)
             with self._output_lock:
                 self._output_buffer.append(data.copy())
         else:
@@ -127,7 +125,6 @@ class SoundDeviceAudio(AudioBase):
         self._output_stream = sd.OutputStream(
             samplerate=self.get_output_audio_samplerate(),
             device=self._output_device_id,
-            channels=1,
             callback=self._output_callback,
             blocksize=self.frames_per_buffer,
         )
@@ -151,10 +148,11 @@ class SoundDeviceAudio(AudioBase):
                 # Get the first chunk from the buffer
                 chunk = self._output_buffer[0]
                 available = len(chunk)
-                
+                chunk = self.ensure_chunk_shape(chunk, outdata.shape)
+
                 if available >= frames:
                     # We have enough data for this callback
-                    outdata[:, 0] = chunk[:frames]
+                    outdata[:] = chunk[:frames]
                     # Remove the used portion
                     if available > frames:
                         self._output_buffer[0] = chunk[frames:]
@@ -162,12 +160,27 @@ class SoundDeviceAudio(AudioBase):
                         self._output_buffer.pop(0)
                 else:
                     # Not enough data, fill what we can and pad with zeros
-                    outdata[:available, 0] = chunk
-                    outdata[available:, 0] = 0
+                    outdata[:available] = chunk
+                    outdata[available:] = 0
                     self._output_buffer.pop(0)
             else:
                 # No data available, output silence
                 outdata.fill(0)
+
+    def ensure_chunk_shape(self, chunk: npt.NDArray[np.float32], target_shape: tuple[int, ...]) -> npt.NDArray[np.float32]:
+        """Ensure chunk has the shape (frames, num_channels) as required by outdata.
+        
+        - If chunk is 1D, tile to required num_channels.
+        - If chunk is 2D with mismatched channels, use column 0.
+        - If chunk is already correct, return as-is.
+        """
+        num_channels = target_shape[1] if len(target_shape) > 1 else 1
+        if chunk.ndim == 1:
+            return np.tile(chunk[:, None], (1, num_channels))
+        elif chunk.shape[1] != num_channels:
+            # Broadcast first channel only
+            return np.tile(chunk[:, [0]], (1, num_channels))
+        return chunk
 
     def stop_playing(self) -> None:
         """Close the audio output stream."""
