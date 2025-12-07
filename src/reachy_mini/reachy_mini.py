@@ -69,6 +69,7 @@ class ReachyMini:
         automatic_body_yaw: bool = True,
         log_level: str = "INFO",
         media_backend: str = "default",
+        pcm_type: str = "plughw",
     ) -> None:
         """Initialize the Reachy Mini robot.
 
@@ -103,7 +104,7 @@ class ReachyMini:
             ]
         )
 
-        self.media_manager = self._configure_mediamanager(media_backend, log_level)
+        self.media_manager = self._configure_mediamanager(media_backend, log_level, pcm_type)
 
     def __del__(self) -> None:
         """Destroy the Reachy Mini instance.
@@ -128,7 +129,7 @@ class ReachyMini:
         return self.media_manager
 
     def _configure_mediamanager(
-        self, media_backend: str, log_level: str
+        self, media_backend: str, log_level: str, pcm_type: str
     ) -> MediaManager:
         mbackend = MediaBackend.DEFAULT
         match media_backend.lower():
@@ -158,6 +159,7 @@ class ReachyMini:
             backend=mbackend,
             log_level=log_level,
             signalling_host=self.client.get_status()["wlan_ip"],
+            pcm_type=pcm_type,
         )
 
     def set_target(

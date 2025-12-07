@@ -32,7 +32,7 @@ from .audio_base import AudioBase  # noqa: E402
 class GStreamerAudio(AudioBase):
     """Audio implementation using GStreamer."""
 
-    def __init__(self, log_level: str = "INFO") -> None:
+    def __init__(self, log_level: str = "INFO", pcm_type="plughw") -> None:
         """Initialize the GStreamer audio."""
         super().__init__(log_level=log_level)
         Gst.init(None)
@@ -41,7 +41,7 @@ class GStreamerAudio(AudioBase):
         self._thread_bus_calls.start()
 
         self._id_audio_card = get_respeaker_card_number()
-
+        self._pcm_type = pcm_type
         self._pipeline_record = Gst.Pipeline.new("audio_recorder")
         self._appsink_audio: Optional[GstApp] = None
         self._init_pipeline_record(self._pipeline_record)
@@ -79,9 +79,9 @@ class GStreamerAudio(AudioBase):
             self.logger.info("Using autoaudiosrc (Default System Device)")
             audiosrc = Gst.ElementFactory.make("autoaudiosrc")
         else:
-            self.logger.info(f"Using alsasrc device plughw:{self._id_audio_card},0")
+            self.logger.info(f"Using alsasrc device {self._pcm_type}:{self._id_audio_card},0")
             audiosrc = Gst.ElementFactory.make("alsasrc")
-            audiosrc.set_property("device", f"plughw:{self._id_audio_card},0")
+            audiosrc.set_property("device", f"{self._pcm_type}:{self._id_audio_card},0")
 
         # 3. Create Processing Elements
         queue = Gst.ElementFactory.make("queue")
@@ -139,7 +139,7 @@ class GStreamerAudio(AudioBase):
             audiosink = Gst.ElementFactory.make("autoaudiosink")  # use default speaker
         else:
             audiosink = Gst.ElementFactory.make("alsasink")
-            audiosink.set_property("device", f"plughw:{self._id_audio_card},0")
+            audiosink.set_property("device", f"{self._pcm_type}:{self._id_audio_card},0")
 
         pipeline.add(queue)
         pipeline.add(audiosink)
@@ -169,29 +169,43 @@ class GStreamerAudio(AudioBase):
         """Open the audio card using GStreamer."""
         self._pipeline_record.set_state(Gst.State.PLAYING)
 
-    def _get_sample(self, appsink: GstApp.AppSink) -> Optional[bytes]:
+    def _get_sample(self, appsink: GstApp.AppSink) -> Optional[npt.NDArray[np.float32]]:
         sample = appsink.try_pull_sample(20_000_000)
         if sample is None:
             return None
-        data = None
+        
         if isinstance(sample, Gst.Sample):
             buf = sample.get_buffer()
             if buf is None:
                 self.logger.warning("Buffer is None")
+                return None
 
-            data = buf.extract_dup(0, buf.get_size())
-        return data
+            # Memory-efficient: map buffer directly without copying
+            success, mapinfo = buf.map(Gst.MapFlags.READ)
+            if not success:
+                self.logger.error("Failed to map buffer")
+                return None
+            
+            try:
+                # Create numpy array from mapped memory (zero-copy view)
+                data = np.frombuffer(mapinfo.data, dtype=np.float32).copy()
+            finally:
+                # Always unmap the buffer
+                buf.unmap(mapinfo)
+            
+            return data
+        return None
 
     def get_audio_sample(self) -> Optional[npt.NDArray[np.float32]]:
         """Read a sample from the audio card."""
-        sample = self._get_sample(self._appsink_audio)
-        if sample is None:
+        data = self._get_sample(self._appsink_audio)
+        if data is None:
             return None
             
         # DYNAMIC FIX: Use self.CHANNELS instead of hardcoded '2'
         # If channels=1 and you reshape to 2, you get chipmunk audio.
         try:
-            return np.frombuffer(sample, dtype=np.float32).reshape(-1, self.CHANNELS)
+            return data.reshape(-1, self.CHANNELS)
         except ValueError as e:
             self.logger.error(f"Shape mismatch! Buffer size doesn't match channels. Error: {e}")
             return None

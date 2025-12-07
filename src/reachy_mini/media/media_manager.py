@@ -35,6 +35,7 @@ class MediaManager:
         log_level: str = "INFO",
         use_sim: bool = False,
         signalling_host: str = "localhost",
+        pcm_type: str = "plughw",
     ) -> None:
         """Initialize the audio device."""
         self.logger = logging.getLogger(__name__)
@@ -56,7 +57,7 @@ class MediaManager:
             case MediaBackend.GSTREAMER:
                 self.logger.info("Using GStreamer media backend.")
                 self._init_camera(use_sim, log_level)
-                self._init_audio(log_level)
+                self._init_audio(log_level, pcm_type)
             case MediaBackend.WEBRTC:
                 self.logger.info("Using WebRTC GStreamer backend.")
                 self._init_webrtc(log_level, signalling_host, 8443)
@@ -114,7 +115,7 @@ class MediaManager:
             return None
         return self.camera.read()
 
-    def _init_audio(self, log_level: str) -> None:
+    def _init_audio(self, log_level: str, pcm_type: str) -> None:
         """Initialize the audio system."""
         self.logger.debug("Initializing audio...")
         if (
@@ -129,7 +130,7 @@ class MediaManager:
             self.logger.info("Using GStreamer audio backend.")
             from reachy_mini.media.audio_gstreamer import GStreamerAudio
 
-            self.audio = GStreamerAudio(log_level=log_level)
+            self.audio = GStreamerAudio(log_level=log_level, pcm_type)
         else:
             raise NotImplementedError(f"Audio backend {self.backend} not implemented.")
 
