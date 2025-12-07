@@ -91,23 +91,17 @@ class GStreamerAudio(AudioBase):
             self.logger.info("Using autoaudiosrc (System Default)")
             audiosrc = Gst.ElementFactory.make("autoaudiosrc")
 
-        # 3. Create Processing Elements
         queue = Gst.ElementFactory.make("queue")
         audioconvert = Gst.ElementFactory.make("audioconvert")
         audioresample = Gst.ElementFactory.make("audioresample")
         
-        # Check creation
-        #elements = [audiosrc, queue, audioconvert, audioresample, capsfilter, self._appsink_audio]
         elements = [audiosrc, queue, audioconvert, audioresample, self._appsink_audio]
         if not all(elements):
             raise RuntimeError("Failed to create specific GStreamer elements")
 
-        # Add all to pipeline
         for elem in elements:
             pipeline.add(elem)
 
-        ## 5. Link Them: Source -> Queue -> Convert -> Resample -> CapsFilter -> AppSink
-        # 5. Link Them: Source -> Queue -> Convert -> Resample -> AppSink
         if not audiosrc.link(queue):
             raise RuntimeError("Failed to link audiosrc -> queue")
         if not queue.link(audioconvert):
@@ -116,10 +110,6 @@ class GStreamerAudio(AudioBase):
             raise RuntimeError("Failed to link audioconvert -> audioresample")
         if not audioresample.link(self._appsink_audio):
              raise RuntimeError("Failed to link audioresample -> appsink")
-        # if not audioresample.link(capsfilter):
-        #     raise RuntimeError("Failed to link audioresample -> capsfilter")
-        # if not capsfilter.link(self._appsink_audio):
-        #     raise RuntimeError("Failed to link capsfilter -> appsink")
 
     def __del__(self) -> None:
         """Destructor to ensure gstreamer resources are released."""
@@ -187,17 +177,14 @@ class GStreamerAudio(AudioBase):
                 self.logger.warning("Buffer is None")
                 return None
 
-            # Memory-efficient: map buffer directly without copying
             success, mapinfo = buf.map(Gst.MapFlags.READ)
             if not success:
                 self.logger.error("Failed to map buffer")
                 return None
             
             try:
-                # Create numpy array from mapped memory (zero-copy view)
                 data = np.frombuffer(mapinfo.data, dtype=np.float32).copy()
             finally:
-                # Always unmap the buffer
                 buf.unmap(mapinfo)
             
             return data
@@ -209,10 +196,8 @@ class GStreamerAudio(AudioBase):
         if data is None:
             return None
             
-        # DYNAMIC FIX: Use self.CHANNELS instead of hardcoded '2'
-        # If channels=1 and you reshape to 2, you get chipmunk audio.
         try:
-            return data.reshape(-1, self.CHANNELS)
+            return data.reshape(-1, 2)
         except ValueError as e:
             self.logger.error(f"Shape mismatch! Buffer size doesn't match channels. Error: {e}")
             return None
