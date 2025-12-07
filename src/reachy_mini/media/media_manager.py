@@ -130,7 +130,7 @@ class MediaManager:
             self.logger.info("Using GStreamer audio backend.")
             from reachy_mini.media.audio_gstreamer import GStreamerAudio
 
-            self.audio = GStreamerAudio(log_level=log_level, pcm_type)
+            self.audio = GStreamerAudio(log_level=log_level, pcm_type=pcm_type)
         else:
             raise NotImplementedError(f"Audio backend {self.backend} not implemented.")
 
