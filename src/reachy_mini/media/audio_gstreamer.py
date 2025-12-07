@@ -3,7 +3,7 @@
 This module provides an implementation of the AudioBase class using GStreamer.
 By default the module directly returns audio stream by ReStreamer
 """
-
+import sys
 from threading import Thread
 from typing import Optional
 
@@ -32,6 +32,9 @@ from .audio_base import AudioBase  # noqa: E402
 class GStreamerAudio(AudioBase):
     """Audio implementation using GStreamer."""
 
+    DEFAULT_LATENCY_US = 30000 
+    DEFAULT_BUFFER_US = 200000
+
     def __init__(self, log_level: str = "INFO", pcm_type="plughw") -> None:
         """Initialize the GStreamer audio."""
         super().__init__(log_level=log_level)
@@ -39,6 +42,8 @@ class GStreamerAudio(AudioBase):
         self._loop = GLib.MainLoop()
         self._thread_bus_calls = Thread(target=lambda: self._loop.run(), daemon=True)
         self._thread_bus_calls.start()
+
+        self._is_linux = sys.platform.startswith("linux")
 
         self._id_audio_card = get_respeaker_card_number()
         self._pcm_type = pcm_type
@@ -74,27 +79,26 @@ class GStreamerAudio(AudioBase):
         self._appsink_audio.set_property("drop", True)
         self._appsink_audio.set_property("max-buffers", 200)
 
-        # 2. Select Source (Hardware vs Auto)
-        if self._id_audio_card == -1:
-            self.logger.info("Using autoaudiosrc (Default System Device)")
-            audiosrc = Gst.ElementFactory.make("autoaudiosrc")
-        else:
+
+        if self._is_linux and self._id_audio_card != -1:
             self.logger.info(f"Using alsasrc device {self._pcm_type}:{self._id_audio_card},0")
             audiosrc = Gst.ElementFactory.make("alsasrc")
             audiosrc.set_property("device", f"{self._pcm_type}:{self._id_audio_card},0")
+            
+            audiosrc.set_property("latency-time", self.DEFAULT_LATENCY_US)
+            audiosrc.set_property("buffer-time", self.DEFAULT_BUFFER_US)
+        else:
+            self.logger.info("Using autoaudiosrc (System Default)")
+            audiosrc = Gst.ElementFactory.make("autoaudiosrc")
 
         # 3. Create Processing Elements
         queue = Gst.ElementFactory.make("queue")
         audioconvert = Gst.ElementFactory.make("audioconvert")
         audioresample = Gst.ElementFactory.make("audioresample")
         
-        # 4. CRITICAL FIX: Explicit CapsFilter
-        # This forces the audioresample to actually work before data hits the sink
-        capsfilter = Gst.ElementFactory.make("capsfilter")
-        capsfilter.set_property("caps", caps)
-
         # Check creation
-        elements = [audiosrc, queue, audioconvert, audioresample, capsfilter, self._appsink_audio]
+        #elements = [audiosrc, queue, audioconvert, audioresample, capsfilter, self._appsink_audio]
+        elements = [audiosrc, queue, audioconvert, audioresample, self._appsink_audio]
         if not all(elements):
             raise RuntimeError("Failed to create specific GStreamer elements")
 
@@ -102,17 +106,20 @@ class GStreamerAudio(AudioBase):
         for elem in elements:
             pipeline.add(elem)
 
-        # 5. Link Them: Source -> Queue -> Convert -> Resample -> CapsFilter -> AppSink
+        ## 5. Link Them: Source -> Queue -> Convert -> Resample -> CapsFilter -> AppSink
+        # 5. Link Them: Source -> Queue -> Convert -> Resample -> AppSink
         if not audiosrc.link(queue):
             raise RuntimeError("Failed to link audiosrc -> queue")
         if not queue.link(audioconvert):
             raise RuntimeError("Failed to link queue -> audioconvert")
         if not audioconvert.link(audioresample):
             raise RuntimeError("Failed to link audioconvert -> audioresample")
-        if not audioresample.link(capsfilter):
-            raise RuntimeError("Failed to link audioresample -> capsfilter")
-        if not capsfilter.link(self._appsink_audio):
-            raise RuntimeError("Failed to link capsfilter -> appsink")
+        if not audioresample.link(self._appsink_audio):
+             raise RuntimeError("Failed to link audioresample -> appsink")
+        # if not audioresample.link(capsfilter):
+        #     raise RuntimeError("Failed to link audioresample -> capsfilter")
+        # if not capsfilter.link(self._appsink_audio):
+        #     raise RuntimeError("Failed to link capsfilter -> appsink")
 
     def __del__(self) -> None:
         """Destructor to ensure gstreamer resources are released."""
