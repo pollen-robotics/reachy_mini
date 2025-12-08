@@ -74,7 +74,7 @@ class AppManager:
             raise RuntimeError("An app is already running")
 
         (ep,) = entry_points(group="reachy_mini_apps", name=app_name)
-        app = ep.load()()
+        app = ep.load()(running_on_wireless=self.running_on_wireless)
 
         def wrapped_run() -> None:
             assert self.current_app is not None
