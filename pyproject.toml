@@ -13,7 +13,7 @@ dependencies = [
     "numpy>=2.2.5",
     "scipy>=1.15.3, <2.0.0",
     "reachy_mini_motor_controller>=1.4.2",
-    "eclipse-zenoh>=1.4.0",
+    "eclipse-zenoh~=1.7.0",
     "opencv-python<=5.0",
     "cv2_enumerate_cameras>=1.2.1",
     "psutil",

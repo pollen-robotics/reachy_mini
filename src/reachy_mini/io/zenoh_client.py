@@ -34,17 +34,25 @@ class ZenohClient(AbstractClient):
             c = zenoh.Config.from_json5(
                 json.dumps(
                     {
+                        "mode": "client",
                         "connect": {
-                            "endpoints": {
-                                "peer": ["tcp/localhost:7447"],
-                                "router": [],
-                            },
-                        },
+                            "endpoints": ["tcp/localhost:7447"]
+                        }
                     }
                 )
             )
         else:
-            c = zenoh.Config()
+            # TODO use the name of the robot for multiple robots support 
+            c = zenoh.Config.from_json5(
+                json.dumps(
+                    {
+                        "mode": "client",
+                        "connect": {
+                            "endpoints": ["tcp/reachy-mini.local:7447"]
+                        }
+                    }
+                )
+            )
 
         self.joint_position_received = threading.Event()
         self.head_pose_received = threading.Event()
