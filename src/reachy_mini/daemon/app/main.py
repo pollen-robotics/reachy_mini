@@ -125,7 +125,7 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
     app.state.daemon = Daemon(
         wireless_version=args.wireless_version, stream=args.stream
     )
-    app.state.app_manager = AppManager()
+    app.state.app_manager = AppManager(running_on_wireless=args.wireless_version)
 
     router = APIRouter(prefix="/api")
     router.include_router(apps.router)

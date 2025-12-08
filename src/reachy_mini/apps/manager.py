@@ -47,10 +47,11 @@ class RunningApp:
 class AppManager:
     """Manager for Reachy Mini apps."""
 
-    def __init__(self) -> None:
+    def __init__(self, running_on_wireless: bool) -> None:
         """Initialize the AppManager."""
         self.current_app = None  # type: RunningApp | None
         self.logger = logging.getLogger("reachy_mini.apps.manager")
+        self.running_on_wireless = running_on_wireless
 
     async def close(self) -> None:
         """Clean up the AppManager, stopping any running app."""
