@@ -79,7 +79,6 @@ class GStreamerAudio(AudioBase):
         self._appsink_audio.set_property("drop", True)
         self._appsink_audio.set_property("max-buffers", 200)
 
-
         if self._is_linux and self._id_audio_card != -1:
             self.logger.info(f"Using alsasrc device {self._pcm_type}:{self._id_audio_card},0")
             audiosrc = Gst.ElementFactory.make("alsasrc")

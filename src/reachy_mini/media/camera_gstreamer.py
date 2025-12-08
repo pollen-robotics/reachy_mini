@@ -173,7 +173,6 @@ class GStreamerCamera(CameraBase):
         self._loop.quit()
         self.pipeline.set_state(Gst.State.NULL)
 
-    
     def get_video_device(self) -> Tuple[str, Optional[CameraSpecs]]:
         """Use Gst.DeviceMonitor to find the unix camera path /dev/videoX.
 
@@ -184,7 +183,7 @@ class GStreamerCamera(CameraBase):
         monitor.start()
 
         cam_names = ["Reachy", "Arducam_12MP", "imx708"]
-        # Priority list for device path properties
+
         path_keys = ["api.v4l2.path", "device.path", "object.path"]
 
         devices = monitor.get_devices()
@@ -193,13 +192,17 @@ class GStreamerCamera(CameraBase):
                 name = device.get_display_name()
                 
                 if cam_name in name:
-                    # Logic for physical V4L2 devices
-                    if cam_name != "imx708": 
+                    if cam_name == "imx708":
+                        camera_specs = cast(CameraSpecs, ReachyMiniWirelessCamSpecs)
+                        self.logger.debug(f"Found {cam_name} camera")
+                        monitor.stop()
+                        return cam_name, camera_specs
+                    
+                    else: 
                         device_props = device.get_properties()
                         if not device_props:
                             continue
 
-                        # Iterate through known keys to find the first valid path
                         device_path = None
                         for key in path_keys:
                             if device_props.has_field(key):
@@ -215,13 +218,6 @@ class GStreamerCamera(CameraBase):
                             self.logger.debug(f"Found {cam_name} camera at {device_path}")
                             monitor.stop()
                             return str(device_path), camera_specs
-
-                    # Logic for imx708 (seems to bypass standard v4l2 path logic in your snippet)
-                    elif cam_name == "imx708":
-                        camera_specs = cast(CameraSpecs, ReachyMiniWirelessCamSpecs)
-                        self.logger.debug(f"Found {cam_name} camera")
-                        monitor.stop()
-                        return cam_name, camera_specs
 
         monitor.stop()
         self.logger.warning("No camera found.")
