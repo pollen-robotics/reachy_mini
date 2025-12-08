@@ -49,11 +49,11 @@ class MediaManager:
                 self.logger.info("No media backend selected.")
             case MediaBackend.DEFAULT:
                 self.logger.info("Using default media backend (OpenCV + SoundDevice).")
-                self._init_camera(use_sim, log_level)
+                self._init_camera(use_sim, log_level, pcm_type)
                 self._init_audio(log_level)
             case MediaBackend.DEFAULT_NO_VIDEO:
                 self.logger.info("Using default media backend (SoundDevice only).")
-                self._init_audio(log_level)
+                self._init_audio(log_level, pcm_type)
             case MediaBackend.GSTREAMER:
                 self.logger.info("Using GStreamer media backend.")
                 self._init_camera(use_sim, log_level)

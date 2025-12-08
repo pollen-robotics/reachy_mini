@@ -35,7 +35,7 @@ class GStreamerAudio(AudioBase):
     DEFAULT_LATENCY_US = 30000 
     DEFAULT_BUFFER_US = 200000
 
-    def __init__(self, log_level: str = "INFO", pcm_type="plughw") -> None:
+    def __init__(self, log_level: str = "INFO", pcm_type : str = "plughw") -> None:
         """Initialize the GStreamer audio."""
         super().__init__(log_level=log_level)
         Gst.init(None)

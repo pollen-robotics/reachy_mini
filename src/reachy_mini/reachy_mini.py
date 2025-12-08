@@ -81,6 +81,7 @@ class ReachyMini:
             automatic_body_yaw (bool): If True, the body yaw will be used to compute the IK and FK. Default is False.
             log_level (str): Logging level, defaults to "INFO".
             media_backend (str): Media backend to use, either "default" (OpenCV), "gstreamer" or "webrtc", defaults to "default".
+            pcm_type (str): PCM type to use for audio backend, defaults to "plughw".
 
         It will try to connect to the daemon, and if it fails, it will raise an exception.
 
