@@ -37,6 +37,7 @@ class ZenohClient(AbstractClient):
                 )
             )
         else:
+            # TODO use the name of the robot for multiple robots support 
             c = zenoh.Config.from_json5(
                 json.dumps(
                     {
