@@ -48,13 +48,13 @@ class AppManager:
     """Manager for Reachy Mini apps."""
 
     def __init__(
-        self, wireless_version: bool = False, desktop_version: bool = False
+        self, wireless_version: bool = False, desktop_app_daemon: bool = False
     ) -> None:
         """Initialize the AppManager."""
         self.current_app = None  # type: RunningApp | None
         self.logger = logging.getLogger("reachy_mini.apps.manager")
         self.wireless_version = wireless_version
-        self.desktop_version = desktop_version
+        self.desktop_app_daemon = desktop_app_daemon
 
     async def close(self) -> None:
         """Clean up the AppManager, stopping any running app."""
@@ -78,7 +78,7 @@ class AppManager:
 
         try:
             app_cls = local_common_venv.load_app_from_venv(
-                app_name, self.wireless_version, self.desktop_version
+                app_name, self.wireless_version, self.desktop_app_daemon
             )
             app = app_cls()
         except ValueError as e:
@@ -182,7 +182,7 @@ class AppManager:
         elif source == SourceKind.INSTALLED:
             return await local_common_venv.list_available_apps(
                 wireless_version=self.wireless_version,
-                desktop_version=self.desktop_version,
+                desktop_app_daemon=self.desktop_app_daemon,
             )
         elif source == SourceKind.LOCAL:
             return []
@@ -195,7 +195,7 @@ class AppManager:
             app,
             logger,
             wireless_version=self.wireless_version,
-            desktop_version=self.desktop_version,
+            desktop_app_daemon=self.desktop_app_daemon,
         )
         if success != 0:
             raise RuntimeError(f"Failed to install app '{app.name}'")
@@ -206,7 +206,7 @@ class AppManager:
             app_name,
             logger,
             wireless_version=self.wireless_version,
-            desktop_version=self.desktop_version,
+            desktop_app_daemon=self.desktop_app_daemon,
         )
         if success != 0:
             raise RuntimeError(f"Failed to uninstall app '{app_name}'")
