@@ -91,7 +91,7 @@ class ReachyMiniApp(ABC):
             with ReachyMini(
                 media_backend=self.media_backend,
                 *args,
-                **kwargs,
+                **kwargs,  # type: ignore
             ) as reachy_mini:
                 self.run(reachy_mini, self.stop_event)
         except Exception:
