@@ -10,6 +10,8 @@ class {{ class_name }}(ReachyMiniApp):
     # Optional: URL to a custom configuration page for the app
     # eg. "http://localhost:8042"
     custom_app_url: str | None = "http://0.0.0.0:8042"
+    # Optional: specify a media backend ("gstreamer", "default", etc.)
+    request_media_backend: str | None = None
 
     def run(self, reachy_mini: ReachyMini, stop_event: threading.Event):
         t0 = time.time()
