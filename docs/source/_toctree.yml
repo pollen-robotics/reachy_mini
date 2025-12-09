@@ -16,11 +16,11 @@
   - local: daemon
     title: Run the Reachy Mini daemon
   - local: demo_apps
-    title: Run the demo and amazing apps
+    title: Run the demo and awesome apps
   - local: python_sdk
-    title: Using the Reachy Mini Python sdk
+    title: Using the Python SDK
   - local: rest_api
-    title: Using the Reachy Mini REST API
+    title: Using the REST API
   title: Software guide
 - sections:
   - local: troubleshooting

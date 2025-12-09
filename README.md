@@ -255,7 +255,7 @@ Checks are performed by Ruff. You may want to [configure your IDE to support it]
 
 ## Troubleshooting
 
-see [dedicated section](docs/troubleshooting.md)
+see [dedicated section](docs/source/troubleshooting.mdx)
 
 ## License
 

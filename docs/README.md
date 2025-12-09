@@ -24,7 +24,7 @@ Once you have setup the `doc-builder` and additional packages, you can generate 
 typing the following command:
 
 ```bash
-doc-builder build reachy_mini docs/source/ --build_dir ~/tmp/test-build --version 1.1.3
+doc-builder build reachy_mini docs/source/ --build_dir ~/tmp/test-build
 ```
 
 You can adapt the `--build_dir` to set any temporary folder that you prefer. This command will create it and generate

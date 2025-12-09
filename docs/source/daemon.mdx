@@ -1,5 +1,79 @@
-📖 Follow our step-by-step [Assembly Guide](https://huggingface.co/spaces/pollen-robotics/Reachy_Mini_Assembly_Guide).
+# Run the reachy mini daemon
 
-Most builders finish in about 3 hours, our current speed record is 43 minutes. The guide walks you through every step with clear visuals so you can assemble Reachy Mini confidently from start to finish. Enjoy the build!
+Before being able to use the robot, you need to run the daemon that will handle the communication with the motors. This daemon can run either in simulation (MuJoCo) or on the real robot.
 
-▶️ View the [Assembly Video](https://youtu.be/_r0cHySFbeY?si=6Mw4js8HSUs4cwoJ).
+### For real robot
+
+```bash
+reachy-mini-daemon
+```
+
+or run it via the Python module:
+
+```bash
+python -m reachy_mini.daemon.app.main
+```
+
+Additional argument for both simulation and real robot:
+
+```bash
+--localhost-only: (default behavior). The server will only accept connections from localhost.
+```
+
+or
+
+```bash
+--no-localhost-only: If set, the server will accept connections from any connection on the local network.
+```
+
+> [!TIP]
+> **For the lite version (connected via USB)**
+> 
+> It should automatically detect the serial port of the robot. If it does not, you can specify it manually with the `-p` option:
+> 
+> ```bash
+> reachy-mini-daemon -p <serial_port>
+> ```
+
+### In simulation ([MuJoCo](https://mujoco.org))
+
+You first have to install the optional dependency `mujoco`.
+
+```bash
+pip install reachy-mini[mujoco]
+```
+
+Then run the daemon with the `--sim` argument.
+
+```bash
+reachy-mini-daemon --sim
+```
+
+Additional arguments:
+
+```bash
+--scene <empty|minimal> : (Default empty). Choose between a basic empty scene, or a scene with a table and some objects.
+```
+
+<img src="https://www.pollen-robotics.com/wp-content/uploads/2025/06/Reachy_mini_simulation.gif" width="250" alt="Reachy Mini in MuJoCo">
+
+
+*Note: On OSX in order to run mujoco, you need to use mjpython (see [here](https://mujoco.readthedocs.io/en/stable/python.html#passive-viewer)). So, you should run the daemon with:*
+
+```bash
+ mjpython -m reachy_mini.daemon.app.main --sim
+ ```
+
+### Usage
+
+For more information about the daemon and its options, you can run:
+
+```bash
+reachy-mini-daemon --help
+```
+
+### Dashboard
+
+You can access a simple dashboard to monitor the robot's status at [http://localhost:8000/](http://localhost:8000/) when the daemon is running. This lets you turn your robot on and off, run some basic movements, and browse spaces for Reachy Mini!
+
+![Reachy Mini Dashboard](docs/assets/dashboard.png)

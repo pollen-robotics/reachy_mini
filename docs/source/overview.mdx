@@ -1,9 +1,12 @@
-This repository provides everything you need to control Reachy Mini, both in simulation and on the real robot. It consists of two main parts:
+# Software overview
+
+The [GitHub repository](https://github.com/pollen-robotics/reachy_mini) provides everything you need to control Reachy Mini, both in simulation and on the real robot. It consists of two main parts:
 
 - **The 😈 Daemon 😈**: A background service that manages communication with the robot's motors and sensors, or with the simulation environment. It should be running before you can control the robot. It can run either for the simulation (MuJoCo) or for the real robot. 
 - **🐍 SDK & 🕸️ API** to control the robot's main features (head, antennas, camera, speakers, microphone, etc.) and connect with your AI experimentation. Depending on your preferences and needs, there is a [Python SDK](#using-the-python-sdk) and a [HTTP REST API](#using-the-rest-api).
 
 Using the [Python SDK](#using-the-python-sdk), making your robot move only require a few lines of code, as illustrated in the example below:
+
 
 ```python
 from reachy_mini import ReachyMini
