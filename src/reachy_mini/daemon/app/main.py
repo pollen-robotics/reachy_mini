@@ -43,6 +43,7 @@ class Args:
     log_file: str | None = None
 
     wireless_version: bool = False
+    desktop_app_daemon: bool = False
 
     stream: bool = False
 
@@ -123,9 +124,11 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
 
     app.state.args = args
     app.state.daemon = Daemon(
-        wireless_version=args.wireless_version, stream=args.stream
+        wireless_version=args.wireless_version, desktop_app_daemon=args.desktop_app_daemon
     )
-    app.state.app_manager = AppManager()
+    app.state.app_manager = AppManager(
+        wireless_version=args.wireless_version, desktop_app_daemon=args.desktop_app_daemon
+    )
 
     router = APIRouter(prefix="/api")
     router.include_router(apps.router)
@@ -247,6 +250,12 @@ def main() -> None:
         action="store_true",
         default=default_args.wireless_version,
         help="Use the wireless version of Reachy Mini (default: False).",
+    )
+    parser.add_argument(
+        "--desktop-app-daemon",
+        action="store_true",
+        default=default_args.desktop_app_daemon,
+        help="Use the desktop version of Reachy Mini (default: False).",
     )
 
     parser.add_argument(
