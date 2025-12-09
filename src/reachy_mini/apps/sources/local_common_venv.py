@@ -241,11 +241,11 @@ async def install_package(
             if ret != 0:
                 return ret
 
-            # Install package in the new venv using uv
+            # Install package in the new venv using uv pip install
             python_path = _get_app_python(app_name)
             logger.info(f"Installing '{app_name}' using uv in {venv_path}")
             ret = await running_command(
-                [str(python_path), "-m", "uv", "pip", "install", target],
+                ["uv", "pip", "install", "--python", str(python_path), target],
                 logger=logger,
             )
 
@@ -261,13 +261,9 @@ async def install_package(
                 logger.warning(f"Installation failed, cleaning up {venv_path}")
                 shutil.rmtree(venv_path)
     else:
-        # Original behavior: install into current environment using uv
         if app.source_kind == SourceKind.HF_SPACE or app.source_kind == SourceKind.LOCAL:
             logger.info(f"Adding package from {target} using uv...")
             return await running_command(["uv", "add", target], logger=logger)
-        else:
-            raise ValueError(f"Cannot install app from source kind '{app.source_kind}'")
-
 
 def load_app_from_venv(
     app_name: str,
