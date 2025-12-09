@@ -4,11 +4,227 @@
 
 <!-- FAQ:basics:start -->
 
+<details>
+<summary><b>How do I connect to Reachy Mini from Python?</b><br>
+<div
+  style="
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-xs);
+  "
+>
+  Tags:
+  
+  <span
+    style="
+      display: inline-block;
+      padding: 2px 10px;
+      margin: 2px 4px;
+      background: rgba(59, 176, 209, 0.1);
+      color: var(--primary);
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    "
+  >
+    SDK
+  </span>
+  <span
+    style="
+      display: inline-block;
+      padding: 2px 10px;
+      margin: 2px 4px;
+      background: rgba(59, 176, 209, 0.1);
+      color: var(--primary);
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    "
+  >
+    PYTHON
+  </span>
+  <span
+    style="
+      display: inline-block;
+      padding: 2px 10px;
+      margin: 2px 4px;
+      background: rgba(59, 176, 209, 0.1);
+      color: var(--primary);
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    "
+  >
+    START
+  </span>
+</div></summary>
+
+To control Reachy Mini, you mainly use the <mark style="background-color: rgba(59, 176, 209, 0.1);">`ReachyMini`</mark> class from the <mark style="background-color: rgba(59, 176, 209, 0.1);">`reachy_mini`</mark> package:
+
+```python
+from reachy_mini import ReachyMini
+
+mini = ReachyMini()
+```
+
+This connects to the Reachy Mini daemon (started via <mark style="background-color: rgba(59, 176, 209, 0.1);">`reachy-mini-daemon`</mark> or <mark style="background-color: rgba(59, 176, 209, 0.1);">`reachy_mini.daemon.app.main`</mark>) and initializes motors and sensors.
+
+<strong>Recommended pattern:</strong> use a context manager to automatically handle connection and cleanup:
+
+```python
+from reachy_mini import ReachyMini
+
+with ReachyMini() as mini:
+    # your code here
+    ...
+```
+
+<hfoptions id="General-Basics">
+<hfoption id="Beta">
+
+```python
+# For ReachyMini Beta
+```
+
+</hfoption>
+<hfoption id="Lite">
+
+<!-- prettier-ignore-start -->
+```python
+# For ReachyMini Lite
+```
+<!-- prettier-ignore-end -->
+
+</hfoption>
+<hfoption id="Wireless">
+
+<!-- prettier-ignore-start -->
+```python
+# For ReachyMini Wireless
+```
+<!-- prettier-ignore-end -->
+
+</hfoption>
+</hfoptions>
+
+<p style="color:grey"><i>Source: API doc.</i></p>
+</details><br>
+
+<details>
+<summary><b>Do I need to start the daemon manually?</b><br>
+<div
+  style="
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-xs);
+  "
+>
+  Tags:
+  
+  <span
+    style="
+      display: inline-block;
+      padding: 2px 10px;
+      margin: 2px 4px;
+      background: rgba(59, 176, 209, 0.1);
+      color: var(--primary);
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    "
+  >
+    SDK
+  </span>
+  <span
+    style="
+      display: inline-block;
+      padding: 2px 10px;
+      margin: 2px 4px;
+      background: rgba(59, 176, 209, 0.1);
+      color: var(--primary);
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    "
+  >
+    START
+  </span>
+</div></summary>
+
+Yes. All examples assume you have already started the Reachy Mini daemon:
+
+- Either via command line: <mark style="background-color: rgba(59, 176, 209, 0.1);">`reachy-mini-daemon`</mark>
+- Or via Python: <mark style="background-color: rgba(59, 176, 209, 0.1);">`reachy_mini.daemon.app.main`</mark>
+The <mark style="background-color: rgba(59, 176, 209, 0.1);">`ReachyMini`</mark> instance will then connect to this daemon.
+
+<p style="color:grey"><i>Source: API doc.</i></p>
+</details><br>
+
 <!-- FAQ:basics:end -->
 
 ## 1.2 Assembly
 
 
 <!-- FAQ:assembly:start -->
+
+<details>
+<summary><b>How long does assembly usually take?</b><br>
+<div
+  style="
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-xs);
+  "
+>
+  Tags:
+  
+  <span
+    style="
+      display: inline-block;
+      padding: 2px 10px;
+      margin: 2px 4px;
+      background: rgba(59, 176, 209, 0.1);
+      color: var(--primary);
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    "
+  >
+    ASSEMBLY
+  </span>
+  <span
+    style="
+      display: inline-block;
+      padding: 2px 10px;
+      margin: 2px 4px;
+      background: rgba(59, 176, 209, 0.1);
+      color: var(--primary);
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    "
+  >
+    HARDWARE
+  </span>
+</div></summary>
+
+Most testers report <b>1.5–2 hours</b>, with some up to <b>4 hours</b> depending on experience.
+
+<p style="color:grey"><i>Source: Hardware doc.</i></p>
+</details><br>
 
 <!-- FAQ:assembly:end -->

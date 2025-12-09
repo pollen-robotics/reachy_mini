@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 import json
 import pathlib
 import re
@@ -8,8 +7,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 
 FAQ_DATA_DIR = ROOT / "docs" / "faq"
 FAQ_ANSWERS_DIR = FAQ_DATA_DIR / "answers"
-FAQ_TEMPLATE_FILE = ROOT / "docs" / "faq" / "faq-template.mdx"
-FAQ_OUTPUT_FILE = ROOT / "docs" / "source" / "faq.mdx"
+FAQ_FILE = ROOT / "docs" / "source" / "faq.mdx"
 
 
 def load_section(section_name: str) -> List[Dict[str, Any]]:
@@ -34,7 +32,7 @@ def load_answer_text(item: Dict[str, Any]) -> str:
         )
 
     with answer_path.open("r", encoding="utf-8") as f:
-        return f.read().rstrip()  # on enlève juste les \n de fin
+        return f.read().rstrip()  # just strip trailing newlines
 
 
 def render_item(item: Dict[str, Any]) -> str:
@@ -43,7 +41,7 @@ def render_item(item: Dict[str, Any]) -> str:
     answer = load_answer_text(item)
     source = item.get("source")
 
-    # Génération du HTML pour les tags
+    # HTML for tags
     tags_html_parts = []
     for tag in tags:
         tags_html_parts.append(
@@ -93,7 +91,7 @@ def render_item(item: Dict[str, Any]) -> str:
 def render_section(section_name: str) -> str:
     items = load_section(section_name)
     rendered_items = [render_item(item) for item in items]
-    # Séparation par une ligne vide entre questions
+    # blank line between questions
     return "\n\n".join(rendered_items) + "\n"
 
 
@@ -112,15 +110,13 @@ def replace_section(content: str, section_name: str, new_block: str) -> str:
     replacement = rf"\1\n\n{new_block}\n\3"
     (content, n) = pattern.subn(replacement, content)
     if n == 0:
-        raise ValueError(
-            f"No block for section '{section_name}' found in {FAQ_TEMPLATE_FILE}"
-        )
+        raise ValueError(f"No block for section '{section_name}' found in {FAQ_FILE}")
     return content
 
 
 def find_sections(content: str) -> List[str]:
     """
-    Find all section names in the markers:
+    Find all section names in markers:
     <!-- FAQ:section_name:start -->
     """
     pattern = re.compile(r"<!-- FAQ:([a-zA-Z0-9_-]+):start -->")
@@ -128,26 +124,25 @@ def find_sections(content: str) -> List[str]:
 
 
 def main() -> None:
-    if not FAQ_TEMPLATE_FILE.exists():
-        raise FileNotFoundError(f"FAQ template not found: {FAQ_TEMPLATE_FILE}")
+    if not FAQ_FILE.exists():
+        raise FileNotFoundError(f"FAQ file not found: {FAQ_FILE}")
 
-    with FAQ_TEMPLATE_FILE.open("r", encoding="utf-8") as f:
-        template_content = f.read()
+    with FAQ_FILE.open("r", encoding="utf-8") as f:
+        content = f.read()
 
-    sections = find_sections(template_content)
+    sections = find_sections(content)
     if not sections:
         raise RuntimeError(
-            f"No FAQ section found in {FAQ_TEMPLATE_FILE}. "
+            f"No FAQ section found in {FAQ_FILE}. "
             "Use markers like <!-- FAQ:section-name:start -->."
         )
 
-    content = template_content
     for section in sections:
         block = render_section(section)
         content = replace_section(content, section, block)
 
-    FAQ_OUTPUT_FILE.parent.mkdir(parents=True, exist_ok=True)
-    with FAQ_OUTPUT_FILE.open("w", encoding="utf-8") as f:
+    FAQ_FILE.parent.mkdir(parents=True, exist_ok=True)
+    with FAQ_FILE.open("w", encoding="utf-8") as f:
         f.write(content)
 
 
