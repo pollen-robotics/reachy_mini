@@ -7,5 +7,14 @@
         ],
         "answer_file": "assembly/assembly-time.mdx",
         "source": "Hardware doc"
+    },
+    {
+        "question": "Are there any difficult steps during assembly?",
+        "tags": [
+            "ASSEMBLY",
+            "HARDWARE"
+        ],
+        "answer_file": "assembly/difficult-steps.mdx",
+        "source": "Hardware doc"
     }
 ]

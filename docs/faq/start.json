@@ -1,0 +1,12 @@
+[
+    {
+        "question": "My Reachy Mini doesn’t move on first startup. What should I check?",
+        "tags": [
+            "START",
+            "POWER",
+            "TROUBLESHOOTING"
+        ],
+        "answer_file": "start/first-startup-issue.mdx",
+        "source": "API doc"
+    }
+]

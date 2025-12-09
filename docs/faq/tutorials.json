@@ -1,0 +1,11 @@
+[
+    {
+        "question": "Is there a Scratch-like beginner mode?",
+        "tags": [
+            "TUTORIALS",
+            "EDUCATION"
+        ],
+        "answer_file": "tutorials/scratch-like-beginner-mode.mdx",
+        "source": "API doc"
+    }
+]

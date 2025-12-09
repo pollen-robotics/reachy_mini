@@ -1,0 +1,32 @@
+[
+    {
+        "question": "How to Connect to a Wi-Fi network?",
+        "tags": [
+            "WiFi",
+            "START",
+            "WIRELESS"
+        ],
+        "answer_file": "setup/wifi-connection.mdx",
+        "source": "API doc"
+    },
+    {
+        "question": "Why do I need a virtual environment (.venv)?",
+        "tags": [
+            "SDK",
+            "PYTHON",
+            "ENVIRONMENT"
+        ],
+        "answer_file": "setup/need-for-venv.mdx",
+        "source": "developers referencing `.venv` in troubleshooting threads"
+    },
+    {
+        "question": "How to solve Chromadb / GStreamer / OpenCV installation issues?",
+        "tags": [
+            "AUDIO",
+            "VISION",
+            "DEPENDENCIES"
+        ],
+        "answer_file": "setup/dependencies-installation-issues.mdx",
+        "source": "API doc"
+    }
+]
