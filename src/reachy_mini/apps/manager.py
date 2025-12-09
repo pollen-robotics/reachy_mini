@@ -55,6 +55,7 @@ class AppManager:
         self.logger = logging.getLogger("reachy_mini.apps.manager")
         self.wireless_version = wireless_version
         self.desktop_app_daemon = desktop_app_daemon
+        self.running_on_wireless = wireless_version
 
     async def close(self) -> None:
         """Clean up the AppManager, stopping any running app."""
@@ -80,12 +81,12 @@ class AppManager:
             app_cls = local_common_venv.load_app_from_venv(
                 app_name, self.wireless_version, self.desktop_app_daemon
             )
-            app = app_cls()
+            app = app_cls(running_on_wireless=self.running_on_wireless)
         except ValueError as e:
             # Fallback to original method for backward compatibility
             try:
                 (ep,) = entry_points(group="reachy_mini_apps", name=app_name)
-                app = ep.load()()
+                app = ep.load()(running_on_wireless=self.running_on_wireless)
             except ValueError:
                 raise RuntimeError(f"App '{app_name}' not found: {e}")
 
