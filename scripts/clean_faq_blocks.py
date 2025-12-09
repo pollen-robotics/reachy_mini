@@ -6,37 +6,57 @@ from typing import Iterable
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 DOCS_SOURCE_DIR = ROOT / "docs" / "source"
 
-# Blocks by section:
+# Old section blocks:
 # <!-- FAQ:section-name:start --> ... <!-- FAQ:section-name:end -->
-SECTION_PATTERN = re.compile(
-    r"(<!-- FAQ:([a-zA-Z0-9_-]+):start -->)(.*?)(<!-- FAQ:\2:end -->)",
+SECTION_PATTERN_OLD = re.compile(
+    r"(?P<start><!-- FAQ:([a-zA-Z0-9_-]+):start -->)"
+    r"(?P<body>.*?)"
+    r"(?P<end><!-- FAQ:\2:end -->)",
+    re.DOTALL,
+)
+
+# New section blocks with folder:
+# <!-- FAQ:folder:section-name:start --> ... <!-- FAQ:folder:section-name:end -->
+SECTION_PATTERN_NEW = re.compile(
+    r"(?P<start><!-- FAQ:([a-zA-Z0-9_-]+):([a-zA-Z0-9_-]+):start -->)"
+    r"(?P<body>.*?)"
+    r"(?P<end><!-- FAQ:\2:\3:end -->)",
     re.DOTALL,
 )
 
 # Blocks by tags:
 # <!-- FAQ-TAGS:expr:start --> ... <!-- FAQ-TAGS:expr:end -->
 TAGS_PATTERN = re.compile(
-    r"(<!-- FAQ-TAGS:([^:]+):start -->)(.*?)(<!-- FAQ-TAGS:\2:end -->)",
+    r"(?P<start><!-- FAQ-TAGS:([^:]+):start -->)"
+    r"(?P<body>.*?)"
+    r"(?P<end><!-- FAQ-TAGS:\2:end -->)",
     re.DOTALL,
 )
+
+
+def _keep_markers_only(match: re.Match) -> str:
+    """Return start marker, two newlines, end marker."""
+    return f"{match.group('start')}\n\n{match.group('end')}"
 
 
 def clean_content(content: str) -> str:
     """
     Delete everything between the markers:
-      - <!-- FAQ:xxx:start --> ... <!-- FAQ:xxx:end -->
+      - <!-- FAQ:section:start --> ... <!-- FAQ:section:end -->
+      - <!-- FAQ:folder:section:start --> ... <!-- FAQ:folder:section:end -->
       - <!-- FAQ-TAGS:expr:start --> ... <!-- FAQ-TAGS:expr:end -->
 
     leaving only the markers, with an empty line between the two.
 
     Implementation in ONE PASS per block type (no while loop).
     """
-    # Si pas de marqueur, on retourne direct
     if "<!-- FAQ" not in content:
         return content
 
-    content = SECTION_PATTERN.sub(r"\1\n\n\4", content)
-    content = TAGS_PATTERN.sub(r"\1\n\n\4", content)
+    # Clean new folder+section markers first, then old ones, then tag markers
+    content = SECTION_PATTERN_NEW.sub(_keep_markers_only, content)
+    content = SECTION_PATTERN_OLD.sub(_keep_markers_only, content)
+    content = TAGS_PATTERN.sub(_keep_markers_only, content)
     return content
 
 

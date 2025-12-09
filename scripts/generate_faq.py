@@ -1,23 +1,53 @@
 import json
 import pathlib
 import re
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Tuple
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 
 FAQ_DATA_DIR = ROOT / "docs" / "faq"
-FAQ_ANSWERS_DIR = FAQ_DATA_DIR / "answers"
 FAQ_FILE = ROOT / "docs" / "source" / "faq.mdx"
 
 
-def load_section(section_name: str) -> List[Dict[str, Any]]:
-    json_path = FAQ_DATA_DIR / f"{section_name}.json"
-    if not json_path.exists():
+def load_section(folder_name: str, section_name: str) -> List[Dict[str, Any]]:
+    """
+    Load a section from JSON by searching in docs/faq/<folder_name> and all its children
+    for a file named <section_name>.json.
+
+    Also attaches an internal "_answers_dir" to each item:
+    json_path.parent / "answers"
+    """
+    base_dir = FAQ_DATA_DIR / folder_name
+    if not base_dir.exists():
         raise FileNotFoundError(
-            f"JSON for section '{section_name}' not found: {json_path}"
+            f"Folder '{folder_name}' not found under FAQ_DATA_DIR: {base_dir}"
         )
+
+    target_name = f"{section_name}.json"
+    matches = list(base_dir.rglob(target_name))
+
+    if not matches:
+        raise FileNotFoundError(
+            f"JSON for section '{section_name}' in folder '{folder_name}' "
+            f"not found under: {base_dir}"
+        )
+    if len(matches) > 1:
+        # You can change this to pick the first if you prefer implicit behavior
+        raise RuntimeError(
+            f"Multiple JSON files named '{target_name}' found under '{base_dir}':\n"
+            + "\n".join(f"- {m}" for m in matches)
+        )
+
+    json_path = matches[0]
     with json_path.open("r", encoding="utf-8") as f:
-        return json.load(f)
+        items: List[Dict[str, Any]] = json.load(f)
+
+    answers_dir = json_path.parent / "answers"
+    for it in items:
+        # internal metadata: where to look for answers for this item
+        it["_answers_dir"] = answers_dir
+
+    return items
 
 
 def load_answer_text(item: Dict[str, Any]) -> str:
@@ -25,7 +55,13 @@ def load_answer_text(item: Dict[str, Any]) -> str:
     if not answer_file:
         raise KeyError(f"Missing 'answer_file' for question: {item.get('question')}")
 
-    answer_path = FAQ_ANSWERS_DIR / answer_file
+    answers_dir = item.get("_answers_dir")
+    if not answers_dir:
+        raise KeyError(
+            f"Missing internal '_answers_dir' for item with question: {item.get('question')}"
+        )
+
+    answer_path = pathlib.Path(answers_dir) / answer_file
     if not answer_path.exists():
         raise FileNotFoundError(
             f"Answer file not found for '{item.get('question')}': {answer_path}"
@@ -88,38 +124,48 @@ def render_item(item: Dict[str, Any]) -> str:
     return block
 
 
-def render_section(section_name: str) -> str:
-    items = load_section(section_name)
+def render_section(folder_name: str, section_name: str) -> str:
+    items = load_section(folder_name, section_name)
     rendered_items = [render_item(item) for item in items]
     # blank line between questions
     return "\n\n".join(rendered_items) + "\n"
 
 
-def replace_section(content: str, section_name: str, new_block: str) -> str:
+def replace_section(
+    content: str, folder_name: str, section_name: str, new_block: str
+) -> str:
     """
     Replace the FAQ section markers:
-    <!-- FAQ:section_name:start -->
+
+    <!-- FAQ:folder_name:section_name:start -->
     ...
-    <!-- FAQ:section_name:end -->
+    <!-- FAQ:folder_name:section_name:end -->
+
     with the new content.
     """
     pattern = re.compile(
-        rf"(<!-- FAQ:{re.escape(section_name)}:start -->)(.*?)(<!-- FAQ:{re.escape(section_name)}:end -->)",
+        rf"(<!-- FAQ:{re.escape(folder_name)}:{re.escape(section_name)}:start -->)"
+        r"(.*?)"
+        rf"(<!-- FAQ:{re.escape(folder_name)}:{re.escape(section_name)}:end -->)",
         re.DOTALL,
     )
     replacement = rf"\1\n\n{new_block}\n\3"
     (content, n) = pattern.subn(replacement, content)
     if n == 0:
-        raise ValueError(f"No block for section '{section_name}' found in {FAQ_FILE}")
+        raise ValueError(
+            f"No block for section '{folder_name}:{section_name}' found in {FAQ_FILE}"
+        )
     return content
 
 
-def find_sections(content: str) -> List[str]:
+def find_sections(content: str) -> List[Tuple[str, str]]:
     """
-    Find all section names in markers:
-    <!-- FAQ:section_name:start -->
+    Find all (folder_name, section_name) pairs in markers:
+
+    <!-- FAQ:folder_name:section-name:start -->
     """
-    pattern = re.compile(r"<!-- FAQ:([a-zA-Z0-9_-]+):start -->")
+    pattern = re.compile(r"<!-- FAQ:([a-zA-Z0-9_-]+):([a-zA-Z0-9_-]+):start -->")
+    # returns list of (folder_name, section_name)
     return sorted(set(pattern.findall(content)))
 
 
@@ -134,12 +180,12 @@ def main() -> None:
     if not sections:
         raise RuntimeError(
             f"No FAQ section found in {FAQ_FILE}. "
-            "Use markers like <!-- FAQ:section-name:start -->."
+            "Use markers like <!-- FAQ:folder_name:section-name:start -->."
         )
 
-    for section in sections:
-        block = render_section(section)
-        content = replace_section(content, section, block)
+    for folder_name, section_name in sections:
+        block = render_section(folder_name, section_name)
+        content = replace_section(content, folder_name, section_name, block)
 
     FAQ_FILE.parent.mkdir(parents=True, exist_ok=True)
     with FAQ_FILE.open("w", encoding="utf-8") as f:
