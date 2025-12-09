@@ -28,8 +28,9 @@ from reachy_mini.io.protocol import (
 class ZenohServer(AbstractServer):
     """Zenoh server for Reachy Mini."""
 
-    def __init__(self, backend: Backend, localhost_only: bool = True):
+    def __init__(self, prefix: str, backend: Backend, localhost_only: bool = True):
         """Initialize the Zenoh server."""
+        self.prefix = prefix
         self.localhost_only = localhost_only
         self.backend = backend
 
@@ -84,26 +85,26 @@ class ZenohServer(AbstractServer):
 
         self.session = zenoh.open(c)
         self.sub = self.session.declare_subscriber(
-            "reachy_mini/command",
+            f"{self.prefix}/command",
             self._handle_command,
         )
-        self.pub = self.session.declare_publisher("reachy_mini/joint_positions")
-        self.pub_record = self.session.declare_publisher("reachy_mini/recorded_data")
+        self.pub = self.session.declare_publisher(f"{self.prefix}/joint_positions")
+        self.pub_record = self.session.declare_publisher(f"{self.prefix}/recorded_data")
         self.backend.set_joint_positions_publisher(self.pub)
         self.backend.set_recording_publisher(self.pub_record)
 
-        self.pub_pose = self.session.declare_publisher("reachy_mini/head_pose")
+        self.pub_pose = self.session.declare_publisher(f"{self.prefix}/head_pose")
         self.backend.set_pose_publisher(self.pub_pose)
 
         self.task_req_sub = self.session.declare_subscriber(
-            "reachy_mini/task",
+            f"{self.prefix}/task",
             self._handle_task_request,
         )
         self.task_progress_pub = self.session.declare_publisher(
-            "reachy_mini/task_progress"
+            f"{self.prefix}/task_progress"
         )
 
-        self.pub_status = self.session.declare_publisher("reachy_mini/daemon_status")
+        self.pub_status = self.session.declare_publisher(f"{self.prefix}/daemon_status")
 
     def stop(self) -> None:
         """Stop the Zenoh server."""
