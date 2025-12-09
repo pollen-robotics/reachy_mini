@@ -66,4 +66,7 @@ class {{ class_name }}(ReachyMiniApp):
 
 if __name__ == "__main__":
     app = {{ class_name }}()
-    app.wrapped_run()
+    try:
+        app.wrapped_run()
+    except KeyboardInterrupt:
+        app.stop()

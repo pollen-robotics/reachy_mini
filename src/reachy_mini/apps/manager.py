@@ -96,7 +96,8 @@ class AppManager:
                 self.current_app.status.state = AppState.RUNNING
                 self.logger.getChild("runner").info(f"App {app_name} is running")
                 app.wrapped_run(*args, **kwargs)
-                self.current_app.status.state = AppState.DONE
+                if self.current_app is not None:
+                    self.current_app.status.state = AppState.DONE
                 self.logger.getChild("runner").info(f"App {app_name} finished")
             except Exception as e:
                 self.logger.getChild("runner").error(
