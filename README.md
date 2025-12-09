@@ -216,7 +216,7 @@ with ReachyMini() as reachy_mini:
     reachy_mini.goto_target(head=pose, duration=2.0)
 ```
 
-For a full description of the SDK, please refer to the [Python SDK documentation](./docs/python-sdk.md).
+For a full description of the SDK, please refer to the [Python SDK documentation](./docs/source/python_sdk.mdx).
 
 ## Using the REST API
 
@@ -224,7 +224,7 @@ The daemon also provides a REST API via [fastapi](https://fastapi.tiangolo.com/)
 
 By default, the API server runs on `http://localhost:8000`. The API is documented using OpenAPI, and you can access the documentation at `http://localhost:8000/docs` when the daemon is running.
 
-More information about the API can be found in the [HTTP API documentation](./docs/rest-api.md).
+More information about the API can be found in the [HTTP API documentation](./docs/source/rest_api.mdx).
 
 ## Open source & contribution
 
