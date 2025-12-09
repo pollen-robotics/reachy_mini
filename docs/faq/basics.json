@@ -1,0 +1,21 @@
+[
+    {
+        "question": "How do I connect to Reachy Mini from Python?",
+        "tags": [
+            "SDK",
+            "PYTHON",
+            "START"
+        ],
+        "answer_file": "basics/connect-from-python.mdx",
+        "source": "API doc"
+    },
+    {
+        "question": "Do I need to start the daemon manually?",
+        "tags": [
+            "SDK",
+            "START"
+        ],
+        "answer_file": "basics/daemon-manual-start.mdx",
+        "source": "API doc"
+    }
+]

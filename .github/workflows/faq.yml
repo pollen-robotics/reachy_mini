@@ -1,0 +1,30 @@
+name: Generate FAQ
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+jobs:
+  build-faq:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Generate FAQ MDX
+        run: |
+          python scripts/generate_faq.py
+
+      - name: Check for uncommitted changes
+        run: |
+          if ! git diff --quiet; then
+            echo "Les fichiers générés (docs/faq.mdx) ne sont pas à jour."
+            echo "Lance 'python scripts/generate_faq.py' en local et commite les changements."
+            git diff
+            exit 1
+          fi

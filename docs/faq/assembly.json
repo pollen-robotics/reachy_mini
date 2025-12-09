@@ -1,0 +1,11 @@
+[
+    {
+        "question": "How long does assembly usually take?",
+        "tags": [
+            "ASSEMBLY",
+            "HARDWARE"
+        ],
+        "answer_file": "assembly/assembly-time.mdx",
+        "source": "Hardware doc"
+    }
+]

@@ -17,6 +17,8 @@
     title: Run the Reachy Mini daemon
   - local: demo_apps
     title: Run the demo and awesome apps
+  - local: wireless-version
+    title: Setup Reachy Mini Wireless
   - local: python_sdk
     title: Using the Python SDK
   - local: rest_api
