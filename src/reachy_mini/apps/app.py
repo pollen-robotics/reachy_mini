@@ -9,6 +9,7 @@ It uses Jinja2 templates to generate the necessary files for the app project.
 
 import argparse
 import importlib
+import logging
 import threading
 import traceback
 from abc import ABC, abstractmethod
@@ -28,11 +29,19 @@ class ReachyMiniApp(ABC):
 
     custom_app_url: str | None = None
     dont_start_webserver: bool = False
+    request_media_backend: str | None = None
 
-    def __init__(self) -> None:
+    def __init__(self, running_on_wireless: bool = False) -> None:
         """Initialize the Reachy Mini app."""
         self.stop_event = threading.Event()
         self.error: str = ""
+        self.logger = logging.getLogger("reachy_mini.app")
+
+        self.media_backend = (
+            self.request_media_backend
+            if self.request_media_backend is not None
+            else ("gstreamer" if running_on_wireless else "default")
+        )
 
         self.settings_app: FastAPI | None = None
         if self.custom_app_url is not None and not self.dont_start_webserver:
@@ -81,7 +90,13 @@ class ReachyMiniApp(ABC):
             settings_app_t.start()
 
         try:
-            with ReachyMini(*args, **kwargs) as reachy_mini:
+            self.logger.info("Starting Reachy Mini app...")
+            self.logger.info(f"Using media backend: {self.media_backend}")
+            with ReachyMini(
+                media_backend=self.media_backend,
+                *args,
+                **kwargs,  # type: ignore
+            ) as reachy_mini:
                 self.run(reachy_mini, self.stop_event)
         except Exception:
             self.error = traceback.format_exc()

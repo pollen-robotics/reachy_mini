@@ -23,33 +23,29 @@ from reachy_mini.io.protocol import AnyTaskRequest, TaskProgress, TaskRequest
 class ZenohClient(AbstractClient):
     """Zenoh client for Reachy Mini."""
 
-    def __init__(self, localhost_only: bool = True):
+    def __init__(self, prefix: str, localhost_only: bool = True):
         """Initialize the Zenoh client.
 
         Args:
+            prefix: The Zenoh prefix to use for communication (used to identify multiple robots).
             localhost_only: If True, connect to localhost only
 
         """
+        self.prefix = prefix
+
         if localhost_only:
             c = zenoh.Config.from_json5(
                 json.dumps(
-                    {
-                        "mode": "client",
-                        "connect": {
-                            "endpoints": ["tcp/localhost:7447"]
-                        }
-                    }
+                    {"mode": "client", "connect": {"endpoints": ["tcp/localhost:7447"]}}
                 )
             )
         else:
-            # TODO use the name of the robot for multiple robots support 
+            # TODO use the name of the robot for multiple robots support
             c = zenoh.Config.from_json5(
                 json.dumps(
                     {
                         "mode": "client",
-                        "connect": {
-                            "endpoints": ["tcp/reachy-mini.local:7447"]
-                        }
+                        "connect": {"endpoints": [f"tcp/{prefix}.local:7447"]},
                     }
                 )
             )
@@ -59,25 +55,25 @@ class ZenohClient(AbstractClient):
         self.status_received = threading.Event()
 
         self.session = zenoh.open(c)
-        self.cmd_pub = self.session.declare_publisher("reachy_mini/command")
+        self.cmd_pub = self.session.declare_publisher(f"{self.prefix}/command")
 
         self.joint_sub = self.session.declare_subscriber(
-            "reachy_mini/joint_positions",
+            f"{self.prefix}/joint_positions",
             self._handle_joint_positions,
         )
 
         self.pose_sub = self.session.declare_subscriber(
-            "reachy_mini/head_pose",
+            f"{self.prefix}/head_pose",
             self._handle_head_pose,
         )
 
         self.recording_sub = self.session.declare_subscriber(
-            "reachy_mini/recorded_data",
+            f"{self.prefix}/recorded_data",
             self._handle_recorded_data,
         )
 
         self.status_sub = self.session.declare_subscriber(
-            "reachy_mini/daemon_status",
+            f"{self.prefix}/daemon_status",
             self._handle_status,
         )
 
@@ -92,9 +88,9 @@ class ZenohClient(AbstractClient):
         self._last_status: Dict[str, Any] = {}  # contains a DaemonStatus
 
         self.tasks: dict[UUID, TaskState] = {}
-        self.task_request_pub = self.session.declare_publisher("reachy_mini/task")
+        self.task_request_pub = self.session.declare_publisher(f"{self.prefix}/task")
         self.task_progress_sub = self.session.declare_subscriber(
-            "reachy_mini/task_progress",
+            f"{self.prefix}/task_progress",
             self._handle_task_progress,
         )
 
