@@ -31,6 +31,8 @@ class ZenohClient(AbstractClient):
             localhost_only: If True, connect to localhost only
 
         """
+        self.prefix = prefix
+
         if localhost_only:
             c = zenoh.Config.from_json5(
                 json.dumps(
@@ -43,7 +45,7 @@ class ZenohClient(AbstractClient):
                 json.dumps(
                     {
                         "mode": "client",
-                        "connect": {"endpoints": ["tcp/reachy-mini.local:7447"]},
+                        "connect": {"endpoints": [f"tcp/{prefix}.local:7447"]},
                     }
                 )
             )
