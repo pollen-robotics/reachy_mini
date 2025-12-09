@@ -9,6 +9,7 @@ It uses Jinja2 templates to generate the necessary files for the app project.
 
 import argparse
 import importlib
+import logging
 import threading
 import traceback
 from abc import ABC, abstractmethod
@@ -34,6 +35,7 @@ class ReachyMiniApp(ABC):
         """Initialize the Reachy Mini app."""
         self.stop_event = threading.Event()
         self.error: str = ""
+        self.logger = logging.getLogger("reachy_mini.app")
 
         self.media_backend = (
             self.request_media_backend
@@ -88,6 +90,8 @@ class ReachyMiniApp(ABC):
             settings_app_t.start()
 
         try:
+            self.logger.info("Starting Reachy Mini app...")
+            self.logger.info(f"Using media backend: {self.media_backend}")
             with ReachyMini(
                 media_backend=self.media_backend,
                 *args,
