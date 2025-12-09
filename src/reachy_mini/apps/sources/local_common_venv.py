@@ -1,5 +1,6 @@
 """Utilities for local common venv apps source."""
 
+import asyncio
 import logging
 import platform
 import shutil
@@ -7,6 +8,8 @@ import sys
 from importlib.metadata import entry_points
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
+
+from huggingface_hub import snapshot_download
 
 from .. import AppInfo, SourceKind
 from ..utils import running_command
@@ -178,7 +181,26 @@ async def install_package(
 ) -> int:
     """Install a package given an AppInfo object, streaming logs."""
     if app.source_kind == SourceKind.HF_SPACE:
-        target = f"git+{app.url}" if app.url is not None else app.name
+        # Use huggingface_hub to download the repo (handles LFS automatically)
+        # This avoids requiring git-lfs to be installed on the system
+        if app.url is not None:
+            # Extract repo_id from URL like "https://huggingface.co/spaces/owner/repo"
+            parts = app.url.rstrip("/").split("/")
+            repo_id = f"{parts[-2]}/{parts[-1]}" if len(parts) >= 2 else app.name
+        else:
+            repo_id = app.name
+
+        logger.info(f"Downloading HuggingFace Space: {repo_id}")
+        try:
+            target = await asyncio.to_thread(
+                snapshot_download,
+                repo_id=repo_id,
+                repo_type="space",
+            )
+            logger.info(f"Downloaded to: {target}")
+        except Exception as e:
+            logger.error(f"Failed to download from HuggingFace: {e}")
+            return 1
     elif app.source_kind == SourceKind.LOCAL:
         target = app.extra.get("path", app.name)
     else:
