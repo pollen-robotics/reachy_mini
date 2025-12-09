@@ -11,7 +11,7 @@ shutdown_button = Button(23, pull_up=False)
 
 def released() -> None:
     """Handle shutdown button released."""
-    for _ in range(10):
+    for _ in range(200):
         time.sleep(0.001)
 
         if shutdown_button.is_pressed:
