@@ -5,7 +5,10 @@ const hfAppsStore = {
         await hfAppsStore.displayAvailableApps(appsData);
     },
     fetchAvailableApps: async () => {
-        const resAvailable = await fetch('/api/apps/list-available/dashboard_selection');
+        // Decide which source to query based on the toggle state.
+        const includeCommunity = document.getElementById('hf-show-community')?.checked === true;
+        const source = includeCommunity ? 'hf_space' : 'dashboard_selection';
+        const resAvailable = await fetch(`/api/apps/list-available/${source}`);
         const appsData = await resAvailable.json();
         return appsData;
     },
@@ -153,5 +156,12 @@ const hfAppsStore = {
 
 
 window.addEventListener('load', async () => {
+    // Attach change listener to community toggle if present
+    const communityToggle = document.getElementById('hf-show-community');
+    if (communityToggle) {
+        communityToggle.addEventListener('change', async () => {
+            await hfAppsStore.refreshAppList();
+        });
+    }
     await hfAppsStore.refreshAppList();
 });

@@ -2,7 +2,8 @@
 
 import os
 import threading
-from typing import Any, List, Optional
+from collections import deque
+from typing import Deque, List, Optional
 
 import numpy as np
 import numpy.typing as npt
@@ -15,6 +16,7 @@ from reachy_mini.utils.constants import ASSETS_ROOT_PATH
 from .audio_base import AudioBase
 
 MAX_INPUT_CHANNELS = 4
+MAX_INPUT_QUEUE_SECONDS = 60.0
 
 class SoundDeviceAudio(AudioBase):
     """Audio device implementation using sounddevice."""
@@ -25,47 +27,85 @@ class SoundDeviceAudio(AudioBase):
     ) -> None:
         """Initialize the SoundDevice audio device."""
         super().__init__(log_level=log_level)
-        self.stream = None
+        self._input_stream = None
         self._output_stream = None
-        self._buffer: List[npt.NDArray[np.float32]] = []
+        self._input_lock = threading.Lock()
+        self._output_lock = threading.Lock()
+        self._input_buffer: Deque[npt.NDArray[np.float32]] = deque()
+        self._output_buffer: List[npt.NDArray[np.float32]] = []
+        self._input_max_queue_seconds: float = MAX_INPUT_QUEUE_SECONDS
+        self._input_queued_samples: int = 0
+
         self._output_device_id = self._get_device_id(
             ["Reachy Mini Audio", "respeaker"], device_io_type="output"
         )
         self._input_device_id = self._get_device_id(
             ["Reachy Mini Audio", "respeaker"], device_io_type="input"
         )
+    
+        self._logs = {
+            "input_underflows": 0,
+            "input_overflows": 0,
+        }
+
+    @property
+    def _input_max_queue_samples(self) -> int:
+        return int(self._input_max_queue_seconds * self.get_input_audio_samplerate())
+
+    @property
+    def _is_recording(self) -> bool:
+        return self._input_stream is not None and self._input_stream.active
 
     def start_recording(self) -> None:
         """Open the audio input stream, using ReSpeaker card if available."""
-        self.stream = sd.InputStream(
+        if self._is_recording:
+            self.stop_recording()
+
+        self._input_stream = sd.InputStream(
             device=self._input_device_id,
             samplerate=self.get_input_audio_samplerate(),
-            callback=self._callback,
+            callback=self._input_callback,
         )
-        if self.stream is None:
-            raise RuntimeError("Failed to open SoundDevice audio stream.")
-        self._buffer.clear()
-        self.stream.start()
-        self.logger.info("SoundDevice audio stream opened.")
+        if self._input_stream is None:
+            raise RuntimeError("Failed to open SoundDevice audio input stream.")
 
-    def _callback(
+        self._input_buffer.clear()
+        self._input_queued_samples = 0
+        self._input_stream.start()
+        self.logger.info("SoundDevice audio input stream opened.")
+
+    def _input_callback(
         self,
         indata: npt.NDArray[np.float32],
         frames: int,
         time: int,
         status: sd.CallbackFlags,
     ) -> None:
-        if status:
-            self.logger.warning(f"SoundDevice status: {status}")
+        if status and status.input_underflow:
+            self._logs["input_underflows"] += 1
+            if self._logs["input_underflows"] % 10 == 1:
+                self.logger.debug(f"Audio input underflow count: {self._logs['input_underflows']}")
 
-        self._buffer.append(indata[:, :MAX_INPUT_CHANNELS]) # Sounddevice callbacks always use 2D arrays. The slicing handles the reshaping and copying of the data.
+        with self._input_lock:
+            if self._input_queued_samples + indata.shape[0] > self._input_max_queue_samples:
+                while self._input_queued_samples + indata.shape[0] > self._input_max_queue_samples and len(self._input_buffer) > 0:
+                    dropped = self._input_buffer.popleft()
+                    self._input_queued_samples -= dropped.shape[0]
+                self._logs["input_overflows"] += 1
+                self.logger.warning(
+                    "Audio input buffer overflowed, dropped old chunks !"
+                )
+            self._input_buffer.append(indata[:, :MAX_INPUT_CHANNELS].copy()) 
+            self._input_queued_samples += indata.shape[0]
 
     def get_audio_sample(self) -> Optional[npt.NDArray[np.float32]]:
         """Read audio data from the buffer. Returns numpy array or None if empty."""
-        if self._buffer and len(self._buffer) > 0:
-            data: npt.NDArray[np.float32] = np.concatenate(self._buffer, axis=0)
-            self._buffer.clear()
-            return data
+        with self._input_lock:
+            if self._input_buffer and len(self._input_buffer) > 0:
+                data: npt.NDArray[np.float32] = np.concatenate(self._input_buffer, axis=0)
+                self._input_buffer.clear()
+                self._input_queued_samples = 0
+                return data
         self.logger.debug("No audio data available in buffer.")
         return None
 
@@ -96,16 +136,17 @@ class SoundDeviceAudio(AudioBase):
 
     def stop_recording(self) -> None:
         """Close the audio stream and release resources."""
-        if self.stream is not None:
-            self.stream.stop()
-            self.stream.close()
-            self.stream = None
+        if self._is_recording:
+            self._input_stream.stop()  # type: ignore[attr-defined]
+            self._input_stream.close()  # type: ignore[attr-defined]
+            self._input_stream = None
             self.logger.info("SoundDevice audio stream closed.")
 
     def push_audio_sample(self, data: npt.NDArray[np.float32]) -> None:
         """Push audio data to the output device."""
         if self._output_stream is not None:
-            self._output_stream.write(np.ascontiguousarray(data))
+            with self._output_lock:
+                self._output_buffer.append(data.copy())
         else:
             self.logger.warning(
                 "Output stream is not open. Call start_playing() first."
@@ -113,15 +154,68 @@ class SoundDeviceAudio(AudioBase):
 
     def start_playing(self) -> None:
         """Open the audio output stream."""
+        self._output_buffer.clear()  # Clear any old data
         if self._output_stream is not None:
             self.stop_playing()
         self._output_stream = sd.OutputStream(
             samplerate=self.get_output_audio_samplerate(),
             device=self._output_device_id,
+            callback=self._output_callback,
         )
         if self._output_stream is None:
             raise RuntimeError("Failed to open SoundDevice audio output stream.")
         self._output_stream.start()
+        self.logger.info("SoundDevice audio output stream opened.")
+
+    def _output_callback(
+        self,
+        outdata: npt.NDArray[np.float32],
+        frames: int,
+        time: int,
+        status: sd.CallbackFlags,
+    ) -> None:
+        """Handle audio output stream callback."""
+        if status:
+            self.logger.warning(f"SoundDevice output status: {status}")
+        
+        with self._output_lock:
+            if self._output_buffer:
+                # Get the first chunk from the buffer
+                chunk = self._output_buffer[0]
+                available = len(chunk)
+                chunk = self.ensure_chunk_shape(chunk, outdata.shape)
+
+                if available >= frames:
+                    # We have enough data for this callback
+                    outdata[:] = chunk[:frames]
+                    # Remove the used portion
+                    if available > frames:
+                        self._output_buffer[0] = chunk[frames:]
+                    else:
+                        self._output_buffer.pop(0)
+                else:
+                    # Not enough data, fill what we can and pad with zeros
+                    outdata[:available] = chunk
+                    outdata[available:] = 0
+                    self._output_buffer.pop(0)
+            else:
+                # No data available, output silence
+                outdata.fill(0)
+
+    def ensure_chunk_shape(self, chunk: npt.NDArray[np.float32], target_shape: tuple[int, ...]) -> npt.NDArray[np.float32]:
+        """Ensure chunk has the shape (frames, num_channels) as required by outdata.
+        
+        - If chunk is 1D, tile to required num_channels.
+        - If chunk is 2D with mismatched channels, use column 0.
+        - If chunk is already correct, return as-is.
+        """
+        num_channels = target_shape[1] if len(target_shape) > 1 else 1
+        if chunk.ndim == 1:
+            return np.tile(chunk[:, None], (1, num_channels))
+        elif chunk.shape[1] != num_channels:
+            # Broadcast first channel only
+            return np.tile(chunk[:, [0]], (1, num_channels))
+        return chunk
 
     def stop_playing(self) -> None:
         """Close the audio output stream."""
@@ -131,12 +225,11 @@ class SoundDeviceAudio(AudioBase):
             self._output_stream = None
             self.logger.info("SoundDevice audio output stream closed.")
 
-    def play_sound(self, sound_file: str, autoclean: bool = False) -> None:
+    def play_sound(self, sound_file: str) -> None:
         """Play a sound file.
 
         Args:
             sound_file (str): Path to the sound file to play. May be given relative to the assets directory or as an absolute path.
-            autoclean (bool): If True, the audio device will be released after the sound is played.
 
         """
         if not os.path.exists(sound_file):
@@ -160,55 +253,12 @@ class SoundDeviceAudio(AudioBase):
 
         self.logger.debug(f"Playing sound '{file_path}' at {samplerate_in} Hz")
 
-        self.stop_playing()
-        start = 0  # current position in audio data
-        length = len(data)
-
-        def callback(
-            outdata: npt.NDArray[np.float32],
-            frames: int,
-            time: Any,  # cdata 'struct PaStreamCallbackTimeInfo *
-            status: sd.CallbackFlags,
-        ) -> None:
-            """Actual playback."""
-            nonlocal start
-
-            if status:
-                self.logger.warning(f"SoundDevice output status: {status}")
-
-            end = start + frames
-            if end > length:
-                # Fill the output buffer with the audio data, or zeros if finished
-                outdata[: length - start, 0] = data[start:]
-                outdata[length - start :, 0] = 0
-                raise sd.CallbackStop()
-            else:
-                outdata[:, 0] = data[start:end]
-            start = end
-
-        stop_event = threading.Event()
-
-        self._output_stream = sd.OutputStream(
-            samplerate=samplerate_out,
-            device=self._output_device_id,
-            channels=1,
-            callback=callback,
-            finished_callback=stop_event.set,  # release the device when done
-        )
-        if self._output_stream is None:
-            raise RuntimeError("Failed to open SoundDevice audio output stream.")
-        self._output_stream.start()
-
-        if autoclean:
-
-            def _clean_up_thread() -> None:
-                stop_event.wait()
-                self.stop_playing()
-
-            threading.Thread(
-                target=_clean_up_thread,
-                daemon=True,
-            ).start()
+        if self._output_stream is not None:
+            self.push_audio_sample(data)
+        else:
+            self.logger.warning("Output stream wasn't open. We are opening it and leaving it open.")
+            self.start_playing()
+            self.push_audio_sample(data)
 
     def _get_device_id(
         self, names_contains: List[str], device_io_type: str = "output"

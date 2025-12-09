@@ -24,24 +24,29 @@ class ZenohClient(AbstractClient):
     """Zenoh client for Reachy Mini."""
 
     def __init__(self, prefix: str, localhost_only: bool = True):
-        """Initialize the Zenoh client."""
-        self.prefix = prefix
+        """Initialize the Zenoh client.
 
+        Args:
+            prefix: The Zenoh prefix to use for communication (used to identify multiple robots).
+            localhost_only: If True, connect to localhost only
+
+        """
         if localhost_only:
             c = zenoh.Config.from_json5(
                 json.dumps(
-                    {
-                        "connect": {
-                            "endpoints": {
-                                "peer": ["tcp/localhost:7447"],
-                                "router": [],
-                            },
-                        },
-                    }
+                    {"mode": "client", "connect": {"endpoints": ["tcp/localhost:7447"]}}
                 )
             )
         else:
-            c = zenoh.Config()
+            # TODO use the name of the robot for multiple robots support
+            c = zenoh.Config.from_json5(
+                json.dumps(
+                    {
+                        "mode": "client",
+                        "connect": {"endpoints": ["tcp/reachy-mini.local:7447"]},
+                    }
+                )
+            )
 
         self.joint_position_received = threading.Event()
         self.head_pose_received = threading.Event()

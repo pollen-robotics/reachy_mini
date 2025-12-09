@@ -63,7 +63,25 @@ class ZenohServer(AbstractServer):
                 )
             )
         else:
-            c = zenoh.Config()
+            c = zenoh.Config.from_json5(
+                json.dumps(
+                    {
+                        # Listen on all interfaces → reachable on LAN/Wi-Fi
+                        "listen": {
+                            "endpoints": ["tcp/0.0.0.0:7447"],
+                        },
+                        # Allow standard discovery
+                        "scouting": {
+                            "multicast": { "enabled": True },
+                            "gossip": { "enabled": True },
+                        },
+                        # No forced connect target; router will accept incoming sessions
+                        "connect": {
+                            "endpoints": []
+                        }
+                    }
+                )
+            )
 
         self.session = zenoh.open(c)
         self.sub = self.session.declare_subscriber(
