@@ -23,8 +23,8 @@ jobs:
       - name: Check for uncommitted changes
         run: |
           if ! git diff --quiet; then
-            echo "Les fichiers générés (docs/faq.mdx) ne sont pas à jour."
-            echo "Lance 'python scripts/generate_faq.py' en local et commite les changements."
+            echo "Generate files (docs/faq.mdx) are not up to date."
+            echo "Run 'python scripts/generate_faq.py' locally and commit the changes."
             git diff
             exit 1
           fi
