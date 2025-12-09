@@ -61,7 +61,7 @@ class GStreamerAudio(AudioBase):
     def _init_pipeline_record(self, pipeline: Gst.Pipeline) -> None:
         self._appsink_audio = Gst.ElementFactory.make("appsink")
         caps = Gst.Caps.from_string(
-            f"audio/x-raw,rate={self.SAMPLE_RATE},channels=2,format=F32LE,layout=interleaved"
+            f"audio/x-raw,rate={self.SAMPLE_RATE},channels={self.CHANNELS},format=F32LE,layout=interleaved"
         )
         self._appsink_audio.set_property("caps", caps)
         self._appsink_audio.set_property("drop", True)  # avoid overflow
@@ -104,7 +104,7 @@ class GStreamerAudio(AudioBase):
         self._appsrc.set_property("format", Gst.Format.TIME)
         self._appsrc.set_property("is-live", True)
         caps = Gst.Caps.from_string(
-            f"audio/x-raw,format=F32LE,channels=1,rate={self.SAMPLE_RATE},layout=interleaved"
+            f"audio/x-raw,format=F32LE,channels={self.CHANNELS},rate={self.SAMPLE_RATE},layout=interleaved"
         )
         self._appsrc.set_property("caps", caps)
 
@@ -179,6 +179,14 @@ class GStreamerAudio(AudioBase):
     def get_output_audio_samplerate(self) -> int:
         """Get the output samplerate of the audio device."""
         return self.SAMPLE_RATE
+
+    def get_input_channels(self) -> int:
+        """Get the number of input channels of the audio device."""
+        return self.CHANNELS
+
+    def get_output_channels(self) -> int:
+        """Get the number of output channels of the audio device."""
+        return self.CHANNELS
 
     def stop_recording(self) -> None:
         """Release the camera resource."""
