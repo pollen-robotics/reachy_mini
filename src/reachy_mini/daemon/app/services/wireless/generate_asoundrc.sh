@@ -1,5 +1,19 @@
 #!/bin/bash
 
+
+# Wait for USB device 38fb:1001 to be present, with a timeout of 30 seconds
+TIMEOUT=30
+SECONDS_WAITED=0
+while ! lsusb | grep -q '38fb:1001'; do
+    if [ "$SECONDS_WAITED" -ge "$TIMEOUT" ]; then
+        echo "Timeout: USB device 38fb:1001 not found after $TIMEOUT seconds."
+        exit 1
+    fi
+    echo "Waiting for USB device 38fb:1001... ($SECONDS_WAITED s)"
+    sleep 1
+    SECONDS_WAITED=$((SECONDS_WAITED + 1))
+done
+
 # Output file path
 OUTPUT_FILE="$HOME/.asoundrc"
 
