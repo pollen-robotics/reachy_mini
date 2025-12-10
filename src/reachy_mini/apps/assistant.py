@@ -182,10 +182,16 @@ def check(console: Console, app_path: str) -> None:
         console.print(f"[red]App path {app_path} does not exist.[/red]")
         exit()
 
-    app_path = str(app_path).rstrip("/")
-    app_name = os.path.basename(app_path)
+    full_app_path = Path(app_path).resolve()
+    app_name = full_app_path.name
+    entrypoint_name = app_name
+    pkg_name = app_name.replace("-", "_")
+    class_name = "".join(word.capitalize() for word in pkg_name.split("_"))
 
-    print(f"Checking {app_name} at path '{app_path}'")
+    console.print(f"\n🔎 Checking app '{app_name}' in {full_app_path}/...")
+    console.print(f"\tExpected package name: {pkg_name}")
+    console.print(f"\tExpected class name: {class_name}")
+    console.print(f"\tExpected entrypoint name: {entrypoint_name}\n")
 
     # Check that:
     # - index.html, style.css exist in the root of the app
@@ -216,12 +222,9 @@ def check(console: Console, app_path: str) -> None:
         )
         sys.exit(1)
 
-    if (
-        f'{app_name} = "{app_name}.main:{"".join(word.capitalize() for word in app_name.replace("-", "_").split("_"))}"'
-        not in pyproject_content
-    ):
+    if f'{entrypoint_name} = "{pkg_name}.main:{class_name}"' not in pyproject_content:
         console.print(
-            f'❌ pyproject.toml is missing the entrypoint for the app: {app_name} = "{app_name}.main:{"".join(word.capitalize() for word in app_name.replace("-", "_").split("_"))}"',
+            f'❌ pyproject.toml is missing the entrypoint for the app: {entrypoint_name} = "{pkg_name}.main:{class_name}"',
             style="bold red",
         )
         sys.exit(1)
