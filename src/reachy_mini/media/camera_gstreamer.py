@@ -184,28 +184,41 @@ class GStreamerCamera(CameraBase):
 
         cam_names = ["Reachy", "Arducam_12MP", "imx708"]
 
+        path_keys = ["api.v4l2.path", "device.path", "object.path"]
+
         devices = monitor.get_devices()
         for cam_name in cam_names:
             for device in devices:
                 name = device.get_display_name()
-                device_props = device.get_properties()
-
+                
                 if cam_name in name:
-                    if device_props and device_props.has_field("api.v4l2.path"):
-                        device_path = device_props.get_string("api.v4l2.path")
-                        camera_specs = (
-                            cast(CameraSpecs, ArducamSpecs)
-                            if cam_name == "Arducam_12MP"
-                            else cast(CameraSpecs, ReachyMiniLiteCamSpecs)
-                        )
-                        self.logger.debug(f"Found {cam_name} camera at {device_path}")
-                        monitor.stop()
-                        return str(device_path), camera_specs
-                    elif cam_name == "imx708":
+                    if cam_name == "imx708":
                         camera_specs = cast(CameraSpecs, ReachyMiniWirelessCamSpecs)
                         self.logger.debug(f"Found {cam_name} camera")
                         monitor.stop()
                         return cam_name, camera_specs
+                    
+                    else: 
+                        device_props = device.get_properties()
+                        if not device_props:
+                            continue
+
+                        device_path = None
+                        for key in path_keys:
+                            if device_props.has_field(key):
+                                device_path = device_props.get_string(key)
+                                break
+                        
+                        if device_path:
+                            camera_specs = (
+                                cast(CameraSpecs, ArducamSpecs)
+                                if cam_name == "Arducam_12MP"
+                                else cast(CameraSpecs, ReachyMiniLiteCamSpecs)
+                            )
+                            self.logger.debug(f"Found {cam_name} camera at {device_path}")
+                            monitor.stop()
+                            return str(device_path), camera_specs
+
         monitor.stop()
         self.logger.warning("No camera found.")
         return "", None
