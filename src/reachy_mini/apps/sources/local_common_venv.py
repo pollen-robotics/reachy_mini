@@ -27,7 +27,8 @@ def _should_use_separate_venvs(
     wireless_version: bool = False, desktop_app_daemon: bool = False
 ) -> bool:
     """Determine if we should use separate venvs based on version flags."""
-    return wireless_version or desktop_app_daemon
+    # Disable venv for wireless version due to storage constraints
+    return desktop_app_daemon
 
 
 def _get_venv_parent_dir() -> Path:
@@ -263,7 +264,7 @@ def load_app_from_venv(
         site_packages = _get_app_site_packages(app_name)
         if not site_packages or not site_packages.exists():
             raise ValueError(f"App '{app_name}' venv not found or invalid")
-        
+
         sys.path.insert(0, str(site_packages))
         try:
             eps = entry_points(group="reachy_mini_apps")
