@@ -244,7 +244,6 @@ class GStreamerAudio(AudioBase):
         audiosink: Optional[Gst.Element] = None
 
         if has_reachymini_asoundrc():
-            print("Using reachymini asoundrc")
             # reachy mini wireless has a preconfigured asoundrc
             audiosink = Gst.ElementFactory.make("alsasink")
             audiosink.set_property("device", "reachymini_audio_sink")
