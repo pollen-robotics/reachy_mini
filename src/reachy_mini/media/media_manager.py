@@ -23,6 +23,7 @@ class MediaBackend(Enum):
     DEFAULT = "default"
     DEFAULT_NO_VIDEO = "default_no_video"
     GSTREAMER = "gstreamer"
+    GSTREAMER_NO_VIDEO = "gstreamer_no_video"
     WEBRTC = "webrtc"
 
 
@@ -56,6 +57,9 @@ class MediaManager:
             case MediaBackend.GSTREAMER:
                 self.logger.info("Using GStreamer media backend.")
                 self._init_camera(use_sim, log_level)
+                self._init_audio(log_level)
+            case MediaBackend.GSTREAMER_NO_VIDEO:
+                self.logger.info("Using GStreamer audio backend.")
                 self._init_audio(log_level)
             case MediaBackend.WEBRTC:
                 self.logger.info("Using WebRTC GStreamer backend.")
@@ -126,7 +130,10 @@ class MediaManager:
             from reachy_mini.media.audio_sounddevice import SoundDeviceAudio
 
             self.audio = SoundDeviceAudio(log_level=log_level)
-        elif self.backend == MediaBackend.GSTREAMER:
+        elif (
+            self.backend == MediaBackend.GSTREAMER
+            or self.backend == MediaBackend.GSTREAMER_NO_VIDEO
+        ):
             self.logger.info("Using GStreamer audio backend.")
             from reachy_mini.media.audio_gstreamer import GStreamerAudio
 
