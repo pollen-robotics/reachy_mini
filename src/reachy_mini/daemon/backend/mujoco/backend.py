@@ -98,6 +98,14 @@ class MujocoBackend(Backend):
             "head",
         )
 
+        self.reachy_origin = self.model.body_pos[
+            mujoco.mj_name2id(
+                self.model,
+                mujoco.mjtObj.mjOBJ_BODY,
+                "reachy_mini",
+            )
+        ]
+
         self.current_head_pose = np.eye(4)
 
         self.joint_names = get_actuator_names(self.model)
@@ -202,7 +210,11 @@ class MujocoBackend(Backend):
                 viewer.cam.distance = 0.8  # ≃ ||pos - lookat||
                 viewer.cam.azimuth = 160  # degrees
                 viewer.cam.elevation = -20  # degrees
-                viewer.cam.lookat[:] = [0, 0, 0.15]
+                viewer.cam.lookat[:] = [
+                    self.reachy_origin[0],
+                    self.reachy_origin[1],
+                    self.reachy_origin[2] + 0.15
+                ]
 
                 # force one render with your new camera
                 mujoco.mj_step(self.model, self.data)
@@ -335,7 +347,7 @@ class MujocoBackend(Backend):
         mj_current_head_pose[:3, :3] = self.data.site_xmat[self.head_site_id].reshape(
             3, 3
         )
-        mj_current_head_pose[:3, 3] = self.data.site_xpos[self.head_site_id]
+        mj_current_head_pose[:3, 3] = self.data.site_xpos[self.head_site_id] - self.reachy_origin
         mj_current_head_pose[2, 3] -= 0.177
         return mj_current_head_pose
 
