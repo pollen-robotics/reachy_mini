@@ -14,9 +14,6 @@ from huggingface_hub import snapshot_download
 from .. import AppInfo, SourceKind
 from ..utils import running_command
 
-if TYPE_CHECKING:
-    from ..app import ReachyMiniApp
-
 
 def _is_windows() -> bool:
     """Check if the current platform is Windows."""
