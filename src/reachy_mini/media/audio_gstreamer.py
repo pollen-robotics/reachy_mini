@@ -10,7 +10,10 @@ from typing import Optional
 import numpy as np
 import numpy.typing as npt
 
-from reachy_mini.media.audio_utils import get_respeaker_card_number, has_reachymini_asoundrc
+from reachy_mini.media.audio_utils import (
+    get_respeaker_card_number,
+    has_reachymini_asoundrc,
+)
 
 try:
     import gi
@@ -72,7 +75,7 @@ class GStreamerAudio(AudioBase):
             audiosrc = Gst.ElementFactory.make("autoaudiosrc")  # use default mic
         elif has_reachymini_asoundrc():
             # reachy mini wireless has a preconfigured asoundrc
-            audiosrc = Gst.ElementFactory.make("alsasrc")  
+            audiosrc = Gst.ElementFactory.make("alsasrc")
             audiosrc.set_property("device", "reachymini_audio_src")
         else:
             audiosrc = Gst.ElementFactory.make("alsasrc")
@@ -121,7 +124,7 @@ class GStreamerAudio(AudioBase):
             audiosink = Gst.ElementFactory.make("autoaudiosink")  # use default speaker
         elif has_reachymini_asoundrc():
             # reachy mini wireless has a preconfigured asoundrc
-            audiosink = Gst.ElementFactory.make("alsasink")  
+            audiosink = Gst.ElementFactory.make("alsasink")
             audiosink.set_property("device", "reachymini_audio_sink")
         else:
             audiosink = Gst.ElementFactory.make("alsasink")

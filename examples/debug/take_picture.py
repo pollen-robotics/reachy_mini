@@ -8,16 +8,15 @@ Note: The daemon must be running before executing this script.
 """
 
 import argparse
+import time
 
 import cv2
 
 from reachy_mini import ReachyMini
-import time
 
 
 def main(backend: str) -> None:
     """Get a frame and take a picture."""
-
     with ReachyMini(media_backend=backend) as reachy_mini:
         frame = reachy_mini.media.get_frame()
         start_time = time.time()

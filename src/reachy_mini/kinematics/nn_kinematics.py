@@ -59,7 +59,6 @@ class NNKinematics:
         pose[:3, :3] = R.from_euler("xyz", [roll, pitch, yaw]).as_matrix()
         return pose
 
-
     def set_automatic_body_yaw(self, automatic_body_yaw: bool) -> None:
         """Set the automatic body yaw.
 
@@ -68,7 +67,8 @@ class NNKinematics:
 
         """
         self.automatic_body_yaw = automatic_body_yaw
-        
+
+
 class OnnxInfer:
     """Infer an onnx model."""
 
@@ -84,8 +84,6 @@ class OnnxInfer:
         outputs = self.ort_session.run(None, {"input": [input]})
         res: npt.NDArray[np.float64] = outputs[0][0]
         return res
-    
-    
 
 
 if __name__ == "__main__":

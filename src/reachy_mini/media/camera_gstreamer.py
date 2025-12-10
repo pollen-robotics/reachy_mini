@@ -191,10 +191,11 @@ class GStreamerCamera(CameraBase):
 
         Returns the device path (e.g., '/dev/video2'), or '' if not found.
         """
-
         if os.path.exists("/tmp/reachymini_camera_socket"):
             camera_specs = cast(CameraSpecs, ReachyMiniWirelessCamSpecs)
-            self.logger.debug("Found wireless camera socket at /tmp/reachymini_camera_socket")
+            self.logger.debug(
+                "Found wireless camera socket at /tmp/reachymini_camera_socket"
+            )
             return "/tmp/reachymini_camera_socket", camera_specs
 
         monitor = Gst.DeviceMonitor()

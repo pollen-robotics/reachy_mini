@@ -5,16 +5,12 @@ Starts a gstreamer webrtc pipeline to stream video and audio.
 
 import logging
 from threading import Thread
-from typing import Optional, Tuple , cast
+from typing import Optional, Tuple, cast
 
 import gi
 
-
-from reachy_mini.media.camera_constants import CameraResolution
-
 from reachy_mini.media.camera_constants import (
     ArducamSpecs,
-    CameraResolution,
     CameraSpecs,
     ReachyMiniLiteCamSpecs,
     ReachyMiniWirelessCamSpecs,
@@ -37,9 +33,9 @@ class GstWebRTC:
         self._logger = logging.getLogger(__name__)
         self._logger.setLevel(log_level)
 
-        #self._id_audio_card = get_respeaker_card_number()
-        self._logger.info("Writing .asoundrc to home directory in a subprocess")        
-        
+        # self._id_audio_card = get_respeaker_card_number()
+        self._logger.info("Writing .asoundrc to home directory in a subprocess")
+
         Gst.init(None)
         self._loop = GLib.MainLoop()
         self._thread_bus_calls = Thread(target=lambda: self._loop.run(), daemon=True)
@@ -54,8 +50,6 @@ class GstWebRTC:
 
         if self._resolution is None:
             raise RuntimeError("Failed to get default camera resolution.")
-        
-
 
         self._pipeline_sender = Gst.Pipeline.new("reachymini_webrtc_sender")
         self._bus_sender = self._pipeline_sender.get_bus()
@@ -65,17 +59,15 @@ class GstWebRTC:
 
         webrtcsink = self._configure_webrtc(self._pipeline_sender)
 
-        self._configure_video(cam_path,self._pipeline_sender, webrtcsink)
+        self._configure_video(cam_path, self._pipeline_sender, webrtcsink)
         self._configure_audio(self._pipeline_sender, webrtcsink)
 
-        
         self._pipeline_receiver = Gst.Pipeline.new("reachymini_webrtc_receiver")
         self._bus_receiver = self._pipeline_receiver.get_bus()
         self._bus_receiver.add_watch(
             GLib.PRIORITY_DEFAULT, self._on_bus_message, self._loop
         )
         self._configure_receiver(self._pipeline_receiver)
-        
 
     def __del__(self) -> None:
         """Destructor to ensure gstreamer resources are released."""
@@ -118,7 +110,9 @@ class GstWebRTC:
         audioconvert = Gst.ElementFactory.make("audioconvert")
         audioresample = Gst.ElementFactory.make("audioresample")
         alsasink = Gst.ElementFactory.make("alsasink")
-        alsasink.set_property("device", "reachymini_audio_sink") #f"hw:{self._id_audio_card},0")
+        alsasink.set_property(
+            "device", "reachymini_audio_sink"
+        )  # f"hw:{self._id_audio_card},0")
         alsasink.set_property("sync", False)
 
         pipeline.add(udpsrc)
@@ -150,7 +144,9 @@ class GstWebRTC:
         """Get the current camera framerate."""
         return self._resolution.value[2]
 
-    def _configure_video(self, cam_path: str, pipeline: Gst.Pipeline, webrtcsink: Gst.Element) -> None:
+    def _configure_video(
+        self, cam_path: str, pipeline: Gst.Pipeline, webrtcsink: Gst.Element
+    ) -> None:
         self._logger.debug(f"Configuring video {cam_path}")
         camerasrc = Gst.ElementFactory.make("libcamerasrc")
         caps = Gst.Caps.from_string(
@@ -181,8 +177,8 @@ class GstWebRTC:
                 capsfilter,
                 tee,
                 queue_unixfd,
-                unixfdsink,                
-                queue_encoder,                
+                unixfdsink,
+                queue_encoder,
                 v4l2h264enc,
                 capsfilter_h264,
             ]
@@ -201,7 +197,7 @@ class GstWebRTC:
         camerasrc.link(capsfilter)
         capsfilter.link(tee)
         tee.link(queue_unixfd)
-        queue_unixfd.link(unixfdsink)        
+        queue_unixfd.link(unixfdsink)
         tee.link(queue_encoder)
         queue_encoder.link(v4l2h264enc)
         v4l2h264enc.link(capsfilter_h264)
@@ -213,12 +209,7 @@ class GstWebRTC:
         alsasrc = Gst.ElementFactory.make("alsasrc")
         alsasrc.set_property("device", "reachymini_audio_src")
 
-
-        if not all(
-            [
-                alsasrc
-            ]
-        ):
+        if not all([alsasrc]):
             raise RuntimeError("Failed to create GStreamer audio elements")
 
         pipeline.add(alsasrc)
@@ -235,7 +226,7 @@ class GstWebRTC:
 
         snd_card_name = "Reachy Mini Audio"
 
-        devices = monitor.get_devices()        
+        devices = monitor.get_devices()
         for device in devices:
             name = device.get_display_name()
             device_props = device.get_properties()
@@ -245,7 +236,7 @@ class GstWebRTC:
                     serial = device_props.get_string("object.serial")
                     self._logger.debug(f"Found audio input device with serial {serial}")
                     monitor.stop()
-                    return serial
+                    return str(serial)
 
         monitor.stop()
         self._logger.warning("No source audio card found.")
@@ -287,7 +278,6 @@ class GstWebRTC:
         monitor.stop()
         self._logger.warning("No camera found.")
         return "", None
-
 
     def _on_bus_message(self, bus: Gst.Bus, msg: Gst.Message, loop) -> bool:  # type: ignore[no-untyped-def]
         t = msg.type

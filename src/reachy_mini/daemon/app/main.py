@@ -83,7 +83,7 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
     async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         """Lifespan context manager for the FastAPI application."""
         args = app.state.args  # type: Args
-        
+
         try:
             if args.autostart:
                 await app.state.daemon.start(
@@ -108,7 +108,7 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
                 await app.state.app_manager.close()
             except Exception as e:
                 logging.error(f"Error closing app manager: {e}")
-            
+
             try:
                 logging.info("Shutting down daemon...")
                 await app.state.daemon.stop(

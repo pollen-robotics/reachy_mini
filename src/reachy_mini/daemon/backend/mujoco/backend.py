@@ -31,8 +31,8 @@ from .utils import (
 )
 from .video_udp import UDPJPEGFrameSender
 
-CAMERA_REACHY = 'eye_camera'
-CAMERA_STUDIO_CLOSE = 'studio_close'
+CAMERA_REACHY = "eye_camera"
+CAMERA_STUDIO_CLOSE = "studio_close"
 CAMERA_SIZES = {CAMERA_REACHY: (1280, 720), CAMERA_STUDIO_CLOSE: (640, 640)}
 
 
@@ -91,7 +91,7 @@ class MujocoBackend(Backend):
         self.decimation = 10  # -> 50hz control loop
         self.rendering_timestep = 0.04  # s, rendering loop # 25Hz
         self.streaming_timestep = 0.04  # s, streaming loop # 25Hz
-        
+
         self.head_site_id = mujoco.mj_name2id(
             self.model,
             mujoco.mjtObj.mjOBJ_SITE,
@@ -115,7 +115,7 @@ class MujocoBackend(Backend):
                 self.col_inds.append(i)
                 self.model.geom_contype[i] = 0
                 self.model.geom_conaffinity[i] = 0
-    
+
     def _get_camera_id(self, camera_name: str) -> Any:
         """Get the id of the virtual camera."""
         return mujoco.mj_name2id(
@@ -141,7 +141,7 @@ class MujocoBackend(Backend):
         while not self.should_stop.is_set():
             start_t = time.time()
             offscreen_renderer.update_scene(self.data, camera_id)
-            
+
             # OPTIMIZATION: Disable expensive rendering effects on the scene
             offscreen_renderer.scene.flags[mujoco.mjtRndFlag.mjRND_SHADOW] = 0
             offscreen_renderer.scene.flags[mujoco.mjtRndFlag.mjRND_REFLECTION] = 0
@@ -162,11 +162,11 @@ class MujocoBackend(Backend):
         streamer = UDPJPEGFrameSender(dest_port=port)
         offscreen_renderer = self._get_renderer(camera_name)
         camera_id = self._get_camera_id(camera_name)
-        
+
         while not self.should_stop.is_set():
             start_t = time.time()
             offscreen_renderer.update_scene(self.data, camera_id)
-            
+
             im = offscreen_renderer.render()
             streamer.send_frame(im)
 
@@ -181,7 +181,11 @@ class MujocoBackend(Backend):
         """
         step = 1
         if self.websocket_uri:
-            robot_view_streaming_thread = Thread(target=self.streaming_loop, args=(CAMERA_STUDIO_CLOSE, self.websocket_uri), daemon=True)
+            robot_view_streaming_thread = Thread(
+                target=self.streaming_loop,
+                args=(CAMERA_STUDIO_CLOSE, self.websocket_uri),
+                daemon=True,
+            )
             robot_view_streaming_thread.start()
 
         if not self.headless:
@@ -203,12 +207,10 @@ class MujocoBackend(Backend):
                 # self.streamer_udp.send_frame(im)
 
         self.data.qpos[self.joint_qpos_addr] = np.array(
-            self._SLEEP_HEAD_JOINT_POSITIONS
-            + self._SLEEP_ANTENNAS_JOINT_POSITIONS
+            self._SLEEP_HEAD_JOINT_POSITIONS + self._SLEEP_ANTENNAS_JOINT_POSITIONS
         ).reshape(-1, 1)
         self.data.ctrl[:] = np.array(
-            self._SLEEP_HEAD_JOINT_POSITIONS
-            + self._SLEEP_ANTENNAS_JOINT_POSITIONS
+            self._SLEEP_HEAD_JOINT_POSITIONS + self._SLEEP_ANTENNAS_JOINT_POSITIONS
         )
 
         # recompute all kinematics, collisions, etc.
@@ -230,7 +232,9 @@ class MujocoBackend(Backend):
         if not self.headless:
             viewer.sync()
 
-            rendering_thread = Thread(target=self.rendering_loop, args=(CAMERA_REACHY, 5005), daemon=True)
+            rendering_thread = Thread(
+                target=self.rendering_loop, args=(CAMERA_REACHY, 5005), daemon=True
+            )
             rendering_thread.start()
 
         # Update the internal states of the IK and FK to the current configuration

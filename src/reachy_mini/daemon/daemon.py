@@ -171,17 +171,25 @@ class Daemon:
 
         self.websocket_server: Optional[AsyncWebSocketController] = None
         if websocket_uri is not None:
-            self.websocket_server = AsyncWebSocketController(ws_uri=websocket_uri + "/robot", backend=self.backend)
+            self.websocket_server = AsyncWebSocketController(
+                ws_uri=websocket_uri + "/robot", backend=self.backend
+            )
 
         if stream_media:
             if websocket_uri is None:
                 raise ValueError("WebSocket URI is required when streaming media.")
             self.media_manager = MediaManager()
-            self.websocket_frame_sender = AsyncWebSocketFrameSender(ws_uri=websocket_uri + "/video_stream")
-            self._thread_publish_frames = Thread(target=self._publish_frames, daemon=True)
+            self.websocket_frame_sender = AsyncWebSocketFrameSender(
+                ws_uri=websocket_uri + "/video_stream"
+            )
+            self._thread_publish_frames = Thread(
+                target=self._publish_frames, daemon=True
+            )
             self._thread_event_publish_frames = Event()
             self._thread_publish_frames.start()
-            self.websocket_audio_sender = AsyncWebSocketAudioStreamer(ws_uri=websocket_uri + "/audio_stream")
+            self.websocket_audio_sender = AsyncWebSocketAudioStreamer(
+                ws_uri=websocket_uri + "/audio_stream"
+            )
             self._thread_publish_audio = Thread(target=self._publish_audio, daemon=True)
             self._thread_event_publish_audio = Event()
             self._thread_publish_audio.start()
@@ -202,15 +210,27 @@ class Daemon:
                 self.zenoh_server.stop()
                 if self.websocket_server is not None:
                     self.websocket_server.stop()
-                if self._thread_publish_frames is not None and self._thread_publish_frames.is_alive():
+                if (
+                    self._thread_publish_frames is not None
+                    and self._thread_publish_frames.is_alive()
+                ):
                     self._thread_event_publish_frames.set()
                     self._thread_publish_frames.join(timeout=2.0)
-                if self._thread_publish_audio is not None and self._thread_publish_audio.is_alive():
+                if (
+                    self._thread_publish_audio is not None
+                    and self._thread_publish_audio.is_alive()
+                ):
                     self._thread_event_publish_audio.set()
                     self._thread_publish_audio.join(timeout=2.0)
-                if self.websocket_frame_sender is not None and self.websocket_frame_sender.connected.is_set():
+                if (
+                    self.websocket_frame_sender is not None
+                    and self.websocket_frame_sender.connected.is_set()
+                ):
                     self.websocket_frame_sender.stop_flag = True
-                if self.websocket_audio_sender is not None and self.websocket_audio_sender.connected.is_set():
+                if (
+                    self.websocket_audio_sender is not None
+                    and self.websocket_audio_sender.connected.is_set()
+                ):
                     self.websocket_audio_sender.stop_flag = True
                 self.backend = None
 
