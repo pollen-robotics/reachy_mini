@@ -324,7 +324,7 @@ def check(console: Console, app_path: str) -> None:
     console.print(f"✅ {app_name}/main.py exists.")
 
     # - <app_name>/main.py contains a class named <AppName> that inherits from ReachyMiniApp
-    with open(main_file, "r") as f:
+    with open(main_file, "r") as f:  # type: ignore
         main_content = f.read()
     class_name = "".join(
         word.capitalize() for word in app_name.replace("-", "_").split("_")
