@@ -15,7 +15,7 @@ dependencies = [
 keywords = ["reachy-mini-app"]
 
 [project.entry-points."reachy_mini_apps"]
-{{ app_name }} = "{{ module_name }}.main:{{ class_name }}"
+{{ entrypoint_name }} = "{{ module_name }}.main:{{ class_name }}"
 
 [tool.setuptools]
 package-dir = { "" = "." }
@@ -25,4 +25,4 @@ include-package-data = true
 where = ["."]
 
 [tool.setuptools.package-data]
-{{ app_name }} = ["**/*"] # Also include all non-.py files
+{{ module_name }} = ["**/*"] # Also include all non-.py files

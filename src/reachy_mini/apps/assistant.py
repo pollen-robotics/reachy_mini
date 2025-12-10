@@ -102,6 +102,10 @@ def create(console: Console, app_name: str, app_path: Path) -> None:
 
     """
     app_name, language, app_path = create_cli(console, app_name, app_path)
+    app_name = app_name.replace(
+        "-", "_"
+    )  # Force underscores in app name (belt and suspenders)
+
     TEMPLATE_DIR = Path(__file__).parent / "templates"
     env = Environment(loader=FileSystemLoader(TEMPLATE_DIR))
 
@@ -114,7 +118,8 @@ def create(console: Console, app_name: str, app_path: Path) -> None:
         console.print(f"❌ Folder {base_path} already exists.", style="bold red")
         exit()
 
-    module_name = app_name.replace("-", "_")
+    module_name = app_name
+    entrypoint_name = app_name.replace("_", "-")
     class_name = "".join(word.capitalize() for word in module_name.split("_"))
     class_name_display = " ".join(word.capitalize() for word in module_name.split("_"))
 
@@ -129,6 +134,7 @@ def create(console: Console, app_name: str, app_path: Path) -> None:
         "module_name": module_name,
         "class_name": class_name,
         "class_name_display": class_name_display,
+        "entrypoint_name": entrypoint_name,
     }
 
     (base_path / module_name / "__init__.py").touch()
