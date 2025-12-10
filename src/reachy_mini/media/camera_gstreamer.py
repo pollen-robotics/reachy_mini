@@ -4,6 +4,7 @@ This module provides an implementation of the CameraBase class using GStreamer.
 By default the module directly returns JPEG images as output by the camera.
 """
 
+import os
 from threading import Thread
 from typing import Optional, Tuple, cast
 
@@ -20,6 +21,7 @@ from reachy_mini.media.camera_constants import (
 
 try:
     import gi
+
 except ImportError as e:
     raise ImportError(
         "The 'gi' module is required for GStreamerCamera but could not be imported. \
@@ -70,6 +72,17 @@ class GStreamerCamera(CameraBase):
         if cam_path == "":
             self.logger.warning("Recording pipeline set without camera.")
             self.pipeline.remove(self._appsink_video)
+        elif cam_path == "/tmp/reachymini_camera_socket":
+            camsrc = Gst.ElementFactory.make("unixfdsrc")
+            camsrc.set_property("socket-path", "/tmp/reachymini_camera_socket")
+            self.pipeline.add(camsrc)
+            queue = Gst.ElementFactory.make("queue")
+            self.pipeline.add(queue)
+            videoconvert = Gst.ElementFactory.make("videoconvert")
+            self.pipeline.add(videoconvert)
+            camsrc.link(queue)
+            queue.link(videoconvert)
+            videoconvert.link(self._appsink_video)
         elif cam_path == "imx708":
             camsrc = Gst.ElementFactory.make("libcamerasrc")
             self.pipeline.add(camsrc)
@@ -178,6 +191,12 @@ class GStreamerCamera(CameraBase):
 
         Returns the device path (e.g., '/dev/video2'), or '' if not found.
         """
+
+        if os.path.exists("/tmp/reachymini_camera_socket"):
+            camera_specs = cast(CameraSpecs, ReachyMiniWirelessCamSpecs)
+            self.logger.debug("Found wireless camera socket at /tmp/reachymini_camera_socket")
+            return "/tmp/reachymini_camera_socket", camera_specs
+
         monitor = Gst.DeviceMonitor()
         monitor.add_filter("Video/Source")
         monitor.start()
