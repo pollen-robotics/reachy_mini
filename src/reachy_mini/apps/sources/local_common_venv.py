@@ -3,6 +3,7 @@
 import asyncio
 import logging
 import platform
+import re
 import shutil
 import sys
 from importlib.metadata import entry_points
@@ -117,6 +118,43 @@ def get_app_python(
         return Path(sys.executable)
 
 
+def _get_custom_app_url_from_file(app_name: str) -> str | None:
+    """Get custom_app_url by reading it from the app's main.py file.
+
+    This is much faster than subprocess and avoids sys.path pollution.
+    Looks for patterns like: custom_app_url: str | None = "http://..."
+    """
+    site_packages = _get_app_site_packages(app_name)
+    if not site_packages or not site_packages.exists():
+        return None
+
+    # Try to find main.py in the app's package directory
+    app_dir = site_packages / app_name
+    main_file = app_dir / "main.py"
+
+    if not main_file.exists():
+        return None
+
+    try:
+        content = main_file.read_text(encoding="utf-8")
+
+        # Match patterns like:
+        # custom_app_url: str | None = "http://..."
+        # custom_app_url = "http://..."
+        # custom_app_url: str = "http://..."
+        pattern = r'custom_app_url\s*(?::\s*[^=]+)?\s*=\s*["\']([^"\']+)["\']'
+        match = re.search(pattern, content)
+
+        if match:
+            return match.group(1)
+        return None
+    except Exception as e:
+        logging.getLogger("reachy_mini.apps").warning(
+            f"Could not read custom_app_url from '{app_name}/main.py': {e}"
+        )
+        return None
+
+
 async def _list_apps_from_separate_venvs() -> list[AppInfo]:
     """List apps by scanning sibling venv directories."""
     parent_dir = _get_venv_parent_dir()
@@ -131,11 +169,9 @@ async def _list_apps_from_separate_venvs() -> list[AppInfo]:
         # Extract app name from venv directory name
         app_name = venv_path.name[: -len("_venv")]
 
-        # Note: We don't load the app to get custom_app_url for separate venvs
-        # to avoid sys.path pollution and version conflicts. The custom_app_url
-        # will still work when the app actually runs (it uses its own class attribute).
-        # This only means the settings icon won't appear in the dashboard listing.
-        custom_app_url = None
+        # Get custom_app_url by reading the main.py file (fast, no sys.path pollution)
+        # This ensures the settings icon appears in the dashboard listing
+        custom_app_url = _get_custom_app_url_from_file(app_name)
 
         apps.append(
             AppInfo(
