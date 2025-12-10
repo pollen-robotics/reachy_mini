@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any, Dict
 
 import questionary
+import tomllib
 import yaml
 from huggingface_hub import CommitOperationAdd, HfApi, get_repo_discussions, whoami
 from jinja2 import Environment, FileSystemLoader
@@ -188,13 +189,30 @@ def check(console: Console, app_path: str) -> None:
         console.print(f"[red]App path {app_path} does not exist.[/red]")
         exit()
 
-    full_app_path = Path(app_path).resolve()
-    app_name = full_app_path.name
+    abs_app_path = Path(app_path).resolve()
+
+    # Check if there is a pyproject.toml file in the root of the app
+    pyproject_file = abs_app_path / "pyproject.toml"
+    if not pyproject_file.exists():
+        console.print("❌ pyproject.toml is missing", style="bold red")
+        sys.exit(1)
+
+    # Extract app name
+    with open(pyproject_file, "rb") as f:
+        pyproject_content = tomllib.load(f)
+        project = pyproject_content.get("project", {})
+        app_name = project.get("name", None)
+        if app_name is None:
+            console.print(
+                "❌ Project name is missing in pyproject.toml", style="bold red"
+            )
+            sys.exit(1)
+
     entrypoint_name = app_name
     pkg_name = app_name.replace("-", "_")
     class_name = "".join(word.capitalize() for word in pkg_name.split("_"))
 
-    console.print(f"\n🔎 Checking app '{app_name}' in {full_app_path}/...")
+    console.print(f"\n🔎 Checking app '{app_name}' in {abs_app_path}/...")
     console.print(f"\tExpected package name: {pkg_name}")
     console.print(f"\tExpected class name: {class_name}")
     console.print(f"\tExpected entrypoint name: {entrypoint_name}\n")
@@ -202,51 +220,87 @@ def check(console: Console, app_path: str) -> None:
     # Check that:
     # - index.html, style.css exist in the root of the app
 
-    if not os.path.exists(os.path.join(app_path, "index.html")):
+    if not os.path.exists(os.path.join(abs_app_path, "index.html")):
         console.print("❌ index.html is missing", style="bold red")
         sys.exit(1)
 
-    if not os.path.exists(os.path.join(app_path, "style.css")):
+    if not os.path.exists(os.path.join(abs_app_path, "style.css")):
         console.print("❌ style.css is missing", style="bold red")
         sys.exit(1)
     console.print("✅ index.html and style.css exist in the root of the app.")
-    # - pyproject.toml exists in the root of the app
-    if not os.path.exists(os.path.join(app_path, "pyproject.toml")):
-        console.print("❌ pyproject.toml is missing", style="bold red")
-        sys.exit(1)
-    console.print("✅ pyproject.toml exists in the root of the app.")
-    #   - pyproject.toml contains the entrypoint
-    # [project.entry-points."reachy_mini_apps"]
-    # test = "<app_name>.main:<AppName>"
-    with open(os.path.join(app_path, "pyproject.toml"), "r") as f:
-        pyproject_content = f.read()
 
-    if '[project.entry-points."reachy_mini_apps"]' not in pyproject_content:
+    # - pkg_name and pkg_name/__init__.py exists
+    if not os.path.exists(os.path.join(abs_app_path, pkg_name)) or not os.path.exists(
+        os.path.join(abs_app_path, pkg_name, "__init__.py")
+    ):
+        console.print(f"❌ Package folder '{pkg_name}' is missing", style="bold red")
+        sys.exit(1)
+
+    if "entry-points" not in pyproject_content["project"]:
         console.print(
-            '❌ pyproject.toml is missing the [project.entry-points."reachy_mini_apps"] section',
+            "❌ pyproject.toml is missing the entry-points section",
             style="bold red",
         )
         sys.exit(1)
 
-    if f'{entrypoint_name} = "{pkg_name}.main:{class_name}"' not in pyproject_content:
+    entry_points = pyproject_content["project"]["entry-points"]
+
+    if "reachy_mini_apps" not in entry_points:
+        console.print(
+            "❌ pyproject.toml is missing the reachy_mini_apps entry-points section",
+            style="bold red",
+        )
+        sys.exit(1)
+
+    ep = entry_points["reachy_mini_apps"]
+    for k, v in ep.items():
+        console.print(f'Found entrypoint: {k} = "{v}"')
+        if k == entrypoint_name and v == f"{pkg_name}.main:{class_name}":
+            console.print(
+                "✅ pyproject.toml contains the correct entrypoint for the app."
+            )
+            break
+    else:
         console.print(
             f'❌ pyproject.toml is missing the entrypoint for the app: {entrypoint_name} = "{pkg_name}.main:{class_name}"',
             style="bold red",
         )
         sys.exit(1)
 
-    console.print("✅ pyproject.toml contains the entrypoint section.")
     # - <app_name>/__init__.py exists
-    app_name = os.path.basename(app_path)
+    pkg_path = Path(abs_app_path) / pkg_name
+    init_file = pkg_path / "__init__.py"
 
-    if not os.path.exists(os.path.join(app_path, app_name, "__init__.py")):
+    if not init_file.exists():
         console.print("❌ __init__.py is missing", style="bold red")
         sys.exit(1)
 
     console.print(f"✅ {app_name}/__init__.py exists.")
 
+    main_file = pkg_path / "main.py"
+    if not main_file.exists():
+        console.print("❌ main.py is missing", style="bold red")
+        sys.exit(1)
+    console.print(f"✅ {app_name}/main.py exists.")
+
+    # - <app_name>/main.py contains a class named <AppName> that inherits from ReachyMiniApp
+    with open(main_file, "r") as f:
+        main_content = f.read()
+    class_name = "".join(
+        word.capitalize() for word in app_name.replace("-", "_").split("_")
+    )
+    if f"class {class_name}(ReachyMiniApp)" not in main_content:
+        console.print(
+            f"❌ main.py is missing the class {class_name} that inherits from ReachyMiniApp",
+            style="bold red",
+        )
+        sys.exit(1)
+    console.print(
+        f"✅ main.py contains the class {class_name} that inherits from ReachyMiniApp."
+    )
+
     # - README.md exists in the root of the app
-    if not os.path.exists(os.path.join(app_path, "README.md")):
+    if not os.path.exists(os.path.join(abs_app_path, "README.md")):
         console.print("❌ README.md is missing", style="bold red")
         sys.exit(1)
     console.print("✅ README.md exists in the root of the app.")
@@ -277,7 +331,7 @@ def check(console: Console, app_path: str) -> None:
         return metadata
 
     #   - README.md contains at least a title and the tags "reachy_mini" and "reachy_mini_{python/js}_app"
-    readme_metadata = parse_readme(os.path.join(app_path, "README.md"))
+    readme_metadata = parse_readme(os.path.join(abs_app_path, "README.md"))
     if len(readme_metadata) == 0:
         console.print("❌ README.md is missing metadata section.", style="bold red")
         sys.exit(1)
@@ -315,30 +369,14 @@ def check(console: Console, app_path: str) -> None:
     console.print("✅ README.md contains the required metadata.")
     # - <app_name>/main.py exists
 
-    if not os.path.exists(os.path.join(app_path, app_name, "main.py")):
-        console.print("❌ main.py is missing", style="bold red")
-        sys.exit(1)
-    console.print(f"✅ {app_name}/main.py exists.")
-
-    # - <app_name>/main.py contains a class named <AppName> that inherits from ReachyMiniApp
-    with open(os.path.join(app_path, app_name, "main.py"), "r") as f:
-        main_content = f.read()
-    class_name = "".join(
-        word.capitalize() for word in app_name.replace("-", "_").split("_")
-    )
-    if f"class {class_name}(ReachyMiniApp)" not in main_content:
-        console.print(
-            f"❌ main.py is missing the class {class_name} that inherits from ReachyMiniApp",
-            style="bold red",
-        )
-        sys.exit(1)
-    console.print(
-        f"✅ main.py contains the class {class_name} that inherits from ReachyMiniApp."
-    )
-
     # Now, create a temporary python venv in a temp dir, `pip install . the app, check that it works and that the entrypoint is registered
     with tempfile.TemporaryDirectory() as tmpdir:
-        console.print("\nCreating a temporary virtual environment to test the app...")
+        # change dir to tmpdir
+        os.chdir(tmpdir)
+
+        console.print(
+            f"\nCreating a temporary virtual environment to test the app... (tmp dir: {tmpdir})"
+        )
         venv_path = os.path.join(tmpdir, "venv")
         subprocess.run([sys.executable, "-m", "venv", venv_path], check=True)
 
@@ -355,7 +393,7 @@ def check(console: Console, app_path: str) -> None:
 
         console.print("Installing the app in the temporary virtual environment...")
         subprocess.run(
-            [pip_executable, "install", app_path],
+            [pip_executable, "install", abs_app_path],
             check=True,
         )
 
@@ -373,7 +411,7 @@ def check(console: Console, app_path: str) -> None:
         if (
             subprocess.run(
                 [python_executable, "-c", check_script],
-                capture_output=True,
+                # capture_output=True,
                 text=True,
             ).returncode
             != 0
