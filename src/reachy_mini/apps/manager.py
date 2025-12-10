@@ -84,10 +84,11 @@ class AppManager:
             app_name, self.wireless_version, self.desktop_app_daemon
         )
 
-        # Launch app as subprocess
+        # Launch app as subprocess with unbuffered output
         self.logger.getChild("runner").info(f"Starting app {app_name}")
         process = await asyncio.create_subprocess_exec(
             str(python_path),
+            "-u",  # Unbuffered stdout/stderr for real-time logging
             "-m",
             module_name,
             stdout=asyncio.subprocess.PIPE,
