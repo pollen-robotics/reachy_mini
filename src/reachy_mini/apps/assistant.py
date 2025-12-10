@@ -209,7 +209,7 @@ def check(console: Console, app_path: str) -> None:
     with open(os.path.join(app_path, "pyproject.toml"), "r") as f:
         pyproject_content = f.read()
 
-    if not '[project.entry-points."reachy_mini_apps"]' in pyproject_content:
+    if '[project.entry-points."reachy_mini_apps"]' not in pyproject_content:
         console.print(
             '❌ pyproject.toml is missing the [project.entry-points."reachy_mini_apps"] section',
             style="bold red",
@@ -242,21 +242,8 @@ def check(console: Console, app_path: str) -> None:
         sys.exit(1)
     console.print("✅ README.md exists in the root of the app.")
 
-    def parse_readme(file_path):
-        #     ---
-        #     title: Test
-        #     emoji: 👋
-        #     colorFrom: red
-        #     colorTo: blue
-        #     sdk: static
-        #     pinned: false
-        #     short_description: Write your description here
-        #     tags:
-        #     - reachy_mini
-        #     - reachy_mini_python_app
-        #     other_stuff : abc
-        #     ---
-
+    def parse_readme(file_path: str) -> dict:
+        """Parse the metadata section of the README.md file."""
         with open(file_path, "r") as f:
             lines = f.readlines()
 
