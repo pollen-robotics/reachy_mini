@@ -109,12 +109,17 @@ class MujocoBackend(Backend):
             get_joint_addr_from_name(self.model, n) for n in self.joint_names
         ]
 
+        # Disable collisions at the beginning for smoother initialization
         self.col_inds = []
         for i, type in enumerate(self.model.geom_contype):
             if type != 0:
-                self.col_inds.append(i)
-                self.model.geom_contype[i] = 0
-                self.model.geom_conaffinity[i] = 0
+                geom_name = mujoco.mj_id2name(self.model, mujoco.mjtObj.mjOBJ_GEOM, i)
+                # monkey-patch: the geoms in the minimal scene are named (duck_geom, table_top_collision ... ).
+                # We don't disable the collision for them so that the objects don't fall to the ground at initialization
+                if geom_name is None:
+                    self.col_inds.append(i)
+                    self.model.geom_contype[i] = 0
+                    self.model.geom_conaffinity[i] = 0
 
     def _get_camera_id(self, camera_name: str) -> Any:
         """Get the id of the virtual camera."""

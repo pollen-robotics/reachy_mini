@@ -42,15 +42,20 @@ class Daemon:
     def __init__(
         self,
         log_level: str = "INFO",
+        robot_name: str = "reachy_mini",
         wireless_version: bool = False,
         stream: bool = False,
+        desktop_app_daemon: bool = False,
     ) -> None:
         """Initialize the Reachy Mini daemon."""
         self.log_level = log_level
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(self.log_level)
 
+        self.robot_name = robot_name
+
         self.wireless_version = wireless_version
+        self.desktop_app_daemon = desktop_app_daemon
 
         self.backend: "RobotBackend | MujocoBackend | None" = None
         # Get package version
@@ -62,8 +67,10 @@ class Daemon:
             self.logger.warning("Could not determine daemon version")
 
         self._status = DaemonStatus(
+            robot_name=robot_name,
             state=DaemonState.NOT_INITIALIZED,
             wireless_version=wireless_version,
+            desktop_app_daemon=desktop_app_daemon,
             simulation_enabled=None,
             backend_status=None,
             error=None,
@@ -164,7 +171,11 @@ class Daemon:
             self._status.error = str(e)
             raise e
 
-        self.zenoh_server = ZenohServer(self.backend, localhost_only=localhost_only)
+        self.zenoh_server = ZenohServer(
+            prefix=self.robot_name,
+            backend=self.backend,
+            localhost_only=localhost_only,
+        )
         self.zenoh_server.start()
         self._thread_publish_status = Thread(target=self._publish_status, daemon=True)
         self._thread_publish_status.start()
@@ -602,8 +613,10 @@ class DaemonState(Enum):
 class DaemonStatus:
     """Dataclass representing the status of the Reachy Mini daemon."""
 
+    robot_name: str
     state: DaemonState
     wireless_version: bool
+    desktop_app_daemon: bool
     simulation_enabled: Optional[bool]
     backend_status: Optional[RobotBackendStatus | MujocoBackendStatus]
     error: Optional[str] = None
