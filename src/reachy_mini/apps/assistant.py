@@ -324,17 +324,93 @@ def check(console: Console, app_path: str) -> None:
         sys.exit(1)
     console.print(f"✅ {app_name}/main.py exists.")
 
-    # - <app_name>/main.py contains a class named <AppName> that inherits from ReachyMiniApp
+    # - <app_name>/main.py contains a class named <AppName> that inherits from ReachyMiniApp
     with open(os.path.join(app_path, app_name, "main.py"), "r") as f:
         main_content = f.read()
-    class_name = "".join(word.capitalize() for word in app_name.replace("-", "_").split("_"))
+    class_name = "".join(
+        word.capitalize() for word in app_name.replace("-", "_").split("_")
+    )
     if f"class {class_name}(ReachyMiniApp)" not in main_content:
         console.print(
             f"❌ main.py is missing the class {class_name} that inherits from ReachyMiniApp",
             style="bold red",
         )
-        sys.exit(1) 
-    console.print(f"✅ main.py contains the class {class_name} that inherits from ReachyMiniApp.")
+        sys.exit(1)
+    console.print(
+        f"✅ main.py contains the class {class_name} that inherits from ReachyMiniApp."
+    )
+
+    # Now, create a temporary python venv in a temp dir, `pip install . the app, check that it works and that the entrypoint is registered
+    with tempfile.TemporaryDirectory() as tmpdir:
+        console.print("\nCreating a temporary virtual environment to test the app...")
+        venv_path = os.path.join(tmpdir, "venv")
+        subprocess.run([sys.executable, "-m", "venv", venv_path], check=True)
+
+        pip_executable = os.path.join(
+            venv_path,
+            "Scripts" if os.name == "nt" else "bin",
+            "pip",
+        )
+        python_executable = os.path.join(
+            venv_path,
+            "Scripts" if os.name == "nt" else "bin",
+            "python",
+        )
+
+        console.print("Installing the app in the temporary virtual environment...")
+        subprocess.run(
+            [pip_executable, "install", app_path],
+            check=True,
+        )
+
+        console.print("Checking that the app entrypoint is registered...")
+
+        # use from importlib.metadata import entry_points
+
+        check_script = (
+            f"from importlib.metadata import entry_points; "
+            f"eps = entry_points(group='reachy_mini_apps'); "
+            f"app_names = [ep.name for ep in eps]; "
+            f"import sys; "
+            f"sys.exit(0) if '{app_name}' in app_names else sys.exit(1)"
+        )
+        if (
+            subprocess.run(
+                [python_executable, "-c", check_script],
+                capture_output=True,
+                text=True,
+            ).returncode
+            != 0
+        ):
+            console.print(
+                f"❌ App '{app_name}' entrypoint is not registered correctly.",
+                style="bold red",
+            )
+            sys.exit(1)
+        console.print("✅ App entrypoint is registered correctly.")
+
+        # Now try to uninstall the app and check that it uninstalls correctly
+        console.print("Uninstalling the app from the temporary virtual environment...")
+        subprocess.run(
+            [pip_executable, "uninstall", "-y", app_name],
+            check=True,
+        )
+
+        if (
+            subprocess.run(
+                [python_executable, "-c", check_script],
+                capture_output=True,
+                text=True,
+            ).returncode
+            == 0
+        ):
+            console.print(
+                f"❌ App '{app_name}' was not uninstalled correctly.",
+                style="bold red",
+            )
+            sys.exit(1)
+
+        console.print("✅ App installation and uninstallation tests passed.")
 
     console.print(f"\n✅ App '{app_name}' passed all checks!", style="bold green")
 
