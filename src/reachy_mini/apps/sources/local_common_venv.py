@@ -117,6 +117,57 @@ def get_app_python(
         return Path(sys.executable)
 
 
+async def _get_custom_app_url_from_venv(app_name: str) -> str | None:
+    """Get custom_app_url from an app in a separate venv via subprocess.
+
+    This avoids sys.path pollution by running a subprocess with the app's venv Python.
+    """
+    python_path = _get_app_python(app_name)
+
+    if not python_path.exists():
+        return None
+
+    # Python script to extract custom_app_url
+    script = f"""
+import sys
+from importlib.metadata import entry_points
+
+try:
+    eps = entry_points(group="reachy_mini_apps")
+    ep = eps.select(name="{app_name}")
+    if not ep:
+        sys.exit(1)
+
+    app_cls = list(ep)[0].load()
+    custom_app_url = getattr(app_cls, 'custom_app_url', None)
+
+    if custom_app_url:
+        print(custom_app_url, end='')
+except Exception:
+    # Silent fail - custom_app_url is optional
+    sys.exit(1)
+"""
+
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            str(python_path),
+            "-c",
+            script,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await proc.communicate()
+
+        if proc.returncode == 0 and stdout:
+            return stdout.decode().strip()
+        return None
+    except Exception as e:
+        logging.getLogger("reachy_mini.apps").warning(
+            f"Could not get custom_app_url for '{app_name}': {e}"
+        )
+        return None
+
+
 async def _list_apps_from_separate_venvs() -> list[AppInfo]:
     """List apps by scanning sibling venv directories."""
     parent_dir = _get_venv_parent_dir()
@@ -131,11 +182,9 @@ async def _list_apps_from_separate_venvs() -> list[AppInfo]:
         # Extract app name from venv directory name
         app_name = venv_path.name[: -len("_venv")]
 
-        # Note: We don't load the app to get custom_app_url for separate venvs
-        # to avoid sys.path pollution and version conflicts. The custom_app_url
-        # will still work when the app actually runs (it uses its own class attribute).
-        # This only means the settings icon won't appear in the dashboard listing.
-        custom_app_url = None
+        # Get custom_app_url using subprocess (no sys.path pollution)
+        # This ensures the settings icon appears in the dashboard listing
+        custom_app_url = await _get_custom_app_url_from_venv(app_name)
 
         apps.append(
             AppInfo(
