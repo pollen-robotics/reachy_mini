@@ -168,7 +168,9 @@ def create(console: Console, app_name: str, app_path: Path) -> None:
     console.print(f"✅ Created app '{app_name}' in {base_path}/", style="bold green")
 
 
-def install_app_with_progress(console, pip_executable: str, app_path: Path) -> None:
+def install_app_with_progress(
+    console: Console, pip_executable: str, app_path: Path
+) -> None:
     """Install the app in a temporary virtual environment with a progress spinner."""
     console.print("Installing the app in the temporary virtual environment...")
 
@@ -327,7 +329,7 @@ def check(console: Console, app_path: str) -> None:
     class_name = "".join(
         word.capitalize() for word in app_name.replace("-", "_").split("_")
     )
-    if f"class {class_name}(ReachyMiniApp)" not in main_content:
+    if f"class {class_name}(ReachyMiniApp)" not in str(main_content):
         console.print(
             f"❌ main.py is missing the class {class_name} that inherits from ReachyMiniApp",
             style="bold red",
@@ -343,7 +345,7 @@ def check(console: Console, app_path: str) -> None:
         sys.exit(1)
     console.print("✅ README.md exists in the root of the app.")
 
-    def parse_readme(file_path: str) -> Dict[str, Any]:
+    def parse_readme(file_path: str) -> Any:
         """Parse the metadata section of the README.md file."""
         with open(file_path, "r") as f:
             lines = f.readlines()
