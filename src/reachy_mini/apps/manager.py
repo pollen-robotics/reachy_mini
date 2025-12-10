@@ -2,10 +2,10 @@
 
 import asyncio
 import logging
+import os
+import signal
 from dataclasses import dataclass
 from enum import Enum
-from importlib.metadata import entry_points
-from threading import Thread
 from typing import TYPE_CHECKING, Any, Optional
 
 from pydantic import BaseModel
@@ -39,8 +39,8 @@ class AppStatus(BaseModel):
 class RunningApp:
     """Information about a running app."""
 
-    app: "ReachyMiniApp"
-    thread: Thread
+    process: asyncio.subprocess.Process
+    monitor_task: asyncio.Task[None]
     status: AppStatus
 
 
@@ -72,59 +72,94 @@ class AppManager:
         )
 
     async def start_app(self, app_name: str, *args: Any, **kwargs: Any) -> AppStatus:
-        """Start the app, raises RuntimeError if an app is already running."""
+        """Start the app as a subprocess, raises RuntimeError if an app is already running."""
         if self.is_app_running():
             raise RuntimeError("An app is already running")
 
-        try:
-            app_cls = local_common_venv.load_app_from_venv(
-                app_name, self.wireless_version, self.desktop_app_daemon
-            )
-            app = app_cls()
-        except ValueError as e:
-            # Fallback to original method for backward compatibility
-            try:
-                (ep,) = entry_points(group="reachy_mini_apps", name=app_name)
-                app = ep.load()()
-            except ValueError:
-                raise RuntimeError(f"App '{app_name}' not found: {e}")
+        # Get module name and Python path for subprocess execution
+        module_name = local_common_venv.get_app_module(
+            app_name, self.wireless_version, self.desktop_app_daemon
+        )
+        python_path = local_common_venv.get_app_python(
+            app_name, self.wireless_version, self.desktop_app_daemon
+        )
 
-        def wrapped_run() -> None:
+        # Launch app as subprocess
+        self.logger.getChild("runner").info(f"Starting app {app_name}")
+        process = await asyncio.create_subprocess_exec(
+            str(python_path),
+            "-m",
+            module_name,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+
+        # Create status and monitor task
+        status = AppStatus(
+            info=AppInfo(name=app_name, source_kind=SourceKind.INSTALLED),
+            state=AppState.STARTING,
+            error=None,
+        )
+
+        async def monitor_process() -> None:
+            """Monitor the subprocess and update status."""
             assert self.current_app is not None
+            assert process.stdout is not None
+            assert process.stderr is not None
 
-            try:
-                self.current_app.status.state = AppState.RUNNING
-                self.logger.getChild("runner").info(f"App {app_name} is running")
-                app.wrapped_run(*args, **kwargs)
-                if self.current_app is not None:
+            # Update to RUNNING once process starts
+            self.current_app.status.state = AppState.RUNNING
+            self.logger.getChild("runner").info(f"App {app_name} is running")
+
+            # Stream stdout
+            async def log_stdout() -> None:
+                assert process.stdout is not None
+                async for line in process.stdout:
+                    self.logger.getChild("runner").info(line.decode().rstrip())
+
+            # Stream stderr (many libraries write INFO/WARNING to stderr)
+            stderr_lines: list[str] = []
+
+            async def log_stderr() -> None:
+                assert process.stderr is not None
+                async for line in process.stderr:
+                    decoded = line.decode().rstrip()
+                    stderr_lines.append(decoded)
+                    self.logger.getChild("runner").info(decoded)
+
+            # Run both streams concurrently
+            await asyncio.gather(log_stdout(), log_stderr())
+
+            # Wait for process to complete
+            returncode = await process.wait()
+
+            # Update status based on exit code
+            if self.current_app is not None:
+                if returncode == 0:
                     self.current_app.status.state = AppState.DONE
-                self.logger.getChild("runner").info(f"App {app_name} finished")
-            except Exception as e:
-                self.logger.getChild("runner").error(
-                    f"An error occurred in the app {app_name}: {e}"
-                )
-                self.logger.getChild("runner").error(
-                    f"Exception details: '{app.error}'",
-                )
-                self.current_app.status.state = AppState.ERROR
-                self.current_app.status.error = str(app.error)
+                    self.logger.getChild("runner").info(f"App {app_name} finished")
+                else:
+                    self.current_app.status.state = AppState.ERROR
+                    error_msg = "\n".join(stderr_lines[-10:])  # Last 10 lines
+                    self.current_app.status.error = (
+                        f"Process exited with code {returncode}\n{error_msg}"
+                    )
+                    self.logger.getChild("runner").error(
+                        f"App {app_name} exited with code {returncode}"
+                    )
+
+        monitor_task = asyncio.create_task(monitor_process())
 
         self.current_app = RunningApp(
-            status=AppStatus(
-                info=AppInfo(name=app_name, source_kind=SourceKind.INSTALLED),
-                state=AppState.STARTING,
-                error=None,
-            ),
-            app=app,
-            thread=Thread(target=wrapped_run),
+            process=process,
+            monitor_task=monitor_task,
+            status=status,
         )
-        self.logger.getChild("runner").info(f"Starting app {app_name}")
-        self.current_app.thread.start()
 
         return self.current_app.status
 
     async def stop_current_app(self, timeout: float | None = 5.0) -> None:
-        """Stop the current app."""
+        """Stop the current app subprocess."""
         if not self.is_app_running():
             raise RuntimeError("No app is currently running")
 
@@ -134,15 +169,37 @@ class AppManager:
         self.logger.getChild("runner").info(
             f"Stopping app {self.current_app.status.info.name}"
         )
-        self.current_app.app.stop()
-        self.current_app.thread.join(timeout)
 
-        if self.current_app.thread.is_alive():
-            self.logger.getChild("runner").warning(
-                "The app did not stop within the timeout"
-            )
-        else:
-            self.logger.getChild("runner").info("App stopped successfully")
+        # Terminate subprocess
+        process = self.current_app.process
+        if process.returncode is None:
+            # Send SIGINT to trigger KeyboardInterrupt (cross-platform, handled by template)
+            try:
+                if os.name == 'posix':
+                    # Unix/Linux/Mac: send SIGINT signal
+                    os.kill(process.pid, signal.SIGINT)
+                else:
+                    # Windows: use CTRL_C_EVENT or fallback to terminate
+                    process.terminate()
+
+                # Wait for graceful shutdown
+                await asyncio.wait_for(process.wait(), timeout=timeout)
+                self.logger.getChild("runner").info("App stopped successfully")
+            except asyncio.TimeoutError:
+                # Force kill if timeout expires
+                self.logger.getChild("runner").warning(
+                    "App did not stop within timeout, forcing termination"
+                )
+                process.kill()
+                await process.wait()
+
+        # Cancel and wait for monitor task
+        if not self.current_app.monitor_task.done():
+            self.current_app.monitor_task.cancel()
+            try:
+                await self.current_app.monitor_task
+            except asyncio.CancelledError:
+                pass
 
         self.current_app = None
 

@@ -7,7 +7,7 @@ import shutil
 import sys
 from importlib.metadata import entry_points
 from pathlib import Path
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 from huggingface_hub import snapshot_download
 
@@ -102,6 +102,22 @@ def _get_app_site_packages(app_name: str) -> Path | None:
 def get_app_site_packages(app_name: str) -> Path | None:
     """Public API to get the site-packages directory for a given app's venv."""
     return _get_app_site_packages(app_name)
+
+
+def get_app_python(
+    app_name: str,
+    wireless_version: bool = False,
+    desktop_app_daemon: bool = False,
+) -> Path:
+    """Get the Python executable path for an app (cross-platform).
+
+    For separate venvs: returns the app's venv Python
+    For shared environment: returns the current Python interpreter
+    """
+    if _should_use_separate_venvs(wireless_version, desktop_app_daemon):
+        return _get_app_python(app_name)
+    else:
+        return Path(sys.executable)
 
 
 async def _list_apps_from_separate_venvs() -> list[AppInfo]:
@@ -252,37 +268,35 @@ async def install_package(
         )
 
 
-def load_app_from_venv(
+def get_app_module(
     app_name: str,
     wireless_version: bool = False,
     desktop_app_daemon: bool = False,
-) -> type["ReachyMiniApp"]:
-    """Load an app class from its separate venv or current environment."""
+) -> str:
+    """Get the module name for an app without loading it (for subprocess execution)."""
     if _should_use_separate_venvs(wireless_version, desktop_app_daemon):
-        # Load from separate venv
+        # Get module from separate venv's entry points
         site_packages = _get_app_site_packages(app_name)
         if not site_packages or not site_packages.exists():
             raise ValueError(f"App '{app_name}' venv not found or invalid")
-        
+
         sys.path.insert(0, str(site_packages))
         try:
             eps = entry_points(group="reachy_mini_apps")
             ep = eps.select(name=app_name)
             if not ep:
                 raise ValueError(f"No entry point found for app '{app_name}'")
-            app_cls = list(ep)[0].load()
-            return cast(type["ReachyMiniApp"], app_cls)
-        except Exception as e:
-            raise ValueError(f"Could not load app '{app_name}' from venv: {e}")
+            # Get module name without loading (e.g., "my_app.main" from "my_app.main:MyApp")
+            return list(ep)[0].module
         finally:
             sys.path.pop(0)
     else:
-        # Original behavior: load from current environment
+        # Get module from current environment
         eps = entry_points(group="reachy_mini_apps", name=app_name)
         ep_list = list(eps)
         if not ep_list:
             raise ValueError(f"No entry point found for app '{app_name}'")
-        return cast(type["ReachyMiniApp"], ep_list[0].load())
+        return ep_list[0].module
 
 
 async def uninstall_package(
