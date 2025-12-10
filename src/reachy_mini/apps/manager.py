@@ -55,6 +55,7 @@ class AppManager:
         self.logger = logging.getLogger("reachy_mini.apps.manager")
         self.wireless_version = wireless_version
         self.desktop_app_daemon = desktop_app_daemon
+        self.running_on_wireless = wireless_version
 
     async def close(self) -> None:
         """Clean up the AppManager, stopping any running app."""
