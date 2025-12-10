@@ -108,6 +108,7 @@
             <!-- <joint name="table_joint" type="free" /> -->
             <!-- replace the table top collision with a box -->
             <geom class="collision"
+                name="table_top_collision"
                 type="box"
                 size="0.56 0.03 0.35"
                 pos="0 0.77 0"
