@@ -167,6 +167,7 @@ class SoundDeviceAudio(AudioBase):
     def start_playing(self) -> None:
         """Open the audio output stream."""
         self._output_buffer.clear()  # Clear any old data
+
         if self._output_stream is not None:
             self.stop_playing()
         self._output_stream = sd.OutputStream(

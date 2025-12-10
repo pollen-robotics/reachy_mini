@@ -359,11 +359,15 @@ class Backend:
             )
         sleep_period = 1.0 / play_frequency
 
+        if move.sound_path is not None and self.audio is not None:
+            self.play_sound(str(move.sound_path))
+
         t0 = time.time()
         while time.time() - t0 < move.duration:
             t = time.time() - t0
 
             head, antennas, body_yaw = move.evaluate(t)
+
             if head is not None:
                 self.set_target_head_pose(head)
             if body_yaw is not None:
@@ -376,6 +380,10 @@ class Backend:
                 await asyncio.sleep(sleep_period - elapsed)
             else:
                 await asyncio.sleep(0.001)
+
+        if move.sound_path is not None and self.audio is not None:
+            # release audio resources after playing the move sound
+            self.audio.stop_playing()
 
     async def goto_target(
         self,

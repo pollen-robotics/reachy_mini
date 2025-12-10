@@ -179,6 +179,7 @@ async def list_recorded_move_dataset(
     """List available recorded moves in a dataset."""
     try:
         moves = RecordedMoves(dataset_name)
+        print("Loaded moves:", moves.list_moves())
     except RepositoryNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
 

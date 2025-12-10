@@ -16,18 +16,22 @@ def main(dataset_path: str) -> None:
     recorded_moves = RecordedMoves(dataset_path)
 
     print("Connecting to Reachy Mini...")
-    with ReachyMini(use_sim=False, media_backend="no_media") as reachy:
+    with ReachyMini() as reachy:
         print("Connection successful! Starting dance sequence...\n")
         try:
+            reachy.media.start_playing()
             while True:
                 for move_name in recorded_moves.list_moves():
                     move: RecordedMove = recorded_moves.get(move_name)
                     print(f"Playing move: {move_name}: {move.description}\n")
+                    reachy.media.play_sound(move.sound_path)
                     # print(f"params: {move.move_params}")
                     reachy.play_move(move, initial_goto_duration=1.0)
 
         except KeyboardInterrupt:
             print("\n Sequence interrupted by user. Shutting down.")
+        finally:
+            reachy.media.stop_playing()
 
 
 if __name__ == "__main__":
