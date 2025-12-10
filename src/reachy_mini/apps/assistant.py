@@ -30,19 +30,29 @@ def create_cli(
     console: Console, app_name: str | None, app_path: Path | None
 ) -> tuple[str, str, Path]:
     """Create a new Reachy Mini app project using a CLI."""
+
+    def validate_app_name(text: str) -> bool | str:
+        if not text.strip():
+            return "App name cannot be empty."
+        if " " in text:
+            return "App name cannot contain spaces."
+        if "-" in text:
+            return "App name cannot contain dashes ('-'). Please use underscores ('_') instead."
+        return True
+
     if app_name is None:
         # 1) App name
         console.print("$ What is the name of your app ?")
         app_name = questionary.text(
             ">",
             default="",
-            validate=lambda text: bool(text.strip()) or "App name cannot be empty.",
+            validate=validate_app_name,
         ).ask()
 
         if app_name is None:
             console.print("[red]Aborted.[/red]")
             exit()
-        app_name = app_name.strip()
+        app_name = app_name.strip().lower()
 
     # 2) Language
     console.print("\n$ Choose the language of your app")
