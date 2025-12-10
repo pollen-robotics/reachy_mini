@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Dict
 
 import questionary
+import yaml
 from huggingface_hub import CommitOperationAdd, HfApi, get_repo_discussions, whoami
 from jinja2 import Environment, FileSystemLoader
 from rich.console import Console
@@ -166,12 +167,176 @@ def check(console: Console, app_path: str) -> None:
         app_path (str): Local path to the app to check.
 
     """
+    if app_path is None:
+        console.print("\n$ What is the local path to the app you want to check?")
+        app_path = questionary.path(
+            ">",
+            default="",
+        ).ask()
+        if app_path is None:
+            console.print("[red]Aborted.[/red]")
+            exit()
+        app_path = Path(app_path).expanduser().resolve()
+
     if not os.path.exists(app_path):
         console.print(f"[red]App path {app_path} does not exist.[/red]")
         exit()
-    # Placeholder for checking logic
-    print(f"Checking app at path '{app_path}'")
-    pass
+
+    app_path = str(app_path).rstrip("/")
+    app_name = os.path.basename(app_path)
+
+    print(f"Checking {app_name} at path '{app_path}'")
+
+    # Check that:
+    # - index.html, style.css exist in the root of the app
+
+    if not os.path.exists(os.path.join(app_path, "index.html")):
+        console.print("❌ index.html is missing", style="bold red")
+        sys.exit(1)
+
+    if not os.path.exists(os.path.join(app_path, "style.css")):
+        console.print("❌ style.css is missing", style="bold red")
+        sys.exit(1)
+    console.print("✅ index.html and style.css exist in the root of the app.")
+    # - pyproject.toml exists in the root of the app
+    if not os.path.exists(os.path.join(app_path, "pyproject.toml")):
+        console.print("❌ pyproject.toml is missing", style="bold red")
+        sys.exit(1)
+    console.print("✅ pyproject.toml exists in the root of the app.")
+    #   - pyproject.toml contains the entrypoint
+    # [project.entry-points."reachy_mini_apps"]
+    # test = "<app_name>.main:<AppName>"
+    with open(os.path.join(app_path, "pyproject.toml"), "r") as f:
+        pyproject_content = f.read()
+
+    if not '[project.entry-points."reachy_mini_apps"]' in pyproject_content:
+        console.print(
+            '❌ pyproject.toml is missing the [project.entry-points."reachy_mini_apps"] section',
+            style="bold red",
+        )
+        sys.exit(1)
+
+    if (
+        f'{app_name} = "{app_name}.main:{"".join(word.capitalize() for word in app_name.replace("-", "_").split("_"))}"'
+        not in pyproject_content
+    ):
+        console.print(
+            f'❌ pyproject.toml is missing the entrypoint for the app: {app_name} = "{app_name}.main:{"".join(word.capitalize() for word in app_name.replace("-", "_").split("_"))}"',
+            style="bold red",
+        )
+        sys.exit(1)
+
+    console.print("✅ pyproject.toml contains the entrypoint section.")
+    # - <app_name>/__init__.py exists
+    app_name = os.path.basename(app_path)
+
+    if not os.path.exists(os.path.join(app_path, app_name, "__init__.py")):
+        console.print("❌ __init__.py is missing", style="bold red")
+        sys.exit(1)
+
+    console.print(f"✅ {app_name}/__init__.py exists.")
+
+    # - README.md exists in the root of the app
+    if not os.path.exists(os.path.join(app_path, "README.md")):
+        console.print("❌ README.md is missing", style="bold red")
+        sys.exit(1)
+    console.print("✅ README.md exists in the root of the app.")
+
+    def parse_readme(file_path):
+        #     ---
+        #     title: Test
+        #     emoji: 👋
+        #     colorFrom: red
+        #     colorTo: blue
+        #     sdk: static
+        #     pinned: false
+        #     short_description: Write your description here
+        #     tags:
+        #     - reachy_mini
+        #     - reachy_mini_python_app
+        #     other_stuff : abc
+        #     ---
+
+        with open(file_path, "r") as f:
+            lines = f.readlines()
+
+        in_metadata = False
+        metadata = ""
+        for line in lines:
+            line = line.strip()
+            if line == "---":
+                if not in_metadata:
+                    in_metadata = True
+                else:
+                    break
+            elif in_metadata:
+                metadata += line + "\n"
+
+        try:
+            metadata = yaml.safe_load(metadata)
+        except yaml.YAMLError as e:
+            console.print(f"❌ Error parsing YAML metadata: {e}", style="bold red")
+            sys.exit(1)
+
+        return metadata
+
+    #   - README.md contains at least a title and the tags "reachy_mini" and "reachy_mini_{python/js}_app"
+    readme_metadata = parse_readme(os.path.join(app_path, "README.md"))
+    if len(readme_metadata) == 0:
+        console.print("❌ README.md is missing metadata section.", style="bold red")
+        sys.exit(1)
+    if "title" not in readme_metadata.keys():
+        console.print(
+            "❌ README.md is missing the title key in metadata.", style="bold red"
+        )
+        sys.exit(1)
+    if readme_metadata["title"] == "":
+        console.print("❌ README.md title cannot be empty.", style="bold red")
+        sys.exit(1)
+
+    if "tags" not in readme_metadata.keys():
+        console.print(
+            "❌ README.md is missing the tags key in metadata.", style="bold red"
+        )
+        sys.exit(1)
+
+    if "reachy_mini" not in readme_metadata["tags"]:
+        console.print(
+            '❌ README.md must contain the "reachy_mini" tag', style="bold red"
+        )
+        sys.exit(1)
+
+    if (
+        "reachy_mini_python_app" not in readme_metadata["tags"]
+        and "reachy_mini_js_app" not in readme_metadata["tags"]
+    ):
+        console.print(
+            '❌ README.md must contain either the "reachy_mini_python_app" or "reachy_mini_js_app" tag',
+            style="bold red",
+        )
+        sys.exit(1)
+
+    console.print("✅ README.md contains the required metadata.")
+    # - <app_name>/main.py exists
+
+    if not os.path.exists(os.path.join(app_path, app_name, "main.py")):
+        console.print("❌ main.py is missing", style="bold red")
+        sys.exit(1)
+    console.print(f"✅ {app_name}/main.py exists.")
+
+    # - <app_name>/main.py contains a class named <AppName> that inherits from ReachyMiniApp
+    with open(os.path.join(app_path, app_name, "main.py"), "r") as f:
+        main_content = f.read()
+    class_name = "".join(word.capitalize() for word in app_name.replace("-", "_").split("_"))
+    if f"class {class_name}(ReachyMiniApp)" not in main_content:
+        console.print(
+            f"❌ main.py is missing the class {class_name} that inherits from ReachyMiniApp",
+            style="bold red",
+        )
+        sys.exit(1) 
+    console.print(f"✅ main.py contains the class {class_name} that inherits from ReachyMiniApp.")
+
+    console.print(f"\n✅ App '{app_name}' passed all checks!", style="bold green")
 
 
 def request_app_addition(new_app_repo_id: str) -> bool:
