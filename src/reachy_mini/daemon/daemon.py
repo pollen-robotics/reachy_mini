@@ -564,7 +564,6 @@ class Daemon:
                 kinematics_engine=kinematics_engine,
                 headless=headless,
                 use_audio=use_audio,
-                wireless_version=wireless_version,
                 websocket_uri=websocket_uri,
             )
         else:
