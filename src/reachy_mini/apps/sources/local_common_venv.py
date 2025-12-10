@@ -25,7 +25,8 @@ def _should_use_separate_venvs(
     wireless_version: bool = False, desktop_app_daemon: bool = False
 ) -> bool:
     """Determine if we should use separate venvs based on version flags."""
-    return wireless_version or desktop_app_daemon
+    # Disable venv for wireless version due to storage constraints
+    return desktop_app_daemon
 
 
 def _get_venv_parent_dir() -> Path:
