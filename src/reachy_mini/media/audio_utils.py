@@ -2,6 +2,7 @@
 
 import logging
 import subprocess
+from pathlib import Path
 
 
 def get_respeaker_card_number() -> int:
@@ -33,3 +34,51 @@ def get_respeaker_card_number() -> int:
     except subprocess.CalledProcessError as e:
         logging.error(f"Cannot find sound card: {e}")
         return 0
+
+
+def write_asoundrc_to_home():
+    """Write the .asoundrc file with Reachy Mini audio configuration to the user's home directory."""
+    card_id = get_respeaker_card_number()
+    asoundrc_content = f'''
+pcm.!default {{
+    type hw
+    card {card_id}
+}}
+
+ctl.!default {{
+    type hw
+    card {card_id}
+}}
+
+pcm.reachymini_audio_sink {{
+    type dmix
+    ipc_key 4241
+    slave {{
+        pcm "hw:{card_id},0"
+        channels 2
+        period_size 1024
+        buffer_size 4096
+        rate 16000
+    }}
+    bindings {{
+        0 0
+        1 1
+    }}
+}}
+
+pcm.reachymini_audio_src {{
+    type dsnoop
+    ipc_key 4242
+    slave {{
+        pcm "hw:{card_id},0"
+        channels 2
+        rate 16000
+        period_size 1024
+        buffer_size 4096
+    }}
+}}
+'''    
+    asoundrc_path = Path.home().joinpath(".asoundrc")
+    with open(asoundrc_path, "w") as f:
+        f.write(asoundrc_content)
+
