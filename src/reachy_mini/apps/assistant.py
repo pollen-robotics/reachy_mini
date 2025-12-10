@@ -5,6 +5,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 from typing import Any, Dict
 
@@ -14,6 +15,7 @@ import yaml
 from huggingface_hub import CommitOperationAdd, HfApi, get_repo_discussions, whoami
 from jinja2 import Environment, FileSystemLoader
 from rich.console import Console
+from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
 
 
 def is_git_repo(path: Path) -> bool:
@@ -164,6 +166,42 @@ def create(console: Console, app_name: str, app_path: Path) -> None:
     # TODO assets dir with a .gif ?
 
     console.print(f"✅ Created app '{app_name}' in {base_path}/", style="bold green")
+
+
+def install_app_with_progress(console, pip_executable: str, app_path: Path) -> None:
+    """Install the app in a temporary virtual environment with a progress spinner."""
+    console.print("Installing the app in the temporary virtual environment...")
+
+    # Start pip in the background, discard its output
+    process = subprocess.Popen(
+        [
+            pip_executable,
+            "install",
+            "-q",  # quiet
+            str(app_path),
+        ],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.STDOUT,
+    )
+
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        TimeElapsedColumn(),
+        console=console,
+    ) as progress:
+        task_id = progress.add_task("Installing dependencies...", start=True)
+
+        # Keep the spinner running while pip is working
+        while process.poll() is None:
+            time.sleep(0.1)
+
+        # Mark task as finished
+        progress.update(task_id, description="Installation finished")
+
+    # Handle exit code like check=True would
+    if process.returncode != 0:
+        raise subprocess.CalledProcessError(process.returncode, process.args)
 
 
 def check(console: Console, app_path: str) -> None:
@@ -391,11 +429,7 @@ def check(console: Console, app_path: str) -> None:
             "python",
         )
 
-        console.print("Installing the app in the temporary virtual environment...")
-        subprocess.run(
-            [pip_executable, "install", abs_app_path],
-            check=True,
-        )
+        install_app_with_progress(console, pip_executable, abs_app_path)
 
         console.print("Checking that the app entrypoint is registered...")
 
