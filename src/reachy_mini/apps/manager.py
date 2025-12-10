@@ -201,6 +201,23 @@ class AppManager:
             except asyncio.CancelledError:
                 pass
 
+        # Return robot to zero position after app stops
+        try:
+            from reachy_mini import ReachyMini
+            from reachy_mini.reachy_mini import INIT_HEAD_POSE
+
+            self.logger.getChild("runner").info("Returning robot to zero position")
+            with ReachyMini() as reachy:
+                reachy.goto_target(
+                    head=INIT_HEAD_POSE,
+                    antennas=[0.0, 0.0],
+                    duration=1.0,
+                )
+        except Exception as e:
+            self.logger.getChild("runner").warning(
+                f"Could not return to zero position: {e}"
+            )
+
         self.current_app = None
 
     async def restart_current_app(self) -> AppStatus:
