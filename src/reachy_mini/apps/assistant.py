@@ -6,7 +6,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from typing import Dict
+from typing import Any, Dict
 
 import questionary
 import yaml
@@ -242,7 +242,7 @@ def check(console: Console, app_path: str) -> None:
         sys.exit(1)
     console.print("✅ README.md exists in the root of the app.")
 
-    def parse_readme(file_path: str) -> Dict[str, str]:
+    def parse_readme(file_path: str) -> Dict[str, Any]:
         """Parse the metadata section of the README.md file."""
         with open(file_path, "r") as f:
             lines = f.readlines()
