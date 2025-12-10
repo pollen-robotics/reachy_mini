@@ -1,4 +1,5 @@
 """Async WebSocket Audio Streamer."""
+
 import asyncio
 import logging
 import threading
@@ -88,11 +89,11 @@ class AsyncWebSocketAudioStreamer:
 
     async def _send_loop(self, ws: ClientConnection) -> None:
         """Send outgoing audio chunks and keep-alive pings.
-        
+
         To avoid audible artifacts, this method aggregates small chunks into larger batches before sending.
         """
         last_activity = time.time()
-        
+
         # Buffer to hold small chunks
         batch_buffer = bytearray()
         # Track when we started filling this specific batch
@@ -103,13 +104,13 @@ class AsyncWebSocketAudioStreamer:
                 # 1. Try to pull data from the queue
                 # Use a short timeout so we can check time-based conditions frequently
                 chunk = self.send_queue.get(timeout=0.01)
-                
+
                 # If this is the first chunk in the buffer, reset timer
                 if len(batch_buffer) == 0:
                     batch_start_time = time.time()
-                
+
                 batch_buffer.extend(chunk)
-                
+
             except Empty:
                 pass
             except Exception as e:
@@ -118,29 +119,34 @@ class AsyncWebSocketAudioStreamer:
 
             # 2. Check if we should send the batch
             now = time.time()
-            
+
             # Condition A: Buffer is full enough (Size based)
             is_full = len(batch_buffer) >= self.BATCH_SIZE_BYTES
-            
+
             # Condition B: Buffer has data, but it's getting too old (Time based)
-            # This ensures that if the robot says a short word, it sends it 
+            # This ensures that if the robot says a short word, it sends it
             # after 100ms instead of waiting forever for more data.
-            is_timed_out = (len(batch_buffer) > 0) and ((now - batch_start_time) > self.BATCH_TIMEOUT)
+            is_timed_out = (len(batch_buffer) > 0) and (
+                (now - batch_start_time) > self.BATCH_TIMEOUT
+            )
             if is_full or is_timed_out:
                 try:
                     # Send the aggregated buffer
                     await ws.send(batch_buffer)  # type: ignore
-                    
+
                     # Reset
                     batch_buffer = bytearray()
                     last_activity = now
                 except Exception as e:
                     logger.info(f"[WS-AUDIO] Send error: {e}")
                     break
-            
+
             # 3. Keep-Alive Ping (Only if completely idle)
             # We only ping if the buffer is empty AND we haven't sent anything recently
-            if len(batch_buffer) == 0 and (now - last_activity) > self.keep_alive_interval:
+            if (
+                len(batch_buffer) == 0
+                and (now - last_activity) > self.keep_alive_interval
+            ):
                 try:
                     await ws.send("ping")
                     last_activity = now
@@ -148,7 +154,7 @@ class AsyncWebSocketAudioStreamer:
                 except Exception as e:
                     logger.info(f"[WS-AUDIO] Ping failed: {e}")
                     break
-            
+
             # Tiny sleep to yield control if we are just spinning
             if len(batch_buffer) == 0:
                 await asyncio.sleep(0.001)
@@ -193,11 +199,11 @@ class AsyncWebSocketAudioStreamer:
             data = audio
         else:
             # Convert only if needed
-            arr = np.asarray(audio) 
+            arr = np.asarray(audio)
             # Handle stereo if accidentally passed (take channel 0)
             if arr.ndim > 1:
                 arr = arr[:, 0]
-                
+
             if arr.dtype == np.float32 or arr.dtype == np.float64:
                 # If any value is above 1 or below -1, scale the entire array so the max abs value is 1 or less
                 max_abs = np.max(np.abs(arr))
@@ -213,7 +219,9 @@ class AsyncWebSocketAudioStreamer:
 
         self.send_queue.put(data)
 
-    def get_audio_chunk(self, timeout: Optional[float] = 0.01) -> Optional[npt.NDArray[np.float32]]:
+    def get_audio_chunk(
+        self, timeout: Optional[float] = 0.01
+    ) -> Optional[npt.NDArray[np.float32]]:
         """Retrieve a received audio chunk, if any."""
         try:
             if timeout == 0:
@@ -222,7 +230,7 @@ class AsyncWebSocketAudioStreamer:
                 audio_bytes = self.recv_queue.get(timeout=timeout)
             # bytes -> int16 -> float32 in [-1, 1]
             int16_arr = np.frombuffer(audio_bytes, dtype=np.int16)
-            float_arr = (int16_arr.astype(np.float32) / 32767.0)
+            float_arr = int16_arr.astype(np.float32) / 32767.0
             return float_arr
         except Empty:
             return None

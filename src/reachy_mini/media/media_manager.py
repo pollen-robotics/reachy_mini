@@ -42,7 +42,7 @@ class MediaManager:
         self.backend = backend
         self.camera: Optional[CameraBase] = None
         self.audio: Optional[AudioBase] = None
-        
+
         match backend:
             case MediaBackend.NO_MEDIA:
                 self.logger.info("No media backend selected.")
@@ -242,9 +242,11 @@ class MediaManager:
             return
 
         if data.ndim > 2 or data.ndim == 0:
-            self.logger.warning(f"Audio samples arrays must have at most 2 dimensions and at least 1 dimension, got {data.ndim}")
+            self.logger.warning(
+                f"Audio samples arrays must have at most 2 dimensions and at least 1 dimension, got {data.ndim}"
+            )
             return
-        
+
         # Transpose data to match sounddevice channels last convention
         if data.ndim == 2 and data.shape[1] > data.shape[0]:
             data = data.T
@@ -257,7 +259,7 @@ class MediaManager:
             data = np.column_stack((data,) * output_channels)
         # Lower channels input to higher channels output : reduce to mono and duplicate to fit
         elif data.ndim == 2 and data.shape[1] < output_channels:
-            data = np.column_stack((data[:,0],) * output_channels)
+            data = np.column_stack((data[:, 0],) * output_channels)
         # Higher channels input to lower channels output : crop to fit
         elif data.ndim == 2 and data.shape[1] > output_channels:
             data = data[:, :output_channels]

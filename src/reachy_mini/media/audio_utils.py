@@ -2,6 +2,7 @@
 
 import logging
 import subprocess
+from pathlib import Path
 
 
 def get_respeaker_card_number() -> int:
@@ -32,4 +33,13 @@ def get_respeaker_card_number() -> int:
 
     except subprocess.CalledProcessError as e:
         logging.error(f"Cannot find sound card: {e}")
-        return 0
+        return -1
+
+
+def has_reachymini_asoundrc() -> bool:
+    """Check if ~/.asoundrc exists and contains both reachymini_audio_sink and reachymini_audio_src."""
+    asoundrc_path = Path.home().joinpath(".asoundrc")
+    if not asoundrc_path.exists():
+        return False
+    content = asoundrc_path.read_text(errors="ignore")
+    return "reachymini_audio_sink" in content and "reachymini_audio_src" in content

@@ -64,10 +64,10 @@ class OpenCVCamera(CameraBase):
 
     def read(self) -> Optional[npt.NDArray[np.uint8]]:
         """Read a frame from the camera.
-        
+
         Returns:
             The frame as a uint8 numpy array, or None if no frame could be read.
-            
+
         Raises:
             RuntimeError: If the camera is not opened.
 
