@@ -2,6 +2,7 @@
 
 import json
 import os
+import subprocess
 import sys
 import tempfile
 from pathlib import Path
@@ -13,10 +14,22 @@ from jinja2 import Environment, FileSystemLoader
 from rich.console import Console
 
 
-def create_gui(
+def is_git_repo(path: Path) -> bool:
+    """Check if the given path is inside a git repository."""
+    try:
+        subprocess.check_output(
+            ["git", "-C", path, "rev-parse", "--is-inside-work-tree"],
+            stderr=subprocess.STDOUT,
+        )
+        return True
+    except subprocess.CalledProcessError:
+        return False
+
+
+def create_cli(
     console: Console, app_name: str | None, app_path: Path | None
 ) -> tuple[str, str, Path]:
-    """Create a new Reachy Mini app project using a GUI."""
+    """Create a new Reachy Mini app project using a CLI."""
     if app_name is None:
         # 1) App name
         console.print("$ What is the name of your app ?")
@@ -58,13 +71,12 @@ def create_gui(
             console.print("[red]Aborted.[/red]")
             exit()
         app_path = Path(app_path).expanduser().resolve()
-
-    name_of_repo = Path(app_path).name
-    if name_of_repo == "reachy_mini":
-        console.print(
-            "[red] Safeguard : You can't store your apps in the reachy_mini repo as it is already a git repo. Aborted.[/red]"
-        )
-        exit()
+        if is_git_repo(app_path):
+            console.print(
+                f"[red] The path {app_path} is already inside a git repository. "
+                "Please choose another path. Aborted.[/red]"
+            )
+            exit()
 
     return app_name, language, app_path
 
@@ -78,7 +90,7 @@ def create(console: Console, app_name: str, app_path: Path) -> None:
         app_path (Path): The directory where the app project will be created.
 
     """
-    app_name, language, app_path = create_gui(console, app_name, app_path)
+    app_name, language, app_path = create_cli(console, app_name, app_path)
     TEMPLATE_DIR = Path(__file__).parent / "templates"
     env = Environment(loader=FileSystemLoader(TEMPLATE_DIR))
 
