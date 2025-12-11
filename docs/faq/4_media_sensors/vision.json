@@ -1,0 +1,33 @@
+[
+    {
+        "question": "Is camera quality good in various lighting conditions?",
+        "tags": [
+            "VISION",
+            "CAMERA",
+            "HARDWARE"
+        ],
+        "answer_file": "vision/camera_quality.mdx",
+        "source": "Users in chatlog, fallback authors"
+    },
+    {
+        "question": "How do I grab camera frames from Reachy Mini?",
+        "tags": [
+            "VISION",
+            "CAMERA",
+            "MEDIA"
+        ],
+        "answer_file": "vision/grab_camera_frames.mdx",
+        "source": "API documentation"
+    },
+    {
+        "question": "How can I use the GStreamer backend instead of default OpenCV/sounddevice?",
+        "tags": [
+            "AUDIO",
+            "VIDEO",
+            "GSTREAMER",
+            "ADVANCED"
+        ],
+        "answer_file": "vision/gstreamer_backend.mdx",
+        "source": "API documentation"
+    }
+]

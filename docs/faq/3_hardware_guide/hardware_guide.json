@@ -37,16 +37,6 @@
         "source": "API documentation"
     },
     {
-        "question": "Is camera quality good in various lighting conditions?",
-        "tags": [
-            "VISION",
-            "CAMERA",
-            "HARDWARE"
-        ],
-        "answer_file": "camera_quality.mdx",
-        "source": "Users in chatlog, fallback authors"
-    },
-    {
         "question": "How do I enable, disable, or make motors compliant?",
         "tags": [
             "MOTORS",

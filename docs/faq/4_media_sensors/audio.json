@@ -1,0 +1,20 @@
+[
+    {
+        "question": "How do I access microphone audio samples?",
+        "tags": [
+            "AUDIO",
+            "MEDIA"
+        ],
+        "answer_file": "audio/microphone_samples.mdx",
+        "source": "API documentation"
+    },
+    {
+        "question": "How do I send audio to the speaker?",
+        "tags": [
+            "AUDIO",
+            "MEDIA"
+        ],
+        "answer_file": "audio/speaker_output.mdx",
+        "source": "API documentation"
+    }
+]

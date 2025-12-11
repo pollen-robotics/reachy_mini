@@ -1,0 +1,7 @@
+```python
+from reachy_mini import ReachyMini
+
+with ReachyMini() as mini:
+    sample = mini.media.get_audio_sample()
+    # sample is a numpy array as returned by sounddevice
+```
