@@ -226,6 +226,10 @@ By default, the API server runs on `http://localhost:8000`. The API is documente
 
 More information about the API can be found in the [HTTP API documentation](./docs/rest-api.md).
 
+## Share your apps with the commmunity
+
+You can share your github repositories on social media or use [this guide](https://huggingface.co/blog/pollen-robotics/make-and-publish-your-reachy-mini-apps) to share your app even with users who can't code.
+
 ## Open source & contribution
 
 This project is actively developed and maintained by the [Pollen Robotics team](https://www.pollen-robotics.com) and the [Hugging Face team](https://huggingface.co/). 
