@@ -1,4 +1,4 @@
-"""Clean FAQ and FAQ-TAGS blocks in Markdown documentation files."""
+"""Clean TROUBLESHOOTING and TROUBLESHOOTING-TAGS blocks in Markdown files."""
 
 import argparse
 import pathlib
@@ -6,31 +6,31 @@ from typing import Iterable
 
 from qa_utils import (
     DOCS_SOURCE_DIR,
-    FAQ_CONFIG,
     ROOT,
+    TROUBLESHOOTING_CONFIG,
     clean_qa_markers,
     iter_markdown_files,
 )
 
 
 def process_file(path: pathlib.Path) -> bool:
-    """Clean a Markdown file for FAQ markers.
+    """Clean a Markdown file for troubleshooting markers.
 
     Returns True if the file was modified.
     """
     original = path.read_text(encoding="utf-8")
-    cleaned = clean_qa_markers(original, FAQ_CONFIG)
+    cleaned = clean_qa_markers(original, TROUBLESHOOTING_CONFIG)
     if cleaned != original:
         path.write_text(cleaned, encoding="utf-8")
-        print(f"[clean_faq_blocks] cleaned: {path.relative_to(ROOT)}")
+        print(f"[clean_troubleshooting_blocks] cleaned: {path.relative_to(ROOT)}")
         return True
     return False
 
 
 def main() -> None:
-    """Run the FAQ blocks cleaning script."""
+    """Run the troubleshooting blocks cleaning script."""
     parser = argparse.ArgumentParser(
-        description="Clean the content between FAQ/FAQ-TAGS blocks.",
+        description="Clean the content between TROUBLESHOOTING/TROUBLESHOOTING-TAGS blocks.",
     )
     parser.add_argument(
         "files",
@@ -52,7 +52,7 @@ def main() -> None:
             any_changed = True
 
     if not any_changed:
-        print("[clean_faq_blocks] no changes (already clean).")
+        print("[clean_troubleshooting_blocks] no changes (already clean).")
 
 
 if __name__ == "__main__":

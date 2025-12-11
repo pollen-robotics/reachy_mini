@@ -15,7 +15,7 @@
             "START",
             "POWER"
         ],
-        "answer_file": "start/first-startup-issue.mdx",
+        "answer_file": "first-startup-issue.mdx",
         "source": "API documentation"
     }
 ]

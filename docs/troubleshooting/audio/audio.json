@@ -9,7 +9,7 @@
         "source": "Community forum"
     },
     {
-        "question": "No Microphone Input *(For beta only)*",
+        "question": "No Microphone Input <i>(For beta only)</i>",
         "tags": [
             "AUDIO",
             "MICROPHONE"
@@ -18,7 +18,7 @@
         "source": "Community forum"
     },
     {
-        "question": "Sound Direction of Arrival Not Working *(For beta only)*",
+        "question": "Sound Direction of Arrival Not Working <i>(For beta only)</i>",
         "tags": [
             "AUDIO",
             "MICROPHONE"
@@ -27,7 +27,7 @@
         "source": "Community forum"
     },
     {
-        "question": "Volume Is Too Low *(Linux only)*",
+        "question": "Volume Is Too Low <i>(Linux only)</i>",
         "tags": [
             "AUDIO",
             "VOLUME"
