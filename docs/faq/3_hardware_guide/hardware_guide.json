@@ -1,0 +1,59 @@
+[
+    {
+        "question": "What are the safety limits of the head and body?",
+        "tags": [
+            "MOTORS",
+            "LIMITS",
+            "SAFETY"
+        ],
+        "answer_file": "safety_limits.mdx",
+        "source": "API documentation"
+    },
+    {
+        "question": "What happens if I ask for a pose that exceeds limits?",
+        "tags": [
+            "MOTORS",
+            "LIMITS"
+        ],
+        "answer_file": "pose_exceeding_limits.mdx",
+        "source": "API documentation"
+    },
+    {
+        "question": "What are the specs of the power supply?",
+        "tags": [
+            "POWER",
+            "HARDWARE"
+        ],
+        "answer_file": "power_supply.mdx",
+        "source": "No direct data"
+    },
+    {
+        "question": "How do I reset motors?",
+        "tags": [
+            "MOTORS",
+            "RESET"
+        ],
+        "answer_file": "motor_reset.mdx",
+        "source": "API documentation"
+    },
+    {
+        "question": "Is camera quality good in various lighting conditions?",
+        "tags": [
+            "VISION",
+            "CAMERA",
+            "HARDWARE"
+        ],
+        "answer_file": "camera_quality.mdx",
+        "source": "Users in chatlog, fallback authors"
+    },
+    {
+        "question": "How do I enable, disable, or make motors compliant?",
+        "tags": [
+            "MOTORS",
+            "COMPLIANCY",
+            "SAFETY"
+        ],
+        "answer_file": "motor_compliancy.mdx",
+        "source": "API documentation"
+    }
+]
