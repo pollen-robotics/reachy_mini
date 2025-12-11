@@ -266,7 +266,10 @@ async def write(
     websocket: WebSocket,
     backend: Backend = Depends(ws_get_backend),
 ) -> None:
-    """WebSocket endpoint to stream the full state of the robot."""
+    """WebSocket endpoint to stream raw packet to the serialport and return any response buffer.
+
+    Returns an empty bytes if no response is received.
+    """
     await websocket.accept()
 
     try:
