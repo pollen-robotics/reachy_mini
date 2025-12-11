@@ -8,7 +8,6 @@ import shutil
 import sys
 from importlib.metadata import entry_points
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 from huggingface_hub import snapshot_download
 
@@ -154,7 +153,9 @@ def _get_custom_app_url_from_file(
     This is much faster than subprocess and avoids sys.path pollution.
     Looks for patterns like: custom_app_url: str | None = "http://..."
     """
-    site_packages = _get_app_site_packages(app_name, wireless_version, desktop_app_daemon)
+    site_packages = _get_app_site_packages(
+        app_name, wireless_version, desktop_app_daemon
+    )
     if not site_packages or not site_packages.exists():
         return None
 
@@ -207,6 +208,7 @@ async def _list_apps_from_separate_venvs(
 
         # Use subprocess to list entry points from the apps_venv environment
         import subprocess
+
         try:
             result = subprocess.run(
                 [
@@ -214,7 +216,7 @@ async def _list_apps_from_separate_venvs(
                     "-c",
                     "from importlib.metadata import entry_points; "
                     "eps = entry_points(group='reachy_mini_apps'); "
-                    "print('\\n'.join(ep.name for ep in eps))"
+                    "print('\\n'.join(ep.name for ep in eps))",
                 ],
                 capture_output=True,
                 text=True,
@@ -223,10 +225,16 @@ async def _list_apps_from_separate_venvs(
             if result.returncode != 0:
                 return []
 
-            app_names = [name.strip() for name in result.stdout.strip().split('\n') if name.strip()]
+            app_names = [
+                name.strip()
+                for name in result.stdout.strip().split("\n")
+                if name.strip()
+            ]
             apps = []
             for app_name in app_names:
-                custom_app_url = _get_custom_app_url_from_file(app_name, wireless_version, desktop_app_daemon)
+                custom_app_url = _get_custom_app_url_from_file(
+                    app_name, wireless_version, desktop_app_daemon
+                )
                 apps.append(
                     AppInfo(
                         name=app_name,
@@ -256,7 +264,9 @@ async def _list_apps_from_separate_venvs(
 
             # Get custom_app_url by reading the main.py file (fast, no sys.path pollution)
             # This ensures the settings icon appears in the dashboard listing
-            custom_app_url = _get_custom_app_url_from_file(app_name, wireless_version, desktop_app_daemon)
+            custom_app_url = _get_custom_app_url_from_file(
+                app_name, wireless_version, desktop_app_daemon
+            )
 
             apps.append(
                 AppInfo(
@@ -302,7 +312,9 @@ async def list_available_apps(
 ) -> list[AppInfo]:
     """List apps available from entry points or separate venvs."""
     if _should_use_separate_venvs(wireless_version, desktop_app_daemon):
-        return await _list_apps_from_separate_venvs(wireless_version, desktop_app_daemon)
+        return await _list_apps_from_separate_venvs(
+            wireless_version, desktop_app_daemon
+        )
     else:
         return await _list_apps_from_entry_points()
 
@@ -366,19 +378,33 @@ async def install_package(
 
                 # On wireless, pre-install reachy-mini with gstreamer support
                 if wireless_version and not desktop_app_daemon:
-                    logger.info("Pre-installing reachy-mini with gstreamer support in apps_venv")
-                    python_path = _get_app_python(app_name, wireless_version, desktop_app_daemon)
+                    logger.info(
+                        "Pre-installing reachy-mini with gstreamer support in apps_venv"
+                    )
+                    python_path = _get_app_python(
+                        app_name, wireless_version, desktop_app_daemon
+                    )
                     ret = await running_command(
-                        [str(python_path), "-m", "pip", "install", "reachy-mini[gstreamer]"],
+                        [
+                            str(python_path),
+                            "-m",
+                            "pip",
+                            "install",
+                            "reachy-mini[gstreamer]",
+                        ],
                         logger=logger,
                     )
                     if ret != 0:
-                        logger.warning("Failed to pre-install reachy-mini, continuing anyway")
+                        logger.warning(
+                            "Failed to pre-install reachy-mini, continuing anyway"
+                        )
             else:
                 logger.info(f"Using existing shared venv at {venv_path}")
 
             # Install package in the venv
-            python_path = _get_app_python(app_name, wireless_version, desktop_app_daemon)
+            python_path = _get_app_python(
+                app_name, wireless_version, desktop_app_daemon
+            )
             ret = await running_command(
                 [str(python_path), "-m", "pip", "install", target],
                 logger=logger,
@@ -392,7 +418,11 @@ async def install_package(
             return 0
         finally:
             # Clean up broken venv on any failure (but not shared wireless venv)
-            if not success and venv_path.exists() and not (wireless_version and not desktop_app_daemon):
+            if (
+                not success
+                and venv_path.exists()
+                and not (wireless_version and not desktop_app_daemon)
+            ):
                 logger.warning(f"Installation failed, cleaning up {venv_path}")
                 shutil.rmtree(venv_path)
     else:
@@ -411,7 +441,9 @@ def get_app_module(
     """Get the module name for an app without loading it (for subprocess execution)."""
     if _should_use_separate_venvs(wireless_version, desktop_app_daemon):
         # Get module from separate venv's entry points
-        site_packages = _get_app_site_packages(app_name, wireless_version, desktop_app_daemon)
+        site_packages = _get_app_site_packages(
+            app_name, wireless_version, desktop_app_daemon
+        )
         if not site_packages or not site_packages.exists():
             raise ValueError(f"App '{app_name}' venv not found or invalid")
 
@@ -450,7 +482,9 @@ async def uninstall_package(
         if wireless_version and not desktop_app_daemon:
             # Wireless: shared venv, just uninstall the package
             logger.info(f"Uninstalling '{app_name}' from shared venv at {venv_path}")
-            python_path = _get_app_python(app_name, wireless_version, desktop_app_daemon)
+            python_path = _get_app_python(
+                app_name, wireless_version, desktop_app_daemon
+            )
             return await running_command(
                 [str(python_path), "-m", "pip", "uninstall", "-y", app_name],
                 logger=logger,

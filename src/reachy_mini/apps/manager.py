@@ -6,15 +6,12 @@ import os
 import signal
 from dataclasses import dataclass
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Optional
+from typing import Any, Optional
 
 from pydantic import BaseModel
 
 from . import AppInfo, SourceKind
 from .sources import hf_space, local_common_venv
-
-if TYPE_CHECKING:
-    from .app import ReachyMiniApp
 
 
 class AppState(str, Enum):
@@ -181,7 +178,7 @@ class AppManager:
         if process.returncode is None:
             # Send SIGINT to trigger KeyboardInterrupt (cross-platform, handled by template)
             try:
-                if os.name == 'posix':
+                if os.name == "posix":
                     # Unix/Linux/Mac: send SIGINT signal
                     os.kill(process.pid, signal.SIGINT)
                 else:

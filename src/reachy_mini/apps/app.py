@@ -76,6 +76,7 @@ class ReachyMiniApp(ABC):
 
         Returns:
             True if the service exists, False otherwise
+
         """
         if platform.system() != "Linux":
             return False
