@@ -1,0 +1,20 @@
+[
+    {
+        "question": "Are CAD files available to customize Reachy Mini?",
+        "tags": [
+            "CAD",
+            "3D_PRINTING"
+        ],
+        "answer_file": "cad_files.mdx",
+        "source": "No direct data"
+    },
+    {
+        "question": "Can I modify the appearance (custom skins)?",
+        "tags": [
+            "CUSTOMIZATION",
+            "SKINS"
+        ],
+        "answer_file": "custom_skins.mdx",
+        "source": "elgrorg (fallback)"
+    }
+]
