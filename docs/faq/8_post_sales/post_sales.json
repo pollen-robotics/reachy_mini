@@ -1,0 +1,49 @@
+[
+    {
+        "question": "I haven’t received my package. How can I check it?",
+        "tags": [
+            "DELIVERY",
+            "SHIPPING",
+            "POST_SALES"
+        ],
+        "answer_file": "package_not_received.mdx",
+        "source": "Support"
+    },
+    {
+        "question": "I received my package but its severely damage.",
+        "tags": [
+            "DELIVERY",
+            "SHIPPING",
+            "POST_SALES"
+        ],
+        "answer_file": "package_damaged.mdx",
+        "source": "Support"
+    },
+    {
+        "question": "Can I have a refund (before the unit being shipped)?",
+        "tags": [
+            "REFUND",
+            "POST_SALES"
+        ],
+        "answer_file": "refund_before_shipping.mdx",
+        "source": "Support"
+    },
+    {
+        "question": "Can I have a refund (after the unit being shipped)?",
+        "tags": [
+            "REFUND",
+            "POST_SALES"
+        ],
+        "answer_file": "refund_after_shipping.mdx",
+        "source": "Support"
+    },
+    {
+        "question": "Warranty: My unit is malfunctioning / broken part ?",
+        "tags": [
+            "WARRANTY",
+            "POST_SALES"
+        ],
+        "answer_file": "warranty.mdx",
+        "source": "Support"
+    }
+]
