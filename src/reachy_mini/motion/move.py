@@ -1,6 +1,7 @@
 """Module for defining motion moves on the ReachyMini robot."""
 
 from abc import ABC, abstractmethod
+from pathlib import Path
 
 import numpy as np
 import numpy.typing as npt
@@ -8,6 +9,11 @@ import numpy.typing as npt
 
 class Move(ABC):
     """Abstract base class for defining a move on the ReachyMini robot."""
+
+    @property
+    def sound(self) -> Path | None:
+        """Sound associated with the move."""
+        return None
 
     @property
     @abstractmethod
