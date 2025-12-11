@@ -6,12 +6,15 @@ import os
 import signal
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from pydantic import BaseModel
 
 from . import AppInfo, SourceKind
 from .sources import hf_space, local_common_venv
+
+if TYPE_CHECKING:
+    from reachy_mini.daemon.daemon import Daemon
 
 
 class AppState(str, Enum):
@@ -48,7 +51,7 @@ class AppManager:
         self,
         wireless_version: bool = False,
         desktop_app_daemon: bool = False,
-        daemon: Optional[Any] = None,
+        daemon: Optional["Daemon"] = None,
     ) -> None:
         """Initialize the AppManager."""
         self.current_app = None  # type: RunningApp | None
