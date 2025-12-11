@@ -43,6 +43,7 @@ class Args:
     log_file: str | None = None
 
     wireless_version: bool = False
+    desktop_app_daemon: bool = False
 
     stream: bool = False
 
@@ -65,6 +66,8 @@ class Args:
     wake_up_on_start: bool = True
     goto_sleep_on_stop: bool = True
 
+    robot_name: str = "reachy_mini"
+
     fastapi_host: str = "0.0.0.0"
     fastapi_port: int = 8000
 
@@ -83,7 +86,7 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
     async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         """Lifespan context manager for the FastAPI application."""
         args = app.state.args  # type: Args
-        
+
         try:
             if args.autostart:
                 await app.state.daemon.start(
@@ -108,7 +111,7 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
                 await app.state.app_manager.close()
             except Exception as e:
                 logging.error(f"Error closing app manager: {e}")
-            
+
             try:
                 logging.info("Shutting down daemon...")
                 await app.state.daemon.stop(
@@ -123,9 +126,16 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
 
     app.state.args = args
     app.state.daemon = Daemon(
-        wireless_version=args.wireless_version, stream=args.stream
+        robot_name=args.robot_name,
+        stream=args.stream,
+        wireless_version=args.wireless_version,
+        desktop_app_daemon=args.desktop_app_daemon,
     )
-    app.state.app_manager = AppManager()
+    app.state.app_manager = AppManager(
+        wireless_version=args.wireless_version,
+        desktop_app_daemon=args.desktop_app_daemon,
+        daemon=app.state.daemon,
+    )
 
     router = APIRouter(prefix="/api")
     router.include_router(apps.router)
@@ -248,12 +258,25 @@ def main() -> None:
         default=default_args.wireless_version,
         help="Use the wireless version of Reachy Mini (default: False).",
     )
+    parser.add_argument(
+        "--desktop-app-daemon",
+        action="store_true",
+        default=default_args.desktop_app_daemon,
+        help="Use the desktop version of Reachy Mini (default: False).",
+    )
 
     parser.add_argument(
         "--stream",
         action="store_true",
         default=default_args.stream,
         help="Enable webrtc streaming. For wireless version only (default: False).",
+    )
+
+    parser.add_argument(
+        "--robot-name",
+        type=str,
+        default=default_args.robot_name,
+        help="Name of the robot (default: reachy_mini).",
     )
 
     # Real robot mode

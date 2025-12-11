@@ -4,7 +4,7 @@
 
 > ⚠️ Reachy Mini is still in beta. Expect bugs, some of them we won't fix right away if they are not a priority.
 
-[Reachy Mini](https://www.pollen-robotics.com/reachy-mini/) is an expressive, open-source robot designed for human-robot interaction, creative coding, and AI experimentation. We made it to be affordable, easy to use, hackable and cute, so that you can focus on building cool AI applications!
+[Reachy Mini](https://huggingface.co/blog/reachy-mini) is an expressive, open-source robot designed for human-robot interaction, creative coding, and AI experimentation. We made it to be affordable, easy to use, hackable and cute, so that you can focus on building cool AI applications!
 
 [![Reachy Mini Hello](/docs/assets/reachy_mini_hello.gif)](https://www.pollen-robotics.com/reachy-mini/)
 
@@ -225,6 +225,10 @@ The daemon also provides a REST API via [fastapi](https://fastapi.tiangolo.com/)
 By default, the API server runs on `http://localhost:8000`. The API is documented using OpenAPI, and you can access the documentation at `http://localhost:8000/docs` when the daemon is running.
 
 More information about the API can be found in the [HTTP API documentation](./docs/source/rest_api.mdx).
+
+## Share your apps with the commmunity
+
+You can share your github repositories on social media or use [this guide](https://huggingface.co/blog/pollen-robotics/make-and-publish-your-reachy-mini-apps) to share your app even with users who can't code.
 
 ## Open source & contribution
 

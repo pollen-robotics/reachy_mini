@@ -62,6 +62,7 @@ class ReachyMini:
 
     def __init__(
         self,
+        robot_name: str = "reachy_mini",
         localhost_only: bool = True,
         spawn_daemon: bool = False,
         use_sim: bool = False,
@@ -73,6 +74,7 @@ class ReachyMini:
         """Initialize the Reachy Mini robot.
 
         Args:
+            robot_name (str): Name of the robot, defaults to "reachy_mini".
             localhost_only (bool): If True, will only connect to localhost daemons, defaults to True.
             spawn_daemon (bool): If True, will spawn a daemon to control the robot, defaults to False.
             use_sim (bool): If True and spawn_daemon is True, will spawn a simulated robot, defaults to True.
@@ -86,8 +88,9 @@ class ReachyMini:
         """
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(log_level)
+        self.robot_name = robot_name
         daemon_check(spawn_daemon, use_sim)
-        self.client = ZenohClient(localhost_only)
+        self.client = ZenohClient(robot_name, localhost_only)
         self.client.wait_for_connection(timeout=timeout)
         self.set_automatic_body_yaw(automatic_body_yaw)
         self._last_head_pose: Optional[npt.NDArray[np.float64]] = None

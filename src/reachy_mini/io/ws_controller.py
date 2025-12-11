@@ -1,4 +1,5 @@
 """Async WebSocket Controller for remote control and streaming of the robot."""
+
 import asyncio
 import json
 import logging
@@ -12,6 +13,7 @@ from websockets.asyncio.client import ClientConnection, connect
 from reachy_mini.daemon.backend.abstract import Backend
 
 logger = logging.getLogger("reachy_mini.ws_controller")
+
 
 @dataclass
 class Movement:
