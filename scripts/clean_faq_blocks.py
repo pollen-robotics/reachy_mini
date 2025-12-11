@@ -1,3 +1,5 @@
+"""Clean FAQ and FAQ-TAGS blocks in Markdown documentation files."""
+
 import argparse
 import pathlib
 import re
@@ -35,25 +37,27 @@ TAGS_PATTERN = re.compile(
 
 
 def _keep_markers_only(match: re.Match) -> str:
-    """Return start marker, two newlines, end marker."""
+    """Return start marker, two newlines, and end marker."""
     return f"{match.group('start')}\n\n{match.group('end')}"
 
 
 def clean_content(content: str) -> str:
-    """
-    Delete everything between the markers:
-      - <!-- FAQ:section:start --> ... <!-- FAQ:section:end -->
-      - <!-- FAQ:folder:section:start --> ... <!-- FAQ:folder:section:end -->
-      - <!-- FAQ-TAGS:expr:start --> ... <!-- FAQ-TAGS:expr:end -->
+    """Clean FAQ markers content from the given text.
+
+    This deletes everything between the markers:
+
+    - <!-- FAQ:section:start --> ... <!-- FAQ:section:end -->
+    - <!-- FAQ:folder:section:start --> ... <!-- FAQ:folder:section:end -->
+    - <!-- FAQ-TAGS:expr:start --> ... <!-- FAQ-TAGS:expr:end -->
 
     leaving only the markers, with an empty line between the two.
 
-    Implementation in ONE PASS per block type (no while loop).
+    The implementation runs in one pass per block type (no while loop).
     """
     if "<!-- FAQ" not in content:
         return content
 
-    # Clean new folder+section markers first, then old ones, then tag markers
+    # Clean new folder+section markers first, then old ones, then tag markers.
     content = SECTION_PATTERN_NEW.sub(_keep_markers_only, content)
     content = SECTION_PATTERN_OLD.sub(_keep_markers_only, content)
     content = TAGS_PATTERN.sub(_keep_markers_only, content)
@@ -61,8 +65,8 @@ def clean_content(content: str) -> str:
 
 
 def process_file(path: pathlib.Path) -> bool:
-    """
-    Clean a .md/.mdx file.
+    """Clean a Markdown file.
+
     Returns True if the file was modified.
     """
     original = path.read_text(encoding="utf-8")
@@ -75,9 +79,10 @@ def process_file(path: pathlib.Path) -> bool:
 
 
 def iter_target_files(paths: Iterable[pathlib.Path]) -> Iterable[pathlib.Path]:
-    """
+    """Yield Markdown files to clean.
+
     If paths are provided as arguments, only those are processed.
-    Otherwise, it scans all docs/source/*.md(x).
+    Otherwise, all docs/source/*.md(x) files are scanned.
     """
     if paths:
         for p in paths:
@@ -86,9 +91,10 @@ def iter_target_files(paths: Iterable[pathlib.Path]) -> Iterable[pathlib.Path]:
                 yield p
         return
 
-    # Default mode: all docs/source
+    # Default mode: all docs/source.
     if not DOCS_SOURCE_DIR.exists():
-        raise FileNotFoundError(f"Directory docs/source not found: {DOCS_SOURCE_DIR}")
+        msg = f"Directory docs/source not found: {DOCS_SOURCE_DIR}"
+        raise FileNotFoundError(msg)
 
     for path in DOCS_SOURCE_DIR.rglob("*"):
         if path.is_file() and path.suffix.lower() in {".md", ".mdx"}:
@@ -96,14 +102,17 @@ def iter_target_files(paths: Iterable[pathlib.Path]) -> Iterable[pathlib.Path]:
 
 
 def main() -> None:
+    """Run the FAQ blocks cleaning script."""
     parser = argparse.ArgumentParser(
-        description="Clean the content between FAQ/FAQ-TAGS blocks."
+        description="Clean the content between FAQ/FAQ-TAGS blocks.",
     )
     parser.add_argument(
         "files",
         nargs="*",
-        help="Markdown (.md/.mdx) files to clean (relative or absolute paths). "
-        "If none are provided, it will scan the docs/source/ directory.",
+        help=(
+            "Markdown (.md/.mdx) files to clean (relative or absolute paths). "
+            "If none are provided, it will scan the docs/source/ directory."
+        ),
     )
     args = parser.parse_args()
 

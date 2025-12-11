@@ -1,7 +1,9 @@
+"""Generate FAQ sections in documentation from JSON definitions."""
+
 import json
 import pathlib
 import re
-from typing import List, Dict, Any, Tuple
+from typing import Any, Dict, List, Tuple
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 
@@ -11,7 +13,7 @@ DOCS_SOURCE_DIR = ROOT / "docs" / "source"
 
 
 def load_all_items() -> List[Dict[str, Any]]:
-    """Charge all *.json files from FAQ_DATA_DIR."""
+    """Load all FAQ items from JSON files."""
     all_items: List[Dict[str, Any]] = []
     for json_path in FAQ_DATA_DIR.glob("*.json"):
         section_name = json_path.stem
@@ -19,7 +21,8 @@ def load_all_items() -> List[Dict[str, Any]]:
             try:
                 items = json.load(f)
             except json.JSONDecodeError as e:
-                raise RuntimeError(f"JSON error in {json_path}: {e}") from e
+                msg = f"JSON error in {json_path}: {e}"
+                raise RuntimeError(msg) from e
         for it in items:
             it.setdefault("_section", section_name)
         all_items.extend(items)
@@ -27,30 +30,31 @@ def load_all_items() -> List[Dict[str, Any]]:
 
 
 def load_answer_text(item: Dict[str, Any]) -> str:
+    """Load the answer text for a FAQ item."""
     answer_file = item.get("answer_file")
     if not answer_file:
-        raise KeyError(
-            f"FAQ item missing 'answer_file' for question: {item.get('question')}"
-        )
+        msg = f"FAQ item missing 'answer_file' for question: {item.get('question')}"
+        raise KeyError(msg)
 
     answer_path = FAQ_ANSWERS_DIR / answer_file
     if not answer_path.exists():
-        raise FileNotFoundError(
-            f"Answer file not found for '{item.get('question')}': {answer_path}"
-        )
+        msg = f"Answer file not found for '{item.get('question')}': {answer_path}"
+        raise FileNotFoundError(msg)
 
     with answer_path.open("r", encoding="utf-8") as f:
-        return f.read().rstrip()  # remove only trailing \n
+        # Remove only trailing newline characters.
+        return f.read().rstrip()
 
 
 def render_item(item: Dict[str, Any]) -> str:
+    """Render a FAQ item as an HTML details block."""
     question = item["question"]
     tags = item.get("tags", [])
     answer = load_answer_text(item)
     source = item.get("source")
 
     # Tags
-    tags_html_parts = []
+    tags_html_parts: List[str] = []
     for tag in tags:
         tags_html_parts.append(
             f"""
@@ -97,19 +101,22 @@ def render_item(item: Dict[str, Any]) -> str:
 
 
 def item_has_any_tag(item: Dict[str, Any], wanted_tags: List[str]) -> bool:
+    """Return True if the item has at least one of the wanted tags."""
     item_tags = [str(t).strip().lower() for t in item.get("tags", [])]
     wanted_tags_normalized = [t.strip().lower() for t in wanted_tags if t.strip()]
     return any(t in item_tags for t in wanted_tags_normalized)
 
 
 def render_by_tags(tags_expr: str) -> str:
-    """
-    tags_expr ex : "SDK" or "SDK,ASSEMBLY"
-    Inserting all items that have AT LEAST ONE of the requested tags.
+    """Render all items that have at least one of the requested tags.
+
+    Tags expression examples: "SDK" or "SDK,ASSEMBLY".
     """
     tags = [t.strip() for t in tags_expr.split(",") if t.strip()]
     if not tags:
-        raise ValueError(f"Empty tags expression: '{tags_expr}'")
+        msg = f"Empty tags expression: '{tags_expr}'"
+        raise ValueError(msg)
+
     all_items = load_all_items()
     matching: List[Dict[str, Any]] = [
         it for it in all_items if item_has_any_tag(it, tags)
@@ -132,58 +139,66 @@ def render_by_tags(tags_expr: str) -> str:
 
 
 def find_tags_placeholders(content: str) -> List[str]:
-    """
-    Returns tag expressions as they appear:
-    e.g.: "SDK", "SDK,ASSEMBLY"
+    """Return tag expressions as they appear in the content.
+
+    Examples: "SDK", "SDK,ASSEMBLY".
     """
     pattern = re.compile(r"<!-- FAQ-TAGS:([^:]+):start -->")
     matches = pattern.findall(content)
     # Keep the expression as is (including spaces) for searching
-    # but trim it for the unique list
-    return sorted(set(m.strip() for m in matches))
+    # but trim it for the unique list.
+    return sorted({m.strip() for m in matches})
 
 
 def replace_tag_block(content: str, tags_expr: str, new_block: str) -> str:
-    """
-    Replace everything between:
+    """Replace the FAQ block that matches the given tags expression.
+
+    The block is delimited by:
+
     <!-- FAQ-TAGS:tags_expr:start -->
     ...
     <!-- FAQ-TAGS:tags_expr:end -->
     """
     # Use the expression as written in the file (including spaces)
-    # to match exactly
+    # to match exactly.
     escaped_expr = re.escape(tags_expr)
     pattern = re.compile(
-        rf"(<!-- FAQ-TAGS:{escaped_expr}:start -->)(.*?)(<!-- FAQ-TAGS:{escaped_expr}:end -->)",
+        (
+            rf"(<!-- FAQ-TAGS:{escaped_expr}:start -->)"
+            r"(.*?)"
+            rf"(<!-- FAQ-TAGS:{escaped_expr}:end -->)"
+        ),
         re.DOTALL,
     )
-    replacement = rf"\1\n\n{new_block}\n\3"
-    (content, n) = pattern.subn(replacement, content)
+    replacement = r"\1\n\n" + new_block + r"\n\3"
+    content, n = pattern.subn(replacement, content)
     if n == 0:
-        raise ValueError(f"No FAQ-TAGS block found for '{tags_expr}' in the file.")
+        msg = f"No FAQ-TAGS block found for '{tags_expr}' in the file."
+        raise ValueError(msg)
     return content
 
 
 def process_file(path: pathlib.Path) -> bool:
-    """
-    Process a .md/.mdx file.
+    """Process a Markdown file and update its FAQ blocks.
+
     Returns True if the content was modified.
     """
     original = path.read_text(encoding="utf-8")
     content = original
 
-    # We search for placeholders with a broad regex to retrieve
-    # exactly the tag expression as it appears:
+    # Search for placeholders with a broad regex to retrieve
+    # exactly the tag expression as it appears.
     raw_matches = re.findall(r"<!-- FAQ-TAGS:([^:]+):start -->", content)
-    # We keep the EXACT expressions (without strip) for replacements,
-    # but we deduplicate them gently.
-    seen_exprs = []
+    # Keep the EXACT expressions (without strip) for replacements,
+    # but deduplicate them gently.
+    seen_exprs: List[str] = []
     for raw in raw_matches:
         if raw not in seen_exprs:
             seen_exprs.append(raw)
 
     if not seen_exprs:
-        return False  # nothing to do in this file
+        # Nothing to do in this file.
+        return False
 
     for raw_expr in seen_exprs:
         expr_for_render = raw_expr.strip()
@@ -197,8 +212,10 @@ def process_file(path: pathlib.Path) -> bool:
 
 
 def main() -> None:
+    """Run the FAQ tags injection script."""
     if not DOCS_SOURCE_DIR.exists():
-        raise FileNotFoundError(f"Directory docs/source not found: {DOCS_SOURCE_DIR}")
+        msg = f"Directory docs/source not found: {DOCS_SOURCE_DIR}"
+        raise FileNotFoundError(msg)
 
     any_changed = False
     for path in DOCS_SOURCE_DIR.rglob("*"):
