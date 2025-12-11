@@ -18,6 +18,7 @@ from .audio_base import AudioBase
 MAX_INPUT_CHANNELS = 4
 MAX_INPUT_QUEUE_SECONDS = 60.0
 
+
 class SoundDeviceAudio(AudioBase):
     """Audio device implementation using sounddevice."""
 
@@ -42,7 +43,7 @@ class SoundDeviceAudio(AudioBase):
         self._input_device_id = self._get_device_id(
             ["Reachy Mini Audio", "respeaker"], device_io_type="input"
         )
-    
+
         self._logs = {
             "input_underflows": 0,
             "input_overflows": 0,
@@ -84,25 +85,36 @@ class SoundDeviceAudio(AudioBase):
         if status and status.input_underflow:
             self._logs["input_underflows"] += 1
             if self._logs["input_underflows"] % 10 == 1:
-                self.logger.debug(f"Audio input underflow count: {self._logs['input_underflows']}")
+                self.logger.debug(
+                    f"Audio input underflow count: {self._logs['input_underflows']}"
+                )
 
         with self._input_lock:
-            if self._input_queued_samples + indata.shape[0] > self._input_max_queue_samples:
-                while self._input_queued_samples + indata.shape[0] > self._input_max_queue_samples and len(self._input_buffer) > 0:
+            if (
+                self._input_queued_samples + indata.shape[0]
+                > self._input_max_queue_samples
+            ):
+                while (
+                    self._input_queued_samples + indata.shape[0]
+                    > self._input_max_queue_samples
+                    and len(self._input_buffer) > 0
+                ):
                     dropped = self._input_buffer.popleft()
                     self._input_queued_samples -= dropped.shape[0]
                 self._logs["input_overflows"] += 1
                 self.logger.warning(
                     "Audio input buffer overflowed, dropped old chunks !"
                 )
-            self._input_buffer.append(indata[:, :MAX_INPUT_CHANNELS].copy()) 
+            self._input_buffer.append(indata[:, :MAX_INPUT_CHANNELS].copy())
             self._input_queued_samples += indata.shape[0]
 
     def get_audio_sample(self) -> Optional[npt.NDArray[np.float32]]:
         """Read audio data from the buffer. Returns numpy array or None if empty."""
         with self._input_lock:
             if self._input_buffer and len(self._input_buffer) > 0:
-                data: npt.NDArray[np.float32] = np.concatenate(self._input_buffer, axis=0)
+                data: npt.NDArray[np.float32] = np.concatenate(
+                    self._input_buffer, axis=0
+                )
                 self._input_buffer.clear()
                 self._input_queued_samples = 0
                 return data
@@ -125,7 +137,7 @@ class SoundDeviceAudio(AudioBase):
         """Get the number of input channels of the audio device."""
         return min(
             int(sd.query_devices(self._input_device_id, "input")["max_input_channels"]),
-            MAX_INPUT_CHANNELS
+            MAX_INPUT_CHANNELS,
         )
 
     def get_output_channels(self) -> int:
@@ -177,7 +189,7 @@ class SoundDeviceAudio(AudioBase):
         """Handle audio output stream callback."""
         if status:
             self.logger.warning(f"SoundDevice output status: {status}")
-        
+
         with self._output_lock:
             if self._output_buffer:
                 # Get the first chunk from the buffer
@@ -202,9 +214,11 @@ class SoundDeviceAudio(AudioBase):
                 # No data available, output silence
                 outdata.fill(0)
 
-    def ensure_chunk_shape(self, chunk: npt.NDArray[np.float32], target_shape: tuple[int, ...]) -> npt.NDArray[np.float32]:
+    def ensure_chunk_shape(
+        self, chunk: npt.NDArray[np.float32], target_shape: tuple[int, ...]
+    ) -> npt.NDArray[np.float32]:
         """Ensure chunk has the shape (frames, num_channels) as required by outdata.
-        
+
         - If chunk is 1D, tile to required num_channels.
         - If chunk is 2D with mismatched channels, use column 0.
         - If chunk is already correct, return as-is.
@@ -256,7 +270,9 @@ class SoundDeviceAudio(AudioBase):
         if self._output_stream is not None:
             self.push_audio_sample(data)
         else:
-            self.logger.warning("Output stream wasn't open. We are opening it and leaving it open.")
+            self.logger.warning(
+                "Output stream wasn't open. We are opening it and leaving it open."
+            )
             self.start_playing()
             self.push_audio_sample(data)
 

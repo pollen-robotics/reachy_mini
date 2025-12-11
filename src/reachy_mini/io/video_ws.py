@@ -1,4 +1,5 @@
 """Async WebSocket Frame Sender."""
+
 import asyncio
 import logging
 import threading
@@ -12,6 +13,7 @@ from websockets.asyncio.client import ClientConnection, connect
 from websockets.exceptions import ConnectionClosed
 
 logger = logging.getLogger("reachy_mini.io.video_ws")
+
 
 class AsyncWebSocketFrameSender:
     """Async WebSocket frame sender."""
@@ -27,12 +29,12 @@ class AsyncWebSocketFrameSender:
     def __init__(self, ws_uri: str) -> None:
         """Initialize the WebSocket frame sender."""
         self.ws_uri = ws_uri
-        self.queue = Queue(maxsize=2) 
+        self.queue = Queue(maxsize=2)
         self.loop = asyncio.new_event_loop()
         self.thread = threading.Thread(target=self._run_loop, daemon=True)
         self.connected = threading.Event()
         self.stop_flag = False
-        self._last_frame = None 
+        self._last_frame = None
         self.thread.start()
 
     def _run_loop(self) -> None:
@@ -53,36 +55,38 @@ class AsyncWebSocketFrameSender:
             try:
                 ws: ClientConnection
                 async with connect(
-                    self.ws_uri, 
-                    ping_interval=5,      # Every 5 seconds is plenty
-                    ping_timeout=10,      # Give it 10s to respond
-                    close_timeout=1,      # Don't wait long for polite closes
+                    self.ws_uri,
+                    ping_interval=5,  # Every 5 seconds is plenty
+                    ping_timeout=10,  # Give it 10s to respond
+                    close_timeout=1,  # Don't wait long for polite closes
                 ) as ws:
                     logger.info("[WS Video] Connected to Space")
                     self.connected.set()
-                    self._clear_queue() # Ensure we start fresh
+                    self._clear_queue()  # Ensure we start fresh
 
                     while not self.stop_flag:
                         try:
                             frame = self.queue.get_nowait()
-                            
+
                             await ws.send(frame)
 
                         except Empty:
                             # Queue is empty, just yield to event loop
                             await asyncio.sleep(0.05)
                             continue
-                        
+
                         except Exception as e:
                             logger.error(f"[WS Video] Send error: {e}")
                             break
 
-            except (ConnectionClosed) as e:
+            except ConnectionClosed as e:
                 # Common network errors, retry quickly
-                logger.error(f"[WS Video] Connection lost ({type(e).__name__}). Retrying...")
+                logger.error(
+                    f"[WS Video] Connection lost ({type(e).__name__}). Retrying..."
+                )
                 self.connected.clear()
                 self._last_frame = None
-                await asyncio.sleep(0.5) # Wait briefly before reconnecting
+                await asyncio.sleep(0.5)  # Wait briefly before reconnecting
 
             except Exception as e:
                 logger.error(f"[WS Video] Unexpected error: {e}")
@@ -118,10 +122,12 @@ class AsyncWebSocketFrameSender:
                 # Queue is full, network is likely slower than camera.
                 # Drop the OLDEST frame to make room for the NEWEST.
                 try:
-                    self.queue.get_nowait() # Pop old frame
-                    self.queue.put_nowait(data) # Push new frame
+                    self.queue.get_nowait()  # Pop old frame
+                    self.queue.put_nowait(data)  # Push new frame
                 except Empty:
-                    logger.error("[WS Video] Queue is full and empty, this should not happen.")
+                    logger.error(
+                        "[WS Video] Queue is full and empty, this should not happen."
+                    )
 
     def close(self) -> None:
         """Close the WebSocket frame sender."""
