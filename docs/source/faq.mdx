@@ -21,8 +21,8 @@ If you want to modify or add a block, check ../README.md  -->
 
 Most testers report <b>1.5–2 hours</b>, with some up to <b>4 hours</b> depending on experience.
 
+<p style="color:grey"><i>Source: Hardware doc.</i></p>
 
-_Source: Hardware doc._
 
 </details><br>
 
@@ -43,8 +43,8 @@ Video for Reachy Mini [BETA](https://www.youtube.com/watch?v=_r0cHySFbeY), LITE,
 
 Digital Assembly Guide for Reachy Mini [BETA](https://huggingface.co/spaces/pollen-robotics/Reachy_Mini_Assembly_Guide), LITE, WIRELESS
 
+<p style="color:grey"><i>Source: Hardware doc.</i></p>
 
-_Source: Hardware doc._
 
 </details><br>
 
@@ -74,8 +74,8 @@ _Source: Hardware doc._
 5. Enter your Wi-Fi network credentials (SSID and password) and click "Connect".
 6. Wait a few moments for Reachy Mini to connect to your Wi-Fi network. The access point will disappear once connected. If the connection fails, Reachy Mini will restart the access point, and you can try again.
 
+<p style="color:grey"><i>Source: API doc.</i></p>
 
-_Source: API doc._
 
 </details><br>
 
@@ -91,8 +91,8 @@ _Source: API doc._
 
 Helps prevent package conflicts during SDK installation.
 
+<p style="color:grey"><i>Source: developers referencing `.venv` in troubleshooting threads.</i></p>
 
-_Source: developers referencing `.venv` in troubleshooting threads._
 
 </details><br>
 
@@ -108,8 +108,8 @@ _Source: developers referencing `.venv` in troubleshooting threads._
 
 Users solved these by rebuilding their environment and reinstalling missing system dependencies.
 
+<p style="color:grey"><i>Source: API doc.</i></p>
 
-_Source: API doc._
 
 </details><br>
 
@@ -131,8 +131,8 @@ _Source: API doc._
 
 Sure! You can install apps directly from your Dashboard if they’re native, or add them to your favourites if they’re web-based.
 
+<p style="color:grey"><i>Source: User guide.</i></p>
 
-_Source: User guide._
 
 </details><br>
 
@@ -155,8 +155,8 @@ _Source: User guide._
 One of our beta tester built a TurboWarp/Scratch 3.0 extension for controlling Reachy Mini: 
 [reachy_mini_turbowarp](https://github.com/iizukak/reachy_mini_turbowarp)
 
+<p style="color:grey"><i>Source: API doc.</i></p>
 
-_Source: API doc._
 
 </details><br>
 
@@ -181,8 +181,8 @@ _Source: API doc._
 
 Update the Reachy Mini SDK to the latest version. Earlier versions had a bug preventing smooth installation.
 
+<p style="color:grey"><i>Source: Community forum.</i></p>
 
-_Source: Community forum._
 
 </details><br>
 
@@ -198,8 +198,8 @@ _Source: Community forum._
 
 Browse [spaces on Hugging Face](https://huggingface.co/spaces?q=reachy+mini) to discover all the apps developed for Reachy Mini. You can also find them directly through the Reachy Mini dashboard. The ones marked with a “certified” tag are those that have been tested and approved by the team.
 
+<p style="color:grey"><i>Source: Hugging Face spaces.</i></p>
 
-_Source: Hugging Face spaces._
 
 </details><br>
 
@@ -237,8 +237,8 @@ class MyApp(ReachyMiniApp):
 
 - `stop_event` is a threading.Event indicating when the app should stop.
 
+<p style="color:grey"><i>Source: API documentation.</i></p>
 
-_Source: API documentation._
 
 </details><br>
 
@@ -281,8 +281,8 @@ Or install as a package:
 pip install -e my_app_name/
 ```
 
+<p style="color:grey"><i>Source: API documentation.</i></p>
 
-_Source: API documentation._
 
 </details><br>
 
@@ -298,8 +298,8 @@ _Source: API documentation._
 
 Add sequences in `reachy_mini/app/collection/dance.py`.
 
+<p style="color:grey"><i>Source: API documentation.</i></p>
 
-_Source: API documentation._
 
 </details><br>
 
@@ -315,8 +315,8 @@ _Source: API documentation._
 
 Yes, but requires custom audio processing (e.g., Librosa). Streaming audio tempo detection is more challenging than offline analysis.
 
+<p style="color:grey"><i>Source: fallback authors (audio analysis discussion).</i></p>
 
-_Source: fallback authors (audio analysis discussion)._
 
 </details><br>
 
@@ -332,8 +332,8 @@ _Source: fallback authors (audio analysis discussion)._
 
 Yes, users built local OpenAI-compatible integrations.
 
+<p style="color:grey"><i>Source: fallback community authors.</i></p>
 
-_Source: fallback community authors._
 
 </details><br>
 
@@ -355,8 +355,8 @@ _Source: fallback community authors._
 
 Mentioned in discussions; models were being worked on but not yet official during beta.
 
+<p style="color:grey"><i>Source: Community discussion.</i></p>
 
-_Source: Community discussion._
 
 </details><br>
 
@@ -391,8 +391,8 @@ with ReachyMini() as mini:
 - `mm=True` means translation arguments are in millimeters.
 - The head frame is located at the base of the head.
 
+<p style="color:grey"><i>Source: API documentation.</i></p>
 
-_Source: API documentation._
 
 </details><br>
 
@@ -417,8 +417,8 @@ mini.goto_target(head=pose, duration=2.0)
 - `degrees=True` means angles are given in degrees.
 - You can combine translation (x, y, z) and orientation (roll, pitch, yaw).
 
+<p style="color:grey"><i>Source: API documentation.</i></p>
 
-_Source: API documentation._
 
 </details><br>
 
@@ -452,8 +452,8 @@ with ReachyMini() as mini:
 - `antennas` is a 2-element array in radians [right, left].
 - `body_yaw` controls body rotation.
 
+<p style="color:grey"><i>Source: API documentation.</i></p>
 
-_Source: API documentation._
 
 </details><br>
 
@@ -486,8 +486,8 @@ mini.set_target(head=create_head_pose(y=y, mm=True))
 
 ```
 
+<p style="color:grey"><i>Source: API documentation.</i></p>
 
-_Source: API documentation._
 
 </details><br>
 
@@ -517,8 +517,8 @@ To compare methods, run the example:
 
 - `examples/goto_interpolation_playground.py`
 
+<p style="color:grey"><i>Source: API documentation.</i></p>
 
-_Source: API documentation._
 
 </details><br>
 
@@ -550,8 +550,8 @@ with ReachyMini() as mini:
 - `initial_goto_duration` smoothly moves the robot to the starting pose of the move.
 - Datasets are hosted on Hugging Face (e.g. emotions / dances libraries).
 
+<p style="color:grey"><i>Source: API documentation.</i></p>
 
-_Source: API documentation._
 
 </details><br>
 
@@ -585,8 +585,8 @@ Tools to record and upload datasets:
 
 - `reachy_mini_toolbox/tools/moves`
 
+<p style="color:grey"><i>Source: API documentation.</i></p>
 
-_Source: API documentation._
 
 </details><br>
 
@@ -617,8 +617,8 @@ Limits:
 
 If commanded pose exceeds these limits, the robot will clamp to the nearest safe pose (no exception is thrown).
 
+<p style="color:grey"><i>Source: API documentation.</i></p>
 
-_Source: API documentation._
 
 </details><br>
 
@@ -647,8 +647,8 @@ head_pose = reachy.get_current_head_pose()
 print("current head pose", head_pose)
 ```
 
+<p style="color:grey"><i>Source: API documentation.</i></p>
 
-_Source: API documentation._
 
 </details><br>
 
@@ -664,8 +664,8 @@ _Source: API documentation._
 
 Users requested this information; no final spec was posted in chatlogs.
 
+<p style="color:grey"><i>Source: No direct data.</i></p>
 
-_Source: No direct data._
 
 </details><br>
 
@@ -681,8 +681,8 @@ _Source: No direct data._
 
 This is now done automatically when the daemon starts, so restarting the daemon should be enough.
 
+<p style="color:grey"><i>Source: API documentation.</i></p>
 
-_Source: API documentation._
 
 </details><br>
 
@@ -710,8 +710,8 @@ _Source: API documentation._
     
     Used by the gravity compensation example.
 
+<p style="color:grey"><i>Source: API documentation.</i></p>
 
-_Source: API documentation._
 
 </details><br>
 
@@ -743,8 +743,8 @@ with ReachyMini() as mini:
     # sample is a numpy array as returned by sounddevice
 ```
 
+<p style="color:grey"><i>Source: API documentation.</i></p>
 
-_Source: API documentation._
 
 </details><br>
 
@@ -766,8 +766,8 @@ with ReachyMini() as mini:
     mini.media.push_audio_sample(chunk)
 ```
 
+<p style="color:grey"><i>Source: API documentation.</i></p>
 
-_Source: API documentation._
 
 </details><br>
 
@@ -790,8 +790,8 @@ _Source: API documentation._
 
 Several testers reported excellent indoor performance, even in office lighting.
 
+<p style="color:grey"><i>Source: Users in chatlog, fallback authors.</i></p>
 
-_Source: Users in chatlog, fallback authors._
 
 </details><br>
 
@@ -814,8 +814,8 @@ with ReachyMini() as mini:
     # frame is a numpy array compatible with OpenCV
 ```
 
+<p style="color:grey"><i>Source: API documentation.</i></p>
 
-_Source: API documentation._
 
 </details><br>
 
@@ -839,8 +839,8 @@ Then run your code with `--backend gstreamer`.
 
 You must have GStreamer binaries installed on your system. You can define custom pipelines (see `camera_gstreamer.py` in the repository for an example).
 
+<p style="color:grey"><i>Source: API documentation.</i></p>
 
-_Source: API documentation._
 
 </details><br>
 
@@ -864,8 +864,8 @@ _Source: API documentation._
 
 Users asked for CAD files; no direct confirmation was provided in chatlogs.
 
+<p style="color:grey"><i>Source: No direct data.</i></p>
 
-_Source: No direct data._
 
 </details><br>
 
@@ -881,8 +881,8 @@ _Source: No direct data._
 
 Community members shared custom builds, including a Star Wars astromech variant.
 
+<p style="color:grey"><i>Source: elgrorg (fallback).</i></p>
 
-_Source: elgrorg (fallback)._
 
 </details><br>
 
@@ -906,8 +906,8 @@ _Source: elgrorg (fallback)._
 
 Yes, users implemented wake-up behaviors and audio-reactive motions in the Radio App.
 
+<p style="color:grey"><i>Source: Fallback users.</i></p>
 
-_Source: Fallback users._
 
 </details><br>
 
@@ -923,8 +923,8 @@ _Source: Fallback users._
 
 Yes, with GStreamer + OpenCV, users achieved real-time face detection successfully.
 
+<p style="color:grey"><i>Source: Fallback user who posted “Reachy seeing me for the first time ❤️”.</i></p>
 
-_Source: Fallback user who posted “Reachy seeing me for the first time ❤️”._
 
 </details><br>
 
@@ -940,8 +940,8 @@ _Source: Fallback user who posted “Reachy seeing me for the first time ❤️�
 
 Some users suggested discriminator-based personalization (“Make Reachy yours”).
 
+<p style="color:grey"><i>Source: Fallback author.</i></p>
 
-_Source: Fallback author._
 
 </details><br>
 
@@ -964,8 +964,8 @@ You provide a 2D point in image coordinates:
 
 You can also specify the duration of the movement, like in `goto_target`.
 
+<p style="color:grey"><i>Source: API documentation.</i></p>
 
-_Source: API documentation._
 
 </details><br>
 
@@ -983,8 +983,8 @@ Use `look_at_world`, which takes a 3D point in the robot world frame.
 
 The world frame is illustrated in the docs (world_frame image).
 
+<p style="color:grey"><i>Source: API documentation.</i></p>
 
-_Source: API documentation._
 
 </details><br>
 
@@ -1012,8 +1012,8 @@ Recommended workflow:
 - Publish as a Hugging Face Space (web based and added as a favourite on your dashboard) or Python package (directly installable via the dashboard).
 - See the example space: [`reachy_mini_app_example`](https://huggingface.co/spaces/pollen-robotics/reachy_mini_app_example).
 
+<p style="color:grey"><i>Source: Community forum.</i></p>
 
-_Source: Community forum._
 
 </details><br>
 
@@ -1029,8 +1029,8 @@ _Source: Community forum._
 
 Via pull requests on our [GitHub](https://github.com/pollen-robotics/reachy_mini/blob/develop/README.md).
 
+<p style="color:grey"><i>Source: Documentation guidelines.</i></p>
 
-_Source: Documentation guidelines._
 
 </details><br>
 
@@ -1053,8 +1053,8 @@ They help you:
 - Record moves (via `start_recording` / `stop_recording`).
 - Upload them to the Hugging Face Hub (for example: `reachy-mini-emotions-library`, `reachy-mini-dances-library`).
 
+<p style="color:grey"><i>Source: Code repository.</i></p>
 
-_Source: Code repository._
 
 </details><br>
 
@@ -1078,8 +1078,8 @@ _Source: Code repository._
 
 TODO
 
+<p style="color:grey"><i>Source: Support.</i></p>
 
-_Source: Support._
 
 </details><br>
 
@@ -1095,8 +1095,8 @@ _Source: Support._
 
 TODO
 
+<p style="color:grey"><i>Source: Support.</i></p>
 
-_Source: Support._
 
 </details><br>
 
@@ -1112,8 +1112,8 @@ _Source: Support._
 
 TODO
 
+<p style="color:grey"><i>Source: Support.</i></p>
 
-_Source: Support._
 
 </details><br>
 
@@ -1129,8 +1129,8 @@ _Source: Support._
 
 TODO
 
+<p style="color:grey"><i>Source: Support.</i></p>
 
-_Source: Support._
 
 </details><br>
 
@@ -1146,8 +1146,8 @@ _Source: Support._
 
 TODO
 
+<p style="color:grey"><i>Source: Support.</i></p>
 
-_Source: Support._
 
 </details><br>
 
