@@ -62,7 +62,7 @@ motors:
       return_delay_time: 0
       shutdown_error: 52
       pid: 
-        - 400
+        - 200
         - 0
         - 0
   - stewart_1:
@@ -73,7 +73,7 @@ motors:
       return_delay_time: 0
       shutdown_error: 52
       pid:
-        - 400
+        - 300
         - 0
         - 0
   - stewart_2:
@@ -84,7 +84,7 @@ motors:
       return_delay_time: 0
       shutdown_error: 52
       pid:
-        - 400
+        - 300
         - 0
         - 0
   - stewart_3:
@@ -95,7 +95,7 @@ motors:
       return_delay_time: 0
       shutdown_error: 52
       pid:
-        - 400
+        - 300
         - 0
         - 0
   - stewart_4:
@@ -106,7 +106,7 @@ motors:
       return_delay_time: 0
       shutdown_error: 52
       pid:
-        - 400
+        - 300
         - 0
         - 0
   - stewart_5:
@@ -117,7 +117,7 @@ motors:
       return_delay_time: 0
       shutdown_error: 52
       pid:
-        - 400
+        - 300
         - 0
         - 0
   - stewart_6:
@@ -128,7 +128,7 @@ motors:
       return_delay_time: 0
       shutdown_error: 52
       pid:
-        - 400
+        - 300
         - 0
         - 0
   - right_antenna:
