@@ -71,6 +71,7 @@ class Daemon:
             state=DaemonState.NOT_INITIALIZED,
             wireless_version=wireless_version,
             desktop_app_daemon=desktop_app_daemon,
+            stream_enabled=stream,
             simulation_enabled=None,
             backend_status=None,
             error=None,
@@ -617,6 +618,7 @@ class DaemonStatus:
     state: DaemonState
     wireless_version: bool
     desktop_app_daemon: bool
+    stream_enabled: bool
     simulation_enabled: Optional[bool]
     backend_status: Optional[RobotBackendStatus | MujocoBackendStatus]
     error: Optional[str] = None
