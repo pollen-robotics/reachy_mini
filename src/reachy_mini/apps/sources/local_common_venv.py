@@ -363,6 +363,17 @@ async def install_package(
                 )
                 if ret != 0:
                     return ret
+
+                # On wireless, pre-install reachy-mini with gstreamer support
+                if wireless_version and not desktop_app_daemon:
+                    logger.info("Pre-installing reachy-mini with gstreamer support in apps_venv")
+                    python_path = _get_app_python(app_name, wireless_version, desktop_app_daemon)
+                    ret = await running_command(
+                        [str(python_path), "-m", "pip", "install", "reachy-mini[gstreamer]"],
+                        logger=logger,
+                    )
+                    if ret != 0:
+                        logger.warning("Failed to pre-install reachy-mini, continuing anyway")
             else:
                 logger.info(f"Using existing shared venv at {venv_path}")
 
