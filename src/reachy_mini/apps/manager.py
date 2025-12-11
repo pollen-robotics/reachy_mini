@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Optional
 
+import numpy as np
 from pydantic import BaseModel
 
 from . import AppInfo, SourceKind
@@ -215,7 +216,7 @@ class AppManager:
                 self.logger.getChild("runner").info("Returning robot to zero position")
                 await self.daemon.backend.goto_target(
                     head=INIT_HEAD_POSE,
-                    antennas=[0.0, 0.0],
+                    antennas=np.array([0.0, 0.0]),
                     duration=1.0,
                 )
             except Exception as e:
