@@ -553,7 +553,7 @@ class RobotBackend(Backend):
 
         def voltage_ok(
             id: int,
-            allowed_max_voltage: float = 7.3,
+            allowed_max_voltage: float = 7.8,
         ) -> bool:
             assert self.c is not None, (
                 "Motor controller not initialized or already closed."
