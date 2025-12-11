@@ -1,0 +1,10 @@
+You can add orientation arguments to `create_head_pose`, for example:
+
+```python
+pose = create_head_pose(z=10, roll=15, degrees=True, mm=True)
+mini.goto_target(head=pose, duration=2.0)
+
+```
+
+- `degrees=True` means angles are given in degrees.
+- You can combine translation (x, y, z) and orientation (roll, pitch, yaw).

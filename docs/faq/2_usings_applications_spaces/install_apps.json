@@ -1,0 +1,21 @@
+[
+    {
+        "question": "Installing an app from HuggingFace Space results in errors. What can I try?",
+        "tags": [
+            "INSTALLATION",
+            "APPS",
+            "SDK"
+        ],
+        "answer_file": "install_apps/installation-errors.mdx",
+        "source": "Community forum"
+    },
+    {
+        "question": "Where can I see examples of apps?",
+        "tags": [
+            "APPS",
+            "EXAMPLES"
+        ],
+        "answer_file": "install_apps/examples.mdx",
+        "source": "Hugging Face spaces"
+    }
+]

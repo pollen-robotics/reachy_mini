@@ -1,0 +1,15 @@
+Inherit from `ReachyMiniApp` and implement `run`:
+
+```python
+import threading
+from reachy_mini.apps.app import ReachyMiniApp
+from reachy_mini import ReachyMini
+
+class MyApp(ReachyMiniApp):
+    def run(self, reachy_mini: ReachyMini, stop_event: threading.Event):
+        # your app logic
+        ...
+
+```
+
+- `stop_event` is a threading.Event indicating when the app should stop.

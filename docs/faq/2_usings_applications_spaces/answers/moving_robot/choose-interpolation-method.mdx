@@ -1,0 +1,15 @@
+Use the `method` argument in `goto_target`:
+
+```python
+mini.goto_target(
+    head=create_head_pose(y=10, mm=True),
+    antennas=np.deg2rad([-45, -45]),
+    duration=2.0,
+    method="cartoon",  # "linear", "minjerk", "ease", or "cartoon"
+)
+
+```
+
+To compare methods, run the example:
+
+- `examples/goto_interpolation_playground.py`

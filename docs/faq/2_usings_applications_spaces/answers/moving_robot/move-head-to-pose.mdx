@@ -1,0 +1,14 @@
+Use `goto_target` with a pose created by `create_head_pose`:
+
+```python
+from reachy_mini import ReachyMini
+from reachy_mini.utils import create_head_pose
+
+with ReachyMini() as mini:
+    mini.goto_target(head=create_head_pose(y=-10, mm=True))
+
+```
+
+- `create_head_pose` builds a 4x4 transform matrix (position + orientation).
+- `mm=True` means translation arguments are in millimeters.
+- The head frame is located at the base of the head.

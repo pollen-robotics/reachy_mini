@@ -1,0 +1,51 @@
+[
+    {
+        "question": "How do I write a Reachy Mini app?",
+        "tags": [
+            "APPS",
+            "SDK",
+            "PROGRAMMING"
+        ],
+        "answer_file": "develop_apps/how-to-write.mdx",
+        "source": "API documentation"
+    },
+    {
+        "question": "How can I generate a new app template quickly?",
+        "tags": [
+            "APPS",
+            "TOOLING"
+        ],
+        "answer_file": "develop_apps/generate-template.mdx",
+        "source": "API documentation"
+    },
+    {
+        "question": "How do I add custom dance moves?",
+        "tags": [
+            "APPS",
+            "MOVEMENT",
+            "ANIMATION"
+        ],
+        "answer_file": "develop_apps/add-custom-dance-moves.mdx",
+        "source": "API documentation"
+    },
+    {
+        "question": "Is it possible to make Reachy nod to music (tempo sync)?",
+        "tags": [
+            "AUDIO",
+            "MOVEMENT",
+            "AI"
+        ],
+        "answer_file": "develop_apps/nod-to-music.mdx",
+        "source": "fallback authors (audio analysis discussion)"
+    },
+    {
+        "question": "Does the SDK support local AI actions (OpenAI-style)?",
+        "tags": [
+            "AI",
+            "SDK",
+            "APPS"
+        ],
+        "answer_file": "develop_apps/local-ai-actions.mdx",
+        "source": "fallback community authors"
+    }
+]

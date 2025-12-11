@@ -1,0 +1,18 @@
+`goto_target`:
+
+- Interpolates motion over a duration (default 0.5 s).
+- Supports methods: `linear`, `minjerk`, `ease`, `cartoon`.
+- Ideal for smooth, timed motions.
+
+`set_target`:
+
+- Sets the target immediately, without interpolation.
+- Suited for high-frequency control (e.g. sinusoidal trajectories, teleoperation).
+
+Example of sinusoidal motion:
+
+```python
+y = 10 * np.sin(2 * np.pi * 0.5 * t)
+mini.set_target(head=create_head_pose(y=y, mm=True))
+
+```
