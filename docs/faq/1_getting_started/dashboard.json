@@ -1,16 +1,5 @@
 [
     {
-        "question": "The dashboard on localhost:8000 doesn’t open. What am I missing?",
-        "tags": [
-            "DASHBOARD",
-            "NETWORK",
-            "SDK",
-            "TROUBLESHOOTING"
-        ],
-        "answer_file": "dashboard/access-dashboard.mdx",
-        "source": "User guide"
-    },
-    {
         "question": "Is installing apps directly from the dashboard supported?",
         "tags": [
             "DASHBOARD",

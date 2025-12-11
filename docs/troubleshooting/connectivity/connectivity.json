@@ -1,0 +1,21 @@
+[
+    {
+        "question": "The dashboard on localhost:8000 doesn’t open.",
+        "tags": [
+            "DASHBOARD",
+            "NETWORK",
+            "SDK"
+        ],
+        "answer_file": "access-dashboard.mdx",
+        "source": "User guide"
+    },
+    {
+        "question": "My Reachy Mini doesn’t move on first startup.",
+        "tags": [
+            "START",
+            "POWER"
+        ],
+        "answer_file": "start/first-startup-issue.mdx",
+        "source": "API documentation"
+    }
+]

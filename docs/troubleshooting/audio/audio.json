@@ -1,0 +1,38 @@
+[
+    {
+        "question": "The audio-based app behaves inconsistently",
+        "tags": [
+            "AUDIO",
+            "REALTIME"
+        ],
+        "answer_file": "inconsistent_behavior.mdx",
+        "source": "Community forum"
+    },
+    {
+        "question": "No Microphone Input *(For beta only)*",
+        "tags": [
+            "AUDIO",
+            "MICROPHONE"
+        ],
+        "answer_file": "no_microphone_input.mdx",
+        "source": "Community forum"
+    },
+    {
+        "question": "Sound Direction of Arrival Not Working *(For beta only)*",
+        "tags": [
+            "AUDIO",
+            "MICROPHONE"
+        ],
+        "answer_file": "sound_direction_of_arrival.mdx",
+        "source": "Community forum"
+    },
+    {
+        "question": "Volume Is Too Low *(Linux only)*",
+        "tags": [
+            "AUDIO",
+            "VOLUME"
+        ],
+        "answer_file": "volume_too_low.mdx",
+        "source": "Community forum"
+    }
+]

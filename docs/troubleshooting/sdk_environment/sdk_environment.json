@@ -1,0 +1,22 @@
+[
+    {
+        "question": "PortAudio error when starting the daemon",
+        "tags": [
+            "START",
+            "AUDIO",
+            "ENVIRONMENT",
+            "DEPENDENCIES"
+        ],
+        "answer_file": "portaudio_error.mdx",
+        "source": "Community forum"
+    },
+    {
+        "question": "Import errors when running examples",
+        "tags": [
+            "SDK",
+            "INSTALLATION"
+        ],
+        "answer_file": "import_errors.mdx",
+        "source": "Community forum"
+    }
+]

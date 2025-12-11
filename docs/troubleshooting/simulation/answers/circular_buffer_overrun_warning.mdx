@@ -1,0 +1,7 @@
+When starting a client with `with ReachyMini() as mini:` in Mujoco (--sim mode), you may see the following warning:
+
+```
+Circular buffer overrun. To avoid, increase fifo_size URL option. To survive in such case, use overrun_nonfatal option
+```
+
+This message comes from FFmpeg (embedded in OpenCV) while consuming the UDP video stream. It appears because the frames are not being used, causing the buffer to fill up. If you do not intend to use the frames, set `ReachyMini(media_backend="no_media")` or `ReachyMini(media_backend="default_no_video")`.
