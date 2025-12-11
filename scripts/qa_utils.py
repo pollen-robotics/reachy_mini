@@ -193,13 +193,13 @@ def render_faq_item(item: Dict[str, Any], config: QaConfig = FAQ_CONFIG) -> str:
         source_html = f"\n\n_Source: {source}._"
 
     block = f"""<details>
-<summary><strong>{question}</strong></summary>
+<summary><strong>{question}</strong><br>{tags_line}</summary>
 
 {answer}
 {source_html}
 
 {tags_line}
-</details>
+</details><br>
 """
 
     return block
