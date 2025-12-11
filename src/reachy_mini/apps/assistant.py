@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any, Dict
 
 import questionary
-import tomllib
+import toml
 import yaml
 from huggingface_hub import CommitOperationAdd, HfApi, get_repo_discussions, whoami
 from jinja2 import Environment, FileSystemLoader
@@ -239,7 +239,7 @@ def check(console: Console, app_path: str) -> None:
 
     # Extract app name
     with open(pyproject_file, "rb") as f:
-        pyproject_content = tomllib.load(f)
+        pyproject_content = toml.load(f)
         project = pyproject_content.get("project", {})
         app_name = project.get("name", None)
         if app_name is None:
