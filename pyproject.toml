@@ -34,7 +34,6 @@ dependencies = [
     "rich",
     "questionary",
     "websockets>=12,<16",
-    "tomllib",
 ]
 
 
