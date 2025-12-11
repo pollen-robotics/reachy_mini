@@ -1,13 +1,11 @@
 """Generate FAQ file content from JSON sections."""
 
-import json
 import pathlib
 import re
 from typing import Any, Dict, List, Tuple
 
-ROOT = pathlib.Path(__file__).resolve().parents[1]
+from faq_utils import FAQ_ANSWERS_DIR, FAQ_DATA_DIR, ROOT, load_json_items, render_item
 
-FAQ_DATA_DIR = ROOT / "docs" / "faq"
 FAQ_FILE = ROOT / "docs" / "source" / "faq.mdx"
 
 
@@ -28,7 +26,6 @@ def load_section(folder_name: str, section_name: str) -> List[Dict[str, Any]]:
         )
         raise FileNotFoundError(msg)
     if len(matches) > 1:
-        # You can change this to pick the first if you prefer implicit behavior.
         msg = (
             f"Multiple JSON files named '{target_name}' found under "
             f"'{base_dir}':\n" + "\n".join(f"- {m}" for m in matches)
@@ -36,94 +33,19 @@ def load_section(folder_name: str, section_name: str) -> List[Dict[str, Any]]:
         raise RuntimeError(msg)
 
     json_path = matches[0]
-    with json_path.open("r", encoding="utf-8") as f:
-        items: List[Dict[str, Any]] = json.load(f)
+    items = load_json_items(json_path)
 
-    answers_dir = json_path.parent / "answers"
+    answers_dir_candidate = json_path.parent / "answers"
+    if answers_dir_candidate.exists():
+        answers_dir = answers_dir_candidate
+    else:
+        answers_dir = FAQ_ANSWERS_DIR
+
     for it in items:
         # Internal metadata: where to look for answers for this item.
         it["_answers_dir"] = answers_dir
 
     return items
-
-
-def load_answer_text(item: Dict[str, Any]) -> str:
-    """Load the answer text for a FAQ item."""
-    answer_file = item.get("answer_file")
-    if not answer_file:
-        msg = f"Missing 'answer_file' for question: {item.get('question')}"
-        raise KeyError(msg)
-
-    answers_dir = item.get("_answers_dir")
-    if not answers_dir:
-        msg = (
-            "Missing internal '_answers_dir' for item with question: "
-            f"{item.get('question')}"
-        )
-        raise KeyError(msg)
-
-    answer_path = pathlib.Path(answers_dir) / answer_file
-    if not answer_path.exists():
-        msg = f"Answer file not found for '{item.get('question')}': {answer_path}"
-        raise FileNotFoundError(msg)
-
-    with answer_path.open("r", encoding="utf-8") as f:
-        # Strip only trailing newlines.
-        return f.read().rstrip()
-
-
-def render_item(item: Dict[str, Any]) -> str:
-    """Render a FAQ item as an HTML details block."""
-    question = item["question"]
-    tags = item.get("tags", [])
-    answer = load_answer_text(item)
-    source = item.get("source")
-
-    # HTML for tags.
-    tags_html_parts: List[str] = []
-    for tag in tags:
-        tags_html_parts.append(
-            f"""
-  <span
-    style="
-      display: inline-block;
-      padding: 2px 10px;
-      margin: 2px 4px;
-      background: rgba(59, 176, 209, 0.1);
-      color: var(--primary);
-      border-radius: 12px;
-      font-size: 11px;
-      font-weight: 500;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-    "
-  >
-    {tag}
-  </span>"""
-        )
-    tags_html = "".join(tags_html_parts)
-
-    source_html = ""
-    if source:
-        source_html = f'\n<p style="color:grey"><i>Source: {source}.</i></p>\n'
-
-    block = f"""<details>
-<summary><b>{question}</b><br>
-<div
-  style="
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-xs);
-  "
->
-  Tags:
-  {tags_html}
-</div></summary>
-
-{answer}
-{source_html}</details><br>"""
-
-    return block
 
 
 def render_section(folder_name: str, section_name: str) -> str:
