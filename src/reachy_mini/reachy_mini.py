@@ -717,6 +717,12 @@ class ReachyMini:
 
         sleep_period = 1.0 / play_frequency
 
+        if (
+            move.sound_path is not None
+            and self.media_manager.backend != MediaBackend.NO_MEDIA
+        ):
+            self.media_manager.play_sound(str(move.sound_path))
+
         t0 = time.time()
         while time.time() - t0 < move.duration:
             t = min(time.time() - t0, move.duration - 1e-2)
