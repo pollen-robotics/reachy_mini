@@ -48,7 +48,10 @@ class AppManager:
     """Manager for Reachy Mini apps."""
 
     def __init__(
-        self, wireless_version: bool = False, desktop_app_daemon: bool = False
+        self,
+        wireless_version: bool = False,
+        desktop_app_daemon: bool = False,
+        daemon: Optional[Any] = None,
     ) -> None:
         """Initialize the AppManager."""
         self.current_app = None  # type: RunningApp | None
@@ -56,6 +59,7 @@ class AppManager:
         self.wireless_version = wireless_version
         self.desktop_app_daemon = desktop_app_daemon
         self.running_on_wireless = wireless_version
+        self.daemon = daemon
 
     async def close(self) -> None:
         """Clean up the AppManager, stopping any running app."""
@@ -204,21 +208,20 @@ class AppManager:
                 pass
 
         # Return robot to zero position after app stops
-        try:
-            from reachy_mini import ReachyMini
-            from reachy_mini.reachy_mini import INIT_HEAD_POSE
+        if self.daemon is not None and self.daemon.backend is not None:
+            try:
+                from reachy_mini.reachy_mini import INIT_HEAD_POSE
 
-            self.logger.getChild("runner").info("Returning robot to zero position")
-            with ReachyMini() as reachy:
-                reachy.goto_target(
+                self.logger.getChild("runner").info("Returning robot to zero position")
+                await self.daemon.backend.goto_target(
                     head=INIT_HEAD_POSE,
                     antennas=[0.0, 0.0],
                     duration=1.0,
                 )
-        except Exception as e:
-            self.logger.getChild("runner").warning(
-                f"Could not return to zero position: {e}"
-            )
+            except Exception as e:
+                self.logger.getChild("runner").warning(
+                    f"Could not return to zero position: {e}"
+                )
 
         self.current_app = None
 
