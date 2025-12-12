@@ -238,7 +238,7 @@ def check(console: Console, app_path: str) -> None:
         sys.exit(1)
 
     # Extract app name
-    with open(pyproject_file, "rb") as f:
+    with open(pyproject_file, "r", encoding="utf-8") as f:
         pyproject_content = toml.load(f)
         project = pyproject_content.get("project", {})
         app_name = project.get("name", None)
@@ -324,7 +324,7 @@ def check(console: Console, app_path: str) -> None:
     console.print(f"✅ {app_name}/main.py exists.")
 
     # - <app_name>/main.py contains a class named <AppName> that inherits from ReachyMiniApp
-    with open(main_file, "r") as f:  # type: ignore
+    with open(main_file, "r") as f:
         main_content = f.read()
     class_name = "".join(
         word.capitalize() for word in app_name.replace("-", "_").split("_")
