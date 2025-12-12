@@ -63,6 +63,27 @@ We support and test on Linux and macOS. It's also working on Windows, but it is 
 
 The daemon is built in Python, so you need to have Python installed on your computer (versions from 3.10 to 3.13 are supported). We recommend using a virtual environment to avoid dependency conflicts with your other Python projects.
 
+> 💡 **Tip**: For significantly faster app installations, we recommend installing [uv](https://docs.astral.sh/uv/):
+> 
+> **Standalone installer (recommended):**
+> 
+> **macOS and Linux:**
+> ```bash
+> curl -LsSf https://astral.sh/uv/install.sh | sh
+> ```
+> 
+> **Windows:**
+> ```powershell
+> powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+> ```
+> 
+> **Or with pipx (alternative method):**
+> ```bash
+> pipx install uv
+> ```
+> 
+> Once installed, uv will be automatically detected and used for app installations through the dashboard. If uv is not available, the system will automatically fall back to using pip.
+
 You can install Reachy Mini from the source code or from PyPI.
 
 First, make sure `git-lfs` is installed on your system:
