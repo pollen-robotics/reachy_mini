@@ -15,6 +15,20 @@ from .. import AppInfo, SourceKind
 from ..utils import running_command
 
 
+async def _check_uv_available() -> bool:
+    """Check if uv is available on the system."""
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "uv", "--version",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        await proc.wait()
+        return proc.returncode == 0
+    except FileNotFoundError:
+        return False
+
+
 def _is_windows() -> bool:
     """Check if the current platform is Windows."""
     return platform.system() == "Windows"
@@ -326,6 +340,14 @@ async def install_package(
     desktop_app_daemon: bool = False,
 ) -> int:
     """Install a package given an AppInfo object, streaming logs."""
+    # Check if uv is available
+    use_uv = await _check_uv_available()
+    if not use_uv:
+        logger.warning(
+            "uv is not installed. Falling back to pip. "
+            "Install uv for faster installs: pip install uv"
+        )
+    
     if app.source_kind == SourceKind.HF_SPACE:
         # Use huggingface_hub to download the repo (handles LFS automatically)
         # This avoids requiring git-lfs to be installed on the system
@@ -384,16 +406,26 @@ async def install_package(
                     python_path = _get_app_python(
                         app_name, wireless_version, desktop_app_daemon
                     )
-                    ret = await running_command(
-                        [
+                    
+                    if use_uv:
+                        install_cmd = [
+                            "uv",
+                            "pip",
+                            "install",
+                            "--python",
+                            str(python_path),
+                            "reachy-mini[gstreamer]",
+                        ]
+                    else:
+                        install_cmd = [
                             str(python_path),
                             "-m",
                             "pip",
                             "install",
                             "reachy-mini[gstreamer]",
-                        ],
-                        logger=logger,
-                    )
+                        ]
+                    
+                    ret = await running_command(install_cmd, logger=logger)
                     if ret != 0:
                         logger.warning(
                             "Failed to pre-install reachy-mini, continuing anyway"
@@ -405,10 +437,13 @@ async def install_package(
             python_path = _get_app_python(
                 app_name, wireless_version, desktop_app_daemon
             )
-            ret = await running_command(
-                [str(python_path), "-m", "pip", "install", target],
-                logger=logger,
-            )
+            
+            if use_uv:
+                install_cmd = ["uv", "pip", "install", "--python", str(python_path), target]
+            else:
+                install_cmd = [str(python_path), "-m", "pip", "install", target]
+            
+            ret = await running_command(install_cmd, logger=logger)
 
             if ret != 0:
                 return ret
@@ -427,10 +462,12 @@ async def install_package(
                 shutil.rmtree(venv_path)
     else:
         # Original behavior: install into current environment
-        return await running_command(
-            [sys.executable, "-m", "pip", "install", target],
-            logger=logger,
-        )
+        if use_uv:
+            install_cmd = ["uv", "pip", "install", "--python", sys.executable, target]
+        else:
+            install_cmd = [sys.executable, "-m", "pip", "install", target]
+        
+        return await running_command(install_cmd, logger=logger)
 
 
 def get_app_module(
@@ -485,10 +522,31 @@ async def uninstall_package(
             python_path = _get_app_python(
                 app_name, wireless_version, desktop_app_daemon
             )
-            return await running_command(
-                [str(python_path), "-m", "pip", "uninstall", "-y", app_name],
-                logger=logger,
-            )
+            
+            # Check if uv is available
+            use_uv = await _check_uv_available()
+            
+            if use_uv:
+                uninstall_cmd = [
+                    "uv",
+                    "pip",
+                    "uninstall",
+                    "--python",
+                    str(python_path),
+                    "-y",
+                    app_name,
+                ]
+            else:
+                uninstall_cmd = [
+                    str(python_path),
+                    "-m",
+                    "pip",
+                    "uninstall",
+                    "-y",
+                    app_name,
+                ]
+            
+            return await running_command(uninstall_cmd, logger=logger)
         else:
             # Desktop: remove the entire per-app venv directory
             logger.info(f"Removing venv for '{app_name}' at {venv_path}")
@@ -496,12 +554,18 @@ async def uninstall_package(
             logger.info(f"Successfully uninstalled '{app_name}'")
             return 0
     else:
-        # Original behavior: uninstall from current environment
         existing_apps = await list_available_apps()
         if app_name not in [app.name for app in existing_apps]:
             raise ValueError(f"Cannot uninstall app '{app_name}': it is not installed")
 
-        return await running_command(
-            [sys.executable, "-m", "pip", "uninstall", "-y", app_name],
-            logger=logger,
-        )
+        # Check if uv is available
+        use_uv = await _check_uv_available()
+        
+        logger.info(f"Removing package {app_name}")
+        
+        if use_uv:
+            uninstall_cmd = ["uv", "pip", "uninstall", "--python", sys.executable, "-y", app_name]
+        else:
+            uninstall_cmd = [sys.executable, "-m", "pip", "uninstall", "-y", app_name]
+        
+        return await running_command(uninstall_cmd, logger=logger)
