@@ -1,4 +1,4 @@
-name: Build documentation
+name: Build HF documentation
 
 on:
   workflow_dispatch:

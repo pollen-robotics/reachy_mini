@@ -1,8 +1,8 @@
-name: Upload PR Documentation
+name: Upload PR HF Documentation
 
 on:
   workflow_run:
-    workflows: ["Build PR Documentation"]
+    workflows: ["Build PR HF Documentation"]
     types:
       - completed
 

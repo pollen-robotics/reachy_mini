@@ -1,4 +1,4 @@
-name: Build PR Documentation
+name: Build PR HF Documentation
 
 on:
   pull_request:
