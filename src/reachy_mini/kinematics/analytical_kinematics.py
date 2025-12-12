@@ -16,7 +16,8 @@ from scipy.spatial.transform import Rotation as R
 
 import reachy_mini
 
-
+# a helper (more optimal) function to extract euler angles from rotation matrix
+# hure till we pass the passive joint calculation to rust
 def fast_euler_from_matrix(R_mat: np.ndarray, order: str = "XYZ") -> np.ndarray:
     """Fast Euler angle extraction without creating Rotation object.
     
@@ -44,6 +45,7 @@ def fast_euler_from_matrix(R_mat: np.ndarray, order: str = "XYZ") -> np.ndarray:
     else:
         # Fall back to scipy for other orders
         return R.from_matrix(R_mat).as_euler(order)
+    
 
 # Duplicated for now.
 SLEEP_HEAD_POSE = np.array(
@@ -142,6 +144,7 @@ class AnalyticalKinematics:
         body_yaw: float = 0.0,
         check_collision: bool = False,
         no_iterations: int = 0,
+        calculate_passive_joints: bool = False,
     ) -> Annotated[NDArray[np.float64], (7,)]:
         """Compute the inverse kinematics for a given head pose.
 
@@ -168,6 +171,8 @@ class AnalyticalKinematics:
             stewart_joints = self.kin.inverse_kinematics(_pose, body_yaw)  # type: ignore[arg-type]
             reachy_joints = [body_yaw] + stewart_joints
 
+        if calculate_passive_joints:
+            self.calculate_passive_joints(joints=np.array(reachy_joints), T_head=pose)
 
         self.current_joints
         return np.array(reachy_joints)
@@ -177,6 +182,7 @@ class AnalyticalKinematics:
         joint_angles: Annotated[NDArray[np.float64], (7,)],
         check_collision: bool = False,
         no_iterations: int = 3,
+        calculate_passive_joints: bool = True,
     ) -> Annotated[NDArray[np.float64], (4, 4)]:
         """Compute the forward kinematics for a given set of joint angles.
 
@@ -215,6 +221,9 @@ class AnalyticalKinematics:
         assert T_world_platform is not None
 
         T_world_platform[:3, 3][2] -= self.head_z_offset
+        
+        if calculate_passive_joints:
+            self.calculate_passive_joints(joints=joint_angles, T_head=T_world_platform)
         
         return T_world_platform
 
