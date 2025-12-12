@@ -26,6 +26,7 @@ from fastapi.templating import Jinja2Templates
 from reachy_mini.apps.manager import AppManager
 from reachy_mini.daemon.app.routers import (
     apps,
+    camera,
     daemon,
     hf_auth,
     kinematics,
@@ -151,6 +152,7 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
 
     router = APIRouter(prefix="/api")
     router.include_router(apps.router)
+    router.include_router(camera.router)
     router.include_router(daemon.router)
     router.include_router(hf_auth.router)
     router.include_router(kinematics.router)
