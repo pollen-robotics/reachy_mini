@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "reachy_mini"
-version = "1.1.4"
+version = "1.2.0rc1"
 authors = [{ name = "Pollen Robotics", email = "contact@pollen-robotics.com" }]
 description = ""
 readme = "README.md"
@@ -34,6 +34,7 @@ dependencies = [
     "rich",
     "questionary",
     "websockets>=12,<16",
+    "toml",
 ]
 
 

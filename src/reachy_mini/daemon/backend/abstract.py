@@ -163,6 +163,7 @@ class Backend:
         # Recording lock to guard buffer swaps and appends
         self._rec_lock = threading.Lock()
 
+        self.audio: Optional[MediaManager] = None
         if self.use_audio:
             if wireless_version:
                 self.logger.debug(
@@ -178,8 +179,6 @@ class Backend:
                 self.audio = MediaManager(
                     backend=MediaBackend.DEFAULT_NO_VIDEO, log_level=log_level
                 )
-        else:
-            self.audio = None  # type: ignore
 
     # Life cycle methods
     def wrapped_run(self) -> None:
@@ -381,7 +380,6 @@ class Backend:
             t = time.time() - t0
 
             head, antennas, body_yaw = move.evaluate(t)
-
             if head is not None:
                 self.set_target_head_pose(head)
             if body_yaw is not None:
@@ -736,6 +734,8 @@ class Backend:
 
         self._last_head_pose = self.SLEEP_HEAD_POSE
         await asyncio.sleep(sleep_time)
+        if self.audio:
+            self.audio.stop_playing()
 
     # Motor control modes
     @abstractmethod
