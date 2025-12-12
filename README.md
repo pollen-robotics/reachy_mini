@@ -119,6 +119,8 @@ You may need to log out and log back in for the group changes to take effect.
 
 Before being able to use the robot, you need to run the daemon that will handle the communication with the motors. This daemon can run either in simulation (MuJoCo) or on the real robot.
 
+### For the real robot
+
 ```bash
 reachy-mini-daemon
 ```
@@ -140,6 +142,15 @@ or
 ```bash
 --no-localhost-only: If set, the server will accept connections from any connection on the local network.
 ```
+
+> [!TIP]
+> **For the lite version (connected via USB)**
+> 
+> It should automatically detect the serial port of the robot. If it does not, you can specify it manually with the `-p` option:
+> 
+> ```bash
+> reachy-mini-daemon -p <serial_port>
+> ```
 
 ### In simulation ([MuJoCo](https://mujoco.org))
 
@@ -169,14 +180,6 @@ Additional arguments:
 ```bash
  mjpython -m reachy_mini.daemon.app.main --sim
  ```
-
-### For the lite version (connected via USB)
-
-It should automatically detect the serial port of the robot. If it does not, you can specify it manually with the `-p` option:
-
-```bash
-reachy-mini-daemon -p <serial_port>
-```
 
 ### Usage
 
