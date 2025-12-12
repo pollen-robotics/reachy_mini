@@ -695,6 +695,7 @@ class ReachyMini:
         move: Move,
         play_frequency: float = 100.0,
         initial_goto_duration: float = 0.0,
+        sound: bool = True,
     ) -> None:
         """Asynchronously play a Move.
 
@@ -702,6 +703,7 @@ class ReachyMini:
             move (Move): The Move object to be played.
             play_frequency (float): The frequency at which to evaluate the move (in Hz).
             initial_goto_duration (float): Duration for the initial goto to the starting position of the move (in seconds). If 0, no initial goto is performed.
+            sound (bool): If True, play the sound associated with the move (if any).
 
         """
         if initial_goto_duration > 0.0:
@@ -717,10 +719,7 @@ class ReachyMini:
 
         sleep_period = 1.0 / play_frequency
 
-        if (
-            move.sound_path is not None
-            and self.media_manager.backend != MediaBackend.NO_MEDIA
-        ):
+        if move.sound_path is not None and sound:
             self.media_manager.play_sound(str(move.sound_path))
 
         t0 = time.time()
