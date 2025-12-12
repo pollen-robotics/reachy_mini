@@ -690,7 +690,7 @@ def publish(
                 exit()
             else:
                 console.print("Trying to push anyway...")
-                pushed = try_to_push(console, app_path)
+                pushed = try_to_push(console, Path(app_path))
             exit()
 
         if no_check:
@@ -716,7 +716,7 @@ def publish(
 
         # && git push HEAD:main"
 
-        pushed = try_to_push(console, app_path)
+        pushed = try_to_push(console, Path(app_path))
         if not pushed:
             exit()
 
