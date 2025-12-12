@@ -3,7 +3,7 @@ name: Build PR HF Documentation
 on:
   pull_request:
     branches:
-      - main
+      - hf-docs-faq-template
     paths:
       - "docs/**"
 
