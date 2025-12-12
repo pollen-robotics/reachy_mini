@@ -139,9 +139,9 @@ motors:
       return_delay_time: 0
       shutdown_error: 52
       pid:
-        - 250
+        - 200
         - 0
-        - 300
+        - 0
   - left_antenna:
       id: 18
       offset: 0
@@ -150,6 +150,6 @@ motors:
       return_delay_time: 0
       shutdown_error: 52
       pid:
-        - 250
+        - 200
         - 0
-        - 300
+        - 0

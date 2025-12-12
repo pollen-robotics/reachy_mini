@@ -60,9 +60,9 @@ Then you can launch the daemon again : `reachy-mini-daemon`
 
 This issue can be caused by incorrect PID values for the servos. Please check and update the PID values in the `hardware_config.yaml` file located in `src/reachy_mini/assets/config/`.
 
-If the antennas are oscillating, update the PID values for the left and right antenna servos. Generally if the oscillation is mild, lowering the proportional gain (first value). If the oscillation is severe, you may also need to decrease the derivative gain (third value).
+If the antennas are oscillating, update the PID values for the left and right antenna servos (`right_antenna` and `left_antenna`). Generally if the oscillation is present, lowering the proportional gain (first value) helps to stabilize the movement. For example, if the current P value is 200, try reducing it to 150. 
 
-If the head is oscillating, update the PID values for the neck servos (neck_yaw and neck_pitch) in a similar manner.
+If the head is oscillating, update the PID values for the neck servos (`stewart_1` to `stewart_6`) in a similar manner.
 
 Be careful when adjusting these values, as setting them too low may result in sluggish or unresponsive movement while setting the values too high may case instability. Do small adjustments and test the robot's behavior after each change. 
 
