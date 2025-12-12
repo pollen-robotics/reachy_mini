@@ -335,7 +335,7 @@ def init_respeaker_usb() -> Optional[ReSpeaker]:
         dev = usb.core.find(
             idVendor=0x38FB, idProduct=0x1001, backend=get_libusb1_backend()
         )
-        
+
         # If not found, try old firmware
         if dev is None:
             dev = usb.core.find(
@@ -348,7 +348,7 @@ def init_respeaker_usb() -> Optional[ReSpeaker]:
         if dev is None:
             logging.error("No Reachy Mini Audio USB device found!")
             return None
-        
+
         return ReSpeaker(dev)
 
     except usb.core.NoBackendError:
@@ -394,7 +394,7 @@ def main() -> None:
         dev = find(vid=args.vid, pid=args.pid)
     else:
         dev = init_respeaker_usb()
-        
+
     if not dev:
         print("No device found")
         sys.exit(1)
@@ -432,12 +432,20 @@ def main() -> None:
     except Exception as e:
         error_msg = f"Error executing command {args.command}: {e}"
         print(error_msg)
-        
+
         # Check if it's a permission error, so far only seen on Linux
-        if "Errno 13" in str(e) or "Access denied" in str(e) or "insufficient permissions" in str(e):
+        if (
+            "Errno 13" in str(e)
+            or "Access denied" in str(e)
+            or "insufficient permissions" in str(e)
+        ):
             print("\nThis looks like a permissions error.")
-            print("\n - You are most likely on Linux and need to adjust udev rules for USB permissions.")  
-            print("\n - If you are not on Linux or have additional questions contact the team.")  
+            print(
+                "\n - You are most likely on Linux and need to adjust udev rules for USB permissions."
+            )
+            print(
+                "\n - If you are not on Linux or have additional questions contact the team."
+            )
         sys.exit(1)
     finally:
         dev.close()

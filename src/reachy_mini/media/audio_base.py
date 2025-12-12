@@ -18,6 +18,7 @@ class AudioBase(ABC):
     """Abstract class for opening and managing audio devices."""
 
     SAMPLE_RATE = 16000  # respeaker samplerate
+    CHANNELS = 2  # respeaker channels
 
     def __init__(self, log_level: str = "INFO") -> None:
         """Initialize the audio device."""
@@ -47,6 +48,14 @@ class AudioBase(ABC):
     def get_output_audio_samplerate(self) -> int:
         """Get the outputsamplerate of the audio device."""
         return self.SAMPLE_RATE
+
+    def get_input_channels(self) -> int:
+        """Get the number of input channels of the audio device."""
+        return self.CHANNELS
+
+    def get_output_channels(self) -> int:
+        """Get the number of output channels of the audio device."""
+        return self.CHANNELS
 
     @abstractmethod
     def stop_recording(self) -> None:

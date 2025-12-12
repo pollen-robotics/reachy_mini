@@ -62,6 +62,7 @@ class ReachyMini:
 
     def __init__(
         self,
+        robot_name: str = "reachy_mini",
         localhost_only: bool = True,
         spawn_daemon: bool = False,
         use_sim: bool = False,
@@ -73,6 +74,7 @@ class ReachyMini:
         """Initialize the Reachy Mini robot.
 
         Args:
+            robot_name (str): Name of the robot, defaults to "reachy_mini".
             localhost_only (bool): If True, will only connect to localhost daemons, defaults to True.
             spawn_daemon (bool): If True, will spawn a daemon to control the robot, defaults to False.
             use_sim (bool): If True and spawn_daemon is True, will spawn a simulated robot, defaults to True.
@@ -86,8 +88,9 @@ class ReachyMini:
         """
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(log_level)
+        self.robot_name = robot_name
         daemon_check(spawn_daemon, use_sim)
-        self.client = ZenohClient(localhost_only)
+        self.client = ZenohClient(robot_name, localhost_only)
         self.client.wait_for_connection(timeout=timeout)
         self.set_automatic_body_yaw(automatic_body_yaw)
         self._last_head_pose: Optional[npt.NDArray[np.float64]] = None
@@ -692,6 +695,7 @@ class ReachyMini:
         move: Move,
         play_frequency: float = 100.0,
         initial_goto_duration: float = 0.0,
+        sound: bool = True,
     ) -> None:
         """Asynchronously play a Move.
 
@@ -699,6 +703,7 @@ class ReachyMini:
             move (Move): The Move object to be played.
             play_frequency (float): The frequency at which to evaluate the move (in Hz).
             initial_goto_duration (float): Duration for the initial goto to the starting position of the move (in seconds). If 0, no initial goto is performed.
+            sound (bool): If True, play the sound associated with the move (if any).
 
         """
         if initial_goto_duration > 0.0:
@@ -713,6 +718,9 @@ class ReachyMini:
             )
 
         sleep_period = 1.0 / play_frequency
+
+        if move.sound_path is not None and sound:
+            self.media_manager.play_sound(str(move.sound_path))
 
         t0 = time.time()
         while time.time() - t0 < move.duration:

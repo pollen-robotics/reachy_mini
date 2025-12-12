@@ -23,6 +23,7 @@ class MediaBackend(Enum):
     DEFAULT = "default"
     DEFAULT_NO_VIDEO = "default_no_video"
     GSTREAMER = "gstreamer"
+    GSTREAMER_NO_VIDEO = "gstreamer_no_video"
     WEBRTC = "webrtc"
 
 
@@ -57,9 +58,13 @@ class MediaManager:
                 self.logger.info("Using GStreamer media backend.")
                 self._init_camera(use_sim, log_level)
                 self._init_audio(log_level)
+            case MediaBackend.GSTREAMER_NO_VIDEO:
+                self.logger.info("Using GStreamer audio backend.")
+                self._init_audio(log_level)
             case MediaBackend.WEBRTC:
                 self.logger.info("Using WebRTC GStreamer backend.")
                 self._init_webrtc(log_level, signalling_host, 8443)
+                self._init_audio(log_level)
             case _:
                 raise NotImplementedError(f"Media backend {backend} not implemented.")
 
@@ -125,7 +130,10 @@ class MediaManager:
             from reachy_mini.media.audio_sounddevice import SoundDeviceAudio
 
             self.audio = SoundDeviceAudio(log_level=log_level)
-        elif self.backend == MediaBackend.GSTREAMER:
+        elif (
+            self.backend == MediaBackend.GSTREAMER
+            or self.backend == MediaBackend.GSTREAMER_NO_VIDEO
+        ):
             self.logger.info("Using GStreamer audio backend.")
             from reachy_mini.media.audio_gstreamer import GStreamerAudio
 
@@ -201,6 +209,20 @@ class MediaManager:
             return -1
         return self.audio.get_output_audio_samplerate()
 
+    def get_input_channels(self) -> int:
+        """Get the number of input channels of the audio device."""
+        if self.audio is None:
+            self.logger.warning("Audio system is not initialized.")
+            return -1
+        return self.audio.get_input_channels()
+
+    def get_output_channels(self) -> int:
+        """Get the number of output channels of the audio device."""
+        if self.audio is None:
+            self.logger.warning("Audio system is not initialized.")
+            return -1
+        return self.audio.get_output_channels()
+
     def stop_recording(self) -> None:
         """Stop recording audio."""
         if self.audio is None:
@@ -225,6 +247,30 @@ class MediaManager:
         if self.audio is None:
             self.logger.warning("Audio system is not initialized.")
             return
+
+        if data.ndim > 2 or data.ndim == 0:
+            self.logger.warning(
+                f"Audio samples arrays must have at most 2 dimensions and at least 1 dimension, got {data.ndim}"
+            )
+            return
+
+        # Transpose data to match sounddevice channels last convention
+        if data.ndim == 2 and data.shape[1] > data.shape[0]:
+            data = data.T
+
+        # Fit data to match output stream channels
+        output_channels = self.get_output_channels()
+
+        # Mono input to multiple channels output : duplicate to fit
+        if data.ndim == 1 and output_channels > 1:
+            data = np.column_stack((data,) * output_channels)
+        # Lower channels input to higher channels output : reduce to mono and duplicate to fit
+        elif data.ndim == 2 and data.shape[1] < output_channels:
+            data = np.column_stack((data[:, 0],) * output_channels)
+        # Higher channels input to lower channels output : crop to fit
+        elif data.ndim == 2 and data.shape[1] > output_channels:
+            data = data[:, :output_channels]
+
         self.audio.push_audio_sample(data)
 
     def stop_playing(self) -> None:

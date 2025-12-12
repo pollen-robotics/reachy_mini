@@ -41,3 +41,16 @@ Circular buffer overrun. To avoid, increase fifo_size URL option. To survive in 
 ```
 
 This message comes from FFmpeg (embedded in OpenCV) while consuming the UDP video stream. It appears because the frames are not being used, causing the buffer to fill up. If you do not intend to use the frames, set `ReachyMini(media_backend="no_media")` or `ReachyMini(media_backend="default_no_video")`.
+
+
+## PortAudio error when starting the daemon
+
+Some users may have an error when launching the daemon for the first time : `OSError: PortAudio library not found`. 
+
+To resolve that, you can install manually this library by executing in the terminal : 
+
+```bash
+sudo apt-get install libportaudio2
+```
+
+Then you can launch the daemon again : `reachy-mini-daemon`

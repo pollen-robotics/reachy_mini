@@ -22,8 +22,14 @@
     </div>
 
 
-    <div class="app-section-title">Install from 🤗 Hugging Face</div>
+    <div class="flex items-center justify-between">
+        <div class="app-section-title">Install from 🤗 Hugging Face</div>
+        <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200">
+            <input id="hf-show-community" type="checkbox" class="w-4 h-4">
+            <span>Show community apps</span>
+        </label>
+    </div>
     <div class="">
-        <ul id="hf-available-apps" class="overflow-y-auto max-h-96">Loading app from 🤗...</ul>
+        <ul id="hf-available-apps" class="overflow-y-auto max-h-96">Loading apps from 🤗...</ul>
     </div>
 </section>

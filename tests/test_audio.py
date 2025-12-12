@@ -20,6 +20,48 @@ def test_play_sound_default_backend() -> None:
     # Sound should be audible if the audio device is correctly set up.
 
 @pytest.mark.audio
+def test_push_audio_sample_default_backend() -> None:
+    """Test pushing an audio sample with the default backend."""
+    media = MediaManager(backend=MediaBackend.DEFAULT_NO_VIDEO)
+    media.start_playing()
+
+    #Stereo, channels last
+    data = np.random.random((media.get_output_audio_samplerate(), 2)).astype(np.float32)
+    media.push_audio_sample(data)
+    time.sleep(1)
+
+    #Mono, channels last
+    data = np.random.random((media.get_output_audio_samplerate(), 1)).astype(np.float32)
+    media.push_audio_sample(data)
+    time.sleep(1)
+
+    #Multiple channels, channels last
+    data = np.random.random((media.get_output_audio_samplerate(), 10)).astype(np.float32)
+    media.push_audio_sample(data)
+    time.sleep(1)
+
+    #Stereo, channels first
+    data = np.random.random((2, media.get_output_audio_samplerate())).astype(np.float32)
+    media.push_audio_sample(data)
+    time.sleep(1)
+
+    # No assertion: test passes if no exception is raised.
+    # Sound should be audible if the audio device is correctly set up.
+
+    data = np.array(0).astype(np.float32)
+    media.push_audio_sample(data)
+    time.sleep(1)
+
+    data = np.random.random((media.get_output_audio_samplerate(), 2, 2)).astype(np.float32)
+    media.push_audio_sample(data)
+    time.sleep(1)
+
+    # No assertion: test passes if no exception is raised.
+    # No sound should be audible if the audio device is correctly set up.
+
+    media.stop_playing()
+
+@pytest.mark.audio
 def test_record_audio_and_file_exists() -> None:
     """Test recording audio and check that the file exists and is not empty."""
     media = MediaManager(backend=MediaBackend.DEFAULT_NO_VIDEO)
@@ -38,6 +80,26 @@ def test_record_audio_and_file_exists() -> None:
     # comment the following line if you want to keep the file for inspection
     os.remove(tmpfile.name)
     #print(f"Recorded audio saved to {tmpfile.name}")
+
+@pytest.mark.audio
+def test_record_audio_without_start_recording() -> None:
+    """Test recording audio without starting recording."""
+    media = MediaManager(backend=MediaBackend.DEFAULT_NO_VIDEO)
+    audio = media.get_audio_sample()
+    assert audio is None
+
+@pytest.mark.audio
+def test_record_audio_above_max_queue_seconds() -> None:
+    """Test recording audio and check that the maximum queue seconds is respected."""
+    media = MediaManager(backend=MediaBackend.DEFAULT_NO_VIDEO)
+    media.audio._input_max_queue_seconds = 1
+    media.start_recording()
+    time.sleep(5)
+    audio = media.get_audio_sample()
+    media.stop_recording()
+
+    assert audio is not None
+    assert audio.shape[0] < media.audio._input_max_queue_samples
 
 @pytest.mark.audio
 def test_DoA() -> None:
