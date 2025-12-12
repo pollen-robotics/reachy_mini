@@ -60,10 +60,10 @@ Then you can launch the daemon again : `reachy-mini-daemon`
 
 This issue can be caused by incorrect PID values for the servos. Please check and update the PID values in the `hardware_config.yaml` file located in `src/reachy_mini/assets/config/`.
 
-If the antennas are oscillating, update the PID values for the left and right antenna servos (`right_antenna` and `left_antenna`). Generally if the oscillation is present, lowering the proportional gain (first value) helps to stabilize the movement. For example, if the current P value is 200, try reducing it to 150. 
+If the antennas are oscillating, update the PID values for the left and right antenna servos (`right_antenna` and `left_antenna`). Generally if the oscillation is present, lowering the proportional gain (first value) helps to stabilize the movement. For example, if the current P value is 200, try reducing it to 150. If the oscillation persists, continue to lower the P value in increments of 25 until the oscillation stops. If the P value is already low (e.g., below 100) and oscillation continues, consider adjusting the derivative gain (third value) slightly upwards to add damping, do it in increments of 10.
 
 If the head is oscillating, update the PID values for the neck servos (`stewart_1` to `stewart_6`) in a similar manner.
 
-Be careful when adjusting these values, as setting them too low may result in sluggish or unresponsive movement while setting the values too high may case instability. Do small adjustments and test the robot's behavior after each change. 
+Be careful when adjusting these values, as setting them too low may result in sluggish or unresponsive movement while setting the values too high may case instability. Do small adjustments (10-20) and test the robot's behavior after each change. 
 
-**Make sure to restart the Reachy Mini daemon after making changes to the configuration file for the changes to take effect.**
+**‼️ Make sure to restart the Reachy Mini daemon after making changes to the configuration file for the changes to take effect.**
