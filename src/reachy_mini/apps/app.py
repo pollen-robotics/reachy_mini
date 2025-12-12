@@ -10,6 +10,8 @@ It uses Jinja2 templates to generate the necessary files for the app project.
 import argparse
 import importlib
 import logging
+import platform
+import subprocess
 import threading
 import traceback
 from abc import ABC, abstractmethod
@@ -37,6 +39,10 @@ class ReachyMiniApp(ABC):
         self.error: str = ""
         self.logger = logging.getLogger("reachy_mini.app")
 
+        # If we're running with wireless, we assume systemd service is used
+        running_on_wireless = self._check_systemd_service_exists()
+        self.logger.info(f"Running on wireless: {running_on_wireless}")
+
         self.media_backend = (
             self.request_media_backend
             if self.request_media_backend is not None
@@ -60,6 +66,31 @@ class ReachyMiniApp(ABC):
                     async def index() -> FileResponse:
                         """Serve the settings app index page."""
                         return FileResponse(index_file)
+
+    @staticmethod
+    def _check_systemd_service_exists(service_name: str = "reachy-mini-daemon") -> bool:
+        """Check if a systemd service exists (Linux only).
+
+        Args:
+            service_name: Name of the systemd service to check
+
+        Returns:
+            True if the service exists, False otherwise
+
+        """
+        if platform.system() != "Linux":
+            return False
+
+        try:
+            result = subprocess.run(
+                ["systemctl", "status", service_name],
+                capture_output=True,
+                timeout=2,
+            )
+            # Return code 0 = running, 3 = stopped but exists, 4 = doesn't exist
+            return result.returncode != 4
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            return False
 
     def wrapped_run(self, *args: Any, **kwargs: Any) -> None:
         """Wrap the run method with Reachy Mini context management."""

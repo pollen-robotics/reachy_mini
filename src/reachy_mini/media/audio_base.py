@@ -51,7 +51,7 @@ class AudioBase(ABC):
 
     def get_input_channels(self) -> int:
         """Get the number of input channels of the audio device."""
-        return self.CHANNELS   
+        return self.CHANNELS
 
     def get_output_channels(self) -> int:
         """Get the number of output channels of the audio device."""
