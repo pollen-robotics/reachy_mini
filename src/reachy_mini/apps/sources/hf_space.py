@@ -11,8 +11,9 @@ from .. import AppInfo, SourceKind
 # Constants
 AUTHORIZED_APP_LIST_URL = "https://huggingface.co/datasets/pollen-robotics/reachy-mini-official-app-store/raw/main/app-list.json"
 HF_SPACES_API_URL = "https://huggingface.co/api/spaces"
-# TODO look for js apps too (reachy_mini_js_app)
-HF_SPACES_FILTER_URL = "https://huggingface.co/api/spaces?filter=reachy_mini_python_app&sort=likes&direction=-1&limit=50&full=true"
+HF_SPACES_PYTHON_URL = "https://huggingface.co/api/spaces?filter=reachy_mini_python_app&sort=likes&direction=-1&limit=50&full=true"
+HF_SPACES_JS_URL = "https://huggingface.co/api/spaces?filter=reachy_mini_js_app&sort=likes&direction=-1&limit=50&full=true"
+
 REQUEST_TIMEOUT = aiohttp.ClientTimeout(total=30)
 
 
@@ -75,32 +76,49 @@ async def list_available_apps() -> list[AppInfo]:
         return apps
 
 
-async def list_all_apps() -> list[AppInfo]:
-    """List all apps available on Hugging Face Spaces (including unofficial ones)."""
+async def get_apps_by_tag(tag: str) -> list[AppInfo]:
+    """Fetch apps from Hugging Face Spaces filtered by tag."""
+    url_map = {
+        "python": HF_SPACES_PYTHON_URL,
+        "js": HF_SPACES_JS_URL,
+    }
+
+    url = url_map.get(tag)
+    if not url:
+        return []
+
     async with aiohttp.ClientSession(timeout=REQUEST_TIMEOUT) as session:
         try:
-            async with session.get(HF_SPACES_FILTER_URL) as response:
+            async with session.get(url) as response:
                 response.raise_for_status()
-                data: list[Dict[str, Any]] = await response.json()
+                data = await response.json()
         except (aiohttp.ClientError, json.JSONDecodeError, asyncio.TimeoutError):
             return []
 
-        if not isinstance(data, list):
-            return []
+    if not isinstance(data, list):
+        return []
 
-        apps = []
-        for item in data:
-            if item is None or "id" not in item:
-                continue
+    apps = []
+    for item in data:
+        if item is None or "id" not in item:
+            continue
 
-            apps.append(
-                AppInfo(
-                    name=item["id"].split("/")[-1],
-                    description=item.get("cardData", {}).get("short_description", ""),
-                    url=f"https://huggingface.co/spaces/{item['id']}",
-                    source_kind=SourceKind.HF_SPACE,
-                    extra=item,
-                )
+        apps.append(
+            AppInfo(
+                name=item["id"].split("/")[-1],
+                description=item.get("cardData", {}).get("short_description", ""),
+                url=f"https://huggingface.co/spaces/{item['id']}",
+                source_kind=SourceKind.HF_SPACE,
+                extra=item,
             )
+        )
 
-        return apps
+    return apps
+
+
+async def list_all_apps() -> list[AppInfo]:
+    """List all apps available on Hugging Face Spaces (including unofficial ones)."""
+    python_apps, js_apps = await asyncio.gather(
+        get_apps_by_tag("python"), get_apps_by_tag("js")
+    )
+    return python_apps + js_apps

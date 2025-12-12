@@ -85,7 +85,16 @@ const hfAppsStore = {
         const installButtonDiv = document.createElement('button');
         installButtonDiv.className = 'row-span-2 my-2 hf-app-install-button';
 
-        if (isInstalled) {
+        // Check if this is a JS app (no installation needed)
+        const isJsApp = app.extra?.cardData?.tags?.includes('reachy_mini_js_app');
+
+        if (isJsApp) {
+            installButtonDiv.classList.add('border', 'border-red-600');
+            installButtonDiv.textContent = 'Open';
+            installButtonDiv.onclick = () => {
+                window.open(app.url, '_blank', 'noopener,noreferrer');
+            };
+        } else if (isInstalled) {
             installButtonDiv.classList.add('bg-gray-400', 'cursor-not-allowed');
             installButtonDiv.textContent = 'Installed';
             installButtonDiv.disabled = true;
