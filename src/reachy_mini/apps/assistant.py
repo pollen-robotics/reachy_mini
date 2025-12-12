@@ -592,7 +592,7 @@ def request_app_addition(new_app_repo_id: str) -> bool:
     return True
 
 
-def try_to_push(console, _app_path) -> bool:
+def try_to_push(console: Console, _app_path: Path) -> bool:
     """Try to push changes to the remote repository."""
     console.print("Pushing changes to the remote repository ...", style="bold blue")
     push_result = subprocess.run(
@@ -644,7 +644,7 @@ def publish(
                 "[red] Safeguard : You may have selected reachy_mini repo as your app. Aborted.[/red]"
             )
             exit()
-    app_path = Path(app_path).expanduser().resolve()
+    app_path = Path(app_path).expanduser().resolve()  # type: ignore
     if not os.path.exists(app_path):
         console.print(f"[red]App path {app_path} does not exist.[/red]")
         sys.exit()
