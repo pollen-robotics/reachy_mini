@@ -1,0 +1,8 @@
+Use the media object:
+```python
+from reachy_mini import ReachyMini
+
+with ReachyMini() as mini:
+    frame = mini.media.get_frame()
+    # frame is a numpy array compatible with OpenCV
+```

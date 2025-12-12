@@ -1,0 +1,12 @@
+[
+    {
+        "question": "Reachy’s face tracking seems slow or inaccurate.",
+        "tags": [
+            "VISION",
+            "LIGHTING",
+            "TRACKING"
+        ],
+        "answer_file": "face_tracking.mdx",
+        "source": "Community forum"
+    }
+]

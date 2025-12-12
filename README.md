@@ -12,7 +12,7 @@
 
 Reachy Mini's hardware comes in two flavors:
 - **Reachy Mini lite**: where the robot is directly connected to your computer via USB. And the code that controls the robot (the daemon) runs on your computer.
-- **Reachy Mini wireless**: where an Raspberry Pi is embedded in the robot, and the code that controls the robot (the daemon) runs on the Raspberry Pi. You can connect to it via Wi-Fi from your computer (see [Wireless Setup](./docs/wireless-version.md)).
+- **Reachy Mini wireless**: where an Raspberry Pi is embedded in the robot, and the code that controls the robot (the daemon) runs on the Raspberry Pi. You can connect to it via Wi-Fi from your computer (see [Wireless Setup](./docs/source/wireless-version.mdx)).
 
 There is also a simulated version of Reachy Mini in [MuJoCo](https://mujoco.org) that you can use to prototype your applications before deploying them on the real robot. It behaves like the lite version where the daemon runs on your computer.
 
@@ -119,6 +119,8 @@ You may need to log out and log back in for the group changes to take effect.
 
 Before being able to use the robot, you need to run the daemon that will handle the communication with the motors. This daemon can run either in simulation (MuJoCo) or on the real robot.
 
+### For the real robot
+
 ```bash
 reachy-mini-daemon
 ```
@@ -140,6 +142,15 @@ or
 ```bash
 --no-localhost-only: If set, the server will accept connections from any connection on the local network.
 ```
+
+> [!TIP]
+> **For the lite version (connected via USB)**
+> 
+> It should automatically detect the serial port of the robot. If it does not, you can specify it manually with the `-p` option:
+> 
+> ```bash
+> reachy-mini-daemon -p <serial_port>
+> ```
 
 ### In simulation ([MuJoCo](https://mujoco.org))
 
@@ -169,14 +180,6 @@ Additional arguments:
 ```bash
  mjpython -m reachy_mini.daemon.app.main --sim
  ```
-
-### For the lite version (connected via USB)
-
-It should automatically detect the serial port of the robot. If it does not, you can specify it manually with the `-p` option:
-
-```bash
-reachy-mini-daemon -p <serial_port>
-```
 
 ### Usage
 
@@ -216,7 +219,7 @@ with ReachyMini() as reachy_mini:
     reachy_mini.goto_target(head=pose, duration=2.0)
 ```
 
-For a full description of the SDK, please refer to the [Python SDK documentation](./docs/python-sdk.md).
+For a full description of the SDK, please refer to the [Python SDK documentation](./docs/source/python_sdk.mdx).
 
 ## Using the REST API
 
@@ -224,7 +227,7 @@ The daemon also provides a REST API via [fastapi](https://fastapi.tiangolo.com/)
 
 By default, the API server runs on `http://localhost:8000`. The API is documented using OpenAPI, and you can access the documentation at `http://localhost:8000/docs` when the daemon is running.
 
-More information about the API can be found in the [HTTP API documentation](./docs/rest-api.md).
+More information about the API can be found in the [HTTP API documentation](./docs/source/rest_api.mdx).
 
 ## Share your apps with the commmunity
 
@@ -259,7 +262,7 @@ Checks are performed by Ruff. You may want to [configure your IDE to support it]
 
 ## Troubleshooting
 
-see [dedicated section](docs/troubleshooting.md)
+see [dedicated section](docs/source/troubleshooting.mdx)
 
 ## License
 

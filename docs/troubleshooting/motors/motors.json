@@ -1,0 +1,11 @@
+[
+    {
+        "question": "Motors stop responding after a while",
+        "tags": [
+            "MOTORS",
+            "POWER"
+        ],
+        "answer_file": "motors_stop_responding.mdx",
+        "source": "Community forum"
+    }
+]

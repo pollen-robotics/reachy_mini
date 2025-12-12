@@ -1,0 +1,14 @@
+Example:
+
+```python
+reachy.goto_target(head=create_head_pose(roll=-50, degrees=True))
+```
+
+- This exceeds the roll limit (±40°).
+- The robot will move to the closest valid pose instead.
+
+You can inspect the actual pose with:
+```python
+head_pose = reachy.get_current_head_pose()
+print("current head pose", head_pose)
+```

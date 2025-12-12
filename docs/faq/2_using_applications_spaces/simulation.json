@@ -1,0 +1,11 @@
+[
+    {
+        "question": "Is there a simulation environment?",
+        "tags": [
+            "SIMULATION",
+            "SDK"
+        ],
+        "answer_file": "simulation/simulation-environment.mdx",
+        "source": "Community discussion"
+    }
+]

@@ -1,0 +1,48 @@
+[
+    {
+        "question": "Can Reachy wake up or move autonomously based on audio?",
+        "tags": [
+            "AUDIO",
+            "MOVEMENT",
+            "AI"
+        ],
+        "answer_file": "wake_up_move_autonomously.mdx",
+        "source": "Fallback users"
+    },
+    {
+        "question": "Can Reachy follow faces?",
+        "tags": [
+            "VISION",
+            "FACE_TRACKING"
+        ],
+        "answer_file": "follow_faces.mdx",
+        "source": "Fallback user who posted “Reachy seeing me for the first time ❤️”"
+    },
+    {
+        "question": "Can I create a personalized behavior model?",
+        "tags": [
+            "AI",
+            "PERSONALIZATION"
+        ],
+        "answer_file": "personalized_behavior_model.mdx",
+        "source": "Fallback author"
+    },
+    {
+        "question": "How can I make Reachy Mini look at a point in the image?",
+        "tags": [
+            "VISION",
+            "LOOK_AT_IMAGE"
+        ],
+        "answer_file": "look_at_point_in_image.mdx",
+        "source": "API documentation"
+    },
+    {
+        "question": "How can I make Reachy Mini look at a 3D point in the world?",
+        "tags": [
+            "VISION",
+            "LOOK_AT_WORLD"
+        ],
+        "answer_file": "look_at_point_in_world.mdx",
+        "source": "API documentation"
+    }
+]

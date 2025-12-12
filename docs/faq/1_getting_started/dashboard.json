@@ -1,0 +1,12 @@
+[
+    {
+        "question": "Is installing apps directly from the dashboard supported?",
+        "tags": [
+            "DASHBOARD",
+            "APPS",
+            "INSTALLATION"
+        ],
+        "answer_file": "dashboard/installing-apps.mdx",
+        "source": "User guide"
+    }
+]

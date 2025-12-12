@@ -1,0 +1,31 @@
+[
+    {
+        "question": "Is there a recommended way to share apps with the community?",
+        "tags": [
+            "APPS",
+            "COMMUNITY",
+            "CONTRIBUTING"
+        ],
+        "answer_file": "share_apps_with_community.mdx",
+        "source": "Community forum"
+    },
+    {
+        "question": "How can I submit improvements to the SDK?",
+        "tags": [
+            "SDK",
+            "CONTRIBUTING"
+        ],
+        "answer_file": "contribute_to_sdk.mdx",
+        "source": "Documentation guidelines"
+    },
+    {
+        "question": "How can I contribute to datasets of moves (dances/emotions)?",
+        "tags": [
+            "CODING DATASET",
+            "CONTRIBUTING",
+            "MOVEMENT"
+        ],
+        "answer_file": "contribute_to_datasets.mdx",
+        "source": "Code repository"
+    }
+]

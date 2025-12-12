@@ -1,0 +1,71 @@
+[
+    {
+        "question": "How do I move Reachy Mini’s head to a specific pose?",
+        "tags": [
+            "MOVEMENT",
+            "HEAD",
+            "SDK"
+        ],
+        "answer_file": "moving_robot/move-head-to-pose.mdx",
+        "source": "API documentation"
+    },
+    {
+        "question": "How do I control head orientation (roll, pitch, yaw)?",
+        "tags": [
+            "MOVEMENT",
+            "HEAD"
+        ],
+        "answer_file": "moving_robot/control-head-orientation.mdx",
+        "source": "API documentation"
+    },
+    {
+        "question": "How do I move head, body, and antennas at the same time?",
+        "tags": [
+            "MOVEMENT",
+            "HEAD",
+            "BODY",
+            "ANTENNAS"
+        ],
+        "answer_file": "moving_robot/move-head-body-antennas.mdx",
+        "source": "API documentation"
+    },
+    {
+        "question": "What’s the difference between `goto_target` and `set_target`?",
+        "tags": [
+            "MOVEMENT",
+            "CONTROL",
+            "CONTROL"
+        ],
+        "answer_file": "moving_robot/difference-goto-target-set-target.mdx",
+        "source": "API documentation"
+    },
+    {
+        "question": "How do I choose the interpolation method for movements?",
+        "tags": [
+            "MOVEMENT",
+            "INTERPOLATION"
+        ],
+        "answer_file": "moving_robot/choose-interpolation-method.mdx",
+        "source": "API documentation"
+    },
+    {
+        "question": "How do I play predefined moves?",
+        "tags": [
+            "MOVEMENT",
+            "DATASET",
+            "PLAYBACK"
+        ],
+        "answer_file": "moving_robot/play-predefined-moves.mdx",
+        "source": "API documentation"
+    },
+    {
+        "question": "How do I record my own moves for later replay?",
+        "tags": [
+            "MOVEMENT",
+            "RECORDING",
+            "TELEOP"
+        ],
+        "answer_file": "moving_robot/record-own-moves.mdx",
+        "source": "API documentation"
+    }
+]

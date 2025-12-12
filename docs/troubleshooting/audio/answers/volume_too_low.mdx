@@ -1,0 +1,8 @@
+Check in `alsamixer` that PCM1 is set to 100%. Then use PCM,0 to adjust the volume.
+
+To make this change permanent:
+```
+CARD=$(aplay -l | grep -i "reSpeaker XVF3800 4-Mic Array" | head -n1 | sed -n 's/^card \([0-9]*\):.*/\1/p')
+amixer -c "$CARD" set PCM,1 100%
+sudo alsactl store "$CARD"
+```

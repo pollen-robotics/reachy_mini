@@ -1,0 +1,10 @@
+Limits:
+
+1. Motors have limited mechanical range.
+2. Head can collide with the body.
+3. Body yaw: [-180°, 180°].
+4. Head pitch and roll: [-40°, 40°].
+5. Head yaw: [-180°, 180°].
+6. Difference (body_yaw - head_yaw): [-65°, 65°].
+
+If commanded pose exceeds these limits, the robot will clamp to the nearest safe pose (no exception is thrown).

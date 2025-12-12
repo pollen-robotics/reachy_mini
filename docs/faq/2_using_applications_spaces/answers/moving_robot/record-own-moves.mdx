@@ -1,0 +1,19 @@
+Call `start_recording()` and `stop_recording()` around the time where you send `set_target` commands:
+
+```python
+with ReachyMini() as mini:
+    mini.start_recording()
+    # run your teleop / control code ...
+    recorded_motion = mini.stop_recording()
+```
+
+Each recorded frame contains:
+
+- `time`
+- `head`
+- `antennas`
+- `body_yaw`
+
+Tools to record and upload datasets:
+
+- `reachy_mini_toolbox/tools/moves`
