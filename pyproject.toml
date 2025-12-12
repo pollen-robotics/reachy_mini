@@ -34,7 +34,7 @@ dependencies = [
     "rich",
     "questionary",
     "websockets>=12,<16",
-    "tomllib",
+    "toml",
 ]
 
 
@@ -50,6 +50,7 @@ dev = [
     "mypy==1.18.2",
     "rustypot>=1.4.0",
     "types-requests",
+    "types-toml",
     "rerun-sdk>=0.27.2",
     "urdf-parser-py==0.0.4",
 ]

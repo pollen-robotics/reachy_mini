@@ -28,7 +28,7 @@ if typing.TYPE_CHECKING:
     from reachy_mini.daemon.backend.mujoco.backend import MujocoBackendStatus
     from reachy_mini.daemon.backend.robot.backend import RobotBackendStatus
     from reachy_mini.kinematics import AnyKinematics
-from reachy_mini.media.audio_sounddevice import SoundDeviceAudio
+from reachy_mini.media.media_manager import MediaBackend, MediaManager
 from reachy_mini.motion.goto import GotoMove
 from reachy_mini.motion.move import Move
 from reachy_mini.utils.constants import MODELS_ROOT_PATH, URDF_ROOT_PATH
@@ -56,6 +56,7 @@ class Backend:
         check_collision: bool = False,
         kinematics_engine: str = "AnalyticalKinematics",
         use_audio: bool = True,
+        wireless_version: bool = False,
     ) -> None:
         """Initialize the backend."""
         self.logger = logging.getLogger(__name__)
@@ -162,9 +163,22 @@ class Backend:
         # Recording lock to guard buffer swaps and appends
         self._rec_lock = threading.Lock()
 
-        self.audio: Optional[SoundDeviceAudio] = None
+        self.audio: Optional[MediaManager] = None
         if self.use_audio:
-            self.audio = SoundDeviceAudio(log_level=log_level)
+            if wireless_version:
+                self.logger.debug(
+                    "Initializing daemon audio backend for wireless version."
+                )
+                self.audio = MediaManager(
+                    backend=MediaBackend.GSTREAMER_NO_VIDEO, log_level=log_level
+                )
+            else:
+                self.logger.debug(
+                    "Initializing daemon audio backend for non-wireless version."
+                )
+                self.audio = MediaManager(
+                    backend=MediaBackend.DEFAULT_NO_VIDEO, log_level=log_level
+                )
 
     # Life cycle methods
     def wrapped_run(self) -> None:
@@ -358,6 +372,9 @@ class Backend:
             )
         sleep_period = 1.0 / play_frequency
 
+        if move.sound_path is not None and self.audio is not None:
+            self.play_sound(str(move.sound_path))
+
         t0 = time.time()
         while time.time() - t0 < move.duration:
             t = time.time() - t0
@@ -375,6 +392,10 @@ class Backend:
                 await asyncio.sleep(sleep_period - elapsed)
             else:
                 await asyncio.sleep(0.001)
+
+        if move.sound_path is not None and self.audio is not None:
+            # release audio resources after playing the move sound
+            self.audio.stop_playing()
 
     async def goto_target(
         self,
