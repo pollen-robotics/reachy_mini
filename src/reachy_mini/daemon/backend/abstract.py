@@ -738,7 +738,7 @@ class Backend:
         """
         # This is would be better, and fix mypy issues, but Placo is dynamically imported
         # if not isinstance(self.head_kinematics, PlacoKinematics):
-        if self.kinematics_engine != "Placo":
+        if self.kinematics_engine != "Placo" and self.kinematics_engine != "AnalyticalKinematics":
             return None
         return {
             "passive_1_x": self.head_kinematics.get_joint("passive_1_x"),  # type: ignore [union-attr]
