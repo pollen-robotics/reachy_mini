@@ -35,8 +35,6 @@ dependencies = [
     "questionary",
     "websockets>=12,<16",
     "toml",
-    # Placo is now required for proper passive joint calculation
-    "placo==0.9.14",
 ]
 
 
@@ -47,6 +45,7 @@ dev = [
     "ruff==0.12.0",
     "onshape-to-robot==1.7.6",
     "mujoco==3.3.0",
+    "placo==0.9.14",
     "pre-commit",
     "mypy==1.18.2",
     "rustypot>=1.4.0",
@@ -58,7 +57,7 @@ dev = [
 examples = ["pynput"]
 mujoco = ["mujoco==3.3.0"]
 nn_kinematics = ["onnxruntime==1.22.1"]
-# placo_kinematics removed - placo is now a core dependency
+placo_kinematics = ["placo==0.9.14"]
 gstreamer = ["PyGObject>=3.42.2,<=3.46.0", "gst-signalling>=1.1.2"]
 rerun = ["rerun-sdk>=0.27.2", "urdf-parser-py==0.0.4"]
 wireless-version = [

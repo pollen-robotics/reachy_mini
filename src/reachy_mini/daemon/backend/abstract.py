@@ -54,7 +54,7 @@ class Backend:
         self,
         log_level: str = "INFO",
         check_collision: bool = False,
-        kinematics_engine: str = "Placo",
+        kinematics_engine: str = "AnalyticalKinematics",
         use_audio: bool = True,
         wireless_version: bool = False,
     ) -> None:
