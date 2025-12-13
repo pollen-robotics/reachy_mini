@@ -40,12 +40,18 @@ class ZenohClient(AbstractClient):
                 )
             )
         else:
-            # TODO use the name of the robot for multiple robots support
+            # Use peer mode with automatic discovery via multicast/gossip scouting
+            # This allows the client to discover robots on the network without knowing their IP/hostname
+            # The prefix/robot_name is used for topic namespacing only
             c = zenoh.Config.from_json5(
                 json.dumps(
                     {
-                        "mode": "client",
-                        "connect": {"endpoints": [f"tcp/{prefix}.local:7447"]},
+                        "mode": "peer",
+                        "scouting": {
+                            "multicast": {"enabled": True},
+                            "gossip": {"enabled": True},
+                        },
+                        "connect": {"endpoints": []},
                     }
                 )
             )
