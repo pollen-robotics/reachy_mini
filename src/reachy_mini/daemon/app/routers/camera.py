@@ -1,6 +1,6 @@
 """Camera API endpoints."""
 
-from fastapi import APIRouter, HTTPException, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
@@ -11,6 +11,7 @@ router = APIRouter(prefix="/camera", tags=["camera"])
 
 class CameraStatusResponse(BaseModel):
     """Response model for camera status."""
+
     available: bool
     backend: str
     resolution: tuple[int, int] | None = None
@@ -19,18 +20,21 @@ class CameraStatusResponse(BaseModel):
 
 class WebRTCOffer(BaseModel):
     """Request model for WebRTC offer."""
+
     sdp: str
     type: str
 
 
 class WebRTCAnswer(BaseModel):
     """Response model for WebRTC answer."""
+
     answer: dict
     ice_candidates: list[dict]
 
 
 class WebRTCCandidate(BaseModel):
     """Request model for WebRTC ICE candidate."""
+
     candidate: str
     sdpMid: str | None = None
     sdpMLineIndex: int | None = None
@@ -44,9 +48,10 @@ def get_daemon(request: Request) -> Daemon:
 @router.get("/status")
 async def get_camera_status(daemon: Daemon = Depends(get_daemon)) -> CameraStatusResponse:
     """Get the current camera status.
-    
+
     Returns:
         CameraStatusResponse: The camera status including availability, backend, resolution, and framerate.
+
     """
     try:
         # Check if media manager is available and has camera
@@ -93,15 +98,17 @@ async def get_camera_status(daemon: Daemon = Depends(get_daemon)) -> CameraStatu
 @router.post("/webrtc/offer")
 async def handle_webrtc_offer(offer: WebRTCOffer, daemon: Daemon = Depends(get_daemon)) -> WebRTCAnswer:
     """Handle WebRTC offer and return answer with ICE candidates.
-    
+
     Args:
         offer: The WebRTC offer containing SDP and type.
-        
+        daemon: The daemon instance providing access to the media manager.
+
     Returns:
         WebRTCAnswer: The WebRTC answer and ICE candidates.
-        
+
     Raises:
         HTTPException: If WebRTC is not available or offer processing fails.
+
     """
     try:
         # Check if WebRTC backend is available
@@ -152,15 +159,17 @@ async def handle_webrtc_offer(offer: WebRTCOffer, daemon: Daemon = Depends(get_d
 @router.post("/webrtc/ice")
 async def handle_ice_candidate(candidate: WebRTCCandidate, daemon: Daemon = Depends(get_daemon)) -> JSONResponse:
     """Handle ICE candidate from client.
-    
+
     Args:
         candidate: The ICE candidate to add to the connection.
-        
+        daemon: The daemon instance providing access to the media manager.
+
     Returns:
         JSONResponse: Confirmation that the candidate was processed.
-        
+
     Raises:
         HTTPException: If WebRTC is not available or candidate processing fails.
+
     """
     try:
         # Check if WebRTC backend is available
