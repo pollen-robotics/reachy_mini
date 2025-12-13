@@ -15,36 +15,6 @@ from reachy_mini_rust_kinematics import ReachyMiniRustKinematics
 from scipy.spatial.transform import Rotation as R
 
 import reachy_mini
-
-# a helper (more optimal) function to extract euler angles from rotation matrix
-# hure till we pass the passive joint calculation to rust
-def fast_euler_from_matrix(R_mat: np.ndarray, order: str = "XYZ") -> np.ndarray:
-    """Fast Euler angle extraction without creating Rotation object.
-    
-    For XYZ order (rotation matrix extrinsic):
-    Faster than scipy.spatial.transform.Rotation.as_euler() which has overhead.
-    """
-    if order == "XYZ":
-        # Direct extraction from rotation matrix for XYZ convention
-        # Avoids Rotation object creation overhead (~2-3x faster)
-        sin_y = -R_mat[2, 0]
-        sin_y = np.clip(sin_y, -1.0, 1.0)  # Clamp to avoid numerical errors
-        
-        cos_y = np.sqrt(R_mat[0, 0]**2 + R_mat[1, 0]**2)
-        y = np.arctan2(sin_y, cos_y)
-        
-        if np.abs(cos_y) > 1e-6:
-            x = np.arctan2(R_mat[2, 1], R_mat[2, 2])
-            z = np.arctan2(R_mat[1, 0], R_mat[0, 0])
-        else:
-            # Gimbal lock case
-            x = 0.0
-            z = np.arctan2(-R_mat[0, 1], R_mat[1, 1])
-        
-        return np.array([x, y, z])
-    else:
-        # Fall back to scipy for other orders
-        return R.from_matrix(R_mat).as_euler(order)
     
 
 # Duplicated for now.
@@ -144,7 +114,6 @@ class AnalyticalKinematics:
         body_yaw: float = 0.0,
         check_collision: bool = False,
         no_iterations: int = 0,
-        calculate_passive_joints: bool = False,
     ) -> Annotated[NDArray[np.float64], (7,)]:
         """Compute the inverse kinematics for a given head pose.
 
@@ -170,10 +139,7 @@ class AnalyticalKinematics:
             # it does not modify the body yaw
             stewart_joints = self.kin.inverse_kinematics(_pose, body_yaw)  # type: ignore[arg-type]
             reachy_joints = [body_yaw] + stewart_joints
-
-        if calculate_passive_joints:
-            self.calculate_passive_joints(joints=np.array(reachy_joints), T_head=pose)
-
+            
         self.current_joints
         return np.array(reachy_joints)
 
@@ -182,7 +148,6 @@ class AnalyticalKinematics:
         joint_angles: Annotated[NDArray[np.float64], (7,)],
         check_collision: bool = False,
         no_iterations: int = 3,
-        calculate_passive_joints: bool = True,
     ) -> Annotated[NDArray[np.float64], (4, 4)]:
         """Compute the forward kinematics for a given set of joint angles.
 
@@ -204,14 +169,24 @@ class AnalyticalKinematics:
                     self.kin.forward_kinematics(_joint_angles, body_yaw)
                 )
             assert T_world_platform is not None
+            # check if Z axis if too low 
+            if T_world_platform[2, 3]  < 0.1: 
+                self.logger.warning("WARNING FK: Head Z position is below 0, recomputing FK")
+                body_yaw += 0.001
+                _joint_angles = list(np.array(_joint_angles) + 0.001)
+                tmp = np.eye(4)
+                tmp[:3, 3][2] += self.head_z_offset
+                self.kin.reset_forward_kinematics(tmp)  # type: ignore[arg-type]
+                continue
             # Use faster Euler extraction (avoid Rotation object overhead)
-            euler = fast_euler_from_matrix(T_world_platform[:3, :3], "XYZ")
-            euler = np.degrees(euler)  # Convert to degrees if needed
+            euler = R.from_matrix(T_world_platform[:3, :3]).as_euler(
+                "xyz", degrees=True
+            )
             # check that head is upright. Recompute with epsilon adjustments if not
-            if not (euler[0] > 90 or euler[0] < -90 or euler[1] > 90 or euler[1] < -90):
+            if not (euler[0] > 90 or euler[0] < -90 or euler[1] > 90 or euler[1] < -90 or abs(euler[2] - body_yaw) > 90):
                 ok = True
             else:
-                self.logger.warning("Head is not upright, recomputing FK")
+                self.logger.warning("WARNING FK: Head is not upright, recomputing FK")
                 body_yaw += 0.001
                 _joint_angles = list(np.array(_joint_angles) + 0.001)
                 tmp = np.eye(4)
@@ -221,9 +196,6 @@ class AnalyticalKinematics:
         assert T_world_platform is not None
 
         T_world_platform[:3, 3][2] -= self.head_z_offset
-        
-        if calculate_passive_joints:
-            self.calculate_passive_joints(joints=joint_angles, T_head=T_world_platform)
         
         return T_world_platform
 
@@ -267,6 +239,16 @@ class AnalyticalKinematics:
         _pose = T_head.copy()
         _pose[:3, 3][2] += self.head_z_offset
     
+        # rotate pose around Z by body yaw
+        body_yaw = joints[0]
+        cos_yaw = np.cos(-body_yaw)
+        sin_yaw = np.sin(-body_yaw)
+        R_z = np.array([[cos_yaw, -sin_yaw, 0],
+                        [sin_yaw, cos_yaw, 0],
+                        [0, 0, 1]])
+        _pose[:3, :3] = R_z @ _pose[:3, :3]
+        
+    
         # Pre-allocate output array for better performance
         passive_joints = np.zeros(21)
     
@@ -309,7 +291,7 @@ class AnalyticalKinematics:
             straight_line_dir = vec_servo_to_branch_in_servo / norm_vec
             R_servo_branch, _ = R.align_vectors(np.array([straight_line_dir]), np.array([rod_dir]))
             # Use fast Euler extraction instead of Rotation.as_euler()
-            euler = fast_euler_from_matrix(R_servo_branch.as_matrix(), "XYZ")
+            euler = R_servo_branch.as_euler("XYZ")
             
             # Store directly in pre-allocated array instead of extend
             passive_joints[i*3:i*3+3] = euler
@@ -328,7 +310,7 @@ class AnalyticalKinematics:
                 # Compute relative rotation
                 R_dof = R_rod_current.T @ R_head_xl330
                 # Use fast Euler extraction
-                euler_7 = fast_euler_from_matrix(R_dof, "XYZ")
+                euler_7 = R.from_matrix(R_dof).as_euler("XYZ")
                 passive_joints[18:21] = euler_7
                 
         self.passive_joints = passive_joints

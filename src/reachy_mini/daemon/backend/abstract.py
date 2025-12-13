@@ -740,6 +740,9 @@ class Backend:
         # if not isinstance(self.head_kinematics, PlacoKinematics):
         if self.kinematics_engine != "Placo" and self.kinematics_engine != "AnalyticalKinematics":
             return None
+        
+        if self.kinematics_engine == "AnalyticalKinematics":
+            self.head_kinematics.calculate_passive_joints(self.current_head_joint_positions, self.current_head_pose)
         return {
             "passive_1_x": self.head_kinematics.get_joint("passive_1_x"),  # type: ignore [union-attr]
             "passive_1_y": self.head_kinematics.get_joint("passive_1_y"),  # type: ignore [union-attr]
