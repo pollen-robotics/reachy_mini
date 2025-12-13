@@ -666,6 +666,24 @@ def publish(
     repo_url = f"https://huggingface.co/spaces/{repo_path}"
 
     if hf.repo_exists(repo_path, repo_type="space"):
+        if official:
+            # ask for confirmation
+            if not questionary.confirm(
+                "Are you sure you want to ask to publish this app as an official Reachy Mini app?"
+            ).ask():
+                console.print("[red]Aborted.[/red]")
+                exit()
+
+            worked = request_app_addition(repo_path)
+            if worked:
+                console.print(
+                    "\nYou have requested to publish your app as an official Reachy Mini app."
+                )
+                console.print(
+                    "The Pollen and Hugging Face teams will review your app. Thank you for your contribution!"
+                )
+            exit()
+
         console.print("App already exists on Hugging Face Spaces.", style="bold blue")
         os.system(f"cd {app_path} && git pull {repo_url} main")
 
@@ -751,19 +769,19 @@ def publish(
 
         console.print("✅ App published successfully.", style="bold green")
 
-    if official:
-        # ask for confirmation
-        if not questionary.confirm(
-            "Are you sure you want to ask to publish this app as an official Reachy Mini app?"
-        ).ask():
-            console.print("[red]Aborted.[/red]")
-            exit()
+        if official:
+            # ask for confirmation
+            if not questionary.confirm(
+                "Are you sure you want to ask to publish this app as an official Reachy Mini app?"
+            ).ask():
+                console.print("[red]Aborted.[/red]")
+                exit()
 
-        worked = request_app_addition(repo_path)
-        if worked:
-            console.print(
-                "\nYou have requested to publish your app as an official Reachy Mini app."
-            )
-            console.print(
-                "The Pollen and Hugging Face teams will review your app. Thank you for your contribution!"
-            )
+            worked = request_app_addition(repo_path)
+            if worked:
+                console.print(
+                    "\nYou have requested to publish your app as an official Reachy Mini app."
+                )
+                console.print(
+                    "The Pollen and Hugging Face teams will review your app. Thank you for your contribution!"
+                )
