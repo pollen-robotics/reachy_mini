@@ -32,7 +32,7 @@ class RobotBackend(Backend):
         serialport: str,
         log_level: str = "INFO",
         check_collision: bool = False,
-        kinematics_engine: str = "AnalyticalKinematics",
+        kinematics_engine: str = "Placo",
         hardware_error_check_frequency: float = 1.0,
         use_audio: bool = True,
         wireless_version: bool = False,
@@ -44,7 +44,7 @@ class RobotBackend(Backend):
             serialport (str): The serial port to which the Reachy Mini is connected.
             log_level (str): The logging level for the backend. Default is "INFO".
             check_collision (bool): If True, enable collision checking. Default is False.
-            kinematics_engine (str): Kinematics engine to use. Defaults to "AnalyticalKinematics".
+            kinematics_engine (str): Kinematics engine to use. Defaults to "Placo".
             hardware_error_check_frequency (float): Frequency in seconds to check for hardware errors. Default is 1.0.
             use_audio (bool): If True, use audio. Default is True.
             wireless_version (bool): If True, indicates that the wireless version of Reachy Mini is used. Default is False.

@@ -25,6 +25,7 @@ from fastapi.templating import Jinja2Templates
 from reachy_mini.apps.manager import AppManager
 from reachy_mini.daemon.app.routers import (
     apps,
+    camera,
     daemon,
     kinematics,
     motors,
@@ -57,7 +58,7 @@ class Args:
     stream_media: bool = False
     use_audio: bool = True
 
-    kinematics_engine: str = "AnalyticalKinematics"
+    kinematics_engine: str = "Placo"
     check_collision: bool = False
 
     autostart: bool = True
@@ -139,6 +140,7 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
 
     router = APIRouter(prefix="/api")
     router.include_router(apps.router)
+    router.include_router(camera.router)
     router.include_router(daemon.router)
     router.include_router(kinematics.router)
     router.include_router(motors.router)
@@ -181,6 +183,29 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
         return templates.TemplateResponse(
             "index.html", {"request": request, "args": args}
         )
+
+    # ===============================================
+    # Dashboard V2 - React-based dashboard
+    # Served from /v2 path
+    # Copy dist-web from tauri-app build to dashboard-v2
+    # ===============================================
+    DASHBOARD_V2_DIR = Path(__file__).parent / "dashboard-v2"
+    
+    if DASHBOARD_V2_DIR.exists() and (DASHBOARD_V2_DIR / "index.html").exists():
+        # Mount assets folder for JS/CSS bundles
+        if (DASHBOARD_V2_DIR / "assets").exists():
+            app.mount(
+                "/v2/assets",
+                StaticFiles(directory=DASHBOARD_V2_DIR / "assets"),
+                name="dashboard-v2-assets",
+            )
+
+        @app.get("/v2")
+        @app.get("/v2/")
+        async def dashboard_v2(request: Request) -> HTMLResponse:
+            """Render the React-based dashboard v2."""
+            index_path = DASHBOARD_V2_DIR / "index.html"
+            return HTMLResponse(content=index_path.read_text(), status_code=200)
 
     if args.wireless_version:
 
@@ -408,7 +433,7 @@ def main() -> None:
         type=str,
         default=default_args.kinematics_engine,
         choices=["Placo", "NN", "AnalyticalKinematics"],
-        help="Set the kinematics engine (default: AnalyticalKinematics).",
+        help="Set the kinematics engine (default: Placo).",
     )
     # FastAPI server options
     parser.add_argument(

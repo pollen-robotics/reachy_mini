@@ -99,7 +99,7 @@ class Daemon:
         localhost_only: bool = True,
         wake_up_on_start: bool = True,
         check_collision: bool = False,
-        kinematics_engine: str = "AnalyticalKinematics",
+        kinematics_engine: str = "Placo",
         headless: bool = False,
         use_audio: bool = True,
         websocket_uri: Optional[str] = None,
@@ -115,7 +115,7 @@ class Daemon:
             localhost_only (bool): If True, restrict the server to localhost only clients. Defaults to True.
             wake_up_on_start (bool): If True, wake up Reachy Mini on start. Defaults to True.
             check_collision (bool): If True, enable collision checking. Defaults to False.
-            kinematics_engine (str): Kinematics engine to use. Defaults to "AnalyticalKinematics".
+            kinematics_engine (str): Kinematics engine to use. Defaults to "Placo".
             headless (bool): If True, run Mujoco in headless mode (no GUI). Defaults to False.
             websocket_uri (Optional[str]): If set, allow remote control and streaming of the robot through a WebSocket connection to the specified uri. Defaults to None.
             use_audio (bool): If True, enable audio. Defaults to True.
@@ -186,10 +186,17 @@ class Daemon:
                 ws_uri=websocket_uri + "/robot", backend=self.backend
             )
 
+        # Initialize media manager for desktop app or when streaming media
+        self.media_manager: Optional[MediaManager] = None
+        if self.desktop_app_daemon or stream_media:
+            self.media_manager = MediaManager()
+            self.media_manager.start_recording()
+            self.media_manager.start_playing()
+            self.logger.info("Media manager initialized for camera/audio access")
+        
         if stream_media:
             if websocket_uri is None:
                 raise ValueError("WebSocket URI is required when streaming media.")
-            self.media_manager = MediaManager()
             self.websocket_frame_sender = AsyncWebSocketFrameSender(
                 ws_uri=websocket_uri + "/video_stream"
             )
@@ -204,8 +211,6 @@ class Daemon:
             self._thread_publish_audio = Thread(target=self._publish_audio, daemon=True)
             self._thread_event_publish_audio = Event()
             self._thread_publish_audio.start()
-            self.media_manager.start_recording()
-            self.media_manager.start_playing()
 
         def backend_wrapped_run() -> None:
             assert self.backend is not None, (
@@ -486,7 +491,7 @@ class Daemon:
         wake_up_on_start: bool = True,
         goto_sleep_on_stop: bool = True,
         check_collision: bool = False,
-        kinematics_engine: str = "AnalyticalKinematics",
+        kinematics_engine: str = "Placo",
         headless: bool = False,
         use_audio: bool = True,
         websocket_uri: Optional[str] = None,
@@ -504,7 +509,7 @@ class Daemon:
             wake_up_on_start (bool): If True, wake up Reachy Mini on start. Defaults to True.
             goto_sleep_on_stop (bool): If True, put Reachy Mini to sleep on stop. Defaults to True
             check_collision (bool): If True, enable collision checking. Defaults to False.
-            kinematics_engine (str): Kinematics engine to use. Defaults to "AnalyticalKinematics".
+            kinematics_engine (str): Kinematics engine to use. Defaults to "Placo".
             headless (bool): If True, run Mujoco in headless mode (no GUI). Defaults to False.
             use_audio (bool): If True, enable audio. Defaults to True.
             websocket_uri (Optional[str]): If set, allow remote control and streaming of the robot through a WebSocket connection to the specified uri. Defaults to None.

@@ -43,7 +43,7 @@ class MujocoBackend(Backend):
         self,
         scene: str = "empty",
         check_collision: bool = False,
-        kinematics_engine: str = "AnalyticalKinematics",
+        kinematics_engine: str = "Placo",
         headless: bool = False,
         use_audio: bool = False,
         websocket_uri: Optional[str] = None,
@@ -53,7 +53,7 @@ class MujocoBackend(Backend):
         Args:
             scene (str): The name of the scene to load. Default is "empty".
             check_collision (bool): If True, enable collision checking. Default is False.
-            kinematics_engine (str): Kinematics engine to use. Defaults to "AnalyticalKinematics".
+            kinematics_engine (str): Kinematics engine to use. Defaults to "Placo".
             headless (bool): If True, run Mujoco in headless mode (no GUI). Default is False.
             use_audio (bool): If True, use audio. Default is False.
             websocket_uri (Optional[str]): If set, allow streaming of the robot view through a WebSocket connection to the specified uri. Defaults to None.
