@@ -10,6 +10,9 @@ managing the robot's state.
 import argparse
 import asyncio
 import logging
+import sys
+print(f"DEBUG: STARTING LOCAL MAIN.PY from {__file__}")
+print(f"DEBUG: PYTHONPATH IS: {sys.path}")
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -32,6 +35,8 @@ from reachy_mini.daemon.app.routers import (
     state,
     volume,
 )
+
+
 from reachy_mini.daemon.daemon import Daemon
 
 
@@ -138,13 +143,29 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
     )
 
     router = APIRouter(prefix="/api")
+    
+    # Import and include camera router
+    import importlib.util
+    from pathlib import Path
+    current_file = Path(__file__)
+    camera_file = current_file.parent / "routers" / "camera.py"
+    print(f"DEBUG: Loading camera router from {camera_file}")
+    spec = importlib.util.spec_from_file_location("camera", str(camera_file))
+    camera_module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(camera_module)
+    camera = camera_module
+    print(f"DEBUG: Camera router loaded: {camera.router}")
+    
     router.include_router(apps.router)
+    print(f"DEBUG: Including camera router: {camera.router}")
+    router.include_router(camera.router)
     router.include_router(daemon.router)
     router.include_router(kinematics.router)
     router.include_router(motors.router)
     router.include_router(move.router)
     router.include_router(state.router)
     router.include_router(volume.router)
+    print(f"DEBUG: All routers included")
 
     if args.wireless_version:
         from .routers import update, wifi_config
