@@ -53,3 +53,7 @@ with ReachyMini() as mini:
 ```
 
 👉 **[Go to the SDK Quickstart](../../sdk/quickstart.md)** for a complete tutorial.
+
+## ❓ Troubleshooting
+
+Encountering an issue? 👉 **[Check the Troubleshooting & FAQ Guide](../../troubleshooting.md)**

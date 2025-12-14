@@ -59,3 +59,7 @@ mini.start_recording()
 # ... robot moves ...
 recorded_data = mini.stop_recording()
 ```
+
+## ❓ Troubleshooting
+
+Encountering an issue? 👉 **[Check the Troubleshooting & FAQ Guide](/docs/troubleshooting.md)**

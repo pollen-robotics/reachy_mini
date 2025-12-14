@@ -82,3 +82,8 @@ with ReachyMini() as mini:
 ```
 
 👉 **[Go to SDK Documentation](../../SDK/python-sdk.md)** to start coding.
+
+
+## ❓ Troubleshooting
+
+Encountering an issue? 👉 **[Check the Troubleshooting & FAQ Guide](/docs/troubleshooting.md)**

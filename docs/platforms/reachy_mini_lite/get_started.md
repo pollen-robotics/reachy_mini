@@ -48,3 +48,7 @@ Now that everything is connected and installed, you are ready to play!
 * Use the **Desktop App** features.
 * Install and run **Community Apps** (Conversation, Games, etc.).
 * Program your Reachy with **Python**.
+
+## ❓ Troubleshooting
+
+Encountering an issue? 👉 **[Check the Troubleshooting & FAQ Guide](/docs/troubleshooting.md)**

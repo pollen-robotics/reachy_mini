@@ -52,6 +52,10 @@ Now that your robot is online and up to date, you can start controlling it!
 * Program your Reachy with **Python**.
 
 
+## ❓ Troubleshooting
+
+Encountering an issue? 👉 **[Check the Troubleshooting & FAQ Guide](/docs/troubleshooting.md)**
+
 ## Advanced / Expert Mode
 
 If you need to reinstall the Raspberry Pi from scratch or create a custom image, follow the expert guide.
