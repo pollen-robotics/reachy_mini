@@ -1,82 +1,66 @@
-# Reachy Mini
+# Reachy Mini 🤖
 
 [![Ask on HuggingChat](https://img.shields.io/badge/Ask_on-HuggingChat-yellow?logo=huggingface&logoColor=yellow&style=for-the-badge)](https://huggingface.co/chat/?attachments=https%3A%2F%2Fgist.githubusercontent.com%2FFabienDanieau%2F919e1d7468fb16e70dbe984bdc277bba%2Fraw%2Fdoc_reachy_mini_full.md&prompt=Read%20this%20documentation%20about%20Reachy%20Mini%20so%20I%20can%20ask%20questions%20about%20it.)
+[![Discord](https://img.shields.io/badge/Discord-Join_the_Community-7289DA?logo=discord&logoColor=white)](https://discord.gg/2bAhWfXme9)
 
-[Reachy Mini](https://huggingface.co/blog/reachy-mini) is an open source, expressive robot built for AI builders who want to experiment with models, agents, and interactions in the physical world.
+**[Reachy Mini](https://huggingface.co/blog/reachy-mini) is an open-source, expressive robot built for AI builders.**
 
-Affordable, easy to use, and hackable, Reachy Mini lets you focus on building embodied AI behaviors rather than dealing with complex robotics setups.
+Affordable and hackable, it allows you to experiment with embodied AI, agents, and human-robot interactions in the physical world without dealing with complex robotics setups.
 
 [![Reachy Mini Hello](/docs/assets/reachy_mini_hello.gif)](https://www.pollen-robotics.com/reachy-mini/)
 
-## Getting started
+---
 
-Reachy Mini robots are sold as kits and need to be assembled. Assembly typically takes 2 to 3 hours for a first time build and is guided step by step by a detailed assembly guide included in the box.
+## 🚀 Getting Started
 
-You can start building with Reachy Mini even without the physical robot, thanks to simulation.
+**Choose your platform to access the specific guide:**
 
-**Start here:**
-- [Assembly + first boot](docs/getting_started.md)
-- [Build with Reachy Mini](docs/software/build.md)
-- [Software setup](docs/software/README.md)
-- [Simulation](docs/simulation.md)
-- [API & SDK](docs/api.md)
-- [Examples & apps](docs/examples.md)
+| **🤖 Reachy Mini (Wireless)** | **🔌 Reachy Mini Lite** | **💻 Simulation** |
+| :---: | :---: | :---: |
+| The full autonomous experience.<br>Raspberry Pi 4 + Battery + WiFi. | The developer version.<br>USB connection to your computer. | No hardware required.<br>Prototype in MuJoCo. |
+| [**👉 Go to Wireless Guide**](docs/platforms/reachy_mini/README.md) | [**👉 Go to Lite Guide**](docs/platforms/reachy_mini_lite/README.md) | [**👉 Go to Simulation**](docs/platforms/simulation/README.md) |
 
-## Hardware overview
+<br>
 
-Reachy Mini hardware comes in two versions.
+## 📱 Apps & Ecosystem
 
-### Reachy Mini
-The full, autonomous experience. Applications run directly onboard, with WiFi or Ethernet connectivity. It includes a built in battery (around 1.5 to 2 hours of operation) and can also run while plugged into a power outlet.
+Reachy Mini comes with an app store powered by Hugging Face Spaces. You can install these apps directly from your robot's dashboard with one click!
 
-👉 Learn more: [Reachy Mini hardware](docs/hardware/reachy-mini.md)
+* **🗣️ [Conversation App](https://huggingface.co/spaces/pollen-robotics/reachy_mini_conversation_app):** Talk naturally with Reachy Mini (powered by LLMs).
+* **🎮 [Red Light Green Light](https://huggingface.co/spaces/ReMiFabre/red_light_green_light):** Play the famous game with your robot!
+* **👋 [Hand Tracker](https://huggingface.co/spaces/ReMiFabre/hand_tracker_v2):** The robot follows your hand movements in real-time.
 
-### Reachy Mini Lite
-A more minimal version designed for learning, tinkering, and development. Applications run on a separate computer connected via USB. It has no battery and only works when plugged into a power outlet.
+[**👉 Browse all apps on Hugging Face**](https://huggingface.co/spaces?q=reachy_mini)
 
-👉 Learn more: [Reachy Mini Lite hardware](docs/hardware/reachy-mini-lite.md)
+---
 
+## 🐍 Software & SDK
 
-## Build without hardware
+Once your robot (or simulation) is running, the code is the same!
+Control your Reachy Mini with Python to create movements, build apps, and connect AI models.
 
-You do not need a physical robot to get started. Reachy Mini is available as a simulated robot in [MuJoCo](https://mujoco.org), allowing you to prototype, test, and debug applications before deploying them on real hardware.
+You will find the Installation guide, Quickstart, and API Reference in the SDK documentation.
 
-The simulation behaves like the Lite version, with the full software stack running on your computer.
+[**👉 Go to SDK Documentation**](docs/sdk/README.md)
 
-## Software overview
+## 🛠 Hardware Overview
 
-Reachy Mini is designed to be simple to use, even for a first robotics project. Applications are managed by a daemon that handles the connection to the robot, whether it runs directly on the robot, on your computer, or in simulation.
+Reachy Mini robots are sold as kits and generally take **2 to 3 hours** to assemble. Detailed step-by-step guides are available in the platform-specific folders linked above.
 
-Depending on your setup, you interact with Reachy Mini either through a web interface or a desktop application.
+* **Reachy Mini (Wireless):** Runs onboard (RPi 4), autonomous, includes IMU. [See specs](docs/platforms/reachy_mini/hardware.md).
+* **Reachy Mini Lite:** Runs on your PC, powered via wall outlet. [See specs](docs/platforms/reachy_mini_lite/hardware.md).
 
-👉 Learn more: [Dashboard](docs/software/dashboard.md)
+[**🛒 Buy Reachy Mini**](https://www.pollen-robotics.com/reachy-mini/)
 
-The same APIs and application logic work across Reachy Mini, Reachy Mini Lite, and simulation, making it easy to develop once and deploy anywhere.
+## 🤝 Community & Contributing
 
-To start building on Reachy Mini, you can install the Reachy Mini Python package:
+Reachy Mini is a collaborative project between [Pollen Robotics](https://www.pollen-robotics.com) and [Hugging Face](https://huggingface.co/).
 
-```bash
-pip install reachy-mini
-```
-👉 Learn more: [Software documentation](docs/software/README.md)
-
-
-## Join the community
-
-Reachy Mini is built as an open source project and grows with its community. Join the discussion, share what you are building, or get help on Discord.
-
-👉 https://discord.gg/2bAhWfXme9
-
+* **Join the Community:** We use [Discord](https://discord.gg/2bAhWfXme9) to share our moments with Reachy, build apps together, and get help.
+* **Found a bug?** Open an issue on this repository.
+* **Created an App?** Share it on [Hugging Face Spaces](https://huggingface.co/spaces?q=reachy_mini).
 
 ## License
 
 This project is licensed under the Apache 2.0 License. See the [LICENSE](LICENSE) file for details.
-
-The robot design files are licensed under the [Creative Commons BY-SA-NC](TODO) license.
-
-
-## Open source & contribution
-
-This project is actively developed and maintained by the [Pollen Robotics team](https://www.pollen-robotics.com) and the [Hugging Face team](https://huggingface.co/).
-
-Contributions are welcome. Feel free to open issues to report bugs or request features, and submit pull requests if you want to contribute code.
+Hardware design files are licensed under Creative Commons BY-SA-NC.
