@@ -16,6 +16,7 @@ You can start building with Reachy Mini even without the physical robot, thanks 
 
 **Start here:**
 - [Assembly + first boot](docs/getting_started.md)
+- [Build with Reachy Mini](docs/software/build.md)
 - [Software setup](docs/software/README.md)
 - [Simulation](docs/simulation.md)
 - [API & SDK](docs/api.md)
