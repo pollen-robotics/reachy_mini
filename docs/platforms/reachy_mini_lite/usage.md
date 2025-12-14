@@ -1,42 +1,46 @@
 # Using Reachy Mini Lite
 
-The Lite version relies on your computer to run its intelligence. You can use it through a user-friendly **Desktop App** or in **Developer Mode**.
+The Lite version relies on your computer to run its intelligence. The central hub for this is the **Reachy Mini Control** application.
 
-## 1. Reachy Mini Control (Desktop App) 🖥️
+## 1. Reachy Mini Control (Dashboard) 🖥️
 
-For beginners and demos, we recommend the **Reachy Mini Control** application.
+When you open the application, you access the complete control panel for your robot.
 
-* **Download:** [Windows](#) | [macOS](#) | [Linux](#)
-* **Features:**
-    * **Visualizer:** See the camera feed and robot posture.
-    * **App Launcher:** Run official demos (Teleoperation, Dances) with one click.
-    * **Status:** See connection health.
+* **Status & Visualizer (Left Panel):**
+    * **3D View:** Shows the real-time position of the robot.
+    * **Ready/Not Ready:** Indicates if the robot is correctly connected via USB.
+    * **Sensors:** Monitor the microphone input and speaker volume.
+    * **Logs:** See technical details and connection events at the bottom.
 
-## 2. Developer Mode (Web Dashboard) 🛠️
+## 2. Applications & Demos 📱
 
-If you want to run Python scripts or access advanced features, you will use the **Daemon**.
+You don't need to code to start having fun. The app comes with an integrated ecosystem.
 
-**1. Start the Daemon:**
-Open a terminal and run:
-```bash
-reachy-mini-daemon
-```
+### Quick Actions
+Located at the bottom right, these are built-in demos ready to launch instantly:
+* **Expressions:** Make Reachy express emotions (Happy, Sad, Angry, etc.).
+* **Controller:** Teleoperate the robot using a game controller or sliders. 
 
-**2. Open the Dashboard:**
-Go to [http://localhost:8000](http://localhost:8000).
-* **Monitor:** Check motor states.
-* **Apps:** You can also install/run apps from Hugging Face here, just like on the Wireless version!
+### Installing New Apps
+To extend Reachy's capabilities with community-created behaviors:
+1.  **Discover:** Click the **"Discover apps"** button. This opens the Hugging Face Spaces store.
+2.  **Install:** Select an app (like a Game or a Conversation demo) and click "Install".
+3.  **Play:** Once installed, the app will appear in your "Applications" list. Simply click **"Play"** to start it.
 
-## 3. Coding Quickstart 🐍
+> **Note:** When an App is running, it controls the robot. Stop the app before trying to run your own Python scripts.
 
-To control the robot with your own code:
+## 3. Coding with Python 🐍
+
+The Desktop App runs the **Daemon** (the background service) automatically. This means you can write Python scripts that connect directly to the app.
 
 **1. Install the library:**
+If you haven't already, install the SDK on your computer:
 ```bash
 pip install reachy-mini
 ```
 
 **2. Write your code:**
+Create a file named hello_reachy.py and run it.
 
 ```python
 from reachy_mini import ReachyMini
