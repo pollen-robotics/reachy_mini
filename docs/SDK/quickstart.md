@@ -51,7 +51,7 @@ python hello.py
 Encountering an issue? 👉 **[Check the Troubleshooting & FAQ Guide](/docs/troubleshooting.md)**
 
 
-## Next Step
+## Next Steps
 * **[Python SDK](python-sdk.md)**: Learn to move, see, speak, and hear.
 * **[Browse the Examples Folder](/examples)**
 * **[AI Integrations](integration.md)**: Connect LLMs, build Apps, and publish to Hugging Face.

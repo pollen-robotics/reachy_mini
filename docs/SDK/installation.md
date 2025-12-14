@@ -76,7 +76,7 @@ sudo usermod -aG dialout $USER
 ## ❓ Troubleshooting
 Encountering an issue? 👉 **[Check the Troubleshooting & FAQ Guide](/docs/troubleshooting.md)**
 
-## Next Step
+## Next Steps
 * **[Quickstart Guide](quickstart.md)**: Run your first behavior on Reachy Mini
 * **[Python SDK](python-sdk.md)**: Learn to move, see, speak, and hear.
 * **[AI Integrations](integration.md)**: Connect LLMs, build Apps, and publish to Hugging Face.

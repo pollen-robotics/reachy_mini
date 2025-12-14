@@ -81,7 +81,7 @@ with ReachyMini() as mini:
     )
 ```
 
-## Next Step
+## Next Steps
 * **[Python SDK](/docs/sdk/python-sdk.md)**: Learn to move, see, speak, and hear.
 * **[AI Integrations](/docs/sdk/integration.md)**: Connect LLMs, build Apps, and publish to Hugging Face.
 * **[Core Concepts](/docs/sdk/core-concept.md)**: Architecture, coordinate systems, and safety limits.

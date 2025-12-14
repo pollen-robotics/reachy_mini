@@ -47,3 +47,9 @@ You can change how the motors behave:
 * **`reachy_mini.enable_motors()`**: Stiff. Holds position.
 * **`reachy_mini.disable_motors()`**: Limp. No power.
 * **`reachy_mini.enable_gravity_compensation()`**: "Soft" mode. You can move the head with your hands and it will stay in place where you left it. (Only works with Placo Kinematics backend)
+
+
+## Next Steps
+* **[Quickstart Guide](quickstart.md)**: Run your first behavior on Reachy Mini
+* **[Python SDK](python-sdk.md)**: Learn to move, see, speak, and hear.
+* **[AI Integrations](integration.md)**: Connect LLMs, build Apps, and publish to Hugging Face.
