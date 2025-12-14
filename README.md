@@ -27,8 +27,8 @@ Affordable and hackable, it allows you to experiment with embodied AI, agents, a
 Reachy Mini comes with an app store powered by Hugging Face Spaces. You can install these apps directly from your robot's dashboard with one click!
 
 * **🗣️ [Conversation App](https://huggingface.co/spaces/pollen-robotics/reachy_mini_conversation_app):** Talk naturally with Reachy Mini (powered by LLMs).
-* **🎮 [Red Light Green Light](https://huggingface.co/spaces/ReMiFabre/red_light_green_light):** Play the famous game with your robot!
-* **👋 [Hand Tracker](https://huggingface.co/spaces/ReMiFabre/hand_tracker_v2):** The robot follows your hand movements in real-time.
+* **📻 [Radio](https://huggingface.co/spaces/pollen-robotics/reachy_mini_radio):** Listen to the radio with Reachy Mini !
+* **👋 [Hand Tracker](https://huggingface.co/spaces/pollen-robotics/hand_tracker_v2):** The robot follows your hand movements in real-time.
 
 [**👉 Browse all apps on Hugging Face**](https://huggingface.co/spaces?q=reachy_mini)
 
@@ -41,7 +41,7 @@ Control your Reachy Mini with Python to create movements, build apps, and connec
 
 You will find the Installation guide, Quickstart, and API Reference in the SDK documentation.
 
-[**👉 Go to SDK Documentation**](docs/sdk/README.md)
+[**👉 Go to SDK Documentation**](docs/SDK/readme.md)
 
 ## 🛠 Hardware Overview
 
