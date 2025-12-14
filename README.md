@@ -3,13 +3,13 @@
 [![Ask on HuggingChat](https://img.shields.io/badge/Ask_on-HuggingChat-yellow?logo=huggingface&logoColor=yellow&style=for-the-badge)](https://huggingface.co/chat/?attachments=https%3A%2F%2Fgist.githubusercontent.com%2FFabienDanieau%2F919e1d7468fb16e70dbe984bdc277bba%2Fraw%2Fdoc_reachy_mini_full.md&prompt=Read%20this%20documentation%20about%20Reachy%20Mini%20so%20I%20can%20ask%20questions%20about%20it.)
 [![Discord](https://img.shields.io/badge/Discord-Join_the_Community-7289DA?logo=discord&logoColor=white)](https://discord.gg/2bAhWfXme9)
 
-**[Reachy Mini](https://huggingface.co/blog/reachy-mini) is an open-source, expressive robot built for AI builders.**
+**Reachy Mini is an open-source, expressive robot built for AI builders.**
 
 Affordable and hackable, it allows you to experiment with embodied AI, agents, and human-robot interactions in the physical world without dealing with complex robotics setups.
 
 [![Reachy Mini Hello](/docs/assets/reachy_mini_hello.gif)](https://www.pollen-robotics.com/reachy-mini/)
 
----
+
 
 ## 🚀 Getting Started
 
@@ -32,7 +32,7 @@ Reachy Mini comes with an app store powered by Hugging Face Spaces. You can inst
 
 [**👉 Browse all apps on Hugging Face**](https://huggingface.co/spaces?q=reachy_mini)
 
----
+
 
 ## 🐍 Software & SDK
 

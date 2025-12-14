@@ -22,6 +22,12 @@ with ReachyMini() as mini:
 * **[AI Integrations](integrations.md)**: Connect LLMs, build Apps, and publish to Hugging Face.
 * **[Core Concepts](core-concepts.md)**: Architecture, coordinate systems, and safety limits.
 
+## 📂 Code Examples
+
+We provide a collection of ready-to-run scripts to help you understand how to use specific features of the robot.
+
+[**👉 Browse the Examples Folder**](../../examples)
+
 ## 📦 Installation
 Prerequisites: Python 3.10 - 3.13.
 
