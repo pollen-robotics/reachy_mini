@@ -58,6 +58,8 @@ Encountering an issue? 👉 **[Check the Troubleshooting & FAQ Guide](/docs/trou
 
 ## Advanced / Expert Mode
 
-If you need to reinstall the Raspberry Pi from scratch or create a custom image, follow the expert guide.
+If you need to reinstall the Raspberry Pi from scratch or create a custom image, follow the expert guides.
+
+👉 **[Reflash the ISO](reflash_the_rpi_ISO.md)**
 
 👉 **[Manual Raspberry Pi Installation](advanced_rpi_setup.md)**
