@@ -10,7 +10,7 @@ Reachy Mini comes as a kit. Building it is the first step of your journey!
 * **Tools:** Everything is included in the box.
 * **Instructions:** We strongly recommend following the video guide alongside the manual.
 
-👉 **[Open the Lite Assembly Guide & Video](LINK_TO_ASSEMBLY_GUIDE)**
+👉 **[Open the Lite Assembly Guide & Video](https://huggingface.co/spaces/pollen-robotics/Reachy_Mini_LITE_Assembly_Guide)**
 
 ## 2. 💻 Connection
 

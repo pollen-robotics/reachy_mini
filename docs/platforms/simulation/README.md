@@ -75,4 +75,4 @@ with ReachyMini() as mini:
     )
 ```
 
-👉 **[Go to SDK Documentation](../../sdk/README.md)** to start coding.
+👉 **[Go to SDK Documentation](../../SDK/python-sdk.md)** to start coding.
