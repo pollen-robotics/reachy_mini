@@ -6,11 +6,12 @@ Understanding how Reachy Mini works under the hood will help you build robust ap
 
 Reachy Mini uses a **Client-Server** architecture:
 
-1.  **The Daemon (Server):** * Runs on the computer connected to the robot (or the simulation).
+1.  **The Daemon (Server):** 
+    * Runs on the computer connected to the robot (or the simulation).
     * Handles hardware I/O (USB/Serial), safety checks, and sensor reading.
     * Exposes a REST API (`localhost:8000`) and WebSocket.
     
-2.  **The SDK (Client):**
+3.  **The SDK (Client):**
     * Your Python code (`reachy_mini` package).
     * Connects to the Daemon over the network.
     * *Advantage:* You can run your AI code on a powerful server while the Daemon runs on a Raspberry Pi connected to the robot.
@@ -21,12 +22,13 @@ When moving the robot, you will work with two main reference frames:
 
 ### 1. Head Frame
 Located at the base of the head. Used for `goto_target` commands.
-* **X:** Forward
-* **Y:** Left
-* **Z:** Up
+
+[![Reachy Mini Head Frame](/docs/assets/head_frame.png)]()
 
 ### 2. World Frame
 Fixed relative to the robot's base. Used for `look_at_world` commands.
+
+[![Reachy Mini World Frame](/docs/assets/world_frame.png)]()
 
 ## Safety Limits ⚠️
 
@@ -42,6 +44,6 @@ Reachy Mini has physical and software limits to prevent self-collision and damag
 ## Motor Modes
 
 You can change how the motors behave:
-* **`enable_motors()`**: Stiff. Holds position.
-* **`disable_motors()`**: Limp. No power.
-* **`make_motors_compliant()`**: "Soft" mode. Motors are on but yield to external force. Useful for teaching-by-demonstration (moving the robot by hand).
+* **`reachy_mini.enable_motors()`**: Stiff. Holds position.
+* **`reachy_mini.disable_motors()`**: Limp. No power.
+* **`reachy_mini.enable_gravity_compensation()`**: "Soft" mode. You can move the head with your hands and it will stay in place where you left it. (Only works with Placo Kinematics backend)
