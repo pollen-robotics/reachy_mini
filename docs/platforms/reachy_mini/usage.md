@@ -39,101 +39,17 @@ Since your robot is on the network, you can control it remotely!
 
 ```python
 from reachy_mini import ReachyMini
+import time
 
-# Replace with your robot's IP if 'reachy-mini.local' doesn't resolve
-with ReachyMini(host="reachy-mini.local") as mini:
-    mini.media.speak("Hello, world!")
-    mini.turn_on("fan")
-```
-
-👉 **[Go to the SDK Quickstart](../../sdk/quickstart.md)** for a complete tutorial.
-
----
-
-# Using Reachy Mini Lite
-
-The Lite version relies on your computer to run its intelligence. You can use it through a user-friendly **Desktop App** or in **Developer Mode**.
-
-## 1. Reachy Mini Control (Desktop App) 🖥️
-
-For beginners and demos, we recommend the **Reachy Mini Control** application.
-
-* **Download:** [Windows](#) | [macOS](#) | [Linux](#)
-* **Features:**
-    * **Visualizer:** See the camera feed and robot posture.
-    * **App Launcher:** Run official demos (Teleoperation, Dances) with one click.
-    * **Status:** See connection health.
-
-## 2. Developer Mode (Web Dashboard) 🛠️
-
-If you want to run Python scripts or access advanced features, you will use the **Daemon**.
-
-**1. Start the Daemon:**
-Open a terminal and run:
-```bash
-reachy-mini-daemon
-```
-
-**2. Open the Dashboard:**
-Go to [http://localhost:8000](http://localhost:8000).
-* **Monitor:** Check motor states.
-* **Apps:** You can also install/run apps from Hugging Face here, just like on the Wireless version!
-
-## 3. Coding Quickstart 🐍
-
-To control the robot with your own code:
-
-**1. Install the library:**
-```bash
-pip install reachy-mini
-```
-
-**2. Write your code:**
-```python
-from reachy_mini import ReachyMini
-
-# Connects to localhost by default
 with ReachyMini() as mini:
-    print("I am connected via USB!")
-    mini.media.speak("Ready to code.")
-```
-
-👉 **[Go to the SDK Quickstart](../../sdk/quickstart.md)** for a complete tutorial.
-
----
-
-# Using the Simulation
-
-The simulation provides the exact same interface as the real robot. This means you can use the Dashboard and Python SDK exactly as if you had a Reachy Mini Lite connected.
-
-## 1. The Dashboard 🕹️
-
-When you run the simulation daemon:
-```bash
-reachy-mini-daemon --sim
-```
-
-You can access the Dashboard at **[http://localhost:8000](http://localhost:8000)**.
-* **Visualize:** See the camera feed (simulated view).
-* **Apps:** You can install and run Apps! They will execute inside the simulation (e.g., the robot will dance in the 3D viewer).
-
-## 2. Coding Quickstart 🐍
-
-Your Python code works seamlessly with the simulation.
-
-**1. Install:**
-```bash
-pip install reachy-mini[mujoco]
-```
-
-**2. Run:**
-```python
-from reachy_mini import ReachyMini
-
-# Connects to the simulated robot
-with ReachyMini() as mini:
-    # This movement happens in the MuJoCo window!
-    mini.media.speak("I am alive... virtually.")
+    # Check connection
+    print(f"Connected! Robot state: {mini.state}")
+    
+    # Wiggle antennas
+    print("Wiggling antennas...")
+    mini.goto_target(antennas=[0.5, -0.5], duration=0.5)
+    time.sleep(0.5)
+    mini.goto_target(antennas=[-0.5, 0.5], duration=0.5)
 ```
 
 👉 **[Go to the SDK Quickstart](../../sdk/quickstart.md)** for a complete tutorial.

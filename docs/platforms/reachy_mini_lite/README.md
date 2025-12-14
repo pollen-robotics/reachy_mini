@@ -17,9 +17,11 @@ Reachy Mini comes as a kit. Building it is the first step of your journey!
 1.  **Power Up:** Plug the robot into a wall outlet using the provided power supply.
 2.  **Connect USB:** Connect the USB cable from the robot to your computer.
 
-## 3. 🕹️ Next Step: Control Software
+## 3. 🕹️ Next Step: Using the Robot
 
-To control the robot, you need to install the software on your computer.
+Now that your robot is online and up to date, you can start controlling it!
 
-👉 **[Go to the Dashboard & Software Guide](dashboard.md)**
-
+👉 **[Go to the Usage Guide](usage.md)** to learn how to:
+* Install and use the **Dashboard**.
+* Install and run **Apps** (like Conversation or Games).
+* Program your Reachy with **Python**.

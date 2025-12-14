@@ -29,7 +29,13 @@ On macOS, MuJoCo requires a specific launcher to work correctly with the GUI. In
 mjpython -m reachy_mini.daemon.app.main --sim
 ```
 
-## 3. Scenes & Options
+## 3. Dashboard and Apps
+
+You can access the Dashboard at **[http://localhost:8000](http://localhost:8000)**.
+
+* **Apps:** You can install and run Apps! They will execute inside the simulation (e.g., the robot will dance in the 3D viewer).
+
+## 4. Scenes & Options
 
 You can customize the simulation environment using the `--scene` argument.
 
@@ -41,7 +47,7 @@ You can customize the simulation environment using the `--scene` argument.
 reachy-mini-daemon --sim --scene minimal
 ```
 
-## 4. Connecting your Code
+## 5. Connecting your Code
 
 Once the simulation is running, it behaves exactly like a real **Reachy Mini Lite** connected via USB. The daemon listens on `localhost`.
 
