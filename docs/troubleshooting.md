@@ -36,20 +36,17 @@ Testers generally describe it as fun and simple. The trickiest parts are usually
 <details>
 <summary><strong>My Reachy Mini doesn’t move on first startup. What should I check?</strong></summary>
 
-* **Power Supply:** Ensure the 12V power supply is plugged in. The USB connection is not enough to power the motors.
+* **Power Supply:** Ensure the 7V-5A power supply is plugged in. The USB connection is not enough to power the motors.
 * **Cables:** Check that all cables are fully inserted. Loose power cables are a common cause of "motor not responding" errors.
 
 </details>
 
 <details>
 <summary><strong>Do I need to start the daemon manually?</strong></summary>
+**NO** 
 
-**Yes.** All Python examples assume the daemon is already running.
-To start it, open a terminal and run:
-
-```bash
-reachy-mini-daemon
-```
+- With Reachy Mini (Wireless), the daemon is already running on the embedded Raspberry pi
+- With Reachy Mini Lite, you can use [the desktop app](/docs/reachy_mini_lite/get_started.md)
 
 </details>
 
@@ -59,13 +56,7 @@ reachy-mini-daemon
 
 <details>
 <summary><strong>How do I connect the robot to Wi-Fi?</strong></summary>
-
-1.  Power on Reachy Mini.
-2.  Look for the Wi-Fi network **`reachy-mini-ap`** on your computer/phone.
-3.  Connect to it (Password: `reachy-mini`).
-4.  Go to `http://reachy-mini.local:8000/settings` in your browser.
-5.  Enter your home Wi-Fi credentials and click "Connect".
-6.  The Access Point will disappear. Reachy is now on your local network.
+See the [Reachy Mini Wireless guide](/docs/reachy_mini/get_started.md)
 
 </details>
 
@@ -117,7 +108,7 @@ If you command a pose outside these limits, the robot will automatically clamp t
 <summary><strong>Motors stop responding after a while.</strong></summary>
 
 * Check the power supply connection.
-* Motors might have entered thermal protection mode (overheating). Wait for them to cool down.
+* Motors might have entered thermal protection mode (overheating). Turn off and on again.
 * Updating the SDK (`pip install -U reachy-mini`) has solved this for some users.
 
 </details>
