@@ -1,4 +1,4 @@
-# Reachy Mini Simulation
+# Reachy Mini Simulation - Setup Guide
 
 You don't need a physical robot to start building! The Reachy Mini simulation runs on [MuJoCo](https://mujoco.org) and provides a realistic physics environment to prototype, test, and debug your applications.
 

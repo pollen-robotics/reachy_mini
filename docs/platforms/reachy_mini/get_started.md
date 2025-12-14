@@ -31,7 +31,7 @@ Once assembled, you need to connect the robot to your Wi-Fi network.
 3.  **Configure Wi-Fi:**
     * Open your browser and go to: **[http://reachy-mini.local:8000/settings](http://reachy-mini.local:8000/settings)**.
     * Enter your local Wi-Fi credentials (SSID & Password) and click **"Connect"**.
-    * The robot will reboot and join your network.
+    * Wait a few moments for Reachy Mini to connect to your Wi-Fi network. The access point will disappear once connected. If the connection fails, Reachy Mini will restart the access point, and you can try again.
 
 ## 3. 🔄 Update System
 
@@ -50,3 +50,10 @@ Now that your robot is online and up to date, you can start controlling it!
 * Access the **Dashboard**.
 * Install and run **Apps** (like Conversation or Games).
 * Program your Reachy with **Python**.
+
+
+## Advanced / Expert Mode
+
+If you need to reinstall the Raspberry Pi from scratch or create a custom image, follow the expert guide.
+
+👉 **[Manual Raspberry Pi Installation](advanced_rpi_setup.md)**

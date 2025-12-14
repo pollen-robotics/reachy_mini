@@ -16,7 +16,7 @@ It removes the hardware complexity, allowing you to focus on what matters: build
 | **🤖 Reachy Mini (Wireless)** | **🔌 Reachy Mini Lite** | **💻 Simulation** |
 | :---: | :---: | :---: |
 | The full autonomous experience.<br>Raspberry Pi 4 + Battery + WiFi. | The developer version.<br>USB connection to your computer. | No hardware required.<br>Prototype in MuJoCo. |
-| [**👉 Go to Wireless Guide**](docs/platforms/reachy_mini/README.md) | [**👉 Go to Lite Guide**](docs/platforms/reachy_mini_lite/README.md) | [**👉 Go to Simulation**](docs/platforms/simulation/README.md) |
+| [**👉 Go to Wireless Guide**](docs/platforms/reachy_mini/get_started.md) | [**👉 Go to Lite Guide**](docs/platforms/reachy_mini_lite/get_started.md) | [**👉 Go to Simulation**](docs/platforms/simulation/get_started.md) |
 
 <br>
 
@@ -50,7 +50,7 @@ Reachy Mini robots are sold as kits and generally take **2 to 3 hours** to assem
 * **Reachy Mini (Wireless):** Runs onboard (RPi 4), autonomous, includes IMU. [See specs](docs/platforms/reachy_mini/hardware.md).
 * **Reachy Mini Lite:** Runs on your PC, powered via wall outlet. [See specs](docs/platforms/reachy_mini_lite/hardware.md).
 
-[**🛒 Buy Reachy Mini**](https://www.pollen-robotics.com/reachy-mini/)
+[**🛒 Buy Reachy Mini**](https://www.hf.co/reachy-mini/)
 
 <br>
 
