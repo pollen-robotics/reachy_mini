@@ -6,8 +6,11 @@
 Smooth interpolation between points. You can control `head`, `antennas`, and `body_yaw`.
 
 ```python
+from reachy_mini import ReachyMini
 from reachy_mini.utils import create_head_pose
 import numpy as np
+
+mini = ReachyMini()
 
 # Move everything at once
 mini.goto_target(
