@@ -105,12 +105,26 @@ class RecordedMove(Move):
 
 
 class RecordedMoves:
-    """Load a library of recorded moves from a HuggingFace dataset."""
+    """Load a library of recorded moves from a HuggingFace dataset.
+
+    Uses local cache only to avoid blocking network calls during playback.
+    The dataset must be downloaded beforehand (e.g., on first daemon startup
+    or via explicit download). This prevents the robot from freezing while
+    waiting for HuggingFace Hub network responses.
+    """
 
     def __init__(self, hf_dataset_name: str):
         """Initialize RecordedMoves."""
         self.hf_dataset_name = hf_dataset_name
-        self.local_path = snapshot_download(self.hf_dataset_name, repo_type="dataset")
+        # Use local_files_only=True to avoid blocking network calls.
+        # This ensures instant loading from cache without network latency.
+        # If the dataset is not cached, this will raise an error - the dataset
+        # should be pre-downloaded on daemon startup or first use.
+        self.local_path = snapshot_download(
+            self.hf_dataset_name,
+            repo_type="dataset",
+            local_files_only=True,
+        )
         self.moves: Dict[str, Any] = {}
         self.sounds: Dict[str, Optional[Path]] = {}
 
