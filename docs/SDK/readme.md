@@ -19,7 +19,7 @@ with ReachyMini() as mini:
 ## 🚀 Get Started
 * **[Quickstart Guide](quickstart.md)**: Zero to "Hello World" in 5 minutes.
 * **[Python SDK](python-sdk.md)**: Learn to move, see, speak, and hear.
-* **[AI Integrations](integrations.md)**: Connect LLMs, build Apps, and publish to Hugging Face.
+* **[AI Integrations](integration.md)**: Connect LLMs, build Apps, and publish to Hugging Face.
 * **[Core Concepts](core-concepts.md)**: Architecture, coordinate systems, and safety limits.
 
 ## 📂 Code Examples
