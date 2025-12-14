@@ -2,7 +2,9 @@
 
 You don't need a physical robot to start building! The Reachy Mini simulation runs on [MuJoCo](https://mujoco.org) and provides a realistic physics environment to prototype, test, and debug your applications.
 
-![Reachy Mini in MuJoCo](https://www.pollen-robotics.com/wp-content/uploads/2025/06/Reachy_mini_simulation.gif)
+<div align="center">
+    <img src="https://www.pollen-robotics.com/wp-content/uploads/2025/06/Reachy_mini_simulation.gif" width="400" alt="Reachy Mini in MuJoCo">
+</div>
 
 ## 1. Installation
 
