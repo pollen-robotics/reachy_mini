@@ -335,3 +335,11 @@ Contact **Seeed Studio** (the sender) immediately with photos.
 If a part is broken/malfunctioning, Seeed's after-sales team will determine if it is a hardware defect covered by warranty. They will provide repair or replacement parts.
 
 </details>
+
+
+## 💬 Still stuck?
+
+If you couldn't find the answer to your issue in this guide, please reach out to us directly!
+The Pollen Robotics team and the community are active on Discord to help you troubleshoot specific problems.
+
+👉 **[Join the Pollen Robotics Discord](https://discord.gg/2bAhWfXme9)**
