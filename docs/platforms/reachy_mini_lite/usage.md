@@ -2,6 +2,8 @@
 
 The Lite version relies on your computer to run its intelligence. The central hub for this is the **Reachy Mini Control** application.
 
+Check [this guide](/docs/platforms/reachy_mini_lite/get_started.md) if you have not installed it yet.
+
 ## 1. Reachy Mini Control (Dashboard) 🖥️
 
 When you open the application, you access the complete control panel for your robot.

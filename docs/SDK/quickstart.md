@@ -12,10 +12,10 @@ The **Daemon** is a background service that handles the low-level communication 
 
 * **On Reachy Mini (Wireless)**: The daemon is running when the robot is power on. Ensure your computer and Reachy Mini are on the same network
 * **On Reachy Mini Lite (USB)**: You have two options
-  - Start the [desktop application](/docs/platforms/reachy_mini_lite/usage.md)
+  - Start the [desktop application](/docs/platforms/reachy_mini_lite/get_started.md)
   - Open a terminal and run ```reachy-mini-daemon```
 * **For Simulation (No robot needed):** You have two options
-  - Start the [desktop application](/docs/platforms/reachy_mini_lite/usage.md)
+  - Start the [desktop application](/docs/platforms/reachy_mini_lite/get_started.md)
   - Open a terminal and run ```reachy-mini-daemon --sim```
 
 
