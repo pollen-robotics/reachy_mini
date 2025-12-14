@@ -29,30 +29,7 @@ Reachy Mini can run "Apps" — autonomous behaviors packaged for the robot (like
 
 Ready to write your own logic? Reachy Mini is controlled via a simple Python SDK.
 
-**1. Install the library on your computer:**
-```bash
-pip install reachy-mini
-```
-
-**2. Write your code:**
-Since your robot is on the network, you can control it remotely!
-
-```python
-from reachy_mini import ReachyMini
-import time
-
-with ReachyMini() as mini:
-    # Check connection
-    print(f"Connected! Robot state: {mini.state}")
-    
-    # Wiggle antennas
-    print("Wiggling antennas...")
-    mini.goto_target(antennas=[0.5, -0.5], duration=0.5)
-    time.sleep(0.5)
-    mini.goto_target(antennas=[-0.5, 0.5], duration=0.5)
-```
-
-👉 **[Go to the SDK Quickstart](../../sdk/quickstart.md)** for a complete tutorial.
+👉 **[Go to the SDK documentation](/docs/sdk/readme.md)** for a complete overview.
 
 ## ❓ Troubleshooting
 

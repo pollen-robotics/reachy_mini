@@ -17,7 +17,8 @@ with ReachyMini() as mini:
 ```
 
 ## 🚀 Get Started
-* **[Quickstart Guide](quickstart.md)**: Zero to "Hello World" in 5 minutes.
+* **[Installation](installation.md)**: 5min to setup your computer
+* **[Quickstart Guide](quickstart.md)**: Run your first behavior on Reachy Mini
 * **[Python SDK](python-sdk.md)**: Learn to move, see, speak, and hear.
 * **[AI Integrations](integration.md)**: Connect LLMs, build Apps, and publish to Hugging Face.
 * **[Core Concepts](core-concept.md)**: Architecture, coordinate systems, and safety limits.
@@ -28,17 +29,9 @@ We provide a collection of ready-to-run scripts to help you understand how to us
 
 [**👉 Browse the Examples Folder**](../../examples)
 
-## 📦 Installation
-Prerequisites: Python 3.10 - 3.13.
+## ❓ Troubleshooting
 
-```bash
-pip install reachy-mini
-```
-
-*For simulation users:*
-```bash
-pip install reachy-mini[mujoco]
-```
+Encountering an issue? 👉 **[Check the Troubleshooting & FAQ Guide](/docs/troubleshooting.md)**
 
 ## 💬 Community
 * [Discord](https://discord.gg/pollen-robotics) - Get help and share projects.

@@ -31,33 +31,9 @@ To extend Reachy's capabilities with community-created behaviors:
 
 ## 3. Coding with Python 🐍
 
-The Desktop App runs the **Daemon** (the background service) automatically. This means you can write Python scripts that connect directly to the app.
+Ready to write your own logic? Reachy Mini is controlled via a simple Python SDK.
 
-**1. Install the library:**
-If you haven't already, install the SDK on your computer:
-```bash
-pip install reachy-mini
-```
-
-**2. Write your code:**
-Create a file named hello_reachy.py and run it.
-
-```python
-from reachy_mini import ReachyMini
-import time
-
-with ReachyMini() as mini:
-    # Check connection
-    print(f"Connected! Robot state: {mini.state}")
-    
-    # Wiggle antennas
-    print("Wiggling antennas...")
-    mini.goto_target(antennas=[0.5, -0.5], duration=0.5)
-    time.sleep(0.5)
-    mini.goto_target(antennas=[-0.5, 0.5], duration=0.5)
-```
-
-👉 **[Go to the SDK Quickstart](../../sdk/quickstart.md)** for a complete tutorial.
+👉 **[Go to the SDK documentation](/docs/sdk/readme.md)** for a complete overview.
 
 ## ❓ Troubleshooting
 

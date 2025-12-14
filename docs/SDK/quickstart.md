@@ -4,66 +4,24 @@ Follow this guide to get your Reachy Mini up and running, either on real hardwar
 
 ## 1. Prerequisites
 
-Before installing the python package, ensure you have the system dependencies:
+You have correctly installed Reachy Mini on your computer, see [this guide](/docs/sdk/installation.md)
 
-* **Python 3.10 - 3.13** (Virtual environment recommended)
-* **Git LFS**: Required for downloading large model files.
-    * *Linux:* `sudo apt install git-lfs`
-    * *macOS:* `brew install git-lfs`
-    * *Windows:* [Download Installer](https://git-lfs.com)
-
-## 2. Install the Software
-
-```bash
-# Create and activate a virtual environment
-python -m venv .venv
-source .venv/bin/activate  # Windows: .venv\Scripts\activate
-
-# Install the SDK
-pip install reachy-mini
-
-# If you use simulation :
-pip install reachy-mini[mujoco]
-```
-
-> **Note for `uv` users:** You can skip the venv setup and run commands directly with `uv run ...`.
-
-### 🐧 Linux Users: USB Permission Setup
-If you are on Linux and using the robot via USB, you must set up udev rules:
-
-<details>
-<summary>Click to see udev instructions</summary>
-
-```bash
-echo 'SUBSYSTEM=="tty", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="55d3", MODE="0666", GROUP="dialout"
-SUBSYSTEM=="tty", ATTRS{idVendor}=="38fb", ATTRS{idProduct}=="1001", MODE="0666", GROUP="dialout"' \
-| sudo tee /etc/udev/rules.d/99-reachy-mini.rules
-
-sudo udevadm control --reload-rules && sudo udevadm trigger
-sudo usermod -aG dialout $USER
-# Log out and log back in!
-```
-</details>
-
-## 3. Start the Robot Server (Daemon)
+## 2. Ensure the Robot Server is running (Daemon)
 
 The **Daemon** is a background service that handles the low-level communication with motors and sensors. It must be running for your code to work.
 
-Open a terminal and run:
+* **On Reachy Mini (Wireless)**: The daemon is running when the robot is power on. Ensure your computer and Reachy Mini are on the same network
+* **On Reachy Mini Lite (USB)**: You have two options
+  - Start the [desktop application](/docs/platforms/reachy_mini_lite/usage.md)
+  - Open a terminal and run ```reachy-mini-daemon```
+* **For Simulation (No robot needed):** You have two options
+  - Start the [desktop application](/docs/platforms/reachy_mini_lite/usage.md)
+  - Open a terminal and run ```reachy-mini-daemon --sim```
 
-**For Real Robot:**
-```bash
-reachy-mini-daemon
-```
-
-**For Simulation (No robot needed):**
-```bash
-reachy-mini-daemon --sim
-```
 
 ✅ **Verification:** Open [http://localhost:8000](http://localhost:8000) in your browser. If you see the Reachy Dashboard, you are ready!
 
-## 4. Your First Script
+## 3. Your First Script
 
 Keep the daemon terminal open. In a **new terminal**, create a file named `hello.py`:
 
@@ -88,3 +46,13 @@ Run it:
 ```bash
 python hello.py
 ```
+
+## ❓ Troubleshooting
+Encountering an issue? 👉 **[Check the Troubleshooting & FAQ Guide](/docs/troubleshooting.md)**
+
+
+## Next Step
+* **[Python SDK](python-sdk.md)**: Learn to move, see, speak, and hear.
+* **[Browse the Examples Folder](/examples)**
+* **[AI Integrations](integration.md)**: Connect LLMs, build Apps, and publish to Hugging Face.
+* **[Core Concepts](core-concept.md)**: Architecture, coordinate systems, and safety limits.
