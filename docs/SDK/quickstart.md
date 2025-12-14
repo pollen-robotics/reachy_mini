@@ -21,6 +21,9 @@ source .venv/bin/activate  # Windows: .venv\Scripts\activate
 
 # Install the SDK
 pip install reachy-mini
+
+# If you use simulation :
+pip install reachy-mini[mujoco]
 ```
 
 > **Note for `uv` users:** You can skip the venv setup and run commands directly with `uv run ...`.
