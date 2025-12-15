@@ -45,8 +45,8 @@ Testers generally describe it as fun and simple. The trickiest parts are usually
 <summary><strong>Do I need to start the daemon manually?</strong></summary>
 **NO** 
 
-- With Reachy Mini (Wireless), the daemon is already running on the embedded Raspberry pi
-- With Reachy Mini Lite, you can use [the desktop app](/docs/reachy_mini_lite/get_started.md)
+- With Reachy Mini (Wireless), the daemon is already running on the embedded Raspberry Pi.
+- With Reachy Mini Lite, you can use [the desktop app](/docs/platforms/reachy_mini_lite/get_started.md).
 
 </details>
 
@@ -56,7 +56,7 @@ Testers generally describe it as fun and simple. The trickiest parts are usually
 
 <details>
 <summary><strong>How do I connect the robot to Wi-Fi?</strong></summary>
-See the [Reachy Mini Wireless guide](/docs/reachy_mini/get_started.md)
+See the [Reachy Mini Wireless guide](/docs/platforms/reachy_mini/get_started.md).
 
 </details>
 
@@ -240,7 +240,7 @@ with ReachyMini() as mini:
 # Get audio 
 sample = mini.media.get_audio_sample()
 
-# Play audio ]
+# Play audio
 mini.media.push_audio_sample(numpy_chunk)
 ```
 
