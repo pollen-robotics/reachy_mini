@@ -64,7 +64,7 @@ def check_reachymini_asoundrc() -> bool:
     return True
 
 
-def write_asoundrc_to_home():
+def write_asoundrc_to_home() -> None:
     """Write the .asoundrc file with Reachy Mini audio configuration to the user's home directory."""
     card_id = get_respeaker_card_number()
     asoundrc_content = f"""
