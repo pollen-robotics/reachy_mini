@@ -15,18 +15,9 @@ from .. import AppInfo, SourceKind
 from ..utils import running_command
 
 
-async def _check_uv_available() -> bool:
+def _check_uv_available() -> bool:
     """Check if uv is available on the system."""
-    try:
-        proc = await asyncio.create_subprocess_exec(
-            "uv", "--version",
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        await proc.wait()
-        return proc.returncode == 0
-    except FileNotFoundError:
-        return False
+    return shutil.which("uv") is not None
 
 
 def _is_windows() -> bool:
@@ -341,7 +332,7 @@ async def install_package(
 ) -> int:
     """Install a package given an AppInfo object, streaming logs."""
     # Check if uv is available
-    use_uv = await _check_uv_available()
+    use_uv = _check_uv_available()
     if not use_uv:
         logger.warning(
             "uv is not installed. Falling back to pip. "
@@ -524,7 +515,7 @@ async def uninstall_package(
             )
             
             # Check if uv is available
-            use_uv = await _check_uv_available()
+            use_uv = _check_uv_available()
             
             if use_uv:
                 uninstall_cmd = [
@@ -533,7 +524,6 @@ async def uninstall_package(
                     "uninstall",
                     "--python",
                     str(python_path),
-                    "-y",
                     app_name,
                 ]
             else:
@@ -559,12 +549,12 @@ async def uninstall_package(
             raise ValueError(f"Cannot uninstall app '{app_name}': it is not installed")
 
         # Check if uv is available
-        use_uv = await _check_uv_available()
+        use_uv = _check_uv_available()
         
         logger.info(f"Removing package {app_name}")
         
         if use_uv:
-            uninstall_cmd = ["uv", "pip", "uninstall", "--python", sys.executable, "-y", app_name]
+            uninstall_cmd = ["uv", "pip", "uninstall", "--python", sys.executable, app_name]
         else:
             uninstall_cmd = [sys.executable, "-m", "pip", "uninstall", "-y", app_name]
         
