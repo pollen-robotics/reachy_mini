@@ -10,7 +10,7 @@ Reachy Mini comes as a kit. Building it is the first step of your journey!
 * **Tools:** Everything is included in the box.
 * **Instructions:** We strongly recommend following the video guide alongside the manual.
 
-> **💡 Pro Tip:** We strongly recommend having the **Online Guide** or the **assembly video** open alongside the paper booklet (see below). The online version includes short video extract for every step that make the assembly much easier to understand.
+> **💡 Pro Tip:** We strongly recommend having the **Online Guide** or the **assembly video** open alongside the paper booklet (see below). The online version includes short video extracts for every step, which makes the assembly much easier to understand.
 
 | **📖 Interactive Digital Guide** | **📺 Full Assembly Video** |
 | :---: | :---: |
