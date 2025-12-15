@@ -106,6 +106,16 @@ class ReachyMini:
             ]
         )
 
+        # When connecting to a remote robot, check if streaming is available
+        if not localhost_only and media_backend == "default":
+            daemon_status = self.client.get_status()
+            if daemon_status.get("wireless_version") and daemon_status.get("stream_enabled"):
+                self.logger.info("Remote connection detected with streaming enabled - using WebRTC backend.")
+                media_backend = "webrtc"
+            else:
+                self.logger.info("Remote connection detected without streaming - disabling media. Start daemon with '--stream' flag to enable WebRTC.")
+                media_backend = "no_media"
+
         self.media_manager = self._configure_mediamanager(media_backend, log_level)
 
     def __del__(self) -> None:
@@ -114,7 +124,8 @@ class ReachyMini:
         The client is disconnected explicitly to avoid a thread pending issue.
 
         """
-        self.client.disconnect()
+        if hasattr(self, 'client'):
+            self.client.disconnect()
 
     def __enter__(self) -> "ReachyMini":
         """Context manager entry point for Reachy Mini."""
@@ -134,15 +145,22 @@ class ReachyMini:
         self, media_backend: str, log_level: str
     ) -> MediaManager:
         mbackend = MediaBackend.DEFAULT
+        daemon_status = self.client.get_status()
         match media_backend.lower():
             case "webrtc":
-                if self.client.get_status()["wireless_version"]:
-                    mbackend = MediaBackend.WEBRTC
-                else:
+                if not daemon_status.get("wireless_version"):
                     self.logger.warning(
                         "Non-wireless version detected, daemon should use the flag '--wireless-version'. Reverting to default"
                     )
                     mbackend = MediaBackend.DEFAULT
+                elif not daemon_status.get("stream_enabled"):
+                    self.logger.warning(
+                        "WebRTC requested but streaming is not enabled on daemon. Start daemon with '--stream' flag. Reverting to no_media"
+                    )
+                    mbackend = MediaBackend.NO_MEDIA
+                else:
+                    self.logger.info("WebRTC backend configured successfully.")
+                    mbackend = MediaBackend.WEBRTC
             case "gstreamer":
                 mbackend = MediaBackend.GSTREAMER
             case "default":
