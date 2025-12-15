@@ -33,7 +33,7 @@ gstreamer1.0-nice
 The WebRTC plugin requires Rust. Install it via `rustup`:
 
 ```bash
-curl --proto '=https' --tlsv1.2 -sSf [https://sh.rustup.rs](https://sh.rustup.rs) | sh
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source $HOME/.cargo/env
 ```
 
@@ -43,7 +43,7 @@ We use a specific version of the GStreamer WebRTC plugin written in Rust.
 
 ```bash
 # Clone the repository
-git clone [https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs.git](https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs.git)
+git clone https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs.git
 cd gst-plugins-rs
 git checkout 0.14.1
 
