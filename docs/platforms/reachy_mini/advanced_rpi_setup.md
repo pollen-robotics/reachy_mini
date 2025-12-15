@@ -64,9 +64,11 @@ source ~/.bashrc
 
 ## 5. Install Reachy Mini Daemon
 
-Install the python package with the GStreamer extras:
+Clone the Reachy Mini repository and install the Python package with the GStreamer extras:
 
 ```bash
+git clone https://github.com/pollen-robotics/reachy_mini.git
+cd reachy_mini
 pip install -e .[gstreamer]
 ```
 
@@ -76,7 +78,7 @@ pip install -e .[gstreamer]
 To start the daemon with WebRTC streaming enabled (Wireless mode):
 
 ```bash
-reachy-mini-daemon --wireless-version
+reachy-mini-daemon --wireless-version --stream
 ```
 
 ### Start a Client (Viewer)
