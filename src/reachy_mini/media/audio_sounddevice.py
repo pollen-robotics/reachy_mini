@@ -195,7 +195,6 @@ class SoundDeviceAudio(AudioBase):
             filled = 0
             while filled < frames and self._output_buffer:
                 chunk = self._output_buffer[0]
-                chunk = self.ensure_chunk_shape(chunk, outdata.shape)
                 
                 needed = frames - filled
                 available = len(chunk)
@@ -263,8 +262,7 @@ class SoundDeviceAudio(AudioBase):
             data = scipy.signal.resample(
                 data, int(len(data) * (samplerate_out / samplerate_in))
             )
-        if data.ndim > 1:  # convert to mono
-            data = np.mean(data, axis=1)
+        data = self.ensure_chunk_shape(data, (-1, self.get_output_channels()))
 
         self.logger.debug(f"Playing sound '{file_path}' at {samplerate_in} Hz")
 
