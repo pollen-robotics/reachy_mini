@@ -175,6 +175,7 @@ class AnalyticalKinematics:
                 body_yaw += 0.001
                 _joint_angles = list(np.array(_joint_angles) + 0.001)
                 tmp = np.eye(4)
+                #tmp[:3,:3] += np.random.randn(3,3)*1e-3
                 tmp[:3, 3][2] += self.head_z_offset
                 self.kin.reset_forward_kinematics(tmp)  # type: ignore[arg-type]
                 continue
@@ -186,10 +187,14 @@ class AnalyticalKinematics:
             if not (euler[0] > 90 or euler[0] < -90 or euler[1] > 90 or euler[1] < -90 or abs(euler[2] - body_yaw) > 90):
                 ok = True
             else:
-                self.logger.warning("WARNING FK: Head is not upright, recomputing FK")
+                if (euler[0] > 90 or euler[0] < -90 or euler[1] > 90 or euler[1] < -90):
+                    self.logger.warning("WARNING FK: Head is not upright, recomputing FK")
+                elif abs(euler[2] - body_yaw) > 90:
+                    self.logger.warning("WARNING FK: Head yaw relative to body yaw is too large, recomputing FK")
                 body_yaw += 0.001
                 _joint_angles = list(np.array(_joint_angles) + 0.001)
                 tmp = np.eye(4)
+                #tmp[:3,:3] += np.random.randn(3,3)*1e-3
                 tmp[:3, 3][2] += self.head_z_offset
                 self.kin.reset_forward_kinematics(tmp)  # type: ignore[arg-type]
 
@@ -295,23 +300,23 @@ class AnalyticalKinematics:
             
             # Store directly in pre-allocated array instead of extend
             passive_joints[i*3:i*3+3] = euler
-            
-            if i == 5:
-                # Compute 7th passive joint only for last branch
-                # Calculate transformed position and rotation more efficiently
-                R_servo_branch_mat = R_servo_branch.as_matrix()
-                
-                # Head XL330 target orientation
-                R_head_xl330 = _pose[:3, :3] @ T_HEAD_XL_330[:3, :3]
-                
-                # Current rod orientation with correction
-                R_rod_current = R_world_servo @ R_servo_branch_mat @ self.passive_corrections[6]
-                
-                # Compute relative rotation
-                R_dof = R_rod_current.T @ R_head_xl330
-                # Use fast Euler extraction
-                euler_7 = R.from_matrix(R_dof).as_euler("XYZ")
-                passive_joints[18:21] = euler_7
+
+        # 7th passive joint 
+        # Compute 7th passive joint only for last branch
+        # Calculate transformed position and rotation more efficiently
+        R_servo_branch_mat = R_servo_branch.as_matrix()
+        
+        # Head XL330 target orientation
+        R_head_xl330 = _pose[:3, :3] @ T_HEAD_XL_330[:3, :3]
+        
+        # Current rod orientation with correction
+        R_rod_current = R_world_servo @ R_servo_branch_mat @ self.passive_corrections[6]
+        
+        # Compute relative rotation
+        R_dof = R_rod_current.T @ R_head_xl330
+        # Use fast Euler extraction
+        euler_7 = R.from_matrix(R_dof).as_euler("XYZ")
+        passive_joints[18:21] = euler_7
                 
         self.passive_joints = passive_joints
         return self.passive_joints
