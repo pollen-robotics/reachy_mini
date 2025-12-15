@@ -11,7 +11,7 @@ Reachy Mini uses a **Client-Server** architecture:
     * Handles hardware I/O (USB/Serial), safety checks, and sensor reading.
     * Exposes a REST API (`localhost:8000`) and WebSocket.
     
-3.  **The SDK (Client):**
+2.  **The SDK (Client):**
     * Your Python code (`reachy_mini` package).
     * Connects to the Daemon over the network.
     * *Advantage:* You can run your AI code on a powerful server while the Daemon runs on a Raspberry Pi connected to the robot.
@@ -44,9 +44,9 @@ Reachy Mini has physical and software limits to prevent self-collision and damag
 ## Motor Modes
 
 You can change how the motors behave:
-* **`reachy_mini.enable_motors()`**: Stiff. Holds position.
-* **`reachy_mini.disable_motors()`**: Limp. No power.
-* **`reachy_mini.enable_gravity_compensation()`**: "Soft" mode. You can move the head with your hands and it will stay in place where you left it. (Only works with Placo Kinematics backend)
+* **`mini.enable_motors()`**: Stiff. Holds position.
+* **`mini.disable_motors()`**: Limp. No power.
+* **`mini.enable_gravity_compensation()`**: "Soft" mode. You can move the head with your hands and it will stay in place where you left it. (Only works with the Placo kinematics backend.)
 
 
 ## Next Steps
