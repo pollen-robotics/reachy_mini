@@ -38,7 +38,7 @@ Reachy Mini has physical and software limits to prevent self-collision and damag
 | :--- | :--- |
 | **Head Pitch/Roll** | [-40°, +40°] |
 | **Head Yaw** | [-180°, +180°] |
-| **Body Yaw** | [-180°, +180°] |
+| **Body Yaw** | [-160°, +160°] |
 | **Yaw Delta** | Max 65° difference between Head and Body Yaw |
 
 ## Motor Modes
