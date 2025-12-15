@@ -20,18 +20,6 @@ It removes the hardware complexity, allowing you to focus on what matters: build
 
 <br>
 
-## 📱 Apps & Ecosystem
-
-Reachy Mini comes with an app store powered by Hugging Face Spaces. You can install these apps directly from your robot's dashboard with one click!
-
-* **🗣️ [Conversation App](https://huggingface.co/spaces/pollen-robotics/reachy_mini_conversation_app):** Talk naturally with Reachy Mini (powered by LLMs).
-* **📻 [Radio](https://huggingface.co/spaces/pollen-robotics/reachy_mini_radio):** Listen to the radio with Reachy Mini !
-* **👋 [Hand Tracker](https://huggingface.co/spaces/pollen-robotics/hand_tracker_v2):** The robot follows your hand movements in real-time.
-
-[**👉 Browse all apps on Hugging Face**](https://pollen-robotics-reachy-mini-landing-page.hf.space/#/apps)
-
-<br>
-
 ## 🐍 Software & SDK
 
 Once your robot (or simulation) is running, the code is the same!
