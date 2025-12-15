@@ -190,30 +190,30 @@ class SoundDeviceAudio(AudioBase):
         """Handle audio output stream callback."""
         if status:
             self.logger.warning(f"SoundDevice output status: {status}")
-
+        
         with self._output_lock:
-            if self._output_buffer:
-                # Get the first chunk from the buffer
+            filled = 0
+            while filled < frames and self._output_buffer:
                 chunk = self._output_buffer[0]
-                available = len(chunk)
                 chunk = self.ensure_chunk_shape(chunk, outdata.shape)
-
-                if available >= frames:
-                    # We have enough data for this callback
-                    outdata[:] = chunk[:frames]
-                    # Remove the used portion
-                    if available > frames:
-                        self._output_buffer[0] = chunk[frames:]
-                    else:
-                        self._output_buffer.pop(0)
+                
+                needed = frames - filled
+                available = len(chunk)
+                take = min(needed, available)
+                
+                outdata[filled:filled + take] = chunk[:take]
+                filled += take
+                
+                if take < available:
+                    # Partial consumption, keep remainder
+                    self._output_buffer[0] = chunk[take:]
                 else:
-                    # Not enough data, fill what we can and pad with zeros
-                    outdata[:available] = chunk
-                    outdata[available:] = 0
+                    # Fully consumed this chunk
                     self._output_buffer.pop(0)
-            else:
-                # No data available, output silence
-                outdata.fill(0)
+            
+            # Only pad with zeros if buffer is truly empty
+            if filled < frames:
+                outdata[filled:] = 0
 
     def ensure_chunk_shape(
         self, chunk: npt.NDArray[np.float32], target_shape: tuple[int, ...]
