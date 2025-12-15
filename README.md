@@ -18,6 +18,8 @@ It removes the hardware complexity, allowing you to focus on what matters: build
 | The full autonomous experience.<br>Raspberry Pi 4 + Battery + WiFi. | The developer version.<br>USB connection to your computer. | No hardware required.<br>Prototype in MuJoCo. |
 | [**👉 Go to Wireless Guide**](docs/platforms/reachy_mini/get_started.md) | [**👉 Go to Lite Guide**](docs/platforms/reachy_mini_lite/get_started.md) | [**👉 Go to Simulation**](docs/platforms/simulation/get_started.md) |
 
+> ⚡ **Pro tip:** Install [uv](https://docs.astral.sh/uv/getting-started/installation/) for 10-100x faster app installations (auto-detected, falls back to `pip`).
+
 <br>
 
 ## 📱 Apps & Ecosystem
