@@ -26,7 +26,7 @@ Reachy Mini comes as a kit. Building it is the first step of your journey!
 The **Reachy Mini Control** desktop app is the command center for your robot. It includes the dashboard, visualization tools, and app launcher—no command line required.
 
 <div align="center">
-  <a href="https://pollen-robotics-reachy-mini-landing-page.hf.space/#/download">
+  <a href="http://hf.co/reachy-mini/#/download">
     <img src="https://pollen-robotics-reachy-mini-landing-page.hf.space/assets/desktop-app-screenshot--white.png" width="600" alt="Reachy Mini Control App">
   </a>
 </div>
@@ -35,7 +35,7 @@ The **Reachy Mini Control** desktop app is the command center for your robot. It
 
 **Get the App:**
 
-* **👉 [Download from Official Website](https://pollen-robotics-reachy-mini-landing-page.hf.space/#/download)** (Recommended for Windows, macOS, Linux)
+* **👉 [Download from Official Website](http://hf.co/reachy-mini/#/download)** (Recommended for Windows, macOS, Linux)
 * *Alternative:* [GitHub Releases](https://github.com/pollen-robotics/reachy-mini-desktop-app/releases) (For specific versions)
 
 > **✨ Auto-Update:** Once installed, simply open the app. It will automatically check for and install the latest updates for both the App and the Robot's internal software.
