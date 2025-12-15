@@ -45,7 +45,7 @@ Reachy uses `sounddevice` for audio I/O.
 sample = mini.media.get_audio_sample()
 
 # Play
-mini.media.play_audio("hello.wav")
+mini.media.play_sound("wake_up.wav")
 # Or push raw chunks:
 # mini.media.push_audio_sample(chunk)
 ```
