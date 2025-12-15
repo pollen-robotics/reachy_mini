@@ -457,7 +457,8 @@ def main() -> None:
             )
         else:
             logging.getLogger().warning(
-                "~/.asoundrc not found or not correctly configured for Reachy Mini Audio. Creating a new one and killing daemon"
+                "~/.asoundrc not found or not correctly configured for Reachy Mini Audio. "
+                "Creating a new one and killing daemon. Please restart the daemon afterward."
             )
             write_asoundrc_to_home()
             exit(1)
