@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "reachy_mini"
-version = "1.2.0rc1"
+version = "1.2.0"
 authors = [{ name = "Pollen Robotics", email = "contact@pollen-robotics.com" }]
 description = ""
 readme = "README.md"
@@ -50,6 +50,7 @@ dev = [
     "mypy==1.18.2",
     "rustypot>=1.4.0",
     "types-requests",
+    "types-toml",
     "rerun-sdk>=0.27.2",
     "urdf-parser-py==0.0.4",
 ]
