@@ -55,7 +55,11 @@ Reachy Mini robots are sold as kits and generally take **2 to 3 hours** to assem
 [**🛒 Buy Reachy Mini**](https://www.hf.co/reachy-mini/)
 
 <br>
+## ❓ Troubleshooting
 
+Encountering an issue? 👉 **[Check the Troubleshooting & FAQ Guide](/docs/troubleshooting.md)**
+
+<br>
 ## 🤝 Community & Contributing
 
 Reachy Mini is a collaborative project between [Pollen Robotics](https://www.pollen-robotics.com) and [Hugging Face](https://huggingface.co/).
