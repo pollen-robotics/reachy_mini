@@ -29,7 +29,7 @@ Reachy Mini can run "Apps" — autonomous behaviors packaged for the robot (like
 
 Ready to write your own logic? Reachy Mini is controlled via a simple Python SDK.
 
-👉 **[Go to the SDK documentation](/docs/sdk/readme.md)** for a complete overview.
+👉 **[Go to the SDK documentation](/docs/SDK/readme.md)** for a complete overview.
 
 ## ❓ Troubleshooting
 
