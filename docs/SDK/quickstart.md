@@ -4,19 +4,19 @@ Follow this guide to get your Reachy Mini up and running, either on real hardwar
 
 ## 1. Prerequisites
 
-You have correctly installed Reachy Mini on your computer, see [this guide](/docs/sdk/installation.md)
+You have correctly installed Reachy Mini on your computer, see [this guide](/docs/SDK/installation.md).
 
 ## 2. Ensure the Robot Server is running (Daemon)
 
 The **Daemon** is a background service that handles the low-level communication with motors and sensors. It must be running for your code to work.
 
-* **On Reachy Mini (Wireless)**: The daemon is running when the robot is power on. Ensure your computer and Reachy Mini are on the same network
+* **On Reachy Mini (Wireless)**: The daemon is running when the robot is powered on. Ensure your computer and Reachy Mini are on the same network.
 * **On Reachy Mini Lite (USB)**: You have two options
   - Start the [desktop application](/docs/platforms/reachy_mini_lite/get_started.md)
-  - Open a terminal and run ```reachy-mini-daemon```
+  - Open a terminal and run `reachy-mini-daemon`
 * **For Simulation (No robot needed):** You have two options
   - Start the [desktop application](/docs/platforms/reachy_mini_lite/get_started.md)
-  - Open a terminal and run ```reachy-mini-daemon --sim```
+  - Open a terminal and run `reachy-mini-daemon --sim`
 
 
 ✅ **Verification:** Open [http://localhost:8000](http://localhost:8000) in your browser. If you see the Reachy Dashboard, you are ready!
@@ -27,7 +27,6 @@ Keep the daemon terminal open. In a **new terminal**, create a file named `hello
 
 ```python
 from reachy_mini import ReachyMini
-import time
 
 # Connect to the running daemon
 with ReachyMini() as mini:
