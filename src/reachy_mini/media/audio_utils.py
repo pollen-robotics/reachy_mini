@@ -15,12 +15,12 @@ def get_respeaker_card_number() -> int:
 
         lines = output.split("\n")
         for line in lines:
-            if "reachy mini audio" in line.lower() and "card" in line:
-                card_number = line.split(":")[0].split("card ")[1].strip()
+            if "reachy mini audio" in line.lower():
+                card_number = line.split(":")[0][-1:]
                 logging.debug(f"Found Reachy Mini Audio sound card: {card_number}")
                 return int(card_number)
-            elif "respeaker" in line.lower() and "card" in line:
-                card_number = line.split(":")[0].split("card ")[1].strip()
+            elif "respeaker" in line.lower():
+                card_number = line.split(":")[0][-1:]
                 logging.warning(
                     f"Found ReSpeaker sound card: {card_number}. Please update firmware!"
                 )
@@ -43,3 +43,69 @@ def has_reachymini_asoundrc() -> bool:
         return False
     content = asoundrc_path.read_text(errors="ignore")
     return "reachymini_audio_sink" in content and "reachymini_audio_src" in content
+
+
+def check_reachymini_asoundrc() -> bool:
+    """Check if ~/.asoundrc exists and is correctly configured for Reachy Mini Audio."""
+    asoundrc_path = Path.home().joinpath(".asoundrc")
+    if not asoundrc_path.exists():
+        return False
+    content = asoundrc_path.read_text(errors="ignore")
+    card_id = get_respeaker_card_number()
+    # Check for both sink and src
+    if not ("reachymini_audio_sink" in content and "reachymini_audio_src" in content):
+        return False
+    # Check that the card number in .asoundrc matches the detected card_id
+    import re
+
+    card_numbers = set(re.findall(r"card\s+(\d+)", content))
+    if str(card_id) not in card_numbers:
+        return False
+    return True
+
+
+def write_asoundrc_to_home():
+    """Write the .asoundrc file with Reachy Mini audio configuration to the user's home directory."""
+    card_id = get_respeaker_card_number()
+    asoundrc_content = f"""
+pcm.!default {{
+    type hw
+    card {card_id}
+}}
+
+ctl.!default {{
+    type hw
+    card {card_id}
+}}
+
+pcm.reachymini_audio_sink {{
+    type dmix
+    ipc_key 4241
+    slave {{
+        pcm "hw:{card_id},0"
+        channels 2
+        period_size 1024
+        buffer_size 4096
+        rate 16000
+    }}
+    bindings {{
+        0 0
+        1 1
+    }}
+}}
+
+pcm.reachymini_audio_src {{
+    type dsnoop
+    ipc_key 4242
+    slave {{
+        pcm "hw:{card_id},0"
+        channels 2
+        rate 16000
+        period_size 1024
+        buffer_size 4096
+    }}
+}}
+"""
+    asoundrc_path = Path.home().joinpath(".asoundrc")
+    with open(asoundrc_path, "w") as f:
+        f.write(asoundrc_content)
