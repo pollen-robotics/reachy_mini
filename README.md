@@ -5,8 +5,6 @@
 
 **Reachy Mini is an open-source, expressive robot made for hackers and AI builders.**
 
-It removes the hardware complexity, allowing you to focus on what matters: building intelligent agents that can see, hear, and interact with the physical world.
-
 [![Reachy Mini Hello](/docs/assets/reachy_mini_hello.gif)](https://www.pollen-robotics.com/reachy-mini/)
 
 ## 🚀 Getting Started
