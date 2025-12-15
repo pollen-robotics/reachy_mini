@@ -536,7 +536,10 @@ async def uninstall_package(
                     app_name,
                 ]
             
-            return await running_command(uninstall_cmd, logger=logger)
+            ret = await running_command(uninstall_cmd, logger=logger)
+            if ret == 0:
+                logger.info(f"Successfully uninstalled '{app_name}'")
+            return ret
         else:
             # Desktop: remove the entire per-app venv directory
             logger.info(f"Removing venv for '{app_name}' at {venv_path}")
@@ -558,4 +561,7 @@ async def uninstall_package(
         else:
             uninstall_cmd = [sys.executable, "-m", "pip", "uninstall", "-y", app_name]
         
-        return await running_command(uninstall_cmd, logger=logger)
+        ret = await running_command(uninstall_cmd, logger=logger)
+        if ret == 0:
+            logger.info(f"Successfully uninstalled '{app_name}'")
+        return ret
