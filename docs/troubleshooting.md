@@ -221,6 +221,22 @@ mini.play_move(recorded_moves.get("dance_1"))
 ## 👁️ Vision & Audio
 
 <details>
+<summary><strong>Volume is too low (Linux)</strong></summary>
+
+1.  Run `alsamixer`.
+2.  Set **PCM1** to 100%.
+3.  Use **PCM,0** to adjust the global volume.
+
+To make it permanent:
+```bash
+CARD=$(aplay -l | grep -i "reSpeaker" | head -n1 | sed -n 's/^card \([0-9]*\):.*/\1/p')
+amixer -c "$CARD" set PCM,1 100%
+sudo alsactl store "$CARD"
+```
+
+</details>
+
+<details>
 <summary><strong>How do I get camera frames?</strong></summary>
 
 Use the `media` object.
@@ -266,6 +282,14 @@ Performance relies heavily on lighting conditions. Ensure the face is well-lit. 
 ## 🔧 Specific Error Messages & Fixes
 
 <details>
+<summary><strong>Motor '<name>' hardware errors: ['Input Voltage Error']</strong></summary>
+We are using a higher voltage on Reachy Mini, it's on purpose :)
+
+</details>
+
+
+
+<details>
 <summary><strong>Error: "OSError: PortAudio library not found"</strong></summary>
 
 You are missing a system dependency. Run:
@@ -282,22 +306,6 @@ Then restart the daemon.
 
 This appears if you connect to the robot but don't consume the video frames, causing the buffer to fill up.
 * **Fix:** If you don't need video, initialize with `ReachyMini(media_backend="no_media")`.
-
-</details>
-
-<details>
-<summary><strong>Volume is too low (Linux)</strong></summary>
-
-1.  Run `alsamixer`.
-2.  Set **PCM1** to 100%.
-3.  Use **PCM,0** to adjust the global volume.
-
-To make it permanent:
-```bash
-CARD=$(aplay -l | grep -i "reSpeaker" | head -n1 | sed -n 's/^card \([0-9]*\):.*/\1/p')
-amixer -c "$CARD" set PCM,1 100%
-sudo alsactl store "$CARD"
-```
 
 </details>
 
