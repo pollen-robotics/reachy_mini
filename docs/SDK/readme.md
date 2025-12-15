@@ -2,7 +2,7 @@
 
 
 ## ⚡️ Quick Look
-Control your robot in just **3 lines of code**:
+Control your robot in just **a few lines of code**:
 
 ```python
 from reachy_mini import ReachyMini

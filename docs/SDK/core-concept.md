@@ -21,7 +21,7 @@ Reachy Mini uses a **Client-Server** architecture:
 When moving the robot, you will work with two main reference frames:
 
 ### 1. Head Frame
-Located at the base of the head. Used for `goto_target` commands.
+Located at the base of the head. Used for `goto_target` and `set_target` commands.
 
 [![Reachy Mini Head Frame](/docs/assets/head_frame.png)]()
 
@@ -46,7 +46,7 @@ Reachy Mini has physical and software limits to prevent self-collision and damag
 You can change how the motors behave:
 * **`mini.enable_motors()`**: Stiff. Holds position.
 * **`mini.disable_motors()`**: Limp. No power.
-* **`mini.enable_gravity_compensation()`**: "Soft" mode. You can move the head with your hands and it will stay in place where you left it. (Only works with the Placo kinematics backend.)
+* **`mini.enable_gravity_compensation()`**: "Soft" mode. You can move the head by hand, and it will stay where you leave it. (Only works with the Placo kinematics backend.)
 
 
 ## Next Steps
