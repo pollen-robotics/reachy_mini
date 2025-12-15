@@ -17,7 +17,7 @@ with ReachyMini() as mini:
 ```
 
 ## 🚀 Get Started
-* **[Installation](installation.md)**: 5min to setup your computer
+* **[Installation](installation.md)**: 5 minutes to set up your computer
 * **[Quickstart Guide](quickstart.md)**: Run your first behavior on Reachy Mini
 * **[Python SDK](python-sdk.md)**: Learn to move, see, speak, and hear.
 * **[AI Integrations](integration.md)**: Connect LLMs, build Apps, and publish to Hugging Face.
@@ -37,5 +37,4 @@ Encountering an issue? 👉 **[Check the Troubleshooting & FAQ Guide](/docs/trou
 * [Discord](https://discord.gg/pollen-robotics) - Get help and share projects.
 * [Hugging Face Spaces](https://huggingface.co/spaces?q=reachy_mini) - Discover community apps.
 * [GitHub Discussions](https://github.com/pollen-robotics/reachy_mini/discussions) - Feature requests and bugs.
-
 
