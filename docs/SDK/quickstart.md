@@ -6,7 +6,7 @@ Follow this guide to get your Reachy Mini up and running, either on real hardwar
 
 Make sure you have installed Reachy Mini on your computer following our [installation guide](/docs/SDK/installation.md). 
 
-> **💡 Important:** Ensure you have created and activated your Python virtual environment. Remember to activate it every time you open a new terminal!
+> **💡 Important:** Ensure you have created and activated your Python virtual environment. **Remember to activate it every time you open a new terminal!**
 
 ## 2. Ensure the Robot Server is running (Daemon)
 
@@ -17,13 +17,13 @@ The **Daemon** is a background service that handles the low-level communication 
   - Start the [desktop application](/docs/platforms/reachy_mini_lite/get_started.md)
   - Open a terminal and run :
   ```bash
-  reachy-mini-daemon
+  uv run reachy-mini-daemon
   ```
 * **For Simulation (No robot needed)** - You have two options :
   - Start the [desktop application](/docs/platforms/reachy_mini_lite/get_started.md)
   - Open a terminal and run 
   ```bash
-  reachy-mini-daemon --sim
+  uv run reachy-mini-daemon --sim
   ```
 
 

@@ -226,6 +226,11 @@ In your terminal, run:
 uv add reachy-mini
 ```
 
+If you want to use the simulation mode, you need to add the `mujoco` extra:
+```bash
+uv add reachy-mini --extra mujoco
+```
+
 ### 🔧 Option B: Install from Source  
 > **For developers** - Want to modify the SDK or contribute? Choose this option!
 
@@ -235,6 +240,10 @@ git clone https://github.com/pollen-robotics/reachy_mini && cd reachy_mini
 uv sync
 ```
 
+If you want to use the simulation mode, you need to add the `mujoco` extra:
+```bash
+uv sync --extra mujoco
+```
 ### 🐧 Linux Users: USB Permission Setup
 
 > **Linux + USB connection?** You need to grant access to Reachy Mini's serial port.
