@@ -1,77 +1,78 @@
-# Reachy Mini
+# Reachy Mini 🤖
 
 [![Ask on HuggingChat](https://img.shields.io/badge/Ask_on-HuggingChat-yellow?logo=huggingface&logoColor=yellow&style=for-the-badge)](https://huggingface.co/chat/?attachments=https%3A%2F%2Fgist.githubusercontent.com%2FFabienDanieau%2F919e1d7468fb16e70dbe984bdc277bba%2Fraw%2Fdoc_reachy_mini_full.md&prompt=Read%20this%20documentation%20about%20Reachy%20Mini%20so%20I%20can%20ask%20questions%20about%20it.)
+[![Discord](https://img.shields.io/badge/Discord-Join_the_Community-7289DA?logo=discord&logoColor=white)](https://discord.gg/2bAhWfXme9)
 
-> ⚠️ Reachy Mini is still in beta. Expect bugs, some of them we won't fix right away if they are not a priority.
+**Reachy Mini is an open-source, expressive robot made for hackers and AI builders.**
 
-[Reachy Mini](https://huggingface.co/blog/reachy-mini) is an expressive, open-source robot designed for human-robot interaction, creative coding, and AI experimentation. We made it to be affordable, easy to use, hackable and cute, so that you can focus on building cool AI applications!
+It removes the hardware complexity, allowing you to focus on what matters: building intelligent agents that can see, hear, and interact with the physical world.
 
 [![Reachy Mini Hello](/docs/assets/reachy_mini_hello.gif)](https://www.pollen-robotics.com/reachy-mini/)
 
-### Versions Lite & Wireless
+## 🚀 Getting Started
+
 
 Reachy Mini's hardware comes in two flavors:
 - **Reachy Mini lite**: where the robot is directly connected to your computer via USB. And the code that controls the robot (the daemon) runs on your computer.
 - **Reachy Mini wireless**: where an Raspberry Pi is embedded in the robot, and the code that controls the robot (the daemon) runs on the Raspberry Pi. You can connect to it via Wi-Fi from your computer (see [Wireless Setup](./docs/source/wireless-version.mdx)).
 
-There is also a simulated version of Reachy Mini in [MuJoCo](https://mujoco.org) that you can use to prototype your applications before deploying them on the real robot. It behaves like the lite version where the daemon runs on your computer.
+**Choose your platform to access the specific guide:**
 
-## Assembly guide
 
-📖 Follow our step-by-step [Assembly Guide](https://huggingface.co/spaces/pollen-robotics/Reachy_Mini_Assembly_Guide).
+| **🤖 Reachy Mini (Wireless)** | **🔌 Reachy Mini Lite** | **💻 Simulation** |
+| :---: | :---: | :---: |
+| The full autonomous experience.<br>Raspberry Pi 4 + Battery + WiFi. | The developer version.<br>USB connection to your computer. | No hardware required.<br>Prototype in MuJoCo. |
+| [**👉 Go to Wireless Guide**](docs/platforms/reachy_mini/get_started.md) | [**👉 Go to Lite Guide**](docs/platforms/reachy_mini_lite/get_started.md) | [**👉 Go to Simulation**](docs/platforms/simulation/get_started.md) |
 
-Most builders finish in about 3 hours, our current speed record is 43 minutes. The guide walks you through every step with clear visuals so you can assemble Reachy Mini confidently from start to finish. Enjoy the build!
+> ⚡ **Pro tip:** Install [uv](https://docs.astral.sh/uv/getting-started/installation/) for 10-100x faster app installations (auto-detected, falls back to `pip`).
 
-▶️ View the [Assembly Video](https://youtu.be/_r0cHySFbeY?si=6Mw4js8HSUs4cwoJ).
+<br>
 
-## Software overview
+## 📱 Apps & Ecosystem
 
-This repository provides everything you need to control Reachy Mini, both in simulation and on the real robot. It consists of two main parts:
+Reachy Mini comes with an app store powered by Hugging Face Spaces. You can install these apps directly from your robot's dashboard with one click!
 
-- **The 😈 Daemon 😈**: A background service that manages communication with the robot's motors and sensors, or with the simulation environment. It should be running before you can control the robot. It can run either for the simulation (MuJoCo) or for the real robot. 
-- **🐍 SDK & 🕸️ API** to control the robot's main features (head, antennas, camera, speakers, microphone, etc.) and connect with your AI experimentation. Depending on your preferences and needs, there is a [Python SDK](#using-the-python-sdk) and a [HTTP REST API](#using-the-rest-api).
+* **🗣️ [Conversation App](https://huggingface.co/spaces/pollen-robotics/reachy_mini_conversation_app):** Talk naturally with Reachy Mini (powered by LLMs).
+* **📻 [Radio](https://huggingface.co/spaces/pollen-robotics/reachy_mini_radio):** Listen to the radio with Reachy Mini !
+* **👋 [Hand Tracker](https://huggingface.co/spaces/pollen-robotics/hand_tracker_v2):** The robot follows your hand movements in real-time.
 
-Using the [Python SDK](#using-the-python-sdk), making your robot move only require a few lines of code, as illustrated in the example below:
+[**👉 Browse all apps on Hugging Face**](https://pollen-robotics-reachy-mini-landing-page.hf.space/#/apps)
 
-```python
-from reachy_mini import ReachyMini
-from reachy_mini.utils import create_head_pose
+<br>
 
-with ReachyMini() as reachy_mini:
-    # Move the head up (10mm on z-axis) and roll it 15 degrees
-    pose = create_head_pose(z=10, roll=15, degrees=True, mm=True)
-    reachy_mini.goto_target(head=pose, duration=2.0)
+## 🐍 Software & SDK
 
-    # Reset to default pose
-    pose = create_head_pose() 
-    reachy_mini.goto_target(head=pose, duration=2.0)
-```
+Once your robot (or simulation) is running, the code is the same!
+Control your Reachy Mini with Python to create movements, build apps, and connect AI models.
 
-and using the [REST API](#using-the-rest-api), reading the current state of the robot:
+You will find the Installation guide, Quickstart, and API Reference in the SDK documentation.
 
-```bash
-curl 'http://localhost:8000/api/state/full'
-```
+[**👉 Go to SDK Documentation**](docs/SDK/readme.md)
+[**🤗 Share your app with the community**](**https://huggingface.co/blog/pollen-robotics/make-and-publish-your-reachy-mini-apps**)
 
-Those two examples above assume that the daemon is already running (either in simulation or on the real robot) locally.
+<br>
 
-## Installation of the daemon and Python SDK
+## 🛠 Hardware Overview
 
-As mentioned above, before being able to use the robot, you need to run the daemon that will handle the communication with the motors.
+Reachy Mini robots are sold as kits and generally take **2 to 3 hours** to assemble. Detailed step-by-step guides are available in the platform-specific folders linked above.
 
-We support and test on Linux and macOS. It's also working on Windows, but it is less tested at the moment. Do not hesitate to open an issue if you encounter any problem. 
+* **Reachy Mini (Wireless):** Runs onboard (RPi 4), autonomous, includes IMU. [See specs](docs/platforms/reachy_mini/hardware.md).
+* **Reachy Mini Lite:** Runs on your PC, powered via wall outlet. [See specs](docs/platforms/reachy_mini_lite/hardware.md).
 
-The daemon is built in Python, so you need to have Python installed on your computer (versions from 3.10 to 3.13 are supported). We recommend using a virtual environment to avoid dependency conflicts with your other Python projects.
+[**🛒 Buy Reachy Mini**](https://www.hf.co/reachy-mini/)
 
-You can install Reachy Mini from the source code or from PyPI.
+<br>
 
-First, make sure `git-lfs` is installed on your system:
+## ❓ Troubleshooting
 
-- On Linux: `sudo apt install git-lfs`
-- On macOS: `brew install git-lfs`
-- On Windows: [Follow the instructions here](https://docs.github.com/en/repositories/working-with-files/managing-large-files/installing-git-large-file-storage?platform=windows)
+Encountering an issue? 👉 **[Check the Troubleshooting & FAQ Guide](/docs/troubleshooting.md)**
 
-From PyPI, you can install the package with:
+<br>
+
+## 🤝 Community & Contributing
+
+Reachy Mini is a collaborative project between [Pollen Robotics](https://www.pollen-robotics.com) and [Hugging Face](https://huggingface.co/).
+
 
 ```bash
 pip install reachy-mini
@@ -264,15 +265,12 @@ Checks are performed by Ruff. You may want to [configure your IDE to support it]
 
 see [dedicated section](docs/source/troubleshooting.mdx)
 
+* **Join the Community:** We use [Discord](https://discord.gg/2bAhWfXme9) to share our moments with Reachy, build apps together, and get help.
+* **Found a bug?** Open an issue on this repository.
+* **Created an App?** [Share it with the community](https://huggingface.co/blog/pollen-robotics/make-and-publish-your-reachy-mini-apps).
+
+
 ## License
 
-This project is licensed under the Apache 2.0 License - see the [LICENSE](LICENSE) file for details.
-
-The robot design files are licensed under the [TODO](TODO) license.
-
-### Simulation model used
-
-- https://polyhaven.com/a/food_apple_01
-- https://polyhaven.com/a/croissant
-- https://polyhaven.com/a/wooden_table_02
-- https://polyhaven.com/a/rubber_duck_toy
+This project is licensed under the Apache 2.0 License. See the [LICENSE](LICENSE) file for details.
+Hardware design files are licensed under Creative Commons BY-SA-NC.
