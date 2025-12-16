@@ -350,4 +350,4 @@ If a part is broken/malfunctioning, Seeed's after-sales team will determine if i
 If you couldn't find the answer to your issue in this guide, please reach out to us directly!
 The Pollen Robotics team and the community are active on Discord to help you troubleshoot specific problems.
 
-👉 **[Join the Pollen Robotics Discord](https://discord.gg/2bAhWfXme9)**
+👉 **[Join the Pollen Robotics Discord](https://discord.gg/Y7FgMqHsub)**
