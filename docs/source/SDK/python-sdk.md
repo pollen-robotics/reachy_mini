@@ -60,10 +60,10 @@ recorded_data = mini.stop_recording()
 ```
 
 ## Next Steps
-* **[Browse the Examples Folder](/examples)**
+* **[Browse the Examples Folder](https://github.com/pollen-robotics/reachy_mini/tree/develop/examples)**
 * **[AI Integrations](integration.md)**: Connect LLMs, build Apps, and publish to Hugging Face.
 * **[Core Concepts](core-concept.md)**: Architecture, coordinate systems, and safety limits.
 
 ## ❓ Troubleshooting
 
-Encountering an issue? 👉 **[Check the Troubleshooting & FAQ Guide](/docs/troubleshooting.md)**
+Encountering an issue? 👉 **[Check the Troubleshooting & FAQ Guide](./troubleshooting.md)**

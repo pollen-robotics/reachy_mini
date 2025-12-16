@@ -12,10 +12,10 @@ The **Daemon** is a background service that handles the low-level communication 
 
 * **On Reachy Mini (Wireless)**: The daemon is running when the robot is powered on. Ensure your computer and Reachy Mini are on the same network.
 * **On Reachy Mini Lite (USB)**: You have two options
-  - Start the [desktop application](/docs/platforms/reachy_mini_lite/get_started.md)
+  - Start the [desktop application](../reachy_mini_lite/get_started_lite.md)
   - Open a terminal and run `reachy-mini-daemon`
 * **For Simulation (No robot needed):** You have two options
-  - Start the [desktop application](/docs/platforms/reachy_mini_lite/get_started.md)
+  - Start the [desktop application](../reachy_mini_lite/get_started_lite.md)
   - Open a terminal and run `reachy-mini-daemon --sim`
 
 
@@ -47,11 +47,11 @@ python hello.py
 ```
 
 ## ❓ Troubleshooting
-Encountering an issue? 👉 **[Check the Troubleshooting & FAQ Guide](/docs/troubleshooting.md)**
+Encountering an issue? 👉 **[Check the Troubleshooting & FAQ Guide](../troubleshooting.md)**
 
 
 ## Next Steps
 * **[Python SDK](python-sdk.md)**: Learn to move, see, speak, and hear.
-* **[Browse the Examples Folder](/examples)**
+* **[Browse the Examples Folder](https://github.com/pollen-robotics/reachy_mini/tree/develop/examples)**
 * **[AI Integrations](integration.md)**: Connect LLMs, build Apps, and publish to Hugging Face.
 * **[Core Concepts](core-concept.md)**: Architecture, coordinate systems, and safety limits.

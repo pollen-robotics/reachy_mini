@@ -74,7 +74,7 @@ sudo usermod -aG dialout $USER
 </details>
 
 ## ❓ Troubleshooting
-Encountering an issue? 👉 **[Check the Troubleshooting & FAQ Guide](/docs/troubleshooting.md)**
+Encountering an issue? 👉 **[Check the Troubleshooting & FAQ Guide](../troubleshooting.md)**
 
 ## Next Steps
 * **[Quickstart Guide](quickstart.md)**: Run your first behavior on Reachy Mini
