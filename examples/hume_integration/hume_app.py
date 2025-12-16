@@ -37,7 +37,8 @@ class HumeApp(ReachyMiniApp):
         self.logger = logging.getLogger("hume_app")
         self.logger.setLevel(logging.INFO)
         
-        # Audio state
+        # Audio state - using queue for proper buffering
+        self._audio_queue = None  # Will be initialized in async context
         self._audio_buffer = []
         self._audio_buffer_primed = False
         self.sample_rate = 48000 # Default fallback
@@ -57,7 +58,7 @@ class HumeApp(ReachyMiniApp):
         self.sample_rate = input_sample_rate
         self.logger.info(f"Microphone detected: {input_sample_rate}Hz, {input_channels} channels")
         
-        # Setup Session Settings using RawWrapper to force 'models'
+        # Setup Session Settings - prosody is automatically enabled in EVI 3
         settings_dict = {
             "type": "session_settings",
             "audio": {
@@ -66,11 +67,11 @@ class HumeApp(ReachyMiniApp):
                 "channels": input_channels,
             },
             "system_prompt": "You are Reachy, a helpful and expressive robot companion.",
-            "models": {
-                "prosody": {} # Explicitly enable prosody inference
-            }
         }
         session_settings = RawWrapper(settings_dict)
+
+        # Initialize audio queue for proper buffering
+        self._audio_queue = asyncio.Queue(maxsize=50)
         
         reachy_mini.media.audio.start_playing()
         reachy_mini.media.audio.start_recording()
@@ -90,12 +91,14 @@ class HumeApp(ReachyMiniApp):
                 # Create concurrent tasks
                 audio_task = asyncio.create_task(self._audio_stream_task(reachy_mini, socket, stop_event))
                 receive_task = asyncio.create_task(self._receive_task(reachy_mini, socket, stop_event))
-                
+                playback_task = asyncio.create_task(self._audio_playback_task(reachy_mini, stop_event))
+
                 while not stop_event.is_set():
                     await asyncio.sleep(0.1)
 
                 audio_task.cancel()
                 receive_task.cancel()
+                playback_task.cancel()
                 
         except Exception as e:
             self.logger.error(f"Error in Hume App: {e}")
@@ -105,7 +108,7 @@ class HumeApp(ReachyMiniApp):
             self.logger.info("Hume App stopped.")
 
     async def _audio_stream_task(self, reachy_mini: ReachyMini, socket: Any, stop_event: threading.Event):
-        """Streaming audio input."""
+        """Streaming audio input - using 20ms buffer window as recommended by Hume."""
         self.logger.info("Starting audio streaming task...")
         try:
             while not stop_event.is_set():
@@ -114,14 +117,12 @@ class HumeApp(ReachyMiniApp):
                      # Convert to PCM, Base64
                     pcm_data = (audio_chunk * 32767).astype(np.int16)
                     base64_audio = base64.b64encode(pcm_data.tobytes()).decode("utf-8")
-                    
-                    # SDK Method: Use send_publish with AudioInput
-                    # We can use RawWrapper or AudioInput if we trust it
-                    # But send_publish works with AudioInput object too?
-                    # Let's use AudioInput object since it worked before
+
+                    # Send audio input to Hume
                     await socket.send_publish(AudioInput(data=base64_audio))
-                
-                await asyncio.sleep(0.01)
+
+                # Hume recommends 20ms buffer window for native apps
+                await asyncio.sleep(0.02)
         except asyncio.CancelledError:
             pass
         except Exception as e:
@@ -134,59 +135,100 @@ class HumeApp(ReachyMiniApp):
             async for event in socket:
                 if stop_event.is_set():
                     break
-                
-                self.logger.info(f"Received event: {type(event)}") # Debug log
-                
+
+                event_type = type(event).__name__
+                self.logger.debug(f"Received event: {event_type}")
+
                 if isinstance(event, AudioOutput):
-                    # Handle Audio
+                    # Queue audio instead of playing directly to avoid clicking
                     b64_data = event.data
                     if b64_data:
                         audio_bytes = base64.b64decode(b64_data)
                         audio_int16 = np.frombuffer(audio_bytes, dtype=np.int16)
                         audio_float32 = audio_int16.astype(np.float32) / 32768.0
-                        # JITTER BUFFER + COMPENSATOR LOGIC
-                        PRIMING_THRESHOLD = 4096
-                        
-                        if not self._audio_buffer_primed:
-                            self._audio_buffer.append(audio_float32)
-                            total_samples = sum(len(c) for c in self._audio_buffer)
-                            
-                            if total_samples >= PRIMING_THRESHOLD:
-                                combined_audio = np.concatenate(self._audio_buffer)
-                                await self._push_audio_safe(reachy_mini, combined_audio)
-                                self._audio_buffer = []
-                                self._audio_buffer_primed = True
-                                self.logger.info("Buffer primed.")
-                        else:
-                            await self._push_audio_safe(reachy_mini, audio_float32)
-                            
+
+                        # Add to queue for playback task to handle
+                        try:
+                            await asyncio.wait_for(self._audio_queue.put(audio_float32), timeout=1.0)
+                        except asyncio.TimeoutError:
+                            self.logger.warning("Audio queue full, dropping chunk")
+
                 elif isinstance(event, UserInterruption):
-                    self.logger.info("Interruption detected.")
-                    self._audio_buffer = []
-                    self._audio_buffer_primed = False
+                    self.logger.info("Interruption detected - clearing audio queue")
+                    # Clear the queue
+                    while not self._audio_queue.empty():
+                        try:
+                            self._audio_queue.get_nowait()
+                        except asyncio.QueueEmpty:
+                            break
                     reachy_mini.media.audio.stop_playing()
                     reachy_mini.media.audio.start_playing()
-                    
+
                 elif isinstance(event, AssistantProsody):
-                    # Handle Prosody
-                    scores = event.models.prosody.scores
-                    if scores:
-                        # SDK returns object? Or dict?
-                        # Usually custom object. converted to dict for mapping?
-                        # Assuming it behaves dict-like or we iterate
-                        # If it is an object, we access attributes?
-                        # Let's try converting to dict if possible or accessing assuming Dict[str, float]
-                        # Actually most likely: event.models.prosody.scores is { 'Joy': 0.5, ... } 
-                        self._handle_emotions(reachy_mini, scores)
-                    else:
-                        self.logger.warning("AssistantProsody received but no scores.")
-                        
-                # Handle other types if needed (UserMessage etc)
-                
+                    # Handle Prosody with enhanced logging
+                    self.logger.info(f"✓ AssistantProsody event received!")
+                    try:
+                        if hasattr(event, 'models') and hasattr(event.models, 'prosody'):
+                            scores = event.models.prosody.scores
+                            if scores:
+                                self.logger.info(f"Prosody scores structure: {type(scores)}")
+                                self._handle_emotions(reachy_mini, scores)
+                            else:
+                                self.logger.warning("AssistantProsody received but scores are None/empty")
+                        else:
+                            self.logger.warning(f"AssistantProsody structure unexpected: {dir(event)}")
+                    except Exception as e:
+                        self.logger.error(f"Error processing AssistantProsody: {e}", exc_info=True)
+
+                # Log other event types for debugging
+                else:
+                    self.logger.debug(f"Other event type: {event_type}")
+
         except asyncio.CancelledError:
             pass
         except Exception as e:
-            self.logger.error(f"Error in receiver: {e}")
+            self.logger.error(f"Error in receiver: {e}", exc_info=True)
+
+    async def _audio_playback_task(self, reachy_mini: ReachyMini, stop_event: threading.Event):
+        """Dedicated task for smooth audio playback from queue.
+
+        This prevents clicking by ensuring audio is queued and played at the correct rate,
+        rather than playing chunks immediately as they arrive from Hume.
+        """
+        self.logger.info("Starting audio playback task...")
+        PRIMING_THRESHOLD = 4096  # Prime buffer before starting playback
+        primed = False
+        buffer = []
+
+        try:
+            while not stop_event.is_set():
+                try:
+                    # Get audio from queue
+                    audio_chunk = await asyncio.wait_for(self._audio_queue.get(), timeout=0.1)
+
+                    if not primed:
+                        # Build up initial buffer to prevent underruns
+                        buffer.append(audio_chunk)
+                        total_samples = sum(len(c) for c in buffer)
+
+                        if total_samples >= PRIMING_THRESHOLD:
+                            combined_audio = np.concatenate(buffer)
+                            await self._push_audio_safe(reachy_mini, combined_audio)
+                            buffer = []
+                            primed = True
+                            self.logger.info("Audio buffer primed - starting playback")
+                    else:
+                        # Normal playback - push audio immediately
+                        await self._push_audio_safe(reachy_mini, audio_chunk)
+
+                except asyncio.TimeoutError:
+                    # No audio available, continue waiting
+                    continue
+
+        except asyncio.CancelledError:
+            self.logger.info("Audio playback task cancelled")
+        except Exception as e:
+            self.logger.error(f"Error in audio playback: {e}", exc_info=True)
 
     async def _push_audio_safe(self, reachy_mini: ReachyMini, audio_float32: np.ndarray):
         """Push audio with optional resampling."""
@@ -202,32 +244,63 @@ class HumeApp(ReachyMiniApp):
              
         reachy_mini.media.audio.push_audio_sample(audio_float32)
 
-    def _handle_emotions(self, reachy_mini: ReachyMini, scores: Any): # Types might vary
-        # ... Reuse the Emotion mapping logic ...
-        # Assuming scores is a dict or iterable of (name, value)
-        if hasattr(scores, "items"):
-            items = scores.items()
-        elif isinstance(scores, dict):
-            items = scores.items()
-        else:
-            # Fallback if SDK returns object list?
-            # User will debug if crash.
-            return
-            
-        top_emotion = max(items, key=lambda x: x[1])
-        emotion_name, score = top_emotion
-        
-        if score < 0.3: return
-        self.logger.info(f"Emotion: {emotion_name} ({score:.2f})")
-        
-        if emotion_name in ["Amusement", "Excitement", "Joy", "Ecstasy"]:
-             reachy_mini.set_target(head=create_head_pose(pitch=-5, z=20, degrees=True, mm=True), antennas=[0.5, -0.5])
-        elif emotion_name in ["Sadness", "Distress", "Pain", "Disappointment"]:
-             reachy_mini.set_target(head=create_head_pose(pitch=10, z=-10, degrees=True, mm=True), antennas=[-0.8, 0.8])
-        elif emotion_name in ["Confusion", "Doubt", "Awkwardness"]:
-             reachy_mini.set_target(head=create_head_pose(roll=10, z=10, degrees=True, mm=True), antennas=[0.2, 0.8])
-        elif emotion_name == "Neutral":
-             reachy_mini.set_target(head=create_head_pose(z=15, degrees=True, mm=True), antennas=[0.0, 0.0])
+    def _handle_emotions(self, reachy_mini: ReachyMini, scores: Any):
+        """Process prosody scores and animate robot based on detected emotions."""
+        try:
+            # Handle different score formats from Hume SDK
+            if hasattr(scores, "items"):
+                items = scores.items()
+            elif isinstance(scores, dict):
+                items = scores.items()
+            else:
+                self.logger.warning(f"Unexpected scores format: {type(scores)}")
+                return
+
+            if not items:
+                self.logger.warning("No emotion items found in scores")
+                return
+
+            # Find top emotion
+            top_emotion = max(items, key=lambda x: x[1])
+            emotion_name, score = top_emotion
+
+            self.logger.info(f"Top emotion: {emotion_name} (score: {score:.2f})")
+
+            # Only animate if score is significant
+            if score < 0.3:
+                self.logger.debug(f"Emotion score too low ({score:.2f}), skipping animation")
+                return
+
+            # Animate robot based on emotion
+            if emotion_name in ["Amusement", "Excitement", "Joy", "Ecstasy"]:
+                self.logger.info(f"🎉 Animating happy emotion: {emotion_name}")
+                reachy_mini.set_target(
+                    head=create_head_pose(pitch=-5, z=20, degrees=True, mm=True),
+                    antennas=[0.5, -0.5]
+                )
+            elif emotion_name in ["Sadness", "Distress", "Pain", "Disappointment"]:
+                self.logger.info(f"😢 Animating sad emotion: {emotion_name}")
+                reachy_mini.set_target(
+                    head=create_head_pose(pitch=10, z=-10, degrees=True, mm=True),
+                    antennas=[-0.8, 0.8]
+                )
+            elif emotion_name in ["Confusion", "Doubt", "Awkwardness"]:
+                self.logger.info(f"🤔 Animating confused emotion: {emotion_name}")
+                reachy_mini.set_target(
+                    head=create_head_pose(roll=10, z=10, degrees=True, mm=True),
+                    antennas=[0.2, 0.8]
+                )
+            elif emotion_name == "Neutral":
+                self.logger.info(f"😐 Animating neutral emotion")
+                reachy_mini.set_target(
+                    head=create_head_pose(z=15, degrees=True, mm=True),
+                    antennas=[0.0, 0.0]
+                )
+            else:
+                self.logger.debug(f"No animation defined for emotion: {emotion_name}")
+
+        except Exception as e:
+            self.logger.error(f"Error handling emotions: {e}", exc_info=True)
 
 def main():
     import argparse
