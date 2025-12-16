@@ -36,13 +36,13 @@ def main() -> None:
     motors = list(config.motors.keys())
     if args.serialport is None:
         console.print(
-            "Are you running this script on the wireless version of Reachy Mini?"
+            "Which version of Reachy Mini are you using?",
         )
         wireless_choice = questionary.select(
             ">",
             [
-                questionary.Choice("No", value=False),
-                questionary.Choice("Yes", value=True),
+                questionary.Choice("Lite", value=False),
+                questionary.Choice("Wireless", value=True),
             ],
         ).ask()
         ports = find_serial_port(wireless_version=wireless_choice)
