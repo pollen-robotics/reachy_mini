@@ -360,6 +360,8 @@ def check(console: Console, app_path: str) -> None:
         )
         sys.exit(1)
 
+    console.print("✅ pyproject.toml contains the package data section.")
+
     # - <app_name>/__init__.py exists
     pkg_path = Path(abs_app_path) / pkg_name
     init_file = pkg_path / "__init__.py"
