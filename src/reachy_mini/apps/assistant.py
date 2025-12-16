@@ -337,6 +337,29 @@ def check(console: Console, app_path: str) -> None:
         )
         sys.exit(1)
 
+    # Check [tool.setuptools.package-data] section
+    console.print("Checking package data in pyproject.toml...")
+    if "tool" not in pyproject_content or "setuptools" not in pyproject_content["tool"]:
+        console.print(
+            "❌ pyproject.toml is missing the [tool.setuptools] section",
+            style="bold red",
+        )
+        sys.exit(1)
+    setuptools_section = pyproject_content["tool"]["setuptools"]
+    if "package-data" not in setuptools_section:
+        console.print(
+            "❌ pyproject.toml is missing the [tool.setuptools.package-data] section",
+            style="bold red",
+        )
+        sys.exit(1)
+    package_data = setuptools_section["package-data"]
+    if pkg_name not in package_data:
+        console.print(
+            f"❌ pyproject.toml is missing the package data for the package '{pkg_name}'",
+            style="bold red",
+        )
+        sys.exit(1)
+
     # - <app_name>/__init__.py exists
     pkg_path = Path(abs_app_path) / pkg_name
     init_file = pkg_path / "__init__.py"
