@@ -60,7 +60,7 @@ In your new terminal, run:
 python hello.py
 ```
 
-🎉 **Congratulations!** If everything went well, your robot should now wiggle its antennas!
+🎉 If everything went well, your robot should now wiggle its antennas!
 
 ## ❓ Troubleshooting
 Encountering an issue? 👉 **[Check the Troubleshooting & FAQ Guide](/docs/troubleshooting.md)**
