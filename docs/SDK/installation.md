@@ -163,7 +163,7 @@ git lfs install
 
 In your terminal, run:
 ```bash
-uv venv my_reachy_env --python 3.12
+uv venv reachy_mini_env --python 3.12
 ```
 
 ### Activate the environment
@@ -173,7 +173,7 @@ uv venv my_reachy_env --python 3.12
 
 In your terminal, run:
 ```bash
-source my_reachy_env/bin/activate
+source reachy_mini_env/bin/activate
 ```
 
 </details>
@@ -198,12 +198,12 @@ powershell Set-ExecutionPolicy RemoteSigned
 
 Now you can activate your virtual environment by running:
 ```powershell
-my_reachy_env\Scripts\activate
+reachy_mini_env\Scripts\activate
 ```
 
 </details>
 
-> **✅ Success indicator:** You should see `(my_reachy_env)` at the start of your command line prompt!
+> **✅ Success indicator:** You should see `(reachy_mini_env)` at the start of your command line prompt!
 
 ## 3. 🚀 Install Reachy Mini
 
