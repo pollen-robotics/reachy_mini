@@ -1,162 +1,235 @@
-# 📦 Installation of the Daemon and Python SDK
+# 📦 Installation Guide
 
-**Supported OS:** We support and test on **Linux**, **MacOS** and **Windows**, but feel free to open an [issue](https://github.com/pollen-robotics/reachy_mini/issues) if you encounter any problem.
+> **Welcome to Reachy Mini!** This guide will help you install the Python SDK and daemon to start controlling your robot.
 
-## 1. Prerequisites
+<div align="center">
 
-* **Python:** You need Python installed on your computer (versions from _3.10_ to _3.12_ are supported).
-* **Git** and **Git LFS:** You must have `git` and `git-lfs` installed to correctly download model assets.
+| 🐧 **Linux** | 🍎 **macOS** | 🪟 **Windows** |
+|:---:|:---:|:---:|
+| ✅ Supported | ✅ Supported | ✅ Supported |
 
-### Install Python
+</div>
 
-#### 1. Install uv
+**Need help?** Feel free to open an [issue](https://github.com/pollen-robotics/reachy_mini/issues) if you encounter any problem.
 
-Open the *Terminal* application and run the following command (copy-paste it and press enter):
+## First time using the command line? 🖥️
+<details>
+<summary>Click here if you're new to using a terminal/command line</summary>
 
-**Linux and MacOs**
+A **command line** (also called terminal or command prompt) is a text-based interface where you can type commands to interact with your computer. Don't worry—it's simpler than it looks!
 
+**How to open the command line:**
+* **Windows:** Press `Win + R`, type `cmd` or `powershell`, and press Enter
+* **macOS:** Press `Cmd + Space`, type `Terminal`, and press Enter  
+* **Linux:** Press `Ctrl + Alt + T` or search for "Terminal" in your applications
+
+**Basic tips:**
+* Type commands exactly as shown in the instructions
+* Press `Enter` after typing each command to run it
+* You can copy and paste commands (right-click to paste in most command line interfaces)
+
+> **💡 Don't be intimidated!** The command line is just another way to give instructions to your computer. Follow the commands step by step, and you'll be controlling your Reachy Mini in no time!
+
+</details>
+
+## 1. 📋 Prerequisites
+
+<div align="center">
+
+| Tool | Version | Purpose |
+|------|---------|---------|
+| 🐍 **Python** | 3.10 - 3.12 | Run Reachy Mini SDK |
+| 📂 **Git** | Latest | Download source code and apps |
+| 📦 **Git LFS** | Latest | Download model assets |
+
+</div>
+
+### 🐍 Install Python
+
+We'll use `uv` - a fast Python package manager that makes installation simple!
+
+#### Step 1: Install uv
+
+<details>
+<summary>🐧 <strong>Linux</strong> & 🍎 <strong>macOS</strong></summary>
+
+In your terminal, run:
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
-**Windows**
+</details>
 
+<details>
+<summary>🪟 <strong>Windows</strong></summary>
+
+In your terminal, run:
 ```powershell
 powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
 ```
 
-Follow the prompts of the program and let it handle the installation. Once completed, you can verify the installation with :
+</details>
 
+**✅ Verify installation:**
+
+Once the installation is completed, you can check if everything went well with :
 ```bash
 uv --version
 ```
 
-#### 2. Install Python
+#### Step 2: Install Python
 
-In the *Terminal* application, run the following command :
-
+In your terminal, run:
 ```bash
-uv python install 3.XX
+uv python install 3.12
 ```
 
-We suggest replacing `3.XX` by `3.12` to install Python 3.12 which is the latest supported Python version on Reachy Mini.
+> **💡 Tip:** We recommend Python 3.12 as it's the latest supported version for Reachy Mini.
 
 
-### Install Git and Git LFS
+### 📂 Install Git and Git LFS
 
-**Linux**
+<details>
+<summary>🐧 <strong>Linux</strong></summary>
 
-In the _Terminal_ application, run :
+#### Install Git and Git LFS
 
+In your terminal, run:
 ```bash
 sudo apt install git git-lfs
 ```
 
-And initialize Git LFS by running :
+</details>
 
-```bash
-git lfs install
-```
+<details>
+<summary>🍎 <strong>macOS</strong></summary>
 
-**MacOS**
+#### 1. Install Homebrew (if not already installed)
 
-1. Install Homebrew
-
-In the _Terminal_ application, run :
-
+In your terminal, run:
 ```zsh
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 ```
 
-Follow the prompts of the program and let it handle the installation. If you have an Apple Silicon processor (M1, M2,...), Homebrew will prompt you to run this command :
+For Apple Silicon (M1, M2, etc.), you will also be prompted to run :
 
 ```zsh
 echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> ~/.zprofile
 eval "$(/opt/homebrew/bin/brew shellenv)"
 ```
 
-You can finally verify the installation with :
+✅ Verify Homebrew:
 
+Once the installation is completed you can check if it went fine with :
 ```zsh
 brew --version
 ```
 
-2. Install Git and Git LFS
+#### 2. Install Git and Git LFS 
 
-In the _Terminal_ application, run :
-
+In your terminal, run:
 ```zsh
 brew install git git-lfs
 ```
 
-And initialize Git LFS by running :
+</details>
 
-```zsh
-git lfs install
-```
+<details>
+<summary>🪟 <strong>Windows</strong></summary>
 
-**Windows**
+#### Download and install Git for Windows
 
-The easiest way to install Git and Git LFS on Windows is to install [Git for Windows](https://gitforwindows.org).
+<div align="center">
 
-Once the installation is completed, initialize Git LFS by running the following command in the _Terminal_ application :
+[![Download Git for Windows](https://img.shields.io/badge/Download-Git%20for%20Windows-blue?style=for-the-badge&logo=git&logoColor=white)](https://git-scm.com/install/windows)
 
-```Powershell
-git lfs install
-```
+</div>
 
-## 2. Set up a Virtual Environment (Highly Recommended)
+</details>
 
-Modern version of Python require a _Virtual Environment_ to work correctly. This is also a good development practice, as it isolates the Reachy Mini installation and prevents dependency conflicts with your other Python projects.
+**✅ Finalize installation:**
 
-### Create and activate the environment
-
-To create a virtual environment using, open the _Terminal_ application  and run :
+Finally, Git LFS then needs to be initialized with the command :
 
 ```bash
-uv venv my_environment --python 3.XX
+git lfs install
 ```
 
-Where `3.XX` is the installed Pyhton version.
+## 2. 🏠 Set up a Virtual Environment
 
-The virtual environment is then activated by running this command :
+> **Why use a virtual environment?** It keeps your Reachy Mini installation isolated and prevents conflicts with other Python projects. Modern Python development requires this!
 
-**Linux and MacOS**
+### Create the environment
+
+In your terminal, run:
+```bash
+uv venv my_reachy_env --python 3.12
+```
+
+### Activate the environment
+
+<details>
+<summary>🐧 <strong>Linux</strong> & 🍎 <strong>macOS</strong></summary>
+
+In your terminal, run:
 ```bash
 source .venv/bin/activate
 ```
 
-**Windows**
-```Powershell
+</details>
+
+<details>
+<summary>🪟 <strong>Windows</strong></summary>
+
+In your terminal, run:
+```powershell
 .venv\Scripts\activate
 ```
 
-> *Once activated, you should see `(.venv)` appear at the start of your command line.*
+</details>
 
-## 3. Install the Package
+> **✅ Success indicator:** You should see `(.venv)` at the start of your command line prompt!
 
-You can install Reachy Mini from PyPI (standard) or from the source code (for development).
+## 3. 🚀 Install Reachy Mini
 
-### Option A: Install from PyPI (Standard)
-Best for most users who just want to use the robot.
+Choose your installation method:
 
+<div align="center">
+
+| 📦 **PyPI Installation** | 🔧 **Source Installation** |
+|:---:|:---:|
+| **For Everyone** | **For Developers** |
+| Ready to use | Modify the code |
+
+</div>
+
+### 📦 Option A: Install from PyPI
+> **Recommended for most users** - Just want to control your robot? This is for you!
+
+In your terminal, run:
 ```bash
 uv add reachy-mini
 ```
 
-### Option B: Install from Source (For Developers)
+### 🔧 Option B: Install from Source  
+> **For developers** - Want to modify the SDK or contribute? Choose this option!
 
-Best if you want to modify the SDK code.
-
+In your terminal, run:
 ```bash
 git clone https://github.com/pollen-robotics/reachy_mini
 uv sync ./reachy_mini
 ```
 
 ### 🐧 Linux Users: USB Permission Setup
-If you are on Linux and using the robot via USB, you must set up udev rules.
+
+> **Linux + USB connection?** You need to grant access to Reachy Mini's serial port.
+
 <details>
-<summary>Click to see udev instructions</summary>
+<summary>🔧 <strong>Click here to set up USB permissions</strong></summary>
+
+<br>
+
+Run these commands in your terminal:
 
 ```bash
 echo 'SUBSYSTEM=="tty", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="55d3", MODE="0666", GROUP="dialout"
@@ -166,9 +239,14 @@ SUBSYSTEM=="tty", ATTRS{idVendor}=="38fb", ATTRS{idProduct}=="1001", MODE="0666"
 sudo udevadm control --reload-rules && sudo udevadm trigger
 sudo usermod -aG dialout $USER
 ```
-⚠️ Important: You may need to log out and log back in for the group changes to take effect.
+
+> ⚠️ **Important:** Log out and log back in for the changes to take effect!
 
 </details>
+
+## 🎉 Congratulations!
+
+You've successfully installed Reachy Mini! Your robot is ready to come to life.
 
 ## ❓ Troubleshooting
 Encountering an issue? 👉 **[Check the Troubleshooting & FAQ Guide](/docs/troubleshooting.md)**

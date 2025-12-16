@@ -23,6 +23,8 @@ Reachy Mini comes as a kit. Building it is the first step of your journey!
 
 ## 3. 📥 Download Reachy Mini Control
 
+> **🚧 Work in Progress:** The Reachy Mini Control app for Reachy Mini Lite is currently being finalized and will be available in a few days. In the meantime, you can use the [Python SDK](/docs/SDK/readme.md) to control your robot directly.
+
 The **Reachy Mini Control** desktop app is the command center for your robot. It includes the dashboard, visualization tools, and app launcher—no command line required.
 
 <div align="center">
@@ -39,8 +41,6 @@ The **Reachy Mini Control** desktop app is the command center for your robot. It
 * *Alternative:* [GitHub Releases](https://github.com/pollen-robotics/reachy-mini-desktop-app/releases) (For specific versions)
 
 > **✨ Auto-Update:** Once installed, simply open the app. It will automatically check for and install the latest updates for both the App and the Robot's internal software.
-
-> **🔧 Fallback Solution:** If the Reachy Mini Control app doesn't work or fails to start, you can still control your robot using the [Python SDK](/docs/SDK/python-sdk.md) directly.
 
 ## 4. 🕹️ Next Step: Using the Robot
 
