@@ -11,19 +11,31 @@ You have correctly installed Reachy Mini on your computer, see [this guide](/doc
 The **Daemon** is a background service that handles the low-level communication with motors and sensors. It must be running for your code to work.
 
 * **On Reachy Mini (Wireless)**: The daemon is running when the robot is powered on. Ensure your computer and Reachy Mini are on the same network.
-* **On Reachy Mini Lite (USB)**: You have two options
+* **On Reachy Mini Lite (USB)** - You have two options :
   - Start the [desktop application](/docs/platforms/reachy_mini_lite/get_started.md)
-  - Open a terminal and run `reachy-mini-daemon`
-* **For Simulation (No robot needed):** You have two options
+  - Open a terminal and run :
+  ```bash
+  reachy-mini-daemon
+  ```
+* **For Simulation (No robot needed)** - You have two options :
   - Start the [desktop application](/docs/platforms/reachy_mini_lite/get_started.md)
-  - Open a terminal and run `reachy-mini-daemon --sim`
+  - Open a terminal and run 
+  ```bash
+  reachy-mini-daemon --sim
+  ```
 
 
 ✅ **Verification:** Open [http://localhost:8000](http://localhost:8000) in your browser. If you see the Reachy Dashboard, you are ready!
 
 ## 3. Your First Script
 
-Keep the daemon terminal open. In a **new terminal**, create a file named `hello.py`:
+> **⚠️ Important:** Keep the daemon terminal open and running! The daemon must stay active for your robot to work.
+
+### Create your Python script
+
+**Step 1:** Open a new terminal window
+
+**Step 2:** Create a new file called `hello.py` and copy-paste the following code into it:
 
 ```python
 from reachy_mini import ReachyMini
@@ -41,10 +53,14 @@ with ReachyMini() as mini:
     print("Done!")
 ```
 
-Run it:
+**Step 3:** Save the file and run your script:
+
+In your new terminal, run:
 ```bash
 python hello.py
 ```
+
+🎉 **Congratulations!** If everything went well, your robot should now wiggle its antennas!
 
 ## ❓ Troubleshooting
 Encountering an issue? 👉 **[Check the Troubleshooting & FAQ Guide](/docs/troubleshooting.md)**
