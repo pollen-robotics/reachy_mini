@@ -1,3 +1,5 @@
+"""Script to reflash Reachy Mini's motors firmware."""
+
 import argparse
 from importlib.resources import files
 
@@ -29,7 +31,7 @@ def main() -> None:
 
     console = Console()
 
-    config_file_path = files(reachy_mini).joinpath("assets/config/hardware_config.yaml")
+    config_file_path = str(files(reachy_mini).joinpath("assets/config/hardware_config.yaml"))
     config = parse_yaml_config(config_file_path)
     motors = list(config.motors.keys())
     if args.serialport is None:
