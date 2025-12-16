@@ -200,7 +200,12 @@ class SoundDeviceAudio(AudioBase):
                 available = len(chunk)
                 take = min(needed, available)
                 
-                outdata[filled:filled + take] = chunk[:take]
+                # Reshape chunk to match outdata channels
+                # We slice first to get the time segment, then reshape
+                chunk_slice = chunk[:take]
+                chunk_reshaped = self.ensure_chunk_shape(chunk_slice, outdata.shape)
+                
+                outdata[filled:filled + take] = chunk_reshaped
                 filled += take
                 
                 if take < available:
