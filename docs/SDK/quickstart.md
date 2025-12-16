@@ -4,7 +4,9 @@ Follow this guide to get your Reachy Mini up and running, either on real hardwar
 
 ## 1. Prerequisites
 
-You have correctly installed Reachy Mini on your computer, see [this guide](/docs/SDK/installation.md).
+Make sure you have installed Reachy Mini on your computer following our [installation guide](/docs/SDK/installation.md). 
+
+> **💡 Important:** Ensure you have created and activated your Python virtual environment. Remember to activate it every time you open a new terminal!
 
 ## 2. Ensure the Robot Server is running (Daemon)
 
