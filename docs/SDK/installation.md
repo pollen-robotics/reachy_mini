@@ -72,7 +72,7 @@ powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | ie
 
 **✅ Verify installation:**
 
-Once the installation is completed, you can check if everything went well with :
+Once the installation is completed, close your terminal and open a new one. You can check if everything went well with :
 ```bash
 uv --version
 ```
