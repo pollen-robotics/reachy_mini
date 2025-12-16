@@ -31,14 +31,6 @@ FAQ_CONFIG = QaConfig(
     tags_block_label="FAQ-TAGS",
 )
 
-TROUBLESHOOTING_CONFIG = QaConfig(
-    name="troubleshooting",
-    data_dir=ROOT / "docs" / "troubleshooting",
-    default_answers_dir=ROOT / "docs" / "troubleshooting" / "answers",
-    section_block_label="TROUBLESHOOTING",
-    tags_block_label="TROUBLESHOOTING-TAGS",
-)
-
 
 # ---------------------------------------------------------------------------
 # JSON and items loading
@@ -158,64 +150,9 @@ def render_faq_item(item: Dict[str, Any], config: QaConfig = FAQ_CONFIG) -> str:
 <summary><strong>{question}</strong><br>{tags_block}</summary>
 
 {answer}
-{source_html}
 
 </details><br>
 """
-
-    return block
-
-
-def render_troubleshooting_item(
-    item: Dict[str, Any],
-    config: QaConfig = TROUBLESHOOTING_CONFIG,
-) -> str:
-    """Render a troubleshooting item as an HTML details block."""
-    question = item["question"]
-    tags = item.get("tags", [])
-    answer = load_answer_text(item, config)
-    source = item.get("source")
-
-    if tags:
-        tags_html = " ".join(
-            f'<kbd style="'
-            "display:inline-block;"
-            "padding:2px 10px;"
-            "margin:2px 4px;"
-            "background:rgba(220, 53, 69, 0.1);"
-            "color:#dc3545;"
-            "border-radius:12px;"
-            "font-size:11px;"
-            "font-weight:500;"
-            "text-transform:uppercase;"
-            "letter-spacing:0.5px;"
-            "border:none;"
-            '">'
-            f"{tag}"
-            "</kbd>"
-            for tag in tags
-        )
-        tags_block = f"Tags: {tags_html}"
-    else:
-        tags_block = ""
-
-    source_html = ""
-    if source:
-        source_html = f'\n<p style="color:grey"><i>Source: {source}.</i></p>\n'
-
-    block = f"""<details
-  style="
-    margin-top: 8px;
-    border-left: 3px solid #dc3545;
-    padding-left: 12px;
-  "
->
-<summary><b>{question}</b><br>{tags_block}</summary>
-
-{answer}
-{source_html}
-
-</details><br>"""
 
     return block
 

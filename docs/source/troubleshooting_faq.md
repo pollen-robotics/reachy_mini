@@ -2,7 +2,7 @@
 Do not modify the content of the blocks manually.
 If you want to modify or add a block, check ../README.md  -->
 
-# Frequently Asked Questions
+# Troubleshooting & FAQ
 
 Welcome to the Reachy Mini support page. Click on the questions below to reveal the answers.
 
@@ -19,7 +19,7 @@ Welcome to the Reachy Mini support page. Click on the questions below to reveal 
 
 <br>
 
-## 🧭 1. Getting Started
+## 1. 🚀 Getting Started & Assembly
 
 ### 1.1 Assembly
 
@@ -35,9 +35,6 @@ Welcome to the Reachy Mini support page. Click on the questions below to reveal 
 <summary><strong>How long does assembly usually take?</strong><br>Tags: <kbd style="display:inline-block;padding:2px 10px;margin:2px 4px;background:rgba(59,176,209,0.1);color:#3bb0d1;border-radius:12px;font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:0.5px;border:none;">ASSEMBLY</kbd> <kbd style="display:inline-block;padding:2px 10px;margin:2px 4px;background:rgba(59,176,209,0.1);color:#3bb0d1;border-radius:12px;font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:0.5px;border:none;">HARDWARE</kbd></summary>
 
 Most testers report <b>1.5–2 hours</b>, with some up to <b>4 hours</b> depending on experience.
-
-<p style="color:grey"><i>Source: Hardware doc.</i></p>
-
 
 </details><br>
 
@@ -57,9 +54,6 @@ it comes with a printed user guide, and you also have access to a video and the 
 Video for Reachy Mini [BETA](https://www.youtube.com/watch?v=_r0cHySFbeY), LITE, WIRELESS
 
 Digital Assembly Guide for Reachy Mini [BETA](https://huggingface.co/spaces/pollen-robotics/Reachy_Mini_Assembly_Guide), LITE, WIRELESS
-
-<p style="color:grey"><i>Source: Hardware doc.</i></p>
-
 
 </details><br>
 
@@ -89,9 +83,6 @@ Digital Assembly Guide for Reachy Mini [BETA](https://huggingface.co/spaces/poll
 5. Enter your Wi-Fi network credentials (SSID and password) and click "Connect".
 6. Wait a few moments for Reachy Mini to connect to your Wi-Fi network. The access point will disappear once connected. If the connection fails, Reachy Mini will restart the access point, and you can try again.
 
-<p style="color:grey"><i>Source: API doc.</i></p>
-
-
 </details><br>
 
 
@@ -106,9 +97,6 @@ Digital Assembly Guide for Reachy Mini [BETA](https://huggingface.co/spaces/poll
 
 Helps prevent package conflicts during SDK installation.
 
-<p style="color:grey"><i>Source: developers referencing `.venv` in troubleshooting threads.</i></p>
-
-
 </details><br>
 
 
@@ -122,9 +110,6 @@ Helps prevent package conflicts during SDK installation.
 <summary><strong>How to solve Chromadb / GStreamer / OpenCV installation issues?</strong><br>Tags: <kbd style="display:inline-block;padding:2px 10px;margin:2px 4px;background:rgba(59,176,209,0.1);color:#3bb0d1;border-radius:12px;font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:0.5px;border:none;">AUDIO</kbd> <kbd style="display:inline-block;padding:2px 10px;margin:2px 4px;background:rgba(59,176,209,0.1);color:#3bb0d1;border-radius:12px;font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:0.5px;border:none;">VISION</kbd> <kbd style="display:inline-block;padding:2px 10px;margin:2px 4px;background:rgba(59,176,209,0.1);color:#3bb0d1;border-radius:12px;font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:0.5px;border:none;">DEPENDENCIES</kbd></summary>
 
 Users solved these by rebuilding their environment and reinstalling missing system dependencies.
-
-<p style="color:grey"><i>Source: API doc.</i></p>
-
 
 </details><br>
 
@@ -146,9 +131,6 @@ Users solved these by rebuilding their environment and reinstalling missing syst
 
 Sure! You can install apps directly from your Dashboard if they’re native, or add them to your favourites if they’re web-based.
 
-<p style="color:grey"><i>Source: User guide.</i></p>
-
-
 </details><br>
 
 
@@ -169,9 +151,6 @@ Sure! You can install apps directly from your Dashboard if they’re native, or 
 
 One of our beta tester built a TurboWarp/Scratch 3.0 extension for controlling Reachy Mini: 
 [reachy_mini_turbowarp](https://github.com/iizukak/reachy_mini_turbowarp)
-
-<p style="color:grey"><i>Source: API doc.</i></p>
-
 
 </details><br>
 
@@ -196,9 +175,6 @@ One of our beta tester built a TurboWarp/Scratch 3.0 extension for controlling R
 
 Update the Reachy Mini SDK to the latest version. Earlier versions had a bug preventing smooth installation.
 
-<p style="color:grey"><i>Source: Community forum.</i></p>
-
-
 </details><br>
 
 
@@ -212,9 +188,6 @@ Update the Reachy Mini SDK to the latest version. Earlier versions had a bug pre
 <summary><strong>Where can I see examples of apps?</strong><br>Tags: <kbd style="display:inline-block;padding:2px 10px;margin:2px 4px;background:rgba(59,176,209,0.1);color:#3bb0d1;border-radius:12px;font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:0.5px;border:none;">APPS</kbd> <kbd style="display:inline-block;padding:2px 10px;margin:2px 4px;background:rgba(59,176,209,0.1);color:#3bb0d1;border-radius:12px;font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:0.5px;border:none;">EXAMPLES</kbd></summary>
 
 Browse [spaces on Hugging Face](https://huggingface.co/spaces?q=reachy+mini) to discover all the apps developed for Reachy Mini. You can also find them directly through the Reachy Mini dashboard. The ones marked with a “certified” tag are those that have been tested and approved by the team.
-
-<p style="color:grey"><i>Source: Hugging Face spaces.</i></p>
-
 
 </details><br>
 
@@ -251,9 +224,6 @@ class MyApp(ReachyMiniApp):
 ```
 
 - `stop_event` is a threading.Event indicating when the app should stop.
-
-<p style="color:grey"><i>Source: API documentation.</i></p>
-
 
 </details><br>
 
@@ -296,9 +266,6 @@ Or install as a package:
 pip install -e my_app_name/
 ```
 
-<p style="color:grey"><i>Source: API documentation.</i></p>
-
-
 </details><br>
 
 
@@ -312,9 +279,6 @@ pip install -e my_app_name/
 <summary><strong>How do I add custom dance moves?</strong><br>Tags: <kbd style="display:inline-block;padding:2px 10px;margin:2px 4px;background:rgba(59,176,209,0.1);color:#3bb0d1;border-radius:12px;font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:0.5px;border:none;">APPS</kbd> <kbd style="display:inline-block;padding:2px 10px;margin:2px 4px;background:rgba(59,176,209,0.1);color:#3bb0d1;border-radius:12px;font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:0.5px;border:none;">MOVEMENT</kbd> <kbd style="display:inline-block;padding:2px 10px;margin:2px 4px;background:rgba(59,176,209,0.1);color:#3bb0d1;border-radius:12px;font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:0.5px;border:none;">ANIMATION</kbd></summary>
 
 Add sequences in `reachy_mini/app/collection/dance.py`.
-
-<p style="color:grey"><i>Source: API documentation.</i></p>
-
 
 </details><br>
 
@@ -330,9 +294,6 @@ Add sequences in `reachy_mini/app/collection/dance.py`.
 
 Yes, but requires custom audio processing (e.g., Librosa). Streaming audio tempo detection is more challenging than offline analysis.
 
-<p style="color:grey"><i>Source: fallback authors (audio analysis discussion).</i></p>
-
-
 </details><br>
 
 
@@ -346,9 +307,6 @@ Yes, but requires custom audio processing (e.g., Librosa). Streaming audio tempo
 <summary><strong>Does the SDK support local AI actions (OpenAI-style)?</strong><br>Tags: <kbd style="display:inline-block;padding:2px 10px;margin:2px 4px;background:rgba(59,176,209,0.1);color:#3bb0d1;border-radius:12px;font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:0.5px;border:none;">AI</kbd> <kbd style="display:inline-block;padding:2px 10px;margin:2px 4px;background:rgba(59,176,209,0.1);color:#3bb0d1;border-radius:12px;font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:0.5px;border:none;">SDK</kbd> <kbd style="display:inline-block;padding:2px 10px;margin:2px 4px;background:rgba(59,176,209,0.1);color:#3bb0d1;border-radius:12px;font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:0.5px;border:none;">APPS</kbd></summary>
 
 Yes, users built local OpenAI-compatible integrations.
-
-<p style="color:grey"><i>Source: fallback community authors.</i></p>
-
 
 </details><br>
 
@@ -369,9 +327,6 @@ Yes, users built local OpenAI-compatible integrations.
 <summary><strong>Is there a simulation environment?</strong><br>Tags: <kbd style="display:inline-block;padding:2px 10px;margin:2px 4px;background:rgba(59,176,209,0.1);color:#3bb0d1;border-radius:12px;font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:0.5px;border:none;">SIMULATION</kbd> <kbd style="display:inline-block;padding:2px 10px;margin:2px 4px;background:rgba(59,176,209,0.1);color:#3bb0d1;border-radius:12px;font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:0.5px;border:none;">SDK</kbd></summary>
 
 Mentioned in discussions; models were being worked on but not yet official during beta.
-
-<p style="color:grey"><i>Source: Community discussion.</i></p>
-
 
 </details><br>
 
@@ -406,9 +361,6 @@ with ReachyMini() as mini:
 - `mm=True` means translation arguments are in millimeters.
 - The head frame is located at the base of the head.
 
-<p style="color:grey"><i>Source: API documentation.</i></p>
-
-
 </details><br>
 
 
@@ -431,9 +383,6 @@ mini.goto_target(head=pose, duration=2.0)
 
 - `degrees=True` means angles are given in degrees.
 - You can combine translation (x, y, z) and orientation (roll, pitch, yaw).
-
-<p style="color:grey"><i>Source: API documentation.</i></p>
-
 
 </details><br>
 
@@ -467,9 +416,6 @@ with ReachyMini() as mini:
 - `antennas` is a 2-element array in radians [right, left].
 - `body_yaw` controls body rotation.
 
-<p style="color:grey"><i>Source: API documentation.</i></p>
-
-
 </details><br>
 
 
@@ -501,9 +447,6 @@ mini.set_target(head=create_head_pose(y=y, mm=True))
 
 ```
 
-<p style="color:grey"><i>Source: API documentation.</i></p>
-
-
 </details><br>
 
 
@@ -531,9 +474,6 @@ mini.goto_target(
 To compare methods, run the example:
 
 - `examples/goto_interpolation_playground.py`
-
-<p style="color:grey"><i>Source: API documentation.</i></p>
-
 
 </details><br>
 
@@ -564,9 +504,6 @@ with ReachyMini() as mini:
 
 - `initial_goto_duration` smoothly moves the robot to the starting pose of the move.
 - Datasets are hosted on Hugging Face (e.g. emotions / dances libraries).
-
-<p style="color:grey"><i>Source: API documentation.</i></p>
-
 
 </details><br>
 
@@ -600,9 +537,6 @@ Tools to record and upload datasets:
 
 - `reachy_mini_toolbox/tools/moves`
 
-<p style="color:grey"><i>Source: API documentation.</i></p>
-
-
 </details><br>
 
 
@@ -632,9 +566,6 @@ Limits:
 
 If commanded pose exceeds these limits, the robot will clamp to the nearest safe pose (no exception is thrown).
 
-<p style="color:grey"><i>Source: API documentation.</i></p>
-
-
 </details><br>
 
 
@@ -662,9 +593,6 @@ head_pose = reachy.get_current_head_pose()
 print("current head pose", head_pose)
 ```
 
-<p style="color:grey"><i>Source: API documentation.</i></p>
-
-
 </details><br>
 
 
@@ -679,9 +607,6 @@ print("current head pose", head_pose)
 
 Users requested this information; no final spec was posted in chatlogs.
 
-<p style="color:grey"><i>Source: No direct data.</i></p>
-
-
 </details><br>
 
 
@@ -695,9 +620,6 @@ Users requested this information; no final spec was posted in chatlogs.
 <summary><strong>How do I reset motors?</strong><br>Tags: <kbd style="display:inline-block;padding:2px 10px;margin:2px 4px;background:rgba(59,176,209,0.1);color:#3bb0d1;border-radius:12px;font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:0.5px;border:none;">MOTORS</kbd> <kbd style="display:inline-block;padding:2px 10px;margin:2px 4px;background:rgba(59,176,209,0.1);color:#3bb0d1;border-radius:12px;font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:0.5px;border:none;">RESET</kbd></summary>
 
 This is now done automatically when the daemon starts, so restarting the daemon should be enough.
-
-<p style="color:grey"><i>Source: API documentation.</i></p>
-
 
 </details><br>
 
@@ -724,9 +646,6 @@ This is now done automatically when the daemon starts, so restarting the daemon 
     Motors ON but compliant. Robot feels soft, does not resist; good for teaching by demonstration.
     
     Used by the gravity compensation example.
-
-<p style="color:grey"><i>Source: API documentation.</i></p>
-
 
 </details><br>
 
@@ -758,9 +677,6 @@ with ReachyMini() as mini:
     # sample is a numpy array as returned by sounddevice
 ```
 
-<p style="color:grey"><i>Source: API documentation.</i></p>
-
-
 </details><br>
 
 
@@ -780,9 +696,6 @@ with ReachyMini() as mini:
     # chunk is a numpy array of audio samples
     mini.media.push_audio_sample(chunk)
 ```
-
-<p style="color:grey"><i>Source: API documentation.</i></p>
-
 
 </details><br>
 
@@ -805,9 +718,6 @@ with ReachyMini() as mini:
 
 Several testers reported excellent indoor performance, even in office lighting.
 
-<p style="color:grey"><i>Source: Users in chatlog, fallback authors.</i></p>
-
-
 </details><br>
 
 
@@ -828,9 +738,6 @@ with ReachyMini() as mini:
     frame = mini.media.get_frame()
     # frame is a numpy array compatible with OpenCV
 ```
-
-<p style="color:grey"><i>Source: API documentation.</i></p>
-
 
 </details><br>
 
@@ -854,9 +761,6 @@ Then run your code with `--backend gstreamer`.
 
 You must have GStreamer binaries installed on your system. You can define custom pipelines (see `camera_gstreamer.py` in the repository for an example).
 
-<p style="color:grey"><i>Source: API documentation.</i></p>
-
-
 </details><br>
 
 
@@ -879,9 +783,6 @@ You must have GStreamer binaries installed on your system. You can define custom
 
 Users asked for CAD files; no direct confirmation was provided in chatlogs.
 
-<p style="color:grey"><i>Source: No direct data.</i></p>
-
-
 </details><br>
 
 
@@ -895,9 +796,6 @@ Users asked for CAD files; no direct confirmation was provided in chatlogs.
 <summary><strong>Can I modify the appearance (custom skins)?</strong><br>Tags: <kbd style="display:inline-block;padding:2px 10px;margin:2px 4px;background:rgba(59,176,209,0.1);color:#3bb0d1;border-radius:12px;font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:0.5px;border:none;">CUSTOMIZATION</kbd> <kbd style="display:inline-block;padding:2px 10px;margin:2px 4px;background:rgba(59,176,209,0.1);color:#3bb0d1;border-radius:12px;font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:0.5px;border:none;">SKINS</kbd></summary>
 
 Community members shared custom builds, including a Star Wars astromech variant.
-
-<p style="color:grey"><i>Source: elgrorg (fallback).</i></p>
-
 
 </details><br>
 
@@ -921,9 +819,6 @@ Community members shared custom builds, including a Star Wars astromech variant.
 
 Yes, users implemented wake-up behaviors and audio-reactive motions in the Radio App.
 
-<p style="color:grey"><i>Source: Fallback users.</i></p>
-
-
 </details><br>
 
 
@@ -938,9 +833,6 @@ Yes, users implemented wake-up behaviors and audio-reactive motions in the Radio
 
 Yes, with GStreamer + OpenCV, users achieved real-time face detection successfully.
 
-<p style="color:grey"><i>Source: Fallback user who posted “Reachy seeing me for the first time ❤️”.</i></p>
-
-
 </details><br>
 
 
@@ -954,9 +846,6 @@ Yes, with GStreamer + OpenCV, users achieved real-time face detection successful
 <summary><strong>Can I create a personalized behavior model?</strong><br>Tags: <kbd style="display:inline-block;padding:2px 10px;margin:2px 4px;background:rgba(59,176,209,0.1);color:#3bb0d1;border-radius:12px;font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:0.5px;border:none;">AI</kbd> <kbd style="display:inline-block;padding:2px 10px;margin:2px 4px;background:rgba(59,176,209,0.1);color:#3bb0d1;border-radius:12px;font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:0.5px;border:none;">PERSONALIZATION</kbd></summary>
 
 Some users suggested discriminator-based personalization (“Make Reachy yours”).
-
-<p style="color:grey"><i>Source: Fallback author.</i></p>
-
 
 </details><br>
 
@@ -979,9 +868,6 @@ You provide a 2D point in image coordinates:
 
 You can also specify the duration of the movement, like in `goto_target`.
 
-<p style="color:grey"><i>Source: API documentation.</i></p>
-
-
 </details><br>
 
 
@@ -997,9 +883,6 @@ You can also specify the duration of the movement, like in `goto_target`.
 Use `look_at_world`, which takes a 3D point in the robot world frame.
 
 The world frame is illustrated in the docs (world_frame image).
-
-<p style="color:grey"><i>Source: API documentation.</i></p>
-
 
 </details><br>
 
@@ -1027,9 +910,6 @@ Recommended workflow:
 - Publish as a Hugging Face Space (web based and added as a favourite on your dashboard) or Python package (directly installable via the dashboard).
 - See the example space: [`reachy_mini_app_example`](https://huggingface.co/spaces/pollen-robotics/reachy_mini_app_example).
 
-<p style="color:grey"><i>Source: Community forum.</i></p>
-
-
 </details><br>
 
 
@@ -1043,9 +923,6 @@ Recommended workflow:
 <summary><strong>How can I submit improvements to the SDK?</strong><br>Tags: <kbd style="display:inline-block;padding:2px 10px;margin:2px 4px;background:rgba(59,176,209,0.1);color:#3bb0d1;border-radius:12px;font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:0.5px;border:none;">SDK</kbd> <kbd style="display:inline-block;padding:2px 10px;margin:2px 4px;background:rgba(59,176,209,0.1);color:#3bb0d1;border-radius:12px;font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:0.5px;border:none;">CONTRIBUTING</kbd></summary>
 
 Via pull requests on our [GitHub](https://github.com/pollen-robotics/reachy_mini/blob/develop/README.md).
-
-<p style="color:grey"><i>Source: Documentation guidelines.</i></p>
-
 
 </details><br>
 
@@ -1067,9 +944,6 @@ They help you:
 
 - Record moves (via `start_recording` / `stop_recording`).
 - Upload them to the Hugging Face Hub (for example: `reachy-mini-emotions-library`, `reachy-mini-dances-library`).
-
-<p style="color:grey"><i>Source: Code repository.</i></p>
-
 
 </details><br>
 
@@ -1093,9 +967,6 @@ They help you:
 
 TODO
 
-<p style="color:grey"><i>Source: Support.</i></p>
-
-
 </details><br>
 
 
@@ -1108,10 +979,7 @@ TODO
 >
 <summary><strong>I received my package but its severely damage.</strong><br>Tags: <kbd style="display:inline-block;padding:2px 10px;margin:2px 4px;background:rgba(59,176,209,0.1);color:#3bb0d1;border-radius:12px;font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:0.5px;border:none;">DELIVERY</kbd> <kbd style="display:inline-block;padding:2px 10px;margin:2px 4px;background:rgba(59,176,209,0.1);color:#3bb0d1;border-radius:12px;font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:0.5px;border:none;">SHIPPING</kbd> <kbd style="display:inline-block;padding:2px 10px;margin:2px 4px;background:rgba(59,176,209,0.1);color:#3bb0d1;border-radius:12px;font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:0.5px;border:none;">POST_SALES</kbd></summary>
 
-TODO
-
-<p style="color:grey"><i>Source: Support.</i></p>
-
+If the damage is caused during shipment, we will claim with the transporter and then provide related compensation or solutions to the clients.
 
 </details><br>
 
@@ -1127,9 +995,6 @@ TODO
 
 TODO
 
-<p style="color:grey"><i>Source: Support.</i></p>
-
-
 </details><br>
 
 
@@ -1144,9 +1009,6 @@ TODO
 
 TODO
 
-<p style="color:grey"><i>Source: Support.</i></p>
-
-
 </details><br>
 
 
@@ -1159,16 +1021,15 @@ TODO
 >
 <summary><strong>Warranty: My unit is malfunctioning / broken part ?</strong><br>Tags: <kbd style="display:inline-block;padding:2px 10px;margin:2px 4px;background:rgba(59,176,209,0.1);color:#3bb0d1;border-radius:12px;font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:0.5px;border:none;">WARRANTY</kbd> <kbd style="display:inline-block;padding:2px 10px;margin:2px 4px;background:rgba(59,176,209,0.1);color:#3bb0d1;border-radius:12px;font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:0.5px;border:none;">POST_SALES</kbd></summary>
 
-TODO
-
-<p style="color:grey"><i>Source: Support.</i></p>
-
+Our after-sale team will involve in to confirm if it's the hardware problem and if it's under warranty, if it is, we will either repair or replace the parts, depending on the situation.
 
 </details><br>
 
 
 <!-- FAQ:8_post_sales:post_sales:end -->
 
+
+---
 
 ## 💬 Still stuck?
 

@@ -11,7 +11,7 @@ from qa_utils import (
     replace_section_block,
 )
 
-FAQ_FILE = ROOT / "docs" / "source" / "faq.mdx"
+FAQ_FILE = ROOT / "docs" / "source" / "troubleshooting_faq.md"
 
 
 def load_section(folder_name: str, section_name: str) -> list[dict]:
