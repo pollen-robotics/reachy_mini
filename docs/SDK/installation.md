@@ -231,8 +231,8 @@ uv add reachy-mini
 
 In your terminal, run:
 ```bash
-git clone https://github.com/pollen-robotics/reachy_mini
-uv sync ./reachy_mini
+git clone https://github.com/pollen-robotics/reachy_mini && cd reachy_mini
+uv sync
 ```
 
 ### 🐧 Linux Users: USB Permission Setup
