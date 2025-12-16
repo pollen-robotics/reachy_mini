@@ -262,7 +262,7 @@ class MujocoBackend(Backend):
                     self.get_present_antenna_joint_positions()
                 )
                 
-                if self.kinematics_engine != "Placo":
+                if self.kinematics_engine == "Placo":
                     # Update the Placo kinematics model to recompute passive joints
                     self.update_head_kinematics_model(
                         self.current_head_joint_positions,
