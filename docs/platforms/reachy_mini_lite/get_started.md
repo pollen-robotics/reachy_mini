@@ -40,6 +40,8 @@ The **Reachy Mini Control** desktop app is the command center for your robot. It
 
 > **✨ Auto-Update:** Once installed, simply open the app. It will automatically check for and install the latest updates for both the App and the Robot's internal software.
 
+> **🔧 Fallback Solution:** If the Reachy Mini Control app doesn't work or fails to start, you can still control your robot using the [Python SDK](/docs/SDK/python-sdk.md) directly.
+
 ## 4. 🕹️ Next Step: Using the Robot
 
 Now that everything is connected and installed, you are ready to play!
