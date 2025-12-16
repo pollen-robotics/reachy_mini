@@ -325,7 +325,7 @@ This appears if you connect to the robot but don't consume the video frames, cau
 <details>
 <summary><strong>My package is damaged or missing.</strong></summary>
 
-Contact **Seeed Studio** (the sender) immediately with photos.
+Contact **Pollen Robotics** team immediately. You can send us an email to sales@pollen-robotics.com with photos of the package, receipt number or invoice number and your full name. We will then check with the transport company and keep you updated.
 
 </details>
 
@@ -333,14 +333,14 @@ Contact **Seeed Studio** (the sender) immediately with photos.
 <summary><strong>Refund Policy</strong></summary>
 
 * **Before shipping:** Contact `sales@pollen-robotics.com` for a 100% refund.
-* **After shipping:** You have 30 days. Contact sales with proof of delivery and invoice.
+* **After shipping:** You have 30 days to return your package. Contact sales (sales@pollen-robotics.com) with proof of delivery and invoice or receipt number. If you have comments / feedback, please let us know, our focus is building a robot the open-source community enjoys building. 
 
 </details>
 
 <details>
 <summary><strong>Warranty</strong></summary>
 
-If a part is broken/malfunctioning, Seeed's after-sales team will determine if it is a hardware defect covered by warranty. They will provide repair or replacement parts.
+If a part is broken/malfunctioning, Pollen's after-sales team will determine if it is a hardware defect covered by warranty. Then, our manufacturer will provide repair or replacement parts. You can send us an email to sales@pollen-robotics.com with photos of the issue, receipt number or invoice number and your full name.
 
 </details>
 
