@@ -64,9 +64,17 @@ See the [Reachy Mini Wireless guide](/docs/platforms/reachy_mini/get_started.md)
 <summary><strong>The dashboard at http://localhost:8000 doesn't work.</strong></summary>
 
 Perform these checks:
-1.  **Virtual Environment:** Ensure you are running inside your `.venv`.
-2.  **SDK Update:** Ensure you have the latest version: `pip install -U reachy-mini`.
-3.  **Daemon:** Make sure `reachy-mini-daemon` is running in a terminal.
+1.  **Virtual Environment:** Ensure you are running inside your virtual environment (`.venv`, `reachy_mini_env`,...).
+2.  **SDK Update:** Ensure you have the latest version.
+- With `pip`, run :
+```bash
+pip install -U reachy-mini
+```
+- With `uv`, run :
+```bash
+uv add reachy-mini
+```
+3.  **Daemon:** Make sure the daemon `reachy-mini-daemon` is running in a terminal.
 
 </details>
 
@@ -76,6 +84,18 @@ Perform these checks:
 Yes. The daemon provides a REST API (FastAPI) and WebSocket support.
 * **Docs:** `http://localhost:8000/docs` (available when daemon is running).
 * **Features:** Get state, Move joints, Control daemon.
+
+</details>
+
+<details>
+<summary><strong>All apps installations fail on Windows !</strong></summary>
+
+It might be related to unsufficient rights to create symlinks in Windows. You can set the environment variable `HF_HUB_DISABLE_SYMLINKS_WARNING` to 1 to remove the warnings that cause the failure.
+
+In a terminal, run :
+```powershell
+set HF_HUB_DISABLE_SYMLINKS_WARNING=1
+```
 
 </details>
 
