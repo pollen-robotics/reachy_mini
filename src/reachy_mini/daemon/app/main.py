@@ -75,6 +75,8 @@ class Args:
     fastapi_host: str = "0.0.0.0"
     fastapi_port: int = 8000
 
+    zenoh_port: int = 7447
+
     localhost_only: bool | None = None
 
 
@@ -105,6 +107,7 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
                     check_collision=args.check_collision,
                     wake_up_on_start=args.wake_up_on_start,
                     localhost_only=localhost_only,
+                    zenoh_port=args.zenoh_port,
                     hardware_config_filepath=args.hardware_config_filepath,
                 )
             yield

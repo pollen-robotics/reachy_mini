@@ -23,7 +23,9 @@ from reachy_mini.io.protocol import AnyTaskRequest, TaskProgress, TaskRequest
 class ZenohClient(AbstractClient):
     """Zenoh client for Reachy Mini."""
 
-    def __init__(self, prefix: str, localhost_only: bool = True):
+    def __init__(
+        self, prefix: str, localhost_only: bool = True, zenoh_port: int = 7447
+    ) -> None:
         """Initialize the Zenoh client.
 
         Args:
@@ -32,11 +34,15 @@ class ZenohClient(AbstractClient):
 
         """
         self.prefix = prefix
+        self.zenoh_port = zenoh_port
 
         if localhost_only:
             c = zenoh.Config.from_json5(
                 json.dumps(
-                    {"mode": "client", "connect": {"endpoints": ["tcp/localhost:7447"]}}
+                    {
+                        "mode": "client",
+                        "connect": {"endpoints": [f"tcp/localhost:{self.zenoh_port}"]},
+                    }
                 )
             )
         else:

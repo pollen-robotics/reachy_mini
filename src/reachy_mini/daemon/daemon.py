@@ -105,6 +105,7 @@ class Daemon:
         use_audio: bool = True,
         websocket_uri: Optional[str] = None,
         stream_media: bool = False,
+        zenoh_port: int = 7447,
         hardware_config_filepath: str | None = None,
     ) -> "DaemonState":
         """Start the Reachy Mini daemon.
@@ -176,6 +177,7 @@ class Daemon:
             prefix=self.robot_name,
             backend=self.backend,
             localhost_only=localhost_only,
+            zenoh_port=zenoh_port,
         )
         self.zenoh_server.start()
         self._thread_publish_status = Thread(target=self._publish_status, daemon=True)

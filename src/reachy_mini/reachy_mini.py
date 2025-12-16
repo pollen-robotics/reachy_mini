@@ -70,6 +70,7 @@ class ReachyMini:
         automatic_body_yaw: bool = True,
         log_level: str = "INFO",
         media_backend: str = "default",
+        zenoh_port: int = 7447,
     ) -> None:
         """Initialize the Reachy Mini robot.
 
@@ -90,7 +91,7 @@ class ReachyMini:
         self.logger.setLevel(log_level)
         self.robot_name = robot_name
         daemon_check(spawn_daemon, use_sim)
-        self.client = ZenohClient(robot_name, localhost_only)
+        self.client = ZenohClient(robot_name, localhost_only, zenoh_port)
         self.client.wait_for_connection(timeout=timeout)
         self.set_automatic_body_yaw(automatic_body_yaw)
         self._last_head_pose: Optional[npt.NDArray[np.float64]] = None
@@ -109,11 +110,17 @@ class ReachyMini:
         # When connecting to a remote robot, check if streaming is available
         if not localhost_only and media_backend == "default":
             daemon_status = self.client.get_status()
-            if daemon_status.get("wireless_version") and daemon_status.get("stream_enabled"):
-                self.logger.info("Remote connection detected with streaming enabled - using WebRTC backend.")
+            if daemon_status.get("wireless_version") and daemon_status.get(
+                "stream_enabled"
+            ):
+                self.logger.info(
+                    "Remote connection detected with streaming enabled - using WebRTC backend."
+                )
                 media_backend = "webrtc"
             else:
-                self.logger.info("Remote connection detected without streaming - disabling media. Start daemon with '--stream' flag to enable WebRTC.")
+                self.logger.info(
+                    "Remote connection detected without streaming - disabling media. Start daemon with '--stream' flag to enable WebRTC."
+                )
                 media_backend = "no_media"
 
         self.media_manager = self._configure_mediamanager(media_backend, log_level)
@@ -124,7 +131,7 @@ class ReachyMini:
         The client is disconnected explicitly to avoid a thread pending issue.
 
         """
-        if hasattr(self, 'client'):
+        if hasattr(self, "client"):
             self.client.disconnect()
 
     def __enter__(self) -> "ReachyMini":

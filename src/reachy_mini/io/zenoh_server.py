@@ -28,12 +28,18 @@ from reachy_mini.io.protocol import (
 class ZenohServer(AbstractServer):
     """Zenoh server for Reachy Mini."""
 
-    def __init__(self, prefix: str, backend: Backend, localhost_only: bool = True):
+    def __init__(
+        self,
+        prefix: str,
+        backend: Backend,
+        localhost_only: bool = True,
+        zenoh_port: int = 7447,
+    ) -> None:
         """Initialize the Zenoh server."""
         self.prefix = prefix
         self.localhost_only = localhost_only
         self.backend = backend
-
+        self.zenoh_port = zenoh_port
         self._lock = threading.Lock()
         self._cmd_event = threading.Event()
 
@@ -44,7 +50,7 @@ class ZenohServer(AbstractServer):
                 json.dumps(
                     {
                         "listen": {
-                            "endpoints": ["tcp/localhost:7447"],
+                            "endpoints": [f"tcp/localhost:{self.zenoh_port}"],
                         },
                         "scouting": {
                             "multicast": {
@@ -56,7 +62,7 @@ class ZenohServer(AbstractServer):
                         },
                         "connect": {
                             "endpoints": [
-                                "tcp/localhost:7447",
+                                f"tcp/localhost:{self.zenoh_port}",
                             ],
                         },
                     }
@@ -68,17 +74,15 @@ class ZenohServer(AbstractServer):
                     {
                         # Listen on all interfaces → reachable on LAN/Wi-Fi
                         "listen": {
-                            "endpoints": ["tcp/0.0.0.0:7447"],
+                            "endpoints": [f"tcp/0.0.0.0:{self.zenoh_port}"],
                         },
                         # Allow standard discovery
                         "scouting": {
-                            "multicast": { "enabled": True },
-                            "gossip": { "enabled": True },
+                            "multicast": {"enabled": True},
+                            "gossip": {"enabled": True},
                         },
                         # No forced connect target; router will accept incoming sessions
-                        "connect": {
-                            "endpoints": []
-                        }
+                        "connect": {"endpoints": []},
                     }
                 )
             )
