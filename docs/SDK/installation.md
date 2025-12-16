@@ -81,7 +81,7 @@ uv --version
 
 In your terminal, run:
 ```bash
-uv python install 3.12
+uv python install 3.12 --default
 ```
 
 > **💡 Tip:** We recommend Python 3.12 as it's the latest supported version for Reachy Mini.
