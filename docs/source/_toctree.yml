@@ -10,9 +10,9 @@
   - local: reachy_mini/usage_wireless
     title: Usage
   - local: reachy_mini/advanced_rpi_setup
-    title: Advanced - Manual Raspberry Pi Installation
+    title: (Advanced) Manual Raspberry Pi Installation
   - local: reachy_mini/reflash_the_rpi_ISO
-    title: Advanced - Reflash the ISO
+    title: (Advanced) Reflash the ISO
   title: Reachy Mini (Wireless)
 - sections:
   - local: reachy_mini_lite/get_started_lite
