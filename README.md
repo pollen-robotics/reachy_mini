@@ -42,6 +42,7 @@ Control your Reachy Mini with Python to create movements, build apps, and connec
 You will find the Installation guide, Quickstart, and API Reference in the SDK documentation.
 
 [**👉 Go to SDK Documentation**](docs/SDK/readme.md)
+[**🤗 Share your app with the community**](**https://huggingface.co/blog/pollen-robotics/make-and-publish-your-reachy-mini-apps**)
 
 <br>
 
@@ -68,7 +69,7 @@ Reachy Mini is a collaborative project between [Pollen Robotics](https://www.pol
 
 * **Join the Community:** We use [Discord](https://discord.gg/2bAhWfXme9) to share our moments with Reachy, build apps together, and get help.
 * **Found a bug?** Open an issue on this repository.
-* **Created an App?** Share it on [Hugging Face Spaces](https://huggingface.co/spaces?q=reachy_mini).
+* **Created an App?** [Share it with the community](https://huggingface.co/blog/pollen-robotics/make-and-publish-your-reachy-mini-apps).
 
 ## License
 
