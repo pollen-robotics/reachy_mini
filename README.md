@@ -7,9 +7,11 @@
 
 It removes the hardware complexity, allowing you to focus on what matters: building intelligent agents that can see, hear, and interact with the physical world.
 
+🛒 [**Buy Reachy Mini**](https://www.hf.co/reachy-mini/)
+
 [![Reachy Mini Hello](/docs/assets/reachy_mini_hello.gif)](https://www.pollen-robotics.com/reachy-mini/)
 
-## 🚀 Getting Started
+## ⚡️ Build and start your own robot
 
 **Choose your platform to access the specific guide:**
 
@@ -17,6 +19,8 @@ It removes the hardware complexity, allowing you to focus on what matters: build
 | :---: | :---: | :---: |
 | The full autonomous experience.<br>Raspberry Pi 4 + Battery + WiFi. | The developer version.<br>USB connection to your computer. | No hardware required.<br>Prototype in MuJoCo. |
 | 👉 [**Go to Wireless Guide**](docs/platforms/reachy_mini/get_started.md) | 👉 [**Go to Lite Guide**](docs/platforms/reachy_mini_lite/get_started.md) | 👉 [**Go to Simulation**](docs/platforms/simulation/get_started.md) |
+
+
 
 > ⚡ **Pro tip:** Install [uv](https://docs.astral.sh/uv/getting-started/installation/) for 10-100x faster app installations (auto-detected, falls back to `pip`).
 
@@ -30,20 +34,36 @@ Reachy Mini comes with an app store powered by Hugging Face Spaces. You can inst
 * **📻 [Radio](https://huggingface.co/spaces/pollen-robotics/reachy_mini_radio):** Listen to the radio with Reachy Mini !
 * **👋 [Hand Tracker](https://huggingface.co/spaces/pollen-robotics/hand_tracker_v2):** The robot follows your hand movements in real-time.
 
-👉 [**Browse all apps on Hugging Face**](https://pollen-robotics-reachy-mini-landing-page.hf.space/#/apps)
+👉 [**Browse all apps on Hugging Face**](https://hf.co/reachy-mini/#/apps)
 
 <br>
 
-## 🐍 Software & SDK
+## 🚀 Getting Started with Reachy Mini SDK
 
-Once your robot (or simulation) is running, the code is the same!
-Control your Reachy Mini with Python to create movements, build apps, and connect AI models.
+### Quick Look
+Control your robot in just **a few lines of code**:
 
-You will find the Installation guide, Quickstart, and API Reference in the SDK documentation.
+```python
+from reachy_mini import ReachyMini
+from reachy_mini.utils import create_head_pose
 
-👉[**Go to SDK Documentation**](docs/SDK/readme.md)
+with ReachyMini() as mini:
+    # Look up and tilt head
+    mini.goto_target(
+        head=create_head_pose(z=10, roll=15, degrees=True, mm=True),
+        duration=1.0
+    )
+```
 
-🤗[**Share your app with the community**](https://huggingface.co/blog/pollen-robotics/make-and-publish-your-reachy-mini-apps)
+### User guides
+* **[Installation](installation.md)**: 5 minutes to set up your computer
+* **[Quickstart Guide](quickstart.md)**: Run your first behavior on Reachy Mini
+* **[Python SDK](python-sdk.md)**: Learn to move, see, speak, and hear.
+* **[AI Integrations](integration.md)**: Connect LLMs, build Apps, and publish to Hugging Face.
+* **[Core Concepts](core-concept.md)**: Architecture, coordinate systems, and safety limits.
+* 🤗[**Share your app with the community**](https://huggingface.co/blog/pollen-robotics/make-and-publish-your-reachy-mini-apps)
+* 📂 [**Browse the Examples Folder**](examples)
+
 
 <br>
 
@@ -53,8 +73,6 @@ Reachy Mini robots are sold as kits and generally take **2 to 3 hours** to assem
 
 * **Reachy Mini (Wireless):** Runs onboard (RPi 4), autonomous, includes IMU. [See specs](docs/platforms/reachy_mini/hardware.md).
 * **Reachy Mini Lite:** Runs on your PC, powered via wall outlet. [See specs](docs/platforms/reachy_mini_lite/hardware.md).
-
-🛒 [**Buy Reachy Mini**](https://www.hf.co/reachy-mini/)
 
 <br>
 
@@ -66,11 +84,9 @@ Encountering an issue? 👉 **[Check the Troubleshooting & FAQ Guide](/docs/trou
 
 ## 🤝 Community & Contributing
 
-Reachy Mini is a collaborative project between [Pollen Robotics](https://www.pollen-robotics.com) and [Hugging Face](https://huggingface.co/).
-
-* **Join the Community:** We use [Discord](https://discord.gg/2bAhWfXme9) to share our moments with Reachy, build apps together, and get help.
+* **Join the Community:** Join [Discord](https://discord.gg/2bAhWfXme9) to share your moments with Reachy, build apps together, and get help.
 * **Found a bug?** Open an issue on this repository.
-* **Created an App?** [Share it with the community](https://huggingface.co/blog/pollen-robotics/make-and-publish-your-reachy-mini-apps).
+
 
 ## License
 
