@@ -41,14 +41,14 @@ S2 = DigitalOutputDevice(7)
 S3 = DigitalOutputDevice(1)
 
 
-def get_channel_binary(channel) -> List[int]:
+def get_channel_binary(channel: int) -> List[int]:
     """Convert channel number (0-8) to 4-bit binary representation."""
     assert channel in np.arange(9), "Channel must be between 0 and 8"
     bits = [int(b) for b in f"{channel:04b}"]  # 4-bit binary
     return bits[::-1]  # flip the order
 
 
-def select_channel(channel: int):
+def select_channel(channel: int) -> None:
     """Select a channel on the multiplexer."""
     bits = get_channel_binary(channel)
     S0.on() if bits[0] else S0.off()
@@ -57,7 +57,7 @@ def select_channel(channel: int):
     S3.on() if bits[3] else S3.off()
 
 
-def main():
+def main() -> None:
     """Scan all channels of the multiplexer to find motors in factory default state, and set them up one by one."""
     config = parse_yaml_config(CONFIG_FILE_PATH)
     motor_name_to_id = {m: config.motors[m].id for m in config.motors}

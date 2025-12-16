@@ -33,6 +33,10 @@ from reachy_mini.daemon.app.routers import (
     volume,
 )
 from reachy_mini.daemon.daemon import Daemon
+from reachy_mini.media.audio_utils import (
+    check_reachymini_asoundrc,
+    write_asoundrc_to_home,
+)
 
 
 @dataclass
@@ -445,6 +449,18 @@ def main() -> None:
         )
         logging.getLogger().addHandler(file_handler)
         logging.getLogger().setLevel(args.log_level)
+
+    if args.wireless_version:
+        if check_reachymini_asoundrc():
+            logging.getLogger().info(
+                "~/.asoundrc correctly configured for Reachy Mini Audio."
+            )
+        else:
+            logging.getLogger().warning(
+                "~/.asoundrc not found or not correctly configured for Reachy Mini Audio. "
+                "Creating a new one."
+            )
+            write_asoundrc_to_home()
 
     run_app(Args(**vars(args)))
 
