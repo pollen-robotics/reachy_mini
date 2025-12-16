@@ -16,7 +16,7 @@ It removes the hardware complexity, allowing you to focus on what matters: build
 | **🤖 Reachy Mini (Wireless)** | **🔌 Reachy Mini Lite** | **💻 Simulation** |
 | :---: | :---: | :---: |
 | The full autonomous experience.<br>Raspberry Pi 4 + Battery + WiFi. | The developer version.<br>USB connection to your computer. | No hardware required.<br>Prototype in MuJoCo. |
-| [**👉 Go to Wireless Guide**](docs/platforms/reachy_mini/get_started.md) | [**👉 Go to Lite Guide**](docs/platforms/reachy_mini_lite/get_started.md) | [**👉 Go to Simulation**](docs/platforms/simulation/get_started.md) |
+| 👉 [**Go to Wireless Guide**](docs/platforms/reachy_mini/get_started.md) | 👉 [**Go to Lite Guide**](docs/platforms/reachy_mini_lite/get_started.md) | 👉 [**Go to Simulation**](docs/platforms/simulation/get_started.md) |
 
 > ⚡ **Pro tip:** Install [uv](https://docs.astral.sh/uv/getting-started/installation/) for 10-100x faster app installations (auto-detected, falls back to `pip`).
 
@@ -30,7 +30,7 @@ Reachy Mini comes with an app store powered by Hugging Face Spaces. You can inst
 * **📻 [Radio](https://huggingface.co/spaces/pollen-robotics/reachy_mini_radio):** Listen to the radio with Reachy Mini !
 * **👋 [Hand Tracker](https://huggingface.co/spaces/pollen-robotics/hand_tracker_v2):** The robot follows your hand movements in real-time.
 
-[**👉 Browse all apps on Hugging Face**](https://pollen-robotics-reachy-mini-landing-page.hf.space/#/apps)
+👉 [**Browse all apps on Hugging Face**](https://pollen-robotics-reachy-mini-landing-page.hf.space/#/apps)
 
 <br>
 
@@ -41,8 +41,9 @@ Control your Reachy Mini with Python to create movements, build apps, and connec
 
 You will find the Installation guide, Quickstart, and API Reference in the SDK documentation.
 
-[**👉 Go to SDK Documentation**](docs/SDK/readme.md)
-[**🤗 Share your app with the community**](**https://huggingface.co/blog/pollen-robotics/make-and-publish-your-reachy-mini-apps**)
+👉[**Go to SDK Documentation**](docs/SDK/readme.md)
+
+🤗[**Share your app with the community**](https://huggingface.co/blog/pollen-robotics/make-and-publish-your-reachy-mini-apps)
 
 <br>
 
@@ -53,7 +54,7 @@ Reachy Mini robots are sold as kits and generally take **2 to 3 hours** to assem
 * **Reachy Mini (Wireless):** Runs onboard (RPi 4), autonomous, includes IMU. [See specs](docs/platforms/reachy_mini/hardware.md).
 * **Reachy Mini Lite:** Runs on your PC, powered via wall outlet. [See specs](docs/platforms/reachy_mini_lite/hardware.md).
 
-[**🛒 Buy Reachy Mini**](https://www.hf.co/reachy-mini/)
+🛒 [**Buy Reachy Mini**](https://www.hf.co/reachy-mini/)
 
 <br>
 
