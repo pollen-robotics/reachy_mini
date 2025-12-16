@@ -173,7 +173,7 @@ uv venv my_reachy_env --python 3.12
 
 In your terminal, run:
 ```bash
-source .venv/bin/activate
+source my_reachy_env/bin/activate
 ```
 
 </details>
@@ -181,14 +181,29 @@ source .venv/bin/activate
 <details>
 <summary>🪟 <strong>Windows</strong></summary>
 
-In your terminal, run:
+> **⚠️ First-time setup:** Before you can activate your virtual environment, Windows needs permission to run scripts. You only need to do this once!
+
+**Step 1:** Open terminal as Administrator
+- Press `Win + R`, type `powershell`
+- Right-click on "Windows PowerShell" and select "Run as administrator"
+
+**Step 2:** Enable script execution
+
+In the administrator terminal, run:
 ```powershell
-.venv\Scripts\activate
+powershell Set-ExecutionPolicy RemoteSigned
+```
+
+**Step 3:** Close the administrator terminal and open a regular terminal
+
+Now you can activate your virtual environment by running:
+```powershell
+my_reachy_env\Scripts\activate
 ```
 
 </details>
 
-> **✅ Success indicator:** You should see `(.venv)` at the start of your command line prompt!
+> **✅ Success indicator:** You should see `(my_reachy_env)` at the start of your command line prompt!
 
 ## 3. 🚀 Install Reachy Mini
 
