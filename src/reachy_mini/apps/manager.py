@@ -68,18 +68,18 @@ class AppManager:
         if self.is_app_running():
             await self.stop_current_app()
 
-    def _kill_process_tree(self, pid: int) -> None:
-        """Kill a process and all its children recursively."""
-        try:
-            parent = psutil.Process(pid)
-            children = parent.children(recursive=True)
-            for child in children:
-                try:
-                    child.kill()
-                except psutil.NoSuchProcess:
-                    pass
-        except psutil.NoSuchProcess:
-            pass
+    # def _kill_process_tree(self, pid: int) -> None:
+    #     """Kill a process and all its children recursively."""
+    #     try:
+    #         parent = psutil.Process(pid)
+    #         children = parent.children(recursive=True)
+    #         for child in children:
+    #             try:
+    #                 child.kill()
+    #             except psutil.NoSuchProcess:
+    #                 pass
+    #     except psutil.NoSuchProcess:
+    #         pass
 
     # App lifecycle management
     # Only one app can be started at a time for now
@@ -114,6 +114,7 @@ class AppManager:
             module_name,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
+            start_new_session=True,
         )
 
         # Create status and monitor task
@@ -202,21 +203,24 @@ class AppManager:
             try:
                 if os.name == "posix":
                     # Unix/Linux/Mac: send SIGINT signal
-                    os.kill(process.pid, signal.SIGINT)
+                    os.killpg(process.pid, signal.SIGINT)
                 else:
                     # Windows: use CTRL_C_EVENT or fallback to terminate
                     process.terminate()
 
                 # Wait for graceful shutdown
                 await asyncio.wait_for(process.wait(), timeout=timeout)
-                self.logger.getChild("runner").info("App stopped successfully")
+                self.logger.getChild("runner").info("App stopped successfully ito \n")
             except asyncio.TimeoutError:
                 # Force kill if timeout expires - also kill child processes
                 self.logger.getChild("runner").warning(
                     "App did not stop within timeout, forcing termination"
                 )
-                self._kill_process_tree(process.pid)
-                process.kill()
+                # self._kill_process_tree(process.pid)
+                if os.name == "posix":
+                    os.killpg(process.pid, signal.SIGKILL)
+                else:
+                    process.kill()
                 await process.wait()
 
         # Cancel and wait for monitor task
