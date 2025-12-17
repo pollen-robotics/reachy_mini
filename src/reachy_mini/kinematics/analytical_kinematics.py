@@ -41,26 +41,10 @@ class AnalyticalKinematics:
         self.head_z_offset = data["head_z_offset"]
 
         self.kin = ReachyMiniRustKinematics(
-            #data["motor_arm_length"], data["rod_length"]
             json_file_path = data_path
         )
 
         self.start_body_yaw = 0.0
-
-        
-        self.motors = data["motors"]
-        self.T_world_motor = []
-        for motor in self.motors:
-            T_w_motor = np.linalg.inv(motor["T_motor_world"])
-            # self.kin.add_branch(
-            #     motor["branch_position"],
-            #     T_w_motor,  # type: ignore[arg-type]
-            #     1 if motor["solution"] else -1,
-            # )
-            self.T_world_motor.append(T_w_motor)
-            
-        self.motor_arms_length = data["motor_arm_length"]
-        self.rod_length = data["rod_length"]
 
         # TODO test with init head pose instead of sleep pose
         sleep_head_pose = SLEEP_HEAD_POSE.copy()
@@ -71,17 +55,6 @@ class AnalyticalKinematics:
         # self.logger.setLevel(logging.WARNING)
         self.current_joints = np.zeros(7)   # inital joint angles
         self.passive_joints = np.zeros(21)  # inital passive joint angles
-        
-        self.T_head_xl330 = np.array(data["passive_joint_kinematics"]["t_xl330_in_platform_frame"])
-        passive_orientation_offset = data["passive_joint_kinematics"]["orientation_offset_in_servo_arm_frame"]
-        # Cache passive correction rotations
-        self.passive_corrections = [R.from_euler("xyz", offset).as_matrix() for offset in passive_orientation_offset]
-        self.stewart_rod_direction_in_passive = np.array(data["passive_joint_kinematics"]["stewart_rod_direction_in_passive_frame"]) 
-        # self.kin.init_passive_kinematics(
-        #     self.T_head_xl330,
-        #     passive_orientation_offset,
-        #     self.stewart_rod_direction_in_passive
-        #)
 
     def ik(
         self,
