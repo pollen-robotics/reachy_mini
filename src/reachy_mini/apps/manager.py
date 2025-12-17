@@ -210,7 +210,7 @@ class AppManager:
 
                 # Wait for graceful shutdown
                 await asyncio.wait_for(process.wait(), timeout=timeout)
-                self.logger.getChild("runner").info("App stopped successfully ito \n")
+                self.logger.getChild("runner").info("App stopped successfully")
             except asyncio.TimeoutError:
                 # Force kill if timeout expires - also kill child processes
                 self.logger.getChild("runner").warning(
