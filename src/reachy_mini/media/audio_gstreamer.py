@@ -45,7 +45,8 @@ class GStreamerAudio(AudioBase):
         self._thread_bus_calls = Thread(target=lambda: self._loop.run(), daemon=True)
         self._thread_bus_calls.start()
 
-        self._id_audio_card = get_respeaker_card_number()
+        #self._id_audio_card = get_respeaker_card_number()
+        
 
         self._pipeline_record = Gst.Pipeline.new("audio_recorder")
         self._appsink_audio: Optional[GstApp] = None
@@ -73,15 +74,21 @@ class GStreamerAudio(AudioBase):
         self._appsink_audio.set_property("max-buffers", 200)
 
         audiosrc: Optional[Gst.Element] = None
-        if self._id_audio_card == -1:
+
+        id_audio_card = self._get_audio_device("Source")
+
+        if id_audio_card is None:
             audiosrc = Gst.ElementFactory.make("autoaudiosrc")  # use default mic
+        elif os.name == "nt":
+            audiosrc = Gst.ElementFactory.make("wasapi2src")
+            audiosrc.set_property("device", id_audio_card)
         elif has_reachymini_asoundrc():
             # reachy mini wireless has a preconfigured asoundrc
             audiosrc = Gst.ElementFactory.make("alsasrc")
             audiosrc.set_property("device", "reachymini_audio_src")
         else:
             audiosrc = Gst.ElementFactory.make("alsasrc")
-            audiosrc.set_property("device", f"hw:{self._id_audio_card},0")
+            audiosrc.set_property("device", f"hw:{id_audio_card},0")
 
         queue = Gst.ElementFactory.make("queue")
         audioconvert = Gst.ElementFactory.make("audioconvert")
@@ -136,15 +143,21 @@ class GStreamerAudio(AudioBase):
         audioresample = Gst.ElementFactory.make("audioresample")
 
         audiosink: Optional[Gst.Element] = None
-        if self._id_audio_card == -1:
+
+        id_audio_card = self._get_audio_device("Sink")
+
+        if id_audio_card is None:
             audiosink = Gst.ElementFactory.make("autoaudiosink")  # use default speaker
         elif has_reachymini_asoundrc():
             # reachy mini wireless has a preconfigured asoundrc
             audiosink = Gst.ElementFactory.make("alsasink")
             audiosink.set_property("device", "reachymini_audio_sink")
+        elif os.name == "nt":
+            audiosink = Gst.ElementFactory.make("wasapi2sink")
+            audiosink.set_property("device", id_audio_card)
         else:
             audiosink = Gst.ElementFactory.make("alsasink")
-            audiosink.set_property("device", f"hw:{self._id_audio_card},0")
+            audiosink.set_property("device", f"hw:{id_audio_card},0")
 
         pipeline.add(audiosink)
         pipeline.add(self._appsrc)
@@ -282,3 +295,40 @@ class GStreamerAudio(AudioBase):
             self.logger.warning(
                 "AppSrc is not initialized. Call start_playing() first."
             )
+
+    def _get_audio_device(self, device_type: str = "Source") -> Optional[str]:
+        """Use Gst.DeviceMonitor to find the pipeire audio card.
+
+        Returns the device ID of the found audio card, None if not.
+        """
+        monitor = Gst.DeviceMonitor()
+        monitor.add_filter(f"Audio/{device_type}")
+        monitor.start()
+
+        snd_card_name = "Reachy Mini Audio"
+        try:
+            devices = monitor.get_devices()
+            for device in devices:
+                name = device.get_display_name()
+                device_props = device.get_properties()
+
+                if snd_card_name in name:
+                    if device_props and device_props.has_field("object.serial"):
+                        serial = device_props.get_string("object.serial")
+                        self._logger.debug(f"Found audio input device with serial {serial}")
+                        #monitor.stop()
+                        return str(serial)
+                    elif os.name == "nt" and device_props.has_field("device.api") and device_props.get_string("device.api") == "wasapi2":
+                        print("Windows OS detected")
+                        print(dir(device))
+                        print(device_props.get_string("device.id"))
+                        self.logger.debug(f"Found audio input device {name} for Windows")
+                        return str(name)
+                    
+            #monitor.stop()
+            self.logger.warning("No source audio card found.")
+        except Exception as e:
+            self.logger.error(f"Error while getting audio input device: {e}")
+        finally:
+            monitor.stop()
+        return None
