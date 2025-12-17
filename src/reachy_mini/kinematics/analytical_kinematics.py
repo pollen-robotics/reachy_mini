@@ -27,39 +27,6 @@ SLEEP_HEAD_POSE = np.array(
     ]
 )
 
-# XL330 frame pose in the head frame
-# exracted from URDF
-T_HEAD_XL_330 = np.array([
-    [ 0.4822, -0.7068, -0.5177,  0.0206],
-    [ 0.1766, -0.5003,  0.8476, -0.0218],
-    [-0.8581, -0.5001, -0.1164, -0.    ],
-    [ 0.    ,  0.    ,  0.    ,  1.    ]])
-
-# passive joint orientation offsets 
-# extracted from URDF
-PASSIVE_ORIENTATION_OFFSET = \
-[
-    [-0.13754,-0.0882156, 2.10349],    
-    [-3.14159, 5.37396e-16, -3.14159],
-    [0.373569, 0.0882156, -1.0381], 
-    [-0.0860846, 0.0882156, 1.0381],
-    [0.123977, 0.0882156, -1.0381],
-    [3.0613, 0.0882156, 1.0381],
-    [3.14159, 2.10388e-17, 4.15523e-17]
-]
-
-# stewart rod direction in passive frame
-# exracted from URDF
-STEWART_ROD_DIR_IN_PASSIVE_FRAME = np.array([
-    [1, 0, 0], # rod 1
-    [ 0.50606941, -0.85796418, -0.08826792],# rod 2
-    [-1, 0, 0], # rod 3 
-    [-1, 0, 0], # ....
-    [-1, 0, 0],
-    [-1, 0, 0]]
-)
-
-
 class AnalyticalKinematics:
     """Reachy Mini Analytical Kinematics class, implemented in Rust with python bindings."""
 
@@ -74,20 +41,22 @@ class AnalyticalKinematics:
         self.head_z_offset = data["head_z_offset"]
 
         self.kin = ReachyMiniRustKinematics(
-            data["motor_arm_length"], data["rod_length"]
+            #data["motor_arm_length"], data["rod_length"]
+            json_file_path = data_path
         )
 
         self.start_body_yaw = 0.0
 
+        
         self.motors = data["motors"]
         self.T_world_motor = []
         for motor in self.motors:
             T_w_motor = np.linalg.inv(motor["T_motor_world"])
-            self.kin.add_branch(
-                motor["branch_position"],
-                T_w_motor,  # type: ignore[arg-type]
-                1 if motor["solution"] else -1,
-            )
+            # self.kin.add_branch(
+            #     motor["branch_position"],
+            #     T_w_motor,  # type: ignore[arg-type]
+            #     1 if motor["solution"] else -1,
+            # )
             self.T_world_motor.append(T_w_motor)
             
         self.motor_arms_length = data["motor_arm_length"]
@@ -100,13 +69,19 @@ class AnalyticalKinematics:
 
         self.logger = logging.getLogger(__name__)
         # self.logger.setLevel(logging.WARNING)
-        
-        
         self.current_joints = np.zeros(7)   # inital joint angles
         self.passive_joints = np.zeros(21)  # inital passive joint angles
-        # Cache passive correction rotations (computed once in __init__ would be even better)
-        self.passive_corrections = [R.from_euler("xyz", offset).as_matrix() for offset in PASSIVE_ORIENTATION_OFFSET]
         
+        self.T_head_xl330 = np.array(data["passive_joint_kinematics"]["t_xl330_in_platform_frame"])
+        passive_orientation_offset = data["passive_joint_kinematics"]["orientation_offset_in_servo_arm_frame"]
+        # Cache passive correction rotations
+        self.passive_corrections = [R.from_euler("xyz", offset).as_matrix() for offset in passive_orientation_offset]
+        self.stewart_rod_direction_in_passive = np.array(data["passive_joint_kinematics"]["stewart_rod_direction_in_passive_frame"]) 
+        # self.kin.init_passive_kinematics(
+        #     self.T_head_xl330,
+        #     passive_orientation_offset,
+        #     self.stewart_rod_direction_in_passive
+        #)
 
     def ik(
         self,
@@ -247,80 +222,6 @@ class AnalyticalKinematics:
             joints = self.current_joints
         if T_head is None:
             T_head = self.fk(joints, no_iterations=10)
-        
-        _pose = T_head.copy()
-        _pose[:3, 3][2] += self.head_z_offset
-    
-        # Inverse rotation: rotate pose around Z by -body_yaw to undo the previous rotation
-        # Faster: direct Z-rotation without constructing a Rotation object
-        cos_yaw = np.cos(joints[0])
-        sin_yaw = np.sin(joints[0])
-        R_z = np.array([[cos_yaw, -sin_yaw, 0.0], [sin_yaw, cos_yaw, 0.0], [0.0, 0.0, 1.0]])
-        _pose = np.block([[R_z.T, np.zeros((3, 1))], [0.0, 0.0, 0.0, 1.0]]) @ _pose 
-               
-    
-        # Pre-allocate output array for better performance
-        passive_joints = np.zeros(21)
-    
-        # Pre-compute common transforms to avoid redundant creation
-        T_motor_servo_arm = np.eye(4)
-        T_motor_servo_arm[:3, 3][0] = self.motor_arms_length
-                
-        # for each branch 
-        #  - calculate the branch position on the platform in the world frame
-        #  - calculate the servo arm joint position in the world frame
-        #  - calculate the passive joint angles based on the two positions (roll, pitch, yaw)
-        for i, motor in enumerate(self.motors):
-            # Use direct position extraction instead of creating intermediate transforms
-            branch_pos_world = _pose[:3, :3] @ motor["branch_position"] + _pose[:3, 3]
             
-            # Compute servo rotation directly
-            # rotating around Z axis
-            cos_z = np.cos(joints[i+1])
-            sin_z = np.sin(joints[i+1])
-            R_servo = np.array([[cos_z, -sin_z, 0], [sin_z, cos_z, 0], [0, 0, 1]])
-            # Compute world servo arm position more efficiently
-            T_world_motor = self.T_world_motor[i]
-            servo_pos_local = R_servo @ T_motor_servo_arm[:3, 3]
-            P_world_servo_arm = T_world_motor[:3, :3] @ servo_pos_local + T_world_motor[:3, 3]
-            
-            # Apply passive correction to orientation
-            R_world_servo = T_world_motor[:3, :3] @ R_servo @ self.passive_corrections[i]
-            
-            # calculate the euler angles between the two world frame positions
-            # imagining a straight line from the servo arm to the branch
-            vec_servo_to_branch = branch_pos_world - P_world_servo_arm
-            # Use direct matrix transpose instead of creating Rotation object for inverse
-            vec_servo_to_branch_in_servo = R_world_servo.T @ vec_servo_to_branch
-            
-            # rod direction in the passive frame
-            rod_dir = STEWART_ROD_DIR_IN_PASSIVE_FRAME[i]
-            # should contain exactly the same value as the rod length
-            norm_vec = np.linalg.norm(vec_servo_to_branch_in_servo)
-            straight_line_dir = vec_servo_to_branch_in_servo / norm_vec
-            R_servo_branch, _ = R.align_vectors(np.array([straight_line_dir]), np.array([rod_dir]))
-            # Use fast Euler extraction instead of Rotation.as_euler()
-            euler = R_servo_branch.as_euler("XYZ")
-            
-            # Store directly in pre-allocated array instead of extend
-            passive_joints[i*3:i*3+3] = euler
-            
-        # 7th passive joint 
-        # Compute 7th passive joint only for last branch
-        # Calculate transformed position and rotation more efficiently
-        R_servo_branch_mat = R_servo_branch.as_matrix()
-        
-        # Head XL330 target orientation
-        R_head_xl330 = _pose[:3, :3] @ T_HEAD_XL_330[:3, :3]
-        
-        # Current rod orientation with correction
-        R_rod_current = R_world_servo @ R_servo_branch_mat @ self.passive_corrections[6]
-        
-        # Compute relative rotation
-        R_dof = R_rod_current.T @ R_head_xl330
-        # Use fast Euler extraction
-        euler_7 = R.from_matrix(R_dof).as_euler("XYZ")
-        passive_joints[18:21] = euler_7
-                
-        self.passive_joints = passive_joints
+        self.passive_joints = self.kin.calculate_passive_joints(joints, T_head)
         return self.passive_joints
