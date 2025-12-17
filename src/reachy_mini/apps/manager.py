@@ -180,7 +180,7 @@ class AppManager:
 
         return self.current_app.status
 
-    async def stop_current_app(self, timeout: float | None = 20.0) -> None:
+    async def stop_current_app(self, timeout: float | None = 3.0) -> None:
         """Stop the current app subprocess."""
         if self.current_app is None or self.current_app.status.state in (
             AppState.DONE,
