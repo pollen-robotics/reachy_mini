@@ -12,7 +12,6 @@ import numpy as np
 import numpy.typing as npt
 
 from reachy_mini.media.audio_utils import (
-    get_respeaker_card_number,
     has_reachymini_asoundrc,
 )
 from reachy_mini.utils.constants import ASSETS_ROOT_PATH
@@ -45,8 +44,7 @@ class GStreamerAudio(AudioBase):
         self._thread_bus_calls = Thread(target=lambda: self._loop.run(), daemon=True)
         self._thread_bus_calls.start()
 
-        #self._id_audio_card = get_respeaker_card_number()
-        
+        # self._id_audio_card = get_respeaker_card_number()
 
         self._pipeline_record = Gst.Pipeline.new("audio_recorder")
         self._appsink_audio: Optional[GstApp] = None
@@ -87,8 +85,8 @@ class GStreamerAudio(AudioBase):
             audiosrc = Gst.ElementFactory.make("alsasrc")
             audiosrc.set_property("device", "reachymini_audio_src")
         else:
-            audiosrc = Gst.ElementFactory.make("alsasrc")
-            audiosrc.set_property("device", f"hw:{id_audio_card},0")
+            audiosrc = Gst.ElementFactory.make("pulsesrc")
+            audiosrc.set_property("device", f"{id_audio_card}")
 
         queue = Gst.ElementFactory.make("queue")
         audioconvert = Gst.ElementFactory.make("audioconvert")
@@ -156,8 +154,8 @@ class GStreamerAudio(AudioBase):
             audiosink = Gst.ElementFactory.make("wasapi2sink")
             audiosink.set_property("device", id_audio_card)
         else:
-            audiosink = Gst.ElementFactory.make("alsasink")
-            audiosink.set_property("device", f"hw:{id_audio_card},0")
+            audiosink = Gst.ElementFactory.make("pulsesink")
+            audiosink.set_property("device", f"{id_audio_card}")
 
         pipeline.add(audiosink)
         pipeline.add(self._appsrc)
@@ -313,19 +311,22 @@ class GStreamerAudio(AudioBase):
                 device_props = device.get_properties()
 
                 if snd_card_name in name:
-                    if device_props and device_props.has_field("object.serial"):
-                        serial = device_props.get_string("object.serial")
-                        self._logger.debug(f"Found audio input device with serial {serial}")
-                        #monitor.stop()
-                        return str(serial)
-                    elif os.name == "nt" and device_props.has_field("device.api") and device_props.get_string("device.api") == "wasapi2":
-                        print("Windows OS detected")
-                        print(dir(device))
-                        print(device_props.get_string("device.id"))
-                        self.logger.debug(f"Found audio input device {name} for Windows")
+                    if device_props and device_props.has_field("node.name"):
+                        node_name = device_props.get_string("node.name")
+                        self.logger.debug(
+                            f"Found audio input device with node name {node_name}"
+                        )
+                        return str(node_name)
+                    elif (
+                        os.name == "nt"
+                        and device_props.has_field("device.api")
+                        and device_props.get_string("device.api") == "wasapi2"
+                    ):
+                        self.logger.debug(
+                            f"Found audio input device {name} for Windows"
+                        )
                         return str(name)
-                    
-            #monitor.stop()
+
             self.logger.warning("No source audio card found.")
         except Exception as e:
             self.logger.error(f"Error while getting audio input device: {e}")
