@@ -23,6 +23,14 @@ You do not need to install them.
 </details>
 
 <details>
+<summary><strong>Image is dark on the Lite version</strong></summary>
+
+- set auto-exposure-priority=1 using uvc-util on macOS
+
+</details>
+
+<details>
+
 <summary><strong>Low audio volume</strong></summary>
 
 - Update your robot to version 1.2.3 or later
@@ -54,7 +62,7 @@ It is easy to fix by following this guide:
 ##  Most commons questions
 
 <details>
-<summary><strong>Overload Error</strong></summary>
+<summary><strong>Motor blinking red or Overload Error</strong></summary>
 
 If you get "Motor hardware errors: ['Overload Error']" a few second after starting the robot for the first time.
 
