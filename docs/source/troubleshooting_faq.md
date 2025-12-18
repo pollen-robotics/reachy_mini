@@ -218,8 +218,15 @@ It’s fixed! You can now enjoy all the features of Reachy Mini again. Head over
 5. Enter your Wi-Fi network credentials (SSID and password) and click "Connect".
 6. Wait a few moments for Reachy Mini to connect to your Wi-Fi network. The access point will disappear once connected. If the connection fails, Reachy Mini will restart the access point, and you can try again.
 
-</details><br>
+</details> <br>
 
+<details>
+<summary><strong>How do I reset the Wi-Fi hotspot?</strong>
+<br>Tags: <kbd>WiFi</kbd> <kbd>TROUBLESHOOTING</kbd> <kbd>WIRELESS</kbd></summary>
+
+If you need to reset the robot's Wi-Fi hotspot (for example, if you can't connect or want to change the network), follow the instructions in the [Wi-Fi Reset Guide](/docs/platforms/reachy_mini/reset.md).
+
+</details> <br>
 
 <details>
 <summary>
