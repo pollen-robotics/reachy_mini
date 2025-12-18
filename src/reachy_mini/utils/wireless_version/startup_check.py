@@ -5,7 +5,6 @@ If any files are not owned by pollen, it will recursively change ownership.
 """
 
 import logging
-import os
 import pwd
 import subprocess
 from pathlib import Path
@@ -24,7 +23,6 @@ def check_and_fix_venvs_ownership(
         custom_logger: Optional logger to use instead of the module logger
 
     """
-    log = custom_logger if custom_logger is not None else logger
     try:
         # Get pollen user's UID
         pollen_uid = pwd.getpwnam(USER).pw_uid
