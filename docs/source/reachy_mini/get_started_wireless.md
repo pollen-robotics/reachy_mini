@@ -10,12 +10,14 @@ Reachy Mini comes as a kit. Building it is the first step of your journey!
 * **Tools:** Everything is included in the box.
 * **Instructions:** We strongly recommend following the video guide alongside the manual.
 
-> **💡 Pro Tip:** We strongly recommend having the **Online Guide** or the **assembly video** open alongside the paper booklet (see below). The online version includes short video extracts for every step, which makes the assembly much easier to understand.
+> [!TIP]
+> **💡 Pro Tip:**  
+> We strongly recommend having the **Online Guide** or the **assembly video** open alongside the paper booklet (see below).
+> The online version includes short video extracts for every step, which makes the assembly much easier to understand.
 
 | **📖 Interactive Digital Guide** | **📺 Full Assembly Video** |
 | :---: | :---: |
-| [![Assembly Guide](/docs/assets/digital_assembly_guide_preview_mini.jpg)](https://huggingface.co/spaces/pollen-robotics/Reachy_Mini_Assembly_Guide)<br>[**Open Step-by-Step Guide**](https://huggingface.co/spaces/pollen-robotics/Reachy_Mini_Assembly_Guide)<br>*(Includes short video loops)* | [![Watch on YouTube](https://img.youtube.com/vi/WeKKdnuXca4/maxresdefault.jpg)](https://www.youtube.com/watch?v=WeKKdnuXca4)<br>[**Watch on YouTube**](https://www.youtube.com/watch?v=WeKKdnuXca4)<br>*(Video with sections for each step)* |
-
+| <a href="https://huggingface.co/spaces/pollen-robotics/Reachy_Mini_Assembly_Guide"><img src="https://github.com/pollen-robotics/reachy_mini/raw/develop/docs/assets/digital_assembly_guide_preview_mini.jpg" style="width:100%; object-fit:contain;" /></a><br>[**Open Step-by-Step Guide**](https://huggingface.co/spaces/pollen-robotics/Reachy_Mini_Assembly_Guide)<br>*(Includes short video loops)* | <a href="https://www.youtube.com/watch?v=WeKKdnuXca4"><img src="https://img.youtube.com/vi/WeKKdnuXca4/maxresdefault.jpg" style="width:100%; object-fit:contain;" /></a><br>[**Watch on YouTube**](https://www.youtube.com/watch?v=WeKKdnuXca4)<br>*(Video with sections for each step)* |
 
 ## 2. 🛜 First Boot & Wi-Fi Configuration
 
@@ -26,7 +28,7 @@ Once assembled, you need to connect the robot to your Wi-Fi network.
     * **Password:** `reachy-mini`
     * *Or scan the QR Code:*
     
-    ![QR-Code reachy-mini-ap](/docs/assets/qrcode-ap.png)
+    ![QR-Code reachy-mini-ap](https://github.com/pollen-robotics/reachy_mini/raw/develop/docs/assets/qrcode-ap.png)
 
 3.  **Configure Wi-Fi:**
     * Open your browser and go to: **[http://reachy-mini.local:8000/settings](http://reachy-mini.local:8000/settings)**.
@@ -46,7 +48,7 @@ Before going further, it is highly recommended to update your robot to the lates
 
 Now that your robot is online and up to date, you can start controlling it!
 
-👉 **[Go to the Usage Guide](usage.md)** to learn how to:
+👉 **[Go to the Usage Guide](usage_wireless.md)** to learn how to:
 * Access the **Dashboard**.
 * Install and run **Apps** (like Conversation or Games).
 * Program your Reachy with **Python**.
@@ -54,7 +56,7 @@ Now that your robot is online and up to date, you can start controlling it!
 
 ## ❓ Troubleshooting
 
-Encountering an issue? 👉 **[Check the Troubleshooting & FAQ Guide](/docs/troubleshooting.md)**
+Encountering an issue? 👉 **[Check the Troubleshooting & FAQ Guide](../troubleshooting.md)**
 
 ## Advanced / Expert Mode
 

@@ -23,12 +23,12 @@ When moving the robot, you will work with two main reference frames:
 ### 1. Head Frame
 Located at the base of the head. Used for `goto_target` and `set_target` commands.
 
-[![Reachy Mini Head Frame](/docs/assets/head_frame.png)]()
+[![Reachy Mini Head Frame](https://github.com/pollen-robotics/reachy_mini/raw/develop/docs/assets/head_frame.png)]()
 
 ### 2. World Frame
 Fixed relative to the robot's base. Used for `look_at_world` commands.
 
-[![Reachy Mini World Frame](/docs/assets/world_frame.png)]()
+[![Reachy Mini World Frame](https://github.com/pollen-robotics/reachy_mini/raw/develop/docs/assets/world_frame.png)]()
 
 ## Safety Limits ⚠️
 
