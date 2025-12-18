@@ -84,11 +84,11 @@ with ReachyMini() as mini:
 ```
 
 ## Next Steps
-* **[Python SDK](/docs/SDK/python-sdk.md)**: Learn to move, see, speak, and hear.
-* **[AI Integrations](/docs/SDK/integration.md)**: Connect LLMs, build Apps, and publish to Hugging Face.
-* **[Core Concepts](/docs/SDK/core-concept.md)**: Architecture, coordinate systems, and safety limits.
+* **[Python SDK](SDK/python-sdk.md)**: Learn to move, see, speak, and hear.
+* **[AI Integrations](SDK/integration.md)**: Connect LLMs, build Apps, and publish to Hugging Face.
+* **[Core Concepts](SDK/core-concept.md)**: Architecture, coordinate systems, and safety limits.
 
 
 ## ❓ Troubleshooting
 
-Encountering an issue? 👉 **[Check the Troubleshooting & FAQ Guide](/docs/troubleshooting.md)**
+Encountering an issue? 👉 **[Check the Troubleshooting & FAQ Guide](troubleshooting.md)**

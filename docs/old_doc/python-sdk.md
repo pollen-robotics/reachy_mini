@@ -1,10 +1,28 @@
-# Reachy Mini API Documentation
+# Using the Python SDK
+
+The API is designed to be simple and intuitive. You can control the robot's features such as the head, antennas, camera, speakers, and microphone. For instance, to move the head of the robot, you can use the `goto_target` method as shown in the example below:
+
+```python
+from reachy_mini import ReachyMini
+from reachy_mini.utils import create_head_pose
+
+with ReachyMini() as reachy_mini:
+    # Move the head up (10mm on z-axis) and roll it 15 degrees
+    pose = create_head_pose(z=10, roll=15, degrees=True, mm=True)
+    reachy_mini.goto_target(head=pose, duration=2.0)
+
+    # Reset to default pose
+    pose = create_head_pose() 
+    reachy_mini.goto_target(head=pose, duration=2.0)
+```
+
+**So let's dive into the API!**
 
 *⚠️ All examples shown below suppose that you have already started the Reachy Mini daemon, either by running `reachy-mini-daemon` or by using the Python module `reachy_mini.daemon.app.main`. ⚠️*
 
 ## ReachyMini
 
-Reachy Mini's API is designed to be simple and intuitive. You will mostly interact with the `ReachyMini` class, which provides methods to control the robot's joints such as the head and antennas and interact with its sensors.
+In Reachy Mini's API, you will mostly interact with the `ReachyMini` class, which provides methods to control the robot's joints such as the head and antennas and interact with its sensors.
 
 The first step is to instantiate the `ReachyMini` class. This can be done as follows:
 
@@ -33,6 +51,15 @@ Then, the next step is to show how to move the robot. The `ReachyMini` class pro
 * the antennas' position
 
 The `head_frame` is positioned at the base of the head, as you can see in the image below. This is the frame you are controling when using `set_target` and `goto_target`.
+
+<p align="center">
+  <img
+    src="https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/reachy_mini/head_frame.png"
+    alt="Reachy Mini head frame"
+    title="Reachy Mini head frame"
+    width="100%"
+  ></img>
+</p>
 
 [![Reachy Mini Head Frame](/docs/assets/head_frame.png)]()
 

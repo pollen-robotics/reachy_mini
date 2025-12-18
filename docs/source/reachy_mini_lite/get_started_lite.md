@@ -14,7 +14,9 @@ Reachy Mini comes as a kit. Building it is the first step of your journey!
 
 | **📖 Interactive Digital Guide** | **📺 Full Assembly Video** |
 | :---: | :---: |
-| [![Assembly Guide](/docs/assets/digital_assembly_guide_preview_mini_lite.jpg)](https://huggingface.co/spaces/pollen-robotics/Reachy_Mini_LITE_Assembly_Guide)<br>[**Open Step-by-Step Guide**](https://huggingface.co/spaces/pollen-robotics/Reachy_Mini_LITE_Assembly_Guide)<br>*(Includes short video loops)* | [![Watch on YouTube](https://img.youtube.com/vi/PC5Yx950nMY/maxresdefault.jpg)](https://www.youtube.com/watch?v=PC5Yx950nMY)<br>[**Watch on YouTube**](https://www.youtube.com/watch?v=PC5Yx950nMY)<br>*(Video with sections for each step)* |
+| <a href="https://huggingface.co/spaces/pollen-robotics/Reachy_Mini_LITE_Assembly_Guide"><img src="https://github.com/pollen-robotics/reachy_mini/raw/develop/docs/assets/digital_assembly_guide_preview_mini_lite.jpg" style="width:100%; object-fit:contain;" /></a><br>[**Open Step-by-Step Guide**](https://huggingface.co/spaces/pollen-robotics/Reachy_Mini_LITE_Assembly_Guide)<br>*(Includes short video loops)* | <a href="https://www.youtube.com/watch?v=PC5Yx950nMY"><img src="https://img.youtube.com/vi/PC5Yx950nMY/maxresdefault.jpg" style="width:100%; object-fit:contain;" /></a><br>[**Watch on YouTube**](https://www.youtube.com/watch?v=PC5Yx950nMY)<br>*(Video with sections for each step)* |
+
+
 
 ## 2. 💻 Connection
 
@@ -22,8 +24,6 @@ Reachy Mini comes as a kit. Building it is the first step of your journey!
 2.  **Connect Data:** Connect the USB cable from the robot to your computer.
 
 ## 3. 📥 Download Reachy Mini Control
-
-> **🚧 🪟 WINDOWS USERS ONLY:** The Reachy Mini Control app for **Windows** is currently being finalized and will be available in a few days. **Windows users** can use the [Python SDK](/docs/SDK/readme.md) to control your robot directly in the meantime.
 
 The **Reachy Mini Control** desktop app is the command center for your robot. It includes the dashboard, visualization tools, and app launcher—no command line required.
 
@@ -46,11 +46,11 @@ The **Reachy Mini Control** desktop app is the command center for your robot. It
 
 Now that everything is connected and installed, you are ready to play!
 
-👉 **[Go to the Usage Guide](usage.md)** to learn how to:
+👉 **[Go to the Usage Guide](usage_lite.md)** to learn how to:
 * Use the **Desktop App** features.
 * Install and run **Community Apps** (Conversation, Games, etc.).
 * Program your Reachy with **Python**.
 
 ## ❓ Troubleshooting
 
-Encountering an issue? 👉 **[Check the Troubleshooting & FAQ Guide](/docs/troubleshooting.md)**
+Encountering an issue? 👉 **[Check the Troubleshooting & FAQ Guide](../troubleshooting.md)**

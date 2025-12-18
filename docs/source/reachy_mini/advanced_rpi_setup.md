@@ -1,9 +1,12 @@
 # Advanced: Manual Raspberry Pi Installation
 
+
+> [!TIP]
 > **⚠️ Expert Guide Only**
 >
-> This guide explains how to install the Reachy Mini software stack from scratch on a fresh Raspberry Pi.
-> **Most users do not need this.** Reachy Mini comes pre-installed. Only follow these steps if you are creating a new SD card image or building a custom setup.
+> This guide explains how to install the Reachy Mini software stack from scratch on a fresh Raspberry Pi.  
+> **Most users do not need this.**
+> Reachy Mini comes pre-installed. Only follow these steps if you are creating a new SD card image or building a custom setup.
 
 ## 1. Install OS
 

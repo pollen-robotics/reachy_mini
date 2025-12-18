@@ -1,0 +1,52 @@
+- sections:
+  - local: index
+    title: Discover Reachy Mini
+  title: Welcome
+- sections:
+  - local: reachy_mini/get_started_wireless
+    title: Getting started
+  - local: reachy_mini/hardware_wireless
+    title: Hardware
+  - local: reachy_mini/usage_wireless
+    title: Usage
+  - local: reachy_mini/advanced_rpi_setup
+    title: (Advanced) Manual Raspberry Pi Installation
+  - local: reachy_mini/reflash_the_rpi_ISO
+    title: (Advanced) Reflash the ISO
+  title: Reachy Mini (Wireless)
+- sections:
+  - local: reachy_mini_lite/get_started_lite
+    title: Getting started
+  - local: reachy_mini_lite/hardware_lite
+    title: Hardware
+  - local: reachy_mini_lite/usage_lite
+    title: Usage
+  title: Reachy Mini Lite
+- sections:
+  - local: get_started_simulation
+    title: Getting started
+  title: Simulation
+- sections:
+  - local: SDK/overview
+    title: Software overview
+  - local: SDK/installation
+    title: Installation
+  - local: SDK/quickstart
+    title: Quickstart Guide
+  - local: SDK/python-sdk
+    title: Python SDK
+  - local: SDK/integration
+    title: AI Integrations
+  - local: SDK/core-concept
+    title: Core Concepts
+  - local: rest_api
+    title: Using the REST API
+  title: Software guide
+- sections:
+  - local: troubleshooting_faq
+    title: Troubleshooting & FAQ
+  title: Help and support
+- sections:
+  - local: contributing
+    title: Contributing
+  title: Open source & contributions
