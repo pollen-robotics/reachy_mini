@@ -5,6 +5,7 @@ import pytest
 import soundfile as sf
 from reachy_mini.media.media_manager import MediaManager, MediaBackend
 import numpy as np
+from reachy_mini.media.audio_utils import _process_card_number_output
 
 @pytest.mark.audio
 def test_play_sound_default_backend() -> None:
@@ -167,3 +168,17 @@ def test_no_media() -> None:
     assert media.get_audio_sample() is None
     assert media.get_input_audio_samplerate() == -1
     assert media.get_output_audio_samplerate() == -1
+
+
+def test_get_respeaker_card_number() -> None:
+    """Test getting the ReSpeaker card number."""
+    alsa_output = "carte 5 : Audio [Reachy Mini Audio], périphérique 0 : USB Audio [USB Audio]"
+    card_number = _process_card_number_output(alsa_output)
+    assert isinstance(card_number, int)
+    assert card_number == 5
+    alsa_output = "card 0: Audio [Reachy Mini Audio], device 0: USB Audio [USB Audio]"
+    card_number = _process_card_number_output(alsa_output)
+    assert card_number == 0
+    alsa_output = "card 3: PCH [HDA Intel PCH], device 0: ALC255 Analog [ALC255 Analog]"
+    card_number = _process_card_number_output(alsa_output)
+    assert card_number == 0

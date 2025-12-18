@@ -42,15 +42,20 @@ class Daemon:
     def __init__(
         self,
         log_level: str = "INFO",
+        robot_name: str = "reachy_mini",
         wireless_version: bool = False,
         stream: bool = False,
+        desktop_app_daemon: bool = False,
     ) -> None:
         """Initialize the Reachy Mini daemon."""
         self.log_level = log_level
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(self.log_level)
 
+        self.robot_name = robot_name
+
         self.wireless_version = wireless_version
+        self.desktop_app_daemon = desktop_app_daemon
 
         self.backend: "RobotBackend | MujocoBackend | None" = None
         # Get package version
@@ -62,8 +67,11 @@ class Daemon:
             self.logger.warning("Could not determine daemon version")
 
         self._status = DaemonStatus(
+            robot_name=robot_name,
             state=DaemonState.NOT_INITIALIZED,
             wireless_version=wireless_version,
+            desktop_app_daemon=desktop_app_daemon,
+            stream_enabled=stream,
             simulation_enabled=None,
             backend_status=None,
             error=None,
@@ -164,24 +172,42 @@ class Daemon:
             self._status.error = str(e)
             raise e
 
-        self.zenoh_server = ZenohServer(self.backend, localhost_only=localhost_only)
+        self.zenoh_server = ZenohServer(
+            prefix=self.robot_name,
+            backend=self.backend,
+            localhost_only=localhost_only,
+        )
         self.zenoh_server.start()
         self._thread_publish_status = Thread(target=self._publish_status, daemon=True)
         self._thread_publish_status.start()
 
         self.websocket_server: Optional[AsyncWebSocketController] = None
         if websocket_uri is not None:
-            self.websocket_server = AsyncWebSocketController(ws_uri=websocket_uri + "/robot", backend=self.backend)
+            self.websocket_server = AsyncWebSocketController(
+                ws_uri=websocket_uri + "/robot", backend=self.backend
+            )
 
+        self._thread_publish_frames: Optional[Thread] = None
+        self._thread_event_publish_audio: Optional[Event] = None
+        self._thread_publish_audio: Optional[Thread] = None
+        self._thread_event_publish_frames: Optional[Event] = None
+        self.websocket_frame_sender: Optional[AsyncWebSocketFrameSender] = None
+        self.websocket_audio_sender: Optional[AsyncWebSocketAudioStreamer] = None
         if stream_media:
             if websocket_uri is None:
                 raise ValueError("WebSocket URI is required when streaming media.")
             self.media_manager = MediaManager()
-            self.websocket_frame_sender = AsyncWebSocketFrameSender(ws_uri=websocket_uri + "/video_stream")
-            self._thread_publish_frames = Thread(target=self._publish_frames, daemon=True)
+            self.websocket_frame_sender = AsyncWebSocketFrameSender(
+                ws_uri=websocket_uri + "/video_stream"
+            )
+            self._thread_publish_frames = Thread(
+                target=self._publish_frames, daemon=True
+            )
             self._thread_event_publish_frames = Event()
             self._thread_publish_frames.start()
-            self.websocket_audio_sender = AsyncWebSocketAudioStreamer(ws_uri=websocket_uri + "/audio_stream")
+            self.websocket_audio_sender = AsyncWebSocketAudioStreamer(
+                ws_uri=websocket_uri + "/audio_stream"
+            )
             self._thread_publish_audio = Thread(target=self._publish_audio, daemon=True)
             self._thread_event_publish_audio = Event()
             self._thread_publish_audio.start()
@@ -202,15 +228,29 @@ class Daemon:
                 self.zenoh_server.stop()
                 if self.websocket_server is not None:
                     self.websocket_server.stop()
-                if self._thread_publish_frames is not None and self._thread_publish_frames.is_alive():
+                if (
+                    self._thread_publish_frames is not None
+                    and self._thread_publish_frames.is_alive()
+                    and self._thread_event_publish_frames is not None
+                ):
                     self._thread_event_publish_frames.set()
                     self._thread_publish_frames.join(timeout=2.0)
-                if self._thread_publish_audio is not None and self._thread_publish_audio.is_alive():
+                if (
+                    self._thread_publish_audio is not None
+                    and self._thread_publish_audio.is_alive()
+                    and self._thread_event_publish_audio is not None
+                ):
                     self._thread_event_publish_audio.set()
                     self._thread_publish_audio.join(timeout=2.0)
-                if self.websocket_frame_sender is not None and self.websocket_frame_sender.connected.is_set():
+                if (
+                    self.websocket_frame_sender is not None
+                    and self.websocket_frame_sender.connected.is_set()
+                ):
                     self.websocket_frame_sender.stop_flag = True
-                if self.websocket_audio_sender is not None and self.websocket_audio_sender.connected.is_set():
+                if (
+                    self.websocket_audio_sender is not None
+                    and self.websocket_audio_sender.connected.is_set()
+                ):
                     self.websocket_audio_sender.stop_flag = True
                 self.backend = None
 
@@ -252,6 +292,12 @@ class Daemon:
 
     def _publish_frames(self) -> None:
         """Publish the media to the WebSocket."""
+        if (
+            self._thread_event_publish_frames is None
+            or self.websocket_frame_sender is None
+        ):
+            self.logger.warning("_publish_frames called but not properly initialized.")
+            return
         while self._thread_event_publish_frames.is_set() is False:
             frame = self.media_manager.get_frame()
             if frame is not None:
@@ -260,6 +306,13 @@ class Daemon:
 
     def _publish_audio(self) -> None:
         """Publish the audio to the WebSocket."""
+        if (
+            self._thread_event_publish_audio is None
+            or self.websocket_audio_sender is None
+        ):
+            self.logger.warning("_publish_audio called but not properly initialized.")
+            return
+
         while self._thread_event_publish_audio.is_set() is False:
             audio = self.media_manager.get_audio_sample()
             if audio is not None:
@@ -563,6 +616,7 @@ class Daemon:
                 check_collision=check_collision,
                 kinematics_engine=kinematics_engine,
                 use_audio=use_audio,
+                wireless_version=wireless_version,
                 hardware_config_filepath=hardware_config_filepath,
             )
 
@@ -582,8 +636,11 @@ class DaemonState(Enum):
 class DaemonStatus:
     """Dataclass representing the status of the Reachy Mini daemon."""
 
+    robot_name: str
     state: DaemonState
     wireless_version: bool
+    desktop_app_daemon: bool
+    stream_enabled: bool
     simulation_enabled: Optional[bool]
     backend_status: Optional[RobotBackendStatus | MujocoBackendStatus]
     error: Optional[str] = None

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "reachy_mini"
-version = "1.1.3"
+version = "1.2.3rc1"
 authors = [{ name = "Pollen Robotics", email = "contact@pollen-robotics.com" }]
 description = ""
 readme = "README.md"
@@ -13,7 +13,7 @@ dependencies = [
     "numpy>=2.2.5",
     "scipy>=1.15.3, <2.0.0",
     "reachy_mini_motor_controller>=1.4.2",
-    "eclipse-zenoh>=1.4.0",
+    "eclipse-zenoh~=1.7.0",
     "opencv-python<=5.0",
     "cv2_enumerate_cameras>=1.2.1",
     "psutil",
@@ -34,6 +34,8 @@ dependencies = [
     "rich",
     "questionary",
     "websockets>=12,<16",
+    "toml",
+    "rustypot",
 ]
 
 
@@ -49,6 +51,7 @@ dev = [
     "mypy==1.18.2",
     "rustypot>=1.4.0",
     "types-requests",
+    "types-toml",
     "rerun-sdk>=0.27.2",
     "urdf-parser-py==0.0.4",
 ]
@@ -70,6 +73,7 @@ wireless-version = [
 [project.scripts]
 reachy-mini-daemon = "reachy_mini.daemon.app.main:main"
 reachy-mini-app-assistant = "reachy_mini.apps.app:main"
+reachy-mini-reflash-motors = "reachy_mini.tools.reflash_motors:main"
 
 [tool.setuptools]
 package-dir = { "" = "src" }

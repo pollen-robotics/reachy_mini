@@ -28,8 +28,9 @@ from reachy_mini.io.protocol import (
 class ZenohServer(AbstractServer):
     """Zenoh server for Reachy Mini."""
 
-    def __init__(self, backend: Backend, localhost_only: bool = True):
+    def __init__(self, prefix: str, backend: Backend, localhost_only: bool = True):
         """Initialize the Zenoh server."""
+        self.prefix = prefix
         self.localhost_only = localhost_only
         self.backend = backend
 
@@ -62,30 +63,48 @@ class ZenohServer(AbstractServer):
                 )
             )
         else:
-            c = zenoh.Config()
+            c = zenoh.Config.from_json5(
+                json.dumps(
+                    {
+                        # Listen on all interfaces → reachable on LAN/Wi-Fi
+                        "listen": {
+                            "endpoints": ["tcp/0.0.0.0:7447"],
+                        },
+                        # Allow standard discovery
+                        "scouting": {
+                            "multicast": { "enabled": True },
+                            "gossip": { "enabled": True },
+                        },
+                        # No forced connect target; router will accept incoming sessions
+                        "connect": {
+                            "endpoints": []
+                        }
+                    }
+                )
+            )
 
         self.session = zenoh.open(c)
         self.sub = self.session.declare_subscriber(
-            "reachy_mini/command",
+            f"{self.prefix}/command",
             self._handle_command,
         )
-        self.pub = self.session.declare_publisher("reachy_mini/joint_positions")
-        self.pub_record = self.session.declare_publisher("reachy_mini/recorded_data")
+        self.pub = self.session.declare_publisher(f"{self.prefix}/joint_positions")
+        self.pub_record = self.session.declare_publisher(f"{self.prefix}/recorded_data")
         self.backend.set_joint_positions_publisher(self.pub)
         self.backend.set_recording_publisher(self.pub_record)
 
-        self.pub_pose = self.session.declare_publisher("reachy_mini/head_pose")
+        self.pub_pose = self.session.declare_publisher(f"{self.prefix}/head_pose")
         self.backend.set_pose_publisher(self.pub_pose)
 
         self.task_req_sub = self.session.declare_subscriber(
-            "reachy_mini/task",
+            f"{self.prefix}/task",
             self._handle_task_request,
         )
         self.task_progress_pub = self.session.declare_publisher(
-            "reachy_mini/task_progress"
+            f"{self.prefix}/task_progress"
         )
 
-        self.pub_status = self.session.declare_publisher("reachy_mini/daemon_status")
+        self.pub_status = self.session.declare_publisher(f"{self.prefix}/daemon_status")
 
     def stop(self) -> None:
         """Stop the Zenoh server."""
@@ -99,6 +118,17 @@ class ZenohServer(AbstractServer):
         data = sample.payload.to_string()
         command = json.loads(data)
         with self._lock:
+            block_targets = self.backend.is_move_running  # Prevent concurrent target updates from different clients
+
+            def _maybe_ignore(field: str) -> bool:
+                """Return True if the command should be ignored while a move runs."""
+                if not block_targets:
+                    return False
+                self.backend.logger.warning(
+                    f"Ignoring {field} command: a move is currently running."
+                )
+                return True
+
             if "torque" in command:
                 if (
                     command["ids"] is not None
@@ -110,19 +140,31 @@ class ZenohServer(AbstractServer):
                     else:
                         self.backend.set_motor_control_mode(MotorControlMode.Disabled)
             if "head_joint_positions" in command:
-                self.backend.set_target_head_joint_positions(
-                    np.array(command["head_joint_positions"])
-                )
+                if _maybe_ignore("head_joint_positions"):
+                    pass
+                else:
+                    self.backend.set_target_head_joint_positions(
+                        np.array(command["head_joint_positions"])
+                    )
             if "head_pose" in command:
-                self.backend.set_target_head_pose(
-                    np.array(command["head_pose"]).reshape(4, 4)
-                )
+                if _maybe_ignore("head_pose"):
+                    pass
+                else:
+                    self.backend.set_target_head_pose(
+                        np.array(command["head_pose"]).reshape(4, 4)
+                    )
             if "body_yaw" in command:
-                self.backend.set_target_body_yaw(command["body_yaw"])
+                if _maybe_ignore("body_yaw"):
+                    pass
+                else:
+                    self.backend.set_target_body_yaw(command["body_yaw"])
             if "antennas_joint_positions" in command:
-                self.backend.set_target_antenna_joint_positions(
-                    np.array(command["antennas_joint_positions"]),
-                )
+                if _maybe_ignore("antennas_joint_positions"):
+                    pass
+                else:
+                    self.backend.set_target_antenna_joint_positions(
+                        np.array(command["antennas_joint_positions"]),
+                    )
             if "gravity_compensation" in command:
                 try:
                     if command["gravity_compensation"]:

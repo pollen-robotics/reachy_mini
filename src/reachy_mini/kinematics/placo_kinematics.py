@@ -151,7 +151,7 @@ class PlacoKinematics:
             self.ik_yaw_joint_task.configure("joints", "soft", 5e-5)
         else:
             self.ik_yaw_joint_task.configure("joints", "soft", 3.0)
-            
+
         # joint limit tasks (values form URDF)
         self.ik_solver.enable_velocity_limits(True)
         self.ik_solver.enable_joint_limits(True)
@@ -645,7 +645,7 @@ class PlacoKinematics:
 
         """
         self.automatic_body_yaw = automatic_body_yaw
-        
+
         if not self.automatic_body_yaw:
             self.ik_yaw_joint_task.configure("joints", "soft", 3.0)
         else:
