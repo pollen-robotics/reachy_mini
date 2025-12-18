@@ -67,27 +67,35 @@ It should be in the `DEBUG` position.
 </details>
 
 
-##  Most commons questions
+##  Most common questions
 
 <details>
-<summary><strong>I have 2 cables and a few screws left after finishing the assembly. Is this normal?</strong></summary>
+<summary>
+<strong>I have 2 cables and a few screws left after finishing the assembly. Is this normal?</strong>
+<br>Tags: <kbd>ASSEMBLY</kbd> <kbd>HARDWARE</kbd>
+</summary>
 
-Yes, this is completely normal.  
+**Yes**, this is completely normal.  
 We intentionally include spare cables and screws in the kit in case some parts are damaged or lost during assembly.
 
 You do not need to install them.
 
-</details>
+</details><br>
 
 <details>
-<summary><strong>Image is dark on the Lite version</strong></summary>
+<summary>
+<strong>Image is dark on the Lite version</strong>
+<br>Tags: <kbd>IMAGE</kbd> <kbd>HARDWARE</kbd>
+</summary>
 
 - set auto-exposure-priority=1 using uvc-util on macOS
 
-</details>
+</details><br>
 
 <details>
-<summary><strong>Motor blinking red or Overload Error</strong></summary>
+<summary><strong>Motor blinking red or Overload Error</strong>
+<br>Tags: <kbd>MOTORS</kbd> <kbd>HARDWARE</kbd> <kbd>TROUBLESHOOTING</kbd>
+</summary>
 
 If you get "Motor hardware errors: ['Overload Error']" a few second after starting the robot for the first time.
 
