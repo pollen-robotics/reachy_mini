@@ -90,12 +90,12 @@ If your robot’s antennas are positioned in an antagonistic way, as shown in th
 
 |Step                          |                                   |
 |------------------------------|-----------------------------------|
-|![Antenna reversed step1](https://github.com/pollen-robotics/reachy_mini/raw/develop/docs/assets/antenna-reversed-step1.png)|STEP 1: Unscrew the antenna that has the issue, the one that points upward when the robot is in the OFF position and downward when it is in the ON position.|
-|![Antenna reversed step2](https://github.com/pollen-robotics/reachy_mini/raw/develop/docs/assets/antenna-reversed-step2.png)|STEP 2: Unscrew the two screws holding the antenna mount attached to the motor horn.|
-|![Antenna reversed step3](https://github.com/pollen-robotics/reachy_mini/raw/develop/docs/assets/antenna-reversed-step3.png)|STEP 3: Position the motor so that the **dot** (**A**) located next to the motor shaft **hole** (**B**) is facing upward|
-|![Antenna reversed step4](https://github.com/pollen-robotics/reachy_mini/raw/develop/docs/assets/antenna-reversed-step4.png)|STEP 4: Align the antenna interface so that the line mark (**2**) is also facing upward like the motor part (**1**).|
-|![Antenna reversed step4bis](https://github.com/pollen-robotics/reachy_mini/raw/develop/docs/assets/antenna-reversed-step4bis.png)|Screw the two 2.5×6 screws to attach the antenna interface to the motor horn.|
-|![Antenna reversed step5](https://github.com/pollen-robotics/reachy_mini/raw/develop/docs/assets/antenna-reversed-step5.png)|STEP 5: Fix back the Antenna with **2.5x8mm** screw.|
+|![Antenna reversed step1](https://github.com/pollen-robotics/reachy_mini/raw/develop/docs/assets/antenna-reversed-step1.png) | <p style="display: table-cell; vertical-align: middle; margin: 0;">STEP 1: Unscrew the antenna that has the issue, the one that points upward when the robot is in the OFF position and downward when it is in the ON position</p>|
+|![Antenna reversed step2](https://github.com/pollen-robotics/reachy_mini/raw/develop/docs/assets/antenna-reversed-step2.png) | <p style="display: table-cell; vertical-align: middle; margin: 0;"> STEP 2: Unscrew the two screws holding the antenna mount attached to the motor horn.</p> |
+|![Antenna reversed step3](https://github.com/pollen-robotics/reachy_mini/raw/develop/docs/assets/antenna-reversed-step3.png)|<p style="display: table-cell; vertical-align: middle; margin: 0;">STEP 3: Position the motor so that the **dot** (**A**) located next to the motor shaft **hole** (**B**) is facing upward</p>|
+|![Antenna reversed step4](https://github.com/pollen-robotics/reachy_mini/raw/develop/docs/assets/antenna-reversed-step4.png)|<p style="display: table-cell; vertical-align: middle; margin: 0;">STEP 4: Align the antenna interface so that the line mark (**2**) is also facing upward like the motor part (**1**).</p>|
+|![Antenna reversed step4bis](https://github.com/pollen-robotics/reachy_mini/raw/develop/docs/assets/antenna-reversed-step4bis.png)| <p style="display: table-cell; vertical-align: middle; margin: 0;">Screw the two 2.5×6 screws to attach the antenna interface to the motor horn.</p>|
+|![Antenna reversed step5](https://github.com/pollen-robotics/reachy_mini/raw/develop/docs/assets/antenna-reversed-step5.png)|<p style="display: table-cell; vertical-align: middle; margin: 0;">STEP 5: Fix back the Antenna with **2.5x8mm** screw.</p>|
 
 It’s fixed! You can now enjoy all the features of Reachy Mini again. Head over to hf.co/reachy-mini to continue.
 ![Antenna ok](https://github.com/pollen-robotics/reachy_mini/raw/develop/docs/assets/antenna_ok.png)
