@@ -37,6 +37,9 @@ from reachy_mini.media.audio_utils import (
     check_reachymini_asoundrc,
     write_asoundrc_to_home,
 )
+from reachy_mini.utils.wireless_version.startup_check import (
+    check_and_fix_venvs_ownership,
+)
 
 
 @dataclass
@@ -451,6 +454,9 @@ def main() -> None:
         logging.getLogger().setLevel(args.log_level)
 
     if args.wireless_version:
+        # Check and fix ownership of /venvs directory
+        check_and_fix_venvs_ownership()
+
         if check_reachymini_asoundrc():
             logging.getLogger().info(
                 "~/.asoundrc correctly configured for Reachy Mini Audio."
