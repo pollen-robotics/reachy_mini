@@ -44,7 +44,6 @@ class Daemon:
         log_level: str = "INFO",
         robot_name: str = "reachy_mini",
         wireless_version: bool = False,
-        stream: bool = False,
         desktop_app_daemon: bool = False,
     ) -> None:
         """Initialize the Reachy Mini daemon."""
@@ -71,7 +70,6 @@ class Daemon:
             state=DaemonState.NOT_INITIALIZED,
             wireless_version=wireless_version,
             desktop_app_daemon=desktop_app_daemon,
-            stream_enabled=stream,
             simulation_enabled=None,
             backend_status=None,
             error=None,
@@ -83,11 +81,7 @@ class Daemon:
         self._webrtc: Optional[Any] = (
             None  # type GstWebRTC imported for wireless version only
         )
-        if stream:
-            if not wireless_version:
-                raise RuntimeError(
-                    "WebRTC streaming is only supported for wireless version. Use --wireless-version flag."
-                )
+        if wireless_version:
             from reachy_mini.media.webrtc_daemon import GstWebRTC
 
             self._webrtc = GstWebRTC(log_level)
@@ -640,7 +634,6 @@ class DaemonStatus:
     state: DaemonState
     wireless_version: bool
     desktop_app_daemon: bool
-    stream_enabled: bool
     simulation_enabled: Optional[bool]
     backend_status: Optional[RobotBackendStatus | MujocoBackendStatus]
     error: Optional[str] = None
