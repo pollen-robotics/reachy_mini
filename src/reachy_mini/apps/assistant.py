@@ -148,7 +148,7 @@ def create(console: Console, app_name: str, app_path: Path) -> None:
         exit()
 
     module_name = app_name
-    entrypoint_name = app_name.replace("_", "-")
+    entrypoint_name = app_name.replace("-", "_")
     class_name = "".join(word.capitalize() for word in module_name.split("_"))
     class_name_display = " ".join(word.capitalize() for word in module_name.split("_"))
 

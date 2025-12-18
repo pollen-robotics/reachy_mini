@@ -34,7 +34,7 @@ We provide a collection of ready-to-run scripts to help you understand how to us
 Encountering an issue? 👉 **[Check the Troubleshooting & FAQ Guide](/docs/troubleshooting.md)**
 
 ## 💬 Community
-* [Discord](https://discord.gg/pollen-robotics) - Get help and share projects.
+* [Discord](https://discord.gg/Y7FgMqHsub) - Get help and share projects.
 * [Hugging Face Spaces](https://huggingface.co/spaces?q=reachy_mini) - Discover community apps.
 * [GitHub Discussions](https://github.com/pollen-robotics/reachy_mini/discussions) - Feature requests and bugs.
 

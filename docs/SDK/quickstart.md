@@ -4,33 +4,48 @@ Follow this guide to get your Reachy Mini up and running, either on real hardwar
 
 ## 1. Prerequisites
 
-You have correctly installed Reachy Mini on your computer, see [this guide](/docs/SDK/installation.md).
+Make sure you have installed Reachy Mini on your computer following our [installation guide](/docs/SDK/installation.md). 
+
+> **💡 Important:** Ensure you have created and activated your Python virtual environment. **Remember to activate it every time you open a new terminal!**
 
 ## 2. Ensure the Robot Server is running (Daemon)
 
 The **Daemon** is a background service that handles the low-level communication with motors and sensors. It must be running for your code to work.
 
 * **On Reachy Mini (Wireless)**: The daemon is running when the robot is powered on. Ensure your computer and Reachy Mini are on the same network.
-* **On Reachy Mini Lite (USB)**: You have two options
+* **On Reachy Mini Lite (USB)** - You have two options :
   - Start the [desktop application](/docs/platforms/reachy_mini_lite/get_started.md)
-  - Open a terminal and run `reachy-mini-daemon`
-* **For Simulation (No robot needed):** You have two options
+  - Open a terminal and run :
+  ```bash
+  uv run reachy-mini-daemon
+  ```
+* **For Simulation (No robot needed)** - You have two options :
   - Start the [desktop application](/docs/platforms/reachy_mini_lite/get_started.md)
-  - Open a terminal and run `reachy-mini-daemon --sim`
+  - Open a terminal and run 
+  ```bash
+  uv run reachy-mini-daemon --sim
+  ```
 
 
 ✅ **Verification:** Open [http://localhost:8000](http://localhost:8000) in your browser. If you see the Reachy Dashboard, you are ready!
 
 ## 3. Your First Script
 
-Keep the daemon terminal open. In a **new terminal**, create a file named `hello.py`:
+> **⚠️ Important:** Keep the daemon terminal open and running! The daemon must stay active for your robot to work.
 
+### Create your Python script
+
+**Step 1:** Open a new terminal window
+
+**Step 2:** Create a new file called `hello.py` and copy-paste the following code into it:
+
+> Tip: If you are using a Reachy Mini Wireless and running the script on your computer, you need to do `ReachyMini(localhost_only=False)`
 ```python
 from reachy_mini import ReachyMini
 
 # Connect to the running daemon
 with ReachyMini() as mini:
-    print(f"Connected! Robot State: {mini.state}")
+    print("Connected to Reachy Mini! ")
     
     # Wiggle antennas
     print("Wiggling antennas...")
@@ -41,10 +56,14 @@ with ReachyMini() as mini:
     print("Done!")
 ```
 
-Run it:
+**Step 3:** Save the file and run your script:
+
+In your new terminal, run:
 ```bash
 python hello.py
 ```
+
+🎉 If everything went well, your robot should now wiggle its antennas!
 
 ## ❓ Troubleshooting
 Encountering an issue? 👉 **[Check the Troubleshooting & FAQ Guide](/docs/troubleshooting.md)**

@@ -64,9 +64,17 @@ See the [Reachy Mini Wireless guide](/docs/platforms/reachy_mini/get_started.md)
 <summary><strong>The dashboard at http://localhost:8000 doesn't work.</strong></summary>
 
 Perform these checks:
-1.  **Virtual Environment:** Ensure you are running inside your `.venv`.
-2.  **SDK Update:** Ensure you have the latest version: `pip install -U reachy-mini`.
-3.  **Daemon:** Make sure `reachy-mini-daemon` is running in a terminal.
+1.  **Virtual Environment:** Ensure you are running inside your virtual environment (`.venv`, `reachy_mini_env`,...).
+2.  **SDK Update:** Ensure you have the latest version.
+- With `pip`, run :
+```bash
+pip install -U reachy-mini
+```
+- With `uv`, run :
+```bash
+uv add reachy-mini
+```
+3.  **Daemon:** Make sure the daemon `reachy-mini-daemon` is running in a terminal.
 
 </details>
 
@@ -76,6 +84,18 @@ Perform these checks:
 Yes. The daemon provides a REST API (FastAPI) and WebSocket support.
 * **Docs:** `http://localhost:8000/docs` (available when daemon is running).
 * **Features:** Get state, Move joints, Control daemon.
+
+</details>
+
+<details>
+<summary><strong>All apps installations fail on Windows !</strong></summary>
+
+It might be related to unsufficient rights to create symlinks in Windows. You can set the environment variable `HF_HUB_DISABLE_SYMLINKS_WARNING` to 1 to remove the warnings that cause the failure.
+
+In a terminal, run :
+```powershell
+set HF_HUB_DISABLE_SYMLINKS_WARNING=1
+```
 
 </details>
 
@@ -221,6 +241,22 @@ mini.play_move(recorded_moves.get("dance_1"))
 ## 👁️ Vision & Audio
 
 <details>
+<summary><strong>Volume is too low (Linux)</strong></summary>
+
+1.  Run `alsamixer`.
+2.  Set **PCM1** to 100%.
+3.  Use **PCM,0** to adjust the global volume.
+
+To make it permanent:
+```bash
+CARD=$(aplay -l | grep -i "reSpeaker" | head -n1 | sed -n 's/^card \([0-9]*\):.*/\1/p')
+amixer -c "$CARD" set PCM,1 100%
+sudo alsactl store "$CARD"
+```
+
+</details>
+
+<details>
 <summary><strong>How do I get camera frames?</strong></summary>
 
 Use the `media` object.
@@ -266,6 +302,14 @@ Performance relies heavily on lighting conditions. Ensure the face is well-lit. 
 ## 🔧 Specific Error Messages & Fixes
 
 <details>
+<summary><strong>Motor '<name>' hardware errors: ['Input Voltage Error']</strong></summary>
+We are using a higher voltage on Reachy Mini, it's on purpose :)
+
+</details>
+
+
+
+<details>
 <summary><strong>Error: "OSError: PortAudio library not found"</strong></summary>
 
 You are missing a system dependency. Run:
@@ -286,22 +330,6 @@ This appears if you connect to the robot but don't consume the video frames, cau
 </details>
 
 <details>
-<summary><strong>Volume is too low (Linux)</strong></summary>
-
-1.  Run `alsamixer`.
-2.  Set **PCM1** to 100%.
-3.  Use **PCM,0** to adjust the global volume.
-
-To make it permanent:
-```bash
-CARD=$(aplay -l | grep -i "reSpeaker" | head -n1 | sed -n 's/^card \([0-9]*\):.*/\1/p')
-amixer -c "$CARD" set PCM,1 100%
-sudo alsactl store "$CARD"
-```
-
-</details>
-
-<details>
 <summary><strong>No Microphone Input / Direction of Arrival (Beta Units)</strong></summary>
 
 * **No Input:** Requires firmware 2.1.3. Run the [update script](../src/reachy_mini/assets/firmware/update.sh).
@@ -317,7 +345,7 @@ sudo alsactl store "$CARD"
 <details>
 <summary><strong>My package is damaged or missing.</strong></summary>
 
-Contact **Seeed Studio** (the sender) immediately with photos.
+Contact **Pollen Robotics** team immediately. You can send us an email to sales@pollen-robotics.com with photos of the package, receipt number or invoice number and your full name. We will then check with the transport company and keep you updated.
 
 </details>
 
@@ -325,14 +353,14 @@ Contact **Seeed Studio** (the sender) immediately with photos.
 <summary><strong>Refund Policy</strong></summary>
 
 * **Before shipping:** Contact `sales@pollen-robotics.com` for a 100% refund.
-* **After shipping:** You have 30 days. Contact sales with proof of delivery and invoice.
+* **After shipping:** You have 30 days to return your package. Contact sales (sales@pollen-robotics.com) with proof of delivery and invoice or receipt number. If you have comments / feedback, please let us know, our focus is building a robot the open-source community enjoys building. 
 
 </details>
 
 <details>
 <summary><strong>Warranty</strong></summary>
 
-If a part is broken/malfunctioning, Seeed's after-sales team will determine if it is a hardware defect covered by warranty. They will provide repair or replacement parts.
+If a part is broken/malfunctioning, Pollen's after-sales team will determine if it is a hardware defect covered by warranty. Then, our manufacturer will provide repair or replacement parts. You can send us an email to sales@pollen-robotics.com with photos of the issue, receipt number or invoice number and your full name.
 
 </details>
 
@@ -342,4 +370,4 @@ If a part is broken/malfunctioning, Seeed's after-sales team will determine if i
 If you couldn't find the answer to your issue in this guide, please reach out to us directly!
 The Pollen Robotics team and the community are active on Discord to help you troubleshoot specific problems.
 
-👉 **[Join the Pollen Robotics Discord](https://discord.gg/2bAhWfXme9)**
+👉 **[Join the Pollen Robotics Discord](https://discord.gg/Y7FgMqHsub)**
