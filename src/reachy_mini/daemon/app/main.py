@@ -52,8 +52,6 @@ class Args:
     wireless_version: bool = False
     desktop_app_daemon: bool = False
 
-    stream: bool = False
-
     serialport: str = "auto"
     hardware_config_filepath: str | None = None
 
@@ -134,7 +132,6 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
     app.state.args = args
     app.state.daemon = Daemon(
         robot_name=args.robot_name,
-        stream=args.stream,
         wireless_version=args.wireless_version,
         desktop_app_daemon=args.desktop_app_daemon,
     )
@@ -270,13 +267,6 @@ def main() -> None:
         action="store_true",
         default=default_args.desktop_app_daemon,
         help="Use the desktop version of Reachy Mini (default: False).",
-    )
-
-    parser.add_argument(
-        "--stream",
-        action="store_true",
-        default=default_args.stream,
-        help="Enable webrtc streaming. For wireless version only (default: False).",
     )
 
     parser.add_argument(
