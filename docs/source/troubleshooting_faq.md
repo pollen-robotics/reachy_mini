@@ -4,6 +4,8 @@ Welcome to the Reachy Mini support page. Click on the questions below to reveal 
 
 ## 📋 Table of Contents
 
+  - [Known Issues - Batch December 2025](#known-issues---batch-december-2025)
+  - [Most commons questions](#most-commons-questions)
 1.  [🚀 Getting Started & Assembly](#-getting-started--assembly)
 2.  [🐍 SDK, Apps & Programming](#-sdk-apps--programming)
 3.  [🤖 Hardware & Customization](#-hardware--cutomization)
@@ -11,6 +13,92 @@ Welcome to the Reachy Mini support page. Click on the questions below to reveal 
 5.  [👀 Interaction features](#-interactions-features)
 7.  [🤝 Contributing](#-contributing)
 8.  [📦 Shipping & Warranty](#-shipping--warranty)
+
+---
+
+##  Known Issues - Batch December 2025
+
+<details>
+<summary><strong>The head may touch the body during some official motions</strong></summary>
+
+This behavior is expected and not a hardware or software bug.  
+However, since it can be confusing, we will update those motions to avoid this contact.
+
+</details>
+
+<details>
+
+<summary><strong>Low audio volume</strong></summary>
+
+- Update your robot to version 1.2.3 or later
+
+For more details, see the documentation:  
+[Getting Started](/docs/platforms/reachy_mini/get_started.md)
+
+</details>
+
+<details>
+<summary><strong>Permission errors</strong></summary>
+
+- Update your robot to version 1.2.3 or later  
+- Reboot the robot
+
+</details>
+
+<details>
+<summary><strong>An antenna appears rotated by 90° or 180°</strong></summary>
+
+This is a manufacturing issue.
+
+It is easy to fix by following this guide:  
+[Antenna repositioning guide](https://cdn.discordapp.com/attachments/1450364269886705757/1450801804374970529/reachy-mini-antenna-mismounted-v3.pdf?ex=69452d78&is=6943dbf8&hm=1c870bd64b3e476501b665c83c7de9412a4495f8e059bb3a9f3d7fd1f5e188f1&)
+
+</details>
+
+<details>
+<summary><strong>[Wireless] The wifi access point doesn't appear and the fan keeps spinning</strong></summary>
+
+When starting the robot, you should hear a fan spinning. It should stop spinning after a few seconds. If it doesn't stop spinning, it means the OS is not booting. This probably means the switch on the head board is in the `DOWNLOAD SW1` position.
+
+![Head board switch](/docs/assets/head_board_switch.png)
+
+It should be in the `DEBUG` position.
+
+</details>
+
+
+##  Most commons questions
+
+<details>
+<summary><strong>I have 2 cables and a few screws left after finishing the assembly. Is this normal?</strong></summary>
+
+Yes, this is completely normal.  
+We intentionally include spare cables and screws in the kit in case some parts are damaged or lost during assembly.
+
+You do not need to install them.
+
+</details>
+
+<details>
+<summary><strong>Image is dark on the Lite version</strong></summary>
+
+- set auto-exposure-priority=1 using uvc-util on macOS
+
+</details>
+
+<details>
+<summary><strong>Motor blinking red or Overload Error</strong></summary>
+
+If you get "Motor hardware errors: ['Overload Error']" a few second after starting the robot for the first time.
+
+It is VERY likely there are motor not in the good slot, e.g motor 4 on slot 3
+
+
+- [**Reachy Mini Wireless - Step-by-Step Guide**](https://huggingface.co/spaces/pollen-robotics/Reachy_Mini_Assembly_Guide)
+- [**Reachy Mini LITE - Step-by-Step Guide**](https://huggingface.co/spaces/pollen-robotics/Reachy_Mini_LITE_Assembly_Guide)
+
+
+</details>
 
 ---
 
