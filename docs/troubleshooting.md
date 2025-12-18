@@ -41,6 +41,17 @@ It is easy to fix by following this guide:
 
 </details>
 
+<details>
+<summary><strong>[Wireless] The wifi access point doesn't appear and the fan keeps spinning</strong></summary>
+
+When starting the robot, you should hear a fan spinning. It should stop spinning after a few seconds. If it doesn't stop spinning, it means the OS is not booting. This probably means the switch on the head board is in the `DOWNLOAD SW1` position.
+
+![Head board switch](/docs/assets/head_board_switch.png)
+
+It should be in the `DEBUG` position.
+
+</details>
+
 
 ##  Most commons questions
 
@@ -79,14 +90,19 @@ It is VERY likely there are motor not in the good slot, e.g motor 4 on slot 3
 
 ## 📋 Table of Contents
 
-1.  [🚀 Getting Started & Assembly](#-getting-started--assembly)
-2.  [🔌 Connection & Dashboard](#-connection--dashboard)
-3.  [🤖 Hardware, Motors & Limits](#-hardware-motors--limits)
-4.  [🐍 SDK, Apps & Programming](#-sdk-apps--programming)
-5.  [🕹️ Moving the Robot](#-moving-the-robot)
-6.  [👁️ Vision & Audio](#-vision--audio)
-7.  [🔧 Specific Error Messages & Fixes](#-specific-error-messages--fixes)
-8.  [📦 Shipping & Warranty](#-shipping--warranty)
+- [Troubleshooting \& FAQ](#troubleshooting--faq)
+  - [Known Issues - Batch December 2025](#known-issues---batch-december-2025)
+  - [Most commons questions](#most-commons-questions)
+  - [📋 Table of Contents](#-table-of-contents)
+  - [🚀 Getting Started \& Assembly](#-getting-started--assembly)
+  - [🔌 Connection \& Dashboard](#-connection--dashboard)
+  - [🤖 Hardware, Motors \& Limits](#-hardware-motors--limits)
+  - [🐍 SDK, Apps \& Programming](#-sdk-apps--programming)
+  - [🕹️ Moving the Robot](#️-moving-the-robot)
+  - [👁️ Vision \& Audio](#️-vision--audio)
+  - [🔧 Specific Error Messages \& Fixes](#-specific-error-messages--fixes)
+  - [📦 Shipping \& Warranty](#-shipping--warranty)
+  - [💬 Still stuck?](#-still-stuck)
 
 <br>
 
