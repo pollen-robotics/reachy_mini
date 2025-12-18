@@ -193,6 +193,13 @@ set HF_HUB_DISABLE_SYMLINKS_WARNING=1
 
 </details>
 
+<details>
+<summary><strong>How do I reset the Wi-Fi hotspot?</strong></summary>
+
+If you need to reset the robot's Wi-Fi hotspot (for example, if you can't connect or want to change the network), follow the instructions in the [Wi-Fi Reset Guide](/docs/platforms/reachy_mini/reset.md).
+
+</details>
+
 <br>
 
 ## 🤖 Hardware, Motors & Limits
