@@ -84,7 +84,11 @@ class Daemon:
         if wireless_version:
             from reachy_mini.media.webrtc_daemon import GstWebRTC
 
-            self._webrtc = GstWebRTC(log_level)
+            try:
+                self._webrtc = GstWebRTC(log_level)
+            except Exception as e:
+                self.logger.error(f"Failed to initialize WebRTC: {e}")
+                self._webrtc = None
 
     async def start(
         self,
