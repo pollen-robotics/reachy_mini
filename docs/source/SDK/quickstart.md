@@ -25,12 +25,13 @@ The **Daemon** is a background service that handles the low-level communication 
 
 Keep the daemon terminal open. In a **new terminal**, create a file named `hello.py`:
 
+> Tip: If you are using a Reachy Mini Wireless and running the script on your computer, you need to do `ReachyMini(localhost_only=False)`
 ```python
 from reachy_mini import ReachyMini
 
 # Connect to the running daemon
 with ReachyMini() as mini:
-    print(f"Connected! Robot State: {mini.state}")
+    print("Connected to Reachy Mini! ")
     
     # Wiggle antennas
     print("Wiggling antennas...")
