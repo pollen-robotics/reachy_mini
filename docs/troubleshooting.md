@@ -147,7 +147,10 @@ Testers generally describe it as fun and simple. The trickiest parts are usually
 
 <details>
 <summary><strong>How do I connect the robot to Wi-Fi?</strong></summary>
-See the [Reachy Mini Wireless guide](/docs/platforms/reachy_mini/get_started.md).
+
+See : [Reachy Mini Wireless guide](/docs/platforms/reachy_mini/get_started.md) .
+
+
 
 </details>
 
@@ -165,7 +168,7 @@ pip install -U reachy-mini
 ```bash
 uv add reachy-mini
 ```
-3.  **Daemon:** Make sure the daemon `reachy-mini-daemon` is running in a terminal.
+1.  **Daemon:** Make sure the daemon `reachy-mini-daemon` is running in a terminal.
 
 </details>
 
