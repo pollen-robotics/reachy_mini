@@ -13,23 +13,6 @@ However, since it can be confusing, we will update those motions to avoid this c
 </details>
 
 <details>
-<summary><strong>I have 2 cables and a few screws left after finishing the assembly. Is this normal?</strong></summary>
-
-Yes, this is completely normal.  
-We intentionally include spare cables and screws in the kit in case some parts are damaged or lost during assembly.
-
-You do not need to install them.
-
-</details>
-
-<details>
-<summary><strong>Image is dark on the Lite version</strong></summary>
-
-- set auto-exposure-priority=1 using uvc-util on macOS
-
-</details>
-
-<details>
 
 <summary><strong>Low audio volume</strong></summary>
 
@@ -60,6 +43,23 @@ It is easy to fix by following this guide:
 
 
 ##  Most commons questions
+
+<details>
+<summary><strong>I have 2 cables and a few screws left after finishing the assembly. Is this normal?</strong></summary>
+
+Yes, this is completely normal.  
+We intentionally include spare cables and screws in the kit in case some parts are damaged or lost during assembly.
+
+You do not need to install them.
+
+</details>
+
+<details>
+<summary><strong>Image is dark on the Lite version</strong></summary>
+
+- set auto-exposure-priority=1 using uvc-util on macOS
+
+</details>
 
 <details>
 <summary><strong>Motor blinking red or Overload Error</strong></summary>
