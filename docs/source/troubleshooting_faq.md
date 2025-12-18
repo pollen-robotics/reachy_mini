@@ -5,15 +5,14 @@ Welcome to the Reachy Mini support page. Click on the questions below to reveal 
 ## 📋 Table of Contents
 
 1.  [🚀 Getting Started & Assembly](#-getting-started--assembly)
-2.  [🔌 Connection & Dashboard](#-connection--dashboard)
-3.  [🤖 Hardware, Motors & Limits](#-hardware-motors--limits)
-4.  [🐍 SDK, Apps & Programming](#-sdk-apps--programming)
-5.  [🕹️ Moving the Robot](#-moving-the-robot)
-6.  [👁️ Vision & Audio](#-vision--audio)
-7.  [🔧 Specific Error Messages & Fixes](#-specific-error-messages--fixes)
+2.  [🐍 SDK, Apps & Programming](#-sdk-apps--programming)
+3.  [🤖 Hardware & Customization](#-hardware--cutomization)
+4.  [👁️ Media & Sensors](#-media--sensors)
+5.  [👀 Interaction features](#-interactions-features)
+7.  [🤝 Contributing](#-contributing)
 8.  [📦 Shipping & Warranty](#-shipping--warranty)
 
-<br>
+---
 
 ## 1. 🚀 Getting Started & Assembly
 
@@ -33,7 +32,7 @@ Most testers report <b>1.5–2 hours</b>, with some up to <b>4 hours</b> dependi
 <details>
 <summary>
 <strong>Are there any difficult steps during assembly?</strong>
-<br>Tags: <kbd>ASSEMBLY</kbd> <kbd>HARDWARE</kbd>
+<br>Tags: <kbd>ASSEMBLY</kbd> <kbd>HARDWARE</kbd> <kbd>BETA</kbd> <kbd>LITE</kbd> <kbd>WIRELESS</kbd>
 </summary>
 
 Not really, testers describe it as **fun, simple, and satisfying**. Basic tools and patience are enough. 
@@ -45,9 +44,67 @@ Digital Assembly Guide for Reachy Mini [BETA](https://huggingface.co/spaces/poll
 
 </details><br>
 
+<details>
+<summary>
+<strong>How to remove the battery?</strong>
+<br>Tags: <kbd>ASSEMBLY</kbd> <kbd>HARDWARE</kbd> <kbd>WIRELESS</kbd>
+</summary>
 
-### 1.2 Set up
+- Check that the green led is not on first.
+- Remove the 3x screws at the bottom and take out the foot a little bit.
 
+![Bottom screws](https://github.com/pollen-robotics/reachy_mini/raw/develop/docs/assets/bottom_raws.png)
+
+- Unplug the indicated connector (red arrow) to be able to remove the battery. There should be some double-sided tape that maintain the battery in place, so it can be a bit hard to remove.
+
+![Battery connector](https://github.com/pollen-robotics/reachy_mini/raw/develop/docs/assets/battery_connector.png)
+
+- When you'll re-assemble it, do these step again in reverse order. Just be careful not to pinch any cable.
+
+</details><br>
+
+
+### 1.2 Start
+
+<details>
+<summary>
+<strong>My Reachy Mini doesn’t move on first startup. What should I check?</strong>
+<br>Tags: <kbd>START</kbd> <kbd>POWER</kbd> <kbd>TROUBLESHOOTING</kbd> <kbd>BETA</kbd> <kbd>LITE</kbd> <kbd>WIRELESS</kbd>
+</summary>
+
+Verify the **power supply**, and ensure all cables are fully inserted, loose power cables caused several “motor not responding” issues.
+
+</details><br>
+
+<details>
+<summary>
+<strong>One antenna is reversed, how to fix this?</strong>
+<br>Tags: <kbd>START</kbd> <kbd>TROUBLESHOOTING</kbd> <kbd>BETA</kbd> <kbd>LITE</kbd> <kbd>WIRELESS</kbd>
+</summary>
+
+If your robot’s antennas are positioned in an antagonistic way, as shown in the photo below, it means your robot is part of a batch that had a small production issue: the antennas were mounted the wrong way around.
+
+![Antenna reversed](https://github.com/pollen-robotics/reachy_mini/raw/develop/docs/assets/antenna_reversed.png)
+
+**Here is a step-by-step guide to help you install them correctly**
+
+|Step                          |                                   |
+|------------------------------|-----------------------------------|
+|![Antenna reversed step1](https://github.com/pollen-robotics/reachy_mini/raw/develop/docs/assets/antenna-reversed-step1.png)|STEP 1: Unscrew the antenna that has the issue, the one that points upward when the robot is in the OFF position and downward when it is in the ON position.|
+|![Antenna reversed step2](https://github.com/pollen-robotics/reachy_mini/raw/develop/docs/assets/antenna-reversed-step2.png)|STEP 2: Unscrew the two screws holding the antenna mount attached to the motor horn.|
+|![Antenna reversed step3](https://github.com/pollen-robotics/reachy_mini/raw/develop/docs/assets/antenna-reversed-step3.png)|STEP 3: Position the motor so that the **dot** (**A**) located next to the motor shaft **hole** (**B**) is facing upward|
+|![Antenna reversed step4](https://github.com/pollen-robotics/reachy_mini/raw/develop/docs/assets/antenna-reversed-step4.png)|STEP 4: Align the antenna interface so that the line mark (**2**) is also facing upward like the motor part (**1**).|
+|![Antenna reversed step4bis](https://github.com/pollen-robotics/reachy_mini/raw/develop/docs/assets/antenna-reversed-step4bis.png)|Screw the two 2.5×6 screws to attach the antenna interface to the motor horn.|
+|![Antenna reversed step5](https://github.com/pollen-robotics/reachy_mini/raw/develop/docs/assets/antenna-reversed-step5.png)|STEP 5: Fix back the Antenna with **2.5x8mm** screw.|
+
+It’s fixed! You can now enjoy all the features of Reachy Mini again. Head over to hf.co/reachy-mini to continue.
+![Antenna ok](https://github.com/pollen-robotics/reachy_mini/raw/develop/docs/assets/antenna_ok.png)
+
+
+</details><br>
+
+
+### 1.3 Set up
 
 <details>
 <summary>
@@ -74,7 +131,7 @@ Digital Assembly Guide for Reachy Mini [BETA](https://huggingface.co/spaces/poll
 <br>Tags: <kbd>SDK</kbd> <kbd>PYTHON</kbd> <kbd>ENVIRONMENT</kbd>
 </summary>
 
-Helps prevent package conflicts during SDK installation.
+Virtual environments keeps your Reachy Mini installation isolated and prevents conflicts with other Python projects. Modern Python development requires this now!
 
 </details><br>
 
@@ -89,10 +146,42 @@ Users solved these by rebuilding their environment and reinstalling missing syst
 
 </details><br>
 
+<details>
+<summary>
+<strong>Do I need to start the daemon manually?</strong>
+<br>Tags: <kbd>AUDIO</kbd> <kbd>VISION</kbd> <kbd>DEPENDENCIES</kbd>
+</summary>
+
+**NO** 
+
+- With Reachy Mini (Wireless), the daemon is already running on the embedded Raspberry Pi.
+- With Reachy Mini Lite, you can use [the desktop app](./reachy_mini_lite/get_started_lite.md).
+
+</details><br>
 
 
-### 1.3 Dashboard
+### 1.4 Dashboard
 
+<details>
+<summary>
+<strong>The dashboard on localhost:8000 doesn’t open. What am I missing?</strong>
+<br>Tags: <kbd>DASHBOARD</kbd> <kbd>NETWORK</kbd> <kbd>SDK</kbd> <kbd>TROUBLESHOOTING</kbd>
+</summary>
+
+Perform these checks:
+1.  **Virtual Environment:** Ensure you are running inside your virtual environment (`.venv`, `reachy_mini_env`,...).
+2.  **SDK Update:** Ensure you have the latest version.
+- With `pip`, run :
+```bash
+pip install -U reachy-mini
+```
+- With `uv`, run :
+```bash
+uv add reachy-mini
+```
+3.  **Daemon:** Make sure the daemon `reachy-mini-daemon` is running in a terminal.
+
+</details><br>
 
 <details>
 <summary>
@@ -105,8 +194,7 @@ Sure! You can install apps directly from your Dashboard if they’re native, or 
 </details><br>
 
 
-
-### 1.4 Tutorials
+### 1.5 Tutorials / examples
 
 
 <details>
@@ -116,14 +204,35 @@ Sure! You can install apps directly from your Dashboard if they’re native, or 
 </summary>
 
 One of our beta tester built a TurboWarp/Scratch 3.0 extension for controlling Reachy Mini: 
-[reachy_mini_turbowarp](https://github.com/iizukak/reachy_mini_turbowarp)
+[reachy_mini_turbowarp](https://github.com/iizukak/reachy_mini_turbowarp)  
+
+There is also a coding lab app using natural language commands to program movements on Reachy Mini:
+[Reachy Mini Coding Lab](https://huggingface.co/spaces/dlouapre/coding_lab)
+
+</details><br>
+
+
+<details>
+<summary>
+<strong>Import errors when running examples.</strong>
+<br>Tags: <kbd>SDK</kbd> <kbd>INSTALLATION</kbd>
+</summary>
+
+Outdated local SDK version — fixed by upgrading:
+- With pip, run :
+```bash
+pip install -U reachy-mini
+```
+- With uv, run :
+```bash
+uv add reachy-mini
+```
 
 </details><br>
 
 
 
-
-## 🧩 2. Using and Developing applications / spaces
+## 2. 🐍 SDK, Apps & Programming
 
 ### 2.1 Install Applications
 
@@ -133,7 +242,11 @@ One of our beta tester built a TurboWarp/Scratch 3.0 extension for controlling R
 <br>Tags: <kbd>INSTALLATION</kbd> <kbd>APPS</kbd> <kbd>SDK</kbd>
 </summary>
 
-Update the Reachy Mini SDK to the latest version. Earlier versions had a bug preventing smooth installation.
+Update your SDK. Early versions had a bug with Space installation.
+
+```bash
+pip install -U reachy-mini
+```
 
 </details><br>
 
@@ -149,7 +262,54 @@ Browse [spaces on Hugging Face](https://huggingface.co/spaces?q=reachy+mini) to 
 </details><br>
 
 
+<details>
+<summary>
+<strong>All apps installations fail on Windows !</strong>
+<br>Tags: <kbd>APPS</kbd> <kbd>EXAMPLES</kbd>
+</summary>
+
+It might be related to unsufficient rights to create symlinks in Windows. You can set the environment variable `HF_HUB_DISABLE_SYMLINKS_WARNING` to 1 to remove the warnings that cause the failure.
+
+In a terminal, run :
+```bash
+powershell set HF_HUB_DISABLE_SYMLINKS_WARNING=1 
+```
+
+</details><br>
+
 ### 2.2 Web API
+
+<details>
+<summary>
+<strong>Does the robot have a Web API?</strong>
+<br>Tags: <kbd>APPS</kbd> <kbd>SDK</kbd> <kbd>PROGRAMMING</kbd>
+</summary>
+
+The Reachy Mini daemon provides a REST API that you can use to control the robot and get its state and even control the daemon itself. The API is implemented using [FastAPI](https://fastapi.tiangolo.com/) and [pydantic](https://docs.pydantic.dev/latest/) models.
+
+It should provide you all the necessary endpoints to interact with the robot, including:
+
+- Getting the state of the robot (joints positions, motor status, etc.)
+- Moving the robot's joints or setting specific poses
+
+The API is documented using OpenAPI, and you can access all available routes and test them at `http://localhost:8000/docs` when the daemon is running. You can also access the raw OpenAPI schema at `http://localhost:8000/openapi.json`.
+
+This can be useful if you want to generate client code for your preferred programming language or framework, connect it to your AI application, or even to create your MCP server.
+
+**WebSocket support**
+
+The API also supports WebSocket connections for real-time updates. For instance, you can subscribe to joint state updates:
+```
+let ws = new WebSocket(`ws://127.0.0.1:8000/api/state/ws/full`);
+
+ws.onmessage = (event) => {
+    const data = JSON.parse(event.data);
+    console.log(data);
+};
+```
+
+</details><br>
+
 
 ### 2.3 Develop Applications
 
@@ -258,7 +418,23 @@ Yes, users built local OpenAI-compatible integrations.
 <br>Tags: <kbd>SIMULATION</kbd> <kbd>SDK</kbd>
 </summary>
 
-Mentioned in discussions; models were being worked on but not yet official during beta.
+**Yes**, via **MuJoCo**. It is still a work in progress, but you can run code with the `--sim` flag or `ReachyMini(media_backend="no_media")` if just testing logic without physics.
+
+</details><br>
+
+<details>
+<summary>
+<strong>Warning: "Circular buffer overrun"</strong>
+<br>Tags: <kbd>SIMULATION</kbd> <kbd>TROUBLESHOOTING</kbd>
+</summary>
+
+When starting a client with `with ReachyMini() as mini:` in Mujoco (--sim mode), you may see the following warning:
+
+```
+Circular buffer overrun. To avoid, increase fifo_size URL option. To survive in such case, use overrun_nonfatal option
+```
+
+This message comes from FFmpeg (embedded in OpenCV) while consuming the UDP video stream. It appears because the frames are not being used, causing the buffer to fill up. If you do not intend to use the frames, set `ReachyMini(media_backend="no_media")` or `ReachyMini(media_backend="default_no_video")`.
 
 </details><br>
 
@@ -450,8 +626,9 @@ Tools to record and upload datasets:
 
 
 
-## 🎛 3. Hardware Guide
+## 3. 🤖 Hardware & Customization
 
+### 3.1 Motors & Limits
 
 <details>
 <summary>
@@ -542,12 +719,121 @@ This is now done automatically when the daemon starts, so restarting the daemon 
 </details><br>
 
 
+<details>
+<summary>
+<strong>Motors stop responding after a while.</strong>
+<br>Tags: <kbd>MOTORS</kbd> <kbd>POWER</kbd> <kbd>TROUBLESHOOTING</kbd>
+</summary>
+
+Check power supply and cable stability. Updating SDK also solved issues for multiple users.
+
+</details><br>
 
 
-## 🧠 4. Media & Sensors
+<details>
+<summary>
+<strong>Two motors side by side blink red</strong>
+<br>Tags: <kbd>MOTORS</kbd> <kbd>ASSEMBLY</kbd> <kbd>HARDWARE</kbd> <kbd>WIRELESS</kbd> <kbd>LITE</kbd>
+</summary>
+
+After starting the robot, each motors should be in its neutral position:
+
+![Neutral position](https://github.com/pollen-robotics/reachy_mini/raw/develop/docs/assets/neutral_position.png)
+
+If two motors side by side are blinking red, and are in a higher position (like motors 1&2 in the following picture), they are probably inverted.
+
+![Motors 1 & 2](https://github.com/pollen-robotics/reachy_mini/raw/develop/docs/assets/motors_1_2.png)
+
+Fix: verify that the numbers on the motors match to the correct location and invert two motors if needed.
+
+</details><br>
+
+
+### 3.2 Customization
+
+
+<details>
+<summary>
+<strong>Are CAD files available to customize Reachy Mini?</strong>
+<br>Tags: <kbd>CAD</kbd> <kbd>3D_PRINTING</kbd>
+</summary>
+
+Not currently public.
+
+</details><br>
+
+
+<details>
+<summary>
+<strong>Can I modify the appearance (custom skins)?</strong>
+<br>Tags: <kbd>CUSTOMIZATION</kbd> <kbd>SKINS</kbd>
+</summary>
+
+Community members shared custom builds, including a Star Wars astromech variant.
+
+</details><br>
+
+
+
+
+## 4. 👁️ Media & Sensors
 
 ### 4.1 Audio
 
+<details>
+<summary>
+<strong>The audio-based app behaves inconsistently.</strong>
+<br>Tags: <kbd>AUDIO</kbd> <kbd>REALTIME</kbd> <kbd>TROUBLESHOOTING</kbd>
+</summary>
+
+Streaming audio detection is harder than analyzing a complete file. Limitations come from real-time tempo extraction.
+
+</details><br>
+
+<details>
+<summary>
+<strong>No Microphone Input <i>(For beta only)</i></strong>
+<br>Tags: <kbd>AUDIO</kbd> <kbd>MEDIA</kbd>
+</summary>
+
+There is a known issue where the microphone may not initialize correctly. Please update to [firmware 2.1.3](https://github.com/pollen-robotics/reachy_mini/blob/develop/src/reachy_mini/assets/firmware/reachymini_ua_io16_lin_v2.1.3.bin). You may need to run the [update script](https://github.com/pollen-robotics/reachy_mini/blob/develop/src/reachy_mini/assets/firmware/update.sh). Linux users may require to run the command as *sudo*.
+
+Afterwards, run [examples/debug/sound_record.py](https://github.com/pollen-robotics/reachy_mini/blob/develop/examples/debug/sound_record.py) to check that everything is working properly.
+
+If the problem persists, check the connection of the flex cables ([see slides 45 to 47](https://huggingface.co/spaces/pollen-robotics/Reachy_Mini_Assembly_Guide)).
+
+</details><br>
+
+<details>
+<summary>
+<strong>Sound Direction of Arrival Not Working <i>(For beta only)</i></strong>
+<br>Tags: <kbd>AUDIO</kbd> <kbd>MEDIA</kbd>
+</summary>
+
+The microphone array requires firmware version 2.1.0 or higher to support this feature. The firmware files are located in `src/reachy_mini/assets/firmware/*.bin`.
+
+A [helper script](https://github.com/pollen-robotics/reachy_mini/blob/develop/src/reachy_mini/assets/firmware/update.sh) is available for Unix users (see above). Refer to the [Seeed documentation](https://wiki.seeedstudio.com/respeaker_xvf3800_introduction/#update-firmware) for more details on the upgrade process.
+
+</details><br>
+
+<details>
+<summary>
+<strong>Volume Is Too Low <i>(Linux only)</i></strong>
+<br>Tags: <kbd>AUDIO</kbd> <kbd>MEDIA</kbd>
+</summary>
+
+1.  Run `alsamixer`.
+2.  Set **PCM1** to 100%.
+3.  Use **PCM,0** to adjust the global volume.
+
+To make it permanent:
+```bash
+CARD=$(aplay -l | grep -i "reSpeaker" | head -n1 | sed -n 's/^card \([0-9]*\):.*/\1/p')
+amixer -c "$CARD" set PCM,1 100%
+sudo alsactl store "$CARD"
+```
+
+</details><br>
 
 <details>
 <summary>
@@ -581,8 +867,6 @@ with ReachyMini() as mini:
 ```
 
 </details><br>
-
-
 
 ### 4.2 Vision
 
@@ -636,33 +920,7 @@ You must have GStreamer binaries installed on your system. You can define custom
 
 
 
-## 🎨 5. Customization
-
-
-<details>
-<summary>
-<strong>Are CAD files available to customize Reachy Mini?</strong>
-<br>Tags: <kbd>CAD</kbd> <kbd>3D_PRINTING</kbd>
-</summary>
-
-Users asked for CAD files; no direct confirmation was provided in chatlogs.
-
-</details><br>
-
-
-<details>
-<summary>
-<strong>Can I modify the appearance (custom skins)?</strong>
-<br>Tags: <kbd>CUSTOMIZATION</kbd> <kbd>SKINS</kbd>
-</summary>
-
-Community members shared custom builds, including a Star Wars astromech variant.
-
-</details><br>
-
-
-
-## 👀 6. Interaction feature
+## 6. 👀 Interaction feature
 
 <details>
 <summary>
@@ -682,6 +940,16 @@ Yes, users implemented wake-up behaviors and audio-reactive motions in the Radio
 </summary>
 
 Yes, with GStreamer + OpenCV, users achieved real-time face detection successfully.
+
+</details><br>
+
+<details>
+<summary>
+<strong>Reachy’s face tracking seems slow or inaccurate.</strong>
+<br>Tags: <kbd>VISION</kbd> <kbd>FACE_TRACKING</kbd>
+</summary>
+
+Performance relies heavily on **lighting conditions**. Ensure the face is well-lit. Using the GStreamer backend can also improve latency compared to the default OpenCV backend.
 
 </details><br>
 
@@ -729,7 +997,7 @@ The world frame is illustrated in the docs (world_frame image).
 
 
 
-## 🤝 7. Contributing
+## 7. 🤝 Contributing
 
 
 <details>
@@ -761,7 +1029,7 @@ Via pull requests on our [GitHub](https://github.com/pollen-robotics/reachy_mini
 <details>
 <summary>
 <strong>How can I contribute to datasets of moves (dances/emotions)?</strong>
-<br>Tags: <kbd>CODING DATASET</kbd> <kbd>CONTRIBUTING</kbd> <kbd>MOVEMENT</kbd>
+<br>Tags: <kbd>DATASET</kbd> <kbd>CONTRIBUTING</kbd> <kbd>MOVEMENT</kbd>
 </summary>
 
 Use the tools in:
@@ -777,48 +1045,27 @@ They help you:
 
 
 
-## 📦 8. Post-sales
+## 8. 📦 Shipping & Warranty
 
 <details>
 <summary>
-<strong>I haven’t received my package. How can I check it?</strong>
-<br>Tags: <kbd>DELIVERY</kbd> <kbd>SHIPPING</kbd> <kbd>POST_SALES</kbd>
+<strong>My package is damaged or missing.</strong>
+<br>Tags: <kbd>SHIPPING</kbd>
 </summary>
 
-TODO
+Contact **Pollen Robotics** team immediately. You can send us an email to sales@pollen-robotics.com with photos of the package, receipt number or invoice number and your full name. We will then check with the transport company and keep you updated.
 
 </details><br>
 
 
 <details>
 <summary>
-<strong>I received my package but its severely damage.</strong>
-<br>Tags: <kbd>DELIVERY</kbd> <kbd>SHIPPING</kbd> <kbd>POST_SALES</kbd>
+<strong>Refund Policy</strong>
+<br>Tags: <kbd>REFUND</kbd>
 </summary>
 
-If the damage is caused during shipment, we will claim with the transporter and then provide related compensation or solutions to the clients.
-
-</details><br>
-
-
-<details>
-<summary>
-<strong>Can I have a refund (before the unit being shipped)?</strong>
-<br>Tags: <kbd>REFUND</kbd> <kbd>POST_SALES</kbd>
-</summary>
-
-TODO
-
-</details><br>
-
-
-<details>
-<summary>
-<strong>Can I have a refund (after the unit being shipped)?</strong>
-<br>Tags: <kbd>REFUND</kbd> <kbd>POST_SALES</kbd>
-</summary>
-
-TODO
+* **Before shipping:** Contact `sales@pollen-robotics.com` for a 100% refund.
+* **After shipping:** You have 30 days to return your package. Contact sales (sales@pollen-robotics.com) with proof of delivery and invoice or receipt number. If you have comments / feedback, please let us know, our focus is building a robot the open-source community enjoys building. 
 
 </details><br>
 
@@ -826,10 +1073,10 @@ TODO
 <details>
 <summary>
 <strong>Warranty: My unit is malfunctioning / broken part ?</strong>
-<br>Tags: <kbd>WARRANTY</kbd> <kbd>POST_SALES</kbd>
+<br>Tags: <kbd>WARRANTY</kbd>
 </summary>
 
-Our after-sale team will involve in to confirm if it's the hardware problem and if it's under warranty, if it is, we will either repair or replace the parts, depending on the situation.
+If a part is broken/malfunctioning, Pollen's after-sales team will determine if it is a hardware defect covered by warranty. Then, our manufacturer will provide repair or replacement parts. You can send us an email to sales@pollen-robotics.com with photos of the issue, receipt number or invoice number and your full name.
 
 </details><br>
 
