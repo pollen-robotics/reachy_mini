@@ -8,10 +8,11 @@ Welcome to the Reachy Mini support page. Click on the questions below to reveal 
 <details>
 <summary><strong>Motor blinking red or Overload Error</strong></summary>
 
-If you get "Motor hardware errors: ['Overload Error']" a few second after starting the robot for the first time.
+If you get "Motor hardware errors: ['Overload Error']" a few second after starting the robot **for the first time.**
 
-It is VERY likely there are motor not in the good slot, e.g motor 4 on slot 3
+It is VERY likely there are motors not placed in the good slot, e.g motor 1 on slot 2
 
+Check assembly guide:
 
 - [**Reachy Mini Wireless - Step-by-Step Guide**](https://huggingface.co/spaces/pollen-robotics/Reachy_Mini_Assembly_Guide)
 - [**Reachy Mini LITE - Step-by-Step Guide**](https://huggingface.co/spaces/pollen-robotics/Reachy_Mini_LITE_Assembly_Guide)
@@ -22,12 +23,15 @@ It is VERY likely there are motor not in the good slot, e.g motor 4 on slot 3
 <details>
 
 <summary><strong>A motor feels broken</strong></summary>
-We identified an issue affecting a limited production batch of Reachy Mini robots, related to a faulty Dynamixel motor.
-In most reported cases, the issue affects often motor number 4 or one with QC label n°2544. 
+We identified an issue affecting a limited production batch of Reachy Mini robots, related to a faulty batch of Dynamixel motor. 
 
-If one of your motors, feels blocked or unusually hard to move, when turned off [(example video here)](https://drive.google.com/file/d/1UHTqUcb21aFThqlr2Qcx23VWqvj_y-ly/view?usp=sharing), please  fill out this short form so we can track and resolve your case: 
+In most reported cases, the issue affects motor number 4 or one with QC label n°2544.
 
-👉 https://forms.gle/JdhMzadeCnbynw7Q6
+If one of your motors, feels blocked or unusually hard to move, when turned off [(example video here)](https://drive.google.com/file/d/1UHTqUcb21aFThqlr2Qcx23VWqvj_y-ly/view?usp=sharing), and you are 100% sure the motor was in the correct slot.
+
+It's probably a broken motor.
+
+Please fill out this short form so we can track and ship you a new motor:  https://forms.gle/JdhMzadeCnbynw7Q6
 
 </details>
 
@@ -56,7 +60,7 @@ For more details, see the documentation:
 This is a manufacturing issue.
 
 It is easy to fix by following this guide:  
-[Antenna repositioning guide](https://cdn.discordapp.com/attachments/1450364269886705757/1450801804374970529/reachy-mini-antenna-mismounted-v3.pdf?ex=69452d78&is=6943dbf8&hm=1c870bd64b3e476501b665c83c7de9412a4495f8e059bb3a9f3d7fd1f5e188f1&)
+[Antenna repositioning guide](https://drive.google.com/file/d/1FsmNpwELuXUbdhGHDMjG_CNpYXOMtR7A/view?usp=drive_link)
 
 </details>
 
