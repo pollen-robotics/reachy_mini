@@ -43,12 +43,13 @@ It is easy to fix by following this guide:
 
 <details>
 
-<summary><strong>Broken Motor 4</strong></summary>
-
+<summary><strong>A motor feels broken</strong></summary>
 We identified an issue affecting a limited production batch of Reachy Mini robots, related to a faulty Dynamixel motor.
 In most reported cases, the issue affects motor number 4.
 
-If your robot is impacted, [go on this form](https://forms.gle/eAZXTgPhrtAx4Dx99), to report the problem so we can quickly validate the case and ship a replacement motor.
+If one of your motors, feels blocked or unusually hard to move, when turned off [(example video here)](https://drive.google.com/file/d/1UHTqUcb21aFThqlr2Qcx23VWqvj_y-ly/view?usp=sharing), please  fill out this short form so we can track and resolve your case: 
+
+👉 https://forms.gle/JdhMzadeCnbynw7Q6
 
 </details>
 
