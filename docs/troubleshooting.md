@@ -4,11 +4,30 @@ Welcome to the Reachy Mini support page. Click on the questions below to reveal 
 
 ##  Known Issues - Batch December 2025
 
-<details>
-<summary><strong>The head may touch the body during some official motions</strong></summary>
 
-This behavior is expected and not a hardware or software bug.  
-However, since it can be confusing, we will update those motions to avoid this contact.
+<details>
+<summary><strong>Motor blinking red or Overload Error</strong></summary>
+
+If you get "Motor hardware errors: ['Overload Error']" a few second after starting the robot for the first time.
+
+It is VERY likely there are motor not in the good slot, e.g motor 4 on slot 3
+
+
+- [**Reachy Mini Wireless - Step-by-Step Guide**](https://huggingface.co/spaces/pollen-robotics/Reachy_Mini_Assembly_Guide)
+- [**Reachy Mini LITE - Step-by-Step Guide**](https://huggingface.co/spaces/pollen-robotics/Reachy_Mini_LITE_Assembly_Guide)
+
+
+</details>
+
+<details>
+
+<summary><strong>A motor feels broken</strong></summary>
+We identified an issue affecting a limited production batch of Reachy Mini robots, related to a faulty Dynamixel motor.
+In most reported cases, the issue affects often motor number 4 or one with QC label n°2544. 
+
+If one of your motors, feels blocked or unusually hard to move, when turned off [(example video here)](https://drive.google.com/file/d/1UHTqUcb21aFThqlr2Qcx23VWqvj_y-ly/view?usp=sharing), please  fill out this short form so we can track and resolve your case: 
+
+👉 https://forms.gle/JdhMzadeCnbynw7Q6
 
 </details>
 
@@ -42,21 +61,6 @@ It is easy to fix by following this guide:
 </details>
 
 <details>
-
-<summary><strong>A motor feels broken</strong></summary>
-We identified an issue affecting a limited production batch of Reachy Mini robots, related to a faulty Dynamixel motor.
-In most reported cases, the issue affects motor number 4.
-
-If one of your motors, feels blocked or unusually hard to move, when turned off [(example video here)](https://drive.google.com/file/d/1UHTqUcb21aFThqlr2Qcx23VWqvj_y-ly/view?usp=sharing), please  fill out this short form so we can track and resolve your case: 
-
-👉 https://forms.gle/JdhMzadeCnbynw7Q6
-
-</details>
-
-
-##  Most commons questions
-
-<details>
 <summary><strong>I have 2 cables and a few screws left after finishing the assembly. Is this normal?</strong></summary>
 
 Yes, this is completely normal.  
@@ -74,19 +78,12 @@ You do not need to install them.
 </details>
 
 <details>
-<summary><strong>Motor blinking red or Overload Error</strong></summary>
+<summary><strong>The head may touch the body during some official motions</strong></summary>
 
-If you get "Motor hardware errors: ['Overload Error']" a few second after starting the robot for the first time.
-
-It is VERY likely there are motor not in the good slot, e.g motor 4 on slot 3
-
-
-- [**Reachy Mini Wireless - Step-by-Step Guide**](https://huggingface.co/spaces/pollen-robotics/Reachy_Mini_Assembly_Guide)
-- [**Reachy Mini LITE - Step-by-Step Guide**](https://huggingface.co/spaces/pollen-robotics/Reachy_Mini_LITE_Assembly_Guide)
-
+This behavior is expected and not a hardware or software bug.  
+However, since it can be confusing, we will update those motions to avoid this contact.
 
 </details>
-
 
 
 ## 📋 Table of Contents
