@@ -2933,6 +2933,7 @@ dependencies = [
     { name = "scipy" },
     { name = "sounddevice" },
     { name = "soundfile" },
+    { name = "toml" },
     { name = "uvicorn", extra = ["standard"] },
     { name = "websockets" },
 ]
@@ -3027,6 +3028,7 @@ requires-dist = [
     { name = "semver", marker = "extra == 'wireless-version'", specifier = ">=3,<4" },
     { name = "sounddevice", specifier = "==0.5.1" },
     { name = "soundfile", specifier = "==0.13.1" },
+    { name = "toml" },
     { name = "types-requests", marker = "extra == 'dev'" },
     { name = "urdf-parser-py", marker = "extra == 'dev'", specifier = "==0.0.4" },
     { name = "urdf-parser-py", marker = "extra == 'rerun'", specifier = "==0.0.4" },

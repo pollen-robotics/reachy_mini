@@ -1,10 +1,13 @@
 """Camera API endpoints."""
 
+from typing import Any, cast
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from reachy_mini.daemon.daemon import Daemon
+from reachy_mini.media.media_manager import MediaBackend
 
 router = APIRouter(prefix="/camera", tags=["camera"])
 
@@ -28,8 +31,8 @@ class WebRTCOffer(BaseModel):
 class WebRTCAnswer(BaseModel):
     """Response model for WebRTC answer."""
 
-    answer: dict
-    ice_candidates: list[dict]
+    answer: dict[str, Any]
+    ice_candidates: list[dict[str, Any]]
 
 
 class WebRTCCandidate(BaseModel):
@@ -42,7 +45,7 @@ class WebRTCCandidate(BaseModel):
 
 def get_daemon(request: Request) -> Daemon:
     """Dependency to get the daemon instance."""
-    return request.app.state.daemon
+    return cast(Daemon, request.app.state.daemon)
 
 
 @router.get("/status")
@@ -112,7 +115,7 @@ async def handle_webrtc_offer(offer: WebRTCOffer, daemon: Daemon = Depends(get_d
     """
     try:
         # Check if WebRTC backend is available
-        if daemon.media_manager is None or daemon.media_manager.backend != "webrtc":
+        if daemon.media_manager is None or daemon.media_manager.backend != MediaBackend.WEBRTC:
             raise HTTPException(
                 status_code=400,
                 detail="WebRTC backend not available"
@@ -173,7 +176,7 @@ async def handle_ice_candidate(candidate: WebRTCCandidate, daemon: Daemon = Depe
     """
     try:
         # Check if WebRTC backend is available
-        if daemon.media_manager is None or daemon.media_manager.backend != "webrtc":
+        if daemon.media_manager is None or daemon.media_manager.backend != MediaBackend.WEBRTC:
             raise HTTPException(
                 status_code=400,
                 detail="WebRTC backend not available"
