@@ -237,6 +237,7 @@ uv add reachy-mini --extra mujoco
 In your terminal, run:
 ```bash
 git clone https://github.com/pollen-robotics/reachy_mini && cd reachy_mini
+brew install cmake pkg-config cairo
 uv sync
 ```
 
