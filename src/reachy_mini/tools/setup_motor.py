@@ -261,6 +261,14 @@ def check_configuration(
         )
     print(f"Return delay time is correct: {return_delay} ✅.")
 
+    # Read operating mode
+    operating_mode = c.read_operating_mode(motor_config.id)[0]
+    if operating_mode != motor_config.operating_mode:
+        raise RuntimeError(
+            f"Operating mode is {operating_mode}, expected {motor_config.operating_mode}"
+        )
+    print(f"Operating mode is correct: {operating_mode} ✅.")
+
     # Read angle limits
     angle_limit_min = c.read_raw_min_position_limit(motor_config.id)[0]
     angle_limit_max = c.read_raw_max_position_limit(motor_config.id)[0]
