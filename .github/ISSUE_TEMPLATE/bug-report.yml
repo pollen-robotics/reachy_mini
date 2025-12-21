@@ -83,19 +83,12 @@ body:
     id: version-status
     attributes:
       label: Update Status
-      description: Confirm you're running an up-to-date setup.
+      description: Select all that apply (at least one must be true).
       options:
         - label: My robot is up-to-date via the dashboard.
         - label: I'm running the latest Reachy Mini release from this repo.
     validations:
       required: true
-
-  - type: textarea
-    id: system-info
-    attributes:
-      label: Environment & System Info
-      description: Include firmware version, OS build, app versions, or tooling that might help debug.
-      render: Shell
 
   - type: textarea
     id: description
