@@ -1,0 +1,132 @@
+# Reachy Mini issue template modeled after LeRobot's for consistent reports.
+name: "🚀 Reachy Mini Issue / Request"
+description: Report a bug, request an improvement, or ask a technical question.
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ### Thanks for contributing to Reachy Mini! 🙌
+        Please include as much detail as possible so we can help quickly.
+        **Before filing a ticket, you must read our [Troubleshooting Guide](https://github.com/pollen-robotics/reachy_mini/blob/develop/docs/troubleshooting.md).**
+
+  - type: dropdown
+    id: issue-type
+    attributes:
+      label: Ticket Type
+      description: What kind of ticket are you opening?
+      options:
+        - "🐛 Bug Report"
+        - "💡 Feature Request / Improvement"
+        - "❓ Technical Question"
+        - "🧹 Maintenance / Documentation"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: robot-type
+    attributes:
+      label: Robot Type
+      description: Select the Reachy Mini hardware you are using.
+      options:
+        - Wireless
+        - Lite
+    validations:
+      required: true
+
+  - type: dropdown
+    id: operating-system
+    attributes:
+      label: Operating System
+      description: Choose the OS from which you are controlling Reachy Mini.
+      options:
+        - Windows
+        - macOS
+        - Linux
+        - Other (please describe below)
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: browsers
+    attributes:
+      label: Browsers Used
+      description: Check all browsers you've tried when reproducing the issue.
+      options:
+        - label: Chrome
+        - label: Firefox
+        - label: Edge
+        - label: Safari
+        - label: Opera
+        - label: Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: browser-version
+    attributes:
+      label: Browser version(s)
+      description: If relevant, list the browser versions you used.
+      placeholder: |
+        Chrome 130.0.6723.20, Firefox 131.0, etc.
+
+  - type: checkboxes
+    id: troubleshooting
+    attributes:
+      label: Troubleshooting
+      description: Confirm you reviewed the troubleshooting guide before opening this ticket.
+      options:
+        - label: I have read https://github.com/pollen-robotics/reachy_mini/blob/develop/docs/troubleshooting.md
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: version-status
+    attributes:
+      label: Update Status
+      description: Confirm you're running an up-to-date setup.
+      options:
+        - label: My robot is up-to-date via the dashboard.
+        - label: I'm running the latest Reachy Mini release from this repo.
+    validations:
+      required: true
+
+  - type: textarea
+    id: system-info
+    attributes:
+      label: Environment & System Info
+      description: Include firmware version, OS build, app versions, or tooling that might help debug.
+      render: Shell
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: Provide a clear summary of the issue or your proposal.
+      placeholder: |
+        A concise description of the issue or suggestion.
+    validations:
+      required: true
+
+  - type: textarea
+    id: context-repro
+    attributes:
+      label: Context & Reproduction
+      description: Steps to reproduce, commands run, or code snippets (use code blocks for clarity).
+      placeholder: |
+        Steps to reproduce / Usage example:
+        1.
+        2.
+        3.
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs or stack trace
+      description: Paste relevant logs, CLI output, or stack traces.
+      render: Shell
+
+  - type: textarea
+    id: workaround
+    attributes:
+      label: Additional Info / Workarounds
+      description: Anything else we should know? Include workarounds if you found any.
