@@ -36,6 +36,14 @@ Please fill out this short form so we can track and ship you a new motor:  https
 </details>
 
 <details>
+<summary><strong>Head tilted, A motor is not moving at all, but get stiff when powered on, and doesn't blink red </strong></summary>
+
+This behavior happen when a motor (often n°1) has not been flashed properly during the manufacturing process.  
+=> Please update reachy mini's software and run the ```reachy-mini-reflash-motors``` script. 
+
+</details>
+
+<details>
 
 <summary><strong>Low audio volume</strong></summary>
 
@@ -104,6 +112,18 @@ However, since it can be confusing, we will update those motions to avoid this c
 <br>
 
 ## 🚀 Getting Started & Assembly
+
+<details>
+<summary><strong>I miss a part in my package</strong></summary>
+
+A mistake during the shipping process can happen.  
+But in most cases, the part is just hidden in another box of the package. So please unpack everything first.  
+Some parts are already pre-assembled too, (e.g the bottom head part is already placed in the back head part).  
+    ![Head Parts pre-assembly](/docs/assets/head_parts.jpg)
+
+If you are 100% sure you miss a part, please contact sales@pollen-robotics.com with a picture of all the parts you have and order number or invoice number.  
+You can also find [stl files](https://github.com/pollen-robotics/reachy_mini/tree/develop/src/reachy_mini/descriptions/reachy_mini/mjcf/assets) to print it by yourself in the meantime.  
+</details>
 
 <details>
 <summary><strong>How long does assembly usually take?</strong></summary>
