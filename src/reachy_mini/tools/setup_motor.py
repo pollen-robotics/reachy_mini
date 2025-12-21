@@ -108,6 +108,15 @@ def setup_motor(
         )
 
         time.sleep(MOTOR_SETUP_DELAY)
+
+        change_operating_mode(
+            serial_port,
+            id=motor_config.id,
+            operating_mode=motor_config.operating_mode,
+            baudrate=target_baudrate,
+        )
+
+        time.sleep(MOTOR_SETUP_DELAY)
     except Exception as e:
         print(f"Error while setting up motor ID {from_id}: {e}")
         raise e
@@ -161,6 +170,20 @@ def change_offset(serial_port: str, id: int, offset: int, baudrate: int) -> None
     print(f"Changing offset for motor with ID {id} to {offset}...", end="", flush=True)
     c = Xl330PyController(serial_port, baudrate=baudrate, timeout=SERIAL_TIMEOUT)
     c.write_homing_offset(id, offset)
+    print("✅")
+
+
+def change_operating_mode(
+    serial_port: str, id: int, operating_mode: int, baudrate: int
+) -> None:
+    """Change the operating mode of the motor with the given ID on the specified serial port."""
+    print(
+        f"Changing operating mode for motor with ID {id} to {operating_mode}...",
+        end="",
+        flush=True,
+    )
+    c = Xl330PyController(serial_port, baudrate=baudrate, timeout=SERIAL_TIMEOUT)
+    c.write_operating_mode(id, operating_mode)
     print("✅")
 
 
@@ -260,6 +283,14 @@ def check_configuration(
             f"Return delay time is {return_delay}, expected {motor_config.return_delay_time}"
         )
     print(f"Return delay time is correct: {return_delay} ✅.")
+
+    # Read operating mode
+    operating_mode = c.read_operating_mode(motor_config.id)[0]
+    if operating_mode != motor_config.operating_mode:
+        raise RuntimeError(
+            f"Operating mode is {operating_mode}, expected {motor_config.operating_mode}"
+        )
+    print(f"Operating mode is correct: {operating_mode} ✅.")
 
     # Read angle limits
     angle_limit_min = c.read_raw_min_position_limit(motor_config.id)[0]
