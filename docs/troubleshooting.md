@@ -6,6 +6,25 @@ Welcome to the Reachy Mini support page. Click on the questions below to reveal 
 
 
 <details>
+<summary><strong>Before anything else: update & restart</strong></summary>
+
+**Make sure you are using up-to-date software and that you have restarted both your robot and your computer.**  
+To restart your robot, press OFF, wait 5 seconds, then press ON. This simple procedure fixes several common and well-known issues.
+
+**How to update the software:**
+
+- **If you are using the dashboard in a web browser**  
+  Open `Settings`, then click **Check for updates**.
+- **If you are using the new dashboard**  
+  TODO, but should be simple
+- **If you are using a cloned repository**  
+  Make sure you are either:
+  - On the latest tagged release, or
+  - Up to date with the `develop` branch (`git pull`).
+
+</details>
+
+<details>
 <summary><strong>Motor blinking red or Overload Error</strong></summary>
 
 If you get "Motor hardware errors: ['Overload Error']" a few second after starting the robot **for the first time.**
