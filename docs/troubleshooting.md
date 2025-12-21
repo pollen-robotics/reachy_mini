@@ -39,7 +39,7 @@ Please fill out this short form so we can track and ship you a new motor:  https
 <summary><strong>Head tilted, A motor is not moving at all, but get stiff when powered on, and doesn't blink red </strong></summary>
 
 This behavior happen when a motor (often n°1) has not been flashed properly during the manufacturing process.  
-=> Please update reachy mini's software and run the ```reachy-mini-reflash-motors``` script. 
+=> Please power your robot but don't turn it on with the dashboard/daemon, then update reachy mini's software and run the ```reachy-mini-reflash-motors``` script. 
 
 </details>
 
