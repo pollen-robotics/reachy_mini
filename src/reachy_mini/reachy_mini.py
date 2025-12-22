@@ -138,7 +138,7 @@ class ReachyMini:
         daemon_status = self.client.get_status()
 
         # If wireless, force webrtc unless no_media is selected
-        if media_backend != MediaBackend.NO_MEDIA and daemon_status.get(
+        if media_backend != "no_media" and daemon_status.get(
             "wireless_version"
         ):
             mbackend = MediaBackend.WEBRTC
