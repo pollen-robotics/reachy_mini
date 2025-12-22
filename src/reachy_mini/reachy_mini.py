@@ -136,28 +136,35 @@ class ReachyMini:
     ) -> MediaManager:
         mbackend = MediaBackend.DEFAULT
         daemon_status = self.client.get_status()
-        match media_backend.lower():
-            case "webrtc":
-                if not daemon_status.get("wireless_version"):
-                    self.logger.warning(
-                        "Non-wireless version detected, daemon should use the flag '--wireless-version'. Reverting to default"
-                    )
+
+        # If wireless, force webrtc unless no_media is selected
+        if media_backend != MediaBackend.NO_MEDIA and daemon_status.get(
+            "wireless_version"
+        ):
+            mbackend = MediaBackend.WEBRTC
+        else:
+            match media_backend.lower():
+                case "webrtc":
+                    if not daemon_status.get("wireless_version"):
+                        self.logger.warning(
+                            "Non-wireless version detected, daemon should use the flag '--wireless-version'. Reverting to default"
+                        )
+                        mbackend = MediaBackend.DEFAULT
+                    else:
+                        self.logger.info("WebRTC backend configured successfully.")
+                        mbackend = MediaBackend.WEBRTC
+                case "gstreamer":
+                    mbackend = MediaBackend.GSTREAMER
+                case "default":
                     mbackend = MediaBackend.DEFAULT
-                else:
-                    self.logger.info("WebRTC backend configured successfully.")
-                    mbackend = MediaBackend.WEBRTC
-            case "gstreamer":
-                mbackend = MediaBackend.GSTREAMER
-            case "default":
-                mbackend = MediaBackend.DEFAULT
-            case "no_media":
-                mbackend = MediaBackend.NO_MEDIA
-            case "default_no_video":
-                mbackend = MediaBackend.DEFAULT_NO_VIDEO
-            case _:
-                raise ValueError(
-                    f"Invalid media_backend '{media_backend}'. Supported values are 'default', 'gstreamer', 'no_media', 'default_no_video', and 'webrtc'."
-                )
+                case "no_media":
+                    mbackend = MediaBackend.NO_MEDIA
+                case "default_no_video":
+                    mbackend = MediaBackend.DEFAULT_NO_VIDEO
+                case _:
+                    raise ValueError(
+                        f"Invalid media_backend '{media_backend}'. Supported values are 'default', 'gstreamer', 'no_media', 'default_no_video', and 'webrtc'."
+                    )
 
         return MediaManager(
             use_sim=self.client.get_status()["simulation_enabled"],
