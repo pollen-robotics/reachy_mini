@@ -220,7 +220,7 @@
 
 		<div class="commands">
 			<button class="command-btn" data-command="PING" disabled>Ping</button>
-			<button class="command-btn" data-command="STATUS" disabled>Status</button>
+			<button class="command-btn" data-command="NETWORK_STATUS" disabled>Network Status</button>
 			<button class="command-btn" data-command="CMD_HOTSPOT" disabled>Hotspot</button>
 			<button class="command-btn danger" data-command="CMD_RESTART_DAEMON" disabled>Restart Daemon</button>
 			<button class="command-btn warning" data-command="CMD_SOFTWARE_RESET" disabled>Software Reset</button>
@@ -249,6 +249,7 @@
 		let device = null;
 		let commandCharacteristic = null;
 		let responseCharacteristic = null;
+		let networkStatusCharacteristic = null;
 		const statusEl = document.getElementById('status');
 		const connectBtn = document.getElementById('connectBtn');
 		const commandBtns = document.querySelectorAll('.command-btn');
@@ -260,6 +261,10 @@
 		const SERVICE_UUID = '12345678-1234-5678-1234-56789abcdef0';
 		const COMMAND_CHAR_UUID = '12345678-1234-5678-1234-56789abcdef1';
 		const RESPONSE_CHAR_UUID = '12345678-1234-5678-1234-56789abcdef2';
+
+		// Reachy Status Service UUIDs
+		const REACHY_STATUS_SERVICE_UUID = '12345678-1234-5678-1234-56789abcdef3';
+		const NETWORK_STATUS_UUID = '12345678-1234-5678-1234-56789abcdef4';
 
 		// Check if Web Bluetooth is supported
 		if (!navigator.bluetooth) {
@@ -297,7 +302,7 @@
 
 				device = await navigator.bluetooth.requestDevice({
 					filters: [{ name: 'ReachyMini' }],
-					optionalServices: [SERVICE_UUID]
+					optionalServices: [SERVICE_UUID, REACHY_STATUS_SERVICE_UUID]
 				});
 
 				addLog(`Found device: ${device.name}`);
@@ -322,6 +327,15 @@
 				await responseCharacteristic.startNotifications();
 				responseCharacteristic.addEventListener('characteristicvaluechanged', handleResponse);
 				addLog('Notifications enabled for responses');
+
+				// Get the network status characteristic from Reachy Status Service
+				try {
+					const reachyStatusService = await server.getPrimaryService(REACHY_STATUS_SERVICE_UUID);
+					networkStatusCharacteristic = await reachyStatusService.getCharacteristic(NETWORK_STATUS_UUID);
+					addLog('Got network status characteristic');
+				} catch (error) {
+					addLog('Network status characteristic not available', 'error');
+				}
 
 				updateStatus('Connected to ReachyMini', 'connected');
 				addLog('Successfully connected!', 'success');
@@ -368,6 +382,7 @@
 			commandBtns.forEach(btn => btn.disabled = true);
 			commandCharacteristic = null;
 			responseCharacteristic = null;
+			networkStatusCharacteristic = null;
 			device = null;
 		}
 
@@ -384,7 +399,29 @@
 				return;
 			}
 
-			// Validate PIN
+			// Special handling for NETWORK_STATUS - read from characteristic instead of sending command
+			if (command === 'NETWORK_STATUS') {
+				if (!networkStatusCharacteristic) {
+					addLog('Network status characteristic not available', 'error');
+					showResponse('❌ Network status not available');
+					return;
+				}
+
+				try {
+					addLog('Reading network status...', '');
+					const value = await networkStatusCharacteristic.readValue();
+					const decoder = new TextDecoder('utf-8');
+					const status = decoder.decode(value);
+					addLog(`Network Status: ${status}`, 'success');
+					showResponse(`📡 ${status}`);
+				} catch (error) {
+					addLog(`Failed to read network status: ${error.message}`, 'error');
+					showResponse(`❌ Failed to read network status`);
+				}
+				return;
+			}
+
+			// Validate PIN for other commands
 			const pin = pinInput.value.trim();
 			if (!pin || pin.length !== 5 || !/^\d{5}$/.test(pin)) {
 				addLog('Invalid PIN: Must be exactly 5 digits', 'error');
