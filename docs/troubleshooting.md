@@ -116,6 +116,18 @@ However, since it can be confusing, we will update those motions to avoid this c
 
 </details>
 
+<details>
+<summary><strong>Can't connect to my Wireless Reachy Mini using a USB-C cable</strong></summary>
+
+Wireless units do not expose the robot over USB the way the Lite version does, so plugging a USB-C cable into your laptop will not give you a working connection.  
+Instead:
+
+- Join the robot to your Wi-Fi network and use the SDK client on your laptop to control it remotely.
+- If you want to run code directly on the embedded Raspberry Pi, SSH in and execute your scripts there (this is what the Dashboard does after you publish/install an app).
+- For a tethered link, use a USB-C-to-Ethernet adapter plus an Ethernet cable—this simply replaces Wi-Fi with wired Ethernet.
+
+</details>
+
 
 ## 📋 Table of Contents
 
