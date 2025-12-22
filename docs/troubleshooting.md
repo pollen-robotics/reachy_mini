@@ -3,7 +3,7 @@
 Welcome to the Reachy Mini support page. Click on the questions below to reveal the answers.
 
 ##  Troubleshooting - Batch December 2025
-### Essential troubleshooting - Please read this first
+### Essential troubleshooting - Please read this first, it solves all well-known issues!
 
 
 <details><summary><strong>Before anything else and for any issue: update & restart</strong></summary>
@@ -99,7 +99,7 @@ It can also be the same issue as "Motor blinking red or Overload Error" describe
 
 <details>
 
-<summary><strong>Missing Motor Error</strong></summary>
+<summary><strong>Missing Motor Error / No motor found on port</strong></summary>
 
 - Make sure you have plugged all the motor cables correctly.
 - Make sure you have every motor and not two same motor in the kit. Refer to the label on each motor. e.g motor 1, motor 2, motor 3, motor 4, L motor, R motor...  
@@ -162,6 +162,19 @@ However, since it can be confusing, we will update those motions to avoid this c
 </details>
 
 <details>
+<summary><strong>A part is missing in my package</strong></summary>
+
+Be sure to unpack everything first. Some parts are pre-assembled (e.g the bottom head part is already placed in the back head part).
+
+![head_parts](/docs/assets/head_parts.jpg)
+
+Then, check the assembly guide's parts list to see if you really miss a part:
+If you are 100% sure you miss a part, please contact sales@pollen-robotics.com with a picture of all the parts you have and order number or invoice number.  
+You can also find [stl files](https://github.com/pollen-robotics/reachy_mini/tree/develop/src/reachy_mini/descriptions/reachy_mini/mjcf/assets) to print it by yourself in the meantime.
+</details>
+
+
+<details>
 <summary><strong>Can't connect to my Wireless Reachy Mini using a USB-C cable</strong></summary>
 
 Wireless units do not expose the robot over USB the way the Lite version does, so plugging a USB-C cable into your laptop will not give you a working connection.  
@@ -173,8 +186,9 @@ Instead:
 
 </details>
 
+#### If your issue/question is not listed here, please check the full FAQ below.
 
-## 📋 Table of Contents
+## 📋 FAQ Table of Contents
 
 1.  [🚀 Getting Started & Assembly](#-getting-started--assembly)
 2.  [🔌 Connection & Dashboard](#-connection--dashboard)
@@ -188,18 +202,6 @@ Instead:
 <br>
 
 ## 🚀 Getting Started & Assembly
-
-<details>
-<summary><strong>I miss a part in my package</strong></summary>
-
-A mistake during the shipping process can happen.  
-But in most cases, the part is just hidden in another box of the package. So please unpack everything first.  
-Some parts are already pre-assembled too, (e.g the bottom head part is already placed in the back head part).  
-    ![Head Parts pre-assembly](/docs/assets/head_parts.jpg)
-
-If you are 100% sure you miss a part, please contact sales@pollen-robotics.com with a picture of all the parts you have and order number or invoice number.  
-You can also find [stl files](https://github.com/pollen-robotics/reachy_mini/tree/develop/src/reachy_mini/descriptions/reachy_mini/mjcf/assets) to print it by yourself in the meantime.  
-</details>
 
 <details>
 <summary><strong>How long does assembly usually take?</strong></summary>
@@ -222,11 +224,13 @@ Testers generally describe it as fun and simple. The trickiest parts are usually
 
 * **Power Supply:** Ensure the 7V-5A power supply is plugged in. The USB connection is not enough to power the motors.
 * **Cables:** Check that all cables are fully inserted. Loose power cables are a common cause of "motor not responding" errors.
+* **Troubleshooting Section:** See the Essential Troubleshooting section at the top of this page.
 
 </details>
 
 <details>
 <summary><strong>Do I need to start the daemon manually?</strong></summary>
+
 **NO** 
 
 - With Reachy Mini (Wireless), the daemon is already running on the embedded Raspberry Pi.
@@ -240,7 +244,8 @@ Testers generally describe it as fun and simple. The trickiest parts are usually
 
 <details>
 <summary><strong>How do I connect the robot to Wi-Fi?</strong></summary>
-See the [Reachy Mini Wireless guide](/docs/platforms/reachy_mini/get_started.md).
+
+See the [Reachy Mini Wireless guide](/docs/platforms/reachy_mini/get_started.md) for detailed instructions on connecting to Wi-Fi.
 
 </details>
 
