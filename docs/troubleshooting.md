@@ -199,15 +199,12 @@ See the [Reachy Mini Wireless guide](/docs/platforms/reachy_mini/get_started.md)
 
 </details>
 
-</details> <br>
-
 <details>
-<summary><strong>How do I reset the Wi-Fi hotspot?</strong>
-<br>Tags: <kbd>WiFi</kbd> <kbd>TROUBLESHOOTING</kbd> <kbd>WIRELESS</kbd></summary>
+<summary><strong>How do I reset the Wi-Fi hotspot?</strong></summary>
 
 If you need to reset the robot's Wi-Fi hotspot (for example, if you can't connect or want to change the network), follow the instructions in the [Wi-Fi Reset Guide](/docs/platforms/reachy_mini/reset.md).
 
-</details> <br>
+</details>
 
 <details>
 <summary><strong>The dashboard at http://localhost:8000 doesn't work.</strong></summary>
