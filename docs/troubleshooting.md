@@ -126,6 +126,18 @@ However, since it can be confusing, we will update those motions to avoid this c
 
 </details>
 
+<details>
+<summary><strong>Can't connect to my Wireless Reachy Mini using a USB-C cable</strong></summary>
+
+Wireless units do not expose the robot over USB the way the Lite version does, so plugging a USB-C cable into your laptop will not give you a working connection.  
+Instead:
+
+- Join the robot to your Wi-Fi network and use the SDK client on your laptop to control it remotely.
+- If you want to run code directly on the embedded Raspberry Pi, SSH in and execute your scripts there (this is what the Dashboard does after you publish/install an app).
+- For a tethered link, use a USB-C-to-Ethernet adapter plus an Ethernet cable—this simply replaces Wi-Fi with wired Ethernet.
+
+</details>
+
 
 ## 📋 Table of Contents
 
@@ -323,6 +335,22 @@ pip install -U reachy-mini
 <summary><strong>Is there a Simulation mode?</strong></summary>
 
 Yes, via MuJoCo. It is still a work in progress, but you can run code with the `--sim` flag or `ReachyMini(media_backend="no_media")` if just testing logic without physics.
+
+</details>
+
+<details>
+<summary><strong>How do I debug an app on the Wireless?</strong></summary>
+
+SSH into the embedded computer, clone (or copy) your app, and run it manually. This reproduces what the dashboard does when launching your app.
+
+```bash
+ssh pollen@reachy-mini.local
+# password: root
+cd your_app_name
+python your_app_name/main.py
+```
+
+Your GUI will open at the usual address (for example, `http://reachy-mini.local:8042`).
 
 </details>
 
