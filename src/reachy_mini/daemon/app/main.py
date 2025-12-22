@@ -107,6 +107,20 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
                     localhost_only=localhost_only,
                     hardware_config_filepath=args.hardware_config_filepath,
                 )
+                
+                # Auto-start app that is configured to start at startup
+                from reachy_mini.apps.startup_config import get_apps_to_start_at_startup
+                apps_to_start = get_apps_to_start_at_startup()
+                if apps_to_start:
+                    # Wait a bit for daemon to be fully ready
+                    await asyncio.sleep(1.0)
+                    # Start the app (get_apps_to_start_at_startup validates only one app is set)
+                    app_name = apps_to_start[0]
+                    try:
+                        logging.info(f"Auto-starting app '{app_name}' at startup...")
+                        await app.state.app_manager.start_app(app_name)
+                    except Exception as e:
+                        logging.warning(f"Failed to auto-start app '{app_name}': {e}")
             yield
         finally:
             # Ensure cleanup happens even if there's an exception

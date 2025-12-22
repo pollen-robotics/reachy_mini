@@ -6,13 +6,24 @@ from fastapi import (
     HTTPException,
     WebSocket,
 )
+from pydantic import BaseModel
 
 from reachy_mini.apps import AppInfo, SourceKind
 from reachy_mini.apps.manager import AppManager, AppStatus
+from reachy_mini.apps.startup_config import (
+    get_app_startup_preference,
+    set_app_startup_preference,
+)
 from reachy_mini.daemon.app import bg_job_register
 from reachy_mini.daemon.app.dependencies import get_app_manager
 
 router = APIRouter(prefix="/apps")
+
+
+class StartupPreferenceRequest(BaseModel):
+    """Request model for setting app startup preference."""
+
+    start_at_startup: bool
 
 
 @router.get("/list-available/{source_kind}")
@@ -112,3 +123,42 @@ async def current_app_status(
 ) -> AppStatus | None:
     """Get the status of the currently running app, if any."""
     return await app_manager.current_app_status()
+
+
+@router.get("/startup-preference/{app_name}")
+async def get_startup_preference(app_name: str) -> dict[str, bool]:
+    """Get the startup preference for an app.
+    
+    Args:
+        app_name: Name of the app.
+        
+    Returns:
+        Dictionary with 'start_at_startup' key indicating if the app should start at startup.
+    """
+    return {"start_at_startup": get_app_startup_preference(app_name)}
+
+
+@router.post("/startup-preference/{app_name}")
+async def set_startup_preference(
+    app_name: str, request: StartupPreferenceRequest
+) -> dict[str, bool]:
+    """Set the startup preference for an app.
+    
+    Only one app can be set to start at startup at a time. If setting an app to True,
+    all other apps will be cleared.
+    
+    Args:
+        app_name: Name of the app.
+        request: Request body containing the startup preference.
+        
+    Returns:
+        Dictionary with 'start_at_startup' key indicating the updated preference.
+        
+    Raises:
+        HTTPException: If there's an error setting the preference.
+    """
+    try:
+        set_app_startup_preference(app_name, request.start_at_startup)
+        return {"start_at_startup": request.start_at_startup}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
