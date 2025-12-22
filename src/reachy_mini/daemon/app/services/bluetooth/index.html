@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<meta http-equiv="Permissions-Policy" content="bluetooth=*">
+	<title>ReachyMini Controller</title>
+	<style>
+		* {
+			margin: 0;
+			padding: 0;
+			box-sizing: border-box;
+		}
+
+		body {
+			font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+			background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+			min-height: 100vh;
+			display: flex;
+			justify-content: center;
+			align-items: center;
+			padding: 20px;
+		}
+
+		.container {
+			background: white;
+			border-radius: 20px;
+			padding: 40px;
+			box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+			max-width: 500px;
+			width: 100%;
+		}
+
+		h1 {
+			color: #333;
+			margin-bottom: 10px;
+			font-size: 28px;
+		}
+
+		.status {
+			padding: 12px;
+			border-radius: 8px;
+			margin: 20px 0;
+			font-weight: 500;
+			text-align: center;
+		}
+
+		.status.disconnected {
+			background: #fee;
+			color: #c33;
+		}
+
+		.status.connected {
+			background: #efe;
+			color: #3c3;
+		}
+
+		.status.connecting {
+			background: #ffeaa7;
+			color: #d63031;
+		}
+
+		.connect-btn {
+			width: 100%;
+			padding: 15px;
+			background: #667eea;
+			color: white;
+			border: none;
+			border-radius: 10px;
+			font-size: 16px;
+			font-weight: 600;
+			cursor: pointer;
+			transition: all 0.3s;
+			margin-bottom: 30px;
+		}
+
+		.connect-btn:hover {
+			background: #5568d3;
+			transform: translateY(-2px);
+			box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+		}
+
+		.connect-btn:disabled {
+			background: #ccc;
+			cursor: not-allowed;
+			transform: none;
+		}
+
+		.commands {
+			display: grid;
+			grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+			gap: 15px;
+		}
+
+		.command-btn {
+			padding: 20px;
+			background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+			color: white;
+			border: none;
+			border-radius: 10px;
+			font-size: 14px;
+			font-weight: 600;
+			cursor: pointer;
+			transition: all 0.3s;
+			text-transform: uppercase;
+			letter-spacing: 0.5px;
+		}
+
+		.command-btn:hover:not(:disabled) {
+			transform: translateY(-3px);
+			box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+		}
+
+		.command-btn:active:not(:disabled) {
+			transform: translateY(-1px);
+		}
+
+		.command-btn:disabled {
+			opacity: 0.5;
+			cursor: not-allowed;
+			transform: none;
+		}
+
+		.command-btn.danger {
+			background: linear-gradient(135deg, #ee5a6f 0%, #f29263 100%);
+		}
+
+		.command-btn.warning {
+			background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+		}
+
+		.log {
+			margin-top: 30px;
+			padding: 15px;
+			background: #f8f9fa;
+			border-radius: 8px;
+			max-height: 200px;
+			overflow-y: auto;
+			font-size: 12px;
+			font-family: 'Courier New', monospace;
+		}
+
+		.log-entry {
+			padding: 5px 0;
+			border-bottom: 1px solid #e9ecef;
+		}
+
+		.log-entry:last-child {
+			border-bottom: none;
+		}
+
+		.log-entry.error {
+			color: #c33;
+		}
+
+		.log-entry.success {
+			color: #3c3;
+		}
+
+		.response-box {
+			margin-top: 20px;
+			padding: 15px;
+			background: #e7f3ff;
+			border-left: 4px solid #2196F3;
+			border-radius: 4px;
+			font-size: 14px;
+			font-family: 'Courier New', monospace;
+			display: none;
+		}
+
+		.response-box.show {
+			display: block;
+		}
+
+		.note {
+			margin-top: 20px;
+			padding: 15px;
+			background: #fff3cd;
+			border-left: 4px solid #ffc107;
+			border-radius: 4px;
+			font-size: 14px;
+			color: #856404;
+		}
+	</style>
+</head>
+
+<body>
+	<div class="container">
+		<h1>🤖 ReachyMini Controller</h1>
+
+		<div id="status" class="status disconnected">
+			Disconnected
+		</div>
+
+		<button id="connectBtn" class="connect-btn">
+			Connect to ReachyMini
+		</button>
+
+		<div class="note">
+			<strong>PIN Code Required:</strong> Enter the last 5 digits of your robot's serial number.
+			<br><small>To find your serial number, run: <code>dfu-util -l</code> on the robot.</small>
+			<br><small>Default PIN for testing: 00018</small>
+		</div>
+
+		<div style="margin: 20px 0;">
+			<label for="pinInput" style="display: block; margin-bottom: 8px; font-weight: 600; color: #333;">
+				PIN Code (5 digits):
+			</label>
+			<input
+				type="text"
+				id="pinInput"
+				placeholder="e.g., 00018"
+				maxlength="5"
+				pattern="[0-9]{5}"
+				style="width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 8px; font-size: 16px; font-family: 'Courier New', monospace;"
+			>
+			<small style="color: #666; display: block; margin-top: 5px;">PIN must be sent before each command</small>
+		</div>
+
+		<div class="commands">
+			<button class="command-btn" data-command="PING" disabled>Ping</button>
+			<button class="command-btn" data-command="STATUS" disabled>Status</button>
+			<button class="command-btn" data-command="CMD_HOTSPOT" disabled>Hotspot</button>
+			<button class="command-btn danger" data-command="CMD_RESTART_DAEMON" disabled>Restart Daemon</button>
+			<button class="command-btn warning" data-command="CMD_SOFTWARE_RESET" disabled>Software Reset</button>
+		</div>
+
+		<div id="responseBox" class="response-box"></div>
+
+		<div class="log" id="log"></div>
+
+		<div class="note" style="margin-top: 20px;">
+			<strong>Note:</strong> This requires HTTPS and a Chromium-based browser with Web Bluetooth enabled. Access
+			from your phone's hotspot for best results.
+		</div>
+
+		<div class="note" style="margin-top: 10px; background: #e7f3ff; border-left-color: #2196F3;">
+			<strong>Expected Response Values:</strong>
+			<ul style="margin: 10px 0 0 20px; font-size: 13px;">
+				<li><code>OK</code> or <code>SUCCESS</code> - Command executed successfully</li>
+				<li><code>INVALID_PIN</code> or <code>WRONG_PIN</code> - Incorrect PIN code</li>
+				<li><code>ERROR</code> or <code>FAIL</code> - Command failed</li>
+			</ul>
+		</div>
+	</div>
+
+	<script>
+		let device = null;
+		let commandCharacteristic = null;
+		let responseCharacteristic = null;
+		const statusEl = document.getElementById('status');
+		const connectBtn = document.getElementById('connectBtn');
+		const commandBtns = document.querySelectorAll('.command-btn');
+		const logEl = document.getElementById('log');
+		const responseBox = document.getElementById('responseBox');
+		const pinInput = document.getElementById('pinInput');
+
+		// Correct UUIDs from your server
+		const SERVICE_UUID = '12345678-1234-5678-1234-56789abcdef0';
+		const COMMAND_CHAR_UUID = '12345678-1234-5678-1234-56789abcdef1';
+		const RESPONSE_CHAR_UUID = '12345678-1234-5678-1234-56789abcdef2';
+
+		// Check if Web Bluetooth is supported
+		if (!navigator.bluetooth) {
+			updateStatus('Web Bluetooth not supported', 'disconnected');
+			addLog('ERROR: Web Bluetooth API not available in this browser', 'error');
+			connectBtn.disabled = true;
+		}
+
+		function addLog(message, type = '') {
+			const entry = document.createElement('div');
+			entry.className = `log-entry ${type}`;
+			const timestamp = new Date().toLocaleTimeString();
+			entry.textContent = `[${timestamp}] ${message}`;
+			logEl.appendChild(entry);
+			logEl.scrollTop = logEl.scrollHeight;
+		}
+
+		function updateStatus(message, state) {
+			statusEl.textContent = message;
+			statusEl.className = `status ${state}`;
+		}
+
+		function showResponse(message) {
+			responseBox.textContent = `Response: ${message}`;
+			responseBox.classList.add('show');
+			setTimeout(() => {
+				responseBox.classList.remove('show');
+			}, 5000);
+		}
+
+		async function connectToDevice() {
+			try {
+				updateStatus('Scanning for devices...', 'connecting');
+				addLog('Requesting Bluetooth device...');
+
+				device = await navigator.bluetooth.requestDevice({
+					filters: [{ name: 'ReachyMini' }],
+					optionalServices: [SERVICE_UUID]
+				});
+
+				addLog(`Found device: ${device.name}`);
+				updateStatus('Connecting...', 'connecting');
+
+				const server = await device.gatt.connect();
+				addLog('Connected to GATT server');
+
+				// Get the service
+				const service = await server.getPrimaryService(SERVICE_UUID);
+				addLog('Got service');
+
+				// Get the command characteristic (write)
+				commandCharacteristic = await service.getCharacteristic(COMMAND_CHAR_UUID);
+				addLog('Got command characteristic');
+
+				// Get the response characteristic (read/notify)
+				responseCharacteristic = await service.getCharacteristic(RESPONSE_CHAR_UUID);
+				addLog('Got response characteristic');
+
+				// Enable notifications for responses
+				await responseCharacteristic.startNotifications();
+				responseCharacteristic.addEventListener('characteristicvaluechanged', handleResponse);
+				addLog('Notifications enabled for responses');
+
+				updateStatus('Connected to ReachyMini', 'connected');
+				addLog('Successfully connected!', 'success');
+
+				connectBtn.textContent = 'Disconnect';
+				commandBtns.forEach(btn => btn.disabled = false);
+
+				device.addEventListener('gattserverdisconnected', onDisconnected);
+
+			} catch (error) {
+				addLog(`Connection failed: ${error.message}`, 'error');
+				updateStatus('Connection failed', 'disconnected');
+				console.error('Connection error:', error);
+			}
+		}
+
+		function handleResponse(event) {
+			const value = event.target.value;
+			const decoder = new TextDecoder('utf-8');
+			const response = decoder.decode(value);
+
+			// Check for error responses related to PIN or other errors
+			if (response.includes('INVALID_PIN') || response.includes('WRONG_PIN')) {
+				addLog(`⚠️  Response: ${response} - Check your PIN code!`, 'error');
+				showResponse(`❌ ${response} - Verify your PIN is correct`);
+				pinInput.style.borderColor = '#c33';
+				setTimeout(() => pinInput.style.borderColor = '#ddd', 2000);
+			} else if (response.includes('ERROR') || response.includes('FAIL')) {
+				addLog(`⚠️  Response: ${response}`, 'error');
+				showResponse(`❌ ${response}`);
+			} else if (response.includes('OK') || response.includes('SUCCESS')) {
+				addLog(`✓ Response: ${response}`, 'success');
+				showResponse(`✓ ${response}`);
+			} else {
+				addLog(`Response: ${response}`, 'success');
+				showResponse(response);
+			}
+		}
+
+		function onDisconnected() {
+			updateStatus('Disconnected', 'disconnected');
+			addLog('Device disconnected', 'error');
+			connectBtn.textContent = 'Connect to ReachyMini';
+			commandBtns.forEach(btn => btn.disabled = true);
+			commandCharacteristic = null;
+			responseCharacteristic = null;
+			device = null;
+		}
+
+		async function disconnect() {
+			if (device && device.gatt.connected) {
+				device.gatt.disconnect();
+				addLog('Manually disconnected');
+			}
+		}
+
+		async function sendCommand(command) {
+			if (!commandCharacteristic) {
+				addLog('Not connected to device', 'error');
+				return;
+			}
+
+			// Validate PIN
+			const pin = pinInput.value.trim();
+			if (!pin || pin.length !== 5 || !/^\d{5}$/.test(pin)) {
+				addLog('Invalid PIN: Must be exactly 5 digits', 'error');
+				pinInput.style.borderColor = '#c33';
+				setTimeout(() => pinInput.style.borderColor = '#ddd', 2000);
+				return;
+			}
+
+			try {
+				const encoder = new TextEncoder();
+
+				// Step 1: Send PIN first
+				const pinCommand = `PIN_${pin}`;
+				addLog(`Sending PIN authentication: ${pinCommand}`, '');
+				const pinData = encoder.encode(pinCommand);
+				await commandCharacteristic.writeValue(pinData);
+
+				// Wait a bit for PIN to be processed
+				await new Promise(resolve => setTimeout(resolve, 200));
+
+				// Step 2: Send the actual command
+				const data = encoder.encode(command);
+				await commandCharacteristic.writeValue(data);
+				addLog(`Sent command: ${command}`, 'success');
+
+				// Try to read the response
+				try {
+					const value = await responseCharacteristic.readValue();
+					const decoder = new TextDecoder('utf-8');
+					const response = decoder.decode(value);
+					if (response) {
+						// Check for error responses
+						if (response.includes('INVALID_PIN') || response.includes('WRONG_PIN') || response.includes('ERROR')) {
+							addLog(`Response: ${response}`, 'error');
+							showResponse(`❌ ${response}`);
+						} else {
+							addLog(`Response: ${response}`, 'success');
+							showResponse(`✓ ${response}`);
+						}
+					}
+				} catch (readError) {
+					// Response will come via notification
+					addLog('Waiting for response notification...', '');
+				}
+			} catch (error) {
+				addLog(`Failed to send command: ${error.message}`, 'error');
+				console.error('Send error:', error);
+			}
+		}
+
+		connectBtn.addEventListener('click', async () => {
+			if (device && device.gatt.connected) {
+				await disconnect();
+			} else {
+				await connectToDevice();
+			}
+		});
+
+		commandBtns.forEach(btn => {
+			btn.addEventListener('click', () => {
+				const command = btn.dataset.command;
+				sendCommand(command);
+			});
+		});
+
+		addLog('Ready. Click "Connect to ReachyMini" to start.');
+	</script>
+</body>
+
+</html>
