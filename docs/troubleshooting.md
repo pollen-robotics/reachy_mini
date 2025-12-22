@@ -186,6 +186,15 @@ Instead:
 
 </details>
 
+<details>
+<summary><strong>Wireless Acces point doesn't show up - RPI doesn't boot</strong></summary>
+There is a switch on the board in the head that needs to be in a given position. And if it's not, the AP doesn't show. It's possible that this switch was moved during assembly or maybe even a factory mistake.
+Please check that the switch is on the "debug" and not on "download" position. See the picture below:
+
+![switch_position](/docs/assets/wireless_switch.png)
+
+</details>
+
 #### If your issue/question is not listed here, please check the full FAQ below.
 
 ## 📋 FAQ Table of Contents
