@@ -5,9 +5,11 @@ It handles the control loop, joint positions, torque enabling/disabling, and pro
 It uses the `ReachyMiniMotorController` to communicate with the robot's motors.
 """
 
+import hashlib
 import json
 import logging
 import struct
+import subprocess
 import time
 from dataclasses import dataclass
 from datetime import timedelta
