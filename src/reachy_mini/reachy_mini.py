@@ -106,16 +106,6 @@ class ReachyMini:
             ]
         )
 
-        # When connecting to a remote robot, check if streaming is available
-        if not localhost_only and media_backend == "default":
-            daemon_status = self.client.get_status()
-            if daemon_status.get("wireless_version") and daemon_status.get("stream_enabled"):
-                self.logger.info("Remote connection detected with streaming enabled - using WebRTC backend.")
-                media_backend = "webrtc"
-            else:
-                self.logger.info("Remote connection detected without streaming - disabling media. Start daemon with '--stream' flag to enable WebRTC.")
-                media_backend = "no_media"
-
         self.media_manager = self._configure_mediamanager(media_backend, log_level)
 
     def __del__(self) -> None:
@@ -124,7 +114,7 @@ class ReachyMini:
         The client is disconnected explicitly to avoid a thread pending issue.
 
         """
-        if hasattr(self, 'client'):
+        if hasattr(self, "client"):
             self.client.disconnect()
 
     def __enter__(self) -> "ReachyMini":
@@ -146,33 +136,35 @@ class ReachyMini:
     ) -> MediaManager:
         mbackend = MediaBackend.DEFAULT
         daemon_status = self.client.get_status()
-        match media_backend.lower():
-            case "webrtc":
-                if not daemon_status.get("wireless_version"):
-                    self.logger.warning(
-                        "Non-wireless version detected, daemon should use the flag '--wireless-version'. Reverting to default"
-                    )
+
+        # If wireless, force webrtc unless no_media is selected
+        if media_backend != "no_media" and daemon_status.get(
+            "wireless_version"
+        ):
+            mbackend = MediaBackend.WEBRTC
+        else:
+            match media_backend.lower():
+                case "webrtc":
+                    if not daemon_status.get("wireless_version"):
+                        self.logger.warning(
+                            "Non-wireless version detected, daemon should use the flag '--wireless-version'. Reverting to default"
+                        )
+                        mbackend = MediaBackend.DEFAULT
+                    else:
+                        self.logger.info("WebRTC backend configured successfully.")
+                        mbackend = MediaBackend.WEBRTC
+                case "gstreamer":
+                    mbackend = MediaBackend.GSTREAMER
+                case "default":
                     mbackend = MediaBackend.DEFAULT
-                elif not daemon_status.get("stream_enabled"):
-                    self.logger.warning(
-                        "WebRTC requested but streaming is not enabled on daemon. Start daemon with '--stream' flag. Reverting to no_media"
-                    )
+                case "no_media":
                     mbackend = MediaBackend.NO_MEDIA
-                else:
-                    self.logger.info("WebRTC backend configured successfully.")
-                    mbackend = MediaBackend.WEBRTC
-            case "gstreamer":
-                mbackend = MediaBackend.GSTREAMER
-            case "default":
-                mbackend = MediaBackend.DEFAULT
-            case "no_media":
-                mbackend = MediaBackend.NO_MEDIA
-            case "default_no_video":
-                mbackend = MediaBackend.DEFAULT_NO_VIDEO
-            case _:
-                raise ValueError(
-                    f"Invalid media_backend '{media_backend}'. Supported values are 'default', 'gstreamer', 'no_media', 'default_no_video', and 'webrtc'."
-                )
+                case "default_no_video":
+                    mbackend = MediaBackend.DEFAULT_NO_VIDEO
+                case _:
+                    raise ValueError(
+                        f"Invalid media_backend '{media_backend}'. Supported values are 'default', 'gstreamer', 'no_media', 'default_no_video', and 'webrtc'."
+                    )
 
         return MediaManager(
             use_sim=self.client.get_status()["simulation_enabled"],

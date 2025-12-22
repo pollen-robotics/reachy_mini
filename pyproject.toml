@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "reachy_mini"
-version = "1.2.2"
+version = "1.2.4"
 authors = [{ name = "Pollen Robotics", email = "contact@pollen-robotics.com" }]
 description = ""
 readme = "README.md"
@@ -35,6 +35,7 @@ dependencies = [
     "questionary",
     "websockets>=12,<16",
     "toml",
+    "rustypot",
 ]
 
 
@@ -71,6 +72,7 @@ wireless-version = [
 [project.scripts]
 reachy-mini-daemon = "reachy_mini.daemon.app.main:main"
 reachy-mini-app-assistant = "reachy_mini.apps.app:main"
+reachy-mini-reflash-motors = "reachy_mini.tools.reflash_motors:main"
 
 [tool.setuptools]
 package-dir = { "" = "src" }

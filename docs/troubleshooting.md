@@ -2,6 +2,143 @@
 
 Welcome to the Reachy Mini support page. Click on the questions below to reveal the answers.
 
+##  Known Issues - Batch December 2025
+
+
+<details>
+<summary><strong>Before anything else: update & restart</strong></summary>
+
+**Make sure you are using up-to-date software and that you have restarted both your robot and your computer.**  
+To restart your robot, press OFF, wait 5 seconds, then press ON. This simple procedure fixes several common and well-known issues.
+
+**How to update the software:**
+
+- **If you are using the dashboard in a web browser**  
+  Open `Settings`, then click **Check for updates**.
+- **If you are using the new dashboard**  
+  TODO, but should be simple
+- **If you are using a cloned repository**  
+  Make sure you are either:
+  - On the latest tagged release, or
+  - Up to date with the `develop` branch (`git pull`).
+
+</details>
+
+<details>
+<summary><strong>Motor blinking red or Overload Error</strong></summary>
+
+If you get "Motor hardware errors: ['Overload Error']" a few second after starting the robot **for the first time.**
+
+It is VERY likely there are motors not placed in the good slot, e.g motor 1 on slot 2
+
+Check assembly guide:
+
+- [**Reachy Mini Wireless - Step-by-Step Guide**](https://huggingface.co/spaces/pollen-robotics/Reachy_Mini_Assembly_Guide)
+- [**Reachy Mini LITE - Step-by-Step Guide**](https://huggingface.co/spaces/pollen-robotics/Reachy_Mini_LITE_Assembly_Guide)
+
+
+</details>
+
+<details>
+
+<summary><strong>A motor feels broken</strong></summary>
+We identified an issue affecting a limited production batch of Reachy Mini robots, related to a faulty batch of Dynamixel motor. 
+
+In most reported cases, the issue affects motor number 4 or one with QC label n°2544.
+
+If one of your motors, feels blocked or unusually hard to move, when turned off [(example video here)](https://drive.google.com/file/d/1UHTqUcb21aFThqlr2Qcx23VWqvj_y-ly/view?usp=sharing), and you are 100% sure the motor was in the correct slot.
+
+It's probably a broken motor.
+
+Please fill out this short form so we can track and ship you a new motor:  https://forms.gle/JdhMzadeCnbynw7Q6
+
+</details>
+
+<details>
+<summary><strong>Head tilted, A motor is not moving at all, but get stiff when powered on, and doesn't blink red </strong></summary>
+
+This behavior happen when a motor (often n°1) has not been flashed properly during the manufacturing process.  
+=> Please power your robot but don't turn it on with the dashboard/daemon, then update reachy mini's software and run the ```reachy-mini-reflash-motors``` script. 
+
+</details>
+
+<details>
+<summary><strong>Electrical Shock Error </strong></summary>
+
+An electrical shock error on Dynamixel motors means there is either an issue with the power supply, or a short circuit somewhere.
+Please check if any cable is damaged, from the foot PCB to the head. Especially the followings cables:  
+- Power Cable (black & red) 
+- 3-wires cables for motors (300mm, 200mm, 100mm and 40mm)
+
+</details>
+
+<details>
+
+<summary><strong>Low audio volume</strong></summary>
+
+- Update your robot to version 1.2.3 or later
+
+For more details, see the documentation:  
+[Getting Started](/docs/platforms/reachy_mini/get_started.md)
+
+</details>
+
+<details>
+<summary><strong>Permission errors</strong></summary>
+
+- Update your robot to version 1.2.3 or later  
+- Reboot the robot
+
+</details>
+
+<details>
+<summary><strong>An antenna appears rotated by 90° or 180°</strong></summary>
+
+This is a manufacturing issue.
+
+It is easy to fix by following this guide:  
+[Antenna repositioning guide](https://drive.google.com/file/d/1FsmNpwELuXUbdhGHDMjG_CNpYXOMtR7A/view?usp=drive_link)
+
+</details>
+
+<details>
+<summary><strong>I have 2 cables and a few screws left after finishing the assembly. Is this normal?</strong></summary>
+
+Yes, this is completely normal.  
+We intentionally include spare cables and screws in the kit in case some parts are damaged or lost during assembly.
+
+You do not need to install them.
+
+</details>
+
+<details>
+<summary><strong>Image is dark on the Lite version</strong></summary>
+
+- set auto-exposure-priority=1 using uvc-util on macOS
+
+</details>
+
+<details>
+<summary><strong>The head may touch the body during some official motions</strong></summary>
+
+This behavior is expected and not a hardware or software bug.  
+However, since it can be confusing, we will update those motions to avoid this contact.
+
+</details>
+
+<details>
+<summary><strong>Can't connect to my Wireless Reachy Mini using a USB-C cable</strong></summary>
+
+Wireless units do not expose the robot over USB the way the Lite version does, so plugging a USB-C cable into your laptop will not give you a working connection.  
+Instead:
+
+- Join the robot to your Wi-Fi network and use the SDK client on your laptop to control it remotely.
+- If you want to run code directly on the embedded Raspberry Pi, SSH in and execute your scripts there (this is what the Dashboard does after you publish/install an app).
+- For a tethered link, use a USB-C-to-Ethernet adapter plus an Ethernet cable—this simply replaces Wi-Fi with wired Ethernet.
+
+</details>
+
+
 ## 📋 Table of Contents
 
 1.  [🚀 Getting Started & Assembly](#-getting-started--assembly)
@@ -16,6 +153,18 @@ Welcome to the Reachy Mini support page. Click on the questions below to reveal 
 <br>
 
 ## 🚀 Getting Started & Assembly
+
+<details>
+<summary><strong>I miss a part in my package</strong></summary>
+
+A mistake during the shipping process can happen.  
+But in most cases, the part is just hidden in another box of the package. So please unpack everything first.  
+Some parts are already pre-assembled too, (e.g the bottom head part is already placed in the back head part).  
+    ![Head Parts pre-assembly](/docs/assets/head_parts.jpg)
+
+If you are 100% sure you miss a part, please contact sales@pollen-robotics.com with a picture of all the parts you have and order number or invoice number.  
+You can also find [stl files](https://github.com/pollen-robotics/reachy_mini/tree/develop/src/reachy_mini/descriptions/reachy_mini/mjcf/assets) to print it by yourself in the meantime.  
+</details>
 
 <details>
 <summary><strong>How long does assembly usually take?</strong></summary>
@@ -61,12 +210,27 @@ See the [Reachy Mini Wireless guide](/docs/platforms/reachy_mini/get_started.md)
 </details>
 
 <details>
+<summary><strong>How do I reset the Wi-Fi hotspot?</strong></summary>
+
+If you need to reset the robot's Wi-Fi hotspot (for example, if you can't connect or want to change the network), follow the instructions in the [Wi-Fi Reset Guide](/docs/platforms/reachy_mini/reset.md).
+
+</details>
+
+<details>
 <summary><strong>The dashboard at http://localhost:8000 doesn't work.</strong></summary>
 
 Perform these checks:
-1.  **Virtual Environment:** Ensure you are running inside your `.venv`.
-2.  **SDK Update:** Ensure you have the latest version: `pip install -U reachy-mini`.
-3.  **Daemon:** Make sure `reachy-mini-daemon` is running in a terminal.
+1.  **Virtual Environment:** Ensure you are running inside your virtual environment (`.venv`, `reachy_mini_env`,...).
+2.  **SDK Update:** Ensure you have the latest version.
+- With `pip`, run :
+```bash
+pip install -U reachy-mini
+```
+- With `uv`, run :
+```bash
+uv add reachy-mini
+```
+3.  **Daemon:** Make sure the daemon `reachy-mini-daemon` is running in a terminal.
 
 </details>
 
@@ -76,6 +240,18 @@ Perform these checks:
 Yes. The daemon provides a REST API (FastAPI) and WebSocket support.
 * **Docs:** `http://localhost:8000/docs` (available when daemon is running).
 * **Features:** Get state, Move joints, Control daemon.
+
+</details>
+
+<details>
+<summary><strong>All apps installations fail on Windows !</strong></summary>
+
+It might be related to unsufficient rights to create symlinks in Windows. You can set the environment variable `HF_HUB_DISABLE_SYMLINKS_WARNING` to 1 to remove the warnings that cause the failure.
+
+In a terminal, run :
+```powershell
+set HF_HUB_DISABLE_SYMLINKS_WARNING=1
+```
 
 </details>
 
@@ -166,6 +342,22 @@ pip install -U reachy-mini
 <summary><strong>Is there a Simulation mode?</strong></summary>
 
 Yes, via MuJoCo. It is still a work in progress, but you can run code with the `--sim` flag or `ReachyMini(media_backend="no_media")` if just testing logic without physics.
+
+</details>
+
+<details>
+<summary><strong>How do I debug an app on the Wireless?</strong></summary>
+
+SSH into the embedded computer, clone (or copy) your app, and run it manually. This reproduces what the dashboard does when launching your app.
+
+```bash
+ssh pollen@reachy-mini.local
+# password: root
+cd your_app_name
+python your_app_name/main.py
+```
+
+Your GUI will open at the usual address (for example, `http://reachy-mini.local:8042`).
 
 </details>
 
@@ -325,7 +517,7 @@ This appears if you connect to the robot but don't consume the video frames, cau
 <details>
 <summary><strong>My package is damaged or missing.</strong></summary>
 
-Contact **Seeed Studio** (the sender) immediately with photos.
+Contact **Pollen Robotics** team immediately. You can send us an email to sales@pollen-robotics.com with photos of the package, receipt number or invoice number and your full name. We will then check with the transport company and keep you updated.
 
 </details>
 
@@ -333,14 +525,14 @@ Contact **Seeed Studio** (the sender) immediately with photos.
 <summary><strong>Refund Policy</strong></summary>
 
 * **Before shipping:** Contact `sales@pollen-robotics.com` for a 100% refund.
-* **After shipping:** You have 30 days. Contact sales with proof of delivery and invoice.
+* **After shipping:** You have 30 days to return your package. Contact sales (sales@pollen-robotics.com) with proof of delivery and invoice or receipt number. If you have comments / feedback, please let us know, our focus is building a robot the open-source community enjoys building. 
 
 </details>
 
 <details>
 <summary><strong>Warranty</strong></summary>
 
-If a part is broken/malfunctioning, Seeed's after-sales team will determine if it is a hardware defect covered by warranty. They will provide repair or replacement parts.
+If a part is broken/malfunctioning, Pollen's after-sales team will determine if it is a hardware defect covered by warranty. Then, our manufacturer will provide repair or replacement parts. You can send us an email to sales@pollen-robotics.com with photos of the issue, receipt number or invoice number and your full name.
 
 </details>
 
@@ -350,4 +542,4 @@ If a part is broken/malfunctioning, Seeed's after-sales team will determine if i
 If you couldn't find the answer to your issue in this guide, please reach out to us directly!
 The Pollen Robotics team and the community are active on Discord to help you troubleshoot specific problems.
 
-👉 **[Join the Pollen Robotics Discord](https://discord.gg/2bAhWfXme9)**
+👉 **[Join the Pollen Robotics Discord](https://discord.gg/Y7FgMqHsub)**

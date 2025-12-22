@@ -23,6 +23,8 @@ Reachy Mini comes as a kit. Building it is the first step of your journey!
 
 ## 3. 📥 Download Reachy Mini Control
 
+> **🚧 🪟 WINDOWS USERS ONLY:** The Reachy Mini Control app for **Windows** is currently being finalized and will be available in a few days. **Windows users** can use the [Python SDK](/docs/SDK/readme.md) to control your robot directly in the meantime.
+
 The **Reachy Mini Control** desktop app is the command center for your robot. It includes the dashboard, visualization tools, and app launcher—no command line required.
 
 <div align="center">
