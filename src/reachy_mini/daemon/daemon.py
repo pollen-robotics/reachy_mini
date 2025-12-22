@@ -612,7 +612,7 @@ class Daemon:
             )
 
             if reflash_motors_on_start:
-                reflash_motors(serialport)
+                reflash_motors(serialport, dont_light_up=True)
 
             return RobotBackend(
                 serialport=serialport,
