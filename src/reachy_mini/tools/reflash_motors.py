@@ -2,6 +2,7 @@
 
 import argparse
 from importlib.resources import files
+from typing import Optional
 
 import questionary
 from rich.console import Console
@@ -31,7 +32,7 @@ def main() -> None:
     reflash_motors(args.serialport)
 
 
-def reflash_motors(serialport=None) -> None:
+def reflash_motors(serialport: Optional[str] = None) -> None:
     """Reflash Reachy Mini's motors."""
     console = Console()
 
