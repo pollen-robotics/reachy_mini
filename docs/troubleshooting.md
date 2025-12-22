@@ -78,7 +78,7 @@ If the issue persists, please fill out this short form so we can track and ship 
 
 
 <details>
-<summary><strong>Head tilted, A motor is not moving at all, but get stiff when powered on, and doesn't blink red </strong></summary>
+<summary><strong>A motor is not moving at all, but get stiff when powered on, and doesn't blink red </strong></summary>
 
 This behavior happen when a motor (often n°1) has not been flashed properly during the manufacturing process.  
 => Please power your robot but don't turn it on with the dashboard/daemon, then update reachy mini's software, then reboot the robot. This will reflash your motors.
@@ -352,6 +352,17 @@ We do not have the possibility to check the battery status, that's a known limit
 
 We only have the led indication for "low battery" when it's time to charge it. (green -> orange -> red)
 
+</details>
+
+<details>
+<summary><strong>How to remove the battery</strong></summary>
+
+- Check that the green led is not on first.
+- Remove the 3x screws at the bottom and take out the foot a little bit.
+![remove_foot](/docs/assets/remove_foot.png)
+- Unplug the indicated connector (red arrow) to be able to remove the battery. There should be some double-sided tape that maintain the battery in place, so it can be a bit hard to remove.
+![battery_location](/docs/assets/battery_connector.png)
+- When you'll re-assemble it, do these step again in reverse order. Just be careful not to pinch any cable.
 </details>
 
 <details>
