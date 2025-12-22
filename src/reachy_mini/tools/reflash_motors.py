@@ -37,7 +37,7 @@ def main() -> None:
     reflash_motors(args.serialport)
 
 
-def reflash_motors(serialport: Optional[str] = None, dont_light_up=False) -> None:
+def reflash_motors(serialport: Optional[str] = None, dont_light_up: bool = False) -> None:
     """Reflash Reachy Mini's motors."""
     console = Console()
 
