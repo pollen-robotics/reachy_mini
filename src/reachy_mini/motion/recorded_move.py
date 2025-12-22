@@ -119,6 +119,10 @@ class RecordedMoves:
     def process(self) -> None:
         """Populate recorded moves and sounds."""
         move_paths_tmp = glob(f"{self.local_path}/*.json")
+        data_dir = os.path.join(self.local_path, "data")
+        if os.path.isdir(data_dir):
+            # Newer datasets keep their moves inside data/; look there as well.
+            move_paths_tmp.extend(glob(f"{data_dir}/*.json"))
         move_paths = [Path(move_path) for move_path in move_paths_tmp]
         for move_path in move_paths:
             move_name = move_path.stem
