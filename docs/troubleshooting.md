@@ -326,6 +326,7 @@ If you command a pose outside these limits, the robot will automatically clamp t
 * Check the power supply connection.
 * Motors might have entered thermal protection mode (overheating). Turn off and on again.
 * Updating the SDK (`pip install -U reachy-mini`) has solved this for some users.
+* If the motor's led blinks red, see the "Motor blinking red or Overload Error" section in the Essential Troubleshooting above.
 
 </details>
 
@@ -546,7 +547,7 @@ This appears if you connect to the robot but don't consume the video frames, cau
 
 * **No Input:** Requires firmware 2.1.3. Run the [update script](../src/reachy_mini/assets/firmware/update.sh).
 * **No Direction:** Requires firmware 2.1.0+.
-* Check flex cables (Slides 45-47 of assembly guide).
+* Check that the flat flexible cable is intalled the right way (Slides 45-47 of assembly guide).
 
 </details>
 
