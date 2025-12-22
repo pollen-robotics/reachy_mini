@@ -137,27 +137,9 @@ It is easy to fix by following this guide:
 </details>
 
 <details>
-<summary><strong>I have 2 cables and a few screws left after finishing the assembly. Is this normal?</strong></summary>
-
-Yes, this is completely normal.  
-We intentionally include spare cables and screws in the kit in case some parts are damaged or lost during assembly.
-
-You do not need to install them.
-
-</details>
-
-<details>
 <summary><strong>Image is dark on the Lite version</strong></summary>
 
 - set auto-exposure-priority=1 using uvc-util on macOS
-
-</details>
-
-<details>
-<summary><strong>The head may touch the body during some official motions</strong></summary>
-
-This behavior is expected and not a hardware or software bug.  
-However, since it can be confusing, we will update those motions to avoid this contact.
 
 </details>
 
@@ -225,6 +207,16 @@ Most testers report between **1.5 and 2 hours**. It can take up to 4 hours depen
 Testers generally describe it as fun and simple. The trickiest parts are usually:
 * **Cable routing:** ensuring cables aren't pinched.
 * **Torque:** Tightening parts correctly (not too loose, not too hard).
+
+</details>
+
+<details>
+<summary><strong>I have 2 cables and a few screws left after finishing the assembly. Is this normal?</strong></summary>
+
+Yes, this is completely normal.  
+We intentionally include spare cables and screws in the kit in case some parts are damaged or lost during assembly.
+
+You do not need to install them.
 
 </details>
 
@@ -363,6 +355,14 @@ We only have the led indication for "low battery" when it's time to charge it. (
 - Unplug the indicated connector (red arrow) to be able to remove the battery. There should be some double-sided tape that maintain the battery in place, so it can be a bit hard to remove.
 ![battery_location](/docs/assets/battery_connector.png)
 - When you'll re-assemble it, do these step again in reverse order. Just be careful not to pinch any cable.
+</details>
+
+<details>
+<summary><strong>The head may touch the body during some official motions</strong></summary>
+
+This behavior is expected and not a hardware or software bug.  
+However, since it can be confusing, we will update those motions to avoid this contact.
+
 </details>
 
 <details>
