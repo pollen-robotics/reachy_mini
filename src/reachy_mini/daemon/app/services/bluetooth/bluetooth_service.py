@@ -628,7 +628,7 @@ class BluetoothCommandService:
         agent_manager = dbus.Interface(
             self.bus.get_object("org.bluez", "/org/bluez"), "org.bluez.AgentManager1"
         )
-        agent = NoInputAgent(self.bus, AGENT_PATH)
+        self.agent = NoInputAgent(self.bus, AGENT_PATH)
         agent_manager.RegisterAgent(AGENT_PATH, "NoInputNoOutput")
         agent_manager.RequestDefaultAgent(AGENT_PATH)
         logger.info("BLE Agent registered for Just Works pairing")
@@ -776,7 +776,7 @@ def get_hotspot_ip() -> str:
     if "[" in status and "]" in status:
         try:
             return status.split("]")[1].split(";")[0].strip()
-        except:
+        except (IndexError, AttributeError):
             return "0.0.0.0"
     return "0.0.0.0"
 
