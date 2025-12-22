@@ -76,21 +76,13 @@ def check_and_fix_venvs_ownership(
         print(f"All files under {venvs_path} are owned by {USER}")
 
 
-def check_and_update_bluetooth_service(
-    custom_logger: logging.Logger | None = None,
-) -> None:
+def check_and_update_bluetooth_service() -> None:
     """Check if bluetooth service needs updating and update if different.
 
     Compares the source bluetooth_service.py with the installed version at
     /bluetooth/bluetooth_service.py. If they differ, copies the new version
     and restarts the bluetooth service.
-
-    Args:
-        custom_logger: Optional logger to use instead of the module logger
-
     """
-    log = custom_logger if custom_logger else logger
-
     # This file: src/reachy_mini/utils/wireless_version/startup_check.py
     # Target:    src/reachy_mini/daemon/app/services/bluetooth/bluetooth_service.py
     # From parent: ../../daemon/app/services/bluetooth/bluetooth_service.py
@@ -99,51 +91,51 @@ def check_and_update_bluetooth_service(
     target = Path("/bluetooth/bluetooth_service.py")
 
     if not source.exists():
-        log.error(f"Source bluetooth service not found at {source}")
+        print(f"Source bluetooth service not found at {source}")
         return
 
     # Check if target exists
     if not target.exists():
-        log.info(f"Bluetooth service not installed at {target}, copying...")
+        print(f"Bluetooth service not installed at {target}, copying...")
         needs_update = True
     else:
         # Compare files
         try:
             if filecmp.cmp(str(source), str(target), shallow=False):
-                log.info("Bluetooth service is up to date")
+                print("Bluetooth service is up to date")
                 return
             else:
-                log.info("Bluetooth service has changed, updating...")
+                print("Bluetooth service has changed, updating...")
                 needs_update = True
         except Exception as e:
-            log.error(f"Error comparing bluetooth service files: {e}")
+            print(f"Error comparing bluetooth service files: {e}")
             return
 
     if needs_update:
         try:
             # Copy the new version using sudo
-            log.info(f"Copying {source} to {target}")
+            print(f"Copying {source} to {target}")
             subprocess.run(
                 ["sudo", "cp", str(source), str(target)],
                 check=True,
                 capture_output=True,
                 text=True,
             )
-            log.info("Successfully copied bluetooth service")
+            print("Successfully copied bluetooth service")
 
             # Restart the bluetooth service
-            log.info("Restarting bluetooth service...")
+            print("Restarting bluetooth service...")
             subprocess.run(
                 ["sudo", "systemctl", "restart", "reachy-mini-bluetooth"],
                 check=True,
                 capture_output=True,
                 text=True,
             )
-            log.info("Successfully restarted bluetooth service")
+            print("Successfully restarted bluetooth service")
         except subprocess.CalledProcessError as e:
-            log.error(f"Failed to update bluetooth service: {e.stderr}")
+            print(f"Failed to update bluetooth service: {e.stderr}")
         except Exception as e:
-            log.error(f"Unexpected error while updating bluetooth service: {e}")
+            print(f"Unexpected error while updating bluetooth service: {e}")
 
 
 if __name__ == "__main__":

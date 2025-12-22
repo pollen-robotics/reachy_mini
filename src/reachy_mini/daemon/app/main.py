@@ -449,7 +449,7 @@ def main() -> None:
         check_and_fix_venvs_ownership(custom_logger=logging.getLogger())
 
         # Check and update bluetooth service if needed
-        check_and_update_bluetooth_service(custom_logger=logging.getLogger())
+        check_and_update_bluetooth_service()
 
         if check_reachymini_asoundrc():
             logging.getLogger().info(
