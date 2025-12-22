@@ -28,6 +28,7 @@ from reachy_mini.io import (
     ZenohServer,
 )
 from reachy_mini.media.media_manager import MediaManager
+from reachy_mini.tools.reflash_motors import reflash_motors
 
 from .backend.mujoco import MujocoBackend, MujocoBackendStatus
 from .backend.robot import RobotBackend, RobotBackendStatus
@@ -576,6 +577,7 @@ class Daemon:
         use_audio: bool,
         websocket_uri: Optional[str],
         hardware_config_filepath: str | None = None,
+        reflash_motors_on_start: bool = True,
     ) -> "RobotBackend | MujocoBackend":
         if sim:
             return MujocoBackend(
@@ -608,6 +610,10 @@ class Daemon:
             self.logger.info(
                 f"Creating RobotBackend with parameters: serialport={serialport}, check_collision={check_collision}, kinematics_engine={kinematics_engine}"
             )
+
+            if reflash_motors_on_start:
+                reflash_motors(serialport)
+
             return RobotBackend(
                 serialport=serialport,
                 log_level=self.log_level,
