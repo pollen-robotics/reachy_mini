@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
 from ....daemon.backend.abstract import Backend, MotorControlMode
-from ..dependencies import get_backend
+from ..dependencies import get_backend, verify_api_token
 
 router = APIRouter(
     prefix="/motors",
@@ -34,8 +34,12 @@ async def get_motor_status(backend: Backend = Depends(get_backend)) -> MotorStat
 async def set_motor_mode(
     mode: MotorControlMode,
     backend: Backend = Depends(get_backend),
+    token: str = Depends(verify_api_token),
 ) -> dict[str, str]:
-    """Set the motor control mode."""
+    """Set the motor control mode.
+    
+    Requires authentication via Bearer token in Authorization header.
+    """
     backend.set_motor_control_mode(mode)
 
     return {"status": f"motors changed to {mode} mode"}

@@ -12,7 +12,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 
 from ....daemon.backend.abstract import Backend
-from ..dependencies import get_backend, ws_get_backend
+from ..dependencies import get_backend, ws_get_backend, verify_api_token
 from ..models import AnyPose, FullState, as_any_pose
 
 router = APIRouter(prefix="/state")
@@ -22,12 +22,14 @@ router = APIRouter(prefix="/state")
 async def get_head_pose(
     use_pose_matrix: bool = False,
     backend: Backend = Depends(get_backend),
+    token: str = Depends(verify_api_token),
 ) -> AnyPose:
     """Get the present head pose.
 
     Arguments:
         use_pose_matrix (bool): Whether to use the pose matrix representation (4x4 flattened) or the translation + Euler angles representation (x, y, z, roll, pitch, yaw).
         backend (Backend): The backend instance.
+        token (str): API authentication token (required).
 
     Returns:
         AnyPose: The present head pose.

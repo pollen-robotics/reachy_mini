@@ -21,7 +21,7 @@ from pydantic import BaseModel
 from reachy_mini.motion.recorded_move import RecordedMoves
 
 from ....daemon.backend.abstract import Backend
-from ..dependencies import get_backend, ws_get_backend
+from ..dependencies import get_backend, ws_get_backend, verify_api_token
 from ..models import AnyPose, FullBodyTarget
 
 move_tasks: dict[UUID, asyncio.Task[None]] = {}
