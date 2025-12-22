@@ -39,6 +39,7 @@ from reachy_mini.media.audio_utils import (
 )
 from reachy_mini.utils.wireless_version.startup_check import (
     check_and_fix_venvs_ownership,
+    check_and_update_bluetooth_service,
 )
 
 
@@ -446,6 +447,9 @@ def main() -> None:
     if args.wireless_version:
         # Check and fix ownership of /venvs directory
         check_and_fix_venvs_ownership(custom_logger=logging.getLogger())
+
+        # Check and update bluetooth service if needed
+        check_and_update_bluetooth_service(custom_logger=logging.getLogger())
 
         if check_reachymini_asoundrc():
             logging.getLogger().info(
