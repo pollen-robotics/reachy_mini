@@ -316,6 +316,22 @@ Yes, via MuJoCo. It is still a work in progress, but you can run code with the `
 
 </details>
 
+<details>
+<summary><strong>How do I debug an app on the Wireless?</strong></summary>
+
+SSH into the embedded computer, clone (or copy) your app, and run it manually. This reproduces what the dashboard does when launching your app.
+
+```bash
+ssh pollen@reachy-mini.local
+# password: root
+cd your_app_name
+python your_app_name/main.py
+```
+
+Your GUI will open at the usual address (for example, `http://reachy-mini.local:8042`).
+
+</details>
+
 <br>
 
 ## 🕹️ Moving the Robot
