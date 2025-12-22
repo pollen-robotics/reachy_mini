@@ -63,6 +63,16 @@ This behavior happen when a motor (often n°1) has not been flashed properly dur
 </details>
 
 <details>
+<summary><strong>Electrical Shock Error </strong></summary>
+
+An electrical shock error on Dynamixel motors means there is either an issue with the power supply, or a short circuit somewhere.
+Please check if any cable is damaged, from the foot PCB to the head. Especially the followings cables:  
+- Power Cable (black & red) 
+- 3-wires cables for motors (300mm, 200mm, 100mm and 40mm)
+
+</details>
+
+<details>
 
 <summary><strong>Low audio volume</strong></summary>
 
