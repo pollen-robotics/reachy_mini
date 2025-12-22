@@ -2,46 +2,68 @@
 
 Welcome to the Reachy Mini support page. Click on the questions below to reveal the answers.
 
-##  Known Issues - Batch December 2025
+##  Troubleshooting - Batch December 2025
+### Essential troubleshooting - Please read this first
 
 
-<details>
-<summary><strong>Before anything else: update & restart</strong></summary>
-
+<details><summary><strong>Before anything else and for any issue: update & restart</strong></summary>
 **Make sure you are using up-to-date software and that you have restarted both your robot and your computer.**  
 To restart your robot, press OFF, wait 5 seconds, then press ON. This simple procedure fixes several common and well-known issues.
 
 **How to update the software:**
 
 - **If you are using the dashboard in a web browser**  
-  Open `Settings`, then click **Check for updates**.
-- **If you are using the new dashboard**  
-  TODO, but should be simple
+  Open `Settings`, then click **Check for updates**.  
+  ![Update](/docs/assets/update.png)
+- **If you are using the new dashboard/app**  
+  Since 0.8.5 of the app, 
 - **If you are using a cloned repository**  
   Make sure you are either:
   - On the latest tagged release, or
   - Up to date with the `develop` branch (`git pull`).
-
 </details>
 
-<details>
-<summary><strong>Motor blinking red or Overload Error</strong></summary>
 
-If you get "Motor hardware errors: ['Overload Error']" a few second after starting the robot **for the first time.**
+<details><summary><strong>Motor blinking red or Overload Error</strong></summary>
 
-It is VERY likely there are motors not placed in the good slot, e.g motor 1 on slot 2
+**1. Motors inversion**: If you get "Motor hardware errors: ['Overload Error']" a few second after starting the robot **for the first time.** and have two motors arm pointing upward.  
+It is VERY likely there are motors not placed in the good slot, e.g motor 1 on slot 2.
+
+<details><summary>See illustration</summary>
+
+![Motors inversion symptom](/docs/assets/motors_upward.png)
+
+</details>
 
 Check assembly guide:
 
 - [**Reachy Mini Wireless - Step-by-Step Guide**](https://huggingface.co/spaces/pollen-robotics/Reachy_Mini_Assembly_Guide)
 - [**Reachy Mini LITE - Step-by-Step Guide**](https://huggingface.co/spaces/pollen-robotics/Reachy_Mini_LITE_Assembly_Guide)
 
+**2. Check the arm orientation on the motor's horn**:
+Remove the faulty motor, then place the arm upward like in the attached picture. Then check if you can see the the two line marks aligned as represented:
 
-</details>
+<details><summary>See picture:</summary>
 
-<details>
+![Marks_aligned](/docs/assets/marks_aligned.png)
+</details> 
 
-<summary><strong>A motor feels broken</strong></summary>
+If they are not, please remove the two screws securing the arm and put it back with the two lines matching.  
+
+
+**3. check the extra length of the usb cable inside the head:**  
+If it's too long inside the head, there must miss some slack underneath and the head cannot move freely.  
+So the motors force too much and can be damaged.  
+<details><summary>See picture:</summary>
+
+![usb_cable_length](/docs/assets/usb_cable_length.jpg)
+</details>  
+
+Please let some slack to the usb cable to allow the head to move freely, even to its maximal height position.  
+
+
+
+**4. A motor feels broken:**
 We identified an issue affecting a limited production batch of Reachy Mini robots, related to a faulty batch of Dynamixel motor. 
 
 In most reported cases, the issue affects motor number 4 or one with QC label n°2544.
@@ -50,15 +72,16 @@ If one of your motors, feels blocked or unusually hard to move, when turned off 
 
 It's probably a broken motor.
 
-Please fill out this short form so we can track and ship you a new motor:  https://forms.gle/JdhMzadeCnbynw7Q6
-
+First, try to update your robot to the latest software version, then reboot it. This will reflash your motors.
+If the issue persists, please fill out this short form so we can track and ship you a new motor:  https://forms.gle/JdhMzadeCnbynw7Q6
 </details>
+
 
 <details>
 <summary><strong>Head tilted, A motor is not moving at all, but get stiff when powered on, and doesn't blink red </strong></summary>
 
 This behavior happen when a motor (often n°1) has not been flashed properly during the manufacturing process.  
-=> Please power your robot but don't turn it on with the dashboard/daemon, then update reachy mini's software and run the ```reachy-mini-reflash-motors``` script. 
+=> Please power your robot but don't turn it on with the dashboard/daemon, then update reachy mini's software, then reboot the robot. This will reflash your motors.
 
 </details>
 
@@ -70,7 +93,19 @@ Please check if any cable is damaged, from the foot PCB to the head. Especially 
 - Power Cable (black & red) 
 - 3-wires cables for motors (300mm, 200mm, 100mm and 40mm)
 
+It can also be the same issue as "Motor blinking red or Overload Error" described above.
+
 </details>
+
+<details>
+
+<summary><strong>Missing Motor Error</strong></summary>
+
+- Make sure you have plugged all the motor cables correctly.
+- Make sure you have every motor and not two same motor in the kit. Refer to the label on each motor. e.g motor 1, motor 2, motor 3, motor 4, L motor, R motor...  
+
+</details>
+
 
 <details>
 
