@@ -340,6 +340,21 @@ If you command a pose outside these limits, the robot will automatically clamp t
 </details>
 
 <details>
+<summary><strong>Does the battery has safety features?</strong></summary>
+Wireless includes a proper battery charger.  
+The battery integrates a BMS with a temperature sensor too.
+
+</details>
+
+<details>
+<summary><strong>How do I see the battery left?</strong></summary>
+We do not have the possibility to check the battery status, that's a known limitation of the design.  
+
+We only have the led indication for "low battery" when it's time to charge it. (green -> orange -> red)
+
+</details>
+
+<details>
 <summary><strong>Can I modify the appearance (Skins/CAD)?</strong></summary>
 
 * **CAD:** Not currently public.
