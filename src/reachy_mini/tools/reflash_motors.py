@@ -2,6 +2,7 @@
 
 import argparse
 from importlib.resources import files
+from typing import Optional
 
 import questionary
 from rich.console import Console
@@ -15,7 +16,7 @@ BAUDRATE = 1000000
 
 
 def main() -> None:
-    """Reflash Reachy Mini's motors."""
+    """Entry point for the reflash_motors script."""
     parser = argparse.ArgumentParser(
         description="Reflash Reachy Mini motors' firmware.",
     )
@@ -28,13 +29,19 @@ def main() -> None:
         "If not specified, the script will try to automatically find it.",
     )
     args = parser.parse_args()
+    reflash_motors(args.serialport)
 
+
+def reflash_motors(serialport: Optional[str] = None) -> None:
+    """Reflash Reachy Mini's motors."""
     console = Console()
 
-    config_file_path = str(files(reachy_mini).joinpath("assets/config/hardware_config.yaml"))
+    config_file_path = str(
+        files(reachy_mini).joinpath("assets/config/hardware_config.yaml")
+    )
     config = parse_yaml_config(config_file_path)
     motors = list(config.motors.keys())
-    if args.serialport is None:
+    if serialport is None:
         console.print(
             "Which version of Reachy Mini are you using?",
         )

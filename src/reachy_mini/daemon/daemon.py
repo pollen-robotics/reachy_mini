@@ -28,6 +28,7 @@ from reachy_mini.io import (
     ZenohServer,
 )
 from reachy_mini.media.media_manager import MediaManager
+from reachy_mini.tools.reflash_motors import reflash_motors
 
 from .backend.mujoco import MujocoBackend, MujocoBackendStatus
 from .backend.robot import RobotBackend, RobotBackendStatus
@@ -44,7 +45,6 @@ class Daemon:
         log_level: str = "INFO",
         robot_name: str = "reachy_mini",
         wireless_version: bool = False,
-        stream: bool = False,
         desktop_app_daemon: bool = False,
     ) -> None:
         """Initialize the Reachy Mini daemon."""
@@ -71,7 +71,6 @@ class Daemon:
             state=DaemonState.NOT_INITIALIZED,
             wireless_version=wireless_version,
             desktop_app_daemon=desktop_app_daemon,
-            stream_enabled=stream,
             simulation_enabled=None,
             backend_status=None,
             error=None,
@@ -83,14 +82,14 @@ class Daemon:
         self._webrtc: Optional[Any] = (
             None  # type GstWebRTC imported for wireless version only
         )
-        if stream:
-            if not wireless_version:
-                raise RuntimeError(
-                    "WebRTC streaming is only supported for wireless version. Use --wireless-version flag."
-                )
+        if wireless_version:
             from reachy_mini.media.webrtc_daemon import GstWebRTC
 
-            self._webrtc = GstWebRTC(log_level)
+            try:
+                self._webrtc = GstWebRTC(log_level)
+            except Exception as e:
+                self.logger.error(f"Failed to initialize WebRTC: {e}")
+                self._webrtc = None
 
     async def start(
         self,
@@ -578,6 +577,7 @@ class Daemon:
         use_audio: bool,
         websocket_uri: Optional[str],
         hardware_config_filepath: str | None = None,
+        reflash_motors_on_start: bool = True,
     ) -> "RobotBackend | MujocoBackend":
         if sim:
             return MujocoBackend(
@@ -610,6 +610,10 @@ class Daemon:
             self.logger.info(
                 f"Creating RobotBackend with parameters: serialport={serialport}, check_collision={check_collision}, kinematics_engine={kinematics_engine}"
             )
+
+            if reflash_motors_on_start:
+                reflash_motors(serialport)
+
             return RobotBackend(
                 serialport=serialport,
                 log_level=self.log_level,
@@ -640,7 +644,6 @@ class DaemonStatus:
     state: DaemonState
     wireless_version: bool
     desktop_app_daemon: bool
-    stream_enabled: bool
     simulation_enabled: Optional[bool]
     backend_status: Optional[RobotBackendStatus | MujocoBackendStatus]
     error: Optional[str] = None
