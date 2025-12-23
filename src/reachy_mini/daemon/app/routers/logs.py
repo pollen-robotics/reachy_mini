@@ -46,7 +46,7 @@ async def websocket_daemon_logs(websocket: WebSocket) -> None:
             except Exception as e:
                 logger.error(f"Error reading stderr: {e}")
 
-        stderr_task = asyncio.create_task(log_stderr())  # type: ignore
+        stderr_task = asyncio.create_task(log_stderr())
 
         # Stream lines to WebSocket
         while True:
