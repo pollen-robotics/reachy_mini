@@ -223,12 +223,12 @@ Choose your installation method:
 
 In your terminal, run:
 ```bash
-uv add reachy-mini
+uv pip install "reachy-mini"
 ```
 
 If you want to use the simulation mode, you need to add the `mujoco` extra:
 ```bash
-uv add reachy-mini --extra mujoco
+uv pip install "reachy-mini[mujoco]"
 ```
 
 ### 🔧 Option B: Install from Source  
