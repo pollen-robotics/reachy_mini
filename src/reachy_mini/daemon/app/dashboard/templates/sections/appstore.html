@@ -61,22 +61,22 @@
             <!-- Login form (shown when not authenticated) -->
             <div id="hf-login-form" class="space-y-3">
                 <div>
-                    <label for="hf-token-input" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
+                    <label for="hf-token-input" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">
                         HuggingFace Token
                     </label>
                     <input
                         type="password"
                         id="hf-token-input"
                         placeholder="hf_..."
-                        class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-red-500"
+                        class="w-full px-4 py-3 text-base font-mono border-2 border-gray-300 dark:border-gray-500 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500"
                     />
-                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
                         Get your token from <a href="https://huggingface.co/settings/tokens" target="_blank" class="text-red-600 hover:underline">huggingface.co/settings/tokens</a>
                     </p>
                 </div>
                 <button
                     id="hf-login-button"
-                    class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                    class="w-full px-4 py-2.5 bg-red-600 text-white font-medium rounded-lg hover:bg-red-700 transition-colors"
                 >
                     Login
                 </button>
@@ -99,19 +99,19 @@
 
                 <!-- Private space installation -->
                 <div>
-                    <label for="hf-space-id-input" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
+                    <label for="hf-space-id-input" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">
                         Private Space ID
                     </label>
                     <input
                         type="text"
                         id="hf-space-id-input"
                         placeholder="username/space-name"
-                        class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-red-500"
+                        class="w-full px-4 py-3 text-base font-mono border-2 border-gray-300 dark:border-gray-500 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500"
                     />
                 </div>
                 <button
                     id="hf-install-private-button"
-                    class="px-4 py-2 border border-red-600 text-red-600 rounded-lg hover:bg-red-50 dark:hover:bg-gray-700 transition-colors"
+                    class="w-full px-4 py-2.5 border-2 border-red-600 text-red-600 font-medium rounded-lg hover:bg-red-50 dark:hover:bg-gray-700 transition-colors"
                 >
                     Install Private Space
                 </button>

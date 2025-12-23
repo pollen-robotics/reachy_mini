@@ -178,6 +178,20 @@ const hfAppsStore = {
                 document.getElementById('hf-logout-button').onclick = hfAppsStore.advanced.logout;
                 document.getElementById('hf-install-private-button').onclick = hfAppsStore.advanced.installPrivateSpace;
 
+                // Add Enter key support for token input
+                document.getElementById('hf-token-input').addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') {
+                        hfAppsStore.advanced.login();
+                    }
+                });
+
+                // Add Enter key support for space ID input
+                document.getElementById('hf-space-id-input').addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') {
+                        hfAppsStore.advanced.installPrivateSpace();
+                    }
+                });
+
                 // Check authentication status
                 await hfAppsStore.advanced.checkAuthStatus();
             } catch (error) {
