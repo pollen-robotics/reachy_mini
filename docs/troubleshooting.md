@@ -323,6 +323,7 @@ Helps prevent package conflicts during SDK installation.
 
 <details>
 <summary><strong>Where can I find more information about hardware?</strong></summary>
+
 Refer to the [Reachy Mini Hardware page](/docs/platforms/reachy_mini/hardware.md) for detailed information about the robot's hardware components.
 
 </details>
