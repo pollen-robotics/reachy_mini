@@ -18,6 +18,8 @@ async def websocket_daemon_logs(websocket: WebSocket) -> None:
     await websocket.accept()
 
     process = None
+    stderr_task = None
+
     try:
         # Start journalctl subprocess to stream daemon logs
         process = await asyncio.create_subprocess_exec(
@@ -31,10 +33,40 @@ async def websocket_daemon_logs(websocket: WebSocket) -> None:
             stderr=asyncio.subprocess.PIPE,
         )
 
+        logger.info("journalctl process started")
+
+        # Task to read and log stderr
+        async def log_stderr():
+            try:
+                while True:
+                    err_line = await process.stderr.readline()
+                    if not err_line:
+                        break
+                    logger.error(f"journalctl stderr: {err_line.decode().strip()}")
+            except Exception as e:
+                logger.error(f"Error reading stderr: {e}")
+
+        stderr_task = asyncio.create_task(log_stderr())
+
         # Stream lines to WebSocket
         while True:
-            line = await process.stdout.readline()
+            try:
+                line = await asyncio.wait_for(process.stdout.readline(), timeout=1.0)
+            except asyncio.TimeoutError:
+                # No data available, check if process is still running
+                if process.returncode is not None:
+                    logger.error(f"journalctl process exited with code {process.returncode}")
+                    break
+                # Check if WebSocket is still connected
+                try:
+                    await websocket.send_text("")  # Keepalive ping
+                except Exception:
+                    break
+                continue
+
             if not line:
+                # EOF reached
+                logger.info("journalctl process stdout closed")
                 break
 
             # Send line to client
@@ -60,6 +92,14 @@ async def websocket_daemon_logs(websocket: WebSocket) -> None:
         except Exception:
             pass
     finally:
+        # Cancel stderr task if running
+        if stderr_task and not stderr_task.done():
+            stderr_task.cancel()
+            try:
+                await stderr_task
+            except asyncio.CancelledError:
+                pass
+
         # Terminate journalctl process if still running
         if process and process.returncode is None:
             try:

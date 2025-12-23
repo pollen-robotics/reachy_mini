@@ -58,7 +58,10 @@ const daemonLogs = {
         };
 
         daemonLogs.ws.onmessage = (event) => {
-            daemonLogs.appendLog(event.data);
+            // Ignore empty keepalive messages
+            if (event.data && event.data.trim()) {
+                daemonLogs.appendLog(event.data);
+            }
         };
 
         daemonLogs.ws.onclose = () => {
