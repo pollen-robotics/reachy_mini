@@ -134,15 +134,9 @@ const daemonLogs = {
     }
 };
 
-// Close modal when clicking outside of it
-window.addEventListener('load', () => {
-    const modal = document.getElementById('logs-modal');
-    if (modal) {
-        modal.addEventListener('click', (event) => {
-            // Close if clicking on the overlay (not the modal content)
-            if (event.target === modal) {
-                daemonLogs.closeLogsModal();
-            }
-        });
+// Close modal with ESC key
+window.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && daemonLogs.modalOpen) {
+        daemonLogs.closeLogsModal();
     }
 });
