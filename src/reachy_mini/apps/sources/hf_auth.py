@@ -3,7 +3,7 @@
 from typing import Any, Optional
 
 from huggingface_hub import HfApi, HfFolder, whoami
-from huggingface_hub.utils import HfHubHTTPError
+from huggingface_hub.utils import HfHubHTTPError  # type: ignore
 
 
 def save_hf_token(token: str) -> dict[str, Any]:
@@ -17,7 +17,7 @@ def save_hf_token(token: str) -> dict[str, Any]:
 
     Returns:
         dict with status and username if valid, or error message
-        
+
     """
     try:
         # Validate token first by making an API call

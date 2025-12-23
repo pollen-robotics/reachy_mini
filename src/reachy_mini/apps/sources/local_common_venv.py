@@ -360,7 +360,7 @@ def _save_app_metadata(app_name: str, metadata: dict) -> None:  # type: ignore
         json.dump(metadata, f)
 
 
-def _load_app_metadata(app_name: str) -> dict:
+def _load_app_metadata(app_name: str) -> dict:  # type: ignore
     """Load metadata for an app."""
     import json
 
@@ -369,7 +369,7 @@ def _load_app_metadata(app_name: str) -> dict:
         return {}
     try:
         with open(metadata_path, "r") as f:
-            return json.load(f)
+            return json.load(f)  # type: ignore
     except Exception:
         return {}
 
