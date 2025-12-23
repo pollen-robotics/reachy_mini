@@ -7,6 +7,7 @@ Welcome to the Reachy Mini support page. Click on the questions below to reveal 
 
 
 <details><summary><strong>Before anything else and for any issue: update & restart</strong></summary>
+
 **Make sure you are using up-to-date software and that you have restarted both your robot and your computer.**  
 To restart your robot, press OFF, wait 5 seconds, then press ON. This simple procedure fixes several common and well-known issues.
 
@@ -204,9 +205,10 @@ Most testers report between **1.5 and 2 hours**. It can take up to 4 hours depen
 <details>
 <summary><strong>Are there any difficult steps during assembly?</strong></summary>
 
-Testers generally describe it as fun and simple. The trickiest parts are usually:
-* **Cable routing:** ensuring cables aren't pinched.
-* **Torque:** Tightening parts correctly (not too loose, not too hard).
+Not really, testers describe it as **fun, simple, and satisfying**. Basic tools and patience are enough. C**able routing** and **torqueing parts correctly** are the trickiest elements. When you buy a Reachy Mini Lite or Wireless, it comes with a printed user guide, and you also have access to a video and the Digital guide.
+Video for Reachy Mini [BETA](https://www.youtube.com/watch?v=_r0cHySFbeY), LITE, WIRELESS
+
+Digital Assembly Guide for Reachy Mini [BETA](https://huggingface.co/spaces/pollen-robotics/Reachy_Mini_Assembly_Guide), LITE, WIRELESS
 
 </details>
 
@@ -282,17 +284,36 @@ Yes. The daemon provides a REST API (FastAPI) and WebSocket support.
 * **Docs:** `http://localhost:8000/docs` (available when daemon is running).
 * **Features:** Get state, Move joints, Control daemon.
 
+You can use the API to control the robot and get its state and even control the daemon itself. The API is implemented using [FastAPI](https://fastapi.tiangolo.com/) and [pydantic](https://docs.pydantic.dev/latest/) models.
+
+It should provide you all the necessary endpoints to interact with the robot, including:
+
+- Getting the state of the robot (joints positions, motor status, etc.)
+- Moving the robot's joints or setting specific poses
+
+The API is documented using OpenAPI, and you can access all available routes and test them at http://localhost:8000/docs when the daemon is running. You can also access the raw OpenAPI schema at http://localhost:8000/openapi.json.
+
+This can be useful if you want to generate client code for your preferred programming language or framework, connect it to your AI application, or even to create your MCP server.
+
+**WebSocket support**
+
+The API also supports WebSocket connections for real-time updates. For instance, you can subscribe to joint state updates:
+
+```
+let ws = new WebSocket(`ws://127.0.0.1:8000/api/state/ws/full`);
+
+ws.onmessage = (event) => {
+    const data = JSON.parse(event.data);
+    console.log(data);
+};
+```
+
 </details>
 
 <details>
-<summary><strong>All apps installations fail on Windows !</strong></summary>
+<summary><strong>Why do I need a virtual environment (.venv)?</strong></summary>
 
-It might be related to unsufficient rights to create symlinks in Windows. You can set the environment variable `HF_HUB_DISABLE_SYMLINKS_WARNING` to 1 to remove the warnings that cause the failure.
-
-In a terminal, run :
-```powershell
-set HF_HUB_DISABLE_SYMLINKS_WARNING=1
-```
+Helps prevent package conflicts during SDK installation.
 
 </details>
 
@@ -400,6 +421,24 @@ with ReachyMini() as mini:
 3.  Run it: `python my_app_name/main.py`.
 
 Check the [Hugging Face Tutorial](https://huggingface.co/blog/pollen-robotics/make-and-publish-your-reachy-mini-apps) for details.
+
+</details>
+
+<details><summary><strong>Is installing apps directly from the dashboard supported?</strong></summary>
+
+Sure! You can install apps directly from your Dashboard if they’re native, or add them to your favourites if they’re web-based.
+
+</details>
+
+<details>
+<summary><strong>All apps installations fail on Windows !</strong></summary>
+
+It might be related to unsufficient rights to create symlinks in Windows. You can set the environment variable `HF_HUB_DISABLE_SYMLINKS_WARNING` to 1 to remove the warnings that cause the failure.
+
+In a terminal, run :
+```powershell
+set HF_HUB_DISABLE_SYMLINKS_WARNING=1
+```
 
 </details>
 
