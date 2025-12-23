@@ -7,6 +7,8 @@ from fastapi import (
     WebSocket,
 )
 
+from pydantic import BaseModel
+
 from reachy_mini.apps import AppInfo, SourceKind
 from reachy_mini.apps.manager import AppManager, AppStatus
 from reachy_mini.daemon.app import bg_job_register
@@ -112,3 +114,56 @@ async def current_app_status(
 ) -> AppStatus | None:
     """Get the status of the currently running app, if any."""
     return await app_manager.current_app_status()
+
+
+class PrivateSpaceInstallRequest(BaseModel):
+    """Request model for installing a private HuggingFace space."""
+
+    space_id: str
+
+
+@router.post("/install-private-space")
+async def install_private_space(
+    request: PrivateSpaceInstallRequest,
+    app_manager: "AppManager" = Depends(get_app_manager),
+) -> dict[str, str]:
+    """Install a private HuggingFace space.
+
+    Only available on wireless version.
+    Requires HF token to be stored via /api/hf-auth/save-token first.
+    """
+    if not app_manager.wireless_version:
+        raise HTTPException(
+            status_code=403,
+            detail="Private space installation only available on wireless version",
+        )
+
+    from reachy_mini.apps.sources import hf_auth
+
+    # Check if token is available
+    token = hf_auth.get_hf_token()
+    if not token:
+        raise HTTPException(
+            status_code=401,
+            detail="No HuggingFace token found. Please authenticate first.",
+        )
+
+    # Create AppInfo for the private space
+    space_name = request.space_id.split("/")[-1]
+    app_info = AppInfo(
+        name=space_name,
+        description=f"Private space: {request.space_id}",
+        url=f"https://huggingface.co/spaces/{request.space_id}",
+        source_kind=SourceKind.HF_SPACE,
+        extra={
+            "id": request.space_id,
+            "private": True,
+            "cardData": {
+                "title": space_name,
+                "short_description": f"Private space: {request.space_id}",
+            },
+        },
+    )
+
+    job_id = bg_job_register.run_command("install", app_manager.install_new_app, app_info)
+    return {"job_id": job_id}

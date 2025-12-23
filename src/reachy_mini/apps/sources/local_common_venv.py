@@ -350,15 +350,38 @@ async def install_package(
             repo_id = app.name
 
         logger.info(f"Downloading HuggingFace Space: {repo_id}")
+
+        # Check if this is a private space installation
+        is_private = app.extra.get("private", False)
+        token = None
+
+        if is_private:
+            # Get token for private spaces
+            from reachy_mini.apps.sources import hf_auth
+
+            token = hf_auth.get_hf_token()
+            if not token:
+                logger.error("Private space requires authentication but no token found")
+                return 1
+            logger.info("Using stored HF token for private space access")
+
         try:
             target = await asyncio.to_thread(
                 snapshot_download,
                 repo_id=repo_id,
                 repo_type="space",
+                token=token,  # Pass token (None for public, actual token for private)
             )
             logger.info(f"Downloaded to: {target}")
         except Exception as e:
-            logger.error(f"Failed to download from HuggingFace: {e}")
+            error_msg = str(e)
+            if "401" in error_msg or "403" in error_msg or "Repository not found" in error_msg:
+                logger.error(
+                    f"Authentication failed or space not found: {e}\n"
+                    "This space may be private. Please authenticate with a valid HF token."
+                )
+            else:
+                logger.error(f"Failed to download from HuggingFace: {e}")
             return 1
     elif app.source_kind == SourceKind.LOCAL:
         target = app.extra.get("path", app.name)
