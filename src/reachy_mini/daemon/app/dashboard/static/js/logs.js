@@ -101,17 +101,31 @@ const daemonLogs = {
         // Get all log text
         const logText = logsDiv.innerText;
 
-        // Copy to clipboard
-        navigator.clipboard.writeText(logText).then(() => {
-            // Show confirmation
-            if (buttonText) {
-                const originalText = buttonText.textContent;
+        // Create temporary textarea for copying (works without HTTPS)
+        const textarea = document.createElement('textarea');
+        textarea.value = logText;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+
+        try {
+            // Select and copy
+            textarea.select();
+            textarea.setSelectionRange(0, 99999); // For mobile devices
+            const successful = document.execCommand('copy');
+
+            if (successful && buttonText) {
                 buttonText.textContent = 'Copied!';
                 setTimeout(() => {
-                    buttonText.textContent = originalText;
+                    buttonText.textContent = 'Copy';
+                }, 2000);
+            } else if (buttonText) {
+                buttonText.textContent = 'Failed';
+                setTimeout(() => {
+                    buttonText.textContent = 'Copy';
                 }, 2000);
             }
-        }).catch(err => {
+        } catch (err) {
             console.error('Failed to copy logs:', err);
             if (buttonText) {
                 buttonText.textContent = 'Failed';
@@ -119,7 +133,9 @@ const daemonLogs = {
                     buttonText.textContent = 'Copy';
                 }, 2000);
             }
-        });
+        } finally {
+            document.body.removeChild(textarea);
+        }
     },
 
     disconnect: () => {
