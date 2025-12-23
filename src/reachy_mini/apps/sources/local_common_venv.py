@@ -351,9 +351,10 @@ def _get_app_metadata_path(app_name: str) -> Path:
     return metadata_dir / f"{app_name}.json"
 
 
-def _save_app_metadata(app_name: str, metadata: dict) -> None:
+def _save_app_metadata(app_name: str, metadata: dict) -> None:  # type: ignore
     """Save metadata for an app."""
     import json
+
     metadata_path = _get_app_metadata_path(app_name)
     with open(metadata_path, "w") as f:
         json.dump(metadata, f)
@@ -362,6 +363,7 @@ def _save_app_metadata(app_name: str, metadata: dict) -> None:
 def _load_app_metadata(app_name: str) -> dict:
     """Load metadata for an app."""
     import json
+
     metadata_path = _get_app_metadata_path(app_name)
     if not metadata_path.exists():
         return {}
@@ -393,7 +395,7 @@ async def install_package(
             "uv is not installed. Falling back to pip. "
             "Install uv for faster installs: pip install uv"
         )
-    
+
     if app.source_kind == SourceKind.HF_SPACE:
         # Use huggingface_hub to download the repo (handles LFS automatically)
         # This avoids requiring git-lfs to be installed on the system
@@ -427,24 +429,32 @@ async def install_package(
             try:
                 api = HfApi(token=token)
                 space_info = api.space_info(repo_id=repo_id)
-                logger.info(f"Space found: {space_info.id} (private={space_info.private})")
+                logger.info(
+                    f"Space found: {space_info.id} (private={space_info.private})"
+                )
 
                 # List all files in the space to see what's available
                 try:
-                    files_in_repo = api.list_repo_files(repo_id=repo_id, repo_type="space", token=token)
+                    files_in_repo = api.list_repo_files(
+                        repo_id=repo_id, repo_type="space", token=token
+                    )
                     logger.info(f"Files available in space: {', '.join(files_in_repo)}")
                 except Exception as list_error:
                     logger.warning(f"Could not list files in space: {list_error}")
             except Exception as verify_error:
                 logger.error(f"Cannot access space {repo_id}: {verify_error}")
                 if "404" in str(verify_error):
-                    logger.error(f"Space '{repo_id}' not found. Please check the space ID and your permissions.")
+                    logger.error(
+                        f"Space '{repo_id}' not found. Please check the space ID and your permissions."
+                    )
                 elif "401" in str(verify_error) or "403" in str(verify_error):
-                    logger.error(f"Access denied to space '{repo_id}'. Please check your HuggingFace token permissions.")
+                    logger.error(
+                        f"Access denied to space '{repo_id}'. Please check your HuggingFace token permissions."
+                    )
                 return 1
 
             # Download the space
-            logger.info(f"Attempting to download all files from space...")
+            logger.info("Attempting to download all files from space...")
             # For private spaces, we need to be careful about missing files like .gitattributes
             # snapshot_download can fail on 404 for optional git metadata files
             target = await asyncio.to_thread(
@@ -452,13 +462,17 @@ async def install_package(
                 repo_id=repo_id,
                 repo_type="space",
                 token=token,
-                ignore_patterns=[".gitattributes", ".gitignore"],  # Skip git metadata that may 404
+                ignore_patterns=[
+                    ".gitattributes",
+                    ".gitignore",
+                ],  # Skip git metadata that may 404
                 allow_patterns=None,  # Download all other files
             )
             logger.info(f"Downloaded to: {target}")
 
             # Check what files were downloaded to help with debugging
             import os
+
             downloaded_files = []
             for root, dirs, files in os.walk(target):
                 for file in files:
@@ -532,7 +546,7 @@ async def install_package(
                     python_path = _get_app_python(
                         app_name, wireless_version, desktop_app_daemon
                     )
-                    
+
                     if use_uv:
                         install_cmd = [
                             "uv",
@@ -550,7 +564,7 @@ async def install_package(
                             "install",
                             "reachy-mini[gstreamer]",
                         ]
-                    
+
                     ret = await running_command(install_cmd, logger=logger)
                     if ret != 0:
                         logger.warning(
@@ -563,12 +577,19 @@ async def install_package(
             python_path = _get_app_python(
                 app_name, wireless_version, desktop_app_daemon
             )
-            
+
             if use_uv:
-                install_cmd = ["uv", "pip", "install", "--python", str(python_path), target]
+                install_cmd = [
+                    "uv",
+                    "pip",
+                    "install",
+                    "--python",
+                    str(python_path),
+                    target,
+                ]
             else:
                 install_cmd = [str(python_path), "-m", "pip", "install", target]
-            
+
             ret = await running_command(install_cmd, logger=logger)
 
             if ret != 0:
@@ -598,7 +619,7 @@ async def install_package(
             install_cmd = ["uv", "pip", "install", "--python", sys.executable, target]
         else:
             install_cmd = [sys.executable, "-m", "pip", "install", target]
-        
+
         return await running_command(install_cmd, logger=logger)
 
 
@@ -654,10 +675,10 @@ async def uninstall_package(
             python_path = _get_app_python(
                 app_name, wireless_version, desktop_app_daemon
             )
-            
+
             # Check if uv is available
             use_uv = _check_uv_available()
-            
+
             if use_uv:
                 uninstall_cmd = [
                     "uv",
@@ -676,7 +697,7 @@ async def uninstall_package(
                     "-y",
                     app_name,
                 ]
-            
+
             ret = await running_command(uninstall_cmd, logger=logger)
             if ret == 0:
                 logger.info(f"Successfully uninstalled '{app_name}'")
@@ -698,14 +719,21 @@ async def uninstall_package(
 
         # Check if uv is available
         use_uv = _check_uv_available()
-        
+
         logger.info(f"Removing package {app_name}")
-        
+
         if use_uv:
-            uninstall_cmd = ["uv", "pip", "uninstall", "--python", sys.executable, app_name]
+            uninstall_cmd = [
+                "uv",
+                "pip",
+                "uninstall",
+                "--python",
+                sys.executable,
+                app_name,
+            ]
         else:
             uninstall_cmd = [sys.executable, "-m", "pip", "uninstall", "-y", app_name]
-        
+
         ret = await running_command(uninstall_cmd, logger=logger)
         if ret == 0:
             logger.info(f"Successfully uninstalled '{app_name}'")

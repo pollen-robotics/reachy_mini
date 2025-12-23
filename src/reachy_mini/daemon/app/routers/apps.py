@@ -6,7 +6,6 @@ from fastapi import (
     HTTPException,
     WebSocket,
 )
-
 from pydantic import BaseModel
 
 from reachy_mini.apps import AppInfo, SourceKind
@@ -165,5 +164,7 @@ async def install_private_space(
         },
     )
 
-    job_id = bg_job_register.run_command("install", app_manager.install_new_app, app_info)
+    job_id = bg_job_register.run_command(
+        "install", app_manager.install_new_app, app_info
+    )
     return {"job_id": job_id}
