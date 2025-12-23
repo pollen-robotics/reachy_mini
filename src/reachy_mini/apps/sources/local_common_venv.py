@@ -240,14 +240,20 @@ async def _list_apps_from_separate_venvs(
                 custom_app_url = _get_custom_app_url_from_file(
                     app_name, wireless_version, desktop_app_daemon
                 )
+                # Load saved metadata (e.g., private flag)
+                metadata = _load_app_metadata(app_name)
+                # Merge with current extra data
+                extra_data = {
+                    "custom_app_url": custom_app_url,
+                    "venv_path": str(apps_venv),
+                }
+                extra_data.update(metadata)
+
                 apps.append(
                     AppInfo(
                         name=app_name,
                         source_kind=SourceKind.INSTALLED,
-                        extra={
-                            "custom_app_url": custom_app_url,
-                            "venv_path": str(apps_venv),
-                        },
+                        extra=extra_data,
                     )
                 )
             return apps
@@ -273,14 +279,20 @@ async def _list_apps_from_separate_venvs(
                 app_name, wireless_version, desktop_app_daemon
             )
 
+            # Load saved metadata (e.g., private flag)
+            metadata = _load_app_metadata(app_name)
+            # Merge with current extra data
+            extra_data = {
+                "custom_app_url": custom_app_url,
+                "venv_path": str(venv_path),
+            }
+            extra_data.update(metadata)
+
             apps.append(
                 AppInfo(
                     name=app_name,
                     source_kind=SourceKind.INSTALLED,
-                    extra={
-                        "custom_app_url": custom_app_url,
-                        "venv_path": str(venv_path),
-                    },
+                    extra=extra_data,
                 )
             )
 
@@ -301,11 +313,18 @@ async def _list_apps_from_entry_points() -> list[AppInfo]:
             logging.getLogger("reachy_mini.apps").warning(
                 f"Could not load app '{ep.name}' from entry point: {e}"
             )
+
+        # Load saved metadata (e.g., private flag)
+        metadata = _load_app_metadata(ep.name)
+        # Merge with current extra data
+        extra_data = {"custom_app_url": custom_app_url}
+        extra_data.update(metadata)
+
         apps.append(
             AppInfo(
                 name=ep.name,
                 source_kind=SourceKind.INSTALLED,
-                extra={"custom_app_url": custom_app_url},
+                extra=extra_data,
             )
         )
 
@@ -322,6 +341,42 @@ async def list_available_apps(
         )
     else:
         return await _list_apps_from_entry_points()
+
+
+def _get_app_metadata_path(app_name: str) -> Path:
+    """Get the path to the metadata file for an app."""
+    parent_dir = _get_venv_parent_dir()
+    metadata_dir = parent_dir / ".app_metadata"
+    metadata_dir.mkdir(exist_ok=True)
+    return metadata_dir / f"{app_name}.json"
+
+
+def _save_app_metadata(app_name: str, metadata: dict) -> None:
+    """Save metadata for an app."""
+    import json
+    metadata_path = _get_app_metadata_path(app_name)
+    with open(metadata_path, "w") as f:
+        json.dump(metadata, f)
+
+
+def _load_app_metadata(app_name: str) -> dict:
+    """Load metadata for an app."""
+    import json
+    metadata_path = _get_app_metadata_path(app_name)
+    if not metadata_path.exists():
+        return {}
+    try:
+        with open(metadata_path, "r") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def _delete_app_metadata(app_name: str) -> None:
+    """Delete metadata for an app."""
+    metadata_path = _get_app_metadata_path(app_name)
+    if metadata_path.exists():
+        metadata_path.unlink()
 
 
 async def install_package(
@@ -521,6 +576,12 @@ async def install_package(
 
             logger.info(f"Successfully installed '{app_name}' in {venv_path}")
             success = True
+
+            # Save app metadata (e.g., private flag)
+            if app.extra:
+                _save_app_metadata(app_name, app.extra)
+                logger.info(f"Saved metadata for '{app_name}': {app.extra}")
+
             return 0
         finally:
             # Clean up broken venv on any failure (but not shared wireless venv)
@@ -619,12 +680,16 @@ async def uninstall_package(
             ret = await running_command(uninstall_cmd, logger=logger)
             if ret == 0:
                 logger.info(f"Successfully uninstalled '{app_name}'")
+                # Delete app metadata
+                _delete_app_metadata(app_name)
             return ret
         else:
             # Desktop: remove the entire per-app venv directory
             logger.info(f"Removing venv for '{app_name}' at {venv_path}")
             shutil.rmtree(venv_path)
             logger.info(f"Successfully uninstalled '{app_name}'")
+            # Delete app metadata
+            _delete_app_metadata(app_name)
             return 0
     else:
         existing_apps = await list_available_apps()
@@ -644,4 +709,6 @@ async def uninstall_package(
         ret = await running_command(uninstall_cmd, logger=logger)
         if ret == 0:
             logger.info(f"Successfully uninstalled '{app_name}'")
+            # Delete app metadata
+            _delete_app_metadata(app_name)
         return ret
