@@ -28,6 +28,7 @@ from reachy_mini.daemon.app.routers import (
     daemon,
     hf_auth,
     kinematics,
+    logs,
     motors,
     move,
     state,
@@ -154,8 +155,10 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
     router.include_router(volume.router)
 
     if args.wireless_version:
-        from .routers import update, wifi_config
+        from .routers import cache, update, wifi_config
 
+        app.include_router(cache.router)
+        app.include_router(logs.router)
         app.include_router(update.router)
         app.include_router(wifi_config.router)
 
@@ -195,6 +198,11 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
         async def settings(request: Request) -> HTMLResponse:
             """Render the settings page."""
             return templates.TemplateResponse("settings.html", {"request": request})
+
+        @app.get("/logs")
+        async def logs_page(request: Request) -> HTMLResponse:
+            """Render the logs page."""
+            return templates.TemplateResponse("logs.html", {"request": request})
 
     return app
 
