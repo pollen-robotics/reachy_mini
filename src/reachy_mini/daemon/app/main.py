@@ -196,6 +196,11 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
             """Render the settings page."""
             return templates.TemplateResponse("settings.html", {"request": request})
 
+        @app.get("/logs")
+        async def logs_page(request: Request) -> HTMLResponse:
+            """Render the logs page."""
+            return templates.TemplateResponse("logs.html", {"request": request})
+
     return app
 
 

@@ -1,42 +1,6 @@
 const daemonLogs = {
     ws: null,
     isConnected: false,
-    viewOpen: false,
-
-    openLogsView: () => {
-        const logsView = document.getElementById('logs-view');
-        const logsDiv = document.getElementById('daemon-logs-content');
-
-        if (!logsView || !logsDiv) {
-            console.error('Logs view elements not found');
-            return;
-        }
-
-        // Clear previous logs
-        logsDiv.innerHTML = '';
-
-        // Show full-screen view
-        logsView.classList.remove('hidden');
-        daemonLogs.viewOpen = true;
-
-        // Connect to WebSocket
-        daemonLogs.connectWebSocket();
-    },
-
-    closeLogsView: () => {
-        const logsView = document.getElementById('logs-view');
-
-        if (!logsView) {
-            return;
-        }
-
-        // Hide view
-        logsView.classList.add('hidden');
-        daemonLogs.viewOpen = false;
-
-        // Disconnect WebSocket
-        daemonLogs.disconnect();
-    },
 
     connectWebSocket: () => {
         const logsDiv = document.getElementById('daemon-logs-content');
@@ -68,15 +32,13 @@ const daemonLogs = {
             statusDiv.textContent = 'Disconnected';
             statusDiv.className = 'text-sm text-red-600 font-semibold';
 
-            // Attempt reconnection if view is still open
-            if (daemonLogs.viewOpen) {
-                setTimeout(() => {
-                    if (daemonLogs.viewOpen && !daemonLogs.isConnected) {
-                        console.log('Attempting to reconnect to logs WebSocket...');
-                        daemonLogs.connectWebSocket();
-                    }
-                }, 2000);
-            }
+            // Attempt reconnection after 2 seconds
+            setTimeout(() => {
+                if (!daemonLogs.isConnected) {
+                    console.log('Attempting to reconnect to logs WebSocket...');
+                    daemonLogs.connectWebSocket();
+                }
+            }, 2000);
         };
 
         daemonLogs.ws.onerror = (error) => {
@@ -136,10 +98,3 @@ const daemonLogs = {
         }
     }
 };
-
-// Close view with ESC key
-window.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape' && daemonLogs.viewOpen) {
-        daemonLogs.closeLogsView();
-    }
-});

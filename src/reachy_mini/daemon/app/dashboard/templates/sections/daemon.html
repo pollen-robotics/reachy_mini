@@ -35,11 +35,11 @@
         </div>
         {% if args.wireless_version %}
         <div class="w-full flex  pt-4 gap-4 justify-center">
-            <button id="daemon-logs-btn"
+            <a id="daemon-logs-btn"
                 class="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-300 rounded-lg shadow border border-gray-300"
-                onclick="daemonLogs.openLogsView()">
+                href="/logs">
                 Logs
-            </button>
+            </a>
             <a id="daemon-settings-btn"
                 class="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-300 rounded-lg shadow border border-gray-300"
                 href="/settings">
