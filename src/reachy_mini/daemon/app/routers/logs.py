@@ -25,9 +25,9 @@ async def websocket_daemon_logs(websocket: WebSocket) -> None:
         process = await asyncio.create_subprocess_exec(
             "journalctl",
             "-u", "reachy-mini-daemon",
+            "-b",  # current boot only
             "-f",  # follow mode (tail)
             "-n", "100",  # start with last 100 lines
-            "--since", "boot",  # only from current boot
             "--output", "short-iso",  # ISO timestamp format
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
