@@ -2,7 +2,7 @@
 
 Run :
 
-python3 recorded_moves_with_url.py -l [dance, emotions]
+python3 recorded_moves_example.py -l [dance, emotions]
 """
 
 import argparse
