@@ -36,22 +36,22 @@ async def websocket_daemon_logs(websocket: WebSocket) -> None:
         logger.info("journalctl process started")
 
         # Task to read and log stderr
-        async def log_stderr():
+        async def log_stderr() -> None:
             try:
                 while True:
-                    err_line = await process.stderr.readline()
+                    err_line = await process.stderr.readline()  # type: ignore
                     if not err_line:
                         break
                     logger.error(f"journalctl stderr: {err_line.decode().strip()}")
             except Exception as e:
                 logger.error(f"Error reading stderr: {e}")
 
-        stderr_task = asyncio.create_task(log_stderr())
+        stderr_task = asyncio.create_task(log_stderr())  # type: ignore
 
         # Stream lines to WebSocket
         while True:
             try:
-                line = await asyncio.wait_for(process.stdout.readline(), timeout=1.0)
+                line = await asyncio.wait_for(process.stdout.readline(), timeout=1.0)  # type: ignore
             except asyncio.TimeoutError:
                 # No data available, check if process is still running
                 if process.returncode is not None:
