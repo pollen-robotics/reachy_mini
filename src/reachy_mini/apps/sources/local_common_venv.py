@@ -366,19 +366,41 @@ async def install_package(
             logger.info("Using stored HF token for private space access")
 
         try:
+            # First, verify the space exists and we have access
+            from huggingface_hub import HfApi
+
+            try:
+                api = HfApi(token=token)
+                space_info = api.space_info(repo_id=repo_id)
+                logger.info(f"Space found: {space_info.id} (private={space_info.private})")
+            except Exception as verify_error:
+                logger.error(f"Cannot access space {repo_id}: {verify_error}")
+                if "404" in str(verify_error):
+                    logger.error(f"Space '{repo_id}' not found. Please check the space ID and your permissions.")
+                elif "401" in str(verify_error) or "403" in str(verify_error):
+                    logger.error(f"Access denied to space '{repo_id}'. Please check your HuggingFace token permissions.")
+                return 1
+
+            # Download the space
             target = await asyncio.to_thread(
                 snapshot_download,
                 repo_id=repo_id,
                 repo_type="space",
                 token=token,  # Pass token (None for public, actual token for private)
+                ignore_patterns=[".gitattributes"],  # Ignore git metadata that might be missing
             )
             logger.info(f"Downloaded to: {target}")
         except Exception as e:
             error_msg = str(e)
-            if "401" in error_msg or "403" in error_msg or "Repository not found" in error_msg:
+            if "401" in error_msg or "403" in error_msg:
                 logger.error(
-                    f"Authentication failed or space not found: {e}\n"
-                    "This space may be private. Please authenticate with a valid HF token."
+                    f"Authentication failed: {e}\n"
+                    "Please check that your HuggingFace token has access to this space."
+                )
+            elif "404" in error_msg:
+                logger.error(
+                    f"Space not found: {e}\n"
+                    f"Please verify that '{repo_id}' exists and you have access."
                 )
             else:
                 logger.error(f"Failed to download from HuggingFace: {e}")
