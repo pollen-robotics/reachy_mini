@@ -373,6 +373,13 @@ async def install_package(
                 api = HfApi(token=token)
                 space_info = api.space_info(repo_id=repo_id)
                 logger.info(f"Space found: {space_info.id} (private={space_info.private})")
+
+                # List all files in the space to see what's available
+                try:
+                    files_in_repo = api.list_repo_files(repo_id=repo_id, repo_type="space", token=token)
+                    logger.info(f"Files available in space: {', '.join(files_in_repo)}")
+                except Exception as list_error:
+                    logger.warning(f"Could not list files in space: {list_error}")
             except Exception as verify_error:
                 logger.error(f"Cannot access space {repo_id}: {verify_error}")
                 if "404" in str(verify_error):
@@ -382,14 +389,39 @@ async def install_package(
                 return 1
 
             # Download the space
+            # Note: We don't use ignore_patterns to ensure we get all files
+            logger.info(f"Attempting to download all files from space...")
             target = await asyncio.to_thread(
                 snapshot_download,
                 repo_id=repo_id,
                 repo_type="space",
                 token=token,  # Pass token (None for public, actual token for private)
-                ignore_patterns=[".gitattributes"],  # Ignore git metadata that might be missing
             )
             logger.info(f"Downloaded to: {target}")
+
+            # Check what files were downloaded to help with debugging
+            import os
+            downloaded_files = []
+            for root, dirs, files in os.walk(target):
+                for file in files:
+                    rel_path = os.path.relpath(os.path.join(root, file), target)
+                    downloaded_files.append(rel_path)
+            logger.info(f"Downloaded files: {', '.join(downloaded_files)}")
+
+            # Check if this looks like a Python package
+            has_pyproject = os.path.exists(os.path.join(target, "pyproject.toml"))
+            has_setup = os.path.exists(os.path.join(target, "setup.py"))
+
+            if not has_pyproject and not has_setup:
+                logger.warning(
+                    f"Space does not appear to have pyproject.toml or setup.py in the root directory. "
+                    f"For a Reachy Mini app, you need a proper Python package structure. "
+                    f"Downloaded files: {', '.join(downloaded_files)}"
+                )
+                logger.info(
+                    "If your package files are in a subdirectory, make sure they're in the root of the space. "
+                    "Check that pyproject.toml or setup.py is committed to your HuggingFace Space."
+                )
         except Exception as e:
             error_msg = str(e)
             if "401" in error_msg or "403" in error_msg:
