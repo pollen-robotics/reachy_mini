@@ -2,7 +2,7 @@ const daemonLogs = {
     ws: null,
     isConnected: false,
     modalOpen: false,
-    maxLines: 1000,
+    autoScroll: true,
 
     openLogsModal: () => {
         const modal = document.getElementById('logs-modal');
@@ -94,6 +94,9 @@ const daemonLogs = {
             return;
         }
 
+        // Check if user is scrolled to bottom before adding new log
+        const isScrolledToBottom = logsDiv.scrollHeight - logsDiv.scrollTop <= logsDiv.clientHeight + 50;
+
         // Create new log line element
         const logLine = document.createElement('div');
         logLine.className = 'text-gray-300 leading-tight';
@@ -110,15 +113,12 @@ const daemonLogs = {
         logLine.textContent = line;
         logsDiv.appendChild(logLine);
 
-        // Limit buffer size
-        while (logsDiv.children.length > daemonLogs.maxLines) {
-            logsDiv.removeChild(logsDiv.firstChild);
+        // Only auto-scroll if user was already at the bottom
+        if (isScrolledToBottom) {
+            requestAnimationFrame(() => {
+                logsDiv.scrollTop = logsDiv.scrollHeight;
+            });
         }
-
-        // Auto-scroll to bottom - use requestAnimationFrame to ensure DOM is updated
-        requestAnimationFrame(() => {
-            logsDiv.scrollTop = logsDiv.scrollHeight;
-        });
     },
 
     clearLogs: () => {
