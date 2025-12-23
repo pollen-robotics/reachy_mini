@@ -1,48 +1,27 @@
-<div id="logs-modal" tabindex="-1" aria-hidden="true"
-    class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900 bg-opacity-50">
-    <div class="relative w-full max-w-4xl max-h-[85vh] flex flex-col">
-        <div class="relative bg-white rounded-lg shadow dark:bg-gray-700 flex flex-col max-h-full">
-            <!-- Header -->
-            <div class="flex items-center justify-between p-3 border-b dark:border-gray-600 flex-shrink-0">
-                <div class="flex items-center gap-3">
-                    <h3 class="text-base font-semibold text-gray-900 dark:text-white">Daemon Logs</h3>
-                    <span id="logs-status" class="text-xs text-gray-500">Disconnected</span>
-                </div>
-                <button onclick="daemonLogs.closeLogsModal()" type="button"
-                    class="text-gray-400 bg-transparent hover:bg-gray-200 hover:text-gray-900 rounded-lg text-sm w-8 h-8 inline-flex justify-center items-center dark:hover:bg-gray-600 dark:hover:text-white">
-                    <svg class="w-3 h-3" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none"
-                        viewBox="0 0 14 14">
-                        <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="m1 1 6 6m0 0 6 6M7 7l6-6M7 7l-6 6" />
-                    </svg>
-                    <span class="sr-only">Close modal</span>
-                </button>
-            </div>
-
-            <!-- Body with logs -->
-            <div class="p-3 flex-1 overflow-hidden">
-                <div id="daemon-logs-content"
-                    class="overflow-y-scroll h-full bg-gray-900 border border-gray-600 rounded p-2 font-mono text-xs text-gray-100">
-                    <!-- Logs will be appended here by JavaScript -->
-                </div>
-            </div>
-
-            <!-- Footer -->
-            <div class="flex items-center justify-between p-3 border-t border-gray-200 dark:border-gray-600 flex-shrink-0">
-                <div class="flex gap-2 items-center">
-                    <button onclick="daemonLogs.clearLogs()" type="button"
-                        class="px-3 py-1.5 text-xs bg-gray-200 hover:bg-gray-300 text-gray-800 rounded dark:bg-gray-600 dark:hover:bg-gray-500 dark:text-white">
-                        Clear
-                    </button>
-                    <span class="text-xs text-gray-500 dark:text-gray-400">
-                        Current boot • All logs preserved
-                    </span>
-                </div>
-                <button onclick="daemonLogs.closeLogsModal()" type="button"
-                    class="px-4 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded dark:bg-blue-600 dark:hover:bg-blue-700">
-                    Close
-                </button>
-            </div>
+<!-- Full-screen logs view -->
+<div id="logs-view" class="hidden fixed inset-0 z-50 bg-gray-900 flex flex-col">
+    <!-- Top bar with return button -->
+    <div class="bg-gray-800 border-b border-gray-700 p-3 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+            <button onclick="daemonLogs.closeLogsView()"
+                class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded flex items-center gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+                </svg>
+                Back
+            </button>
+            <h1 class="text-lg font-semibold text-white">Daemon Logs</h1>
+            <span id="logs-status" class="text-sm text-gray-400">Disconnected</span>
         </div>
+        <button onclick="daemonLogs.clearLogs()"
+            class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded text-sm">
+            Clear
+        </button>
+    </div>
+
+    <!-- Logs content - full remaining height -->
+    <div id="daemon-logs-content"
+        class="flex-1 overflow-y-auto p-4 font-mono text-xs text-gray-100 leading-relaxed">
+        <!-- Logs will be appended here by JavaScript -->
     </div>
 </div>

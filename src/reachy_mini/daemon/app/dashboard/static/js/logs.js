@@ -1,39 +1,38 @@
 const daemonLogs = {
     ws: null,
     isConnected: false,
-    modalOpen: false,
-    autoScroll: true,
+    viewOpen: false,
 
-    openLogsModal: () => {
-        const modal = document.getElementById('logs-modal');
+    openLogsView: () => {
+        const logsView = document.getElementById('logs-view');
         const logsDiv = document.getElementById('daemon-logs-content');
 
-        if (!modal || !logsDiv) {
-            console.error('Logs modal elements not found');
+        if (!logsView || !logsDiv) {
+            console.error('Logs view elements not found');
             return;
         }
 
         // Clear previous logs
         logsDiv.innerHTML = '';
 
-        // Show modal
-        modal.classList.remove('hidden');
-        daemonLogs.modalOpen = true;
+        // Show full-screen view
+        logsView.classList.remove('hidden');
+        daemonLogs.viewOpen = true;
 
         // Connect to WebSocket
         daemonLogs.connectWebSocket();
     },
 
-    closeLogsModal: () => {
-        const modal = document.getElementById('logs-modal');
+    closeLogsView: () => {
+        const logsView = document.getElementById('logs-view');
 
-        if (!modal) {
+        if (!logsView) {
             return;
         }
 
-        // Hide modal
-        modal.classList.add('hidden');
-        daemonLogs.modalOpen = false;
+        // Hide view
+        logsView.classList.add('hidden');
+        daemonLogs.viewOpen = false;
 
         // Disconnect WebSocket
         daemonLogs.disconnect();
@@ -69,10 +68,10 @@ const daemonLogs = {
             statusDiv.textContent = 'Disconnected';
             statusDiv.className = 'text-sm text-red-600 font-semibold';
 
-            // Attempt reconnection if modal is still open
-            if (daemonLogs.modalOpen) {
+            // Attempt reconnection if view is still open
+            if (daemonLogs.viewOpen) {
                 setTimeout(() => {
-                    if (daemonLogs.modalOpen && !daemonLogs.isConnected) {
+                    if (daemonLogs.viewOpen && !daemonLogs.isConnected) {
                         console.log('Attempting to reconnect to logs WebSocket...');
                         daemonLogs.connectWebSocket();
                     }
@@ -138,21 +137,9 @@ const daemonLogs = {
     }
 };
 
-// Close modal with ESC key and backdrop click
-window.addEventListener('load', () => {
-    const modal = document.getElementById('logs-modal');
-    if (modal) {
-        // Close on backdrop click
-        modal.addEventListener('click', (event) => {
-            if (event.target === modal) {
-                daemonLogs.closeLogsModal();
-            }
-        });
-    }
-});
-
+// Close view with ESC key
 window.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape' && daemonLogs.modalOpen) {
-        daemonLogs.closeLogsModal();
+    if (event.key === 'Escape' && daemonLogs.viewOpen) {
+        daemonLogs.closeLogsView();
     }
 });
