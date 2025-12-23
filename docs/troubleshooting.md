@@ -322,6 +322,12 @@ Helps prevent package conflicts during SDK installation.
 ## 🤖 Hardware, Motors & Limits
 
 <details>
+<summary><strong>Where can I find more information about hardware?</strong></summary>
+Refer to the [Reachy Mini Hardware page](/docs/platforms/reachy_mini/hardware.md) for detailed information about the robot's hardware components.
+
+</details>
+
+<details>
 <summary><strong>What are the safety limits (Head & Body)?</strong></summary>
 
 If you command a pose outside these limits, the robot will automatically clamp to the nearest safe pose.
