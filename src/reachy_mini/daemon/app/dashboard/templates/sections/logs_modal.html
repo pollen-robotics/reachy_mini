@@ -1,13 +1,12 @@
 <div id="logs-modal" tabindex="-1" aria-hidden="true"
-    class="hidden fixed inset-0 z-50 flex items-center justify-center w-full h-full bg-gray-800 bg-opacity-75"
-    onclick="if(event.target === this) daemonLogs.closeLogsModal()">
-    <div class="relative p-4 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-        <div class="relative bg-white rounded-lg shadow-lg dark:bg-gray-700">
+    class="hidden fixed inset-0 z-50 flex items-center justify-center overflow-y-auto overflow-x-hidden">
+    <div class="relative p-4 w-full max-w-4xl">
+        <div class="relative bg-white rounded-lg shadow dark:bg-gray-700">
             <!-- Header -->
-            <div class="flex items-center justify-between p-3 md:p-4 border-b rounded-t dark:border-gray-600 border-gray-200 sticky top-0 bg-white dark:bg-gray-700 z-10">
-                <div class="flex items-center gap-4">
+            <div class="flex items-center justify-between p-4 border-b rounded-t dark:border-gray-600">
+                <div class="flex items-center gap-3">
                     <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Daemon Logs</h3>
-                    <span id="logs-status" class="text-sm text-gray-500">Disconnected</span>
+                    <span id="logs-status" class="text-xs text-gray-500">Disconnected</span>
                 </div>
                 <button onclick="daemonLogs.closeLogsModal()" type="button"
                     class="text-gray-400 bg-transparent hover:bg-gray-200 hover:text-gray-900 rounded-lg text-sm w-8 h-8 inline-flex justify-center items-center dark:hover:bg-gray-600 dark:hover:text-white">
@@ -21,24 +20,26 @@
             </div>
 
             <!-- Body with logs -->
-            <div class="p-3 md:p-4">
+            <div class="p-4 space-y-4">
                 <div id="daemon-logs-content"
-                    class="overflow-y-auto h-[60vh] bg-gray-50 border border-gray-200 rounded-lg p-3 dark:bg-gray-800 dark:border-gray-600">
+                    class="overflow-y-auto h-96 bg-gray-900 border border-gray-600 rounded p-3 font-mono text-xs text-gray-100">
                     <!-- Logs will be appended here by JavaScript -->
-                </div>
-                <div class="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                    Showing logs from current boot. Auto-scrolling to bottom.
                 </div>
             </div>
 
             <!-- Footer -->
-            <div class="flex items-center justify-between p-3 md:p-4 border-t border-gray-200 rounded-b dark:border-gray-600 sticky bottom-0 bg-white dark:bg-gray-700">
-                <button onclick="daemonLogs.clearLogs()" type="button"
-                    class="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg shadow dark:bg-gray-600 dark:hover:bg-gray-500 dark:text-white">
-                    Clear
-                </button>
+            <div class="flex items-center justify-between p-4 border-t border-gray-200 rounded-b dark:border-gray-600">
+                <div class="flex gap-2">
+                    <button onclick="daemonLogs.clearLogs()" type="button"
+                        class="px-3 py-2 text-sm bg-gray-200 hover:bg-gray-300 text-gray-800 rounded dark:bg-gray-600 dark:hover:bg-gray-500 dark:text-white">
+                        Clear
+                    </button>
+                    <span class="text-xs text-gray-500 dark:text-gray-400 flex items-center">
+                        Showing logs from current boot
+                    </span>
+                </div>
                 <button onclick="daemonLogs.closeLogsModal()" type="button"
-                    class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow dark:bg-blue-600 dark:hover:bg-blue-700">
+                    class="px-4 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded dark:bg-blue-600 dark:hover:bg-blue-700">
                     Close
                 </button>
             </div>

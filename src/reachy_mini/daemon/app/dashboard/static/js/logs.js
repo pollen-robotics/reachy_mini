@@ -96,13 +96,15 @@ const daemonLogs = {
 
         // Create new log line element
         const logLine = document.createElement('div');
-        logLine.className = 'font-mono text-xs text-gray-700 leading-relaxed';
+        logLine.className = 'text-gray-300 leading-tight';
 
-        // Highlight error lines
+        // Highlight error and warning lines
         if (line.includes('ERROR') || line.includes('Error') || line.includes('error')) {
-            logLine.className = 'font-mono text-xs text-red-700 font-semibold leading-relaxed';
+            logLine.className = 'text-red-400 font-semibold leading-tight';
         } else if (line.includes('WARNING') || line.includes('Warning') || line.includes('warning')) {
-            logLine.className = 'font-mono text-xs text-orange-600 leading-relaxed';
+            logLine.className = 'text-yellow-400 leading-tight';
+        } else if (line.includes('INFO')) {
+            logLine.className = 'text-green-400 leading-tight';
         }
 
         logLine.textContent = line;
@@ -113,8 +115,10 @@ const daemonLogs = {
             logsDiv.removeChild(logsDiv.firstChild);
         }
 
-        // Auto-scroll to bottom
-        logsDiv.scrollTop = logsDiv.scrollHeight;
+        // Auto-scroll to bottom - use requestAnimationFrame to ensure DOM is updated
+        requestAnimationFrame(() => {
+            logsDiv.scrollTop = logsDiv.scrollHeight;
+        });
     },
 
     clearLogs: () => {
@@ -134,7 +138,19 @@ const daemonLogs = {
     }
 };
 
-// Close modal with ESC key
+// Close modal with ESC key and backdrop click
+window.addEventListener('load', () => {
+    const modal = document.getElementById('logs-modal');
+    if (modal) {
+        // Close on backdrop click
+        modal.addEventListener('click', (event) => {
+            if (event.target === modal) {
+                daemonLogs.closeLogsModal();
+            }
+        });
+    }
+});
+
 window.addEventListener('keydown', (event) => {
     if (event.key === 'Escape' && daemonLogs.modalOpen) {
         daemonLogs.closeLogsModal();
