@@ -90,6 +90,38 @@ const daemonLogs = {
         }
     },
 
+    copyLogs: () => {
+        const logsDiv = document.getElementById('daemon-logs-content');
+        const buttonText = document.getElementById('copy-button-text');
+
+        if (!logsDiv) {
+            return;
+        }
+
+        // Get all log text
+        const logText = logsDiv.innerText;
+
+        // Copy to clipboard
+        navigator.clipboard.writeText(logText).then(() => {
+            // Show confirmation
+            if (buttonText) {
+                const originalText = buttonText.textContent;
+                buttonText.textContent = 'Copied!';
+                setTimeout(() => {
+                    buttonText.textContent = originalText;
+                }, 2000);
+            }
+        }).catch(err => {
+            console.error('Failed to copy logs:', err);
+            if (buttonText) {
+                buttonText.textContent = 'Failed';
+                setTimeout(() => {
+                    buttonText.textContent = 'Copy';
+                }, 2000);
+            }
+        });
+    },
+
     disconnect: () => {
         if (daemonLogs.ws) {
             daemonLogs.ws.close();
