@@ -390,29 +390,16 @@ async def install_package(
 
             # Download the space
             logger.info(f"Attempting to download all files from space...")
-            # Note: allow_patterns=None means download everything
-            # We need to handle missing .gitattributes gracefully
-            try:
-                target = await asyncio.to_thread(
-                    snapshot_download,
-                    repo_id=repo_id,
-                    repo_type="space",
-                    token=token,
-                    allow_patterns=None,  # Download all files
-                )
-            except Exception as download_error:
-                # If download fails due to missing .gitattributes, try again ignoring it
-                if ".gitattributes" in str(download_error) and "404" in str(download_error):
-                    logger.info("Retrying download without .gitattributes...")
-                    target = await asyncio.to_thread(
-                        snapshot_download,
-                        repo_id=repo_id,
-                        repo_type="space",
-                        token=token,
-                        ignore_patterns=[".gitattributes"],
-                    )
-                else:
-                    raise
+            # For private spaces, we need to be careful about missing files like .gitattributes
+            # snapshot_download can fail on 404 for optional git metadata files
+            target = await asyncio.to_thread(
+                snapshot_download,
+                repo_id=repo_id,
+                repo_type="space",
+                token=token,
+                ignore_patterns=[".gitattributes", ".gitignore"],  # Skip git metadata that may 404
+                allow_patterns=None,  # Download all other files
+            )
             logger.info(f"Downloaded to: {target}")
 
             # Check what files were downloaded to help with debugging
