@@ -209,13 +209,21 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
 
 def run_app(args: Args) -> None:
     """Run the FastAPI app with Uvicorn."""
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(
+        level=args.log_level,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    )
 
     async def run_server() -> None:
         health_check_event = asyncio.Event()
         app = create_app(args, health_check_event)
 
-        config = uvicorn.Config(app, host=args.fastapi_host, port=args.fastapi_port)
+        config = uvicorn.Config(
+            app,
+            host=args.fastapi_host,
+            port=args.fastapi_port,
+            log_config=None,  # Don't override Python logging configuration
+        )
         server = uvicorn.Server(config)
 
         health_check_task = None
