@@ -164,8 +164,10 @@ class GstWebRTC:
         extra_controls_structure.set_value("repeat_sequence_header", 1)
         extra_controls_structure.set_value("video_bitrate", 5_000_000)
         v4l2h264enc.set_property("extra-controls", extra_controls_structure)
+        # Use Level 3.1 + Constrained Baseline for Safari/WebKit compatibility
+        # (Level 4.0 is not supported by Safari WebRTC, causing SDP negotiation failure)
         caps_h264 = Gst.Caps.from_string(
-            "video/x-h264,stream-format=byte-stream,alignment=au,level=(string)4"
+            "video/x-h264,stream-format=byte-stream,alignment=au,level=(string)3.1,profile=(string)constrained-baseline"
         )
         capsfilter_h264 = Gst.ElementFactory.make("capsfilter")
         capsfilter_h264.set_property("caps", caps_h264)
