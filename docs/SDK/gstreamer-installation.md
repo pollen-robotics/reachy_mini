@@ -33,7 +33,6 @@ sudo apt-get install -y \
     libcairo2-dev \
     libportaudio2 \
     gstreamer1.0-libcamera \
-    librpicam-app1 \
     libnice10 \
     gstreamer1.0-plugins-good \
     gstreamer1.0-alsa \
