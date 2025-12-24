@@ -209,10 +209,24 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
 
 def run_app(args: Args) -> None:
     """Run the FastAPI app with Uvicorn."""
-    logging.basicConfig(
-        level=args.log_level,
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    # Configure logging to ensure all logs go to stderr (captured by systemd)
+    import sys
+
+    root_logger = logging.getLogger()
+    root_logger.setLevel(args.log_level)
+
+    # Create handler that writes to stderr with immediate flush
+    handler = logging.StreamHandler(sys.stderr)
+    handler.setLevel(args.log_level)
+    handler.setFormatter(
+        logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
     )
+    root_logger.addHandler(handler)
+
+    # Explicitly configure the apps.manager logger to ensure propagation
+    apps_logger = logging.getLogger("reachy_mini.apps.manager")
+    apps_logger.setLevel(args.log_level)
+    apps_logger.propagate = True  # Ensure it propagates to root logger
 
     async def run_server() -> None:
         health_check_event = asyncio.Event()
