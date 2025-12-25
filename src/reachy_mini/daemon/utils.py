@@ -12,6 +12,47 @@ import psutil
 import serial.tools.list_ports
 
 
+# Path to the unix socket created by WebRTC daemon for local camera access
+CAMERA_SOCKET_PATH = "/tmp/reachymini_camera_socket"
+
+
+def is_localhost(ip: str | None) -> bool:
+    """Check if an IP address corresponds to localhost.
+
+    Args:
+        ip: The IP address to check. Can be None.
+
+    Returns:
+        True if the IP is a localhost address, False otherwise.
+
+    """
+    if ip is None:
+        return False
+
+    localhost_addresses = {
+        "127.0.0.1",
+        "::1",
+        "localhost",
+        "0.0.0.0",
+    }
+    return ip in localhost_addresses or ip.startswith("127.")
+
+
+def is_local_camera_available() -> bool:
+    """Check if local camera access is available via the unix socket.
+
+    On wireless Reachy Mini, the WebRTC daemon exposes raw camera frames
+    via a unix socket at /tmp/reachymini_camera_socket. Local clients
+    (running on the CM4) can access this socket directly without going
+    through WebRTC encoding/decoding, which saves CPU and reduces latency.
+
+    Returns:
+        True if the local camera socket exists and is accessible.
+
+    """
+    return os.path.exists(CAMERA_SOCKET_PATH)
+
+
 def daemon_check(spawn_daemon: bool, use_sim: bool) -> None:
     """Check if the Reachy Mini daemon is running and spawn it if necessary."""
 

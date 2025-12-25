@@ -18,7 +18,7 @@ import numpy.typing as npt
 from asgiref.sync import async_to_sync
 from scipy.spatial.transform import Rotation as R
 
-from reachy_mini.daemon.utils import daemon_check
+from reachy_mini.daemon.utils import daemon_check, is_local_camera_available
 from reachy_mini.io.protocol import GotoTaskRequest
 from reachy_mini.io.zenoh_client import ZenohClient
 from reachy_mini.media.media_manager import MediaBackend, MediaManager
@@ -136,35 +136,48 @@ class ReachyMini:
     ) -> MediaManager:
         mbackend = MediaBackend.DEFAULT
         daemon_status = self.client.get_status()
+        is_wireless = daemon_status.get("wireless_version", False)
 
-        # If wireless, force webrtc unless no_media is selected
-        if media_backend != "no_media" and daemon_status.get(
-            "wireless_version"
-        ):
-            mbackend = MediaBackend.WEBRTC
-        else:
-            match media_backend.lower():
-                case "webrtc":
-                    if not daemon_status.get("wireless_version"):
-                        self.logger.warning(
-                            "Non-wireless version detected, daemon should use the flag '--wireless-version'. Reverting to default"
-                        )
-                        mbackend = MediaBackend.DEFAULT
-                    else:
-                        self.logger.info("WebRTC backend configured successfully.")
-                        mbackend = MediaBackend.WEBRTC
-                case "gstreamer":
-                    mbackend = MediaBackend.GSTREAMER
-                case "default":
-                    mbackend = MediaBackend.DEFAULT
-                case "no_media":
-                    mbackend = MediaBackend.NO_MEDIA
-                case "default_no_video":
-                    mbackend = MediaBackend.DEFAULT_NO_VIDEO
-                case _:
-                    raise ValueError(
-                        f"Invalid media_backend '{media_backend}'. Supported values are 'default', 'gstreamer', 'no_media', 'default_no_video', and 'webrtc'."
+        match media_backend.lower():
+            case "webrtc":
+                if not is_wireless:
+                    self.logger.warning(
+                        "Non-wireless version detected, daemon should use the flag '--wireless-version'. Reverting to default"
                     )
+                    mbackend = MediaBackend.DEFAULT
+                else:
+                    self.logger.info("WebRTC backend configured successfully.")
+                    mbackend = MediaBackend.WEBRTC
+            case "gstreamer":
+                mbackend = MediaBackend.GSTREAMER
+            case "default":
+                # For wireless version with default backend, auto-detect local vs remote
+                # Local clients can use the unix socket (via GStreamer) to avoid WebRTC overhead
+                if is_wireless:
+                    if is_local_camera_available():
+                        # Local client on CM4: use GStreamer to read from unix socket
+                        self.logger.info(
+                            "Wireless version detected with local camera socket available. "
+                            "Using GStreamer backend for direct camera access (no WebRTC overhead)."
+                        )
+                        mbackend = MediaBackend.GSTREAMER
+                    else:
+                        # Remote client: use WebRTC for streaming
+                        self.logger.info(
+                            "Wireless version detected, no local camera socket. "
+                            "Using WebRTC backend for remote streaming."
+                        )
+                        mbackend = MediaBackend.WEBRTC
+                else:
+                    mbackend = MediaBackend.DEFAULT
+            case "no_media":
+                mbackend = MediaBackend.NO_MEDIA
+            case "default_no_video":
+                mbackend = MediaBackend.DEFAULT_NO_VIDEO
+            case _:
+                raise ValueError(
+                    f"Invalid media_backend '{media_backend}'. Supported values are 'default', 'gstreamer', 'no_media', 'default_no_video', and 'webrtc'."
+                )
 
         return MediaManager(
             use_sim=self.client.get_status()["simulation_enabled"],
