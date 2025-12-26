@@ -10,10 +10,11 @@ managing the robot's state.
 import argparse
 import asyncio
 import logging
+import types
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import AsyncGenerator
+from typing import Any, AsyncGenerator
 
 import uvicorn
 from fastapi import APIRouter, FastAPI, Request
@@ -119,7 +120,7 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
                 logging.info("Shutting down app manager...")
                 await app.state.app_manager.close()
             except Exception as e:
-                logging.error(f"Error closing app manager: {e}")
+                logging.exception(f"Error closing app manager: {e}")
 
             try:
                 logging.info("Shutting down daemon...")
@@ -127,7 +128,7 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
                     goto_sleep_on_stop=args.goto_sleep_on_stop,
                 )
             except Exception as e:
-                logging.error(f"Error stopping daemon: {e}")
+                logging.exception(f"Error stopping daemon: {e}")
 
     app = FastAPI(
         lifespan=lifespan,
@@ -210,13 +211,68 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
 
 def run_app(args: Args) -> None:
     """Run the FastAPI app with Uvicorn."""
-    logging.basicConfig(level=logging.INFO)
+    # Configure logging to ensure all logs go to stderr (captured by systemd)
+    import sys
+
+    root_logger = logging.getLogger()
+    root_logger.setLevel(args.log_level)
+
+    # Create handler that writes to stderr with immediate flush
+    handler = logging.StreamHandler(sys.stderr)
+    handler.setLevel(args.log_level)
+    handler.setFormatter(
+        logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+    )
+    root_logger.addHandler(handler)
+
+    # Explicitly configure the apps.manager logger to ensure propagation
+    apps_logger = logging.getLogger("reachy_mini.apps.manager")
+    apps_logger.setLevel(args.log_level)
+    apps_logger.propagate = True  # Ensure it propagates to root logger
+
+    # Install exception hook to catch uncaught exceptions
+    def exception_hook(exc_type: type[BaseException], exc_value: BaseException, exc_traceback: types.TracebackType | None) -> None:
+        """Log uncaught exceptions with full traceback."""
+        if issubclass(exc_type, KeyboardInterrupt):
+            # Allow KeyboardInterrupt to exit normally
+            sys.__excepthook__(exc_type, exc_value, exc_traceback)
+            return
+
+        root_logger.critical(
+            "Uncaught exception",
+            exc_info=(exc_type, exc_value, exc_traceback)
+        )
+        sys.stderr.flush()
+
+    sys.excepthook = exception_hook
 
     async def run_server() -> None:
+        # Set up asyncio exception handler to catch unhandled task exceptions
+        loop = asyncio.get_running_loop()
+
+        def asyncio_exception_handler(loop: asyncio.AbstractEventLoop, context: dict[str, Any]) -> None:
+            """Handle exceptions in asyncio tasks."""
+            exception = context.get("exception")
+            if exception:
+                root_logger.error(
+                    f"Unhandled exception in asyncio task: {context.get('message', 'No message')}",
+                    exc_info=(type(exception), exception, exception.__traceback__)
+                )
+            else:
+                root_logger.error(f"Asyncio error: {context}")
+            sys.stderr.flush()
+
+        loop.set_exception_handler(asyncio_exception_handler)
+
         health_check_event = asyncio.Event()
         app = create_app(args, health_check_event)
 
-        config = uvicorn.Config(app, host=args.fastapi_host, port=args.fastapi_port)
+        config = uvicorn.Config(
+            app,
+            host=args.fastapi_host,
+            port=args.fastapi_port,
+            log_config=None,  # Don't override Python logging configuration
+        )
         server = uvicorn.Server(config)
 
         health_check_task = None
@@ -245,6 +301,9 @@ def run_app(args: Args) -> None:
             await server.serve()
         except KeyboardInterrupt:
             logging.info("Received Ctrl-C, shutting down gracefully.")
+        except Exception as e:
+            logging.exception(f"Error during server operation: {e}")
+            raise
         finally:
             # Cancel health check task if it exists
             if health_check_task and not health_check_task.done():
@@ -259,7 +318,8 @@ def run_app(args: Args) -> None:
     except KeyboardInterrupt:
         logging.info("Shutdown complete.")
     except Exception as e:
-        logging.error(f"Error during shutdown: {e}")
+        logging.exception(f"Error during shutdown: {e}")
+        sys.stderr.flush()
         raise
 
 
