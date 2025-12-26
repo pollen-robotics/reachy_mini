@@ -138,6 +138,71 @@ def check_and_update_bluetooth_service() -> None:
             print(f"Unexpected error while updating bluetooth service: {e}")
 
 
+def check_and_update_wireless_launcher() -> None:
+    """Check if wireless daemon service needs updating and update if different.
+
+    Compares the source reachy-mini-daemon.service with the installed version.
+    If they differ, copies the new version and reloads systemd.
+    """
+    source = (
+        Path(__file__).parent
+        / ".."
+        / ".."
+        / "daemon"
+        / "app"
+        / "services"
+        / "wireless"
+        / "reachy-mini-daemon.service"
+    )
+    source = source.resolve()
+    target = Path("/etc/systemd/system/reachy-mini-daemon.service")
+
+    if not source.exists():
+        print(f"Source service file not found at {source}")
+        return
+
+    # Check if target exists
+    if not target.exists():
+        print(f"Wireless daemon service not installed at {target}")
+        return
+
+    # Compare files
+    try:
+        if filecmp.cmp(str(source), str(target), shallow=False):
+            print("Wireless daemon service is up to date")
+            return
+        else:
+            print("Wireless daemon service has changed, updating...")
+    except Exception as e:
+        print(f"Error comparing service files: {e}")
+        return
+
+    # Update service file
+    try:
+        print(f"Copying {source} to {target}")
+        subprocess.run(
+            ["sudo", "cp", str(source), str(target)],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        print("Successfully copied service file")
+
+        # Reload systemd daemon
+        print("Reloading systemd daemon...")
+        subprocess.run(
+            ["sudo", "systemctl", "daemon-reload"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        print("Successfully reloaded systemd")
+    except subprocess.CalledProcessError as e:
+        print(f"Failed to update service: {e.stderr}")
+    except Exception as e:
+        print(f"Unexpected error while updating service: {e}")
+
+
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     check_and_fix_venvs_ownership()

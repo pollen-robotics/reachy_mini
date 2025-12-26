@@ -42,6 +42,7 @@ from reachy_mini.media.audio_utils import (
 from reachy_mini.utils.wireless_version.startup_check import (
     check_and_fix_venvs_ownership,
     check_and_update_bluetooth_service,
+    check_and_update_wireless_launcher,
 )
 
 
@@ -460,6 +461,9 @@ def main() -> None:
 
         # Check and update bluetooth service if needed
         check_and_update_bluetooth_service()
+
+        # Check and update wireless launcher if needed
+        check_and_update_wireless_launcher()
 
         if check_reachymini_asoundrc():
             logging.getLogger().info(
