@@ -10,10 +10,11 @@ managing the robot's state.
 import argparse
 import asyncio
 import logging
+import types
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import AsyncGenerator
+from typing import Any, AsyncGenerator
 
 import uvicorn
 from fastapi import APIRouter, FastAPI, Request
@@ -229,7 +230,7 @@ def run_app(args: Args) -> None:
     apps_logger.propagate = True  # Ensure it propagates to root logger
 
     # Install exception hook to catch uncaught exceptions
-    def exception_hook(exc_type, exc_value, exc_traceback):
+    def exception_hook(exc_type: type[BaseException], exc_value: BaseException, exc_traceback: types.TracebackType | None) -> None:
         """Log uncaught exceptions with full traceback."""
         if issubclass(exc_type, KeyboardInterrupt):
             # Allow KeyboardInterrupt to exit normally
@@ -248,7 +249,7 @@ def run_app(args: Args) -> None:
         # Set up asyncio exception handler to catch unhandled task exceptions
         loop = asyncio.get_running_loop()
 
-        def asyncio_exception_handler(loop, context):
+        def asyncio_exception_handler(loop: asyncio.AbstractEventLoop, context: dict[str, Any]) -> None:
             """Handle exceptions in asyncio tasks."""
             exception = context.get("exception")
             if exception:
