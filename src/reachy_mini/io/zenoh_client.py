@@ -19,21 +19,32 @@ import zenoh
 from reachy_mini.io.abstract import AbstractClient
 from reachy_mini.io.protocol import AnyTaskRequest, TaskProgress, TaskRequest
 
+DEFAULT_ZENOH_PORT = 7447
+
 
 class ZenohClient(AbstractClient):
     """Zenoh client for Reachy Mini."""
 
-    def __init__(self, prefix: str, localhost_only: bool = True):
+    def __init__(
+        self, prefix: str, localhost_only: bool = True, host: str | None = None
+    ):
         """Initialize the Zenoh client.
 
         Args:
             prefix: The Zenoh prefix to use for communication (used to identify multiple robots).
-            localhost_only: If True, connect to localhost only
+            localhost_only: If True, connect to localhost only. Ignored if host is provided.
+            host: Hostname or IP address of the robot (e.g., "reachy-mini.local" or "192.168.1.100").
+                If provided, overrides localhost_only.
 
         """
         self.prefix = prefix
 
-        if localhost_only:
+        if host is not None:
+            endpoint = f"tcp/{host}:{DEFAULT_ZENOH_PORT}"
+            c = zenoh.Config.from_json5(
+                json.dumps({"mode": "client", "connect": {"endpoints": [endpoint]}})
+            )
+        elif localhost_only:
             c = zenoh.Config.from_json5(
                 json.dumps(
                     {"mode": "client", "connect": {"endpoints": ["tcp/localhost:7447"]}}

@@ -39,7 +39,7 @@ The **Daemon** is a background service that handles the low-level communication 
 
 **Step 2:** Create a new file called `hello.py` and copy-paste the following code into it:
 
-> Tip: If you are using a Reachy Mini Wireless and running the script on your computer, you need to do `ReachyMini(localhost_only=False)`
+> Tip: If you are using a Reachy Mini Wireless and running the script on your computer, you need to do `ReachyMini(localhost_only=False)` or specify the robot's address directly with `ReachyMini(host="reachy-mini.local")`
 ```python
 from reachy_mini import ReachyMini
 

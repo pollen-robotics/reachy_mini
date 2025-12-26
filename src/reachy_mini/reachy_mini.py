@@ -70,12 +70,14 @@ class ReachyMini:
         automatic_body_yaw: bool = True,
         log_level: str = "INFO",
         media_backend: str = "default",
+        host: str | None = None,
     ) -> None:
         """Initialize the Reachy Mini robot.
 
         Args:
             robot_name (str): Name of the robot, defaults to "reachy_mini".
             localhost_only (bool): If True, will only connect to localhost daemons, defaults to True.
+                Ignored if host is provided.
             spawn_daemon (bool): If True, will spawn a daemon to control the robot, defaults to False.
             use_sim (bool): If True and spawn_daemon is True, will spawn a simulated robot, defaults to True.
             timeout (float): Timeout for the client connection, defaults to 5.0 seconds.
@@ -84,6 +86,8 @@ class ReachyMini:
             media_backend (str): Use "no_media" to disable media entirely. Any other value
                 triggers auto-detection: Lite uses OpenCV, Wireless uses GStreamer (local)
                 or WebRTC (remote) based on environment.
+            host (str | None): Hostname or IP address of the robot (e.g., "reachy-mini.local").
+                If provided, overrides localhost_only.
 
         It will try to connect to the daemon, and if it fails, it will raise an exception.
 
@@ -92,7 +96,7 @@ class ReachyMini:
         self.logger.setLevel(log_level)
         self.robot_name = robot_name
         daemon_check(spawn_daemon, use_sim)
-        self.client = ZenohClient(robot_name, localhost_only)
+        self.client = ZenohClient(robot_name, localhost_only, host=host)
         self.client.wait_for_connection(timeout=timeout)
         self.set_automatic_body_yaw(automatic_body_yaw)
         self._last_head_pose: Optional[npt.NDArray[np.float64]] = None
