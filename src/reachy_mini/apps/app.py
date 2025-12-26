@@ -39,14 +39,16 @@ class ReachyMiniApp(ABC):
         self.error: str = ""
         self.logger = logging.getLogger("reachy_mini.app")
 
-        # If we're running with wireless, we assume systemd service is used
-        running_on_wireless = self._check_systemd_service_exists()
-        self.logger.info(f"Running on wireless: {running_on_wireless}")
+        # Detect if we're running on the CM4 (where the systemd service exists)
+        # If not, we're running remotely and need localhost_only=False
+        self.running_on_device = self._check_systemd_service_exists()
+        self.logger.info(f"Running on device: {self.running_on_device}")
 
+        # Media backend is now auto-detected by ReachyMini, just use "default"
         self.media_backend = (
             self.request_media_backend
             if self.request_media_backend is not None
-            else ("gstreamer" if running_on_wireless else "default")
+            else "default"
         )
 
         self.settings_app: FastAPI | None = None
@@ -123,8 +125,14 @@ class ReachyMiniApp(ABC):
         try:
             self.logger.info("Starting Reachy Mini app...")
             self.logger.info(f"Using media backend: {self.media_backend}")
+            self.logger.info(f"Running on device: {self.running_on_device}")
+
+            # If running remotely (not on device), need localhost_only=False to discover daemon
+            localhost_only = self.running_on_device
+
             with ReachyMini(
                 media_backend=self.media_backend,
+                localhost_only=localhost_only,
                 *args,
                 **kwargs,  # type: ignore
             ) as reachy_mini:

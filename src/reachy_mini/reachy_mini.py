@@ -18,7 +18,7 @@ import numpy.typing as npt
 from asgiref.sync import async_to_sync
 from scipy.spatial.transform import Rotation as R
 
-from reachy_mini.daemon.utils import daemon_check
+from reachy_mini.daemon.utils import daemon_check, is_local_camera_available
 from reachy_mini.io.protocol import GotoTaskRequest
 from reachy_mini.io.zenoh_client import ZenohClient
 from reachy_mini.media.media_manager import MediaBackend, MediaManager
@@ -81,7 +81,9 @@ class ReachyMini:
             timeout (float): Timeout for the client connection, defaults to 5.0 seconds.
             automatic_body_yaw (bool): If True, the body yaw will be used to compute the IK and FK. Default is False.
             log_level (str): Logging level, defaults to "INFO".
-            media_backend (str): Media backend to use, either "default" (OpenCV), "gstreamer" or "webrtc", defaults to "default".
+            media_backend (str): Use "no_media" to disable media entirely. Any other value
+                triggers auto-detection: Lite uses OpenCV, Wireless uses GStreamer (local)
+                or WebRTC (remote) based on environment.
 
         It will try to connect to the daemon, and if it fails, it will raise an exception.
 
@@ -134,37 +136,43 @@ class ReachyMini:
     def _configure_mediamanager(
         self, media_backend: str, log_level: str
     ) -> MediaManager:
-        mbackend = MediaBackend.DEFAULT
         daemon_status = self.client.get_status()
+        is_wireless = daemon_status.get("wireless_version", False)
 
-        # If wireless, force webrtc unless no_media is selected
-        if media_backend != "no_media" and daemon_status.get(
-            "wireless_version"
-        ):
-            mbackend = MediaBackend.WEBRTC
+        # If no_media is requested, skip all media initialization
+        if media_backend.lower() == "no_media":
+            self.logger.info("No media backend requested.")
+            mbackend = MediaBackend.NO_MEDIA
         else:
-            match media_backend.lower():
-                case "webrtc":
-                    if not daemon_status.get("wireless_version"):
-                        self.logger.warning(
-                            "Non-wireless version detected, daemon should use the flag '--wireless-version'. Reverting to default"
-                        )
-                        mbackend = MediaBackend.DEFAULT
-                    else:
-                        self.logger.info("WebRTC backend configured successfully.")
-                        mbackend = MediaBackend.WEBRTC
-                case "gstreamer":
-                    mbackend = MediaBackend.GSTREAMER
-                case "default":
-                    mbackend = MediaBackend.DEFAULT
-                case "no_media":
-                    mbackend = MediaBackend.NO_MEDIA
-                case "default_no_video":
-                    mbackend = MediaBackend.DEFAULT_NO_VIDEO
-                case _:
-                    raise ValueError(
-                        f"Invalid media_backend '{media_backend}'. Supported values are 'default', 'gstreamer', 'no_media', 'default_no_video', and 'webrtc'."
+            # Auto-detect the optimal backend based on environment
+            # Any explicit backend value (other than no_media) is ignored
+            if media_backend.lower() not in ("default", "auto"):
+                self.logger.debug(
+                    f"media_backend='{media_backend}' ignored, using auto-detection."
+                )
+
+            if is_wireless:
+                if is_local_camera_available():
+                    # Local client on CM4: use GStreamer to read from unix socket
+                    # This avoids WebRTC encode/decode overhead
+                    self.logger.info(
+                        "Auto-detected: Wireless + local camera socket. "
+                        "Using GStreamer backend (no WebRTC overhead)."
                     )
+                    mbackend = MediaBackend.GSTREAMER
+                else:
+                    # Remote client: use WebRTC for streaming
+                    self.logger.info(
+                        "Auto-detected: Wireless + remote client. "
+                        "Using WebRTC backend for streaming."
+                    )
+                    mbackend = MediaBackend.WEBRTC
+            else:
+                # Lite version: use default OpenCV backend
+                self.logger.info(
+                    "Auto-detected: Lite version. Using default (OpenCV) backend."
+                )
+                mbackend = MediaBackend.DEFAULT
 
         return MediaManager(
             use_sim=self.client.get_status()["simulation_enabled"],
