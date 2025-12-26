@@ -11,7 +11,6 @@ from typing import Any, List
 import psutil
 import serial.tools.list_ports
 
-
 # Path to the unix socket created by WebRTC daemon for local camera access
 CAMERA_SOCKET_PATH = "/tmp/reachymini_camera_socket"
 
