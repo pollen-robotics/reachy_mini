@@ -24,18 +24,6 @@
 
 <br>
 
-## 📱 Apps & Ecosystem
-
-Reachy Mini comes with an app store powered by Hugging Face Spaces. You can install these apps directly from your robot's dashboard with one click!
-
-* **🗣️ [Conversation App](https://huggingface.co/spaces/pollen-robotics/reachy_mini_conversation_app):** Talk naturally with Reachy Mini (powered by LLMs).
-* **📻 [Radio](https://huggingface.co/spaces/pollen-robotics/reachy_mini_radio):** Listen to the radio with Reachy Mini !
-* **👋 [Hand Tracker](https://huggingface.co/spaces/pollen-robotics/hand_tracker_v2):** The robot follows your hand movements in real-time.
-
-👉 [**Browse all apps on Hugging Face**](https://hf.co/reachy-mini/#/apps)
-
-<br>
-
 ## 🚀 Getting Started with Reachy Mini SDK
 
 ### Quick Look
@@ -44,6 +32,7 @@ Control your robot in just **a few lines of code**:
 ```python
 from reachy_mini import ReachyMini
 from reachy_mini.utils import create_head_pose
+
 
 with ReachyMini() as mini:
     # Look up and tilt head
@@ -61,6 +50,7 @@ with ReachyMini() as mini:
 * **[Core Concepts](docs/SDK/core-concept.md)**: Architecture, coordinate systems, and safety limits.
 * 🤗[**Share your app with the community**](https://huggingface.co/blog/pollen-robotics/make-and-publish-your-reachy-mini-apps)
 * 📂 [**Browse the Examples Folder**](examples)
+* 📱 [**Browse all apps on Hugging Face**](https://hf.co/reachy-mini/#/apps)
 
 
 <br>
