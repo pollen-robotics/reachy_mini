@@ -7,9 +7,14 @@ Also checks and updates the bluetooth service if needed.
 
 import filecmp
 import logging
-import pwd
+import platform
 import subprocess
 from pathlib import Path
+
+if platform.system() != "Windows":
+    import pwd
+else:
+    pwd = None
 
 logger = logging.getLogger(__name__)
 USER = "pollen"
@@ -25,8 +30,10 @@ def check_and_fix_venvs_ownership(
         custom_logger: Optional logger to use instead of the module logger
 
     """
+    if pwd is None:
+        return
+
     try:
-        # Get pollen user's UID
         pollen_uid = pwd.getpwnam(USER).pw_uid
     except KeyError:
         print(f"User '{USER}' does not exist on this system")
