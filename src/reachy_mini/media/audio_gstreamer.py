@@ -200,7 +200,7 @@ class GStreamerAudio(AudioBase):
             return None
             
         try:
-            return data.reshape(-1, 2)
+            return data.reshape(-1, self.CHANNELS)
         except ValueError as e:
             self.logger.error(f"Shape mismatch! Buffer size doesn't match channels. Error: {e}")
             return None
