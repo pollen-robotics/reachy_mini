@@ -46,8 +46,20 @@ class Daemon:
         robot_name: str = "reachy_mini",
         wireless_version: bool = False,
         desktop_app_daemon: bool = False,
+        h264_profile: str = "compatible",
     ) -> None:
-        """Initialize the Reachy Mini daemon."""
+        """Initialize the Reachy Mini daemon.
+
+        Args:
+            log_level: Logging level.
+            robot_name: Name of the robot for Zenoh prefix.
+            wireless_version: Whether this is a wireless Reachy Mini.
+            desktop_app_daemon: Whether started from desktop app.
+            h264_profile: H264 profile for WebRTC streaming.
+                - "compatible": 720p, Safari/WebKit OK (default)
+                - "quality": 1080p, no Safari support
+
+        """
         self.log_level = log_level
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(self.log_level)
@@ -86,7 +98,7 @@ class Daemon:
             from reachy_mini.media.webrtc_daemon import GstWebRTC
 
             try:
-                self._webrtc = GstWebRTC(log_level)
+                self._webrtc = GstWebRTC(log_level, h264_profile=h264_profile)
             except Exception as e:
                 self.logger.error(f"Failed to initialize WebRTC: {e}")
                 self._webrtc = None
