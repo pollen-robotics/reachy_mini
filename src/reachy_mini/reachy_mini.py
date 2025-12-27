@@ -678,6 +678,8 @@ class ReachyMini:
 
         Args:
             ids (List[str] | None): List of motor names to enable. If None, all motors will be enabled.
+                Valid names match `src/reachy_mini/assets/config/hardware_config.yaml`:
+                `body_rotation`, `stewart_1` … `stewart_6`, `right_antenna`, `left_antenna`.
 
         """
         self._set_torque(True, ids=ids)
@@ -687,6 +689,8 @@ class ReachyMini:
 
         Args:
             ids (List[str] | None): List of motor names to disable. If None, all motors will be disabled.
+                Valid names match `src/reachy_mini/assets/config/hardware_config.yaml`:
+                `body_rotation`, `stewart_1` … `stewart_6`, `right_antenna`, `left_antenna`.
 
         """
         self._set_torque(False, ids=ids)
