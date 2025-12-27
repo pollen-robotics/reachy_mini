@@ -1,22 +1,29 @@
 from rustypot import Xl330PyController
 
-baudrates = [9600, 57600, 115200, 1000000]
+from typing import List
+
+baudrates: List[int] = [9600, 57600, 115200, 1000000]
 
 
-def scan(baudrate):
-    c = Xl330PyController("/dev/ttyAMA3", baudrate, 0.01)
-    found_motors = []
-    for i in range(255):
-        ret = c.ping(i)
-        if ret:
-            found_motors.append(i)
+def scan(baudrate: int) -> List[int]:
+    """Scan the bus at the given baudrate and return detected IDs."""
+    controller = Xl330PyController("/dev/ttyAMA3", baudrate, 0.01)
+    found_motors: list[int] = []
+    for motor_id in range(255):
+        if controller.ping(motor_id):
+            found_motors.append(motor_id)
     return found_motors
 
 
-for baudrate in baudrates:
-    print(f"Trying baudrate: {baudrate}")
-    found_motors = scan(baudrate)
-    if found_motors:
-        print(f"Found motors at baudrate {baudrate}: {found_motors}")
-    else:
-        print(f"No motors found at baudrate {baudrate}")
+def main() -> None:
+    for baudrate in baudrates:
+        print(f"Trying baudrate: {baudrate}")
+        found_motors = scan(baudrate)
+        if found_motors:
+            print(f"Found motors at baudrate {baudrate}: {found_motors}")
+        else:
+            print(f"No motors found at baudrate {baudrate}")
+
+
+if __name__ == "__main__":
+    main()
