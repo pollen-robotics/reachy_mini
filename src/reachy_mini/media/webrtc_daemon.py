@@ -11,6 +11,7 @@ import gi
 
 from reachy_mini.media.camera_constants import (
     ArducamSpecs,
+    CameraResolution,
     CameraSpecs,
     ReachyMiniLiteCamSpecs,
     ReachyMiniWirelessCamSpecs,
@@ -21,6 +22,22 @@ gi.require_version("GstApp", "1.0")
 
 from gi.repository import GLib, Gst  # noqa: E402
 
+# H264 profile presets for WebRTC streaming
+# - "compatible": Level 3.1 + Constrained Baseline for Safari/WebKit compatibility (720p max)
+# - "quality": Level 4.0 + Main profile for higher quality (1080p, no Safari support)
+H264_PROFILES = {
+    "compatible": {
+        "level": "3.1",
+        "profile": "constrained-baseline",
+        "resolution": CameraResolution.R1280x720at30fps,
+    },
+    "quality": {
+        "level": "4",
+        "profile": "main",
+        "resolution": CameraResolution.R1920x1080at30fps,
+    },
+}
+
 
 class GstWebRTC:
     """WebRTC pipeline using GStreamer."""
@@ -28,12 +45,34 @@ class GstWebRTC:
     def __init__(
         self,
         log_level: str = "INFO",
+        h264_profile: str = "compatible",
     ) -> None:
-        """Initialize the GStreamer WebRTC pipeline."""
+        """Initialize the GStreamer WebRTC pipeline.
+
+        Args:
+            log_level: Logging level (DEBUG, INFO, WARNING, ERROR).
+            h264_profile: H264 profile preset to use.
+                - "compatible": Level 3.1 + Constrained Baseline (720p, Safari OK)
+                - "quality": Level 4.0 + Main profile (1080p, no Safari)
+
+        """
         self._logger = logging.getLogger(__name__)
         self._logger.setLevel(log_level)
 
-        # self._id_audio_card = get_respeaker_card_number()
+        # Load H264 profile configuration
+        if h264_profile not in H264_PROFILES:
+            self._logger.warning(
+                f"Unknown H264 profile '{h264_profile}', using 'compatible'"
+            )
+            h264_profile = "compatible"
+
+        self._h264_config = H264_PROFILES[h264_profile]
+        self._logger.info(
+            f"WebRTC using H264 profile '{h264_profile}': "
+            f"level={self._h264_config['level']}, "
+            f"profile={self._h264_config['profile']}, "
+            f"resolution={self._h264_config['resolution'].name}"
+        )
 
         Gst.init(None)
         self._loop = GLib.MainLoop()
@@ -44,7 +83,9 @@ class GstWebRTC:
 
         if self.camera_specs is None:
             raise RuntimeError("Camera specs not set")
-        self._resolution = self.camera_specs.default_resolution
+
+        # Override resolution based on H264 profile
+        self._resolution = self._h264_config["resolution"]
         self.resized_K = self.camera_specs.K
 
         if self._resolution is None:
@@ -164,10 +205,12 @@ class GstWebRTC:
         extra_controls_structure.set_value("repeat_sequence_header", 1)
         extra_controls_structure.set_value("video_bitrate", 5_000_000)
         v4l2h264enc.set_property("extra-controls", extra_controls_structure)
-        # Use Level 3.1 + Constrained Baseline for Safari/WebKit compatibility
-        # (Level 4.0 is not supported by Safari WebRTC, causing SDP negotiation failure)
+        # Use H264 level and profile from configuration
+        h264_level = self._h264_config["level"]
+        h264_profile = self._h264_config["profile"]
         caps_h264 = Gst.Caps.from_string(
-            "video/x-h264,stream-format=byte-stream,alignment=au,level=(string)3.1,profile=(string)constrained-baseline"
+            f"video/x-h264,stream-format=byte-stream,alignment=au,"
+            f"level=(string){h264_level},profile=(string){h264_profile}"
         )
         capsfilter_h264 = Gst.ElementFactory.make("capsfilter")
         capsfilter_h264.set_property("caps", caps_h264)

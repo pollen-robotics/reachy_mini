@@ -81,6 +81,8 @@ class Args:
 
     localhost_only: bool | None = None
 
+    h264_profile: str = "compatible"
+
 
 def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> FastAPI:
     """Create and configure the FastAPI application."""
@@ -137,6 +139,7 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
         robot_name=args.robot_name,
         wireless_version=args.wireless_version,
         desktop_app_daemon=args.desktop_app_daemon,
+        h264_profile=args.h264_profile,
     )
     app.state.app_manager = AppManager(
         wireless_version=args.wireless_version,
@@ -428,6 +431,14 @@ def main() -> None:
         "--fastapi-port",
         type=int,
         default=default_args.fastapi_port,
+    )
+    # WebRTC options
+    parser.add_argument(
+        "--h264-profile",
+        type=str,
+        default=default_args.h264_profile,
+        choices=["compatible", "quality"],
+        help="H264 profile for WebRTC: 'compatible' (720p, Safari OK) or 'quality' (1080p, no Safari). Default: compatible.",
     )
     # Logging options
     parser.add_argument(
