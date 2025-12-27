@@ -51,16 +51,16 @@ Now that your robot is online and up to date, you can start controlling it!
 * Install and run **Apps** (like Conversation or Games).
 * Program your Reachy with **Python**.
 
-## 5. Advanced: Connect directly via SSH to the internal RPI 
+## 5. 💻 Advanced: Connect directly to the internal Raspberry Pi via SSH
 
-If you need to connect to the internall raspberry-pi via SSH, credentials are:
+If you need to connect to Reachy Mini's internal Raspberry Pi via SSH, credentials are:
 
 ```
 username: pollen
 password: root
 ```
 
-Once connected via SSG, you can check the integrity of your raspberry pi and robot setup:
+Once connected via SSH, you can check the integrity of your Raspberry Pi and robot setup with:
 
 ```
 reachyminios_check
