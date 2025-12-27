@@ -102,8 +102,43 @@ It can also be the same issue as "Motor blinking red or Overload Error" describe
 
 <summary><strong>Missing Motor Error / No motor found on port</strong></summary>
 
-- Make sure you have plugged all the motor cables correctly.
+- Make sure you have plugged all the motor cables correctly. Make sure your cables are seated down tight. Its easy to not push them down all the way.
+- Check that the cables are not damaged.
+- Make sure the power supply is plugged in and providing power.
+
 - Make sure you have every motor and not two same motor in the kit. Refer to the label on each motor. e.g motor 1, motor 2, motor 3, motor 4, L motor, R motor...  
+- If you still have the issue you can try scanning the motors using the [scan_motors.py script](/src/reachy_mini/tools/scan_motors.py).
+    - If your robot is Lite, you can run the script directly on your computer. Go to the "tools" folder, where the script is located, and run the same command as below but without the scp and ssh part.
+    - If your robot is Wireless, you need to copy the script on the raspberry. Go to the "tools" folder, where the script is located, and run:
+    ```bash
+    sudo scp scan_motors.py pollen@reachy-mini.local:~/
+    # password: ---your sudo password---
+    # RPI password: root
+    ```
+    - Then ssh into the robot:
+    ```bash
+    ssh pollen@reachy-mini.local
+    ```
+    - Activate the venv:
+    ```bash
+    source /venvs/mini_daemon/bin/activate
+    ```
+    - And run the script: (Motors must be powered on for this!)
+    ```bash
+    python scan_motors.py
+    ```
+    - It should print the list of detected motors. You should have all motors on baudrate 1000000, with the following IDs: 10, 11, 12, 13, 14, 15, 17, 18. If some are missing, check the cables again. If there is a motor with a different ID or baudrate, please contact support.
+    Example of the right output:
+    ```
+    Trying baudrate: 9600
+    No motors found at baudrate 9600
+    Trying baudrate: 57600
+    No motors found at baudrate 57600
+    Trying baudrate: 115200
+    No motors found at baudrate 115200
+    Trying baudrate: 1000000
+    Found motors at baudrate 1000000: [10, 11, 12, 13, 14, 15, 16, 17, 18]
+    ```
 
 </details>
 
