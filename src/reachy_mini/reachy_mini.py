@@ -70,6 +70,7 @@ class ReachyMini:
         automatic_body_yaw: bool = True,
         log_level: str = "INFO",
         media_backend: str = "default",
+        alsa_pcm_type: str = "plughw",
     ) -> None:
         """Initialize the Reachy Mini robot.
 
@@ -84,6 +85,7 @@ class ReachyMini:
             media_backend (str): Use "no_media" to disable media entirely. Any other value
                 triggers auto-detection: Lite uses OpenCV, Wireless uses GStreamer (local)
                 or WebRTC (remote) based on environment.
+            alsa_pcm_type (str): ALSA PCM type, defaults to "plughw". Relevant for GStreamer audio backend.
 
         It will try to connect to the daemon, and if it fails, it will raise an exception.
 
@@ -108,7 +110,7 @@ class ReachyMini:
             ]
         )
 
-        self.media_manager = self._configure_mediamanager(media_backend, log_level)
+        self.media_manager = self._configure_mediamanager(media_backend, log_level, alsa_pcm_type)
 
     def __del__(self) -> None:
         """Destroy the Reachy Mini instance.
@@ -134,7 +136,7 @@ class ReachyMini:
         return self.media_manager
 
     def _configure_mediamanager(
-        self, media_backend: str, log_level: str
+        self, media_backend: str, log_level: str, alsa_pcm_type: str
     ) -> MediaManager:
         daemon_status = self.client.get_status()
         is_wireless = daemon_status.get("wireless_version", False)
@@ -179,6 +181,7 @@ class ReachyMini:
             backend=mbackend,
             log_level=log_level,
             signalling_host=self.client.get_status()["wlan_ip"],
+            alsa_pcm_type=alsa_pcm_type,
         )
 
     def set_target(
