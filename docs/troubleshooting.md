@@ -297,18 +297,27 @@ If you need to reset the robot's Wi-Fi hotspot (for example, if you can't connec
 <details>
 <summary><strong>The dashboard at http://localhost:8000 doesn't work.</strong></summary>
 
-Perform these checks:
-1.  **Virtual Environment:** Ensure you are running inside your virtual environment (`.venv`, `reachy_mini_env`,...).
-2.  **SDK Update:** Ensure you have the latest version.
-- With `pip`, run :
+1. **Check browser permissions**: Ensure your browser can access local networks. <br> On _macOS_, these permissions are found in System Settings → Privacy & Security → Local Network.
+
+2. **For Wireless Reachy Mini**: Ensure both your computer and the robot are connected to the **same network**, then verify connectivity by running the following command in your terminal:
+```bash
+ping reachy-mini
+```
+
+3. **For Lite Reachy Mini**: Perform these checks.
+- _Virtual Environment:_ Ensure you are running inside your virtual environment (`.venv`, `reachy_mini_env`,...).
+- _SDK Update:_ Ensure you have the latest version.
+
+With `pip`, run :
 ```bash
 pip install -U reachy-mini
 ```
-- With `uv`, run :
+With `uv`, run :
 ```bash
 uv add reachy-mini
 ```
-3.  **Daemon:** Make sure the daemon `reachy-mini-daemon` is running in a terminal.
+
+- _Daemon:_ Make sure the daemon `reachy-mini-daemon` is running in a terminal.
 
 </details>
 
