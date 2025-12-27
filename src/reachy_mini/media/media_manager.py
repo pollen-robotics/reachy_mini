@@ -36,6 +36,7 @@ class MediaManager:
         log_level: str = "INFO",
         use_sim: bool = False,
         signalling_host: str = "localhost",
+        alsa_pcm_type: str = "plughw",
     ) -> None:
         """Initialize the audio device."""
         self.logger = logging.getLogger(__name__)
@@ -43,6 +44,7 @@ class MediaManager:
         self.backend = backend
         self.camera: Optional[CameraBase] = None
         self.audio: Optional[AudioBase] = None
+
 
         match backend:
             case MediaBackend.NO_MEDIA:
@@ -53,14 +55,14 @@ class MediaManager:
                 self._init_audio(log_level)
             case MediaBackend.DEFAULT_NO_VIDEO:
                 self.logger.info("Using default media backend (SoundDevice only).")
-                self._init_audio(log_level)
+                self._init_audio(log_level, alsa_pcm_type)
             case MediaBackend.GSTREAMER:
                 self.logger.info("Using GStreamer media backend.")
                 self._init_camera(use_sim, log_level)
-                self._init_audio(log_level)
+                self._init_audio(log_level, alsa_pcm_type)
             case MediaBackend.GSTREAMER_NO_VIDEO:
                 self.logger.info("Using GStreamer audio backend.")
-                self._init_audio(log_level)
+                self._init_audio(log_level, alsa_pcm_type)
             case MediaBackend.WEBRTC:
                 self.logger.info("Using WebRTC GStreamer backend.")
                 self._init_webrtc(log_level, signalling_host, 8443)
