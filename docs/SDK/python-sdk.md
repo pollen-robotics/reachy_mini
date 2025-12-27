@@ -1,5 +1,7 @@
 # Python SDK Reference
 
+> **💡 Reminder:** If you are using a Reachy Mini Wireless and running the script on your computer, in the following examples you need to replace `ReachyMini()` by `ReachyMini(localhost_only=False)`.
+
 ## Movement
 
 ### Basic Control (`goto_target`)
