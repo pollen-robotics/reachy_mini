@@ -161,6 +161,8 @@ gst-launch-1.0 videotestsrc ! autovideosink
 gst-inspect-1.0 webrtcsrc
 ```
 
+> **💡 For advanced testing and troubleshooting:** See the [Advanced Raspberry Pi Setup Guide](../platforms/reachy_mini/advanced_rpi_setup.md) for detailed configuration options and system diagnostics.
+
 ## 🔧 Python Dependencies
 
 When installing Reachy Mini Python package, you will also need to add the `gstreamer` extra :
@@ -176,3 +178,4 @@ uv add reachy-mini --extra gstreamer
 ```bash
 uv sync --extra gstreamer
 ```
+
