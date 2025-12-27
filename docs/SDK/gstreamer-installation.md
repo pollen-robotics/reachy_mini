@@ -32,7 +32,6 @@ sudo apt-get install -y \
     libgirepository1.0-dev \
     libcairo2-dev \
     libportaudio2 \
-    gstreamer1.0-libcamera \
     libnice10 \
     gstreamer1.0-plugins-good \
     gstreamer1.0-alsa \
