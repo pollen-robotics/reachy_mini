@@ -1,6 +1,8 @@
-from rustypot import Xl330PyController
+"""Scan a serial bus to find which motor IDs respond at common baudrates."""
 
 from typing import List
+
+from rustypot import Xl330PyController
 
 baudrates: List[int] = [9600, 57600, 115200, 1000000]
 
@@ -16,6 +18,7 @@ def scan(baudrate: int) -> List[int]:
 
 
 def main() -> None:
+    """Iterate through baudrates and print the IDs found at each."""
     for baudrate in baudrates:
         print(f"Trying baudrate: {baudrate}")
         found_motors = scan(baudrate)
