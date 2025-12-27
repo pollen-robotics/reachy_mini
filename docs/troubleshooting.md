@@ -108,7 +108,8 @@ It can also be the same issue as "Motor blinking red or Overload Error" describe
 
 - Make sure you have every motor and not two same motor in the kit. Refer to the label on each motor. e.g motor 1, motor 2, motor 3, motor 4, L motor, R motor...  
 - If you still have the issue you can try scanning the motors using the [scan_motors.py script](/src/reachy_mini/tools/scan_motors.py).
-    - To copy the script on the raspberry, go to the "tools" folder, where the script is located, and run:
+    - If your robot is Lite, you can run the script directly on your computer. Go to the "tools" folder, where the script is located, and run the same command as below but without the scp and ssh part.
+    - If your robot is Wireless, you need to copy the script on the raspberry. Go to the "tools" folder, where the script is located, and run:
     ```bash
     sudo scp scan_motors.py pollen@reachy-mini.local:~/
     # password: ---your sudo password---
@@ -122,7 +123,7 @@ It can also be the same issue as "Motor blinking red or Overload Error" describe
     ```bash
     source /venvs/mini_daemon/bin/activate
     ```
-    - And run the script:
+    - And run the script: (Motors must be powered on for this!)
     ```bash
     python scan_motors.py
     ```
