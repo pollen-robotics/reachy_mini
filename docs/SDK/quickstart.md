@@ -8,6 +8,49 @@ Make sure you have installed Reachy Mini on your computer following our [install
 
 > **💡 Important:** Ensure you have created and activated your Python virtual environment. **Remember to activate it every time you open a new terminal!**
 
+<details>
+<summary><strong>🔧 Run SDK directly on Wireless Reachy Mini (Optional)</strong></summary>
+
+If you want to run the SDK directly on your wireless Reachy Mini instead of remotely on your computer, you can connect via SSH into it.
+
+### Step 1: SSH Connection
+
+Open a terminal and run:
+
+```bash
+ssh pollen@reachy-mini
+```
+
+When prompted, use these **default credentials**:
+- Username: `pollen`
+- Password: `root`
+
+### Step 2: Activate the Python virtual environment
+
+After connecting, activate the virtual environment:
+
+```bash
+source /venvs/apps_venv/bin/activate
+```
+
+### Step 3: Run scripts locally
+
+When running scripts on Reachy Mini itself, use the standard `ReachyMini()` constructor (no need for `localhost_only=False`):
+
+```python
+from reachy_mini import ReachyMini
+
+with ReachyMini() as mini:
+    # Your code here
+```
+
+> **💡 Benefits of running locally:** Lower latency, no network dependency, and direct access to all robot resources.
+> 
+> **⚠️ Drawbacks:** Lower CPU power, and no GUI available.
+
+
+</details>
+
 ## 2. Ensure the Robot Server is running (Daemon)
 
 The **Daemon** is a background service that handles the low-level communication with motors and sensors. It must be running for your code to work.
@@ -39,7 +82,7 @@ The **Daemon** is a background service that handles the low-level communication 
 
 **Step 2:** Create a new file called `hello.py` and copy-paste the following code into it:
 
-> Tip: If you are using a Reachy Mini Wireless and running the script on your computer, you need to do `ReachyMini(localhost_only=False)`
+> Tip: If you are using a Reachy Mini Wireless and running the script on your computer, you need to replace `ReachyMini()` by `ReachyMini(localhost_only=False)`.
 ```python
 from reachy_mini import ReachyMini
 
