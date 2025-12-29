@@ -308,11 +308,16 @@ class GstWebRTC:
         self._pipeline_receiver.set_state(Gst.State.PAUSED)
 
     def stop(self) -> None:
-        """Stop the WebRTC pipeline."""
+        """Stop the WebRTC pipeline.
+
+        Uses PAUSED instead of NULL to keep the signalling server running
+        and the producer registered, allowing proper restart.
+        TODO ASK FABIEN
+        """
         self._logger.debug("Stopping WebRTC")
 
-        self._pipeline_sender.set_state(Gst.State.NULL)
-        self._pipeline_receiver.set_state(Gst.State.NULL)
+        self._pipeline_sender.set_state(Gst.State.PAUSED)
+        self._pipeline_receiver.set_state(Gst.State.PAUSED)
 
 
 if __name__ == "__main__":
