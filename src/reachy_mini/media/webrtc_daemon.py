@@ -5,7 +5,7 @@ Starts a gstreamer webrtc pipeline to stream video and audio.
 
 import logging
 from threading import Thread
-from typing import Optional, Tuple, cast
+from typing import Optional, Tuple, TypedDict, cast
 
 import gi
 
@@ -22,10 +22,19 @@ gi.require_version("GstApp", "1.0")
 
 from gi.repository import GLib, Gst  # noqa: E402
 
+
+class H264ProfileConfig(TypedDict):
+    """Type definition for H264 profile configuration."""
+
+    level: str
+    profile: str
+    resolution: CameraResolution
+
+
 # H264 profile presets for WebRTC streaming
 # - "compatible": Level 3.1 + Constrained Baseline for Safari/WebKit compatibility (720p max)
 # - "quality": Level 4.0 + Main profile for higher quality (1080p, no Safari support)
-H264_PROFILES = {
+H264_PROFILES: dict[str, H264ProfileConfig] = {
     "compatible": {
         "level": "3.1",
         "profile": "constrained-baseline",
