@@ -25,9 +25,9 @@ from numpy.typing import NDArray
 from scipy.spatial.transform import Rotation as R
 
 if typing.TYPE_CHECKING:
+    from reachy_mini.daemon.backend.mockup_sim.backend import MockupSimBackendStatus
     from reachy_mini.daemon.backend.mujoco.backend import MujocoBackendStatus
     from reachy_mini.daemon.backend.robot.backend import RobotBackendStatus
-    from reachy_mini.daemon.backend.mockup_sim.backend import MockupSimBackendStatus
     from reachy_mini.kinematics import AnyKinematics
 from reachy_mini.media.media_manager import MediaBackend, MediaManager
 from reachy_mini.motion.goto import GotoMove

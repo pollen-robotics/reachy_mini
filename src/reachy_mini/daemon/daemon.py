@@ -30,9 +30,9 @@ from reachy_mini.io import (
 from reachy_mini.media.media_manager import MediaManager
 from reachy_mini.tools.reflash_motors import reflash_motors
 
+from .backend.mockup_sim import MockupSimBackend, MockupSimBackendStatus
 from .backend.mujoco import MujocoBackend, MujocoBackendStatus
 from .backend.robot import RobotBackend, RobotBackendStatus
-from .backend.mockup_sim import MockupSimBackend, MockupSimBackendStatus
 
 
 class Daemon:
