@@ -25,6 +25,7 @@ from numpy.typing import NDArray
 from scipy.spatial.transform import Rotation as R
 
 if typing.TYPE_CHECKING:
+    from reachy_mini.daemon.backend.mockup_sim.backend import MockupSimBackendStatus
     from reachy_mini.daemon.backend.mujoco.backend import MujocoBackendStatus
     from reachy_mini.daemon.backend.robot.backend import RobotBackendStatus
     from reachy_mini.kinematics import AnyKinematics
@@ -228,7 +229,7 @@ class Backend:
             self._active_move_depth -= 1
         self._play_move_lock.release()
 
-    def get_status(self) -> "RobotBackendStatus | MujocoBackendStatus":
+    def get_status(self) -> "RobotBackendStatus | MujocoBackendStatus | MockupSimBackendStatus":
         """Return backend statistics.
 
         This method is a placeholder and should be overridden by subclasses.
