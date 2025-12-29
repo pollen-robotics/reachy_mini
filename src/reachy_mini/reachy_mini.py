@@ -174,11 +174,14 @@ class ReachyMini:
                 )
                 mbackend = MediaBackend.DEFAULT
 
+        # Use UDP for both MuJoCo (simulation_enabled) and sim-lite (sim_lite_enabled)
+        daemon_status = self.client.get_status()
+        use_sim = daemon_status.get("simulation_enabled", False) or daemon_status.get("sim_lite_enabled", False)
         return MediaManager(
-            use_sim=self.client.get_status()["simulation_enabled"],
+            use_sim=use_sim,
             backend=mbackend,
             log_level=log_level,
-            signalling_host=self.client.get_status()["wlan_ip"],
+            signalling_host=daemon_status.get("wlan_ip"),
         )
 
     def set_target(
