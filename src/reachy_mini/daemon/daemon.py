@@ -138,8 +138,8 @@ class Daemon:
             f"Daemon start parameters: sim={sim}, sim_lite={sim_lite}, serialport={serialport}, scene={scene}, localhost_only={localhost_only}, wake_up_on_start={wake_up_on_start}, check_collision={check_collision}, kinematics_engine={kinematics_engine}, headless={headless}, hardware_config_filepath={hardware_config_filepath}"
         )
 
-        # sim_lite behaves like a real robot from apps perspective (local media available)
-        # Only MuJoCo (--sim) sets simulation_enabled=True
+        # sim-lite behaves exactly like a real robot for apps (they open webcam directly)
+        # Only MuJoCo (--sim) sets simulation_enabled=True (streams video via UDP)
         self._status.simulation_enabled = sim
         self._status.sim_lite_enabled = sim_lite
 
