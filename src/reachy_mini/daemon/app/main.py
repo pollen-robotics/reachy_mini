@@ -62,6 +62,7 @@ class Args:
     hardware_config_filepath: str | None = None
 
     sim: bool = False
+    sim_lite: bool = False
     scene: str = "empty"
     headless: bool = False
     websocket_uri: str | None = None
@@ -103,6 +104,7 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
                 await app.state.daemon.start(
                     serialport=args.serialport,
                     sim=args.sim,
+                    sim_lite=args.sim_lite,
                     scene=args.scene,
                     headless=args.headless,
                     websocket_uri=args.websocket_uri,
@@ -377,6 +379,12 @@ def main() -> None:
         action="store_true",
         default=default_args.sim,
         help="Run in simulation mode using Mujoco.",
+    )
+    parser.add_argument(
+        "--sim-lite",
+        action="store_true",
+        default=default_args.sim_lite,
+        help="Run in lightweight simulation mode (no MuJoCo required).",
     )
     parser.add_argument(
         "--scene",
