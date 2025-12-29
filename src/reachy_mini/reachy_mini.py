@@ -109,6 +109,14 @@ class ReachyMini:
         )
 
         self.media_manager = self._configure_mediamanager(media_backend, log_level)
+        daemon_status = self.client.get_status()
+        is_wireless = daemon_status.get("wireless_version", False)
+        if is_wireless:
+            from bmi088 import BMI088
+
+            self.bmi088 = BMI088(i2c_bus=4)
+        else:
+            self.bmi088 = None
 
     def __del__(self) -> None:
         """Destroy the Reachy Mini instance.
@@ -132,6 +140,16 @@ class ReachyMini:
     def media(self) -> MediaManager:
         """Expose the MediaManager instance used by ReachyMini."""
         return self.media_manager
+
+    @property
+    def imu(self):
+        """Get the BMI088 IMU instance."""
+        if self.bmi088 is not None:
+            return self.bmi088
+        else:
+            raise RuntimeError(
+                "IMU is only available on the Wireless version of Reachy Mini."
+            )
 
     def _configure_mediamanager(
         self, media_backend: str, log_level: str
@@ -276,12 +294,16 @@ class ReachyMini:
             )
 
         req = GotoTaskRequest(
-            head=np.array(head, dtype=np.float64).flatten().tolist()
-            if head is not None
-            else None,
-            antennas=np.array(antennas, dtype=np.float64).flatten().tolist()
-            if antennas is not None
-            else None,
+            head=(
+                np.array(head, dtype=np.float64).flatten().tolist()
+                if head is not None
+                else None
+            ),
+            antennas=(
+                np.array(antennas, dtype=np.float64).flatten().tolist()
+                if antennas is not None
+                else None
+            ),
             duration=duration,
             method=method,
             body_yaw=body_yaw,
@@ -614,9 +636,10 @@ class ReachyMini:
         cmd = {}
 
         if pose is not None:
-            assert pose.shape == (4, 4), (
-                f"Head pose should be a 4x4 matrix, got {pose.shape}."
-            )
+            assert pose.shape == (
+                4,
+                4,
+            ), f"Head pose should be a 4x4 matrix, got {pose.shape}."
             cmd["head_pose"] = pose.tolist()
         else:
             raise ValueError("Pose must be provided as a 4x4 matrix.")
