@@ -73,6 +73,7 @@ class Daemon:
             wireless_version=wireless_version,
             desktop_app_daemon=desktop_app_daemon,
             simulation_enabled=None,
+            sim_lite_enabled=None,
             backend_status=None,
             error=None,
             wlan_ip=None,
@@ -138,6 +139,7 @@ class Daemon:
         )
 
         self._status.simulation_enabled = sim or sim_lite
+        self._status.sim_lite_enabled = sim_lite
 
         if not localhost_only:
             self._status.wlan_ip = get_ip_address()
@@ -665,6 +667,7 @@ class DaemonStatus:
     wireless_version: bool
     desktop_app_daemon: bool
     simulation_enabled: Optional[bool]
+    sim_lite_enabled: Optional[bool]
     backend_status: Optional[RobotBackendStatus | MujocoBackendStatus | SimLiteBackendStatus]
     error: Optional[str] = None
     wlan_ip: Optional[str] = None
