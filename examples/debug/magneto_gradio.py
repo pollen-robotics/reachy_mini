@@ -97,6 +97,8 @@ class DaemonRecorder(BaseRecorder):
         try:
             with ReachyMini() as mini:
                 print("✅ (SDK) Connected. Capturing...")
+
+                mini.media.start_recording()
                 
                 while self.is_recording:
                     chunk = mini.media.get_audio_sample()
