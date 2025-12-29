@@ -3,17 +3,22 @@
 A lightweight simulation backend that doesn't require MuJoCo.
 Target positions become current positions immediately (no physics).
 The kinematics engine is still used for FK/IK computations.
+Webcam is streamed via UDP to be compatible with apps expecting MuJoCo-style video.
 """
 
 import json
+import logging
 import time
 from dataclasses import dataclass
-from typing import Annotated
+from threading import Thread
+from typing import Annotated, Optional
 
+import cv2
 import numpy as np
 import numpy.typing as npt
 
 from ..abstract import Backend, MotorControlMode
+from ..mujoco.video_udp import UDPJPEGFrameSender
 
 
 class SimLiteBackend(Backend):
@@ -21,6 +26,7 @@ class SimLiteBackend(Backend):
 
     This backend provides a simple simulation where target positions
     are applied immediately without physics simulation.
+    Webcam video is streamed via UDP for app compatibility.
     """
 
     def __init__(
@@ -28,6 +34,7 @@ class SimLiteBackend(Backend):
         check_collision: bool = False,
         kinematics_engine: str = "AnalyticalKinematics",
         use_audio: bool = True,
+        stream_video: bool = True,
     ) -> None:
         """Initialize the SimLiteBackend.
 
@@ -35,6 +42,7 @@ class SimLiteBackend(Backend):
             check_collision: If True, enable collision checking. Default is False.
             kinematics_engine: Kinematics engine to use. Defaults to "AnalyticalKinematics".
             use_audio: If True, use audio. Default is True.
+            stream_video: If True, stream webcam via UDP. Default is True.
 
         """
         super().__init__(
@@ -42,6 +50,8 @@ class SimLiteBackend(Backend):
             kinematics_engine=kinematics_engine,
             use_audio=use_audio,
         )
+
+        self.logger = logging.getLogger(__name__)
 
         from reachy_mini.reachy_mini import (
             SLEEP_ANTENNAS_JOINT_POSITIONS,
@@ -61,12 +71,56 @@ class SimLiteBackend(Backend):
         # Control loop frequency
         self.control_frequency = 50.0  # Hz
 
+        # Video streaming
+        self._stream_video = stream_video
+        self._video_thread: Optional[Thread] = None
+        self._video_cap: Optional[cv2.VideoCapture] = None
+
+    def _webcam_streaming_loop(self) -> None:
+        """Stream webcam frames via UDP.
+
+        This makes sim-lite compatible with apps expecting MuJoCo-style video.
+        """
+        streamer = UDPJPEGFrameSender(dest_port=5005)
+        streaming_fps = 30.0
+        streaming_period = 1.0 / streaming_fps
+
+        # Try to open webcam
+        self._video_cap = cv2.VideoCapture(0)
+        if not self._video_cap.isOpened():
+            self.logger.warning("Could not open webcam for streaming. Video will not be available.")
+            return
+
+        self.logger.info("SimLite: Webcam streaming started on UDP port 5005")
+
+        while not self.should_stop.is_set():
+            start_t = time.time()
+
+            ret, frame = self._video_cap.read()
+            if ret and frame is not None:
+                # Convert BGR to RGB for UDPJPEGFrameSender (it expects RGB)
+                frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                streamer.send_frame(frame_rgb)
+
+            elapsed = time.time() - start_t
+            time.sleep(max(0, streaming_period - elapsed))
+
+        # Cleanup
+        self._video_cap.release()
+        streamer.close()
+        self.logger.info("SimLite: Webcam streaming stopped")
+
     def run(self) -> None:
         """Run the simulation loop.
 
         In sim-lite mode, target positions are applied immediately.
         """
         control_period = 1.0 / self.control_frequency
+
+        # Start webcam streaming thread
+        if self._stream_video:
+            self._video_thread = Thread(target=self._webcam_streaming_loop, daemon=True)
+            self._video_thread.start()
 
         # Initialize kinematics with current positions
         self.update_head_kinematics_model(
@@ -132,7 +186,9 @@ class SimLiteBackend(Backend):
 
     def close(self) -> None:
         """Close the backend."""
-        pass
+        # Video capture is released in _webcam_streaming_loop when should_stop is set
+        if self._video_cap is not None and self._video_cap.isOpened():
+            self._video_cap.release()
 
     def get_status(self) -> "SimLiteBackendStatus":
         """Get the status of the backend."""
