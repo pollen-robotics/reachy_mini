@@ -27,3 +27,21 @@ def clear_huggingface_cache() -> dict[str, str]:
     except Exception as e:
         logger.error(f"Failed to clear HuggingFace cache: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to clear cache: {str(e)}")
+
+@router.post("/reset-apps")
+def reset_apps() -> dict[str, str]:
+    """Remove applications virtual environment directory."""
+    try:
+        venv_path = Path("/venvs/apps_venv/")
+
+        if venv_path.exists():
+            shutil.rmtree(venv_path)
+            logger.info(f"Removed applications virtual environment at {venv_path}")
+            return {"status": "success", "message": "Applications virtual environment removed"}
+        else:
+            logger.info(f"Applications virtual environment directory does not exist: {venv_path}")
+            return {"status": "success", "message": "Virtual environment directory already empty"}
+
+    except Exception as e:
+        logger.error(f"Failed to clear applications virtual environment: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to clear virtual environment: {str(e)}")
