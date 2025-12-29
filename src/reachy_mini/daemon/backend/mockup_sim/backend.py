@@ -1,4 +1,4 @@
-"""Sim Lite Backend for Reachy Mini.
+"""Mockup Simulation Backend for Reachy Mini.
 
 A lightweight simulation backend that doesn't require MuJoCo.
 Target positions become current positions immediately (no physics).
@@ -18,7 +18,7 @@ import numpy.typing as npt
 from ..abstract import Backend, MotorControlMode
 
 
-class SimLiteBackend(Backend):
+class MockupSimBackend(Backend):
     """Lightweight simulated Reachy Mini without MuJoCo.
 
     This backend provides a simple simulation where target positions
@@ -33,7 +33,7 @@ class SimLiteBackend(Backend):
         kinematics_engine: str = "AnalyticalKinematics",
         use_audio: bool = True,
     ) -> None:
-        """Initialize the SimLiteBackend.
+        """Initialize the MockupSimBackend.
 
         Args:
             check_collision: If True, enable collision checking. Default is False.
@@ -68,7 +68,7 @@ class SimLiteBackend(Backend):
     def run(self) -> None:
         """Run the simulation loop.
 
-        In sim-lite mode, target positions are applied immediately.
+        In mockup-sim mode, target positions are applied immediately.
         """
         control_period = 1.0 / self.control_frequency
 
@@ -138,9 +138,9 @@ class SimLiteBackend(Backend):
         """Close the backend."""
         pass
 
-    def get_status(self) -> "SimLiteBackendStatus":
+    def get_status(self) -> "MockupSimBackendStatus":
         """Get the status of the backend."""
-        return SimLiteBackendStatus(motor_control_mode=self._motor_control_mode)
+        return MockupSimBackendStatus(motor_control_mode=self._motor_control_mode)
 
     def get_present_head_joint_positions(
         self,
@@ -165,14 +165,14 @@ class SimLiteBackend(Backend):
     def set_motor_torque_ids(self, ids: list[str], on: bool) -> None:
         """Set the motor torque state for specific motor names.
 
-        No-op in sim-lite mode.
+        No-op in mockup-sim mode.
         """
         pass
 
 
 @dataclass
-class SimLiteBackendStatus:
-    """Status of the SimLite backend."""
+class MockupSimBackendStatus:
+    """Status of the MockupSim backend."""
 
     motor_control_mode: MotorControlMode
     error: str | None = None

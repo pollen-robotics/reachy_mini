@@ -56,7 +56,7 @@ def find_camera(
             cap.release()
         return cap, cast(CameraSpecs, ArducamSpecs)
 
-    # Fallback: try to open any available webcam (useful for sim-lite mode on desktop)
+    # Fallback: try to open any available webcam (useful for mockup-sim mode on desktop)
     cap = cv2.VideoCapture(0)
     if cap is not None and cap.isOpened():
         if no_cap:
