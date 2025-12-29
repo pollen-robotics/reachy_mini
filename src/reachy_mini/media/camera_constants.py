@@ -108,6 +108,7 @@ class ReachyMiniWirelessCamSpecs(ReachyMiniLiteCamSpecs):
     available_resolutions = [
         CameraResolution.R1920x1080at30fps,
         CameraResolution.R1280x720at60fps,
+        CameraResolution.R1280x720at30fps,  # Required for H264 Level 3.1 (Safari/WebKit)
         CameraResolution.R3840x2592at10fps,
         CameraResolution.R3840x2160at10fps,
         CameraResolution.R3264x2448at10fps,
