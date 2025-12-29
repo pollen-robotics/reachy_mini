@@ -68,41 +68,52 @@ class RawRecorder(BaseRecorder):
 
 class DaemonRecorder(BaseRecorder):
     """Records via Reachy SDK (Requires Daemon RUNNING)."""
+    """Enregistre via le SDK Reachy (Nécessite Daemon ALLUMÉ)."""
+
     def start(self):
         if self.is_recording: return "⚠️ Already in progress"
-        
-        # Local import to avoid errors if running in RAW mode without SDK installed
-        from reachy_mini import ReachyMini
-        self.ReachyMini = ReachyMini
+        try:
+            import reachy_mini
+        except ImportError:
+            return "❌ Error: SDK 'reachy_mini' not found. Please install it.", None
 
         self.audio_buffer = []
         self.is_recording = True
         
-        def record_loop():
-            print("🤖 (SDK) Connecting to Daemon...")
-            try:
-                with self.ReachyMini() as mini:
-                    print("✅ (SDK) Connected. Capturing...")
-                    while self.is_recording:
-                        # Official SDK method
-                        if hasattr(mini, 'media'):
-                            chunk = mini.media.get_audio_sample()
-                            if chunk is not None and len(chunk) > 0:
-                                self.audio_buffer.append(chunk)
-                        time.sleep(0.005)
-            except Exception as e:
-                print(f"❌ SDK Thread Error: {e}")
-                self.is_recording = False
-
-        self.thread = threading.Thread(target=record_loop)
+        self.thread = threading.Thread(target=self.record_loop)
         self.thread.start()
-        return "🔴 DAEMON Recording in progress... (Daemon must be RUNNING)"
+        return "🔴 DAEMON Recording in progress..."
+
+    def record_loop(self):
+        print("🤖 (SDK) Connecting to Daemon...")
+        
+        try:
+            from reachy_mini import ReachyMini 
+        except ImportError:
+            print("❌ ReachyMini class not found!")
+            self.is_recording = False
+            return
+
+        try:
+            with ReachyMini() as mini:
+                print("✅ (SDK) Connected. Capturing...")
+                
+                while self.is_recording:
+                    chunk = mini.media.get_audio_sample()
+                    if chunk is not None and len(chunk) > 0:
+                        self.audio_buffer.append(chunk)
+                    
+                    time.sleep(0.005)
+                    
+        except Exception as e:
+            print(f"❌ SDK Thread Error: {e}")
+            self.is_recording = False
 
     def stop(self):
         if not self.is_recording: return "⚠️ Nothing to stop", None
         
         print("⏹️ (SDK) Stop requested...")
-        self.is_recording = False # Stops the while loop
+        self.is_recording = False 
         
         if self.thread:
             self.thread.join(timeout=2.0)
