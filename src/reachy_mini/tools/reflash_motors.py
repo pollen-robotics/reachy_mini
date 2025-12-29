@@ -97,7 +97,7 @@ def reflash_motors(
             )
         except RuntimeError as e:
             console.print(
-                f"❌ Configuration check failed for motor '{motor_name}': {e}",
+                f"[FAIL] Configuration check failed for motor '{motor_name}': {e}",
                 style="red",
             )
             return

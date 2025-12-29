@@ -10,8 +10,6 @@ It uses Jinja2 templates to generate the necessary files for the app project.
 import argparse
 import importlib
 import logging
-import platform
-import subprocess
 import threading
 import traceback
 from abc import ABC, abstractmethod
@@ -39,14 +37,16 @@ class ReachyMiniApp(ABC):
         self.error: str = ""
         self.logger = logging.getLogger("reachy_mini.app")
 
-        # If we're running with wireless, we assume systemd service is used
-        running_on_wireless = self._check_systemd_service_exists()
-        self.logger.info(f"Running on wireless: {running_on_wireless}")
+        # Detect if daemon is available on localhost
+        # If yes, use localhost connection. If no, use multicast scouting for remote daemon.
+        self.daemon_on_localhost = self._check_daemon_on_localhost()
+        self.logger.info(f"Daemon on localhost: {self.daemon_on_localhost}")
 
+        # Media backend is now auto-detected by ReachyMini, just use "default"
         self.media_backend = (
             self.request_media_backend
             if self.request_media_backend is not None
-            else ("gstreamer" if running_on_wireless else "default")
+            else "default"
         )
 
         self.settings_app: FastAPI | None = None
@@ -68,28 +68,23 @@ class ReachyMiniApp(ABC):
                         return FileResponse(index_file)
 
     @staticmethod
-    def _check_systemd_service_exists(service_name: str = "reachy-mini-daemon") -> bool:
-        """Check if a systemd service exists (Linux only).
+    def _check_daemon_on_localhost(port: int = 8000, timeout: float = 0.5) -> bool:
+        """Check if daemon is reachable on localhost.
 
         Args:
-            service_name: Name of the systemd service to check
+            port: Port to check (default: 8000)
+            timeout: Connection timeout in seconds
 
         Returns:
-            True if the service exists, False otherwise
+            True if daemon responds on localhost, False otherwise
 
         """
-        if platform.system() != "Linux":
-            return False
+        import socket
 
         try:
-            result = subprocess.run(
-                ["systemctl", "status", service_name],
-                capture_output=True,
-                timeout=2,
-            )
-            # Return code 0 = running, 3 = stopped but exists, 4 = doesn't exist
-            return result.returncode != 4
-        except (subprocess.TimeoutExpired, FileNotFoundError):
+            with socket.create_connection(("127.0.0.1", port), timeout=timeout):
+                return True
+        except (socket.timeout, ConnectionRefusedError, OSError):
             return False
 
     def wrapped_run(self, *args: Any, **kwargs: Any) -> None:
@@ -123,8 +118,15 @@ class ReachyMiniApp(ABC):
         try:
             self.logger.info("Starting Reachy Mini app...")
             self.logger.info(f"Using media backend: {self.media_backend}")
+            self.logger.info(f"Daemon on localhost: {self.daemon_on_localhost}")
+
+            # If daemon is on localhost, use localhost_only=True
+            # Otherwise use multicast scouting to find remote daemon
+            localhost_only = self.daemon_on_localhost
+
             with ReachyMini(
                 media_backend=self.media_backend,
+                localhost_only=localhost_only,
                 *args,
                 **kwargs,  # type: ignore
             ) as reachy_mini:

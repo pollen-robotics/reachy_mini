@@ -268,6 +268,18 @@ sudo usermod -aG dialout $USER
 
 </details>
 
+## 📡 Wireless Reachy Mini Setup
+
+> **Want to use the SDK from a remote laptop with a wireless Reachy Mini ?** You'll need to install GStreamer to receive video and audio streams.
+
+### 🔧 Install GStreamer
+
+<div align="center">
+
+[![GStreamer Installation Guide](https://img.shields.io/badge/📖-GStreamer%20Installation%20Guide-blue?style=for-the-badge)](gstreamer-installation.md)
+
+</div>
+
 ## 🎉 Congratulations!
 
 You've successfully installed Reachy Mini! Your robot is ready to come to life.
