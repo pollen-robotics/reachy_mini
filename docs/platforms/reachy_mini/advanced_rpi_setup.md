@@ -111,41 +111,4 @@ gst-launch-1.0 audiotestsrc ! audioconvert ! audioresample ! opusenc ! audio/x-o
 
 ## 8. Install Daemon from a Specific Branch
 
-> **⚠️ For developers/testers only.** Use this to test a feature branch before it's released.
-
-### Prerequisites
-- SSH access to the robot
-- The robot connected to Wi-Fi (or via Hotspot)
-
-### Procedure
-
-1. **SSH into the robot:**
-   ```bash
-   ssh pollen@reachy-mini.local
-   # password: root
-   ```
-
-2. **Activate the daemon virtual environment:**
-   ```bash
-   source /venvs/mini_daemon/bin/activate
-   ```
-
-3. **Install the branch:**
-   ```bash
-   pip install --no-cache-dir --force-reinstall git+https://github.com/pollen-robotics/reachy_mini.git@<branch-name>
-   ```
-   Replace `<branch-name>` with the target branch (e.g., `develop`, `feature/my-feature`).
-
-4. **Restart the daemon:**
-   ```bash
-   sudo systemctl restart reachy-mini-daemon
-   ```
-
-5. **Verify the installation:**
-   ```bash
-   pip show reachy-mini | grep Version
-   ```
-
-### Rollback to Factory Version
-
-If something goes wrong, use the **SOFTWARE_RESET** command via Bluetooth to restore the factory daemon. See the [Reset Guide](reset.md) for instructions.
+Follow the dedicated instructions in the [Install Daemon from Branch guide](install_daemon_from_branch.md).
