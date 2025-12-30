@@ -164,9 +164,14 @@ class SoundDeviceAudio(AudioBase):
                 "Output stream is not open. Call start_playing() first."
             )
 
+    def clear_output_buffer(self) -> None:
+        """Clear the output buffer."""
+        with self._output_lock:
+            self._output_buffer.clear()
+
     def start_playing(self) -> None:
         """Open the audio output stream."""
-        self._output_buffer.clear()  # Clear any old data
+        self.clear_output_buffer()
 
         if self._output_stream is not None:
             self.stop_playing()
@@ -237,6 +242,7 @@ class SoundDeviceAudio(AudioBase):
             self._output_stream.stop()
             self._output_stream.close()
             self._output_stream = None
+            self.clear_output_buffer()
             self.logger.info("SoundDevice audio output stream closed.")
 
     def play_sound(self, sound_file: str) -> None:

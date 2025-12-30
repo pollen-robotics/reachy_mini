@@ -61,6 +61,7 @@ motors:
       upper_limit: 4095
       return_delay_time: 0
       shutdown_error: 52
+      operating_mode: 3
       pid: 
         - 200
         - 0
@@ -72,6 +73,7 @@ motors:
       upper_limit: 2958
       return_delay_time: 0
       shutdown_error: 52
+      operating_mode: 3
       pid:
         - 300
         - 0
@@ -83,6 +85,7 @@ motors:
       upper_limit: 2844
       return_delay_time: 0
       shutdown_error: 52
+      operating_mode: 3
       pid:
         - 300
         - 0
@@ -94,6 +97,7 @@ motors:
       upper_limit: 2958
       return_delay_time: 0
       shutdown_error: 52
+      operating_mode: 3
       pid:
         - 300
         - 0
@@ -105,6 +109,7 @@ motors:
       upper_limit: 2594
       return_delay_time: 0
       shutdown_error: 52
+      operating_mode: 3
       pid:
         - 300
         - 0
@@ -116,6 +121,7 @@ motors:
       upper_limit: 2958
       return_delay_time: 0
       shutdown_error: 52
+      operating_mode: 3
       pid:
         - 300
         - 0
@@ -127,6 +133,7 @@ motors:
       upper_limit: 2594
       return_delay_time: 0
       shutdown_error: 52
+      operating_mode: 3
       pid:
         - 300
         - 0
@@ -138,6 +145,7 @@ motors:
       upper_limit: 4095
       return_delay_time: 0
       shutdown_error: 52
+      operating_mode: 3
       pid:
         - 200
         - 0
@@ -149,6 +157,7 @@ motors:
       upper_limit: 4095
       return_delay_time: 0
       shutdown_error: 52
+      operating_mode: 3
       pid:
         - 200
         - 0

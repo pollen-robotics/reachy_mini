@@ -223,12 +223,12 @@ Choose your installation method:
 
 In your terminal, run:
 ```bash
-uv add reachy-mini
+uv pip install "reachy-mini"
 ```
 
 If you want to use the simulation mode, you need to add the `mujoco` extra:
 ```bash
-uv add reachy-mini --extra mujoco
+uv pip install "reachy-mini[mujoco]"
 ```
 
 ### 🔧 Option B: Install from Source  
@@ -267,6 +267,18 @@ sudo usermod -aG dialout $USER
 > ⚠️ **Important:** Log out and log back in for the changes to take effect!
 
 </details>
+
+## 📡 Wireless Reachy Mini Setup
+
+> **Want to use the SDK from a remote laptop with a wireless Reachy Mini ?** You'll need to install GStreamer to receive video and audio streams.
+
+### 🔧 Install GStreamer
+
+<div align="center">
+
+[![GStreamer Installation Guide](https://img.shields.io/badge/📖-GStreamer%20Installation%20Guide-blue?style=for-the-badge)](gstreamer-installation.md)
+
+</div>
 
 ## 🎉 Congratulations!
 

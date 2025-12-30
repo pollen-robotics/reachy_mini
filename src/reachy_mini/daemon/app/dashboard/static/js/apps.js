@@ -114,7 +114,15 @@ const installedApps = {
         const title = document.createElement('div');
         const titleSpan = document.createElement('span');
         titleSpan.className = 'installed-app-title top-1/2 ';
-        titleSpan.innerHTML = app.name;
+
+        // Add [private] tag if this is a private space
+        const isPrivate = app.extra && app.extra.private === true;
+        if (isPrivate) {
+            titleSpan.innerHTML = app.name + ' <span style="color: #dc2626; font-size: 0.75rem; font-weight: 600; margin-left: 0.25rem;">[private]</span>';
+        } else {
+            titleSpan.innerHTML = app.name;
+        }
+
         title.appendChild(titleSpan);
         if (app.extra && app.extra.custom_app_url) {
             const settingsLink = document.createElement('a');
