@@ -3,6 +3,7 @@ on: [pull_request]
 jobs:
   pytest:
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest]
