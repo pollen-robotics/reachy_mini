@@ -10,7 +10,6 @@ import asyncio
 import json
 import logging
 import time
-import warnings
 from typing import Dict, List, Literal, Optional, Union, cast
 
 import cv2
@@ -51,7 +50,6 @@ SLEEP_HEAD_POSE = np.array(
 )
 
 ConnectionMode = Literal["auto", "localhost_only", "network"]
-ConnectionModeArg = ConnectionMode | bool
 
 
 class ReachyMini:
@@ -59,9 +57,9 @@ class ReachyMini:
 
     Args:
         connection_mode: Select how to connect to the daemon. Use
-            `"localhost_only"` to force USB/Lite setups, `"network"` to
-            discover a wireless robot on the LAN, or `"auto"` (default) to
-            try localhost first then fall back to the network.
+            `"localhost_only"` to restrict connections to daemons running on
+            localhost, `"network"` to scout for daemons on the LAN, or `"auto"`
+            (default) to try localhost first then fall back to the network.
         spawn_daemon (bool): If True, will spawn a daemon to control the robot, defaults to False.
         use_sim (bool): If True and spawn_daemon is True, will spawn a simulated robot, defaults to True.
 
@@ -70,14 +68,13 @@ class ReachyMini:
     def __init__(
         self,
         robot_name: str = "reachy_mini",
-        connection_mode: ConnectionModeArg = "auto",
+        connection_mode: ConnectionMode = "auto",
         spawn_daemon: bool = False,
         use_sim: bool = False,
         timeout: float = 5.0,
         automatic_body_yaw: bool = True,
         log_level: str = "INFO",
         media_backend: str = "default",
-        *,
         localhost_only: Optional[bool] = None,
     ) -> None:
         """Initialize the Reachy Mini robot.
@@ -85,8 +82,11 @@ class ReachyMini:
         Args:
             robot_name (str): Name of the robot, defaults to "reachy_mini".
             connection_mode: `"auto"` (default), `"localhost_only"` or `"network"`.
-                `"auto"` will first try localhost and then fall back to the network
-                if no daemon responds locally.
+                `"auto"` will first try daemons on localhost and fall back to
+                network discovery if no local daemon responds.
+            localhost_only (Optional[bool]): Deprecated alias for the connection
+                mode. Set `False` to search for network daemons. Will be removed
+                in a future release.
             spawn_daemon (bool): If True, will spawn a daemon to control the robot, defaults to False.
             use_sim (bool): If True and spawn_daemon is True, will spawn a simulated robot, defaults to True.
             timeout (float): Timeout for the client connection, defaults to 5.0 seconds.
@@ -198,37 +198,36 @@ class ReachyMini:
 
     def _normalize_connection_mode(
         self,
-        connection_mode: ConnectionModeArg,
+        connection_mode: ConnectionMode,
         legacy_localhost_only: Optional[bool],
     ) -> ConnectionMode:
         """Normalize connection mode input, optionally honoring the legacy alias."""
-        if legacy_localhost_only is not None:
-            if not (
-                isinstance(connection_mode, str)
-                and connection_mode.lower() == "auto"
-            ):
-                raise ValueError(
-                    "Cannot set both connection_mode and localhost_only. "
-                    "Please use connection_mode only."
-                )
-            warnings.warn(
-                "The 'localhost_only' parameter is deprecated. "
-                "Use connection_mode instead.",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-            return "localhost_only" if legacy_localhost_only else "network"
-
-        if isinstance(connection_mode, bool):
-            return "localhost_only" if connection_mode else "network"
-
         normalized = connection_mode.lower()
         if normalized not in {"auto", "localhost_only", "network"}:
             raise ValueError(
                 "Invalid connection_mode. "
                 "Use 'auto', 'localhost_only', or 'network'."
             )
-        return cast(ConnectionMode, normalized)
+        resolved = cast(ConnectionMode, normalized)
+
+        if legacy_localhost_only is None:
+            return resolved
+
+        self.logger.warning(
+            "The 'localhost_only' argument is deprecated and will be removed in a "
+            "future release. Please switch to connection_mode."
+        )
+
+        if resolved != "auto":
+            self.logger.warning(
+                "Both connection_mode=%s and localhost_only=%s were provided. "
+                "connection_mode takes precedence.",
+                resolved,
+                legacy_localhost_only,
+            )
+            return resolved
+
+        return "localhost_only" if legacy_localhost_only else "network"
 
     def _initialize_client(
         self, requested_mode: ConnectionMode, timeout: float
