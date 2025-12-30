@@ -14,7 +14,7 @@ import threading
 import traceback
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 from urllib.parse import urlparse
 
 from fastapi import FastAPI
@@ -121,7 +121,7 @@ class ReachyMiniApp(ABC):
             self.logger.info(f"Daemon on localhost: {self.daemon_on_localhost}")
 
             # Force the connection mode based on daemon location detection
-            connection_mode = (
+            connection_mode: Literal["localhost_only", "network"] = (
                 "localhost_only" if self.daemon_on_localhost else "network"
             )
 
