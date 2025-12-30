@@ -120,13 +120,14 @@ class ReachyMiniApp(ABC):
             self.logger.info(f"Using media backend: {self.media_backend}")
             self.logger.info(f"Daemon on localhost: {self.daemon_on_localhost}")
 
-            # If daemon is on localhost, use localhost_only=True
-            # Otherwise use multicast scouting to find remote daemon
-            localhost_only = self.daemon_on_localhost
+            # Force the connection mode based on daemon location detection
+            connection_mode = (
+                "localhost_only" if self.daemon_on_localhost else "network"
+            )
 
             with ReachyMini(
                 media_backend=self.media_backend,
-                localhost_only=localhost_only,
+                connection_mode=connection_mode,
                 *args,
                 **kwargs,  # type: ignore
             ) as reachy_mini:

@@ -1,6 +1,6 @@
 # Python SDK Reference
 
-> **💡 Reminder:** If you are using a Reachy Mini Wireless and running the script on your computer, in the following examples you need to replace `ReachyMini()` by `ReachyMini(localhost_only=False)`.
+> **💡 Reminder:** The SDK now auto-detects whether it should connect over USB/localhost or over the network, so `ReachyMini()` works out of the box. You can still force a mode with `ReachyMini(connection_mode="localhost_only" | "network")` if needed.
 
 ## Movement
 
