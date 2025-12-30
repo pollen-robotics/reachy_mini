@@ -164,4 +164,4 @@ with gr.Blocks(title=title_str) as demo:
     btn_stop.click(fn=recorder.stop, outputs=[status_box, audio_out])
 
 if __name__ == "__main__":
-    demo.launch(server_name="0.0.0.0", server_port=7860)
+    demo.launch(server_name="0.0.0.0", server_port=7880)
