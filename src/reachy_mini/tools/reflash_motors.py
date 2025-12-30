@@ -37,7 +37,9 @@ def main() -> None:
     reflash_motors(args.serialport)
 
 
-def reflash_motors(serialport: Optional[str] = None, dont_light_up: bool = False) -> None:
+def reflash_motors(
+    serialport: Optional[str] = None, dont_light_up: bool = False
+) -> None:
     """Reflash Reachy Mini's motors."""
     console = Console()
 
@@ -95,7 +97,7 @@ def reflash_motors(serialport: Optional[str] = None, dont_light_up: bool = False
             )
         except RuntimeError as e:
             console.print(
-                f"❌ Configuration check failed for motor '{motor_name}': {e}",
+                f"[FAIL] Configuration check failed for motor '{motor_name}': {e}",
                 style="red",
             )
             return

@@ -152,6 +152,231 @@ const hfAppsStore = {
             installedApps.refreshAppList();
         };
     },
+
+    // Advanced functionality for private spaces
+    advanced: {
+        isAuthenticated: false,
+        username: null,
+
+        init: async () => {
+            // Check if we're on wireless version
+            try {
+                const status = await fetch('/api/daemon/status').then(r => r.json());
+                const isWireless = status.wireless_version;
+
+                if (!isWireless) {
+                    // Don't show advanced section on non-wireless
+                    return;
+                }
+
+                // Show the advanced section
+                document.getElementById('hf-advanced-section').classList.remove('hidden');
+
+                // Set up event listeners
+                document.getElementById('hf-advanced-toggle').onclick = hfAppsStore.advanced.toggleSection;
+                document.getElementById('hf-login-button').onclick = hfAppsStore.advanced.login;
+                document.getElementById('hf-logout-button').onclick = hfAppsStore.advanced.logout;
+                document.getElementById('hf-install-private-button').onclick = hfAppsStore.advanced.installPrivateSpace;
+
+                // Add Enter key support for token input
+                document.getElementById('hf-token-input').addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') {
+                        hfAppsStore.advanced.login();
+                    }
+                });
+
+                // Add Enter key support for space ID input
+                document.getElementById('hf-space-id-input').addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') {
+                        hfAppsStore.advanced.installPrivateSpace();
+                    }
+                });
+
+                // Check authentication status
+                await hfAppsStore.advanced.checkAuthStatus();
+            } catch (error) {
+                console.error('Error initializing advanced section:', error);
+            }
+        },
+
+        toggleSection: () => {
+            const content = document.getElementById('hf-advanced-content');
+            const chevron = document.getElementById('hf-advanced-chevron');
+
+            if (content.classList.contains('hidden')) {
+                content.classList.remove('hidden');
+                chevron.style.transform = 'rotate(90deg)';
+            } else {
+                content.classList.add('hidden');
+                chevron.style.transform = 'rotate(0deg)';
+            }
+        },
+
+        checkAuthStatus: async () => {
+            try {
+                const response = await fetch('/api/hf-auth/status');
+                const data = await response.json();
+
+                hfAppsStore.advanced.isAuthenticated = data.is_logged_in;
+                hfAppsStore.advanced.username = data.username;
+
+                hfAppsStore.advanced.updateAuthUI();
+            } catch (error) {
+                console.error('Error checking auth status:', error);
+            }
+        },
+
+        updateAuthUI: () => {
+            const indicator = document.getElementById('hf-auth-indicator');
+            const authText = document.getElementById('hf-auth-text');
+            const loginForm = document.getElementById('hf-login-form');
+            const loggedInView = document.getElementById('hf-logged-in-view');
+            const usernameSpan = document.getElementById('hf-username');
+
+            if (hfAppsStore.advanced.isAuthenticated) {
+                // Authenticated state
+                indicator.classList.remove('bg-gray-400');
+                indicator.classList.add('bg-green-500');
+                authText.textContent = 'Authenticated';
+                loginForm.classList.add('hidden');
+                loggedInView.classList.remove('hidden');
+                usernameSpan.textContent = hfAppsStore.advanced.username || 'Unknown';
+            } else {
+                // Not authenticated state
+                indicator.classList.remove('bg-green-500');
+                indicator.classList.add('bg-gray-400');
+                authText.textContent = 'Not authenticated';
+                loginForm.classList.remove('hidden');
+                loggedInView.classList.add('hidden');
+            }
+        },
+
+        login: async () => {
+            const tokenInput = document.getElementById('hf-token-input');
+            const errorDiv = document.getElementById('hf-login-error');
+            const loginButton = document.getElementById('hf-login-button');
+
+            const token = tokenInput.value.trim();
+
+            if (!token) {
+                errorDiv.textContent = 'Please enter a token';
+                errorDiv.classList.remove('hidden');
+                return;
+            }
+
+            // Disable button during request
+            loginButton.disabled = true;
+            loginButton.textContent = 'Logging in...';
+            errorDiv.classList.add('hidden');
+
+            try {
+                const response = await fetch('/api/hf-auth/save-token', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ token })
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Login failed');
+                }
+
+                const data = await response.json();
+
+                // Clear token input
+                tokenInput.value = '';
+
+                // Update state
+                hfAppsStore.advanced.isAuthenticated = true;
+                hfAppsStore.advanced.username = data.username;
+                hfAppsStore.advanced.updateAuthUI();
+
+            } catch (error) {
+                errorDiv.textContent = error.message;
+                errorDiv.classList.remove('hidden');
+            } finally {
+                loginButton.disabled = false;
+                loginButton.textContent = 'Login';
+            }
+        },
+
+        logout: async () => {
+            try {
+                await fetch('/api/hf-auth/token', { method: 'DELETE' });
+
+                hfAppsStore.advanced.isAuthenticated = false;
+                hfAppsStore.advanced.username = null;
+                hfAppsStore.advanced.updateAuthUI();
+
+            } catch (error) {
+                console.error('Error logging out:', error);
+            }
+        },
+
+        installPrivateSpace: async () => {
+            const spaceIdInput = document.getElementById('hf-space-id-input');
+            const errorDiv = document.getElementById('hf-private-install-error');
+            const installButton = document.getElementById('hf-install-private-button');
+
+            const spaceId = spaceIdInput.value.trim();
+
+            if (!spaceId) {
+                errorDiv.textContent = 'Please enter a space ID';
+                errorDiv.classList.remove('hidden');
+                return;
+            }
+
+            // Validate format (should be "username/space-name")
+            if (!spaceId.includes('/')) {
+                errorDiv.textContent = 'Space ID should be in format: username/space-name';
+                errorDiv.classList.remove('hidden');
+                return;
+            }
+
+            // Disable button during request
+            installButton.disabled = true;
+            installButton.textContent = 'Installing...';
+            errorDiv.classList.add('hidden');
+
+            try {
+                const response = await fetch('/api/apps/install-private-space', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ space_id: spaceId })
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Installation failed');
+                }
+
+                const data = await response.json();
+                const jobId = data.job_id;
+
+                // Clear input
+                spaceIdInput.value = '';
+
+                // Show installation modal (reuse existing modal)
+                const spaceName = spaceId.split('/')[1];
+                hfAppsStore.appInstallLogHandler(spaceName, jobId);
+
+            } catch (error) {
+                if (error.message.includes('authenticate') || error.message.includes('401')) {
+                    // Token expired or invalid - show login form
+                    errorDiv.textContent = 'Authentication expired. Please login again.';
+                    hfAppsStore.advanced.isAuthenticated = false;
+                    hfAppsStore.advanced.username = null;
+                    hfAppsStore.advanced.updateAuthUI();
+                } else {
+                    errorDiv.textContent = error.message;
+                }
+                errorDiv.classList.remove('hidden');
+            } finally {
+                installButton.disabled = false;
+                installButton.textContent = 'Install Private Space';
+            }
+        },
+    },
 };
 
 
@@ -164,4 +389,7 @@ window.addEventListener('load', async () => {
         });
     }
     await hfAppsStore.refreshAppList();
+
+    // Initialize advanced section for private spaces
+    await hfAppsStore.advanced.init();
 });
