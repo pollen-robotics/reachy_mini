@@ -353,7 +353,8 @@ class Daemon:
                 self.websocket_server.stop()
 
             if self._webrtc:
-                self._webrtc.stop()
+                # We use pause() instead of stop() to keep the signalling server running and the producer registered, allowing proper restart.
+                self._webrtc.pause()
 
             if goto_sleep_on_stop:
                 try:

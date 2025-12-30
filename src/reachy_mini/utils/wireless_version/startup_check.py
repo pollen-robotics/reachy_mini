@@ -7,7 +7,6 @@ Also checks and updates the bluetooth service if needed.
 
 import filecmp
 import logging
-import pwd
 import subprocess
 from pathlib import Path
 
@@ -18,13 +17,15 @@ USER = "pollen"
 def check_and_fix_venvs_ownership(
     venvs_path: str = "/venvs", custom_logger: logging.Logger | None = None
 ) -> None:
-    """Check if files under venvs_path are owned by user pollen and fix if needed.
+    """For wirelss units, check if files under venvs_path are owned by user pollen and fix if needed.
 
     Args:
         venvs_path: Path to the virtual environments directory (default: /venvs)
         custom_logger: Optional logger to use instead of the module logger
 
     """
+    import pwd
+
     try:
         # Get pollen user's UID
         pollen_uid = pwd.getpwnam(USER).pw_uid
@@ -81,39 +82,63 @@ def check_and_update_bluetooth_service() -> None:
 
     Compares the source bluetooth_service.py with the installed version at
     /bluetooth/bluetooth_service.py. If they differ, copies the new version
-    and restarts the bluetooth service.
+    and restarts the bluetooth service. Also syncs the commands/ folder.
     """
     # This file: src/reachy_mini/utils/wireless_version/startup_check.py
     # Target:    src/reachy_mini/daemon/app/services/bluetooth/bluetooth_service.py
     # From parent: ../../daemon/app/services/bluetooth/bluetooth_service.py
-    source = Path(__file__).parent / ".." / ".." / "daemon" / "app" / "services" / "bluetooth" / "bluetooth_service.py"
-    source = source.resolve()
+    bluetooth_dir = Path(__file__).parent / ".." / ".." / "daemon" / "app" / "services" / "bluetooth"
+    bluetooth_dir = bluetooth_dir.resolve()
+    source = bluetooth_dir / "bluetooth_service.py"
     target = Path("/bluetooth/bluetooth_service.py")
+    source_commands = bluetooth_dir / "commands"
+    target_commands = Path("/bluetooth/commands")
 
     if not source.exists():
         print(f"Source bluetooth service not found at {source}")
         return
 
-    # Check if target exists
+    needs_update = False
+    needs_commands_update = False
+
+    # Check if bluetooth_service.py needs update
     if not target.exists():
         print(f"Bluetooth service not installed at {target}, copying...")
         needs_update = True
     else:
-        # Compare files
         try:
-            if filecmp.cmp(str(source), str(target), shallow=False):
-                print("Bluetooth service is up to date")
-                return
-            else:
+            if not filecmp.cmp(str(source), str(target), shallow=False):
                 print("Bluetooth service has changed, updating...")
                 needs_update = True
         except Exception as e:
             print(f"Error comparing bluetooth service files: {e}")
-            return
 
-    if needs_update:
-        try:
-            # Copy the new version using sudo
+    # Check if commands folder needs update
+    if source_commands.exists():
+        if not target_commands.exists():
+            print("Commands folder not installed, copying...")
+            needs_commands_update = True
+        else:
+            # Compare each command file
+            for cmd_file in source_commands.glob("*.sh"):
+                target_cmd = target_commands / cmd_file.name
+                if not target_cmd.exists():
+                    needs_commands_update = True
+                    break
+                try:
+                    if not filecmp.cmp(str(cmd_file), str(target_cmd), shallow=False):
+                        needs_commands_update = True
+                        break
+                except Exception:
+                    needs_commands_update = True
+                    break
+
+    if not needs_update and not needs_commands_update:
+        print("Bluetooth service and commands are up to date")
+        return
+
+    try:
+        if needs_update:
             print(f"Copying {source} to {target}")
             subprocess.run(
                 ["sudo", "cp", str(source), str(target)],
@@ -123,19 +148,35 @@ def check_and_update_bluetooth_service() -> None:
             )
             print("Successfully copied bluetooth service")
 
-            # Restart the bluetooth service
-            print("Restarting bluetooth service...")
+        if needs_commands_update:
+            print(f"Syncing commands folder to {target_commands}")
             subprocess.run(
-                ["sudo", "systemctl", "restart", "reachy-mini-bluetooth"],
+                ["sudo", "mkdir", "-p", str(target_commands)],
                 check=True,
                 capture_output=True,
                 text=True,
             )
-            print("Successfully restarted bluetooth service")
-        except subprocess.CalledProcessError as e:
-            print(f"Failed to update bluetooth service: {e.stderr}")
-        except Exception as e:
-            print(f"Unexpected error while updating bluetooth service: {e}")
+            subprocess.run(
+                ["sudo", "cp", "-r", f"{source_commands}/.", str(target_commands)],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            print("Successfully synced commands folder")
+
+        # Restart the bluetooth service
+        print("Restarting bluetooth service...")
+        subprocess.run(
+            ["sudo", "systemctl", "restart", "reachy-mini-bluetooth"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        print("Successfully restarted bluetooth service")
+    except subprocess.CalledProcessError as e:
+        print(f"Failed to update bluetooth service: {e.stderr}")
+    except Exception as e:
+        print(f"Unexpected error while updating bluetooth service: {e}")
 
 
 def check_and_update_wireless_launcher() -> None:
