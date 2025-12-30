@@ -322,6 +322,7 @@ class GStreamerAudio(AudioBase):
                         os.name == "nt"
                         and device_props.has_field("device.api")
                         and device_props.get_string("device.api") == "wasapi2"
+                        and device_props.get_string("wasapi2.device.loopback") == "false"
                     ):
                         device_id = device_props.get_string("device.id")
                         self.logger.debug(
