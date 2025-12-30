@@ -39,7 +39,7 @@ def setup_motor(
     from_baudrate: int,
     target_baudrate: int,
     from_id: int,
-):
+) -> None:
     """Set up the motor with the given configuration."""
     if not lookup_for_motor(
         serial_port,
@@ -108,6 +108,15 @@ def setup_motor(
         )
 
         time.sleep(MOTOR_SETUP_DELAY)
+
+        change_operating_mode(
+            serial_port,
+            id=motor_config.id,
+            operating_mode=motor_config.operating_mode,
+            baudrate=target_baudrate,
+        )
+
+        time.sleep(MOTOR_SETUP_DELAY)
     except Exception as e:
         print(f"Error while setting up motor ID {from_id}: {e}")
         raise e
@@ -126,42 +135,56 @@ def lookup_for_motor(
     c = Xl330PyController(serial_port, baudrate=baudrate, timeout=SERIAL_TIMEOUT)
     ret = c.ping(id)
     if not silent:
-        print(f"{'✅' if ret else '❌'}")
+        print(f"{'[OK]' if ret else '[FAIL]'}")
     return ret
 
 
-def disable_torque(serial_port: str, id: int, baudrate: int):
+def disable_torque(serial_port: str, id: int, baudrate: int) -> None:
     """Disable the torque of the motor with the given ID on the specified serial port."""
     print(f"Disabling torque for motor with ID {id}...", end="", flush=True)
     c = Xl330PyController(serial_port, baudrate=baudrate, timeout=SERIAL_TIMEOUT)
     c.write_torque_enable(id, False)
-    print("✅")
+    print("[OK]")
 
 
 def change_baudrate(
     serial_port: str, id: int, base_baudrate: int, target_baudrate: int
-):
+) -> None:
     """Change the baudrate of the motor with the given ID on the specified serial port."""
     print(f"Changing baudrate to {target_baudrate}...", end="", flush=True)
     c = Xl330PyController(serial_port, baudrate=base_baudrate, timeout=SERIAL_TIMEOUT)
     c.write_baud_rate(id, XL_BAUDRATE_CONV_TABLE[target_baudrate])
-    print("✅")
+    print("[OK]")
 
 
-def change_id(serial_port: str, current_id: int, new_id: int, baudrate: int):
+def change_id(serial_port: str, current_id: int, new_id: int, baudrate: int) -> None:
     """Change the ID of the motor with the given current ID on the specified serial port."""
     print(f"Changing ID from {current_id} to {new_id}...", end="", flush=True)
     c = Xl330PyController(serial_port, baudrate=baudrate, timeout=SERIAL_TIMEOUT)
     c.write_id(current_id, new_id)
-    print("✅")
+    print("[OK]")
 
 
-def change_offset(serial_port: str, id: int, offset: int, baudrate: int):
+def change_offset(serial_port: str, id: int, offset: int, baudrate: int) -> None:
     """Change the offset of the motor with the given ID on the specified serial port."""
     print(f"Changing offset for motor with ID {id} to {offset}...", end="", flush=True)
     c = Xl330PyController(serial_port, baudrate=baudrate, timeout=SERIAL_TIMEOUT)
     c.write_homing_offset(id, offset)
-    print("✅")
+    print("[OK]")
+
+
+def change_operating_mode(
+    serial_port: str, id: int, operating_mode: int, baudrate: int
+) -> None:
+    """Change the operating mode of the motor with the given ID on the specified serial port."""
+    print(
+        f"Changing operating mode for motor with ID {id} to {operating_mode}...",
+        end="",
+        flush=True,
+    )
+    c = Xl330PyController(serial_port, baudrate=baudrate, timeout=SERIAL_TIMEOUT)
+    c.write_operating_mode(id, operating_mode)
+    print("[OK]")
 
 
 def change_angle_limits(
@@ -170,7 +193,7 @@ def change_angle_limits(
     angle_limit_min: int,
     angle_limit_max: int,
     baudrate: int,
-):
+) -> None:
     """Change the angle limits of the motor with the given ID on the specified serial port."""
     print(
         f"Changing angle limits for motor with ID {id} to [{angle_limit_min}, {angle_limit_max}]...",
@@ -180,12 +203,12 @@ def change_angle_limits(
     c = Xl330PyController(serial_port, baudrate=baudrate, timeout=SERIAL_TIMEOUT)
     c.write_raw_min_position_limit(id, angle_limit_min)
     c.write_raw_max_position_limit(id, angle_limit_max)
-    print("✅")
+    print("[OK]")
 
 
 def change_shutdown_error(
     serial_port: str, id: int, baudrate: int, shutdown_error: int
-):
+) -> None:
     """Change the shutdown error of the motor with the given ID on the specified serial port."""
     print(
         f"Changing shutdown error for motor with ID {id} to {shutdown_error}...",
@@ -194,12 +217,12 @@ def change_shutdown_error(
     )
     c = Xl330PyController(serial_port, baudrate=baudrate, timeout=SERIAL_TIMEOUT)
     c.write_shutdown(id, shutdown_error)
-    print("✅")
+    print("[OK]")
 
 
 def change_return_delay_time(
     serial_port: str, id: int, return_delay_time: int, baudrate: int
-):
+) -> None:
     """Change the return delay time of the motor with the given ID on the specified serial port."""
     print(
         f"Changing return delay time for motor with ID {id} to {return_delay_time}...",
@@ -208,10 +231,10 @@ def change_return_delay_time(
     )
     c = Xl330PyController(serial_port, baudrate=baudrate, timeout=SERIAL_TIMEOUT)
     c.write_return_delay_time(id, return_delay_time)
-    print("✅")
+    print("[OK]")
 
 
-def light_led_up(serial_port: str, id: int, baudrate: int):
+def light_led_up(serial_port: str, id: int, baudrate: int) -> None:
     """Light the LED of the motor with the given ID on the specified serial port."""
     c = Xl330PyController(serial_port, baudrate=baudrate, timeout=SERIAL_TIMEOUT)
 
@@ -226,7 +249,7 @@ def light_led_up(serial_port: str, id: int, baudrate: int):
         trials += 1
 
 
-def light_led_down(serial_port: str, id: int, baudrate: int):
+def light_led_down(serial_port: str, id: int, baudrate: int) -> None:
     """Light the LED of the motor with the given ID on the specified serial port."""
     c = Xl330PyController(serial_port, baudrate=baudrate, timeout=SERIAL_TIMEOUT)
     trials = 0
@@ -240,7 +263,9 @@ def light_led_down(serial_port: str, id: int, baudrate: int):
         trials += 1
 
 
-def check_configuration(motor_config: MotorConfig, serial_port: str, baudrate: int):
+def check_configuration(
+    motor_config: MotorConfig, serial_port: str, baudrate: int
+) -> None:
     """Check the configuration of the motor with the given ID on the specified serial port."""
     c = Xl330PyController(serial_port, baudrate=baudrate, timeout=SERIAL_TIMEOUT)
 
@@ -249,7 +274,7 @@ def check_configuration(motor_config: MotorConfig, serial_port: str, baudrate: i
     # Check if there is a motor with the desired ID
     if not c.ping(motor_config.id):
         raise RuntimeError(f"No motor with ID {motor_config.id} found, cannot proceed")
-    print(f"Found motor with ID {motor_config.id} ✅.")
+    print(f"Found motor with ID {motor_config.id} [OK].")
 
     # Read return delay time
     return_delay = c.read_return_delay_time(motor_config.id)[0]
@@ -257,7 +282,15 @@ def check_configuration(motor_config: MotorConfig, serial_port: str, baudrate: i
         raise RuntimeError(
             f"Return delay time is {return_delay}, expected {motor_config.return_delay_time}"
         )
-    print(f"Return delay time is correct: {return_delay} ✅.")
+    print(f"Return delay time is correct: {return_delay} [OK].")
+
+    # Read operating mode
+    operating_mode = c.read_operating_mode(motor_config.id)[0]
+    if operating_mode != motor_config.operating_mode:
+        raise RuntimeError(
+            f"Operating mode is {operating_mode}, expected {motor_config.operating_mode}"
+        )
+    print(f"Operating mode is correct: {operating_mode} [OK].")
 
     # Read angle limits
     angle_limit_min = c.read_raw_min_position_limit(motor_config.id)[0]
@@ -271,14 +304,14 @@ def check_configuration(motor_config: MotorConfig, serial_port: str, baudrate: i
             f"Angle limit max is {angle_limit_max}, expected {motor_config.angle_limit_max}"
         )
     print(
-        f"Angle limits are correct: [{motor_config.angle_limit_min}, {motor_config.angle_limit_max}] ✅."
+        f"Angle limits are correct: [{motor_config.angle_limit_min}, {motor_config.angle_limit_max}] [OK]."
     )
 
     # Read homing offset
     offset = c.read_homing_offset(motor_config.id)[0]
     if offset != motor_config.offset:
         raise RuntimeError(f"Homing offset is {offset}, expected {motor_config.offset}")
-    print(f"Homing offset is correct: {offset} ✅.")
+    print(f"Homing offset is correct: {offset} [OK].")
 
     # Read shutdown
     shutdown = c.read_shutdown(motor_config.id)[0]
@@ -286,12 +319,12 @@ def check_configuration(motor_config: MotorConfig, serial_port: str, baudrate: i
         raise RuntimeError(
             f"Shutdown is {shutdown}, expected {motor_config.shutdown_error}"
         )
-    print(f"Shutdown error is correct: {shutdown} ✅.")
+    print(f"Shutdown error is correct: {shutdown} [OK].")
 
-    print("Configuration is correct ✅!")
+    print("Configuration is correct [OK]!")
 
 
-def run(args):
+def run(args: argparse.Namespace) -> None:
     """Entry point for the Reachy Mini motor configuration tool."""
     config = parse_yaml_config(args.config_file)
 
@@ -323,7 +356,7 @@ def run(args):
                 baudrate=config.serial.baudrate,
             )
         except RuntimeError as e:
-            print(f"❌ Configuration check failed for motor '{motor_name}': {e}")
+            print(f"[FAIL] Configuration check failed for motor '{motor_name}': {e}")
             return
 
         light_led_up(

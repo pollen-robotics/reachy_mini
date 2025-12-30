@@ -240,14 +240,20 @@ async def _list_apps_from_separate_venvs(
                 custom_app_url = _get_custom_app_url_from_file(
                     app_name, wireless_version, desktop_app_daemon
                 )
+                # Load saved metadata (e.g., private flag)
+                metadata = _load_app_metadata(app_name)
+                # Merge with current extra data
+                extra_data = {
+                    "custom_app_url": custom_app_url,
+                    "venv_path": str(apps_venv),
+                }
+                extra_data.update(metadata)
+
                 apps.append(
                     AppInfo(
                         name=app_name,
                         source_kind=SourceKind.INSTALLED,
-                        extra={
-                            "custom_app_url": custom_app_url,
-                            "venv_path": str(apps_venv),
-                        },
+                        extra=extra_data,
                     )
                 )
             return apps
@@ -273,14 +279,20 @@ async def _list_apps_from_separate_venvs(
                 app_name, wireless_version, desktop_app_daemon
             )
 
+            # Load saved metadata (e.g., private flag)
+            metadata = _load_app_metadata(app_name)
+            # Merge with current extra data
+            extra_data = {
+                "custom_app_url": custom_app_url,
+                "venv_path": str(venv_path),
+            }
+            extra_data.update(metadata)
+
             apps.append(
                 AppInfo(
                     name=app_name,
                     source_kind=SourceKind.INSTALLED,
-                    extra={
-                        "custom_app_url": custom_app_url,
-                        "venv_path": str(venv_path),
-                    },
+                    extra=extra_data,
                 )
             )
 
@@ -301,11 +313,18 @@ async def _list_apps_from_entry_points() -> list[AppInfo]:
             logging.getLogger("reachy_mini.apps").warning(
                 f"Could not load app '{ep.name}' from entry point: {e}"
             )
+
+        # Load saved metadata (e.g., private flag)
+        metadata = _load_app_metadata(ep.name)
+        # Merge with current extra data
+        extra_data = {"custom_app_url": custom_app_url}
+        extra_data.update(metadata)
+
         apps.append(
             AppInfo(
                 name=ep.name,
                 source_kind=SourceKind.INSTALLED,
-                extra={"custom_app_url": custom_app_url},
+                extra=extra_data,
             )
         )
 
@@ -324,6 +343,44 @@ async def list_available_apps(
         return await _list_apps_from_entry_points()
 
 
+def _get_app_metadata_path(app_name: str) -> Path:
+    """Get the path to the metadata file for an app."""
+    parent_dir = _get_venv_parent_dir()
+    metadata_dir = parent_dir / ".app_metadata"
+    metadata_dir.mkdir(exist_ok=True)
+    return metadata_dir / f"{app_name}.json"
+
+
+def _save_app_metadata(app_name: str, metadata: dict) -> None:  # type: ignore
+    """Save metadata for an app."""
+    import json
+
+    metadata_path = _get_app_metadata_path(app_name)
+    with open(metadata_path, "w") as f:
+        json.dump(metadata, f)
+
+
+def _load_app_metadata(app_name: str) -> dict:  # type: ignore
+    """Load metadata for an app."""
+    import json
+
+    metadata_path = _get_app_metadata_path(app_name)
+    if not metadata_path.exists():
+        return {}
+    try:
+        with open(metadata_path, "r") as f:
+            return json.load(f)  # type: ignore
+    except Exception:
+        return {}
+
+
+def _delete_app_metadata(app_name: str) -> None:
+    """Delete metadata for an app."""
+    metadata_path = _get_app_metadata_path(app_name)
+    if metadata_path.exists():
+        metadata_path.unlink()
+
+
 async def install_package(
     app: AppInfo,
     logger: logging.Logger,
@@ -338,7 +395,7 @@ async def install_package(
             "uv is not installed. Falling back to pip. "
             "Install uv for faster installs: pip install uv"
         )
-    
+
     if app.source_kind == SourceKind.HF_SPACE:
         # Use huggingface_hub to download the repo (handles LFS automatically)
         # This avoids requiring git-lfs to be installed on the system
@@ -350,15 +407,107 @@ async def install_package(
             repo_id = app.name
 
         logger.info(f"Downloading HuggingFace Space: {repo_id}")
+
+        # Check if this is a private space installation
+        is_private = app.extra.get("private", False)
+        token = None
+
+        if is_private:
+            # Get token for private spaces
+            from reachy_mini.apps.sources import hf_auth
+
+            token = hf_auth.get_hf_token()
+            if not token:
+                logger.error("Private space requires authentication but no token found")
+                return 1
+            logger.info("Using stored HF token for private space access")
+
         try:
+            # First, verify the space exists and we have access
+            from huggingface_hub import HfApi
+
+            try:
+                api = HfApi(token=token)
+                space_info = api.space_info(repo_id=repo_id)
+                logger.info(
+                    f"Space found: {space_info.id} (private={space_info.private})"
+                )
+
+                # List all files in the space to see what's available
+                try:
+                    files_in_repo = api.list_repo_files(
+                        repo_id=repo_id, repo_type="space", token=token
+                    )
+                    logger.info(f"Files available in space: {', '.join(files_in_repo)}")
+                except Exception as list_error:
+                    logger.warning(f"Could not list files in space: {list_error}")
+            except Exception as verify_error:
+                logger.error(f"Cannot access space {repo_id}: {verify_error}")
+                if "404" in str(verify_error):
+                    logger.error(
+                        f"Space '{repo_id}' not found. Please check the space ID and your permissions."
+                    )
+                elif "401" in str(verify_error) or "403" in str(verify_error):
+                    logger.error(
+                        f"Access denied to space '{repo_id}'. Please check your HuggingFace token permissions."
+                    )
+                return 1
+
+            # Download the space
+            logger.info("Attempting to download all files from space...")
+            # For private spaces, we need to be careful about missing files like .gitattributes
+            # snapshot_download can fail on 404 for optional git metadata files
             target = await asyncio.to_thread(
                 snapshot_download,
                 repo_id=repo_id,
                 repo_type="space",
+                token=token,
+                ignore_patterns=[
+                    ".gitattributes",
+                    ".gitignore",
+                ],  # Skip git metadata that may 404
+                allow_patterns=None,  # Download all other files
             )
             logger.info(f"Downloaded to: {target}")
+
+            # Check what files were downloaded to help with debugging
+            import os
+
+            downloaded_files = []
+            for root, dirs, files in os.walk(target):
+                for file in files:
+                    rel_path = os.path.relpath(os.path.join(root, file), target)
+                    downloaded_files.append(rel_path)
+            logger.info(f"Downloaded files: {', '.join(downloaded_files)}")
+
+            # Check if this looks like a Python package
+            has_pyproject = os.path.exists(os.path.join(target, "pyproject.toml"))
+            has_setup = os.path.exists(os.path.join(target, "setup.py"))
+
+            if not has_pyproject and not has_setup:
+                logger.warning(
+                    f"Space does not appear to have pyproject.toml or setup.py in the root directory. "
+                    f"For a Reachy Mini app, you need a proper Python package structure. "
+                    f"Downloaded files: {', '.join(downloaded_files)}"
+                )
+                logger.info(
+                    "If your package files are in a subdirectory, make sure they're in the root of the space. "
+                    "Check that pyproject.toml or setup.py is committed to your HuggingFace Space."
+                )
         except Exception as e:
-            logger.error(f"Failed to download from HuggingFace: {e}")
+            error_msg = str(e)
+            if "401" in error_msg or "403" in error_msg:
+                logger.error(
+                    f"Authentication failed: {e}\n"
+                    "Please check that your HuggingFace token has access to this space."
+                )
+            elif "404" in error_msg:
+                logger.error(
+                    f"Space not found: {e}\n"
+                    f"Please verify that '{repo_id}' exists and you have access."
+                )
+            else:
+                logger.error(f"Failed to download from HuggingFace: {e}")
             return 1
     elif app.source_kind == SourceKind.LOCAL:
         target = app.extra.get("path", app.name)
@@ -397,7 +546,7 @@ async def install_package(
                     python_path = _get_app_python(
                         app_name, wireless_version, desktop_app_daemon
                     )
-                    
+
                     if use_uv:
                         install_cmd = [
                             "uv",
@@ -415,7 +564,7 @@ async def install_package(
                             "install",
                             "reachy-mini[gstreamer]",
                         ]
-                    
+
                     ret = await running_command(install_cmd, logger=logger)
                     if ret != 0:
                         logger.warning(
@@ -428,12 +577,19 @@ async def install_package(
             python_path = _get_app_python(
                 app_name, wireless_version, desktop_app_daemon
             )
-            
+
             if use_uv:
-                install_cmd = ["uv", "pip", "install", "--python", str(python_path), target]
+                install_cmd = [
+                    "uv",
+                    "pip",
+                    "install",
+                    "--python",
+                    str(python_path),
+                    target,
+                ]
             else:
                 install_cmd = [str(python_path), "-m", "pip", "install", target]
-            
+
             ret = await running_command(install_cmd, logger=logger)
 
             if ret != 0:
@@ -441,6 +597,12 @@ async def install_package(
 
             logger.info(f"Successfully installed '{app_name}' in {venv_path}")
             success = True
+
+            # Save app metadata (e.g., private flag)
+            if app.extra:
+                _save_app_metadata(app_name, app.extra)
+                logger.info(f"Saved metadata for '{app_name}': {app.extra}")
+
             return 0
         finally:
             # Clean up broken venv on any failure (but not shared wireless venv)
@@ -457,7 +619,7 @@ async def install_package(
             install_cmd = ["uv", "pip", "install", "--python", sys.executable, target]
         else:
             install_cmd = [sys.executable, "-m", "pip", "install", target]
-        
+
         return await running_command(install_cmd, logger=logger)
 
 
@@ -513,10 +675,10 @@ async def uninstall_package(
             python_path = _get_app_python(
                 app_name, wireless_version, desktop_app_daemon
             )
-            
+
             # Check if uv is available
             use_uv = _check_uv_available()
-            
+
             if use_uv:
                 uninstall_cmd = [
                     "uv",
@@ -535,16 +697,20 @@ async def uninstall_package(
                     "-y",
                     app_name,
                 ]
-            
+
             ret = await running_command(uninstall_cmd, logger=logger)
             if ret == 0:
                 logger.info(f"Successfully uninstalled '{app_name}'")
+                # Delete app metadata
+                _delete_app_metadata(app_name)
             return ret
         else:
             # Desktop: remove the entire per-app venv directory
             logger.info(f"Removing venv for '{app_name}' at {venv_path}")
             shutil.rmtree(venv_path)
             logger.info(f"Successfully uninstalled '{app_name}'")
+            # Delete app metadata
+            _delete_app_metadata(app_name)
             return 0
     else:
         existing_apps = await list_available_apps()
@@ -553,15 +719,24 @@ async def uninstall_package(
 
         # Check if uv is available
         use_uv = _check_uv_available()
-        
+
         logger.info(f"Removing package {app_name}")
-        
+
         if use_uv:
-            uninstall_cmd = ["uv", "pip", "uninstall", "--python", sys.executable, app_name]
+            uninstall_cmd = [
+                "uv",
+                "pip",
+                "uninstall",
+                "--python",
+                sys.executable,
+                app_name,
+            ]
         else:
             uninstall_cmd = [sys.executable, "-m", "pip", "uninstall", "-y", app_name]
-        
+
         ret = await running_command(uninstall_cmd, logger=logger)
         if ret == 0:
             logger.info(f"Successfully uninstalled '{app_name}'")
+            # Delete app metadata
+            _delete_app_metadata(app_name)
         return ret

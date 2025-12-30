@@ -230,6 +230,10 @@ async def set_target(
     backend: Backend = Depends(get_backend),
 ) -> dict[str, str]:
     """POST route to set a single FullBodyTarget."""
+    if backend.is_move_running:
+        # Avoid fighting with the daemon while a trajectory is running
+        backend.logger.warning("Ignoring set_target request: move already running.")
+        return {"status": "ignored", "reason": "move_running"}
     backend.set_target(
         head=target.target_head_pose.to_pose_array()
         if target.target_head_pose

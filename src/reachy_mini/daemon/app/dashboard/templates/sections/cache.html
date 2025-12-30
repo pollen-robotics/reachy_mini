@@ -1,0 +1,82 @@
+<div class="app-section">
+    <div class="app-section-title">Cache Management</div>
+
+    <div class="mt-2">
+        <button id="clear-hf-cache-btn"
+                onclick="clearHFCache()"
+                class="px-4 py-2 rounded-lg shadow bg-red-500 hover:bg-red-600"
+                style="color: white;">
+            Clear HuggingFace Cache
+        </button>
+        <span id="cache-status" class="ml-3 text-sm"></span>
+    </div>
+    <div class="mt-2">
+        <button id="reset-apps"
+                onclick="resetApps()"
+                class="px-4 py-2 rounded-lg shadow bg-red-500 hover:bg-red-600"
+                style="color: white;">
+            Reset Applications
+        </button>
+        <span id="reset-status" class="ml-3 text-sm"></span>
+    </div>
+</div>
+
+<script>
+async function clearHFCache() {
+    const btn = document.getElementById('clear-hf-cache-btn');
+    const status = document.getElementById('cache-status');
+
+    btn.disabled = true;
+    btn.textContent = 'Clearing...';
+    status.textContent = '';
+
+    try {
+        const response = await fetch('/cache/clear-hf', { method: 'POST' });
+        const data = await response.json();
+
+        if (response.ok) {
+            status.textContent = '✓ Cache cleared';
+            status.className = 'ml-3 text-sm text-green-600';
+        } else {
+            status.textContent = '✗ ' + (data.detail || 'Failed');
+            status.className = 'ml-3 text-sm text-red-600';
+        }
+    } catch (error) {
+        status.textContent = '✗ Error: ' + error.message;
+        status.className = 'ml-3 text-sm text-red-600';
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Clear HuggingFace Cache';
+        setTimeout(() => { status.textContent = ''; }, 3000);
+    }
+}
+
+async function resetApps() {
+    const btn = document.getElementById('reset-apps');
+    const status = document.getElementById('reset-status');
+
+    btn.disabled = true;
+    btn.textContent = 'Resetting...';
+    status.textContent = '';
+
+    try {
+        const response = await fetch('/cache/reset-apps', { method: 'POST' });
+        const data = await response.json();
+
+        if (response.ok) {
+            status.textContent = '✓ Apps reset';
+            status.className = 'ml-3 text-sm text-green-600';
+        } else {
+            status.textContent = '✗ ' + (data.detail || 'Failed');
+            status.className = 'ml-3 text-sm text-red-600';
+        }
+    } catch (error) {
+        status.textContent = '✗ Error: ' + error.message;
+        status.className = 'ml-3 text-sm text-red-600';
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Reset Applications';
+        setTimeout(() => { status.textContent = ''; }, 3000);
+    }
+}
+</script>
