@@ -1,11 +1,14 @@
 import os
-import time
 import tempfile
+import time
+
+import numpy as np
 import pytest
 import soundfile as sf
-from reachy_mini.media.media_manager import MediaManager, MediaBackend
-import numpy as np
+
 from reachy_mini.media.audio_utils import _process_card_number_output
+from reachy_mini.media.media_manager import MediaBackend, MediaManager
+
 
 @pytest.mark.audio
 def test_play_sound_default_backend() -> None:
@@ -106,12 +109,17 @@ def test_record_audio_above_max_queue_seconds() -> None:
 def test_DoA() -> None:
     """Test Direction of Arrival (DoA) estimation."""
     media = MediaManager(backend=MediaBackend.DEFAULT_NO_VIDEO)
+    # Test via AudioBase directly
     doa = media.audio.get_DoA()
     assert doa is not None
     assert isinstance(doa, tuple)
     assert len(doa) == 2
     assert isinstance(doa[0], float)
     assert isinstance(doa[1], bool)
+    # Test via MediaManager proxy
+    doa_proxy = media.get_DoA()
+    assert doa_proxy is not None
+    assert doa_proxy == doa
 
 
 '''
@@ -168,6 +176,7 @@ def test_no_media() -> None:
     assert media.get_audio_sample() is None
     assert media.get_input_audio_samplerate() == -1
     assert media.get_output_audio_samplerate() == -1
+    assert media.get_DoA() is None
 
 
 def test_get_respeaker_card_number() -> None:
