@@ -10,23 +10,6 @@ Available backends include:
 - GStreamer: GStreamer-based audio backend for advanced audio processing
 - WebRTC: WebRTC-based audio for real-time communication
 
-Example usage:
-    >>> from reachy_mini.media.audio_base import AudioBase
-    >>> class MyAudio(AudioBase):
-    ...     def start_recording(self) -> None:
-    ...         pass
-    ...     def get_audio_sample(self) -> Optional[npt.NDArray[np.float32]]:
-    ...         pass
-    ...     def stop_recording(self) -> None:
-    ...         pass
-    ...     def start_playing(self) -> None:
-    ...         pass
-    ...     def push_audio_sample(self, data: npt.NDArray[np.float32]) -> None:
-    ...         pass
-    ...     def stop_playing(self) -> None:
-    ...         pass
-    ...     def play_sound(self, sound_file: str) -> None:
-    ...         pass
 """
 
 import logging

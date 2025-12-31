@@ -152,7 +152,28 @@ def check_reachymini_asoundrc() -> bool:
 
 
 def write_asoundrc_to_home() -> None:
-    """Write the .asoundrc file with Reachy Mini audio configuration to the user's home directory."""
+    """Write the .asoundrc file with Reachy Mini audio configuration to the user's home directory.
+
+    This function creates an ALSA configuration file (.asoundrc) in the user's home directory
+    that configures the ReSpeaker sound card for proper audio routing and multi-client support.
+    The configuration enables simultaneous audio input and output access, which is essential
+    for the Reachy Mini Wireless version's audio functionality.
+
+    The generated configuration includes:
+        - Default audio device settings pointing to the ReSpeaker sound card
+        - dmix plugin for multi-client audio output (reachymini_audio_sink)
+        - dsnoop plugin for multi-client audio input (reachymini_audio_src)
+        - Proper buffer and sample rate settings for optimal performance
+
+    Note:
+    This function automatically detects the ReSpeaker card number and creates a configuration
+    tailored to the detected hardware. It is primarily used for the Reachy Mini Wireless version.
+
+    The configuration file will be created at ~/.asoundrc and will overwrite any existing file
+    with the same name. Existing audio configurations should be backed up before calling this function.
+
+
+    """
     card_id = get_respeaker_card_number()
     asoundrc_content = f"""
 pcm.!default {{
