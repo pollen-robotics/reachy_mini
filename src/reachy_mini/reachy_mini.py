@@ -10,7 +10,7 @@ import asyncio
 import json
 import logging
 import time
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Literal, Optional, Union, cast
 
 import cv2
 import numpy as np
@@ -49,12 +49,17 @@ SLEEP_HEAD_POSE = np.array(
     ]
 )
 
+ConnectionMode = Literal["auto", "localhost_only", "network"]
+
 
 class ReachyMini:
     """Reachy Mini class for controlling a simulated or real Reachy Mini robot.
 
     Args:
-        localhost_only (bool): If True, will only connect to localhost daemons, defaults to True.
+        connection_mode: Select how to connect to the daemon. Use
+            `"localhost_only"` to restrict connections to daemons running on
+            localhost, `"network"` to scout for daemons on the LAN, or `"auto"`
+            (default) to try localhost first then fall back to the network.
         spawn_daemon (bool): If True, will spawn a daemon to control the robot, defaults to False.
         use_sim (bool): If True and spawn_daemon is True, will spawn a simulated robot, defaults to True.
 
@@ -63,19 +68,25 @@ class ReachyMini:
     def __init__(
         self,
         robot_name: str = "reachy_mini",
-        localhost_only: bool = True,
+        connection_mode: ConnectionMode = "auto",
         spawn_daemon: bool = False,
         use_sim: bool = False,
         timeout: float = 5.0,
         automatic_body_yaw: bool = True,
         log_level: str = "INFO",
         media_backend: str = "default",
+        localhost_only: Optional[bool] = None,
     ) -> None:
         """Initialize the Reachy Mini robot.
 
         Args:
             robot_name (str): Name of the robot, defaults to "reachy_mini".
-            localhost_only (bool): If True, will only connect to localhost daemons, defaults to True.
+            connection_mode: `"auto"` (default), `"localhost_only"` or `"network"`.
+                `"auto"` will first try daemons on localhost and fall back to
+                network discovery if no local daemon responds.
+            localhost_only (Optional[bool]): Deprecated alias for the connection
+                mode. Set `False` to search for network daemons. Will be removed
+                in a future release.
             spawn_daemon (bool): If True, will spawn a daemon to control the robot, defaults to False.
             use_sim (bool): If True and spawn_daemon is True, will spawn a simulated robot, defaults to True.
             timeout (float): Timeout for the client connection, defaults to 5.0 seconds.
@@ -92,8 +103,12 @@ class ReachyMini:
         self.logger.setLevel(log_level)
         self.robot_name = robot_name
         daemon_check(spawn_daemon, use_sim)
-        self.client = ZenohClient(robot_name, localhost_only)
-        self.client.wait_for_connection(timeout=timeout)
+        normalized_mode = self._normalize_connection_mode(
+            connection_mode, localhost_only
+        )
+        self.client, self.connection_mode = self._initialize_client(
+            normalized_mode, timeout
+        )
         self.set_automatic_body_yaw(automatic_body_yaw)
         self._last_head_pose: Optional[npt.NDArray[np.float64]] = None
         self.is_recording = False
@@ -180,6 +195,79 @@ class ReachyMini:
             log_level=log_level,
             signalling_host=self.client.get_status()["wlan_ip"],
         )
+
+    def _normalize_connection_mode(
+        self,
+        connection_mode: ConnectionMode,
+        legacy_localhost_only: Optional[bool],
+    ) -> ConnectionMode:
+        """Normalize connection mode input, optionally honoring the legacy alias."""
+        normalized = connection_mode.lower()
+        if normalized not in {"auto", "localhost_only", "network"}:
+            raise ValueError(
+                "Invalid connection_mode. "
+                "Use 'auto', 'localhost_only', or 'network'."
+            )
+        resolved = cast(ConnectionMode, normalized)
+
+        if legacy_localhost_only is None:
+            return resolved
+
+        self.logger.warning(
+            "The 'localhost_only' argument is deprecated and will be removed in a "
+            "future release. Please switch to connection_mode."
+        )
+
+        if resolved != "auto":
+            self.logger.warning(
+                "Both connection_mode=%s and localhost_only=%s were provided. "
+                "connection_mode takes precedence.",
+                resolved,
+                legacy_localhost_only,
+            )
+            return resolved
+
+        return "localhost_only" if legacy_localhost_only else "network"
+
+    def _initialize_client(
+        self, requested_mode: ConnectionMode, timeout: float
+    ) -> tuple[ZenohClient, ConnectionMode]:
+        """Create a client according to the requested mode, adding auto fallback."""
+        requested_mode = cast(ConnectionMode, requested_mode.lower())
+        if requested_mode == "auto":
+            try:
+                client = self._connect_single(localhost_only=True, timeout=timeout)
+                selected: ConnectionMode = "localhost_only"
+            except Exception as err:
+                self.logger.info(
+                    "Auto connection: localhost attempt failed (%s). "
+                    "Trying network discovery.",
+                    err,
+                )
+                client = self._connect_single(localhost_only=False, timeout=timeout)
+                selected = "network"
+            self.logger.info("Connection mode selected: %s", selected)
+            return client, selected
+
+        if requested_mode == "localhost_only":
+            client = self._connect_single(localhost_only=True, timeout=timeout)
+            selected = "localhost_only"
+        else:
+            client = self._connect_single(localhost_only=False, timeout=timeout)
+            selected = "network"
+
+        self.logger.info("Connection mode selected: %s", selected)
+        return client, selected
+
+    def _connect_single(self, localhost_only: bool, timeout: float) -> ZenohClient:
+        """Connect once with the requested tunneling mode and guard cleanup."""
+        client = ZenohClient(self.robot_name, localhost_only)
+        try:
+            client.wait_for_connection(timeout=timeout)
+        except Exception:
+            client.disconnect()
+            raise
+        return client
 
     def set_target(
         self,
