@@ -161,8 +161,6 @@ gst-launch-1.0 videotestsrc ! autovideosink
 gst-inspect-1.0 webrtcsrc
 ```
 
-> **💡 For advanced testing and troubleshooting:** See the [Advanced Raspberry Pi Setup Guide](../platforms/reachy_mini/advanced_rpi_setup.md) for detailed configuration options and system diagnostics.
-
 ## 🔧 Python Dependencies
 
 When installing Reachy Mini Python package, you will also need to add the `gstreamer` extra :
@@ -179,3 +177,20 @@ uv pip install "reachy-mini[gstreamer]"
 uv sync --extra gstreamer
 ```
 
+## Troubleshooting & Unit Tests
+
+If you encounter issues with the stream, you can test the components individually.
+
+**Test 1: Manually create the WebRTC Server**
+Run this GStreamer pipeline on the robot to verify the camera and encoder stack:
+
+```bash
+gst-launch-1.0 webrtcsink run-signalling-server=true meta="meta,name=reachymini" name=ws libcamerasrc ! capsfilter caps=video/x-raw,width=1280,height=720,framerate=60/1,format=YUY2,colorimetry=bt709,interlace-mode=progressive ! queue !  v4l2h264enc extra-controls="controls,repeat_sequence_header=1" ! 'video/x-h264,level=(string)4' ! ws. alsasrc device=hw:4 ! queue ! audioconvert ! audioresample ! opusenc ! audio/x-opus, rate=48000, channels=2 ! ws.
+```
+
+**Test 2: Send Audio to Reachy**
+Send an audio RTP stream to port 5000 to test the speakers:
+
+```bash
+gst-launch-1.0 audiotestsrc ! audioconvert ! audioresample ! opusenc ! audio/x-opus, rate=48000, channels=2 ! rtpopuspay pt=96 ! udpsink host=<ROBOT_IP> port=5000
+```

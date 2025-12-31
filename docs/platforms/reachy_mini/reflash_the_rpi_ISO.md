@@ -70,3 +70,22 @@ sudo bmaptool copy image_2025-11-19-reachyminios-lite-v0.0.10.zip --bmap 2025-11
 
 
 When it's done, you must ⚠️`move the switch back to DEBUG`⚠️ and reboot the robot.
+
+## Check that everything is working
+
+ssh into the robot : 
+
+```bash
+ssh pollen@reachy-mini.local
+# password: root
+```
+Then run : 
+
+```bash
+reachyminios_check
+```
+
+If successful, you should see : 
+```bash
+Image validation PASSED
+```

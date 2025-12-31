@@ -1,44 +1,96 @@
 # Install the Daemon from a Specific Branch
 
-> **⚠️ Developers/Testers Only**
+> **⚠️ For Developers and Testers Only**
 >
-> Use this guide to install the Reachy Mini daemon from a GitHub branch before it is officially released.
+> This guide explains how to install the Reachy Mini daemon from a specific GitHub branch before it is officially released. Use this for testing new features or bug fixes.
 
 ## Prerequisites
 
-- SSH access to your Reachy Mini (`pollen@reachy-mini.local`, password `root`).
-- The robot connected to your Wi-Fi (or reachable through the hotspot).
+- SSH access to your Reachy Mini robot (`pollen@reachy-mini.local`, password: `root`)
+- The robot must be connected to your Wi-Fi network (or accessible through its hotspot)
 
-## Procedure
+## Local Development Setup
 
-1. **SSH into the robot:**
+This method allows you to safely test changes without affecting the system-wide installation. It's ideal for development and debugging.
+
+### Steps:
+
+1. **Connect to the robot via SSH:**
    ```bash
    ssh pollen@reachy-mini.local
-   # password: root
+   # Password: root
    ```
 
-2. **Activate the daemon virtual environment:**
+2. **Clone the Reachy Mini repository with the specific branch:**
+   ```bash
+   git clone git+https://github.com/pollen-robotics/reachy_mini.git@<branch-name>
+   cd reachy_mini
+   ```
+
+3. **Set up the virtual environment:**
+   ```bash
+   uv sync --all-extras
+   source .venv/bin/activate
+   ```
+
+4. **Stop the system daemon service:**
+   ```bash
+   sudo systemctl stop reachy-mini-daemon
+   ```
+   **Note:** This step must be repeated after each reboot since the system service restarts automatically.
+
+5. **Start the local daemon for testing:**
+   ```bash
+   reachy-mini-daemon --wireless-version
+   ```
+
+Now you can modify the code in `~/reachy_mini` and test your changes without affecting the system installation.
+
+## System-Wide Custom Installation
+
+Use this method to install a branch version as the system-wide daemon for more thorough testing.
+
+### Steps:
+
+1. **Connect to the robot via SSH:**
+   ```bash
+   ssh pollen@reachy-mini.local
+   # Password: root
+   ```
+
+2. **Activate the daemon's virtual environment:**
    ```bash
    source /venvs/mini_daemon/bin/activate
    ```
 
-3. **Install the branch:**
+3. **Install the specific branch:**
    ```bash
    pip install --no-cache-dir --force-reinstall \
      git+https://github.com/pollen-robotics/reachy_mini.git@<branch-name>
    ```
-   Replace `<branch-name>` with the branch you want to test (e.g., `develop`, `feature/my-feature`).
+   Replace `<branch-name>` with the branch you want to test (e.g., `develop`, `feature/my-feature`, `bugfix/issue-123`).
 
-4. **Restart the daemon:**
+4. **Restart the daemon service:**
    ```bash
    sudo systemctl restart reachy-mini-daemon
    ```
 
-5. **Verify the installation:**
+5. **Verify the installation was successful:**
    ```bash
    pip show reachy-mini | grep Version
    ```
+   This should display the version corresponding to your installed branch.
 
-## Rollback to Factory Version
+## Rolling Back to Factory Version
 
-If the branch causes issues, trigger the **SOFTWARE_RESET** command (via Bluetooth) to reinstall the factory daemon. See the [Reset Guide](reset.md) for detailed steps.
+If you encounter issues with the branch installation, you can restore the factory daemon:
+
+1. **Trigger the SOFTWARE_RESET command** via Bluetooth to reinstall the original factory daemon
+2. **Refer to the [Reset Guide](reset.md)** for detailed step-by-step instructions
+
+## Important Notes
+
+- **Backup your work** before switching between different branch installations
+- **Test thoroughly** in local development mode before doing system-wide installations
+- **Monitor system logs** after installation: `journalctl -u reachy-mini-daemon -f`
+- **Performance impact:** Some development branches may have reduced performance or stability

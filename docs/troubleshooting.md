@@ -22,6 +22,9 @@ To restart your robot, press OFF, wait 5 seconds, then press ON. This simple pro
   Make sure you are either:
   - On the latest tagged release, or
   - Up to date with the `develop` branch (`git pull`).
+
+**Wireless Reachy Mini**: run `reachyminios_check` to make sure everything is fine (see [Get Started](get_started.md))  
+
 </details>
 
 
@@ -212,6 +215,8 @@ Please check that the switch is on the "debug" and not on "download" position. S
 ![switch_position](/docs/assets/wireless_switch.png)
 
 </details>
+
+
 
 #### If your issue/question is not listed here, please check the full FAQ below.
 
@@ -633,6 +638,36 @@ mini.media.push_audio_sample(numpy_chunk)
 
 Performance relies heavily on lighting conditions. Ensure the face is well-lit. Using the GStreamer backend can also improve latency compared to the default OpenCV backend.
 
+</details>
+
+<details>
+<summary><strong>How do I check that the sound system is working?</strong></summary>
+
+### Reachy Mini Lite Version
+
+The easiest way to test the Lite version is to directly use the *Pollen Robotics Reachy Mini Audio* device from your computer to verify proper functionality.
+
+### Reachy Mini Wireless Version
+
+For the Wireless version, you can use the following GStreamer commands to test audio recording and playback:
+
+In the case of the wireless version, you may use the following commands:
+```bash
+# record a sound
+gst-launch-1.0 -e alsasrc device="reachymini_audio_src" ! audioconvert ! audioresample ! wavenc ! filesink location="test.wav"
+# playback the recording
+gst-launch-1.0 filesrc location=test.wav ! wavparse ! audioconvert ! alsasink device=reachymini_audio_sink
+#playback a test sound (pink noise)
+gst-launch-1.0 audiotestsrc wave="pink-noise" ! audioconvert ! audioresample ! alsasink device="reachymini_audio_sink"
+```
+
+**Advanced Testing:**
+You can play back a sound while recording simultaneously to test the echo cancellation performance. This helps verify that the microphone array is properly processing audio and canceling echo from the speakers.
+
+**Troubleshooting Tips:**
+- Ensure the `.asoundrc` file exists in the home directory
+- Check that the microphone is detected: `arecord -l`
+- Check that the speaker is detected: `aplay -l`
 </details>
 
 <br>
