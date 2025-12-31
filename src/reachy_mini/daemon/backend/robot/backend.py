@@ -463,7 +463,7 @@ class RobotBackend(Backend):
         """
         return np.array(self.get_all_joint_positions()[1])
 
-    def get_imu_data(self) -> dict[str, list[float]] | None:
+    def get_imu_data(self) -> dict[str, list[float] | float] | None:
         """Get current IMU data (accelerometer, gyroscope, quaternion, temperature).
 
         Returns:
@@ -493,7 +493,7 @@ class RobotBackend(Backend):
                 "accelerometer": [float(accel_x), float(accel_y), float(accel_z)],
                 "gyroscope": [float(gyro_x), float(gyro_y), float(gyro_z)],
                 "quaternion": [float(q) for q in quat],
-                "temperature": [float(temperature)],
+                "temperature": float(temperature),
             }
         except Exception as e:
             self.logger.error(f"Error reading IMU data: {e}")
