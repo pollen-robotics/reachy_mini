@@ -42,6 +42,21 @@ with ReachyMini(media_backend="default") as mini:
 ```
 The returned frame is a numpy array with shape `(height, width, 3)` and data type `uint8`.
 
+### IMU 🧭
+
+> ⚠️ The IMU is only available with the wireless version of Reachy Mini
+
+Take a look at [this example](../../examples/imu_example.py)
+```python
+with ReachyMini() as mini:
+    imu_data = mini.imu
+    accel_x, accel_y, accel_z = imu_data["accelerometer"] # (m/s^2)
+    gyro_x, gyro_y, gyro_z = imu_data["gyroscope"] # (rad/s)
+    quat_w, quat_x, quat_y, quat_z = imu_data["quaternion"] # (w, x, y, z)
+    temperature = imu_data["temperature"] # (°C)
+
+```
+
 
 ### Audio 🎙️ 🔊
 
