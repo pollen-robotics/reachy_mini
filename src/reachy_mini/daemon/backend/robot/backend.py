@@ -483,11 +483,12 @@ class RobotBackend(Backend):
             # Read temperature in Celsius
             temperature = self.bmi088.read_temperature()
 
+            # Convert all numpy types to native Python floats for JSON serialization
             return {
-                "accelerometer": [accel_x, accel_y, accel_z],
-                "gyroscope": [gyro_x, gyro_y, gyro_z],
-                "quaternion": list(quat),
-                "temperature": temperature,
+                "accelerometer": [float(accel_x), float(accel_y), float(accel_z)],
+                "gyroscope": [float(gyro_x), float(gyro_y), float(gyro_z)],
+                "quaternion": [float(q) for q in quat],
+                "temperature": float(temperature),
             }
         except Exception as e:
             self.logger.error(f"Error reading IMU data: {e}")
