@@ -23,7 +23,7 @@ To restart your robot, press OFF, wait 5 seconds, then press ON. This simple pro
   - On the latest tagged release, or
   - Up to date with the `develop` branch (`git pull`).
 
-**Wireless Reachy Mini**: run `reachyminios_check` to make sure everything is fine (see [Get Started](get_started.md))  
+**Wireless Reachy Mini**: run `reachyminios_check` to make sure everything is fine (see [Get Started](docs/platforms/reachy_mini/get_started.md))  
 
 </details>
 
