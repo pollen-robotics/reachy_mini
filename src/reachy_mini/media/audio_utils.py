@@ -1,4 +1,22 @@
-"""Utility functions for audio handling, specifically for detecting the ReSpeaker sound card."""
+"""Utility functions for audio handling, specifically for detecting the ReSpeaker sound card.
+
+This module provides helper functions for working with the ReSpeaker microphone array
+and managing audio device configuration on Linux systems. It includes functions for
+detecting sound cards, checking configuration files, and managing ALSA configuration.
+
+Example usage:
+    >>> from reachy_mini.media.audio_utils import get_respeaker_card_number, has_reachymini_asoundrc
+    >>>
+    >>> # Get the ReSpeaker card number
+    >>> card_num = get_respeaker_card_number()
+    >>> print(f"ReSpeaker card number: {card_num}")
+    >>>
+    >>> # Check if .asoundrc is properly configured
+    >>> if has_reachymini_asoundrc():
+    ...     print("Reachy Mini audio configuration is properly set up")
+    ... else:
+    ...     print("Need to configure audio devices")
+"""
 
 import logging
 import subprocess
@@ -6,7 +24,27 @@ from pathlib import Path
 
 
 def _process_card_number_output(output: str) -> int:
-    """Process the output of 'arecord -l' to find the ReSpeaker or Reachy Mini Audio card number."""
+    """Process the output of 'arecord -l' to find the ReSpeaker or Reachy Mini Audio card number.
+
+    Args:
+        output (str): The output string from the 'arecord -l' command containing
+                     information about available audio devices.
+
+    Returns:
+        int: The card number of the detected Reachy Mini Audio or ReSpeaker device,
+             or 0 if neither is found (default sound card).
+
+    Note:
+        This function parses the output of 'arecord -l' to identify Reachy Mini
+        Audio or ReSpeaker devices. It prefers Reachy Mini Audio devices and
+        warns if only a ReSpeaker device is found (indicating firmware update needed).
+
+    Example:
+        >>> output = "card 1: ReachyMiniAudio [reachy mini audio], device 0: USB Audio [USB Audio]"
+        >>> card_num = _process_card_number_output(output)
+        >>> print(f"Detected card: {card_num}")
+
+    """
     lines = output.split("\n")
     for line in lines:
         if "reachy mini audio" in line.lower():
@@ -25,7 +63,33 @@ def _process_card_number_output(output: str) -> int:
 
 
 def get_respeaker_card_number() -> int:
-    """Return the card number of the ReSpeaker sound card, or 0 if not found."""
+    """Return the card number of the ReSpeaker sound card, or 0 if not found.
+
+    Returns:
+        int: The card number of the detected ReSpeaker/Reachy Mini Audio device.
+             Returns 0 if no specific device is found (uses default sound card),
+             or -1 if there's an error running the detection command.
+
+    Note:
+        This function runs 'arecord -l' to list available audio capture devices
+        and processes the output to find Reachy Mini Audio or ReSpeaker devices.
+        It's primarily used on Linux systems with ALSA audio configuration.
+
+        The function returns:
+        - Positive integer: Card number of detected Reachy Mini Audio device
+        - 0: No Reachy Mini Audio device found, using default sound card
+        - -1: Error occurred while trying to detect audio devices
+
+    Example:
+        >>> card_num = get_respeaker_card_number()
+        >>> if card_num > 0:
+        ...     print(f"Using Reachy Mini Audio card {card_num}")
+        ... elif card_num == 0:
+        ...     print("Using default sound card")
+        ... else:
+        ...     print("Error detecting audio devices")
+
+    """
     try:
         result = subprocess.run(
             ["arecord", "-l"], capture_output=True, text=True, check=True
@@ -40,7 +104,27 @@ def get_respeaker_card_number() -> int:
 
 
 def has_reachymini_asoundrc() -> bool:
-    """Check if ~/.asoundrc exists and contains both reachymini_audio_sink and reachymini_audio_src."""
+    """Check if ~/.asoundrc exists and contains both reachymini_audio_sink and reachymini_audio_src.
+
+    Returns:
+        bool: True if ~/.asoundrc exists and contains the required Reachy Mini
+             audio configuration entries, False otherwise.
+
+    Note:
+        This function checks for the presence of the ALSA configuration file
+        ~/.asoundrc and verifies that it contains the necessary configuration
+        entries for Reachy Mini audio devices (reachymini_audio_sink and
+        reachymini_audio_src). These entries are required for proper audio
+        routing and device management.
+
+    Example:
+        >>> if has_reachymini_asoundrc():
+        ...     print("Reachy Mini audio configuration is properly set up")
+        ... else:
+        ...     print("Need to configure Reachy Mini audio devices")
+        ...     write_asoundrc_to_home()  # Create the configuration
+
+    """
     asoundrc_path = Path.home().joinpath(".asoundrc")
     if not asoundrc_path.exists():
         return False
