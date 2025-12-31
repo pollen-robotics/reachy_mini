@@ -80,7 +80,6 @@ class GStreamerAudio(AudioBase):
         elif os.name == "nt":
             audiosrc = Gst.ElementFactory.make("wasapi2src")
             audiosrc.set_property("device", id_audio_card)
-            audiosrc.set_property("loopback", True)
         elif has_reachymini_asoundrc():
             # reachy mini wireless has a preconfigured asoundrc
             audiosrc = Gst.ElementFactory.make("alsasrc")
@@ -322,15 +321,16 @@ class GStreamerAudio(AudioBase):
                         os.name == "nt"
                         and device_props.has_field("device.api")
                         and device_props.get_string("device.api") == "wasapi2"
-                        and device_props.get_string("wasapi2.device.loopback") == "false"
                     ):
+                        if device_type == "Source" and device_props.get_value("wasapi2.device.loopback") == True:
+                            continue  # skip loopback devices for source
                         device_id = device_props.get_string("device.id")
                         self.logger.debug(
                             f"Found audio input device {name} for Windows"
                         )
                         return str(device_id)
 
-            self.logger.warning("No source audio card found.")
+            self.logger.warning(f"No {device_type} audio card found.")
         except Exception as e:
             self.logger.error(f"Error while getting audio input device: {e}")
         finally:

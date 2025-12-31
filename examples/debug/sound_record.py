@@ -31,8 +31,8 @@ def main(backend: str) -> None:
                 audio_samples.append(sample)
             else:
                 print("No audio data available yet...")
-            if backend == "default":
-                time.sleep(0.2)
+            #if backend == "default":
+            #    time.sleep(0.2)
         mini.media.stop_recording()
 
         # Concatenate all samples and save
