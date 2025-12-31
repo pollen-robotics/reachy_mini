@@ -17,6 +17,7 @@ from typing import Annotated, Any
 import log_throttling
 import numpy as np
 import numpy.typing as npt
+import zenoh
 from reachy_mini_motor_controller import ReachyMiniPyControlLoop
 
 from reachy_mini.utils.hardware_config.parser import parse_yaml_config
@@ -399,7 +400,11 @@ class RobotBackend(Backend):
 
         """
         assert self.c is not None, "Motor controller not initialized or already closed."
-        assert mode in [0, 3, 5], (
+        assert mode in [
+            0,
+            3,
+            5,
+        ], (
             "Invalid operation mode. Must be one of [0 (torque), 3 (position), 5 (current-limiting position)]."
         )
 
