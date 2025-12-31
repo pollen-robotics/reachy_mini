@@ -10,6 +10,7 @@ from typing import Optional, Tuple, cast
 
 import numpy as np
 import numpy.typing as npt
+import platform
 
 from reachy_mini.media.camera_constants import (
     ArducamSpecs,
@@ -25,7 +26,7 @@ try:
 except ImportError as e:
     raise ImportError(
         "The 'gi' module is required for GStreamerCamera but could not be imported. \
-                      Please install the GStreamer backend: pip install .[gstreamer]."
+        Please install the GStreamer backend: pip install .[gstreamer]."
     ) from e
 
 gi.require_version("Gst", "1.0")
@@ -72,8 +73,19 @@ class GStreamerCamera(CameraBase):
         if cam_path == "":
             self.logger.warning("Recording pipeline set without camera.")
             self.pipeline.remove(self._appsink_video)
-        elif os.name == "nt":
+        elif platform.system() == "Windows":
             camsrc = Gst.ElementFactory.make("mfvideosrc")
+            camsrc.set_property("device-name", cam_path)
+            self.pipeline.add(camsrc)
+            queue = Gst.ElementFactory.make("queue")
+            self.pipeline.add(queue)
+            videoconvert = Gst.ElementFactory.make("videoconvert")
+            self.pipeline.add(videoconvert)
+            camsrc.link(queue)
+            queue.link(videoconvert)
+            videoconvert.link(self._appsink_video)
+        elif platform.system() == "Darwin":
+            camsrc = Gst.ElementFactory.make("avfvideosrc")
             camsrc.set_property("device-name", cam_path)
             self.pipeline.add(camsrc)
             queue = Gst.ElementFactory.make("queue")
@@ -233,13 +245,13 @@ class GStreamerCamera(CameraBase):
                                 f"Found {cam_name} camera at {device_path}"
                             )
                             return str(device_path), camera_specs
-                        elif os.name == "nt":
+                        elif platform.system() == "Windows" or platform.system() == "Darwin":
                             camera_specs = (
                                 cast(CameraSpecs, ArducamSpecs)
                                 if cam_name == "Arducam_12MP"
                                 else cast(CameraSpecs, ReachyMiniLiteCamSpecs)
                             )
-                            self.logger.debug(f"Found {cam_name} camera for Windows")
+                            self.logger.debug(f"Found {cam_name} camera for {platform.system()}")
                             return str(name), camera_specs
                         elif cam_name == "imx708":
                             camera_specs = cast(CameraSpecs, ReachyMiniWirelessCamSpecs)

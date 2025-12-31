@@ -1,10 +1,11 @@
-"""GStreamer camera backend.
+"""GStreamer audio backend.
 
-This module provides an implementation of the CameraBase class using GStreamer.
-By default the module directly returns JPEG images as output by the camera.
+This module provides an implementation of the AudioBase class using GStreamer.
+Cross-platform compatible with Linux and macOS.
 """
 
 import os
+import platform
 from threading import Thread
 from typing import Optional
 
@@ -20,8 +21,8 @@ try:
     import gi
 except ImportError as e:
     raise ImportError(
-        "The 'gi' module is required for GStreamerCamera but could not be imported. \
-                      Please install the GStreamer backend: pip install .[gstreamer]."
+        "The 'gi' module is required for GStreamerAudio but could not be imported. \
+        Please install the GStreamer backend: pip install .[gstreamer]."
     ) from e
 
 gi.require_version("Gst", "1.0")
@@ -77,9 +78,12 @@ class GStreamerAudio(AudioBase):
 
         if id_audio_card is None:
             audiosrc = Gst.ElementFactory.make("autoaudiosrc")  # use default mic
-        elif os.name == "nt":
+        elif platform.system() == "Windows":
             audiosrc = Gst.ElementFactory.make("wasapi2src")
             audiosrc.set_property("device", id_audio_card)
+        elif platform.system() == "Darwin":
+            audiosrc = Gst.ElementFactory.make("osxaudiosrc")
+            audiosrc.set_property("unique-id", id_audio_card)
         elif has_reachymini_asoundrc():
             # reachy mini wireless has a preconfigured asoundrc
             audiosrc = Gst.ElementFactory.make("alsasrc")
@@ -150,9 +154,12 @@ class GStreamerAudio(AudioBase):
             # reachy mini wireless has a preconfigured asoundrc
             audiosink = Gst.ElementFactory.make("alsasink")
             audiosink.set_property("device", "reachymini_audio_sink")
-        elif os.name == "nt":
+        elif platform.system() == "Windows":
             audiosink = Gst.ElementFactory.make("wasapi2sink")
             audiosink.set_property("device", id_audio_card)
+        elif platform.system() == "Darwin":
+            audiosink = Gst.ElementFactory.make("osxaudiosink")
+            audiosink.set_property("unique-id", id_audio_card)
         else:
             audiosink = Gst.ElementFactory.make("pulsesink")
             audiosink.set_property("device", f"{id_audio_card}")
@@ -337,7 +344,7 @@ class GStreamerAudio(AudioBase):
                         )
                         return str(node_name)
                     elif (
-                        os.name == "nt"
+                        platform.system() == "Windows"
                         and device_props.has_field("device.api")
                         and device_props.get_string("device.api") == "wasapi2"
                     ):
@@ -348,7 +355,15 @@ class GStreamerAudio(AudioBase):
                             f"Found audio input device {name} for Windows"
                         )
                         return str(device_id)
-
+                    elif (
+                        platform.system() == "Darwin"
+                    ):
+                        device_id = device_props.get_string("unique-id")
+                        self.logger.debug(
+                            f"Found audio input device {name} for macOS"
+                        )
+                        return str(device_id)
+                
             self.logger.warning(f"No {device_type} audio card found.")
         except Exception as e:
             self.logger.error(f"Error while getting audio input device: {e}")
