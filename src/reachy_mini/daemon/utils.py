@@ -151,7 +151,7 @@ def get_ip_address(ifname: str = "wlan0") -> str | None:
         if ifname in addrs:
             for snic in addrs[ifname]:
                 if snic.family == socket.AF_INET:
-                    return snic.address
+                    return str(snic.address)
         print(f"Could not get IP address for interface {ifname} on Windows.")
         return None
     else:
