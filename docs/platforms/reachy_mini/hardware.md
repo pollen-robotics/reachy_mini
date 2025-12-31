@@ -5,9 +5,7 @@
 ![Dimensions](/docs/assets/reachy_mini_dimensions.png)
 
 - Dimensions: 30x20x15.5cm (extended)
-- Mass:
-    - Lite : 1.350 Kg
-    - Reachy Mini : 1.475 Kg
+- Mass: 1.475 Kg
 - Material: ABS, PC, Aluminium, Steel
 - Dofs:
     - Head : 6 dofs  (3 rotations & 3 translations)
@@ -28,9 +26,7 @@
 
 ![back_interface](/docs/assets/back_interface.png)
 
-- Control: 
-- Raspberry 4 Compute Module (Wireless version)
-- USB-C Connection for computer (Lite version)
+- Control: Raspberry 4 Compute Module (Wireless version)
 
 ![Components](/docs/assets/reachy_mini_components.png)
 
@@ -70,4 +66,3 @@
     - USB-C output (i.e. one can plug a device such as a usb key). Please note that it will *not* charge through this USB port.
     - Raspberry 4 Compute Module - CM4104016 (Wifi, 4GB RAM, 16GB flash)
     - Wifi antenna - 2,4-5GHz dual-band patch Antenna, 2,79 dBi, omnidirectionnal
-- Lite Controller Board: same camera, same mics, same speaker. Of course, the USB is an input, Reachy Mini Lite is a device plugged on a computer. This USB port will not supply Reachy, the DC connector must be plugged in.
