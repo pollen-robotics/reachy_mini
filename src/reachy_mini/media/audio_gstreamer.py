@@ -249,8 +249,6 @@ class GStreamerAudio(AudioBase):
     def play_sound(self, sound_file: str) -> None:
         """Play a sound file.
 
-        Todo: for now this function is mean to be used on the wireless version.
-
         Args:
             sound_file (str): Path to the sound file to play.
 
@@ -270,12 +268,33 @@ class GStreamerAudio(AudioBase):
             # reachy mini wireless has a preconfigured asoundrc
             audiosink = Gst.ElementFactory.make("alsasink")
             audiosink.set_property("device", "reachymini_audio_sink")
+        elif os.name == "nt":
+            id_audio_card = self._get_audio_device("Sink")
+            audiosink = Gst.ElementFactory.make("wasapi2sink")
+            audiosink.set_property("device", id_audio_card)
+            self.logger.info(f"Using audio device {id_audio_card} for playback.")
+        else:
+            id_audio_card = self._get_audio_device("Sink")
+            audiosink = Gst.ElementFactory.make("pulsesink")
+            audiosink.set_property("device", f"{id_audio_card}")
+        # Todo: OSX support
 
         playbin = Gst.ElementFactory.make("playbin", "player")
         if not playbin:
             self.logger.error("Failed to create playbin element")
             return
-        playbin.set_property("uri", f"file://{file_path}")
+        
+        # Fix for Windows: use file:/// and forward slashes
+        if os.name == "nt":
+            uri_path = file_path.replace("\\", "/")
+            if not uri_path.startswith("/") and ":" in uri_path:
+                # Ensure three slashes after file: for absolute paths (file:///C:/...)
+                uri = f"file:///{uri_path}"
+            else:
+                uri = f"file://{uri_path}"
+        else:
+            uri = f"file://{file_path}"
+        playbin.set_property("uri", uri)
         if audiosink is not None:
             playbin.set_property("audio-sink", audiosink)
 
