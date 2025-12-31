@@ -186,22 +186,22 @@ class ReachyMini:
             self.logger.info("No media backend requested.")
             mbackend = MediaBackend.NO_MEDIA
         else:
-            # Auto-detect the optimal backend based on environment
-            # Any explicit backend value (other than no_media) is ignored
-            if media_backend.lower() not in ("default", "auto"):
-                self.logger.debug(
-                    f"media_backend='{media_backend}' ignored, using auto-detection."
-                )
-
             if is_wireless:
                 if is_local_camera_available():
                     # Local client on CM4: use GStreamer to read from unix socket
                     # This avoids WebRTC encode/decode overhead
-                    self.logger.info(
-                        "Auto-detected: Wireless + local camera socket. "
-                        "Using GStreamer backend (no WebRTC overhead)."
-                    )
-                    mbackend = MediaBackend.GSTREAMER
+                    if media_backend.lower() == "gstreamer_no_video":
+                        mbackend = MediaBackend.GSTREAMER_NO_VIDEO
+                        self.logger.info(
+                            "Auto-detected: Wireless + local camera socket. "
+                            "Using GStreamer audio-only backend (no WebRTC overhead)."
+                        )
+                    else:
+                        mbackend = MediaBackend.GSTREAMER
+                        self.logger.info(
+                            "Auto-detected: Wireless + local camera socket. "
+                            "Using GStreamer backend (no WebRTC overhead)."
+                        )
                 else:
                     # Remote client: use WebRTC for streaming
                     self.logger.info(
@@ -210,11 +210,15 @@ class ReachyMini:
                     )
                     mbackend = MediaBackend.WEBRTC
             else:
-                # Lite version: use default OpenCV backend
-                self.logger.info(
-                    "Auto-detected: Lite version. Using default (OpenCV) backend."
-                )
-                mbackend = MediaBackend.DEFAULT
+                # Lite version: use specified backend if compatible
+                try:
+                    mbackend = MediaBackend(media_backend.lower())
+                    if mbackend == MediaBackend.WEBRTC:
+                        self.logger.warning("WebRTC backend is not compatible with Lite version, using default backend.")
+                        mbackend = MediaBackend.DEFAULT
+                except ValueError:
+                    self.logger.warning(f"Invalid media backend: {media_backend}, using default backend.")
+                    mbackend = MediaBackend.DEFAULT
 
         return MediaManager(
             use_sim=self.client.get_status()["simulation_enabled"],
