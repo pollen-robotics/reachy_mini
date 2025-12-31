@@ -9,6 +9,7 @@ from cv2_enumerate_cameras import enumerate_cameras
 from reachy_mini.media.camera_constants import (
     ArducamSpecs,
     CameraSpecs,
+    GenericWebcamSpecs,
     OlderRPiCamSpecs,
     ReachyMiniLiteCamSpecs,
 )
@@ -54,6 +55,13 @@ def find_camera(
         if no_cap:
             cap.release()
         return cap, cast(CameraSpecs, ArducamSpecs)
+
+    # Fallback: try to open any available webcam (useful for mockup-sim mode on desktop)
+    cap = cv2.VideoCapture(0)
+    if cap is not None and cap.isOpened():
+        if no_cap:
+            cap.release()
+        return cap, cast(CameraSpecs, GenericWebcamSpecs)
 
     return None, None
 

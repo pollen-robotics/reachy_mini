@@ -32,6 +32,18 @@ XL_BAUDRATE_CONV_TABLE = {
     4000000: 6,
 }
 
+id2name = {
+    10: "body_rotation",
+    11: "stewart_1",
+    12: "stewart_2",
+    13: "stewart_3",
+    14: "stewart_4",
+    15: "stewart_5",
+    16: "stewart_6",
+    17: "right_antenna",
+    18: "left_antenna",
+}
+
 
 def setup_motor(
     motor_config: MotorConfig,
@@ -48,7 +60,7 @@ def setup_motor(
     ):
         raise RuntimeError(
             f"No motor found on port {serial_port}. "
-            f"Make sure the motor is in factory settings (ID {from_id} and baudrate {from_baudrate}) and connected to the specified port."
+            f"Make sure the motor {id2name.get(from_id, from_id)} is in factory settings (ID {from_id} and baudrate {from_baudrate}) and connected to the specified port."
         )
 
     # Make sure the torque is disabled to be able to write EEPROM
