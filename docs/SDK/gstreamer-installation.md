@@ -170,7 +170,7 @@ When installing Reachy Mini Python package, you will also need to add the `gstre
 ### Install from PyPI
 
 ```bash
-uv add reachy-mini --extra gstreamer
+uv pip install "reachy-mini[gstreamer]"
 ```
 
 ### Install from source
