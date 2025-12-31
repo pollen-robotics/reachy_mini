@@ -1,5 +1,17 @@
 name: Linters
-on: [ push, pull_request ]
+on:
+  push:
+    paths:
+      - "src/**"
+      - "tests/**"
+      - ".github/workflows/**"
+      - "pyproject.toml"
+  pull_request:
+    paths:
+      - "src/**"
+      - "tests/**"
+      - ".github/workflows/**"
+      - "pyproject.toml"
 jobs:
   ruff:
     runs-on: ubuntu-latest
@@ -17,11 +29,11 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.10"
-          cache: 'pip' # caching pip dependencies
+          cache: "pip" # caching pip dependencies
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install .[dev]
-      - name : Lint with mypy
-        run : |
+      - name: Lint with mypy
+        run: |
           mypy --install-types --non-interactive
