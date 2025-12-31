@@ -168,11 +168,11 @@ class ReachyMini:
                     )
                     mbackend = MediaBackend.WEBRTC
             else:
-                # Lite version: use default OpenCV backend
+                # Lite version: use default GStreamer backend
                 self.logger.info(
-                    "Auto-detected: Lite version. Using default (OpenCV) backend."
+                    "Auto-detected: Lite version. Using default (gstreamer) backend."
                 )
-                mbackend = MediaBackend.DEFAULT
+                mbackend = MediaBackend.GSTREAMER
 
         return MediaManager(
             use_sim=self.client.get_status()["simulation_enabled"],
