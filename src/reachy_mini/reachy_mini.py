@@ -233,10 +233,11 @@ class ReachyMini:
         self, requested_mode: ConnectionMode, timeout: float
     ) -> tuple[ZenohClient, ConnectionMode]:
         """Create a client according to the requested mode, adding auto fallback."""
+        requested_mode = cast(ConnectionMode, requested_mode.lower())
         if requested_mode == "auto":
             try:
                 client = self._connect_single(localhost_only=True, timeout=timeout)
-                return client, "localhost_only"
+                selected: ConnectionMode = "localhost_only"
             except Exception as err:
                 self.logger.info(
                     "Auto connection: localhost attempt failed (%s). "
@@ -244,14 +245,19 @@ class ReachyMini:
                     err,
                 )
                 client = self._connect_single(localhost_only=False, timeout=timeout)
-                return client, "network"
+                selected = "network"
+            self.logger.info("Connection mode selected: %s", selected)
+            return client, selected
 
         if requested_mode == "localhost_only":
             client = self._connect_single(localhost_only=True, timeout=timeout)
-            return client, "localhost_only"
+            selected = "localhost_only"
+        else:
+            client = self._connect_single(localhost_only=False, timeout=timeout)
+            selected = "network"
 
-        client = self._connect_single(localhost_only=False, timeout=timeout)
-        return client, "network"
+        self.logger.info("Connection mode selected: %s", selected)
+        return client, selected
 
     def _connect_single(self, localhost_only: bool, timeout: float) -> ZenohClient:
         """Connect once with the requested tunneling mode and guard cleanup."""
