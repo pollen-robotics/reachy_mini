@@ -1,7 +1,6 @@
 """Utilities for managing the Reachy Mini daemon."""
 
 import os
-import socket
 import struct
 import subprocess
 import time
@@ -128,20 +127,35 @@ def find_serial_port(
 
 
 def get_ip_address(ifname: str = "wlan0") -> str | None:
-    """Get the IP address of a specific network interface (Linux Only)."""
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    try:
-        import fcntl
+    """Get the IP address of a specific network interface (Linux and Windows)."""
+    import platform
+    import socket
 
-        return socket.inet_ntoa(
-            fcntl.ioctl(
-                s.fileno(),
-                0x8915,  # SIOCGIFADDR
-                struct.pack("256s", ifname[:15].encode("utf-8")),
-            )[20:24]
-        )
-    except OSError:
-        print(f"Could not get IP address for interface {ifname}.")
+    if platform.system() == "Linux":
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            import fcntl
+            return socket.inet_ntoa(
+                fcntl.ioctl(
+                    s.fileno(),
+                    0x8915,  # SIOCGIFADDR
+                    struct.pack("256s", ifname[:15].encode("utf-8")),
+                )[20:24]
+            )
+        except OSError:
+            print(f"Could not get IP address for interface {ifname}.")
+            return None
+    elif platform.system() == "Windows":
+        import psutil
+        addrs = psutil.net_if_addrs()
+        if ifname in addrs:
+            for snic in addrs[ifname]:
+                if snic.family == socket.AF_INET:
+                    return snic.address
+        print(f"Could not get IP address for interface {ifname} on Windows.")
+        return None
+    else:
+        print(f"Platform {platform.system()} not supported for get_ip_address.")
         return None
 
 
