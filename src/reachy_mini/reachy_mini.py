@@ -109,14 +109,6 @@ class ReachyMini:
         )
 
         self.media_manager = self._configure_mediamanager(media_backend, log_level)
-        daemon_status = self.client.get_status()
-        is_wireless = daemon_status.get("wireless_version", False)
-        if is_wireless:
-            from bmi088 import BMI088
-
-            self.bmi088 = BMI088(i2c_bus=4)
-        else:
-            self.bmi088 = None
 
     def __del__(self) -> None:
         """Destroy the Reachy Mini instance.
@@ -142,14 +134,31 @@ class ReachyMini:
         return self.media_manager
 
     @property
-    def imu(self):
-        """Get the BMI088 IMU instance."""
-        if self.bmi088 is not None:
-            return self.bmi088
-        else:
-            raise RuntimeError(
-                "IMU is only available on the Wireless version of Reachy Mini."
-            )
+    def imu(self) -> Dict[str, List[float] | float] | None:
+        """Get the current IMU data from the backend.
+
+        Returns:
+            dict with the following keys, or None if IMU is not available (Lite version)
+            or no data received yet:
+            - 'accelerometer': [x, y, z] in m/s^2
+            - 'gyroscope': [x, y, z] in rad/s
+            - 'quaternion': [w, x, y, z] orientation quaternion
+            - 'temperature': float in °C
+
+        Note:
+            - Data is cached from the last Zenoh update at 50Hz
+            - Quaternion is in [w, x, y, z] format
+
+        Example:
+            >>> imu_data = reachy.imu
+            >>> if imu_data is not None:
+            >>>     accel_x, accel_y, accel_z = imu_data['accelerometer']
+            >>>     gyro_x, gyro_y, gyro_z = imu_data['gyroscope']
+            >>>     quat_w, quat_x, quat_y, quat_z = imu_data['quaternion']
+            >>>     temp = imu_data['temperature']
+
+        """
+        return self.client.get_current_imu_data()
 
     def _configure_mediamanager(
         self, media_backend: str, log_level: str

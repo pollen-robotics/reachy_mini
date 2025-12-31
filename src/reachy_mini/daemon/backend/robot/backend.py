@@ -110,6 +110,21 @@ class RobotBackend(Backend):
 
         self.hardware_error_check_frequency = hardware_error_check_frequency  # seconds
 
+        # Initialize IMU for wireless version
+        if wireless_version:
+            try:
+                from bmi088 import BMI088
+
+                self.bmi088 = BMI088(i2c_bus=4)
+                self.logger.info("BMI088 IMU initialized successfully")
+            except Exception as e:
+                self.logger.warning(f"Failed to initialize IMU: {e}")
+                self.bmi088 = None
+        else:
+            self.bmi088 = None
+
+        self.imu_publisher: zenoh.Publisher | None = None
+
     def run(self) -> None:
         """Run the control loop for the robot backend.
 
@@ -233,6 +248,12 @@ class RobotBackend(Backend):
                             }
                         )
                     )
+
+                    # Publish IMU data if available
+                    if self.imu_publisher is not None and self.bmi088 is not None:
+                        imu_data = self.get_imu_data()
+                        if imu_data is not None:
+                            self.imu_publisher.put(json.dumps(imu_data))
 
                 self.last_alive = time.time()
 
@@ -436,6 +457,41 @@ class RobotBackend(Backend):
 
         """
         return np.array(self.get_all_joint_positions()[1])
+
+    def get_imu_data(self) -> dict[str, list[float]] | None:
+        """Get current IMU data (accelerometer, gyroscope, quaternion, temperature).
+
+        Returns:
+            dict with 'accelerometer', 'gyroscope', 'quaternion', and 'temperature' keys,
+            or None if IMU is not available.
+
+        """
+        if self.bmi088 is None:
+            return None
+
+        try:
+            # Read accelerometer (returns tuple of x, y, z in m/s^2)
+            accel_x, accel_y, accel_z = self.bmi088.read_accelerometer(m_per_s2=True)
+
+            # Read gyroscope (returns tuple of x, y, z in rad/s)
+            gyro_x, gyro_y, gyro_z = self.bmi088.read_gyroscope(deg_per_s=False)
+
+            # Get quaternion orientation (dt = control loop period)
+            dt = 1.0 / self.control_loop_frequency  # 0.02 seconds at 50Hz
+            quat = self.bmi088.get_quat(dt)
+
+            # Read temperature in Celsius
+            temperature = self.bmi088.read_temperature()
+
+            return {
+                "accelerometer": [accel_x, accel_y, accel_z],
+                "gyroscope": [gyro_x, gyro_y, gyro_z],
+                "quaternion": list(quat),
+                "temperature": temperature,
+            }
+        except Exception as e:
+            self.logger.error(f"Error reading IMU data: {e}")
+            return None
 
     def compensate_head_gravity(self) -> None:
         """Calculate the currents necessary to compensate for gravity."""
