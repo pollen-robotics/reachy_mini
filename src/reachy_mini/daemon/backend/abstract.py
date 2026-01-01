@@ -132,6 +132,7 @@ class Backend:
         self.joint_positions_publisher: zenoh.Publisher | None = None
         self.pose_publisher: zenoh.Publisher | None = None
         self.recording_publisher: zenoh.Publisher | None = None
+        self.imu_publisher: zenoh.Publisher | None = None
         self.error: str | None = None  # To store any error that occurs during execution
         self.is_recording = False  # Flag to indicate if recording is active
         self.recorded_data: list[dict[str, Any]] = []  # List to store recorded data
@@ -256,6 +257,15 @@ class Backend:
 
         """
         self.pose_publisher = publisher
+
+    def set_imu_publisher(self, publisher: zenoh.Publisher) -> None:
+        """Set the publisher for IMU data.
+
+        Args:
+            publisher: A publisher object that will be used to publish IMU data.
+
+        """
+        self.imu_publisher = publisher
 
     def update_target_head_joints_from_ik(
         self,

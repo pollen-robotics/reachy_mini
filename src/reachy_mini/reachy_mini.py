@@ -148,6 +148,33 @@ class ReachyMini:
         """Expose the MediaManager instance used by ReachyMini."""
         return self.media_manager
 
+    @property
+    def imu(self) -> Dict[str, List[float] | float] | None:
+        """Get the current IMU data from the backend.
+
+        Returns:
+            dict with the following keys, or None if IMU is not available (Lite version)
+            or no data received yet:
+            - 'accelerometer': [x, y, z] in m/s^2
+            - 'gyroscope': [x, y, z] in rad/s
+            - 'quaternion': [w, x, y, z] orientation quaternion
+            - 'temperature': float in °C
+
+        Note:
+            - Data is cached from the last Zenoh update at 50Hz
+            - Quaternion is in [w, x, y, z] format
+
+        Example:
+            >>> imu_data = reachy.imu
+            >>> if imu_data is not None:
+            >>>     accel_x, accel_y, accel_z = imu_data['accelerometer']
+            >>>     gyro_x, gyro_y, gyro_z = imu_data['gyroscope']
+            >>>     quat_w, quat_x, quat_y, quat_z = imu_data['quaternion']
+            >>>     temp = imu_data['temperature']
+
+        """
+        return self.client.get_current_imu_data()
+
     def _configure_mediamanager(
         self, media_backend: str, log_level: str
     ) -> MediaManager:
@@ -364,12 +391,16 @@ class ReachyMini:
             )
 
         req = GotoTaskRequest(
-            head=np.array(head, dtype=np.float64).flatten().tolist()
-            if head is not None
-            else None,
-            antennas=np.array(antennas, dtype=np.float64).flatten().tolist()
-            if antennas is not None
-            else None,
+            head=(
+                np.array(head, dtype=np.float64).flatten().tolist()
+                if head is not None
+                else None
+            ),
+            antennas=(
+                np.array(antennas, dtype=np.float64).flatten().tolist()
+                if antennas is not None
+                else None
+            ),
             duration=duration,
             method=method,
             body_yaw=body_yaw,
@@ -702,9 +733,10 @@ class ReachyMini:
         cmd = {}
 
         if pose is not None:
-            assert pose.shape == (4, 4), (
-                f"Head pose should be a 4x4 matrix, got {pose.shape}."
-            )
+            assert pose.shape == (
+                4,
+                4,
+            ), f"Head pose should be a 4x4 matrix, got {pose.shape}."
             cmd["head_pose"] = pose.tolist()
         else:
             raise ValueError("Pose must be provided as a 4x4 matrix.")
