@@ -184,6 +184,8 @@ If it doesn't help, you can also try to increase D to 10 on the same motors.
 
 
 </details>
+
+<details>
 <summary><strong>Image is dark on the Lite version</strong></summary>
 
 - set auto-exposure-priority=1 using uvc-util on macOS
