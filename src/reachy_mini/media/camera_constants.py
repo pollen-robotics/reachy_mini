@@ -152,3 +152,24 @@ class MujocoCameraSpecs(CameraSpecs):
         ]
     )
     D = np.zeros((5,))  # no distortion
+
+
+@dataclass
+class GenericWebcamSpecs(CameraSpecs):
+    """Generic webcam specifications (fallback for any webcam)."""
+
+    name = "generic"
+    available_resolutions = [
+        CameraResolution.R1280x720at30fps,
+        CameraResolution.R1920x1080at30fps,
+    ]
+    default_resolution = CameraResolution.R1280x720at30fps
+    # Approximate camera matrix for generic 720p webcam
+    K = np.array(
+        [
+            [640.0, 0.0, 640.0],
+            [0.0, 640.0, 360.0],
+            [0.0, 0.0, 1.0],
+        ]
+    )
+    D = np.zeros((5,))  # assume no distortion

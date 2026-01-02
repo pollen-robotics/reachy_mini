@@ -10,6 +10,12 @@ import argparse
 from reachy_mini import ReachyMini
 from reachy_mini.motion.recorded_move import RecordedMove, RecordedMoves
 
+# Keep compatibility with the original library flag while allowing custom datasets.
+LIBRARY_DATASETS = {
+    "dance": "pollen-robotics/reachy-mini-dances-library",
+    "emotions": "pollen-robotics/reachy-mini-emotions-library",
+}
+
 
 def main(dataset_path: str) -> None:
     """Connect to Reachy and run the main demonstration loop."""
@@ -23,7 +29,6 @@ def main(dataset_path: str) -> None:
                 for move_name in recorded_moves.list_moves():
                     move: RecordedMove = recorded_moves.get(move_name)
                     print(f"Playing move: {move_name}: {move.description}\n")
-                    # print(f"params: {move.move_params}")
                     reachy.play_move(move, initial_goto_duration=1.0)
 
         except KeyboardInterrupt:
@@ -35,13 +40,18 @@ if __name__ == "__main__":
         description="Demonstrate and play all available dance moves for Reachy Mini."
     )
     parser.add_argument(
-        "-l", "--library", type=str, default="dance", choices=["dance", "emotions"]
+        "-l",
+        "--library",
+        type=str,
+        default="dance",
+        choices=sorted(LIBRARY_DATASETS.keys()),
+        help="Pick one of the original libraries (default: dance).",
+    )
+    parser.add_argument(
+        "--dataset",
+        type=str,
+        help="Local path or HF dataset id. Overrides --library when provided.",
     )
     args = parser.parse_args()
-
-    dataset_path = (
-        "pollen-robotics/reachy-mini-dances-library"
-        if args.library == "dance"
-        else "pollen-robotics/reachy-mini-emotions-library"
-    )
+    dataset_path = args.dataset or LIBRARY_DATASETS[args.library]
     main(dataset_path)
