@@ -78,7 +78,7 @@ class GStreamerCamera(CameraBase):
             self.pipeline.add(camsrc)
             queue = Gst.ElementFactory.make("queue")
             self.pipeline.add(queue)
-            videoconvert = Gst.ElementFactory.make("videoconvert")
+            videoconvert = Gst.ElementFactory.make("v4l2convert")
             self.pipeline.add(videoconvert)
             camsrc.link(queue)
             queue.link(videoconvert)
