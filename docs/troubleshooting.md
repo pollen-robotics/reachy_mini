@@ -173,6 +173,17 @@ It is easy to fix by following this guide:
 </details>
 
 <details>
+<summary><strong>A motor is shaky</strong></summary>
+
+This can happen if the motor's PID values are not optimal. Often, motors 10 (foot), 17 and 18 (the antennas) can exhibit slight jitters when holding position.
+These are fine "adjustments" that the motor is making, which in this case is an overcorrection.
+The good news is that you can [tune PID Control values](https://github.com/pollen-robotics/reachy_mini/blob/18823bf22e5fc31420f3bfe3c2483ef135a32391/src/reachy_mini/assets/config/hardware_config.yaml#L66C1-L67C1) to calm these jitters. 
+
+You can try first to reduce P to 180 on motors, 10, 17, and 18.
+If it doesn't help, you can also try to increase D to 10 on the same motors.
+
+
+</details>
 <summary><strong>Image is dark on the Lite version</strong></summary>
 
 - set auto-exposure-priority=1 using uvc-util on macOS
@@ -390,6 +401,47 @@ If you command a pose outside these limits, the robot will automatically clamp t
 * **`enable_motors()`**: Motors **ON** (Stiff). Robot holds position.
 * **`disable_motors()`**: Motors **OFF** (Limp). You can move it by hand.
 * **`make_motors_compliant()`**: Motors **ON but Soft**. Useful for teaching-by-demonstration.
+
+</details>
+
+<details>
+<summary><strong>How do I access to motors' parameters?</strong></summary>
+
+1. You can refer scanning the motors using the [scan_motors.py script](/src/reachy_mini/tools/scan_motors.py).
+
+- If your robot is Lite, you can run the script directly on your computer. Go to the "tools" folder, where the script is located,and run the same command as below but without the scp and ssh part.
+- If your robot is Wireless, you need tocopythe script on the raspberry. Go tothe"tools" folder, where the script is located,and run:
+```bash
+sudo scp scan_motors.pypollen@reachy-minilocal:~/
+# password: ---your sudo password---
+# RPI password: root
+```
+- Then ssh into the robot:
+```bash
+ssh pollen@reachy-mini.local
+```
+- Activate the venv:
+```bash
+source /venvs/mini_daemon/bin/activate
+```
+- And run the script: (Motors must be poweredonfor this!)
+```bash
+python scan_motors.py
+```
+- It should print the list of detected motors. You should have all motors on baudrate 1000000, with the following IDs: 10,11, 12, 13, 14, 15,17, 18. If some are missing, check the cables again. If there is a motor with a different ID or baudrate, please contact support.
+
+Example of the right output:
+```
+Trying baudrate: 9600
+No motors found at baudrate 9600
+Trying baudrate: 57600
+No motors found at baudrate 57600
+Trying baudrate: 115200
+No motors found at baudrate 115200
+Trying baudrate: 1000000
+Found motors at baudrate 1000000: [10, 11,12,13, 14, 15, 16, 17, 18]
+```
+2. Lite: You can also use the Dynamixel Wizard to read motors parameters. Follow the guide [here](/docs/platforms/reachy_mini_lite/wizard.md). 
 
 </details>
 
