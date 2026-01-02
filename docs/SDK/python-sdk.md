@@ -30,6 +30,8 @@ Bypasses interpolation. Use this for high-frequency control (e.g., following a j
 
 ## Sensors & Media
 
+The media architecture is described in detail in the [Media Architecture](/docs/SDK/media-architecture.md) section. Although accesssing audio and video from the SDK is similar across Reachy Mini versions, the underlying implementation differs.
+
 ### Camera 📷
 
 The frames of the camera can be accessed as follows :
