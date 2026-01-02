@@ -150,9 +150,8 @@ class GstWebRTC:
     ) -> None:
         self._logger.debug(f"Configuring video {cam_path}")
         camerasrc = Gst.ElementFactory.make("libcamerasrc")
-        v4l2convert = Gst.ElementFactory.make("v4l2convert")
         caps = Gst.Caps.from_string(
-            f"video/x-raw,width={self.resolution[0]},height={self.resolution[1]},framerate={self.framerate}/1,format=BGR"
+            f"video/x-raw,width={self.resolution[0]},height={self.resolution[1]},framerate={self.framerate}/1,format=YUY2,colorimetry=bt709,interlace-mode=progressive"
         )
         capsfilter = Gst.ElementFactory.make("capsfilter")
         capsfilter.set_property("caps", caps)
@@ -179,7 +178,6 @@ class GstWebRTC:
         if not all(
             [
                 camerasrc,
-                v4l2convert,
                 capsfilter,
                 tee,
                 queue_unixfd,
@@ -192,7 +190,6 @@ class GstWebRTC:
             raise RuntimeError("Failed to create GStreamer video elements")
 
         pipeline.add(camerasrc)
-        pipeline.add(v4l2convert)
         pipeline.add(capsfilter)
         pipeline.add(tee)
         pipeline.add(queue_unixfd)
@@ -201,8 +198,7 @@ class GstWebRTC:
         pipeline.add(v4l2h264enc)
         pipeline.add(capsfilter_h264)
 
-        camerasrc.link(v4l2convert)
-        v4l2convert.link(capsfilter)
+        camerasrc.link(capsfilter)
         capsfilter.link(tee)
         tee.link(queue_unixfd)
         queue_unixfd.link(unixfdsink)

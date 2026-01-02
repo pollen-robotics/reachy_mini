@@ -78,8 +78,11 @@ class GStreamerCamera(CameraBase):
             self.pipeline.add(camsrc)
             queue = Gst.ElementFactory.make("queue")
             self.pipeline.add(queue)
+            videoconvert = Gst.ElementFactory.make("videoconvert")
+            self.pipeline.add(videoconvert)
             camsrc.link(queue)
-            queue.link(self._appsink_video)
+            queue.link(videoconvert)
+            videoconvert.link(self._appsink_video)
         elif cam_path == "imx708":
             camsrc = Gst.ElementFactory.make("libcamerasrc")
             self.pipeline.add(camsrc)
