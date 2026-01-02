@@ -108,6 +108,21 @@ class GStreamerAudio(AudioBase):
         self._bus_record.remove_watch()
         self._bus_playback.remove_watch()
 
+    def set_max_output_buffers(self, max_buffers: int) -> None:
+        """Set the maximum number of output buffers to queue in the player.
+
+        Args:
+            max_buffers (int): Maximum number of buffers to queue.
+
+        """
+        if self._appsrc is not None:
+            self._appsrc.set_property("max-buffers", max_buffers)
+            self._appsrc.set_property("leaky-type", 2)  # drop old buffers
+        else:
+            self.logger.warning(
+                "AppSrc is not initialized. Call start_playing() first."
+            )
+
     def _init_pipeline_playback(self, pipeline: Gst.Pipeline) -> None:
         self._appsrc = Gst.ElementFactory.make("appsrc")
         self._appsrc.set_property("format", Gst.Format.TIME)
@@ -120,7 +135,6 @@ class GStreamerAudio(AudioBase):
         audioconvert = Gst.ElementFactory.make("audioconvert")
         audioresample = Gst.ElementFactory.make("audioresample")
 
-        queue = Gst.ElementFactory.make("queue")
         audiosink: Optional[Gst.Element] = None
         if self._id_audio_card == -1:
             audiosink = Gst.ElementFactory.make("autoaudiosink")  # use default speaker
@@ -132,14 +146,12 @@ class GStreamerAudio(AudioBase):
             audiosink = Gst.ElementFactory.make("alsasink")
             audiosink.set_property("device", f"hw:{self._id_audio_card},0")
 
-        pipeline.add(queue)
         pipeline.add(audiosink)
         pipeline.add(self._appsrc)
         pipeline.add(audioconvert)
         pipeline.add(audioresample)
 
-        self._appsrc.link(queue)
-        queue.link(audioconvert)
+        self._appsrc.link(audioconvert)
         audioconvert.link(audioresample)
         audioresample.link(audiosink)
 
