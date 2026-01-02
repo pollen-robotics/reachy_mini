@@ -327,7 +327,7 @@ pip install -U reachy-mini
 ```
 With `uv`, run :
 ```bash
-uv add reachy-mini
+uv pip install -U reachy-mini
 ```
 
 - _Daemon:_ Make sure the daemon `reachy-mini-daemon` is running in a terminal.

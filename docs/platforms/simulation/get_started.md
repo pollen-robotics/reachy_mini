@@ -8,19 +8,28 @@ You don't need a physical robot to start building! The Reachy Mini simulation ru
 
 ## 1. Installation
 
+> **📋 Prerequisites:** Before setting up the simulation, you must first complete the basic installation and virtual environment setup by following the **[Installation Guide](/docs/SDK/installation.md)**. This guide assumes you already have the Reachy Mini SDK installed and your virtual environment activated.
+
 The simulation requires the `mujoco` python bindings. You can install them alongside the Reachy Mini software with the extra tag `[mujoco]`.
 
+With `pip`, run :
 ```bash
-pip install reachy-mini[mujoco]
+pip install "reachy-mini[mujoco]"
+```
+With `uv`, run :
+```bash
+uv pip install "reachy-mini[mujoco]"
 ```
 
 ## 2. Running the Simulation
 
-To start the simulated robot, simply run the daemon with the `--sim` flag:
+To start the simulated robot, simply run the daemon command with the `--sim` flag:
 
 ```bash
 reachy-mini-daemon --sim
 ```
+
+> If you are using `uv`, you need to add `uv run` before `reachy-mini-daemon`.
 
 A window should open displaying the 3D view of the robot. You can interact with the view using your mouse (drag to rotate, right-click to pan, scroll to zoom).
 
@@ -30,6 +39,8 @@ On macOS, MuJoCo requires a specific launcher to work correctly with the GUI. In
 ```bash
 mjpython -m reachy_mini.daemon.app.main --sim
 ```
+
+> **⚠️ macOS Users:** `uv` may have compatibility issues with MuJoCo on macOS. If you encounter installation or runtime problems, it's recommended to use `pip` directly instead of `uv` for MuJoCo-related packages.
 
 ## 3. Dashboard and Apps
 
@@ -51,9 +62,7 @@ reachy-mini-daemon --sim --scene minimal
 
 ## 5. Connecting your Code
 
-Once the simulation is running, it behaves exactly like a real **Reachy Mini Lite** connected via USB. The daemon listens on `localhost`.
-
-You can run any Python SDK script without modification:
+Once the simulation is running, it behaves exactly like a real **Reachy Mini Lite** connected via USB. The daemon listens on `localhost`, and you can run any Python SDK script without modification:
 
 ```python
 from reachy_mini import ReachyMini
