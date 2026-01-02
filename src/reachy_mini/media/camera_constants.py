@@ -106,16 +106,16 @@ class ReachyMiniWirelessCamSpecs(ReachyMiniLiteCamSpecs):
 
     name = "wireless"
     available_resolutions = [
+        CameraResolution.R1280x720at30fps,  # Default for H264 Level 3.1 (Safari/WebKit)
         CameraResolution.R1920x1080at30fps,
         CameraResolution.R1280x720at60fps,
-        CameraResolution.R1280x720at30fps,  # Required for H264 Level 3.1 (Safari/WebKit)
         CameraResolution.R3840x2592at10fps,
         CameraResolution.R3840x2160at10fps,
         CameraResolution.R3264x2448at10fps,
         CameraResolution.R3072x1728at10fps,
     ]
-    # Note: For WebRTC, resolution is overridden by h264_profile setting in webrtc_daemon.py
-    default_resolution = CameraResolution.R1920x1080at30fps
+    # 720p@30fps for H264 Level 3.1 compatibility (Safari/WebKit)
+    default_resolution = CameraResolution.R1280x720at30fps
 
 
 @dataclass
