@@ -190,7 +190,7 @@ class ReachyMini:
                 if is_local_camera_available():
                     # Local client on CM4: use GStreamer to read from unix socket
                     # This avoids WebRTC encode/decode overhead
-                    if media_backend.lower() == "gstreamer_no_video":
+                    if "no_video" in media_backend.lower():
                         mbackend = MediaBackend.GSTREAMER_NO_VIDEO
                         self.logger.info(
                             "Auto-detected: Wireless + local camera socket. "
@@ -214,10 +214,15 @@ class ReachyMini:
                 try:
                     mbackend = MediaBackend(media_backend.lower())
                     if mbackend == MediaBackend.WEBRTC:
-                        self.logger.warning("WebRTC backend is not compatible with Lite version, using default backend.")
+                        self.logger.warning(f"Incompatible media backend on Lite: {media_backend}, using default backend.")
                         mbackend = MediaBackend.DEFAULT
+                    else:
+                        self.logger.info(
+                            "Auto-detected: Lite. "
+                            f"Using {mbackend} backend."
+                        )
                 except ValueError:
-                    self.logger.warning(f"Invalid media backend: {media_backend}, using default backend.")
+                    self.logger.warning(f"Invalid media backend on Lite: {media_backend}, using default backend.")
                     mbackend = MediaBackend.DEFAULT
 
         return MediaManager(
