@@ -108,3 +108,7 @@ Send an audio RTP stream to port 5000 to test the speakers:
 ```bash
 gst-launch-1.0 audiotestsrc ! audioconvert ! audioresample ! opusenc ! audio/x-opus, rate=48000, channels=2 ! rtpopuspay pt=96 ! udpsink host=<ROBOT_IP> port=5000
 ```
+
+## 8. Install Daemon from a Specific Branch
+
+Follow the dedicated instructions in the [Install Daemon from Branch guide](install_daemon_from_branch.md).

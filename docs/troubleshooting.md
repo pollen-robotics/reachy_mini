@@ -2,27 +2,69 @@
 
 Welcome to the Reachy Mini support page. Click on the questions below to reveal the answers.
 
-##  Known Issues - Batch December 2025
+##  Troubleshooting - Batch December 2025
+### Essential troubleshooting - Please read this first, it solves all well-known issues!
 
 
-<details>
-<summary><strong>Motor blinking red or Overload Error</strong></summary>
+<details><summary><strong>Before anything else and for any issue: update & restart</strong></summary>
 
-If you get "Motor hardware errors: ['Overload Error']" a few second after starting the robot **for the first time.**
+**Make sure you are using up-to-date software and that you have restarted both your robot and your computer.**  
+To restart your robot, press OFF, wait 5 seconds, then press ON. This simple procedure fixes several common and well-known issues.
 
-It is VERY likely there are motors not placed in the good slot, e.g motor 1 on slot 2
+**How to update the software:**
+
+- **If you are using the dashboard in a web browser**  
+  Open `Settings`, then click **Check for updates**.  
+  ![Update](/docs/assets/update.png)
+- **If you are using the new dashboard/app**  
+  Since 0.8.5 of the app, 
+- **If you are using a cloned repository**  
+  Make sure you are either:
+  - On the latest tagged release, or
+  - Up to date with the `develop` branch (`git pull`).
+</details>
+
+
+<details><summary><strong>Motor blinking red or Overload Error</strong></summary>
+
+**1. Motors inversion**: If you get "Motor hardware errors: ['Overload Error']" a few second after starting the robot **for the first time.** and have two motors arm pointing upward.  
+It is VERY likely there are motors not placed in the good slot, e.g motor 1 on slot 2.
+
+<details><summary>See illustration</summary>
+
+![Motors inversion symptom](/docs/assets/motors_upward.png)
+
+</details>
 
 Check assembly guide:
 
 - [**Reachy Mini Wireless - Step-by-Step Guide**](https://huggingface.co/spaces/pollen-robotics/Reachy_Mini_Assembly_Guide)
 - [**Reachy Mini LITE - Step-by-Step Guide**](https://huggingface.co/spaces/pollen-robotics/Reachy_Mini_LITE_Assembly_Guide)
 
+**2. Check the arm orientation on the motor's horn**:
+Remove the faulty motor, then place the arm upward like in the attached picture. Then check if you can see the the two line marks aligned as represented:
 
-</details>
+<details><summary>See picture:</summary>
 
-<details>
+![Marks_aligned](/docs/assets/marks_aligned.png)
+</details> 
 
-<summary><strong>A motor feels broken</strong></summary>
+If they are not, please remove the two screws securing the arm and put it back with the two lines matching.  
+
+
+**3. check the extra length of the usb cable inside the head:**  
+If it's too long inside the head, there must miss some slack underneath and the head cannot move freely.  
+So the motors force too much and can be damaged.  
+<details><summary>See picture:</summary>
+
+![usb_cable_length](/docs/assets/usb_cable_length.jpg)
+</details>  
+
+Please let some slack to the usb cable to allow the head to move freely, even to its maximal height position.  
+
+
+
+**4. A motor feels broken:**
 We identified an issue affecting a limited production batch of Reachy Mini robots, related to a faulty batch of Dynamixel motor. 
 
 In most reported cases, the issue affects motor number 4 or one with QC label n°2544.
@@ -31,9 +73,75 @@ If one of your motors, feels blocked or unusually hard to move, when turned off 
 
 It's probably a broken motor.
 
-Please fill out this short form so we can track and ship you a new motor:  https://forms.gle/JdhMzadeCnbynw7Q6
+First, try to update your robot to the latest software version, then reboot it. This will reflash your motors.
+If the issue persists, please fill out this short form so we can track and ship you a new motor:  https://forms.gle/JdhMzadeCnbynw7Q6
+</details>
+
+
+<details>
+<summary><strong>A motor is not moving at all, but get stiff when powered on, and doesn't blink red </strong></summary>
+
+This behavior happen when a motor (often n°1) has not been flashed properly during the manufacturing process.  
+=> Please power your robot but don't turn it on with the dashboard/daemon, then update reachy mini's software, then reboot the robot. This will reflash your motors.
 
 </details>
+
+<details>
+<summary><strong>Electrical Shock Error </strong></summary>
+
+An electrical shock error on Dynamixel motors means there is either an issue with the power supply, or a short circuit somewhere.
+Please check if any cable is damaged, from the foot PCB to the head. Especially the followings cables:  
+- Power Cable (black & red) 
+- 3-wires cables for motors (300mm, 200mm, 100mm and 40mm)
+
+It can also be the same issue as "Motor blinking red or Overload Error" described above.
+
+</details>
+
+<details>
+
+<summary><strong>Missing Motor Error / No motor found on port</strong></summary>
+
+- Make sure you have plugged all the motor cables correctly. Make sure your cables are seated down tight. Its easy to not push them down all the way.
+- Check that the cables are not damaged.
+- Make sure the power supply is plugged in and providing power.
+
+- Make sure you have every motor and not two same motor in the kit. Refer to the label on each motor. e.g motor 1, motor 2, motor 3, motor 4, L motor, R motor...  
+- If you still have the issue you can try scanning the motors using the [scan_motors.py script](/src/reachy_mini/tools/scan_motors.py).
+    - If your robot is Lite, you can run the script directly on your computer. Go to the "tools" folder, where the script is located, and run the same command as below but without the scp and ssh part.
+    - If your robot is Wireless, you need to copy the script on the raspberry. Go to the "tools" folder, where the script is located, and run:
+    ```bash
+    sudo scp scan_motors.py pollen@reachy-mini.local:~/
+    # password: ---your sudo password---
+    # RPI password: root
+    ```
+    - Then ssh into the robot:
+    ```bash
+    ssh pollen@reachy-mini.local
+    ```
+    - Activate the venv:
+    ```bash
+    source /venvs/mini_daemon/bin/activate
+    ```
+    - And run the script: (Motors must be powered on for this!)
+    ```bash
+    python scan_motors.py
+    ```
+    - It should print the list of detected motors. You should have all motors on baudrate 1000000, with the following IDs: 10, 11, 12, 13, 14, 15, 17, 18. If some are missing, check the cables again. If there is a motor with a different ID or baudrate, please contact support.
+    Example of the right output:
+    ```
+    Trying baudrate: 9600
+    No motors found at baudrate 9600
+    Trying baudrate: 57600
+    No motors found at baudrate 57600
+    Trying baudrate: 115200
+    No motors found at baudrate 115200
+    Trying baudrate: 1000000
+    Found motors at baudrate 1000000: [10, 11, 12, 13, 14, 15, 16, 17, 18]
+    ```
+
+</details>
+
 
 <details>
 
@@ -65,12 +173,15 @@ It is easy to fix by following this guide:
 </details>
 
 <details>
-<summary><strong>I have 2 cables and a few screws left after finishing the assembly. Is this normal?</strong></summary>
+<summary><strong>A motor is shaky</strong></summary>
 
-Yes, this is completely normal.  
-We intentionally include spare cables and screws in the kit in case some parts are damaged or lost during assembly.
+This can happen if the motor's PID values are not optimal. Often, motors 10 (foot), 17 and 18 (the antennas) can exhibit slight jitters when holding position.
+These are fine "adjustments" that the motor is making, which in this case is an overcorrection.
+The good news is that you can [tune PID Control values](https://github.com/pollen-robotics/reachy_mini/blob/18823bf22e5fc31420f3bfe3c2483ef135a32391/src/reachy_mini/assets/config/hardware_config.yaml#L66C1-L67C1) to calm these jitters. 
 
-You do not need to install them.
+You can try first to reduce P to 180 on motors, 10, 17, and 18.
+If it doesn't help, you can also try to increase D to 10 on the same motors.
+
 
 </details>
 
@@ -82,15 +193,42 @@ You do not need to install them.
 </details>
 
 <details>
-<summary><strong>The head may touch the body during some official motions</strong></summary>
+<summary><strong>A part is missing in my package</strong></summary>
 
-This behavior is expected and not a hardware or software bug.  
-However, since it can be confusing, we will update those motions to avoid this contact.
+Be sure to unpack everything first. Some parts are pre-assembled (e.g the bottom head part is already placed in the back head part).
 
+![head_parts](/docs/assets/head_parts.jpg)
+
+Then, check the assembly guide's parts list to see if you really miss a part:
+If you are 100% sure you miss a part, please contact sales@pollen-robotics.com with a picture of all the parts you have and order number or invoice number.  
+You can also find [stl files](https://github.com/pollen-robotics/reachy_mini/tree/develop/src/reachy_mini/descriptions/reachy_mini/mjcf/assets) to print it by yourself in the meantime.
 </details>
 
 
-## 📋 Table of Contents
+<details>
+<summary><strong>Can't connect to my Wireless Reachy Mini using a USB-C cable</strong></summary>
+
+Wireless units do not expose the robot over USB the way the Lite version does, so plugging a USB-C cable into your laptop will not give you a working connection.  
+Instead:
+
+- Join the robot to your Wi-Fi network and use the SDK client on your laptop to control it remotely.
+- If you want to run code directly on the embedded Raspberry Pi, SSH in and execute your scripts there (this is what the Dashboard does after you publish/install an app).
+- For a tethered link, use a USB-C-to-Ethernet adapter plus an Ethernet cable—this simply replaces Wi-Fi with wired Ethernet.
+
+</details>
+
+<details>
+<summary><strong>Wireless Acces point doesn't show up - RPI doesn't boot</strong></summary>
+There is a switch on the board in the head that needs to be in a given position. And if it's not, the AP doesn't show. It's possible that this switch was moved during assembly or maybe even a factory mistake.
+Please check that the switch is on the "debug" and not on "download" position. See the picture below:
+
+![switch_position](/docs/assets/wireless_switch.png)
+
+</details>
+
+#### If your issue/question is not listed here, please check the full FAQ below.
+
+## 📋 FAQ Table of Contents
 
 1.  [🚀 Getting Started & Assembly](#-getting-started--assembly)
 2.  [🔌 Connection & Dashboard](#-connection--dashboard)
@@ -115,9 +253,20 @@ Most testers report between **1.5 and 2 hours**. It can take up to 4 hours depen
 <details>
 <summary><strong>Are there any difficult steps during assembly?</strong></summary>
 
-Testers generally describe it as fun and simple. The trickiest parts are usually:
-* **Cable routing:** ensuring cables aren't pinched.
-* **Torque:** Tightening parts correctly (not too loose, not too hard).
+Not really, testers describe it as **fun, simple, and satisfying**. Basic tools and patience are enough. C**able routing** and **torqueing parts correctly** are the trickiest elements. When you buy a Reachy Mini Lite or Wireless, it comes with a printed user guide, and you also have access to a video and the Digital guide.
+Video for Reachy Mini [BETA](https://www.youtube.com/watch?v=_r0cHySFbeY), LITE, WIRELESS
+
+Digital Assembly Guide for Reachy Mini [BETA](https://huggingface.co/spaces/pollen-robotics/Reachy_Mini_Assembly_Guide), LITE, WIRELESS
+
+</details>
+
+<details>
+<summary><strong>I have 2 cables and a few screws left after finishing the assembly. Is this normal?</strong></summary>
+
+Yes, this is completely normal.  
+We intentionally include spare cables and screws in the kit in case some parts are damaged or lost during assembly.
+
+You do not need to install them.
 
 </details>
 
@@ -126,11 +275,13 @@ Testers generally describe it as fun and simple. The trickiest parts are usually
 
 * **Power Supply:** Ensure the 7V-5A power supply is plugged in. The USB connection is not enough to power the motors.
 * **Cables:** Check that all cables are fully inserted. Loose power cables are a common cause of "motor not responding" errors.
+* **Troubleshooting Section:** See the Essential Troubleshooting section at the top of this page.
 
 </details>
 
 <details>
 <summary><strong>Do I need to start the daemon manually?</strong></summary>
+
 **NO** 
 
 - With Reachy Mini (Wireless), the daemon is already running on the embedded Raspberry Pi.
@@ -144,25 +295,42 @@ Testers generally describe it as fun and simple. The trickiest parts are usually
 
 <details>
 <summary><strong>How do I connect the robot to Wi-Fi?</strong></summary>
-See the [Reachy Mini Wireless guide](/docs/platforms/reachy_mini/get_started.md).
+
+See the [Reachy Mini Wireless guide](/docs/platforms/reachy_mini/get_started.md) for detailed instructions on connecting to Wi-Fi.
+
+</details>
+
+<details>
+<summary><strong>How do I reset the Wi-Fi hotspot?</strong></summary>
+
+If you need to reset the robot's Wi-Fi hotspot (for example, if you can't connect or want to change the network), follow the instructions in the [Wi-Fi Reset Guide](/docs/platforms/reachy_mini/reset.md).
 
 </details>
 
 <details>
 <summary><strong>The dashboard at http://localhost:8000 doesn't work.</strong></summary>
 
-Perform these checks:
-1.  **Virtual Environment:** Ensure you are running inside your virtual environment (`.venv`, `reachy_mini_env`,...).
-2.  **SDK Update:** Ensure you have the latest version.
-- With `pip`, run :
+1. **Check browser permissions**: Ensure your browser can access local networks. <br> On _macOS_, these permissions are found in System Settings → Privacy & Security → Local Network.
+
+2. **For Wireless Reachy Mini**: Ensure both your computer and the robot are connected to the **same network**, then verify connectivity by running the following command in your terminal:
+```bash
+ping reachy-mini
+```
+
+3. **For Lite Reachy Mini**: Perform these checks.
+- _Virtual Environment:_ Ensure you are running inside your virtual environment (`.venv`, `reachy_mini_env`,...).
+- _SDK Update:_ Ensure you have the latest version.
+
+With `pip`, run :
 ```bash
 pip install -U reachy-mini
 ```
-- With `uv`, run :
+With `uv`, run :
 ```bash
-uv add reachy-mini
+uv pip install -U reachy-mini
 ```
-3.  **Daemon:** Make sure the daemon `reachy-mini-daemon` is running in a terminal.
+
+- _Daemon:_ Make sure the daemon `reachy-mini-daemon` is running in a terminal.
 
 </details>
 
@@ -173,23 +341,49 @@ Yes. The daemon provides a REST API (FastAPI) and WebSocket support.
 * **Docs:** `http://localhost:8000/docs` (available when daemon is running).
 * **Features:** Get state, Move joints, Control daemon.
 
+You can use the API to control the robot and get its state and even control the daemon itself. The API is implemented using [FastAPI](https://fastapi.tiangolo.com/) and [pydantic](https://docs.pydantic.dev/latest/) models.
+
+It should provide you all the necessary endpoints to interact with the robot, including:
+
+- Getting the state of the robot (joints positions, motor status, etc.)
+- Moving the robot's joints or setting specific poses
+
+The API is documented using OpenAPI, and you can access all available routes and test them at http://localhost:8000/docs when the daemon is running. You can also access the raw OpenAPI schema at http://localhost:8000/openapi.json.
+
+This can be useful if you want to generate client code for your preferred programming language or framework, connect it to your AI application, or even to create your MCP server.
+
+**WebSocket support**
+
+The API also supports WebSocket connections for real-time updates. For instance, you can subscribe to joint state updates:
+
+```
+let ws = new WebSocket(`ws://127.0.0.1:8000/api/state/ws/full`);
+
+ws.onmessage = (event) => {
+    const data = JSON.parse(event.data);
+    console.log(data);
+};
+```
+
 </details>
 
 <details>
-<summary><strong>All apps installations fail on Windows !</strong></summary>
+<summary><strong>Why do I need a virtual environment (.venv)?</strong></summary>
 
-It might be related to unsufficient rights to create symlinks in Windows. You can set the environment variable `HF_HUB_DISABLE_SYMLINKS_WARNING` to 1 to remove the warnings that cause the failure.
-
-In a terminal, run :
-```powershell
-set HF_HUB_DISABLE_SYMLINKS_WARNING=1
-```
+Helps prevent package conflicts during SDK installation.
 
 </details>
 
 <br>
 
 ## 🤖 Hardware, Motors & Limits
+
+<details>
+<summary><strong>Where can I find more information about hardware?</strong></summary>
+
+Refer to the [Reachy Mini Hardware page](/docs/platforms/reachy_mini/hardware.md) for detailed information about the robot's hardware components.
+
+</details>
 
 <details>
 <summary><strong>What are the safety limits (Head & Body)?</strong></summary>
@@ -213,11 +407,87 @@ If you command a pose outside these limits, the robot will automatically clamp t
 </details>
 
 <details>
+<summary><strong>How do I access to motors' parameters?</strong></summary>
+
+1. You can refer scanning the motors using the [scan_motors.py script](/src/reachy_mini/tools/scan_motors.py).
+
+- If your robot is Lite, you can run the script directly on your computer. Go to the "tools" folder, where the script is located,and run the same command as below but without the scp and ssh part.
+- If your robot is Wireless, you need tocopythe script on the raspberry. Go tothe"tools" folder, where the script is located,and run:
+```bash
+sudo scp scan_motors.pypollen@reachy-minilocal:~/
+# password: ---your sudo password---
+# RPI password: root
+```
+- Then ssh into the robot:
+```bash
+ssh pollen@reachy-mini.local
+```
+- Activate the venv:
+```bash
+source /venvs/mini_daemon/bin/activate
+```
+- And run the script: (Motors must be poweredonfor this!)
+```bash
+python scan_motors.py
+```
+- It should print the list of detected motors. You should have all motors on baudrate 1000000, with the following IDs: 10,11, 12, 13, 14, 15,17, 18. If some are missing, check the cables again. If there is a motor with a different ID or baudrate, please contact support.
+
+Example of the right output:
+```
+Trying baudrate: 9600
+No motors found at baudrate 9600
+Trying baudrate: 57600
+No motors found at baudrate 57600
+Trying baudrate: 115200
+No motors found at baudrate 115200
+Trying baudrate: 1000000
+Found motors at baudrate 1000000: [10, 11,12,13, 14, 15, 16, 17, 18]
+```
+2. Lite: You can also use the Dynamixel Wizard to read motors parameters. Follow the guide [here](/docs/platforms/reachy_mini_lite/wizard.md). 
+
+</details>
+
+<details>
 <summary><strong>Motors stop responding after a while.</strong></summary>
 
 * Check the power supply connection.
 * Motors might have entered thermal protection mode (overheating). Turn off and on again.
 * Updating the SDK (`pip install -U reachy-mini`) has solved this for some users.
+* If the motor's led blinks red, see the "Motor blinking red or Overload Error" section in the Essential Troubleshooting above.
+
+</details>
+
+<details>
+<summary><strong>Does the battery has safety features?</strong></summary>
+Wireless includes a proper battery charger.  
+The battery integrates a BMS with a temperature sensor too.
+
+</details>
+
+<details>
+<summary><strong>How do I see the battery left?</strong></summary>
+We do not have the possibility to check the battery status, that's a known limitation of the design.  
+
+We only have the led indication for "low battery" when it's time to charge it. (green -> orange -> red)
+
+</details>
+
+<details>
+<summary><strong>How to remove the battery</strong></summary>
+
+- Check that the green led is not on first.
+- Remove the 3x screws at the bottom and take out the foot a little bit.
+![remove_foot](/docs/assets/remove_foot.png)
+- Unplug the indicated connector (red arrow) to be able to remove the battery. There should be some double-sided tape that maintain the battery in place, so it can be a bit hard to remove.
+![battery_location](/docs/assets/battery_connector.png)
+- When you'll re-assemble it, do these step again in reverse order. Just be careful not to pinch any cable.
+</details>
+
+<details>
+<summary><strong>The head may touch the body during some official motions</strong></summary>
+
+This behavior is expected and not a hardware or software bug.  
+However, since it can be confusing, we will update those motions to avoid this contact.
 
 </details>
 
@@ -259,6 +529,24 @@ Check the [Hugging Face Tutorial](https://huggingface.co/blog/pollen-robotics/ma
 
 </details>
 
+<details><summary><strong>Is installing apps directly from the dashboard supported?</strong></summary>
+
+Sure! You can install apps directly from your Dashboard if they’re native, or add them to your favourites if they’re web-based.
+
+</details>
+
+<details>
+<summary><strong>All apps installations fail on Windows !</strong></summary>
+
+It might be related to unsufficient rights to create symlinks in Windows. You can set the environment variable `HF_HUB_DISABLE_SYMLINKS_WARNING` to 1 to remove the warnings that cause the failure.
+
+In a terminal, run :
+```powershell
+set HF_HUB_DISABLE_SYMLINKS_WARNING=1
+```
+
+</details>
+
 <details>
 <summary><strong>Installing apps from Hugging Face fails.</strong></summary>
 
@@ -274,6 +562,22 @@ pip install -U reachy-mini
 <summary><strong>Is there a Simulation mode?</strong></summary>
 
 Yes, via MuJoCo. It is still a work in progress, but you can run code with the `--sim` flag or `ReachyMini(media_backend="no_media")` if just testing logic without physics.
+
+</details>
+
+<details>
+<summary><strong>How do I debug an app on the Wireless?</strong></summary>
+
+SSH into the embedded computer, clone (or copy) your app, and run it manually. This reproduces what the dashboard does when launching your app.
+
+```bash
+ssh pollen@reachy-mini.local
+# password: root
+cd your_app_name
+python your_app_name/main.py
+```
+
+Your GUI will open at the usual address (for example, `http://reachy-mini.local:8042`).
 
 </details>
 
@@ -422,7 +726,7 @@ This appears if you connect to the robot but don't consume the video frames, cau
 
 * **No Input:** Requires firmware 2.1.3. Run the [update script](../src/reachy_mini/assets/firmware/update.sh).
 * **No Direction:** Requires firmware 2.1.0+.
-* Check flex cables (Slides 45-47 of assembly guide).
+* Check that the flat flexible cable is intalled the right way (Slides 45-47 of assembly guide).
 
 </details>
 

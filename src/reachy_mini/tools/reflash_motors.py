@@ -2,20 +2,26 @@
 
 import argparse
 from importlib.resources import files
+from typing import Optional
 
 import questionary
 from rich.console import Console
 
 import reachy_mini
 from reachy_mini.daemon.utils import find_serial_port
-from reachy_mini.tools.setup_motor import check_configuration, light_led_up, setup_motor
+from reachy_mini.tools.setup_motor import (
+    check_configuration,
+    light_led_down,
+    light_led_up,
+    setup_motor,
+)
 from reachy_mini.utils.hardware_config.parser import parse_yaml_config
 
 BAUDRATE = 1000000
 
 
 def main() -> None:
-    """Reflash Reachy Mini's motors."""
+    """Entry point for the reflash_motors script."""
     parser = argparse.ArgumentParser(
         description="Reflash Reachy Mini motors' firmware.",
     )
@@ -28,13 +34,21 @@ def main() -> None:
         "If not specified, the script will try to automatically find it.",
     )
     args = parser.parse_args()
+    reflash_motors(args.serialport)
 
+
+def reflash_motors(
+    serialport: Optional[str] = None, dont_light_up: bool = False
+) -> None:
+    """Reflash Reachy Mini's motors."""
     console = Console()
 
-    config_file_path = str(files(reachy_mini).joinpath("assets/config/hardware_config.yaml"))
+    config_file_path = str(
+        files(reachy_mini).joinpath("assets/config/hardware_config.yaml")
+    )
     config = parse_yaml_config(config_file_path)
     motors = list(config.motors.keys())
-    if args.serialport is None:
+    if serialport is None:
         console.print(
             "Which version of Reachy Mini are you using?",
         )
@@ -83,7 +97,7 @@ def main() -> None:
             )
         except RuntimeError as e:
             console.print(
-                f"❌ Configuration check failed for motor '{motor_name}': {e}",
+                f"[FAIL] Configuration check failed for motor '{motor_name}': {e}",
                 style="red",
             )
             return
@@ -93,3 +107,10 @@ def main() -> None:
             motor_config.id,
             baudrate=config.serial.baudrate,
         )
+
+        if dont_light_up:
+            light_led_down(
+                serialport,
+                motor_config.id,
+                baudrate=config.serial.baudrate,
+            )

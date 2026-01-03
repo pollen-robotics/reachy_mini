@@ -28,7 +28,9 @@ from reachy_mini.io import (
     ZenohServer,
 )
 from reachy_mini.media.media_manager import MediaManager
+from reachy_mini.tools.reflash_motors import reflash_motors
 
+from .backend.mockup_sim import MockupSimBackend, MockupSimBackendStatus
 from .backend.mujoco import MujocoBackend, MujocoBackendStatus
 from .backend.robot import RobotBackend, RobotBackendStatus
 
@@ -44,7 +46,6 @@ class Daemon:
         log_level: str = "INFO",
         robot_name: str = "reachy_mini",
         wireless_version: bool = False,
-        stream: bool = False,
         desktop_app_daemon: bool = False,
     ) -> None:
         """Initialize the Reachy Mini daemon."""
@@ -57,7 +58,7 @@ class Daemon:
         self.wireless_version = wireless_version
         self.desktop_app_daemon = desktop_app_daemon
 
-        self.backend: "RobotBackend | MujocoBackend | None" = None
+        self.backend: "RobotBackend | MujocoBackend | MockupSimBackend | None" = None
         # Get package version
         try:
             package_version = version("reachy_mini")
@@ -71,8 +72,8 @@ class Daemon:
             state=DaemonState.NOT_INITIALIZED,
             wireless_version=wireless_version,
             desktop_app_daemon=desktop_app_daemon,
-            stream_enabled=stream,
             simulation_enabled=None,
+            mockup_sim_enabled=None,
             backend_status=None,
             error=None,
             wlan_ip=None,
@@ -83,18 +84,19 @@ class Daemon:
         self._webrtc: Optional[Any] = (
             None  # type GstWebRTC imported for wireless version only
         )
-        if stream:
-            if not wireless_version:
-                raise RuntimeError(
-                    "WebRTC streaming is only supported for wireless version. Use --wireless-version flag."
-                )
+        if wireless_version:
             from reachy_mini.media.webrtc_daemon import GstWebRTC
 
-            self._webrtc = GstWebRTC(log_level)
+            try:
+                self._webrtc = GstWebRTC(log_level)
+            except Exception as e:
+                self.logger.error(f"Failed to initialize WebRTC: {e}")
+                self._webrtc = None
 
     async def start(
         self,
         sim: bool = False,
+        mockup_sim: bool = False,
         serialport: str = "auto",
         scene: str = "empty",
         localhost_only: bool = True,
@@ -111,6 +113,7 @@ class Daemon:
 
         Args:
             sim (bool): If True, run in simulation mode using Mujoco. Defaults to False.
+            mockup_sim (bool): If True, run in lightweight simulation mode (no MuJoCo). Defaults to False.
             serialport (str): Serial port for real motors. Defaults to "auto", which will try to find the port automatically.
             scene (str): Name of the scene to load in simulation mode ("empty" or "minimal"). Defaults to "empty".
             localhost_only (bool): If True, restrict the server to localhost only clients. Defaults to True.
@@ -132,16 +135,20 @@ class Daemon:
             return self._status.state
 
         self.logger.info(
-            f"Daemon start parameters: sim={sim}, serialport={serialport}, scene={scene}, localhost_only={localhost_only}, wake_up_on_start={wake_up_on_start}, check_collision={check_collision}, kinematics_engine={kinematics_engine}, headless={headless}, hardware_config_filepath={hardware_config_filepath}"
+            f"Daemon start parameters: sim={sim}, mockup_sim={mockup_sim}, serialport={serialport}, scene={scene}, localhost_only={localhost_only}, wake_up_on_start={wake_up_on_start}, check_collision={check_collision}, kinematics_engine={kinematics_engine}, headless={headless}, hardware_config_filepath={hardware_config_filepath}"
         )
 
+        # mockup-sim behaves exactly like a real robot for apps (they open webcam directly)
+        # Only MuJoCo (--sim) sets simulation_enabled=True (streams video via UDP)
         self._status.simulation_enabled = sim
+        self._status.mockup_sim_enabled = mockup_sim
 
         if not localhost_only:
             self._status.wlan_ip = get_ip_address()
 
         self._start_params = {
             "sim": sim,
+            "mockup_sim": mockup_sim,
             "serialport": serialport,
             "headless": headless,
             "websocket_uri": websocket_uri,
@@ -158,6 +165,7 @@ class Daemon:
             self.backend = self._setup_backend(
                 wireless_version=self.wireless_version,
                 sim=sim,
+                mockup_sim=mockup_sim,
                 serialport=serialport,
                 scene=scene,
                 check_collision=check_collision,
@@ -354,7 +362,8 @@ class Daemon:
                 self.websocket_server.stop()
 
             if self._webrtc:
-                self._webrtc.stop()
+                # We use pause() instead of stop() to keep the signalling server running and the producer registered, allowing proper restart.
+                self._webrtc.pause()
 
             if goto_sleep_on_stop:
                 try:
@@ -401,6 +410,7 @@ class Daemon:
     async def restart(
         self,
         sim: Optional[bool] = None,
+        mockup_sim: Optional[bool] = None,
         serialport: Optional[str] = None,
         scene: Optional[str] = None,
         headless: Optional[bool] = None,
@@ -415,6 +425,7 @@ class Daemon:
 
         Args:
             sim (bool): If True, run in simulation mode using Mujoco. Defaults to None (uses the previous value).
+            mockup_sim (bool): If True, run in lightweight simulation mode (no MuJoCo). Defaults to None (uses the previous value).
             serialport (str): Serial port for real motors. Defaults to None (uses the previous value).
             scene (str): Name of the scene to load in simulation mode ("empty" or "minimal"). Defaults to None (uses the previous value).
             headless (bool): If True, run Mujoco in headless mode (no GUI). Defaults to None (uses the previous value).
@@ -443,6 +454,9 @@ class Daemon:
             )
             params: dict[str, Any] = {
                 "sim": sim if sim is not None else self._start_params["sim"],
+                "mockup_sim": mockup_sim
+                if mockup_sim is not None
+                else self._start_params["mockup_sim"],
                 "serialport": serialport
                 if serialport is not None
                 else self._start_params["serialport"],
@@ -502,6 +516,7 @@ class Daemon:
     async def run4ever(
         self,
         sim: bool = False,
+        mockup_sim: bool = False,
         serialport: str = "auto",
         scene: str = "empty",
         localhost_only: bool = True,
@@ -520,6 +535,7 @@ class Daemon:
 
         Args:
             sim (bool): If True, run in simulation mode using Mujoco. Defaults to False.
+            mockup_sim (bool): If True, run in lightweight simulation mode (no MuJoCo). Defaults to False.
             serialport (str): Serial port for real motors. Defaults to "auto", which will try to find the port automatically.
             scene (str): Name of the scene to load in simulation mode ("empty" or "minimal"). Defaults to "empty".
             localhost_only (bool): If True, restrict the server to localhost only clients. Defaults to True.
@@ -535,6 +551,7 @@ class Daemon:
         """
         await self.start(
             sim=sim,
+            mockup_sim=mockup_sim,
             serialport=serialport,
             scene=scene,
             localhost_only=localhost_only,
@@ -570,6 +587,7 @@ class Daemon:
         self,
         wireless_version: bool,
         sim: bool,
+        mockup_sim: bool,
         serialport: str,
         scene: str,
         check_collision: bool,
@@ -578,8 +596,15 @@ class Daemon:
         use_audio: bool,
         websocket_uri: Optional[str],
         hardware_config_filepath: str | None = None,
-    ) -> "RobotBackend | MujocoBackend":
-        if sim:
+        reflash_motors_on_start: bool = True,
+    ) -> "RobotBackend | MujocoBackend | MockupSimBackend":
+        if mockup_sim:
+            return MockupSimBackend(
+                check_collision=check_collision,
+                kinematics_engine=kinematics_engine,
+                use_audio=use_audio,
+            )
+        elif sim:
             return MujocoBackend(
                 scene=scene,
                 check_collision=check_collision,
@@ -610,6 +635,10 @@ class Daemon:
             self.logger.info(
                 f"Creating RobotBackend with parameters: serialport={serialport}, check_collision={check_collision}, kinematics_engine={kinematics_engine}"
             )
+
+            if reflash_motors_on_start:
+                reflash_motors(serialport, dont_light_up=True)
+
             return RobotBackend(
                 serialport=serialport,
                 log_level=self.log_level,
@@ -640,9 +669,9 @@ class DaemonStatus:
     state: DaemonState
     wireless_version: bool
     desktop_app_daemon: bool
-    stream_enabled: bool
     simulation_enabled: Optional[bool]
-    backend_status: Optional[RobotBackendStatus | MujocoBackendStatus]
+    mockup_sim_enabled: Optional[bool]
+    backend_status: Optional[RobotBackendStatus | MujocoBackendStatus | MockupSimBackendStatus]
     error: Optional[str] = None
     wlan_ip: Optional[str] = None
     version: Optional[str] = None

@@ -279,3 +279,15 @@ class MediaManager:
             self.logger.warning("Audio system is not initialized.")
             return
         self.audio.stop_playing()
+
+    def get_DoA(self) -> tuple[float, bool] | None:
+        """Get the Direction of Arrival (DoA) from the microphone array.
+
+        Returns:
+            tuple[float, bool] | None: A tuple (angle_radians, speech_detected),
+            or None if the audio system is not available.
+
+        """
+        if self.audio is None:
+            return None
+        return self.audio.get_DoA()

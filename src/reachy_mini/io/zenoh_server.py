@@ -96,6 +96,10 @@ class ZenohServer(AbstractServer):
         self.pub_pose = self.session.declare_publisher(f"{self.prefix}/head_pose")
         self.backend.set_pose_publisher(self.pub_pose)
 
+        # Declare IMU data publisher
+        self.pub_imu = self.session.declare_publisher(f"{self.prefix}/imu_data")
+        self.backend.set_imu_publisher(self.pub_imu)
+
         self.task_req_sub = self.session.declare_subscriber(
             f"{self.prefix}/task",
             self._handle_task_request,

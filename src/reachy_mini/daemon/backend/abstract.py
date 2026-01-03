@@ -25,6 +25,7 @@ from numpy.typing import NDArray
 from scipy.spatial.transform import Rotation as R
 
 if typing.TYPE_CHECKING:
+    from reachy_mini.daemon.backend.mockup_sim.backend import MockupSimBackendStatus
     from reachy_mini.daemon.backend.mujoco.backend import MujocoBackendStatus
     from reachy_mini.daemon.backend.robot.backend import RobotBackendStatus
     from reachy_mini.kinematics import AnyKinematics
@@ -131,6 +132,7 @@ class Backend:
         self.joint_positions_publisher: zenoh.Publisher | None = None
         self.pose_publisher: zenoh.Publisher | None = None
         self.recording_publisher: zenoh.Publisher | None = None
+        self.imu_publisher: zenoh.Publisher | None = None
         self.error: str | None = None  # To store any error that occurs during execution
         self.is_recording = False  # Flag to indicate if recording is active
         self.recorded_data: list[dict[str, Any]] = []  # List to store recorded data
@@ -228,7 +230,7 @@ class Backend:
             self._active_move_depth -= 1
         self._play_move_lock.release()
 
-    def get_status(self) -> "RobotBackendStatus | MujocoBackendStatus":
+    def get_status(self) -> "RobotBackendStatus | MujocoBackendStatus | MockupSimBackendStatus":
         """Return backend statistics.
 
         This method is a placeholder and should be overridden by subclasses.
@@ -255,6 +257,15 @@ class Backend:
 
         """
         self.pose_publisher = publisher
+
+    def set_imu_publisher(self, publisher: zenoh.Publisher) -> None:
+        """Set the publisher for IMU data.
+
+        Args:
+            publisher: A publisher object that will be used to publish IMU data.
+
+        """
+        self.imu_publisher = publisher
 
     def update_target_head_joints_from_ik(
         self,
