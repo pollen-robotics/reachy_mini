@@ -1,7 +1,42 @@
 """GStreamer camera backend.
 
 This module provides an implementation of the CameraBase class using GStreamer.
-By default the module directly returns JPEG images as output by the camera.
+It offers advanced video processing capabilities including hardware-accelerated
+decoding, image format conversion, and support for various camera models.
+
+The GStreamer camera backend features:
+- Hardware-accelerated video decoding
+- Support for multiple camera models (Reachy Mini Lite, Arducam, etc.)
+- Advanced image processing pipelines
+- Automatic camera detection and configuration
+- Multiple resolution and frame rate support
+- JPEG and raw image format support
+
+Example usage:
+    >>> from reachy_mini.media.camera_gstreamer import GStreamerCamera
+    >>> from reachy_mini.media.camera_constants import CameraResolution
+    >>>
+    >>> # Create GStreamer camera instance
+    >>> camera = GStreamerCamera(log_level="INFO")
+    >>>
+    >>> # Open the camera
+    >>> camera.open()
+    >>>
+    >>> # Set resolution (optional)
+    >>> camera.set_resolution(CameraResolution.R1280x720at30fps)
+    >>>
+    >>> # Capture frames
+    >>> frame = camera.read()
+    >>> if frame is not None:
+    ...     print(f"Captured frame with shape: {frame.shape}")
+    >>>
+    >>> # Get camera information
+    >>> width, height = camera.resolution
+    >>> fps = camera.framerate
+    >>> print(f"Camera: {width}x{height}@{fps}fps")
+    >>>
+    >>> # Clean up
+    >>> camera.close()
 """
 
 import os

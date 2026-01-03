@@ -1,6 +1,37 @@
 """Media Manager.
 
-Provides camera and audio access based on the selected backedn
+Provides camera and audio access based on the selected backend.
+
+This module offers a unified interface for managing both camera and audio
+devices with support for multiple backends. It simplifies the process of
+initializing, configuring, and using media devices across different
+platforms and use cases.
+
+Available backends:
+- NO_MEDIA: No media devices (useful for headless operation)
+- DEFAULT: OpenCV + SoundDevice (cross-platform default)
+- DEFAULT_NO_VIDEO: SoundDevice only (audio without video)
+- GSTREAMER: GStreamer-based media (advanced features)
+- GSTREAMER_NO_VIDEO: GStreamer audio only
+- WEBRTC: WebRTC-based media for real-time communication
+
+Example usage:
+    >>> from reachy_mini.media.media_manager import MediaManager, MediaBackend
+    >>>
+    >>> # Initialize with default backend
+    >>> media = MediaManager(backend=MediaBackend.DEFAULT)
+    >>>
+    >>> # Capture a frame
+    >>> frame = media.get_frame()
+    >>> if frame is not None:
+    ...     cv2.imshow("Frame", frame)
+    ...     cv2.waitKey(1)
+    >>>
+    >>> # Play a sound
+    >>> media.play_sound("/path/to/sound.wav")
+    >>>
+    >>> # Clean up
+    >>> media.close()
 """
 
 import logging
@@ -17,7 +48,25 @@ from reachy_mini.media.camera_base import CameraBase
 
 
 class MediaBackend(Enum):
-    """Media backends."""
+    """Media backends.
+
+    Enumeration of available media backends that can be used with MediaManager.
+    Each backend provides different capabilities and performance characteristics.
+
+    Attributes:
+        NO_MEDIA: No media devices - useful for headless operation or when
+                 media devices are not needed.
+        DEFAULT: Default backend using OpenCV for video and SoundDevice for audio.
+                Cross-platform and widely compatible.
+        DEFAULT_NO_VIDEO: SoundDevice audio only - for audio processing without video.
+        GSTREAMER: GStreamer-based media backend with advanced video and audio
+                  processing capabilities.
+        GSTREAMER_NO_VIDEO: GStreamer audio only - for advanced audio processing
+                           without video.
+        WEBRTC: WebRTC-based media backend for real-time communication and
+               streaming applications.
+
+    """
 
     NO_MEDIA = "no_media"
     DEFAULT = "default"
@@ -28,7 +77,19 @@ class MediaBackend(Enum):
 
 
 class MediaManager:
-    """Abstract class for opening and managing audio devices."""
+    """Media Manager for handling camera and audio devices.
+
+        This class provides a unified interface for managing both camera and audio
+    devices across different backends. It handles initialization, configuration,
+    and cleanup of media resources.
+
+    Attributes:
+            logger (logging.Logger): Logger instance for media-related messages.
+            backend (MediaBackend): The selected media backend.
+            camera (Optional[CameraBase]): Camera device instance.
+            audio (Optional[AudioBase]): Audio device instance.
+
+    """
 
     def __init__(
         self,
@@ -37,7 +98,28 @@ class MediaManager:
         use_sim: bool = False,
         signalling_host: str = "localhost",
     ) -> None:
-        """Initialize the audio device."""
+        """Initialize the media manager.
+
+        Args:
+            backend (MediaBackend): The media backend to use. Default is DEFAULT.
+            log_level (str): Logging level for media operations.
+                          Options: 'DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'.
+                          Default: 'INFO'.
+            use_sim (bool): Whether to use simulation mode (for testing).
+                          Default: False.
+            signalling_host (str): Host address for WebRTC signalling server.
+                                 Only used with WEBRTC backend.
+                                 Default: 'localhost'.
+
+        Note:
+            The constructor initializes the selected media backend and sets up
+            the appropriate camera and audio devices based on the backend choice.
+
+        Example:
+            >>> media = MediaManager(backend=MediaBackend.DEFAULT)
+            >>> media = MediaManager(backend=MediaBackend.GSTREAMER, log_level="DEBUG")
+
+        """
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(log_level)
         self.backend = backend
@@ -69,7 +151,26 @@ class MediaManager:
                 raise NotImplementedError(f"Media backend {backend} not implemented.")
 
     def close(self) -> None:
-        """Close the media manager and release resources."""
+        """Close the media manager and release resources.
+
+        This method should be called when the media manager is no longer needed
+        to properly clean up and release all media resources. It stops any ongoing
+        audio recording/playback and closes the camera device.
+
+        Note:
+            After calling this method, the media manager can be reused by calling
+            the appropriate initialization methods again, but it's generally
+            recommended to create a new MediaManager instance if needed.
+
+        Example:
+            >>> media = MediaManager()
+            >>> try:
+            ...     # Use media devices
+            ...     frame = media.get_frame()
+            ... finally:
+            ...     media.close()
+
+        """
         if self.camera is not None:
             self.camera.close()
         if self.audio is not None:
@@ -111,7 +212,27 @@ class MediaManager:
         """Get a frame from the camera.
 
         Returns:
-            Optional[npt.NDArray[np.uint8]]: The captured BGR frame, or None if the camera is not available.
+            Optional[npt.NDArray[np.uint8]]: The captured BGR frame as a numpy array
+            with shape (height, width, 3), or None if the camera is not available
+            or an error occurred.
+
+            The image is in BGR format (OpenCV convention) and can be directly
+            used with OpenCV functions or converted to RGB if needed.
+
+        Note:
+            This method returns None if the camera is not initialized or if
+            there's an error capturing the frame. Always check the return value
+            before using the frame.
+
+        Example:
+            >>> frame = media.get_frame()
+            >>> if frame is not None:
+            ...     # Process the frame
+            ...     cv2.imshow("Camera", frame)
+            ...     cv2.waitKey(1)
+            ...
+            ...     # Convert to RGB if needed
+            ...     rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
         """
         if self.camera is None:

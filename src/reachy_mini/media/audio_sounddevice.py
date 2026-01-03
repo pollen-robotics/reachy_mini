@@ -1,4 +1,43 @@
-"""Audio implementation using sounddevice backend."""
+"""Audio implementation using sounddevice backend.
+
+This module provides a cross-platform audio implementation using the sounddevice
+library. It supports microphone input, speaker output, and sound file playback
+across different operating systems (Windows, macOS, Linux).
+
+The sounddevice backend features:
+- Cross-platform compatibility
+- Low-latency audio processing
+- Support for multiple audio devices
+- Sound file playback (WAV, OGG, FLAC, etc.)
+- Automatic sample rate and channel conversion
+- Thread-safe audio buffer management
+
+Note:
+    This class is typically used internally by the MediaManager when the DEFAULT
+    backend is selected. Direct usage is possible but usually not necessary.
+
+Example usage via MediaManager:
+    >>> from reachy_mini.media.media_manager import MediaManager, MediaBackend
+    >>>
+    >>> # Create media manager with sounddevice backend (default)
+    >>> media = MediaManager(backend=MediaBackend.DEFAULT, log_level="INFO")
+    >>>
+    >>> # Start audio recording
+    >>> media.start_recording()
+    >>>
+    >>> # Get audio samples
+    >>> samples = media.get_audio_sample()
+    >>> if samples is not None:
+    ...     print(f"Captured {len(samples)} audio samples")
+    >>>
+    >>> # Play a sound file
+    >>> media.play_sound("/path/to/sound.wav")
+    >>>
+    >>> # Clean up
+    >>> media.stop_recording()
+    >>> media.close()
+
+"""
 
 import os
 import threading
@@ -20,13 +59,32 @@ MAX_INPUT_QUEUE_SECONDS = 60.0
 
 
 class SoundDeviceAudio(AudioBase):
-    """Audio device implementation using sounddevice."""
+    """Audio device implementation using sounddevice.
+
+    This class implements the AudioBase interface using the sounddevice library,
+    providing cross-platform audio capture and playback capabilities.
+
+    Attributes:
+        Inherits all attributes from AudioBase.
+        Additionally manages sounddevice streams and audio buffers.
+
+    """
 
     def __init__(
         self,
         log_level: str = "INFO",
     ) -> None:
-        """Initialize the SoundDevice audio device."""
+        """Initialize the SoundDevice audio device.
+
+        Args:
+            log_level (str): Logging level for audio operations.
+                          Default: 'INFO'.
+
+        Note:
+            This constructor initializes the sounddevice audio system and sets up
+            the necessary audio streams for recording and playback.
+
+        """
         super().__init__(log_level=log_level)
         self._input_stream = None
         self._output_stream = None
@@ -58,7 +116,10 @@ class SoundDeviceAudio(AudioBase):
         return self._input_stream is not None and self._input_stream.active
 
     def start_recording(self) -> None:
-        """Open the audio input stream, using ReSpeaker card if available."""
+        """Open the audio input stream, using ReSpeaker card if available.
+
+        See AudioBase.start_recording() for complete documentation.
+        """
         if self._is_recording:
             self.stop_recording()
 
@@ -109,7 +170,10 @@ class SoundDeviceAudio(AudioBase):
             self._input_queued_samples += indata.shape[0]
 
     def get_audio_sample(self) -> Optional[npt.NDArray[np.float32]]:
-        """Read audio data from the buffer. Returns numpy array or None if empty."""
+        """Read audio data from the buffer. Returns numpy array or None if empty.
+
+        See AudioBase.get_audio_sample() for complete documentation.
+        """
         with self._input_lock:
             if self._input_buffer and len(self._input_buffer) > 0:
                 data: npt.NDArray[np.float32] = np.concatenate(
@@ -122,32 +186,47 @@ class SoundDeviceAudio(AudioBase):
         return None
 
     def get_input_audio_samplerate(self) -> int:
-        """Get the input samplerate of the audio device."""
+        """Get the input samplerate of the audio device.
+
+        See AudioBase.get_input_audio_samplerate() for complete documentation.
+        """
         return int(
             sd.query_devices(self._input_device_id, "input")["default_samplerate"]
         )
 
     def get_output_audio_samplerate(self) -> int:
-        """Get the output samplerate of the audio device."""
+        """Get the output samplerate of the audio device.
+
+        See AudioBase.get_output_audio_samplerate() for complete documentation.
+        """
         return int(
             sd.query_devices(self._output_device_id, "output")["default_samplerate"]
         )
 
     def get_input_channels(self) -> int:
-        """Get the number of input channels of the audio device."""
+        """Get the number of input channels of the audio device.
+
+        See AudioBase.get_input_channels() for complete documentation.
+        """
         return min(
             int(sd.query_devices(self._input_device_id, "input")["max_input_channels"]),
             MAX_INPUT_CHANNELS,
         )
 
     def get_output_channels(self) -> int:
-        """Get the number of output channels of the audio device."""
+        """Get the number of output channels of the audio device.
+
+        See AudioBase.get_output_channels() for complete documentation.
+        """
         return int(
             sd.query_devices(self._output_device_id, "output")["max_output_channels"]
         )
 
     def stop_recording(self) -> None:
-        """Close the audio stream and release resources."""
+        """Close the audio stream and release resources.
+
+        See AudioBase.stop_recording() for complete documentation.
+        """
         if self._is_recording:
             self._input_stream.stop()  # type: ignore[attr-defined]
             self._input_stream.close()  # type: ignore[attr-defined]
@@ -155,7 +234,10 @@ class SoundDeviceAudio(AudioBase):
             self.logger.info("SoundDevice audio stream closed.")
 
     def push_audio_sample(self, data: npt.NDArray[np.float32]) -> None:
-        """Push audio data to the output device."""
+        """Push audio data to the output device.
+
+        See AudioBase.push_audio_sample() for complete documentation.
+        """
         if self._output_stream is not None:
             with self._output_lock:
                 self._output_buffer.append(data.copy())
@@ -170,7 +252,10 @@ class SoundDeviceAudio(AudioBase):
             self._output_buffer.clear()
 
     def start_playing(self) -> None:
-        """Open the audio output stream."""
+        """Open the audio output stream.
+
+        See AudioBase.start_playing() for complete documentation.
+        """
         self.clear_output_buffer()
 
         if self._output_stream is not None:
@@ -195,26 +280,26 @@ class SoundDeviceAudio(AudioBase):
         """Handle audio output stream callback."""
         if status:
             self.logger.warning(f"SoundDevice output status: {status}")
-        
+
         with self._output_lock:
             filled = 0
             while filled < frames and self._output_buffer:
                 chunk = self._output_buffer[0]
-                
+
                 needed = frames - filled
                 available = len(chunk)
                 take = min(needed, available)
-                
-                outdata[filled:filled + take] = chunk[:take]
+
+                outdata[filled : filled + take] = chunk[:take]
                 filled += take
-                
+
                 if take < available:
                     # Partial consumption, keep remainder
                     self._output_buffer[0] = chunk[take:]
                 else:
                     # Fully consumed this chunk
                     self._output_buffer.pop(0)
-            
+
             # Only pad with zeros if buffer is truly empty
             if filled < frames:
                 outdata[filled:] = 0
@@ -237,7 +322,10 @@ class SoundDeviceAudio(AudioBase):
         return chunk
 
     def stop_playing(self) -> None:
-        """Close the audio output stream."""
+        """Close the audio output stream.
+
+        See AudioBase.stop_playing() for complete documentation.
+        """
         if self._output_stream is not None:
             self._output_stream.stop()
             self._output_stream.close()
@@ -247,6 +335,8 @@ class SoundDeviceAudio(AudioBase):
 
     def play_sound(self, sound_file: str) -> None:
         """Play a sound file.
+
+        See AudioBase.play_sound() for complete documentation.
 
         Args:
             sound_file (str): Path to the sound file to play. May be given relative to the assets directory or as an absolute path.
