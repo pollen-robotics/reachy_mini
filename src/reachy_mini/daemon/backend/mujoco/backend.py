@@ -193,23 +193,37 @@ class MujocoBackend(Backend):
             )
             robot_view_streaming_thread.start()
 
+        viewer = None
         if not self.headless:
-            viewer = mujoco.viewer.launch_passive(
-                self.model, self.data, show_left_ui=False, show_right_ui=False
-            )
-            with viewer.lock():
-                viewer.cam.type = mujoco.mjtCamera.mjCAMERA_FREE
-                viewer.cam.distance = 0.8  # ≃ ||pos - lookat||
-                viewer.cam.azimuth = 160  # degrees
-                viewer.cam.elevation = -20  # degrees
-                viewer.cam.lookat[:] = [0, 0, 0.15]
+            try:
+                viewer = mujoco.viewer.launch_passive(
+                    self.model, self.data, show_left_ui=False, show_right_ui=False
+                )
+                with viewer.lock():
+                    viewer.cam.type = mujoco.mjtCamera.mjCAMERA_FREE
+                    viewer.cam.distance = 0.8  # ≃ ||pos - lookat||
+                    viewer.cam.azimuth = 160  # degrees
+                    viewer.cam.elevation = -20  # degrees
+                    viewer.cam.lookat[:] = [0, 0, 0.15]
 
-                # force one render with your new camera
-                mujoco.mj_step(self.model, self.data)
-                viewer.sync()
+                    # force one render with your new camera
+                    mujoco.mj_step(self.model, self.data)
+                    viewer.sync()
 
-                # im = self.get_camera()
-                # self.streamer_udp.send_frame(im)
+                    # im = self.get_camera()
+                    # self.streamer_udp.send_frame(im)
+            except Exception as e:
+                if "mjpython" in str(e).lower() or "macos" in str(e).lower():
+                    self.logger.warning(
+                        f"Failed to launch MuJoCo viewer: {e}. "
+                        "Falling back to headless mode. "
+                        "On macOS, use 'mjpython' instead of regular Python to enable the viewer, "
+                        "or use --headless flag."
+                    )
+                    viewer = None
+                    self.headless = True
+                else:
+                    raise
 
         self.data.qpos[self.joint_qpos_addr] = np.array(
             self._SLEEP_HEAD_JOINT_POSITIONS + self._SLEEP_ANTENNAS_JOINT_POSITIONS
@@ -234,7 +248,7 @@ class MujocoBackend(Backend):
 
         # one more frame so the viewer shows your startup pose
         mujoco.mj_step(self.model, self.data)
-        if not self.headless:
+        if viewer is not None:
             viewer.sync()
 
             rendering_thread = Thread(
@@ -307,7 +321,7 @@ class MujocoBackend(Backend):
                         )
                     self.ready.set()
 
-                if not self.headless:
+                if viewer is not None:
                     viewer.sync()
 
             mujoco.mj_step(self.model, self.data)
@@ -317,7 +331,7 @@ class MujocoBackend(Backend):
             # print(f"Step {step}: took {took*1e6:.1f}us")
             step += 1
 
-        if not self.headless:
+        if viewer is not None:
             viewer.close()
             rendering_thread.join()
         if self.websocket_uri:

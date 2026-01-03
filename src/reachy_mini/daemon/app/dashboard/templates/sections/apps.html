@@ -1,8 +1,19 @@
 <section class="w-full">
     <div class="app-section">
         <div class="app-section-title">Applications</div>
-        <div class="">
-            <ul id="installed-apps" class="overflow-y-auto max-h-96"></ul>
+        <div class="mt-4 overflow-y-auto max-h-96">
+            <table class="w-full">
+                <thead class="bg-gray-50 sticky top-0">
+                    <tr class="border-b border-gray-200">
+                        <th class="text-left text-sm font-semibold text-gray-700 py-3 px-4">App Name</th>
+                        <th class="text-center text-sm font-semibold text-gray-700 py-3 px-4">Status</th>
+                        <th class="text-center text-sm font-semibold text-gray-700 py-3 px-4">Start at startup</th>
+                        <th class="text-center text-sm font-semibold text-gray-700 py-3 px-4">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="installed-apps" class="divide-y divide-gray-100">
+                </tbody>
+            </table>
         </div>
     </div>
 </section>
