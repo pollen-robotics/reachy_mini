@@ -259,6 +259,21 @@ class GstWebRTCClient(CameraBase, AudioBase):
         queue.link(rtpopuspay)
         rtpopuspay.link(udpsink)
 
+    def set_max_output_buffers(self, max_buffers: int) -> None:
+        """Set the maximum number of output buffers to queue in the player.
+
+        Args:
+            max_buffers (int): Maximum number of buffers to queue.
+
+        """
+        if self._appsrc is not None:
+            self._appsrc.set_property("max-buffers", max_buffers)
+            self._appsrc.set_property("leaky-type", 2)  # drop old buffers
+        else:
+            self.logger.warning(
+                "AppSrc is not initialized. Call start_playing() first."
+            )
+
     def start_playing(self) -> None:
         """Open the audio output using GStreamer."""
         self._pipeline_playback.set_state(Gst.State.PLAYING)

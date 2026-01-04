@@ -169,6 +169,17 @@ class SoundDeviceAudio(AudioBase):
         with self._output_lock:
             self._output_buffer.clear()
 
+    def set_max_output_buffers(self, max_buffers: int) -> None:
+        """Set the maximum number of output buffers to queue in the player.
+
+        Args:
+            max_buffers (int): Maximum number of buffers to queue.
+
+        """
+        self.logger.warning(
+            "set_max_output_buffers is not implemented for SoundDeviceAudio."
+        )
+
     def start_playing(self) -> None:
         """Open the audio output stream."""
         self.clear_output_buffer()
@@ -195,26 +206,26 @@ class SoundDeviceAudio(AudioBase):
         """Handle audio output stream callback."""
         if status:
             self.logger.warning(f"SoundDevice output status: {status}")
-        
+
         with self._output_lock:
             filled = 0
             while filled < frames and self._output_buffer:
                 chunk = self._output_buffer[0]
-                
+
                 needed = frames - filled
                 available = len(chunk)
                 take = min(needed, available)
-                
-                outdata[filled:filled + take] = chunk[:take]
+
+                outdata[filled : filled + take] = chunk[:take]
                 filled += take
-                
+
                 if take < available:
                     # Partial consumption, keep remainder
                     self._output_buffer[0] = chunk[take:]
                 else:
                     # Fully consumed this chunk
                     self._output_buffer.pop(0)
-            
+
             # Only pad with zeros if buffer is truly empty
             if filled < frames:
                 outdata[filled:] = 0
