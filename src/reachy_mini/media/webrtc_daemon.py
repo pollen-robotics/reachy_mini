@@ -35,8 +35,6 @@ class GstWebRTC:
         self._logger = logging.getLogger(__name__)
         self._logger.setLevel(log_level)
 
-        # self._id_audio_card = get_respeaker_card_number()
-
         Gst.init(None)
         self._loop = GLib.MainLoop()
         self._thread_bus_calls = Thread(target=lambda: self._loop.run(), daemon=True)
@@ -169,8 +167,10 @@ class GstWebRTC:
         extra_controls_structure.set_value("repeat_sequence_header", 1)
         extra_controls_structure.set_value("video_bitrate", 5_000_000)
         v4l2h264enc.set_property("extra-controls", extra_controls_structure)
+        # Use H264 Level 3.1 + Constrained Baseline for Safari/WebKit compatibility
         caps_h264 = Gst.Caps.from_string(
-            "video/x-h264,stream-format=byte-stream,alignment=au,level=(string)4"
+            "video/x-h264,stream-format=byte-stream,alignment=au,"
+            "level=(string)3.1,profile=(string)constrained-baseline"
         )
         capsfilter_h264 = Gst.ElementFactory.make("capsfilter")
         capsfilter_h264.set_property("caps", caps_h264)
