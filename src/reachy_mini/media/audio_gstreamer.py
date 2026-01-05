@@ -275,16 +275,22 @@ class GStreamerAudio(AudioBase):
             # reachy mini wireless has a preconfigured asoundrc
             audiosink = Gst.ElementFactory.make("alsasink")
             audiosink.set_property("device", "reachymini_audio_sink")
-        elif os.name == "nt":
+            self.logger.info(f"Using audio device reachymini_audio_sink for playback.")
+        elif platform.system() == "Windows":
             id_audio_card = self._get_audio_device("Sink")
             audiosink = Gst.ElementFactory.make("wasapi2sink")
             audiosink.set_property("device", id_audio_card)
-            self.logger.info(f"Using audio device {id_audio_card} for playback.")
+            self.logger.info(f"Using audio device {id_audio_card} for playback on Windows.")
+        elif platform.system() == "Darwin":
+            id_audio_card = self._get_audio_device("Sink")
+            audiosink = Gst.ElementFactory.make("osxaudiosink")
+            audiosink.set_property("unique-id", id_audio_card)
+            self.logger.info(f"Using audio device {id_audio_card} for playback on macOS.")
         else:
             id_audio_card = self._get_audio_device("Sink")
             audiosink = Gst.ElementFactory.make("pulsesink")
             audiosink.set_property("device", f"{id_audio_card}")
-        # Todo: OSX support
+            self.logger.info(f"Using audio device {id_audio_card} for playback.")
 
         playbin = Gst.ElementFactory.make("playbin", "player")
         if not playbin:
