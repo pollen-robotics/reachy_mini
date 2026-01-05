@@ -60,8 +60,9 @@ def setup_motor(
     ):
         raise RuntimeError(
             f"No motor found on port {serial_port}. "
-            f"Make sure the motor {id2name.get(from_id, from_id)} is in factory settings (ID {from_id} and baudrate {from_baudrate}) and connected to the specified port."
+            f"Make sure Reachy Mini is powered !"
         )
+        # f"Make sure the motor {id2name.get(from_id, from_id)} is in factory settings (ID {from_id} and baudrate {from_baudrate}) and connected to the specified port."
 
     # Make sure the torque is disabled to be able to write EEPROM
     disable_torque(serial_port, from_id, from_baudrate)
