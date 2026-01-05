@@ -200,6 +200,13 @@ def forget_all_wifi_networks() -> None:
                 error = None
                 connections = get_wifi_connections()
                 forgotten = []
+                
+                # Check if we're currently connected to a non-Hotspot network
+                was_connected_to_wifi = False
+                for conn in connections:
+                    if conn.name != "Hotspot" and check_if_connection_active(conn.name):
+                        was_connected_to_wifi = True
+                        break
 
                 for conn in connections:
                     if conn.name != "Hotspot":
@@ -208,9 +215,10 @@ def forget_all_wifi_networks() -> None:
 
                 logger.info(f"Forgotten {len(forgotten)} networks: {forgotten}")
 
-                # Always ensure we have connectivity after forgetting all
-                if get_current_wifi_mode() == WifiMode.DISCONNECTED:
-                    logger.info("No connection left, setting up hotspot...")
+                # Always fallback to hotspot if we were connected to a WiFi network
+                # or if we're now disconnected
+                if was_connected_to_wifi or get_current_wifi_mode() == WifiMode.DISCONNECTED:
+                    logger.info("Falling back to hotspot after clearing all networks...")
                     setup_wifi_connection(
                         name="Hotspot",
                         ssid=HOTSPOT_SSID,
