@@ -68,6 +68,16 @@ class AudioBase(ABC):
         pass
 
     @abstractmethod
+    def set_max_output_buffers(self, max_buffers: int) -> None:
+        """Set the maximum number of output buffers to queue in the player.
+
+        Args:
+            max_buffers (int): Maximum number of buffers to queue.
+
+        """
+        pass
+
+    @abstractmethod
     def push_audio_sample(self, data: npt.NDArray[np.float32]) -> None:
         """Push audio data to the output device."""
         pass
