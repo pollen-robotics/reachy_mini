@@ -39,14 +39,14 @@ def test_change_resolution_errors() -> None:
     media = MediaManager(backend=MediaBackend.DEFAULT)
     media.camera.camera_specs = None
     with pytest.raises(RuntimeError):
-        media.camera.set_resolution(CameraResolution.R1280x720)
+        media.camera.set_resolution(CameraResolution.R1280x720at30fps)
 
     media.camera.camera_specs = MujocoCameraSpecs()
     with pytest.raises(RuntimeError):
-        media.camera.set_resolution(CameraResolution.R1280x720)
+        media.camera.set_resolution(CameraResolution.R1280x720at30fps)
     media.camera.camera_specs = ReachyMiniLiteCamSpecs()
     with pytest.raises(ValueError):
-        media.camera.set_resolution(CameraResolution.R1280x720)
+        media.camera.set_resolution(CameraResolution.R1280x720at30fps)
 
 
 @pytest.mark.video_gstreamer
