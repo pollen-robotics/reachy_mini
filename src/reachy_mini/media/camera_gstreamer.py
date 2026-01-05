@@ -86,7 +86,7 @@ class GStreamerCamera(CameraBase):
             videoconvert.link(self._appsink_video)
         elif platform.system() == "Darwin":
             camsrc = Gst.ElementFactory.make("avfvideosrc")
-            camsrc.set_property("device-name", cam_path)
+            camsrc.set_property("device-index", cam_path)
             self.pipeline.add(camsrc)
             queue = Gst.ElementFactory.make("queue")
             self.pipeline.add(queue)
@@ -229,7 +229,7 @@ class GStreamerCamera(CameraBase):
             cam_names = ["Reachy", "Arducam_12MP", "imx708"]
             devices = monitor.get_devices()
             for cam_name in cam_names:
-                for device in devices:
+                for device_index, device in enumerate(devices):
                     name = device.get_display_name()
                     device_props = device.get_properties()
 
@@ -245,14 +245,22 @@ class GStreamerCamera(CameraBase):
                                 f"Found {cam_name} camera at {device_path}"
                             )
                             return str(device_path), camera_specs
-                        elif platform.system() == "Windows" or platform.system() == "Darwin":
+                        elif platform.system() == "Windows":
                             camera_specs = (
                                 cast(CameraSpecs, ArducamSpecs)
                                 if cam_name == "Arducam_12MP"
                                 else cast(CameraSpecs, ReachyMiniLiteCamSpecs)
                             )
-                            self.logger.debug(f"Found {cam_name} camera for {platform.system()}")
+                            self.logger.debug(f"Found {cam_name} camera for Windows")
                             return str(name), camera_specs
+                        elif platform.system() == "Darwin":
+                            camera_specs = (
+                                cast(CameraSpecs, ArducamSpecs)
+                                if cam_name == "Arducam_12MP"
+                                else cast(CameraSpecs, ReachyMiniLiteCamSpecs)
+                            )
+                            self.logger.debug(f"Found {cam_name} camera at index {device_index} for macOS")
+                            return device_index, camera_specs
                         elif cam_name == "imx708":
                             camera_specs = cast(CameraSpecs, ReachyMiniWirelessCamSpecs)
                             self.logger.debug(f"Found {cam_name} camera")
