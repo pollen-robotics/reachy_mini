@@ -7,6 +7,7 @@ const installedApps = {
     currentlyRunningApp: null,
     busy: false,
     toggles: {},
+    startupCheckboxes: {},
 
     startApp: async (appName) => {
         if (installedApps.busy) {
@@ -91,27 +92,38 @@ const installedApps = {
         appsListElement.innerHTML = '';
 
         if (!appsData || appsData.length === 0) {
-            appsListElement.innerHTML = '<li>No installed apps found.</li>';
+            const emptyRow = document.createElement('tr');
+            const emptyCell = document.createElement('td');
+            emptyCell.colSpan = 4;
+            emptyCell.className = 'text-gray-500 text-center py-8';
+            emptyCell.textContent = 'No installed apps found.';
+            emptyRow.appendChild(emptyCell);
+            appsListElement.appendChild(emptyRow);
             return;
         }
 
         const runningApp = await installedApps.getRunningApp();
 
         installedApps.toggles = {};
-        appsData.forEach(app => {
-            const li = document.createElement('li');
-            li.className = 'app-list-item';
+        installedApps.startupCheckboxes = {};
+        
+        // Create all app rows
+        for (const app of appsData) {
             const isRunning = (app.name === runningApp);
-            li.appendChild(installedApps.createAppElement(app, isRunning));
-            appsListElement.appendChild(li);
-        });
+            const row = await installedApps.createAppElement(app, isRunning);
+            appsListElement.appendChild(row);
+        }
     },
 
-    createAppElement: (app, isRunning) => {
-        const container = document.createElement('div');
-        container.className = 'grid grid-cols-[auto_6rem_2rem] justify-stretch gap-x-2';
+    createAppElement: async (app, isRunning) => {
+        const row = document.createElement('tr');
+        row.className = 'hover:bg-gray-50 transition-colors';
 
-        const title = document.createElement('div');
+        // App name cell (left aligned)
+        const nameCell = document.createElement('td');
+        nameCell.className = 'py-3 px-4';
+        const titleDiv = document.createElement('div');
+        titleDiv.className = 'flex items-center';
         const titleSpan = document.createElement('span');
         titleSpan.className = 'installed-app-title top-1/2 ';
 
@@ -123,10 +135,10 @@ const installedApps = {
             titleSpan.innerHTML = app.name;
         }
 
-        title.appendChild(titleSpan);
+        titleDiv.appendChild(titleSpan);
         if (app.extra && app.extra.custom_app_url) {
             const settingsLink = document.createElement('a');
-            settingsLink.className = 'installed-app-settings ml-2 text-gray-500 cursor-pointer';
+            settingsLink.className = 'installed-app-settings ml-2 text-gray-400 hover:text-gray-600 cursor-pointer transition-colors';
             settingsLink.innerHTML = '⚙️';
 
             const url = new URL(app.extra.custom_app_url);
@@ -135,15 +147,19 @@ const installedApps = {
             settingsLink.href = url.toString();
             settingsLink.target = '_blank';
             settingsLink.rel = 'noopener noreferrer';
-            title.appendChild(settingsLink);
+            titleDiv.appendChild(settingsLink);
         }
-        container.appendChild(title);
-        const slider = document.createElement('div');
-        const toggle = new ToggleSlider({
+        nameCell.appendChild(titleDiv);
+        row.appendChild(nameCell);
+        
+        // Status toggle cell
+        const statusCell = document.createElement('td');
+        statusCell.className = 'py-3 px-4 text-center';
+        const statusToggle = new ToggleSlider({
             checked: isRunning,
             onChange: (checked) => {
                 if (installedApps.busy) {
-                    toggle.setChecked(!checked);
+                    statusToggle.setChecked(!checked);
                     return;
                 }
                 if (checked) {
@@ -153,14 +169,96 @@ const installedApps = {
                 }
             }
         });
-        installedApps.toggles[app.name] = toggle;
-        slider.appendChild(toggle.element);
-        container.appendChild(slider);
+        installedApps.toggles[app.name] = statusToggle;
+        statusCell.appendChild(statusToggle.element);
+        row.appendChild(statusCell);
+        
+        // Startup checkbox cell
+        const startupCell = document.createElement('td');
+        startupCell.className = 'py-3 px-4 text-center';
+        
+        const startupLabel = document.createElement('label');
+        startupLabel.className = 'flex items-center justify-center gap-2 cursor-pointer group';
+        
+        const startupCheckbox = document.createElement('input');
+        startupCheckbox.type = 'checkbox';
+        startupCheckbox.id = `startup-${app.name}`;
+        startupCheckbox.name = `startup-${app.name}`;
+        startupCheckbox.className = 'w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2 cursor-pointer transition-all';
+        startupCheckbox.checked = false;
+        
+        // Load initial startup preference
+        (async () => {
+            try {
+                const resp = await fetch(`/api/apps/startup-preference/${app.name}`);
+                if (resp.ok) {
+                    const data = await resp.json();
+                    startupCheckbox.checked = data.start_at_startup === true;
+                }
+            } catch (e) {
+                console.error(`Failed to load startup preference for ${app.name}:`, e);
+            }
+        })();
+        
+        // Handle checkbox change - only one app can be set to start at startup
+        startupCheckbox.addEventListener('change', async (e) => {
+            const newValue = e.target.checked;
+            
+            // If this checkbox is being checked, uncheck all others
+            if (newValue) {
+                for (const [otherAppName, otherCheckbox] of Object.entries(installedApps.startupCheckboxes)) {
+                    if (otherAppName !== app.name && otherCheckbox.checked) {
+                        // Uncheck the other checkbox
+                        otherCheckbox.checked = false;
+                        // Also save the preference for the other app
+                        try {
+                            await fetch(`/api/apps/startup-preference/${otherAppName}`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ start_at_startup: false })
+                            });
+                        } catch (error) {
+                            console.error(`Failed to save startup preference for ${otherAppName}:`, error);
+                        }
+                    }
+                }
+            }
+            
+            // Save the preference for this app
+            try {
+                const resp = await fetch(`/api/apps/startup-preference/${app.name}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ start_at_startup: newValue })
+                });
+                if (!resp.ok) {
+                    throw new Error(`HTTP error! status: ${resp.status}`);
+                }
+            } catch (error) {
+                console.error(`Failed to save startup preference for ${app.name}:`, error);
+                // Revert checkbox state on error
+                startupCheckbox.checked = !newValue;
+            }
+        });
+        
+        const startupSpan = document.createElement('span');
+        startupSpan.className = 'text-sm text-gray-600 group-hover:text-gray-800 transition-colors';
+        startupSpan.textContent = 'Start at startup';
+        
+        startupLabel.appendChild(startupCheckbox);
+        startupLabel.appendChild(startupSpan);
+        startupCell.appendChild(startupLabel);
+        row.appendChild(startupCell);
+        
+        installedApps.startupCheckboxes[app.name] = startupCheckbox;
 
+        // Actions cell
+        const actionsCell = document.createElement('td');
+        actionsCell.className = 'py-3 px-4 text-center';
         const remove = document.createElement('button');
         remove.innerHTML = '🗑️';
-        remove.className = '-translate-y-1 text-xl';
-        container.appendChild(remove);
+        remove.className = 'text-xl hover:opacity-70 hover:scale-110 cursor-pointer transition-all p-1';
+        remove.title = 'Remove app';
         remove.onclick = async () => {
             console.log(`Removing ${app.name}...`);
             const resp = await fetch(`/api/apps/remove/${app.name}`, { method: 'POST' });
@@ -169,8 +267,10 @@ const installedApps = {
 
             installedApps.appUninstallLogHandler(app.name, jobId);
         };
+        actionsCell.appendChild(remove);
+        row.appendChild(actionsCell);
 
-        return container;
+        return row;
     },
 
     getRunningApp: async () => {
