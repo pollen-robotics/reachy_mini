@@ -69,6 +69,11 @@ with ReachyMini(media_backend="default") as mini:
     mini.media.push_audio_sample(samples)
     time.sleep(len(samples) / mini.media.get_output_audio_samplerate())
 
+    # Get Direction of Arrival
+    # 0 radians is left, π/2 radians is front/back, π radians is right.
+    doa, is_speech_detected = mini.media.get_DoA()
+    print(doa, is_speech_detected)
+
     # Release audio devices (input/output)
     mini.media.stop_recording()
     mini.media.stop_playing()

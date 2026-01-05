@@ -597,6 +597,8 @@ amixer -c "$CARD" set PCM,1 100%
 sudo alsactl store "$CARD"
 ```
 
+This is a [known issue](https://www.xmos.com/documentation/XM-014888-PC/html/modules/fwk_xvf/doc/user_guide/02_setting_up_the_hardware.html#low-volume-of-playback-audio-on-linux-for-project-ua) of the XVF3800 based sound card.
+
 </details>
 
 <details>

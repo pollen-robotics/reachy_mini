@@ -3,13 +3,13 @@
 Example usage:
 
     # Read a parameter
-    python reachy_host.py AUDIO_MGR_OP_L
+    python audio_control_utils.py AUDIO_MGR_OP_L
     # Output:
     # ReadCMD: cmdid: 143, resid: 35, response: array('B', [0, 8, 0])
     # AUDIO_MGR_OP_L: [0, 8, 0]
 
     # Write a parameter
-    python reachy_host.py AUDIO_MGR_OP_L --values 3 0
+    python audio_control_utils.py AUDIO_MGR_OP_L --values 3 0
     # Output:
     # Writing to AUDIO_MGR_OP_L with values: [3, 0]
     # WriteCMD: cmdid: 15, resid: 35, payload: [3, 0]
