@@ -131,6 +131,11 @@ class GStreamerCamera(CameraBase):
         else:
             camsrc = Gst.ElementFactory.make("v4l2src")
             camsrc.set_property("device", cam_path)
+            # examples of camera controls settings:
+            # extra_controls_structure = Gst.Structure.new_empty("extra-controls")
+            # extra_controls_structure.set_value("saturation", 64)
+            # extra_controls_structure.set_value("brightness", 50)
+            # camsrc.set_property("extra-controls", extra_controls_structure)
             self.pipeline.add(camsrc)
             queue = Gst.ElementFactory.make("queue")
             self.pipeline.add(queue)

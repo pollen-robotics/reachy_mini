@@ -125,6 +125,11 @@ class OpenCVCamera(CameraBase):
             self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, self._resolution.value[0])
             self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self._resolution.value[1])
 
+            # example of camera controls settings:
+            # self.cap.set(cv2.CAP_PROP_BRIGHTNESS, 0.5)
+            # self.cap.set(cv2.CAP_PROP_CONTRAST, 0.5)
+            # self.cap.set(cv2.CAP_PROP_SATURATION, 64)
+
         self.resized_K = self.camera_specs.K
 
         if not self.cap.isOpened():

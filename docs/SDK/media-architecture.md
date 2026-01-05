@@ -31,3 +31,7 @@ Two backends are available. The default one relies on the combination of OpenCV 
 An experimental GStreamer backend is also available. While it is mostly tuned for Linux systems, it should work on other platforms. It requires more manual installation at the moment (see [gstreamer-installation](/docs/SDK/gstreamer-installation.md))
 
 [![Reachy Mini Media Client](/docs/assets/reachyminilite_media_client.png)]()
+
+## Advanced Controls 
+
+Please refer to the dedicated pages to fine-tune camera and microphone parameters for [Reachy Mini](/docs/platforms/reachy_mini/media_advanced_controls.md) and [Reachy Mini Lite](/docs/platforms/reachy_mini_lite/media_advanced_controls.md).
