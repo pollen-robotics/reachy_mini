@@ -8,7 +8,7 @@ from reachy_mini.media.camera_constants import CameraResolution
 
 @pytest.mark.wireless
 def test_daemon_wireless_client_disconnection() -> None:
-    with ReachyMini(media_backend="no_media", localhost_only=False) as mini:
+    with ReachyMini(media_backend="no_media", connection_mode="network") as mini:
         status = mini.client.get_status()
         assert status['state'] == "running"
         assert status['wireless_version'] is True

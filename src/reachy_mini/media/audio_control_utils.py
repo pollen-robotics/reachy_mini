@@ -1,15 +1,15 @@
-"""Allows tuning of the XMOS XVF3800 chip.
+"""Allows tuning of the XMOS XVF3800 chip integrated in the Reachy Mini Audio card.
 
 Example usage:
 
     # Read a parameter
-    python reachy_host.py AUDIO_MGR_OP_L
+    python audio_control_utils.py AUDIO_MGR_OP_L
     # Output:
     # ReadCMD: cmdid: 143, resid: 35, response: array('B', [0, 8, 0])
     # AUDIO_MGR_OP_L: [0, 8, 0]
 
     # Write a parameter
-    python reachy_host.py AUDIO_MGR_OP_L --values 3 0
+    python audio_control_utils.py AUDIO_MGR_OP_L --values 3 0
     # Output:
     # Writing to AUDIO_MGR_OP_L with values: [3, 0]
     # WriteCMD: cmdid: 15, resid: 35, payload: [3, 0]
@@ -320,7 +320,34 @@ class ReSpeaker:
 
 
 def find(vid: int = 0x2886, pid: int = 0x001A) -> ReSpeaker | None:
-    """Find and return the ReSpeaker USB device with the given Vendor ID and Product ID."""
+    """Find and return the ReSpeaker USB device with the given Vendor ID and Product ID.
+
+    Args:
+        vid (int): USB Vendor ID to search for. Default: 0x2886 (XMOS).
+        pid (int): USB Product ID to search for. Default: 0x001A (XMOS XVF3800).
+
+    Returns:
+        ReSpeaker | None: A ReSpeaker object if the device is found,
+                         None otherwise.
+
+    Note:
+        This function searches for USB devices with the specified Vendor ID
+        and Product ID using libusb backend. The default values target
+        XMOS XVF3800 devices used in ReSpeaker microphone arrays.
+
+    Example:
+        >>> from reachy_mini.media.audio_control_utils import find
+        >>>
+        >>> # Find default ReSpeaker device
+        >>> respeaker = find()
+        >>> if respeaker is not None:
+        ...     print("Found ReSpeaker device")
+        ...     respeaker.close()
+        >>>
+        >>> # Find specific device
+        >>> custom_device = find(vid=0x1234, pid=0x5678)
+
+    """
     dev = usb.core.find(idVendor=vid, idProduct=pid, backend=get_libusb1_backend())
     if not dev:
         return None
@@ -329,7 +356,35 @@ def find(vid: int = 0x2886, pid: int = 0x001A) -> ReSpeaker | None:
 
 
 def init_respeaker_usb() -> Optional[ReSpeaker]:
-    """Initialize the ReSpeaker USB device. Looks for both new and beta device IDs."""
+    """Initialize the ReSpeaker USB device. Looks for both new and beta device IDs.
+
+    Returns:
+        Optional[ReSpeaker]: A ReSpeaker object if a compatible device is found,
+                           None otherwise.
+
+    Note:
+        This function attempts to initialize a ReSpeaker microphone array by
+        searching for USB devices with known Vendor and Product IDs. It tries:
+        1. New Reachy Mini Audio firmware (0x38FB:0x1001) - preferred
+        2. Old ReSpeaker firmware (0x2886:0x001A) - with warning to update
+
+        The function handles USB backend errors gracefully and returns
+        None if no compatible device is found or if initialization fails.
+
+    Example:
+        >>> from reachy_mini.media.audio_control_utils import init_respeaker_usb
+        >>>
+        >>> # Initialize ReSpeaker device
+        >>> respeaker = init_respeaker_usb()
+        >>> if respeaker is not None:
+        ...     print("ReSpeaker initialized successfully")
+        ...     # Use the device...
+        ...     doa = respeaker.read("DOA_VALUE_RADIANS")
+        ...     respeaker.close()
+        ... else:
+        ...     print("No ReSpeaker device found")
+
+    """
     try:
         # Try new firmware first
         dev = usb.core.find(

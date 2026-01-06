@@ -25,10 +25,11 @@ from numpy.typing import NDArray
 from scipy.spatial.transform import Rotation as R
 
 if typing.TYPE_CHECKING:
+    from reachy_mini.daemon.backend.mockup_sim.backend import MockupSimBackendStatus
     from reachy_mini.daemon.backend.mujoco.backend import MujocoBackendStatus
     from reachy_mini.daemon.backend.robot.backend import RobotBackendStatus
     from reachy_mini.kinematics import AnyKinematics
-from reachy_mini.media.audio_sounddevice import SoundDeviceAudio
+from reachy_mini.media.media_manager import MediaBackend, MediaManager
 from reachy_mini.motion.goto import GotoMove
 from reachy_mini.motion.move import Move
 from reachy_mini.utils.constants import MODELS_ROOT_PATH, URDF_ROOT_PATH
@@ -56,6 +57,7 @@ class Backend:
         check_collision: bool = False,
         kinematics_engine: str = "AnalyticalKinematics",
         use_audio: bool = True,
+        wireless_version: bool = False,
     ) -> None:
         """Initialize the backend."""
         self.logger = logging.getLogger(__name__)
@@ -130,6 +132,7 @@ class Backend:
         self.joint_positions_publisher: zenoh.Publisher | None = None
         self.pose_publisher: zenoh.Publisher | None = None
         self.recording_publisher: zenoh.Publisher | None = None
+        self.imu_publisher: zenoh.Publisher | None = None
         self.error: str | None = None  # To store any error that occurs during execution
         self.is_recording = False  # Flag to indicate if recording is active
         self.recorded_data: list[dict[str, Any]] = []  # List to store recorded data
@@ -162,9 +165,26 @@ class Backend:
         # Recording lock to guard buffer swaps and appends
         self._rec_lock = threading.Lock()
 
-        self.audio: Optional[SoundDeviceAudio] = None
+        self.audio: Optional[MediaManager] = None
         if self.use_audio:
-            self.audio = SoundDeviceAudio(log_level=log_level)
+            if wireless_version:
+                self.logger.debug(
+                    "Initializing daemon audio backend for wireless version."
+                )
+                self.audio = MediaManager(
+                    backend=MediaBackend.GSTREAMER_NO_VIDEO, log_level=log_level
+                )
+            else:
+                self.logger.debug(
+                    "Initializing daemon audio backend for non-wireless version."
+                )
+                self.audio = MediaManager(
+                    backend=MediaBackend.DEFAULT_NO_VIDEO, log_level=log_level
+                )
+
+        # Guard to ensure only one play_move/goto is executed at a time (goto itself uses play_move, so we need an RLock)
+        self._play_move_lock = threading.RLock()
+        self._active_move_depth = 0  # Tracks nested acquisitions within the owning thread
 
     # Life cycle methods
     def wrapped_run(self) -> None:
@@ -192,7 +212,25 @@ class Backend:
             "The method close should be overridden by subclasses."
         )
 
-    def get_status(self) -> "RobotBackendStatus | MujocoBackendStatus":
+    @property
+    def is_move_running(self) -> bool:
+        """Return True if a move is currently executing."""
+        return self._active_move_depth > 0
+
+    def _try_start_move(self) -> bool:
+        """Attempt to acquire the move guard, returning False if another client already owns it."""
+        if not self._play_move_lock.acquire(blocking=False):
+            return False
+        self._active_move_depth += 1
+        return True
+
+    def _end_move(self) -> None:
+        """Release the move guard; paired with every successful _try_start_move()."""
+        if self._active_move_depth > 0:
+            self._active_move_depth -= 1
+        self._play_move_lock.release()
+
+    def get_status(self) -> "RobotBackendStatus | MujocoBackendStatus | MockupSimBackendStatus":
         """Return backend statistics.
 
         This method is a placeholder and should be overridden by subclasses.
@@ -219,6 +257,15 @@ class Backend:
 
         """
         self.pose_publisher = publisher
+
+    def set_imu_publisher(self, publisher: zenoh.Publisher) -> None:
+        """Set the publisher for IMU data.
+
+        Args:
+            publisher: A publisher object that will be used to publish IMU data.
+
+        """
+        self.imu_publisher = publisher
 
     def update_target_head_joints_from_ik(
         self,
@@ -346,35 +393,48 @@ class Backend:
             initial_goto_duration (float): Duration for an initial goto to the move's starting position. If 0.0, no initial goto is performed.
 
         """
-        if initial_goto_duration > 0.0:
-            start_head_pose, start_antennas_positions, start_body_yaw = move.evaluate(
-                0.0
-            )
-            await self.goto_target(
-                head=start_head_pose,
-                antennas=start_antennas_positions,
-                duration=initial_goto_duration,
-                body_yaw=start_body_yaw,
-            )
-        sleep_period = 1.0 / play_frequency
+        if not self._try_start_move():
+            self.logger.warning("Ignoring play_move request: another move is running.")
+            return
 
-        t0 = time.time()
-        while time.time() - t0 < move.duration:
-            t = time.time() - t0
+        try:
+            if initial_goto_duration > 0.0:
+                start_head_pose, start_antennas_positions, start_body_yaw = move.evaluate(
+                    0.0
+                )
+                await self.goto_target(
+                    head=start_head_pose,
+                    antennas=start_antennas_positions,
+                    duration=initial_goto_duration,
+                    body_yaw=start_body_yaw,
+                )
+            sleep_period = 1.0 / play_frequency
 
-            head, antennas, body_yaw = move.evaluate(t)
-            if head is not None:
-                self.set_target_head_pose(head)
-            if body_yaw is not None:
-                self.set_target_body_yaw(body_yaw)
-            if antennas is not None:
-                self.set_target_antenna_joint_positions(antennas)
+            if move.sound_path is not None and self.audio is not None:
+                self.play_sound(str(move.sound_path))
 
-            elapsed = time.time() - t0 - t
-            if elapsed < sleep_period:
-                await asyncio.sleep(sleep_period - elapsed)
-            else:
-                await asyncio.sleep(0.001)
+            t0 = time.time()
+            while time.time() - t0 < move.duration:
+                t = time.time() - t0
+
+                head, antennas, body_yaw = move.evaluate(t)
+                if head is not None:
+                    self.set_target_head_pose(head)
+                if body_yaw is not None:
+                    self.set_target_body_yaw(body_yaw)
+                if antennas is not None:
+                    self.set_target_antenna_joint_positions(antennas)
+
+                elapsed = time.time() - t0 - t
+                if elapsed < sleep_period:
+                    await asyncio.sleep(sleep_period - elapsed)
+                else:
+                    await asyncio.sleep(0.001)
+        finally:
+            if move.sound_path is not None and self.audio is not None:
+                # release audio resources after playing the move sound
+                self.audio.stop_playing()
+            self._end_move()
 
     async def goto_target(
         self,

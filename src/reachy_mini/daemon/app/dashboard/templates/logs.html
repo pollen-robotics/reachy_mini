@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<div class="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
+    <div class="flex items-center justify-between mb-4">
+        <div class="flex items-center gap-3">
+            <h1 class="text-xl font-semibold text-gray-900 dark:text-white">Daemon Logs</h1>
+            <span id="logs-status" class="text-sm text-gray-500">Disconnected</span>
+        </div>
+        <div class="flex gap-2">
+            <button onclick="daemonLogs.copyLogs()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm">
+                <span id="copy-button-text">Copy</span>
+            </button>
+            <button onclick="daemonLogs.clearLogs()" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded dark:bg-gray-600 dark:hover:bg-gray-500 dark:text-white">
+                Clear
+            </button>
+        </div>
+    </div>
+
+    <div id="daemon-logs-content"
+         class="overflow-y-auto h-[calc(100vh-200px)] bg-gray-900 border border-gray-600 rounded p-3 font-mono text-xs text-gray-100 leading-relaxed">
+        <!-- Logs will be appended here by JavaScript -->
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="/static/js/logs.js"></script>
+<script>
+    // Auto-connect when page loads
+    window.addEventListener('load', () => {
+        daemonLogs.connectWebSocket();
+    });
+</script>
+{% endblock %}
