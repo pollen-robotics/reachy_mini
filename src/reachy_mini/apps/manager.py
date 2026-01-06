@@ -236,6 +236,11 @@ class AppManager:
         # Return robot to zero position after app stops
         if self.daemon is not None and self.daemon.backend is not None:
             try:
+                self.daemon.backend.enable_motors()
+            except Exception as e:
+                pass
+            
+            try:
                 from reachy_mini.reachy_mini import INIT_HEAD_POSE
 
                 self.logger.getChild("runner").info("Returning robot to zero position")
