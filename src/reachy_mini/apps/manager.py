@@ -12,7 +12,7 @@ import numpy as np
 import psutil
 from pydantic import BaseModel
 
-from reachy_mini.daemon.backend.mujoco import MujocoBackend
+from reachy_mini.daemon.backend.robot import RobotBackend
 
 from . import AppInfo, SourceKind
 from .sources import hf_space, local_common_venv
@@ -240,8 +240,8 @@ class AppManager:
 
         # Return robot to zero position after app stops
         if self.daemon is not None and self.daemon.backend is not None:
-            if not isinstance(self.daemon.backend, MujocoBackend):
-                self.daemon.backend.enable_motors()
+            if isinstance(self.daemon.backend, RobotBackend):
+                self.daemon.backend.enable_motors() 
 
             try:
                 from reachy_mini.reachy_mini import INIT_HEAD_POSE
