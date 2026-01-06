@@ -237,7 +237,7 @@ class AppManager:
         if self.daemon is not None and self.daemon.backend is not None:
             try:
                 self.daemon.backend.enable_motors()
-            except Exception as e:
+            except Exception:
                 pass
             
             try:
