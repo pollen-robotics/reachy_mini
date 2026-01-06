@@ -14,6 +14,7 @@ from pydantic import BaseModel
 
 from . import AppInfo, SourceKind
 from .sources import hf_space, local_common_venv
+from reachy_mini.daemon.backend.mujoco import MujocoBackend
 
 if TYPE_CHECKING:
     from reachy_mini.daemon.daemon import Daemon
@@ -235,10 +236,8 @@ class AppManager:
 
         # Return robot to zero position after app stops
         if self.daemon is not None and self.daemon.backend is not None:
-            try:
+            if not isinstance(self.daemon.backend, MujocoBackend):
                 self.daemon.backend.enable_motors()
-            except Exception:
-                pass
             
             try:
                 from reachy_mini.reachy_mini import INIT_HEAD_POSE
