@@ -1,6 +1,41 @@
 """GStreamer WebRTC client implementation.
 
 The class is a client for the webrtc server hosted on the Reachy Mini Wireless robot.
+
+This module provides a GStreamer-based WebRTC client that implements both CameraBase
+and AudioBase interfaces, allowing it to be used as a drop-in replacement for
+traditional camera and audio devices in the media system.
+
+The WebRTC client supports real-time audio and video streaming over WebRTC protocol,
+making it suitable for remote operation and telepresence applications.
+
+Note:
+    This class is typically used internally by the MediaManager when the WEBRTC
+    backend is selected. Direct usage is possible but usually not necessary.
+
+Example usage via MediaManager:
+    >>> from reachy_mini.media.media_manager import MediaManager, MediaBackend
+    >>>
+    >>> # Create media manager with WebRTC backend
+    >>> media = MediaManager(
+    ...     backend=MediaBackend.WEBRTC,
+    ...     signalling_host="192.168.1.100",
+    ...     log_level="INFO"
+    ... )
+    >>>
+    >>> # Use camera functionality
+    >>> frame = media.get_frame()
+    >>> if frame is not None:
+    ...     cv2.imshow("WebRTC Stream", frame)
+    ...     cv2.waitKey(1)
+    >>>
+    >>> # Use audio functionality
+    >>> media.start_recording()
+    >>> audio_samples = media.get_audio_sample()
+    >>>
+    >>> # Clean up
+    >>> media.close()
+
 """
 
 from threading import Thread
@@ -24,7 +59,18 @@ from gi.repository import GLib, Gst, GstApp  # noqa: E402, F401
 
 
 class GstWebRTCClient(CameraBase, AudioBase):
-    """GStreamer WebRTC client implementation."""
+    """GStreamer WebRTC client implementation.
+
+    This class implements a WebRTC client using GStreamer that can connect to
+    a WebRTC server (such as the one hosted on Reachy Mini Wireless) to stream
+    audio and video in real-time. It implements both CameraBase and AudioBase
+    interfaces, allowing seamless integration with the media system.
+
+    Attributes:
+        Inherits all attributes from CameraBase and AudioBase.
+        Additionally manages GStreamer pipelines for WebRTC communication.
+
+    """
 
     def __init__(
         self,
@@ -33,7 +79,30 @@ class GstWebRTCClient(CameraBase, AudioBase):
         signaling_host: str = "",
         signaling_port: int = 8443,
     ):
-        """Initialize the GStreamer WebRTC client."""
+        """Initialize the GStreamer WebRTC client.
+
+        Args:
+            log_level (str): Logging level for WebRTC operations.
+                          Default: 'INFO'.
+            peer_id (str): WebRTC peer ID to connect to. Default: ''.
+            signaling_host (str): Host address of the WebRTC signaling server.
+                               Default: ''.
+            signaling_port (int): Port of the WebRTC signaling server.
+                               Default: 8443.
+
+        Note:
+            This constructor initializes the GStreamer environment and sets up
+            the necessary pipelines for WebRTC communication. The WebRTC connection
+            is established when open() is called.
+
+        Example:
+            >>> client = GstWebRTCClient(
+            ...     peer_id="reachymini",
+            ...     signaling_host="192.168.1.100",
+            ...     signaling_port=8443
+            ... )
+
+        """
         super().__init__(log_level=log_level)
         Gst.init(None)
         self._loop = GLib.MainLoop()
@@ -166,7 +235,10 @@ class GstWebRTCClient(CameraBase, AudioBase):
         return True
 
     def open(self) -> None:
-        """Open the video stream."""
+        """Open the video stream.
+
+        See CameraBase.open() for complete documentation.
+        """
         self._pipeline_record.set_state(Gst.State.PLAYING)
 
     def _get_sample(self, appsink: GstApp.AppSink) -> Optional[bytes]:
@@ -185,6 +257,8 @@ class GstWebRTCClient(CameraBase, AudioBase):
     def get_audio_sample(self) -> Optional[npt.NDArray[np.float32]]:
         """Read a sample from the audio card. Returns the sample or None if error.
 
+        See AudioBase.get_audio_sample() for complete documentation.
+
         Returns:
             Optional[npt.NDArray[np.float32]]: The captured sample in raw format, or None if error.
 
@@ -196,6 +270,8 @@ class GstWebRTCClient(CameraBase, AudioBase):
 
     def read(self) -> Optional[npt.NDArray[np.uint8]]:
         """Read a frame from the camera. Returns the frame or None if error.
+
+        See CameraBase.read() for complete documentation.
 
         Returns:
             Optional[npt.NDArray[np.uint8]]: The captured frame in BGR format, or None if error.
@@ -211,16 +287,25 @@ class GstWebRTCClient(CameraBase, AudioBase):
         return arr
 
     def close(self) -> None:
-        """Stop the pipeline."""
+        """Stop the pipeline.
+
+        See CameraBase.close() for complete documentation.
+        """
         # self._loop.quit()
         self._pipeline_record.set_state(Gst.State.NULL)
 
     def start_recording(self) -> None:
-        """Open the audio card using GStreamer."""
+        """Open the audio card using GStreamer.
+
+        See AudioBase.start_recording() for complete documentation.
+        """
         pass  # already started in open()
 
     def stop_recording(self) -> None:
-        """Release the camera resource."""
+        """Release the camera resource.
+
+        See AudioBase.stop_recording() for complete documentation.
+        """
         pass  # managed in close()
 
     def _init_pipeline_playback(
@@ -275,11 +360,17 @@ class GstWebRTCClient(CameraBase, AudioBase):
             )
 
     def start_playing(self) -> None:
-        """Open the audio output using GStreamer."""
+        """Open the audio output using GStreamer.
+
+        See AudioBase.start_playing() for complete documentation.
+        """
         self._pipeline_playback.set_state(Gst.State.PLAYING)
 
     def stop_playing(self) -> None:
-        """Stop playing audio and release resources."""
+        """Stop playing audio and release resources.
+
+        See AudioBase.stop_playing() for complete documentation.
+        """
         self._pipeline_playback.set_state(Gst.State.NULL)
 
     def push_audio_sample(self, data: npt.NDArray[np.float32]) -> None:
@@ -295,6 +386,8 @@ class GstWebRTCClient(CameraBase, AudioBase):
 
     def play_sound(self, sound_file: str) -> None:
         """Play a sound file.
+
+        See AudioBase.play_sound() for complete documentation.
 
         Args:
             sound_file (str): Path to the sound file to play.
