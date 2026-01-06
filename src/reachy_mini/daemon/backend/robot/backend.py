@@ -8,6 +8,7 @@ It uses the `ReachyMiniMotorController` to communicate with the robot's motors.
 import json
 import logging
 import struct
+import threading
 import time
 from dataclasses import dataclass
 from datetime import timedelta
@@ -112,6 +113,13 @@ class RobotBackend(Backend):
         self.hardware_error_check_frequency = hardware_error_check_frequency  # seconds
 
         # Initialize IMU for wireless version
+        self.bmi088 = None
+        self._imu_thread: threading.Thread | None = None
+        self._imu_thread_stop = threading.Event()
+        self._imu_data_lock = threading.Lock()
+        self._cached_imu_data: dict[str, list[float] | float] | None = None
+        self._imu_frequency = 20.0  # Hz - IMU runs at lower frequency than control loop
+
         if wireless_version:
             try:
                 from bmi088 import BMI088
@@ -121,8 +129,6 @@ class RobotBackend(Backend):
             except Exception as e:
                 self.logger.warning(f"Failed to initialize IMU: {e}")
                 self.bmi088 = None
-        else:
-            self.bmi088 = None
 
         self.imu_publisher: zenoh.Publisher | None = None
 
@@ -155,6 +161,13 @@ class RobotBackend(Backend):
         assert self.current_head_pose is not None
 
         self.head_kinematics.ik(self.current_head_pose, no_iterations=20)
+
+        # Start IMU thread if IMU is available
+        if self.bmi088 is not None:
+            self._imu_thread_stop.clear()
+            self._imu_thread = threading.Thread(target=self._imu_thread_loop, daemon=True)
+            self._imu_thread.start()
+            self.logger.info(f"IMU thread started at {self._imu_frequency} Hz")
 
         while not self.should_stop.is_set():
             start_t = time.time()
@@ -250,11 +263,11 @@ class RobotBackend(Backend):
                         )
                     )
 
-                    # Publish IMU data if available
-                    if self.imu_publisher is not None and self.bmi088 is not None:
-                        imu_data = self.get_imu_data()
-                        if imu_data is not None:
-                            self.imu_publisher.put(json.dumps(imu_data))
+                    # Publish cached IMU data (non-blocking, updated by IMU thread)
+                    if self.imu_publisher is not None and self._cached_imu_data is not None:
+                        with self._imu_data_lock:
+                            if self._cached_imu_data is not None:
+                                self.imu_publisher.put(json.dumps(self._cached_imu_data))
 
                 self.last_alive = time.time()
 
@@ -305,6 +318,13 @@ class RobotBackend(Backend):
 
     def close(self) -> None:
         """Close the motor controller connection."""
+        # Stop IMU thread first
+        if self._imu_thread is not None:
+            self._imu_thread_stop.set()
+            self._imu_thread.join(timeout=1.0)
+            self._imu_thread = None
+            self.logger.info("IMU thread stopped")
+
         if self.c is not None:
             self.c.close()
         self.c = None
@@ -470,34 +490,68 @@ class RobotBackend(Backend):
             dict with 'accelerometer', 'gyroscope', 'quaternion', and 'temperature' keys,
             or None if IMU is not available.
 
+        Note:
+            This method reads from I2C and updates the Madgwick filter. It avoids
+            redundant reads by passing already-read accel/gyro values directly to
+            the Madgwick filter instead of calling get_quat() which would read again.
+
         """
         if self.bmi088 is None:
             return None
 
         try:
-            # Read accelerometer (returns tuple of x, y, z in m/s^2)
-            accel_x, accel_y, accel_z = self.bmi088.read_accelerometer(m_per_s2=True)
+            # Read accelerometer once (returns tuple of x, y, z)
+            accel = self.bmi088.read_accelerometer(m_per_s2=False)  # in g for Madgwick
+            accel_m_s2 = tuple(a * 9.80665 for a in accel)  # convert to m/s^2 for output
 
-            # Read gyroscope (returns tuple of x, y, z in rad/s)
-            gyro_x, gyro_y, gyro_z = self.bmi088.read_gyroscope(deg_per_s=False)
+            # Read gyroscope once (returns tuple of x, y, z in rad/s)
+            gyro = self.bmi088.read_gyroscope(deg_per_s=False)
 
-            # Get quaternion orientation (dt = control loop period)
-            dt = 1.0 / self.control_loop_frequency  # 0.02 seconds at 50Hz
-            quat = self.bmi088.get_quat(dt)
+            # Update Madgwick filter directly with already-read values (no redundant I2C)
+            dt = 1.0 / self._imu_frequency
+            self.bmi088.q = list(
+                self.bmi088.madgwick.updateIMU(q=self.bmi088.q, acc=accel, gyr=gyro, dt=dt)
+            )
+            quat = self.bmi088.q
 
             # Read temperature in Celsius
             temperature = self.bmi088.read_temperature()
 
             # Convert all numpy types to native Python floats for JSON serialization
             return {
-                "accelerometer": [float(accel_x), float(accel_y), float(accel_z)],
-                "gyroscope": [float(gyro_x), float(gyro_y), float(gyro_z)],
+                "accelerometer": [float(a) for a in accel_m_s2],
+                "gyroscope": [float(g) for g in gyro],
                 "quaternion": [float(q) for q in quat],
                 "temperature": float(temperature),
             }
         except Exception as e:
             self.logger.error(f"Error reading IMU data: {e}")
             return None
+
+    def _imu_thread_loop(self) -> None:
+        """Background thread that reads IMU data at a lower frequency.
+
+        This runs independently from the motor control loop to avoid blocking
+        serial communication with motors. Runs at self._imu_frequency Hz.
+        """
+        period = 1.0 / self._imu_frequency
+
+        while not self._imu_thread_stop.is_set():
+            start_t = time.time()
+
+            try:
+                imu_data = self.get_imu_data()
+                if imu_data is not None:
+                    with self._imu_data_lock:
+                        self._cached_imu_data = imu_data
+            except Exception as e:
+                self.logger.error(f"IMU thread error: {e}")
+
+            # Sleep for remaining time in period
+            elapsed = time.time() - start_t
+            sleep_time = period - elapsed
+            if sleep_time > 0:
+                self._imu_thread_stop.wait(sleep_time)
 
     def compensate_head_gravity(self) -> None:
         """Calculate the currents necessary to compensate for gravity."""
