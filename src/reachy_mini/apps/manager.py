@@ -12,9 +12,10 @@ import numpy as np
 import psutil
 from pydantic import BaseModel
 
+from reachy_mini.daemon.backend.mujoco import MujocoBackend
+
 from . import AppInfo, SourceKind
 from .sources import hf_space, local_common_venv
-from reachy_mini.daemon.backend.mujoco import MujocoBackend
 
 if TYPE_CHECKING:
     from reachy_mini.daemon.daemon import Daemon
