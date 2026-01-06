@@ -150,7 +150,10 @@ class AppManager:
                     decoded = line.decode().rstrip()
                     stderr_lines.append(decoded)
                     # Check if line looks like an error or exception
-                    if any(keyword in decoded for keyword in ["Error:", "Exception:", "Traceback", "ERROR"]):
+                    if any(
+                        keyword in decoded
+                        for keyword in ["Error:", "Exception:", "Traceback", "ERROR"]
+                    ):
                         self.logger.getChild("runner").error(decoded)
                     else:
                         # Many libraries write INFO/WARNING to stderr
@@ -239,7 +242,7 @@ class AppManager:
         if self.daemon is not None and self.daemon.backend is not None:
             if not isinstance(self.daemon.backend, MujocoBackend):
                 self.daemon.backend.enable_motors()
-            
+
             try:
                 from reachy_mini.reachy_mini import INIT_HEAD_POSE
 

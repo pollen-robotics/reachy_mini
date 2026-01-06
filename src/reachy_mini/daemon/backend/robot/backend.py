@@ -11,8 +11,7 @@ import struct
 import time
 from dataclasses import dataclass
 from datetime import timedelta
-from multiprocessing import \
-    Event  # It seems to be more accurate than threading.Event
+from multiprocessing import Event  # It seems to be more accurate than threading.Event
 from typing import Annotated, Any
 
 import log_throttling
