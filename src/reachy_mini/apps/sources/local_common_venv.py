@@ -8,6 +8,7 @@ import shutil
 import sys
 from importlib.metadata import entry_points
 from pathlib import Path
+from typing import Any
 
 from huggingface_hub import snapshot_download
 
@@ -188,7 +189,7 @@ def _get_app_metadata_from_file(
             sys.path.remove(str(site_packages))
 
     app_dir = site_packages / package_name
-    metadata = {"custom_app_url": None, "emoji": None}
+    metadata: dict[str, str | None] = {"custom_app_url": None, "emoji": None}
 
     # PRIORITY 1: Read emoji from README.md YAML front matter
     readme_file = app_dir / "README.md"
@@ -304,7 +305,7 @@ async def _list_apps_from_separate_venvs(
                 # Load saved metadata (e.g., private flag)
                 saved_metadata = _load_app_metadata(app_name)
                 # Merge with current extra data
-                extra_data = {
+                extra_data: dict[str, Any] = {
                     "custom_app_url": metadata.get("custom_app_url"),
                     "venv_path": str(apps_venv),
                 }
