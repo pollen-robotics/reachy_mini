@@ -36,6 +36,7 @@ dependencies = [
     "websockets>=12,<16",
     "toml",
     "rustypot",
+    "pyobjc-core==10.1",
 ]
 
 

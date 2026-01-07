@@ -21,6 +21,7 @@ brew install libsndfile portaudio ffmpeg swig
 echo "[2/4] Syncing Python dependencies (uv)..."
 if ! command -v uv &> /dev/null; then
     echo "Installing uv..."
+    pip install --upgrade pip
     pip install uv
 fi
 
