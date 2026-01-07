@@ -29,7 +29,7 @@ This method allows you to safely test changes without affecting the system-wide 
 
 3. **Set up the virtual environment:**
    ```bash
-   uv sync --all-extras
+   uv sync --<needed extras : gstreamer,...>
    source .venv/bin/activate
    ```
 
