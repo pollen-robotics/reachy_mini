@@ -3311,7 +3311,7 @@ wheels = [
 
 [[package]]
 name = "rustypot"
-version = "1.4.0"
+version = "1.4.2"
 source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/41/ad/22e84d4b3099e3fc109fd65e3af9629987974a227fa566d229c32a0bf654/rustypot-1.4.0.tar.gz", hash = "sha256:5e8607f0cff9f2953f59c567e34cc089f4fd9ff88ebbb41d4b329dd9dffcf0f8", size = 60097, upload-time = "2025-11-19T11:53:43.027Z" }
 wheels = [
