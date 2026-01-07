@@ -208,7 +208,11 @@ class Backend:
 
         Subclasses should override this method to add their own cleanup logic,
         and call super().close() at the end to ensure audio resources are released.
+
+        Note: This base implementation handles common cleanup (audio).
+        Subclasses must still implement their own cleanup for backend-specific resources.
         """
+        self.logger.debug("Backend.close() - cleaning up audio resources")
         if self.audio is not None:
             self.audio.close()
             self.audio = None
