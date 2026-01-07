@@ -183,6 +183,7 @@ class GStreamerAudio(AudioBase):
         else:
             audiosink = Gst.ElementFactory.make("alsasink")
             audiosink.set_property("device", f"hw:{self._id_audio_card},0")
+            audiosink.set_property("buffer-time", 20000)
 
         pipeline.add(audiosink)
         pipeline.add(self._appsrc)
@@ -205,6 +206,11 @@ class GStreamerAudio(AudioBase):
             return False
 
         return True
+
+    def _dump_latency(self) -> None:
+        query = Gst.Query.new_latency()
+        self._pipeline_playback.query(query)
+        self.logger.info(f"Pipeline latency {query.parse_latency()}")
 
     def start_recording(self) -> None:
         """Open the audio card using GStreamer.
@@ -281,6 +287,7 @@ class GStreamerAudio(AudioBase):
         See AudioBase.start_playing() for complete documentation.
         """
         self._pipeline_playback.set_state(Gst.State.PLAYING)
+        GLib.timeout_add_seconds(5, self._dump_latency)
 
     def stop_playing(self) -> None:
         """Stop playing audio and release resources.
