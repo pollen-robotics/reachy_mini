@@ -135,8 +135,8 @@ class MockupSimBackend(Backend):
             time.sleep(max(0, control_period - elapsed))
 
     def close(self) -> None:
-        """Close the backend."""
-        pass
+        """Close the backend and release resources."""
+        super().close()
 
     def get_status(self) -> "MockupSimBackendStatus":
         """Get the status of the backend."""

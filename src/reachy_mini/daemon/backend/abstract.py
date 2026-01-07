@@ -204,13 +204,14 @@ class Backend:
         raise NotImplementedError("The method run should be overridden by subclasses.")
 
     def close(self) -> None:
-        """Close the backend.
+        """Close the backend and release resources.
 
-        This method is a placeholder and should be overridden by subclasses.
+        Subclasses should override this method to add their own cleanup logic,
+        and call super().close() at the end to ensure audio resources are released.
         """
-        raise NotImplementedError(
-            "The method close should be overridden by subclasses."
-        )
+        if self.audio is not None:
+            self.audio.close()
+            self.audio = None
 
     @property
     def is_move_running(self) -> bool:

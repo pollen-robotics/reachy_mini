@@ -340,9 +340,9 @@ class MujocoBackend(Backend):
         return mj_current_head_pose
 
     def close(self) -> None:
-        """Close the Mujoco backend."""
+        """Close the Mujoco backend and release resources."""
         # TODO Do something in mujoco here ?
-        pass
+        super().close()
 
     def get_status(self) -> "MujocoBackendStatus":
         """Get the status of the Mujoco backend.
