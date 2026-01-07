@@ -40,6 +40,7 @@ from reachy_mini.media.audio_utils import (
     check_reachymini_asoundrc,
     write_asoundrc_to_home,
 )
+from reachy_mini.motion.recorded_move import preload_default_datasets
 from reachy_mini.utils.wireless_version.startup_check import (
     check_and_fix_venvs_ownership,
     check_and_sync_apps_venv_sdk,
@@ -77,6 +78,7 @@ class Args:
 
     wake_up_on_start: bool = True
     goto_sleep_on_stop: bool = True
+    preload_datasets: bool = False
 
     robot_name: str = "reachy_mini"
 
@@ -99,6 +101,13 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
         """Lifespan context manager for the FastAPI application."""
         args = app.state.args  # type: Args
 
+        # Pre-download recorded move datasets in background to avoid delays on first play
+        # This runs in a thread pool to not block the event loop
+        preload_task = None
+        if args.preload_datasets:
+            loop = asyncio.get_event_loop()
+            preload_task = loop.run_in_executor(None, preload_default_datasets)
+
         try:
             if args.autostart:
                 await app.state.daemon.start(
@@ -116,6 +125,15 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
                     localhost_only=localhost_only,
                     hardware_config_filepath=args.hardware_config_filepath,
                 )
+
+            # Wait for dataset preload to complete (non-blocking if already done)
+            if preload_task is not None:
+                try:
+                    await preload_task
+                    logging.info("Recorded move datasets pre-loaded successfully")
+                except Exception as e:
+                    logging.warning(f"Failed to pre-load some datasets: {e}")
+
             yield
         finally:
             # Ensure cleanup happens even if there's an exception
@@ -459,6 +477,18 @@ def main() -> None:
         action="store_false",
         dest="goto_sleep_on_stop",
         help="Do not put the robot to sleep on daemon stop (default: False).",
+    )
+    parser.add_argument(
+        "--preload-datasets",
+        action="store_true",
+        default=default_args.preload_datasets,
+        help="Pre-download recorded move datasets (emotions, dances) at startup (default: False).",
+    )
+    parser.add_argument(
+        "--no-preload-datasets",
+        action="store_false",
+        dest="preload_datasets",
+        help="Do not pre-download datasets at startup (default: True).",
     )
     # Zenoh server options
     parser.add_argument(
