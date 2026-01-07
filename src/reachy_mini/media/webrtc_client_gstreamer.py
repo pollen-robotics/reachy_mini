@@ -4,7 +4,7 @@ The class is a client for the webrtc server hosted on the Reachy Mini Wireless r
 """
 
 from threading import Thread
-from typing import Optional, cast
+from typing import Iterator, Optional, cast
 
 import gi
 import numpy as np
@@ -104,8 +104,8 @@ class GstWebRTCClient(CameraBase, AudioBase):
         signaller.set_property("uri", f"ws://{signaling_host}:{signaling_port}")
         return source
 
-    def _iterate_gst(self, iterator: Gst.Iterator):
-        """Helper generator to iterate over GStreamer iterators pythonically."""
+    def _iterate_gst(self, iterator: Gst.Iterator) -> Iterator[Gst.Element]:
+        """Iterate over GStreamer iterators."""
         while True:
             result, elem = iterator.next()
             if result == Gst.IteratorResult.DONE:
