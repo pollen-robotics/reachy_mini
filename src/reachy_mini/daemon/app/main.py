@@ -487,7 +487,7 @@ def main() -> None:
         "--no-preload-datasets",
         action="store_false",
         dest="preload_datasets",
-        help="Do not pre-download datasets at startup (default: True).",
+        help="Do not pre-download datasets at startup (default: False).",
     )
     # Zenoh server options
     parser.add_argument(
