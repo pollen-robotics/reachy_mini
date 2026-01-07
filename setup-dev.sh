@@ -41,7 +41,7 @@ cd reachy-mini-desktop-app
 
 # Set REACHY_MINI_SOURCE to the absolute path of the repo root
 # This tells the build script to install the package from THIS directory
-export REACHY_MINI_SOURCE="$REPO_ROOT"
+
 
 echo "Building sidecar (this may take a moment)..."
 # We need to ensure we run the build script from the desktop app directory context
