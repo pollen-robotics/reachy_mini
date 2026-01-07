@@ -191,7 +191,37 @@ If it doesn't help, you can also try to increase D to 10 on the same motors.
 <details>
 <summary><strong>Image is dark on the Lite version</strong></summary>
 
-- set auto-exposure-priority=1 using uvc-util on macOS
+**➡️ Quick Fix: Adjust Exposure Time in Camera Settings**
+
+To fix a dark image, enable auto-exposure or manually increase the exposure time using a camera control application. These applications provide an intuitive interface for adjusting exposure and other camera parameters.
+
+**Recommended Applications:**
+
+- **macOS:** [CameraController](https://github.com/itaybre/CameraController) - Open-source GUI application for USB camera control
+- **Linux:** qv4l2 - Qt-based GUI application for V4L2 camera control
+  - Install: `sudo apt install qv4l2`
+- **Windows:** [Webcam Settings](https://www.softpedia.com/get/Internet/WebCam/Webcam-Settings-Tool.shtml) or [ManyCam](https://manycam.com/) for advanced camera control
+
+These applications allow you to adjust exposure time, brightness, and other camera parameters through an intuitive graphical interface.
+
+---
+
+**➡️ Advanced: Using libuvc for In-Depth Camera Control**
+
+For advanced users who want precise control over camera parameters, you can use libuvc-based command-line utilities. These tools provide low-level access to all UVC camera controls. 
+
+To fix the darkness issue specifically, set `auto-exposure-priority=1` using these command-line tools.
+
+**Command-Line Tools by Platform:**
+
+- **macOS:** [uvc-util](https://github.com/jtfrey/uvc-util)
+
+- **Linux:** [v4l2-ctl](https://manpages.debian.org/testing/v4l-utils/v4l2-ctl.1.en.html)
+  - Install: `sudo apt install v4l-utils`
+
+- **Windows:** Windows does not have a direct equivalent.
+
+**Note:** These command-line tools require technical knowledge and access to the camera parameters may vary depending on the selected tool. Use `--help` and list available controls before making any changes.
 
 </details>
 
@@ -416,10 +446,10 @@ If you command a pose outside these limits, the robot will automatically clamp t
 
 1. You can refer scanning the motors using the [scan_motors.py script](/src/reachy_mini/tools/scan_motors.py).
 
-- If your robot is Lite, you can run the script directly on your computer. Go to the "tools" folder, where the script is located,and run the same command as below but without the scp and ssh part.
-- If your robot is Wireless, you need tocopythe script on the raspberry. Go tothe"tools" folder, where the script is located,and run:
+- If your robot is Lite, you can run the script directly on your computer. Go to the "tools" folder, where the script is located, and run the same command as below but without the scp and ssh part.
+- If your robot is Wireless, you need to copy the scanning script on the raspberry. Go to the "tools" folder, where the script is located,and run:
 ```bash
-sudo scp scan_motors.pypollen@reachy-minilocal:~/
+sudo scp scan_motors.py pollen@reachy-minilocal:~/
 # password: ---your sudo password---
 # RPI password: root
 ```
