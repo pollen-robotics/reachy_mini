@@ -93,6 +93,14 @@ class Daemon:
                 self.logger.error(f"Failed to initialize WebRTC: {e}")
                 self._webrtc = None
 
+    def __del__(self) -> None:
+        """Destructor to ensure proper cleanup."""
+        self.logger.debug("Cleaning up Daemon resources...")
+        if self._webrtc is not None:
+            self._webrtc.stop()
+            self._webrtc.__del__()
+            self._webrtc = None
+
     async def start(
         self,
         sim: bool = False,
@@ -671,7 +679,9 @@ class DaemonStatus:
     desktop_app_daemon: bool
     simulation_enabled: Optional[bool]
     mockup_sim_enabled: Optional[bool]
-    backend_status: Optional[RobotBackendStatus | MujocoBackendStatus | MockupSimBackendStatus]
+    backend_status: Optional[
+        RobotBackendStatus | MujocoBackendStatus | MockupSimBackendStatus
+    ]
     error: Optional[str] = None
     wlan_ip: Optional[str] = None
     version: Optional[str] = None

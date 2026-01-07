@@ -129,6 +129,7 @@ class GstWebRTC:
 
     def __del__(self) -> None:
         """Destructor to ensure gstreamer resources are released."""
+        self._logger.debug("Cleaning up GstWebRTC")
         self._loop.quit()
         self._bus_sender.remove_watch()
         self._bus_receiver.remove_watch()

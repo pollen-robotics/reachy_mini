@@ -30,9 +30,15 @@ with ReachyMini(media_backend="no_media") as mini:
             temperature = imu_data["temperature"]
 
             # Display data
-            print(f"Accelerometer (m/s²): X={accel_x:7.3f}  Y={accel_y:7.3f}  Z={accel_z:7.3f}")
-            print(f"Gyroscope (rad/s):    X={gyro_x:7.3f}  Y={gyro_y:7.3f}  Z={gyro_z:7.3f}")
-            print(f"Quaternion (w,x,y,z): W={quat_w:6.3f}  X={quat_x:6.3f}  Y={quat_y:6.3f}  Z={quat_z:6.3f}")
+            print(
+                f"Accelerometer (m/s²): X={accel_x:7.3f}  Y={accel_y:7.3f}  Z={accel_z:7.3f}"
+            )
+            print(
+                f"Gyroscope (rad/s):    X={gyro_x:7.3f}  Y={gyro_y:7.3f}  Z={gyro_z:7.3f}"
+            )
+            print(
+                f"Quaternion (w,x,y,z): W={quat_w:6.3f}  X={quat_x:6.3f}  Y={quat_y:6.3f}  Z={quat_z:6.3f}"
+            )
             print(f"Temperature: {temperature:.1f}°C")
             print("-" * 80)
 

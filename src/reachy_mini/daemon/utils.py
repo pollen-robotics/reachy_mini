@@ -135,6 +135,7 @@ def get_ip_address(ifname: str = "wlan0") -> str | None:
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         try:
             import fcntl
+
             return socket.inet_ntoa(
                 fcntl.ioctl(
                     s.fileno(),
@@ -147,6 +148,7 @@ def get_ip_address(ifname: str = "wlan0") -> str | None:
             return None
     elif platform.system() == "Windows":
         import psutil
+
         addrs = psutil.net_if_addrs()
         if ifname in addrs:
             for snic in addrs[ifname]:

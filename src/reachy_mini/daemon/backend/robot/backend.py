@@ -304,10 +304,11 @@ class RobotBackend(Backend):
                 self.last_hardware_error_check_time = time.time()
 
     def close(self) -> None:
-        """Close the motor controller connection."""
+        """Close the motor controller connection and release resources."""
         if self.c is not None:
             self.c.close()
         self.c = None
+        super().close()
 
     def get_status(self) -> "RobotBackendStatus":
         """Get the current status of the robot backend."""
