@@ -11,14 +11,15 @@ from reachy_mini.kinematics import PlacoKinematics
 
 def main():
     """Run a demo to compensate the gravity of the Reachy Mini platform."""
-    urdf_path = "src/reachy_mini/descriptions/reachy_mini/urdf/robot.urdf"
+    from pathlib import Path
+    urdf_path = str(Path(__file__).parent.parent.parent / "src/reachy_mini/descriptions/reachy_mini/urdf/robot.urdf")
     solver = PlacoKinematics(urdf_path, 0.02)
     robot = solver.robot
     robot.update_kinematics()
     viz = robot_viz(robot)
 
     # Initialize the motor controller (adjust port if needed)
-    controller = ReachyMiniMotorController(serialport="/dev/ttyACM0")
+    controller = ReachyMiniMotorController(serialport="/dev/cu.usbmodem5AAF2624361")
 
     # Details found here in the Specifications table
     # https://emanual.robotis.com/docs/en/dxl/x/xl330-m288/#Specifications

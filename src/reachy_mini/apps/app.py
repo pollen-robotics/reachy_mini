@@ -30,6 +30,7 @@ class ReachyMiniApp(ABC):
     custom_app_url: str | None = None
     dont_start_webserver: bool = False
     request_media_backend: str | None = None
+    emoji: str | None = None  # App icon emoji (shown in dashboard)
 
     def __init__(self, running_on_wireless: bool = False) -> None:
         """Initialize the Reachy Mini app."""
