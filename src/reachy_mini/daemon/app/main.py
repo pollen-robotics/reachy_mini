@@ -102,11 +102,18 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
         args = app.state.args  # type: Args
 
         # Pre-download recorded move datasets in background to avoid delays on first play
-        # This runs in a thread pool to not block the event loop
-        preload_task = None
+        # This runs in a thread pool and completes independently (fire and forget)
         if args.preload_datasets:
+
+            def preload_with_logging() -> None:
+                try:
+                    preload_default_datasets()
+                    logging.info("Recorded move datasets pre-loaded successfully")
+                except Exception as e:
+                    logging.warning(f"Failed to pre-load some datasets: {e}")
+
             loop = asyncio.get_event_loop()
-            preload_task = loop.run_in_executor(None, preload_default_datasets)
+            loop.run_in_executor(None, preload_with_logging)
 
         try:
             if args.autostart:
@@ -125,14 +132,6 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
                     localhost_only=localhost_only,
                     hardware_config_filepath=args.hardware_config_filepath,
                 )
-
-            # Wait for dataset preload to complete (non-blocking if already done)
-            if preload_task is not None:
-                try:
-                    await preload_task
-                    logging.info("Recorded move datasets pre-loaded successfully")
-                except Exception as e:
-                    logging.warning(f"Failed to pre-load some datasets: {e}")
 
             yield
         finally:
