@@ -133,6 +133,13 @@ class GstWebRTC:
         self._loop.quit()
         self._bus_sender.remove_watch()
         self._bus_receiver.remove_watch()
+        # Enable if need to dump logs
+        # Gst.deinit()
+
+    def _dump_latency(self) -> None:
+        query = Gst.Query.new_latency()
+        self._pipeline_sender.query(query)
+        self._logger.info(f"Pipeline latency {query.parse_latency()}")
 
     def _configure_webrtc(self, pipeline: Gst.Pipeline) -> Gst.Element:
         self._logger.debug("Configuring WebRTC")
@@ -147,9 +154,22 @@ class GstWebRTC:
         webrtcsink.set_property("meta", meta_structure)
         webrtcsink.set_property("run-signalling-server", True)
 
+        webrtcsink.connect("consumer-added", self._consumer_added)
+
         pipeline.add(webrtcsink)
 
         return webrtcsink
+
+    def _consumer_added(
+        self, webrtcbin: Gst.Bin, arg1: Gst.Element, udata: bytes
+    ) -> None:
+        self._logger.info("consumer added")
+
+        Gst.debug_bin_to_dot_file(
+            self._pipeline_sender, Gst.DebugGraphDetails.ALL, "pipeline_full"
+        )
+
+        GLib.timeout_add_seconds(5, self._dump_latency)
 
     def _configure_receiver(self, pipeline: Gst.Pipeline) -> None:
         udpsrc = Gst.ElementFactory.make("udpsrc")
@@ -272,6 +292,7 @@ class GstWebRTC:
 
         alsasrc = Gst.ElementFactory.make("alsasrc")
         alsasrc.set_property("device", "reachymini_audio_src")
+        # to optimize the latency, tune ~/.asoundrc file
 
         if not all([alsasrc]):
             raise RuntimeError("Failed to create GStreamer audio elements")
@@ -365,6 +386,7 @@ class GstWebRTC:
         self._logger.debug("Starting WebRTC")
         self._pipeline_sender.set_state(Gst.State.PLAYING)
         self._pipeline_receiver.set_state(Gst.State.PLAYING)
+        GLib.timeout_add_seconds(5, self._dump_latency)
 
     def pause(self) -> None:
         """Pause the WebRTC pipeline."""
@@ -397,3 +419,4 @@ if __name__ == "__main__":
         logging.info("User interrupted")
     finally:
         webrtc.stop()
+        webrtc.__del__()
