@@ -37,6 +37,7 @@ dependencies = [
     "toml",
     "rustypot",
     "pyobjc-core==10.1",
+    "pyaudio",
 ]
 
 
@@ -55,7 +56,7 @@ dev = [
     "types-toml",
     "rerun-sdk>=0.27.2",
     "urdf-parser-py==0.0.4",
-    "pyaudio",
+
 ]
 examples = ["pynput"]
 mujoco = ["mujoco==3.3.0"]
