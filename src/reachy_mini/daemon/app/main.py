@@ -102,7 +102,7 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
         args = app.state.args  # type: Args
 
         # Pre-download recorded move datasets in background to avoid delays on first play
-        # This runs in a thread pool and completes independently (fire and forget)
+        # This runs in asyncio's default ThreadPoolExecutor (fire and forget)
         if args.preload_datasets:
 
             def preload_with_logging() -> None:
