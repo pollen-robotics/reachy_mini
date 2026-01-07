@@ -244,8 +244,11 @@ class GstWebRTC:
         queue_encoder = Gst.ElementFactory.make("queue", "queue_encoder")
         v4l2h264enc = Gst.ElementFactory.make("v4l2h264enc")
         extra_controls_structure = Gst.Structure.new_empty("extra-controls")
+        # doc: https://docs.qualcomm.com/doc/80-70014-50/topic/v4l2h264enc.html
         extra_controls_structure.set_value("repeat_sequence_header", 1)
         extra_controls_structure.set_value("video_bitrate", 5_000_000)
+        extra_controls_structure.set_value("h264_i_frame_period", 60)
+        extra_controls_structure.set_value("video_gop_size", 256)
         v4l2h264enc.set_property("extra-controls", extra_controls_structure)
         # Use H264 Level 3.1 + Constrained Baseline for Safari/WebKit compatibility
         caps_h264 = Gst.Caps.from_string(
