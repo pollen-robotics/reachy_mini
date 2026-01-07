@@ -29,6 +29,7 @@ class ZenohClient(AbstractClient):
 
         Args:
             prefix: The Zenoh prefix to use for communication (used to identify multiple robots).
+            localhost_only: (Deprecated) If True, connect to localhost only. Use 'host="localhost"' instead.
             host: If specified, connect to this host only
 
         """

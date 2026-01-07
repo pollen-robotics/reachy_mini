@@ -11,7 +11,7 @@ import json
 import logging
 import platform
 import time
-from typing import Dict, List, Literal, Optional, Union, cast
+from typing import Any, Dict, List, Literal, Optional, Union, cast
 
 import cv2
 import numpy as np
@@ -328,7 +328,7 @@ class ReachyMini:
         self,
         host: Union[str, bool, None] = None,
         timeout: float = 5.0,
-        **kwargs,
+        **kwargs: Any,
     ) -> ZenohClient:
         """Connect once with the requested tunneling mode and guard cleanup."""
         # Backward compatibility for localhost_only argument passed as positional bool
