@@ -184,7 +184,9 @@ class Backend:
 
         # Guard to ensure only one play_move/goto is executed at a time (goto itself uses play_move, so we need an RLock)
         self._play_move_lock = threading.RLock()
-        self._active_move_depth = 0  # Tracks nested acquisitions within the owning thread
+        self._active_move_depth = (
+            0  # Tracks nested acquisitions within the owning thread
+        )
 
     # Life cycle methods
     def wrapped_run(self) -> None:
@@ -235,7 +237,9 @@ class Backend:
             self._active_move_depth -= 1
         self._play_move_lock.release()
 
-    def get_status(self) -> "RobotBackendStatus | MujocoBackendStatus | MockupSimBackendStatus":
+    def get_status(
+        self,
+    ) -> "RobotBackendStatus | MujocoBackendStatus | MockupSimBackendStatus":
         """Return backend statistics.
 
         This method is a placeholder and should be overridden by subclasses.
@@ -404,8 +408,8 @@ class Backend:
 
         try:
             if initial_goto_duration > 0.0:
-                start_head_pose, start_antennas_positions, start_body_yaw = move.evaluate(
-                    0.0
+                start_head_pose, start_antennas_positions, start_body_yaw = (
+                    move.evaluate(0.0)
                 )
                 await self.goto_target(
                     head=start_head_pose,
