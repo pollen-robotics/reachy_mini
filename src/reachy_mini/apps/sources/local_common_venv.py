@@ -148,6 +148,95 @@ def get_app_python(
         return Path(sys.executable)
 
 
+def _get_app_metadata_from_file(
+    app_name: str,
+    wireless_version: bool = False,
+    desktop_app_daemon: bool = False,
+) -> dict[str, str | None]:
+    """Get app metadata (custom_app_url, emoji) by reading the app's files.
+
+    Reads metadata in this order of priority:
+    1. README.md YAML front matter (standard location for emoji)
+    2. main.py class attributes (fallback for custom_app_url)
+
+    Returns a dict with 'custom_app_url' and 'emoji' keys.
+    """
+    site_packages = _get_app_site_packages(
+        app_name, wireless_version, desktop_app_daemon
+    )
+    if not site_packages or not site_packages.exists():
+        return {"custom_app_url": None, "emoji": None}
+
+    # Get the actual package name from entry points (may differ from app_name)
+    # This handles cases where venv name != package name
+    package_name = app_name
+    try:
+        sys.path.insert(0, str(site_packages))
+        eps = entry_points(group="reachy_mini_apps")
+        ep = eps.select(name=app_name)
+        if ep:
+            # Get module name (e.g., "ultradancemix_9000.main")
+            ep_list = list(ep)
+            if ep_list:
+                module_name = ep_list[0].module
+                # Extract package name (first part before dot)
+                package_name = module_name.split(".")[0]
+    except Exception:
+        pass
+    finally:
+        if str(site_packages) in sys.path:
+            sys.path.remove(str(site_packages))
+
+    app_dir = site_packages / package_name
+    metadata = {"custom_app_url": None, "emoji": None}
+
+    # PRIORITY 1: Read emoji from README.md YAML front matter
+    readme_file = app_dir / "README.md"
+    if readme_file.exists():
+        try:
+            import yaml
+
+            content = readme_file.read_text(encoding="utf-8")
+            # Parse YAML front matter (between --- markers)
+            if content.startswith("---"):
+                parts = content.split("---", 2)
+                if len(parts) >= 2:
+                    yaml_content = parts[1].strip()
+                    readme_metadata = yaml.safe_load(yaml_content)
+                    if isinstance(readme_metadata, dict):
+                        if "emoji" in readme_metadata:
+                            metadata["emoji"] = readme_metadata["emoji"]
+        except Exception as e:
+            logging.getLogger("reachy_mini.apps").debug(
+                f"Could not read emoji from '{app_name}/README.md': {e}"
+            )
+
+    # PRIORITY 2: Read custom_app_url and emoji (fallback) from main.py
+    main_file = app_dir / "main.py"
+    if main_file.exists():
+        try:
+            content = main_file.read_text(encoding="utf-8")
+
+            # Match custom_app_url patterns
+            url_pattern = r'custom_app_url\s*(?::\s*[^=]+)?\s*=\s*["\']([^"\']+)["\']'
+            url_match = re.search(url_pattern, content)
+            if url_match:
+                metadata["custom_app_url"] = url_match.group(1)
+
+            # Match emoji patterns (only if not found in README)
+            if not metadata["emoji"]:
+                emoji_pattern = r'emoji\s*(?::\s*[^=]+)?\s*=\s*["\']([^"\']+)["\']'
+                emoji_match = re.search(emoji_pattern, content)
+                if emoji_match:
+                    metadata["emoji"] = emoji_match.group(1)
+        except Exception as e:
+            logging.getLogger("reachy_mini.apps").warning(
+                f"Could not read metadata from '{app_name}/main.py': {e}"
+            )
+
+    return metadata
+
+
 def _get_custom_app_url_from_file(
     app_name: str,
     wireless_version: bool = False,
@@ -155,40 +244,12 @@ def _get_custom_app_url_from_file(
 ) -> str | None:
     """Get custom_app_url by reading it from the app's main.py file.
 
-    This is much faster than subprocess and avoids sys.path pollution.
-    Looks for patterns like: custom_app_url: str | None = "http://..."
+    This is a compatibility wrapper for _get_app_metadata_from_file.
     """
-    site_packages = _get_app_site_packages(
+    metadata = _get_app_metadata_from_file(
         app_name, wireless_version, desktop_app_daemon
     )
-    if not site_packages or not site_packages.exists():
-        return None
-
-    # Try to find main.py in the app's package directory
-    app_dir = site_packages / app_name
-    main_file = app_dir / "main.py"
-
-    if not main_file.exists():
-        return None
-
-    try:
-        content = main_file.read_text(encoding="utf-8")
-
-        # Match patterns like:
-        # custom_app_url: str | None = "http://..."
-        # custom_app_url = "http://..."
-        # custom_app_url: str = "http://..."
-        pattern = r'custom_app_url\s*(?::\s*[^=]+)?\s*=\s*["\']([^"\']+)["\']'
-        match = re.search(pattern, content)
-
-        if match:
-            return match.group(1)
-        return None
-    except Exception as e:
-        logging.getLogger("reachy_mini.apps").warning(
-            f"Could not read custom_app_url from '{app_name}/main.py': {e}"
-        )
-        return None
+    return metadata.get("custom_app_url")
 
 
 async def _list_apps_from_separate_venvs(
@@ -237,17 +298,21 @@ async def _list_apps_from_separate_venvs(
             ]
             apps = []
             for app_name in app_names:
-                custom_app_url = _get_custom_app_url_from_file(
+                metadata = _get_app_metadata_from_file(
                     app_name, wireless_version, desktop_app_daemon
                 )
                 # Load saved metadata (e.g., private flag)
-                metadata = _load_app_metadata(app_name)
+                saved_metadata = _load_app_metadata(app_name)
                 # Merge with current extra data
                 extra_data = {
-                    "custom_app_url": custom_app_url,
+                    "custom_app_url": metadata.get("custom_app_url"),
                     "venv_path": str(apps_venv),
                 }
-                extra_data.update(metadata)
+                # Add emoji to cardData if present
+                if metadata.get("emoji"):
+                    extra_data["cardData"] = {"emoji": metadata["emoji"]}
+
+                extra_data.update(saved_metadata)
 
                 apps.append(
                     AppInfo(
@@ -273,20 +338,24 @@ async def _list_apps_from_separate_venvs(
             # Extract app name from venv directory name
             app_name = venv_path.name[: -len("_venv")]
 
-            # Get custom_app_url by reading the main.py file (fast, no sys.path pollution)
-            # This ensures the settings icon appears in the dashboard listing
-            custom_app_url = _get_custom_app_url_from_file(
+            # Get metadata by reading the main.py file (fast, no sys.path pollution)
+            # This ensures the settings icon and emoji appear in the dashboard listing
+            metadata = _get_app_metadata_from_file(
                 app_name, wireless_version, desktop_app_daemon
             )
 
             # Load saved metadata (e.g., private flag)
-            metadata = _load_app_metadata(app_name)
+            saved_metadata = _load_app_metadata(app_name)
             # Merge with current extra data
             extra_data = {
-                "custom_app_url": custom_app_url,
+                "custom_app_url": metadata.get("custom_app_url"),
                 "venv_path": str(venv_path),
             }
-            extra_data.update(metadata)
+            # Add emoji to cardData if present
+            if metadata.get("emoji"):
+                extra_data["cardData"] = {"emoji": metadata["emoji"]}
+
+            extra_data.update(saved_metadata)
 
             apps.append(
                 AppInfo(
@@ -306,19 +375,25 @@ async def _list_apps_from_entry_points() -> list[AppInfo]:
     apps = []
     for ep in entry_point_apps:
         custom_app_url = None
+        emoji = None
         try:
             app = ep.load()
             custom_app_url = app.custom_app_url
+            emoji = getattr(app, "emoji", None)
         except Exception as e:
             logging.getLogger("reachy_mini.apps").warning(
                 f"Could not load app '{ep.name}' from entry point: {e}"
             )
 
         # Load saved metadata (e.g., private flag)
-        metadata = _load_app_metadata(ep.name)
+        saved_metadata = _load_app_metadata(ep.name)
         # Merge with current extra data
         extra_data = {"custom_app_url": custom_app_url}
-        extra_data.update(metadata)
+        # Add emoji to cardData if present
+        if emoji:
+            extra_data["cardData"] = {"emoji": emoji}
+
+        extra_data.update(saved_metadata)
 
         apps.append(
             AppInfo(
