@@ -70,7 +70,7 @@ class Args:
     stream_media: bool = False
     use_audio: bool = True
 
-    kinematics_engine: str = "AnalyticalKinematics"
+    kinematics_engine: str = "Placo"
     check_collision: bool = False
 
     autostart: bool = True
@@ -236,7 +236,11 @@ def run_app(args: Args) -> None:
     apps_logger.propagate = True  # Ensure it propagates to root logger
 
     # Install exception hook to catch uncaught exceptions
-    def exception_hook(exc_type: type[BaseException], exc_value: BaseException, exc_traceback: types.TracebackType | None) -> None:
+    def exception_hook(
+        exc_type: type[BaseException],
+        exc_value: BaseException,
+        exc_traceback: types.TracebackType | None,
+    ) -> None:
         """Log uncaught exceptions with full traceback."""
         if issubclass(exc_type, KeyboardInterrupt):
             # Allow KeyboardInterrupt to exit normally
@@ -244,8 +248,7 @@ def run_app(args: Args) -> None:
             return
 
         root_logger.critical(
-            "Uncaught exception",
-            exc_info=(exc_type, exc_value, exc_traceback)
+            "Uncaught exception", exc_info=(exc_type, exc_value, exc_traceback)
         )
         sys.stderr.flush()
 
@@ -255,13 +258,15 @@ def run_app(args: Args) -> None:
         # Set up asyncio exception handler to catch unhandled task exceptions
         loop = asyncio.get_running_loop()
 
-        def asyncio_exception_handler(loop: asyncio.AbstractEventLoop, context: dict[str, Any]) -> None:
+        def asyncio_exception_handler(
+            loop: asyncio.AbstractEventLoop, context: dict[str, Any]
+        ) -> None:
             """Handle exceptions in asyncio tasks."""
             exception = context.get("exception")
             if exception:
                 root_logger.error(
                     f"Unhandled exception in asyncio task: {context.get('message', 'No message')}",
-                    exc_info=(type(exception), exception, exception.__traceback__)
+                    exc_info=(type(exception), exception, exception.__traceback__),
                 )
             else:
                 root_logger.error(f"Asyncio error: {context}")
@@ -488,7 +493,7 @@ def main() -> None:
         type=str,
         default=default_args.kinematics_engine,
         choices=["Placo", "NN", "AnalyticalKinematics"],
-        help="Set the kinematics engine (default: AnalyticalKinematics).",
+        help="Set the kinematics engine (default: Placo).",
     )
     # FastAPI server options
     parser.add_argument(

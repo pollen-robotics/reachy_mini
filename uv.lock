@@ -2907,7 +2907,7 @@ wheels = [
 
 [[package]]
 name = "reachy-mini"
-version = "1.2.2"
+version = "1.2.6"
 source = { editable = "." }
 dependencies = [
     { name = "aiohttp" },
@@ -2951,6 +2951,7 @@ dev = [
     { name = "ruff" },
     { name = "rustypot" },
     { name = "types-requests" },
+    { name = "types-toml" },
     { name = "urdf-parser-py" },
 ]
 examples = [
@@ -3030,6 +3031,7 @@ requires-dist = [
     { name = "soundfile", specifier = "==0.13.1" },
     { name = "toml" },
     { name = "types-requests", marker = "extra == 'dev'" },
+    { name = "types-toml", marker = "extra == 'dev'" },
     { name = "urdf-parser-py", marker = "extra == 'dev'", specifier = "==0.0.4" },
     { name = "urdf-parser-py", marker = "extra == 'rerun'", specifier = "==0.0.4" },
     { name = "uvicorn", extras = ["standard"] },
