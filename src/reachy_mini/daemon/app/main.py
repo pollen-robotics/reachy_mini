@@ -79,6 +79,7 @@ class Args:
     wake_up_on_start: bool = True
     goto_sleep_on_stop: bool = True
     preload_datasets: bool = False
+    dataset_update_interval_hours: float = 24.0  # 0 to disable periodic updates
 
     robot_name: str = "reachy_mini"
 
@@ -100,20 +101,45 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
     async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         """Lifespan context manager for the FastAPI application."""
         args = app.state.args  # type: Args
+        dataset_updater_task: asyncio.Task[None] | None = None
+
+        def preload_with_logging() -> None:
+            """Download datasets with logging."""
+            try:
+                preload_default_datasets()
+                logging.info("Recorded move datasets pre-loaded successfully")
+            except Exception as e:
+                logging.warning(f"Failed to pre-load some datasets: {e}")
+
+        async def dataset_updater(interval_hours: float) -> None:
+            """Background task that periodically checks for dataset updates."""
+            interval_seconds = interval_hours * 3600
+            while True:
+                try:
+                    await asyncio.sleep(interval_seconds)
+                    logging.info("Checking for dataset updates...")
+                    loop = asyncio.get_event_loop()
+                    await loop.run_in_executor(None, preload_with_logging)
+                except asyncio.CancelledError:
+                    logging.info("Dataset updater task cancelled")
+                    break
+                except Exception as e:
+                    logging.warning(f"Error in dataset updater: {e}")
 
         # Pre-download recorded move datasets in background to avoid delays on first play
         # This runs in asyncio's default ThreadPoolExecutor (fire and forget)
         if args.preload_datasets:
-
-            def preload_with_logging() -> None:
-                try:
-                    preload_default_datasets()
-                    logging.info("Recorded move datasets pre-loaded successfully")
-                except Exception as e:
-                    logging.warning(f"Failed to pre-load some datasets: {e}")
-
             loop = asyncio.get_event_loop()
             loop.run_in_executor(None, preload_with_logging)
+
+        # Start periodic dataset updater if enabled (interval > 0)
+        if args.dataset_update_interval_hours > 0:
+            dataset_updater_task = asyncio.create_task(
+                dataset_updater(args.dataset_update_interval_hours)
+            )
+            logging.info(
+                f"Dataset updater started (interval: {args.dataset_update_interval_hours}h)"
+            )
 
         try:
             if args.autostart:
@@ -135,6 +161,14 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
 
             yield
         finally:
+            # Cancel dataset updater task if running
+            if dataset_updater_task and not dataset_updater_task.done():
+                dataset_updater_task.cancel()
+                try:
+                    await dataset_updater_task
+                except asyncio.CancelledError:
+                    pass
+
             # Ensure cleanup happens even if there's an exception
             try:
                 logging.info("Shutting down app manager...")
@@ -488,6 +522,13 @@ def main() -> None:
         action="store_false",
         dest="preload_datasets",
         help="Do not pre-download datasets at startup (default: False).",
+    )
+    parser.add_argument(
+        "--dataset-update-interval",
+        type=float,
+        default=default_args.dataset_update_interval_hours,
+        dest="dataset_update_interval_hours",
+        help="Interval in hours for background dataset update checks (default: 24.0, 0 to disable).",
     )
     # Zenoh server options
     parser.add_argument(
