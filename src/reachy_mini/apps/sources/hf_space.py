@@ -12,7 +12,7 @@ from .. import AppInfo, SourceKind
 AUTHORIZED_APP_LIST_URL = "https://huggingface.co/datasets/pollen-robotics/reachy-mini-official-app-store/raw/main/app-list.json"
 HF_SPACES_API_URL = "https://huggingface.co/api/spaces"
 # TODO look for js apps too (reachy_mini_js_app)
-HF_SPACES_FILTER_URL = "https://huggingface.co/api/spaces?filter=reachy_mini_python_app&sort=likes&direction=-1&limit=50&full=true"
+HF_SPACES_FILTER_URL = "https://huggingface.co/api/spaces?filter=reachy_mini_python_app&sort=likes&direction=-1&limit=500&full=true"
 REQUEST_TIMEOUT = aiohttp.ClientTimeout(total=30)
 
 

@@ -17,6 +17,7 @@ from typing import Annotated, Any
 import log_throttling
 import numpy as np
 import numpy.typing as npt
+import zenoh
 from reachy_mini_motor_controller import ReachyMiniPyControlLoop
 
 from reachy_mini.utils.hardware_config.parser import parse_yaml_config
@@ -109,6 +110,21 @@ class RobotBackend(Backend):
         self.target_head_joint_current = None  # Placeholder for head joint torque
 
         self.hardware_error_check_frequency = hardware_error_check_frequency  # seconds
+
+        # Initialize IMU for wireless version
+        if wireless_version:
+            try:
+                from bmi088 import BMI088
+
+                self.bmi088 = BMI088(i2c_bus=4)
+                self.logger.info("BMI088 IMU initialized successfully")
+            except Exception as e:
+                self.logger.warning(f"Failed to initialize IMU: {e}")
+                self.bmi088 = None
+        else:
+            self.bmi088 = None
+
+        self.imu_publisher: zenoh.Publisher | None = None
 
     def run(self) -> None:
         """Run the control loop for the robot backend.
@@ -234,6 +250,12 @@ class RobotBackend(Backend):
                         )
                     )
 
+                    # Publish IMU data if available
+                    if self.imu_publisher is not None and self.bmi088 is not None:
+                        imu_data = self.get_imu_data()
+                        if imu_data is not None:
+                            self.imu_publisher.put(json.dumps(imu_data))
+
                 self.last_alive = time.time()
 
                 self.ready.set()  # Mark the backend as ready
@@ -282,10 +304,11 @@ class RobotBackend(Backend):
                 self.last_hardware_error_check_time = time.time()
 
     def close(self) -> None:
-        """Close the motor controller connection."""
+        """Close the motor controller connection and release resources."""
         if self.c is not None:
             self.c.close()
         self.c = None
+        super().close()
 
     def get_status(self) -> "RobotBackendStatus":
         """Get the current status of the robot backend."""
@@ -378,7 +401,11 @@ class RobotBackend(Backend):
 
         """
         assert self.c is not None, "Motor controller not initialized or already closed."
-        assert mode in [0, 3, 5], (
+        assert mode in [
+            0,
+            3,
+            5,
+        ], (
             "Invalid operation mode. Must be one of [0 (torque), 3 (position), 5 (current-limiting position)]."
         )
 
@@ -436,6 +463,42 @@ class RobotBackend(Backend):
 
         """
         return np.array(self.get_all_joint_positions()[1])
+
+    def get_imu_data(self) -> dict[str, list[float] | float] | None:
+        """Get current IMU data (accelerometer, gyroscope, quaternion, temperature).
+
+        Returns:
+            dict with 'accelerometer', 'gyroscope', 'quaternion', and 'temperature' keys,
+            or None if IMU is not available.
+
+        """
+        if self.bmi088 is None:
+            return None
+
+        try:
+            # Read accelerometer (returns tuple of x, y, z in m/s^2)
+            accel_x, accel_y, accel_z = self.bmi088.read_accelerometer(m_per_s2=True)
+
+            # Read gyroscope (returns tuple of x, y, z in rad/s)
+            gyro_x, gyro_y, gyro_z = self.bmi088.read_gyroscope(deg_per_s=False)
+
+            # Get quaternion orientation (dt = control loop period)
+            dt = 1.0 / self.control_loop_frequency  # 0.02 seconds at 50Hz
+            quat = self.bmi088.get_quat(dt)
+
+            # Read temperature in Celsius
+            temperature = self.bmi088.read_temperature()
+
+            # Convert all numpy types to native Python floats for JSON serialization
+            return {
+                "accelerometer": [float(accel_x), float(accel_y), float(accel_z)],
+                "gyroscope": [float(gyro_x), float(gyro_y), float(gyro_z)],
+                "quaternion": [float(q) for q in quat],
+                "temperature": float(temperature),
+            }
+        except Exception as e:
+            self.logger.error(f"Error reading IMU data: {e}")
+            return None
 
     def compensate_head_gravity(self) -> None:
         """Calculate the currents necessary to compensate for gravity."""

@@ -9,8 +9,9 @@ It also includes methods for multimedia interactions like playing sounds and loo
 import asyncio
 import json
 import logging
+import platform
 import time
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Literal, Optional, Union, cast
 
 import cv2
 import numpy as np
@@ -18,7 +19,7 @@ import numpy.typing as npt
 from asgiref.sync import async_to_sync
 from scipy.spatial.transform import Rotation as R
 
-from reachy_mini.daemon.utils import daemon_check
+from reachy_mini.daemon.utils import daemon_check, is_local_camera_available
 from reachy_mini.io.protocol import GotoTaskRequest
 from reachy_mini.io.zenoh_client import ZenohClient
 from reachy_mini.media.media_manager import MediaBackend, MediaManager
@@ -49,12 +50,17 @@ SLEEP_HEAD_POSE = np.array(
     ]
 )
 
+ConnectionMode = Literal["auto", "localhost_only", "network"]
+
 
 class ReachyMini:
     """Reachy Mini class for controlling a simulated or real Reachy Mini robot.
 
     Args:
-        localhost_only (bool): If True, will only connect to localhost daemons, defaults to True.
+        connection_mode: Select how to connect to the daemon. Use
+            `"localhost_only"` to restrict connections to daemons running on
+            localhost, `"network"` to scout for daemons on the LAN, or `"auto"`
+            (default) to try localhost first then fall back to the network.
         spawn_daemon (bool): If True, will spawn a daemon to control the robot, defaults to False.
         use_sim (bool): If True and spawn_daemon is True, will spawn a simulated robot, defaults to True.
 
@@ -63,25 +69,33 @@ class ReachyMini:
     def __init__(
         self,
         robot_name: str = "reachy_mini",
-        localhost_only: bool = True,
+        connection_mode: ConnectionMode = "auto",
         spawn_daemon: bool = False,
         use_sim: bool = False,
         timeout: float = 5.0,
         automatic_body_yaw: bool = True,
         log_level: str = "INFO",
         media_backend: str = "default",
+        localhost_only: Optional[bool] = None,
     ) -> None:
         """Initialize the Reachy Mini robot.
 
         Args:
             robot_name (str): Name of the robot, defaults to "reachy_mini".
-            localhost_only (bool): If True, will only connect to localhost daemons, defaults to True.
+            connection_mode: `"auto"` (default), `"localhost_only"` or `"network"`.
+                `"auto"` will first try daemons on localhost and fall back to
+                network discovery if no local daemon responds.
+            localhost_only (Optional[bool]): Deprecated alias for the connection
+                mode. Set `False` to search for network daemons. Will be removed
+                in a future release.
             spawn_daemon (bool): If True, will spawn a daemon to control the robot, defaults to False.
             use_sim (bool): If True and spawn_daemon is True, will spawn a simulated robot, defaults to True.
             timeout (float): Timeout for the client connection, defaults to 5.0 seconds.
             automatic_body_yaw (bool): If True, the body yaw will be used to compute the IK and FK. Default is False.
             log_level (str): Logging level, defaults to "INFO".
-            media_backend (str): Media backend to use, either "default" (OpenCV), "gstreamer" or "webrtc", defaults to "default".
+            media_backend (str): Use "no_media" to disable media entirely. Any other value
+                triggers auto-detection: Lite uses OpenCV, Wireless uses GStreamer (local)
+                or WebRTC (remote) based on environment.
 
         It will try to connect to the daemon, and if it fails, it will raise an exception.
 
@@ -90,8 +104,12 @@ class ReachyMini:
         self.logger.setLevel(log_level)
         self.robot_name = robot_name
         daemon_check(spawn_daemon, use_sim)
-        self.client = ZenohClient(robot_name, localhost_only)
-        self.client.wait_for_connection(timeout=timeout)
+        normalized_mode = self._normalize_connection_mode(
+            connection_mode, localhost_only
+        )
+        self.client, self.connection_mode = self._initialize_client(
+            normalized_mode, timeout
+        )
         self.set_automatic_body_yaw(automatic_body_yaw)
         self._last_head_pose: Optional[npt.NDArray[np.float64]] = None
         self.is_recording = False
@@ -131,40 +149,97 @@ class ReachyMini:
         """Expose the MediaManager instance used by ReachyMini."""
         return self.media_manager
 
+    @property
+    def imu(self) -> Dict[str, List[float] | float] | None:
+        """Get the current IMU data from the backend.
+
+        Returns:
+            dict with the following keys, or None if IMU is not available (Lite version)
+            or no data received yet:
+            - 'accelerometer': [x, y, z] in m/s^2
+            - 'gyroscope': [x, y, z] in rad/s
+            - 'quaternion': [w, x, y, z] orientation quaternion
+            - 'temperature': float in °C
+
+        Note:
+            - Data is cached from the last Zenoh update at 50Hz
+            - Quaternion is in [w, x, y, z] format
+
+        Example:
+            >>> imu_data = reachy.imu
+            >>> if imu_data is not None:
+            >>>     accel_x, accel_y, accel_z = imu_data['accelerometer']
+            >>>     gyro_x, gyro_y, gyro_z = imu_data['gyroscope']
+            >>>     quat_w, quat_x, quat_y, quat_z = imu_data['quaternion']
+            >>>     temp = imu_data['temperature']
+
+        """
+        return self.client.get_current_imu_data()
+
     def _configure_mediamanager(
         self, media_backend: str, log_level: str
     ) -> MediaManager:
-        mbackend = MediaBackend.DEFAULT
         daemon_status = self.client.get_status()
+        is_wireless = daemon_status.get("wireless_version", False)
 
-        # If wireless, force webrtc unless no_media is selected
-        if media_backend != "no_media" and daemon_status.get(
-            "wireless_version"
-        ):
-            mbackend = MediaBackend.WEBRTC
+        # If no_media is requested, skip all media initialization
+        if media_backend.lower() == "no_media":
+            self.logger.info("No media backend requested.")
+            mbackend = MediaBackend.NO_MEDIA
         else:
-            match media_backend.lower():
-                case "webrtc":
-                    if not daemon_status.get("wireless_version"):
+            if is_wireless:
+                if is_local_camera_available():
+                    # Local client on CM4: use GStreamer to read from unix socket
+                    # This avoids WebRTC encode/decode overhead
+                    if "no_video" in media_backend.lower():
+                        mbackend = MediaBackend.GSTREAMER_NO_VIDEO
+                        self.logger.info(
+                            "Auto-detected: Wireless + local camera socket. "
+                            "Using GStreamer audio-only backend (no WebRTC overhead)."
+                        )
+                    else:
+                        mbackend = MediaBackend.GSTREAMER
+                        self.logger.info(
+                            "Auto-detected: Wireless + local camera socket. "
+                            "Using GStreamer backend (no WebRTC overhead)."
+                        )
+                else:
+                    # Remote client: use WebRTC for streaming
+                    self.logger.info(
+                        "Auto-detected: Wireless + remote client. "
+                        "Using WebRTC backend for streaming."
+                    )
+                    mbackend = MediaBackend.WEBRTC
+            else:
+                # Lite version: use specified backend if compatible
+                try:
+                    mbackend = MediaBackend(media_backend.lower())
+                    if mbackend == MediaBackend.WEBRTC:
                         self.logger.warning(
-                            "Non-wireless version detected, daemon should use the flag '--wireless-version'. Reverting to default"
+                            f"Incompatible media backend on Lite: {media_backend}, using default backend."
                         )
                         mbackend = MediaBackend.DEFAULT
+                    # TODO : Remove when wheel is released !
+                    elif "gstreamer" in media_backend.lower() and (
+                        platform.system() == "Darwin" or platform.system() == "Windows"
+                    ):
+                        self.logger.warning(
+                            f"Unsupported media backend on Lite for {platform.system()}: {media_backend}, using default backend."
+                        )
+                        mbackend = (
+                            MediaBackend.DEFAULT_NO_VIDEO
+                            if "no_video" in media_backend.lower()
+                            else MediaBackend.DEFAULT
+                        )
                     else:
-                        self.logger.info("WebRTC backend configured successfully.")
-                        mbackend = MediaBackend.WEBRTC
-                case "gstreamer":
-                    mbackend = MediaBackend.GSTREAMER
-                case "default":
-                    mbackend = MediaBackend.DEFAULT
-                case "no_media":
-                    mbackend = MediaBackend.NO_MEDIA
-                case "default_no_video":
-                    mbackend = MediaBackend.DEFAULT_NO_VIDEO
-                case _:
-                    raise ValueError(
-                        f"Invalid media_backend '{media_backend}'. Supported values are 'default', 'gstreamer', 'no_media', 'default_no_video', and 'webrtc'."
+                        self.logger.info(
+                            f"Auto-detected: Lite. Using {mbackend} backend."
+                        )
+                except ValueError:
+                    self.logger.warning(
+                        f"Invalid media backend on Lite: {media_backend}, using default backend."
                     )
+                    mbackend = MediaBackend.DEFAULT
 
         return MediaManager(
             use_sim=self.client.get_status()["simulation_enabled"],
@@ -172,6 +247,78 @@ class ReachyMini:
             log_level=log_level,
             signalling_host=self.client.get_status()["wlan_ip"],
         )
+
+    def _normalize_connection_mode(
+        self,
+        connection_mode: ConnectionMode,
+        legacy_localhost_only: Optional[bool],
+    ) -> ConnectionMode:
+        """Normalize connection mode input, optionally honoring the legacy alias."""
+        normalized = connection_mode.lower()
+        if normalized not in {"auto", "localhost_only", "network"}:
+            raise ValueError(
+                "Invalid connection_mode. Use 'auto', 'localhost_only', or 'network'."
+            )
+        resolved = cast(ConnectionMode, normalized)
+
+        if legacy_localhost_only is None:
+            return resolved
+
+        self.logger.warning(
+            "The 'localhost_only' argument is deprecated and will be removed in a "
+            "future release. Please switch to connection_mode."
+        )
+
+        if resolved != "auto":
+            self.logger.warning(
+                "Both connection_mode=%s and localhost_only=%s were provided. "
+                "connection_mode takes precedence.",
+                resolved,
+                legacy_localhost_only,
+            )
+            return resolved
+
+        return "localhost_only" if legacy_localhost_only else "network"
+
+    def _initialize_client(
+        self, requested_mode: ConnectionMode, timeout: float
+    ) -> tuple[ZenohClient, ConnectionMode]:
+        """Create a client according to the requested mode, adding auto fallback."""
+        requested_mode = cast(ConnectionMode, requested_mode.lower())
+        if requested_mode == "auto":
+            try:
+                client = self._connect_single(localhost_only=True, timeout=timeout)
+                selected: ConnectionMode = "localhost_only"
+            except Exception as err:
+                self.logger.info(
+                    "Auto connection: localhost attempt failed (%s). "
+                    "Trying network discovery.",
+                    err,
+                )
+                client = self._connect_single(localhost_only=False, timeout=timeout)
+                selected = "network"
+            self.logger.info("Connection mode selected: %s", selected)
+            return client, selected
+
+        if requested_mode == "localhost_only":
+            client = self._connect_single(localhost_only=True, timeout=timeout)
+            selected = "localhost_only"
+        else:
+            client = self._connect_single(localhost_only=False, timeout=timeout)
+            selected = "network"
+
+        self.logger.info("Connection mode selected: %s", selected)
+        return client, selected
+
+    def _connect_single(self, localhost_only: bool, timeout: float) -> ZenohClient:
+        """Connect once with the requested tunneling mode and guard cleanup."""
+        client = ZenohClient(self.robot_name, localhost_only)
+        try:
+            client.wait_for_connection(timeout=timeout)
+        except Exception:
+            client.disconnect()
+            raise
+        return client
 
     def set_target(
         self,
@@ -268,12 +415,16 @@ class ReachyMini:
             )
 
         req = GotoTaskRequest(
-            head=np.array(head, dtype=np.float64).flatten().tolist()
-            if head is not None
-            else None,
-            antennas=np.array(antennas, dtype=np.float64).flatten().tolist()
-            if antennas is not None
-            else None,
+            head=(
+                np.array(head, dtype=np.float64).flatten().tolist()
+                if head is not None
+                else None
+            ),
+            antennas=(
+                np.array(antennas, dtype=np.float64).flatten().tolist()
+                if antennas is not None
+                else None
+            ),
             duration=duration,
             method=method,
             body_yaw=body_yaw,
@@ -606,9 +757,10 @@ class ReachyMini:
         cmd = {}
 
         if pose is not None:
-            assert pose.shape == (4, 4), (
-                f"Head pose should be a 4x4 matrix, got {pose.shape}."
-            )
+            assert pose.shape == (
+                4,
+                4,
+            ), f"Head pose should be a 4x4 matrix, got {pose.shape}."
             cmd["head_pose"] = pose.tolist()
         else:
             raise ValueError("Pose must be provided as a 4x4 matrix.")
@@ -667,6 +819,8 @@ class ReachyMini:
 
         Args:
             ids (List[str] | None): List of motor names to enable. If None, all motors will be enabled.
+                Valid names match `src/reachy_mini/assets/config/hardware_config.yaml`:
+                `body_rotation`, `stewart_1` … `stewart_6`, `right_antenna`, `left_antenna`.
 
         """
         self._set_torque(True, ids=ids)
@@ -676,6 +830,8 @@ class ReachyMini:
 
         Args:
             ids (List[str] | None): List of motor names to disable. If None, all motors will be disabled.
+                Valid names match `src/reachy_mini/assets/config/hardware_config.yaml`:
+                `body_rotation`, `stewart_1` … `stewart_6`, `right_antenna`, `left_antenna`.
 
         """
         self._set_torque(False, ids=ids)

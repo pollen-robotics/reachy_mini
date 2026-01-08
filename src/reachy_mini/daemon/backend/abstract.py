@@ -25,6 +25,7 @@ from numpy.typing import NDArray
 from scipy.spatial.transform import Rotation as R
 
 if typing.TYPE_CHECKING:
+    from reachy_mini.daemon.backend.mockup_sim.backend import MockupSimBackendStatus
     from reachy_mini.daemon.backend.mujoco.backend import MujocoBackendStatus
     from reachy_mini.daemon.backend.robot.backend import RobotBackendStatus
     from reachy_mini.kinematics import AnyKinematics
@@ -131,6 +132,7 @@ class Backend:
         self.joint_positions_publisher: zenoh.Publisher | None = None
         self.pose_publisher: zenoh.Publisher | None = None
         self.recording_publisher: zenoh.Publisher | None = None
+        self.imu_publisher: zenoh.Publisher | None = None
         self.error: str | None = None  # To store any error that occurs during execution
         self.is_recording = False  # Flag to indicate if recording is active
         self.recorded_data: list[dict[str, Any]] = []  # List to store recorded data
@@ -182,7 +184,9 @@ class Backend:
 
         # Guard to ensure only one play_move/goto is executed at a time (goto itself uses play_move, so we need an RLock)
         self._play_move_lock = threading.RLock()
-        self._active_move_depth = 0  # Tracks nested acquisitions within the owning thread
+        self._active_move_depth = (
+            0  # Tracks nested acquisitions within the owning thread
+        )
 
     # Life cycle methods
     def wrapped_run(self) -> None:
@@ -202,13 +206,18 @@ class Backend:
         raise NotImplementedError("The method run should be overridden by subclasses.")
 
     def close(self) -> None:
-        """Close the backend.
+        """Close the backend and release resources.
 
-        This method is a placeholder and should be overridden by subclasses.
+        Subclasses should override this method to add their own cleanup logic,
+        and call super().close() at the end to ensure audio resources are released.
+
+        Note: This base implementation handles common cleanup (audio).
+        Subclasses must still implement their own cleanup for backend-specific resources.
         """
-        raise NotImplementedError(
-            "The method close should be overridden by subclasses."
-        )
+        self.logger.debug("Backend.close() - cleaning up audio resources")
+        if self.audio is not None:
+            self.audio.close()
+            self.audio = None
 
     @property
     def is_move_running(self) -> bool:
@@ -228,7 +237,9 @@ class Backend:
             self._active_move_depth -= 1
         self._play_move_lock.release()
 
-    def get_status(self) -> "RobotBackendStatus | MujocoBackendStatus":
+    def get_status(
+        self,
+    ) -> "RobotBackendStatus | MujocoBackendStatus | MockupSimBackendStatus":
         """Return backend statistics.
 
         This method is a placeholder and should be overridden by subclasses.
@@ -255,6 +266,15 @@ class Backend:
 
         """
         self.pose_publisher = publisher
+
+    def set_imu_publisher(self, publisher: zenoh.Publisher) -> None:
+        """Set the publisher for IMU data.
+
+        Args:
+            publisher: A publisher object that will be used to publish IMU data.
+
+        """
+        self.imu_publisher = publisher
 
     def update_target_head_joints_from_ik(
         self,
@@ -388,8 +408,8 @@ class Backend:
 
         try:
             if initial_goto_duration > 0.0:
-                start_head_pose, start_antennas_positions, start_body_yaw = move.evaluate(
-                    0.0
+                start_head_pose, start_antennas_positions, start_body_yaw = (
+                    move.evaluate(0.0)
                 )
                 await self.goto_target(
                     head=start_head_pose,

@@ -35,8 +35,7 @@ Plug the USB cable (the one shown in the image above, named USB2)
 
 Your device should be visible as `/dev/sdx..` (something like that).
 
-<details>
-<summary>⚠️ Make sure it is unmounted</summary>
+⚠️ Make sure it is unmounted
 
 
 > Check by running : 
@@ -56,7 +55,6 @@ Your device should be visible as `/dev/sdx..` (something like that).
 > sudo umount /media/username/rootfs
 > ```
 
-</details>
 
 ## Flash the ISO 
 
@@ -72,3 +70,22 @@ sudo bmaptool copy image_2025-11-19-reachyminios-lite-v0.0.10.zip --bmap 2025-11
 
 
 When it's done, you must ⚠️`move the switch back to DEBUG`⚠️ and reboot the robot.
+
+## Check that everything is working
+
+ssh into the robot : 
+
+```bash
+ssh pollen@reachy-mini.local
+# password: root
+```
+Then run : 
+
+```bash
+reachyminios_check
+```
+
+If successful, you should see : 
+```bash
+Image validation PASSED
+```

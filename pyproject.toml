@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "reachy_mini"
-version = "1.2.4"
+version = "1.2.8"
 authors = [{ name = "Pollen Robotics", email = "contact@pollen-robotics.com" }]
 description = ""
 readme = "README.md"
@@ -12,7 +12,7 @@ requires-python = ">=3.10"
 dependencies = [
     "numpy>=2.2.5",
     "scipy>=1.15.3, <2.0.0",
-    "reachy_mini_motor_controller>=1.4.2",
+    "reachy_mini_motor_controller>=1.5.3",
     "eclipse-zenoh~=1.7.0",
     "opencv-python<=5.0",
     "cv2_enumerate_cameras>=1.2.1",
@@ -35,7 +35,7 @@ dependencies = [
     "questionary",
     "websockets>=12,<16",
     "toml",
-    "rustypot",
+    "rustypot>=1.4.2",
 ]
 
 
@@ -49,7 +49,6 @@ dev = [
     "placo==0.9.14",
     "pre-commit",
     "mypy==1.18.2",
-    "rustypot>=1.4.0",
     "types-requests",
     "types-toml",
     "rerun-sdk>=0.27.2",

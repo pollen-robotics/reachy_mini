@@ -12,6 +12,8 @@ import numpy as np
 import psutil
 from pydantic import BaseModel
 
+from reachy_mini.daemon.backend.robot import RobotBackend
+
 from . import AppInfo, SourceKind
 from .sources import hf_space, local_common_venv
 
@@ -139,7 +141,7 @@ class AppManager:
                 async for line in process.stdout:
                     self.logger.getChild("runner").info(line.decode().rstrip())
 
-            # Stream stderr (many libraries write INFO/WARNING to stderr)
+            # Stream stderr - log as warning since it often contains errors/exceptions
             stderr_lines: list[str] = []
 
             async def log_stderr() -> None:
@@ -147,7 +149,15 @@ class AppManager:
                 async for line in process.stderr:
                     decoded = line.decode().rstrip()
                     stderr_lines.append(decoded)
-                    self.logger.getChild("runner").info(decoded)
+                    # Check if line looks like an error or exception
+                    if any(
+                        keyword in decoded
+                        for keyword in ["Error:", "Exception:", "Traceback", "ERROR"]
+                    ):
+                        self.logger.getChild("runner").error(decoded)
+                    else:
+                        # Many libraries write INFO/WARNING to stderr
+                        self.logger.getChild("runner").warning(decoded)
 
             # Run both streams concurrently
             await asyncio.gather(log_stdout(), log_stderr())
@@ -167,7 +177,8 @@ class AppManager:
                         f"Process exited with code {returncode}\n{error_msg}"
                     )
                     self.logger.getChild("runner").error(
-                        f"App {app_name} exited with code {returncode}"
+                        f"App {app_name} exited with code {returncode}. "
+                        f"Last stderr output:\n{error_msg}"
                     )
 
         monitor_task = asyncio.create_task(monitor_process())
@@ -229,6 +240,9 @@ class AppManager:
 
         # Return robot to zero position after app stops
         if self.daemon is not None and self.daemon.backend is not None:
+            if isinstance(self.daemon.backend, RobotBackend):
+                self.daemon.backend.enable_motors()
+
             try:
                 from reachy_mini.reachy_mini import INIT_HEAD_POSE
 

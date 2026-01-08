@@ -1,3 +1,9 @@
+# Smartphone simple bluetooth dashboard
+
+With a smarpthone and a Bluetooth Web API able browser (chrome based/opera/edge) you simply go there 👉 [Bluetooth tool](https://pollen-robotics.github.io/reachy_mini/) and reset hotspot, check network status or other tasks.
+
+If your device/browser isn't compatible, please check the other solution.
+
 
 # ReachyMini nRF Connect Guide
 

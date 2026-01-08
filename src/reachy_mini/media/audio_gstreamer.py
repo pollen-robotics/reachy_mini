@@ -1,7 +1,45 @@
-"""GStreamer camera backend.
+"""GStreamer audio backend.
 
-This module provides an implementation of the CameraBase class using GStreamer.
-By default the module directly returns JPEG images as output by the camera.
+This module provides an implementation of the AudioBase class using GStreamer.
+It offers advanced audio processing capabilities including microphone input,
+speaker output, and integration with the ReSpeaker microphone array for
+Direction of Arrival (DoA) estimation.
+
+The GStreamer audio backend supports:
+- High-quality audio capture and playback
+- ReSpeaker microphone array integration
+- Direction of Arrival (DoA) estimation
+- Advanced audio processing pipelines
+- Multiple audio formats and sample rates
+
+Note:
+    This class is typically used internally by the MediaManager when the GSTREAMER
+    backend is selected. Direct usage is possible but usually not necessary.
+
+Example usage via MediaManager:
+    >>> from reachy_mini.media.media_manager import MediaManager, MediaBackend
+    >>>
+    >>> # Create media manager with GStreamer backend
+    >>> media = MediaManager(backend=MediaBackend.GSTREAMER, log_level="INFO")
+    >>>
+    >>> # Start audio recording
+    >>> media.start_recording()
+    >>>
+    >>> # Get audio samples
+    >>> samples = media.get_audio_sample()
+    >>> if samples is not None:
+    ...     print(f"Captured {len(samples)} audio samples")
+    >>>
+    >>> # Get Direction of Arrival
+    >>> doa = media.get_DoA()
+    >>> if doa is not None:
+    ...     angle, speech_detected = doa
+    ...     print(f"Sound direction: {angle} radians, speech detected: {speech_detected}")
+    >>>
+    >>> # Clean up
+    >>> media.stop_recording()
+    >>> media.close()
+
 """
 
 import os
@@ -108,6 +146,21 @@ class GStreamerAudio(AudioBase):
         self._bus_record.remove_watch()
         self._bus_playback.remove_watch()
 
+    def set_max_output_buffers(self, max_buffers: int) -> None:
+        """Set the maximum number of output buffers to queue in the player.
+
+        Args:
+            max_buffers (int): Maximum number of buffers to queue.
+
+        """
+        if self._appsrc is not None:
+            self._appsrc.set_property("max-buffers", max_buffers)
+            self._appsrc.set_property("leaky-type", 2)  # drop old buffers
+        else:
+            self.logger.warning(
+                "AppSrc is not initialized. Call start_playing() first."
+            )
+
     def _init_pipeline_playback(self, pipeline: Gst.Pipeline) -> None:
         self._appsrc = Gst.ElementFactory.make("appsrc")
         self._appsrc.set_property("format", Gst.Format.TIME)
@@ -120,7 +173,6 @@ class GStreamerAudio(AudioBase):
         audioconvert = Gst.ElementFactory.make("audioconvert")
         audioresample = Gst.ElementFactory.make("audioresample")
 
-        queue = Gst.ElementFactory.make("queue")
         audiosink: Optional[Gst.Element] = None
         if self._id_audio_card == -1:
             audiosink = Gst.ElementFactory.make("autoaudiosink")  # use default speaker
@@ -132,14 +184,12 @@ class GStreamerAudio(AudioBase):
             audiosink = Gst.ElementFactory.make("alsasink")
             audiosink.set_property("device", f"hw:{self._id_audio_card},0")
 
-        pipeline.add(queue)
         pipeline.add(audiosink)
         pipeline.add(self._appsrc)
         pipeline.add(audioconvert)
         pipeline.add(audioresample)
 
-        self._appsrc.link(queue)
-        queue.link(audioconvert)
+        self._appsrc.link(audioconvert)
         audioconvert.link(audioresample)
         audioresample.link(audiosink)
 
@@ -157,7 +207,10 @@ class GStreamerAudio(AudioBase):
         return True
 
     def start_recording(self) -> None:
-        """Open the audio card using GStreamer."""
+        """Open the audio card using GStreamer.
+
+        See AudioBase.start_recording() for complete documentation.
+        """
         self._pipeline_record.set_state(Gst.State.PLAYING)
 
     def _get_sample(self, appsink: GstApp.AppSink) -> Optional[bytes]:
@@ -176,6 +229,8 @@ class GStreamerAudio(AudioBase):
     def get_audio_sample(self) -> Optional[npt.NDArray[np.float32]]:
         """Read a sample from the audio card. Returns the sample or None if error.
 
+        See AudioBase.get_audio_sample() for complete documentation.
+
         Returns:
             Optional[npt.NDArray[np.float32]]: The captured sample in raw format, or None if error.
 
@@ -186,35 +241,59 @@ class GStreamerAudio(AudioBase):
         return np.frombuffer(sample, dtype=np.float32).reshape(-1, 2)
 
     def get_input_audio_samplerate(self) -> int:
-        """Get the input samplerate of the audio device."""
+        """Get the input samplerate of the audio device.
+
+        See AudioBase.get_input_audio_samplerate() for complete documentation.
+        """
         return self.SAMPLE_RATE
 
     def get_output_audio_samplerate(self) -> int:
-        """Get the output samplerate of the audio device."""
+        """Get the output samplerate of the audio device.
+
+        See AudioBase.get_output_audio_samplerate() for complete documentation.
+        """
         return self.SAMPLE_RATE
 
     def get_input_channels(self) -> int:
-        """Get the number of input channels of the audio device."""
+        """Get the number of input channels of the audio device.
+
+        See AudioBase.get_input_channels() for complete documentation.
+        """
         return self.CHANNELS
 
     def get_output_channels(self) -> int:
-        """Get the number of output channels of the audio device."""
+        """Get the number of output channels of the audio device.
+
+        See AudioBase.get_output_channels() for complete documentation.
+        """
         return self.CHANNELS
 
     def stop_recording(self) -> None:
-        """Release the camera resource."""
+        """Release the camera resource.
+
+        See AudioBase.stop_recording() for complete documentation.
+        """
         self._pipeline_record.set_state(Gst.State.NULL)
 
     def start_playing(self) -> None:
-        """Open the audio output using GStreamer."""
+        """Open the audio output using GStreamer.
+
+        See AudioBase.start_playing() for complete documentation.
+        """
         self._pipeline_playback.set_state(Gst.State.PLAYING)
 
     def stop_playing(self) -> None:
-        """Stop playing audio and release resources."""
+        """Stop playing audio and release resources.
+
+        See AudioBase.stop_playing() for complete documentation.
+        """
         self._pipeline_playback.set_state(Gst.State.NULL)
 
     def push_audio_sample(self, data: npt.NDArray[np.float32]) -> None:
-        """Push audio data to the output device."""
+        """Push audio data to the output device.
+
+        See AudioBase.push_audio_sample() for complete documentation.
+        """
         if self._appsrc is not None:
             buf = Gst.Buffer.new_wrapped(data.tobytes())
             self._appsrc.push_buffer(buf)
@@ -225,6 +304,8 @@ class GStreamerAudio(AudioBase):
 
     def play_sound(self, sound_file: str) -> None:
         """Play a sound file.
+
+        See AudioBase.play_sound() for complete documentation.
 
         Todo: for now this function is mean to be used on the wireless version.
 

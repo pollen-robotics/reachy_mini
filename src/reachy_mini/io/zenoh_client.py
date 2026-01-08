@@ -59,6 +59,7 @@ class ZenohClient(AbstractClient):
         self.joint_position_received = threading.Event()
         self.head_pose_received = threading.Event()
         self.status_received = threading.Event()
+        self.imu_data_received = threading.Event()
 
         self.session = zenoh.open(c)
         self.cmd_pub = self.session.declare_publisher(f"{self.prefix}/command")
@@ -83,6 +84,11 @@ class ZenohClient(AbstractClient):
             self._handle_status,
         )
 
+        self.imu_sub = self.session.declare_subscriber(
+            f"{self.prefix}/imu_data",
+            self._handle_imu_data,
+        )
+
         self._last_head_joint_positions = None
         self._last_antennas_joint_positions = None
         self._last_head_pose: Optional[npt.NDArray[np.float64]] = None
@@ -92,6 +98,7 @@ class ZenohClient(AbstractClient):
         self._recorded_data_ready = threading.Event()
         self._is_alive = False
         self._last_status: Dict[str, Any] = {}  # contains a DaemonStatus
+        self._last_imu_data: Optional[Dict[str, List[float] | float]] = None
 
         self.tasks: dict[UUID, TaskState] = {}
         self.task_request_pub = self.session.declare_publisher(f"{self.prefix}/task")
@@ -178,6 +185,13 @@ class ZenohClient(AbstractClient):
             self._last_status = status
             self.status_received.set()
 
+    def _handle_imu_data(self, sample: zenoh.Sample) -> None:
+        """Handle incoming IMU data."""
+        if sample.payload:
+            imu_data = json.loads(sample.payload.to_string())
+            self._last_imu_data = imu_data
+            self.imu_data_received.set()
+
     def get_current_joints(self) -> tuple[list[float], list[float]]:
         """Get the current joint positions."""
         assert (
@@ -213,6 +227,18 @@ class ZenohClient(AbstractClient):
             raise TimeoutError("Status not received in time.")
         self.status_received.clear()  # ready for next run
         return self._last_status
+
+    def get_current_imu_data(self) -> Optional[Dict[str, List[float] | float]]:
+        """Get the current IMU data.
+
+        Returns:
+            dict with 'accelerometer', 'gyroscope', 'quaternion', and 'temperature' keys,
+            or None if no data has been received yet or IMU is not available.
+
+        """
+        if self._last_imu_data is None:
+            return None
+        return self._last_imu_data.copy()
 
     def _handle_head_pose(self, sample: zenoh.Sample) -> None:
         """Handle incoming head pose."""
