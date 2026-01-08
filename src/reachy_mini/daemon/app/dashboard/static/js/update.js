@@ -2,46 +2,76 @@ const updateManager = {
     busy: false,
     preRelease: false,
 
+    // Check for PyPI updates
     checkForUpdate: async () => {
-        await updateManager.updateUI();  // Clear previous state
-
-        await fetch('/update/available?pre_release=' + updateManager.preRelease)
-            .then(async response => {
-                if (!response.ok) {
-                    return false;
-                }
+        await updateManager.updateUI();
+        try {
+            const response = await fetch('/update/available?pre_release=' + updateManager.preRelease);
+            if (response.ok) {
                 const data = await response.json();
                 await updateManager.updateUI(data);
-            }).catch(error => {
-                console.error('Error checking for updates:', error);
-            });
+            }
+        } catch (error) {
+            console.error('Error checking for updates:', error);
+        }
     },
 
+    // Start PyPI update
     startUpdate: async () => {
-        if (updateManager.busy) {
-            console.warn('An update is already in progress.');
-            return;
-        }
+        if (updateManager.busy) return;
         updateManager.busy = true;
 
-        fetch('/update/start?pre_release=' + updateManager.preRelease, { method: 'POST' })
-            .then(response => {
-                if (response.ok) {
-                    return response.json();
-                } else {
-                    return response.json().then(data => {
-                        throw new Error(data.detail || 'Error starting update');
-                    });
-                }
-            })
-            .then(data => {
-                const jobId = data.job_id;
-                updateManager.connectLogsWebSocket(jobId);
-            })
-            .catch(error => {
-                console.error('Error triggering update:', error);
-                updateManager.busy = false;
-            });
+        try {
+            const response = await fetch('/update/start?pre_release=' + updateManager.preRelease, { method: 'POST' });
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.detail || 'Error starting update');
+            updateManager.connectLogsWebSocket(data.job_id);
+        } catch (error) {
+            console.error('Error triggering update:', error);
+            updateManager.busy = false;
+        }
+    },
+
+    // Install from a specific git ref (tag/branch)
+    installFromRef: async () => {
+        if (updateManager.busy) return;
+
+        const gitRef = document.getElementById('git-ref-input').value.trim();
+        const errorDiv = document.getElementById('git-ref-error');
+        errorDiv.classList.add('hidden');
+
+        if (!gitRef) {
+            errorDiv.textContent = 'Please enter a tag or branch name';
+            errorDiv.classList.remove('hidden');
+            return;
+        }
+
+        // Validate ref exists on GitHub
+        try {
+            const validateResp = await fetch('/update/validate-ref?git_ref=' + encodeURIComponent(gitRef));
+            const validateData = await validateResp.json();
+            if (!validateData.valid) {
+                errorDiv.textContent = validateData.error || `Ref '${gitRef}' not found`;
+                errorDiv.classList.remove('hidden');
+                return;
+            }
+        } catch (error) {
+            errorDiv.textContent = 'Failed to validate ref: ' + error.message;
+            errorDiv.classList.remove('hidden');
+            return;
+        }
+
+        // Start installation
+        updateManager.busy = true;
+        try {
+            const response = await fetch('/update/start-from-ref?git_ref=' + encodeURIComponent(gitRef), { method: 'POST' });
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.detail || 'Error starting install');
+            updateManager.connectLogsWebSocket(data.job_id);
+        } catch (error) {
+            console.error('Error installing from ref:', error);
+            updateManager.busy = false;
+        }
     },
 
     connectLogsWebSocket: (jobId) => {
