@@ -33,6 +33,7 @@ def init_media_manager(log_level: str = "INFO") -> MediaManager:
         
     Returns:
         The initialized MediaManager instance.
+
     """
     global _media_manager
     if _media_manager is None:
@@ -71,6 +72,7 @@ async def ws_video_stream(
         websocket: The WebSocket connection.
         fps: Target frames per second (default: 15).
         quality: JPEG quality 1-100 (default: 80).
+
     """
     await websocket.accept()
     
@@ -126,6 +128,7 @@ async def ws_audio_stream(
     Args:
         websocket: The WebSocket connection.
         sample_rate: Expected sample rate (for client info).
+
     """
     await websocket.accept()
     
