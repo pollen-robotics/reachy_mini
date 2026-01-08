@@ -47,6 +47,7 @@ class Daemon:
         robot_name: str = "reachy_mini",
         wireless_version: bool = False,
         desktop_app_daemon: bool = False,
+        mockup_sim: bool = False,
     ) -> None:
         """Initialize the Reachy Mini daemon."""
         self.log_level = log_level
@@ -57,6 +58,7 @@ class Daemon:
 
         self.wireless_version = wireless_version
         self.desktop_app_daemon = desktop_app_daemon
+        self.mockup_sim = mockup_sim
 
         self.backend: "RobotBackend | MujocoBackend | MockupSimBackend | None" = None
         # Get package version
@@ -82,13 +84,18 @@ class Daemon:
         self._thread_event_publish_status = Event()
 
         self._webrtc: Optional[Any] = (
-            None  # type GstWebRTC imported for wireless version only
+            None  # type GstWebRTC imported for wireless version or mockup_sim
         )
-        if wireless_version:
+        # Initialize WebRTC for wireless version (robot camera) or mockup_sim (generic webcam)
+        if wireless_version or mockup_sim:
             from reachy_mini.media.webrtc_daemon import GstWebRTC
 
             try:
-                self._webrtc = GstWebRTC(log_level)
+                # Use generic webcam mode for mockup_sim
+                self._webrtc = GstWebRTC(
+                    log_level=log_level,
+                    use_generic_webcam=mockup_sim,
+                )
             except Exception as e:
                 self.logger.error(f"Failed to initialize WebRTC: {e}")
                 self._webrtc = None

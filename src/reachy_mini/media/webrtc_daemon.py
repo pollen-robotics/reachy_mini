@@ -39,6 +39,7 @@ from reachy_mini.daemon.utils import CAMERA_SOCKET_PATH, is_local_camera_availab
 from reachy_mini.media.camera_constants import (
     ArducamSpecs,
     CameraSpecs,
+    GenericWebcamSpecs,
     ReachyMiniLiteCamSpecs,
     ReachyMiniWirelessCamSpecs,
 )
@@ -69,12 +70,15 @@ class GstWebRTC:
     def __init__(
         self,
         log_level: str = "INFO",
+        use_generic_webcam: bool = False,
     ) -> None:
         """Initialize the GStreamer WebRTC pipeline.
 
         Args:
             log_level (str): Logging level for WebRTC daemon operations.
                           Default: 'INFO'.
+            use_generic_webcam (bool): If True, use generic webcam pipeline
+                          (cross-platform, for mockup-sim mode). Default: False.
 
         Note:
             This constructor initializes the GStreamer environment, detects the
@@ -93,6 +97,7 @@ class GstWebRTC:
         """
         self._logger = logging.getLogger(__name__)
         self._logger.setLevel(log_level)
+        self._use_generic_webcam = use_generic_webcam
 
         Gst.init(None)
         self._loop = GLib.MainLoop()
@@ -117,22 +122,27 @@ class GstWebRTC:
 
         webrtcsink = self._configure_webrtc(self._pipeline_sender)
 
-        self._configure_video(cam_path, self._pipeline_sender, webrtcsink)
-        self._configure_audio(self._pipeline_sender, webrtcsink)
-
-        self._pipeline_receiver = Gst.Pipeline.new("reachymini_webrtc_receiver")
-        self._bus_receiver = self._pipeline_receiver.get_bus()
-        self._bus_receiver.add_watch(
-            GLib.PRIORITY_DEFAULT, self._on_bus_message, self._loop
-        )
-        self._configure_receiver(self._pipeline_receiver)
+        if self._use_generic_webcam:
+            self._configure_video_generic(cam_path, self._pipeline_sender, webrtcsink)
+            self._configure_audio_generic(self._pipeline_sender, webrtcsink)
+        else:
+            self._configure_video(cam_path, self._pipeline_sender, webrtcsink)
+            self._configure_audio(self._pipeline_sender, webrtcsink)
+            # Only setup receiver for robot mode (needs alsasink)
+            self._pipeline_receiver = Gst.Pipeline.new("reachymini_webrtc_receiver")
+            self._bus_receiver = self._pipeline_receiver.get_bus()
+            self._bus_receiver.add_watch(
+                GLib.PRIORITY_DEFAULT, self._on_bus_message, self._loop
+            )
+            self._configure_receiver(self._pipeline_receiver)
 
     def __del__(self) -> None:
         """Destructor to ensure gstreamer resources are released."""
         self._logger.debug("Cleaning up GstWebRTC")
         self._loop.quit()
         self._bus_sender.remove_watch()
-        self._bus_receiver.remove_watch()
+        if hasattr(self, "_bus_receiver"):
+            self._bus_receiver.remove_watch()
 
     def _configure_webrtc(self, pipeline: Gst.Pipeline) -> Gst.Element:
         self._logger.debug("Configuring WebRTC")
@@ -279,6 +289,109 @@ class GstWebRTC:
         pipeline.add(alsasrc)
         alsasrc.link(webrtcsink)
 
+    def _configure_video_generic(
+        self, cam_path: str, pipeline: Gst.Pipeline, webrtcsink: Gst.Element
+    ) -> None:
+        """Configure video pipeline for generic webcam (cross-platform).
+
+        Uses autovideosrc and software H264 encoding for maximum compatibility.
+        """
+        self._logger.debug(f"Configuring generic video for {cam_path}")
+
+        # Use autovideosrc for cross-platform webcam access
+        videosrc = Gst.ElementFactory.make("autovideosrc")
+        if videosrc is None:
+            raise RuntimeError("Failed to create autovideosrc element")
+
+        # Video conversion and scaling
+        videoconvert = Gst.ElementFactory.make("videoconvert")
+        videoscale = Gst.ElementFactory.make("videoscale")
+
+        # Caps filter for resolution
+        caps = Gst.Caps.from_string(
+            f"video/x-raw,width={self.resolution[0]},height={self.resolution[1]},framerate={self.framerate}/1"
+        )
+        capsfilter = Gst.ElementFactory.make("capsfilter")
+        capsfilter.set_property("caps", caps)
+
+        # Software H264 encoder (try x264enc first, fallback to openh264enc)
+        encoder = Gst.ElementFactory.make("x264enc")
+        if encoder is None:
+            encoder = Gst.ElementFactory.make("openh264enc")
+        if encoder is None:
+            raise RuntimeError(
+                "No H264 encoder found. Install gstreamer x264 or openh264 plugin."
+            )
+
+        # Configure encoder for low latency
+        if encoder.get_factory().get_name() == "x264enc":
+            encoder.set_property("tune", "zerolatency")
+            encoder.set_property("speed-preset", "ultrafast")
+            encoder.set_property("bitrate", 2000)  # kbps
+        else:
+            # openh264enc settings
+            encoder.set_property("bitrate", 2000000)  # bps
+
+        # H264 caps
+        caps_h264 = Gst.Caps.from_string(
+            "video/x-h264,stream-format=byte-stream,alignment=au,"
+            "level=(string)3.1,profile=(string)constrained-baseline"
+        )
+        capsfilter_h264 = Gst.ElementFactory.make("capsfilter")
+        capsfilter_h264.set_property("caps", caps_h264)
+
+        queue = Gst.ElementFactory.make("queue")
+
+        if not all([videoconvert, videoscale, capsfilter, capsfilter_h264, queue]):
+            raise RuntimeError("Failed to create GStreamer video elements")
+
+        pipeline.add(videosrc)
+        pipeline.add(videoconvert)
+        pipeline.add(videoscale)
+        pipeline.add(capsfilter)
+        pipeline.add(encoder)
+        pipeline.add(capsfilter_h264)
+        pipeline.add(queue)
+
+        videosrc.link(videoconvert)
+        videoconvert.link(videoscale)
+        videoscale.link(capsfilter)
+        capsfilter.link(encoder)
+        encoder.link(capsfilter_h264)
+        capsfilter_h264.link(queue)
+        queue.link(webrtcsink)
+
+    def _configure_audio_generic(
+        self, pipeline: Gst.Pipeline, webrtcsink: Gst.Element
+    ) -> None:
+        """Configure audio pipeline for generic microphone (cross-platform).
+
+        Uses autoaudiosrc for maximum compatibility.
+        """
+        self._logger.debug("Configuring generic audio")
+
+        # Use autoaudiosrc for cross-platform microphone access
+        audiosrc = Gst.ElementFactory.make("autoaudiosrc")
+        if audiosrc is None:
+            raise RuntimeError("Failed to create autoaudiosrc element")
+
+        audioconvert = Gst.ElementFactory.make("audioconvert")
+        audioresample = Gst.ElementFactory.make("audioresample")
+        queue = Gst.ElementFactory.make("queue")
+
+        if not all([audioconvert, audioresample, queue]):
+            raise RuntimeError("Failed to create GStreamer audio elements")
+
+        pipeline.add(audiosrc)
+        pipeline.add(audioconvert)
+        pipeline.add(audioresample)
+        pipeline.add(queue)
+
+        audiosrc.link(audioconvert)
+        audioconvert.link(audioresample)
+        audioresample.link(queue)
+        queue.link(webrtcsink)
+
     def _get_audio_input_device(self) -> Optional[str]:
         """Use Gst.DeviceMonitor to find the pipeire audio card.
 
@@ -307,17 +420,43 @@ class GstWebRTC:
         return None
 
     def _get_video_device(self) -> Tuple[str, Optional[CameraSpecs]]:
-        """Use Gst.DeviceMonitor to find the unix camera path /dev/videoX.
+        """Use Gst.DeviceMonitor to find the camera.
 
         Returns the device path (e.g., '/dev/video2'), or '' if not found.
+        In generic webcam mode, returns the first available video source.
         """
         monitor = Gst.DeviceMonitor()
         monitor.add_filter("Video/Source")
         monitor.start()
 
+        devices = monitor.get_devices()
+
+        # In generic webcam mode, accept any video source
+        if self._use_generic_webcam:
+            for device in devices:
+                name = device.get_display_name()
+                device_props = device.get_properties()
+                self._logger.debug(f"Found video device: {name}")
+
+                # Try to get device path (Linux)
+                if device_props and device_props.has_field("api.v4l2.path"):
+                    device_path = device_props.get_string("api.v4l2.path")
+                    self._logger.info(f"Using generic webcam: {name} at {device_path}")
+                    monitor.stop()
+                    return str(device_path), cast(CameraSpecs, GenericWebcamSpecs)
+
+                # macOS/Windows: use device name directly
+                self._logger.info(f"Using generic webcam: {name}")
+                monitor.stop()
+                return name, cast(CameraSpecs, GenericWebcamSpecs)
+
+            monitor.stop()
+            self._logger.warning("No webcam found for generic mode.")
+            return "", None
+
+        # Robot mode: look for specific cameras
         cam_names = ["Reachy", "Arducam_12MP", "imx708"]
 
-        devices = monitor.get_devices()
         for cam_name in cam_names:
             for device in devices:
                 name = device.get_display_name()
@@ -364,20 +503,23 @@ class GstWebRTC:
         """Start the WebRTC pipeline."""
         self._logger.debug("Starting WebRTC")
         self._pipeline_sender.set_state(Gst.State.PLAYING)
-        self._pipeline_receiver.set_state(Gst.State.PLAYING)
+        if hasattr(self, "_pipeline_receiver"):
+            self._pipeline_receiver.set_state(Gst.State.PLAYING)
 
     def pause(self) -> None:
         """Pause the WebRTC pipeline."""
         self._logger.debug("Pausing WebRTC")
         self._pipeline_sender.set_state(Gst.State.PAUSED)
-        self._pipeline_receiver.set_state(Gst.State.PAUSED)
+        if hasattr(self, "_pipeline_receiver"):
+            self._pipeline_receiver.set_state(Gst.State.PAUSED)
 
     def stop(self) -> None:
         """Stop the WebRTC pipeline."""
         self._logger.debug("Stopping WebRTC")
 
         self._pipeline_sender.set_state(Gst.State.NULL)
-        self._pipeline_receiver.set_state(Gst.State.NULL)
+        if hasattr(self, "_pipeline_receiver"):
+            self._pipeline_receiver.set_state(Gst.State.NULL)
 
 
 if __name__ == "__main__":
