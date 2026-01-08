@@ -228,8 +228,8 @@ class SoundDeviceAudio(AudioBase):
         See AudioBase.stop_recording() for complete documentation.
         """
         if self._input_stream is not None:
-            self._input_stream.stop()  # type: ignore[attr-defined]
-            self._input_stream.close()  # type: ignore[attr-defined]
+            self._input_stream.stop()
+            self._input_stream.close()
             self._input_stream = None
             self.logger.info("SoundDevice audio stream closed.")
 
