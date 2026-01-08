@@ -72,13 +72,11 @@ class ZenohServer(AbstractServer):
                         },
                         # Allow standard discovery
                         "scouting": {
-                            "multicast": { "enabled": True },
-                            "gossip": { "enabled": True },
+                            "multicast": {"enabled": True},
+                            "gossip": {"enabled": True},
                         },
                         # No forced connect target; router will accept incoming sessions
-                        "connect": {
-                            "endpoints": []
-                        }
+                        "connect": {"endpoints": []},
                     }
                 )
             )
@@ -122,7 +120,9 @@ class ZenohServer(AbstractServer):
         data = sample.payload.to_string()
         command = json.loads(data)
         with self._lock:
-            block_targets = self.backend.is_move_running  # Prevent concurrent target updates from different clients
+            block_targets = (
+                self.backend.is_move_running
+            )  # Prevent concurrent target updates from different clients
 
             def _maybe_ignore(field: str) -> bool:
                 """Return True if the command should be ignored while a move runs."""

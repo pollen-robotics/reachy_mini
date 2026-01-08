@@ -93,6 +93,14 @@ class Daemon:
                 self.logger.error(f"Failed to initialize WebRTC: {e}")
                 self._webrtc = None
 
+    def __del__(self) -> None:
+        """Destructor to ensure proper cleanup."""
+        self.logger.debug("Cleaning up Daemon resources...")
+        if self._webrtc is not None:
+            self._webrtc.stop()
+            self._webrtc.__del__()
+            self._webrtc = None
+
     async def start(
         self,
         sim: bool = False,
@@ -357,7 +365,7 @@ class Daemon:
             self._status.state = DaemonState.STOPPING
             self.backend.is_shutting_down = True
             self._thread_event_publish_status.set()
-            self.zenoh_server.stop()
+
             if self.websocket_server is not None:
                 self.websocket_server.stop()
 
@@ -387,6 +395,9 @@ class Daemon:
 
             self.backend.close()
             self.backend.ready.clear()
+
+            # zenoh server must be closed after backend finishes to publish all data
+            self.zenoh_server.stop()
 
             if self._status.state != DaemonState.ERROR:
                 self.logger.info("Daemon stopped successfully.")
@@ -671,7 +682,9 @@ class DaemonStatus:
     desktop_app_daemon: bool
     simulation_enabled: Optional[bool]
     mockup_sim_enabled: Optional[bool]
-    backend_status: Optional[RobotBackendStatus | MujocoBackendStatus | MockupSimBackendStatus]
+    backend_status: Optional[
+        RobotBackendStatus | MujocoBackendStatus | MockupSimBackendStatus
+    ]
     error: Optional[str] = None
     wlan_ip: Optional[str] = None
     version: Optional[str] = None
