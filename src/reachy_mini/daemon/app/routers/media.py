@@ -7,8 +7,9 @@ from the local camera and microphone. Used primarily for mockup-sim mode.
 import asyncio
 import base64
 import logging
-from typing import Optional
+from typing import Any, Optional
 
+import numpy as np
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from reachy_mini.media.media_manager import MediaBackend, MediaManager
@@ -96,7 +97,7 @@ async def ws_video_stream(
                 _, buffer = cv2.imencode(".jpg", frame, encode_params)
                 
                 # Send as base64
-                frame_b64 = base64.b64encode(buffer).decode("utf-8")
+                frame_b64 = base64.b64encode(buffer.tobytes()).decode("utf-8")
                 await websocket.send_json({
                     "type": "frame",
                     "data": frame_b64,
@@ -143,7 +144,7 @@ async def ws_audio_stream(
     try:
         while True:
             samples = media.get_audio_sample()
-            if samples is not None and len(samples) > 0:
+            if samples is not None and isinstance(samples, np.ndarray) and len(samples) > 0:
                 # Send as base64-encoded bytes
                 audio_b64 = base64.b64encode(samples.tobytes()).decode("utf-8")
                 await websocket.send_json({
@@ -169,7 +170,7 @@ async def ws_audio_stream(
 
 
 @router.get("/status")
-async def get_media_status() -> dict:
+async def get_media_status() -> dict[str, Any]:
     """Get the status of the media streaming system."""
     media = get_media_manager()
     
