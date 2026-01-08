@@ -227,10 +227,11 @@ class SoundDeviceAudio(AudioBase):
 
         See AudioBase.stop_recording() for complete documentation.
         """
-        if self._is_recording:
+        if self._is_recording and self._input_stream is not None:
             self._input_stream.stop()  # type: ignore[attr-defined]
             self._input_stream.close()  # type: ignore[attr-defined]
             self._input_stream = None
+            self._is_recording = False
             self.logger.info("SoundDevice audio stream closed.")
 
     def push_audio_sample(self, data: npt.NDArray[np.float32]) -> None:
