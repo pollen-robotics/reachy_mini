@@ -1,6 +1,31 @@
 """WebRTC daemon.
 
 Starts a gstreamer webrtc pipeline to stream video and audio.
+
+This module provides a WebRTC server implementation using GStreamer that can
+stream video and audio from the Reachy Mini robot to WebRTC clients. It's
+designed to run as a daemon process on the robot and handle multiple client
+connections for telepresence and remote monitoring applications.
+
+The WebRTC daemon supports:
+- Real-time video streaming from the robot's camera
+- Real-time audio streaming from the robot's microphone
+- Multiple client connections
+- Automatic camera detection and configuration
+
+Example usage:
+    >>> from reachy_mini.media.webrtc_daemon import GstWebRTC
+    >>>
+    >>> # Create and start WebRTC daemon
+    >>> webrtc_daemon = GstWebRTC(log_level="INFO")
+    >>> # The daemon will automatically start streaming when initialized
+    >>>
+    >>> # Run until interrupted
+    >>> try:
+    ...     while True:
+    ...         pass  # Keep the daemon running
+    ... except KeyboardInterrupt:
+    ...     pass  # Cleanup would be handled automatically
 """
 
 import logging
@@ -25,17 +50,49 @@ from gi.repository import GLib, Gst  # noqa: E402
 
 
 class GstWebRTC:
-    """WebRTC pipeline using GStreamer."""
+    """WebRTC pipeline using GStreamer.
+
+    This class implements a WebRTC server using GStreamer that streams video
+    and audio from the Reachy Mini robot to connected WebRTC clients. It's
+    designed to run as a daemon process and handle the complete WebRTC
+    signaling and media streaming pipeline.
+
+    Attributes:
+        _logger (logging.Logger): Logger instance for WebRTC daemon operations.
+        _loop (GLib.MainLoop): GLib main loop for handling GStreamer events.
+        camera_specs (CameraSpecs): Specifications of the detected camera.
+        _resolution (CameraResolution): Current streaming resolution.
+        resized_K (npt.NDArray[np.float64]): Camera intrinsic matrix for current resolution.
+
+    """
 
     def __init__(
         self,
         log_level: str = "INFO",
     ) -> None:
-        """Initialize the GStreamer WebRTC pipeline."""
+        """Initialize the GStreamer WebRTC pipeline.
+
+        Args:
+            log_level (str): Logging level for WebRTC daemon operations.
+                          Default: 'INFO'.
+
+        Note:
+            This constructor initializes the GStreamer environment, detects the
+            available camera, and sets up the WebRTC streaming pipeline. The
+            pipeline automatically starts streaming when initialized.
+
+        Raises:
+            RuntimeError: If no camera is detected or camera specifications cannot
+                        be determined.
+
+        Example:
+            >>> # Initialize WebRTC daemon with debug logging
+            >>> webrtc_daemon = GstWebRTC(log_level="DEBUG")
+            >>> # The daemon is now streaming and ready to accept client connections
+
+        """
         self._logger = logging.getLogger(__name__)
         self._logger.setLevel(log_level)
-
-        # self._id_audio_card = get_respeaker_card_number()
 
         Gst.init(None)
         self._loop = GLib.MainLoop()
@@ -72,6 +129,7 @@ class GstWebRTC:
 
     def __del__(self) -> None:
         """Destructor to ensure gstreamer resources are released."""
+        self._logger.debug("Cleaning up GstWebRTC")
         self._loop.quit()
         self._bus_sender.remove_watch()
         self._bus_receiver.remove_watch()
@@ -169,8 +227,10 @@ class GstWebRTC:
         extra_controls_structure.set_value("repeat_sequence_header", 1)
         extra_controls_structure.set_value("video_bitrate", 5_000_000)
         v4l2h264enc.set_property("extra-controls", extra_controls_structure)
+        # Use H264 Level 3.1 + Constrained Baseline for Safari/WebKit compatibility
         caps_h264 = Gst.Caps.from_string(
-            "video/x-h264,stream-format=byte-stream,alignment=au,level=(string)4"
+            "video/x-h264,stream-format=byte-stream,alignment=au,"
+            "level=(string)3.1,profile=(string)constrained-baseline"
         )
         capsfilter_h264 = Gst.ElementFactory.make("capsfilter")
         capsfilter_h264.set_property("caps", caps_h264)

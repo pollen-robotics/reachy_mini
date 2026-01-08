@@ -85,7 +85,9 @@ class MockupSimBackend(Backend):
             if self.target_head_joint_positions is not None:
                 self._head_joint_positions = self.target_head_joint_positions.copy()
             if self.target_antenna_joint_positions is not None:
-                self._antenna_joint_positions = self.target_antenna_joint_positions.copy()
+                self._antenna_joint_positions = (
+                    self.target_antenna_joint_positions.copy()
+                )
 
             # Update current states
             self.current_head_joint_positions = self._head_joint_positions.copy()
@@ -133,10 +135,6 @@ class MockupSimBackend(Backend):
             # Sleep to maintain control frequency
             elapsed = time.time() - start_t
             time.sleep(max(0, control_period - elapsed))
-
-    def close(self) -> None:
-        """Close the backend."""
-        pass
 
     def get_status(self) -> "MockupSimBackendStatus":
         """Get the status of the backend."""

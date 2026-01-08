@@ -1,4 +1,27 @@
-"""Camera constants for Reachy Mini."""
+r"""Camera constants for Reachy Mini.
+
+This module defines camera specifications and resolutions for various camera models
+used with the Reachy Mini robot. It includes camera calibration parameters,
+supported resolutions, and camera identification information.
+
+The module provides:
+- CameraResolution enum: Standardized resolutions and frame rates
+- CameraSpecs dataclass: Base camera specifications with calibration data
+- Specific camera specifications for different camera models
+
+Example usage:
+    >>> from reachy_mini.media.camera_constants import CameraResolution, ReachyMiniLiteCamSpecs
+    >>>
+    >>> # Get available resolutions for Reachy Mini Lite Camera
+    >>> print("Available resolutions:")
+    >>> for res in ReachyMiniLiteCamSpecs.available_resolutions:
+    ...     width, height, fps = res.value
+    ...     print(f"  {width}x{height}@{fps}fps")
+    >>>
+    >>> # Access camera calibration parameters
+    >>> print(f"Camera matrix:\\n{ReachyMiniLiteCamSpecs.K}")
+    >>> print(f"Distortion coefficients: {ReachyMiniLiteCamSpecs.D}")
+"""
 
 from dataclasses import dataclass, field
 from enum import Enum
@@ -9,7 +32,48 @@ import numpy.typing as npt
 
 
 class CameraResolution(Enum):
-    """Base class for camera resolutions."""
+    """Base class for camera resolutions.
+
+    Enumeration of standardized camera resolutions and frame rates supported
+    by Reachy Mini cameras. Each enum value contains a tuple of (width, height, fps).
+
+    Attributes:
+        R1536x864at40fps: 1536x864 resolution at 40 fps
+        R1280x720at60fps: 1280x720 resolution at 60 fps (HD)
+        R1280x720at30fps: 1280x720 resolution at 30 fps (HD)
+        R1920x1080at30fps: 1920x1080 resolution at 30 fps (Full HD)
+        R1920x1080at60fps: 1920x1080 resolution at 60 fps (Full HD)
+        R2304x1296at30fps: 2304x1296 resolution at 30 fps
+        R1600x1200at30fps: 1600x1200 resolution at 30 fps
+        R3264x2448at30fps: 3264x2448 resolution at 30 fps
+        R3264x2448at10fps: 3264x2448 resolution at 10 fps
+        R3840x2592at30fps: 3840x2592 resolution at 30 fps
+        R3840x2592at10fps: 3840x2592 resolution at 10 fps
+        R3840x2160at30fps: 3840x2160 resolution at 30 fps (4K UHD)
+        R3840x2160at10fps: 3840x2160 resolution at 10 fps (4K UHD)
+        R3072x1728at10fps: 3072x1728 resolution at 10 fps
+        R4608x2592at10fps: 4608x2592 resolution at 10 fps
+
+    Note:
+        The enum values are tuples containing (width, height, frames_per_second).
+        Not all resolutions are supported by all camera models - check the specific
+        camera specifications for available resolutions.
+
+    Example:
+        >>> from reachy_mini.media.camera_constants import CameraResolution
+        >>>
+        >>> # Get resolution information
+        >>> res = CameraResolution.R1280x720at30fps
+        >>> width, height, fps = res.value
+        >>> print(f"Resolution: {width}x{height}@{fps}fps")
+        >>>
+        >>> # Check if a resolution is supported by a camera
+        >>> from reachy_mini.media.camera_constants import ReachyMiniLiteCamSpecs
+        >>> res = CameraResolution.R1920x1080at60fps
+        >>> if res in ReachyMiniLiteCamSpecs.available_resolutions:
+        ...     print("This resolution is supported")
+
+    """
 
     R1536x864at40fps = (1536, 864, 40)
 
@@ -37,7 +101,48 @@ class CameraResolution(Enum):
 
 @dataclass
 class CameraSpecs:
-    """Base camera specifications."""
+    """Base camera specifications.
+
+    Dataclass containing specifications for a camera model, including supported
+    resolutions, calibration parameters, and USB identification information.
+
+    Attributes:
+        name (str): Human-readable name of the camera model.
+        available_resolutions (List[CameraResolution]): List of supported resolutions
+            and frame rates for this camera model.
+        default_resolution (CameraResolution): Default resolution used when the camera
+            is initialized.
+        vid (int): USB Vendor ID for identifying this camera model.
+        pid (int): USB Product ID for identifying this camera model.
+        K (npt.NDArray[np.float64]): 3x3 camera intrinsic matrix containing focal
+            lengths and principal point coordinates.
+        D (npt.NDArray[np.float64]): 5-element array containing distortion coefficients
+            (k1, k2, p1, p2, k3) for radial and tangential distortion.
+
+    Note:
+        The intrinsic matrix K has the format:
+        [[fx,  0, cx],
+         [ 0, fy, cy],
+         [ 0,  0,  1]]
+
+        Where fx, fy are focal lengths in pixels, and cx, cy are the principal
+        point coordinates (typically near the image center).
+
+    Example:
+        >>> from reachy_mini.media.camera_constants import CameraSpecs
+        >>>
+        >>> # Create a custom camera specification
+        >>> custom_specs = CameraSpecs(
+        ...     name="custom_camera",
+        ...     available_resolutions=[CameraResolution.R1280x720at30fps],
+        ...     default_resolution=CameraResolution.R1280x720at30fps,
+        ...     vid=0x1234,
+        ...     pid=0x5678,
+        ...     K=np.array([[800, 0, 640], [0, 800, 360], [0, 0, 1]]),
+        ...     D=np.zeros(5)
+        ... )
+
+    """
 
     name: str = ""
     available_resolutions: List[CameraResolution] = field(default_factory=list)
@@ -106,6 +211,7 @@ class ReachyMiniWirelessCamSpecs(ReachyMiniLiteCamSpecs):
 
     name = "wireless"
     available_resolutions = [
+        CameraResolution.R1280x720at30fps,  # Default for H264 Level 3.1 (Safari/WebKit)
         CameraResolution.R1920x1080at30fps,
         CameraResolution.R1280x720at60fps,
         CameraResolution.R3840x2592at10fps,
@@ -113,7 +219,8 @@ class ReachyMiniWirelessCamSpecs(ReachyMiniLiteCamSpecs):
         CameraResolution.R3264x2448at10fps,
         CameraResolution.R3072x1728at10fps,
     ]
-    default_resolution = CameraResolution.R1920x1080at30fps
+    # 720p@30fps for H264 Level 3.1 compatibility (Safari/WebKit)
+    default_resolution = CameraResolution.R1280x720at30fps
 
 
 @dataclass

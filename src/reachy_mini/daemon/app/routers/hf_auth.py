@@ -30,7 +30,9 @@ async def save_token(request: TokenRequest) -> TokenResponse:
     result = hf_auth.save_hf_token(request.token)
 
     if result["status"] == "error":
-        raise HTTPException(status_code=400, detail=result.get("message", "Invalid token"))
+        raise HTTPException(
+            status_code=400, detail=result.get("message", "Invalid token")
+        )
 
     return TokenResponse(
         status="success",

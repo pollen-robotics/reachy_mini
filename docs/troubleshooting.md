@@ -22,6 +22,9 @@ To restart your robot, press OFF, wait 5 seconds, then press ON. This simple pro
   Make sure you are either:
   - On the latest tagged release, or
   - Up to date with the `develop` branch (`git pull`).
+
+**Wireless Reachy Mini**: run `reachyminios_check` to make sure everything is fine (see [Get Started](/docs/platforms/reachy_mini/get_started.md))  
+
 </details>
 
 
@@ -188,7 +191,37 @@ If it doesn't help, you can also try to increase D to 10 on the same motors.
 <details>
 <summary><strong>Image is dark on the Lite version</strong></summary>
 
-- set auto-exposure-priority=1 using uvc-util on macOS
+**➡️ Quick Fix: Adjust Exposure Time in Camera Settings**
+
+To fix a dark image, enable auto-exposure or manually increase the exposure time using a camera control application. These applications provide an intuitive interface for adjusting exposure and other camera parameters.
+
+**Recommended Applications:**
+
+- **macOS:** [CameraController](https://github.com/itaybre/CameraController) - Open-source GUI application for USB camera control
+- **Linux:** qv4l2 - Qt-based GUI application for V4L2 camera control
+  - Install: `sudo apt install qv4l2`
+- **Windows:** [Webcam Settings](https://www.softpedia.com/get/Internet/WebCam/Webcam-Settings-Tool.shtml) or [ManyCam](https://manycam.com/) for advanced camera control
+
+These applications allow you to adjust exposure time, brightness, and other camera parameters through an intuitive graphical interface.
+
+---
+
+**➡️ Advanced: Using libuvc for In-Depth Camera Control**
+
+For advanced users who want precise control over camera parameters, you can use libuvc-based command-line utilities. These tools provide low-level access to all UVC camera controls. 
+
+To fix the darkness issue specifically, set `auto-exposure-priority=1` using these command-line tools.
+
+**Command-Line Tools by Platform:**
+
+- **macOS:** [uvc-util](https://github.com/jtfrey/uvc-util)
+
+- **Linux:** [v4l2-ctl](https://manpages.debian.org/testing/v4l-utils/v4l2-ctl.1.en.html)
+  - Install: `sudo apt install v4l-utils`
+
+- **Windows:** Windows does not have a direct equivalent.
+
+**Note:** These command-line tools require technical knowledge and access to the camera parameters may vary depending on the selected tool. Use `--help` and list available controls before making any changes.
 
 </details>
 
@@ -225,6 +258,8 @@ Please check that the switch is on the "debug" and not on "download" position. S
 ![switch_position](/docs/assets/wireless_switch.png)
 
 </details>
+
+
 
 #### If your issue/question is not listed here, please check the full FAQ below.
 
@@ -411,10 +446,10 @@ If you command a pose outside these limits, the robot will automatically clamp t
 
 1. You can refer scanning the motors using the [scan_motors.py script](/src/reachy_mini/tools/scan_motors.py).
 
-- If your robot is Lite, you can run the script directly on your computer. Go to the "tools" folder, where the script is located,and run the same command as below but without the scp and ssh part.
-- If your robot is Wireless, you need tocopythe script on the raspberry. Go tothe"tools" folder, where the script is located,and run:
+- If your robot is Lite, you can run the script directly on your computer. Go to the "tools" folder, where the script is located, and run the same command as below but without the scp and ssh part.
+- If your robot is Wireless, you need to copy the scanning script on the raspberry. Go to the "tools" folder, where the script is located,and run:
 ```bash
-sudo scp scan_motors.pypollen@reachy-minilocal:~/
+sudo scp scan_motors.py pollen@reachy-minilocal:~/
 # password: ---your sudo password---
 # RPI password: root
 ```
@@ -646,6 +681,8 @@ amixer -c "$CARD" set PCM,1 100%
 sudo alsactl store "$CARD"
 ```
 
+This is a [known issue](https://www.xmos.com/documentation/XM-014888-PC/html/modules/fwk_xvf/doc/user_guide/02_setting_up_the_hardware.html#low-volume-of-playback-audio-on-linux-for-project-ua) of the XVF3800 based sound card.
+
 </details>
 
 <details>
@@ -687,6 +724,36 @@ mini.media.push_audio_sample(numpy_chunk)
 
 Performance relies heavily on lighting conditions. Ensure the face is well-lit. Using the GStreamer backend can also improve latency compared to the default OpenCV backend.
 
+</details>
+
+<details>
+<summary><strong>How do I check that the sound system is working?</strong></summary>
+
+### Reachy Mini Lite Version
+
+The easiest way to test the Lite version is to directly use the *Pollen Robotics Reachy Mini Audio* device from your computer to verify proper functionality.
+
+### Reachy Mini Wireless Version
+
+For the Wireless version, you can use the following GStreamer commands to test audio recording and playback:
+
+In the case of the wireless version, you may use the following commands:
+```bash
+# record a sound
+gst-launch-1.0 -e alsasrc device="reachymini_audio_src" ! audioconvert ! audioresample ! wavenc ! filesink location="test.wav"
+# playback the recording
+gst-launch-1.0 filesrc location=test.wav ! wavparse ! audioconvert ! alsasink device=reachymini_audio_sink
+#playback a test sound (pink noise)
+gst-launch-1.0 audiotestsrc wave="pink-noise" ! audioconvert ! audioresample ! alsasink device="reachymini_audio_sink"
+```
+
+**Advanced Testing:**
+You can play back a sound while recording simultaneously to test the echo cancellation performance. This helps verify that the microphone array is properly processing audio and canceling echo from the speakers.
+
+**Troubleshooting Tips:**
+- Ensure the `.asoundrc` file exists in the home directory
+- Check that the microphone is detected: `arecord -l`
+- Check that the speaker is detected: `aplay -l`
 </details>
 
 <br>
