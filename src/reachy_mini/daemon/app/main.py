@@ -30,6 +30,7 @@ from reachy_mini.daemon.app.routers import (
     hf_auth,
     kinematics,
     logs,
+    media,
     motors,
     move,
     state,
@@ -159,6 +160,14 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
                     hardware_config_filepath=args.hardware_config_filepath,
                 )
 
+            # Initialize media streaming for mockup-sim mode (local camera + microphone)
+            if args.mockup_sim and not args.wireless_version:
+                try:
+                    media.init_media_manager(log_level=args.log_level)
+                    logging.info("Media streaming initialized for mockup-sim mode")
+                except Exception as e:
+                    logging.warning(f"Failed to initialize media streaming: {e}")
+
             yield
         finally:
             # Cancel dataset updater task if running
@@ -175,6 +184,12 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
                 await app.state.app_manager.close()
             except Exception as e:
                 logging.exception(f"Error closing app manager: {e}")
+
+            # Close media streaming if initialized
+            try:
+                media.close_media_manager()
+            except Exception as e:
+                logging.warning(f"Error closing media manager: {e}")
 
             try:
                 logging.info("Shutting down daemon...")
@@ -209,6 +224,7 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
     router.include_router(move.router)
     router.include_router(state.router)
     router.include_router(volume.router)
+    router.include_router(media.router)
 
     if args.wireless_version:
         from .routers import cache, update, wifi_config
