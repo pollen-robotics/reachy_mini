@@ -286,7 +286,7 @@ class RobotBackend(Backend):
                     self._status.control_loop_stats["nb_error"] = self._stats[
                         "nb_error"
                     ]
-                    self._status.control_loop_stats["motor_controller"] = (
+                    self._status.control_loop_stats["motor_controller"] = str(
                         self.c.get_stats()
                     )
 
