@@ -13,6 +13,7 @@ from reachy_mini.daemon.app import bg_job_register
 from reachy_mini.daemon.app.bg_job_register import JobInfo
 from reachy_mini.utils.wireless_version.update import update_reachy_mini
 from reachy_mini.utils.wireless_version.update_available import (
+    get_install_source,
     get_local_version,
     get_pypi_version,
     is_update_available,
@@ -20,6 +21,12 @@ from reachy_mini.utils.wireless_version.update_available import (
 
 router = APIRouter(prefix="/update")
 busy_lock = threading.Lock()
+
+
+@router.get("/install-source")
+def install_source() -> dict[str, str]:
+    """Get current install source: version, source type (pypi/git/editable), and git ref if applicable."""
+    return get_install_source("reachy_mini")
 
 
 @router.get("/available")
