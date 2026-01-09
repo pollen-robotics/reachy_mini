@@ -2,21 +2,25 @@
 
 from typing import Any, Optional
 
-from huggingface_hub import HfApi, HfFolder, whoami
+from huggingface_hub import HfApi, get_token, login, logout, whoami
 from huggingface_hub.utils import HfHubHTTPError  # type: ignore
 
 
 def save_hf_token(token: str) -> dict[str, Any]:
-    """Save HuggingFace token securely.
+    """Save a HuggingFace access token securely.
 
-    Uses HfFolder.save_token() which stores in ~/.cache/huggingface/token
-    This is the standard HF location with 600 permissions.
+    Validates the token against the Hugging Face API and, if valid,
+    stores it using the standard Hugging Face authentication mechanism
+    for reuse across sessions.
 
     Args:
-        token: The HuggingFace token to save
+        token: The HuggingFace access token to save.
 
     Returns:
-        dict with status and username if valid, or error message
+        A dict containing:
+        - "status": "success" or "error"
+        - "username": the associated Hugging Face username if successful
+        - "message": an error description if unsuccessful
 
     """
     try:
@@ -24,14 +28,16 @@ def save_hf_token(token: str) -> dict[str, Any]:
         api = HfApi(token=token)
         user_info = api.whoami()
 
-        # If valid, save it
-        HfFolder.save_token(token)
+        # Persist token for future runs (no prompt since token is provided)
+        # add_to_git_credential=False keeps it from touching git credentials.
+        login(token=token, add_to_git_credential=False)
 
         return {
             "status": "success",
             "username": user_info.get("name", ""),
         }
-    except HfHubHTTPError:
+    except (HfHubHTTPError, ValueError):
+        # ValueError can be raised by `login()` on invalid token (v1.x behavior)
         return {
             "status": "error",
             "message": "Invalid token or network error",
@@ -50,18 +56,16 @@ def get_hf_token() -> Optional[str]:
         The stored token, or None if no token is stored.
 
     """
-    return HfFolder.get_token()
+    return get_token()
 
 
 def delete_hf_token() -> bool:
-    """Delete stored HuggingFace token.
+    """Delete stored HuggingFace token(s).
 
-    Returns:
-        True if successfully deleted.
-
+    Note: logout() without arguments logs out from all saved access tokens.
     """
     try:
-        HfFolder.delete_token()
+        logout()
         return True
     except Exception:
         return False
@@ -75,7 +79,6 @@ def check_token_status() -> dict[str, Any]:
 
     """
     token = get_hf_token()
-
     if not token:
         return {"is_logged_in": False, "username": None}
 
