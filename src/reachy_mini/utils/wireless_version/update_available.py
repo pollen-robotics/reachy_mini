@@ -3,10 +3,31 @@
 For now, this only checks if a new version of "reachy_mini" is available on PyPI.
 """
 
-from importlib.metadata import version
+import json
+from importlib.metadata import distribution, version
 
 import requests
 import semver
+
+
+def get_install_source(package_name: str) -> dict[str, str]:
+    """Get install source info: version and origin (PyPI, git ref, or editable)."""
+    dist = distribution(package_name)
+    result = {"version": version(package_name), "source": "pypi"}
+
+    try:
+        direct_url = json.loads(dist.read_text("direct_url.json"))
+        if "dir_info" in direct_url and direct_url["dir_info"].get("editable"):
+            result["source"] = "editable"
+        elif "vcs_info" in direct_url:
+            vcs = direct_url["vcs_info"]
+            result["source"] = "git"
+            result["git_ref"] = vcs.get("requested_revision", "unknown")
+            result["commit"] = vcs.get("commit_id", "")[:8]  # Short hash
+    except FileNotFoundError:
+        pass  # No direct_url.json means PyPI install
+
+    return result
 
 
 def is_update_available(package_name: str, pre_release: bool) -> bool:

@@ -2,6 +2,26 @@ const updateManager = {
     busy: false,
     preRelease: false,
 
+    // Fetch and display current install source (version + origin)
+    loadInstallSource: async () => {
+        const elem = document.getElementById('current-version');
+        if (!elem) return;
+
+        try {
+            const resp = await fetch('/update/install-source');
+            const data = await resp.json();
+            let text = `Current: ${data.version}`;
+            if (data.source === 'git') {
+                text += ` (from ${data.git_ref}@${data.commit})`;
+            } else if (data.source === 'editable') {
+                text += ' (editable)';
+            }
+            elem.textContent = text;
+        } catch (e) {
+            elem.textContent = 'Version unknown';
+        }
+    },
+
     // Check for PyPI updates
     checkForUpdate: async () => {
         await updateManager.updateUI();
@@ -99,9 +119,9 @@ const updateManager = {
             console.log('Update logs WebSocket closed');
             closeButton.classList.remove('hidden');
             closeButton.textContent = 'Close';
-            updateModalTitle.textContent = 'Update Completed ✅';
-
+            updateModalTitle.textContent = 'Update Completed';
             updateManager.busy = false;
+            await updateManager.loadInstallSource();
             await updateManager.checkForUpdate();
         };
     },
@@ -123,40 +143,30 @@ const updateManager = {
     // },
     updateUpdatePage: async (data) => {
         const statusElem = document.getElementById('update-status');
+        const availableVersionElem = document.getElementById('available-version');
+        const startUpdateBtn = document.getElementById('start-update-btn');
         if (!statusElem) return;
 
-        const currentVersionElem = document.getElementById('current-version');
-        const availableVersionElem = document.getElementById('available-version');
-        const availableVersionContainer = document.getElementById('available-version-container');
-        const startUpdateBtn = document.getElementById('start-update-btn');
-
         if (!data || !data.update || !data.update.reachy_mini) {
-            statusElem.innerHTML = 'Checking for updates...';
-            if (currentVersionElem) currentVersionElem.textContent = '';
+            statusElem.textContent = 'Checking for updates...';
             if (availableVersionElem) availableVersionElem.textContent = '';
             return;
         }
 
         const updateInfo = data.update.reachy_mini;
-        const isUpdateAvailable = updateInfo.is_available;
-        const currentVersion = updateInfo.current_version || '-';
-        const availableVersion = updateInfo.available_version || '-';
+        if (availableVersionElem) availableVersionElem.textContent = `Available: ${updateInfo.available_version || '-'}`;
 
-        if (currentVersionElem) currentVersionElem.textContent = `Current version: ${currentVersion}`;
-        if (availableVersionElem) availableVersionElem.textContent = `Available version: ${availableVersion}`;
-
-        if (isUpdateAvailable) {
-            statusElem.innerHTML = 'An update is available!';
-            if (availableVersionContainer) availableVersionContainer.classList.remove('hidden');
+        if (updateInfo.is_available) {
+            statusElem.textContent = 'Update available!';
             startUpdateBtn.classList.remove('hidden');
         } else {
-            statusElem.innerHTML = 'Your system is up to date.';
-            if (availableVersionContainer) availableVersionContainer.classList.add('hidden');
+            statusElem.textContent = 'Up to date.';
             startUpdateBtn.classList.add('hidden');
         }
     }
 };
 
 window.addEventListener('load', async () => {
+    await updateManager.loadInstallSource();
     await updateManager.checkForUpdate();
 });
