@@ -16,7 +16,10 @@ def get_install_source(package_name: str) -> dict[str, str]:
     result = {"version": version(package_name), "source": "pypi"}
 
     try:
-        direct_url = json.loads(dist.read_text("direct_url.json"))
+        direct_url_text = dist.read_text("direct_url.json")
+        if direct_url_text is None:
+            return result
+        direct_url = json.loads(direct_url_text)
         if "dir_info" in direct_url and direct_url["dir_info"].get("editable"):
             result["source"] = "editable"
         elif "vcs_info" in direct_url:
