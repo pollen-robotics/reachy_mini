@@ -20,6 +20,7 @@ async def update_reachy_mini(
         logger: Logger for streaming output.
         pre_release: If True, install pre-release from PyPI (ignored if git_ref set).
         git_ref: If set, install from this GitHub tag/branch instead of PyPI.
+
     """
     # Build install command based on mode
     if git_ref:
