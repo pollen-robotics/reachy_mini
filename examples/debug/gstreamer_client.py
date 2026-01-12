@@ -25,7 +25,7 @@ class GstConsumer:
         self.source = Gst.ElementFactory.make("webrtcsrc")
 
         if not self.pipeline:
-            print("Pipeline could be created.")
+            print("Pipeline could not be created.")
             exit(-1)
 
         if not self.source:
@@ -121,7 +121,7 @@ def process_msg(bus: Gst.Bus, pipeline: Gst.Pipeline) -> bool:
                 try:
                     pipeline.recalculate_latency()
                 except Exception as e:
-                    print("failed to recalculate warning, exception: %s" % str(e))
+                    print("failed to recalculate latency, exception: %s" % str(e))
         # else:
         #    print(f"Message: {msg.type}")
     return True

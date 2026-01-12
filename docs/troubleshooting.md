@@ -30,8 +30,8 @@ To restart your robot, press OFF, wait 5 seconds, then press ON. This simple pro
 
 <details><summary><strong>Motor blinking red or Overload Error</strong></summary>
 
-**1. Motors inversion**: If you get "Motor hardware errors: ['Overload Error']" a few second after starting the robot **for the first time.** and have two motors arm pointing upward.  
-It is VERY likely there are motors not placed in the good slot, e.g motor 1 on slot 2.
+**1. Motors inversion**: If you get "Motor hardware errors: ['Overload Error']" a few seconds after starting the robot **for the first time** and have two motors arm pointing upward.  
+It is VERY likely there are motors not placed in the correct slot, e.g. motor 1 on slot 2.
 
 <details><summary>See illustration</summary>
 
@@ -45,7 +45,7 @@ Check assembly guide:
 - [**Reachy Mini LITE - Step-by-Step Guide**](https://huggingface.co/spaces/pollen-robotics/Reachy_Mini_LITE_Assembly_Guide)
 
 **2. Check the arm orientation on the motor's horn**:
-Remove the faulty motor, then place the arm upward like in the attached picture. Then check if you can see the the two line marks aligned as represented:
+Remove the faulty motor, then place the arm upward like in the attached picture. Then check if you can see the two line marks aligned as represented:
 
 <details><summary>See picture:</summary>
 
@@ -56,7 +56,7 @@ If they are not, please remove the two screws securing the arm and put it back w
 
 
 **3. check the extra length of the usb cable inside the head:**  
-If it's too long inside the head, there must miss some slack underneath and the head cannot move freely.  
+If it's too long inside the head, there might be insufficient slack underneath and the head cannot move freely.  
 So the motors force too much and can be damaged.  
 <details><summary>See picture:</summary>
 
@@ -68,7 +68,7 @@ Please let some slack to the usb cable to allow the head to move freely, even to
 
 
 **4. A motor feels broken:**
-We identified an issue affecting a limited production batch of Reachy Mini robots, related to a faulty batch of Dynamixel motor. 
+We identified an issue affecting a limited production batch of Reachy Mini robots, related to a faulty batch of Dynamixel motors. 
 
 In most reported cases, the issue affects motor number 4 or one with QC label n°2544.
 
@@ -82,9 +82,9 @@ If the issue persists, please fill out this short form so we can track and ship 
 
 
 <details>
-<summary><strong>A motor is not moving at all, but get stiff when powered on, and doesn't blink red </strong></summary>
+<summary><strong>A motor is not moving at all, but gets stiff when powered on, and doesn't blink red</strong></summary>
 
-This behavior happen when a motor (often n°1) has not been flashed properly during the manufacturing process.  
+This behavior happens when a motor (often n°1) has not been flashed properly during the manufacturing process.  
 => Please power your robot but don't turn it on with the dashboard/daemon, then update reachy mini's software, then reboot the robot. This will reflash your motors.
 
 </details>
@@ -251,7 +251,7 @@ Instead:
 </details>
 
 <details>
-<summary><strong>Wireless Acces point doesn't show up - RPI doesn't boot</strong></summary>
+<summary><strong>Wireless Access point doesn't show up - RPI doesn't boot</strong></summary>
 There is a switch on the board in the head that needs to be in a given position. And if it's not, the AP doesn't show. It's possible that this switch was moved during assembly or maybe even a factory mistake.
 Please check that the switch is on the "debug" and not on "download" position. See the picture below:
 
@@ -447,9 +447,9 @@ If you command a pose outside these limits, the robot will automatically clamp t
 1. You can refer scanning the motors using the [scan_motors.py script](/src/reachy_mini/tools/scan_motors.py).
 
 - If your robot is Lite, you can run the script directly on your computer. Go to the "tools" folder, where the script is located, and run the same command as below but without the scp and ssh part.
-- If your robot is Wireless, you need to copy the scanning script on the raspberry. Go to the "tools" folder, where the script is located,and run:
+- If your robot is Wireless, you need to copy the scanning script on the raspberry. Go to the "tools" folder, where the script is located, and run:
 ```bash
-sudo scp scan_motors.py pollen@reachy-minilocal:~/
+sudo scp scan_motors.py pollen@reachy-mini.local:~/
 # password: ---your sudo password---
 # RPI password: root
 ```
@@ -461,11 +461,11 @@ ssh pollen@reachy-mini.local
 ```bash
 source /venvs/mini_daemon/bin/activate
 ```
-- And run the script: (Motors must be poweredonfor this!)
+- And run the script: (Motors must be powered on for this!)
 ```bash
 python scan_motors.py
 ```
-- It should print the list of detected motors. You should have all motors on baudrate 1000000, with the following IDs: 10,11, 12, 13, 14, 15,17, 18. If some are missing, check the cables again. If there is a motor with a different ID or baudrate, please contact support.
+- It should print the list of detected motors. You should have all motors on baudrate 1000000, with the following IDs: 10, 11, 12, 13, 14, 15, 17, 18. If some are missing, check the cables again. If there is a motor with a different ID or baudrate, please contact support.
 
 Example of the right output:
 ```
@@ -476,7 +476,7 @@ No motors found at baudrate 57600
 Trying baudrate: 115200
 No motors found at baudrate 115200
 Trying baudrate: 1000000
-Found motors at baudrate 1000000: [10, 11,12,13, 14, 15, 16, 17, 18]
+Found motors at baudrate 1000000: [10, 11, 12, 13, 14, 15, 16, 17, 18]
 ```
 2. Lite: You can also use the Dynamixel Wizard to read motors parameters. Follow the guide [here](/docs/platforms/reachy_mini_lite/wizard.md). 
 
@@ -664,7 +664,7 @@ mini.play_move(recorded_moves.get("dance_1"))
 </details>
 
 <details>
-<summary><strong>My robot's move look shaky. Is the control loop running correctly?</strong></summary>
+<summary><strong>My robot's moves look shaky. Is the control loop running correctly?</strong></summary>
 
 You can check that the motor control loop runs correctly by checking the daemon status:
 - via the SDK
