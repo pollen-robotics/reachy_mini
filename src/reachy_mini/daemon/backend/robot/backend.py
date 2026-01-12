@@ -71,7 +71,7 @@ class RobotBackend(Backend):
                 seconds=1.0 / self.control_loop_frequency
             ),
             allowed_retries=5,
-            stats_pub_period=None,
+            stats_pub_period=timedelta(seconds=1.0),
         )
 
         self.name2id = self.c.get_motor_name_id()
@@ -286,6 +286,9 @@ class RobotBackend(Backend):
                     self._status.control_loop_stats["nb_error"] = self._stats[
                         "nb_error"
                     ]
+                    self._status.control_loop_stats["motor_controller"] = str(
+                        self.c.get_stats()
+                    )
 
                 self._stats["timestamps"].clear()
                 self._stats["nb_error"] = 0
