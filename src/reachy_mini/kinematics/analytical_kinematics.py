@@ -15,7 +15,6 @@ from reachy_mini_rust_kinematics import ReachyMiniRustKinematics
 from scipy.spatial.transform import Rotation as R
 
 import reachy_mini
-    
 
 # Duplicated for now.
 SLEEP_HEAD_POSE = np.array(
@@ -26,6 +25,7 @@ SLEEP_HEAD_POSE = np.array(
         [0.0, 0.0, 0.0, 1.0],
     ]
 )
+
 
 class AnalyticalKinematics:
     """Reachy Mini Analytical Kinematics class, implemented in Rust with python bindings."""
@@ -40,9 +40,7 @@ class AnalyticalKinematics:
 
         self.head_z_offset = data["head_z_offset"]
 
-        self.kin = ReachyMiniRustKinematics(
-            json_file_path = data_path
-        )
+        self.kin = ReachyMiniRustKinematics(json_file_path=data_path)
 
         self.start_body_yaw = 0.0
 
@@ -53,7 +51,7 @@ class AnalyticalKinematics:
 
         self.logger = logging.getLogger(__name__)
         # self.logger.setLevel(logging.WARNING)
-        self.current_joints = np.zeros(7)   # inital joint angles
+        self.current_joints = np.zeros(7)  # inital joint angles
         self.passive_joints = np.zeros(21)  # inital passive joint angles
 
     def ik(
@@ -88,7 +86,7 @@ class AnalyticalKinematics:
             # it does not modify the body yaw
             stewart_joints = self.kin.inverse_kinematics(_pose, body_yaw)  # type: ignore[arg-type]
             reachy_joints = [body_yaw] + stewart_joints
-            
+
         self.current_joints
         return np.array(reachy_joints)
 
@@ -120,14 +118,18 @@ class AnalyticalKinematics:
                     self.kin.forward_kinematics(_joint_angles, body_yaw)
                 )
             assert T_world_platform is not None
-            # check if Z axis if too low 
-            if T_world_platform[2, 3]  < 0.1: 
-                self.logger.warning(f"WARNING FK: Head Z position is below 0, recomputing FK, try no. {no_tries}")
+            # check if Z axis if too low
+            if T_world_platform[2, 3] < 0.1:
+                self.logger.warning(
+                    f"WARNING FK: Head Z position is below 0, recomputing FK, try no. {no_tries}"
+                )
                 body_yaw += 0.001
                 _joint_angles = list(np.array(_joint_angles) + 0.001)
                 tmp = np.eye(4)
-                #tmp[:3,:3] += np.random.randn(3,3)*1e-3
-                tmp[:3, :3] = R.from_euler('xyz', np.random.randn(3)*0.2, degrees=False).as_matrix()
+                # tmp[:3,:3] += np.random.randn(3,3)*1e-3
+                tmp[:3, :3] = R.from_euler(
+                    "xyz", np.random.randn(3) * 0.2, degrees=False
+                ).as_matrix()
                 tmp[:3, 3][2] += self.head_z_offset
                 self.kin.reset_forward_kinematics(tmp)  # type: ignore[arg-type]
                 continue
@@ -137,28 +139,40 @@ class AnalyticalKinematics:
             )
             # check that head is upright. Recompute with epsilon adjustments if not
             body_yaw_deg = np.degrees(body_yaw)
-            if not (euler[0] > 90 or euler[0] < -90 or euler[1] > 90 or euler[1] < -90 or abs(euler[2] - body_yaw_deg) > 90):
+            if not (
+                euler[0] > 90
+                or euler[0] < -90
+                or euler[1] > 90
+                or euler[1] < -90
+                or abs(euler[2] - body_yaw_deg) > 90
+            ):
                 ok = True
             else:
-                if (euler[0] > 90 or euler[0] < -90 or euler[1] > 90 or euler[1] < -90):
-                    self.logger.warning(f"WARNING FK: Head is not upright, recomputing FK, try no. {no_tries}")
+                if euler[0] > 90 or euler[0] < -90 or euler[1] > 90 or euler[1] < -90:
+                    self.logger.warning(
+                        f"WARNING FK: Head is not upright, recomputing FK, try no. {no_tries}"
+                    )
                 elif abs(euler[2] - body_yaw_deg) > 90:
-                    self.logger.warning(f"WARNING FK: Head yaw relative to body yaw is too large, recomputing FK, try no. {no_tries}")
-                
+                    self.logger.warning(
+                        f"WARNING FK: Head yaw relative to body yaw is too large, recomputing FK, try no. {no_tries}"
+                    )
+
                 body_yaw += 0.001
                 _joint_angles = list(np.array(_joint_angles) + 0.001)
                 tmp = np.eye(4)
-                #tmp[:3,:3] += np.random.randn(3,3)*1e-3
-                tmp[:3, :3] = R.from_euler('xyz', np.random.randn(3)*0.4, degrees=False).as_matrix()
+                # tmp[:3,:3] += np.random.randn(3,3)*1e-3
+                tmp[:3, :3] = R.from_euler(
+                    "xyz", np.random.randn(3) * 0.4, degrees=False
+                ).as_matrix()
                 tmp[:3, 3][2] += self.head_z_offset
                 self.kin.reset_forward_kinematics(tmp)  # type: ignore[arg-type]
 
-        #assert ok is True, "Could not compute a valid FK solution after maximum iterations"
-        
+        # assert ok is True, "Could not compute a valid FK solution after maximum iterations"
+
         assert T_world_platform is not None
 
         T_world_platform[:3, 3][2] -= self.head_z_offset
-        
+
         return T_world_platform
 
     def set_automatic_body_yaw(self, automatic_body_yaw: bool) -> None:
@@ -169,34 +183,35 @@ class AnalyticalKinematics:
 
         """
         self.automatic_body_yaw = automatic_body_yaw
-        
+
     def get_joint(self, joint_name: str) -> float:
         """Get the joint object by its name."""
         if "yaw_body" == joint_name:
             return self.current_joints[0]
 
         if "stewart_" in joint_name:
-            index = int(joint_name.split("_")[1]) -1
+            index = int(joint_name.split("_")[1]) - 1
             return self.current_joints[index + 1]
 
         # the structueal passive joints
         # 1_x, 1_y, 1_z, 2_x, 2_y, 2_z, ..., 7_x, 7_y, 7_z
         if "passive_" in joint_name:
-            index = int(joint_name.split("_")[1]) -1
+            index = int(joint_name.split("_")[1]) - 1
             axis = joint_name.split("_")[2]
             axis_map = {"x": 0, "y": 1, "z": 2}
             return self.passive_joints[index * 3 + axis_map[axis]]
 
-
         return 0.0
-    
-    def calculate_passive_joints(self, joints: np.ndarray = None, T_head: np.ndarray = None) -> np.ndarray:
+
+    def calculate_passive_joints(
+        self, joints: np.ndarray = None, T_head: np.ndarray = None
+    ) -> np.ndarray:
         """Calculate the passive joint angles based on the current joint angles."""
-        
+
         if joints is None:
             joints = self.current_joints
         if T_head is None:
             T_head = self.fk(joints, no_iterations=10)
-            
+
         self.passive_joints = self.kin.calculate_passive_joints(joints, T_head)
         return self.passive_joints

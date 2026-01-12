@@ -33,7 +33,8 @@ except ImportError:
     NNKinematics = MockupNNKinematics  # type: ignore[assignment, misc]
 
 try:
-    from reachy_mini.kinematics.placo_kinematics import PlacoKinematics  # noqa: F401
+    from reachy_mini.kinematics.placo_kinematics import \
+        PlacoKinematics  # noqa: F401
 except ImportError:
 
     class MockupPlacoKinematics:
@@ -60,9 +61,8 @@ except ImportError:
     PlacoKinematics = MockupPlacoKinematics  # type: ignore[assignment, misc]
 
 
-from reachy_mini.kinematics.analytical_kinematics import (  # noqa: F401
-    AnalyticalKinematics,
-)
+from reachy_mini.kinematics.analytical_kinematics import \
+    AnalyticalKinematics  # noqa: F401
 
 AnyKinematics = NNKinematics | PlacoKinematics | AnalyticalKinematics
 __all__ = ["NNKinematics", "PlacoKinematics", "AnalyticalKinematics"]

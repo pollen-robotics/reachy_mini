@@ -436,9 +436,9 @@ class PlacoKinematics:
         ):
             # no need to compute FK
             T_world_head: npt.NDArray[np.float64] = self.robot.get_T_world_frame("head")
-            T_world_head[:3, 3][2] -= (
-                self.head_z_offset
-            )  # offset the height of the head
+            T_world_head[:3, 3][
+                2
+            ] -= self.head_z_offset  # offset the height of the head
             return T_world_head
 
         # update the main task
@@ -626,7 +626,9 @@ class PlacoKinematics:
         #       torque_actuated = J_actuated.T @ wrench_eq
         J_all_joints: npt.NDArray[np.float64] = self.robot.frame_jacobian(
             "head", "local_world_aligned"
-        )[:, 6:]  # all joints except the mobile base 6dofs
+        )[
+            :, 6:
+        ]  # all joints except the mobile base 6dofs
         J_actuated = self.compute_jacobian()
         # using a single matrix G to compute the actuated torques
         G = J_actuated.T @ np.linalg.pinv(J_all_joints.T)
