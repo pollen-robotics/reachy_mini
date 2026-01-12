@@ -663,6 +663,32 @@ mini.play_move(recorded_moves.get("dance_1"))
 
 </details>
 
+<details>
+<summary><strong>My robot's move look shaky. Is the control loop running correctly?</strong></summary>
+
+You can check that the motor control loop runs correctly by checking the daemon status:
+- via the SDK
+```python
+mini = ReachyMini()
+print(mini.client.get_status())
+```
+- via the dashboard API at `http://localhost:8000/docs` on a lite and `http://reachy-mini.local:8000/docs` for the wireless (look for `/api/daemon/status` endpoint)
+
+You should see values around 50Hz (~20ms period): 
+```python
+{
+  ...
+"motor_controller": "ControlLoopStats(period=~19.99ms, read_dt=~1.94 ms, write_dt=~0.19 ms)"
+  ...
+}
+```
+
+If the period is much higher than 20ms, it means the control loop is not running fast enough. This can be due to:
+- Heavy CPU load on the computer (eg. other apps using too much CPU).
+- (only for lite) high USB latency (try configuring your serial port).
+
+</details>
+
 <br>
 
 ## 👁️ Vision & Audio
