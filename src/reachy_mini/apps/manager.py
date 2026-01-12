@@ -273,11 +273,20 @@ class AppManager:
 
     # Apps management interface
     async def list_all_available_apps(self) -> list[AppInfo]:
-        """List available apps (parallel async)."""
+        """List available apps (parallel async and deduplicated)."""
         results = await asyncio.gather(
             *[self.list_available_apps(kind) for kind in SourceKind]
         )
-        return sum(results, [])
+        all_apps = sum(results, [])
+
+        # Deduplicate apps by name, preferring INSTALLED status
+        deduplicated: dict[str, AppInfo] = {}
+        for app in all_apps:
+            name = app.name.lower()
+            if name not in deduplicated or app.source_kind == SourceKind.INSTALLED:
+                deduplicated[name] = app
+
+        return list(deduplicated.values())
 
     async def list_available_apps(self, source: SourceKind) -> list[AppInfo]:
         """List available apps for given source kind."""
