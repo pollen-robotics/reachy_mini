@@ -8,7 +8,7 @@ version = "1.2.8"
 authors = [{ name = "Pollen Robotics", email = "contact@pollen-robotics.com" }]
 description = ""
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.13"
 dependencies = [
     "numpy>=2.2.5",
     "scipy>=1.15.3, <2.0.0",
@@ -22,8 +22,6 @@ dependencies = [
     "fastapi",
     "pyserial",
     "huggingface-hub==0.34.4",
-    "sounddevice==0.5.1",
-    "soundfile==0.13.1",
     "reachy-mini-rust-kinematics>=1.0.3",
     "asgiref",
     "aiohttp",
@@ -36,6 +34,11 @@ dependencies = [
     "websockets>=12,<16",
     "toml",
     "rustypot>=1.4.2",
+
+    # OS-specific: install gstreamer wheel from custom index for Windows and macOS
+    "gstreamer @ https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/d59054109d4dacf3562242c5ff7e66f9485613777f32d023f61c7b5f544fd16d/gstreamer-1.27.90-py3-none-any.whl ; (sys_platform == \"win32\" or sys_platform == \"darwin\")",
+    # OS-specific: use PyGObject for Linux
+    "PyGObject>=3.42.2,<=3.46.0; sys_platform == 'linux'",
 ]
 
 
@@ -54,11 +57,10 @@ dev = [
     "rerun-sdk>=0.27.2",
     "urdf-parser-py==0.0.4",
 ]
-examples = ["pynput"]
+examples = ["pynput", "soundfile"]
 mujoco = ["mujoco==3.3.0"]
 nn_kinematics = ["onnxruntime==1.22.1"]
 placo_kinematics = ["placo==0.9.14"]
-#gstreamer = ["PyGObject>=3.42.2,<=3.46.0"]
 rerun = ["rerun-sdk>=0.27.2", "urdf-parser-py==0.0.4"]
 wireless-version = [
     "semver>=3,<4",

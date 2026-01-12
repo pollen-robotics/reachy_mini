@@ -5,7 +5,11 @@ import logging
 import time
 
 import numpy as np
-import soundfile as sf
+try:
+    import soundfile as sf
+except ImportError:
+    print("The 'soundfile' module is missing. Please install the optional 'examples' dependencies with:\n  pip install .[examples]")
+    exit(1)
 
 from reachy_mini import ReachyMini
 
