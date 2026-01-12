@@ -1,0 +1,14 @@
+name: uv.lock check
+
+on:
+  pull_request:
+    paths:
+      - "pyproject.toml"
+      - "uv.lock"
+
+jobs:
+  uv-lock-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hbelmiro/uv-lock-check@v0.2.0
