@@ -21,6 +21,19 @@ wheels = [
 ]
 
 [[package]]
+name = "ahrs"
+version = "0.4.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "docutils" },
+    { name = "numpy" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/dc/29/1232576b1f6769bf7d1436e5ae5f7234b56bb7bbc255b68a483165090cf3/ahrs-0.4.0.tar.gz", hash = "sha256:4b632b9e53b9cfd1cecadefa543a3534574baeafeef048db703ab33a07dcca21", size = 530456, upload-time = "2025-10-13T11:05:58.675Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/36/76/931b879e1ad5e287c4ed9b60ccea807e63e06cd257829e154c79394abb66/ahrs-0.4.0-py3-none-any.whl", hash = "sha256:7be83963d8021ae326d20b646c05a2218401e559f645bb5c2e40ff7dd54245d7", size = 244694, upload-time = "2025-10-13T11:05:57.097Z" },
+]
+
+[[package]]
 name = "aiohappyeyeballs"
 version = "2.6.1"
 source = { registry = "https://pypi.org/simple" }
@@ -688,6 +701,18 @@ wheels = [
 ]
 
 [[package]]
+name = "colorzero"
+version = "2.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "setuptools" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/b3/ca/688824a06e8c4d04c7d2fd2af2d8da27bed51af20ee5f094154e1d680334/colorzero-2.0.tar.gz", hash = "sha256:e7d5a5c26cd0dc37b164ebefc609f388de24f8593b659191e12d85f8f9d5eb58", size = 25382, upload-time = "2021-03-15T23:42:23.261Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/7e/a6/ddd0f130e44a7593ac6c55aa93f6e256d2270fd88e9d1b64ab7f22ab8fde/colorzero-2.0-py2.py3-none-any.whl", hash = "sha256:0e60d743a6b8071498a56465f7719c96a5e92928f858bab1be2a0d606c9aa0f8", size = 26573, upload-time = "2021-03-15T23:42:21.757Z" },
+]
+
+[[package]]
 name = "commentjson"
 version = "0.9.0"
 source = { registry = "https://pypi.org/simple" }
@@ -726,6 +751,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/96/8e/709914eb2b5749865801041647dc7f4e6d00b549cfe88b65ca192995f07c/distlib-0.4.0.tar.gz", hash = "sha256:feec40075be03a04501a973d81f633735b4b69f98b05450592310c0f401a4e0d", size = 614605, upload-time = "2025-07-17T16:52:00.465Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/33/6b/e0547afaf41bf2c42e52430072fa5658766e3d65bd4b03a563d1b6336f57/distlib-0.4.0-py2.py3-none-any.whl", hash = "sha256:9659f7d87e46584a30b5780e43ac7a2143098441670ff0a49d5f9034c54a6c16", size = 469047, upload-time = "2025-07-17T16:51:58.613Z" },
+]
+
+[[package]]
+name = "docutils"
+version = "0.22.4"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/ae/b6/03bb70946330e88ffec97aefd3ea75ba575cb2e762061e0e62a213befee8/docutils-0.22.4.tar.gz", hash = "sha256:4db53b1fde9abecbb74d91230d32ab626d94f6badfc575d6db9194a49df29968", size = 2291750, upload-time = "2025-12-18T19:00:26.443Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/02/10/5da547df7a391dcde17f59520a231527b8571e6f46fc8efb02ccb370ab12/docutils-0.22.4-py3-none-any.whl", hash = "sha256:d0013f540772d1420576855455d050a2180186c91c15779301ac2ccb3eeb68de", size = 633196, upload-time = "2025-12-18T19:00:18.077Z" },
 ]
 
 [[package]]
@@ -1012,6 +1046,18 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/f7/02/6e639e90f181dc9127046e00d0528f9f7ad12d428972e3a5378b9aefdb0b/glfw-2.10.0-py2.py27.py3.py30.py31.py32.py33.py34.py35.py36.py37.py38.p39.p310.p311.p312.p313-none-manylinux_2_28_x86_64.whl", hash = "sha256:7916034efa867927892635733a3b6af8cd95ceb10566fd7f1e0d2763c2ee8b12", size = 243525, upload-time = "2025-09-12T08:54:34.006Z" },
     { url = "https://files.pythonhosted.org/packages/84/06/cb588ca65561defe0fc48d1df4c2ac12569b81231ae4f2b52ab37007d0bd/glfw-2.10.0-py2.py27.py3.py30.py31.py32.py33.py34.py35.py36.py37.py38.p39.p310.p311.p312.p313-none-win32.whl", hash = "sha256:6c9549da71b93e367b4d71438798daae1da2592039fd14204a80a1a2348ae127", size = 552685, upload-time = "2025-09-12T08:54:35.723Z" },
     { url = "https://files.pythonhosted.org/packages/86/27/00c9c96af18ac0a5eac2ff61cbe306551a2d770d7173f396d0792ee1a59e/glfw-2.10.0-py2.py27.py3.py30.py31.py32.py33.py34.py35.py36.py37.py38.p39.p310.p311.p312.p313-none-win_amd64.whl", hash = "sha256:6292d5d6634d668cd23d337e6089491d3945a9aa4ac6e1667b0003520d7caa51", size = 559466, upload-time = "2025-09-12T08:54:37.661Z" },
+]
+
+[[package]]
+name = "gpiozero"
+version = "2.0.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "colorzero" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/e4/47/334b8db8a981eca9a0fb1e7e48e1997a5eaa8f40bb31c504299dcca0e6ff/gpiozero-2.0.1.tar.gz", hash = "sha256:d4ea1952689ec7e331f9d4ebc9adb15f1d01c2c9dcfabb72e752c9869ab7e97e", size = 136176, upload-time = "2024-02-15T11:07:02.919Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/02/eb/6518a1b00488d48995034226846653c382d676cf5f04be62b3c3fae2c6a1/gpiozero-2.0.1-py3-none-any.whl", hash = "sha256:8f621de357171d574c0b7ea0e358cb66e560818a47b0eeedf41ce1cdbd20c70b", size = 150818, upload-time = "2024-02-15T11:07:00.451Z" },
 ]
 
 [[package]]
@@ -1312,6 +1358,23 @@ name = "lark-parser"
 version = "0.7.8"
 source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/34/b8/aa7d6cf2d5efdd2fcd85cf39b33584fe12a0f7086ed451176ceb7fb510eb/lark-parser-0.7.8.tar.gz", hash = "sha256:26215ebb157e6fb2ee74319aa4445b9f3b7e456e26be215ce19fdaaa901c20a4", size = 276204, upload-time = "2019-11-01T12:45:26.558Z" }
+
+[[package]]
+name = "lgpio"
+version = "0.2.2.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/56/33/26ec2e8049eaa2f077bf23a12dc61ca559fbfa7bea0516bf263d657ae275/lgpio-0.2.2.0.tar.gz", hash = "sha256:11372e653b200f76a0b3ef8a23a0735c85ec678a9f8550b9893151ed0f863fff", size = 90087, upload-time = "2024-03-29T21:59:55.901Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/40/b9/d23f9539bbddf47c01a14fc96158a42d9de454fd9d04f7be1347ca6db8fd/lgpio-0.2.2.0-cp310-cp310-linux_armv7l.whl", hash = "sha256:97fe5fb0e888c96031e8899e8c0eca64c63076a6d1f1e774acad8696430b2ff6", size = 376674, upload-time = "2024-03-29T22:00:41.969Z" },
+    { url = "https://files.pythonhosted.org/packages/9c/db/fbbade15dbc9febdbd06bd82531c0a78206f96262003145d6953396d9554/lgpio-0.2.2.0-cp310-cp310-manylinux_2_34_aarch64.whl", hash = "sha256:f8f1a2818ed4293182999679ac8559aea70d45743f5a3ae8025837e529d9e0d4", size = 356711, upload-time = "2024-04-01T22:49:43.455Z" },
+    { url = "https://files.pythonhosted.org/packages/d5/ca/1c5278b2548e956a52a07efae91ce2300f81c8cf4ad3d7d6b98ce8987e15/lgpio-0.2.2.0-cp310-cp310-manylinux_2_34_x86_64.whl", hash = "sha256:d245f315e4bc5ba1b72df9fd935a16c99e56ccf6b41d9f66a87804c1dfd91c86", size = 362126, upload-time = "2024-04-13T14:08:11.879Z" },
+    { url = "https://files.pythonhosted.org/packages/78/4e/5721ae44b29e4fe9175f68c881694e3713066590739a7c87f8cee2835c25/lgpio-0.2.2.0-cp311-cp311-linux_armv7l.whl", hash = "sha256:5b3c403e1fba9c17d178f1bde102726c548fc5c4fc1ccf5ec3e18f3c08e07e04", size = 382992, upload-time = "2024-03-29T22:00:45.039Z" },
+    { url = "https://files.pythonhosted.org/packages/88/53/e57a22fe815fc68d0991655c1105b8ed872a68491d32e4e0e7d10ffb5c4d/lgpio-0.2.2.0-cp311-cp311-manylinux_2_34_aarch64.whl", hash = "sha256:a2f71fb95b149d8ac82c7c6bae70f054f6dc42a006ad35c90c7d8e54921fbcf4", size = 364848, upload-time = "2024-04-01T22:49:45.889Z" },
+    { url = "https://files.pythonhosted.org/packages/a4/71/11f4e3d76400e4ca43f9f9b014f5a86d9a265340c0bea45cce037277eb34/lgpio-0.2.2.0-cp311-cp311-manylinux_2_34_x86_64.whl", hash = "sha256:e9f4f3915abe5ae0ffdb4b96f485076d80a663876d839e2d3fd9218a71b9873e", size = 370183, upload-time = "2024-04-13T14:08:14.139Z" },
+    { url = "https://files.pythonhosted.org/packages/fe/73/e56c9afb845df53492d42bdea01df9895272bccfdd5128f34719c3a07990/lgpio-0.2.2.0-cp312-cp312-linux_armv7l.whl", hash = "sha256:6c65ac42e878764d04a71ed12fe6d46089b36e9e8127722bf29bb2e4bc91de22", size = 383956, upload-time = "2024-03-29T22:00:47.315Z" },
+    { url = "https://files.pythonhosted.org/packages/3b/1c/becd00f66d2c65feed9a668ff9d91732394cb6baba7bec505d55de0e30c9/lgpio-0.2.2.0-cp312-cp312-manylinux_2_34_aarch64.whl", hash = "sha256:d907db79292c721c605af08187385ddb3b7af09907e1ffca56cf0cd6558ace0a", size = 366058, upload-time = "2024-04-01T22:49:47.615Z" },
+    { url = "https://files.pythonhosted.org/packages/4c/7a/e3b4e5225c9792c4092b2cc07504746acbe62d0a8e4cb023bdf65f6430cf/lgpio-0.2.2.0-cp312-cp312-manylinux_2_34_x86_64.whl", hash = "sha256:2aadff092f642fcdada8457c158f87259dfda3a89ec19bae0b99ff22b34aac4b", size = 372103, upload-time = "2024-04-13T14:08:16.351Z" },
+]
 
 [[package]]
 name = "libusb-package"
@@ -1876,6 +1939,15 @@ wheels = [
 ]
 
 [[package]]
+name = "nmcli"
+version = "1.7.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/1f/fd/01e2cc2d84cf52653e59a2ce4fe0ebb79b388523be753befe843064394c5/nmcli-1.7.0.tar.gz", hash = "sha256:4fb17b6c33d276a264a27b7109fa1d70987570536fa8852b51830f9f7732f982", size = 21209, upload-time = "2026-01-03T02:15:20.137Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/8a/b7/648f9f6989c6c2860ebb403c762137578ca412fe9932b85ab33dc21517fa/nmcli-1.7.0-py3-none-any.whl", hash = "sha256:27144f03600d5e53c09cfa500cd7160dea61f83c3669ccd736401793b65ce980", size = 19905, upload-time = "2026-01-03T02:15:18.799Z" },
+]
+
+[[package]]
 name = "nodeenv"
 version = "1.10.0"
 source = { registry = "https://pypi.org/simple" }
@@ -2248,6 +2320,20 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/f9/e2/3e91f31a7d2b083fe6ef3fa267035b518369d9511ffab804f839851d2779/pluggy-1.6.0.tar.gz", hash = "sha256:7dcc130b76258d33b90f61b658791dede3486c3e6bfb003ee5c9bfb396dd22f3", size = 69412, upload-time = "2025-05-15T12:30:07.975Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/54/20/4d324d65cc6d9205fabedc306948156824eb9f0ee1633355a8f7ec5c66bf/pluggy-1.6.0-py3-none-any.whl", hash = "sha256:e920276dd6813095e9377c0bc5566d94c932c33b27a3e3945d8389c374dd4746", size = 20538, upload-time = "2025-05-15T12:30:06.134Z" },
+]
+
+[[package]]
+name = "pollen-bmi088-imu-library"
+version = "1.0.0rc1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "ahrs" },
+    { name = "numpy" },
+    { name = "smbus3" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/64/ca/f74143ec89fbc502c7d9fc6a4d20a7f56fad822389716daee5e2bfe9e364/pollen_bmi088_imu_library-1.0.0rc1.tar.gz", hash = "sha256:6a82eafa448807a87c7a9e1ed8ef395b0ce5f2f57fa536b5b3a3f428e72d8fcf", size = 3273, upload-time = "2025-10-30T08:57:43.422Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/eb/0a/86991b5db3acb88bbe83ba1e586c1c401830c8dc3b95cb6e0637e60cd26d/pollen_bmi088_imu_library-1.0.0rc1-py3-none-any.whl", hash = "sha256:d13e7297a3042879c36b48f78c6d0e8426af2c5ca31efe312003c7cf74b657c8", size = 3748, upload-time = "2025-10-30T08:57:42.136Z" },
 ]
 
 [[package]]
@@ -2776,11 +2862,11 @@ name = "pyobjc-framework-avfoundation"
 version = "12.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
-    { name = "pyobjc-framework-coreaudio" },
-    { name = "pyobjc-framework-coremedia" },
-    { name = "pyobjc-framework-quartz" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.11' or sys_platform == 'darwin'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.11' or sys_platform == 'darwin'" },
+    { name = "pyobjc-framework-coreaudio", marker = "python_full_version < '3.11' or sys_platform == 'darwin'" },
+    { name = "pyobjc-framework-coremedia", marker = "python_full_version < '3.11' or sys_platform == 'darwin'" },
+    { name = "pyobjc-framework-quartz", marker = "python_full_version < '3.11' or sys_platform == 'darwin'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/cd/42/c026ab308edc2ed5582d8b4b93da6b15d1b6557c0086914a4aabedd1f032/pyobjc_framework_avfoundation-12.1.tar.gz", hash = "sha256:eda0bb60be380f9ba2344600c4231dd58a3efafa99fdc65d3673ecfbb83f6fcb", size = 310047, upload-time = "2025-11-14T10:09:40.069Z" }
 wheels = [
@@ -2798,7 +2884,7 @@ name = "pyobjc-framework-cocoa"
 version = "12.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.11' or sys_platform == 'darwin'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/02/a3/16ca9a15e77c061a9250afbae2eae26f2e1579eb8ca9462ae2d2c71e1169/pyobjc_framework_cocoa-12.1.tar.gz", hash = "sha256:5556c87db95711b985d5efdaaf01c917ddd41d148b1e52a0c66b1a2e2c5c1640", size = 2772191, upload-time = "2025-11-14T10:13:02.069Z" }
 wheels = [
@@ -2816,8 +2902,8 @@ name = "pyobjc-framework-coreaudio"
 version = "12.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.11' or sys_platform == 'darwin'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.11' or sys_platform == 'darwin'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/84/d1/0b884c5564ab952ff5daa949128c64815300556019c1bba0cf2ca752a1a0/pyobjc_framework_coreaudio-12.1.tar.gz", hash = "sha256:a9e72925fcc1795430496ce0bffd4ddaa92c22460a10308a7283ade830089fe1", size = 75077, upload-time = "2025-11-14T10:13:22.345Z" }
 wheels = [
@@ -2835,8 +2921,8 @@ name = "pyobjc-framework-coremedia"
 version = "12.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.11' or sys_platform == 'darwin'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.11' or sys_platform == 'darwin'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/da/7d/5ad600ff7aedfef8ba8f51b11d9aaacdf247b870bd14045d6e6f232e3df9/pyobjc_framework_coremedia-12.1.tar.gz", hash = "sha256:166c66a9c01e7a70103f3ca44c571431d124b9070612ef63a1511a4e6d9d84a7", size = 89566, upload-time = "2025-11-14T10:13:49.788Z" }
 wheels = [
@@ -2874,8 +2960,8 @@ name = "pyobjc-framework-quartz"
 version = "12.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.11' or sys_platform == 'darwin'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.11' or sys_platform == 'darwin'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/94/18/cc59f3d4355c9456fc945eae7fe8797003c4da99212dd531ad1b0de8a0c6/pyobjc_framework_quartz-12.1.tar.gz", hash = "sha256:27f782f3513ac88ec9b6c82d9767eef95a5cf4175ce88a1e5a65875fee799608", size = 3159099, upload-time = "2025-11-14T10:21:24.31Z" }
 wheels = [
@@ -3207,6 +3293,13 @@ rerun = [
     { name = "rerun-sdk" },
     { name = "urdf-parser-py" },
 ]
+wireless-version = [
+    { name = "gpiozero" },
+    { name = "lgpio" },
+    { name = "nmcli" },
+    { name = "pollen-bmi088-imu-library" },
+    { name = "semver" },
+]
 
 [package.metadata]
 requires-dist = [
@@ -3215,14 +3308,17 @@ requires-dist = [
     { name = "cv2-enumerate-cameras", specifier = ">=1.2.1" },
     { name = "eclipse-zenoh", specifier = "~=1.7.0" },
     { name = "fastapi" },
+    { name = "gpiozero", marker = "extra == 'wireless-version'", specifier = ">=2.0.0" },
     { name = "gst-signalling", marker = "extra == 'gstreamer'", specifier = ">=1.1.2" },
     { name = "huggingface-hub", specifier = "==1.3.0" },
     { name = "jinja2" },
+    { name = "lgpio", marker = "extra == 'wireless-version'", specifier = ">=0.2.2.0" },
     { name = "libusb-package", specifier = ">=1.0.26.3" },
     { name = "log-throttling", specifier = "==0.0.3" },
     { name = "mujoco", marker = "extra == 'dev'", specifier = "==3.3.0" },
     { name = "mujoco", marker = "extra == 'mujoco'", specifier = "==3.3.0" },
     { name = "mypy", marker = "extra == 'dev'", specifier = "==1.18.2" },
+    { name = "nmcli", marker = "extra == 'wireless-version'", specifier = ">=1.5" },
     { name = "numpy", specifier = ">=2.2.5" },
     { name = "onnxruntime", marker = "extra == 'nn-kinematics'", specifier = "==1.22.1" },
     { name = "onshape-to-robot", marker = "extra == 'dev'", specifier = "==1.7.6" },
@@ -3230,6 +3326,7 @@ requires-dist = [
     { name = "pip", specifier = ">=25" },
     { name = "placo", marker = "extra == 'dev'", specifier = "==0.9.14" },
     { name = "placo", marker = "extra == 'placo-kinematics'", specifier = "==0.9.14" },
+    { name = "pollen-bmi088-imu-library", marker = "extra == 'wireless-version'" },
     { name = "pre-commit", marker = "extra == 'dev'" },
     { name = "psutil" },
     { name = "pygobject", marker = "extra == 'gstreamer'", specifier = ">=3.42.2,<=3.46.0" },
@@ -3247,6 +3344,7 @@ requires-dist = [
     { name = "ruff", marker = "extra == 'dev'", specifier = "==0.12.0" },
     { name = "rustypot", specifier = ">=1.4.2" },
     { name = "scipy", specifier = ">=1.15.3,<2.0.0" },
+    { name = "semver", marker = "extra == 'wireless-version'", specifier = ">=3,<4" },
     { name = "sounddevice", specifier = "==0.5.1" },
     { name = "soundfile", specifier = "==0.13.1" },
     { name = "toml" },
@@ -3257,7 +3355,7 @@ requires-dist = [
     { name = "uvicorn", extras = ["standard"] },
     { name = "websockets", specifier = ">=12,<16" },
 ]
-provides-extras = ["dev", "examples", "mujoco", "nn-kinematics", "placo-kinematics", "gstreamer", "rerun"]
+provides-extras = ["dev", "examples", "mujoco", "nn-kinematics", "placo-kinematics", "gstreamer", "rerun", "wireless-version"]
 
 [[package]]
 name = "reachy-mini-motor-controller"
@@ -3724,6 +3822,24 @@ wheels = [
 ]
 
 [[package]]
+name = "semver"
+version = "3.0.4"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/72/d1/d3159231aec234a59dd7d601e9dd9fe96f3afff15efd33c1070019b26132/semver-3.0.4.tar.gz", hash = "sha256:afc7d8c584a5ed0a11033af086e8af226a9c0b206f313e0301f8dd7b6b589602", size = 269730, upload-time = "2025-01-24T13:19:27.617Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a6/24/4d91e05817e92e3a61c8a21e08fd0f390f5301f1c448b137c57c4bc6e543/semver-3.0.4-py3-none-any.whl", hash = "sha256:9c824d87ba7f7ab4a1890799cec8596f15c1241cb473404ea1cb0c55e4b04746", size = 17912, upload-time = "2025-01-24T13:19:24.949Z" },
+]
+
+[[package]]
+name = "setuptools"
+version = "80.9.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/18/5d/3bf57dcd21979b887f014ea83c24ae194cfcd12b9e0fda66b957c69d1fca/setuptools-80.9.0.tar.gz", hash = "sha256:f36b47402ecde768dbfafc46e8e4207b4360c654f1f3bb84475f0a28628fb19c", size = 1319958, upload-time = "2025-05-27T00:56:51.443Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a3/dc/17031897dae0efacfea57dfd3a82fdd2a2aeb58e0ff71b77b87e44edc772/setuptools-80.9.0-py3-none-any.whl", hash = "sha256:062d34222ad13e0cc312a4c02d73f059e86a4acbfbdea8f8f76b28c99f306922", size = 1201486, upload-time = "2025-05-27T00:56:49.664Z" },
+]
+
+[[package]]
 name = "shellingham"
 version = "1.5.4"
 source = { registry = "https://pypi.org/simple" }
@@ -3739,6 +3855,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/94/e7/b2c673351809dca68a0e064b6af791aa332cf192da575fd474ed7d6f16a2/six-1.17.0.tar.gz", hash = "sha256:ff70335d468e7eb6ec65b95b99d3a2836546063f63acc5171de367e834932a81", size = 34031, upload-time = "2024-12-04T17:35:28.174Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/b7/ce/149a00dd41f10bc29e5921b496af8b574d8413afcd5e30dfa0ed46c2cc5e/six-1.17.0-py2.py3-none-any.whl", hash = "sha256:4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274", size = 11050, upload-time = "2024-12-04T17:35:26.475Z" },
+]
+
+[[package]]
+name = "smbus3"
+version = "0.5.5"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/75/39/4b7fe2b7cfb42a39e5bb4ef2970a3befc0febbf2b5b8ef85fac04ca6dcb3/smbus3-0.5.5.tar.gz", hash = "sha256:91eed38fb6b7d2f893fbfc3f37006aa41e6913fdda5b3a9a79238b353760f92e", size = 22100, upload-time = "2024-06-29T01:55:18.214Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f5/cf/a0cfae35dac3e3d0b1b4242c8ba184616a47550f8c727b0df654d4338e2d/smbus3-0.5.5-py3-none-any.whl", hash = "sha256:7f4cc169975543e67e4b7404168ce918e656f6f8daca5de2bd30527298058083", size = 13616, upload-time = "2024-06-29T01:55:16.434Z" },
 ]
 
 [[package]]
