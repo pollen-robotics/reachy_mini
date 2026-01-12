@@ -276,95 +276,64 @@ def light_led_down(serial_port: str, id: int, baudrate: int) -> None:
 
 
 def check_configuration(
-    motor_config: MotorConfig, serial_port: str, baudrate: int, silent: bool = False
-) -> bool:
-    """Check the configuration of the motor with the given ID on the specified serial port.
-
-    Args:
-        motor_config: Motor configuration to check
-        serial_port: Serial port to communicate with
-        baudrate: Baudrate for communication
-        silent: If True, don't print status messages
-
-    Returns:
-        True if configuration is correct, False otherwise
-    """
+    motor_config: MotorConfig, serial_port: str, baudrate: int
+) -> None:
+    """Check the configuration of the motor with the given ID on the specified serial port."""
     c = Xl330PyController(serial_port, baudrate=baudrate, timeout=SERIAL_TIMEOUT)
 
-    if not silent:
-        print("Checking configuration...")
+    print("Checking configuration...")
 
     # Check if there is a motor with the desired ID
     if not c.ping(motor_config.id):
-        if not silent:
-            print(f"No motor with ID {motor_config.id} found, cannot proceed")
-        return False
-    if not silent:
-        print(f"Found motor with ID {motor_config.id} [OK].")
+        raise RuntimeError(f"No motor with ID {motor_config.id} found, cannot proceed")
+    print(f"Found motor with ID {motor_config.id} [OK].")
 
     # Read return delay time
     return_delay = c.read_return_delay_time(motor_config.id)[0]
     if return_delay != motor_config.return_delay_time:
-        if not silent:
-            print(
-                f"Return delay time is {return_delay}, expected {motor_config.return_delay_time}"
-            )
-        return False
-    if not silent:
-        print(f"Return delay time is correct: {return_delay} [OK].")
+        raise RuntimeError(
+            f"Return delay time is {return_delay}, expected {motor_config.return_delay_time}"
+        )
+    print(f"Return delay time is correct: {return_delay} [OK].")
 
     # Read operating mode
     operating_mode = c.read_operating_mode(motor_config.id)[0]
     if operating_mode != motor_config.operating_mode:
-        if not silent:
-            print(
-                f"Operating mode is {operating_mode}, expected {motor_config.operating_mode}"
-            )
-        return False
-    if not silent:
-        print(f"Operating mode is correct: {operating_mode} [OK].")
+        raise RuntimeError(
+            f"Operating mode is {operating_mode}, expected {motor_config.operating_mode}"
+        )
+    print(f"Operating mode is correct: {operating_mode} [OK].")
 
     # Read angle limits
     angle_limit_min = c.read_raw_min_position_limit(motor_config.id)[0]
     angle_limit_max = c.read_raw_max_position_limit(motor_config.id)[0]
     if angle_limit_min != motor_config.angle_limit_min:
-        if not silent:
-            print(
-                f"Angle limit min is {angle_limit_min}, expected {motor_config.angle_limit_min}"
-            )
-        return False
-    if angle_limit_max != motor_config.angle_limit_max:
-        if not silent:
-            print(
-                f"Angle limit max is {angle_limit_max}, expected {motor_config.angle_limit_max}"
-            )
-        return False
-    if not silent:
-        print(
-            f"Angle limits are correct: [{motor_config.angle_limit_min}, {motor_config.angle_limit_max}] [OK]."
+        raise RuntimeError(
+            f"Angle limit min is {angle_limit_min}, expected {motor_config.angle_limit_min}"
         )
+    if angle_limit_max != motor_config.angle_limit_max:
+        raise RuntimeError(
+            f"Angle limit max is {angle_limit_max}, expected {motor_config.angle_limit_max}"
+        )
+    print(
+        f"Angle limits are correct: [{motor_config.angle_limit_min}, {motor_config.angle_limit_max}] [OK]."
+    )
 
     # Read homing offset
     offset = c.read_homing_offset(motor_config.id)[0]
     if offset != motor_config.offset:
-        if not silent:
-            print(f"Homing offset is {offset}, expected {motor_config.offset}")
-        return False
-    if not silent:
-        print(f"Homing offset is correct: {offset} [OK].")
+        raise RuntimeError(f"Homing offset is {offset}, expected {motor_config.offset}")
+    print(f"Homing offset is correct: {offset} [OK].")
 
     # Read shutdown
     shutdown = c.read_shutdown(motor_config.id)[0]
     if shutdown != motor_config.shutdown_error:
-        if not silent:
-            print(f"Shutdown is {shutdown}, expected {motor_config.shutdown_error}")
-        return False
-    if not silent:
-        print(f"Shutdown error is correct: {shutdown} [OK].")
+        raise RuntimeError(
+            f"Shutdown is {shutdown}, expected {motor_config.shutdown_error}"
+        )
+    print(f"Shutdown error is correct: {shutdown} [OK].")
 
-    if not silent:
-        print("Configuration is correct [OK]!")
-    return True
+    print("Configuration is correct [OK]!")
 
 
 def run(args: argparse.Namespace) -> None:

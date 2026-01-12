@@ -81,45 +81,26 @@ def reflash_motors(
 
         from_id = motor_config.id
 
-        # Check if motor is already configured correctly (fast path)
-        is_configured = check_configuration(
+        setup_motor(
             motor_config,
             serialport,
-            baudrate=config.serial.baudrate,
-            silent=True,  # Silent check for speed
+            from_id=from_id,
+            from_baudrate=config.serial.baudrate,
+            target_baudrate=config.serial.baudrate,
         )
 
-        if is_configured:
-            console.print(
-                f"Motor '{motor_name}' (ID {motor_config.id}) already configured correctly [SKIP]",
-                style="green",
-            )
-        else:
-            # Motor needs setup - do full configuration
-            console.print(
-                f"Configuring motor '{motor_name}' (ID {motor_config.id})...",
-                style="yellow",
-            )
-            setup_motor(
-                motor_config,
-                serialport,
-                from_id=from_id,
-                from_baudrate=config.serial.baudrate,
-                target_baudrate=config.serial.baudrate,
-            )
-
-            # Verify configuration after setup
-            if not check_configuration(
+        try:
+            check_configuration(
                 motor_config,
                 serialport,
                 baudrate=config.serial.baudrate,
-                silent=False,
-            ):
-                console.print(
-                    f"[FAIL] Configuration check failed for motor '{motor_name}' after setup",
-                    style="red",
-                )
-                return
+            )
+        except RuntimeError as e:
+            console.print(
+                f"[FAIL] Configuration check failed for motor '{motor_name}': {e}",
+                style="red",
+            )
+            return
 
         light_led_up(
             serialport,
