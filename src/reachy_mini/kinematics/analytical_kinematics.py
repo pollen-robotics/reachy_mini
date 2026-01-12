@@ -207,7 +207,6 @@ class AnalyticalKinematics:
         self, joints: np.ndarray = None, T_head: np.ndarray = None
     ) -> np.ndarray:
         """Calculate the passive joint angles based on the current joint angles."""
-
         if joints is None:
             joints = self.current_joints
         if T_head is None:
