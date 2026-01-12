@@ -265,9 +265,9 @@ class Daemon:
         self.backend_run_thread = Thread(target=backend_wrapped_run)
         self.backend_run_thread.start()
 
-        if not self.backend.ready.wait(timeout=15.0):
+        if not self.backend.ready.wait(timeout=2.0):
             self.logger.error(
-                "Backend is not ready after 15 seconds. Some error occurred."
+                "Backend is not ready after 2 seconds. Some error occurred."
             )
             self._status.state = DaemonState.ERROR
             self._status.error = self.backend.error
