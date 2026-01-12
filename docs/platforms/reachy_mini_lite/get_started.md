@@ -29,7 +29,7 @@ The **Reachy Mini Control** desktop app is the command center for your robot. It
 
 <div align="center">
   <a href="http://hf.co/reachy-mini/#/download">
-    <img src="https://pollen-robotics-reachy-mini-landing-page.hf.space/assets/desktop-app-screenshot--white.png" width="600" alt="Reachy Mini Control App">
+    <img src="https://huggingface.co/spaces/pollen-robotics/Reachy_Mini/resolve/main/public/assets/desktop-app-screenshot--white.png" width="600" alt="Reachy Mini Control App">
   </a>
 </div>
 

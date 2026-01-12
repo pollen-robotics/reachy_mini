@@ -76,6 +76,4 @@ If you need to reinstall the Raspberry Pi from scratch or create a custom image,
 
 👉 **[Reflash the ISO](reflash_the_rpi_ISO.md)**
 
-👉 **[Manual Raspberry Pi Installation](advanced_rpi_setup.md)**
-
-
+👉 **[Install Daemon from a Specific Branch](install_daemon_from_branch.md)**

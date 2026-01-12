@@ -1,4 +1,28 @@
-"""Camera utility for Reachy Mini."""
+"""Camera utility for Reachy Mini.
+
+This module provides utility functions for working with cameras on the Reachy Mini robot.
+It includes functions for detecting and identifying different camera models, managing
+camera connections, and handling camera-specific configurations.
+
+Supported camera types:
+- Reachy Mini Lite Camera
+- Arducam
+- Older Raspberry Pi Camera
+- Generic Webcams (fallback)
+
+Example usage:
+    >>> from reachy_mini.media.camera_utils import find_camera
+    >>>
+    >>> # Find and open the Reachy Mini camera
+    >>> cap, camera_specs = find_camera()
+    >>> if cap is not None:
+    ...     print(f"Found {camera_specs.name} camera")
+    ...     # Use the camera
+    ...     ret, frame = cap.read()
+    ...     cap.release()
+    ... else:
+    ...     print("No camera found")
+"""
 
 import platform
 from typing import Optional, Tuple, cast
@@ -9,6 +33,7 @@ from cv2_enumerate_cameras import enumerate_cameras
 from reachy_mini.media.camera_constants import (
     ArducamSpecs,
     CameraSpecs,
+    GenericWebcamSpecs,
     OlderRPiCamSpecs,
     ReachyMiniLiteCamSpecs,
 )
@@ -19,14 +44,45 @@ def find_camera(
 ) -> Tuple[Optional[cv2.VideoCapture], Optional[CameraSpecs]]:
     """Find and return the Reachy Mini camera.
 
-    Looks for the Reachy Mini camera first, then Arducam, then older Raspberry Pi Camera. Returns None if no camera is found.
+    Looks for the Reachy Mini camera first, then Arducam, then older Raspberry Pi Camera.
+    Returns None if no camera is found. Falls back to generic webcam if no specific camera is detected.
 
     Args:
         apiPreference (int): Preferred API backend for the camera. Default is cv2.CAP_ANY.
-        no_cap (bool): If True, close the camera after finding it. Default is False.
+                           Options include cv2.CAP_V4L2 (Linux), cv2.CAP_DSHOW (Windows),
+                           cv2.CAP_MSMF (Windows), etc.
+        no_cap (bool): If True, close the camera after finding it. Useful for testing
+                      camera detection without keeping the camera open. Default is False.
 
     Returns:
-        cv2.VideoCapture | None: A VideoCapture object if the camera is found and opened successfully, otherwise None.
+        Tuple[Optional[cv2.VideoCapture], Optional[CameraSpecs]]: A tuple containing:
+            - cv2.VideoCapture: A VideoCapture object if the camera is found and opened
+              successfully, otherwise None.
+            - CameraSpecs: The camera specifications for the detected camera, or None if
+              no camera was found.
+
+    Note:
+        This function tries to detect cameras in the following order:
+        1. Reachy Mini Lite Camera (preferred)
+        2. Older Raspberry Pi Camera
+        3. Arducam
+        4. Generic Webcam (fallback)
+
+        The function automatically sets the appropriate video codec (MJPG) for
+        Reachy Mini and Raspberry Pi cameras to ensure compatibility.
+
+    Example:
+        >>> cap, specs = find_camera()
+        >>> if cap is not None:
+        ...     print(f"Found {specs.name} camera")
+        ...     # Set resolution
+        ...     cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+        ...     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+        ...     # Capture a frame
+        ...     ret, frame = cap.read()
+        ...     cap.release()
+        ... else:
+        ...     print("No camera found")
 
     """
     cap = find_camera_by_vid_pid(
@@ -55,6 +111,13 @@ def find_camera(
             cap.release()
         return cap, cast(CameraSpecs, ArducamSpecs)
 
+    # Fallback: try to open any available webcam (useful for mockup-sim mode on desktop)
+    cap = cv2.VideoCapture(0)
+    if cap is not None and cap.isOpened():
+        if no_cap:
+            cap.release()
+        return cap, cast(CameraSpecs, GenericWebcamSpecs)
+
     return None, None
 
 
@@ -66,12 +129,37 @@ def find_camera_by_vid_pid(
     """Find and return a camera with the specified VID and PID.
 
     Args:
-        vid (int): Vendor ID of the camera. Default is ReachyMiniCamera
-        pid (int): Product ID of the camera. Default is ReachyMiniCamera
+        vid (int): Vendor ID of the camera. Default is ReachyMiniLiteCamSpecs.vid (0x38FB).
+        pid (int): Product ID of the camera. Default is ReachyMiniLiteCamSpecs.pid (0x1002).
         apiPreference (int): Preferred API backend for the camera. Default is cv2.CAP_ANY.
+                           On Linux, this automatically uses cv2.CAP_V4L2 for better compatibility.
 
     Returns:
-        cv2.VideoCapture | None: A VideoCapture object if the camera is found and opened successfully, otherwise None.
+        cv2.VideoCapture | None: A VideoCapture object if the camera with matching
+            VID/PID is found and opened successfully, otherwise None.
+
+    Note:
+        This function uses the cv2_enumerate_cameras package to enumerate available
+        cameras and find one with the specified USB Vendor ID and Product ID.
+        This is useful for selecting specific camera models when multiple cameras
+        are connected to the system.
+
+        The Arducam camera creates two /dev/videoX devices that enumerate_cameras
+        cannot differentiate, so this function tries to open each potential device
+        until it finds a working one.
+
+    Example:
+        >>> # Find Reachy Mini Lite Camera by its default VID/PID
+        >>> cap = find_camera_by_vid_pid()
+        >>> if cap is not None:
+        ...     print("Found Reachy Mini Lite Camera")
+        ...     cap.release()
+        >>>
+        >>> # Find a specific camera by custom VID/PID
+        >>> cap = find_camera_by_vid_pid(vid=0x0C45, pid=0x636D)  # Arducam
+        >>> if cap is not None:
+        ...     print("Found Arducam")
+        ...     cap.release()
 
     """
     if platform.system() == "Linux":

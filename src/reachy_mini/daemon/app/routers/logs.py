@@ -24,11 +24,14 @@ async def websocket_daemon_logs(websocket: WebSocket) -> None:
         # Start journalctl subprocess to stream daemon logs
         process = await asyncio.create_subprocess_exec(
             "journalctl",
-            "-u", "reachy-mini-daemon",
+            "-u",
+            "reachy-mini-daemon",
             "-b",  # current boot only
             "-f",  # follow mode (tail)
-            "-n", "100",  # start with last 100 lines
-            "--output", "short-iso",  # ISO timestamp format
+            "-n",
+            "100",  # start with last 100 lines
+            "--output",
+            "short-iso",  # ISO timestamp format
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
@@ -55,7 +58,9 @@ async def websocket_daemon_logs(websocket: WebSocket) -> None:
             except asyncio.TimeoutError:
                 # No data available, check if process is still running
                 if process.returncode is not None:
-                    logger.error(f"journalctl process exited with code {process.returncode}")
+                    logger.error(
+                        f"journalctl process exited with code {process.returncode}"
+                    )
                     break
                 # Check if WebSocket is still connected
                 try:
@@ -78,7 +83,9 @@ async def websocket_daemon_logs(websocket: WebSocket) -> None:
         logger.info("WebSocket disconnected")
     except FileNotFoundError:
         # journalctl not available
-        error_msg = "ERROR: journalctl command not found. This feature requires systemd."
+        error_msg = (
+            "ERROR: journalctl command not found. This feature requires systemd."
+        )
         logger.error(error_msg)
         try:
             await websocket.send_text(error_msg)

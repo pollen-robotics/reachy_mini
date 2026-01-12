@@ -87,7 +87,15 @@ def check_and_update_bluetooth_service() -> None:
     # This file: src/reachy_mini/utils/wireless_version/startup_check.py
     # Target:    src/reachy_mini/daemon/app/services/bluetooth/bluetooth_service.py
     # From parent: ../../daemon/app/services/bluetooth/bluetooth_service.py
-    bluetooth_dir = Path(__file__).parent / ".." / ".." / "daemon" / "app" / "services" / "bluetooth"
+    bluetooth_dir = (
+        Path(__file__).parent
+        / ".."
+        / ".."
+        / "daemon"
+        / "app"
+        / "services"
+        / "bluetooth"
+    )
     bluetooth_dir = bluetooth_dir.resolve()
     source = bluetooth_dir / "bluetooth_service.py"
     target = Path("/bluetooth/bluetooth_service.py")

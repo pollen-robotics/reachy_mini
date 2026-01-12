@@ -1,8 +1,16 @@
 name: Pytest
-on: [pull_request]
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - "src/**"
+      - "tests/**"
+      - ".github/workflows/**"
+      - "pyproject.toml"
 jobs:
   pytest:
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest]
@@ -17,12 +25,15 @@ jobs:
       - name: Install system dependencies (Ubuntu)
         if: matrix.os == 'ubuntu-latest'
         run: sudo apt-get update && sudo apt-get install -y libportaudio2
-      - name: Install dependencies
+      - name: Create virtual environment and install dependencies
         run: |
+          python -m venv venv
+          source venv/bin/activate
           python -m pip install --upgrade pip
           pip install .[dev]
       - name: Run tests
         run: |
+          source venv/bin/activate
           pytest -vv -m 'not audio and not video and not audio_gstreamer and not video_gstreamer and not wireless and not wireless_gstreamer' --tb=short
         env:
           MUJOCO_GL: disable

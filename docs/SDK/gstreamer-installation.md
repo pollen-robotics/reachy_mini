@@ -10,6 +10,8 @@
 
 </div>
 
+> **Note**: Python wheels for easy install of GStreamer will be soon released an available on PyPI. They will be directly integrated. Meanwhile, please follow the instructions below to install GStreamer on your system.
+
 ## 🔧 Install GStreamer
 
 <details>
@@ -105,44 +107,14 @@ The WebRTC plugin is activated by default in the Homebrew package.
 
 </div>
 
-1. Download both **runtime** and **development** installers (MSVC version)
-2. Install both with **Complete** installation option
-3. Add to system PATH: `C:\gstreamer\1.0\msvc_x86_64\bin`
-4. Add to PKG_CONFIG_PATH: `C:\gstreamer\1.0\msvc_x86_64\lib\pkgconfig`
+1. Download the **runtime** installer (MSVC version)
+2. Install with **Complete** installation option
+3. Edit the environment variables and Add to system PATH: `C:\Program Files\gstreamer\1.0\msvc_x86_64\bin`
+4. Add to PYTHONPATH: `C:\gstreamer\1.0\msvc_x86_64\lib\site-packages`
 
-> **💡 Important:** Replace `C:\gstreamer` with your actual GStreamer installation folder if you installed it in a different location.
+> **💡 Important:** Replace `C:\Program Files\gstreamer` with your actual GStreamer installation folder if you installed it in a different location.
 
-### Step 2: Install Rust
 
-On Windows, the WebRTC plugin is not activated by default and needs to be compiled manually from the Rust source code. Install Rust using the Windows installer:
-
-1. Download and install Rust from [https://rustup.rs/](https://rustup.rs/)
-2. Restart your terminal.
-
-### Step 3: Build and install WebRTC plugin
-
-The build and install the WebRTC plugin, run the following commands:
-
-```powershell
-# Clone the GStreamer Rust plugins repository
-git clone https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs.git
-cd gst-plugins-rs
-git checkout 0.14.1
-
-# Install the cargo-c build tool
-cargo install cargo-c
-
-# Build the WebRTC plugin (this may take several minutes)
-cargo cinstall -p gst-plugin-webrtc --prefix=C:\gst-plugins-rs --release
-
-# Copy the plugin to GStreamer plugins directory
-copy C:\gst-plugins-rs\lib\gstreamer-1.0\gstrswebrtc.dll C:\gstreamer\1.0\msvc_x86_64\lib\gstreamer-1.0\
-
-# Add plugin path to environment 
-set GST_PLUGIN_PATH="C:\gst-plugins-rs\lib\gstreamer-1.0;%GST_PLUGIN_PATH%"
-```
-
-> **💡 Note:** Replace `C:\gstreamer` with your actual GStreamer installation path if different. The last command requires Administrator privileges to set system-wide environment variables.
 
 </details>
 
@@ -161,7 +133,10 @@ gst-launch-1.0 videotestsrc ! autovideosink
 gst-inspect-1.0 webrtcsrc
 ```
 
-> **💡 For advanced testing and troubleshooting:** See the [Advanced Raspberry Pi Setup Guide](../platforms/reachy_mini/advanced_rpi_setup.md) for detailed configuration options and system diagnostics.
+You should also be able to import gstreamer libraries in a Python environment:
+```bash
+python -c "import gi"
+```
 
 ## 🔧 Python Dependencies
 
@@ -170,7 +145,7 @@ When installing Reachy Mini Python package, you will also need to add the `gstre
 ### Install from PyPI
 
 ```bash
-uv add reachy-mini --extra gstreamer
+uv pip install "reachy-mini[gstreamer]"
 ```
 
 ### Install from source
@@ -179,3 +154,20 @@ uv add reachy-mini --extra gstreamer
 uv sync --extra gstreamer
 ```
 
+## Troubleshooting & Unit Tests
+
+If you encounter issues with the stream, you can test the components individually.
+
+**Test 1: Manually create the WebRTC Server**
+Run this GStreamer pipeline on the robot to verify the camera and encoder stack:
+
+```bash
+gst-launch-1.0 webrtcsink run-signalling-server=true meta="meta,name=reachymini" name=ws libcamerasrc ! capsfilter caps=video/x-raw,width=1280,height=720,framerate=60/1,format=YUY2,colorimetry=bt709,interlace-mode=progressive ! queue !  v4l2h264enc extra-controls="controls,repeat_sequence_header=1" ! 'video/x-h264,level=(string)4' ! ws. alsasrc device=hw:4 ! queue ! audioconvert ! audioresample ! opusenc ! audio/x-opus, rate=48000, channels=2 ! ws.
+```
+
+**Test 2: Send Audio to Reachy**
+Send an audio RTP stream to port 5000 to test the speakers:
+
+```bash
+gst-launch-1.0 audiotestsrc ! audioconvert ! audioresample ! opusenc ! audio/x-opus, rate=48000, channels=2 ! rtpopuspay pt=96 ! udpsink host=<ROBOT_IP> port=5000
+```

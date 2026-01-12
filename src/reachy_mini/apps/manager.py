@@ -12,6 +12,8 @@ import numpy as np
 import psutil
 from pydantic import BaseModel
 
+from reachy_mini.daemon.backend.robot import RobotBackend
+
 from . import AppInfo, SourceKind
 from .sources import hf_space, local_common_venv
 
@@ -148,7 +150,10 @@ class AppManager:
                     decoded = line.decode().rstrip()
                     stderr_lines.append(decoded)
                     # Check if line looks like an error or exception
-                    if any(keyword in decoded for keyword in ["Error:", "Exception:", "Traceback", "ERROR"]):
+                    if any(
+                        keyword in decoded
+                        for keyword in ["Error:", "Exception:", "Traceback", "ERROR"]
+                    ):
                         self.logger.getChild("runner").error(decoded)
                     else:
                         # Many libraries write INFO/WARNING to stderr
@@ -235,6 +240,9 @@ class AppManager:
 
         # Return robot to zero position after app stops
         if self.daemon is not None and self.daemon.backend is not None:
+            if isinstance(self.daemon.backend, RobotBackend):
+                self.daemon.backend.enable_motors()
+
             try:
                 from reachy_mini.reachy_mini import INIT_HEAD_POSE
 

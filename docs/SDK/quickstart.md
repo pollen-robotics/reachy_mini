@@ -35,7 +35,7 @@ source /venvs/apps_venv/bin/activate
 
 ### Step 3: Run scripts locally
 
-When running scripts on Reachy Mini itself, use the standard `ReachyMini()` constructor (no need for `localhost_only=False`):
+When running scripts on Reachy Mini itself, use the standard `ReachyMini()` constructor. Auto mode will keep the connection on localhost unless you explicitly override it:
 
 ```python
 from reachy_mini import ReachyMini
@@ -82,7 +82,7 @@ The **Daemon** is a background service that handles the low-level communication 
 
 **Step 2:** Create a new file called `hello.py` and copy-paste the following code into it:
 
-> Tip: If you are using a Reachy Mini Wireless and running the script on your computer, you need to replace `ReachyMini()` by `ReachyMini(localhost_only=False)`.
+> Tip: The constructor now auto-detects Lite vs Wireless and switches between localhost and network automatically. Only override it for advanced cases, e.g. `ReachyMini(connection_mode="network")`.
 ```python
 from reachy_mini import ReachyMini
 

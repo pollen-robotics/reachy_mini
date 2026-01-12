@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 
 from ....daemon.backend.abstract import Backend
 from ..dependencies import get_backend, ws_get_backend
-from ..models import AnyPose, FullState, as_any_pose
+from ..models import AnyPose, DoAInfo, FullState, as_any_pose
 
 router = APIRouter(prefix="/state")
 
@@ -54,6 +54,23 @@ async def get_antenna_joint_positions(
     return (pos[0], pos[1])
 
 
+@router.get("/doa")
+async def get_doa(
+    backend: Backend = Depends(get_backend),
+) -> DoAInfo | None:
+    """Get the Direction of Arrival from the microphone array.
+
+    Returns the angle in radians (0=left, π/2=front, π=right) and speech detection status.
+    Returns None if the audio device is not available.
+    """
+    if not backend.audio:
+        return None
+    result = backend.audio.get_DoA()
+    if result is None:
+        return None
+    return DoAInfo(angle=result[0], speech_detected=result[1])
+
+
 @router.get("/full")
 async def get_full_state(
     with_control_mode: bool = True,
@@ -66,6 +83,7 @@ async def get_full_state(
     with_antenna_positions: bool = True,
     with_target_antenna_positions: bool = False,
     with_passive_joints: bool = False,
+    with_doa: bool = False,
     use_pose_matrix: bool = False,
     backend: Backend = Depends(get_backend),
 ) -> FullState:
@@ -100,6 +118,10 @@ async def get_full_state(
             result["passive_joints"] = list(joints.values())
         else:
             result["passive_joints"] = None
+    if with_doa and backend.audio:
+        doa_result = backend.audio.get_DoA()
+        if doa_result:
+            result["doa"] = DoAInfo(angle=doa_result[0], speech_detected=doa_result[1])
 
     result["timestamp"] = datetime.now(timezone.utc)
     return FullState.model_validate(result)
@@ -118,6 +140,7 @@ async def ws_full_state(
     with_antenna_positions: bool = True,
     with_target_antenna_positions: bool = False,
     with_passive_joints: bool = False,
+    with_doa: bool = False,
     use_pose_matrix: bool = False,
     backend: Backend = Depends(ws_get_backend),
 ) -> None:
@@ -137,6 +160,7 @@ async def ws_full_state(
                 with_antenna_positions=with_antenna_positions,
                 with_target_antenna_positions=with_target_antenna_positions,
                 with_passive_joints=with_passive_joints,
+                with_doa=with_doa,
                 use_pose_matrix=use_pose_matrix,
                 backend=backend,
             )
