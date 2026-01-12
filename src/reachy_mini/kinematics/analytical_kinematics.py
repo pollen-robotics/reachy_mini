@@ -81,6 +81,7 @@ class AnalyticalKinematics:
                 body_yaw=body_yaw,
                 max_relative_yaw=np.deg2rad(65),
                 max_body_yaw=np.deg2rad(160),
+                max_lean_angle=np.deg2rad(40),
             )
         else:
             # direct inverse kinematics solution with given body yaw
@@ -112,7 +113,7 @@ class AnalyticalKinematics:
         T_world_platform = None
         ok = False
         no_tries = 0
-        while not ok and no_tries < 5:
+        while not ok and no_tries < 10:
             no_tries += 1
             for _ in range(no_iterations):
                 T_world_platform = np.array(
@@ -126,6 +127,7 @@ class AnalyticalKinematics:
                 _joint_angles = list(np.array(_joint_angles) + 0.001)
                 tmp = np.eye(4)
                 #tmp[:3,:3] += np.random.randn(3,3)*1e-3
+                tmp[:3, :3] = R.from_euler('xyz', np.random.randn(3)*0.2, degrees=False).as_matrix()
                 tmp[:3, 3][2] += self.head_z_offset
                 self.kin.reset_forward_kinematics(tmp)  # type: ignore[arg-type]
                 continue
@@ -142,16 +144,16 @@ class AnalyticalKinematics:
                     self.logger.warning(f"WARNING FK: Head is not upright, recomputing FK, try no. {no_tries}")
                 elif abs(euler[2] - body_yaw_deg) > 90:
                     self.logger.warning(f"WARNING FK: Head yaw relative to body yaw is too large, recomputing FK, try no. {no_tries}")
+                
                 body_yaw += 0.001
                 _joint_angles = list(np.array(_joint_angles) + 0.001)
                 tmp = np.eye(4)
                 #tmp[:3,:3] += np.random.randn(3,3)*1e-3
+                tmp[:3, :3] = R.from_euler('xyz', np.random.randn(3)*0.4, degrees=False).as_matrix()
                 tmp[:3, 3][2] += self.head_z_offset
                 self.kin.reset_forward_kinematics(tmp)  # type: ignore[arg-type]
 
-        if not ok:
-            self.logger.error("ERROR FK: Could not compute a valid FK solution after maximum iterations")
-            return None
+        #assert ok is True, "Could not compute a valid FK solution after maximum iterations"
         
         assert T_world_platform is not None
 
