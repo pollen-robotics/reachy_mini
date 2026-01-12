@@ -172,13 +172,26 @@ async def play_goto_sleep(backend: Backend = Depends(get_backend)) -> MoveUUID:
     return create_move_task(backend.goto_sleep())
 
 
+
+# Global in-memory cache for loaded datasets
+_recorded_moves_cache: dict[str, RecordedMoves] = {}
+
+
+def get_cached_recorded_moves(dataset_name: str) -> RecordedMoves:
+    """Get RecordedMoves instance from cache or load it."""
+    if dataset_name not in _recorded_moves_cache:
+        # This will trigger the offline-first download/load logic
+        _recorded_moves_cache[dataset_name] = RecordedMoves(dataset_name)
+    return _recorded_moves_cache[dataset_name]
+
+
 @router.get("/recorded-move-datasets/list/{dataset_name:path}")
 async def list_recorded_move_dataset(
     dataset_name: str,
 ) -> list[str]:
     """List available recorded moves in a dataset."""
     try:
-        moves = RecordedMoves(dataset_name)
+        moves = get_cached_recorded_moves(dataset_name)
     except RepositoryNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
@@ -193,7 +206,7 @@ async def play_recorded_move_dataset(
 ) -> MoveUUID:
     """Request the robot to play a predefined recorded move from a dataset."""
     try:
-        recorded_moves = RecordedMoves(dataset_name)
+        recorded_moves = get_cached_recorded_moves(dataset_name)
     except RepositoryNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
     try:

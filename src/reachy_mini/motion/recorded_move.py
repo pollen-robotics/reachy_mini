@@ -7,10 +7,15 @@ from typing import Any, Dict, List, Optional
 
 import numpy as np
 import numpy.typing as npt
+import logging
 from huggingface_hub import snapshot_download
+from huggingface_hub.utils import LocalEntryNotFoundError
 
 from reachy_mini.motion.move import Move
 from reachy_mini.utils.interpolation import linear_pose_interpolation
+
+
+logger = logging.getLogger(__name__)
 
 
 def lerp(v0: float, v1: float, alpha: float) -> float:
@@ -108,9 +113,25 @@ class RecordedMoves:
     """Load a library of recorded moves from a HuggingFace dataset."""
 
     def __init__(self, hf_dataset_name: str):
-        """Initialize RecordedMoves."""
+        """Initialize RecordedMoves.
+        
+        Attempts to load from local cache first (Offline-First strategy).
+        Only connects to internet if dataset is missing locally.
+        """
         self.hf_dataset_name = hf_dataset_name
-        self.local_path = snapshot_download(self.hf_dataset_name, repo_type="dataset")
+        
+        try:
+            # Step 1: Try local cache
+            self.local_path = snapshot_download(
+                self.hf_dataset_name, 
+                repo_type="dataset", 
+                local_files_only=True
+            )
+            logger.info(f"Loaded {self.hf_dataset_name} from local cache")
+        except (LocalEntryNotFoundError, FileNotFoundError, OSError):
+            # Step 2: Fallback to online download
+            logger.info(f"Dataset {self.hf_dataset_name} not found locally, downloading...")
+            self.local_path = snapshot_download(self.hf_dataset_name, repo_type="dataset")
         self.moves: Dict[str, Any] = {}
         self.sounds: Dict[str, Optional[Path]] = {}
 
