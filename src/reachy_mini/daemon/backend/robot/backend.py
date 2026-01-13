@@ -109,6 +109,11 @@ class RobotBackend(Backend):
         self.target_antenna_joint_current = None  # Placeholder for antenna joint torque
         self.target_head_joint_current = None  # Placeholder for head joint torque
 
+        if hardware_error_check_frequency <= 0:
+            raise ValueError(
+                "hardware_error_check_frequency must be positive and non-zero (Hz)."
+            )
+
         self.hardware_error_check_period = (
             1.0 / hardware_error_check_frequency
         )  # seconds
