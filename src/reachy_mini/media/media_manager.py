@@ -188,7 +188,7 @@ class MediaManager:
     ) -> None:
         """Initialize the camera."""
         self.logger.debug("Initializing camera...")
-        '''
+        """
         if self.backend == MediaBackend.DEFAULT:
             self.logger.info("Using OpenCV camera backend.")
             from reachy_mini.media.camera_opencv import OpenCVCamera
@@ -199,20 +199,17 @@ class MediaManager:
             else:
                 self.camera.open()
         elif self.backend == MediaBackend.GSTREAMER:
-        '''
-        if self.backend == MediaBackend.GSTREAMER or self.backend == MediaBackend.DEFAULT:
+        """
+        if (
+            self.backend == MediaBackend.GSTREAMER
+            or self.backend == MediaBackend.DEFAULT
+        ):
+            self.logger.info("Using GStreamer camera backend.")
+            from reachy_mini.media.camera_gstreamer import GStreamerCamera
 
-            if use_sim:
-                self.loggger.warning("Simulation mode with GStreamer backend is not implemented yet.")
-                # Todo: use simulation with gstreamer
-            else:
+            self.camera = GStreamerCamera(log_level=log_level, use_sim=use_sim)
+            self.camera.open()
 
-                self.logger.info("Using GStreamer camera backend.")
-                from reachy_mini.media.camera_gstreamer import GStreamerCamera
-
-                self.camera = GStreamerCamera(log_level=log_level)
-                self.camera.open()
-                    
         else:
             raise NotImplementedError(f"Camera backend {self.backend} not implemented.")
 
@@ -251,7 +248,7 @@ class MediaManager:
     def _init_audio(self, log_level: str) -> None:
         """Initialize the audio system."""
         self.logger.debug("Initializing audio...")
-        '''
+        """
         if (
             self.backend == MediaBackend.DEFAULT
             or self.backend == MediaBackend.DEFAULT_NO_VIDEO
@@ -264,8 +261,13 @@ class MediaManager:
             self.backend == MediaBackend.GSTREAMER
             or self.backend == MediaBackend.GSTREAMER_NO_VIDEO
         ):
-        '''
-        if self.backend == MediaBackend.GSTREAMER or self.backend == MediaBackend.GSTREAMER_NO_VIDEO or self.backend == MediaBackend.DEFAULT or self.backend == MediaBackend.DEFAULT_NO_VIDEO:
+        """
+        if (
+            self.backend == MediaBackend.GSTREAMER
+            or self.backend == MediaBackend.GSTREAMER_NO_VIDEO
+            or self.backend == MediaBackend.DEFAULT
+            or self.backend == MediaBackend.DEFAULT_NO_VIDEO
+        ):
             self.logger.info("Using GStreamer audio backend.")
             from reachy_mini.media.audio_gstreamer import GStreamerAudio
 

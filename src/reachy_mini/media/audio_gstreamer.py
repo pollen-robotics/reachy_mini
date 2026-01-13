@@ -346,17 +346,21 @@ class GStreamerAudio(AudioBase):
             # reachy mini wireless has a preconfigured asoundrc
             audiosink = Gst.ElementFactory.make("alsasink")
             audiosink.set_property("device", "reachymini_audio_sink")
-            self.logger.info(f"Using audio device reachymini_audio_sink for playback.")
+            self.logger.info("Using audio device reachymini_audio_sink for playback.")
         elif platform.system() == "Windows":
             id_audio_card = self._get_audio_device("Sink")
             audiosink = Gst.ElementFactory.make("wasapi2sink")
             audiosink.set_property("device", id_audio_card)
-            self.logger.info(f"Using audio device {id_audio_card} for playback on Windows.")
+            self.logger.info(
+                f"Using audio device {id_audio_card} for playback on Windows."
+            )
         elif platform.system() == "Darwin":
             id_audio_card = self._get_audio_device("Sink")
             audiosink = Gst.ElementFactory.make("osxaudiosink")
             audiosink.set_property("unique-id", id_audio_card)
-            self.logger.info(f"Using audio device {id_audio_card} for playback on macOS.")
+            self.logger.info(
+                f"Using audio device {id_audio_card} for playback on macOS."
+            )
         else:
             id_audio_card = self._get_audio_device("Sink")
             audiosink = Gst.ElementFactory.make("pulsesink")
@@ -367,7 +371,7 @@ class GStreamerAudio(AudioBase):
         if not playbin:
             self.logger.error("Failed to create playbin element")
             return
-        
+
         # Fix for Windows: use file:/// and forward slashes
         if os.name == "nt":
             uri_path = file_path.replace("\\", "/")
@@ -425,22 +429,22 @@ class GStreamerAudio(AudioBase):
                         and device_props.has_field("device.api")
                         and device_props.get_string("device.api") == "wasapi2"
                     ):
-                        if device_type == "Source" and device_props.get_value("wasapi2.device.loopback") == True:
+                        if (
+                            device_type == "Source"
+                            and device_props.get_value("wasapi2.device.loopback")
+                            == True
+                        ):
                             continue  # skip loopback devices for source
                         device_id = device_props.get_string("device.id")
                         self.logger.debug(
                             f"Found audio input device {name} for Windows"
                         )
                         return str(device_id)
-                    elif (
-                        platform.system() == "Darwin"
-                    ):
+                    elif platform.system() == "Darwin":
                         device_id = device_props.get_string("unique-id")
-                        self.logger.debug(
-                            f"Found audio input device {name} for macOS"
-                        )
+                        self.logger.debug(f"Found audio input device {name} for macOS")
                         return str(device_id)
-                
+
             self.logger.warning(f"No {device_type} audio card found.")
         except Exception as e:
             self.logger.error(f"Error while getting audio input device: {e}")

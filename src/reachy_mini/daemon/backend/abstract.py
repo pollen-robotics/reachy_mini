@@ -167,13 +167,10 @@ class Backend:
 
         self.audio: Optional[MediaManager] = None
         if self.use_audio:
-            self.logger.debug(
-                "Initializing daemon audio backend."
-            )
+            self.logger.debug("Initializing daemon audio backend.")
             self.audio = MediaManager(
                 backend=MediaBackend.GSTREAMER_NO_VIDEO, log_level=log_level
             )
-
 
         # Guard to ensure only one play_move/goto is executed at a time (goto itself uses play_move, so we need an RLock)
         self._play_move_lock = threading.RLock()

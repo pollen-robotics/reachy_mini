@@ -9,7 +9,6 @@ It also includes methods for multimedia interactions like playing sounds and loo
 import asyncio
 import json
 import logging
-import platform
 import time
 from typing import Dict, List, Literal, Optional, Union, cast
 
@@ -219,9 +218,9 @@ class ReachyMini:
                         f"Invalid media backend on Lite: {media_backend}, using default backend."
                     )
                     mbackend = (
-                            MediaBackend.DEFAULT_NO_VIDEO
-                            if "no_video" in media_backend.lower()
-                            else MediaBackend.DEFAULT
+                        MediaBackend.DEFAULT_NO_VIDEO
+                        if "no_video" in media_backend.lower()
+                        else MediaBackend.DEFAULT
                     )
 
         return MediaManager(

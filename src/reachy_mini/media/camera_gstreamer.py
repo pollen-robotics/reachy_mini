@@ -40,17 +40,18 @@ Example usage:
 """
 
 import os
+import platform
 from threading import Thread
 from typing import Optional, Tuple, cast
 
 import numpy as np
 import numpy.typing as npt
-import platform
 
 from reachy_mini.media.camera_constants import (
     ArducamSpecs,
     CameraResolution,
     CameraSpecs,
+    MujocoCameraSpecs,
     ReachyMiniLiteCamSpecs,
     ReachyMiniWirelessCamSpecs,
 )
@@ -79,6 +80,7 @@ class GStreamerCamera(CameraBase):
     def __init__(
         self,
         log_level: str = "INFO",
+        use_sim: bool = False,
     ) -> None:
         """Initialize the GStreamer camera."""
         super().__init__(log_level=log_level)
@@ -88,7 +90,11 @@ class GStreamerCamera(CameraBase):
 
         self.pipeline = Gst.Pipeline.new("camera_recorder")
 
-        cam_path, self.camera_specs = self.get_video_device()
+        if use_sim:
+            cam_path = "use_sim"
+            self.camera_specs = cast(CameraSpecs, MujocoCameraSpecs)
+        else:
+            cam_path, self.camera_specs = self.get_video_device()
 
         if self.camera_specs is None:
             raise RuntimeError("Camera specs not set")
@@ -108,6 +114,26 @@ class GStreamerCamera(CameraBase):
         if cam_path == "":
             self.logger.warning("Recording pipeline set without camera.")
             self.pipeline.remove(self._appsink_video)
+        elif cam_path == "use_sim":
+            udpsrc = Gst.ElementFactory.make("udpsrc")
+            udpsrc.set_property("port", 5005)
+            caps = Gst.Caps.from_string("image/jpeg")
+            udpsrc.set_property("caps", caps)
+            self.pipeline.add(udpsrc)
+            queue = Gst.ElementFactory.make("queue")
+            self.pipeline.add(queue)
+            jpegparse = Gst.ElementFactory.make("jpegparse")
+            self.pipeline.add(jpegparse)
+            # use vaapijpegdec or nvjpegdec for hardware acceleration
+            jpegdec = Gst.ElementFactory.make("jpegdec")
+            self.pipeline.add(jpegdec)
+            videoconvert = Gst.ElementFactory.make("videoconvert")
+            self.pipeline.add(videoconvert)
+            udpsrc.link(queue)
+            queue.link(jpegdec)
+            jpegdec.link(videoconvert)
+            videoconvert.link(self._appsink_video)
+
         elif platform.system() == "Windows":
             camsrc = Gst.ElementFactory.make("mfvideosrc")
             camsrc.set_property("device-name", cam_path)
@@ -299,7 +325,9 @@ class GStreamerCamera(CameraBase):
                                 if cam_name == "Arducam_12MP"
                                 else cast(CameraSpecs, ReachyMiniLiteCamSpecs)
                             )
-                            self.logger.debug(f"Found {cam_name} camera at index {device_index} for macOS")
+                            self.logger.debug(
+                                f"Found {cam_name} camera at index {device_index} for macOS"
+                            )
                             return device_index, camera_specs
                         elif cam_name == "imx708":
                             camera_specs = cast(CameraSpecs, ReachyMiniWirelessCamSpecs)

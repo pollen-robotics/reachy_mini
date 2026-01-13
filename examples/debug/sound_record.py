@@ -5,10 +5,13 @@ import logging
 import time
 
 import numpy as np
+
 try:
     import soundfile as sf
 except ImportError:
-    print("The 'soundfile' module is missing. Please install the optional 'examples' dependencies with:\n  pip install .[examples]")
+    print(
+        "The 'soundfile' module is missing. Please install the optional 'examples' dependencies with:\n  pip install .[examples]"
+    )
     exit(1)
 
 from reachy_mini import ReachyMini
@@ -35,7 +38,7 @@ def main(backend: str) -> None:
                 audio_samples.append(sample)
             else:
                 print("No audio data available yet...")
-            #if backend == "default":
+            # if backend == "default":
             #    time.sleep(0.2)
         mini.media.stop_recording()
 
