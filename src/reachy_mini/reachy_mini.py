@@ -528,8 +528,15 @@ class ReachyMini:
         ray_cam = np.array([x_n, y_n, 1.0])
         ray_cam /= np.linalg.norm(ray_cam)
 
-        # Transform ray from camera frame to head frame (look_at_world assumes head at origin)
-        P_world = self.T_head_cam[:3, :3] @ ray_cam
+        T_world_head = self.get_current_head_pose()
+        T_world_cam = T_world_head @ self.T_head_cam
+
+        R_wc = T_world_cam[:3, :3]
+        t_wc = T_world_cam[:3, 3]
+
+        ray_world = R_wc @ ray_cam
+
+        P_world = ray_world
 
         return self.look_at_world(
             x=P_world[0],
