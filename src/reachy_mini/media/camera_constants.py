@@ -147,6 +147,7 @@ class CameraSpecs:
     name: str = ""
     available_resolutions: List[CameraResolution] = field(default_factory=list)
     default_resolution: CameraResolution = CameraResolution.R1280x720at30fps
+    calibration_resolution: CameraResolution = CameraResolution.R1280x720at30fps
     vid = 0
     pid = 0
     K: npt.NDArray[np.float64] = field(default_factory=lambda: np.eye(3))
@@ -184,6 +185,7 @@ class ReachyMiniLiteCamSpecs(CameraSpecs):
         CameraResolution.R3264x2448at30fps,
     ]
     default_resolution = CameraResolution.R1920x1080at60fps
+    calibration_resolution = CameraResolution.R1920x1080at60fps
     vid = 0x38FB
     pid = 0x1002
     K = np.array(
