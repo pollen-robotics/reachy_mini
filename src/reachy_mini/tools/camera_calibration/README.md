@@ -17,14 +17,25 @@ This directory contains tools for calibrating the Reachy Mini camera using a Cha
 Use `acquire.py` to capture calibration images at the highest resolution (3840x2592):
 
 ```bash
+# With display (GUI mode)
 python acquire.py
+
+# Without display (headless mode - for Raspberry Pi/wireless version)
+python acquire.py --headless
 ```
 
+**GUI Mode:**
 - The camera will automatically use the maximum available resolution
 - Move the Charuco board to different positions and angles
-- Press **Enter** to capture an image (aim for 20-30 images)
+- Press **Enter** in the camera window to capture an image (aim for 20-30 images)
 - Vary the board position: different distances, angles, and locations in the frame
-- Press **Ctrl+C** to exit
+- Press **'q'** to quit
+
+**Headless Mode (for Raspberry Pi/wireless version):**
+- No display required
+- Position the board, then press **Enter** in terminal to capture
+- Type **'q'** and press Enter to quit
+- Images saved with confirmation messages
 
 Images will be saved to `./images/`
 
@@ -97,6 +108,16 @@ Note: The undistorted view automatically crops to remove black borders (alpha=0)
 
 ## Analysis Tools
 
-- `acquire_crop.py`: Capture images at different resolutions for crop analysis
-- `analyze_crop_v3.py`: Analyze how much each resolution mode crops the image
-- `compute_crop.py`: Simple Charuco detection visualization
+- **`acquire_crop.py`**: Capture images at different resolutions for crop analysis
+  ```bash
+  # GUI mode
+  python acquire_crop.py
+
+  # Headless mode (for Raspberry Pi/wireless)
+  python acquire_crop.py --headless
+  ```
+  Automatically cycles through all available resolutions and captures one image per resolution.
+
+- **`analyze_crop_v3.py`**: Analyze how much each resolution mode crops the image
+
+- **`compute_crop.py`**: Simple Charuco detection visualization
