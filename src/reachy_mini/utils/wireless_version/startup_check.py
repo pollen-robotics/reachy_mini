@@ -17,7 +17,7 @@ USER = "pollen"
 def check_and_fix_venvs_ownership(
     venvs_path: str = "/venvs", custom_logger: logging.Logger | None = None
 ) -> None:
-    """For wirelss units, check if files under venvs_path are owned by user pollen and fix if needed.
+    """For wireless units, check if files under venvs_path are owned by user pollen and fix if needed.
 
     Args:
         venvs_path: Path to the virtual environments directory (default: /venvs)

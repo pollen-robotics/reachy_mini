@@ -13,13 +13,13 @@ class NNKinematics:
     """Neural Network based FK/IK. Fitted from PlacoKinematics data."""
 
     def __init__(self, models_root_path: str):
-        """Intialize."""
+        """Initialize."""
         self.fk_model_path = f"{models_root_path}/fknetwork.onnx"
         self.ik_model_path = f"{models_root_path}/iknetwork.onnx"
         self.fk_infer = OnnxInfer(self.fk_model_path)
         self.ik_infer = OnnxInfer(self.ik_model_path)
 
-        self.automatic_body_yaw = False  # No used, kept for canaompatibility
+        self.automatic_body_yaw = False  # Not used, kept for compatibility
 
     def ik(
         self,

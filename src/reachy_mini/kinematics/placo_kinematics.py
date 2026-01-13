@@ -70,7 +70,7 @@ class PlacoKinematics:
         # we could go to soft limits to avoid over-constraining the IK
         # but the current implementation works robustly with hard limits
         # so we keep the hard limits for now
-        constrant_type = "hard"  # "hard" or "soft"
+        constraint_type = "hard"  # "hard" or "soft"
 
         # IK closing tasks
         ik_closing_tasks = []
@@ -78,7 +78,7 @@ class PlacoKinematics:
             ik_closing_task = self.ik_solver.add_relative_position_task(
                 f"closing_{i}_1", f"closing_{i}_2", np.zeros(3)
             )
-            ik_closing_task.configure(f"closing_{i}", constrant_type, 1.0)
+            ik_closing_task.configure(f"closing_{i}", constraint_type, 1.0)
             ik_closing_tasks.append(ik_closing_task)
 
         # FK closing tasks
@@ -87,7 +87,7 @@ class PlacoKinematics:
             fk_closing_task = self.fk_solver.add_relative_position_task(
                 f"closing_{i}_1", f"closing_{i}_2", np.zeros(3)
             )
-            fk_closing_task.configure(f"closing_{i}", constrant_type, 1.0)
+            fk_closing_task.configure(f"closing_{i}", constraint_type, 1.0)
             fk_closing_tasks.append(fk_closing_task)
 
         # Add the constraint between the rotated torso and the head
@@ -227,9 +227,9 @@ class PlacoKinematics:
         self.robot_ik.set_joint_limits("yaw_body", -2.8, 2.8)
 
         # initial state
-        self._inital_q = self.robot.state.q.copy()
-        self._inital_qd = np.zeros_like(self.robot.state.qd)
-        self._inital_qdd = np.zeros_like(self.robot.state.qdd)
+        self._initial_q = self.robot.state.q.copy()
+        self._initial_qd = np.zeros_like(self.robot.state.qd)
+        self._initial_qdd = np.zeros_like(self.robot.state.qdd)
 
         # initial FK to set the head pose
         for _ in range(10):
@@ -237,11 +237,11 @@ class PlacoKinematics:
             self.robot_ik.update_kinematics()
 
         # last good q to revert to in case of collision
-        self._inital_q = self.robot_ik.state.q.copy()
+        self._initial_q = self.robot_ik.state.q.copy()
         self._last_good_q = self.robot_ik.state.q.copy()
 
         # update the robot state to the initial state
-        self._update_state_to_initial(self.robot)  # revert to the inital state
+        self._update_state_to_initial(self.robot)  # revert to the initial state
         self.robot.update_kinematics()
 
         if self.check_collision:
@@ -262,9 +262,9 @@ class PlacoKinematics:
             robot (placo.RobotWrapper): The robot wrapper instance to update.
 
         """
-        robot.state.q = self._inital_q
-        robot.state.qd = self._inital_qd
-        robot.state.qdd = self._inital_qdd
+        robot.state.q = self._initial_q
+        robot.state.qd = self._initial_qd
+        robot.state.qdd = self._initial_qdd
 
     def _pose_distance(
         self, pose1: npt.NDArray[np.float64], pose2: npt.NDArray[np.float64]
@@ -374,7 +374,7 @@ class PlacoKinematics:
             self._logger.debug("IK: Poses too far, starting from initial configuration")
 
         done = True
-        # do the inital ik
+        # do the initial ik
         for i in range(no_iterations):
             try:
                 self.ik_solver.solve(True)  # False to not update the kinematics
@@ -398,7 +398,7 @@ class PlacoKinematics:
             self.robot_ik.update_kinematics()
 
             no_iterations += 2  # add a few more iterations
-            # do the inital ik with 10 iterations
+            # do the initial ik with 10 iterations
             for i in range(no_iterations):
                 try:
                     self.ik_solver.solve(True)  # False to not update the kinematics
@@ -455,7 +455,7 @@ class PlacoKinematics:
         )
 
         done = True
-        # do the inital ik with 2 iterations
+        # do the initial ik with 2 iterations
         for i in range(no_iterations):
             try:
                 self.fk_solver.solve(True)  # False to not update the kinematics
@@ -476,7 +476,7 @@ class PlacoKinematics:
             self.robot.update_kinematics()
 
             no_iterations += 2  # add a few more iterations
-            # do the inital ik with 10 iterations
+            # do the initial ik with 10 iterations
             for i in range(no_iterations):
                 try:
                     self.fk_solver.solve(True)  # False to not update the kinematics
