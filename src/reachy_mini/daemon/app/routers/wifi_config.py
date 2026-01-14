@@ -267,6 +267,19 @@ def check_if_connection_active(name: str) -> bool:
     return any(c.name == name and c.device != "--" for c in get_wifi_connections())
 
 
+def get_wifi_connection_ssid(name: str) -> str:
+    """Get the SSID of a Wifi connection"""
+    for conn in get_wifi_connections():
+        if conn.name == name:
+            conn_data = nmcli.connection.show(name,True)    #Get details of the connection including secrets
+            conn_type = conn_data.get("connection.type", None)
+            if conn_type is None:
+                return ""
+            else:
+                return str(conn_data.get(f"{conn_type}.ssid", ""))
+    return ""
+
+
 def setup_wifi_connection(
     name: str, ssid: str, password: str, is_hotspot: bool = False
 ) -> None:
@@ -280,7 +293,12 @@ def setup_wifi_connection(
         else:
             nmcli.device.wifi_connect(ssid=ssid, password=password)
         return
-
+    elif is_hotspot and get_wifi_connection_ssid(name) != ssid: #Spawn Hotspot with a different SSID
+        logger.info(f"Changing the SSID of WiFi connection {name} to {ssid}...")
+        if check_if_connection_active(name):
+            nmcli.connection.down(name)
+        nmcli.connection.modify(name,{"ssid":ssid})
+        
     logger.info("WiFi configuration already exists.")
     if not check_if_connection_active(name):
         logger.info("WiFi is not active. Activating...")
