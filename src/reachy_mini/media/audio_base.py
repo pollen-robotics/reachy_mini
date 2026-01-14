@@ -99,10 +99,12 @@ class AudioBase(ABC):
             get_input_audio_samplerate() and get_input_channels() respectively.
 
         Example:
-            >>> audio.start_recording()
-            >>> samples = audio.get_audio_sample()
-            >>> if samples is not None:
-            ...     print(f"Got {len(samples)} audio samples")
+            ```python
+            audio.start_recording()
+            samples = audio.get_audio_sample()
+            if samples is not None:
+                print(f"Got {len(samples)} audio samples")
+            ```
 
         """
         pass
@@ -254,7 +256,9 @@ class AudioBase(ABC):
             and stop_playing() methods.
 
         Example:
-            >>> audio.play_sound("/path/to/sound.wav")
+            ```python
+            audio.play_sound("/path/to/sound.wav")
+            ```
 
         """
         pass
