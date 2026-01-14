@@ -62,7 +62,7 @@ password: root
 
 Once connected via SSH, you can check the integrity of your Raspberry Pi and robot setup with:
 
-```
+```bash
 reachyminios_check
 ```
 

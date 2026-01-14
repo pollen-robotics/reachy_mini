@@ -274,7 +274,7 @@ Please check that the switch is on the "debug" and not on "download" position. S
 7.  [🔧 Specific Error Messages & Fixes](#-specific-error-messages--fixes)
 8.  [📦 Shipping & Warranty](#-shipping--warranty)
 
-<br>
+
 
 ## 🚀 Getting Started & Assembly
 
@@ -324,7 +324,7 @@ You do not need to install them.
 
 </details>
 
-<br>
+
 
 ## 🔌 Connection & Dashboard
 
@@ -345,7 +345,7 @@ If you need to reset the robot's Wi-Fi hotspot (for example, if you can't connec
 <details>
 <summary><strong>The dashboard at http://localhost:8000 doesn't work.</strong></summary>
 
-1. **Check browser permissions**: Ensure your browser can access local networks. <br> On _macOS_, these permissions are found in System Settings → Privacy & Security → Local Network.
+1. **Check browser permissions**: Ensure your browser can access local networks.  On _macOS_, these permissions are found in System Settings → Privacy & Security → Local Network.
 
 2. **For Wireless Reachy Mini**: Ensure both your computer and the robot are connected to the **same network**, then verify connectivity by running the following command in your terminal:
 ```bash
@@ -409,7 +409,7 @@ Helps prevent package conflicts during SDK installation.
 
 </details>
 
-<br>
+
 
 ## 🤖 Hardware, Motors & Limits
 
@@ -535,7 +535,7 @@ However, since it can be confusing, we will update those motions to avoid this c
 
 </details>
 
-<br>
+
 
 ## 🐍 SDK, Apps & Programming
 
@@ -617,7 +617,7 @@ Your GUI will open at the usual address (for example, `http://reachy-mini.local:
 
 </details>
 
-<br>
+
 
 ## 🕹️ Moving the Robot
 
@@ -690,7 +690,7 @@ If the period is much higher than 20ms, it means the control loop is not running
 
 </details>
 
-<br>
+
 
 ## 👁️ Vision & Audio
 
@@ -784,7 +784,7 @@ You can play back a sound while recording simultaneously to test the echo cancel
 
 </details>
 
-<br>
+
 
 ## 🔧 Specific Error Messages & Fixes
 
@@ -825,7 +825,7 @@ This appears if you connect to the robot but don't consume the video frames, cau
 
 </details>
 
-<br>
+
 
 ## 📦 Shipping & Warranty
 

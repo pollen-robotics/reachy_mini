@@ -33,7 +33,6 @@ The **Reachy Mini Control** desktop app is the command center for your robot. It
   </a>
 </div>
 
-<br>
 
 **Get the App:**
 

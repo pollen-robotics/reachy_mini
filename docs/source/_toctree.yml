@@ -1,5 +1,5 @@
 - sections:
-    - local: main
+    - local: index
       title: Welcome to Reachy Mini Documentation
   title: Welcome
 - sections:
