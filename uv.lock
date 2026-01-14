@@ -736,12 +736,6 @@ wheels = [
 ]
 
 [[package]]
-name = "dbus-python"
-version = "1.4.0"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/ff/24/63118050c7dd7be04b1ccd60eab53fef00abe844442e1b6dec92dae505d6/dbus-python-1.4.0.tar.gz", hash = "sha256:991666e498f60dbf3e49b8b7678f5559b8a65034fdf61aae62cdecdb7d89c770", size = 232490, upload-time = "2025-03-13T19:57:54.212Z" }
-
-[[package]]
 name = "decorator"
 version = "5.2.1"
 source = { registry = "https://pypi.org/simple" }
@@ -3302,7 +3296,6 @@ rerun = [
     { name = "urdf-parser-py" },
 ]
 wireless-version = [
-    { name = "dbus-python" },
     { name = "gpiozero" },
     { name = "lgpio" },
     { name = "nmcli" },
@@ -3315,7 +3308,6 @@ requires-dist = [
     { name = "aiohttp" },
     { name = "asgiref" },
     { name = "cv2-enumerate-cameras", specifier = ">=1.2.1" },
-    { name = "dbus-python", marker = "extra == 'wireless-version'", specifier = ">=1.3.2" },
     { name = "eclipse-zenoh", specifier = "~=1.7.0" },
     { name = "fastapi" },
     { name = "gpiozero", marker = "extra == 'wireless-version'", specifier = ">=2.0.0" },

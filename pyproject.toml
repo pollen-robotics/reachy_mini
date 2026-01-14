@@ -67,7 +67,6 @@ wireless-version = [
     "pollen_BMI088_imu_library",
     "gpiozero>=2.0.0",
     "lgpio>=0.2.2.0",
-    "dbus-python>=1.3.2",
 ]
 
 [project.scripts]
