@@ -516,6 +516,7 @@ We only have the led indication for "low battery" when it's time to charge it. (
 - Unplug the indicated connector (red arrow) to be able to remove the battery. There should be some double-sided tape that maintain the battery in place, so it can be a bit hard to remove.
 ![battery_location](https://github.com/pollen-robotics/reachy_mini/raw/develop/docs/assets/battery_connector.png)
 - When you'll re-assemble it, do these step again in reverse order. Just be careful not to pinch any cable.
+
 </details>
 
 <details>
@@ -780,6 +781,7 @@ You can play back a sound while recording simultaneously to test the echo cancel
 - Ensure the `.asoundrc` file exists in the home directory
 - Check that the microphone is detected: `arecord -l`
 - Check that the speaker is detected: `aplay -l`
+
 </details>
 
 <br>
