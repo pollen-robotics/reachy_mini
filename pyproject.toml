@@ -36,6 +36,7 @@ dependencies = [
     "websockets>=12,<16",
     "toml",
     "rustypot>=1.4.2",
+    "requests",
 ]
 
 [project.optional-dependencies]
