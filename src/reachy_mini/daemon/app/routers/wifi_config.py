@@ -18,7 +18,8 @@ error: Exception | None = None
 logger = logging.getLogger(__name__)
 
 def get_pin() -> str:
-    """Extract the last 5 digits of the serial number from dfu-util -l output.
+    """Extract the last 5 digits of the serial number from dfu-util output.
+    
     Replicate of the bluetooth_service.py get_pin() function to avoid dbus imports.
     """
     default_pin = "46879"
@@ -268,7 +269,7 @@ def check_if_connection_active(name: str) -> bool:
 
 
 def get_wifi_connection_ssid(name: str) -> str:
-    """Get the SSID of a Wifi connection"""
+    """Get the SSID of a Wifi connection."""
     for conn in get_wifi_connections():
         if conn.name == name:
             conn_data = nmcli.connection.show(name,True)    #Get details of the connection including secrets
