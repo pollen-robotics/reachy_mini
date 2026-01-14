@@ -1,7 +1,7 @@
 - sections:
     - local: index
-      title: Welcome to Reachy Mini Documentation
-  title: Welcome
+      title: Reachy Mini
+  title: Get Started
 - sections:
     - local: platforms/reachy_mini/get_started
       title: Getting started
@@ -56,3 +56,19 @@
     - local: troubleshooting
       title: Troubleshooting & FAQ
   title: Help and support
+- sections:
+    - local: API/reachymini
+      title: Reachy Mini
+    - local: API/media
+      title: Media
+    - local: API/motion
+      title: Motion
+    - local: API/tools
+      title: Tools
+    - local: API/utils
+      title: Utils
+    - local: API/apps
+      title: Apps
+    - local: API/daemon
+      title: Daemon
+  title: API
