@@ -32,7 +32,7 @@ rpicam-still -t 1 -r -o test.jpg --width 4608 --height 2592 --autofocus-mode man
 rpicam-still -t 1 -r -o test.jpg --width 4608 --height 2592 --autofocus-mode manual --lens-position 1000
 ```
 
-At the SDK level, the camera is controlled by GStreamer using the [libcamerasrc](/src/reachy_mini/media/webrtc_daemon.py) component. You can view available parameters with the following command:
+At the SDK level, the camera is controlled by GStreamer using the [libcamerasrc](https://github.com/pollen-robotics/reachy_mini/tree/main/src/reachy_mini/media/webrtc_daemon.py) component. You can view available parameters with the following command:
 
 ```bash
 gst-inspect-1.0 libcamerasrc
@@ -59,7 +59,7 @@ It appears as `Pollen Robotics Reachy Mini Audio` in the system. Volume control 
 
 AEC and other audio filtering can be tuned thanks to the XMOS XVF3800. Advanced users can refer to the [official documentation](https://www.xmos.com/documentation/XM-014888-PC/html/modules/fwk_xvf/doc/user_guide/01_overview.html) to better understand the sound processing. A summary of the parameters is listed [on this page](https://www.xmos.com/documentation/XM-014888-PC/html/modules/fwk_xvf/doc/user_guide/AA_control_command_appendix.html).
 
-To access these parameters, use our helper Python script [audio_control_utils.py](/src/reachy_mini/media/audio_control_utils.py):
+To access these parameters, use our helper Python script [audio_control_utils.py](https://github.com/pollen-robotics/reachy_mini/tree/main/src/reachy_mini/media/audio_control_utils.py):
 
 ```bash
 # Read a parameter
@@ -107,4 +107,4 @@ python src/reachy_mini/media/audio_control_utils.py DOA_VALUE_RADIANS
 # Output
 # DOA_VALUE_RADIANS: (0.5410520434379578, 1.0)
 ```
-This feature is also directly available from [the SDK](/docs/SDK/python-sdk.md#sensors--media).
+This feature is also directly available from [the SDK](../../SDK/python-sdk.md#sensors--media).

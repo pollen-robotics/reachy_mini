@@ -2,13 +2,11 @@
 
 You don't need a physical robot to start building! The Reachy Mini simulation runs on [MuJoCo](https://mujoco.org) and provides a realistic physics environment to prototype, test, and debug your applications.
 
-<div align="center">
-    <img src="https://www.pollen-robotics.com/wp-content/uploads/2025/06/Reachy_mini_simulation.gif" width="400" alt="Reachy Mini in MuJoCo">
-</div>
+![Simulation](https://camo.githubusercontent.com/ce846352192340e1de0c054dec19d4ca185f45a26d76c3f848e50f3707e8b19c/68747470733a2f2f7777772e706f6c6c656e2d726f626f746963732e636f6d2f77702d636f6e74656e742f75706c6f6164732f323032352f30362f5265616368795f6d696e695f73696d756c6174696f6e2e676966)
 
 ## 1. Installation
 
-> **📋 Prerequisites:** Before setting up the simulation, you must first complete the basic installation and virtual environment setup by following the **[Installation Guide](/docs/SDK/installation.md)**. This guide assumes you already have the Reachy Mini SDK installed and your virtual environment activated.
+> **📋 Prerequisites:** Before setting up the simulation, you must first complete the basic installation and virtual environment setup by following the **[Installation Guide](../SDK/installation.md)**. This guide assumes you already have the Reachy Mini SDK installed and your virtual environment activated.
 
 The simulation requires the `mujoco` python bindings. You can install them alongside the Reachy Mini software with the extra tag `[mujoco]`.
 
@@ -93,11 +91,11 @@ with ReachyMini() as mini:
 ```
 
 ## Next Steps
-* **[Python SDK](/docs/SDK/python-sdk.md)**: Learn to move, see, speak, and hear.
-* **[AI Integrations](/docs/SDK/integration.md)**: Connect LLMs, build Apps, and publish to Hugging Face.
-* **[Core Concepts](/docs/SDK/core-concept.md)**: Architecture, coordinate systems, and safety limits.
+* **[Python SDK](../../SDK/python-sdk.md)**: Learn to move, see, speak, and hear.
+* **[AI Integrations](../../SDK/integration.md)**: Connect LLMs, build Apps, and publish to Hugging Face.
+* **[Core Concepts](../../SDK/core-concept.md)**: Architecture, coordinate systems, and safety limits.
 
 
 ## ❓ Troubleshooting
 
-Encountering an issue? 👉 **[Check the Troubleshooting & FAQ Guide](/docs/troubleshooting.md)**
+Encountering an issue? 👉 **[Check the Troubleshooting & FAQ Guide](../../troubleshooting.md)**

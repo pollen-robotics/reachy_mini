@@ -23,7 +23,7 @@ To restart your robot, press OFF, wait 5 seconds, then press ON. This simple pro
   - On the latest tagged release, or
   - Up to date with the `develop` branch (`git pull`).
 
-**Wireless Reachy Mini**: run `reachyminios_check` to make sure everything is fine (see [Get Started](/docs/platforms/reachy_mini/get_started.md))  
+**Wireless Reachy Mini**: run `reachyminios_check` to make sure everything is fine (see [Get Started](./platforms/reachy_mini/get_started.md))  
 
 </details>
 
@@ -110,7 +110,7 @@ It can also be the same issue as "Motor blinking red or Overload Error" describe
 - Make sure the power supply is plugged in and providing power.
 
 - Make sure you have every motor and not two same motor in the kit. Refer to the label on each motor. e.g motor 1, motor 2, motor 3, motor 4, L motor, R motor...  
-- If you still have the issue you can try scanning the motors using the [scan_motors.py script](/src/reachy_mini/tools/scan_motors.py).
+- If you still have the issue you can try scanning the motors using the [scan_motors.py script](https://github.com/pollen-robotics/reachy_mini/tree/main/src/reachy_mini/tools/scan_motors.py).
     - If your robot is Lite, you can run the script directly on your computer. Go to the "tools" folder, where the script is located, and run the same command as below but without the scp and ssh part.
     - If your robot is Wireless, you need to copy the script on the raspberry. Go to the "tools" folder, where the script is located, and run:
     ```bash
@@ -153,7 +153,7 @@ It can also be the same issue as "Motor blinking red or Overload Error" describe
 - Update your robot to version 1.2.3 or later
 
 For more details, see the documentation:  
-[Getting Started](/docs/platforms/reachy_mini/get_started.md)
+[Getting Started](./platforms/reachy_mini/get_started.md)
 
 </details>
 
@@ -180,7 +180,7 @@ It is easy to fix by following this guide:
 
 This can happen if the motor's PID values are not optimal. Often, motors 10 (foot), 17 and 18 (the antennas) can exhibit slight jitters when holding position.
 These are fine "adjustments" that the motor is making, which in this case is an overcorrection.
-The good news is that you can [tune PID Control values](https://github.com/pollen-robotics/reachy_mini/blob/18823bf22e5fc31420f3bfe3c2483ef135a32391/src/reachy_mini/assets/config/hardware_config.yaml#L66C1-L67C1) to calm these jitters. 
+The good news is that you can [tune PID Control values](https://github.com/pollen-robotics/reachy_mini/tree/main/src/reachy_mini/assets/config/hardware_config.yaml#L66C1-L67C1) to calm these jitters. 
 
 You can try first to reduce P to 180 on motors, 10, 17, and 18.
 If it doesn't help, you can also try to increase D to 10 on the same motors.
@@ -320,7 +320,7 @@ You do not need to install them.
 **NO** 
 
 - With Reachy Mini (Wireless), the daemon is already running on the embedded Raspberry Pi.
-- With Reachy Mini Lite, you can use [the desktop app](/docs/platforms/reachy_mini_lite/get_started.md).
+- With Reachy Mini Lite, you can use [the desktop app](./platforms/reachy_mini_lite/get_started.md).
 
 </details>
 
@@ -331,14 +331,14 @@ You do not need to install them.
 <details>
 <summary><strong>How do I connect the robot to Wi-Fi?</strong></summary>
 
-See the [Reachy Mini Wireless guide](/docs/platforms/reachy_mini/get_started.md) for detailed instructions on connecting to Wi-Fi.
+See the [Reachy Mini Wireless guide](./platforms/reachy_mini/get_started.md) for detailed instructions on connecting to Wi-Fi.
 
 </details>
 
 <details>
 <summary><strong>How do I reset the Wi-Fi hotspot?</strong></summary>
 
-If you need to reset the robot's Wi-Fi hotspot (for example, if you can't connect or want to change the network), follow the instructions in the [Wi-Fi Reset Guide](/docs/platforms/reachy_mini/reset.md).
+If you need to reset the robot's Wi-Fi hotspot (for example, if you can't connect or want to change the network), follow the instructions in the [Wi-Fi Reset Guide](./platforms/reachy_mini/reset.md).
 
 </details>
 
@@ -416,7 +416,7 @@ Helps prevent package conflicts during SDK installation.
 <details>
 <summary><strong>Where can I find more information about hardware?</strong></summary>
 
-Refer to the [Reachy Mini Hardware page](/docs/platforms/reachy_mini/hardware.md) for detailed information about the robot's hardware components.
+Refer to the [Reachy Mini Hardware page](./platforms/reachy_mini/hardware.md) for detailed information about the robot's hardware components.
 
 </details>
 
@@ -444,7 +444,7 @@ If you command a pose outside these limits, the robot will automatically clamp t
 <details>
 <summary><strong>How do I access to motors' parameters?</strong></summary>
 
-1. You can refer scanning the motors using the [scan_motors.py script](/src/reachy_mini/tools/scan_motors.py).
+1. You can refer scanning the motors using the [scan_motors.py script](https://github.com/pollen-robotics/reachy_mini/tree/main/src/reachy_mini/tools/scan_motors.py).
 
 - If your robot is Lite, you can run the script directly on your computer. Go to the "tools" folder, where the script is located, and run the same command as below but without the scp and ssh part.
 - If your robot is Wireless, you need to copy the scanning script on the raspberry. Go to the "tools" folder, where the script is located,and run:
@@ -478,7 +478,7 @@ No motors found at baudrate 115200
 Trying baudrate: 1000000
 Found motors at baudrate 1000000: [10, 11,12,13, 14, 15, 16, 17, 18]
 ```
-2. Lite: You can also use the Dynamixel Wizard to read motors parameters. Follow the guide [here](/docs/platforms/reachy_mini_lite/wizard.md). 
+2. Lite: You can also use the Dynamixel Wizard to read motors parameters. Follow the guide [here](./platforms/reachy_mini_lite/wizard.md). 
 
 </details>
 
@@ -819,7 +819,7 @@ This appears if you connect to the robot but don't consume the video frames, cau
 <details>
 <summary><strong>No Microphone Input / Direction of Arrival (Beta Units)</strong></summary>
 
-* **No Input:** Requires firmware 2.1.3. Run the [update script](../src/reachy_mini/assets/firmware/update.sh).
+* **No Input:** Requires firmware 2.1.3. Run the [update script](https://github.com/pollen-robotics/reachy_mini/tree/main/src/reachy_mini/assets/firmware/update.sh).
 * **No Direction:** Requires firmware 2.1.0+.
 * Check that the flat flexible cable is intalled the right way (Slides 45-47 of assembly guide).
 
