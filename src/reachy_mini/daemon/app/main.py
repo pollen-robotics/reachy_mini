@@ -41,6 +41,7 @@ from reachy_mini.media.audio_utils import (
     write_asoundrc_to_home,
 )
 from reachy_mini.utils.wireless_version.startup_check import (
+    check_and_fix_restore_venv,
     check_and_fix_venvs_ownership,
     check_and_sync_apps_venv_sdk,
     check_and_update_bluetooth_service,
@@ -541,6 +542,9 @@ def main() -> None:
 
         # Check and sync apps_venv SDK version with daemon
         check_and_sync_apps_venv_sdk()
+
+        # Check and fix restore venv if it has legacy editable install
+        check_and_fix_restore_venv()
 
         if check_reachymini_asoundrc():
             logging.getLogger().info(
