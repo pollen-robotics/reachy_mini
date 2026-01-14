@@ -1,16 +1,13 @@
 """WiFi Configuration Routers."""
 
 import logging
+import subprocess
 from enum import Enum
 from threading import Lock, Thread
 
 import nmcli
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-
-HOTSPOT_SSID = "reachy-mini-ap"
-HOTSPOT_PASSWORD = "reachy-mini"
-
 
 router = APIRouter(
     prefix="/wifi",
@@ -19,6 +16,29 @@ router = APIRouter(
 busy_lock = Lock()
 error: Exception | None = None
 logger = logging.getLogger(__name__)
+
+def get_pin() -> str:
+    """Extract the last 5 digits of the serial number from dfu-util -l output.
+    Replicate of the bluetooth_service.py get_pin() function to avoid dbus imports.
+    """
+    default_pin = "46879"
+    try:
+        result = subprocess.run(["dfu-util", "-l"], capture_output=True, text=True)
+        lines = result.stdout.splitlines()
+        for line in lines:
+            if "serial=" in line:
+                # Extract serial number
+                serial_part = line.split("serial=")[-1].strip().strip('"')
+                if len(serial_part) >= 5:
+                    return serial_part[-5:]
+        return default_pin  # fallback if not found
+    except Exception as e:
+        logger.error(f"Error getting pin from serial: {e}")
+        return default_pin
+
+HOTSPOT_BASE_SSID = "reachy-mini-ap"
+HOTSPOT_SSID = f"{HOTSPOT_BASE_SSID}-{get_pin()[-3:]}"
+HOTSPOT_PASSWORD = "reachy-mini"
 
 
 class WifiMode(Enum):
