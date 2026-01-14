@@ -3226,7 +3226,7 @@ wheels = [
 
 [[package]]
 name = "reachy-mini"
-version = "1.2.9"
+version = "1.2.11"
 source = { editable = "." }
 dependencies = [
     { name = "aiohttp" },
@@ -3244,9 +3244,11 @@ dependencies = [
     { name = "psutil" },
     { name = "pyserial" },
     { name = "pyusb" },
+    { name = "pyyaml" },
     { name = "questionary" },
     { name = "reachy-mini-motor-controller" },
     { name = "reachy-mini-rust-kinematics" },
+    { name = "requests" },
     { name = "rich" },
     { name = "rustypot" },
     { name = "scipy", version = "1.15.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
@@ -3335,9 +3337,11 @@ requires-dist = [
     { name = "pytest", marker = "extra == 'dev'" },
     { name = "pytest-asyncio", marker = "extra == 'dev'" },
     { name = "pyusb", specifier = ">=1.2.1" },
+    { name = "pyyaml", specifier = ">=6.0" },
     { name = "questionary" },
     { name = "reachy-mini-motor-controller", specifier = ">=1.5.3" },
     { name = "reachy-mini-rust-kinematics", specifier = ">=1.0.3" },
+    { name = "requests", specifier = ">=2.28.0" },
     { name = "rerun-sdk", marker = "extra == 'dev'", specifier = ">=0.27.2" },
     { name = "rerun-sdk", marker = "extra == 'rerun'", specifier = ">=0.27.2" },
     { name = "rich" },
