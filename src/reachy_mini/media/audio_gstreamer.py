@@ -429,9 +429,8 @@ class GStreamerAudio(AudioBase):
                         and device_props.has_field("device.api")
                         and device_props.get_string("device.api") == "wasapi2"
                     ):
-                        if (
-                            device_type == "Source"
-                            and device_props.get_value("wasapi2.device.loopback")                            
+                        if device_type == "Source" and device_props.get_value(
+                            "wasapi2.device.loopback"
                         ):
                             continue  # skip loopback devices for source
                         device_id = device_props.get_string("device.id")
