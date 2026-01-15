@@ -1,6 +1,7 @@
 """Simple gstreamer webrtc consumer example."""
 
 import argparse
+from threading import Thread
 
 import gi
 from gst_signalling.utils import find_producer_peer_id_by_name
@@ -20,6 +21,9 @@ class GstConsumer:
     ) -> None:
         """Initialize the consumer with signalling server details and peer name."""
         Gst.init(None)
+        self._loop = GLib.MainLoop()
+        self._thread_bus_calls = Thread(target=lambda: self._loop.run(), daemon=True)
+        self._thread_bus_calls.start()
 
         self.pipeline = Gst.Pipeline.new("webRTC-consumer")
         self.source = Gst.ElementFactory.make("webrtcsrc")
@@ -84,6 +88,7 @@ class GstConsumer:
 
     def __del__(self) -> None:
         """Destructor to clean up GStreamer resources."""
+        self._loop.quit()
         Gst.deinit()
 
     def get_bus(self) -> Gst.Bus:

@@ -192,8 +192,8 @@ pcm.reachymini_audio_sink {{
     slave {{
         pcm "hw:{card_id},0"
         channels 2
-        period_size 1024
-        buffer_size 4096
+        period_size 256
+        buffer_size 1024
         rate 16000
     }}
     bindings {{
@@ -209,8 +209,8 @@ pcm.reachymini_audio_src {{
         pcm "hw:{card_id},0"
         channels 2
         rate 16000
-        period_size 1024
-        buffer_size 4096
+        period_size 256
+        buffer_size 1024
     }}
 }}
 """
