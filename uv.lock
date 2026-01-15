@@ -3262,18 +3262,14 @@ dependencies = [
 
 [package.optional-dependencies]
 dev = [
-    { name = "mujoco" },
     { name = "mypy" },
     { name = "onshape-to-robot" },
-    { name = "placo" },
     { name = "pre-commit" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
-    { name = "rerun-sdk" },
     { name = "ruff" },
     { name = "types-requests" },
     { name = "types-toml" },
-    { name = "urdf-parser-py" },
 ]
 examples = [
     { name = "pynput" },
@@ -3317,7 +3313,6 @@ requires-dist = [
     { name = "lgpio", marker = "extra == 'wireless-version'", specifier = ">=0.2.2.0" },
     { name = "libusb-package", specifier = ">=1.0.26.3" },
     { name = "log-throttling", specifier = "==0.0.3" },
-    { name = "mujoco", marker = "extra == 'dev'", specifier = "==3.3.0" },
     { name = "mujoco", marker = "extra == 'mujoco'", specifier = "==3.3.0" },
     { name = "mypy", marker = "extra == 'dev'", specifier = "==1.18.2" },
     { name = "nmcli", marker = "extra == 'wireless-version'", specifier = ">=1.5" },
@@ -3326,7 +3321,6 @@ requires-dist = [
     { name = "onshape-to-robot", marker = "extra == 'dev'", specifier = "==1.7.6" },
     { name = "opencv-python", specifier = "<=5.0" },
     { name = "pip", specifier = ">=25" },
-    { name = "placo", marker = "extra == 'dev'", specifier = "==0.9.14" },
     { name = "placo", marker = "extra == 'placo-kinematics'", specifier = "==0.9.14" },
     { name = "pollen-bmi088-imu-library", marker = "extra == 'wireless-version'" },
     { name = "pre-commit", marker = "extra == 'dev'" },
@@ -3342,7 +3336,6 @@ requires-dist = [
     { name = "reachy-mini-motor-controller", specifier = ">=1.5.3" },
     { name = "reachy-mini-rust-kinematics", specifier = ">=1.0.3" },
     { name = "requests", specifier = ">=2.28.0" },
-    { name = "rerun-sdk", marker = "extra == 'dev'", specifier = ">=0.27.2" },
     { name = "rerun-sdk", marker = "extra == 'rerun'", specifier = ">=0.27.2" },
     { name = "rich" },
     { name = "ruff", marker = "extra == 'dev'", specifier = "==0.12.0" },
@@ -3354,7 +3347,6 @@ requires-dist = [
     { name = "toml" },
     { name = "types-requests", marker = "extra == 'dev'" },
     { name = "types-toml", marker = "extra == 'dev'" },
-    { name = "urdf-parser-py", marker = "extra == 'dev'", specifier = "==0.0.4" },
     { name = "urdf-parser-py", marker = "extra == 'rerun'", specifier = "==0.0.4" },
     { name = "uvicorn", extras = ["standard"] },
     { name = "websockets", specifier = ">=12,<16" },
