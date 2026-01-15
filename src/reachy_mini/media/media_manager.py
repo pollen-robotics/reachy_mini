@@ -68,6 +68,7 @@ class MediaBackend(Enum):
 
     """
 
+    # TODO remove gstreamer since it's default
     NO_MEDIA = "no_media"
     DEFAULT = "default"
     DEFAULT_NO_VIDEO = "default_no_video"
@@ -130,11 +131,11 @@ class MediaManager:
             case MediaBackend.NO_MEDIA:
                 self.logger.info("No media backend selected.")
             case MediaBackend.DEFAULT:
-                self.logger.info("Using default media backend (OpenCV + SoundDevice).")
+                self.logger.info("Using default media backend (Gstreamer).")
                 self._init_camera(use_sim, log_level)
                 self._init_audio(log_level)
             case MediaBackend.DEFAULT_NO_VIDEO:
-                self.logger.info("Using default media backend (SoundDevice only).")
+                self.logger.info("Using default media backend (Gstreamer audio only).")
                 self._init_audio(log_level)
             case MediaBackend.GSTREAMER:
                 self.logger.info("Using GStreamer media backend.")
