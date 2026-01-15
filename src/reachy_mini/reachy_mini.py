@@ -16,6 +16,7 @@ from typing import Dict, List, Literal, Optional, Union, cast
 import cv2
 import numpy as np
 import numpy.typing as npt
+import zenoh
 from asgiref.sync import async_to_sync
 from scipy.spatial.transform import Rotation as R
 
@@ -298,19 +299,31 @@ class ReachyMini:
                 try:
                     client = self._connect_single(localhost_only=False, timeout=timeout)
                 except TimeoutError:
-                    raise TimeoutError(
+                    raise ConnectionError(
                         "Auto connection: both localhost and network attempts failed. "
                         "Make sure a Reachy Mini daemon is running and accessible."
                     )
+
                 selected = "network"
             self.logger.info("Connection mode selected: %s", selected)
             return client, selected
 
         if requested_mode == "localhost_only":
-            client = self._connect_single(localhost_only=True, timeout=timeout)
+            try:
+                client = self._connect_single(localhost_only=True, timeout=timeout)
+            except zenoh.ZError:
+                raise ConnectionError(
+                    "Could not connect to daemon on localhost. Is the Reachy Mini daemon running?"
+                )
             selected = "localhost_only"
         else:
-            client = self._connect_single(localhost_only=False, timeout=timeout)
+            try:
+                client = self._connect_single(localhost_only=False, timeout=timeout)
+            except TimeoutError:
+                raise ConnectionError(
+                    "Network connection attempt failed. "
+                    "Make sure a Reachy Mini daemon is running and accessible."
+                )
             selected = "network"
 
         self.logger.info("Connection mode selected: %s", selected)
@@ -318,22 +331,8 @@ class ReachyMini:
 
     def _connect_single(self, localhost_only: bool, timeout: float) -> ZenohClient:
         """Connect once with the requested tunneling mode and guard cleanup."""
-        client: ZenohClient | None = None
-        try:
-            client = ZenohClient(self.robot_name, localhost_only)
-            client.wait_for_connection(timeout=timeout)
-        except Exception:
-            if client is not None:
-                client.disconnect()
-
-            if localhost_only:
-                # Probably no local daemon running
-                raise TimeoutError(
-                    "Could not connect to a Reachy Mini daemon on localhost. "
-                    "Make sure the daemon is running."
-                )
-
-            raise
+        client = ZenohClient(self.robot_name, localhost_only)
+        client.wait_for_connection(timeout=timeout)
         return client
 
     def set_target(
