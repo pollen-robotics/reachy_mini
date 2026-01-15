@@ -147,7 +147,7 @@ class GStreamerCamera(CameraBase):
             videoconvert.link(self._appsink_video)
         elif platform.system() == "Darwin":
             camsrc = Gst.ElementFactory.make("avfvideosrc")
-            camsrc.set_property("device-index", cam_path)
+            camsrc.set_property("device-index", int(cam_path))
             self.pipeline.add(camsrc)
             queue = Gst.ElementFactory.make("queue")
             self.pipeline.add(queue)
@@ -328,7 +328,7 @@ class GStreamerCamera(CameraBase):
                             self.logger.debug(
                                 f"Found {cam_name} camera at index {device_index} for macOS"
                             )
-                            return device_index, camera_specs
+                            return str(device_index), camera_specs
                         elif cam_name == "imx708":
                             camera_specs = cast(CameraSpecs, ReachyMiniWirelessCamSpecs)
                             self.logger.debug(f"Found {cam_name} camera")
