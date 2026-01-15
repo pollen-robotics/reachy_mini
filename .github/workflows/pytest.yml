@@ -24,7 +24,7 @@ jobs:
           cache: "pip"
       - name: Install system dependencies (Ubuntu)
         if: matrix.os == 'ubuntu-latest'
-        run: sudo apt-get update && sudo apt-get install -y libportaudio2
+        run: sudo apt-get update && sudo apt-get install -y libportaudio2 libcairo2-dev libgirepository1.0-dev
       - name: Create virtual environment and install dependencies
         run: |
           python -m venv venv
