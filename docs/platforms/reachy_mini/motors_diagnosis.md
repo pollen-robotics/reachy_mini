@@ -41,7 +41,9 @@ If you have any of the following symptoms, please follow the diagnosis steps bel
 ### Possible outcomes
 
 **1. All motors are detected:**  
-Then all the motors are physically connected and working, but maybe not in the right order or with the right configuration.
+Then all the motors are physically connected and working, but if you still have issues, they are maybe not in the right order or with the right configuration.
+
+![All_motors_detected](/docs/assets/all_motors_found.png) 
 
 **Motors inversion:** If you get "Motor hardware errors: ['Overload Error']" and blinking leds a few seconds after starting the robot **for the first time** and have two motors arm pointing upward.  
 It is VERY likely there are motors not placed in the correct slot, e.g. motor 1 on slot 2.
@@ -79,6 +81,9 @@ First, try to update your robot to the latest software version, then reboot it. 
 If the issue persists, please contact support.
 
 **2. Some motors are not detected:**.
+
+![Some_motors_missing](/docs/assets/missing_motors.png)
+
 - Only one motor is missing: Check the physical connection of that motor according to the assembly instructions.  
 If you are 100% sure the connection is okay, it can also be a motor not flashed properly. Please refer to the **Flashing issue** section below.
 
