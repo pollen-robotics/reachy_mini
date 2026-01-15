@@ -38,8 +38,17 @@ Reachy Mini comes with an app store powered by Hugging Face Spaces. You can inst
 
 ## 🚀 Getting Started with Reachy Mini SDK
 
+### User guides
+* **[Installation](docs/SDK/installation.md)**: 5 minutes to set up your computer
+* **[Quickstart Guide](docs/SDK/quickstart.md)**: Run your first behavior on Reachy Mini
+* **[Python SDK](docs/SDK/python-sdk.md)**: Learn to move, see, speak, and hear.
+* **[AI Integrations](docs/SDK/integration.md)**: Connect LLMs, build Apps, and publish to Hugging Face.
+* **[Core Concepts](docs/SDK/core-concept.md)**: Architecture, coordinate systems, and safety limits.
+* 🤗[**Share your app with the community**](https://huggingface.co/blog/pollen-robotics/make-and-publish-your-reachy-mini-apps)
+* 📂 [**Browse the Examples Folder**](examples)
+
 ### Quick Look
-Control your robot in just **a few lines of code**:
+After [installing the SDK](docs/SDK/installation.md), once your robot is awake, you can control it in just **a few lines of code**:
 
 ```python
 from reachy_mini import ReachyMini
@@ -52,16 +61,6 @@ with ReachyMini() as mini:
         duration=1.0
     )
 ```
-
-### User guides
-* **[Installation](docs/SDK/installation.md)**: 5 minutes to set up your computer
-* **[Quickstart Guide](docs/SDK/quickstart.md)**: Run your first behavior on Reachy Mini
-* **[Python SDK](docs/SDK/python-sdk.md)**: Learn to move, see, speak, and hear.
-* **[AI Integrations](docs/SDK/integration.md)**: Connect LLMs, build Apps, and publish to Hugging Face.
-* **[Core Concepts](docs/SDK/core-concept.md)**: Architecture, coordinate systems, and safety limits.
-* 🤗[**Share your app with the community**](https://huggingface.co/blog/pollen-robotics/make-and-publish-your-reachy-mini-apps)
-* 📂 [**Browse the Examples Folder**](examples)
-
 
 <br>
 
