@@ -6,8 +6,8 @@ on:
   push:
     #branches:
     #  - main
-    paths:
-      - "docs/**"
+    #paths:
+    #  - "docs/**"
 
 jobs:
   build:
