@@ -64,11 +64,16 @@ The **Daemon** is a background service that handles the low-level communication 
   ```
 * **For Simulation (No robot needed)** - You have two options :
   - Start the [desktop application](/docs/platforms/reachy_mini_lite/get_started.md)
-  - Open a terminal and run 
-  ```bash
-  uv run reachy-mini-daemon --sim
-  ```
-
+  - Open a terminal and run:
+    - **Linux/Windows:**
+      ```bash
+      uv run reachy-mini-daemon --sim
+      ```
+    - **macOS:**
+      ```bash
+      mjpython -m reachy_mini.daemon.app.main --sim
+      ```
+      > **⚠️ macOS Users:** `uv` may have compatibility issues with MuJoCo on macOS. If you encounter installation or runtime problems, it's recommended to use `pip` directly instead of `uv` for MuJoCo-related packages.
 
 ✅ **Verification:** Open [http://localhost:8000](http://localhost:8000) in your browser. If you see the Reachy Dashboard, you are ready!
 

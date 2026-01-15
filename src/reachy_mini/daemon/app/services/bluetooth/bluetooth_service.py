@@ -278,7 +278,7 @@ class CommandCharacteristic(Characteristic):
 
 
 class ResponseCharacteristic(Characteristic):
-    """Response Characteristic.""" ""
+    """Response Characteristic."""
 
     def __init__(self, bus, index, service):
         """Initialize the Response Characteristic."""
