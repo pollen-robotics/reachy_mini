@@ -34,6 +34,6 @@ jobs:
       - name: Run tests
         run: |
           source venv/bin/activate
-          pytest -vv -m 'not audio and not video and not audio_sounddevice and not video_opencvand not wireless and not wireless_gstreamer' --tb=short
+          pytest -vv -m 'not audio and not video and not audio_sounddevice and not video_opencv and not wireless and not wireless_gstreamer' --tb=short
         env:
           MUJOCO_GL: disable
