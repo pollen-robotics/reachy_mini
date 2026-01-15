@@ -133,9 +133,9 @@ lint.ignore = [
 testpaths = ["tests"]
 markers = [
     "audio: mark test as requiring audio hardware",
-    "audio_gstreamer: mark test as requiring GStreamer for audio",
+    "audio_sounddevice: mark test as requiring Sounddevice for audio",
     "video: mark test as requiring video hardware",
-    "video_gstreamer: mark test as requiring GStreamer for video",
+    "video_opencv: mark test as requiring OpenCV for video",
     "wireless: mark test as requiring wireless Reachy Mini",
     "wireless_gstreamer: mark test as requiring GStreamer for wireless Reachy Mini",
 ]
