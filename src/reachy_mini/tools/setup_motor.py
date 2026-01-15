@@ -44,12 +44,13 @@ id2name = {
     18: "left_antenna",
 }
 
-# (TX + RX) * (1 start + 8 data + 1 stop) 
+# (TX + RX) * (1 start + 8 data + 1 stop)
 COMMANDS_BITS_LENGTH = {
     "Ping": (10 + 14) * 10,
     "Read": (14 + 15) * 10,
     "Write": (16 + 11) * 10,
-}   
+}
+
 
 def setup_motor(
     motor_config: MotorConfig,
@@ -150,7 +151,11 @@ def lookup_for_motor(
             end="",
             flush=True,
         )
-    c = Xl330PyController(serial_port, baudrate=baudrate, timeout=SERIAL_TIMEOUT + float(COMMANDS_BITS_LENGTH["Ping"]) / baudrate)
+    c = Xl330PyController(
+        serial_port,
+        baudrate=baudrate,
+        timeout=SERIAL_TIMEOUT + float(COMMANDS_BITS_LENGTH["Ping"]) / baudrate,
+    )
     ret = c.ping(id)
     if not silent:
         print(f"{'[OK]' if ret else '[FAIL]'}")
@@ -160,7 +165,11 @@ def lookup_for_motor(
 def disable_torque(serial_port: str, id: int, baudrate: int) -> None:
     """Disable the torque of the motor with the given ID on the specified serial port."""
     print(f"Disabling torque for motor with ID {id}...", end="", flush=True)
-    c = Xl330PyController(serial_port, baudrate=baudrate, timeout=SERIAL_TIMEOUT + float(COMMANDS_BITS_LENGTH["Write"]) / baudrate)
+    c = Xl330PyController(
+        serial_port,
+        baudrate=baudrate,
+        timeout=SERIAL_TIMEOUT + float(COMMANDS_BITS_LENGTH["Write"]) / baudrate,
+    )
     c.write_torque_enable(id, False)
     print("[OK]")
 
@@ -170,7 +179,11 @@ def change_baudrate(
 ) -> None:
     """Change the baudrate of the motor with the given ID on the specified serial port."""
     print(f"Changing baudrate to {target_baudrate}...", end="", flush=True)
-    c = Xl330PyController(serial_port, baudrate=base_baudrate, timeout=SERIAL_TIMEOUT + float(COMMANDS_BITS_LENGTH["Write"]) / base_baudrate)
+    c = Xl330PyController(
+        serial_port,
+        baudrate=base_baudrate,
+        timeout=SERIAL_TIMEOUT + float(COMMANDS_BITS_LENGTH["Write"]) / base_baudrate,
+    )
     c.write_baud_rate(id, XL_BAUDRATE_CONV_TABLE[target_baudrate])
     print("[OK]")
 
@@ -178,7 +191,11 @@ def change_baudrate(
 def change_id(serial_port: str, current_id: int, new_id: int, baudrate: int) -> None:
     """Change the ID of the motor with the given current ID on the specified serial port."""
     print(f"Changing ID from {current_id} to {new_id}...", end="", flush=True)
-    c = Xl330PyController(serial_port, baudrate=baudrate, timeout=SERIAL_TIMEOUT + float(COMMANDS_BITS_LENGTH["Write"]) / baudrate)
+    c = Xl330PyController(
+        serial_port,
+        baudrate=baudrate,
+        timeout=SERIAL_TIMEOUT + float(COMMANDS_BITS_LENGTH["Write"]) / baudrate,
+    )
     c.write_id(current_id, new_id)
     print("[OK]")
 
@@ -186,7 +203,11 @@ def change_id(serial_port: str, current_id: int, new_id: int, baudrate: int) -> 
 def change_offset(serial_port: str, id: int, offset: int, baudrate: int) -> None:
     """Change the offset of the motor with the given ID on the specified serial port."""
     print(f"Changing offset for motor with ID {id} to {offset}...", end="", flush=True)
-    c = Xl330PyController(serial_port, baudrate=baudrate, timeout=SERIAL_TIMEOUT + float(COMMANDS_BITS_LENGTH["Write"]) / baudrate)
+    c = Xl330PyController(
+        serial_port,
+        baudrate=baudrate,
+        timeout=SERIAL_TIMEOUT + float(COMMANDS_BITS_LENGTH["Write"]) / baudrate,
+    )
     c.write_homing_offset(id, offset)
     print("[OK]")
 
@@ -200,7 +221,11 @@ def change_operating_mode(
         end="",
         flush=True,
     )
-    c = Xl330PyController(serial_port, baudrate=baudrate, timeout=SERIAL_TIMEOUT + float(COMMANDS_BITS_LENGTH["Write"]) / baudrate)
+    c = Xl330PyController(
+        serial_port,
+        baudrate=baudrate,
+        timeout=SERIAL_TIMEOUT + float(COMMANDS_BITS_LENGTH["Write"]) / baudrate,
+    )
     c.write_operating_mode(id, operating_mode)
     print("[OK]")
 
@@ -218,7 +243,11 @@ def change_angle_limits(
         end="",
         flush=True,
     )
-    c = Xl330PyController(serial_port, baudrate=baudrate, timeout=SERIAL_TIMEOUT + float(COMMANDS_BITS_LENGTH["Write"]) / baudrate)
+    c = Xl330PyController(
+        serial_port,
+        baudrate=baudrate,
+        timeout=SERIAL_TIMEOUT + float(COMMANDS_BITS_LENGTH["Write"]) / baudrate,
+    )
     c.write_raw_min_position_limit(id, angle_limit_min)
     c.write_raw_max_position_limit(id, angle_limit_max)
     print("[OK]")
@@ -233,7 +262,11 @@ def change_shutdown_error(
         end="",
         flush=True,
     )
-    c = Xl330PyController(serial_port, baudrate=baudrate, timeout=SERIAL_TIMEOUT + float(COMMANDS_BITS_LENGTH["Write"]) / baudrate)
+    c = Xl330PyController(
+        serial_port,
+        baudrate=baudrate,
+        timeout=SERIAL_TIMEOUT + float(COMMANDS_BITS_LENGTH["Write"]) / baudrate,
+    )
     c.write_shutdown(id, shutdown_error)
     print("[OK]")
 
@@ -247,14 +280,22 @@ def change_return_delay_time(
         end="",
         flush=True,
     )
-    c = Xl330PyController(serial_port, baudrate=baudrate, timeout=SERIAL_TIMEOUT + float(COMMANDS_BITS_LENGTH["Write"]) / baudrate)
+    c = Xl330PyController(
+        serial_port,
+        baudrate=baudrate,
+        timeout=SERIAL_TIMEOUT + float(COMMANDS_BITS_LENGTH["Write"]) / baudrate,
+    )
     c.write_return_delay_time(id, return_delay_time)
     print("[OK]")
 
 
 def light_led_up(serial_port: str, id: int, baudrate: int) -> None:
     """Light the LED of the motor with the given ID on the specified serial port."""
-    c = Xl330PyController(serial_port, baudrate=baudrate, timeout=SERIAL_TIMEOUT + float(COMMANDS_BITS_LENGTH["Write"]) / baudrate)
+    c = Xl330PyController(
+        serial_port,
+        baudrate=baudrate,
+        timeout=SERIAL_TIMEOUT + float(COMMANDS_BITS_LENGTH["Write"]) / baudrate,
+    )
 
     trials = 0
 
@@ -269,7 +310,11 @@ def light_led_up(serial_port: str, id: int, baudrate: int) -> None:
 
 def light_led_down(serial_port: str, id: int, baudrate: int) -> None:
     """Light the LED of the motor with the given ID on the specified serial port."""
-    c = Xl330PyController(serial_port, baudrate=baudrate, timeout=SERIAL_TIMEOUT + float(COMMANDS_BITS_LENGTH["Write"]) / baudrate)
+    c = Xl330PyController(
+        serial_port,
+        baudrate=baudrate,
+        timeout=SERIAL_TIMEOUT + float(COMMANDS_BITS_LENGTH["Write"]) / baudrate,
+    )
     trials = 0
 
     while trials < 3:
@@ -285,7 +330,11 @@ def check_configuration(
     motor_config: MotorConfig, serial_port: str, baudrate: int
 ) -> None:
     """Check the configuration of the motor with the given ID on the specified serial port."""
-    c = Xl330PyController(serial_port, baudrate=baudrate, timeout=SERIAL_TIMEOUT + float(COMMANDS_BITS_LENGTH["Read"]) / baudrate)
+    c = Xl330PyController(
+        serial_port,
+        baudrate=baudrate,
+        timeout=SERIAL_TIMEOUT + float(COMMANDS_BITS_LENGTH["Read"]) / baudrate,
+    )
 
     print("Checking configuration...")
 
