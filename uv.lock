@@ -8,7 +8,9 @@ resolution-markers = [
     "python_full_version == '3.11.*' and sys_platform == 'darwin'",
     "python_full_version == '3.11.*' and platform_machine == 'aarch64' and sys_platform == 'linux'",
     "(python_full_version == '3.11.*' and platform_machine != 'aarch64' and sys_platform == 'linux') or (python_full_version == '3.11.*' and sys_platform != 'darwin' and sys_platform != 'linux')",
-    "python_full_version < '3.11'",
+    "python_full_version < '3.11' and sys_platform != 'darwin' and sys_platform != 'win32'",
+    "python_full_version < '3.11' and sys_platform == 'win32'",
+    "python_full_version < '3.11' and sys_platform == 'darwin'",
 ]
 
 [[package]]
@@ -1061,18 +1063,378 @@ wheels = [
 ]
 
 [[package]]
-name = "gst-signalling"
-version = "1.1.2"
-source = { registry = "https://pypi.org/simple" }
+name = "gstreamer"
+version = "1.27.90"
+source = { url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/d59054109d4dacf3562242c5ff7e66f9485613777f32d023f61c7b5f544fd16d/gstreamer-1.27.90-py3-none-any.whl" }
 dependencies = [
-    { name = "numpy" },
-    { name = "pyee" },
-    { name = "pygobject" },
-    { name = "websockets" },
+    { name = "gstreamer-cli", version = "1.27.90", source = { url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/3f01227e2d34ace833f5fd712e6ca0a3f384dba33804c8576ed4f70d31cc8186/gstreamer_cli-1.27.90-cp39-abi3-win_amd64.whl" }, marker = "(python_full_version >= '3.11' and platform_machine != 'aarch64' and sys_platform == 'linux') or (python_full_version >= '3.11' and sys_platform != 'darwin' and sys_platform != 'linux') or sys_platform == 'win32'" },
+    { name = "gstreamer-cli", version = "1.27.90", source = { url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/f40e05e0df2691900386dbe68fc150273fc6813a1af02baafce68675b452501d/gstreamer_cli-1.27.90-cp39-abi3-macosx_10_13_universal2.whl" }, marker = "sys_platform == 'darwin'" },
+    { name = "gstreamer-gtk", version = "1.27.90", source = { url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/09121ed36e7f8dfb73b22ad6c3a4da35b3669d23cd3a3d58232ffa34f8062030/gstreamer_gtk-1.27.90-cp39-abi3-win_amd64.whl" }, marker = "(python_full_version >= '3.11' and platform_machine != 'aarch64' and sys_platform == 'linux') or (python_full_version >= '3.11' and sys_platform != 'darwin' and sys_platform != 'linux') or sys_platform == 'win32'" },
+    { name = "gstreamer-gtk", version = "1.27.90", source = { url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/fb53ea70c92c523f711babdfda8ee797657924105a6e593653599c0b0539839e/gstreamer_gtk-1.27.90-cp39-abi3-macosx_10_15_universal2.whl" }, marker = "sys_platform == 'darwin'" },
+    { name = "gstreamer-plugins", version = "1.27.90", source = { url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/4fb18547164b6e2f94848690552485c172e17aac91a60267bc961eac54e00521/gstreamer_plugins-1.27.90-cp39-abi3-win_amd64.whl" }, marker = "(python_full_version >= '3.11' and platform_machine != 'aarch64' and sys_platform == 'linux') or (python_full_version >= '3.11' and sys_platform != 'darwin' and sys_platform != 'linux') or sys_platform == 'win32'" },
+    { name = "gstreamer-plugins", version = "1.27.90", source = { url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/5a5da63fb8aab6754fb3a5ea0050c7903628215ef6b8aa7ada61d48402cb29a4/gstreamer_plugins-1.27.90-cp39-abi3-macosx_10_13_universal2.whl" }, marker = "sys_platform == 'darwin'" },
+    { name = "gstreamer-plugins-gpl", version = "1.27.90", source = { url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/02018070cd7c735be3d5eb197f0165722f9c75214af4e803ff2a3dd1e36c8876/gstreamer_plugins_gpl-1.27.90-cp39-abi3-win_amd64.whl" }, marker = "(python_full_version >= '3.11' and platform_machine != 'aarch64' and sys_platform == 'linux') or (python_full_version >= '3.11' and sys_platform != 'darwin' and sys_platform != 'linux') or sys_platform == 'win32'" },
+    { name = "gstreamer-plugins-gpl", version = "1.27.90", source = { url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/9c5fe8d199adfcd1ca57d7b985ebb92e785a91a4583f29274b6bb44636e21581/gstreamer_plugins_gpl-1.27.90-cp39-abi3-macosx_10_13_universal2.whl" }, marker = "sys_platform == 'darwin'" },
+    { name = "gstreamer-plugins-gpl-restricted", version = "1.27.90", source = { url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/d4dc71430c7221b9d3e71bfb4d2863aaddad63d0e169918d82e61364ec62849c/gstreamer_plugins_gpl_restricted-1.27.90-cp39-abi3-win_amd64.whl" }, marker = "(python_full_version >= '3.11' and platform_machine != 'aarch64' and sys_platform == 'linux') or (python_full_version >= '3.11' and sys_platform != 'darwin' and sys_platform != 'linux') or sys_platform == 'win32'" },
+    { name = "gstreamer-plugins-gpl-restricted", version = "1.27.90", source = { url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/f57457c01fb828df993816798f96fd650a47cb42b287c8c0bd82f7f353293eb7/gstreamer_plugins_gpl_restricted-1.27.90-cp39-abi3-macosx_10_13_universal2.whl" }, marker = "sys_platform == 'darwin'" },
+    { name = "gstreamer-plugins-restricted", version = "1.27.90", source = { url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/36fb1d58016e335ca2178d520fcd096f6d9a3a792b3a587390cd65abffbc9e5d/gstreamer_plugins_restricted-1.27.90-cp39-abi3-macosx_10_13_universal2.whl" }, marker = "sys_platform == 'darwin'" },
+    { name = "gstreamer-plugins-restricted", version = "1.27.90", source = { url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/8e91d6027edaa966be131140b8e466b714df7008e11ad4998fd11ea9ec41aa0e/gstreamer_plugins_restricted-1.27.90-cp39-abi3-win_amd64.whl" }, marker = "(python_full_version >= '3.11' and platform_machine != 'aarch64' and sys_platform == 'linux') or (python_full_version >= '3.11' and sys_platform != 'darwin' and sys_platform != 'linux') or sys_platform == 'win32'" },
+    { name = "gstreamer-python", marker = "(python_full_version >= '3.11' and platform_machine != 'aarch64') or (python_full_version >= '3.11' and sys_platform != 'linux') or sys_platform == 'darwin' or sys_platform == 'win32'" },
+    { name = "gstreamer-runtime", version = "1.27.90", source = { url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/3b90564ee2517637690c30910cc267abc3edf3a9316274024504f5365b9b26a3/gstreamer_runtime-1.27.90-cp39-abi3-macosx_10_13_universal2.whl" }, marker = "sys_platform == 'darwin'" },
+    { name = "gstreamer-runtime", version = "1.27.90", source = { url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/c46cd36ce41266b1c9896e12c41087303dbba62002dedde54dde800d67d00cc5/gstreamer_runtime-1.27.90-cp39-abi3-win_amd64.whl" }, marker = "(python_full_version >= '3.11' and platform_machine != 'aarch64' and sys_platform == 'linux') or (python_full_version >= '3.11' and sys_platform != 'darwin' and sys_platform != 'linux') or sys_platform == 'win32'" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/3f/77/0c45062d07bb6ad8f940a8a8bc3acd7968cc145be354a566e897d4a6753c/gst_signalling-1.1.2.tar.gz", hash = "sha256:45c7bb3d6801b2704cd4c743130f60d2991b39aa91b6220873ef53ffe9910b98", size = 16467, upload-time = "2025-11-18T13:36:35.935Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/84/7a/4ac380ce2e7e9ea1e055460648d6c562eb554cdc0dd9b6536b38934b9ef4/gst_signalling-1.1.2-py3-none-any.whl", hash = "sha256:39ebb6eac597933504334d4c1f835abd873cbd42fe31896515e3a0db368db78c", size = 19681, upload-time = "2025-11-18T13:36:34.567Z" },
+    { url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/d59054109d4dacf3562242c5ff7e66f9485613777f32d023f61c7b5f544fd16d/gstreamer-1.27.90-py3-none-any.whl", hash = "sha256:d59054109d4dacf3562242c5ff7e66f9485613777f32d023f61c7b5f544fd16d" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "gstreamer-cli", specifier = "~=1.27.90" },
+    { name = "gstreamer-gtk", specifier = "~=1.27.90" },
+    { name = "gstreamer-plugins", specifier = "~=1.27.90" },
+    { name = "gstreamer-plugins-frei0r", marker = "extra == 'frei0r'", specifier = "~=1.27.90" },
+    { name = "gstreamer-plugins-gpl", specifier = "~=1.27.90" },
+    { name = "gstreamer-plugins-gpl-restricted", specifier = "~=1.27.90" },
+    { name = "gstreamer-plugins-restricted", specifier = "~=1.27.90" },
+    { name = "gstreamer-python", specifier = "~=1.27.90" },
+    { name = "gstreamer-runtime", specifier = "~=1.27.90" },
+]
+provides-extras = ["frei0r"]
+
+[[package]]
+name = "gstreamer-cli"
+version = "1.27.90"
+source = { url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/3f01227e2d34ace833f5fd712e6ca0a3f384dba33804c8576ed4f70d31cc8186/gstreamer_cli-1.27.90-cp39-abi3-win_amd64.whl" }
+resolution-markers = [
+    "(python_full_version >= '3.12' and platform_machine != 'aarch64' and sys_platform == 'linux') or (python_full_version >= '3.12' and sys_platform != 'darwin' and sys_platform != 'linux')",
+    "(python_full_version == '3.11.*' and platform_machine != 'aarch64' and sys_platform == 'linux') or (python_full_version == '3.11.*' and sys_platform != 'darwin' and sys_platform != 'linux')",
+    "python_full_version < '3.11' and sys_platform == 'win32'",
+]
+dependencies = [
+    { name = "gstreamer-runtime", version = "1.27.90", source = { url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/c46cd36ce41266b1c9896e12c41087303dbba62002dedde54dde800d67d00cc5/gstreamer_runtime-1.27.90-cp39-abi3-win_amd64.whl" }, marker = "(python_full_version >= '3.11' and platform_machine != 'aarch64' and sys_platform == 'linux') or (python_full_version >= '3.11' and sys_platform != 'darwin' and sys_platform != 'linux') or sys_platform == 'win32'" },
+]
+wheels = [
+    { url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/3f01227e2d34ace833f5fd712e6ca0a3f384dba33804c8576ed4f70d31cc8186/gstreamer_cli-1.27.90-cp39-abi3-win_amd64.whl", hash = "sha256:3f01227e2d34ace833f5fd712e6ca0a3f384dba33804c8576ed4f70d31cc8186" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "gstreamer-runtime", specifier = "~=1.27.90" }]
+
+[[package]]
+name = "gstreamer-cli"
+version = "1.27.90"
+source = { url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/f40e05e0df2691900386dbe68fc150273fc6813a1af02baafce68675b452501d/gstreamer_cli-1.27.90-cp39-abi3-macosx_10_13_universal2.whl" }
+resolution-markers = [
+    "python_full_version >= '3.12' and sys_platform == 'darwin'",
+    "python_full_version == '3.11.*' and sys_platform == 'darwin'",
+    "python_full_version < '3.11' and sys_platform == 'darwin'",
+]
+dependencies = [
+    { name = "gstreamer-runtime", version = "1.27.90", source = { url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/3b90564ee2517637690c30910cc267abc3edf3a9316274024504f5365b9b26a3/gstreamer_runtime-1.27.90-cp39-abi3-macosx_10_13_universal2.whl" }, marker = "sys_platform == 'darwin'" },
+]
+wheels = [
+    { url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/f40e05e0df2691900386dbe68fc150273fc6813a1af02baafce68675b452501d/gstreamer_cli-1.27.90-cp39-abi3-macosx_10_13_universal2.whl", hash = "sha256:f40e05e0df2691900386dbe68fc150273fc6813a1af02baafce68675b452501d" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "gstreamer-runtime", specifier = "~=1.27.90" }]
+
+[[package]]
+name = "gstreamer-gtk"
+version = "1.27.90"
+source = { url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/09121ed36e7f8dfb73b22ad6c3a4da35b3669d23cd3a3d58232ffa34f8062030/gstreamer_gtk-1.27.90-cp39-abi3-win_amd64.whl" }
+resolution-markers = [
+    "(python_full_version >= '3.12' and platform_machine != 'aarch64' and sys_platform == 'linux') or (python_full_version >= '3.12' and sys_platform != 'darwin' and sys_platform != 'linux')",
+    "(python_full_version == '3.11.*' and platform_machine != 'aarch64' and sys_platform == 'linux') or (python_full_version == '3.11.*' and sys_platform != 'darwin' and sys_platform != 'linux')",
+    "python_full_version < '3.11' and sys_platform == 'win32'",
+]
+wheels = [
+    { url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/09121ed36e7f8dfb73b22ad6c3a4da35b3669d23cd3a3d58232ffa34f8062030/gstreamer_gtk-1.27.90-cp39-abi3-win_amd64.whl", hash = "sha256:09121ed36e7f8dfb73b22ad6c3a4da35b3669d23cd3a3d58232ffa34f8062030" },
+]
+
+[[package]]
+name = "gstreamer-gtk"
+version = "1.27.90"
+source = { url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/fb53ea70c92c523f711babdfda8ee797657924105a6e593653599c0b0539839e/gstreamer_gtk-1.27.90-cp39-abi3-macosx_10_15_universal2.whl" }
+resolution-markers = [
+    "python_full_version >= '3.12' and sys_platform == 'darwin'",
+    "python_full_version == '3.11.*' and sys_platform == 'darwin'",
+    "python_full_version < '3.11' and sys_platform == 'darwin'",
+]
+wheels = [
+    { url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/fb53ea70c92c523f711babdfda8ee797657924105a6e593653599c0b0539839e/gstreamer_gtk-1.27.90-cp39-abi3-macosx_10_15_universal2.whl", hash = "sha256:fb53ea70c92c523f711babdfda8ee797657924105a6e593653599c0b0539839e" },
+]
+
+[[package]]
+name = "gstreamer-msvc-runtime"
+version = "1.27.90"
+source = { url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/a197660657fe423ef6f43cc6a9d155c3e9e449279b79778b70378d60b60b9011/gstreamer_msvc_runtime-1.27.90-cp39-abi3-win_amd64.whl" }
+wheels = [
+    { url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/a197660657fe423ef6f43cc6a9d155c3e9e449279b79778b70378d60b60b9011/gstreamer_msvc_runtime-1.27.90-cp39-abi3-win_amd64.whl", hash = "sha256:a197660657fe423ef6f43cc6a9d155c3e9e449279b79778b70378d60b60b9011" },
+]
+
+[[package]]
+name = "gstreamer-plugins"
+version = "1.27.90"
+source = { url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/4fb18547164b6e2f94848690552485c172e17aac91a60267bc961eac54e00521/gstreamer_plugins-1.27.90-cp39-abi3-win_amd64.whl" }
+resolution-markers = [
+    "(python_full_version >= '3.12' and platform_machine != 'aarch64' and sys_platform == 'linux') or (python_full_version >= '3.12' and sys_platform != 'darwin' and sys_platform != 'linux')",
+    "(python_full_version == '3.11.*' and platform_machine != 'aarch64' and sys_platform == 'linux') or (python_full_version == '3.11.*' and sys_platform != 'darwin' and sys_platform != 'linux')",
+    "python_full_version < '3.11' and sys_platform == 'win32'",
+]
+dependencies = [
+    { name = "gstreamer-plugins-runtime", version = "1.27.90", source = { url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/f37f89c14dae3b44f910d841f93e2bafca67810b5a34d324bc7c4d790f457814/gstreamer_plugins_runtime-1.27.90-cp39-abi3-win_amd64.whl" }, marker = "(python_full_version >= '3.11' and platform_machine != 'aarch64' and sys_platform == 'linux') or (python_full_version >= '3.11' and sys_platform != 'darwin' and sys_platform != 'linux') or sys_platform == 'win32'" },
+]
+wheels = [
+    { url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/4fb18547164b6e2f94848690552485c172e17aac91a60267bc961eac54e00521/gstreamer_plugins-1.27.90-cp39-abi3-win_amd64.whl", hash = "sha256:4fb18547164b6e2f94848690552485c172e17aac91a60267bc961eac54e00521" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "gstreamer-plugins-runtime", specifier = "~=1.27.90" }]
+
+[[package]]
+name = "gstreamer-plugins"
+version = "1.27.90"
+source = { url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/5a5da63fb8aab6754fb3a5ea0050c7903628215ef6b8aa7ada61d48402cb29a4/gstreamer_plugins-1.27.90-cp39-abi3-macosx_10_13_universal2.whl" }
+resolution-markers = [
+    "python_full_version >= '3.12' and sys_platform == 'darwin'",
+    "python_full_version == '3.11.*' and sys_platform == 'darwin'",
+    "python_full_version < '3.11' and sys_platform == 'darwin'",
+]
+dependencies = [
+    { name = "gstreamer-plugins-runtime", version = "1.27.90", source = { url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/e0d3774208108570f3fd283aeee913d6a3d85b5aab28be7b2d1229d33096b069/gstreamer_plugins_runtime-1.27.90-cp39-abi3-macosx_10_13_universal2.whl" }, marker = "sys_platform == 'darwin'" },
+]
+wheels = [
+    { url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/5a5da63fb8aab6754fb3a5ea0050c7903628215ef6b8aa7ada61d48402cb29a4/gstreamer_plugins-1.27.90-cp39-abi3-macosx_10_13_universal2.whl", hash = "sha256:5a5da63fb8aab6754fb3a5ea0050c7903628215ef6b8aa7ada61d48402cb29a4" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "gstreamer-plugins-runtime", specifier = "~=1.27.90" }]
+
+[[package]]
+name = "gstreamer-plugins-gpl"
+version = "1.27.90"
+source = { url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/02018070cd7c735be3d5eb197f0165722f9c75214af4e803ff2a3dd1e36c8876/gstreamer_plugins_gpl-1.27.90-cp39-abi3-win_amd64.whl" }
+resolution-markers = [
+    "(python_full_version >= '3.12' and platform_machine != 'aarch64' and sys_platform == 'linux') or (python_full_version >= '3.12' and sys_platform != 'darwin' and sys_platform != 'linux')",
+    "(python_full_version == '3.11.*' and platform_machine != 'aarch64' and sys_platform == 'linux') or (python_full_version == '3.11.*' and sys_platform != 'darwin' and sys_platform != 'linux')",
+    "python_full_version < '3.11' and sys_platform == 'win32'",
+]
+dependencies = [
+    { name = "gstreamer-plugins-runtime", version = "1.27.90", source = { url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/f37f89c14dae3b44f910d841f93e2bafca67810b5a34d324bc7c4d790f457814/gstreamer_plugins_runtime-1.27.90-cp39-abi3-win_amd64.whl" }, marker = "(python_full_version >= '3.11' and platform_machine != 'aarch64' and sys_platform == 'linux') or (python_full_version >= '3.11' and sys_platform != 'darwin' and sys_platform != 'linux') or sys_platform == 'win32'" },
+]
+wheels = [
+    { url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/02018070cd7c735be3d5eb197f0165722f9c75214af4e803ff2a3dd1e36c8876/gstreamer_plugins_gpl-1.27.90-cp39-abi3-win_amd64.whl", hash = "sha256:02018070cd7c735be3d5eb197f0165722f9c75214af4e803ff2a3dd1e36c8876" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "gstreamer-plugins-runtime", specifier = "~=1.27.90" }]
+
+[[package]]
+name = "gstreamer-plugins-gpl"
+version = "1.27.90"
+source = { url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/9c5fe8d199adfcd1ca57d7b985ebb92e785a91a4583f29274b6bb44636e21581/gstreamer_plugins_gpl-1.27.90-cp39-abi3-macosx_10_13_universal2.whl" }
+resolution-markers = [
+    "python_full_version >= '3.12' and sys_platform == 'darwin'",
+    "python_full_version == '3.11.*' and sys_platform == 'darwin'",
+    "python_full_version < '3.11' and sys_platform == 'darwin'",
+]
+dependencies = [
+    { name = "gstreamer-plugins-runtime", version = "1.27.90", source = { url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/e0d3774208108570f3fd283aeee913d6a3d85b5aab28be7b2d1229d33096b069/gstreamer_plugins_runtime-1.27.90-cp39-abi3-macosx_10_13_universal2.whl" }, marker = "sys_platform == 'darwin'" },
+]
+wheels = [
+    { url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/9c5fe8d199adfcd1ca57d7b985ebb92e785a91a4583f29274b6bb44636e21581/gstreamer_plugins_gpl-1.27.90-cp39-abi3-macosx_10_13_universal2.whl", hash = "sha256:9c5fe8d199adfcd1ca57d7b985ebb92e785a91a4583f29274b6bb44636e21581" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "gstreamer-plugins-runtime", specifier = "~=1.27.90" }]
+
+[[package]]
+name = "gstreamer-plugins-gpl-restricted"
+version = "1.27.90"
+source = { url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/d4dc71430c7221b9d3e71bfb4d2863aaddad63d0e169918d82e61364ec62849c/gstreamer_plugins_gpl_restricted-1.27.90-cp39-abi3-win_amd64.whl" }
+resolution-markers = [
+    "(python_full_version >= '3.12' and platform_machine != 'aarch64' and sys_platform == 'linux') or (python_full_version >= '3.12' and sys_platform != 'darwin' and sys_platform != 'linux')",
+    "(python_full_version == '3.11.*' and platform_machine != 'aarch64' and sys_platform == 'linux') or (python_full_version == '3.11.*' and sys_platform != 'darwin' and sys_platform != 'linux')",
+    "python_full_version < '3.11' and sys_platform == 'win32'",
+]
+dependencies = [
+    { name = "gstreamer-plugins-runtime", version = "1.27.90", source = { url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/f37f89c14dae3b44f910d841f93e2bafca67810b5a34d324bc7c4d790f457814/gstreamer_plugins_runtime-1.27.90-cp39-abi3-win_amd64.whl" }, marker = "(python_full_version >= '3.11' and platform_machine != 'aarch64' and sys_platform == 'linux') or (python_full_version >= '3.11' and sys_platform != 'darwin' and sys_platform != 'linux') or sys_platform == 'win32'" },
+]
+wheels = [
+    { url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/d4dc71430c7221b9d3e71bfb4d2863aaddad63d0e169918d82e61364ec62849c/gstreamer_plugins_gpl_restricted-1.27.90-cp39-abi3-win_amd64.whl", hash = "sha256:d4dc71430c7221b9d3e71bfb4d2863aaddad63d0e169918d82e61364ec62849c" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "gstreamer-plugins-runtime", specifier = "~=1.27.90" }]
+
+[[package]]
+name = "gstreamer-plugins-gpl-restricted"
+version = "1.27.90"
+source = { url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/f57457c01fb828df993816798f96fd650a47cb42b287c8c0bd82f7f353293eb7/gstreamer_plugins_gpl_restricted-1.27.90-cp39-abi3-macosx_10_13_universal2.whl" }
+resolution-markers = [
+    "python_full_version >= '3.12' and sys_platform == 'darwin'",
+    "python_full_version == '3.11.*' and sys_platform == 'darwin'",
+    "python_full_version < '3.11' and sys_platform == 'darwin'",
+]
+dependencies = [
+    { name = "gstreamer-plugins-runtime", version = "1.27.90", source = { url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/e0d3774208108570f3fd283aeee913d6a3d85b5aab28be7b2d1229d33096b069/gstreamer_plugins_runtime-1.27.90-cp39-abi3-macosx_10_13_universal2.whl" }, marker = "sys_platform == 'darwin'" },
+]
+wheels = [
+    { url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/f57457c01fb828df993816798f96fd650a47cb42b287c8c0bd82f7f353293eb7/gstreamer_plugins_gpl_restricted-1.27.90-cp39-abi3-macosx_10_13_universal2.whl", hash = "sha256:f57457c01fb828df993816798f96fd650a47cb42b287c8c0bd82f7f353293eb7" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "gstreamer-plugins-runtime", specifier = "~=1.27.90" }]
+
+[[package]]
+name = "gstreamer-plugins-restricted"
+version = "1.27.90"
+source = { url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/36fb1d58016e335ca2178d520fcd096f6d9a3a792b3a587390cd65abffbc9e5d/gstreamer_plugins_restricted-1.27.90-cp39-abi3-macosx_10_13_universal2.whl" }
+resolution-markers = [
+    "python_full_version >= '3.12' and sys_platform == 'darwin'",
+    "python_full_version == '3.11.*' and sys_platform == 'darwin'",
+    "python_full_version < '3.11' and sys_platform == 'darwin'",
+]
+dependencies = [
+    { name = "gstreamer-plugins-runtime", version = "1.27.90", source = { url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/e0d3774208108570f3fd283aeee913d6a3d85b5aab28be7b2d1229d33096b069/gstreamer_plugins_runtime-1.27.90-cp39-abi3-macosx_10_13_universal2.whl" }, marker = "sys_platform == 'darwin'" },
+]
+wheels = [
+    { url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/36fb1d58016e335ca2178d520fcd096f6d9a3a792b3a587390cd65abffbc9e5d/gstreamer_plugins_restricted-1.27.90-cp39-abi3-macosx_10_13_universal2.whl", hash = "sha256:36fb1d58016e335ca2178d520fcd096f6d9a3a792b3a587390cd65abffbc9e5d" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "gstreamer-plugins-runtime", specifier = "~=1.27.90" }]
+
+[[package]]
+name = "gstreamer-plugins-restricted"
+version = "1.27.90"
+source = { url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/8e91d6027edaa966be131140b8e466b714df7008e11ad4998fd11ea9ec41aa0e/gstreamer_plugins_restricted-1.27.90-cp39-abi3-win_amd64.whl" }
+resolution-markers = [
+    "(python_full_version >= '3.12' and platform_machine != 'aarch64' and sys_platform == 'linux') or (python_full_version >= '3.12' and sys_platform != 'darwin' and sys_platform != 'linux')",
+    "(python_full_version == '3.11.*' and platform_machine != 'aarch64' and sys_platform == 'linux') or (python_full_version == '3.11.*' and sys_platform != 'darwin' and sys_platform != 'linux')",
+    "python_full_version < '3.11' and sys_platform == 'win32'",
+]
+dependencies = [
+    { name = "gstreamer-plugins-runtime", version = "1.27.90", source = { url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/f37f89c14dae3b44f910d841f93e2bafca67810b5a34d324bc7c4d790f457814/gstreamer_plugins_runtime-1.27.90-cp39-abi3-win_amd64.whl" }, marker = "(python_full_version >= '3.11' and platform_machine != 'aarch64' and sys_platform == 'linux') or (python_full_version >= '3.11' and sys_platform != 'darwin' and sys_platform != 'linux') or sys_platform == 'win32'" },
+]
+wheels = [
+    { url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/8e91d6027edaa966be131140b8e466b714df7008e11ad4998fd11ea9ec41aa0e/gstreamer_plugins_restricted-1.27.90-cp39-abi3-win_amd64.whl", hash = "sha256:8e91d6027edaa966be131140b8e466b714df7008e11ad4998fd11ea9ec41aa0e" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "gstreamer-plugins-runtime", specifier = "~=1.27.90" }]
+
+[[package]]
+name = "gstreamer-plugins-runtime"
+version = "1.27.90"
+source = { url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/e0d3774208108570f3fd283aeee913d6a3d85b5aab28be7b2d1229d33096b069/gstreamer_plugins_runtime-1.27.90-cp39-abi3-macosx_10_13_universal2.whl" }
+resolution-markers = [
+    "python_full_version >= '3.12' and sys_platform == 'darwin'",
+    "python_full_version == '3.11.*' and sys_platform == 'darwin'",
+    "python_full_version < '3.11' and sys_platform == 'darwin'",
+]
+dependencies = [
+    { name = "gstreamer-runtime", version = "1.27.90", source = { url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/3b90564ee2517637690c30910cc267abc3edf3a9316274024504f5365b9b26a3/gstreamer_runtime-1.27.90-cp39-abi3-macosx_10_13_universal2.whl" }, marker = "sys_platform == 'darwin'" },
+]
+wheels = [
+    { url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/e0d3774208108570f3fd283aeee913d6a3d85b5aab28be7b2d1229d33096b069/gstreamer_plugins_runtime-1.27.90-cp39-abi3-macosx_10_13_universal2.whl", hash = "sha256:e0d3774208108570f3fd283aeee913d6a3d85b5aab28be7b2d1229d33096b069" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "gstreamer-runtime", specifier = "~=1.27.90" }]
+
+[[package]]
+name = "gstreamer-plugins-runtime"
+version = "1.27.90"
+source = { url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/f37f89c14dae3b44f910d841f93e2bafca67810b5a34d324bc7c4d790f457814/gstreamer_plugins_runtime-1.27.90-cp39-abi3-win_amd64.whl" }
+resolution-markers = [
+    "(python_full_version >= '3.12' and platform_machine != 'aarch64' and sys_platform == 'linux') or (python_full_version >= '3.12' and sys_platform != 'darwin' and sys_platform != 'linux')",
+    "(python_full_version == '3.11.*' and platform_machine != 'aarch64' and sys_platform == 'linux') or (python_full_version == '3.11.*' and sys_platform != 'darwin' and sys_platform != 'linux')",
+    "python_full_version < '3.11' and sys_platform == 'win32'",
+]
+dependencies = [
+    { name = "gstreamer-runtime", version = "1.27.90", source = { url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/c46cd36ce41266b1c9896e12c41087303dbba62002dedde54dde800d67d00cc5/gstreamer_runtime-1.27.90-cp39-abi3-win_amd64.whl" }, marker = "(python_full_version >= '3.11' and platform_machine != 'aarch64' and sys_platform == 'linux') or (python_full_version >= '3.11' and sys_platform != 'darwin' and sys_platform != 'linux') or sys_platform == 'win32'" },
+]
+wheels = [
+    { url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/f37f89c14dae3b44f910d841f93e2bafca67810b5a34d324bc7c4d790f457814/gstreamer_plugins_runtime-1.27.90-cp39-abi3-win_amd64.whl", hash = "sha256:f37f89c14dae3b44f910d841f93e2bafca67810b5a34d324bc7c4d790f457814" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "gstreamer-runtime", specifier = "~=1.27.90" }]
+
+[[package]]
+name = "gstreamer-python"
+version = "1.27.90"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/22/61/5836935e9803d71904f47bcbaf870fbc3722205d9e4b7af1e84c845a980a/gstreamer_python-1.27.90-cp310-cp310-macosx_10_13_universal2.whl", hash = "sha256:87421b307f18272ee0948a933d626b570cf968b49b4f5fcecb12e2a1519be472", size = 724668, upload-time = "2026-01-08T11:10:28.092Z" },
+    { url = "https://files.pythonhosted.org/packages/bb/9b/f0dbfb6acf502536bc0954bb1f2417906da2a26df2456bd81bc99a6a08f2/gstreamer_python-1.27.90-cp310-cp310-win32.whl", hash = "sha256:7bb2ff86a81e0deb3b3bd889a5697a059d760050e50ccfc56548786d6760356f", size = 446017, upload-time = "2026-01-08T11:10:30.049Z" },
+    { url = "https://files.pythonhosted.org/packages/2b/87/168f30f8bfc9f36b850f7a8aedfa0c2721802e374376c64ca94fd712accd/gstreamer_python-1.27.90-cp310-cp310-win_amd64.whl", hash = "sha256:e0cbda2af445529a733e2497ebc397ac523007b31e90fc6f9a36e7f7e26dc957", size = 485280, upload-time = "2026-01-08T11:10:31.782Z" },
+    { url = "https://files.pythonhosted.org/packages/e5/8f/c3a1231f5e23bdff8667a551b9f59ffda826c1aa3a490147cacce935a0d5/gstreamer_python-1.27.90-cp311-cp311-macosx_10_13_universal2.whl", hash = "sha256:87db04ba485b5ac9025b681a1c54ee6dc70f79bd4c8eb53b80fa40ad10ba97d2", size = 724454, upload-time = "2026-01-08T11:10:34.22Z" },
+    { url = "https://files.pythonhosted.org/packages/17/c8/020f96c0a7eaf6bd03df82e22952050537bfc8316af1beb50280b9555074/gstreamer_python-1.27.90-cp311-cp311-win32.whl", hash = "sha256:d9a7f0ce347ab46f5c33f02b6ad8f30bc5c5f53dad2a32e190b5cb1103743e84", size = 446491, upload-time = "2026-01-08T11:10:35.929Z" },
+    { url = "https://files.pythonhosted.org/packages/7f/bf/e3471beea3b051de8f307da1628b7f3e7ef4df31347c054a88d9cdb8835e/gstreamer_python-1.27.90-cp311-cp311-win_amd64.whl", hash = "sha256:b75d8b92db2cca231fc561f797641016834ca515e5fda2b068dfe6a964a2ceda", size = 486393, upload-time = "2026-01-08T11:10:38.168Z" },
+    { url = "https://files.pythonhosted.org/packages/3d/8d/db16d3fe546aee28bd2bd18f1a1e260a5c01addac9b430a4e68c69b04ee8/gstreamer_python-1.27.90-cp312-cp312-macosx_10_13_universal2.whl", hash = "sha256:47df7c8820d130fd880a425cbbc0446b4738bfdc50727a5d70785a6204f15664", size = 733175, upload-time = "2026-01-08T11:10:40.019Z" },
+    { url = "https://files.pythonhosted.org/packages/7d/8d/d5caaf9efe1830e120db37d0d40080c118174586ba82e794f765659474ef/gstreamer_python-1.27.90-cp312-cp312-win32.whl", hash = "sha256:2d995d7a7fc2a8d2b4468f619fd8adf91af8bfe23f34e8b50a0e125809a45a26", size = 448642, upload-time = "2026-01-08T11:10:41.701Z" },
+    { url = "https://files.pythonhosted.org/packages/a2/2f/fd14dd97c1a737c6edcd2d55456114504968911adcbe411921991f313b07/gstreamer_python-1.27.90-cp312-cp312-win_amd64.whl", hash = "sha256:61303a72e8d265fe721d50a2b0c6f5826a0a1fbf8cff108b03561395d2c3c946", size = 489101, upload-time = "2026-01-08T11:10:43.762Z" },
+    { url = "https://files.pythonhosted.org/packages/56/cf/ea2dc04754ad360f892eef19e2ec6c81b7d3c46a9a30cace207e73b06c1a/gstreamer_python-1.27.90-cp313-cp313-macosx_10_13_universal2.whl", hash = "sha256:e4cfc3455b50d74645e2fc645c6215e81d64947a7395e864c605bfdb1c505a03", size = 742188, upload-time = "2026-01-08T11:10:46.036Z" },
+    { url = "https://files.pythonhosted.org/packages/e7/10/f3313df454a72e219739202a88c324e6fcf9cbc8cf3a60c5302a4dfa285f/gstreamer_python-1.27.90-cp313-cp313-win32.whl", hash = "sha256:ba82cbc266c91da7cbdf317acfb9818246b390f7c93a3449ccd9c378d6745c5b", size = 449383, upload-time = "2026-01-08T11:10:52.257Z" },
+    { url = "https://files.pythonhosted.org/packages/9c/aa/86a97ec95b4047f0017b018c3b68e13853f622a078ee2829f90a4d4287d9/gstreamer_python-1.27.90-cp313-cp313-win_amd64.whl", hash = "sha256:edc00c2efef29c4b27be1a02ae04950146e51bfc45e5c80394640427a9d821bb", size = 490232, upload-time = "2026-01-08T11:10:54.029Z" },
+    { url = "https://files.pythonhosted.org/packages/3c/e0/cc0d1d85d0895892b29e61f6aec300ab00880460d4043f9d1b54d0389c15/gstreamer_python-1.27.90-cp313-cp313t-win32.whl", hash = "sha256:8e1881e7b852d87307077d0f7c9045ac2b7e4f12a08cbfcd1a42f2f9ba61f0fc", size = 463440, upload-time = "2026-01-08T11:10:47.749Z" },
+    { url = "https://files.pythonhosted.org/packages/77/9c/9de4295753cd2fb18eb49beb233cc17786a91a78ccf5df5cec13ed41dedc/gstreamer_python-1.27.90-cp313-cp313t-win_amd64.whl", hash = "sha256:e6d6546329e58c89ff057decab4b56b9bf737e9a7d2ac37a2c668fd8e47cb70e", size = 509642, upload-time = "2026-01-08T11:10:49.849Z" },
+    { url = "https://files.pythonhosted.org/packages/6e/53/32bc6fc0c3cf89811485870dc0c1a1b59a8c4a997a786b683970e9f275ac/gstreamer_python-1.27.90-cp314-cp314-macosx_10_15_universal2.whl", hash = "sha256:2517788b24a00c923a7f0f912511e7f44704e4dc27ed2ffc74be785dfe3bb615", size = 741088, upload-time = "2026-01-08T11:10:55.669Z" },
+    { url = "https://files.pythonhosted.org/packages/be/92/b4956b88280b393675ce0c51d66efef28900520cc58b3a03af5a454072cb/gstreamer_python-1.27.90-cp314-cp314-win32.whl", hash = "sha256:46c214054061420b75b87f5a102af200b6b02fc6417cd0c8bc9362dc30cdf940", size = 461124, upload-time = "2026-01-08T11:11:01.342Z" },
+    { url = "https://files.pythonhosted.org/packages/77/0d/30a6ca9a800b197c627afc7301620cb05a168ffb98dced703267e9fd6385/gstreamer_python-1.27.90-cp314-cp314-win_amd64.whl", hash = "sha256:30b3eeb65503ce48c97f19feac46faebaddf646fd21251a33038fd8b1a2cf7cb", size = 502226, upload-time = "2026-01-08T11:11:03.473Z" },
+    { url = "https://files.pythonhosted.org/packages/a0/04/52e89ac68b75a70fd27fbe219cb6c643a73afdffce7fc0375e7f4c6e716b/gstreamer_python-1.27.90-cp314-cp314t-win32.whl", hash = "sha256:91be30312b568e1e6c00e9da14897328f7bfdbc3bac16309755685e748b265a3", size = 476494, upload-time = "2026-01-08T11:10:57.663Z" },
+    { url = "https://files.pythonhosted.org/packages/4a/a8/855d9bd0e1bcb9f003491f42da39e7f32ca12eab874fca38d27c429c43b2/gstreamer_python-1.27.90-cp314-cp314t-win_amd64.whl", hash = "sha256:01a3cfbfcbe5a5fc454e545788df501b7b81c5a8d6dfa18cd657517c85efcf9c", size = 524539, upload-time = "2026-01-08T11:10:59.507Z" },
+]
+
+[[package]]
+name = "gstreamer-runtime"
+version = "1.27.90"
+source = { url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/3b90564ee2517637690c30910cc267abc3edf3a9316274024504f5365b9b26a3/gstreamer_runtime-1.27.90-cp39-abi3-macosx_10_13_universal2.whl" }
+resolution-markers = [
+    "python_full_version >= '3.12' and sys_platform == 'darwin'",
+    "python_full_version == '3.11.*' and sys_platform == 'darwin'",
+    "python_full_version < '3.11' and sys_platform == 'darwin'",
+]
+dependencies = [
+    { name = "setuptools", marker = "sys_platform == 'darwin'" },
+    { name = "typing-extensions", marker = "sys_platform == 'darwin'" },
+]
+wheels = [
+    { url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/3b90564ee2517637690c30910cc267abc3edf3a9316274024504f5365b9b26a3/gstreamer_runtime-1.27.90-cp39-abi3-macosx_10_13_universal2.whl", hash = "sha256:3b90564ee2517637690c30910cc267abc3edf3a9316274024504f5365b9b26a3" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "setuptools", specifier = ">=80.9.0" },
+    { name = "typing-extensions", specifier = ">=4.15.0" },
+]
+
+[[package]]
+name = "gstreamer-runtime"
+version = "1.27.90"
+source = { url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/c46cd36ce41266b1c9896e12c41087303dbba62002dedde54dde800d67d00cc5/gstreamer_runtime-1.27.90-cp39-abi3-win_amd64.whl" }
+resolution-markers = [
+    "(python_full_version >= '3.12' and platform_machine != 'aarch64' and sys_platform == 'linux') or (python_full_version >= '3.12' and sys_platform != 'darwin' and sys_platform != 'linux')",
+    "(python_full_version == '3.11.*' and platform_machine != 'aarch64' and sys_platform == 'linux') or (python_full_version == '3.11.*' and sys_platform != 'darwin' and sys_platform != 'linux')",
+    "python_full_version < '3.11' and sys_platform == 'win32'",
+]
+dependencies = [
+    { name = "gstreamer-msvc-runtime", marker = "(python_full_version >= '3.11' and platform_machine != 'aarch64' and sys_platform == 'linux') or (python_full_version >= '3.11' and sys_platform != 'darwin' and sys_platform != 'linux') or sys_platform == 'win32'" },
+    { name = "setuptools", marker = "(python_full_version >= '3.11' and platform_machine != 'aarch64' and sys_platform == 'linux') or (python_full_version >= '3.11' and sys_platform != 'darwin' and sys_platform != 'linux') or sys_platform == 'win32'" },
+    { name = "typing-extensions", marker = "(python_full_version >= '3.11' and platform_machine != 'aarch64' and sys_platform == 'linux') or (python_full_version >= '3.11' and sys_platform != 'darwin' and sys_platform != 'linux') or sys_platform == 'win32'" },
+]
+wheels = [
+    { url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/c46cd36ce41266b1c9896e12c41087303dbba62002dedde54dde800d67d00cc5/gstreamer_runtime-1.27.90-cp39-abi3-win_amd64.whl", hash = "sha256:c46cd36ce41266b1c9896e12c41087303dbba62002dedde54dde800d67d00cc5" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "gstreamer-msvc-runtime", specifier = "~=1.27.90" },
+    { name = "setuptools", specifier = ">=80.9.0" },
+    { name = "typing-extensions", specifier = ">=4.15.0" },
 ]
 
 [[package]]
@@ -1258,7 +1620,9 @@ name = "ipython"
 version = "8.38.0"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
-    "python_full_version < '3.11'",
+    "python_full_version < '3.11' and sys_platform != 'darwin' and sys_platform != 'win32'",
+    "python_full_version < '3.11' and sys_platform == 'win32'",
+    "python_full_version < '3.11' and sys_platform == 'darwin'",
 ]
 dependencies = [
     { name = "colorama", marker = "python_full_version < '3.11' and sys_platform == 'win32'" },
@@ -2128,7 +2492,7 @@ name = "pexpect"
 version = "4.9.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "ptyprocess" },
+    { name = "ptyprocess", marker = "python_full_version >= '3.11' or sys_platform != 'win32'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/42/92/cc564bf6381ff43ce1f4d06852fc19a2f11d180f23dc32d9588bee2f149d/pexpect-4.9.0.tar.gz", hash = "sha256:ee7d41123f3c9911050ea2c2dac107568dc43b2d3b0c7557a33212c398ead30f", size = 166450, upload-time = "2023-11-25T09:07:26.339Z" }
 wheels = [
@@ -2601,25 +2965,6 @@ name = "pycairo"
 version = "1.29.0"
 source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/22/d9/1728840a22a4ef8a8f479b9156aa2943cd98c3907accd3849fb0d5f82bfd/pycairo-1.29.0.tar.gz", hash = "sha256:f3f7fde97325cae80224c09f12564ef58d0d0f655da0e3b040f5807bd5bd3142", size = 665871, upload-time = "2025-11-11T19:13:01.584Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/23/e2/c08847af2a103517f7785830706b6d1d55274494d76ab605eb744404c22f/pycairo-1.29.0-cp310-cp310-win32.whl", hash = "sha256:96c67e6caba72afd285c2372806a0175b1aa2f4537aa88fb4d9802d726effcd1", size = 751339, upload-time = "2025-11-11T19:11:21.266Z" },
-    { url = "https://files.pythonhosted.org/packages/eb/36/2a934c6fd4f32d2011c4d9cc59a32e34e06a97dd9f4b138614078d39340b/pycairo-1.29.0-cp310-cp310-win_amd64.whl", hash = "sha256:65bddd944aee9f7d7d72821b1c87e97593856617c2820a78d589d66aa8afbd08", size = 845074, upload-time = "2025-11-11T19:11:27.111Z" },
-    { url = "https://files.pythonhosted.org/packages/1b/f0/ee0a887d8c8a6833940263b7234aaa63d8d95a27d6130a9a053867ff057c/pycairo-1.29.0-cp310-cp310-win_arm64.whl", hash = "sha256:15b36aea699e2ff215cb6a21501223246032e572a3a10858366acdd69c81a1c8", size = 694758, upload-time = "2025-11-11T19:11:32.635Z" },
-    { url = "https://files.pythonhosted.org/packages/31/92/1b904087e831806a449502786d47d3a468e5edb8f65755f6bd88e8038e53/pycairo-1.29.0-cp311-cp311-win32.whl", hash = "sha256:12757ebfb304b645861283c20585c9204c3430671fad925419cba04844d6dfed", size = 751342, upload-time = "2025-11-11T19:11:37.386Z" },
-    { url = "https://files.pythonhosted.org/packages/db/09/a0ab6a246a7ede89e817d749a941df34f27a74bedf15551da51e86ae105e/pycairo-1.29.0-cp311-cp311-win_amd64.whl", hash = "sha256:3391532db03f9601c1cee9ebfa15b7d1db183c6020f3e75c1348cee16825934f", size = 845036, upload-time = "2025-11-11T19:11:43.408Z" },
-    { url = "https://files.pythonhosted.org/packages/3c/b2/bf455454bac50baef553e7356d36b9d16e482403bf132cfb12960d2dc2e7/pycairo-1.29.0-cp311-cp311-win_arm64.whl", hash = "sha256:b69be8bb65c46b680771dc6a1a422b1cdd0cffb17be548f223e8cbbb6205567c", size = 694644, upload-time = "2025-11-11T19:11:48.599Z" },
-    { url = "https://files.pythonhosted.org/packages/f6/28/6363087b9e60af031398a6ee5c248639eefc6cc742884fa2789411b1f73b/pycairo-1.29.0-cp312-cp312-win32.whl", hash = "sha256:91bcd7b5835764c616a615d9948a9afea29237b34d2ed013526807c3d79bb1d0", size = 751486, upload-time = "2025-11-11T19:11:54.451Z" },
-    { url = "https://files.pythonhosted.org/packages/3a/d2/d146f1dd4ef81007686ac52231dd8f15ad54cf0aa432adaefc825475f286/pycairo-1.29.0-cp312-cp312-win_amd64.whl", hash = "sha256:3f01c3b5e49ef9411fff6bc7db1e765f542dc1c9cfed4542958a5afa3a8b8e76", size = 845383, upload-time = "2025-11-11T19:12:01.551Z" },
-    { url = "https://files.pythonhosted.org/packages/01/16/6e6f33bb79ec4a527c9e633915c16dc55a60be26b31118dbd0d5859e8c51/pycairo-1.29.0-cp312-cp312-win_arm64.whl", hash = "sha256:eafe3d2076f3533535ad4a361fa0754e0ee66b90e548a3a0f558fed00b1248f2", size = 694518, upload-time = "2025-11-11T19:12:06.561Z" },
-    { url = "https://files.pythonhosted.org/packages/f0/21/3f477dc318dd4e84a5ae6301e67284199d7e5a2384f3063714041086b65d/pycairo-1.29.0-cp313-cp313-win32.whl", hash = "sha256:3eb382a4141591807073274522f7aecab9e8fa2f14feafd11ac03a13a58141d7", size = 750949, upload-time = "2025-11-11T19:12:12.198Z" },
-    { url = "https://files.pythonhosted.org/packages/43/34/7d27a333c558d6ac16dbc12a35061d389735e99e494ee4effa4ec6d99bed/pycairo-1.29.0-cp313-cp313-win_amd64.whl", hash = "sha256:91114e4b3fbf4287c2b0788f83e1f566ce031bda49cf1c3c3c19c3e986e95c38", size = 844149, upload-time = "2025-11-11T19:12:19.171Z" },
-    { url = "https://files.pythonhosted.org/packages/15/43/e782131e23df69e5c8e631a016ed84f94bbc4981bf6411079f57af730a23/pycairo-1.29.0-cp313-cp313-win_arm64.whl", hash = "sha256:09b7f69a5ff6881e151354ea092137b97b0b1f0b2ab4eb81c92a02cc4a08e335", size = 693595, upload-time = "2025-11-11T19:12:23.445Z" },
-    { url = "https://files.pythonhosted.org/packages/2d/fa/87eaeeb9d53344c769839d7b2854db7ff2cd596211e00dd1b702eeb1838f/pycairo-1.29.0-cp314-cp314-win32.whl", hash = "sha256:69e2a7968a3fbb839736257bae153f547bca787113cc8d21e9e08ca4526e0b6b", size = 767198, upload-time = "2025-11-11T19:12:42.336Z" },
-    { url = "https://files.pythonhosted.org/packages/3c/90/3564d0f64d0a00926ab863dc3c4a129b1065133128e96900772e1c4421f8/pycairo-1.29.0-cp314-cp314-win_amd64.whl", hash = "sha256:e91243437a21cc4c67c401eff4433eadc45745275fa3ade1a0d877e50ffb90da", size = 871579, upload-time = "2025-11-11T19:12:48.982Z" },
-    { url = "https://files.pythonhosted.org/packages/5e/91/93632b6ba12ad69c61991e3208bde88486fdfc152be8cfdd13444e9bc650/pycairo-1.29.0-cp314-cp314-win_arm64.whl", hash = "sha256:b72200ea0e5f73ae4c788cd2028a750062221385eb0e6d8f1ecc714d0b4fdf82", size = 719537, upload-time = "2025-11-11T19:12:55.016Z" },
-    { url = "https://files.pythonhosted.org/packages/93/23/37053c039f8d3b9b5017af9bc64d27b680c48a898d48b72e6d6583cf0155/pycairo-1.29.0-cp314-cp314t-win_amd64.whl", hash = "sha256:5e45fce6185f553e79e4ef1722b8e98e6cde9900dbc48cb2637a9ccba86f627a", size = 874015, upload-time = "2025-11-11T19:12:28.47Z" },
-    { url = "https://files.pythonhosted.org/packages/d7/54/123f6239685f5f3f2edc123f1e38d2eefacebee18cf3c532d2f4bd51d0ef/pycairo-1.29.0-cp314-cp314t-win_arm64.whl", hash = "sha256:caba0837a4b40d47c8dfb0f24cccc12c7831e3dd450837f2a356c75f21ce5a15", size = 721404, upload-time = "2025-11-11T19:12:36.919Z" },
-]
 
 [[package]]
 name = "pycparser"
@@ -2764,18 +3109,6 @@ wheels = [
 ]
 
 [[package]]
-name = "pyee"
-version = "13.0.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "typing-extensions" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/95/03/1fd98d5841cd7964a27d729ccf2199602fe05eb7a405c1462eb7277945ed/pyee-13.0.0.tar.gz", hash = "sha256:b391e3c5a434d1f5118a25615001dbc8f669cf410ab67d04c4d4e07c55481c37", size = 31250, upload-time = "2025-03-17T18:53:15.955Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/9b/4d/b9add7c84060d4c1906abe9a7e5359f2a60f7a9a4f67268b2766673427d8/pyee-13.0.0-py3-none-any.whl", hash = "sha256:48195a3cddb3b1515ce0695ed76036b5ccc2ef3a9f963ff9f77aec0139845498", size = 15730, upload-time = "2025-03-17T18:53:14.532Z" },
-]
-
-[[package]]
 name = "pygments"
 version = "2.19.2"
 source = { registry = "https://pypi.org/simple" }
@@ -2789,7 +3122,7 @@ name = "pygobject"
 version = "3.46.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pycairo" },
+    { name = "pycairo", marker = "(python_full_version >= '3.11' and sys_platform == 'win32') or (sys_platform != 'darwin' and sys_platform != 'win32')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/ac/4a/f24ddf1d20cc4b56affc7921e29928559a06c922eb60077448392792b914/PyGObject-3.46.0.tar.gz", hash = "sha256:481437b05af0a66b7c366ea052710eb3aacbb979d22d30b797f7ec29347ab1e6", size = 723367, upload-time = "2023-09-10T09:56:26.737Z" }
 
@@ -2841,10 +3174,10 @@ name = "pyobjc-framework-applicationservices"
 version = "12.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core", marker = "python_full_version < '3.11' or sys_platform == 'darwin'" },
-    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.11' or sys_platform == 'darwin'" },
-    { name = "pyobjc-framework-coretext", marker = "python_full_version < '3.11' or sys_platform == 'darwin'" },
-    { name = "pyobjc-framework-quartz", marker = "python_full_version < '3.11' or sys_platform == 'darwin'" },
+    { name = "pyobjc-core", marker = "sys_platform == 'darwin'" },
+    { name = "pyobjc-framework-cocoa", marker = "sys_platform == 'darwin'" },
+    { name = "pyobjc-framework-coretext", marker = "sys_platform == 'darwin'" },
+    { name = "pyobjc-framework-quartz", marker = "sys_platform == 'darwin'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/be/6a/d4e613c8e926a5744fc47a9e9fea08384a510dc4f27d844f7ad7a2d793bd/pyobjc_framework_applicationservices-12.1.tar.gz", hash = "sha256:c06abb74f119bc27aeb41bf1aef8102c0ae1288aec1ac8665ea186a067a8945b", size = 103247, upload-time = "2025-11-14T10:08:52.18Z" }
 wheels = [
@@ -2862,11 +3195,11 @@ name = "pyobjc-framework-avfoundation"
 version = "12.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
-    { name = "pyobjc-framework-coreaudio" },
-    { name = "pyobjc-framework-coremedia" },
-    { name = "pyobjc-framework-quartz" },
+    { name = "pyobjc-core", marker = "sys_platform == 'darwin'" },
+    { name = "pyobjc-framework-cocoa", marker = "sys_platform == 'darwin'" },
+    { name = "pyobjc-framework-coreaudio", marker = "sys_platform == 'darwin'" },
+    { name = "pyobjc-framework-coremedia", marker = "sys_platform == 'darwin'" },
+    { name = "pyobjc-framework-quartz", marker = "sys_platform == 'darwin'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/cd/42/c026ab308edc2ed5582d8b4b93da6b15d1b6557c0086914a4aabedd1f032/pyobjc_framework_avfoundation-12.1.tar.gz", hash = "sha256:eda0bb60be380f9ba2344600c4231dd58a3efafa99fdc65d3673ecfbb83f6fcb", size = 310047, upload-time = "2025-11-14T10:09:40.069Z" }
 wheels = [
@@ -2884,7 +3217,7 @@ name = "pyobjc-framework-cocoa"
 version = "12.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
+    { name = "pyobjc-core", marker = "sys_platform == 'darwin'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/02/a3/16ca9a15e77c061a9250afbae2eae26f2e1579eb8ca9462ae2d2c71e1169/pyobjc_framework_cocoa-12.1.tar.gz", hash = "sha256:5556c87db95711b985d5efdaaf01c917ddd41d148b1e52a0c66b1a2e2c5c1640", size = 2772191, upload-time = "2025-11-14T10:13:02.069Z" }
 wheels = [
@@ -2902,8 +3235,8 @@ name = "pyobjc-framework-coreaudio"
 version = "12.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "sys_platform == 'darwin'" },
+    { name = "pyobjc-framework-cocoa", marker = "sys_platform == 'darwin'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/84/d1/0b884c5564ab952ff5daa949128c64815300556019c1bba0cf2ca752a1a0/pyobjc_framework_coreaudio-12.1.tar.gz", hash = "sha256:a9e72925fcc1795430496ce0bffd4ddaa92c22460a10308a7283ade830089fe1", size = 75077, upload-time = "2025-11-14T10:13:22.345Z" }
 wheels = [
@@ -2921,8 +3254,8 @@ name = "pyobjc-framework-coremedia"
 version = "12.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "sys_platform == 'darwin'" },
+    { name = "pyobjc-framework-cocoa", marker = "sys_platform == 'darwin'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/da/7d/5ad600ff7aedfef8ba8f51b11d9aaacdf247b870bd14045d6e6f232e3df9/pyobjc_framework_coremedia-12.1.tar.gz", hash = "sha256:166c66a9c01e7a70103f3ca44c571431d124b9070612ef63a1511a4e6d9d84a7", size = 89566, upload-time = "2025-11-14T10:13:49.788Z" }
 wheels = [
@@ -2940,9 +3273,9 @@ name = "pyobjc-framework-coretext"
 version = "12.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core", marker = "python_full_version < '3.11' or sys_platform == 'darwin'" },
-    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.11' or sys_platform == 'darwin'" },
-    { name = "pyobjc-framework-quartz", marker = "python_full_version < '3.11' or sys_platform == 'darwin'" },
+    { name = "pyobjc-core", marker = "sys_platform == 'darwin'" },
+    { name = "pyobjc-framework-cocoa", marker = "sys_platform == 'darwin'" },
+    { name = "pyobjc-framework-quartz", marker = "sys_platform == 'darwin'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/29/da/682c9c92a39f713bd3c56e7375fa8f1b10ad558ecb075258ab6f1cdd4a6d/pyobjc_framework_coretext-12.1.tar.gz", hash = "sha256:e0adb717738fae395dc645c9e8a10bb5f6a4277e73cba8fa2a57f3b518e71da5", size = 90124, upload-time = "2025-11-14T10:14:38.596Z" }
 wheels = [
@@ -2960,8 +3293,8 @@ name = "pyobjc-framework-quartz"
 version = "12.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "sys_platform == 'darwin'" },
+    { name = "pyobjc-framework-cocoa", marker = "sys_platform == 'darwin'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/94/18/cc59f3d4355c9456fc945eae7fe8797003c4da99212dd531ad1b0de8a0c6/pyobjc_framework_quartz-12.1.tar.gz", hash = "sha256:27f782f3513ac88ec9b6c82d9767eef95a5cf4175ce88a1e5a65875fee799608", size = 3159099, upload-time = "2025-11-14T10:21:24.31Z" }
 wheels = [
@@ -3234,6 +3567,24 @@ dependencies = [
     { name = "cv2-enumerate-cameras" },
     { name = "eclipse-zenoh" },
     { name = "fastapi" },
+    { name = "gstreamer", marker = "sys_platform == 'darwin' or sys_platform == 'win32'" },
+    { name = "gstreamer-cli", version = "1.27.90", source = { url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/3f01227e2d34ace833f5fd712e6ca0a3f384dba33804c8576ed4f70d31cc8186/gstreamer_cli-1.27.90-cp39-abi3-win_amd64.whl" }, marker = "sys_platform == 'win32'" },
+    { name = "gstreamer-cli", version = "1.27.90", source = { url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/f40e05e0df2691900386dbe68fc150273fc6813a1af02baafce68675b452501d/gstreamer_cli-1.27.90-cp39-abi3-macosx_10_13_universal2.whl" }, marker = "sys_platform == 'darwin'" },
+    { name = "gstreamer-gtk", version = "1.27.90", source = { url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/09121ed36e7f8dfb73b22ad6c3a4da35b3669d23cd3a3d58232ffa34f8062030/gstreamer_gtk-1.27.90-cp39-abi3-win_amd64.whl" }, marker = "sys_platform == 'win32'" },
+    { name = "gstreamer-gtk", version = "1.27.90", source = { url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/fb53ea70c92c523f711babdfda8ee797657924105a6e593653599c0b0539839e/gstreamer_gtk-1.27.90-cp39-abi3-macosx_10_15_universal2.whl" }, marker = "sys_platform == 'darwin'" },
+    { name = "gstreamer-msvc-runtime", marker = "sys_platform == 'win32'" },
+    { name = "gstreamer-plugins", version = "1.27.90", source = { url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/4fb18547164b6e2f94848690552485c172e17aac91a60267bc961eac54e00521/gstreamer_plugins-1.27.90-cp39-abi3-win_amd64.whl" }, marker = "sys_platform == 'win32'" },
+    { name = "gstreamer-plugins", version = "1.27.90", source = { url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/5a5da63fb8aab6754fb3a5ea0050c7903628215ef6b8aa7ada61d48402cb29a4/gstreamer_plugins-1.27.90-cp39-abi3-macosx_10_13_universal2.whl" }, marker = "sys_platform == 'darwin'" },
+    { name = "gstreamer-plugins-gpl", version = "1.27.90", source = { url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/02018070cd7c735be3d5eb197f0165722f9c75214af4e803ff2a3dd1e36c8876/gstreamer_plugins_gpl-1.27.90-cp39-abi3-win_amd64.whl" }, marker = "sys_platform == 'win32'" },
+    { name = "gstreamer-plugins-gpl", version = "1.27.90", source = { url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/9c5fe8d199adfcd1ca57d7b985ebb92e785a91a4583f29274b6bb44636e21581/gstreamer_plugins_gpl-1.27.90-cp39-abi3-macosx_10_13_universal2.whl" }, marker = "sys_platform == 'darwin'" },
+    { name = "gstreamer-plugins-gpl-restricted", version = "1.27.90", source = { url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/d4dc71430c7221b9d3e71bfb4d2863aaddad63d0e169918d82e61364ec62849c/gstreamer_plugins_gpl_restricted-1.27.90-cp39-abi3-win_amd64.whl" }, marker = "sys_platform == 'win32'" },
+    { name = "gstreamer-plugins-gpl-restricted", version = "1.27.90", source = { url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/f57457c01fb828df993816798f96fd650a47cb42b287c8c0bd82f7f353293eb7/gstreamer_plugins_gpl_restricted-1.27.90-cp39-abi3-macosx_10_13_universal2.whl" }, marker = "sys_platform == 'darwin'" },
+    { name = "gstreamer-plugins-restricted", version = "1.27.90", source = { url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/36fb1d58016e335ca2178d520fcd096f6d9a3a792b3a587390cd65abffbc9e5d/gstreamer_plugins_restricted-1.27.90-cp39-abi3-macosx_10_13_universal2.whl" }, marker = "sys_platform == 'darwin'" },
+    { name = "gstreamer-plugins-restricted", version = "1.27.90", source = { url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/8e91d6027edaa966be131140b8e466b714df7008e11ad4998fd11ea9ec41aa0e/gstreamer_plugins_restricted-1.27.90-cp39-abi3-win_amd64.whl" }, marker = "sys_platform == 'win32'" },
+    { name = "gstreamer-plugins-runtime", version = "1.27.90", source = { url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/e0d3774208108570f3fd283aeee913d6a3d85b5aab28be7b2d1229d33096b069/gstreamer_plugins_runtime-1.27.90-cp39-abi3-macosx_10_13_universal2.whl" }, marker = "sys_platform == 'darwin'" },
+    { name = "gstreamer-plugins-runtime", version = "1.27.90", source = { url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/f37f89c14dae3b44f910d841f93e2bafca67810b5a34d324bc7c4d790f457814/gstreamer_plugins_runtime-1.27.90-cp39-abi3-win_amd64.whl" }, marker = "sys_platform == 'win32'" },
+    { name = "gstreamer-runtime", version = "1.27.90", source = { url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/3b90564ee2517637690c30910cc267abc3edf3a9316274024504f5365b9b26a3/gstreamer_runtime-1.27.90-cp39-abi3-macosx_10_13_universal2.whl" }, marker = "sys_platform == 'darwin'" },
+    { name = "gstreamer-runtime", version = "1.27.90", source = { url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/c46cd36ce41266b1c9896e12c41087303dbba62002dedde54dde800d67d00cc5/gstreamer_runtime-1.27.90-cp39-abi3-win_amd64.whl" }, marker = "sys_platform == 'win32'" },
     { name = "huggingface-hub" },
     { name = "jinja2" },
     { name = "libusb-package" },
@@ -3242,6 +3593,7 @@ dependencies = [
     { name = "opencv-python" },
     { name = "pip" },
     { name = "psutil" },
+    { name = "pygobject", marker = "sys_platform == 'linux'" },
     { name = "pyserial" },
     { name = "pyusb" },
     { name = "pyyaml" },
@@ -3253,8 +3605,6 @@ dependencies = [
     { name = "rustypot" },
     { name = "scipy", version = "1.15.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "scipy", version = "1.16.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
-    { name = "sounddevice" },
-    { name = "soundfile" },
     { name = "toml" },
     { name = "uvicorn", extra = ["standard"] },
     { name = "websockets" },
@@ -3277,10 +3627,7 @@ dev = [
 ]
 examples = [
     { name = "pynput" },
-]
-gstreamer = [
-    { name = "gst-signalling" },
-    { name = "pygobject" },
+    { name = "soundfile" },
 ]
 mujoco = [
     { name = "mujoco" },
@@ -3311,7 +3658,24 @@ requires-dist = [
     { name = "eclipse-zenoh", specifier = "~=1.7.0" },
     { name = "fastapi" },
     { name = "gpiozero", marker = "extra == 'wireless-version'", specifier = ">=2.0.0" },
-    { name = "gst-signalling", marker = "extra == 'gstreamer'", specifier = ">=1.1.2" },
+    { name = "gstreamer", marker = "sys_platform == 'darwin' or sys_platform == 'win32'", url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/d59054109d4dacf3562242c5ff7e66f9485613777f32d023f61c7b5f544fd16d/gstreamer-1.27.90-py3-none-any.whl" },
+    { name = "gstreamer-cli", marker = "sys_platform == 'darwin'", url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/f40e05e0df2691900386dbe68fc150273fc6813a1af02baafce68675b452501d/gstreamer_cli-1.27.90-cp39-abi3-macosx_10_13_universal2.whl" },
+    { name = "gstreamer-cli", marker = "sys_platform == 'win32'", url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/3f01227e2d34ace833f5fd712e6ca0a3f384dba33804c8576ed4f70d31cc8186/gstreamer_cli-1.27.90-cp39-abi3-win_amd64.whl" },
+    { name = "gstreamer-gtk", marker = "sys_platform == 'darwin'", url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/fb53ea70c92c523f711babdfda8ee797657924105a6e593653599c0b0539839e/gstreamer_gtk-1.27.90-cp39-abi3-macosx_10_15_universal2.whl" },
+    { name = "gstreamer-gtk", marker = "sys_platform == 'win32'", url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/09121ed36e7f8dfb73b22ad6c3a4da35b3669d23cd3a3d58232ffa34f8062030/gstreamer_gtk-1.27.90-cp39-abi3-win_amd64.whl" },
+    { name = "gstreamer-msvc-runtime", marker = "sys_platform == 'win32'", url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/a197660657fe423ef6f43cc6a9d155c3e9e449279b79778b70378d60b60b9011/gstreamer_msvc_runtime-1.27.90-cp39-abi3-win_amd64.whl" },
+    { name = "gstreamer-plugins", marker = "sys_platform == 'darwin'", url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/5a5da63fb8aab6754fb3a5ea0050c7903628215ef6b8aa7ada61d48402cb29a4/gstreamer_plugins-1.27.90-cp39-abi3-macosx_10_13_universal2.whl" },
+    { name = "gstreamer-plugins", marker = "sys_platform == 'win32'", url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/4fb18547164b6e2f94848690552485c172e17aac91a60267bc961eac54e00521/gstreamer_plugins-1.27.90-cp39-abi3-win_amd64.whl" },
+    { name = "gstreamer-plugins-gpl", marker = "sys_platform == 'darwin'", url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/9c5fe8d199adfcd1ca57d7b985ebb92e785a91a4583f29274b6bb44636e21581/gstreamer_plugins_gpl-1.27.90-cp39-abi3-macosx_10_13_universal2.whl" },
+    { name = "gstreamer-plugins-gpl", marker = "sys_platform == 'win32'", url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/02018070cd7c735be3d5eb197f0165722f9c75214af4e803ff2a3dd1e36c8876/gstreamer_plugins_gpl-1.27.90-cp39-abi3-win_amd64.whl" },
+    { name = "gstreamer-plugins-gpl-restricted", marker = "sys_platform == 'darwin'", url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/f57457c01fb828df993816798f96fd650a47cb42b287c8c0bd82f7f353293eb7/gstreamer_plugins_gpl_restricted-1.27.90-cp39-abi3-macosx_10_13_universal2.whl" },
+    { name = "gstreamer-plugins-gpl-restricted", marker = "sys_platform == 'win32'", url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/d4dc71430c7221b9d3e71bfb4d2863aaddad63d0e169918d82e61364ec62849c/gstreamer_plugins_gpl_restricted-1.27.90-cp39-abi3-win_amd64.whl" },
+    { name = "gstreamer-plugins-restricted", marker = "sys_platform == 'darwin'", url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/36fb1d58016e335ca2178d520fcd096f6d9a3a792b3a587390cd65abffbc9e5d/gstreamer_plugins_restricted-1.27.90-cp39-abi3-macosx_10_13_universal2.whl" },
+    { name = "gstreamer-plugins-restricted", marker = "sys_platform == 'win32'", url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/8e91d6027edaa966be131140b8e466b714df7008e11ad4998fd11ea9ec41aa0e/gstreamer_plugins_restricted-1.27.90-cp39-abi3-win_amd64.whl" },
+    { name = "gstreamer-plugins-runtime", marker = "sys_platform == 'darwin'", url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/e0d3774208108570f3fd283aeee913d6a3d85b5aab28be7b2d1229d33096b069/gstreamer_plugins_runtime-1.27.90-cp39-abi3-macosx_10_13_universal2.whl" },
+    { name = "gstreamer-plugins-runtime", marker = "sys_platform == 'win32'", url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/f37f89c14dae3b44f910d841f93e2bafca67810b5a34d324bc7c4d790f457814/gstreamer_plugins_runtime-1.27.90-cp39-abi3-win_amd64.whl" },
+    { name = "gstreamer-runtime", marker = "sys_platform == 'darwin'", url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/3b90564ee2517637690c30910cc267abc3edf3a9316274024504f5365b9b26a3/gstreamer_runtime-1.27.90-cp39-abi3-macosx_10_13_universal2.whl" },
+    { name = "gstreamer-runtime", marker = "sys_platform == 'win32'", url = "https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/c46cd36ce41266b1c9896e12c41087303dbba62002dedde54dde800d67d00cc5/gstreamer_runtime-1.27.90-cp39-abi3-win_amd64.whl" },
     { name = "huggingface-hub", specifier = "==1.3.0" },
     { name = "jinja2" },
     { name = "lgpio", marker = "extra == 'wireless-version'", specifier = ">=0.2.2.0" },
@@ -3331,7 +3695,7 @@ requires-dist = [
     { name = "pollen-bmi088-imu-library", marker = "extra == 'wireless-version'" },
     { name = "pre-commit", marker = "extra == 'dev'" },
     { name = "psutil" },
-    { name = "pygobject", marker = "extra == 'gstreamer'", specifier = ">=3.42.2,<=3.46.0" },
+    { name = "pygobject", marker = "sys_platform == 'linux'", specifier = ">=3.42.2,<=3.46.0" },
     { name = "pynput", marker = "extra == 'examples'" },
     { name = "pyserial" },
     { name = "pytest", marker = "extra == 'dev'" },
@@ -3349,8 +3713,7 @@ requires-dist = [
     { name = "rustypot", specifier = ">=1.4.2" },
     { name = "scipy", specifier = ">=1.15.3,<2.0.0" },
     { name = "semver", marker = "extra == 'wireless-version'", specifier = ">=3,<4" },
-    { name = "sounddevice", specifier = "==0.5.1" },
-    { name = "soundfile", specifier = "==0.13.1" },
+    { name = "soundfile", marker = "extra == 'examples'" },
     { name = "toml" },
     { name = "types-requests", marker = "extra == 'dev'" },
     { name = "types-toml", marker = "extra == 'dev'" },
@@ -3359,7 +3722,7 @@ requires-dist = [
     { name = "uvicorn", extras = ["standard"] },
     { name = "websockets", specifier = ">=12,<16" },
 ]
-provides-extras = ["dev", "examples", "mujoco", "nn-kinematics", "placo-kinematics", "gstreamer", "rerun", "wireless-version"]
+provides-extras = ["dev", "examples", "mujoco", "nn-kinematics", "placo-kinematics", "rerun", "wireless-version"]
 
 [[package]]
 name = "reachy-mini-motor-controller"
@@ -3692,7 +4055,9 @@ name = "scipy"
 version = "1.15.3"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
-    "python_full_version < '3.11'",
+    "python_full_version < '3.11' and sys_platform != 'darwin' and sys_platform != 'win32'",
+    "python_full_version < '3.11' and sys_platform == 'win32'",
+    "python_full_version < '3.11' and sys_platform == 'darwin'",
 ]
 dependencies = [
     { name = "numpy", marker = "python_full_version < '3.11'" },
@@ -3868,21 +4233,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/75/39/4b7fe2b7cfb42a39e5bb4ef2970a3befc0febbf2b5b8ef85fac04ca6dcb3/smbus3-0.5.5.tar.gz", hash = "sha256:91eed38fb6b7d2f893fbfc3f37006aa41e6913fdda5b3a9a79238b353760f92e", size = 22100, upload-time = "2024-06-29T01:55:18.214Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/f5/cf/a0cfae35dac3e3d0b1b4242c8ba184616a47550f8c727b0df654d4338e2d/smbus3-0.5.5-py3-none-any.whl", hash = "sha256:7f4cc169975543e67e4b7404168ce918e656f6f8daca5de2bd30527298058083", size = 13616, upload-time = "2024-06-29T01:55:16.434Z" },
-]
-
-[[package]]
-name = "sounddevice"
-version = "0.5.1"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "cffi" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/80/2d/b04ae180312b81dbb694504bee170eada5372242e186f6298139fd3a0513/sounddevice-0.5.1.tar.gz", hash = "sha256:09ca991daeda8ce4be9ac91e15a9a81c8f81efa6b695a348c9171ea0c16cb041", size = 52896, upload-time = "2024-10-12T09:40:12.24Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/06/d1/464b5fca3decdd0cfec8c47f7b4161a0b12972453201c1bf03811f367c5e/sounddevice-0.5.1-py3-none-any.whl", hash = "sha256:e2017f182888c3f3c280d9fbac92e5dbddac024a7e3442f6e6116bd79dab8a9c", size = 32276, upload-time = "2024-10-12T09:40:05.605Z" },
-    { url = "https://files.pythonhosted.org/packages/6f/f6/6703fe7cf3d7b7279040c792aeec6334e7305956aba4a80f23e62c8fdc44/sounddevice-0.5.1-py3-none-macosx_10_6_x86_64.macosx_10_6_universal2.whl", hash = "sha256:d16cb23d92322526a86a9490c427bf8d49e273d9ccc0bd096feecd229cde6031", size = 107916, upload-time = "2024-10-12T09:40:07.436Z" },
-    { url = "https://files.pythonhosted.org/packages/57/a5/78a5e71f5ec0faedc54f4053775d61407bfbd7d0c18228c7f3d4252fd276/sounddevice-0.5.1-py3-none-win32.whl", hash = "sha256:d84cc6231526e7a08e89beff229c37f762baefe5e0cc2747cbe8e3a565470055", size = 312494, upload-time = "2024-10-12T09:40:09.355Z" },
-    { url = "https://files.pythonhosted.org/packages/af/9b/15217b04f3b36d30de55fef542389d722de63f1ad81f9c72d8afc98cb6ab/sounddevice-0.5.1-py3-none-win_amd64.whl", hash = "sha256:4313b63f2076552b23ac3e0abd3bcfc0c1c6a696fc356759a13bd113c9df90f1", size = 363634, upload-time = "2024-10-12T09:40:11.065Z" },
 ]
 
 [[package]]
