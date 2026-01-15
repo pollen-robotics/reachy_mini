@@ -4,18 +4,25 @@
 >
 > This guide explains how to reflash the ReachyMiniOS ISO to Reachy Mini's CM4. Doing that will do a factory reset to your Reachy Mini.
 > 
-> **Most users do not need this.** Reachy Mini comes pre-installed. Only follow these steps if you have a broken installation that you couldn't debug
+> **Most users do not need this.** Reachy Mini comes pre-installed. Only follow these steps if you have a broken installation that you couldn't debug.
 
+---
 
 ## Download the ISO and bmap
 
-First, download the latest ISO and bmap from here : https://github.com/pollen-robotics/reachy-mini-os/releases
+First, download the latest ISO and `.bmap` file from:  
+https://github.com/pollen-robotics/reachy-mini-os/releases
 
-## Install rpiboot 
+---
 
-Follow the instructions here: https://github.com/raspberrypi/usbboot?tab=readme-ov-file#building-1
+## Install rpiboot
 
-## Install bmap tools
+Follow the instructions here:  
+https://github.com/raspberrypi/usbboot?tab=readme-ov-file#building-1
+
+---
+
+## Install bmaptool
 
 <details>
 <summary><strong>Linux</strong></summary>
@@ -29,32 +36,50 @@ sudo apt install bmap-tools
 <details>
 <summary><strong>macOS</strong></summary>
 
-Install bmaptool automatically from the latest release:
+Install bmaptool from the official repository:
 
 ```bash
-pip install $(curl -s https://api.github.com/repos/yoctoproject/bmaptool/releases/latest | grep -o '"zipball_url": "[^"]*' | grep -o 'https://[^"]*')
+python3 -m pip install --user "git+https://github.com/yoctoproject/bmaptool.git"
+export PATH="$HOME/.local/bin:$PATH"
+bmaptool --version
 ```
 
-Alternatively, if you prefer to specify the version manually, visit the [bmaptool releases page](https://github.com/yoctoproject/bmaptool/releases).
+**Alternative (Homebrew):**
+
+```bash
+brew install bmap-tools
+```
 
 </details>
 
-## Setup 
+---
 
-1. **Shutdown the robot completely** before proceeding.
+## Setup
 
-2. Run the rpiboot command in your terminal:
+1. **Shut down the robot completely** before proceeding.
+
+2. Run the `rpiboot` command in your terminal (it will wait for the robot to be connected):
+
    ```bash
    sudo ./rpiboot -d mass-storage-gadget64
    ```
 
-3. Set the switch to DOWNLOAD SW1 on the head PCB:
+   You should see something like:
+   ```
+   Waiting for BCM2835/6/7/2711/2712...
+   ```
+   This is expected — the command is waiting for the robot to be connected over USB.
+
+3. Set the switch to **DOWNLOAD (SW1)** on the head PCB:
 
    [![pcb_usb_and_switch](/docs/assets/pcb_usb_and_switch.png)]()
 
-4. Plug the USB cable (the one shown in the image above, named USB2)
+4. Plug the USB cable (the one shown in the image above, named **USB2**).
 
-5. **Power on the robot** - your device should now be visible as a storage device
+5. **Power on the robot**.  
+   The internal eMMC should now appear as a mass-storage device.
+
+---
 
 ## Unmount and Flash the ISO
 
@@ -82,8 +107,8 @@ sda           8:0    1  14.6G  0 disk
 
 **Unmount** the partitions:
 ```bash
-sudo umount /media/username/bootfs
-sudo umount /media/username/rootfs
+sudo umount /media/<username>/bootfs
+sudo umount /media/<username>/rootfs
 ```
 
 ### Flash the ISO
@@ -122,7 +147,7 @@ diskutil unmountDisk /dev/disk4
 
 Replace `/dev/disk4` with your actual disk identifier.
 
-**Note:** `unmountDisk` unmounts all volumes on the disk (`bootfs`, `rootfs`...) at once.
+> **Note:** `unmountDisk` unmounts all volumes on the disk (`bootfs`, `rootfs`...) at once.
 
 ### Flash the ISO
 
@@ -142,25 +167,35 @@ sudo bmaptool copy image_2025-11-19-reachyminios-lite-v0.0.10.zip --bmap 2025-11
 
 ---
 
-When it's done, you must ⚠️**move the switch back to DEBUG**⚠️ and reboot the robot.
+## Restore Normal Boot Mode
 
-## Check that everything is working
+1. **Power off the robot**
+2. **Move the switch back to DEBUG**
+3. **Disconnect the USB cable**
+4. **Power the robot back on**
 
-Connect your computer to the robot's WiFi hotspot (`reachy-mini-ap`, password: `reachy-mini`).
+---
 
-ssh into the robot : 
+## Check that Everything Is Working
+
+**Connect your computer to the robot's WiFi hotspot:**
+- Network name: `reachy-mini-ap`
+- Password: `reachy-mini`
+
+SSH into the robot: 
 
 ```bash
 ssh pollen@reachy-mini.local
 # password: root
 ```
-Then run : 
+
+Then run: 
 
 ```bash
 reachyminios_check
 ```
 
-If successful, you should see : 
+If successful, you should see:
 ```bash
 Image validation PASSED
 ```
