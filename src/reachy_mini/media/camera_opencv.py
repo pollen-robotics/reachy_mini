@@ -48,6 +48,15 @@ Example usage via MediaManager:
 
 """
 
+import warnings
+
+warnings.warn(
+    "The 'reachy_mini.media.camera_opencv' module is deprecated and will be removed in a future version. "
+    "Use MediaManager with MediaBackend.GSTREAMER instead.",
+    FutureWarning,
+    stacklevel=2,
+)
+
 from typing import Optional, cast
 
 import cv2

@@ -9,10 +9,10 @@ platforms and use cases.
 
 Available backends:
 - NO_MEDIA: No media devices (useful for headless operation)
-- DEFAULT: OpenCV + SoundDevice (cross-platform default)
-- DEFAULT_NO_VIDEO: SoundDevice only (audio without video)
-- GSTREAMER: GStreamer-based media (advanced features)
-- GSTREAMER_NO_VIDEO: GStreamer audio only
+- SOUNDDEVICE_OPENCV: OpenCV + SoundDevice (former cross-platform default)
+- SOUNDDEVICE_NO_VIDEO: SoundDevice only (audio without video)
+- GSTREAMER: GStreamer-based media (advanced features)- Alias: DEFAULT
+- GSTREAMER_NO_VIDEO: GStreamer audio only- Alias: DEFAULT_NO_VIDEO
 - WEBRTC: WebRTC-based media for real-time communication
 
 Example usage:
@@ -56,25 +56,27 @@ class MediaBackend(Enum):
     Attributes:
         NO_MEDIA: No media devices - useful for headless operation or when
                  media devices are not needed.
-        DEFAULT: Default backend using OpenCV for video and SoundDevice for audio.
+        SOUNDDEVICE_OPENCV: Default backend using OpenCV for video and SoundDevice for audio.
                 Cross-platform and widely compatible.
-        DEFAULT_NO_VIDEO: SoundDevice audio only - for audio processing without video.
+        SOUNDDEVICE_NO_VIDEO: SoundDevice audio only - for audio processing without video.
         GSTREAMER: GStreamer-based media backend with advanced video and audio
-                  processing capabilities.
+                  processing capabilities. Alias: DEFAULT
         GSTREAMER_NO_VIDEO: GStreamer audio only - for advanced audio processing
-                           without video.
+                           without video. Alias: DEFAULT_NO_VIDEO
         WEBRTC: WebRTC-based media backend for real-time communication and
                streaming applications.
 
     """
 
-    # TODO remove gstreamer since it's default
     NO_MEDIA = "no_media"
-    DEFAULT = "default"
-    DEFAULT_NO_VIDEO = "default_no_video"
     GSTREAMER = "gstreamer"
     GSTREAMER_NO_VIDEO = "gstreamer_no_video"
+    SOUNDDEVICE_NO_VIDEO = "sounddevice_no_video"
+    SOUNDDEVICE_OPENCV = "sounddevice_opencv"
     WEBRTC = "webrtc"
+
+    DEFAULT_NO_VIDEO = GSTREAMER_NO_VIDEO
+    DEFAULT = GSTREAMER 
 
 
 class MediaManager:
@@ -130,24 +132,23 @@ class MediaManager:
         match backend:
             case MediaBackend.NO_MEDIA:
                 self.logger.info("No media backend selected.")
-            case MediaBackend.DEFAULT:
-                self.logger.info("Using default media backend (Gstreamer).")
+            case MediaBackend.SOUNDDEVICE_OPENCV:
+                self.logger.info("Using OpenCV + SoundDevice media backend.")
                 self._init_camera(use_sim, log_level)
                 self._init_audio(log_level)
-            case MediaBackend.DEFAULT_NO_VIDEO:
-                self.logger.info("Using default media backend (Gstreamer audio only).")
+            case MediaBackend.SOUNDDEVICE_NO_VIDEO:
+                self.logger.info("Using SoundDevice audio only backend.")
                 self._init_audio(log_level)
             case MediaBackend.GSTREAMER:
                 self.logger.info("Using GStreamer media backend.")
                 self._init_camera(use_sim, log_level)
                 self._init_audio(log_level)
             case MediaBackend.GSTREAMER_NO_VIDEO:
-                self.logger.info("Using GStreamer audio backend.")
+                self.logger.info("Using GStreamer audio only backend.")
                 self._init_audio(log_level)
             case MediaBackend.WEBRTC:
                 self.logger.info("Using WebRTC GStreamer backend.")
                 self._init_webrtc(log_level, signalling_host, 8443)
-                # self._init_audio(log_level)
             case _:
                 raise NotImplementedError(f"Media backend {backend} not implemented.")
 
@@ -189,8 +190,7 @@ class MediaManager:
     ) -> None:
         """Initialize the camera."""
         self.logger.debug("Initializing camera...")
-        """
-        if self.backend == MediaBackend.DEFAULT:
+        if self.backend == MediaBackend.SOUNDDEVICE_OPENCV:
             self.logger.info("Using OpenCV camera backend.")
             from reachy_mini.media.camera_opencv import OpenCVCamera
 
@@ -198,19 +198,13 @@ class MediaManager:
             if use_sim:
                 self.camera.open(udp_camera="udp://@127.0.0.1:5005")
             else:
-                self.camera.open()
+                self.camera.open()     
         elif self.backend == MediaBackend.GSTREAMER:
-        """
-        if (
-            self.backend == MediaBackend.GSTREAMER
-            or self.backend == MediaBackend.DEFAULT
-        ):
             self.logger.info("Using GStreamer camera backend.")
             from reachy_mini.media.camera_gstreamer import GStreamerCamera
 
             self.camera = GStreamerCamera(log_level=log_level, use_sim=use_sim)
             self.camera.open()
-
         else:
             raise NotImplementedError(f"Camera backend {self.backend} not implemented.")
 
@@ -249,10 +243,9 @@ class MediaManager:
     def _init_audio(self, log_level: str) -> None:
         """Initialize the audio system."""
         self.logger.debug("Initializing audio...")
-        """
         if (
-            self.backend == MediaBackend.DEFAULT
-            or self.backend == MediaBackend.DEFAULT_NO_VIDEO
+            self.backend == MediaBackend.SOUNDDEVICE_OPENCV
+            or self.backend == MediaBackend.SOUNDDEVICE_NO_VIDEO
         ):
             self.logger.info("Using SoundDevice audio backend.")
             from reachy_mini.media.audio_sounddevice import SoundDeviceAudio
@@ -261,13 +254,6 @@ class MediaManager:
         elif (
             self.backend == MediaBackend.GSTREAMER
             or self.backend == MediaBackend.GSTREAMER_NO_VIDEO
-        ):
-        """
-        if (
-            self.backend == MediaBackend.GSTREAMER
-            or self.backend == MediaBackend.GSTREAMER_NO_VIDEO
-            or self.backend == MediaBackend.DEFAULT
-            or self.backend == MediaBackend.DEFAULT_NO_VIDEO
         ):
             self.logger.info("Using GStreamer audio backend.")
             from reachy_mini.media.audio_gstreamer import GStreamerAudio

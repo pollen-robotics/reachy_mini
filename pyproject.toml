@@ -94,6 +94,9 @@ wireless-version = [
     "gpiozero>=2.0.0",
     "lgpio>=0.2.2.0",
 ]
+sounddevice = ["sounddevice==0.5.1", "soundfile"]
+opencv = ["opencv-python<=5.0", "cv2_enumerate_cameras>=1.2.1"]
+dev_media = ["reachy_mini[dev,sounddevice,opencv]"]
 
 [project.scripts]
 reachy-mini-daemon = "reachy_mini.daemon.app.main:main"

@@ -52,4 +52,8 @@ For more information on specific components, see:
 - audio_base.py: Audio interface definition
 - camera_opencv.py: OpenCV camera implementation
 - audio_sounddevice.py: SoundDevice audio implementation
+- audio_gstreamer.py: GStreamer audio implementation
+- camera_gstreamer.py: GStreamer camera implementation
+- webrtc_client_gstreamer.py: WebRTC GStreamer client implementation
+- webrtc_daemon.py: WebRTC GStreamer daemon/server implementation
 """

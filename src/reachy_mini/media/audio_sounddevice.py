@@ -39,6 +39,24 @@ Example usage via MediaManager:
 
 """
 
+import warnings
+
+warnings.warn(
+    "The 'reachy_mini.media.audio_sounddevice' module is deprecated and will be removed in a future version. "
+    "Use MediaManager with MediaBackend.GSTREAMER or MediaBackend.GSTREAMER_NO_VIDEO instead.",
+    FutureWarning,
+    stacklevel=2,
+)
+
+try:
+    import sounddevice as sd
+    import soundfile as sf
+except ImportError as e:
+    raise ImportError(
+        "The 'sounddevice' and 'soundfile' modules are required for SoundDeviceAudio but could not be imported. "
+        "Please install the optional 'sounddevice' dependencies with:\n  pip install .[sounddevice]"
+    ) from e
+
 import os
 import threading
 from collections import deque
@@ -47,8 +65,6 @@ from typing import Deque, List, Optional
 import numpy as np
 import numpy.typing as npt
 import scipy
-import sounddevice as sd
-import soundfile as sf
 
 from reachy_mini.utils.constants import ASSETS_ROOT_PATH
 
