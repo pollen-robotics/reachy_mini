@@ -8,7 +8,7 @@ version = "1.2.8"
 authors = [{ name = "Pollen Robotics", email = "contact@pollen-robotics.com" }]
 description = ""
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.10"
 dependencies = [
     "numpy>=2.2.5",
     "scipy>=1.15.3, <2.0.0",
@@ -35,8 +35,31 @@ dependencies = [
     "toml",
     "rustypot>=1.4.2",
 
-    # OS-specific: install gstreamer wheel from custom index for Windows and macOS
+
+    ## Pick meta package from the gitlab registry for now: https://github.com/pypi/support/issues/8847
     "gstreamer @ https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/d59054109d4dacf3562242c5ff7e66f9485613777f32d023f61c7b5f544fd16d/gstreamer-1.27.90-py3-none-any.whl ; (sys_platform == \"win32\" or sys_platform == \"darwin\")",
+
+    ## Temporarily work around broken pypi metadata: https://github.com/pypi/warehouse/issues/18482#issuecomment-3164270257
+    # Windows
+    "gstreamer_cli @ https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/3f01227e2d34ace833f5fd712e6ca0a3f384dba33804c8576ed4f70d31cc8186/gstreamer_cli-1.27.90-cp39-abi3-win_amd64.whl ; (sys_platform == \"win32\")",
+    "gstreamer_runtime @ https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/c46cd36ce41266b1c9896e12c41087303dbba62002dedde54dde800d67d00cc5/gstreamer_runtime-1.27.90-cp39-abi3-win_amd64.whl ; (sys_platform == \"win32\")",
+    "gstreamer_plugins_runtime @ https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/f37f89c14dae3b44f910d841f93e2bafca67810b5a34d324bc7c4d790f457814/gstreamer_plugins_runtime-1.27.90-cp39-abi3-win_amd64.whl ; (sys_platform == \"win32\")",
+    "gstreamer_plugins_restricted @ https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/8e91d6027edaa966be131140b8e466b714df7008e11ad4998fd11ea9ec41aa0e/gstreamer_plugins_restricted-1.27.90-cp39-abi3-win_amd64.whl ; (sys_platform == \"win32\")",
+    "gstreamer_plugins_gpl @ https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/02018070cd7c735be3d5eb197f0165722f9c75214af4e803ff2a3dd1e36c8876/gstreamer_plugins_gpl-1.27.90-cp39-abi3-win_amd64.whl ; (sys_platform == \"win32\")",
+    "gstreamer_plugins_gpl_restricted @ https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/d4dc71430c7221b9d3e71bfb4d2863aaddad63d0e169918d82e61364ec62849c/gstreamer_plugins_gpl_restricted-1.27.90-cp39-abi3-win_amd64.whl ; (sys_platform == \"win32\")",
+    "gstreamer_plugins @ https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/4fb18547164b6e2f94848690552485c172e17aac91a60267bc961eac54e00521/gstreamer_plugins-1.27.90-cp39-abi3-win_amd64.whl ; (sys_platform == \"win32\")",
+    "gstreamer_msvc_runtime @ https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/a197660657fe423ef6f43cc6a9d155c3e9e449279b79778b70378d60b60b9011/gstreamer_msvc_runtime-1.27.90-cp39-abi3-win_amd64.whl ; (sys_platform == \"win32\")",
+    "gstreamer_gtk @ https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/09121ed36e7f8dfb73b22ad6c3a4da35b3669d23cd3a3d58232ffa34f8062030/gstreamer_gtk-1.27.90-cp39-abi3-win_amd64.whl ; (sys_platform == \"win32\")",
+    # macOS
+    "gstreamer_cli @ https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/f40e05e0df2691900386dbe68fc150273fc6813a1af02baafce68675b452501d/gstreamer_cli-1.27.90-cp39-abi3-macosx_10_13_universal2.whl ; (sys_platform == \"darwin\")",
+    "gstreamer_runtime @ https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/3b90564ee2517637690c30910cc267abc3edf3a9316274024504f5365b9b26a3/gstreamer_runtime-1.27.90-cp39-abi3-macosx_10_13_universal2.whl ; (sys_platform == \"darwin\")",
+    "gstreamer_plugins_runtime @ https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/e0d3774208108570f3fd283aeee913d6a3d85b5aab28be7b2d1229d33096b069/gstreamer_plugins_runtime-1.27.90-cp39-abi3-macosx_10_13_universal2.whl ; (sys_platform == \"darwin\")",
+    "gstreamer_plugins_restricted @ https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/36fb1d58016e335ca2178d520fcd096f6d9a3a792b3a587390cd65abffbc9e5d/gstreamer_plugins_restricted-1.27.90-cp39-abi3-macosx_10_13_universal2.whl ; (sys_platform == \"darwin\")",
+    "gstreamer_plugins_gpl @ https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/9c5fe8d199adfcd1ca57d7b985ebb92e785a91a4583f29274b6bb44636e21581/gstreamer_plugins_gpl-1.27.90-cp39-abi3-macosx_10_13_universal2.whl ; (sys_platform == \"darwin\")",
+    "gstreamer_plugins_gpl_restricted @ https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/f57457c01fb828df993816798f96fd650a47cb42b287c8c0bd82f7f353293eb7/gstreamer_plugins_gpl_restricted-1.27.90-cp39-abi3-macosx_10_13_universal2.whl ; (sys_platform == \"darwin\")",
+    "gstreamer_plugins @ https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/5a5da63fb8aab6754fb3a5ea0050c7903628215ef6b8aa7ada61d48402cb29a4/gstreamer_plugins-1.27.90-cp39-abi3-macosx_10_13_universal2.whl ; (sys_platform == \"darwin\")",
+    "gstreamer_gtk @ https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/files/fb53ea70c92c523f711babdfda8ee797657924105a6e593653599c0b0539839e/gstreamer_gtk-1.27.90-cp39-abi3-macosx_10_15_universal2.whl ; (sys_platform == \"darwin\")",
+
     # OS-specific: use PyGObject for Linux
     "PyGObject>=3.42.2,<=3.46.0; sys_platform == 'linux'",
 ]
