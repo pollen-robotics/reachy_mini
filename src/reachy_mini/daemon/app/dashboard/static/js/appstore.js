@@ -51,7 +51,16 @@ const hfAppsStore = {
         hfApps.forEach(app => {
             const li = document.createElement('li');
             li.className = 'app-list-item';
-            const isInstalled = installedApps.some(installedApp => installedApp.name === app.name);
+            const isInstalled = installedApps.some(installedApp => {
+                // Match by HuggingFace space ID (extra.id) - most reliable
+                if (installedApp.extra?.id && app.extra?.id) {
+                    if (installedApp.extra.id === app.extra.id) {
+                        return true;
+                    }
+                }
+                // Fallback: direct name match
+                return installedApp.name === app.name;
+            });
             li.appendChild(hfAppsStore.createAppElement(app, isInstalled));
             appsListElement.appendChild(li);
         });

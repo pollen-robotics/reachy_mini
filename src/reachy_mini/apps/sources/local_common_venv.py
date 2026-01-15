@@ -314,8 +314,8 @@ async def _list_apps_from_entry_points() -> list[AppInfo]:
                 f"Could not load app '{ep.name}' from entry point: {e}"
             )
 
-        # Load saved metadata (e.g., private flag)
-        metadata = _load_app_metadata(ep.name)
+        # Load saved metadata (searches by entry point name and HuggingFace space name)
+        metadata = _find_metadata_for_entry_point(ep.name)
         # Merge with current extra data
         extra_data = {"custom_app_url": custom_app_url}
         extra_data.update(metadata)
@@ -372,6 +372,72 @@ def _load_app_metadata(app_name: str) -> dict:  # type: ignore
             return json.load(f)  # type: ignore
     except Exception:
         return {}
+
+
+def _find_metadata_for_entry_point(ep_name: str) -> dict:  # type: ignore
+    """Find metadata for an entry point, even if saved with a different name.
+
+    When apps are installed from HuggingFace, metadata is saved with the space name,
+    but entry points may use a different Python package name (different separators
+    or additional suffixes). This function searches for matching metadata.
+
+    Returns:
+        dict: The loaded metadata (may be empty if not found)
+
+    """
+    import json
+
+    # First, try direct match by entry point name
+    metadata = _load_app_metadata(ep_name)
+    if metadata:
+        return metadata
+
+    # If not found, scan all metadata files to find a match
+    parent_dir = _get_venv_parent_dir()
+    metadata_dir = parent_dir / ".app_metadata"
+
+    if not metadata_dir.exists():
+        return {}
+
+    # Normalize name for comparison (remove underscores/dashes, lowercase)
+    def normalize(name: str) -> str:
+        return name.lower().replace("_", "").replace("-", "")
+
+    ep_normalized = normalize(ep_name)
+
+    for metadata_file in metadata_dir.glob("*.json"):
+        try:
+            with open(metadata_file, "r") as f:
+                file_metadata = json.load(f)
+
+            # Get the space name from the file (filename without .json)
+            space_name = metadata_file.stem
+
+            # Check 1: Normalized name match
+            if normalize(space_name) == ep_normalized:
+                return file_metadata # type: ignore
+
+            # Check 2: Entry point name appears in siblings (package structure)
+            siblings = file_metadata.get("siblings", [])
+            for sibling in siblings:
+                rfilename = sibling.get("rfilename", "")
+                # Check if entry point package folder exists in siblings
+                if rfilename.startswith(f"{ep_name}/"):
+                    return file_metadata # type: ignore
+
+            # Check 3: extra.id contains normalized match
+            extra_id = file_metadata.get("id", "")
+            if extra_id:
+                # Extract app name from full ID (remove author prefix)
+                id_name = extra_id.split("/")[-1] if "/" in extra_id else extra_id
+                if normalize(id_name) == ep_normalized:
+                    return file_metadata # type: ignore
+
+        except Exception:
+            continue
+
+    # No match found
+    return {}
 
 
 def _delete_app_metadata(app_name: str) -> None:
@@ -620,7 +686,15 @@ async def install_package(
         else:
             install_cmd = [sys.executable, "-m", "pip", "install", target]
 
-        return await running_command(install_cmd, logger=logger)
+        ret = await running_command(install_cmd, logger=logger)
+
+        if ret == 0 and app.extra:
+            # Save app metadata so we can match by extra.id later
+            # Use the space name (app.name) as the key
+            _save_app_metadata(app.name, app.extra)
+            logger.info(f"Saved metadata for '{app.name}': {app.extra}")
+
+        return ret
 
 
 def get_app_module(

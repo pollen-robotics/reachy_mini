@@ -10,7 +10,7 @@
 
 </div>
 
-> **Note**: Python wheels for easy install of GStreamer will be soon released an available on PyPI. They will be directly integrated. Meanwhile, please follow the instructions below to install GStreamer on your system.
+> **Note**: Python wheels for easy install of GStreamer will be soon released and available on PyPI. They will be directly integrated. Meanwhile, please follow the instructions below to install GStreamer on your system.
 
 ## 🔧 Install GStreamer
 
@@ -21,7 +21,7 @@
 
 **For Ubuntu/Debian-based systems:**
 
-In you terminal, run:
+In your terminal, run:
 
 ```bash
 sudo apt-get update
@@ -45,7 +45,7 @@ sudo apt-get install -y \
 
 ### Step 2: Install Rust
 
-On Linux, the WebRTC plugin is not activated by default and needs to be compiled manually from the Rust source code. Install Rust from the commmand line using `rustup`:
+On Linux, the WebRTC plugin is not activated by default and needs to be compiled manually from the Rust source code. Install Rust from the command line using `rustup`:
 
 ```bash
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
@@ -54,7 +54,7 @@ source $HOME/.cargo/env
 
 ### Step 3: Build and install WebRTC plugin
 
-The build and install the WebRTC plugin, run the following commands :
+To build and install the WebRTC plugin, run the following commands:
 
 ```bash
 # Clone the GStreamer Rust plugins repository
