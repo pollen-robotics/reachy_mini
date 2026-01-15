@@ -225,10 +225,10 @@ class GStreamerCamera(CameraBase):
         super().set_resolution(resolution)
 
         # Check if pipeline is not playing before changing resolution
+        should_restart = False
         if self.pipeline.get_state(0).state == Gst.State.PLAYING:
-            raise RuntimeError(
-                "Cannot change resolution while the camera is streaming. Please close the camera first."
-            )
+            self.close()
+            should_restart = True
 
         self._resolution = resolution
         caps_video = Gst.Caps.from_string(
@@ -236,11 +236,16 @@ class GStreamerCamera(CameraBase):
         )
         self._appsink_video.set_property("caps", caps_video)
 
+        # Restart the pipeline if it was playing before changing resolution
+        if should_restart:
+            self.open()
+
     def open(self) -> None:
         """Open the camera using GStreamer."""
         self.pipeline.set_state(Gst.State.PLAYING)
         self._thread_bus_calls = Thread(target=self._handle_bus_calls, daemon=True)
         self._thread_bus_calls.start()
+        # TODO: Add a small loop to wait for the frames to be ready after restarting the pipeline
 
     def _get_sample(self, appsink: GstApp.AppSink) -> Optional[bytes]:
         sample = appsink.try_pull_sample(20_000_000)
