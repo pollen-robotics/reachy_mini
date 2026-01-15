@@ -50,7 +50,7 @@ SLEEP_HEAD_POSE = np.array(
     ]
 )
 
-ConnectionMode = Literal["auto", "localhost_only", "wireless","network"]
+ConnectionMode = Literal["auto", "localhost_only", "wireless", "network"]
 
 
 class ReachyMini:
