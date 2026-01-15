@@ -4,7 +4,6 @@ import time
 
 import numpy as np
 import pytest
-import soundfile as sf
 
 from reachy_mini.media.audio_utils import _process_card_number_output
 from reachy_mini.media.media_manager import MediaBackend, MediaManager
@@ -68,6 +67,7 @@ def test_push_audio_sample_default_backend() -> None:
 @pytest.mark.audio
 def test_record_audio_and_file_exists() -> None:
     """Test recording audio and check that the file exists and is not empty."""
+    import soundfile as sf
     media = MediaManager(backend=MediaBackend.DEFAULT_NO_VIDEO)
     DURATION = 2  # seconds
     tmpfile = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
@@ -141,6 +141,7 @@ def test_play_sound_gstreamer_backend() -> None:
 @pytest.mark.audio_gstreamer
 def test_record_audio_and_file_exists_gstreamer() -> None:
     """Test recording audio and check that the file exists and is not empty."""
+    import soundfile as sf
     media = MediaManager(backend=MediaBackend.GSTREAMER)
     DURATION = 2  # seconds
     tmpfile = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
@@ -156,7 +157,7 @@ def test_record_audio_and_file_exists_gstreamer() -> None:
             audio_samples.append(sample)
 
     media.stop_recording()
-    
+
     assert len(audio_samples) > 0
     audio_data = np.concatenate(audio_samples, axis=0)
     assert audio_data.ndim == 2 and audio_data.shape[1] == 2
