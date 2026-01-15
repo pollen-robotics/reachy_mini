@@ -60,7 +60,7 @@ try:
 except ImportError as e:
     raise ImportError(
         "The 'gi' module is required for GStreamerAudio but could not be imported. \
-        Please install the GStreamer backend: pip install .[gstreamer]."
+        Please check the gstreamer installation."
     ) from e
 
 gi.require_version("Gst", "1.0")
