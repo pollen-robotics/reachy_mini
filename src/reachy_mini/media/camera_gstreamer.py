@@ -41,6 +41,7 @@ Example usage:
 
 import os
 import platform
+import time
 from threading import Thread
 from typing import Optional, Tuple, cast
 
@@ -338,5 +339,6 @@ class GStreamerCamera(CameraBase):
             self.logger.error(f"Error while getting video device: {e}")
         finally:
             self.logger.debug("Stopping monitor")
+            time.sleep(0.001)
             monitor.stop()
         return "", None
