@@ -9,7 +9,7 @@ import pytest
 from reachy_mini.media.audio_utils import _process_card_number_output
 from reachy_mini.media.media_manager import MediaBackend, MediaManager
 
-SIGNALING_HOST = "reachy-mini-2.local"
+SIGNALING_HOST = "reachy-mini.local"
 
 # Check if sounddevice is installed
 _sounddevice_available = importlib.util.find_spec("sounddevice") is not None

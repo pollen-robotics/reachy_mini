@@ -57,18 +57,18 @@ except ImportError as e:
         "Please install the optional 'sounddevice' dependencies with:\n  pip install .[sounddevice]"
     ) from e
 
-import os
-import threading
-from collections import deque
-from typing import Deque, List, Optional
+import os  # noqa: E402
+import threading  # noqa: E402
+from collections import deque  # noqa: E402
+from typing import Deque, List, Optional  # noqa: E402
 
-import numpy as np
-import numpy.typing as npt
-import scipy
+import numpy as np  # noqa: E402
+import numpy.typing as npt  # noqa: E402
+import scipy  # noqa: E402
 
-from reachy_mini.utils.constants import ASSETS_ROOT_PATH
+from reachy_mini.utils.constants import ASSETS_ROOT_PATH  # noqa: E402
 
-from .audio_base import AudioBase
+from .audio_base import AudioBase  # noqa: E402
 
 MAX_INPUT_CHANNELS = 4
 MAX_INPUT_QUEUE_SECONDS = 60.0

@@ -57,20 +57,20 @@ warnings.warn(
     stacklevel=2,
 )
 
-from typing import Optional, cast
+from typing import Optional, cast  # noqa: E402
 
-import cv2
-import numpy as np
-import numpy.typing as npt
+import cv2  # noqa: E402
+import numpy as np  # noqa: E402
+import numpy.typing as npt  # noqa: E402
 
-from reachy_mini.media.camera_constants import (
+from reachy_mini.media.camera_constants import (  # noqa: E402
     CameraResolution,
     CameraSpecs,
     MujocoCameraSpecs,
 )
-from reachy_mini.media.camera_utils import find_camera
+from reachy_mini.media.camera_utils import find_camera  # noqa: E402
 
-from .camera_base import CameraBase
+from .camera_base import CameraBase  # noqa: E402
 
 
 class OpenCVCamera(CameraBase):

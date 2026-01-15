@@ -6,7 +6,7 @@ import time
 # import tempfile
 import importlib.util
 
-SIGNALING_HOST = "reachy-mini-2.local"
+SIGNALING_HOST = "reachy-mini.local"
 
 # Check if OpenCV is installed
 _opencv_available = importlib.util.find_spec("cv2") is not None
