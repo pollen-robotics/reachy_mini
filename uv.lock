@@ -3625,6 +3625,24 @@ dev = [
     { name = "types-toml" },
     { name = "urdf-parser-py" },
 ]
+dev-media = [
+    { name = "cv2-enumerate-cameras" },
+    { name = "mujoco" },
+    { name = "mypy" },
+    { name = "onshape-to-robot" },
+    { name = "opencv-python" },
+    { name = "placo" },
+    { name = "pre-commit" },
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "rerun-sdk" },
+    { name = "ruff" },
+    { name = "sounddevice" },
+    { name = "soundfile" },
+    { name = "types-requests" },
+    { name = "types-toml" },
+    { name = "urdf-parser-py" },
+]
 examples = [
     { name = "pynput" },
     { name = "soundfile" },
@@ -3635,12 +3653,20 @@ mujoco = [
 nn-kinematics = [
     { name = "onnxruntime" },
 ]
+opencv = [
+    { name = "cv2-enumerate-cameras" },
+    { name = "opencv-python" },
+]
 placo-kinematics = [
     { name = "placo" },
 ]
 rerun = [
     { name = "rerun-sdk" },
     { name = "urdf-parser-py" },
+]
+sounddevice = [
+    { name = "sounddevice" },
+    { name = "soundfile" },
 ]
 wireless-version = [
     { name = "gpiozero" },
@@ -3655,6 +3681,7 @@ requires-dist = [
     { name = "aiohttp" },
     { name = "asgiref" },
     { name = "cv2-enumerate-cameras", specifier = ">=1.2.1" },
+    { name = "cv2-enumerate-cameras", marker = "extra == 'opencv'", specifier = ">=1.2.1" },
     { name = "eclipse-zenoh", specifier = "~=1.7.0" },
     { name = "fastapi" },
     { name = "gpiozero", marker = "extra == 'wireless-version'", specifier = ">=2.0.0" },
@@ -3689,6 +3716,7 @@ requires-dist = [
     { name = "onnxruntime", marker = "extra == 'nn-kinematics'", specifier = "==1.22.1" },
     { name = "onshape-to-robot", marker = "extra == 'dev'", specifier = "==1.7.6" },
     { name = "opencv-python", specifier = "<=5.0" },
+    { name = "opencv-python", marker = "extra == 'opencv'", specifier = "<=5.0" },
     { name = "pip", specifier = ">=25" },
     { name = "placo", marker = "extra == 'dev'", specifier = "==0.9.14" },
     { name = "placo", marker = "extra == 'placo-kinematics'", specifier = "==0.9.14" },
@@ -3703,6 +3731,7 @@ requires-dist = [
     { name = "pyusb", specifier = ">=1.2.1" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "questionary" },
+    { name = "reachy-mini", extras = ["dev", "sounddevice", "opencv"], marker = "extra == 'dev-media'" },
     { name = "reachy-mini-motor-controller", specifier = ">=1.5.3" },
     { name = "reachy-mini-rust-kinematics", specifier = ">=1.0.3" },
     { name = "requests", specifier = ">=2.28.0" },
@@ -3713,7 +3742,9 @@ requires-dist = [
     { name = "rustypot", specifier = ">=1.4.2" },
     { name = "scipy", specifier = ">=1.15.3,<2.0.0" },
     { name = "semver", marker = "extra == 'wireless-version'", specifier = ">=3,<4" },
+    { name = "sounddevice", marker = "extra == 'sounddevice'", specifier = "==0.5.1" },
     { name = "soundfile", marker = "extra == 'examples'" },
+    { name = "soundfile", marker = "extra == 'sounddevice'" },
     { name = "toml" },
     { name = "types-requests", marker = "extra == 'dev'" },
     { name = "types-toml", marker = "extra == 'dev'" },
@@ -3722,7 +3753,7 @@ requires-dist = [
     { name = "uvicorn", extras = ["standard"] },
     { name = "websockets", specifier = ">=12,<16" },
 ]
-provides-extras = ["dev", "examples", "mujoco", "nn-kinematics", "placo-kinematics", "rerun", "wireless-version"]
+provides-extras = ["dev", "examples", "mujoco", "nn-kinematics", "placo-kinematics", "rerun", "wireless-version", "sounddevice", "opencv", "dev-media"]
 
 [[package]]
 name = "reachy-mini-motor-controller"
@@ -4233,6 +4264,21 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/75/39/4b7fe2b7cfb42a39e5bb4ef2970a3befc0febbf2b5b8ef85fac04ca6dcb3/smbus3-0.5.5.tar.gz", hash = "sha256:91eed38fb6b7d2f893fbfc3f37006aa41e6913fdda5b3a9a79238b353760f92e", size = 22100, upload-time = "2024-06-29T01:55:18.214Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/f5/cf/a0cfae35dac3e3d0b1b4242c8ba184616a47550f8c727b0df654d4338e2d/smbus3-0.5.5-py3-none-any.whl", hash = "sha256:7f4cc169975543e67e4b7404168ce918e656f6f8daca5de2bd30527298058083", size = 13616, upload-time = "2024-06-29T01:55:16.434Z" },
+]
+
+[[package]]
+name = "sounddevice"
+version = "0.5.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "cffi" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/80/2d/b04ae180312b81dbb694504bee170eada5372242e186f6298139fd3a0513/sounddevice-0.5.1.tar.gz", hash = "sha256:09ca991daeda8ce4be9ac91e15a9a81c8f81efa6b695a348c9171ea0c16cb041", size = 52896, upload-time = "2024-10-12T09:40:12.24Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/06/d1/464b5fca3decdd0cfec8c47f7b4161a0b12972453201c1bf03811f367c5e/sounddevice-0.5.1-py3-none-any.whl", hash = "sha256:e2017f182888c3f3c280d9fbac92e5dbddac024a7e3442f6e6116bd79dab8a9c", size = 32276, upload-time = "2024-10-12T09:40:05.605Z" },
+    { url = "https://files.pythonhosted.org/packages/6f/f6/6703fe7cf3d7b7279040c792aeec6334e7305956aba4a80f23e62c8fdc44/sounddevice-0.5.1-py3-none-macosx_10_6_x86_64.macosx_10_6_universal2.whl", hash = "sha256:d16cb23d92322526a86a9490c427bf8d49e273d9ccc0bd096feecd229cde6031", size = 107916, upload-time = "2024-10-12T09:40:07.436Z" },
+    { url = "https://files.pythonhosted.org/packages/57/a5/78a5e71f5ec0faedc54f4053775d61407bfbd7d0c18228c7f3d4252fd276/sounddevice-0.5.1-py3-none-win32.whl", hash = "sha256:d84cc6231526e7a08e89beff229c37f762baefe5e0cc2747cbe8e3a565470055", size = 312494, upload-time = "2024-10-12T09:40:09.355Z" },
+    { url = "https://files.pythonhosted.org/packages/af/9b/15217b04f3b36d30de55fef542389d722de63f1ad81f9c72d8afc98cb6ab/sounddevice-0.5.1-py3-none-win_amd64.whl", hash = "sha256:4313b63f2076552b23ac3e0abd3bcfc0c1c6a696fc356759a13bd113c9df90f1", size = 363634, upload-time = "2024-10-12T09:40:11.065Z" },
 ]
 
 [[package]]
