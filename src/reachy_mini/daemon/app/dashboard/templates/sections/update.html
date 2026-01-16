@@ -1,30 +1,42 @@
 <div class="app-section">
     <div class="app-section-title">Reachy Mini Update</div>
 
+    <!-- Current version display -->
     <div class="mt-2">
-        <button id="check-again-btn" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg shadow"
-            onclick="updateManager.checkForUpdate()">Check for Updates</button>
-        <label style="margin-left:1em;">
-            <input type="checkbox" id="pre-release-checkbox"
-                onchange="updateManager.preRelease = this.checked; updateManager.checkForUpdate();">
-            pre-release
-        </label>
+        <span id="current-version" class="font-mono text-blue-700"></span>
     </div>
 
-    <div class="flex flex-col gap-2 pt-4">
-        <div id="update-status"></div>
-        <div class="flex flex-row gap-4">
-            <div class="flex flex-col gap-2 w-full px-4">
-                <div><span id="current-version" class="font-mono text-blue-700"></span></div>
-                <div><span id="available-version" class="font-mono text-green-700"></span></div>
-            </div>
+    <!-- PyPI update section -->
+    <div class="mt-4 p-3 bg-gray-50 rounded-lg">
+        <div class="font-medium mb-2">Update from PyPI</div>
+        <div class="flex items-center gap-4">
+            <button id="check-again-btn" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg shadow"
+                onclick="updateManager.checkForUpdate()">Check for Updates</button>
+            <label>
+                <input type="checkbox" id="pre-release-checkbox"
+                    onchange="updateManager.preRelease = this.checked; updateManager.checkForUpdate();">
+                pre-release
+            </label>
         </div>
-
-        <div class="mt-4">
+        <div class="mt-2">
+            <div id="update-status"></div>
+            <div><span id="available-version" class="font-mono text-green-700"></span></div>
             <button id="start-update-btn"
-                class="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg shadow hidden bg-green-400 hover:bg-green-500 text-white"
+                class="mt-2 px-4 py-2 bg-green-400 hover:bg-green-500 text-white rounded-lg shadow hidden"
                 onclick="updateManager.startUpdate()">Start Update</button>
         </div>
+    </div>
+
+    <!-- Git ref install section -->
+    <div class="mt-4 p-3 bg-gray-50 rounded-lg">
+        <div class="font-medium mb-2">Install from GitHub tag/branch</div>
+        <div class="flex items-center gap-2">
+            <input type="text" id="git-ref-input" placeholder="e.g. v1.2.7 or develop"
+                class="px-3 py-2 border rounded-lg flex-1" />
+            <button id="install-ref-btn" class="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg shadow"
+                onclick="updateManager.installFromRef()">Install</button>
+        </div>
+        <div id="git-ref-error" class="mt-2 text-red-600 hidden"></div>
     </div>
 </div>
 
