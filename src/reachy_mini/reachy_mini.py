@@ -298,7 +298,7 @@ class ReachyMini:
                 )
                 try:
                     client = self._connect_single(localhost_only=False, timeout=timeout)
-                except TimeoutError:
+                except (zenoh.ZError, TimeoutError):
                     raise ConnectionError(
                         "Auto connection: both localhost and network attempts failed. "
                         "Make sure a Reachy Mini daemon is running and accessible."
@@ -311,7 +311,7 @@ class ReachyMini:
         if requested_mode == "localhost_only":
             try:
                 client = self._connect_single(localhost_only=True, timeout=timeout)
-            except zenoh.ZError:
+            except (zenoh.ZError, TimeoutError):
                 raise ConnectionError(
                     "Could not connect to daemon on localhost. Is the Reachy Mini daemon running?"
                 )
@@ -319,7 +319,7 @@ class ReachyMini:
         else:
             try:
                 client = self._connect_single(localhost_only=False, timeout=timeout)
-            except TimeoutError:
+            except (zenoh.ZError, TimeoutError):
                 raise ConnectionError(
                     "Network connection attempt failed. "
                     "Make sure a Reachy Mini daemon is running and accessible."
