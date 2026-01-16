@@ -35,6 +35,7 @@ def test_play_sound(backend: MediaBackend) -> None:
     time.sleep(2)
     # No assertion: test passes if no exception is raised.
     # Sound should be audible if the audio device is correctly set up.
+    media.close()
 
 
 @pytest.mark.audio
@@ -79,6 +80,7 @@ def test_push_audio_sample(backend: MediaBackend) -> None:
     # No sound should be audible if the audio device is correctly set up.
 
     media.stop_playing()
+    media.close()
 
 
 @pytest.mark.audio
@@ -111,6 +113,8 @@ def test_record_audio_and_file_exists(backend: MediaBackend) -> None:
     assert os.path.getsize(tmpfile.name) > 0, "File is empty."
 
     os.remove(tmpfile.name)
+    media.close()
+
 
 @pytest.mark.audio
 @pytest.mark.parametrize("backend", NO_VIDEO_BACKENDS)
@@ -119,6 +123,20 @@ def test_record_audio_without_start_recording(backend: MediaBackend) -> None:
     media = MediaManager(backend=backend, signalling_host=SIGNALING_HOST if backend == MediaBackend.WEBRTC else "localhost")
     audio = media.get_audio_sample()
     assert audio is None, "Audio samples were recorded without starting recording."
+    media.close()
+
+
+@pytest.mark.audio
+@pytest.mark.parametrize("backend", NO_VIDEO_BACKENDS)
+def test_push_audio_sample_without_start_playing(backend: MediaBackend) -> None:
+    """Test pushing an audio sample without starting playing."""
+    media = MediaManager(backend=backend, signalling_host=SIGNALING_HOST if backend == MediaBackend.WEBRTC else "localhost")
+    data = np.random.random((media.get_output_audio_samplerate(), 2)).astype(np.float32)
+    media.push_audio_sample(data)
+    time.sleep(1)
+    # No assertion: test passes if no exception is raised.
+    # Sound should not be audible if the audio device is correctly set up.
+    media.close()
 
 
 @pytest.mark.audio_sounddevice
@@ -134,6 +152,8 @@ def test_record_audio_above_max_queue_seconds(backend: MediaBackend) -> None:
 
     assert audio is not None, "No audio samples were recorded."
     assert audio.shape[0] < media.audio._input_max_queue_samples, f"Audio data has incorrect number of samples: {audio.shape[0]} >= {media.audio._input_max_queue_samples}"
+
+    media.close()
 
 
 @pytest.mark.audio
@@ -153,6 +173,8 @@ def test_DoA(backend: MediaBackend) -> None:
     assert doa_proxy is not None, "DoA is not defined."
     assert doa_proxy == doa, f"Proxy DoA is not equal to direct DoA"
 
+    media.close()
+
 
 def test_no_media() -> None:
     """Test that methods handle uninitialized media gracefully."""
@@ -165,6 +187,8 @@ def test_no_media() -> None:
     assert media.get_input_channels() == -1
     assert media.get_output_channels() == -1
     assert media.get_DoA() is None
+
+    media.close()
 
 
 def test_get_respeaker_card_number() -> None:

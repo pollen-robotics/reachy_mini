@@ -35,6 +35,8 @@ def test_get_frame_exists(backend: MediaBackend) -> None:
     #    cv2.imwrite(tmp_file.name, frame)
     #    print(f"Frame saved for inspection: {tmp_file.name}")    
 
+    media.close()
+
 @pytest.mark.video
 @pytest.mark.parametrize("backend", VIDEO_BACKENDS)
 def test_get_frame_exists_all_resolutions(backend: MediaBackend) -> None:
@@ -48,6 +50,8 @@ def test_get_frame_exists_all_resolutions(backend: MediaBackend) -> None:
         assert isinstance(frame, np.ndarray), f"Frame is not a numpy array at resolution {resolution}."
         assert frame.size > 0, f"Frame is empty at resolution {resolution}."
         assert frame.shape[0] == resolution.value[1] and frame.shape[1] == resolution.value[0], f"Frame has incorrect dimensions at resolution {resolution}: {frame.shape}" 
+
+    media.close()
 
 @pytest.mark.video
 @pytest.mark.parametrize("backend", VIDEO_BACKENDS)
@@ -64,3 +68,5 @@ def test_change_resolution_errors(backend: MediaBackend) -> None:
     media.camera.camera_specs = ReachyMiniLiteCamSpecs()
     with pytest.raises(ValueError):
         media.camera.set_resolution(CameraResolution.R1280x720at30fps)
+
+    media.close()
