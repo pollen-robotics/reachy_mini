@@ -658,6 +658,21 @@ class RobotBackend(Backend):
 
         return errors
 
+    def write_raw_packet(self, packet: bytes) -> bytes:
+        """Write a raw packet to the motor controller and return the response.
+
+        Args:
+            packet (bytes): The raw packet to send to the motor controller.
+
+        Returns:
+            bytes: The raw response packet from the motor controller.
+
+        """
+        assert self.c is not None, "Motor controller not initialized or already closed."
+
+        result: bytes = bytes(self.c.write_raw_packet(packet))
+        return result
+
 
 @dataclass
 class RobotBackendStatus:
