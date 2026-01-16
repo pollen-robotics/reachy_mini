@@ -48,20 +48,29 @@ Example usage via MediaManager:
 
 """
 
-from typing import Optional, cast
+import warnings
 
-import cv2
-import numpy as np
-import numpy.typing as npt
+warnings.warn(
+    "The 'reachy_mini.media.camera_opencv' module is deprecated and will be removed in a future version. "
+    "Use MediaManager with MediaBackend.GSTREAMER instead.",
+    FutureWarning,
+    stacklevel=2,
+)
 
-from reachy_mini.media.camera_constants import (
+from typing import Optional, cast  # noqa: E402
+
+import cv2  # noqa: E402
+import numpy as np  # noqa: E402
+import numpy.typing as npt  # noqa: E402
+
+from reachy_mini.media.camera_constants import (  # noqa: E402
     CameraResolution,
     CameraSpecs,
     MujocoCameraSpecs,
 )
-from reachy_mini.media.camera_utils import find_camera
+from reachy_mini.media.camera_utils import find_camera  # noqa: E402
 
-from .camera_base import CameraBase
+from .camera_base import CameraBase  # noqa: E402
 
 
 class OpenCVCamera(CameraBase):

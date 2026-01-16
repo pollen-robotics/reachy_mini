@@ -5,7 +5,14 @@ import logging
 import time
 
 import numpy as np
-import soundfile as sf
+
+try:
+    import soundfile as sf
+except ImportError:
+    print(
+        "The 'soundfile' module is missing. Please install the optional 'examples' dependencies with:\n  pip install .[examples]"
+    )
+    exit(1)
 
 from reachy_mini import ReachyMini
 
@@ -19,7 +26,7 @@ def main(backend: str) -> None:
         level=logging.DEBUG, format="%(asctime)s [%(levelname)s] %(message)s"
     )
 
-    with ReachyMini(log_level="INFO", media_backend=backend) as mini:
+    with ReachyMini(log_level="DEBUG", media_backend=backend) as mini:
         print(f"Recording for {DURATION} seconds...")
         audio_samples = []
         t0 = time.time()
@@ -31,8 +38,8 @@ def main(backend: str) -> None:
                 audio_samples.append(sample)
             else:
                 print("No audio data available yet...")
-            if backend == "default":
-                time.sleep(0.2)
+            # if backend == "default":
+            #    time.sleep(0.2)
         mini.media.stop_recording()
 
         # Concatenate all samples and save

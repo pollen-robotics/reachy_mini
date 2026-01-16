@@ -41,7 +41,7 @@ async def update_reachy_mini(pre_release: bool, logger: logging.Logger) -> None:
                 "--python",
                 str(apps_venv_python),
                 "--upgrade",
-                "reachy-mini[gstreamer]",
+                "reachy-mini",
             ] + extra_args
         else:
             apps_venv_pip = Path("/venvs/apps_venv/bin/pip")
@@ -49,7 +49,7 @@ async def update_reachy_mini(pre_release: bool, logger: logging.Logger) -> None:
                 str(apps_venv_pip),
                 "install",
                 "--upgrade",
-                "reachy-mini[gstreamer]",
+                "reachy-mini",
             ] + extra_args
 
         await call_logger_wrapper(install_cmd, logger)

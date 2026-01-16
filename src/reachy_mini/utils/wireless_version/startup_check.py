@@ -319,13 +319,13 @@ def check_and_sync_apps_venv_sdk() -> None:
                 "install",
                 "--python",
                 str(apps_venv_python),
-                f"reachy-mini[gstreamer]=={daemon_version}",
+                f"reachy-mini=={daemon_version}",
             ]
         else:
             install_cmd = [
                 str(apps_venv_pip),
                 "install",
-                f"reachy-mini[gstreamer]=={daemon_version}",
+                f"reachy-mini=={daemon_version}",
             ]
 
         result = subprocess.run(

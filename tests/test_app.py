@@ -8,12 +8,12 @@ import pytest
 from reachy_mini import ReachyMiniApp
 from reachy_mini.apps import AppInfo, SourceKind
 from reachy_mini.apps.manager import AppManager, AppState
-from reachy_mini.daemon.daemon import Daemon    
+from reachy_mini.daemon.daemon import Daemon
 from reachy_mini.reachy_mini import ReachyMini
 
 
 @pytest.mark.asyncio
-async def test_app() -> None: 
+async def test_app() -> None:
     class MockApp(ReachyMiniApp):
         def run(self, reachy_mini: ReachyMini, stop_event: Event) -> None:
             time.sleep(1)  # Simulate some processing time
@@ -23,6 +23,7 @@ async def test_app() -> None:
         sim=True,
         headless=True,
         wake_up_on_start=False,
+        use_audio=False,
     )
 
     stop = Event()
@@ -35,18 +36,19 @@ async def test_app() -> None:
 
 
 @pytest.mark.asyncio
-async def test_app_manager() -> None: 
+async def test_app_manager() -> None:
     daemon = Daemon()
     await daemon.start(
         sim=True,
         headless=True,
         wake_up_on_start=False,
+        use_audio=False,
     )
 
     app_mngr = AppManager()
 
     before_installed_apps = await app_mngr.list_available_apps(SourceKind.INSTALLED)
-    
+
     app_info = AppInfo(
         name="ok_app",
         source_kind=SourceKind.LOCAL,
@@ -79,16 +81,17 @@ async def test_app_manager() -> None:
 
 
 @pytest.mark.asyncio
-async def test_faulty_app() -> None: 
+async def test_faulty_app() -> None:
     daemon = Daemon()
     await daemon.start(
         sim=True,
         headless=True,
         wake_up_on_start=False,
+        use_audio=False,
     )
 
     app_mngr = AppManager()
-    
+
     app_info = AppInfo(
         name="faulty_app",
         source_kind=SourceKind.LOCAL,
@@ -114,5 +117,3 @@ async def test_faulty_app() -> None:
 
     if not success:
         pytest.fail("Faulty app did not reach ERROR state in time")
-
-

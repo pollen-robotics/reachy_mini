@@ -42,6 +42,7 @@ A **command line** (also called terminal or command prompt) is a text-based inte
 | 📂 **Git** | Latest | Download source code and apps |
 | 📦 **Git LFS** | Latest | Download model assets |
 
+
 </div>
 
 ### 🐍 Install Python
@@ -244,7 +245,9 @@ If you want to use the simulation mode, you need to add the `mujoco` extra:
 ```bash
 uv sync --extra mujoco
 ```
-### 🐧 Linux Users: USB Permission Setup
+### 🐧 Linux Users
+
+#### USB Permission Setup
 
 > **Linux + USB connection?** You need to grant access to Reachy Mini's serial port.
 
@@ -268,11 +271,10 @@ sudo usermod -aG dialout $USER
 
 </details>
 
-## 📡 Wireless Reachy Mini Setup
 
-> **Want to use the SDK from a remote laptop with a wireless Reachy Mini ?** You'll need to install GStreamer to receive video and audio streams.
+#### Gstreamer
 
-### 🔧 Install GStreamer
+Media management is performed by the GStreamer library. It is automatically instalalled with in the python dependencies for Windows and MacOSX. Linux users have extra steps to follow:
 
 <div align="center">
 

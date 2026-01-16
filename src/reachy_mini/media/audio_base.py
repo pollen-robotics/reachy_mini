@@ -196,6 +196,16 @@ class AudioBase(ABC):
         """
         pass
 
+    def clear_output_buffer(self) -> None:
+        """Clear the output buffer.
+
+        This method flushes the output buffer to prevent push samples from being played.
+        Overwrite if necessary. It seems that set_max_output_buffers with a low value
+        may be enough for gstreamer backend.
+
+        """
+        pass
+
     @abstractmethod
     def set_max_output_buffers(self, max_buffers: int) -> None:
         """Set the maximum number of output buffers to queue in the player.

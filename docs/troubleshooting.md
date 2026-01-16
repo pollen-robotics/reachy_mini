@@ -324,6 +324,13 @@ You do not need to install them.
 
 </details>
 
+<details>
+<summary><strong>[MacOS] Hanging at start up</strong></summary>
+
+This is a known issue. The first run may take some time (up to 10 minutes) because of the loading of the GStreamer libraries.
+
+</details>
+
 <br>
 
 ## 🔌 Connection & Dashboard
