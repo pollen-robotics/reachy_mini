@@ -175,9 +175,13 @@ class MediaManager:
         """
         if self.camera is not None:
             self.camera.close()
+            del self.camera
+            self.camera = None
         if self.audio is not None:
             self.audio.stop_recording()
             self.audio.stop_playing()
+            del self.audio
+            self.audio = None
 
     def __del__(self) -> None:
         """Destructor to ensure resources are released."""
