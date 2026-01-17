@@ -75,7 +75,7 @@ from .audio_base import AudioBase  # noqa: E402
 class GStreamerAudio(AudioBase):
     """Audio implementation using GStreamer."""
 
-    def __init__(self, log_level: str = "INFO") -> None:
+    def __init__(self, input_device: str | None = None, output_device: str | None = None, log_level: str = "INFO") -> None:
         """Initialize the GStreamer audio."""
         super().__init__(log_level=log_level)
         Gst.init(None)
@@ -87,7 +87,7 @@ class GStreamerAudio(AudioBase):
 
         self._pipeline_record = Gst.Pipeline.new("audio_recorder")
         self._appsink_audio: Optional[GstApp] = None
-        self._init_pipeline_record(self._pipeline_record)
+        self._init_pipeline_record(self._pipeline_record, input_device)
         self._bus_record = self._pipeline_record.get_bus()
         self._bus_record.add_watch(
             GLib.PRIORITY_DEFAULT, self._on_bus_message, self._loop
@@ -95,13 +95,13 @@ class GStreamerAudio(AudioBase):
 
         self._pipeline_playback = Gst.Pipeline.new("audio_player")
         self._appsrc: Optional[GstApp] = None
-        self._init_pipeline_playback(self._pipeline_playback)
+        self._init_pipeline_playback(self._pipeline_playback, output_device)
         self._bus_playback = self._pipeline_playback.get_bus()
         self._bus_playback.add_watch(
             GLib.PRIORITY_DEFAULT, self._on_bus_message, self._loop
         )
 
-    def _init_pipeline_record(self, pipeline: Gst.Pipeline) -> None:
+    def _init_pipeline_record(self, pipeline: Gst.Pipeline, input_device: str | None = None) -> None:
         self._appsink_audio = Gst.ElementFactory.make("appsink")
         caps = Gst.Caps.from_string(
             f"audio/x-raw,rate={self.SAMPLE_RATE},channels={self.CHANNELS},format=F32LE,layout=interleaved"
@@ -111,7 +111,14 @@ class GStreamerAudio(AudioBase):
         self._appsink_audio.set_property("max-buffers", 200)
 
         audiosrc: Optional[Gst.Element] = None
-        if self._id_audio_card == -1:
+        input_id = -1
+        if input_device is not None:
+            input_id = get_respeaker_card_number([input_device])
+
+        if input_id != -1:
+            audiosrc = Gst.ElementFactory.make("alsasrc")
+            audiosrc.set_property("device", f"hw:{input_id},0")
+        elif self._id_audio_card == -1:
             audiosrc = Gst.ElementFactory.make("autoaudiosrc")  # use default mic
         elif has_reachymini_asoundrc():
             # reachy mini wireless has a preconfigured asoundrc
@@ -161,7 +168,7 @@ class GStreamerAudio(AudioBase):
                 "AppSrc is not initialized. Call start_playing() first."
             )
 
-    def _init_pipeline_playback(self, pipeline: Gst.Pipeline) -> None:
+    def _init_pipeline_playback(self, pipeline: Gst.Pipeline, output_device: str | None = None) -> None:
         self._appsrc = Gst.ElementFactory.make("appsrc")
         self._appsrc.set_property("format", Gst.Format.TIME)
         self._appsrc.set_property("is-live", True)
@@ -174,7 +181,14 @@ class GStreamerAudio(AudioBase):
         audioresample = Gst.ElementFactory.make("audioresample")
 
         audiosink: Optional[Gst.Element] = None
-        if self._id_audio_card == -1:
+        output_id = -1
+        if output_device is not None:
+            output_id = get_respeaker_card_number([output_device])
+
+        if output_id != -1:
+            audiosink = Gst.ElementFactory.make("alsasink")
+            audiosink.set_property("device", f"hw:{output_id},0")
+        elif self._id_audio_card == -1:
             audiosink = Gst.ElementFactory.make("autoaudiosink")  # use default speaker
         elif has_reachymini_asoundrc():
             # reachy mini wireless has a preconfigured asoundrc
