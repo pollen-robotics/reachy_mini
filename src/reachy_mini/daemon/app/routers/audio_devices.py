@@ -60,49 +60,61 @@ class SetDeviceRequest(BaseModel):
     device_name: str
 
 
-def parse_device_names(output: str) -> list[str]:
-    """Parse the output of aplay -l or arecord -l to extract device names.
+def parse_gst_device_monitor_output(output: str, device_class: str) -> list[str]:
+    """Parse the output of gst-device-monitor-1.0 to extract device names.
+
+    Args:
+        output: The output string from gst-device-monitor-1.0
+        device_class: The device class to filter for ("Audio/Sink" or "Audio/Source")
 
     Example output format:
-        **** List of PLAYBACK Hardware Devices ****
-        card 0: Headphones [bcm2835 Headphones], device 0: bcm2835 Headphones [bcm2835 Headphones]
-          Subdevices: 8/8
-          Subdevice #0: subdevice #0
-        card 1: Audio [Reachy Mini Audio], device 0: USB Audio [USB Audio]
-          Subdevices: 1/1
-          Subdevice #0: subdevice #0
+        Device found:
+
+            name  : Built-in Audio Analog Stereo
+            class : Audio/Sink
+            ...
+
+        Device found:
+
+            name  : My Bluetooth Speaker
+            class : Audio/Sink
+            ...
     """
     names = []
-    # Match lines like: card 0: Headphones [bcm2835 Headphones], device 0: ...
-    pattern = r"card \d+: \w+ \[([^\]]+)\], device \d+:"
+    # Split by "Device found:" to get individual device blocks
+    device_blocks = output.split("Device found:")
 
-    for line in output.split("\n"):
-        match = re.search(pattern, line)
-        if match:
-            name = match.group(1)
-            if name not in names:
-                names.append(name)
+    for block in device_blocks:
+        # Check if this block contains the desired class
+        class_match = re.search(r"class\s*:\s*(\S+)", block)
+        if class_match and class_match.group(1) == device_class:
+            # Extract the device name
+            name_match = re.search(r"name\s*:\s*(.+)", block)
+            if name_match:
+                name = name_match.group(1).strip()
+                if name and name not in names:
+                    names.append(name)
 
     return names
 
 
 def get_device_names(device_type: DeviceType) -> list[str]:
-    """List available audio device names on Linux.
+    """List available audio device names using GStreamer device monitor.
 
     Args:
-        device_type: DeviceType.INPUT for microphones (arecord -l) or DeviceType.OUTPUT for speakers (aplay -l)
+        device_type: DeviceType.INPUT for sources (microphones) or DeviceType.OUTPUT for sinks (speakers)
     """
-    cmd = ["aplay", "-l"] if device_type == DeviceType.OUTPUT else ["arecord", "-l"]
+    device_class = "Audio/Sink" if device_type == DeviceType.OUTPUT else "Audio/Source"
 
     try:
         result = subprocess.run(
-            cmd,
+            ["gst-device-monitor-1.0", "Audio"],
             capture_output=True,
             text=True,
             timeout=AUDIO_COMMAND_TIMEOUT,
         )
         if result.returncode == 0:
-            return parse_device_names(result.stdout)
+            return parse_gst_device_monitor_output(result.stdout, device_class)
     except (subprocess.TimeoutExpired, FileNotFoundError) as e:
         logger.error(f"Failed to list {device_type.value} devices: {e}")
     return []
