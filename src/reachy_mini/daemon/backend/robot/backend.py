@@ -544,10 +544,6 @@ class RobotBackend(Backend):
 
     def set_motor_control_mode(self, mode: MotorControlMode) -> None:
         """Set the motor control mode."""
-        # Check if the mode is already set
-        if mode == self.motor_control_mode:
-            return
-
         if mode == MotorControlMode.Enabled:
             if self.motor_control_mode == MotorControlMode.GravityCompensation:
                 # First, make sure we switch to position control
