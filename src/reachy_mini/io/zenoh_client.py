@@ -23,17 +23,27 @@ from reachy_mini.io.protocol import AnyTaskRequest, TaskProgress, TaskRequest
 class ZenohClient(AbstractClient):
     """Zenoh client for Reachy Mini."""
 
-    def __init__(self, prefix: str, localhost_only: bool = True):
+    def __init__(self, prefix: str, localhost_only: Optional[bool] = None, host_addr: Optional[str] = None):
         """Initialize the Zenoh client.
 
         Args:
             prefix: The Zenoh prefix to use for communication (used to identify multiple robots).
-            localhost_only: If True, connect to localhost only
+            localhost_only: If True, connect to localhost only.
+            host_addr: If specified, connect to this host only.
 
         """
         self.prefix = prefix
-
-        if localhost_only:
+        
+        if localhost_only and host_addr and host_addr not in ["localhost", "127.0.0.1"]:
+            raise ValueError("host_addr must be 'localhost' or '127.0.0.1' when localhost_only is True.")
+                    
+        if host_addr:
+            c = zenoh.Config.from_json5(
+                json.dumps(
+                    {"mode": "client", "connect": {"endpoints": [f"tcp/{host_addr}:7447"]}}
+                )
+            )
+        elif localhost_only:
             c = zenoh.Config.from_json5(
                 json.dumps(
                     {"mode": "client", "connect": {"endpoints": ["tcp/localhost:7447"]}}
