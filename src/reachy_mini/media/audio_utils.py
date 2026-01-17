@@ -22,62 +22,69 @@ import logging
 import subprocess
 from pathlib import Path
 
+DEFAULT_DEVICE_NAMES = ["reachy mini audio", "respeaker"]
 
-def _process_card_number_output(output: str) -> int:
-    """Process the output of 'arecord -l' to find the ReSpeaker or Reachy Mini Audio card number.
+
+def _process_card_number_output(
+    output: str, device_names: list[str] = DEFAULT_DEVICE_NAMES
+) -> int:
+    """Process the output of 'arecord -l' to find a sound card matching any of the given device names.
 
     Args:
         output (str): The output string from the 'arecord -l' command containing
                      information about available audio devices.
+        device_names (list[str]): List of device name patterns to search for (case-insensitive).
+                     Defaults to DEFAULT_DEVICE_NAMES (["reachy mini audio", "respeaker"]).
 
     Returns:
-        int: The card number of the detected Reachy Mini Audio or ReSpeaker device,
-             or 0 if neither is found (default sound card).
+        int: The card number of the first matching device found,
+             or 0 if no match is found (default sound card).
 
     Note:
-        This function parses the output of 'arecord -l' to identify Reachy Mini
-        Audio or ReSpeaker devices. It prefers Reachy Mini Audio devices and
-        warns if only a ReSpeaker device is found (indicating firmware update needed).
+        This function parses the output of 'arecord -l' to identify audio devices.
+        Device names are matched in order, so earlier entries in the list have priority.
 
     Example:
         >>> output = "card 1: ReachyMiniAudio [reachy mini audio], device 0: USB Audio [USB Audio]"
         >>> card_num = _process_card_number_output(output)
         >>> print(f"Detected card: {card_num}")
+        >>>
+        >>> # Search for custom devices
+        >>> card_num = _process_card_number_output(output, ["my device", "other device"])
 
     """
     lines = output.split("\n")
-    for line in lines:
-        if "reachy mini audio" in line.lower():
-            card_number = line.split(" ")[1].split(":")[0]
-            logging.debug(f"Found Reachy Mini Audio sound card: {card_number}")
-            return int(card_number)
-        elif "respeaker" in line.lower():
-            card_number = line.split(" ")[1].split(":")[0]
-            logging.warning(
-                f"Found ReSpeaker sound card: {card_number}. Please update firmware!"
-            )
-            return int(card_number)
+    for device_name in device_names:
+        for line in lines:
+            if device_name.lower() in line.lower():
+                card_number = line.split(" ")[1].split(":")[0]
+                logging.debug(f"Found '{device_name}' sound card: {card_number}")
+                return int(card_number)
 
-    logging.warning("Reachy Mini Audio sound card not found. Returning default card")
+    logging.warning(f"No sound card matching {device_names} found. Returning default card")
     return 0  # default sound card
 
 
-def get_respeaker_card_number() -> int:
-    """Return the card number of the ReSpeaker sound card, or 0 if not found.
+def get_respeaker_card_number(device_names: list[str] = DEFAULT_DEVICE_NAMES) -> int:
+    """Return the card number of a sound card matching any of the given device names, or 0 if not found.
+
+    Args:
+        device_names (list[str]): List of device name patterns to search for (case-insensitive).
+                     Defaults to DEFAULT_DEVICE_NAMES (["reachy mini audio", "respeaker"]).
 
     Returns:
-        int: The card number of the detected ReSpeaker/Reachy Mini Audio device.
+        int: The card number of the detected audio device.
              Returns 0 if no specific device is found (uses default sound card),
              or -1 if there's an error running the detection command.
 
     Note:
         This function runs 'arecord -l' to list available audio capture devices
-        and processes the output to find Reachy Mini Audio or ReSpeaker devices.
+        and processes the output to find matching devices.
         It's primarily used on Linux systems with ALSA audio configuration.
 
         The function returns:
-        - Positive integer: Card number of detected Reachy Mini Audio device
-        - 0: No Reachy Mini Audio device found, using default sound card
+        - Positive integer: Card number of detected audio device
+        - 0: No matching device found, using default sound card
         - -1: Error occurred while trying to detect audio devices
 
     Example:
@@ -88,6 +95,9 @@ def get_respeaker_card_number() -> int:
         ...     print("Using default sound card")
         ... else:
         ...     print("Error detecting audio devices")
+        >>>
+        >>> # Search for custom devices
+        >>> card_num = get_respeaker_card_number(["my device", "other device"])
 
     """
     try:
@@ -96,7 +106,7 @@ def get_respeaker_card_number() -> int:
         )
         output = result.stdout
 
-        return _process_card_number_output(output)
+        return _process_card_number_output(output, device_names)
 
     except subprocess.CalledProcessError as e:
         logging.error(f"Cannot find sound card: {e}")

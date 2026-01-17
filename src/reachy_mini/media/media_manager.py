@@ -123,6 +123,7 @@ class MediaManager:
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(log_level)
         self.backend = backend
+        self._log_level = log_level
         self.camera: Optional[CameraBase] = None
         self.audio: Optional[AudioBase] = None
 
@@ -240,7 +241,7 @@ class MediaManager:
             return None
         return self.camera.read()
 
-    def _init_audio(self, log_level: str) -> None:
+    def _init_audio(self, log_level: str, input_device: Optional[str] = None, output_device: Optional[str] = None) -> None:
         """Initialize the audio system."""
         self.logger.debug("Initializing audio...")
         if (
@@ -258,9 +259,29 @@ class MediaManager:
             self.logger.info("Using GStreamer audio backend.")
             from reachy_mini.media.audio_gstreamer import GStreamerAudio
 
-            self.audio = GStreamerAudio(log_level=log_level)
+            self.audio = GStreamerAudio(log_level=log_level, input_device=input_device, output_device=output_device)
         else:
             raise NotImplementedError(f"Audio backend {self.backend} not implemented.")
+
+    def reset_audio(self, input_device: Optional[str] = None, output_device: Optional[str] = None) -> None:
+        """Reset the audio system when device changes.
+
+        Stops recording/playing, deletes the audio instance, and reinitializes it.
+
+        Args:
+            input_device: The new input device name.
+            output_device: The new output device name.
+        """
+        self.logger.info(f"Resetting audio system (new input device: {input_device}, new output device: {output_device})")
+
+        if self.audio is not None:
+            self.audio.stop_recording()
+            self.audio.stop_playing()
+            del self.audio
+            self.audio = None
+
+        # Reinitialize audio with current backend
+        self._init_audio(self._log_level, input_device, output_device)
 
     def _init_webrtc(
         self, log_level: str, signalling_host: str, signalling_port: int
