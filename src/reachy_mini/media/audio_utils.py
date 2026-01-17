@@ -54,6 +54,7 @@ def _process_card_number_output(
 
     """
     lines = output.split("\n")
+    logging.warning(f"{lines}")
     for device_name in device_names:
         for line in lines:
             if device_name.lower() in line.lower():
