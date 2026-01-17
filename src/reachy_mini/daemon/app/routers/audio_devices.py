@@ -161,6 +161,7 @@ async def set_selected_output_device(request: SetDeviceRequest) -> SelectedDevic
     logger.info(f"Output device set to: {_selected_output_device}")
 
     if _on_output_device_changed:
+        logger.info(f"Triggering output device change callback for: {_selected_output_device}")
         _on_output_device_changed(_selected_output_device)
 
     return SelectedDeviceResponse(device_name=_selected_output_device)
@@ -174,6 +175,7 @@ async def clear_selected_output_device() -> SelectedDeviceResponse:
     logger.info("Output device cleared, using default")
 
     if _on_output_device_changed:
+        logger.info("Triggering output device change callback for: default")
         _on_output_device_changed(None)
 
     return SelectedDeviceResponse(device_name=None)
@@ -202,6 +204,7 @@ async def set_selected_input_device(request: SetDeviceRequest) -> SelectedDevice
     logger.info(f"Input device set to: {_selected_input_device}")
 
     if _on_input_device_changed:
+        logger.info(f"Triggering input device change callback for: {_selected_input_device}")
         _on_input_device_changed(_selected_input_device)
 
     return SelectedDeviceResponse(device_name=_selected_input_device)
@@ -215,6 +218,7 @@ async def clear_selected_input_device() -> SelectedDeviceResponse:
     logger.info("Input device cleared, using default")
 
     if _on_input_device_changed:
+        logger.info("Triggering input device change callback for: default")
         _on_input_device_changed(None)
 
     return SelectedDeviceResponse(device_name=None)
