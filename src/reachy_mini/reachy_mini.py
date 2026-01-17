@@ -313,11 +313,11 @@ class ReachyMini:
         return client, selected
 
     def _connect_localhost(self, timeout: float) -> tuple[ZenohClient, ConnectionMode]:
-        client = self._connect_single(host="localhost", timeout=timeout)
+        client = self._connect_single(host_addr="localhost", timeout=timeout)
         return client, "localhost_only"
 
     def _connect_wireless(self, timeout: float) -> tuple[ZenohClient, ConnectionMode]:
-        client = self._connect_single(host=f"{self.robot_name.replace('_', '-')}.local", timeout=timeout)
+        client = self._connect_single(host_addr=f"{self.robot_name.replace('_', '-')}.local", timeout=timeout)
         return client, "wireless"
 
     def _connect_network(self, timeout: float) -> tuple[ZenohClient, ConnectionMode]:
@@ -326,30 +326,11 @@ class ReachyMini:
 
     def _connect_single(
         self,
-        host: Union[str, bool, None] = None,
+        host_addr: Optional[str] = None,
         timeout: float = 5.0,
         **kwargs: Any,
     ) -> ZenohClient:
-        """Connect once with the requested tunneling mode and guard cleanup."""
-        # Backward compatibility for localhost_only argument passed as positional bool
-        if isinstance(host, bool):
-            self.logger.warning(
-                "The 'localhost_only' argument is deprecated. Please use 'host=\"localhost\"' instead."
-            )
-            host = "localhost" if host else None
-
-        # Backward compatibility for localhost_only argument passed as keyword
-        if "localhost_only" in kwargs:
-            self.logger.warning(
-                "The 'localhost_only' argument is deprecated. Please use 'host=\"localhost\"' instead."
-            )
-            if kwargs["localhost_only"]:
-                host = "localhost"
-
-        # Ensure host is treated as str or None for ZenohClient
-        host = host if isinstance(host, str) else None
-
-        client = ZenohClient(self.robot_name, host=host)
+        client = ZenohClient(self.robot_name, host_addr=host_addr)
         try:
             client.wait_for_connection(timeout=timeout)
         except Exception:
