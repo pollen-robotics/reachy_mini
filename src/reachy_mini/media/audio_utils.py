@@ -19,6 +19,7 @@ Example usage:
 """
 
 import logging
+import re
 import subprocess
 from pathlib import Path
 
@@ -112,6 +113,65 @@ def get_respeaker_card_number(device_names: list[str] = DEFAULT_DEVICE_NAMES) ->
     except subprocess.CalledProcessError as e:
         logging.error(f"Cannot find sound card: {e}")
         return -1
+
+
+def _parse_gst_node_name(output: str, device_names: list[str] = DEFAULT_DEVICE_NAMES) -> str | None:
+    """Parse gst-device-monitor-1.0 output to find the node.name for a given device name.
+
+    Args:
+        output: The output string from gst-device-monitor-1.0 Audio command.
+        device_names: List of device name patterns to search for (case-insensitive).
+
+    Returns:
+        The node.name if found, or None if no match.
+    """
+    device_blocks = output.split("Device found:")
+
+    for device_name in device_names:
+        for block in device_blocks:
+            # Check if this block contains the device name
+            name_match = re.search(r"^\s*name\s*:\s*(.+)$", block, re.MULTILINE)
+            if name_match:
+                found_name = name_match.group(1).strip()
+                if device_name.lower() in found_name.lower():
+                    # Found the device, now extract node.name
+                    node_match = re.search(r"node\.name\s*=\s*\"?([^\"]+)\"?", block)
+                    if node_match:
+                        node_name = node_match.group(1).strip()
+                        logging.debug(f"Found node.name for '{device_name}': {node_name}")
+                        return node_name
+
+    logging.warning(f"No node.name found for devices {device_names}")
+    return None
+
+
+def get_respeaker_node_name(device_names: list[str] = DEFAULT_DEVICE_NAMES) -> str | None:
+    """Return the node.name of a device matching any of the given device names, or None if not found.
+
+    Args:
+        device_names: List of device name patterns to search for (case-insensitive).
+                     Defaults to DEFAULT_DEVICE_NAMES (["reachy mini audio", "respeaker"]).
+
+    Returns:
+        The node.name if found, or None if not found or error.
+
+    Example:
+        >>> node = get_respeaker_node_name()
+        >>> if node:
+        ...     print(f"Node name: {node}")
+    """
+    try:
+        result = subprocess.run(
+            ["gst-device-monitor-1.0", "Audio"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode == 0:
+            return _parse_gst_node_name(result.stdout, device_names)
+    except (subprocess.TimeoutExpired, FileNotFoundError) as e:
+        logging.error(f"gst-device-monitor-1.0 failed: {e}")
+    return None
 
 
 def has_reachymini_asoundrc() -> bool:
