@@ -244,6 +244,18 @@ class MediaManager:
     def _init_audio(self, log_level: str, input_device: Optional[str] = None, output_device: Optional[str] = None) -> None:
         """Initialize the audio system."""
         self.logger.debug("Initializing audio...")
+
+        # Use currently selected devices as defaults if not specified
+        if input_device is None or output_device is None:
+            from reachy_mini.daemon.app.routers.audio_devices import (
+                get_selected_input,
+                get_selected_output,
+            )
+            if input_device is None:
+                input_device = get_selected_input()
+            if output_device is None:
+                output_device = get_selected_output()
+
         if (
             self.backend == MediaBackend.DEFAULT
             or self.backend == MediaBackend.DEFAULT_NO_VIDEO
