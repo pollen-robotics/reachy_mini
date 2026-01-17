@@ -11,7 +11,7 @@ import json
 import logging
 import platform
 import time
-from typing import Any, Dict, List, Literal, Optional, Union, cast
+from typing import Dict, List, Literal, Optional, Union, cast
 
 import cv2
 import numpy as np
@@ -327,8 +327,7 @@ class ReachyMini:
     def _connect_single(
         self,
         host_addr: Optional[str] = None,
-        timeout: float = 5.0,
-        **kwargs: Any,
+        timeout: float = 5.0
     ) -> ZenohClient:
         client = ZenohClient(self.robot_name, host_addr=host_addr)
         try:
