@@ -116,6 +116,7 @@ class GStreamerAudio(AudioBase):
             input_node_name = get_respeaker_node_name([input_device])
 
         if input_node_name is not None:
+            self.logger.info(f"Using pipewire source node {input_node_name}")
             audiosrc = Gst.ElementFactory.make("pipewiresrc")
             audiosrc.set_property("target-object", f"{input_node_name}")
         elif self._audio_node_name is None:
@@ -186,6 +187,7 @@ class GStreamerAudio(AudioBase):
             output_node_name = get_respeaker_node_name([output_device])
 
         if output_node_name is not None:
+            self.logger.info(f"Using pipewire sink node {output_node_name}")
             audiosink = Gst.ElementFactory.make("pipewiresink")
             audiosink.set_property("target-object", f"{output_node_name}")
         elif self._audio_node_name is None:
