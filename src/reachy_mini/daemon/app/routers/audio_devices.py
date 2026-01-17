@@ -13,6 +13,7 @@ import subprocess
 from enum import Enum
 from typing import Callable, Optional
 
+import requests
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
@@ -21,6 +22,8 @@ logger = logging.getLogger(__name__)
 
 # Constants
 AUDIO_COMMAND_TIMEOUT = 2  # Timeout in seconds for audio commands
+DAEMON_BASE_URL = "http://127.0.0.1:8000"
+DAEMON_API_TIMEOUT = 0.5  # Timeout in seconds for API calls
 
 # Callback type: takes device_name (str or None) as argument
 DeviceChangeCallback = Callable[[Optional[str]], None]
@@ -228,12 +231,42 @@ async def clear_selected_input_device() -> SelectedDeviceResponse:
 
 
 def get_selected_input() -> Optional[str]:
-    """Get the currently selected input device name."""
+    """Get the currently selected input device name.
+
+    Tries to fetch from the daemon API first, falls back to local config file.
+    """
+    try:
+        response = requests.get(
+            f"{DAEMON_BASE_URL}/api/audio-devices/input/selected",
+            timeout=DAEMON_API_TIMEOUT,
+        )
+        if response.status_code == 200:
+            data = response.json()
+            return data.get("device_name")
+    except (requests.RequestException, ValueError) as e:
+        logger.debug(f"Could not fetch input device from daemon API: {e}")
+
+    # Fallback to local module variable (loaded from config file at import)
     return _selected_input_device
 
 
 def get_selected_output() -> Optional[str]:
-    """Get the currently selected output device name."""
+    """Get the currently selected output device name.
+
+    Tries to fetch from the daemon API first, falls back to local config file.
+    """
+    try:
+        response = requests.get(
+            f"{DAEMON_BASE_URL}/api/audio-devices/output/selected",
+            timeout=DAEMON_API_TIMEOUT,
+        )
+        if response.status_code == 200:
+            data = response.json()
+            return data.get("device_name")
+    except (requests.RequestException, ValueError) as e:
+        logger.debug(f"Could not fetch output device from daemon API: {e}")
+
+    # Fallback to local module variable (loaded from config file at import)
     return _selected_output_device
 
 
