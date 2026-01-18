@@ -41,6 +41,10 @@ from typing import Optional
 import numpy as np
 import numpy.typing as npt
 
+from reachy_mini.daemon.app.routers.audio_devices import (
+    get_selected_input,
+    get_selected_output,
+)
 from reachy_mini.media.audio_base import AudioBase
 from reachy_mini.media.camera_base import CameraBase
 
@@ -242,8 +246,21 @@ class MediaManager:
         return self.camera.read()
 
     def _init_audio(self, log_level: str, input_device: Optional[str] = None, output_device: Optional[str] = None) -> None:
-        """Initialize the audio system."""
+        """Initialize the audio system.
+
+        If input_device or output_device are not specified, fetches the current
+        selection from the daemon API.
+        """
         self.logger.debug("Initializing audio...")
+
+        # Fetch device settings from daemon if not specified
+        if input_device is None:
+            input_device = get_selected_input()
+            self.logger.info(f"Fetched input device from daemon: {input_device}")
+        if output_device is None:
+            output_device = get_selected_output()
+            self.logger.info(f"Fetched output device from daemon: {output_device}")
+
         if (
             self.backend == MediaBackend.DEFAULT
             or self.backend == MediaBackend.DEFAULT_NO_VIDEO
@@ -256,7 +273,7 @@ class MediaManager:
             self.backend == MediaBackend.GSTREAMER
             or self.backend == MediaBackend.GSTREAMER_NO_VIDEO
         ):
-            self.logger.info("Using GStreamer audio backend.")
+            self.logger.info(f"Using GStreamer audio backend (input: {input_device}, output: {output_device}).")
             from reachy_mini.media.audio_gstreamer import GStreamerAudio
 
             self.audio = GStreamerAudio(log_level=log_level, input_device=input_device, output_device=output_device)
