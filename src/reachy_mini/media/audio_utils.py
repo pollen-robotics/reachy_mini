@@ -135,7 +135,7 @@ def _parse_gst_node_name(output: str, device_names: list[str] = DEFAULT_DEVICE_N
                 found_name = name_match.group(1).strip()
                 if device_name.lower() in found_name.lower():
                     # Found the device, now extract node.name
-                    node_match = re.search(r"node\.name\s*=\s*\"?([^\"]+)\"?", block)
+                    node_match = re.search(r"node\.name\s*=\s*\"?([^\"\n]+)\"?", block)
                     if node_match:
                         node_name = node_match.group(1).strip()
                         logging.debug(f"Found node.name for '{device_name}': {node_name}")
