@@ -281,6 +281,8 @@ class MediaManager:
                 self.audio.close()
 
         self._init_audio(self._log_level, input_device, output_device)
+        self.audio.start_playing()
+        self.audio.start_recording()
 
     def _init_webrtc(
         self, log_level: str, signalling_host: str, signalling_port: int
