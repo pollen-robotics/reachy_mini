@@ -415,6 +415,12 @@ class GStreamerAudio(AudioBase):
     def clear_player(self) -> None:
         """Flush the player's appsrc to drop any queued audio immediately."""
         if self._appsrc is not None:
+            # Push a silent sample to unstick pipewiresink before flushing
+            num_samples = 1024
+            silence = np.zeros((num_samples, self.CHANNELS), dtype=np.float32)
+            self.push_audio_sample(silence)
+            time.sleep(num_samples / self.SAMPLE_RATE)
+
             self._pipeline_playback.set_state(Gst.State.PAUSED)
             self._appsrc.send_event(Gst.Event.new_flush_start())
             self._appsrc.send_event(Gst.Event.new_flush_stop(reset_time=True))
