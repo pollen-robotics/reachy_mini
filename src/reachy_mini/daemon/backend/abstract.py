@@ -29,12 +29,6 @@ if typing.TYPE_CHECKING:
     from reachy_mini.daemon.backend.mujoco.backend import MujocoBackendStatus
     from reachy_mini.daemon.backend.robot.backend import RobotBackendStatus
     from reachy_mini.kinematics import AnyKinematics
-from reachy_mini.daemon.app.routers.audio_devices import (
-    get_selected_input,
-    get_selected_output,
-    on_input_device_changed,
-    on_output_device_changed,
-)
 from reachy_mini.media.media_manager import MediaBackend, MediaManager
 from reachy_mini.motion.goto import GotoMove
 from reachy_mini.motion.move import Move
@@ -187,17 +181,6 @@ class Backend:
                 self.audio = MediaManager(
                     backend=MediaBackend.DEFAULT_NO_VIDEO, log_level=log_level
                 )
-
-            # Register callbacks to reset audio when device selection changes
-            def on_device_changed(device_name: Optional[str]) -> None:
-                if self.audio is not None:
-                    self.audio.reset_audio(
-                        input_device=get_selected_input(),
-                        output_device=get_selected_output(),
-                    )
-
-            on_input_device_changed(on_device_changed)
-            on_output_device_changed(on_device_changed)
 
         # Guard to ensure only one play_move/goto is executed at a time (goto itself uses play_move, so we need an RLock)
         self._play_move_lock = threading.RLock()
