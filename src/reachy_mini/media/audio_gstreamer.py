@@ -79,6 +79,17 @@ class GStreamerAudio(AudioBase):
         """Initialize the GStreamer audio."""
         super().__init__(log_level=log_level)
         Gst.init(None)
+
+        # Initialize all instance variables first (for safe __del__)
+        self._loop: Optional[GLib.MainLoop] = None
+        self._thread_bus_calls: Optional[Thread] = None
+        self._pipeline_record: Optional[Gst.Pipeline] = None
+        self._pipeline_playback: Optional[Gst.Pipeline] = None
+        self._bus_record: Optional[Gst.Bus] = None
+        self._bus_playback: Optional[Gst.Bus] = None
+        self._appsink_audio: Optional[GstApp] = None
+        self._appsrc: Optional[GstApp] = None
+
         self._loop = GLib.MainLoop()
         self._thread_bus_calls = Thread(target=lambda: self._loop.run(), daemon=True)
         self._thread_bus_calls.start()
@@ -86,7 +97,6 @@ class GStreamerAudio(AudioBase):
         self._audio_node_name = get_respeaker_node_name()
 
         self._pipeline_record = Gst.Pipeline.new("audio_recorder")
-        self._appsink_audio: Optional[GstApp] = None
         self._init_pipeline_record(self._pipeline_record, input_device)
         self._bus_record = self._pipeline_record.get_bus()
         self._bus_record.add_watch(
@@ -94,7 +104,6 @@ class GStreamerAudio(AudioBase):
         )
 
         self._pipeline_playback = Gst.Pipeline.new("audio_player")
-        self._appsrc: Optional[GstApp] = None
         self._init_pipeline_playback(self._pipeline_playback, output_device)
         self._bus_playback = self._pipeline_playback.get_bus()
         self._bus_playback.add_watch(
@@ -147,12 +156,40 @@ class GStreamerAudio(AudioBase):
         audioconvert.link(audioresample)
         audioresample.link(self._appsink_audio)
 
+    def _cleanup_pipelines(self) -> None:
+        """Clean up pipelines and bus watches (but keep the main loop running)."""
+        # Stop pipelines first
+        if self._pipeline_record is not None:
+            self._pipeline_record.set_state(Gst.State.NULL)
+        if self._pipeline_playback is not None:
+            self._pipeline_playback.set_state(Gst.State.NULL)
+        # Remove bus watches
+        if self._bus_record is not None:
+            self._bus_record.remove_watch()
+            self._bus_record = None
+        if self._bus_playback is not None:
+            self._bus_playback.remove_watch()
+            self._bus_playback = None
+        # Clear pipeline references
+        self._pipeline_record = None
+        self._pipeline_playback = None
+        self._appsink_audio = None
+        self._appsrc = None
+
+    def close(self) -> None:
+        """Explicitly close and release all GStreamer resources."""
+        self._cleanup_pipelines()
+        # Quit the main loop
+        if self._loop is not None and self._loop.is_running():
+            self._loop.quit()
+
     def __del__(self) -> None:
         """Destructor to ensure gstreamer resources are released."""
         super().__del__()
-        self._loop.quit()
-        self._bus_record.remove_watch()
-        self._bus_playback.remove_watch()
+        self._cleanup_pipelines()
+        # Quit the main loop last
+        if self._loop is not None and self._loop.is_running():
+            self._loop.quit()
 
     def set_max_output_buffers(self, max_buffers: int) -> None:
         """Set the maximum number of output buffers to queue in the player.
