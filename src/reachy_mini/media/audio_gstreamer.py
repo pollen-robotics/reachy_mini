@@ -48,6 +48,7 @@ from typing import Optional
 
 import numpy as np
 import numpy.typing as npt
+import time
 
 from reachy_mini.media.audio_utils import (
     get_audio_device_node_name,
@@ -282,6 +283,7 @@ class GStreamerAudio(AudioBase):
         See AudioBase.start_recording() for complete documentation.
         """
         self._pipeline_record.set_state(Gst.State.PLAYING)
+        time.sleep(1)
 
     def _get_sample(self, appsink: GstApp.AppSink) -> Optional[bytes]:
         sample = appsink.try_pull_sample(20_000_000)
@@ -351,6 +353,7 @@ class GStreamerAudio(AudioBase):
         See AudioBase.start_playing() for complete documentation.
         """
         self._pipeline_playback.set_state(Gst.State.PLAYING)
+        time.sleep(1)
 
     def stop_playing(self) -> None:
         """Stop playing audio and release resources.
