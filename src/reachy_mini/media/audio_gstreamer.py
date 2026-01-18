@@ -50,7 +50,7 @@ import numpy as np
 import numpy.typing as npt
 
 from reachy_mini.media.audio_utils import (
-    get_respeaker_node_name,
+    get_audio_device_node_name,
     has_reachymini_asoundrc,
 )
 from reachy_mini.utils.constants import ASSETS_ROOT_PATH
@@ -94,7 +94,8 @@ class GStreamerAudio(AudioBase):
         self._thread_bus_calls = Thread(target=lambda: self._loop.run(), daemon=True)
         self._thread_bus_calls.start()
 
-        self._audio_node_name = get_respeaker_node_name()
+        self._audio_input_node_name = get_audio_device_node_name(device_class="Audio/Source")
+        self._audio_output_node_name = get_audio_device_node_name(device_class="Audio/Sink")
 
         self._pipeline_record = Gst.Pipeline.new("audio_recorder")
         self._init_pipeline_record(self._pipeline_record, input_device)
@@ -120,15 +121,15 @@ class GStreamerAudio(AudioBase):
         self._appsink_audio.set_property("max-buffers", 200)
 
         audiosrc: Optional[Gst.Element] = None
-        input_node_name = None
+        input_node_name: Optional[str] = None
         if input_device is not None:
-            input_node_name = get_respeaker_node_name([input_device])
+            input_node_name = get_audio_device_node_name(device_names=[input_device], device_class="Audio/Source")
 
         if input_node_name is not None:
             self.logger.info(f"Using pipewire source node {input_node_name}")
             audiosrc = Gst.ElementFactory.make("pipewiresrc")
             audiosrc.set_property("target-object", f"{input_node_name}")
-        elif self._audio_node_name is None:
+        elif self._audio_input_node_name is None:
             audiosrc = Gst.ElementFactory.make("autoaudiosrc")  # use default mic
         elif has_reachymini_asoundrc():
             # reachy mini wireless has a preconfigured asoundrc
@@ -136,7 +137,7 @@ class GStreamerAudio(AudioBase):
             audiosrc.set_property("device", "reachymini_audio_src")
         else:
             audiosrc = Gst.ElementFactory.make("pipewiresrc")
-            audiosrc.set_property("target-object", f"{self._audio_node_name}")
+            audiosrc.set_property("target-object", f"{self._audio_input_node_name}")
 
         queue = Gst.ElementFactory.make("queue")
         audioconvert = Gst.ElementFactory.make("audioconvert")
@@ -219,15 +220,15 @@ class GStreamerAudio(AudioBase):
         audioresample = Gst.ElementFactory.make("audioresample")
 
         audiosink: Optional[Gst.Element] = None
-        output_node_name = None
+        output_node_name: Optional[str] = None
         if output_device is not None:
-            output_node_name = get_respeaker_node_name([output_device])
+            output_node_name = get_audio_device_node_name(device_names=[output_device], device_class="Audio/Sink")
 
         if output_node_name is not None:
             self.logger.info(f"Using pipewire sink node {output_node_name}")
             audiosink = Gst.ElementFactory.make("pipewiresink")
             audiosink.set_property("target-object", f"{output_node_name}")
-        elif self._audio_node_name is None:
+        elif self._audio_output_node_name is None:
             audiosink = Gst.ElementFactory.make("autoaudiosink")  # use default speaker
         elif has_reachymini_asoundrc():
             # reachy mini wireless has a preconfigured asoundrc
@@ -235,7 +236,7 @@ class GStreamerAudio(AudioBase):
             audiosink.set_property("device", "reachymini_audio_sink")
         else:
             audiosink = Gst.ElementFactory.make("pipewiresink")
-            audiosink.set_property("target-object", f"{self._audio_node_name}")
+            audiosink.set_property("target-object", f"{self._audio_output_node_name}")
 
         pipeline.add(audiosink)
         pipeline.add(self._appsrc)
