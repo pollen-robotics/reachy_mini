@@ -129,10 +129,10 @@ class GStreamerAudio(AudioBase):
             self.logger.info(f"Using pipewire source node {input_node_name}")
             audiosrc = Gst.ElementFactory.make("pipewiresrc")
             audiosrc.set_property("target-object", f"{input_node_name}")
-            audiosrc.set_property("sync", False)
-            audiosrc.set_property("processing-deadline", 5000000)  # 5ms processing deadline
-            audiosrc.set_property("render-delay", 0)
-            audiosrc.set_property("qos", True)
+            audiosrc.set_property("min-buffers", 2)
+            audiosrc.set_property("max-buffers", 4)
+            audiosrc.set_property("blocksize", 1024)
+            audiosrc.set_property("do-timestamp", True)
         elif self._audio_input_node_name is None:
             audiosrc = Gst.ElementFactory.make("autoaudiosrc")  # use default mic
         elif has_reachymini_asoundrc():
@@ -142,10 +142,10 @@ class GStreamerAudio(AudioBase):
         else:
             audiosrc = Gst.ElementFactory.make("pipewiresrc")
             audiosrc.set_property("target-object", f"{self._audio_input_node_name}")
-            audiosrc.set_property("sync", False)
-            audiosrc.set_property("processing-deadline", 5000000)  # 5ms processing deadline
-            audiosrc.set_property("render-delay", 0)
-            audiosrc.set_property("qos", True)
+            audiosrc.set_property("min-buffers", 2)
+            audiosrc.set_property("max-buffers", 4)
+            audiosrc.set_property("blocksize", 1024)
+            audiosrc.set_property("do-timestamp", True)
 
         queue = Gst.ElementFactory.make("queue")
         audioconvert = Gst.ElementFactory.make("audioconvert")
