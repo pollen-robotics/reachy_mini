@@ -129,6 +129,10 @@ class GStreamerAudio(AudioBase):
             self.logger.info(f"Using pipewire source node {input_node_name}")
             audiosrc = Gst.ElementFactory.make("pipewiresrc")
             audiosrc.set_property("target-object", f"{input_node_name}")
+            audiosrc.set_property("sync", False)
+            audiosrc.set_property("processing-deadline", 5000000)  # 5ms processing deadline
+            audiosrc.set_property("render-delay", 0)
+            audiosrc.set_property("qos", True)
         elif self._audio_input_node_name is None:
             audiosrc = Gst.ElementFactory.make("autoaudiosrc")  # use default mic
         elif has_reachymini_asoundrc():
@@ -138,6 +142,10 @@ class GStreamerAudio(AudioBase):
         else:
             audiosrc = Gst.ElementFactory.make("pipewiresrc")
             audiosrc.set_property("target-object", f"{self._audio_input_node_name}")
+            audiosrc.set_property("sync", False)
+            audiosrc.set_property("processing-deadline", 5000000)  # 5ms processing deadline
+            audiosrc.set_property("render-delay", 0)
+            audiosrc.set_property("qos", True)
 
         queue = Gst.ElementFactory.make("queue")
         audioconvert = Gst.ElementFactory.make("audioconvert")
@@ -228,6 +236,10 @@ class GStreamerAudio(AudioBase):
             self.logger.info(f"Using pipewire sink node {output_node_name}")
             audiosink = Gst.ElementFactory.make("pipewiresink")
             audiosink.set_property("target-object", f"{output_node_name}")
+            audiosink.set_property("sync", False)
+            audiosink.set_property("processing-deadline", 5000000)  # 5ms processing deadline
+            audiosink.set_property("render-delay", 0)
+            audiosink.set_property("qos", True)
         elif self._audio_output_node_name is None:
             audiosink = Gst.ElementFactory.make("autoaudiosink")  # use default speaker
         elif has_reachymini_asoundrc():
@@ -237,6 +249,10 @@ class GStreamerAudio(AudioBase):
         else:
             audiosink = Gst.ElementFactory.make("pipewiresink")
             audiosink.set_property("target-object", f"{self._audio_output_node_name}")
+            audiosink.set_property("sync", False)
+            audiosink.set_property("processing-deadline", 5000000)  # 5ms processing deadline
+            audiosink.set_property("render-delay", 0)
+            audiosink.set_property("qos", True)
 
         pipeline.add(audiosink)
         pipeline.add(self._appsrc)
