@@ -1,8 +1,7 @@
 name: Build HF PR Documentation
 
 on:
-  #pull_request:
-  push:
+  pull_request:
     #branches:
     #  - main
     #paths:
@@ -20,12 +19,3 @@ jobs:
       commit_sha: ${{ github.event.pull_request.head.sha }}
       pr_number: ${{ github.event.number }}
       package: reachy_mini
-
-  upload:
-    uses: huggingface/doc-builder/.github/workflows/upload_pr_documentation.yml@main
-    with:
-      repo_owner: pollen-robotics
-      package_name: reachy_mini
-    secrets:
-      hf_token: ${{ secrets.HF_DOC_BUILD_PUSH }}
-      comment_bot_token: ${{ secrets.COMMENT_BOT_TOKEN }}
