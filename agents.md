@@ -47,6 +47,8 @@ source .venv/bin/activate  # Linux/macOS
 pip install reachy-mini
 ```
 
+**Note:** If uv is not installed but the user agrees, you can install it (`curl -LsSf https://astral.sh/uv/install.sh | sh` on Linux/macOS or `powershell -c "irm https://astral.sh/uv/install.ps1 | iex"` on Windows).
+
 **Important:** Adapt commands to the user's shell (bash/zsh/fish/PowerShell) and OS.
 
 Record the user's preference in `agents.local.md`.
