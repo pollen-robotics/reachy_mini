@@ -129,12 +129,8 @@ class GStreamerAudio(AudioBase):
 
         if input_node_name is not None:
             self.logger.info(f"Using pipewire source node {input_node_name}")
-            audiosrc = Gst.ElementFactory.make("pipewiresrc")
-            audiosrc.set_property("target-object", f"{input_node_name}")
-            audiosrc.set_property("min-buffers", 2)
-            audiosrc.set_property("max-buffers", 4)
-            audiosrc.set_property("blocksize", 1024)
-            audiosrc.set_property("do-timestamp", True)
+            audiosrc = Gst.ElementFactory.make("pulsesrc")
+            audiosrc.set_property("device", f"{input_node_name}")
         elif self._audio_input_node_name is None:
             audiosrc = Gst.ElementFactory.make("autoaudiosrc")  # use default mic
         elif has_reachymini_asoundrc():
@@ -142,12 +138,8 @@ class GStreamerAudio(AudioBase):
             audiosrc = Gst.ElementFactory.make("alsasrc")
             audiosrc.set_property("device", "reachymini_audio_src")
         else:
-            audiosrc = Gst.ElementFactory.make("pipewiresrc")
-            audiosrc.set_property("target-object", f"{self._audio_input_node_name}")
-            audiosrc.set_property("min-buffers", 2)
-            audiosrc.set_property("max-buffers", 4)
-            audiosrc.set_property("blocksize", 1024)
-            audiosrc.set_property("do-timestamp", True)
+            audiosrc = Gst.ElementFactory.make("pulsesrc")
+            audiosrc.set_property("device", f"{self._audio_input_node_name}")
 
         queue = Gst.ElementFactory.make("queue")
         audioconvert = Gst.ElementFactory.make("audioconvert")
@@ -236,12 +228,8 @@ class GStreamerAudio(AudioBase):
 
         if output_node_name is not None:
             self.logger.info(f"Using pipewire sink node {output_node_name}")
-            audiosink = Gst.ElementFactory.make("pipewiresink")
-            audiosink.set_property("target-object", f"{output_node_name}")
-            audiosink.set_property("sync", False)
-            audiosink.set_property("processing-deadline", 5000000)  # 5ms processing deadline
-            audiosink.set_property("render-delay", 0)
-            audiosink.set_property("qos", True)
+            audiosink = Gst.ElementFactory.make("pulsesink")
+            audiosink.set_property("device", f"{output_node_name}")
         elif self._audio_output_node_name is None:
             audiosink = Gst.ElementFactory.make("autoaudiosink")  # use default speaker
         elif has_reachymini_asoundrc():
@@ -249,12 +237,8 @@ class GStreamerAudio(AudioBase):
             audiosink = Gst.ElementFactory.make("alsasink")
             audiosink.set_property("device", "reachymini_audio_sink")
         else:
-            audiosink = Gst.ElementFactory.make("pipewiresink")
-            audiosink.set_property("target-object", f"{self._audio_output_node_name}")
-            audiosink.set_property("sync", False)
-            audiosink.set_property("processing-deadline", 5000000)  # 5ms processing deadline
-            audiosink.set_property("render-delay", 0)
-            audiosink.set_property("qos", True)
+            audiosink = Gst.ElementFactory.make("pulsesink")
+            audiosink.set_property("device", f"{self._audio_output_node_name}")
 
         pipeline.add(audiosink)
         pipeline.add(self._appsrc)
@@ -420,7 +404,7 @@ class GStreamerAudio(AudioBase):
     def clear_player(self) -> None:
         """Flush the player's appsrc to drop any queued audio immediately."""
         if self._appsrc is not None and self._pipeline_playback is not None:
-            # Push a silent sample to unstick pipewiresink before flushing
+            # Push a silent sample to unstick pulsesink before flushing
             num_samples = 1024
             silence = np.zeros((num_samples, self.CHANNELS), dtype=np.float32)
             self.push_audio_sample(silence)
