@@ -10,7 +10,7 @@ on:
         type: string
       repo_owner:
         type: string
-        default: "huggingface"
+        default: "pollen-robotics"
         description: "Owner of the repo to build documentation for. Defaults to 'huggingface'."
     secrets:
       hf_token:
