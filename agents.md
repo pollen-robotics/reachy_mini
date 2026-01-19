@@ -37,6 +37,16 @@ Example `plan.md` structure:
 
 ```
 
+### Workflow
+
+1. **Create the app first** using `reachy-mini-app-assistant create app_name /path --publish`
+2. **Add `plan.md`** inside the created app folder with your plan and questions
+3. **User** answers questions in the file or in chat
+4. **You** update the plan, ask follow-up questions if needed
+5. **Repeat** until the plan is clear and complete
+6. **Then** implement
+
+**Never manually create app folders** - always use the assistant to get the proper structure, metadata tags, and git setup.
 
 ### Keep plan.md Updated
 
