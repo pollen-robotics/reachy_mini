@@ -1,6 +1,13 @@
 name: Upload PR documentation
 
 on:
+  workflow_run:
+    workflows: ["Build HF PR Documentation"]
+    types:
+      - completed
+    branches:
+      - "**" # All branches
+
   workflow_call:
     inputs:
       package_name:
