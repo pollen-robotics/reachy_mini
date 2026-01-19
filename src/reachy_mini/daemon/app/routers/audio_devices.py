@@ -82,6 +82,7 @@ def parse_gst_device_monitor_output(output: str, device_class: str) -> list[str]
             name  : My Bluetooth Speaker
             class : Audio/Sink
             ...
+
     """
     names = []
     # Split by "Device found:" to get individual device blocks
@@ -106,6 +107,7 @@ def get_device_names(device_type: DeviceType) -> list[str]:
 
     Args:
         device_type: DeviceType.INPUT for sources (microphones) or DeviceType.OUTPUT for sinks (speakers)
+
     """
     device_class = "Audio/Sink" if device_type == DeviceType.OUTPUT else "Audio/Source"
 
@@ -242,7 +244,8 @@ def get_selected_input() -> Optional[str]:
         )
         if response.status_code == 200:
             data = response.json()
-            return data.get("device_name")
+            device_name: str | None = data.get("device_name", None)
+            return device_name
     except (requests.RequestException, ValueError) as e:
         logger.debug(f"Could not fetch input device from daemon API: {e}")
 
@@ -262,7 +265,8 @@ def get_selected_output() -> Optional[str]:
         )
         if response.status_code == 200:
             data = response.json()
-            return data.get("device_name")
+            device_name: str | None = data.get("device_name", None)
+            return device_name
     except (requests.RequestException, ValueError) as e:
         logger.debug(f"Could not fetch output device from daemon API: {e}")
 
@@ -282,6 +286,7 @@ def on_input_device_changed(callback: DeviceChangeCallback) -> None:
             # Restart audio pipeline with new device...
 
         on_input_device_changed(handle_input_change)
+
     """
     global _on_input_device_changed
     _on_input_device_changed = callback
@@ -299,6 +304,7 @@ def on_output_device_changed(callback: DeviceChangeCallback) -> None:
             # Restart audio pipeline with new device...
 
         on_output_device_changed(handle_output_change)
+
     """
     global _on_output_device_changed
     _on_output_device_changed = callback

@@ -43,12 +43,12 @@ Example usage via MediaManager:
 """
 
 import os
+import time
 from threading import Thread
 from typing import Optional
 
 import numpy as np
 import numpy.typing as npt
-import time
 
 from reachy_mini.media.audio_utils import (
     get_audio_device_node_name,
@@ -92,7 +92,8 @@ class GStreamerAudio(AudioBase):
         self._appsrc: Optional[GstApp] = None
 
         self._loop = GLib.MainLoop()
-        self._thread_bus_calls = Thread(target=lambda: self._loop.run(), daemon=True)
+        loop = self._loop  # capture for lambda to satisfy mypy
+        self._thread_bus_calls = Thread(target=lambda: loop.run(), daemon=True)
         self._thread_bus_calls.start()
 
         self._audio_input_node_name = get_audio_device_node_name(device_class="Audio/Source")
@@ -282,8 +283,9 @@ class GStreamerAudio(AudioBase):
 
         See AudioBase.start_recording() for complete documentation.
         """
-        self._pipeline_record.set_state(Gst.State.PLAYING)
-        time.sleep(1)
+        if self._pipeline_record is not None:
+            self._pipeline_record.set_state(Gst.State.PLAYING)
+            time.sleep(1)
 
     def _get_sample(self, appsink: GstApp.AppSink) -> Optional[bytes]:
         sample = appsink.try_pull_sample(20_000_000)
@@ -345,22 +347,25 @@ class GStreamerAudio(AudioBase):
 
         See AudioBase.stop_recording() for complete documentation.
         """
-        self._pipeline_record.set_state(Gst.State.NULL)
+        if self._pipeline_record is not None:
+            self._pipeline_record.set_state(Gst.State.NULL)
 
     def start_playing(self) -> None:
         """Open the audio output using GStreamer.
 
         See AudioBase.start_playing() for complete documentation.
         """
-        self._pipeline_playback.set_state(Gst.State.PLAYING)
-        time.sleep(1)
+        if self._pipeline_playback is not None:
+            self._pipeline_playback.set_state(Gst.State.PLAYING)
+            time.sleep(1)
 
     def stop_playing(self) -> None:
         """Stop playing audio and release resources.
 
         See AudioBase.stop_playing() for complete documentation.
         """
-        self._pipeline_playback.set_state(Gst.State.NULL)
+        if self._pipeline_playback is not None:
+            self._pipeline_playback.set_state(Gst.State.NULL)
 
     def push_audio_sample(self, data: npt.NDArray[np.float32]) -> None:
         """Push audio data to the output device.
@@ -414,7 +419,7 @@ class GStreamerAudio(AudioBase):
 
     def clear_player(self) -> None:
         """Flush the player's appsrc to drop any queued audio immediately."""
-        if self._appsrc is not None:
+        if self._appsrc is not None and self._pipeline_playback is not None:
             # Push a silent sample to unstick pipewiresink before flushing
             num_samples = 1024
             silence = np.zeros((num_samples, self.CHANNELS), dtype=np.float32)

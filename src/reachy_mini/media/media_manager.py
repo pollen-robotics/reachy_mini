@@ -288,6 +288,7 @@ class MediaManager:
         Args:
             input_device: The new input device name.
             output_device: The new output device name.
+
         """
         self.logger.info(f"Resetting audio system (new input device: {input_device}, new output device: {output_device})")
 
@@ -298,8 +299,12 @@ class MediaManager:
                 self.audio.close()
 
         self._init_audio(self._log_level, input_device, output_device)
-        self.audio.start_playing()
-        self.audio.start_recording()
+
+        if self.audio is not None:
+            self.audio.start_playing()
+            self.audio.start_recording()
+        else:
+            self.logger.warning("Could not reset audio system: audio system is not initialized.")
 
     def _init_webrtc(
         self, log_level: str, signalling_host: str, signalling_port: int

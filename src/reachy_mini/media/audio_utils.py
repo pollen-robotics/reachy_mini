@@ -124,6 +124,7 @@ def _parse_gst_node_name(output: str, device_names: list[str] = DEFAULT_DEVICE_N
 
     Returns:
         The node.name if found, or None if no match.
+
     """
     device_blocks = output.split("Device found:")
 
@@ -152,6 +153,7 @@ def get_audio_device_node_name(device_names: list[str] = DEFAULT_DEVICE_NAMES, d
         device_names: List of device name patterns to search for (case-insensitive).
                      Defaults to DEFAULT_DEVICE_NAMES (["reachy mini audio", "respeaker"]).
         device_class: The class of the device to search for (default: "Audio/Source").
+
     Returns:
         The node.name if found, or None if not found or error.
 
@@ -159,6 +161,7 @@ def get_audio_device_node_name(device_names: list[str] = DEFAULT_DEVICE_NAMES, d
         >>> node = get_respeaker_node_name()
         >>> if node:
         ...     print(f"Node name: {node}")
+
     """
     try:
         result = subprocess.run(
