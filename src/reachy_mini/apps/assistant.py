@@ -69,6 +69,8 @@ def create_cli(
     console: Console, app_name: str | None, app_path: Path | None
 ) -> tuple[str, str, Path]:
     """Create a new Reachy Mini app project using a CLI."""
+    interactive = app_name is None or app_path is None
+
     if app_name is None:
         # 1) App name
         console.print("$ What is the name of your app ?")
@@ -83,21 +85,24 @@ def create_cli(
             exit()
         app_name = app_name.strip().lower()
 
-    # 2) Language
-    console.print("\n$ Choose the language of your app")
-    language = questionary.select(
-        ">",
-        choices=["python", "js"],
-        default="python",
-    ).ask()
-    if language is None:
-        console.print("[red]Aborted.[/red]")
-        exit()
+    # 2) Language - only prompt interactively, default to python
+    if interactive:
+        console.print("\n$ Choose the language of your app")
+        language = questionary.select(
+            ">",
+            choices=["python", "js"],
+            default="python",
+        ).ask()
+        if language is None:
+            console.print("[red]Aborted.[/red]")
+            exit()
 
-    # js is not supported yet
-    if language != "python":
-        console.print("[red]Currently only Python apps are supported. Aborted.[/red]")
-        exit()
+        # js is not supported yet
+        if language != "python":
+            console.print("[red]Currently only Python apps are supported. Aborted.[/red]")
+            exit()
+    else:
+        language = "python"
 
     if app_path is None:
         # 3) App path
