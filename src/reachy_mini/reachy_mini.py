@@ -536,7 +536,7 @@ class ReachyMini:
         points = np.array([[[u, v]]], dtype=np.float32)
         x_n, y_n = cv2.undistortPoints(
             points,
-            self.media.camera.K,
+            self.media.camera.K,  # type: ignore
             self.media.camera.D,
         )[0, 0]
 
