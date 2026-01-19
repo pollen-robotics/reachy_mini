@@ -124,17 +124,8 @@ Full tutorial: https://huggingface.co/blog/pollen-robotics/make-and-publish-your
 ### Quick Start
 
 ```bash
-# Create app (interactive prompts for name/path/language)
-reachy-mini-app-assistant create
-
-# Create with name and path specified
-reachy-mini-app-assistant create my_app_name /path/to/create
-
 # Create and publish immediately (public by default)
 reachy-mini-app-assistant create my_app_name /path/to/create --publish
-
-# Create and publish as private
-reachy-mini-app-assistant create my_app_name /path/to/create --publish --private
 ```
 
 ### Recommended Workflow
@@ -237,18 +228,6 @@ The key insight from moves.py docstring:
 ```
 - There is a single control point to the robot: `ReachyMini.set_target`.
 - The control loop runs near 100 Hz and is phase-aligned via a monotonic clock.
-```
-
-**Phase-aligned via monotonic clock** means:
-1. Use `time.monotonic()` instead of `time.time()` (monotonic never goes backwards)
-2. Measure how long the loop iteration took
-3. Sleep only the remaining time to hit the target period
-4. This keeps the loop running at a consistent frequency even if computation time varies
-
-```python
-# From moves.py - _schedule_next_tick
-computation_time = self._now() - loop_start
-sleep_time = max(0.0, self.target_period - computation_time)
 ```
 
 ---
