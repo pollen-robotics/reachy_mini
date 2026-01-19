@@ -1,153 +1,17 @@
-name: Upload PR documentation
+name: Upload PR Documentation
 
 on:
   workflow_run:
     workflows: ["Build HF PR Documentation"]
     types:
       - completed
-    branches:
-      - "**" # All branches
-
-  workflow_call:
-    inputs:
-      package_name:
-        required: true
-        type: string
-      hub_base_path:
-        type: string
-      repo_owner:
-        type: string
-        default: "pollen-robotics"
-        description: "Owner of the repo to build documentation for. Defaults to 'huggingface'."
-    secrets:
-      hf_token:
-        required: true
-      comment_bot_token: #legacy, will be removed in the future
-        required: false
-      comment_bot_app_id:
-        required: false
-      comment_bot_secret_pem:
-        required: false
 
 jobs:
-  upload_pr_documentation:
-    runs-on: ubuntu-22.04
-    if: >
-      (github.event.workflow_run.event == 'pull_request' ||
-      github.event.workflow_run.event == 'pull_request_target' ||
-      github.event.workflow_run.event == 'workflow_dispatch' ||
-      github.event.workflow_run.event == 'push') &&
-      github.event.workflow_run.conclusion == 'success'
-
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          repository: "huggingface/doc-builder"
-          path: doc-builder
-          # Uncomment the following line to use a specific revision of doc-builder
-          # ref: fix-corrupted-zip
-
-      - name: Setup environment
-        shell: bash
-        id: setup-env
-        run: |
-          pip install black
-          cd doc-builder
-          pip install .
-          cd ..
-          echo "current_work_dir=$(pwd)" >> $GITHUB_OUTPUT
-
-      - name: "Download artifact"
-        uses: actions/download-artifact@v4
-        with:
-          name: doc-build-artifact
-          path: ${{ github.workspace }}/build_dir
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          run-id: ${{github.event.workflow_run.id }}
-
-      - name: Display structure of downloaded files
-        run: ls -l
-
-      - name: Get commit_sha & pr_number
-        id: github-context
-        run: |
-          content_commit_sha=$(cat ./build_dir/commit_sha)
-          if [[ $content_commit_sha =~ ^[0-9a-zA-Z]{40}$ ]]; then
-            echo "commit_sha=$content_commit_sha" >> $GITHUB_OUTPUT
-            rm -rf ./build_dir/commit_sha
-          else
-            echo "Encountered an invalid commit_sha"
-            exit 1
-          fi
-
-          content_pr_number=$(cat ./build_dir/pr_number)
-          if [[ $content_pr_number =~ ^[0-9]+$ ]]; then
-            echo "pr_number=$content_pr_number" >> $GITHUB_OUTPUT
-            rm -rf ./build_dir/pr_number
-          else
-            echo "Encountered an invalid pr_number"
-            exit 1
-          fi
-
-      - name: Set hub_docs_url
-        id: hfhub-context
-        run: |
-          if [ -z "${{ inputs.hub_base_path }}" ]
-          then
-            echo "hub_docs_url=https://moon-ci-docs.huggingface.co/docs/${{ inputs.package_name }}/pr_${{ steps.github-context.outputs.pr_number }}" >> $GITHUB_OUTPUT
-            echo "hub_base_path not provided, defaulting to https://moon-ci-docs.huggingface.co/docs"
-          else
-            echo "hub_docs_url=${{ inputs.hub_base_path }}/${{ inputs.package_name }}/pr_${{ steps.github-context.outputs.pr_number }}" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Push to repositories
-        shell: bash
-        run: |
-          cd build_dir
-          doc-builder push ${{ inputs.package_name }} --doc_build_repo_id "hf-doc-build/doc-build-dev" --token "${{ secrets.hf_token }}" --commit_msg "Updated with commit ${{ steps.github-context.outputs.commit_sha }} See: https://github.com/${{ inputs.repo_owner }}/${{ inputs.package_name }}/commit/${{ steps.github-context.outputs.commit_sha }}"
-
-      - name: Find doc comment
-        uses: peter-evans/find-comment@v2
-        id: find_comment
-        with:
-          issue-number: ${{ steps.github-context.outputs.pr_number }}
-          body-includes: docs for this PR
-
-      - name: Determine authentication method
-        id: auth
-        run: |
-          if [[ -n "${{ secrets.comment_bot_token }}" ]]; then
-            echo "method=comment_bot_token" >> $GITHUB_OUTPUT
-          elif [[ -n "${{ secrets.comment_bot_app_id }}" ]]; then
-            echo "method=github_app" >> $GITHUB_OUTPUT
-          else
-            echo "No authentication method provided"
-            exit 1
-          fi
-
-      - name: Create comment_bot token
-        id: comment_bot_token
-        if: steps.auth.outputs.method == 'github_app'
-        uses: actions/create-github-app-token@v2
-        with:
-          app-id: ${{ secrets.comment_bot_app_id }}
-          private-key: ${{ secrets.comment_bot_secret_pem }}
-          repositories: ${{ github.event.repository.name }}
-
-      - name: Add doc comment if not present
-        uses: thollander/actions-comment-pull-request@v2
-        if: steps.find_comment.outputs.comment-id == ''
-        with:
-          message: "The docs for this PR live [here](${{ steps.hfhub-context.outputs.hub_docs_url }}). All of your documentation changes will be reflected on that endpoint. The docs are available until 30 days after the last update."
-          pr_number: ${{ steps.github-context.outputs.pr_number }}
-          GITHUB_TOKEN: ${{ steps.auth.outputs.method == 'comment_bot_token' && secrets.comment_bot_token || steps.comment_bot_token.outputs.token }}
-
-      - name: Update doc comment if necessary
-        if: github.event.action == 'reopened' && steps.find_comment.outputs.comment-id != ''
-        uses: peter-evans/create-or-update-comment@v1
-        with:
-          comment-id: ${{ steps.find_comment.outputs.comment-id }}
-          token: ${{ steps.auth.outputs.method == 'comment_bot_token' && secrets.comment_bot_token || steps.comment_bot_token.outputs.token }}
-          edit-mode: replace
-          body: |
-            The docs for this PR live [here](${{ steps.hfhub-context.outputs.hub_docs_url }}). All of your documentation changes will be reflected on that endpoint. The docs are available until 30 days after the last update.
+  build:
+    uses: huggingface/doc-builder/.github/workflows/upload_pr_documentation.yml@main
+    with:
+      repo_owner: pollen-robotics
+      package_name: reachy_mini
+    secrets:
+      hf_token: ${{ secrets.HF_DOC_BUILD_PUSH }}
+      comment_bot_token: ${{ secrets.COMMENT_BOT_TOKEN }}
