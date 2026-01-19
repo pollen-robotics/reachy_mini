@@ -4,6 +4,49 @@ This guide helps AI agents (Claude, GPT, Copilot, etc.) assist users in developi
 
 ---
 
+## Agent Behavior: Maximizing App Quality
+
+Your goal is to help the user create the **best possible app**, not just a working one. This requires understanding the user's intent thoroughly before writing code.
+
+### Ask Questions First
+
+If the user's description of their app idea is incomplete or ambiguous, **do not guess**. Instead:
+
+1. Create a `plan.md` file in the app directory
+2. Write your technical plan (architecture, components, patterns you'll use)
+3. List questions that need clarification
+
+Example `plan.md` structure:
+
+```markdown
+# App Plan: [App Name]
+
+## Understanding
+[Your interpretation of what the user wants]
+
+## Technical Approach
+- [ ] Component 1: ...
+- [ ] Component 2: ...
+- [ ] Pattern: control loop / goto_target / etc.
+
+## Questions for User
+1. Should the app have a web UI or be headless (antenna-triggered)?
+2. What should happen when [edge case]?
+3. Do you want face tracking, or just preset positions?
+
+
+```
+
+
+### Keep plan.md Updated
+
+As you implement the app, update `plan.md` to track:
+- What's done
+- What's in progress
+- Any new questions or decisions that arise
+
+---
+
 ## First-Run Setup
 
 **Before doing anything else:**
