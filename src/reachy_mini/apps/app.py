@@ -190,6 +190,18 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Path where the app project will be created.",
     )
+    create_parser.add_argument(
+        "--publish",
+        action="store_true",
+        default=False,
+        help="Publish the app to Hugging Face Spaces immediately after creation.",
+    )
+    create_parser.add_argument(
+        "--private",
+        action="store_true",
+        default=False,
+        help="Make the space private (default is public). Only used with --publish.",
+    )
 
     check_parser = subparsers.add_parser("check", help="Check an existing app project")
     check_parser.add_argument(
@@ -244,7 +256,17 @@ def main() -> None:
     args = parse_args()
     console = Console()
     if args.command == "create":
-        assistant.create(console, app_name=args.app_name, app_path=args.path)
+        created_path = assistant.create(console, app_name=args.app_name, app_path=args.path)
+        if args.publish and created_path:
+            console.print("\nPublishing to Hugging Face Spaces...", style="bold blue")
+            assistant.publish(
+                console,
+                app_path=str(created_path),
+                commit_message="Initial commit",
+                official=False,
+                no_check=False,
+                private=args.private,
+            )
     elif args.command == "check":
         assistant.check(console, app_path=args.app_path)
     elif args.command == "publish":

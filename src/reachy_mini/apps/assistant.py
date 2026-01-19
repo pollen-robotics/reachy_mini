@@ -121,13 +121,16 @@ def create_cli(
     return app_name, language, app_path
 
 
-def create(console: Console, app_name: str, app_path: Path) -> None:
+def create(console: Console, app_name: str, app_path: Path) -> Path:
     """Create a new Reachy Mini app project with the given name at the specified path.
 
     Args:
         console (Console): The console object for printing messages.
         app_name (str): The name of the app to create.
         app_path (Path): The directory where the app project will be created.
+
+    Returns:
+        Path: The path to the created app project.
 
     """
     app_name, language, app_path = create_cli(console, app_name, app_path)
@@ -192,6 +195,7 @@ def create(console: Console, app_name: str, app_path: Path) -> None:
     # TODO assets dir with a .gif ?
 
     console.print(f"✅ Created app '{app_name}' in {base_path}/", style="bold green")
+    return base_path
 
 
 def install_app_with_progress(
@@ -615,6 +619,7 @@ def publish(
     commit_message: str,
     official: bool = False,
     no_check: bool = False,
+    private: bool | None = None,
 ) -> None:
     """Publish the app to the Reachy Mini app store.
 
@@ -624,6 +629,7 @@ def publish(
         commit_message (str): Commit message for the app publish.
         official (bool): Request to publish the app as an official Reachy Mini app.
         no_check (bool): Don't run checks before publishing the app.
+        private (bool | None): If True, make private. If False, make public. If None, prompt.
 
     """
     import huggingface_hub as hf
@@ -749,17 +755,22 @@ def publish(
             console.print(f"\n🔎 Running checks on the app at {app_path}/...")
             check(console, str(app_path))
 
-        console.print("Do you want your space to be created private or public?")
-        privacy = questionary.select(
-            ">",
-            choices=["private", "public"],
-            default="public",
-        ).ask()
+        # Determine privacy setting
+        if private is None:
+            console.print("Do you want your space to be created private or public?")
+            privacy = questionary.select(
+                ">",
+                choices=["private", "public"],
+                default="public",
+            ).ask()
+            is_private = (privacy == "private")
+        else:
+            is_private = private
 
         hf.create_repo(
             repo_path,
             repo_type="space",
-            private=(privacy == "private"),
+            private=is_private,
             exist_ok=False,
             space_sdk="static",
         )
