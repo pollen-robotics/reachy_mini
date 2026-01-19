@@ -44,12 +44,6 @@ export PATH="$HOME/.local/bin:$PATH"
 bmaptool --version
 ```
 
-**Alternative (Homebrew):**
-
-```bash
-brew install bmap-tools
-```
-
 </details>
 
 ---
@@ -63,13 +57,7 @@ brew install bmap-tools
    ```bash
    sudo ./rpiboot -d mass-storage-gadget64
    ```
-
-   You should see something like:
-   ```
-   Waiting for BCM2835/6/7/2711/2712...
-   ```
-   This is expected — the command is waiting for the robot to be connected over USB.
-
+   
 3. Set the switch to **DOWNLOAD (SW1)** on the head PCB:
 
    [![pcb_usb_and_switch](/docs/assets/pcb_usb_and_switch.png)]()
