@@ -109,6 +109,13 @@ class AppManager:
 
         # Launch app as subprocess with unbuffered output
         self.logger.getChild("runner").info(f"Starting app {app_name}")
+
+        # Set up environment with PipeWire/PulseAudio session access
+        env = os.environ.copy()
+        env["XDG_RUNTIME_DIR"] = "/run/user/1000"
+        env["DBUS_SESSION_BUS_ADDRESS"] = "unix:path=/run/user/1000/bus"
+        env["PULSE_SERVER"] = "unix:/run/user/1000/pulse/native"
+
         process = await asyncio.create_subprocess_exec(
             str(python_path),
             "-u",  # Unbuffered stdout/stderr for real-time logging
@@ -116,6 +123,7 @@ class AppManager:
             module_name,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
+            env=env,
         )
 
         # Create status and monitor task
