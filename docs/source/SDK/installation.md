@@ -256,8 +256,8 @@ uv sync --extra mujoco
 Run these commands in your terminal:
 
 ```bash
-echo 'SUBSYSTEM=="tty", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="55d3", MODE="0666", GROUP="dialout"
-SUBSYSTEM=="tty", ATTRS{idVendor}=="38fb", ATTRS{idProduct}=="1001", MODE="0666", GROUP="dialout"' \
+echo 'SUBSYSTEM=="usb", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="55d3", MODE="0666", GROUP="dialout"
+SUBSYSTEM=="usb", ATTRS{idVendor}=="38fb", ATTRS{idProduct}=="1001", MODE="0666", GROUP="dialout"' \
 | sudo tee /etc/udev/rules.d/99-reachy-mini.rules
 
 sudo udevadm control --reload-rules && sudo udevadm trigger
@@ -292,4 +292,3 @@ Encountering an issue? 👉 **[Check the Troubleshooting & FAQ Guide](../trouble
 * **[Python SDK](python-sdk.md)**: Learn to move, see, speak, and hear.
 * **[AI Integrations](integration.md)**: Connect LLMs, build Apps, and publish to Hugging Face.
 * **[Core Concepts](core-concept.md)**: Architecture, coordinate systems, and safety limits.
-

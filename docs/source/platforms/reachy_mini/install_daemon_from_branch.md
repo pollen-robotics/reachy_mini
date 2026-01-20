@@ -9,9 +9,10 @@
 - SSH access to your Reachy Mini robot (`pollen@reachy-mini.local`, password: `root`)
 - The robot must be connected to your Wi-Fi network (or accessible through its hotspot)
 
-## Local Development Setup
+## Option A: Local Development Setup
 
-This method allows you to safely test changes without affecting the system-wide installation. It's ideal for development and debugging.
+> This option is intended for active development and fast debugging cycles. It allows you to safely test changes without affecting the system-wide installation.
+> ⚠️ Avoid installing dashboard apps with this option—any changes made to the local `reachy_mini` version won’t be propagated correctly.
 
 ### Steps:
 
@@ -23,14 +24,15 @@ This method allows you to safely test changes without affecting the system-wide 
 
 2. **Clone the Reachy Mini repository with the specific branch:**
    ```bash
-   git clone git+https://github.com/pollen-robotics/reachy_mini.git@<branch-name>
+   git clone -b <branch-name> https://github.com/pollen-robotics/reachy_mini.git
    cd reachy_mini
    ```
 
 3. **Set up the virtual environment:**
    ```bash
-   uv sync --<needed extras : gstreamer,...>
+   uv venv --python /venvs/mini_daemon/bin/python .venv
    source .venv/bin/activate
+   uv sync --extra gstreamer --extra wireless-version
    ```
 
 4. **Stop the system daemon service:**
@@ -46,9 +48,9 @@ This method allows you to safely test changes without affecting the system-wide 
 
 Now you can modify the code in `~/reachy_mini` and test your changes without affecting the system installation.
 
-## System-Wide Custom Installation
+## Option B: System-Wide Custom Installation
 
-Use this method to install a branch version as the system-wide daemon for more thorough testing.
+> This option installs a branch build of reachy-mini as the system-wide daemon. It’s better suited for thorough, end-to-end testing and supports seamless app installation from the dashboard.
 
 ### Steps:
 
@@ -66,9 +68,11 @@ Use this method to install a branch version as the system-wide daemon for more t
 3. **Install the specific branch:**
    ```bash
    pip install --no-cache-dir --force-reinstall \
-     git+https://github.com/pollen-robotics/reachy_mini.git@<branch-name>
+     "reachy_mini[gstreamer,wireless-version] @ git+https://github.com/pollen-robotics/reachy_mini.git@<branch-name>"
    ```
    Replace `<branch-name>` with the branch you want to test (e.g., `develop`, `feature/my-feature`, `bugfix/issue-123`).
+
+   > _Remark_ : we have to use `pip` here and not `uv` because `uv pip install` [does not work correctly with `git lfs`](https://github.com/astral-sh/uv/issues/3312)
 
 4. **Restart the daemon service:**
    ```bash

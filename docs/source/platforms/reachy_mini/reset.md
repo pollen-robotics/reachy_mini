@@ -25,13 +25,16 @@ Reachy Mini wireless emits a Bluetooth signal that allows you to reset the Wi-Fi
 ## 3. Unknown Service & WRITE Section
 - Navigate to the **Unknown Service**.
 - Locate the **WRITE** section.
+- You can also use the **READ** section above to check the response of the robot.
 [![bluetooth_2.jpg](https://github.com/pollen-robotics/reachy_mini/raw/develop/docs/assets/bluetooth_2.jpg)]()
 
 
 
 ## 4. Sending Commands
 Commands are sent as **hexadecimal strings**. Use [this tool](https://www.rapidtables.com/convert/number/ascii-to-hex.html) to convert ASCII to hex if needed.
+Commands can also be sent using the original text format, like "STATUS" or "CMD_HOTSPOT".
 
+**Before sending any command, make sure to send the PIN code first.**
 
 ### Available Commands
 | Command                | Hex Value (send after `0x`)       |
@@ -45,8 +48,18 @@ Commands are sent as **hexadecimal strings**. Use [this tool](https://www.rapidt
 
 ### PIN Code
 
-The PIN code here is 00018, for example. The PIN is the **last 5 digits** of the robot's serial number.
+The PIN is the **last 5 digits** of the robot's serial number. For example if the serial number is `xxxxxxxx4918400018`, the PIN will be `00018` so send `PIN_00018` or the corresponding hex value.
 
+### Available Commands
+| Command                | Hex Value (send after `0x`)       |
+|------------------------|-----------------------------------|
+| STATUS                 | 535441545553                      |
+| PIN_00018              | 50494E5F3030303138                |
+| CMD_HOTSPOT            | 434D445F484F5453504F54            |
+| CMD_RESTART_DAEMON     | 434D445F524553544152545F4441454D4F4E |
+| CMD_SOFTWARE_RESET     | 434D445F534F4654574152455F5245534554 |
+
+Note: If you use the software reset command, the robot will reboot and you will need to wait about 5min for it to be available again.
 
 ### Tips
 
