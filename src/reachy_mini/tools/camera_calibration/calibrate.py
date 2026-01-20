@@ -19,7 +19,7 @@ from typing import Any, List, Optional, Tuple
 import cv2
 import numpy as np
 import numpy.typing as npt
-import yaml  # type: ignore[import-untyped]
+import yaml
 from cv2 import aruco
 
 

@@ -13,7 +13,7 @@ from typing import Any, Dict, List, Tuple
 
 import numpy as np
 import numpy.typing as npt
-import yaml  # type: ignore[import-untyped]
+import yaml
 
 # Crop analysis results from analyze_crop_v3.py
 RESOLUTION_MODES = {
@@ -107,7 +107,7 @@ def scale_intrinsics(
     K_scaled[0, 2] = cx_scaled
     K_scaled[1, 2] = cy_scaled
 
-    return K_scaled  # type: ignore[no-any-return]
+    return K_scaled
 
 
 def generate_scaled_calibrations(calibration_file: str, output_dir: str = '.') -> List[str]:

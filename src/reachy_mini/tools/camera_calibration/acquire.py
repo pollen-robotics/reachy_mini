@@ -13,7 +13,6 @@ import time
 from typing import Any, Optional
 
 import cv2
-import numpy as np
 import numpy.typing as npt
 
 from reachy_mini import ReachyMini
