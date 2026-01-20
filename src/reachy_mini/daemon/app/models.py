@@ -53,7 +53,7 @@ class Matrix4x4Pose(BaseModel):
             float,
             float,
             float,
-        ] = tuple(arr.flatten().tolist())  # type: ignore [assignment]
+        ] = tuple(arr.flatten().tolist())
         return cls(m=m)
 
     def to_pose_array(self) -> NDArray[np.float64]:
