@@ -56,7 +56,15 @@
     - local: troubleshooting
       title: Troubleshooting & FAQ
   title: Help and support
-- sections:
+- isExpanded: false
+  sections:
+    - local: examples/minimal_demo
+      title: Minimal demo
+    - local: examples/look_at
+      title: Look at
+  title: Examples
+- isExpanded: false
+  sections:
     - local: API/reachymini
       title: Reachy Mini
     - local: API/media
