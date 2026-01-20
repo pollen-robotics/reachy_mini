@@ -55,6 +55,46 @@ As you implement the app, update `plan.md` to track:
 - What's in progress
 - Any new questions or decisions that arise
 
+### Test Before Asking the User
+
+Before considering the app done, **test it yourself** to catch early crashes and bugs.
+
+**First, know the user's setup.** If not already recorded in `agents.local.md`, ask:
+
+> "What type of Reachy Mini do you have: **Lite** or **Wireless**?"
+
+Record this in `agents.local.md` for future reference.
+
+**Step 1: Ask the user to prepare the robot**
+
+Ask the user how they want to test:
+
+| Test mode | Lite | Wireless |
+|-----------|------|----------|
+| **Simulation** | Open a new terminal and run: `reachy-mini-daemon --sim` | Open a new terminal and run: `reachy-mini-daemon --sim` |
+| **Physical robot** | Open a new terminal and run: `reachy-mini-daemon` | Turn on the robot and wake it up from the dashboard |
+
+> ⚠️ Make sure no other daemon is already running.
+
+Wait for the user to confirm they're ready.
+
+**Step 2: Run the app**
+
+Run it the same way the dashboard will launch it:
+
+```bash
+cd ~/reachy_mini_apps/my_app
+python my_app/main.py
+```
+
+**Step 3: Check for issues**
+
+- Does it start without crashing?
+- Are there import errors or missing dependencies?
+- Does the control loop run without exceptions?
+
+Fix any issues found, then repeat until the app runs cleanly.
+
 ---
 
 ## First-Run Setup
