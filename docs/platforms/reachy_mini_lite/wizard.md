@@ -8,7 +8,7 @@ You can download the Dynamixel Wizard from the following link:
 1. Power on Reachy Mini Lite using the provided power adapter.
 2. Connect your computer to Reachy Mini Lite using a USB-C cable.
 3. Open the Dynamixel Wizard application.
-4. Click to "option" next to "connect button", then go to the "scan" tab, and check the following info to be able to detect all your motors.
+4. Click on "Options" next to the "Connect" button, then go to the "Scan" tab, and check the following info to be able to detect all your motors.
     - Protocol Version: 2.0
     - Baudrate: 1000000
     - Port: Select the appropriate port for your USB connection (e.g., COM3 on Windows or /dev/ttyUSB0 on Linux/Mac).
@@ -19,6 +19,6 @@ You can download the Dynamixel Wizard from the following link:
 
 ## Read motor parameters
 1. Select a motor from the list of detected motors.
-2. Checks the parameters you want to read (for example: Present Position, Present Velocity, Present Load, etc.)
+2. Check the parameters you want to read (for example: Present Position, Present Velocity, Present Load, etc.)
 
 ![Dynamixel_Wizard_Read_Settings](/docs/assets/wizard_parameters.png)

@@ -16,6 +16,7 @@ from typing import Dict, List, Literal, Optional, Union, cast
 import cv2
 import numpy as np
 import numpy.typing as npt
+import zenoh
 from asgiref.sync import async_to_sync
 from scipy.spatial.transform import Rotation as R
 
@@ -295,16 +296,34 @@ class ReachyMini:
                     "Trying network discovery.",
                     err,
                 )
-                client = self._connect_single(localhost_only=False, timeout=timeout)
+                try:
+                    client = self._connect_single(localhost_only=False, timeout=timeout)
+                except (zenoh.ZError, TimeoutError):
+                    raise ConnectionError(
+                        "Auto connection: both localhost and network attempts failed. "
+                        "Make sure a Reachy Mini daemon is running and accessible."
+                    )
+
                 selected = "network"
             self.logger.info("Connection mode selected: %s", selected)
             return client, selected
 
         if requested_mode == "localhost_only":
-            client = self._connect_single(localhost_only=True, timeout=timeout)
+            try:
+                client = self._connect_single(localhost_only=True, timeout=timeout)
+            except (zenoh.ZError, TimeoutError):
+                raise ConnectionError(
+                    "Could not connect to daemon on localhost. Is the Reachy Mini daemon running?"
+                )
             selected = "localhost_only"
         else:
-            client = self._connect_single(localhost_only=False, timeout=timeout)
+            try:
+                client = self._connect_single(localhost_only=False, timeout=timeout)
+            except (zenoh.ZError, TimeoutError):
+                raise ConnectionError(
+                    "Network connection attempt failed. "
+                    "Make sure a Reachy Mini daemon is running and accessible."
+                )
             selected = "network"
 
         self.logger.info("Connection mode selected: %s", selected)
@@ -313,11 +332,7 @@ class ReachyMini:
     def _connect_single(self, localhost_only: bool, timeout: float) -> ZenohClient:
         """Connect once with the requested tunneling mode and guard cleanup."""
         client = ZenohClient(self.robot_name, localhost_only)
-        try:
-            client.wait_for_connection(timeout=timeout)
-        except Exception:
-            client.disconnect()
-            raise
+        client.wait_for_connection(timeout=timeout)
         return client
 
     def set_target(
@@ -522,7 +537,7 @@ class ReachyMini:
         x_n, y_n = cv2.undistortPoints(
             points,
             self.media.camera.K,  # type: ignore
-            self.media.camera.D,  # type: ignore
+            self.media.camera.D,
         )[0, 0]
 
         ray_cam = np.array([x_n, y_n, 1.0])
