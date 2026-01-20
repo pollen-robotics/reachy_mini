@@ -10,13 +10,15 @@ This script:
 import argparse
 import os
 import time
+from typing import Optional
 
 import cv2
 
 from reachy_mini import ReachyMini
+from reachy_mini.media.camera_constants import CameraResolution
 
 
-def main():
+def main() -> None:
     """Acquire calibration images at maximum resolution."""
     parser = argparse.ArgumentParser(
         description="Acquire calibration images at maximum resolution"
@@ -50,10 +52,14 @@ def main():
         cv2.namedWindow("Reachy Mini Camera")
 
     with ReachyMini(media_backend="gstreamer") as reachy_mini:
+        if reachy_mini.media.camera is None or reachy_mini.media.camera.camera_specs is None:
+            print("ERROR: Could not access camera")
+            return
+
         available_resolutions = reachy_mini.media.camera.camera_specs.available_resolutions
 
         # Find maximum resolution
-        max_resolution = None
+        max_resolution: Optional[CameraResolution] = None
         max_resolution_value = 0
         for resolution_enum in available_resolutions:
             res = resolution_enum.value[:2]
@@ -62,13 +68,18 @@ def main():
                 max_resolution_value = res[0] * res[1]
                 max_resolution = resolution_enum
 
+        if max_resolution is None:
+            print("ERROR: No resolution found")
+            return
+
         res_value = max_resolution.value
         print(f"Using maximum resolution: {max_resolution.name}")
         print(f"  {res_value[0]}x{res_value[1]} @ {res_value[2]}fps\n")
 
-        reachy_mini.media.camera.close()
-        reachy_mini.media.camera.set_resolution(max_resolution)
-        reachy_mini.media.camera.open()
+        if reachy_mini.media.camera is not None:
+            reachy_mini.media.camera.close()
+            reachy_mini.media.camera.set_resolution(max_resolution)
+            reachy_mini.media.camera.open()
 
         time.sleep(2)
 

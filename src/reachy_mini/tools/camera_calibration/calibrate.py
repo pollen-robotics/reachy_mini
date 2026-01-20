@@ -14,14 +14,16 @@ Usage:
 import argparse
 import os
 from glob import glob
+from typing import List, Optional, Tuple
 
 import cv2
 import numpy as np
+import numpy.typing as npt
 import yaml
 from cv2 import aruco
 
 
-def build_charuco_board():
+def build_charuco_board() -> Tuple[aruco.Dictionary, aruco.CharucoBoard]:
     """Build the Charuco board definition matching the physical board."""
     aruco_dict = cv2.aruco.getPredefinedDictionary(aruco.DICT_4X4_1000)
 
@@ -37,7 +39,12 @@ def build_charuco_board():
     return aruco_dict, board
 
 
-def detect_charuco_corners(image, aruco_dict, board, min_markers=4):
+def detect_charuco_corners(
+    image: npt.NDArray[np.uint8],
+    aruco_dict: aruco.Dictionary,
+    board: aruco.CharucoBoard,
+    min_markers: int = 4,
+) -> Tuple[Optional[npt.NDArray[np.float32]], Optional[npt.NDArray[np.int32]], bool]:
     """Detect Charuco corners in an image.
 
     Returns:
@@ -69,7 +76,17 @@ def detect_charuco_corners(image, aruco_dict, board, min_markers=4):
     return charuco_corners, charuco_ids, True
 
 
-def calibrate_camera(images_dir, min_markers=20, visualize=False):
+def calibrate_camera(
+    images_dir: str, min_markers: int = 20, visualize: bool = False
+) -> Tuple[
+    npt.NDArray[np.float64],
+    npt.NDArray[np.float64],
+    List[npt.NDArray[np.float64]],
+    List[npt.NDArray[np.float64]],
+    Tuple[int, int],
+    float,
+    List[str],
+]:
     """Perform camera calibration using images from the specified directory.
 
     Args:
@@ -97,10 +114,10 @@ def calibrate_camera(images_dir, min_markers=20, visualize=False):
     print(f"Found {len(image_files)} images in {images_dir}")
 
     # Storage for calibration data
-    all_charuco_corners = []
-    all_charuco_ids = []
-    image_size = None
-    successful_images = []
+    all_charuco_corners: List[npt.NDArray[np.float32]] = []
+    all_charuco_ids: List[npt.NDArray[np.int32]] = []
+    image_size: Optional[Tuple[int, int]] = None
+    successful_images: List[str] = []
 
     # Process each image
     for i, image_file in enumerate(image_files):
@@ -122,7 +139,7 @@ def calibrate_camera(images_dir, min_markers=20, visualize=False):
             image, aruco_dict, board, min_markers
         )
 
-        if not success:
+        if not success or charuco_corners is None or charuco_ids is None:
             print("Detection failed!")
             continue
 
@@ -158,6 +175,10 @@ def calibrate_camera(images_dir, min_markers=20, visualize=False):
     # Perform calibration
     print("\nPerforming camera calibration...")
 
+    # Ensure image_size is set
+    if image_size is None:
+        raise ValueError("Failed to determine image size from calibration images")
+
     calibration_flags = (
         cv2.CALIB_RATIONAL_MODEL  # Use rational distortion model (k4, k5, k6)
         | cv2.CALIB_THIN_PRISM_MODEL  # Use thin prism distortion (s1, s2, s3, s4)
@@ -165,23 +186,29 @@ def calibrate_camera(images_dir, min_markers=20, visualize=False):
 
     # Use cv2.calibrateCamera with object points from the board
     # First, get 3D object points for each detected corner
-    all_obj_points = []
-    all_img_points = []
+    all_obj_points: List[npt.NDArray[np.float32]] = []
+    all_img_points: List[npt.NDArray[np.float32]] = []
 
     for corners, ids in zip(all_charuco_corners, all_charuco_ids):
         # Get 3D points from board
-        obj_pts = board.getChessboardCorners()[ids.flatten()]
+        obj_pts = board.getChessboardCorners()[ids.flatten().tolist()]  # type: ignore[index]
         all_obj_points.append(obj_pts)
         all_img_points.append(corners)
 
-    rms_error, camera_matrix, dist_coeffs, rvecs, tvecs = cv2.calibrateCamera(
+    # cv2.calibrateCamera returns (rms_error, camera_matrix, dist_coeffs, rvecs, tvecs)
+    calib_result = cv2.calibrateCamera(
         objectPoints=all_obj_points,
         imagePoints=all_img_points,
         imageSize=image_size,
-        cameraMatrix=None,
-        distCoeffs=None,
+        cameraMatrix=None,  # type: ignore[arg-type]
+        distCoeffs=None,  # type: ignore[arg-type]
         flags=calibration_flags,
-    )
+    )  # type: ignore[call-overload]
+    rms_error = calib_result[0]
+    camera_matrix = calib_result[1]
+    dist_coeffs = calib_result[2]
+    rvecs = calib_result[3]
+    tvecs = calib_result[4]
 
     print(f"\n{'=' * 60}")
     print("CALIBRATION RESULTS")
@@ -220,8 +247,13 @@ def calibrate_camera(images_dir, min_markers=20, visualize=False):
 
 
 def save_calibration(
-    output_file, camera_matrix, dist_coeffs, image_size, rms_error, successful_images
-):
+    output_file: str,
+    camera_matrix: npt.NDArray[np.float64],
+    dist_coeffs: npt.NDArray[np.float64],
+    image_size: Tuple[int, int],
+    rms_error: float,
+    successful_images: List[str],
+) -> None:
     """Save calibration parameters to a YAML file."""
     calibration_data = {
         "calibration_date": str(np.datetime64("now")),
@@ -256,7 +288,7 @@ def save_calibration(
     print(f"Calibration saved to {output_file}")
 
 
-def main():
+def main() -> None:
     """Run the calibration process based on command-line arguments."""
     parser = argparse.ArgumentParser(
         description="Calibrate camera using Charuco board images"
@@ -290,7 +322,7 @@ def main():
     # Verify images directory exists
     if not os.path.isdir(args.images_dir):
         print(f"Error: Images directory '{args.images_dir}' does not exist")
-        return 1
+        return
 
     try:
         # Perform calibration
@@ -317,14 +349,12 @@ def main():
         )
 
         print("\nCalibration completed successfully!")
-        return 0
 
     except Exception as e:
         print(f"\nError during calibration: {e}")
         import traceback
 
         traceback.print_exc()
-        return 1
 
 
 if __name__ == "__main__":

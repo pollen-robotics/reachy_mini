@@ -28,6 +28,8 @@ import platform
 from typing import Optional, Tuple, cast
 
 import cv2
+import numpy as np
+import numpy.typing as npt
 from cv2_enumerate_cameras import enumerate_cameras
 
 from reachy_mini.media.camera_constants import (
@@ -179,7 +181,12 @@ def find_camera_by_vid_pid(
     return selected_cap
 
 
-def scale_intrinsics(K_original, original_size, target_size, crop_scale):
+def scale_intrinsics(
+    K_original: npt.NDArray[np.float64],
+    original_size: Tuple[int, int],
+    target_size: Tuple[int, int],
+    crop_scale: float,
+) -> npt.NDArray[np.float64]:
     """Scale camera intrinsics for a different resolution with cropping.
 
     Args:

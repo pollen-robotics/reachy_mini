@@ -12,33 +12,40 @@ This script:
 import argparse
 import os
 import time
+from typing import List, Optional, Tuple
 
 import cv2
 import numpy as np
+import numpy.typing as npt
 import yaml
 
 from reachy_mini import ReachyMini
+from reachy_mini.media.camera_constants import CameraResolution
 
 
-def load_calibration(yaml_file):
+def load_calibration(
+    yaml_file: str,
+) -> Tuple[npt.NDArray[np.float64], npt.NDArray[np.float64], Tuple[int, int]]:
     """Load calibration parameters from YAML file."""
     with open(yaml_file, "r") as f:
         calib = yaml.safe_load(f)
 
     # Reconstruct camera matrix
-    K = np.array(calib["camera_matrix"]["data"]).reshape(3, 3)
+    K = np.array(calib["camera_matrix"]["data"], dtype=np.float64).reshape(3, 3)
 
     # Get distortion coefficients
-    dist = np.array(calib["distortion_coefficients"]["data"])
+    dist = np.array(calib["distortion_coefficients"]["data"], dtype=np.float64)
 
     # Get image size
-    width = calib["image_size"]["width"]
-    height = calib["image_size"]["height"]
+    width: int = calib["image_size"]["width"]
+    height: int = calib["image_size"]["height"]
 
     return K, dist, (width, height)
 
 
-def get_resolution_enum_from_name(name, available_resolutions):
+def get_resolution_enum_from_name(
+    name: str, available_resolutions: List[CameraResolution]
+) -> Optional[CameraResolution]:
     """Get CameraResolution enum from resolution mode name."""
     for res_enum in available_resolutions:
         if res_enum.name == name:
@@ -46,7 +53,7 @@ def get_resolution_enum_from_name(name, available_resolutions):
     return None
 
 
-def main():
+def main() -> None:
     """Run the undistortion visualization."""
     parser = argparse.ArgumentParser(description="Visualize undistorted camera feed")
     parser.add_argument(
@@ -82,6 +89,10 @@ def main():
     print("\nConnecting to Reachy Mini...")
     reachy_mini = ReachyMini(media_backend="gstreamer")
 
+    if reachy_mini.media.camera is None or reachy_mini.media.camera.camera_specs is None:
+        print("ERROR: Could not access camera")
+        return
+
     available_resolutions = reachy_mini.media.camera.camera_specs.available_resolutions
 
     # Select resolution
@@ -92,7 +103,7 @@ def main():
         )
         if resolution_enum is None:
             print(f"ERROR: Resolution {resolution_name} not available")
-            return 1
+            return
     else:
         # Let user choose
         print("\nAvailable resolutions:")
@@ -111,7 +122,7 @@ def main():
             resolution_name = resolution_enum.name
         except (ValueError, IndexError):
             print("Invalid choice")
-            return 1
+            return
 
     print(f"\nUsing resolution: {resolution_name}")
 
@@ -124,7 +135,7 @@ def main():
     if not os.path.exists(calib_file):
         print(f"ERROR: Calibration file not found: {calib_file}")
         print("Run calibrate.py and scale_calibration.py first")
-        return 1
+        return
 
     print(f"Loading calibration from: {calib_file}")
     K, dist, (calib_width, calib_height) = load_calibration(calib_file)
@@ -137,9 +148,10 @@ def main():
 
     # Set camera resolution
     print(f"\nSetting camera to {resolution_name}...")
-    reachy_mini.media.camera.close()
-    reachy_mini.media.camera.set_resolution(resolution_enum)
-    reachy_mini.media.camera.open()
+    if reachy_mini.media.camera is not None:
+        reachy_mini.media.camera.close()
+        reachy_mini.media.camera.set_resolution(resolution_enum)
+        reachy_mini.media.camera.open()
 
     time.sleep(2)
 
@@ -149,7 +161,7 @@ def main():
     # alpha=0 removes black borders by cropping to valid pixels only
     new_camera_matrix, roi = cv2.getOptimalNewCameraMatrix(K, dist, (w, h), 0, (w, h))
     mapx, mapy = cv2.initUndistortRectifyMap(
-        K, dist, None, new_camera_matrix, (w, h), cv2.CV_32FC1
+        K, dist, None, new_camera_matrix, (w, h), cv2.CV_32FC1  # type: ignore[arg-type,call-overload]
     )
 
     # Extract ROI for cropping black borders
@@ -246,13 +258,12 @@ def main():
     finally:
         # Close camera first, then destroy windows
         try:
-            reachy_mini.media.camera.close()
-            print("\nClosed camera")
+            if reachy_mini.media.camera is not None:
+                reachy_mini.media.camera.close()
+                print("\nClosed camera")
         except Exception:
             pass
         cv2.destroyAllWindows()
-
-    return 0
 
 
 if __name__ == "__main__":

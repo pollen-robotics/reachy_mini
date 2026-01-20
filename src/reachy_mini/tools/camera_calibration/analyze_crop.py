@@ -1,13 +1,15 @@
 """Analyze crop and zoom differences between images using ArUco markers."""
 
 from glob import glob
+from typing import Any, Dict, Optional, Set, Tuple
 
 import cv2
 import numpy as np
+import numpy.typing as npt
 from cv2 import aruco
 
 
-def build_charuco_board():
+def build_charuco_board() -> Tuple[aruco.Dictionary, aruco.CharucoBoard]:
     """Build the Charuco board used for calibration."""
     aruco_dict = cv2.aruco.getPredefinedDictionary(aruco.DICT_4X4_1000)
     squares_x = 11  # 11x8 grid
@@ -20,7 +22,9 @@ def build_charuco_board():
     return aruco_dict, board
 
 
-def analyze_image(image_path, aruco_dict, board):
+def analyze_image(
+    image_path: str, aruco_dict: aruco.Dictionary, board: aruco.CharucoBoard
+) -> Optional[Dict[str, Any]]:
     """Analyze a single image and return marker information."""
     im = cv2.imread(image_path)
     if im is None:
@@ -38,36 +42,38 @@ def analyze_image(image_path, aruco_dict, board):
         return None
 
     # Store marker centers indexed by ID (normalized to [0,1] range)
-    marker_centers = {}
-    marker_centers_pixels = {}
+    marker_centers: Dict[int, npt.NDArray[np.float64]] = {}
+    marker_centers_pixels: Dict[int, npt.NDArray[np.floating[Any]]] = {}
     for i, marker_id in enumerate(marker_ids):
         corners = marker_corners[i][0]
-        center = corners.mean(axis=0)
-        marker_centers_pixels[int(marker_id[0])] = center
+        center: npt.NDArray[np.floating[Any]] = corners.mean(axis=0)  # type: ignore[assignment]
+        marker_centers_pixels[int(marker_id[0])] = center  # type: ignore[index]
         # Normalize to image dimensions
         marker_centers[int(marker_id[0])] = np.array(
-            [center[0] / width, center[1] / height]
+            [float(center[0]) / width, float(center[1]) / height]
         )
+
+    marker_ids_set: Set[int] = set(int(mid[0]) for mid in marker_ids)  # type: ignore[index]
 
     return {
         "path": image_path,
         "resolution": (width, height),
-        "marker_ids": set(int(id[0]) for id in marker_ids),
+        "marker_ids": marker_ids_set,
         "marker_centers": marker_centers,  # normalized
         "marker_centers_pixels": marker_centers_pixels,  # absolute
         "image": im,
     }
 
 
-def main():
+def main() -> None:
     """Run the analysis on all images in the 'images' folder."""
     aruco_dict, board = build_charuco_board()
     files = sorted(glob("images/*.png"))
 
     print("Analyzing images...\n")
 
-    results = {}
-    all_marker_ids = None
+    results: Dict[str, Dict[str, Any]] = {}
+    all_marker_ids: Optional[Set[int]] = None
 
     for file in files:
         result = analyze_image(file, aruco_dict, board)
@@ -87,6 +93,10 @@ def main():
                 all_marker_ids = result["marker_ids"]
             else:
                 all_marker_ids = all_marker_ids.intersection(result["marker_ids"])
+
+    if all_marker_ids is None:
+        print("No marker IDs found in any images")
+        return
 
     print(f"Common markers in ALL images: {sorted(all_marker_ids)}")
     print(f"Number of common markers: {len(all_marker_ids)}\n")

@@ -14,7 +14,7 @@ import cv2
 from reachy_mini import ReachyMini
 
 
-def main():
+def main() -> None:
     """Acquire images at different resolutions for crop analysis."""
     parser = argparse.ArgumentParser(
         description="Acquire images at different resolutions for crop analysis"
@@ -50,6 +50,10 @@ def main():
         cv2.namedWindow("Reachy Mini Camera")
 
     with ReachyMini(media_backend="gstreamer") as reachy_mini:
+        if reachy_mini.media.camera is None or reachy_mini.media.camera.camera_specs is None:
+            print("ERROR: Could not access camera")
+            return
+
         available_resolutions = (
             reachy_mini.media.camera.camera_specs.available_resolutions
         )
@@ -77,12 +81,13 @@ def main():
                     f"  Resolution: {res_value[0]}x{res_value[1]} @ {res_value[2]}fps"
                 )
 
-                reachy_mini.media.camera.close()
-                time.sleep(1)
-                reachy_mini.media.camera.set_resolution(current_res)
-                time.sleep(1)
-                reachy_mini.media.camera.open()
-                time.sleep(2)  # Wait for camera to stabilize
+                if reachy_mini.media.camera is not None:
+                    reachy_mini.media.camera.close()
+                    time.sleep(1)
+                    reachy_mini.media.camera.set_resolution(current_res)
+                    time.sleep(1)
+                    reachy_mini.media.camera.open()
+                    time.sleep(2)  # Wait for camera to stabilize
 
                 image_save_path = os.path.join(save_path, f"{current_res.name}.png")
 
@@ -127,7 +132,7 @@ def main():
                             saved = True
                         elif key == ord("q"):
                             print("Quit requested")
-                            return 0
+                            return
 
                         time.sleep(1.0 / 30)
 

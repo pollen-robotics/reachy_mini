@@ -9,8 +9,10 @@ and computes adjusted parameters for other resolution modes.
 """
 
 import argparse
+from typing import Any, Dict, List, Tuple
 
 import numpy as np
+import numpy.typing as npt
 import yaml
 
 # Crop analysis results from analyze_crop_v3.py
@@ -38,25 +40,30 @@ RESOLUTION_MODES = {
 }
 
 
-def load_calibration(yaml_file):
+def load_calibration(yaml_file: str) -> Tuple[npt.NDArray[np.float64], npt.NDArray[np.float64], Tuple[int, int], Dict[str, Any]]:
     """Load calibration parameters from YAML file."""
     with open(yaml_file, 'r') as f:
-        calib = yaml.safe_load(f)
+        calib: Dict[str, Any] = yaml.safe_load(f)
 
     # Reconstruct camera matrix
-    K = np.array(calib['camera_matrix']['data']).reshape(3, 3)
+    K = np.array(calib['camera_matrix']['data'], dtype=np.float64).reshape(3, 3)
 
     # Get distortion coefficients
-    dist = np.array(calib['distortion_coefficients']['data'])
+    dist = np.array(calib['distortion_coefficients']['data'], dtype=np.float64)
 
     # Get original image size
-    width = calib['image_size']['width']
-    height = calib['image_size']['height']
+    width: int = calib['image_size']['width']
+    height: int = calib['image_size']['height']
 
     return K, dist, (width, height), calib
 
 
-def scale_intrinsics(K_original, original_size, target_size, crop_scale):
+def scale_intrinsics(
+    K_original: npt.NDArray[np.float64],
+    original_size: Tuple[int, int],
+    target_size: Tuple[int, int],
+    crop_scale: float,
+) -> npt.NDArray[np.float64]:
     """Scale camera intrinsics for a different resolution with cropping.
 
     Args:
@@ -103,7 +110,7 @@ def scale_intrinsics(K_original, original_size, target_size, crop_scale):
     return K_scaled
 
 
-def generate_scaled_calibrations(calibration_file, output_dir='.'):
+def generate_scaled_calibrations(calibration_file: str, output_dir: str = '.') -> List[str]:
     """Generate scaled calibration files for all resolution modes."""
     print(f"Loading calibration from {calibration_file}...")
     K_original, dist_original, original_size, original_calib = load_calibration(calibration_file)
@@ -179,7 +186,7 @@ def generate_scaled_calibrations(calibration_file, output_dir='.'):
     return generated_files
 
 
-def main():
+def main() -> None:
     """Run the scale calibration tool."""
     parser = argparse.ArgumentParser(
         description="Scale camera calibration for different resolution modes"
@@ -208,13 +215,10 @@ def main():
         for f in generated_files:
             print(f"  - {f}")
 
-        return 0
-
     except Exception as e:
         print(f"\n✗ Error: {e}")
         import traceback
         traceback.print_exc()
-        return 1
 
 
 if __name__ == "__main__":

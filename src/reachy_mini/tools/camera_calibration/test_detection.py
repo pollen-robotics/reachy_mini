@@ -1,12 +1,13 @@
 """Quick test to debug Charuco detection."""
 
 import sys
+from typing import Tuple
 
 import cv2
 from cv2 import aruco
 
 
-def build_charuco_board():
+def build_charuco_board() -> Tuple[aruco.Dictionary, aruco.CharucoBoard]:
     """Create and return the Charuco board and dictionary."""
     aruco_dict = cv2.aruco.getPredefinedDictionary(aruco.DICT_4X4_1000)
     squares_x = 11
