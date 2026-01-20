@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""
-Visualize undistorted camera feed in real-time.
+"""Visualize undistorted camera feed in real-time.
 
 This script:
 1. Lets you choose a camera resolution mode
@@ -19,23 +18,22 @@ import numpy as np
 import yaml
 
 from reachy_mini import ReachyMini
-from reachy_mini.media.camera_constants import CameraResolution
 
 
 def load_calibration(yaml_file):
     """Load calibration parameters from YAML file."""
-    with open(yaml_file, 'r') as f:
+    with open(yaml_file, "r") as f:
         calib = yaml.safe_load(f)
 
     # Reconstruct camera matrix
-    K = np.array(calib['camera_matrix']['data']).reshape(3, 3)
+    K = np.array(calib["camera_matrix"]["data"]).reshape(3, 3)
 
     # Get distortion coefficients
-    dist = np.array(calib['distortion_coefficients']['data'])
+    dist = np.array(calib["distortion_coefficients"]["data"])
 
     # Get image size
-    width = calib['image_size']['width']
-    height = calib['image_size']['height']
+    width = calib["image_size"]["width"]
+    height = calib["image_size"]["height"]
 
     return K, dist, (width, height)
 
@@ -49,28 +47,32 @@ def get_resolution_enum_from_name(name, available_resolutions):
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Visualize undistorted camera feed"
+    """Run the undistortion visualization."""
+    parser = argparse.ArgumentParser(description="Visualize undistorted camera feed")
+    parser.add_argument(
+        "--resolution",
+        type=str,
+        choices=[
+            "R3840x2592at30fps",
+            "R3840x2160at30fps",
+            "R3264x2448at30fps",
+            "R1920x1080at60fps",
+        ],
+        default=None,
+        help="Camera resolution mode to use",
     )
     parser.add_argument(
-        '--resolution',
-        type=str,
-        choices=['R3840x2592at30fps', 'R3840x2160at30fps', 'R3264x2448at30fps', 'R1920x1080at60fps'],
-        default=None,
-        help='Camera resolution mode to use'
-    )
-    parser.add_argument(
-        '--calibration',
+        "--calibration",
         type=str,
         default=None,
-        help='Path to calibration YAML file (auto-detected if not specified)'
+        help="Path to calibration YAML file (auto-detected if not specified)",
     )
 
     args = parser.parse_args()
 
-    print("="*70)
+    print("=" * 70)
     print("CAMERA UNDISTORTION VISUALIZATION")
-    print("="*70)
+    print("=" * 70)
 
     # Create OpenCV window first (before ReachyMini context)
     window_name = "Camera Undistortion"
@@ -85,7 +87,9 @@ def main():
     # Select resolution
     if args.resolution:
         resolution_name = args.resolution
-        resolution_enum = get_resolution_enum_from_name(resolution_name, available_resolutions)
+        resolution_enum = get_resolution_enum_from_name(
+            resolution_name, available_resolutions
+        )
         if resolution_enum is None:
             print(f"ERROR: Resolution {resolution_name} not available")
             return 1
@@ -95,7 +99,9 @@ def main():
         res_list = []
         for i, res in enumerate(available_resolutions):
             res_value = res.value
-            print(f"  {i+1}. {res.name} - {res_value[0]}x{res_value[1]} @ {res_value[2]}fps")
+            print(
+                f"  {i + 1}. {res.name} - {res_value[0]}x{res_value[1]} @ {res_value[2]}fps"
+            )
             res_list.append(res)
 
         choice = input("\nSelect resolution (1-{}): ".format(len(res_list)))
@@ -123,10 +129,10 @@ def main():
     print(f"Loading calibration from: {calib_file}")
     K, dist, (calib_width, calib_height) = load_calibration(calib_file)
 
-    print(f"\nCalibration parameters:")
+    print("\nCalibration parameters:")
     print(f"  Resolution: {calib_width}x{calib_height}")
-    print(f"  fx={K[0,0]:.2f}, fy={K[1,1]:.2f}")
-    print(f"  cx={K[0,2]:.2f}, cy={K[1,2]:.2f}")
+    print(f"  fx={K[0, 0]:.2f}, fy={K[1, 1]:.2f}")
+    print(f"  cx={K[0, 2]:.2f}, cy={K[1, 2]:.2f}")
     print(f"  Distortion coefficients: {len(dist)}")
 
     # Set camera resolution
@@ -142,17 +148,19 @@ def main():
     h, w = calib_height, calib_width
     # alpha=0 removes black borders by cropping to valid pixels only
     new_camera_matrix, roi = cv2.getOptimalNewCameraMatrix(K, dist, (w, h), 0, (w, h))
-    mapx, mapy = cv2.initUndistortRectifyMap(K, dist, None, new_camera_matrix, (w, h), cv2.CV_32FC1)
+    mapx, mapy = cv2.initUndistortRectifyMap(
+        K, dist, None, new_camera_matrix, (w, h), cv2.CV_32FC1
+    )
 
     # Extract ROI for cropping black borders
     x, y, roi_w, roi_h = roi
     print(f"Valid image region (ROI): {roi_w}x{roi_h} (cropped from {w}x{h})")
 
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("CONTROLS:")
     print("  's' - Toggle between split view and full undistorted view")
     print("  'q' - Quit")
-    print("="*70 + "\n")
+    print("=" * 70 + "\n")
 
     split_view = True
 
@@ -168,7 +176,7 @@ def main():
             undistorted = cv2.remap(frame, mapx, mapy, cv2.INTER_LINEAR)
 
             # Crop to valid region (removes black borders)
-            undistorted = undistorted[y:y+roi_h, x:x+roi_w]
+            undistorted = undistorted[y : y + roi_h, x : x + roi_w]
 
             # Create visualization
             if split_view:
@@ -183,29 +191,50 @@ def main():
 
                 combined = np.zeros((orig_h, orig_w + new_undist_w, 3), dtype=np.uint8)
                 combined[:, :orig_w] = frame
-                combined[:, orig_w:orig_w+new_undist_w] = undistorted_resized
+                combined[:, orig_w : orig_w + new_undist_w] = undistorted_resized
 
                 # Add labels
-                cv2.putText(combined, "Original", (10, 30),
-                           cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
-                cv2.putText(combined, "Undistorted (no borders)", (orig_w + 10, 30),
-                           cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                cv2.putText(
+                    combined,
+                    "Original",
+                    (10, 30),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    1,
+                    (0, 0, 255),
+                    2,
+                )
+                cv2.putText(
+                    combined,
+                    "Undistorted (no borders)",
+                    (orig_w + 10, 30),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    1,
+                    (0, 255, 0),
+                    2,
+                )
 
                 display = combined
             else:
                 # Full undistorted view
                 display = undistorted
-                cv2.putText(display, "Undistorted - No borders (press 's' for split view)", (10, 30),
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+                cv2.putText(
+                    display,
+                    "Undistorted - No borders (press 's' for split view)",
+                    (10, 30),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.7,
+                    (0, 255, 0),
+                    2,
+                )
 
             # Display
             cv2.imshow(window_name, display)
 
             # Handle keys
             key = cv2.waitKey(1) & 0xFF
-            if key == ord('q'):
+            if key == ord("q"):
                 break
-            elif key == ord('s'):
+            elif key == ord("s"):
                 split_view = not split_view
                 print(f"View mode: {'split' if split_view else 'full undistorted'}")
 
@@ -219,7 +248,7 @@ def main():
         try:
             reachy_mini.media.camera.close()
             print("\nClosed camera")
-        except:
+        except Exception:
             pass
         cv2.destroyAllWindows()
 

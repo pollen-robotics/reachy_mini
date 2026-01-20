@@ -1,19 +1,24 @@
-#!/usr/bin/env python3
-"""Quick test to debug Charuco detection"""
+"""Quick test to debug Charuco detection."""
+
+import sys
 
 import cv2
 from cv2 import aruco
-import sys
+
 
 def build_charuco_board():
+    """Create and return the Charuco board and dictionary."""
     aruco_dict = cv2.aruco.getPredefinedDictionary(aruco.DICT_4X4_1000)
     squares_x = 11
     squares_y = 8
     square_len = 0.02075
     marker_len = 0.01558
-    board = cv2.aruco.CharucoBoard((squares_x, squares_y), square_len, marker_len, aruco_dict)
+    board = cv2.aruco.CharucoBoard(
+        (squares_x, squares_y), square_len, marker_len, aruco_dict
+    )
     board.setLegacyPattern(True)
     return aruco_dict, board
+
 
 # Test with first image
 image_path = "images/0.png"
@@ -37,7 +42,7 @@ params = cv2.aruco.DetectorParameters()
 detector = cv2.aruco.ArucoDetector(aruco_dict, params)
 marker_corners, marker_ids, rejected = detector.detectMarkers(gray)
 
-print(f"\nArUco marker detection:")
+print("\nArUco marker detection:")
 print(f"  Detected markers: {len(marker_ids) if marker_ids is not None else 0}")
 if marker_ids is not None:
     print(f"  Marker IDs: {sorted(marker_ids.flatten().tolist())}")
@@ -68,7 +73,9 @@ try:
     # Using CharucoDetector (correct API for OpenCV 4.x)
     print("Using CharucoDetector.detectBoard()...")
     charuco_detector = cv2.aruco.CharucoDetector(board)
-    charuco_corners, charuco_ids, marker_corners_out, marker_ids_out = charuco_detector.detectBoard(gray)
+    charuco_corners, charuco_ids, marker_corners_out, marker_ids_out = (
+        charuco_detector.detectBoard(gray)
+    )
 
     if charuco_corners is not None and len(charuco_corners) > 0:
         print(f"  SUCCESS! Detected {len(charuco_corners)} Charuco corners")
@@ -80,6 +87,7 @@ try:
 except Exception as e:
     print(f"  ERROR: {e}")
     import traceback
+
     traceback.print_exc()
 
 # Show result

@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""
-Scale camera calibration parameters for different resolution modes.
+"""Scale camera calibration parameters for different resolution modes.
 
 When the camera uses a cropped sensor region or different resolution,
 the intrinsic parameters need to be adjusted accordingly.
@@ -10,9 +9,9 @@ and computes adjusted parameters for other resolution modes.
 """
 
 import argparse
-import yaml
-import numpy as np
 
+import numpy as np
+import yaml
 
 # Crop analysis results from analyze_crop_v3.py
 RESOLUTION_MODES = {
@@ -58,8 +57,7 @@ def load_calibration(yaml_file):
 
 
 def scale_intrinsics(K_original, original_size, target_size, crop_scale):
-    """
-    Scale camera intrinsics for a different resolution with cropping.
+    """Scale camera intrinsics for a different resolution with cropping.
 
     Args:
         K_original: Original 3x3 camera matrix
@@ -69,6 +67,7 @@ def scale_intrinsics(K_original, original_size, target_size, crop_scale):
 
     Returns:
         K_scaled: Adjusted camera matrix for target resolution
+
     """
     K_scaled = K_original.copy()
 
@@ -106,11 +105,10 @@ def scale_intrinsics(K_original, original_size, target_size, crop_scale):
 
 def generate_scaled_calibrations(calibration_file, output_dir='.'):
     """Generate scaled calibration files for all resolution modes."""
-
     print(f"Loading calibration from {calibration_file}...")
     K_original, dist_original, original_size, original_calib = load_calibration(calibration_file)
 
-    print(f"\nOriginal calibration:")
+    print("\nOriginal calibration:")
     print(f"  Resolution: {original_size[0]}x{original_size[1]}")
     print(f"  fx={K_original[0,0]:.2f}, fy={K_original[1,1]:.2f}")
     print(f"  cx={K_original[0,2]:.2f}, cy={K_original[1,2]:.2f}")
@@ -134,7 +132,7 @@ def generate_scaled_calibrations(calibration_file, output_dir='.'):
         # Scale intrinsics
         K_scaled = scale_intrinsics(K_original, original_size, target_size, crop_scale)
 
-        print(f"  Scaled parameters:")
+        print("  Scaled parameters:")
         print(f"    fx={K_scaled[0,0]:.2f}, fy={K_scaled[1,1]:.2f}")
         print(f"    cx={K_scaled[0,2]:.2f}, cy={K_scaled[1,2]:.2f}")
 
@@ -182,6 +180,7 @@ def generate_scaled_calibrations(calibration_file, output_dir='.'):
 
 
 def main():
+    """Run the scale calibration tool."""
     parser = argparse.ArgumentParser(
         description="Scale camera calibration for different resolution modes"
     )

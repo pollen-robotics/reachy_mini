@@ -1,21 +1,27 @@
+"""Analyze crop and zoom differences between images using ArUco markers."""
+
+from glob import glob
+
 import cv2
 import numpy as np
-from glob import glob
 from cv2 import aruco
 
 
 def build_charuco_board():
+    """Build the Charuco board used for calibration."""
     aruco_dict = cv2.aruco.getPredefinedDictionary(aruco.DICT_4X4_1000)
-    squares_x = 11          # 11x8 grid
+    squares_x = 11  # 11x8 grid
     squares_y = 8
-    square_len = 0.02075    # 20.75mm
-    marker_len = 0.01558    # 15.58mm
-    board = cv2.aruco.CharucoBoard((squares_x, squares_y), square_len, marker_len, aruco_dict)
+    square_len = 0.02075  # 20.75mm
+    marker_len = 0.01558  # 15.58mm
+    board = cv2.aruco.CharucoBoard(
+        (squares_x, squares_y), square_len, marker_len, aruco_dict
+    )
     return aruco_dict, board
 
 
 def analyze_image(image_path, aruco_dict, board):
-    """Analyze a single image and return charuco corner information."""
+    """Analyze a single image and return marker information."""
     im = cv2.imread(image_path)
     if im is None:
         return None
@@ -26,90 +32,135 @@ def analyze_image(image_path, aruco_dict, board):
     detector = cv2.aruco.ArucoDetector(aruco_dict, params)
     board.setLegacyPattern(True)
 
-    # Detect markers
     marker_corners, marker_ids, rejected = detector.detectMarkers(im)
 
     if marker_ids is None or len(marker_ids) == 0:
         return None
 
-    # Use marker corners directly
-    # Each marker has 4 corners, flatten them all
-    all_corners = []
-    for marker in marker_corners:
-        for corner in marker[0]:
-            all_corners.append(corner)
-
-    corners_array = np.array(all_corners)
-    min_x = corners_array[:, 0].min()
-    max_x = corners_array[:, 0].max()
-    min_y = corners_array[:, 1].min()
-    max_y = corners_array[:, 1].max()
-
-    board_width = max_x - min_x
-    board_height = max_y - min_y
-
-    # Calculate center of the board in image
-    center_x = (min_x + max_x) / 2
-    center_y = (min_y + max_y) / 2
+    # Store marker centers indexed by ID (normalized to [0,1] range)
+    marker_centers = {}
+    marker_centers_pixels = {}
+    for i, marker_id in enumerate(marker_ids):
+        corners = marker_corners[i][0]
+        center = corners.mean(axis=0)
+        marker_centers_pixels[int(marker_id[0])] = center
+        # Normalize to image dimensions
+        marker_centers[int(marker_id[0])] = np.array(
+            [center[0] / width, center[1] / height]
+        )
 
     return {
-        'path': image_path,
-        'resolution': (width, height),
-        'num_markers': len(marker_ids),
-        'board_bbox': (min_x, min_y, max_x, max_y),
-        'board_size': (board_width, board_height),
-        'board_center': (center_x, center_y),
-        'image_center': (width / 2, height / 2),
+        "path": image_path,
+        "resolution": (width, height),
+        "marker_ids": set(int(id[0]) for id in marker_ids),
+        "marker_centers": marker_centers,  # normalized
+        "marker_centers_pixels": marker_centers_pixels,  # absolute
+        "image": im,
     }
 
 
 def main():
+    """Run the analysis on all images in the 'images' folder."""
     aruco_dict, board = build_charuco_board()
-    board.setLegacyPattern(True)
-    files = sorted(glob("images/CameraResolution.*.png"))
+    files = sorted(glob("images/*.png"))
 
     print("Analyzing images...\n")
 
-    results = []
+    results = {}
+    all_marker_ids = None
+
     for file in files:
         result = analyze_image(file, aruco_dict, board)
         if result:
-            results.append(result)
-            name = file.split("/")[1].replace("CameraResolution.", "").replace(".png", "")
+            name = (
+                file.split("/")[1].replace("CameraResolution.", "").replace(".png", "")
+            )
+            results[name] = result
+
             print(f"=== {name} ===")
             print(f"Resolution: {result['resolution'][0]}x{result['resolution'][1]}")
-            print(f"Detected markers: {result['num_markers']}")
-            print(f"Board size in pixels: {result['board_size'][0]:.1f} x {result['board_size'][1]:.1f}")
+            print(f"Detected markers: {len(result['marker_ids'])}")
+            print(f"Marker IDs: {sorted(result['marker_ids'])}")
             print()
 
+            if all_marker_ids is None:
+                all_marker_ids = result["marker_ids"]
+            else:
+                all_marker_ids = all_marker_ids.intersection(result["marker_ids"])
+
+    print(f"Common markers in ALL images: {sorted(all_marker_ids)}")
+    print(f"Number of common markers: {len(all_marker_ids)}\n")
+
     # Find the reference (largest resolution)
-    reference = max(results, key=lambda r: r['resolution'][0] * r['resolution'][1])
-    print(f"\n=== Crop Analysis (relative to {reference['path'].split('/')[-1]}) ===\n")
+    reference_name = max(
+        results.keys(),
+        key=lambda k: results[k]["resolution"][0] * results[k]["resolution"][1],
+    )
+    reference = results[reference_name]
 
-    # Calculate crop factors
-    ref_board_width = reference['board_size'][0]
-    ref_board_height = reference['board_size'][1]
+    print(f"\n=== Crop/Zoom Analysis (relative to {reference_name}) ===")
+    print("Using NORMALIZED distances (as fraction of image size)\n")
 
-    for result in results:
-        name = result['path'].split("/")[1].replace("CameraResolution.", "").replace(".png", "")
+    common_ids = sorted(all_marker_ids)
+    if len(common_ids) >= 2:
+        # Pick markers far apart
+        id1, id2 = common_ids[0], common_ids[-1]
 
-        # Scale factor: how much smaller does the board appear?
-        # A smaller board in pixels means we're seeing MORE of the scene (wider FOV, less crop)
-        # A larger board in pixels means we're seeing LESS of the scene (narrower FOV, more crop)
+        print(f"Using markers {id1} and {id2} for distance measurement\n")
 
-        width_scale = result['board_size'][0] / ref_board_width
-        height_scale = result['board_size'][1] / ref_board_height
+        # Calculate distance in normalized coordinates
+        ref_center1 = reference["marker_centers"][id1]
+        ref_center2 = reference["marker_centers"][id2]
+        ref_distance = np.linalg.norm(ref_center1 - ref_center2)
 
-        # FOV factor: inverse of scale
-        # If board appears 2x larger, we're seeing 50% of the FOV
-        fov_width_factor = 1.0 / width_scale
-        fov_height_factor = 1.0 / height_scale
+        for name, result in sorted(
+            results.items(),
+            key=lambda x: x[1]["resolution"][0] * x[1]["resolution"][1],
+            reverse=True,
+        ):
+            center1 = result["marker_centers"][id1]
+            center2 = result["marker_centers"][id2]
+            distance = np.linalg.norm(center1 - center2)
 
+            # Now this is the true scale comparison
+            # If distance > ref_distance: markers are farther apart in frame = board takes up more of image = MORE ZOOM/CROP
+            # If distance < ref_distance: markers are closer together = board takes up less of image = LESS ZOOM
+            scale_factor = distance / ref_distance
+
+            fov_factor = 1.0 / scale_factor
+
+            print(f"{name}:")
+            print(f"  Resolution: {result['resolution'][0]}x{result['resolution'][1]}")
+            print(
+                f"  Normalized distance: {distance:.4f} (reference: {ref_distance:.4f})"
+            )
+            print(f"  Board occupies {scale_factor:.2%} of reference span")
+            if scale_factor > 1:
+                print(
+                    f"  → Board appears LARGER = MORE ZOOMED IN/CROPPED by {((scale_factor - 1) * 100):.1f}%"
+                )
+            else:
+                print(
+                    f"  → Board appears SMALLER = LESS ZOOMED IN by {((1 - scale_factor) * 100):.1f}%"
+                )
+            print(f"  Effective FOV: {fov_factor:.2%} of reference")
+            print()
+
+    # Count markers visible in each
+    print("\n=== Marker Visibility Analysis ===\n")
+
+    ref_markers = results[reference_name]["marker_ids"]
+
+    for name, result in sorted(
+        results.items(),
+        key=lambda x: x[1]["resolution"][0] * x[1]["resolution"][1],
+        reverse=True,
+    ):
+        markers = result["marker_ids"]
+        missing = ref_markers - markers
         print(f"{name}:")
-        print(f"  Resolution: {result['resolution'][0]}x{result['resolution'][1]}")
-        print(f"  Board appears: {width_scale:.2%} width, {height_scale:.2%} height (relative to reference)")
-        print(f"  FOV retained: {fov_width_factor:.2%} horizontal, {fov_height_factor:.2%} vertical")
-        print(f"  Crop: {(1-fov_width_factor)*100:.1f}% horizontal, {(1-fov_height_factor)*100:.1f}% vertical")
+        print(f"  Visible markers: {len(markers)}/{len(ref_markers)}")
+        print(f"  Missing markers: {sorted(missing) if missing else 'none'}")
         print()
 
 

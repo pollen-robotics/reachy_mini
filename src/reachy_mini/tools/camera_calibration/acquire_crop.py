@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""
-Acquire images at different resolutions for crop analysis.
+"""Acquire images at different resolutions for crop analysis.
 
 This script cycles through all available camera resolutions and saves
 one image per resolution for analyzing how much each mode crops.
@@ -13,23 +12,23 @@ import time
 import cv2
 
 from reachy_mini import ReachyMini
-from reachy_mini.media.camera_constants import CameraResolution
 
 
 def main():
+    """Acquire images at different resolutions for crop analysis."""
     parser = argparse.ArgumentParser(
         description="Acquire images at different resolutions for crop analysis"
     )
     parser.add_argument(
-        '--headless',
-        action='store_true',
-        help='Run in headless mode (no display, use terminal input). For Raspberry Pi/wireless version.'
+        "--headless",
+        action="store_true",
+        help="Run in headless mode (no display, use terminal input). For Raspberry Pi/wireless version.",
     )
     parser.add_argument(
-        '--save-path',
+        "--save-path",
         type=str,
-        default='./images',
-        help='Directory to save images (default: ./images)'
+        default="./images",
+        help="Directory to save images (default: ./images)",
     )
 
     args = parser.parse_args()
@@ -37,50 +36,59 @@ def main():
     save_path = args.save_path
     os.makedirs(save_path, exist_ok=True)
 
-    print("="*70)
+    print("=" * 70)
     print("CROP ANALYSIS IMAGE ACQUISITION")
-    print("="*70)
+    print("=" * 70)
     print(f"Save directory: {save_path}")
-    print(f"Mode: {'HEADLESS (terminal input)' if args.headless else 'GUI (press Enter to save)'}")
-    print("="*70 + "\n")
+    print(
+        f"Mode: {'HEADLESS (terminal input)' if args.headless else 'GUI (press Enter to save)'}"
+    )
+    print("=" * 70 + "\n")
 
     # Create window only if not headless
     if not args.headless:
         cv2.namedWindow("Reachy Mini Camera")
 
     with ReachyMini(media_backend="gstreamer") as reachy_mini:
-        available_resolutions = reachy_mini.media.camera.camera_specs.available_resolutions
+        available_resolutions = (
+            reachy_mini.media.camera.camera_specs.available_resolutions
+        )
 
         # Sort by resolution size (largest first)
         sorted_resolutions = sorted(
-            available_resolutions,
-            key=lambda r: r.value[0] * r.value[1],
-            reverse=True
+            available_resolutions, key=lambda r: r.value[0] * r.value[1], reverse=True
         )
 
         print(f"Found {len(sorted_resolutions)} resolutions:")
         for i, res in enumerate(sorted_resolutions):
             res_value = res.value
-            print(f"  {i+1}. {res.name} - {res_value[0]}x{res_value[1]} @ {res_value[2]}fps")
+            print(
+                f"  {i + 1}. {res.name} - {res_value[0]}x{res_value[1]} @ {res_value[2]}fps"
+            )
         print()
 
         try:
             for i, current_res in enumerate(sorted_resolutions):
                 res_value = current_res.value
-                print(f"\n[{i+1}/{len(sorted_resolutions)}] Setting resolution to {current_res.name}")
-                print(f"  Resolution: {res_value[0]}x{res_value[1]} @ {res_value[2]}fps")
+                print(
+                    f"\n[{i + 1}/{len(sorted_resolutions)}] Setting resolution to {current_res.name}"
+                )
+                print(
+                    f"  Resolution: {res_value[0]}x{res_value[1]} @ {res_value[2]}fps"
+                )
 
                 reachy_mini.media.camera.close()
+                time.sleep(1)
                 reachy_mini.media.camera.set_resolution(current_res)
+                time.sleep(1)
                 reachy_mini.media.camera.open()
-
                 time.sleep(2)  # Wait for camera to stabilize
 
                 image_save_path = os.path.join(save_path, f"{current_res.name}.png")
 
                 if args.headless:
                     # Headless mode: use terminal input
-                    print(f"\nPosition the camera and Charuco board.")
+                    print("\nPosition the camera and Charuco board.")
                     input("Press ENTER when ready to capture...")
 
                     frame = reachy_mini.media.get_frame()
@@ -93,7 +101,9 @@ def main():
 
                 else:
                     # GUI mode: show preview and wait for Enter key
-                    print("Press ENTER in the camera window to capture, or 'q' to quit...")
+                    print(
+                        "Press ENTER in the camera window to capture, or 'q' to quit..."
+                    )
 
                     saved = False
                     while not saved:
@@ -115,15 +125,15 @@ def main():
                             cv2.imwrite(image_save_path, frame)
                             print(f"✓ Saved: {image_save_path}")
                             saved = True
-                        elif key == ord('q'):
+                        elif key == ord("q"):
                             print("Quit requested")
                             return 0
 
                         time.sleep(1.0 / 30)
 
-            print("\n" + "="*70)
+            print("\n" + "=" * 70)
             print(f"✓ All done! Captured {len(sorted_resolutions)} images")
-            print("="*70)
+            print("=" * 70)
 
         except KeyboardInterrupt:
             print("\nInterrupted by user")

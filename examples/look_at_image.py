@@ -35,7 +35,7 @@ def main(backend: str) -> None:
     print("Press 'q' to quit the camera feed.")
     with ReachyMini(media_backend=backend) as reachy_mini:
         # reachy_mini.media.camera.close()
-        # reachy_mini.media.camera.set_resolution(CameraResolution.R1920x1080at30fps)
+        # reachy_mini.media.camera.set_resolution(CameraResolution.R3072x1728at10fps)
         # reachy_mini.media.camera.open()
         try:
             while True:

@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""
-Camera calibration script using Charuco board.
+"""Camera calibration script using Charuco board.
 
 This script:
 1. Reads calibration images from ./images/ directory
@@ -15,7 +14,6 @@ Usage:
 import argparse
 import os
 from glob import glob
-from pathlib import Path
 
 import cv2
 import numpy as np
@@ -28,23 +26,25 @@ def build_charuco_board():
     aruco_dict = cv2.aruco.getPredefinedDictionary(aruco.DICT_4X4_1000)
 
     # Board parameters (must match physical board!)
-    squares_x = 11          # number of chessboard squares in X
-    squares_y = 8           # number of chessboard squares in Y
-    square_len = 0.02075    # meters (20.75mm)
-    marker_len = 0.01558    # meters (15.58mm)
+    squares_x = 11  # number of chessboard squares in X
+    squares_y = 8  # number of chessboard squares in Y
+    square_len = 0.02075  # meters (20.75mm)
+    marker_len = 0.01558  # meters (15.58mm)
 
-    board = cv2.aruco.CharucoBoard((squares_x, squares_y), square_len, marker_len, aruco_dict)
+    board = cv2.aruco.CharucoBoard(
+        (squares_x, squares_y), square_len, marker_len, aruco_dict
+    )
     return aruco_dict, board
 
 
 def detect_charuco_corners(image, aruco_dict, board, min_markers=4):
-    """
-    Detect Charuco corners in an image.
+    """Detect Charuco corners in an image.
 
     Returns:
         charuco_corners: Detected corner positions
         charuco_ids: IDs of detected corners
         success: Whether detection was successful
+
     """
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
@@ -59,7 +59,9 @@ def detect_charuco_corners(image, aruco_dict, board, min_markers=4):
 
     # Interpolate Charuco corners using the charuco detector
     charuco_detector = cv2.aruco.CharucoDetector(board)
-    charuco_corners, charuco_ids, marker_corners_out, marker_ids_out = charuco_detector.detectBoard(gray)
+    charuco_corners, charuco_ids, marker_corners_out, marker_ids_out = (
+        charuco_detector.detectBoard(gray)
+    )
 
     if charuco_corners is None or len(charuco_corners) < min_markers:
         return None, None, False
@@ -68,8 +70,7 @@ def detect_charuco_corners(image, aruco_dict, board, min_markers=4):
 
 
 def calibrate_camera(images_dir, min_markers=20, visualize=False):
-    """
-    Perform camera calibration using images from the specified directory.
+    """Perform camera calibration using images from the specified directory.
 
     Args:
         images_dir: Directory containing calibration images
@@ -83,6 +84,7 @@ def calibrate_camera(images_dir, min_markers=20, visualize=False):
         tvecs: Translation vectors for each image
         image_size: (width, height) of calibration images
         rms_error: RMS reprojection error
+
     """
     aruco_dict, board = build_charuco_board()
 
@@ -102,7 +104,10 @@ def calibrate_camera(images_dir, min_markers=20, visualize=False):
 
     # Process each image
     for i, image_file in enumerate(image_files):
-        print(f"\nProcessing {os.path.basename(image_file)} ({i+1}/{len(image_files)})...", end=" ")
+        print(
+            f"\nProcessing {os.path.basename(image_file)} ({i + 1}/{len(image_files)})...",
+            end=" ",
+        )
 
         image = cv2.imread(image_file)
         if image is None:
@@ -118,7 +123,7 @@ def calibrate_camera(images_dir, min_markers=20, visualize=False):
         )
 
         if not success:
-            print(f"Detection failed!")
+            print("Detection failed!")
             continue
 
         print(f"Detected {len(charuco_corners)} corners")
@@ -130,24 +135,32 @@ def calibrate_camera(images_dir, min_markers=20, visualize=False):
         # Visualize if requested
         if visualize:
             vis_image = image.copy()
-            cv2.aruco.drawDetectedCornersCharuco(vis_image, charuco_corners, charuco_ids)
-            cv2.imshow("Detected Corners", cv2.resize(vis_image, (0, 0), fx=0.5, fy=0.5))
+            cv2.aruco.drawDetectedCornersCharuco(
+                vis_image, charuco_corners, charuco_ids
+            )
+            cv2.imshow(
+                "Detected Corners", cv2.resize(vis_image, (0, 0), fx=0.5, fy=0.5)
+            )
             cv2.waitKey(500)
 
     if visualize:
         cv2.destroyAllWindows()
 
-    print(f"\n\nSuccessfully processed {len(all_charuco_corners)}/{len(image_files)} images")
+    print(
+        f"\n\nSuccessfully processed {len(all_charuco_corners)}/{len(image_files)} images"
+    )
 
     if len(all_charuco_corners) < 3:
-        raise ValueError(f"Need at least 3 successful images for calibration, got {len(all_charuco_corners)}")
+        raise ValueError(
+            f"Need at least 3 successful images for calibration, got {len(all_charuco_corners)}"
+        )
 
     # Perform calibration
     print("\nPerforming camera calibration...")
 
     calibration_flags = (
-        cv2.CALIB_RATIONAL_MODEL |  # Use rational distortion model (k4, k5, k6)
-        cv2.CALIB_THIN_PRISM_MODEL  # Use thin prism distortion (s1, s2, s3, s4)
+        cv2.CALIB_RATIONAL_MODEL  # Use rational distortion model (k4, k5, k6)
+        | cv2.CALIB_THIN_PRISM_MODEL  # Use thin prism distortion (s1, s2, s3, s4)
     )
 
     # Use cv2.calibrateCamera with object points from the board
@@ -167,93 +180,109 @@ def calibrate_camera(images_dir, min_markers=20, visualize=False):
         imageSize=image_size,
         cameraMatrix=None,
         distCoeffs=None,
-        flags=calibration_flags
+        flags=calibration_flags,
     )
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("CALIBRATION RESULTS")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     print(f"RMS Reprojection Error: {rms_error:.4f} pixels")
     print(f"Image size: {image_size[0]}x{image_size[1]}")
     print(f"Images used: {len(all_charuco_corners)}")
-    print(f"\nCamera Matrix (K):")
+    print("\nCamera Matrix (K):")
     print(camera_matrix)
-    print(f"\nDistortion Coefficients:")
-    print(f"  k1={dist_coeffs[0,0]:.6f}, k2={dist_coeffs[0,1]:.6f}")
-    print(f"  p1={dist_coeffs[0,2]:.6f}, p2={dist_coeffs[0,3]:.6f}")
-    print(f"  k3={dist_coeffs[0,4]:.6f}", end="")
+    print("\nDistortion Coefficients:")
+    print(f"  k1={dist_coeffs[0, 0]:.6f}, k2={dist_coeffs[0, 1]:.6f}")
+    print(f"  p1={dist_coeffs[0, 2]:.6f}, p2={dist_coeffs[0, 3]:.6f}")
+    print(f"  k3={dist_coeffs[0, 4]:.6f}", end="")
     if dist_coeffs.shape[1] > 5:
-        print(f", k4={dist_coeffs[0,5]:.6f}, k5={dist_coeffs[0,6]:.6f}, k6={dist_coeffs[0,7]:.6f}", end="")
+        print(
+            f", k4={dist_coeffs[0, 5]:.6f}, k5={dist_coeffs[0, 6]:.6f}, k6={dist_coeffs[0, 7]:.6f}",
+            end="",
+        )
     if dist_coeffs.shape[1] > 8:
-        print(f"\n  s1={dist_coeffs[0,8]:.6f}, s2={dist_coeffs[0,9]:.6f}, s3={dist_coeffs[0,10]:.6f}, s4={dist_coeffs[0,11]:.6f}")
+        print(
+            f"\n  s1={dist_coeffs[0, 8]:.6f}, s2={dist_coeffs[0, 9]:.6f}, s3={dist_coeffs[0, 10]:.6f}, s4={dist_coeffs[0, 11]:.6f}"
+        )
     else:
         print()
-    print(f"{'='*60}\n")
+    print(f"{'=' * 60}\n")
 
-    return camera_matrix, dist_coeffs, rvecs, tvecs, image_size, rms_error, successful_images
+    return (
+        camera_matrix,
+        dist_coeffs,
+        rvecs,
+        tvecs,
+        image_size,
+        rms_error,
+        successful_images,
+    )
 
 
-def save_calibration(output_file, camera_matrix, dist_coeffs, image_size, rms_error, successful_images):
+def save_calibration(
+    output_file, camera_matrix, dist_coeffs, image_size, rms_error, successful_images
+):
     """Save calibration parameters to a YAML file."""
-
     calibration_data = {
-        'calibration_date': str(np.datetime64('now')),
-        'image_size': {
-            'width': int(image_size[0]),
-            'height': int(image_size[1])
+        "calibration_date": str(np.datetime64("now")),
+        "image_size": {"width": int(image_size[0]), "height": int(image_size[1])},
+        "camera_matrix": {
+            "rows": 3,
+            "cols": 3,
+            "data": camera_matrix.flatten().tolist(),
         },
-        'camera_matrix': {
-            'rows': 3,
-            'cols': 3,
-            'data': camera_matrix.flatten().tolist()
+        "distortion_coefficients": {
+            "rows": 1,
+            "cols": dist_coeffs.shape[1],
+            "data": dist_coeffs.flatten().tolist(),
         },
-        'distortion_coefficients': {
-            'rows': 1,
-            'cols': dist_coeffs.shape[1],
-            'data': dist_coeffs.flatten().tolist()
-        },
-        'distortion_model': 'rational_polynomial' if dist_coeffs.shape[1] >= 8 else 'plumb_bob',
-        'rms_error': float(rms_error),
-        'num_images': len(successful_images),
-        'image_files': [os.path.basename(f) for f in successful_images]
+        "distortion_model": "rational_polynomial"
+        if dist_coeffs.shape[1] >= 8
+        else "plumb_bob",
+        "rms_error": float(rms_error),
+        "num_images": len(successful_images),
+        "image_files": [os.path.basename(f) for f in successful_images],
     }
 
     # Also save in OpenCV format for easy loading
-    calibration_data['fx'] = float(camera_matrix[0, 0])
-    calibration_data['fy'] = float(camera_matrix[1, 1])
-    calibration_data['cx'] = float(camera_matrix[0, 2])
-    calibration_data['cy'] = float(camera_matrix[1, 2])
+    calibration_data["fx"] = float(camera_matrix[0, 0])
+    calibration_data["fy"] = float(camera_matrix[1, 1])
+    calibration_data["cx"] = float(camera_matrix[0, 2])
+    calibration_data["cy"] = float(camera_matrix[1, 2])
 
-    with open(output_file, 'w') as f:
+    with open(output_file, "w") as f:
         yaml.dump(calibration_data, f, default_flow_style=False, sort_keys=False)
 
     print(f"Calibration saved to {output_file}")
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Calibrate camera using Charuco board images")
-    parser.add_argument(
-        '--images-dir',
-        type=str,
-        default='./images',
-        help='Directory containing calibration images (default: ./images)'
+    """Run the calibration process based on command-line arguments."""
+    parser = argparse.ArgumentParser(
+        description="Calibrate camera using Charuco board images"
     )
     parser.add_argument(
-        '--output',
+        "--images-dir",
         type=str,
-        default='calibration.yaml',
-        help='Output calibration file (default: calibration.yaml)'
+        default="./images",
+        help="Directory containing calibration images (default: ./images)",
     )
     parser.add_argument(
-        '--min-markers',
+        "--output",
+        type=str,
+        default="calibration.yaml",
+        help="Output calibration file (default: calibration.yaml)",
+    )
+    parser.add_argument(
+        "--min-markers",
         type=int,
         default=20,
-        help='Minimum number of detected corners per image (default: 20)'
+        help="Minimum number of detected corners per image (default: 20)",
     )
     parser.add_argument(
-        '--visualize',
-        action='store_true',
-        help='Show detected corners during processing'
+        "--visualize",
+        action="store_true",
+        help="Show detected corners during processing",
     )
 
     args = parser.parse_args()
@@ -265,14 +294,27 @@ def main():
 
     try:
         # Perform calibration
-        camera_matrix, dist_coeffs, rvecs, tvecs, image_size, rms_error, successful_images = calibrate_camera(
-            args.images_dir,
-            min_markers=args.min_markers,
-            visualize=args.visualize
+        (
+            camera_matrix,
+            dist_coeffs,
+            rvecs,
+            tvecs,
+            image_size,
+            rms_error,
+            successful_images,
+        ) = calibrate_camera(
+            args.images_dir, min_markers=args.min_markers, visualize=args.visualize
         )
 
         # Save results
-        save_calibration(args.output, camera_matrix, dist_coeffs, image_size, rms_error, successful_images)
+        save_calibration(
+            args.output,
+            camera_matrix,
+            dist_coeffs,
+            image_size,
+            rms_error,
+            successful_images,
+        )
 
         print("\nCalibration completed successfully!")
         return 0
@@ -280,6 +322,7 @@ def main():
     except Exception as e:
         print(f"\nError during calibration: {e}")
         import traceback
+
         traceback.print_exc()
         return 1
 

@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""
-Acquire calibration images using the camera at maximum resolution.
+"""Acquire calibration images using the camera at maximum resolution.
 
 This script:
 1. Sets camera to maximum resolution
@@ -15,10 +14,10 @@ import time
 import cv2
 
 from reachy_mini import ReachyMini
-from reachy_mini.media.camera_constants import CameraResolution
 
 
 def main():
+    """Acquire calibration images at maximum resolution."""
     parser = argparse.ArgumentParser(
         description="Acquire calibration images at maximum resolution"
     )
