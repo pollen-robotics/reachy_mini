@@ -17,7 +17,7 @@ USER = "pollen"
 def check_and_fix_venvs_ownership(
     venvs_path: str = "/venvs", custom_logger: logging.Logger | None = None
 ) -> None:
-    """For wirelss units, check if files under venvs_path are owned by user pollen and fix if needed.
+    """For wireless units, check if files under venvs_path are owned by user pollen and fix if needed.
 
     Args:
         venvs_path: Path to the virtual environments directory (default: /venvs)
@@ -343,6 +343,55 @@ def check_and_sync_apps_venv_sdk() -> None:
         print("Timeout updating apps_venv SDK")
     except Exception as e:
         print(f"Error updating apps_venv SDK: {e}")
+
+
+def check_and_fix_restore_venv() -> None:
+    """Check if restore venv has editable install and fix if needed.
+
+    The restore partition at /restore/venvs should have a proper PyPI install,
+    not an editable install. If an editable install is detected, reinstall
+    from PyPI with a known good version.
+    """
+    restore_python = Path("/restore/venvs/mini_daemon/bin/python")
+
+    if not restore_python.exists():
+        print("Restore venv not found, skipping")
+        return
+
+    # Check if editable install
+    try:
+        result = subprocess.run(
+            [str(restore_python), "-m", "pip", "show", "reachy-mini"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+    except subprocess.TimeoutExpired:
+        print("Timeout checking restore venv")
+        return
+    except Exception as e:
+        print(f"Error checking restore venv: {e}")
+        return
+
+    if "Editable project location" in result.stdout:
+        print("Legacy editable install detected in restore venv, reinstalling...")
+        try:
+            subprocess.run(
+                [str(restore_python), "-m", "pip", "install", "reachy-mini==1.2.8"],
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=300,
+            )
+            print("Successfully reinstalled reachy-mini in restore venv")
+        except subprocess.CalledProcessError as e:
+            print(f"Failed to reinstall in restore venv: {e.stderr}")
+        except subprocess.TimeoutExpired:
+            print("Timeout reinstalling in restore venv")
+        except Exception as e:
+            print(f"Error reinstalling in restore venv: {e}")
+    else:
+        print("Restore venv install is correct")
 
 
 if __name__ == "__main__":

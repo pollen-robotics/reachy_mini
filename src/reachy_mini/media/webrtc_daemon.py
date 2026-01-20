@@ -280,7 +280,7 @@ class GstWebRTC:
         alsasrc.link(webrtcsink)
 
     def _get_audio_input_device(self) -> Optional[str]:
-        """Use Gst.DeviceMonitor to find the pipeire audio card.
+        """Use Gst.DeviceMonitor to find the pipewire audio card.
 
         Returns the device ID of the found audio card, None if not.
         """

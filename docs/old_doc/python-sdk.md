@@ -32,7 +32,7 @@ Then, the next step is to show how to move the robot. The `ReachyMini` class pro
 * the body's rotation angle
 * the antennas' position
 
-The `head_frame` is positioned at the base of the head, as you can see in the image below. This is the frame you are controling when using `set_target` and `goto_target`.
+The `head_frame` is positioned at the base of the head, as you can see in the image below. This is the frame you are controlling when using `set_target` and `goto_target`.
 
 [![Reachy Mini Head Frame](/docs/assets/head_frame.png)]()
 
@@ -251,7 +251,7 @@ You can control the robot's motors with three main methods:
 3. **`make_motors_compliant`**: Makes the motors compliant (requires motors to be enabled first). In this mode, the motors are powered on, but they do not resist external forces, so you can move the robot by hand, and it will feel "soft". This is useful for safe manual manipulation or teaching by demonstration. For an example, see the [gravity compensation example](../examples/reachy_compliant_demo.py): in this demo, you can move the robot's head and antennas freely, but the robot will use its motors to compensate for gravity and maintain its position/orientation in space.
 
 ### Recording moves
-Let's assume that you have a script that uses the `set_target` fonction to move the robot and you want to record the commands to be able to replay them.
+Let's assume that you have a script that uses the `set_target` function to move the robot and you want to record the commands to be able to replay them.
 For example, this could be a teleoperation script, and you could be recording cute emotions (OK this is how we did it).
 You can create another ReachyMini client (or use the same) and simply use `start_recording()` and `stop_recording()`.
 Below is the snippet of code that show how to start a recording, stop the recording and unpack the data:

@@ -5,6 +5,7 @@ robot. It subscribes to joint positions updates and allows sending commands to t
 """
 
 import json
+import logging
 import threading
 import time
 from dataclasses import dataclass
@@ -136,7 +137,7 @@ class ZenohClient(AbstractClient):
                 raise TimeoutError(
                     "Timeout while waiting for connection with the server."
                 )
-            print("Waiting for connection with the server...")
+            logging.info("Waiting for connection with the server...")
 
         self._is_alive = True
         self._check_alive_evt = threading.Event()

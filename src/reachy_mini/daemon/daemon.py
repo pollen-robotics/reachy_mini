@@ -365,7 +365,7 @@ class Daemon:
             self._status.state = DaemonState.STOPPING
             self.backend.is_shutting_down = True
             self._thread_event_publish_status.set()
-            self.zenoh_server.stop()
+
             if self.websocket_server is not None:
                 self.websocket_server.stop()
 
@@ -395,6 +395,9 @@ class Daemon:
 
             self.backend.close()
             self.backend.ready.clear()
+
+            # zenoh server must be closed after backend finishes to publish all data
+            self.zenoh_server.stop()
 
             if self._status.state != DaemonState.ERROR:
                 self.logger.info("Daemon stopped successfully.")

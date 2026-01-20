@@ -16,6 +16,7 @@ from typing import Dict, List, Literal, Optional, Union, cast
 import cv2
 import numpy as np
 import numpy.typing as npt
+import zenoh
 from asgiref.sync import async_to_sync
 from scipy.spatial.transform import Rotation as R
 
@@ -286,27 +287,59 @@ class ReachyMini:
     ) -> tuple[ZenohClient, ConnectionMode]:
         """Create a client according to the requested mode, adding auto fallback."""
         requested_mode = cast(ConnectionMode, requested_mode.lower())
-        acceptable_modes = ['localhost_only', 'wireless', 'network'] if requested_mode == "auto" else [requested_mode]
-        selected: ConnectionMode
-        client: ZenohClient
+        
+        if requested_mode == "auto":
+            mode_probes = ["localhost_only", "wireless", "network"]
+            selected: ConnectionMode
+            client: ZenohClient
 
-        for i, mode in enumerate(acceptable_modes):
+            for i, mode in enumerate(mode_probes):
+                try:
+                    self.logger.info("Auto connection: trying %s mode.", mode)
+                    if mode == "localhost_only":
+                        client, selected = self._connect_localhost(timeout)
+                    elif mode == "wireless":
+                        client, selected = self._connect_wireless(timeout)
+                    elif mode == "network":
+                        client, selected = self._connect_network(timeout)
+                    break
+                except Exception as err:
+                    self.logger.info(
+                        "Auto connection: %s attempt failed (%s).",
+                        mode,
+                        err,
+                    )
+                    if i == len(mode_probes) - 1:
+                        if isinstance(err, (zenoh.ZError, TimeoutError)):
+                            raise ConnectionError(
+                                f"Auto connection: {', '.join(mode_probes)} attempts failed. "
+                                "Make sure a Reachy Mini daemon is running and accessible."
+                            )
+                        raise err
+            self.logger.info("Connection mode selected: %s", selected)  # type: ignore
+            return client, selected  # type: ignore
+
+        if requested_mode == "localhost_only":
             try:
-                self.logger.info("Auto connection: trying %s mode.", mode)
-                if mode == "localhost_only":
-                    client, selected = self._connect_localhost(timeout)
-                elif mode == "wireless":
-                    client, selected = self._connect_wireless(timeout)
-                elif mode == "network":
-                    client, selected = self._connect_network(timeout)
-                break
-            except Exception as err:
-                if i == len(acceptable_modes) - 1:
-                    raise err
-                self.logger.info(
-                    "Auto connection: %s attempt failed (%s).",
-                    mode,
-                    err,
+                client, selected = self._connect_localhost(timeout)
+            except (zenoh.ZError, TimeoutError):
+                raise ConnectionError(
+                    "Could not connect to daemon on localhost. Is the Reachy Mini daemon running?"
+                )
+        elif requested_mode == "wireless":
+             try:
+                client, selected = self._connect_wireless(timeout)
+             except (zenoh.ZError, TimeoutError):
+                raise ConnectionError(
+                    "Wireless connection attempt failed. Is the Reachy Mini reachable?"
+                )
+        else:
+            try:
+                client, selected = self._connect_network(timeout)
+            except (zenoh.ZError, TimeoutError):
+                raise ConnectionError(
+                    "Network connection attempt failed. "
+                    "Make sure a Reachy Mini daemon is running and accessible."
                 )
 
         self.logger.info("Connection mode selected: %s", selected)
@@ -317,7 +350,9 @@ class ReachyMini:
         return client, "localhost_only"
 
     def _connect_wireless(self, timeout: float) -> tuple[ZenohClient, ConnectionMode]:
-        client = self._connect_single(host_addr=f"{self.robot_name.replace('_', '-')}.local", timeout=timeout)
+        client = self._connect_single(
+            host_addr=f"{self.robot_name.replace('_', '-')}.local", timeout=timeout
+        )
         return client, "wireless"
 
     def _connect_network(self, timeout: float) -> tuple[ZenohClient, ConnectionMode]:
@@ -330,11 +365,7 @@ class ReachyMini:
         timeout: float = 5.0
     ) -> ZenohClient:
         client = ZenohClient(self.robot_name, host_addr=host_addr)
-        try:
-            client.wait_for_connection(timeout=timeout)
-        except Exception:
-            client.disconnect()
-            raise
+        client.wait_for_connection(timeout=timeout)
         return client
 
     def set_target(
@@ -539,7 +570,7 @@ class ReachyMini:
         x_n, y_n = cv2.undistortPoints(
             points,
             self.media.camera.K,  # type: ignore
-            self.media.camera.D,  # type: ignore
+            self.media.camera.D,
         )[0, 0]
 
         ray_cam = np.array([x_n, y_n, 1.0])
