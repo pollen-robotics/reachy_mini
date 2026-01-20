@@ -179,6 +179,53 @@ def find_camera_by_vid_pid(
     return selected_cap
 
 
+def scale_intrinsics(K_original, original_size, target_size, crop_scale):
+    """Scale camera intrinsics for a different resolution with cropping.
+
+    Args:
+        K_original: Original 3x3 camera matrix
+        original_size: (width, height) of original calibration
+        target_size: (width, height) of target resolution
+        crop_scale: Scale factor due to digital zoom/crop (>1 means more zoomed in)
+
+    Returns:
+        K_scaled: Adjusted camera matrix for target resolution
+
+    """
+    K_scaled = K_original.copy()
+
+    orig_w, orig_h = original_size
+    target_w, target_h = target_size
+
+    # Extract original parameters
+    fx = K_original[0, 0]
+    fy = K_original[1, 1]
+    cx = K_original[0, 2]
+    cy = K_original[1, 2]
+
+    # Focal length scaling has two components:
+    # 1. Resolution scaling: focal length in pixels scales with image dimensions
+    # 2. Crop/zoom scaling: cropping increases effective focal length
+
+    resolution_scale_x = target_w / orig_w
+    resolution_scale_y = target_h / orig_h
+
+    fx_scaled = fx * resolution_scale_x * crop_scale
+    fy_scaled = fy * resolution_scale_y * crop_scale
+
+    # Principal point scales with resolution
+    # For centered crop, it stays at the image center after scaling
+    cx_scaled = (cx / orig_w) * target_w
+    cy_scaled = (cy / orig_h) * target_h
+
+    K_scaled[0, 0] = fx_scaled
+    K_scaled[1, 1] = fy_scaled
+    K_scaled[0, 2] = cx_scaled
+    K_scaled[1, 2] = cy_scaled
+
+    return K_scaled
+
+
 if __name__ == "__main__":
     from reachy_mini.media.camera_constants import CameraResolution
 
