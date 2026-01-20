@@ -109,7 +109,14 @@ class RobotBackend(Backend):
         self.target_antenna_joint_current = None  # Placeholder for antenna joint torque
         self.target_head_joint_current = None  # Placeholder for head joint torque
 
-        self.hardware_error_check_frequency = hardware_error_check_frequency  # seconds
+        if hardware_error_check_frequency <= 0:
+            raise ValueError(
+                "hardware_error_check_frequency must be positive and non-zero (Hz)."
+            )
+
+        self.hardware_error_check_period = (
+            1.0 / hardware_error_check_frequency
+        )  # seconds
 
         # Initialize IMU for wireless version
         if wireless_version:
@@ -296,7 +303,7 @@ class RobotBackend(Backend):
 
             if (
                 time.time() - self.last_hardware_error_check_time
-                > self.hardware_error_check_frequency
+                > self.hardware_error_check_period
             ):
                 hardware_errors = self.read_hardware_errors()
                 if hardware_errors:

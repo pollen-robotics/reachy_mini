@@ -27,66 +27,17 @@ To restart your robot, press OFF, wait 5 seconds, then press ON. This simple pro
 
 </details>
 
-
-<details><summary><strong>Motor blinking red or Overload Error</strong></summary>
-
-**1. Motors inversion**: If you get "Motor hardware errors: ['Overload Error']" a few second after starting the robot **for the first time.** and have two motors arm pointing upward.  
-It is VERY likely there are motors not placed in the good slot, e.g motor 1 on slot 2.
-
-<details><summary>See illustration</summary>
-
-![Motors inversion symptom](/docs/assets/motors_upward.png)
-
-</details>
-
-Check assembly guide:
-
-- [**Reachy Mini Wireless - Step-by-Step Guide**](https://huggingface.co/spaces/pollen-robotics/Reachy_Mini_Assembly_Guide)
-- [**Reachy Mini LITE - Step-by-Step Guide**](https://huggingface.co/spaces/pollen-robotics/Reachy_Mini_LITE_Assembly_Guide)
-
-**2. Check the arm orientation on the motor's horn**:
-Remove the faulty motor, then place the arm upward like in the attached picture. Then check if you can see the the two line marks aligned as represented:
-
-<details><summary>See picture:</summary>
-
-![Marks_aligned](/docs/assets/marks_aligned.png)
-</details> 
-
-If they are not, please remove the two screws securing the arm and put it back with the two lines matching.  
-
-
-**3. check the extra length of the usb cable inside the head:**  
-If it's too long inside the head, there must miss some slack underneath and the head cannot move freely.  
-So the motors force too much and can be damaged.  
-<details><summary>See picture:</summary>
-
-![usb_cable_length](/docs/assets/usb_cable_length.jpg)
-</details>  
-
-Please let some slack to the usb cable to allow the head to move freely, even to its maximal height position.  
-
-
-
-**4. A motor feels broken:**
-We identified an issue affecting a limited production batch of Reachy Mini robots, related to a faulty batch of Dynamixel motor. 
-
-In most reported cases, the issue affects motor number 4 or one with QC label n°2544.
-
-If one of your motors, feels blocked or unusually hard to move, when turned off [(example video here)](https://drive.google.com/file/d/1UHTqUcb21aFThqlr2Qcx23VWqvj_y-ly/view?usp=sharing), and you are 100% sure the motor was in the correct slot.
-
-It's probably a broken motor.
-
-First, try to update your robot to the latest software version, then reboot it. This will reflash your motors.
-If the issue persists, please fill out this short form so we can track and ship you a new motor:  https://forms.gle/JdhMzadeCnbynw7Q6
-</details>
-
-
 <details>
-<summary><strong>A motor is not moving at all, but get stiff when powered on, and doesn't blink red </strong></summary>
+<summary><strong>Motors related issues</strong></summary>
 
-This behavior happen when a motor (often n°1) has not been flashed properly during the manufacturing process.  
-=> Please power your robot but don't turn it on with the dashboard/daemon, then update reachy mini's software, then reboot the robot. This will reflash your motors.
+This concerns issues like:  
+- Motors blinking red or not responding/moving.
+- Motors showing errors like "Overload Error"
+- Missing motors: "No motor found on port", "Missing motor", etc.  
 
+If you have any of the following symptoms, please refer to the [Motors diagnosis and troubleshooting guide](/docs/platforms/reachy_mini/motors_diagnosis.md) for detailed steps to diagnose and fix motor-related issues.  
+
+Using the Reachy Mini Testbench app will help you identify and resolve these problems effectively.
 </details>
 
 <details>
@@ -100,51 +51,6 @@ Please check if any cable is damaged, from the foot PCB to the head. Especially 
 It can also be the same issue as "Motor blinking red or Overload Error" described above.
 
 </details>
-
-<details>
-
-<summary><strong>Missing Motor Error / No motor found on port</strong></summary>
-
-- Make sure you have plugged all the motor cables correctly. Make sure your cables are seated down tight. Its easy to not push them down all the way.
-- Check that the cables are not damaged.
-- Make sure the power supply is plugged in and providing power.
-
-- Make sure you have every motor and not two same motor in the kit. Refer to the label on each motor. e.g motor 1, motor 2, motor 3, motor 4, L motor, R motor...  
-- If you still have the issue you can try scanning the motors using the [scan_motors.py script](/src/reachy_mini/tools/scan_motors.py).
-    - If your robot is Lite, you can run the script directly on your computer. Go to the "tools" folder, where the script is located, and run the same command as below but without the scp and ssh part.
-    - If your robot is Wireless, you need to copy the script on the raspberry. Go to the "tools" folder, where the script is located, and run:
-    ```bash
-    sudo scp scan_motors.py pollen@reachy-mini.local:~/
-    # password: ---your sudo password---
-    # RPI password: root
-    ```
-    - Then ssh into the robot:
-    ```bash
-    ssh pollen@reachy-mini.local
-    ```
-    - Activate the venv:
-    ```bash
-    source /venvs/mini_daemon/bin/activate
-    ```
-    - And run the script: (Motors must be powered on for this!)
-    ```bash
-    python scan_motors.py
-    ```
-    - It should print the list of detected motors. You should have all motors on baudrate 1000000, with the following IDs: 10, 11, 12, 13, 14, 15, 17, 18. If some are missing, check the cables again. If there is a motor with a different ID or baudrate, please contact support.
-    Example of the right output:
-    ```
-    Trying baudrate: 9600
-    No motors found at baudrate 9600
-    Trying baudrate: 57600
-    No motors found at baudrate 57600
-    Trying baudrate: 115200
-    No motors found at baudrate 115200
-    Trying baudrate: 1000000
-    Found motors at baudrate 1000000: [10, 11, 12, 13, 14, 15, 16, 17, 18]
-    ```
-
-</details>
-
 
 <details>
 
@@ -251,7 +157,7 @@ Instead:
 </details>
 
 <details>
-<summary><strong>Wireless Acces point doesn't show up - RPI doesn't boot</strong></summary>
+<summary><strong>Wireless Access point doesn't show up - RPI doesn't boot</strong></summary>
 There is a switch on the board in the head that needs to be in a given position. And if it's not, the AP doesn't show. It's possible that this switch was moved during assembly or maybe even a factory mistake.
 Please check that the switch is on the "debug" and not on "download" position. See the picture below:
 
@@ -447,9 +353,9 @@ If you command a pose outside these limits, the robot will automatically clamp t
 1. You can refer scanning the motors using the [scan_motors.py script](/src/reachy_mini/tools/scan_motors.py).
 
 - If your robot is Lite, you can run the script directly on your computer. Go to the "tools" folder, where the script is located, and run the same command as below but without the scp and ssh part.
-- If your robot is Wireless, you need to copy the scanning script on the raspberry. Go to the "tools" folder, where the script is located,and run:
+- If your robot is Wireless, you need to copy the scanning script on the raspberry. Go to the "tools" folder, where the script is located, and run:
 ```bash
-sudo scp scan_motors.py pollen@reachy-minilocal:~/
+sudo scp scan_motors.py pollen@reachy-mini.local:~/
 # password: ---your sudo password---
 # RPI password: root
 ```
@@ -461,11 +367,11 @@ ssh pollen@reachy-mini.local
 ```bash
 source /venvs/mini_daemon/bin/activate
 ```
-- And run the script: (Motors must be poweredonfor this!)
+- And run the script: (Motors must be powered on for this!)
 ```bash
 python scan_motors.py
 ```
-- It should print the list of detected motors. You should have all motors on baudrate 1000000, with the following IDs: 10,11, 12, 13, 14, 15,17, 18. If some are missing, check the cables again. If there is a motor with a different ID or baudrate, please contact support.
+- It should print the list of detected motors. You should have all motors on baudrate 1000000, with the following IDs: 10, 11, 12, 13, 14, 15, 17, 18. If some are missing, check the cables again. If there is a motor with a different ID or baudrate, please contact support.
 
 Example of the right output:
 ```
@@ -476,7 +382,7 @@ No motors found at baudrate 57600
 Trying baudrate: 115200
 No motors found at baudrate 115200
 Trying baudrate: 1000000
-Found motors at baudrate 1000000: [10, 11,12,13, 14, 15, 16, 17, 18]
+Found motors at baudrate 1000000: [10, 11, 12, 13, 14, 15, 16, 17, 18]
 ```
 2. Lite: You can also use the Dynamixel Wizard to read motors parameters. Follow the guide [here](/docs/platforms/reachy_mini_lite/wizard.md). 
 
@@ -664,7 +570,7 @@ mini.play_move(recorded_moves.get("dance_1"))
 </details>
 
 <details>
-<summary><strong>My robot's move look shaky. Is the control loop running correctly?</strong></summary>
+<summary><strong>My robot's moves look shaky. Is the control loop running correctly?</strong></summary>
 
 You can check that the motor control loop runs correctly by checking the daemon status:
 - via the SDK
