@@ -211,7 +211,7 @@ class AsyncWebSocketAudioStreamer:
                     arr = arr / max_abs
                 # Convert float audio [-1,1] to int16 PCM
                 arr = np.clip(arr, -1.0, 1.0)
-                arr = (arr * 32767.0).astype(np.int16)
+                arr = (arr * 32767.0).astype(np.int16)  # type: ignore
             elif arr.dtype != np.int16:
                 arr = arr.astype(np.int16)
 
