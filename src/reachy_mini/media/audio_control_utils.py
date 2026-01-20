@@ -290,7 +290,7 @@ class ReSpeaker:
                 raise ValueError("Unknown status code: {}".format(response[0]))
             time.sleep(0.01)
 
-        logging.info(
+        logging.debug(
             "ReadCMD: cmdid: {}, resid: {}, response: {}".format(
                 wvalue, windex, response
             )
