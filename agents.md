@@ -75,6 +75,8 @@ Before downloading anything, explain to the user:
 
 Once confirmed, proceed with environment setup and cloning.
 
+The user may have limited technical knowledge or a computer not set up for development. Identify missing tools (e.g., git), list them all, explain why each is needed, and ask permission once before installing.
+
 ---
 
 ## 1. Environment Setup
