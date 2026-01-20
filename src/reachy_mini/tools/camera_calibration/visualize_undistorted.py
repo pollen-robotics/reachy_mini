@@ -12,7 +12,7 @@ This script:
 import argparse
 import os
 import time
-from typing import List, Optional, Tuple
+from typing import Any, List, Optional, Tuple
 
 import cv2
 import numpy as np
@@ -161,7 +161,7 @@ def main() -> None:
     # alpha=0 removes black borders by cropping to valid pixels only
     new_camera_matrix, roi = cv2.getOptimalNewCameraMatrix(K, dist, (w, h), 0, (w, h))
     mapx, mapy = cv2.initUndistortRectifyMap(
-        K, dist, None, new_camera_matrix, (w, h), cv2.CV_32FC1  # type: ignore[arg-type,call-overload]
+        K, dist, None, new_camera_matrix, (w, h), cv2.CV_32FC1
     )
 
     # Extract ROI for cropping black borders
@@ -201,7 +201,7 @@ def main() -> None:
                 new_undist_w = int(undist_w * scale)
                 undistorted_resized = cv2.resize(undistorted, (new_undist_w, orig_h))
 
-                combined = np.zeros((orig_h, orig_w + new_undist_w, 3), dtype=np.uint8)
+                combined: npt.NDArray[Any] = np.zeros((orig_h, orig_w + new_undist_w, 3), dtype=np.uint8)
                 combined[:, :orig_w] = frame
                 combined[:, orig_w : orig_w + new_undist_w] = undistorted_resized
 
@@ -267,4 +267,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    exit(main())
+    main()

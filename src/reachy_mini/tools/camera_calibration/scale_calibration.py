@@ -13,7 +13,7 @@ from typing import Any, Dict, List, Tuple
 
 import numpy as np
 import numpy.typing as npt
-import yaml
+import yaml  # type: ignore[import-untyped]
 
 # Crop analysis results from analyze_crop_v3.py
 RESOLUTION_MODES = {
@@ -107,7 +107,7 @@ def scale_intrinsics(
     K_scaled[0, 2] = cx_scaled
     K_scaled[1, 2] = cy_scaled
 
-    return K_scaled
+    return K_scaled  # type: ignore[no-any-return]
 
 
 def generate_scaled_calibrations(calibration_file: str, output_dir: str = '.') -> List[str]:
@@ -131,6 +131,9 @@ def generate_scaled_calibrations(calibration_file: str, output_dir: str = '.') -
         target_size = mode_info['resolution']
         crop_scale = mode_info['crop_scale']
         description = mode_info['description']
+        assert isinstance(target_size, tuple) and len(target_size) == 2
+        assert isinstance(crop_scale, float)
+        assert isinstance(description, str)
 
         print(f"{mode_name}: {description}")
         print(f"  Target resolution: {target_size[0]}x{target_size[1]}")
@@ -222,4 +225,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    exit(main())
+    main()

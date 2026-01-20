@@ -203,8 +203,8 @@ class CameraBase(ABC):
             )
 
         original_K = self.camera_specs.K
-        original_size = tuple(CameraResolution.R3840x2592at30fps.value[:2])
-        target_size = tuple(resolution.value[:2])
+        original_size: tuple[int, int] = (CameraResolution.R3840x2592at30fps.value[0], CameraResolution.R3840x2592at30fps.value[1])
+        target_size: tuple[int, int] = (resolution.value[0], resolution.value[1])
         crop_scale = resolution.value[3]
 
         self.resized_K = scale_intrinsics(

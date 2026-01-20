@@ -14,12 +14,12 @@ Usage:
 import argparse
 import os
 from glob import glob
-from typing import List, Optional, Tuple
+from typing import Any, List, Optional, Tuple
 
 import cv2
 import numpy as np
 import numpy.typing as npt
-import yaml
+import yaml  # type: ignore[import-untyped]
 from cv2 import aruco
 
 
@@ -40,11 +40,11 @@ def build_charuco_board() -> Tuple[aruco.Dictionary, aruco.CharucoBoard]:
 
 
 def detect_charuco_corners(
-    image: npt.NDArray[np.uint8],
+    image: npt.NDArray[Any],
     aruco_dict: aruco.Dictionary,
     board: aruco.CharucoBoard,
     min_markers: int = 4,
-) -> Tuple[Optional[npt.NDArray[np.float32]], Optional[npt.NDArray[np.int32]], bool]:
+) -> Tuple[Optional[npt.NDArray[Any]], Optional[npt.NDArray[Any]], bool]:
     """Detect Charuco corners in an image.
 
     Returns:
@@ -114,8 +114,8 @@ def calibrate_camera(
     print(f"Found {len(image_files)} images in {images_dir}")
 
     # Storage for calibration data
-    all_charuco_corners: List[npt.NDArray[np.float32]] = []
-    all_charuco_ids: List[npt.NDArray[np.int32]] = []
+    all_charuco_corners: List[npt.NDArray[Any]] = []
+    all_charuco_ids: List[npt.NDArray[Any]] = []
     image_size: Optional[Tuple[int, int]] = None
     successful_images: List[str] = []
 
@@ -186,24 +186,25 @@ def calibrate_camera(
 
     # Use cv2.calibrateCamera with object points from the board
     # First, get 3D object points for each detected corner
-    all_obj_points: List[npt.NDArray[np.float32]] = []
-    all_img_points: List[npt.NDArray[np.float32]] = []
+    all_obj_points: List[npt.NDArray[Any]] = []
+    all_img_points: List[npt.NDArray[Any]] = []
 
     for corners, ids in zip(all_charuco_corners, all_charuco_ids):
         # Get 3D points from board
-        obj_pts = board.getChessboardCorners()[ids.flatten().tolist()]  # type: ignore[index]
+        chessboard_corners = board.getChessboardCorners()
+        obj_pts = np.array([chessboard_corners[i] for i in ids.flatten().tolist()], dtype=np.float32)
         all_obj_points.append(obj_pts)
         all_img_points.append(corners)
 
     # cv2.calibrateCamera returns (rms_error, camera_matrix, dist_coeffs, rvecs, tvecs)
-    calib_result = cv2.calibrateCamera(
+    calib_result = cv2.calibrateCamera(  # type: ignore[call-overload]
         objectPoints=all_obj_points,
         imagePoints=all_img_points,
         imageSize=image_size,
-        cameraMatrix=None,  # type: ignore[arg-type]
-        distCoeffs=None,  # type: ignore[arg-type]
+        cameraMatrix=None,
+        distCoeffs=None,
         flags=calibration_flags,
-    )  # type: ignore[call-overload]
+    )
     rms_error = calib_result[0]
     camera_matrix = calib_result[1]
     dist_coeffs = calib_result[2]
@@ -358,4 +359,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    exit(main())
+    main()

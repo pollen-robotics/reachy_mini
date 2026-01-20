@@ -8,8 +8,11 @@ one image per resolution for analyzing how much each mode crops.
 import argparse
 import os
 import time
+from typing import Any
 
 import cv2
+import numpy as np
+import numpy.typing as npt
 
 from reachy_mini import ReachyMini
 
@@ -119,7 +122,7 @@ def main() -> None:
                             continue
 
                         # Show frame (resized if too large)
-                        display_frame = frame
+                        display_frame: npt.NDArray[Any] = frame
                         if frame.shape[0] > 1296:  # If height > 1296, scale down
                             display_frame = cv2.resize(frame, (0, 0), fx=0.5, fy=0.5)
 
@@ -149,4 +152,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    exit(main())
+    main()
