@@ -316,8 +316,8 @@ class ReachyMini:
                                 "Make sure a Reachy Mini daemon is running and accessible."
                             )
                         raise err
-            self.logger.info("Connection mode selected: %s", selected)  # type: ignore
-            return client, selected  # type: ignore
+            self.logger.info("Connection mode selected: %s", selected)
+            return client, selected
 
         if requested_mode == "localhost_only":
             try:
