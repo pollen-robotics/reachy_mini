@@ -415,7 +415,7 @@ def _find_metadata_for_entry_point(ep_name: str) -> dict:  # type: ignore
 
             # Check 1: Normalized name match
             if normalize(space_name) == ep_normalized:
-                return file_metadata # type: ignore
+                return file_metadata  # type: ignore
 
             # Check 2: Entry point name appears in siblings (package structure)
             siblings = file_metadata.get("siblings", [])
@@ -423,7 +423,7 @@ def _find_metadata_for_entry_point(ep_name: str) -> dict:  # type: ignore
                 rfilename = sibling.get("rfilename", "")
                 # Check if entry point package folder exists in siblings
                 if rfilename.startswith(f"{ep_name}/"):
-                    return file_metadata # type: ignore
+                    return file_metadata  # type: ignore
 
             # Check 3: extra.id contains normalized match
             extra_id = file_metadata.get("id", "")
@@ -431,7 +431,7 @@ def _find_metadata_for_entry_point(ep_name: str) -> dict:  # type: ignore
                 # Extract app name from full ID (remove author prefix)
                 id_name = extra_id.split("/")[-1] if "/" in extra_id else extra_id
                 if normalize(id_name) == ep_normalized:
-                    return file_metadata # type: ignore
+                    return file_metadata  # type: ignore
 
         except Exception:
             continue

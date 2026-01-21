@@ -173,6 +173,11 @@ class GstWebRTCClient(CameraBase, AudioBase):
         signaller.set_property("uri", f"ws://{signaling_host}:{signaling_port}")
         return source
 
+    def _dump_latency(self) -> None:
+        query = Gst.Query.new_latency()
+        self._pipeline_record.query(query)
+        self.logger.debug(f"Pipeline latency {query.parse_latency()}")
+
     def _iterate_gst(self, iterator: Gst.Iterator) -> Iterator[Gst.Element]:
         """Iterate over GStreamer iterators."""
         while True:
@@ -188,19 +193,25 @@ class GstWebRTCClient(CameraBase, AudioBase):
         if isinstance(webrtcsrc, Gst.Bin):
             # Try to find by standard name first (fast path)
             webrtcbin = webrtcsrc.get_by_name("webrtcbin0")
-            
+
             if webrtcbin is None:
                 # If not found by name (e.g. re-init scenarios), fallback to recursive search by factory type
-                self.logger.debug(f"webrtcbin0 not found, scanning elements in {webrtcsrc.get_name()} recursively...")
+                self.logger.debug(
+                    f"webrtcbin0 not found, scanning elements in {webrtcsrc.get_name()} recursively..."
+                )
                 for elem in self._iterate_gst(webrtcsrc.iterate_recurse()):
                     if elem.get_factory().get_name() == "webrtcbin":
                         webrtcbin = elem
-                        self.logger.debug(f"Found webrtcbin by factory search: {elem.get_name()}")
+                        self.logger.debug(
+                            f"Found webrtcbin by factory search: {elem.get_name()}"
+                        )
                         break
 
-            assert webrtcbin is not None, "Could not find webrtcbin element in webrtcsrc"
+            assert webrtcbin is not None, (
+                "Could not find webrtcbin element in webrtcsrc"
+            )
             # jitterbuffer has a default 200 ms buffer. Should be ok to lower this in localnetwork config
-            webrtcbin.set_property("latency", 100)
+            webrtcbin.set_property("latency", 10)
 
     def _webrtcsrc_pad_added_cb(self, webrtcsrc: Gst.Element, pad: Gst.Pad) -> None:
         self._configure_webrtcbin(webrtcsrc)
@@ -241,6 +252,8 @@ class GstWebRTCClient(CameraBase, AudioBase):
             self._appsink_audio.sync_state_with_parent()
             audioconvert.sync_state_with_parent()
             audioresample.sync_state_with_parent()
+
+        GLib.timeout_add_seconds(5, self._dump_latency)
 
     def _on_bus_message(self, bus: Gst.Bus, msg: Gst.Message, loop) -> bool:  # type: ignore[no-untyped-def]
         t = msg.type
