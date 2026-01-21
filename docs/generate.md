@@ -4,7 +4,7 @@ To generate the documentation, you first have to build it. Several packages are 
 you can install them with the following command, at the root of the code repository:
 
 ```bash
-uv sync  --extra documentation
+pip install "hf-doc-builder @ git+https://github.com/huggingface/doc-builder.git@main"
 ```
 
 You will also need `nodejs`. Please refer to their [installation page](https://nodejs.org/en/download)
