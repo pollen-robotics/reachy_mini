@@ -1,5 +1,7 @@
 """Minimal demo for Reachy Mini."""
 
+# START doc_example
+
 import time
 
 import numpy as np
@@ -26,3 +28,5 @@ with ReachyMini(media_backend="no_media") as mini:
             mini.set_target(head=head_pose, antennas=(antennas_offset, antennas_offset))
     except KeyboardInterrupt:
         pass
+
+# END doc_example

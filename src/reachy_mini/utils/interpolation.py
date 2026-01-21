@@ -19,7 +19,7 @@ def minimum_jerk(
     final_velocity: Optional[npt.NDArray[np.float64]] = None,
     final_acceleration: Optional[npt.NDArray[np.float64]] = None,
 ) -> InterpolationFunc:
-    """Compute the mimimum jerk interpolation function from starting position to goal position."""
+    """Compute the minimum jerk interpolation function from starting position to goal position."""
     if starting_velocity is None:
         starting_velocity = np.zeros(starting_position.shape)
     if starting_acceleration is None:

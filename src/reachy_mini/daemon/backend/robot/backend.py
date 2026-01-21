@@ -71,7 +71,7 @@ class RobotBackend(Backend):
                 seconds=1.0 / self.control_loop_frequency
             ),
             allowed_retries=5,
-            stats_pub_period=None,
+            stats_pub_period=timedelta(seconds=1.0),
         )
 
         self.name2id = self.c.get_motor_name_id()
@@ -109,7 +109,14 @@ class RobotBackend(Backend):
         self.target_antenna_joint_current = None  # Placeholder for antenna joint torque
         self.target_head_joint_current = None  # Placeholder for head joint torque
 
-        self.hardware_error_check_frequency = hardware_error_check_frequency  # seconds
+        if hardware_error_check_frequency <= 0:
+            raise ValueError(
+                "hardware_error_check_frequency must be positive and non-zero (Hz)."
+            )
+
+        self.hardware_error_check_period = (
+            1.0 / hardware_error_check_frequency
+        )  # seconds
 
         # Initialize IMU for wireless version
         if wireless_version:
@@ -286,6 +293,9 @@ class RobotBackend(Backend):
                     self._status.control_loop_stats["nb_error"] = self._stats[
                         "nb_error"
                     ]
+                    self._status.control_loop_stats["motor_controller"] = str(
+                        self.c.get_stats()
+                    )
 
                 self._stats["timestamps"].clear()
                 self._stats["nb_error"] = 0
@@ -293,7 +303,7 @@ class RobotBackend(Backend):
 
             if (
                 time.time() - self.last_hardware_error_check_time
-                > self.hardware_error_check_frequency
+                > self.hardware_error_check_period
             ):
                 hardware_errors = self.read_hardware_errors()
                 if hardware_errors:
@@ -647,6 +657,21 @@ class RobotBackend(Backend):
                     errors[name] = err
 
         return errors
+
+    def write_raw_packet(self, packet: bytes) -> bytes:
+        """Write a raw packet to the motor controller and return the response.
+
+        Args:
+            packet (bytes): The raw packet to send to the motor controller.
+
+        Returns:
+            bytes: The raw response packet from the motor controller.
+
+        """
+        assert self.c is not None, "Motor controller not initialized or already closed."
+
+        result: bytes = bytes(self.c.write_raw_packet(packet))
+        return result
 
 
 @dataclass

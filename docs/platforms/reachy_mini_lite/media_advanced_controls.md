@@ -1,6 +1,6 @@
 # Advanced Media Controls
 
-This page describes advanced settings to fine-tune the camera and sound system of Reachy Mini Lite. Only the camera access differs slightly from the standard version.
+This page describes advanced settings to fine-tune the camera and sound system of Reachy Mini Lite. Only camera access differs slightly from the standard version: the Raspberry Pi Camera Module 3 is connected via a CSI-to-USB adapter that encodes the video stream as JPEG.
 
 ## Camera
 

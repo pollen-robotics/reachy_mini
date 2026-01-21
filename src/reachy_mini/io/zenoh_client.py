@@ -5,6 +5,7 @@ robot. It subscribes to joint positions updates and allows sending commands to t
 """
 
 import json
+import logging
 import threading
 import time
 from dataclasses import dataclass
@@ -126,7 +127,7 @@ class ZenohClient(AbstractClient):
                 raise TimeoutError(
                     "Timeout while waiting for connection with the server."
                 )
-            print("Waiting for connection with the server...")
+            logging.info("Waiting for connection with the server...")
 
         self._is_alive = True
         self._check_alive_evt = threading.Event()
@@ -250,7 +251,7 @@ class ZenohClient(AbstractClient):
     def get_current_head_pose(self) -> npt.NDArray[np.float64]:
         """Get the current head pose."""
         assert self._last_head_pose is not None, "No head pose received yet."
-        return self._last_head_pose.copy()
+        return self._last_head_pose.copy()  # type: ignore[no-any-return]
 
     def send_task_request(self, task_req: AnyTaskRequest) -> UUID:
         """Send a task request to the server."""

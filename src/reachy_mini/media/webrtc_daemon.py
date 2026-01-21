@@ -133,6 +133,13 @@ class GstWebRTC:
         self._loop.quit()
         self._bus_sender.remove_watch()
         self._bus_receiver.remove_watch()
+        # Enable if need to dump logs
+        # Gst.deinit()
+
+    def _dump_latency(self) -> None:
+        query = Gst.Query.new_latency()
+        self._pipeline_sender.query(query)
+        self._logger.info(f"Pipeline latency {query.parse_latency()}")
 
     def _configure_webrtc(self, pipeline: Gst.Pipeline) -> Gst.Element:
         self._logger.debug("Configuring WebRTC")
@@ -147,9 +154,22 @@ class GstWebRTC:
         webrtcsink.set_property("meta", meta_structure)
         webrtcsink.set_property("run-signalling-server", True)
 
+        webrtcsink.connect("consumer-added", self._consumer_added)
+
         pipeline.add(webrtcsink)
 
         return webrtcsink
+
+    def _consumer_added(
+        self, webrtcbin: Gst.Bin, arg1: Gst.Element, udata: bytes
+    ) -> None:
+        self._logger.info("consumer added")
+
+        Gst.debug_bin_to_dot_file(
+            self._pipeline_sender, Gst.DebugGraphDetails.ALL, "pipeline_full"
+        )
+
+        GLib.timeout_add_seconds(5, self._dump_latency)
 
     def _configure_receiver(self, pipeline: Gst.Pipeline) -> None:
         udpsrc = Gst.ElementFactory.make("udpsrc")
@@ -224,8 +244,11 @@ class GstWebRTC:
         queue_encoder = Gst.ElementFactory.make("queue", "queue_encoder")
         v4l2h264enc = Gst.ElementFactory.make("v4l2h264enc")
         extra_controls_structure = Gst.Structure.new_empty("extra-controls")
+        # doc: https://docs.qualcomm.com/doc/80-70014-50/topic/v4l2h264enc.html
         extra_controls_structure.set_value("repeat_sequence_header", 1)
         extra_controls_structure.set_value("video_bitrate", 5_000_000)
+        extra_controls_structure.set_value("h264_i_frame_period", 60)
+        extra_controls_structure.set_value("video_gop_size", 256)
         v4l2h264enc.set_property("extra-controls", extra_controls_structure)
         # Use H264 Level 3.1 + Constrained Baseline for Safari/WebKit compatibility
         caps_h264 = Gst.Caps.from_string(
@@ -272,6 +295,7 @@ class GstWebRTC:
 
         alsasrc = Gst.ElementFactory.make("alsasrc")
         alsasrc.set_property("device", "reachymini_audio_src")
+        # to optimize the latency, tune ~/.asoundrc file
 
         if not all([alsasrc]):
             raise RuntimeError("Failed to create GStreamer audio elements")
@@ -280,7 +304,7 @@ class GstWebRTC:
         alsasrc.link(webrtcsink)
 
     def _get_audio_input_device(self) -> Optional[str]:
-        """Use Gst.DeviceMonitor to find the pipeire audio card.
+        """Use Gst.DeviceMonitor to find the pipewire audio card.
 
         Returns the device ID of the found audio card, None if not.
         """
@@ -365,6 +389,7 @@ class GstWebRTC:
         self._logger.debug("Starting WebRTC")
         self._pipeline_sender.set_state(Gst.State.PLAYING)
         self._pipeline_receiver.set_state(Gst.State.PLAYING)
+        GLib.timeout_add_seconds(5, self._dump_latency)
 
     def pause(self) -> None:
         """Pause the WebRTC pipeline."""
@@ -397,3 +422,4 @@ if __name__ == "__main__":
         logging.info("User interrupted")
     finally:
         webrtc.stop()
+        webrtc.__del__()
