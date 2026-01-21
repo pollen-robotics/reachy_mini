@@ -350,6 +350,10 @@ class ReachyMini:
         return client, "localhost_only"
 
     def _connect_wireless(self, timeout: float) -> tuple[ZenohClient, ConnectionMode]:
+        # For mDNS/DNS-based discovery we use a `.local` hostname derived from `robot_name`.
+        # Underscores are replaced with hyphens because many hostname resolvers and mDNS
+        # implementations expect hostnames without underscores; this is the convention used
+        # for Reachy Mini wireless hostnames.
         client = self._connect_single(
             host_addr=f"{self.robot_name.replace('_', '-')}.local", timeout=timeout
         )
