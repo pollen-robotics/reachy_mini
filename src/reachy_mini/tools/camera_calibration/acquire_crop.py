@@ -13,7 +13,7 @@ from typing import Any
 import cv2
 import numpy.typing as npt
 
-from reachy_mini import ReachyMini
+from reachy_mini import ReachyMini  # type: ignore
 
 
 def main() -> None:

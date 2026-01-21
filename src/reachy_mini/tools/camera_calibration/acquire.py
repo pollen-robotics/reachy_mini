@@ -15,7 +15,7 @@ from typing import Any, Optional
 import cv2
 import numpy.typing as npt
 
-from reachy_mini import ReachyMini
+from reachy_mini import ReachyMini  # type: ignore
 from reachy_mini.media.camera_constants import CameraResolution
 
 

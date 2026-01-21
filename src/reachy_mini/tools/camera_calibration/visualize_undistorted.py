@@ -19,7 +19,7 @@ import numpy as np
 import numpy.typing as npt
 import yaml
 
-from reachy_mini import ReachyMini
+from reachy_mini import ReachyMini  # type: ignore
 from reachy_mini.media.camera_constants import CameraResolution
 
 
