@@ -2,7 +2,8 @@
 
 Welcome to the Reachy Mini support page. Click on the questions below to reveal the answers.
 
-##  Troubleshooting - Batch December 2025
+## 🛠️ Troubleshooting - Batch December 2025
+
 ### Essential troubleshooting - Please read this first, it solves all well-known issues!
 
 
@@ -41,59 +42,6 @@ Using the Reachy Mini Testbench app will help you identify and resolve these pro
 
 </details>
 
-
-<details>
-<summary><strong>Electrical Shock Error </strong></summary>
-
-An electrical shock error on Dynamixel motors means there is either an issue with the power supply, or a short circuit somewhere.
-Please check if any cable is damaged, from the foot PCB to the head. Especially the followings cables:  
-- Power Cable (black & red) 
-- 3-wires cables for motors (300mm, 200mm, 100mm and 40mm)
-
-</details>
-
-<details><summary>See picture:</summary>
-
-![Marks_aligned](https://github.com/pollen-robotics/reachy_mini/raw/develop/docs/assets/marks_aligned.png)
-</details> 
-
-If they are not, please remove the two screws securing the arm and put it back with the two lines matching.  
-
-
-**3. check the extra length of the usb cable inside the head:**  
-If it's too long inside the head, there must miss some slack underneath and the head cannot move freely.  
-So the motors force too much and can be damaged.  
-<details><summary>See picture:</summary>
-
-![usb_cable_length](https://github.com/pollen-robotics/reachy_mini/raw/develop/docs/assets/usb_cable_length.jpg)
-</details>  
-
-Please let some slack to the usb cable to allow the head to move freely, even to its maximal height position.  
-
-
-
-**4. A motor feels broken:**
-We identified an issue affecting a limited production batch of Reachy Mini robots, related to a faulty batch of Dynamixel motor. 
-
-In most reported cases, the issue affects motor number 4 or one with QC label n°2544.
-
-If one of your motors, feels blocked or unusually hard to move, when turned off [(example video here)](https://drive.google.com/file/d/1UHTqUcb21aFThqlr2Qcx23VWqvj_y-ly/view?usp=sharing), and you are 100% sure the motor was in the correct slot.
-
-It's probably a broken motor.
-
-First, try to update your robot to the latest software version, then reboot it. This will reflash your motors.
-If the issue persists, please fill out this short form so we can track and ship you a new motor:  https://forms.gle/JdhMzadeCnbynw7Q6
-</details>
-
-
-<details>
-<summary><strong>A motor is not moving at all, but get stiff when powered on, and doesn't blink red </strong></summary>
-
-This behavior happen when a motor (often n°1) has not been flashed properly during the manufacturing process.  
-=> Please power your robot but don't turn it on with the dashboard/daemon, then update reachy mini's software, then reboot the robot. This will reflash your motors.
-
-</details>
-
 <details>
 <summary><strong>Electrical Shock Error </strong></summary>
 
@@ -105,7 +53,6 @@ Please check if any cable is damaged, from the foot PCB to the head. Especially 
 It can also be the same issue as "Motor blinking red or Overload Error" described above.
 
 </details>
-
 
 <details>
 
@@ -219,23 +166,6 @@ Please check that the switch is on the "debug" and not on "download" position. S
 ![switch_position](https://github.com/pollen-robotics/reachy_mini/raw/develop/docs/assets/wireless_switch.png)
 
 </details>
-
-
-
-#### If your issue/question is not listed here, please check the full FAQ below.
-
-## 📋 FAQ Table of Contents
-
-1.  [🚀 Getting Started & Assembly](#-getting-started--assembly)
-2.  [🔌 Connection & Dashboard](#-connection--dashboard)
-3.  [🤖 Hardware, Motors & Limits](#-hardware-motors--limits)
-4.  [🐍 SDK, Apps & Programming](#-sdk-apps--programming)
-5.  [🕹️ Moving the Robot](#-moving-the-robot)
-6.  [👁️ Vision & Audio](#-vision--audio)
-7.  [🔧 Specific Error Messages & Fixes](#-specific-error-messages--fixes)
-8.  [📦 Shipping & Warranty](#-shipping--warranty)
-
-
 
 ## 🚀 Getting Started & Assembly
 
