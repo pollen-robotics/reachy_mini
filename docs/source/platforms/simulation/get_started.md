@@ -6,7 +6,7 @@ You don't need a physical robot to start building! The Reachy Mini simulation ru
 
 ## 1. Installation
 
-> **📋 Prerequisites:** Before setting up the simulation, you must first complete the basic installation and virtual environment setup by following the **[Installation Guide](../SDK/installation.md)**. This guide assumes you already have the Reachy Mini SDK installed and your virtual environment activated.
+> **📋 Prerequisites:** Before setting up the simulation, you must first complete the basic installation and virtual environment setup by following the **[Installation Guide](../../SDK/installation.md)**. This guide assumes you already have the Reachy Mini SDK installed and your virtual environment activated.
 
 The simulation requires the `mujoco` python bindings. You can install them alongside the Reachy Mini software with the extra tag `[mujoco]`.
 
