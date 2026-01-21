@@ -1,0 +1,84 @@
+- sections:
+    - local: index
+      title: Reachy Mini
+  title: Get Started
+- sections:
+    - local: platforms/reachy_mini/get_started
+      title: Getting started
+    - local: platforms/reachy_mini/hardware
+      title: Hardware
+    - local: platforms/reachy_mini/usage
+      title: Usage
+    - local: platforms/reachy_mini/media_advanced_controls
+      title: Media Advanced Controls
+    - local: platforms/reachy_mini/reset
+      title: Reset
+    - local: platforms/reachy_mini/install_daemon_from_branch
+      title: Install Daemon from Branch
+    - local: platforms/reachy_mini/reflash_the_rpi_ISO
+      title: Reflash the ISO
+    - local: platforms/reachy_mini/motors_diagnosis
+      title: Motors Diagnosis
+  title: Reachy Mini (Wireless)
+- sections:
+    - local: platforms/reachy_mini_lite/get_started
+      title: Getting started
+    - local: platforms/reachy_mini_lite/hardware
+      title: Hardware
+    - local: platforms/reachy_mini_lite/usage
+      title: Usage
+    - local: platforms/reachy_mini_lite/media_advanced_controls
+      title: Media Advanced Controls
+    - local: platforms/reachy_mini_lite/wizard
+      title: Wizard
+  title: Reachy Mini Lite
+- sections:
+    - local: platforms/simulation/get_started
+      title: Getting started
+  title: Simulation
+- sections:
+    - local: SDK/readme
+      title: SDK Overview
+    - local: SDK/installation
+      title: Installation
+    - local: SDK/quickstart
+      title: Quickstart Guide
+    - local: SDK/python-sdk
+      title: Python SDK
+    - local: SDK/integration
+      title: AI Integrations
+    - local: SDK/core-concept
+      title: Core Concepts
+    - local: SDK/media-architecture
+      title: Media Architecture
+    - local: SDK/gstreamer-installation
+      title: GStreamer Installation
+  title: Software guide
+- sections:
+    - local: troubleshooting
+      title: Troubleshooting & FAQ
+  title: Help and support
+- isExpanded: false
+  sections:
+    - local: examples/minimal_demo
+      title: Minimal demo
+    - local: examples/look_at
+      title: Look at
+  title: Examples
+- isExpanded: false
+  sections:
+    - local: API/reachymini
+      title: Reachy Mini
+    - local: API/media
+      title: Media
+    - local: API/motion
+      title: Motion
+    - local: API/tools
+      title: Tools
+    - local: API/utils
+      title: Utils
+    - local: API/apps
+      title: Apps
+    - local: API/daemon
+      title: Daemon
+  title: API

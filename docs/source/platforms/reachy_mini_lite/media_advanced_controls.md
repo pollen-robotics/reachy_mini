@@ -1,6 +1,6 @@
 # Advanced Media Controls
 
-This page describes advanced settings to fine-tune the camera and sound system of Reachy Mini Lite. Only camera access differs slightly from the standard version: the Raspberry Pi Camera Module 3 is connected via a CSI-to-USB adapter that encodes the video stream as JPEG.
+This page describes advanced settings to fine-tune the camera and sound system of Reachy Mini Lite. Only the camera access differs slightly from the standard version.
 
 ## Camera
 
@@ -8,7 +8,7 @@ The Raspberry Pi camera is mounted on a CSI-to-USB adapter and is detected by th
 
 ### Windows and macOS
 
-Currently, the default backend for these platforms is OpenCV. The parameters can be set in the [code](/src/reachy_mini/media/camera_opencv.py):
+Currently, the default backend for these platforms is OpenCV. The parameters can be set in the [code](https://github.com/pollen-robotics/reachy_mini/tree/main/src/reachy_mini/media/camera_opencv.py):
 
 ```python
 self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, self._resolution.value[0])
@@ -89,9 +89,9 @@ Using GStreamer allows you to directly visualize the effect of parameter changes
 gst-launch-1.0 v4l2src device=/dev/video2 extra-controls=s,exposure_auto=1,exposure_absolute=100,saturation=0 ! videoconvert ! autovideosink
 ```
 
-At the SDK level, the camera is controlled by GStreamer using the [v4l2src](/src/reachy_mini/media/camera_gstreamer.py) component. You can view available parameters with the following command:
+At the SDK level, the camera is controlled by GStreamer using the [v4l2src](https://github.com/pollen-robotics/reachy_mini/tree/main/src/reachy_mini/media/camera_gstreamer.py) component. You can view available parameters with the following command:
 
-The parameters can be set in [the code](/src/reachy_mini/media/camera_gstreamer.py) as follows:
+The parameters can be set in [the code](https://github.com/pollen-robotics/reachy_mini/tree/main/src/reachy_mini/media/camera_gstreamer.py) as follows:
 
 ```python
 camsrc = Gst.ElementFactory.make("v4l2src")
@@ -108,4 +108,4 @@ The default OpenCV backend is also available for Linux.
 
 ## Microphones and Speakers
 
-Refer to the [Reachy Mini documentation](/docs/platforms/reachy_mini/media_advanced_controls.md#microphones-and-speakers). The hardware is exactly the same for the Lite version.
+Refer to the [Reachy Mini documentation](../reachy_mini/media_advanced_controls.md#microphones-and-speakers). The hardware is exactly the same for the Lite version.

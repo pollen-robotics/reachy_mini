@@ -40,9 +40,11 @@ def _process_card_number_output(output: str) -> int:
         warns if only a ReSpeaker device is found (indicating firmware update needed).
 
     Example:
-        >>> output = "card 1: ReachyMiniAudio [reachy mini audio], device 0: USB Audio [USB Audio]"
-        >>> card_num = _process_card_number_output(output)
-        >>> print(f"Detected card: {card_num}")
+        ```python
+        output = "card 1: ReachyMiniAudio [reachy mini audio], device 0: USB Audio [USB Audio]"
+        card_num = _process_card_number_output(output)
+        print(f"Detected card: {card_num}")
+        ```
 
     """
     lines = output.split("\n")
@@ -81,13 +83,15 @@ def get_respeaker_card_number() -> int:
         - -1: Error occurred while trying to detect audio devices
 
     Example:
-        >>> card_num = get_respeaker_card_number()
-        >>> if card_num > 0:
-        ...     print(f"Using Reachy Mini Audio card {card_num}")
-        ... elif card_num == 0:
-        ...     print("Using default sound card")
-        ... else:
-        ...     print("Error detecting audio devices")
+        ```python
+        card_num = get_respeaker_card_number()
+        if card_num > 0:
+            print(f"Using Reachy Mini Audio card {card_num}")
+        elif card_num == 0:
+            print("Using default sound card")
+        else:
+            print("Error detecting audio devices")
+        ```
 
     """
     try:
@@ -118,11 +122,13 @@ def has_reachymini_asoundrc() -> bool:
         routing and device management.
 
     Example:
-        >>> if has_reachymini_asoundrc():
-        ...     print("Reachy Mini audio configuration is properly set up")
-        ... else:
-        ...     print("Need to configure Reachy Mini audio devices")
-        ...     write_asoundrc_to_home()  # Create the configuration
+        ```python
+        if has_reachymini_asoundrc():
+            print("Reachy Mini audio configuration is properly set up")
+        else:
+            print("Need to configure Reachy Mini audio devices")
+            write_asoundrc_to_home()  # Create the configuration
+        ```
 
     """
     asoundrc_path = Path.home().joinpath(".asoundrc")

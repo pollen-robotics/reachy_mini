@@ -1,0 +1,22 @@
+name: Build HF documentation
+
+on:
+  workflow_dispatch:
+
+  push:
+    branches:
+      - main
+    paths:
+      - "docs/**"
+      - "examples/**"
+
+jobs:
+  build:
+    uses: huggingface/doc-builder/.github/workflows/build_main_documentation.yml@main
+    with:
+      repo_owner: pollen-robotics
+      commit_sha: ${{ github.sha }}
+      package: reachy_mini
+    secrets:
+      token: ${{ secrets.HUGGINGFACE_PUSH }}
+      hf_token: ${{ secrets.HF_DOC_BUILD_PUSH }}
