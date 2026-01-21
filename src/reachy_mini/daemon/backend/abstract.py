@@ -31,6 +31,7 @@ if typing.TYPE_CHECKING:
     from reachy_mini.kinematics import AnyKinematics
 from reachy_mini.media.media_manager import MediaBackend, MediaManager
 from reachy_mini.motion.goto import GotoMove
+from reachy_mini.motion.hooks import load_hooks, notify_end, notify_start
 from reachy_mini.motion.move import Move
 from reachy_mini.utils.constants import MODELS_ROOT_PATH, URDF_ROOT_PATH
 from reachy_mini.utils.interpolation import (
@@ -187,6 +188,9 @@ class Backend:
         self._active_move_depth = (
             0  # Tracks nested acquisitions within the owning thread
         )
+
+        # Load motion hooks for plugins (e.g., LED control, logging)
+        load_hooks()
 
     # Life cycle methods
     def wrapped_run(self) -> None:
@@ -406,6 +410,13 @@ class Backend:
             self.logger.warning("Ignoring play_move request: another move is running.")
             return
 
+        # Extract metadata from move for hooks
+        move_name = getattr(move, "description", None)
+        dataset = getattr(move, "dataset_name", None)
+
+        # Notify hooks that move is starting
+        notify_start(move_name, dataset)
+
         try:
             if initial_goto_duration > 0.0:
                 start_head_pose, start_antennas_positions, start_body_yaw = (
@@ -444,6 +455,8 @@ class Backend:
                 # release audio resources after playing the move sound
                 self.audio.stop_playing()
             self._end_move()
+            # Notify hooks that move has ended
+            notify_end(move_name, dataset)
 
     async def goto_target(
         self,

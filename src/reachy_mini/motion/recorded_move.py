@@ -70,10 +70,23 @@ def lerp(v0: float, v1: float, alpha: float) -> float:
 class RecordedMove(Move):
     """Represent a recorded move."""
 
-    def __init__(self, move: Dict[str, Any], sound_path: Optional[Path] = None) -> None:
-        """Initialize RecordedMove."""
+    def __init__(
+        self,
+        move: Dict[str, Any],
+        sound_path: Optional[Path] = None,
+        dataset_name: Optional[str] = None,
+    ) -> None:
+        """Initialize RecordedMove.
+
+        Args:
+            move: Dictionary containing the move data.
+            sound_path: Optional path to the sound file associated with the move.
+            dataset_name: Optional HuggingFace dataset name the move comes from (for hooks).
+
+        """
         self.move = move
         self._sound_path = sound_path
+        self.dataset_name = dataset_name
 
         self.description: str = self.move["description"]
         self.timestamps: List[float] = self.move["time"]
@@ -213,7 +226,11 @@ class RecordedMoves:
                 f"Move {move_name} not found in recorded moves library {self.hf_dataset_name}"
             )
 
-        return RecordedMove(self.moves[move_name], self.sounds[move_name])
+        return RecordedMove(
+            self.moves[move_name],
+            self.sounds[move_name],
+            dataset_name=self.hf_dataset_name,
+        )
 
     def list_moves(self) -> List[str]:
         """List all moves in the loaded library."""
