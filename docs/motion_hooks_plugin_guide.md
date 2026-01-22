@@ -97,7 +97,7 @@ Here's a complete example of a plugin that controls LED eye colors based on emot
 
 ### Project Structure
 
-```
+```text
 reachy_mini_led_eyes/
 ├── pyproject.toml
 └── src/
@@ -236,12 +236,14 @@ my_plugin_name = "my_package.module:MyHookClass"
 ## Best Practices
 
 1. **Defensive Programming**: Your hook may receive `None` values. Always check:
+
    ```python
    if dataset and "emotions" in dataset.lower():
        # Process emotion
    ```
 
 2. **Error Handling**: Wrap risky operations in try/except. Errors are logged but won't crash reachy_mini:
+
    ```python
    def on_move_start(self, move_name, dataset):
        try:
@@ -253,12 +255,14 @@ my_plugin_name = "my_package.module:MyHookClass"
 3. **Performance**: Keep hooks fast. They run on the main thread before/after move playback.
 
 4. **Resource Management**: Clean up resources in `__del__` if needed:
+
    ```python
    def __del__(self):
        self.cleanup_hardware()
    ```
 
 5. **Logging**: Use the standard `logging` module for debugging:
+
    ```python
    import logging
    logger = logging.getLogger(__name__)
@@ -270,6 +274,7 @@ my_plugin_name = "my_package.module:MyHookClass"
 ### Hook Not Loading
 
 Check that:
+
 1. Entry point is correctly registered in `pyproject.toml`
 2. Package is installed: `pip list | grep my-plugin`
 3. Check logs: `import logging; logging.basicConfig(level=logging.INFO)`
@@ -293,6 +298,7 @@ class MyHook:
 ## Contributing
 
 If you create a useful plugin, consider:
+
 - Sharing it on PyPI for others to use
 - Opening a GitHub discussion to showcase your plugin
 - Contributing to the reachy_mini community
