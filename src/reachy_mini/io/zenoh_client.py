@@ -29,13 +29,15 @@ class ZenohClient(AbstractClient):
 
         Args:
             prefix: The Zenoh prefix to use for communication (used to identify multiple robots).
-            localhost_only: If True, connect to localhost only.
-            host_addr: If specified, connect to this host only.
+            localhost_only: If True or None with no host_addr, connect to localhost only.
+            host_addr: If specified, connect to this host only. If None and localhost_only is False, connect to the first robot found on the network.   
 
         """
         self.prefix = prefix
         
-        if localhost_only and host_addr and host_addr not in ["localhost", "127.0.0.1"]:
+        if localhost_only is None and host_addr is None:
+            localhost_only = True # Preserve old behavior when called with only prefix
+        elif localhost_only and host_addr and host_addr not in ["localhost", "127.0.0.1"]:
             raise ValueError("host_addr must be 'localhost' or '127.0.0.1' when localhost_only is True.")
                     
         if host_addr:
