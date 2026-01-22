@@ -48,6 +48,7 @@ The PIN is the **last 5 digits** of the robot's serial number. For example if th
 | CMD_HOTSPOT            | 434D445F484F5453504F54            |
 | CMD_RESTART_DAEMON     | 434D445F524553544152545F4441454D4F4E |
 | CMD_SOFTWARE_RESET     | 434D445F534F4654574152455F5245534554 |
+| NETWORK_STATUS         |                                     |
 
 Note: If you use the software reset command, the robot will reboot and you will need to wait about 5min for it to be available again.
 
