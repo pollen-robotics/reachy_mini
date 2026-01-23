@@ -280,7 +280,20 @@ def check(console: Console, app_path: str) -> None:
             sys.exit(1)
 
     entrypoint_name = app_name
-    pkg_name = app_name.replace("-", "_")
+
+    # Extract pkg_name from entry point (allows package name != project name)
+    entry_points = (
+        pyproject_content.get("project", {})
+        .get("entry-points", {})
+        .get("reachy_mini_apps", {})
+    )
+    app_name_normalized = app_name.replace("-", "_")
+    ep_value = entry_points.get(app_name) or entry_points.get(app_name_normalized)
+    if ep_value and ":" in ep_value:
+        pkg_name = ep_value.split(":")[0].split(".")[0]
+    else:
+        pkg_name = app_name.replace("-", "_")  # fallback to old behavior
+
     class_name = "".join(word.capitalize() for word in pkg_name.split("_"))
 
     console.print(f"\tExpected package name: {pkg_name}", style="dim")
@@ -352,9 +365,6 @@ def check(console: Console, app_path: str) -> None:
     # - <app_name>/main.py contains a class named <AppName> that inherits from ReachyMiniApp
     with open(main_file, "r") as f:
         main_content = f.read()
-    class_name = "".join(
-        word.capitalize() for word in app_name.replace("-", "_").split("_")
-    )
     if f"class {class_name}(ReachyMiniApp)" not in str(main_content):
         console.print(
             f"❌ main.py is missing the class {class_name} that inherits from ReachyMiniApp",
