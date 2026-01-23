@@ -547,7 +547,7 @@ move = mini.stop_recording()
 ```
 
 **Replaying:**
-Use the `RecordedMoves` class to load moves from the [Hugging Face library](https://huggingface.co/pollen-robotics/reachy-mini-dances-library).
+Use the `RecordedMoves` class to load moves from the [Hugging Face library](https://github.com/pollen-robotics/reachy_mini_dances_library).
 
 ```python
 mini.play_move(recorded_moves.get("dance_1"))
