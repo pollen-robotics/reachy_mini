@@ -4,7 +4,7 @@ Welcome to the Reachy Mini support page. Click on the questions below to reveal 
 
 ## 🛠️ Troubleshooting - Batch December 2025
 
-### Essential troubleshooting - Please read this first, it solves all well-known issues!
+**Essential troubleshooting - Please read this first, it solves all well-known issues!**
 
 
 <details><summary><strong>Before anything else and for any issue: update & restart</strong></summary>
