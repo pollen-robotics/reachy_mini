@@ -299,12 +299,16 @@ def check(console: Console, app_path: str) -> None:
         sys.exit(1)
     console.print("✅ index.html and style.css exist in the root of the app.")
 
-    # - pkg_name and pkg_name/__init__.py exists
-    if not os.path.exists(os.path.join(abs_app_path, pkg_name)) or not os.path.exists(
-        os.path.join(abs_app_path, pkg_name, "__init__.py")
-    ):
-        console.print(f"❌ Package folder '{pkg_name}' is missing", style="bold red")
-        sys.exit(1)
+    # Check both flat and src layout
+    pkg_path = abs_app_path / pkg_name
+    if not (pkg_path / "__init__.py").exists():
+        pkg_path = abs_app_path / "src" / pkg_name
+        if not (pkg_path / "__init__.py").exists():
+            console.print(f"❌ Package folder '{pkg_name}' not found", style="bold red")
+            console.print(f"   Checked: {abs_app_path / pkg_name}/", style="dim")
+            console.print(f"   Checked: {abs_app_path / 'src' / pkg_name}/", style="dim")
+            sys.exit(1)
+    console.print(f"✅ Package '{pkg_name}' found at {pkg_path.relative_to(abs_app_path)}/")
 
     if "entry-points" not in pyproject_content["project"]:
         console.print(
@@ -337,21 +341,13 @@ def check(console: Console, app_path: str) -> None:
         )
         sys.exit(1)
 
-    # - <app_name>/__init__.py exists
-    pkg_path = Path(abs_app_path) / pkg_name
-    init_file = pkg_path / "__init__.py"
 
-    if not init_file.exists():
-        console.print("❌ __init__.py is missing", style="bold red")
-        sys.exit(1)
-
-    console.print(f"✅ {app_name}/__init__.py exists.")
-
+    # - main.py exists
     main_file = pkg_path / "main.py"
     if not main_file.exists():
         console.print("❌ main.py is missing", style="bold red")
         sys.exit(1)
-    console.print(f"✅ {app_name}/main.py exists.")
+    console.print(f"✅ {pkg_path.relative_to(abs_app_path)}/main.py exists.")
 
     # - <app_name>/main.py contains a class named <AppName> that inherits from ReachyMiniApp
     with open(main_file, "r") as f:
