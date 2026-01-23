@@ -12,6 +12,12 @@ from reachy_mini.apps import AppInfo, SourceKind
 from reachy_mini.apps.manager import AppManager, AppStatus
 from reachy_mini.daemon.app import bg_job_register
 from reachy_mini.daemon.app.dependencies import get_app_manager
+from reachy_mini.daemon.config import (
+    AutostartConfig,
+    DaemonConfig,
+    load_daemon_config,
+    save_daemon_config,
+)
 
 router = APIRouter(prefix="/apps")
 
@@ -31,6 +37,64 @@ async def list_all_available_apps(
 ) -> list[AppInfo]:
     """List all available apps (including not installed)."""
     return await app_manager.list_all_available_apps()
+
+
+class AutostartRequest(BaseModel):
+    """Request model for setting autostart configuration."""
+
+    enabled: bool
+    app_name: str | None = None
+
+
+class AutostartResponse(BaseModel):
+    """Response model for autostart configuration."""
+
+    enabled: bool
+    app_name: str | None = None
+
+
+@router.get("/autostart")
+async def get_autostart_config() -> AutostartResponse:
+    """Get the current autostart configuration."""
+    config = load_daemon_config()
+    return AutostartResponse(
+        enabled=config.autostart.enabled,
+        app_name=config.autostart.app_name,
+    )
+
+
+@router.post("/autostart")
+async def set_autostart_config(
+    request: AutostartRequest,
+    app_manager: "AppManager" = Depends(get_app_manager),
+) -> AutostartResponse:
+    """Set the autostart configuration.
+
+    Validates that the specified app is installed before saving.
+    """
+    if request.enabled and request.app_name:
+        # Verify the app is installed
+        installed_apps = await app_manager.list_available_apps(SourceKind.INSTALLED)
+        installed_names = {app.name for app in installed_apps}
+
+        if request.app_name not in installed_names:
+            raise HTTPException(
+                status_code=404,
+                detail=f"App '{request.app_name}' is not installed",
+            )
+
+    config = DaemonConfig(
+        autostart=AutostartConfig(
+            enabled=request.enabled,
+            app_name=request.app_name if request.enabled else None,
+        )
+    )
+    save_daemon_config(config)
+
+    return AutostartResponse(
+        enabled=config.autostart.enabled,
+        app_name=config.autostart.app_name,
+    )
 
 
 @router.post("/install")
