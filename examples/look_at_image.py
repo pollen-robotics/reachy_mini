@@ -7,6 +7,8 @@ look_at_image method to make the robot look at the specified point.
 Note: The daemon must be running before executing this script.
 """
 
+# START doc_example
+
 import argparse
 
 import cv2
@@ -74,3 +76,5 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     main(backend=args.backend)
+
+# END doc_example

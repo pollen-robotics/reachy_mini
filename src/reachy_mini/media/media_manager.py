@@ -7,31 +7,6 @@ devices with support for multiple backends. It simplifies the process of
 initializing, configuring, and using media devices across different
 platforms and use cases.
 
-Available backends:
-- NO_MEDIA: No media devices (useful for headless operation)
-- DEFAULT: OpenCV + SoundDevice (cross-platform default)
-- DEFAULT_NO_VIDEO: SoundDevice only (audio without video)
-- GSTREAMER: GStreamer-based media (advanced features)
-- GSTREAMER_NO_VIDEO: GStreamer audio only
-- WEBRTC: WebRTC-based media for real-time communication
-
-Example usage:
-    >>> from reachy_mini.media.media_manager import MediaManager, MediaBackend
-    >>>
-    >>> # Initialize with default backend
-    >>> media = MediaManager(backend=MediaBackend.DEFAULT)
-    >>>
-    >>> # Capture a frame
-    >>> frame = media.get_frame()
-    >>> if frame is not None:
-    ...     cv2.imshow("Frame", frame)
-    ...     cv2.waitKey(1)
-    >>>
-    >>> # Play a sound
-    >>> media.play_sound("/path/to/sound.wav")
-    >>>
-    >>> # Clean up
-    >>> media.close()
 """
 
 import logging
@@ -65,6 +40,17 @@ class MediaBackend(Enum):
                            without video.
         WEBRTC: WebRTC-based media backend for real-time communication and
                streaming applications.
+
+    Example:
+        ```python
+        from reachy_mini.media.media_manager import MediaBackend
+
+        # Select the appropriate backend for your use case
+        backend = MediaBackend.DEFAULT  # Cross-platform default
+        # backend = MediaBackend.GSTREAMER  # Advanced features on Linux
+        # backend = MediaBackend.WEBRTC  # Real-time streaming
+        # backend = MediaBackend.NO_MEDIA  # Headless operation
+        ```
 
     """
 
@@ -115,9 +101,33 @@ class MediaManager:
             The constructor initializes the selected media backend and sets up
             the appropriate camera and audio devices based on the backend choice.
 
-        Example:
-            >>> media = MediaManager(backend=MediaBackend.DEFAULT)
-            >>> media = MediaManager(backend=MediaBackend.GSTREAMER, log_level="DEBUG")
+        Available backends:
+            - NO_MEDIA: No media devices (useful for headless operation)
+            - DEFAULT: OpenCV + SoundDevice (cross-platform default)
+            - DEFAULT_NO_VIDEO: SoundDevice only (audio without video)
+            - GSTREAMER: GStreamer-based media (advanced features)
+            - GSTREAMER_NO_VIDEO: GStreamer audio only
+            - WEBRTC: WebRTC-based media for real-time communication
+
+        Example usage:
+            ```python
+            from reachy_mini.media.media_manager import MediaManager, MediaBackend
+
+            # Initialize with default backend
+            media = MediaManager(backend=MediaBackend.DEFAULT)
+
+            # Capture a frame
+            frame = media.get_frame()
+            if frame is not None:
+                cv2.imshow("Frame", frame)
+                cv2.waitKey(1)
+
+            # Play a sound
+            media.play_sound("/path/to/sound.wav")
+
+            # Clean up
+            media.close()
+            ```
 
         """
         self.logger = logging.getLogger(__name__)
@@ -163,12 +173,14 @@ class MediaManager:
             recommended to create a new MediaManager instance if needed.
 
         Example:
-            >>> media = MediaManager()
-            >>> try:
-            ...     # Use media devices
-            ...     frame = media.get_frame()
-            ... finally:
-            ...     media.close()
+            ```python
+            media = MediaManager()
+            try:
+                # Use media devices
+                frame = media.get_frame()
+            finally:
+                media.close()
+            ```
 
         """
         if self.camera is not None:
@@ -225,14 +237,16 @@ class MediaManager:
             before using the frame.
 
         Example:
-            >>> frame = media.get_frame()
-            >>> if frame is not None:
-            ...     # Process the frame
-            ...     cv2.imshow("Camera", frame)
-            ...     cv2.waitKey(1)
-            ...
-            ...     # Convert to RGB if needed
-            ...     rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            ```python
+            frame = media.get_frame()
+            if frame is not None:
+                # Process the frame
+                cv2.imshow("Camera", frame)
+                cv2.waitKey(1)
+
+                # Convert to RGB if needed
+                rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            ```
 
         """
         if self.camera is None:

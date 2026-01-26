@@ -86,8 +86,10 @@ class CameraBase(ABC):
             RuntimeError: If camera resolution has not been set.
 
         Example:
-            >>> width, height = camera.resolution
-            >>> print(f"Camera resolution: {width}x{height}")
+            ```python
+            width, height = camera.resolution
+            print(f"Camera resolution: {width}x{height}")
+            ```
 
         """
         if self._resolution is None:
@@ -105,8 +107,10 @@ class CameraBase(ABC):
             RuntimeError: If camera resolution has not been set.
 
         Example:
-            >>> fps = camera.framerate
-            >>> print(f"Camera frame rate: {fps} fps")
+            ```python
+            fps = camera.framerate
+            print(f"Camera frame rate: {fps} fps")
+            ```
 
         """
         if self._resolution is None:
@@ -133,10 +137,12 @@ class CameraBase(ABC):
             camera resolution when set_resolution() is called.
 
         Example:
-            >>> K = camera.K
-            >>> if K is not None:
-            ...     fx, fy = K[0, 0], K[1, 1]
-            ...     cx, cy = K[0, 2], K[1, 2]
+            ```python
+            K = camera.K
+            if K is not None:
+                fx, fy = K[0, 0], K[1, 1]
+                cx, cy = K[0, 2], K[1, 2]
+            ```
 
         """
         return self.resized_K
@@ -155,9 +161,11 @@ class CameraBase(ABC):
             functions to undistort captured images.
 
         Example:
-            >>> D = camera.D
-            >>> if D is not None:
-            ...     print(f"Distortion coefficients: {D}")
+            ```python
+            D = camera.D
+            if D is not None:
+                print(f"Distortion coefficients: {D}")
+            ```
 
         """
         if self.camera_specs is not None:
@@ -183,8 +191,10 @@ class CameraBase(ABC):
             position relative to the image dimensions.
 
         Example:
-            >>> from reachy_mini.media.camera_constants import CameraResolution
-            >>> camera.set_resolution(CameraResolution.R1280x720at30fps)
+            ```python
+            from reachy_mini.media.camera_constants import CameraResolution
+            camera.set_resolution(CameraResolution.R1280x720at30fps)
+            ```
 
         """
         if self.camera_specs is None:
@@ -248,11 +258,13 @@ class CameraBase(ABC):
             The image resolution can be obtained via the resolution property.
 
         Example:
-            >>> camera.open()
-            >>> frame = camera.read()
-            >>> if frame is not None:
-            ...     cv2.imshow("Camera Frame", frame)
-            ...     cv2.waitKey(1)
+            ```python
+            camera.open()
+            frame = camera.read()
+            if frame is not None:
+                cv2.imshow("Camera Frame", frame)
+                cv2.waitKey(1)
+            ```
 
         """
         pass

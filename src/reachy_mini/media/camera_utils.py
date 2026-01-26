@@ -74,17 +74,19 @@ def find_camera(
         Reachy Mini and Raspberry Pi cameras to ensure compatibility.
 
     Example:
-        >>> cap, specs = find_camera()
-        >>> if cap is not None:
-        ...     print(f"Found {specs.name} camera")
-        ...     # Set resolution
-        ...     cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
-        ...     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
-        ...     # Capture a frame
-        ...     ret, frame = cap.read()
-        ...     cap.release()
-        ... else:
-        ...     print("No camera found")
+        ```python
+        cap, specs = find_camera()
+        if cap is not None:
+            print(f"Found {specs.name} camera")
+            # Set resolution
+            cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+            # Capture a frame
+            ret, frame = cap.read()
+            cap.release()
+        else:
+            print("No camera found")
+        ```
 
     """
     cap = find_camera_by_vid_pid(
@@ -151,16 +153,18 @@ def find_camera_by_vid_pid(
         until it finds a working one.
 
     Example:
-        >>> # Find Reachy Mini Lite Camera by its default VID/PID
-        >>> cap = find_camera_by_vid_pid()
-        >>> if cap is not None:
-        ...     print("Found Reachy Mini Lite Camera")
-        ...     cap.release()
-        >>>
-        >>> # Find a specific camera by custom VID/PID
-        >>> cap = find_camera_by_vid_pid(vid=0x0C45, pid=0x636D)  # Arducam
-        >>> if cap is not None:
-        ...     print("Found Arducam")
+        ```python
+        # Find Reachy Mini Lite Camera by its default VID/PID
+        cap = find_camera_by_vid_pid()
+        if cap is not None:
+            print("Found Reachy Mini Lite Camera")
+            cap.release()
+
+        # Find a specific camera by custom VID/PID
+        cap = find_camera_by_vid_pid(vid=0x0C45, pid=0x636D)  # Arducam
+        if cap is not None:
+            print("Found Arducam")
+        ```
         ...     cap.release()
 
     """

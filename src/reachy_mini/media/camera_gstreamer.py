@@ -186,11 +186,17 @@ class GStreamerCamera(CameraBase):
         )
         self._appsink_video.set_property("caps", caps_video)
 
+    def _dump_latency(self) -> None:
+        query = Gst.Query.new_latency()
+        self.pipeline.query(query)
+        self.logger.info(f"Pipeline latency {query.parse_latency()}")
+
     def open(self) -> None:
         """Open the camera using GStreamer."""
         self.pipeline.set_state(Gst.State.PLAYING)
         self._thread_bus_calls = Thread(target=self._handle_bus_calls, daemon=True)
         self._thread_bus_calls.start()
+        GLib.timeout_add_seconds(5, self._dump_latency)
 
     def _get_sample(self, appsink: GstApp.AppSink) -> Optional[bytes]:
         sample = appsink.try_pull_sample(20_000_000)

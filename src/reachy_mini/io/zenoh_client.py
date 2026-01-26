@@ -251,7 +251,7 @@ class ZenohClient(AbstractClient):
     def get_current_head_pose(self) -> npt.NDArray[np.float64]:
         """Get the current head pose."""
         assert self._last_head_pose is not None, "No head pose received yet."
-        return self._last_head_pose.copy()
+        return self._last_head_pose.copy()  # type: ignore[no-any-return]
 
     def send_task_request(self, task_req: AnyTaskRequest) -> UUID:
         """Send a task request to the server."""

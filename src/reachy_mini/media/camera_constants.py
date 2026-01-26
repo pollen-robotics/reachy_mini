@@ -60,18 +60,20 @@ class CameraResolution(Enum):
         camera specifications for available resolutions.
 
     Example:
-        >>> from reachy_mini.media.camera_constants import CameraResolution
-        >>>
-        >>> # Get resolution information
-        >>> res = CameraResolution.R1280x720at30fps
-        >>> width, height, fps = res.value
-        >>> print(f"Resolution: {width}x{height}@{fps}fps")
-        >>>
-        >>> # Check if a resolution is supported by a camera
-        >>> from reachy_mini.media.camera_constants import ReachyMiniLiteCamSpecs
-        >>> res = CameraResolution.R1920x1080at60fps
-        >>> if res in ReachyMiniLiteCamSpecs.available_resolutions:
-        ...     print("This resolution is supported")
+        ```python
+        from reachy_mini.media.camera_constants import CameraResolution
+
+        # Get resolution information
+        res = CameraResolution.R1280x720at30fps
+        width, height, fps = res.value
+        print(f"Resolution: {width}x{height}@{fps}fps")
+
+        # Check if a resolution is supported by a camera
+        from reachy_mini.media.camera_constants import ReachyMiniLiteCamSpecs
+        res = CameraResolution.R1920x1080at60fps
+        if res in ReachyMiniLiteCamSpecs.available_resolutions:
+            print("This resolution is supported")
+        ```
 
     """
 
@@ -131,18 +133,20 @@ class CameraSpecs:
         point coordinates (typically near the image center).
 
     Example:
-        >>> from reachy_mini.media.camera_constants import CameraSpecs
-        >>>
-        >>> # Create a custom camera specification
-        >>> custom_specs = CameraSpecs(
-        ...     name="custom_camera",
-        ...     available_resolutions=[CameraResolution.R1280x720at30fps],
-        ...     default_resolution=CameraResolution.R1280x720at30fps,
-        ...     vid=0x1234,
-        ...     pid=0x5678,
-        ...     K=np.array([[800, 0, 640], [0, 800, 360], [0, 0, 1]]),
-        ...     D=np.zeros(5)
-        ... )
+        ```python
+        from reachy_mini.media.camera_constants import CameraSpecs
+
+        # Create a custom camera specification
+        custom_specs = CameraSpecs(
+            name="custom_camera",
+            available_resolutions=[CameraResolution.R1280x720at30fps],
+            default_resolution=CameraResolution.R1280x720at30fps,
+            vid=0x1234,
+            pid=0x5678,
+            K=np.array([[800, 0, 640], [0, 800, 360], [0, 0, 1]]),
+            D=np.zeros(5)
+        )
+        ```
 
     """
 

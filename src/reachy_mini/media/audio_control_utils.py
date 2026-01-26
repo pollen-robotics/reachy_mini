@@ -290,7 +290,7 @@ class ReSpeaker:
                 raise ValueError("Unknown status code: {}".format(response[0]))
             time.sleep(0.01)
 
-        logging.info(
+        logging.debug(
             "ReadCMD: cmdid: {}, resid: {}, response: {}".format(
                 wvalue, windex, response
             )
@@ -336,16 +336,18 @@ def find(vid: int = 0x2886, pid: int = 0x001A) -> ReSpeaker | None:
         XMOS XVF3800 devices used in ReSpeaker microphone arrays.
 
     Example:
-        >>> from reachy_mini.media.audio_control_utils import find
-        >>>
-        >>> # Find default ReSpeaker device
-        >>> respeaker = find()
-        >>> if respeaker is not None:
-        ...     print("Found ReSpeaker device")
-        ...     respeaker.close()
-        >>>
-        >>> # Find specific device
-        >>> custom_device = find(vid=0x1234, pid=0x5678)
+        ```python
+        from reachy_mini.media.audio_control_utils import find
+
+        # Find default ReSpeaker device
+        respeaker = find()
+        if respeaker is not None:
+            print("Found ReSpeaker device")
+            respeaker.close()
+
+        # Find specific device
+        custom_device = find(vid=0x1234, pid=0x5678)
+        ```
 
     """
     dev = usb.core.find(idVendor=vid, idProduct=pid, backend=get_libusb1_backend())
@@ -372,17 +374,19 @@ def init_respeaker_usb() -> Optional[ReSpeaker]:
         None if no compatible device is found or if initialization fails.
 
     Example:
-        >>> from reachy_mini.media.audio_control_utils import init_respeaker_usb
-        >>>
-        >>> # Initialize ReSpeaker device
-        >>> respeaker = init_respeaker_usb()
-        >>> if respeaker is not None:
-        ...     print("ReSpeaker initialized successfully")
-        ...     # Use the device...
-        ...     doa = respeaker.read("DOA_VALUE_RADIANS")
-        ...     respeaker.close()
-        ... else:
-        ...     print("No ReSpeaker device found")
+        ```python
+        from reachy_mini.media.audio_control_utils import init_respeaker_usb
+
+        # Initialize ReSpeaker device
+        respeaker = init_respeaker_usb()
+        if respeaker is not None:
+            print("ReSpeaker initialized successfully")
+            # Use the device...
+            doa = respeaker.read("DOA_VALUE_RADIANS")
+            respeaker.close()
+        else:
+            print("No ReSpeaker device found")
+        ```
 
     """
     try:

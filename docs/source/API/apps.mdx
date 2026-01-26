@@ -1,0 +1,79 @@
+# Apps
+
+## Core App Classes
+
+[[autodoc]] reachy_mini.apps.app.ReachyMiniApp
+
+[[autodoc]] reachy_mini.apps.manager.AppManager
+
+## App Management
+
+[[autodoc]] reachy_mini.apps.manager.AppState
+
+[[autodoc]] reachy_mini.apps.manager.AppStatus
+
+[[autodoc]] reachy_mini.apps.manager.RunningApp
+
+## App Information
+
+[[autodoc]] reachy_mini.apps.AppInfo
+
+[[autodoc]] reachy_mini.apps.SourceKind
+
+## App Assistant
+
+### Assistant Functions
+
+[[autodoc]] reachy_mini.apps.assistant.validate_app_name
+
+[[autodoc]] reachy_mini.apps.assistant.is_git_repo
+
+[[autodoc]] reachy_mini.apps.assistant.validate_location
+
+[[autodoc]] reachy_mini.apps.assistant.validate_location_and_git_repo
+
+[[autodoc]] reachy_mini.apps.assistant.create_cli
+
+[[autodoc]] reachy_mini.apps.assistant.create
+
+[[autodoc]] reachy_mini.apps.assistant.install_app_with_progress
+
+[[autodoc]] reachy_mini.apps.assistant.check
+
+<!-- [[autodoc]] reachy_mini.apps.assistant.parse_readme -->
+
+[[autodoc]] reachy_mini.apps.assistant.request_app_addition
+
+[[autodoc]] reachy_mini.apps.assistant.try_to_push
+
+[[autodoc]] reachy_mini.apps.assistant.publish
+
+## App Sources
+
+[[autodoc]] reachy_mini.apps.sources.hf_auth.save_hf_token
+
+[[autodoc]] reachy_mini.apps.sources.hf_auth.get_hf_token
+
+[[autodoc]] reachy_mini.apps.sources.hf_auth.delete_hf_token
+
+[[autodoc]] reachy_mini.apps.sources.hf_auth.check_token_status
+
+[[autodoc]] reachy_mini.apps.sources.hf_space.list_available_apps
+
+[[autodoc]] reachy_mini.apps.sources.hf_space.list_all_apps
+
+[[autodoc]] reachy_mini.apps.sources.local_common_venv.get_app_site_packages
+
+[[autodoc]] reachy_mini.apps.sources.local_common_venv.get_app_python
+
+[[autodoc]] reachy_mini.apps.sources.local_common_venv.list_available_apps
+
+[[autodoc]] reachy_mini.apps.sources.local_common_venv.install_package
+
+[[autodoc]] reachy_mini.apps.sources.local_common_venv.get_app_module
+
+[[autodoc]] reachy_mini.apps.sources.local_common_venv.uninstall_package
+
+## App Utilities
+
+[[autodoc]] reachy_mini.apps.utils.running_command
