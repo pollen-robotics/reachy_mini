@@ -24,6 +24,7 @@ from reachy_mini.daemon.utils import daemon_check, is_local_camera_available
 from reachy_mini.io.protocol import GotoTaskRequest
 from reachy_mini.io.zenoh_client import ZenohClient
 from reachy_mini.media.media_manager import MediaBackend, MediaManager
+from reachy_mini.motion.hooks import load_hooks, notify_end, notify_start
 from reachy_mini.motion.move import Move
 from reachy_mini.utils.interpolation import InterpolationTechnique, minimum_jerk
 
@@ -126,6 +127,9 @@ class ReachyMini:
         )
 
         self.media_manager = self._configure_mediamanager(media_backend, log_level)
+
+        # Load motion hooks for plugins (e.g., LED control, logging)
+        load_hooks()
 
     def __del__(self) -> None:
         """Destroy the Reachy Mini instance.
@@ -887,38 +891,49 @@ class ReachyMini:
             sound (bool): If True, play the sound associated with the move (if any).
 
         """
-        if initial_goto_duration > 0.0:
-            start_head_pose, start_antennas_positions, start_body_yaw = move.evaluate(
-                0.0
-            )
-            self.goto_target(
-                head=start_head_pose,
-                antennas=start_antennas_positions,
-                duration=initial_goto_duration,
-                body_yaw=start_body_yaw,
-            )
+        # Extract metadata from move for hooks
+        move_name = getattr(move, "description", None)
+        dataset = getattr(move, "dataset_name", None)
 
-        sleep_period = 1.0 / play_frequency
+        # Notify hooks that move is starting
+        notify_start(move_name, dataset)
 
-        if move.sound_path is not None and sound:
-            self.media_manager.play_sound(str(move.sound_path))
+        try:
+            if initial_goto_duration > 0.0:
+                start_head_pose, start_antennas_positions, start_body_yaw = move.evaluate(
+                    0.0
+                )
+                self.goto_target(
+                    head=start_head_pose,
+                    antennas=start_antennas_positions,
+                    duration=initial_goto_duration,
+                    body_yaw=start_body_yaw,
+                )
 
-        t0 = time.time()
-        while time.time() - t0 < move.duration:
-            t = min(time.time() - t0, move.duration - 1e-2)
+            sleep_period = 1.0 / play_frequency
 
-            head, antennas, body_yaw = move.evaluate(t)
-            if head is not None:
-                self.set_target_head_pose(head)
-            if body_yaw is not None:
-                self.set_target_body_yaw(body_yaw)
-            if antennas is not None:
-                self.set_target_antenna_joint_positions(list(antennas))
+            if move.sound_path is not None and sound:
+                self.media_manager.play_sound(str(move.sound_path))
 
-            elapsed = time.time() - t0 - t
-            if elapsed < sleep_period:
-                await asyncio.sleep(sleep_period - elapsed)
-            else:
-                await asyncio.sleep(0.001)
+            t0 = time.time()
+            while time.time() - t0 < move.duration:
+                t = min(time.time() - t0, move.duration - 1e-2)
+
+                head, antennas, body_yaw = move.evaluate(t)
+                if head is not None:
+                    self.set_target_head_pose(head)
+                if body_yaw is not None:
+                    self.set_target_body_yaw(body_yaw)
+                if antennas is not None:
+                    self.set_target_antenna_joint_positions(list(antennas))
+
+                elapsed = time.time() - t0 - t
+                if elapsed < sleep_period:
+                    await asyncio.sleep(sleep_period - elapsed)
+                else:
+                    await asyncio.sleep(0.001)
+        finally:
+            # Notify hooks that move has ended
+            notify_end(move_name, dataset)
 
     play_move = async_to_sync(async_play_move)
