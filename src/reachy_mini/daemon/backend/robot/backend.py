@@ -592,6 +592,8 @@ class RobotBackend(Backend):
 
         if on:
             self.c.enable_torque_on_ids(ids_int)
+            # Enable position updates in control loop
+            self._torque_enabled = True
         else:
             self.c.disable_torque_on_ids(ids_int)
 
