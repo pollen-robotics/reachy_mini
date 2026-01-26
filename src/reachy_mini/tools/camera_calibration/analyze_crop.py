@@ -47,11 +47,11 @@ def analyze_image(
     for i, marker_id in enumerate(marker_ids):
         corners = marker_corners[i][0]
         center = corners.mean(axis=0)
-        marker_centers_pixels[int(marker_id[0])] = center
+        marker_centers_pixels[int(marker_id[0])] = center  # type: ignore
         # Normalize to image dimensions
-        marker_centers[int(marker_id[0])] = np.array([float(center[0]) / width, float(center[1]) / height])
+        marker_centers[int(marker_id[0])] = np.array([float(center[0]) / width, float(center[1]) / height])  # type: ignore
 
-    marker_ids_set: Set[int] = set(int(mid[0]) for mid in marker_ids)
+    marker_ids_set: Set[int] = set(int(mid[0]) for mid in marker_ids)  # type: ignore
 
     return {
         "path": image_path,

@@ -107,7 +107,7 @@ def scale_intrinsics(
     K_scaled[0, 2] = cx_scaled
     K_scaled[1, 2] = cy_scaled
 
-    return K_scaled  # type: ignore
+    return K_scaled
 
 
 def generate_scaled_calibrations(calibration_file: str, output_dir: str = '.') -> List[str]:
