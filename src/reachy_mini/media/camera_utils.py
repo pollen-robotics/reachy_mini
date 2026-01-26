@@ -203,7 +203,7 @@ def scale_intrinsics(
         K_scaled: Adjusted camera matrix for target resolution
 
     """
-    K_scaled = K_original.copy()
+    K_scaled: npt.NDArray[np.float64] = K_original.copy()
 
     orig_w, orig_h = original_size
     target_w, target_h = target_size

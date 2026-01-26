@@ -17,43 +17,47 @@ import yaml
 
 # Crop analysis results from analyze_crop_v3.py
 RESOLUTION_MODES = {
-    'R3840x2592at30fps': {
-        'resolution': (3840, 2592),
-        'crop_scale': 1.0,  # Reference - no crop
-        'description': 'Full resolution (reference)'
+    "R3840x2592at30fps": {
+        "resolution": (3840, 2592),
+        "crop_scale": 1.0,  # Reference - no crop
+        "description": "Full resolution (reference)",
     },
-    'R3840x2160at30fps': {
-        'resolution': (3840, 2160),
-        'crop_scale': 1.109,  # Board appears 11% larger -> 11% digital zoom
-        'description': '4K UHD - 11% crop (vertical)'
+    "R3840x2160at30fps": {
+        "resolution": (3840, 2160),
+        "crop_scale": 1.109,  # Board appears 11% larger -> 11% digital zoom
+        "description": "4K UHD - 11% crop (vertical)",
     },
-    'R3264x2448at30fps': {
-        'resolution': (3264, 2448),
-        'crop_scale': 1.115,  # Board appears 11.5% larger
-        'description': '3MP - 11.5% crop (both axes)'
+    "R3264x2448at30fps": {
+        "resolution": (3264, 2448),
+        "crop_scale": 1.115,  # Board appears 11.5% larger
+        "description": "3MP - 11.5% crop (both axes)",
     },
-    'R1920x1080at60fps': {
-        'resolution': (1920, 1080),
-        'crop_scale': 1.115,  # Board appears 11.5% larger
-        'description': 'Full HD 60fps - 11.5% crop (vertical)'
+    "R1920x1080at60fps": {
+        "resolution": (1920, 1080),
+        "crop_scale": 1.115,  # Board appears 11.5% larger
+        "description": "Full HD 60fps - 11.5% crop (vertical)",
     },
 }
 
 
-def load_calibration(yaml_file: str) -> Tuple[npt.NDArray[np.float64], npt.NDArray[np.float64], Tuple[int, int], Dict[str, Any]]:
+def load_calibration(
+    yaml_file: str,
+) -> Tuple[
+    npt.NDArray[np.float64], npt.NDArray[np.float64], Tuple[int, int], Dict[str, Any]
+]:
     """Load calibration parameters from YAML file."""
-    with open(yaml_file, 'r') as f:
+    with open(yaml_file, "r") as f:
         calib: Dict[str, Any] = yaml.safe_load(f)
 
     # Reconstruct camera matrix
-    K = np.array(calib['camera_matrix']['data'], dtype=np.float64).reshape(3, 3)
+    K = np.array(calib["camera_matrix"]["data"], dtype=np.float64).reshape(3, 3)
 
     # Get distortion coefficients
-    dist = np.array(calib['distortion_coefficients']['data'], dtype=np.float64)
+    dist = np.array(calib["distortion_coefficients"]["data"], dtype=np.float64)
 
     # Get original image size
-    width: int = calib['image_size']['width']
-    height: int = calib['image_size']['height']
+    width: int = calib["image_size"]["width"]
+    height: int = calib["image_size"]["height"]
 
     return K, dist, (width, height), calib
 
@@ -76,7 +80,7 @@ def scale_intrinsics(
         K_scaled: Adjusted camera matrix for target resolution
 
     """
-    K_scaled = K_original.copy()
+    K_scaled: npt.NDArray[np.float64] = K_original.copy()
 
     orig_w, orig_h = original_size
     target_w, target_h = target_size
@@ -110,27 +114,31 @@ def scale_intrinsics(
     return K_scaled
 
 
-def generate_scaled_calibrations(calibration_file: str, output_dir: str = '.') -> List[str]:
+def generate_scaled_calibrations(
+    calibration_file: str, output_dir: str = "."
+) -> List[str]:
     """Generate scaled calibration files for all resolution modes."""
     print(f"Loading calibration from {calibration_file}...")
-    K_original, dist_original, original_size, original_calib = load_calibration(calibration_file)
+    K_original, dist_original, original_size, original_calib = load_calibration(
+        calibration_file
+    )
 
     print("\nOriginal calibration:")
     print(f"  Resolution: {original_size[0]}x{original_size[1]}")
-    print(f"  fx={K_original[0,0]:.2f}, fy={K_original[1,1]:.2f}")
-    print(f"  cx={K_original[0,2]:.2f}, cy={K_original[1,2]:.2f}")
+    print(f"  fx={K_original[0, 0]:.2f}, fy={K_original[1, 1]:.2f}")
+    print(f"  cx={K_original[0, 2]:.2f}, cy={K_original[1, 2]:.2f}")
     print(f"  RMS error: {original_calib.get('rms_error', 'N/A')}")
 
-    print(f"\n{'='*70}")
+    print(f"\n{'=' * 70}")
     print("GENERATING SCALED CALIBRATIONS")
-    print(f"{'='*70}\n")
+    print(f"{'=' * 70}\n")
 
     generated_files = []
 
     for mode_name, mode_info in RESOLUTION_MODES.items():
-        target_size = mode_info['resolution']
-        crop_scale = mode_info['crop_scale']
-        description = mode_info['description']
+        target_size = mode_info["resolution"]
+        crop_scale = mode_info["crop_scale"]
+        description = mode_info["description"]
         assert isinstance(target_size, tuple) and len(target_size) == 2
         assert isinstance(crop_scale, float)
         assert isinstance(description, str)
@@ -143,48 +151,45 @@ def generate_scaled_calibrations(calibration_file: str, output_dir: str = '.') -
         K_scaled = scale_intrinsics(K_original, original_size, target_size, crop_scale)
 
         print("  Scaled parameters:")
-        print(f"    fx={K_scaled[0,0]:.2f}, fy={K_scaled[1,1]:.2f}")
-        print(f"    cx={K_scaled[0,2]:.2f}, cy={K_scaled[1,2]:.2f}")
+        print(f"    fx={K_scaled[0, 0]:.2f}, fy={K_scaled[1, 1]:.2f}")
+        print(f"    cx={K_scaled[0, 2]:.2f}, cy={K_scaled[1, 2]:.2f}")
 
         # Create calibration dict for this mode
         scaled_calib = {
-            'calibration_date': original_calib['calibration_date'],
-            'source_calibration': calibration_file,
-            'resolution_mode': mode_name,
-            'description': description,
-            'image_size': {
-                'width': int(target_size[0]),
-                'height': int(target_size[1])
+            "calibration_date": original_calib["calibration_date"],
+            "source_calibration": calibration_file,
+            "resolution_mode": mode_name,
+            "description": description,
+            "image_size": {"width": int(target_size[0]), "height": int(target_size[1])},
+            "camera_matrix": {
+                "rows": 3,
+                "cols": 3,
+                "data": K_scaled.flatten().tolist(),
             },
-            'camera_matrix': {
-                'rows': 3,
-                'cols': 3,
-                'data': K_scaled.flatten().tolist()
+            "distortion_coefficients": {
+                "rows": 1,
+                "cols": len(dist_original),
+                "data": dist_original.tolist(),
             },
-            'distortion_coefficients': {
-                'rows': 1,
-                'cols': len(dist_original),
-                'data': dist_original.tolist()
-            },
-            'distortion_model': original_calib['distortion_model'],
-            'crop_scale': float(crop_scale),
-            'fx': float(K_scaled[0, 0]),
-            'fy': float(K_scaled[1, 1]),
-            'cx': float(K_scaled[0, 2]),
-            'cy': float(K_scaled[1, 2]),
+            "distortion_model": original_calib["distortion_model"],
+            "crop_scale": float(crop_scale),
+            "fx": float(K_scaled[0, 0]),
+            "fy": float(K_scaled[1, 1]),
+            "cx": float(K_scaled[0, 2]),
+            "cy": float(K_scaled[1, 2]),
         }
 
         # Save to file
         output_file = f"{output_dir}/calibration_{mode_name}.yaml"
-        with open(output_file, 'w') as f:
+        with open(output_file, "w") as f:
             yaml.dump(scaled_calib, f, default_flow_style=False, sort_keys=False)
 
         generated_files.append(output_file)
         print(f"  Saved to: {output_file}\n")
 
-    print(f"{'='*70}")
+    print(f"{'=' * 70}")
     print(f"Generated {len(generated_files)} calibration files")
-    print(f"{'='*70}")
+    print(f"{'=' * 70}")
 
     return generated_files
 
@@ -195,23 +200,22 @@ def main() -> None:
         description="Scale camera calibration for different resolution modes"
     )
     parser.add_argument(
-        'calibration_file',
+        "calibration_file",
         type=str,
-        help='Input calibration YAML file (from calibrate.py)'
+        help="Input calibration YAML file (from calibrate.py)",
     )
     parser.add_argument(
-        '--output-dir',
+        "--output-dir",
         type=str,
-        default='.',
-        help='Output directory for scaled calibration files (default: current directory)'
+        default=".",
+        help="Output directory for scaled calibration files (default: current directory)",
     )
 
     args = parser.parse_args()
 
     try:
         generated_files = generate_scaled_calibrations(
-            args.calibration_file,
-            args.output_dir
+            args.calibration_file, args.output_dir
         )
 
         print("\n✓ Success! Generated calibration files:")
@@ -221,6 +225,7 @@ def main() -> None:
     except Exception as e:
         print(f"\n✗ Error: {e}")
         import traceback
+
         traceback.print_exc()
 
 
