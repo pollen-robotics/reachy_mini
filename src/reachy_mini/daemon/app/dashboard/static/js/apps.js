@@ -1,3 +1,126 @@
+const autostartManager = {
+    currentConfig: { enabled: false, app_name: null },
+
+    init: async () => {
+        await autostartManager.loadConfig();
+        autostartManager.setupListeners();
+    },
+
+    loadConfig: async () => {
+        try {
+            const resp = await fetch('/api/apps/autostart');
+            if (resp.ok) {
+                autostartManager.currentConfig = await resp.json();
+                autostartManager.updateUI();
+            }
+        } catch (e) {
+            console.error('Failed to load autostart config:', e);
+        }
+    },
+
+    populateAppList: (apps) => {
+        const select = document.getElementById('autostart-select');
+        if (!select) return;
+
+        // Keep the "None" option, clear others
+        while (select.options.length > 1) {
+            select.remove(1);
+        }
+
+        // Add installed apps
+        apps.forEach(app => {
+            const option = document.createElement('option');
+            option.value = app.name;
+            option.textContent = app.name;
+            select.appendChild(option);
+        });
+
+        // Set current selection
+        if (autostartManager.currentConfig.enabled && autostartManager.currentConfig.app_name) {
+            select.value = autostartManager.currentConfig.app_name;
+        } else {
+            select.value = '';
+        }
+    },
+
+    setupListeners: () => {
+        const saveBtn = document.getElementById('autostart-save');
+        if (saveBtn) {
+            saveBtn.onclick = autostartManager.saveConfig;
+        }
+    },
+
+    saveConfig: async () => {
+        const select = document.getElementById('autostart-select');
+        const saveBtn = document.getElementById('autostart-save');
+        const statusEl = document.getElementById('autostart-status');
+
+        if (!select || !saveBtn) return;
+
+        const appName = select.value || null;
+        const enabled = appName !== null && appName !== '';
+
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Saving...';
+
+        try {
+            const resp = await fetch('/api/apps/autostart', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ enabled, app_name: appName }),
+            });
+
+            if (resp.ok) {
+                autostartManager.currentConfig = await resp.json();
+                autostartManager.updateUI();
+                if (statusEl) {
+                    statusEl.textContent = 'Configuration saved successfully';
+                    statusEl.className = 'mt-2 text-xs text-green-600 dark:text-green-400';
+                    setTimeout(() => autostartManager.updateUI(), 3000);
+                }
+            } else {
+                const error = await resp.json();
+                if (statusEl) {
+                    statusEl.textContent = `Error: ${error.detail || 'Failed to save'}`;
+                    statusEl.className = 'mt-2 text-xs text-red-600 dark:text-red-400';
+                }
+            }
+        } catch (e) {
+            console.error('Failed to save autostart config:', e);
+            if (statusEl) {
+                statusEl.textContent = 'Error: Network error';
+                statusEl.className = 'mt-2 text-xs text-red-600 dark:text-red-400';
+            }
+        } finally {
+            saveBtn.disabled = false;
+            saveBtn.textContent = 'Save';
+        }
+    },
+
+    updateUI: () => {
+        const select = document.getElementById('autostart-select');
+        const statusEl = document.getElementById('autostart-status');
+
+        if (select) {
+            if (autostartManager.currentConfig.enabled && autostartManager.currentConfig.app_name) {
+                select.value = autostartManager.currentConfig.app_name;
+            } else {
+                select.value = '';
+            }
+        }
+
+        if (statusEl) {
+            if (autostartManager.currentConfig.enabled && autostartManager.currentConfig.app_name) {
+                statusEl.textContent = `"${autostartManager.currentConfig.app_name}" will start automatically when the daemon boots`;
+                statusEl.className = 'mt-2 text-xs text-blue-600 dark:text-blue-400';
+            } else {
+                statusEl.textContent = 'No app configured to start on boot';
+                statusEl.className = 'mt-2 text-xs text-gray-500 dark:text-gray-400';
+            }
+        }
+    },
+};
+
 const installedApps = {
     refreshAppList: async () => {
         const appsData = await installedApps.fetchInstalledApps();
@@ -92,6 +215,7 @@ const installedApps = {
 
         if (!appsData || appsData.length === 0) {
             appsListElement.innerHTML = '<li>No installed apps found.</li>';
+            autostartManager.populateAppList([]);
             return;
         }
 
@@ -105,6 +229,9 @@ const installedApps = {
             li.appendChild(installedApps.createAppElement(app, isRunning));
             appsListElement.appendChild(li);
         });
+
+        // Populate autostart dropdown with installed apps
+        autostartManager.populateAppList(appsData);
     },
 
     createAppElement: (app, isRunning) => {
@@ -327,5 +454,6 @@ class ToggleSlider {
 };
 
 window.addEventListener('load', async () => {
+    await autostartManager.init();
     await installedApps.refreshAppList();
 });

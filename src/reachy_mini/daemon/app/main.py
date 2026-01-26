@@ -23,6 +23,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
+from reachy_mini.apps import SourceKind
 from reachy_mini.apps.manager import AppManager
 from reachy_mini.daemon.app.routers import (
     apps,
@@ -35,6 +36,7 @@ from reachy_mini.daemon.app.routers import (
     state,
     volume,
 )
+from reachy_mini.daemon.config import load_daemon_config
 from reachy_mini.daemon.daemon import Daemon
 from reachy_mini.media.audio_utils import (
     check_reachymini_asoundrc,
@@ -142,6 +144,36 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
                 f"Dataset updater started (interval: {args.dataset_update_interval_hours}h)"
             )
 
+        async def start_autostart_app(app_manager: AppManager) -> None:
+            """Start the configured autostart app if enabled."""
+            try:
+                config = load_daemon_config()
+                if not config.autostart.enabled or not config.autostart.app_name:
+                    logging.debug("Autostart not configured or disabled")
+                    return
+
+                app_name = config.autostart.app_name
+
+                # Verify app is installed
+                installed_apps = await app_manager.list_available_apps(
+                    SourceKind.INSTALLED
+                )
+                installed_names = {a.name for a in installed_apps}
+
+                if app_name not in installed_names:
+                    logging.warning(
+                        f"Autostart app '{app_name}' is not installed, skipping autostart"
+                    )
+                    return
+
+                logging.info(f"Auto-starting app: {app_name}")
+                await app_manager.start_app(app_name)
+                logging.info(f"Autostart app '{app_name}' started successfully")
+
+            except Exception as e:
+                logging.error(f"Failed to start autostart app: {e}")
+                # Don't re-raise - daemon should continue running
+
         try:
             if args.autostart:
                 await app.state.daemon.start(
@@ -159,6 +191,9 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
                     localhost_only=localhost_only,
                     hardware_config_filepath=args.hardware_config_filepath,
                 )
+
+                # Start configured autostart app after daemon is fully initialized
+                await start_autostart_app(app.state.app_manager)
 
             yield
         finally:
