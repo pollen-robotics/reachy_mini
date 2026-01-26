@@ -231,23 +231,3 @@ def scale_intrinsics(
     K_scaled[1, 2] = cy_scaled
 
     return K_scaled
-
-
-if __name__ == "__main__":
-    from reachy_mini.media.camera_constants import CameraResolution
-
-    cam, _ = find_camera()
-    if cam is None:
-        exit("Camera not found")
-
-    cam.set(cv2.CAP_PROP_FRAME_WIDTH, CameraResolution.R1280x720at30fps.value[0])
-    cam.set(cv2.CAP_PROP_FRAME_HEIGHT, CameraResolution.R1280x720at30fps.value[1])
-
-    while True:
-        ret, frame = cam.read()
-        if not ret:
-            print("Failed to grab frame")
-            break
-        cv2.imshow("Camera Feed", frame)
-        if cv2.waitKey(1) & 0xFF == ord("q"):
-            break
