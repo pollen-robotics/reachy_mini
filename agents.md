@@ -1,271 +1,91 @@
 # Reachy Mini Development Guide for AI Agents
 
-This guide helps AI agents (Claude, GPT, Copilot, etc.) assist users in developing Reachy Mini applications.
+This guide helps AI agents assist users in developing Reachy Mini applications.
 
 ---
 
-## Agent Behavior: Maximizing App Quality
+## Agent Behavior
 
-Your goal is to help the user create the **best possible app**, not just a working one. This requires understanding the user's intent thoroughly before writing code.
+### Be a Teacher
 
-### Ask Questions First
+Unless the user explicitly requests otherwise:
+- Explain concepts as you go
+- Encourage questions ("Let me know if you'd like more detail on any of this")
+- Guide non-technical users through each step
+- Don't assume prior knowledge
 
-If the user's description of their app idea is incomplete or ambiguous, **do not guess**. Instead:
+### Always Create plan.md Before Coding
 
-1. Create a `plan.md` file in the app directory
-2. Write your technical plan (architecture, components, patterns you'll use)
-3. List questions that need clarification
+Before implementing any app:
+1. Create `plan.md` in the app directory
+2. Write your understanding of what the user wants
+3. List your technical approach
+4. Ask clarifying questions
+5. Wait for answers before coding
 
-Example `plan.md` structure:
+### Check Setup First
 
-```markdown
-# App Plan: [App Name]
-
-## Understanding
-[Your interpretation of what the user wants]
-
-## Technical Approach
-- [ ] Component 1: ...
-- [ ] Component 2: ...
-- [ ] Pattern: control loop / goto_target / etc.
-
-## Questions for User
-1. Should the app have a web UI or be headless (antenna-triggered)?
-2. What should happen when [edge case]?
-3. Do you want face tracking, or just preset positions?
-
+At the start of any session:
 
 ```
-
-### Workflow
-
-1. **Create the app first** using `reachy-mini-app-assistant create app_name /path --publish`
-2. **Add `plan.md`** inside the created app folder with your plan and questions
-3. **User** answers questions in the file or in chat
-4. **You** update the plan, ask follow-up questions if needed
-5. **Repeat** until the plan is clear and complete
-6. **Then** implement
-
-**Never manually create app folders** - always use the assistant to get the proper structure, metadata tags, and git setup.
-
-### Keep plan.md Updated
-
-As you implement the app, update `plan.md` to track:
-- What's done
-- What's in progress
-- Any new questions or decisions that arise
-
-### Test Before Asking the User
-
-Before considering the app done, **test it yourself** to catch early crashes and bugs.
-
-**First, know the user's setup.** If not already recorded in `agents.local.md`, ask:
-
-> "What type of Reachy Mini do you have: **Lite** or **Wireless**?"
-
-Record this in `agents.local.md` for future reference.
-
-**Step 1: Ask the user to prepare the robot**
-
-Ask the user how they want to test:
-
-| Test mode | Lite | Wireless |
-|-----------|------|----------|
-| **Simulation** | Open a new terminal and run: `reachy-mini-daemon --sim` | Open a new terminal and run: `reachy-mini-daemon --sim` |
-| **Physical robot** | Open a new terminal and run: `reachy-mini-daemon` | Turn on the robot and wake it up from the dashboard |
-
-> ⚠️ Make sure no other daemon is already running.
-
-Wait for the user to confirm they're ready.
-
-**Step 2: Run the app**
-
-Run it the same way the dashboard will launch it:
-
-```bash
-cd ~/reachy_mini_apps/my_app
-python my_app/main.py
+IF agents.local.md exists:
+    Read it for user configuration
+    Look for "Setup complete: YES"
+ELSE:
+    → Read skills/setup-environment.md and run setup
 ```
 
-**Step 3: Check for issues**
+### Keep Notes in agents.local.md
 
-- Does it start without crashing?
-- Are there import errors or missing dependencies?
-- Does the control loop run without exceptions?
-
-Fix any issues found, then repeat until the app runs cleanly.
+Use `agents.local.md` to store:
+- User's robot type (Lite/Wireless)
+- Environment preferences
+- Useful context for future sessions
+- Keep it concise
 
 ---
 
-## First-Run Setup
+## Robot Basics
 
-**Before doing anything else:**
+**Reachy Mini** is a small expressive robot:
 
-1. Check if `agents.local.md` exists (search in current directory and `~/reachy_mini_resources/`)
-2. If it exists: Read it for user-specific configuration and skip completed setup steps
-3. If it doesn't exist: Guide the user through setup interactively (see below)
+| Component | Description |
+|-----------|-------------|
+| **Head** | 6 DOF: pitch, roll, yaw + x, y, z (via Stewart platform) |
+| **Body** | Rotation around vertical axis |
+| **Antennas** | 2 motors, also usable as physical buttons |
 
-### Initial Setup Conversation
-
-Before downloading anything, explain to the user:
-
-> "To help you develop Reachy Mini apps effectively, I'll download the official SDK repository and several example apps to a local folder. This gives me access to the source code, documentation, and proven patterns.
->
-> The default location is `~/reachy_mini_resources/`. Would you like to use a different location?"
-
-Once confirmed, proceed with environment setup and cloning.
-
-The user may have limited technical knowledge or a computer not set up for development. Identify missing tools (e.g., git), list them all, explain why each is needed, and ask permission once before installing.
+**Hardware variants:**
+- **Lite**: USB connection to laptop (full compute power)
+- **Wireless**: Onboard CM4, connects via WiFi (limited compute)
 
 ---
 
-## 1. Environment Setup
+## SDK Essentials
 
-### Python Virtual Environment
+### Connection
 
-Ask the user their preference, or use these defaults:
+```python
+from reachy_mini import ReachyMini
 
-**Preferred approach (try first):**
-```bash
-# Using uv (faster, recommended)
-uv venv .venv
-source .venv/bin/activate  # Linux/macOS
-# or: .venv\Scripts\activate  # Windows
-uv pip install reachy-mini
+with ReachyMini() as mini:
+    # Your code here
 ```
 
-**Fallback (if uv not installed):**
-```bash
-python -m venv .venv
-source .venv/bin/activate  # Linux/macOS
-# or: .venv\Scripts\activate  # Windows
-pip install reachy-mini
-```
+### Two Motion Methods
 
-**Note:** If uv is not installed but the user agrees, you can install it (`curl -LsSf https://astral.sh/uv/install.sh | sh` on Linux/macOS or `powershell -c "irm https://astral.sh/uv/install.ps1 | iex"` on Windows).
+| Method | Use when |
+|--------|----------|
+| `goto_target()` | **Default** - smooth interpolation for gestures, choreography |
+| `set_target()` | Real-time control loops (tracking, games) at 50-100Hz |
 
-**Important:** Adapt commands to the user's shell (bash/zsh/fish/PowerShell) and OS.
+### Units
 
-Record the user's preference in `agents.local.md`.
+- **Head orientation**: degrees (with `degrees=True`) or radians
+- **Head position**: mm (with `mm=True`) or meters
+- **Antennas**: always **radians** - use `np.deg2rad()`
 
----
-
-## 2. Clone Local Resources
-
-Create a single folder for all Reachy Mini resources:
-
-```bash
-mkdir -p ~/reachy_mini_resources
-cd ~/reachy_mini_resources
-
-# Main SDK (essential)
-git clone https://github.com/pollen-robotics/reachy_mini
-
-# Example apps
-git clone https://github.com/pollen-robotics/reachy_mini_conversation_app
-git clone https://github.com/pollen-robotics/reachy_mini_dances_library
-git clone https://huggingface.co/spaces/RemiFabre/marionette
-git clone https://huggingface.co/spaces/RemiFabre/fire_nation_attacked
-git clone https://huggingface.co/spaces/apirrone/spaceship_game
-git clone https://huggingface.co/spaces/pollen-robotics/reachy_mini_radio
-git clone https://huggingface.co/spaces/apirrone/reachy_mini_simon
-git clone https://huggingface.co/spaces/pollen-robotics/hand_tracker_v2
-```
-
-**After cloning, create `agents.local.md`** to record paths and avoid repeating setup.
-
-### Key Reference Files
-
-| Purpose | Path |
-|---------|------|
-| SDK API (all methods) | `reachy_mini/src/reachy_mini/reachy_mini.py` |
-| App base class | `reachy_mini/src/reachy_mini/apps/app.py` |
-| **Control loop reference** | `reachy_mini_conversation_app/src/reachy_mini_conversation_app/moves.py` |
-| Safe torque handling | `marionette/marionette/main.py` |
-| Symbolic motion | `reachy_mini_dances_library/src/reachy_mini_dances_library/rhythmic_motion.py` |
-| Recorded moves example | `reachy_mini/examples/recorded_moves_example.py` |
-
----
-
-## 3. Understanding the SDK
-
-### Documentation
-
-**Read the docs from the cloned repo** (`reachy_mini/docs/`).
-
-Start with:
-1. `docs/SDK/quickstart.md`
-2. `docs/SDK/core-concept.md`
-3. `docs/SDK/python-sdk.md`
-
-### When in Doubt
-
-1. **Check docstrings** - All functions in `reachy_mini.py` are well documented
-2. **Read the source code** - It's open source, use it!
-3. **Never invent functions** - Verify they exist before using them
-
-### Providing Feedback
-
-If you find something unclear or missing:
-1. Append to `~/reachy_mini_resources/insights_for_reachy_mini_maintainers.md`
-2. Encourage the user to submit a PR or issue to improve the ecosystem
-
----
-
-## 4. Creating Apps
-
-### App Creation Guide
-
-Full tutorial: https://huggingface.co/blog/pollen-robotics/make-and-publish-your-reachy-mini-apps
-
-### Quick Start
-
-```bash
-# Create and publish immediately (public by default)
-reachy-mini-app-assistant create my_app_name /path/to/create --publish
-```
-
-### Recommended Workflow
-
-1. **Create and publish immediately** with `--publish` to get a Git repo on Hugging Face
-2. **Develop iteratively** using standard git commands (`git add`, `git commit`, `git push`)
-3. **Validate** with `reachy-mini-app-assistant check /path/to/app`
-4. **Request official status** only for high-quality, polished apps
-
-### App Structure
-
-```
-my_app/
-├── index.html              # HuggingFace Space landing page
-├── style.css               # Landing page styles
-├── pyproject.toml          # Package configuration (includes reachy_mini tag!)
-├── README.md               # Must contain reachy_mini tag in YAML frontmatter
-├── .gitignore
-└── my_app/
-    ├── __init__.py
-    ├── main.py             # Your app code (run method)
-    └── static/             # Optional web UI
-        ├── index.html
-        ├── style.css
-        └── main.js
-```
-
----
-
-## 5. Motion Control Philosophy
-
-### Two Methods: When to Use Each
-
-| Method | Behavior | When to Use |
-|--------|----------|-------------|
-| `goto_target()` | Smooth interpolation over duration | **Default choice** - gestures, choreography, transitions |
-| `set_target()` | Immediate, no interpolation | Control loops requiring real-time reactivity |
-
-**Key insight:** `goto_target()` is simpler and ensures smooth motion. Use it when you can. But during the interpolation, you cannot react to external stimuli - the robot commits to completing the movement.
-
-For reactive applications (face tracking, real-time control), you need `set_target()` in a control loop.
-
-### Basic goto_target Usage
+### Basic Example
 
 ```python
 from reachy_mini import ReachyMini
@@ -273,255 +93,40 @@ from reachy_mini.utils import create_head_pose
 
 with ReachyMini() as mini:
     pose = create_head_pose(yaw=30, pitch=10, degrees=True)
-    mini.goto_target(head=pose, duration=1.0, method="minjerk")
+    mini.goto_target(head=pose, duration=1.0)
 ```
+
+### Before Writing Code
+
+Skim through `~/reachy_mini_resources/reachy_mini/src/reachy_mini/reachy_mini.py` to understand available methods. Focus on docstrings - don't read every line.
 
 ---
 
-## 6. Control Loops with set_target
+## REST API
 
-When you need real-time reactivity (face tracking, game input, etc.), you must use `set_target()` in a control loop.
+The daemon also exposes an HTTP/WebSocket API at `http://localhost:8000/api`.
 
-### The Core Rule
+**Use REST API for:** Web UIs, non-Python clients, remote control, AI/LLM integration via HTTP.
 
-**A single control loop that continuously sends targets.** That's it. One place in the code calls `set_target()`, and it runs at a fixed frequency (typically 50-100 Hz).
+**Interactive docs:** `http://localhost:8000/docs` (when daemon is running)
 
-```python
-import time
-from reachy_mini import ReachyMini
-from reachy_mini.utils import create_head_pose
-
-with ReachyMini() as mini:
-    while not stop_event.is_set():
-        # Compute the pose you want (can change every tick!)
-        pose = compute_current_target_pose()
-
-        # Send it
-        mini.set_target(head=pose, antennas=antennas)
-
-        # Sleep to maintain frequency
-        time.sleep(0.01)  # ~100Hz
-```
-
-### Why This Matters
-
-- **Single control point** prevents race conditions and jerky motion
-- **Continuous targets** maintain the "illusion of life" - even when idle, keep sending
-- **Modify the pose, not where you call set_target** - if you need complex behavior, change what pose you're sending, don't add more set_target calls elsewhere
-
-### Advanced Example: moves.py
-
-**Reference:** `reachy_mini_conversation_app/src/reachy_mini_conversation_app/moves.py`
-
-This file demonstrates a sophisticated implementation with:
-
-- **Primary moves** (emotions, dances, goto, breathing) - mutually exclusive, run sequentially
-- **Secondary moves** (face tracking, speech sync) - additive offsets layered on top
-- **Pose fusion** - combining primary pose with secondary offsets
-- **Phase-aligned timing** - uses `time.monotonic()` to measure elapsed time accurately (avoids wall-clock jumps from NTP, sleep, etc.)
-- **Threading model** - dedicated worker thread owns robot output, other threads communicate via queues
-
-The key insight from moves.py docstring:
-```
-- There is a single control point to the robot: `ReachyMini.set_target`.
-- The control loop runs near 100 Hz and is phase-aligned via a monotonic clock.
-```
+See `skills/rest-api.md` for details.
 
 ---
 
-## 7. AI Agent Integration
+## Platform Compatibility
 
-**Reference:** `reachy_mini_conversation_app/`
-
-The conversation app demonstrates how to turn Reachy Mini into an intelligent, autonomous robot by integrating an LLM (OpenAI Realtime API, compatible with Grok and others) that controls the robot through function calls.
-
-### Key Features
-
-- **Real-time conversation** with low-latency audio streaming
-- **LLM tools** that control the robot:
-  - `move_head` - Queue head pose changes
-  - `dance` - Play dances from the library
-  - `play_emotion` - Play recorded emotions
-  - `camera` - Capture and analyze images
-  - `head_tracking` - Enable/disable face tracking
-- **Custom profiles** - Different personalities with different instructions and enabled tools
-- **Vision processing** - Cloud (GPT) or local (SmolVLM2)
-
-### Architecture
-
-The LLM doesn't control motors directly. Instead:
-1. LLM decides to call a tool (e.g., "dance")
-2. Tool implementation queues a move
-3. The control loop (moves.py) executes it smoothly
-
-This separation keeps the control loop clean and ensures smooth motion regardless of LLM latency.
+| Setup | Compute | Camera | Notes |
+|-------|---------|--------|-------|
+| **Lite** | Full (laptop) | Direct USB | Most flexible, best for dev |
+| **Wireless (local)** | Limited (CM4) | Direct | Memory/CPU constrained |
+| **Wireless (streamed)** | Full (laptop) | Via network | Some tracking quality loss |
+| **Simulation** | Full | N/A | Can't test camera features |
 
 ---
 
-## 8. Safe Torque Handling
+## Safety Limits
 
-**Reference:** `marionette/marionette/main.py`
-
-When toggling motor torque (for recording, compliance, etc.), avoid jerky motion:
-
-### Before Disabling Torque
-
-Go to a safe position first (head will fall when torque is off):
-
-```python
-from reachy_mini.reachy_mini import SLEEP_HEAD_POSE
-import numpy as np
-
-# Move to sleep position before disabling
-antenna_angle = np.deg2rad(15)
-reachy_mini.goto_target(
-    SLEEP_HEAD_POSE,
-    antennas=[-antenna_angle, antenna_angle],
-    duration=1.0,
-)
-reachy_mini.disable_motors()
-```
-
-### Before Enabling Torque
-
-Set goal to current position first (prevents jump to old goal):
-
-```python
-def safe_enable_motors(reachy_mini):
-    """Enable motors without jerky motion."""
-    head_pose = reachy_mini.get_current_head_pose()
-    _, antennas = reachy_mini.get_current_joint_positions()
-
-    reachy_mini.goto_target(
-        head=head_pose,
-        antennas=list(antennas) if antennas is not None else None,
-        duration=0.05,
-    )
-    reachy_mini.enable_motors()
-```
-
----
-
-## 9. Platform Compatibility
-
-Apps should work across setups when possible. Advertise limitations clearly.
-
-| Setup | Compute | Latency | Camera | Notes |
-|-------|---------|---------|--------|-------|
-| **Lite** | Full (laptop) | Low | Direct USB | Most flexible, best for development |
-| **Wireless (local)** | Limited (CM4) | Low | Direct | Memory/CPU constrained |
-| **Wireless (streamed)** | Full (laptop) | Higher | Via network | Some tracking quality loss |
-| **Simulation** | Full | Low | N/A | Can't test camera-based tracking |
-
-### Media/Audio
-
-Use the official ReachyMini interfaces (`get_audio_sample`, `push_audio_sample`) instead of manual implementations - this ensures compatibility across setups.
-
-### OS/Browser Compatibility
-
-Aim for:
-- **OS:** Linux, macOS, Windows
-- **Browsers:** Chrome, Firefox, Safari (for web UIs)
-
----
-
-## 10. Interaction Patterns
-
-### Emotions & Expressiveness
-
-Make the robot expressive! Use emotions at:
-- App start (clear cue that something's happening)
-- App end (graceful closure)
-- Key moments during interaction
-
-```python
-from reachy_mini.motion.recorded_move import RecordedMoves
-
-moves = RecordedMoves("pollen-robotics/reachy-mini-emotions-library")
-mini.play_move(moves.get("happy"), initial_goto_duration=1.0)
-```
-
-### Antennas as Buttons
-
-The motors use low P in PID - they're semi-passive and safe to push. Use antennas for physical interaction:
-
-```python
-_, antennas = mini.get_current_joint_positions()
-if abs(antennas[0]) > threshold:  # Left antenna pulled
-    trigger_action()
-```
-
-**Reference:** `reachy_mini_radio` (change station with antennas)
-
-### Head as Controller
-
-The head has 6 DOF - it's a powerful input device for games or recording.
-
-**Reference:** `fire_nation_attacked`, `spaceship_game` (head as joystick), `marionette` (record head motion)
-
-### No-GUI Pattern
-
-For simple apps, use antenna press to start instead of a web UI:
-
-**Reference:** `reachy_mini_simon` (antenna twitch → wait for press → start game)
-
----
-
-## 11. Symbolic Motion Definition
-
-**Reference:** `reachy_mini_dances_library/src/reachy_mini_dances_library/rhythmic_motion.py`
-
-Alternative to recorded moves - define motion as mathematical functions:
-
-### Advantages
-
-- **Flexible:** Easy to tune amplitude, frequency, phase
-- **Memory efficient:** Function vs thousands of data points
-- **LLM-friendly:** Can generate/modify motion code dynamically
-
-### Core Concept
-
-```python
-def simple_nod(t_beats, amplitude_rad=0.2, subcycles_per_beat=1.0):
-    pitch = amplitude_rad * np.sin(2 * np.pi * subcycles_per_beat * t_beats)
-    return MoveOffsets(
-        position_offset=np.zeros(3),
-        orientation_offset=np.array([0, pitch, 0]),
-        antennas_offset=np.zeros(2),
-    )
-
-# In control loop:
-t_beats = time_seconds * bpm / 60.0
-offsets = simple_nod(t_beats, amplitude_rad=0.3)
-```
-
----
-
-## 12. Example Apps Reference
-
-| App | Key Patterns | Source |
-|-----|--------------|--------|
-| **reachy_mini_conversation_app** | AI agent integration, control loop, LLM tools, face tracking, speech sync | [GitHub](https://github.com/pollen-robotics/reachy_mini_conversation_app) |
-| **marionette** | Recording motion, safe torque handling, HF dataset publishing, audio sync | [HF Space](https://huggingface.co/spaces/RemiFabre/marionette) |
-| **fire_nation_attacked** | Head-as-controller, leaderboards via HF dataset, game state | [HF Space](https://huggingface.co/spaces/RemiFabre/fire_nation_attacked) |
-| **spaceship_game** | Head-as-joystick, antenna buttons, sensor streaming | [HF Space](https://huggingface.co/spaces/apirrone/spaceship_game) |
-| **reachy_mini_radio** | Antenna interaction pattern | [HF Space](https://huggingface.co/spaces/pollen-robotics/reachy_mini_radio) |
-| **reachy_mini_simon** | No-GUI pattern (antenna press to start) | [HF Space](https://huggingface.co/spaces/apirrone/reachy_mini_simon) |
-| **hand_tracker_v2** | Camera-based control loop | [HF Space](https://huggingface.co/spaces/pollen-robotics/hand_tracker_v2) |
-| **reachy_mini_dances_library** | Symbolic motion definition | [GitHub](https://github.com/pollen-robotics/reachy_mini_dances_library) |
-
----
-
-## 13. Constants Quick Reference
-
-**Motor Names:**
-```
-body_rotation, stewart_1, stewart_2, stewart_3, stewart_4, stewart_5, stewart_6, right_antenna, left_antenna
-```
-
-**Interpolation Methods:** `linear`, `minjerk` (default), `ease`, `cartoon`
-
-**Safety Limits** (from `docs/SDK/core-concept.md`):
 | Joint | Range |
 |-------|-------|
 | Head pitch/roll | [-40, +40] degrees |
@@ -529,18 +134,64 @@ body_rotation, stewart_1, stewart_2, stewart_3, stewart_4, stewart_5, stewart_6,
 | Body yaw | [-160, +160] degrees |
 | Yaw delta (head - body) | Max 65° difference |
 
-**Note:** Gentle collisions with the body are safe - no need to enforce strict collision avoidance. The SDK clamps values automatically.
-
-**Units:**
-- Head pose: degrees (with `degrees=True`) or radians
-- Head position: mm (with `mm=True`) or meters
-- **Antennas: always radians** - use `np.deg2rad()`
+Gentle collisions with body are safe. SDK clamps values automatically.
 
 ---
 
-## Community Resources
+## Example Apps
 
-- **App creation guide**: https://huggingface.co/blog/pollen-robotics/make-and-publish-your-reachy-mini-apps
+| App | Key Patterns | Source |
+|-----|--------------|--------|
+| **reachy_mini_conversation_app** | AI integration, control loops, LLM tools | [GitHub](https://github.com/pollen-robotics/reachy_mini_conversation_app) |
+| **marionette** | Recording motion, safe torque, HF dataset | [HF Space](https://huggingface.co/spaces/RemiFabre/marionette) |
+| **fire_nation_attacked** | Head-as-controller, leaderboards, games | [HF Space](https://huggingface.co/spaces/RemiFabre/fire_nation_attacked) |
+| **spaceship_game** | Head-as-joystick, antenna buttons | [HF Space](https://huggingface.co/spaces/apirrone/spaceship_game) |
+| **reachy_mini_radio** | Antenna interaction pattern | [HF Space](https://huggingface.co/spaces/pollen-robotics/reachy_mini_radio) |
+| **reachy_mini_simon** | No-GUI pattern (antenna to start) | [HF Space](https://huggingface.co/spaces/apirrone/reachy_mini_simon) |
+| **hand_tracker_v2** | Camera-based control loop | [HF Space](https://huggingface.co/spaces/pollen-robotics/hand_tracker_v2) |
+| **reachy_mini_dances_library** | Symbolic motion definition | [GitHub](https://github.com/pollen-robotics/reachy_mini_dances_library) |
+
+---
+
+## Skills Reference
+
+Read these files in `skills/` when you need detailed knowledge:
+
+| Skill | When to use |
+|-------|-------------|
+| **setup-environment.md** | First session, no `agents.local.md` exists |
+| **create-app.md** | Creating a new app with `reachy-mini-app-assistant` |
+| **control-loops.md** | Building real-time reactive apps (tracking, games) |
+| **motion-philosophy.md** | Choosing between `goto_target` and `set_target` |
+| **safe-torque.md** | Enabling/disabling motors without jerky motion |
+| **ai-integration.md** | Building LLM-powered apps |
+| **symbolic-motion.md** | Defining motion mathematically (dances, rhythms) |
+| **interaction-patterns.md** | Using antennas as buttons, head as controller |
+| **debugging.md** | App crashes, connectivity issues, basic checks |
+| **testing-apps.md** | Testing before delivery (sim vs physical) |
+| **rest-api.md** | HTTP/WebSocket API for non-Python clients |
+| **deep-dive-docs.md** | When to read full SDK documentation |
+
+---
+
+## Quick Reference
+
+**Motor names:** `body_rotation`, `stewart_1-6`, `right_antenna`, `left_antenna`
+
+**Interpolation methods:** `linear`, `minjerk` (default), `ease`, `cartoon`
+
+**Emotions library:**
+```python
+from reachy_mini.motion.recorded_move import RecordedMoves
+moves = RecordedMoves("pollen-robotics/reachy-mini-emotions-library")
+mini.play_move(moves.get("happy"), initial_goto_duration=1.0)
+```
+
+---
+
+## Community
+
+- **App guide**: https://huggingface.co/blog/pollen-robotics/make-and-publish-your-reachy-mini-apps
 - **Source code**: https://github.com/pollen-robotics/reachy_mini
 - **Community apps**: https://huggingface.co/spaces?q=reachy_mini
 - **Discord**: https://discord.gg/Y7FgMqHsub
