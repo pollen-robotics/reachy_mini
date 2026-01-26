@@ -230,4 +230,4 @@ def scale_intrinsics(
     K_scaled[0, 2] = cx_scaled
     K_scaled[1, 2] = cy_scaled
 
-    return K_scaled
+    return K_scaled  # type: ignore
