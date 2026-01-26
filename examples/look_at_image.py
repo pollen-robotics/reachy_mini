@@ -34,6 +34,7 @@ def main(backend: str) -> None:
     print("Click on the image to make ReachyMini look at that point.")
     print("Press 'q' to quit the camera feed.")
     with ReachyMini(media_backend=backend) as reachy_mini:
+        # Uncomment these three lines to change resolution
         # reachy_mini.media.camera.close()
         # reachy_mini.media.camera.set_resolution(CameraResolution.R3072x1728at10fps)
         # reachy_mini.media.camera.open()
