@@ -44,6 +44,8 @@ with ReachyMini() as mini:
 
 **Best example:** `~/reachy_mini_resources/reachy_mini_conversation_app/src/reachy_mini_conversation_app/moves.py`
 
+> If this folder doesn't exist, run `skills/setup-environment.md` to clone reference apps.
+
 This file demonstrates control with:
 
 ### Primary vs Secondary Moves

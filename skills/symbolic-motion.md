@@ -13,6 +13,8 @@
 
 **Primary reference:** `~/reachy_mini_resources/reachy_mini_dances_library/src/reachy_mini_dances_library/rhythmic_motion.py`
 
+> If this folder doesn't exist, run `skills/setup-environment.md` to clone reference apps.
+
 ---
 
 ## Core Concept

@@ -36,6 +36,8 @@ def check_antenna_press(mini):
 
 **Reference:** `~/reachy_mini_resources/reachy_mini_radio/` (change radio station with antennas)
 
+> If `~/reachy_mini_resources/` doesn't exist, run `skills/setup-environment.md` to clone reference apps.
+
 ---
 
 ## Head as Controller

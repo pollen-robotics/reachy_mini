@@ -154,12 +154,15 @@ git log --oneline -10
 git checkout <older-commit-hash>
 python my_app/main.py  # Test it
 
-# 3. If it works, binary search forward
-# If it doesn't, go back further
+# 3. If it works, check the diff to the broken version
+git diff <this-commit> <broken-commit>
 
-# 4. Once you find the gap (commit A works, commit B doesn't):
-git diff A B  # See exactly what changed
+# 4. Decide: is the diff small enough to debug directly?
+#    - YES → Read the diff and find the bug
+#    - NO  → Binary search further (pick a commit in the middle)
 ```
+
+The key insight: you don't always need to bisect all the way down. At each step, check `git diff` and judge if the changes are small enough to spot the bug directly.
 
 ### When to Use This
 

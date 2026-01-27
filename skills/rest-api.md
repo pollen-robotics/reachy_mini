@@ -114,7 +114,7 @@ ws.onmessage = (event) => {
 
 ## Source Code Reference
 
-For implementation details:
-- **Main FastAPI app:** `~/reachy_mini_resources/reachy_mini/src/reachy_mini/daemon/app/main.py`
-- **Router modules:** `~/reachy_mini_resources/reachy_mini/src/reachy_mini/daemon/app/routers/`
-- **API documentation:** `~/reachy_mini_resources/reachy_mini/docs/old_doc/rest-api.md`
+For implementation details (in this repository):
+- **Main FastAPI app:** `src/reachy_mini/daemon/app/main.py`
+- **Router modules:** `src/reachy_mini/daemon/app/routers/`
+- **API docs:** `docs/source/troubleshooting.md` (REST API FAQ section)

@@ -71,6 +71,8 @@ def _safe_enable_motors(self, reachy_mini: ReachyMini) -> None:
 
 **Reference:** See `~/reachy_mini_resources/fire_nation_attacked/fire_nation_attacked/main.py` for a working implementation of this pattern.
 
+> If `~/reachy_mini_resources/` doesn't exist, run `skills/setup-environment.md` to clone reference apps.
+
 ---
 
 ## Complete Safe Enable Pattern

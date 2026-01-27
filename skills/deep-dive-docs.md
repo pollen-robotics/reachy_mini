@@ -90,7 +90,7 @@ Often the best documentation is working code. Local examples in this repo:
 | Recorded moves playback | `examples/recorded_moves_example.py` |
 | Compliant mode | `examples/reachy_compliant_demo.py` |
 
-External reference apps (clone via setup or browse online):
+External reference apps (run `skills/setup-environment.md` to clone, or browse online):
 
 | Pattern | App | Source |
 |---------|-----|--------|
@@ -108,9 +108,8 @@ External reference apps (clone via setup or browse online):
 If you find something unclear or missing:
 
 1. **Check source code** - The implementation is the ultimate truth
-2. **Try it** - Run a quick test to see what happens
-3. **Document your finding** - Add to `~/reachy_mini_resources/insights_for_reachy_mini_maintainers.md`
-4. **Tell the user** - Encourage them to submit a PR or issue
+2. **Document your finding** - Add to `~/reachy_mini_resources/insights_for_reachy_mini_maintainers.md
+3. **Tell the user** - Encourage them to submit a PR or issue on GitHub
 
 ---
 

@@ -12,6 +12,8 @@
 
 **Primary reference:** `~/reachy_mini_resources/reachy_mini_conversation_app/`
 
+> If this folder doesn't exist, run `skills/setup-environment.md` to clone reference apps.
+
 This app demonstrates how to turn Reachy Mini into an intelligent, autonomous robot using LLMs.
 
 ---
