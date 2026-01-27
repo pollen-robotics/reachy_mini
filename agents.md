@@ -20,7 +20,7 @@ Before implementing any app:
 1. Create `plan.md` in the app directory
 2. Write your understanding of what the user wants
 3. List your technical approach
-4. Ask clarifying questions
+4. Ask clarifying questions and provide answer fields inside `plan.md`
 5. Wait for answers before coding
 
 ### Check Setup First
