@@ -8,7 +8,7 @@
 
 ## Quick Check
 
-If an app folder already exists with `pyproject.toml` containing `reachy_mini` tag, the app structure is already set up.
+If an app folder already exists with `README.md` containing `reachy_mini_python_app` tag, the app structure is probably already set up. In doubt, double check.
 
 ---
 
@@ -48,7 +48,6 @@ my_app/
 1. **Create and publish immediately** with `--publish` to get a Git repo
 2. **Develop iteratively** using standard git: `git add`, `git commit`, `git push`
 3. **Validate** with `reachy-mini-app-assistant check /path/to/app`
-4. **Request official status** only for high-quality, polished apps
 
 ### Step 4: Before Writing Code
 

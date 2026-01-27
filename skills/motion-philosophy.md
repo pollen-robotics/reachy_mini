@@ -78,19 +78,6 @@ Does your app need to react to input/sensors in real-time?
 
 ---
 
-## Mixing Both
-
-Many apps use both:
-
-1. **goto_target()** for transitions (e.g., "go to neutral pose")
-2. **set_target()** in control loop for reactive behavior
-
-The conversation app does this - it uses `goto_target()` for emotions/dances, but has a control loop running for face tracking and speech sync overlays.
-
-**Important:** Don't call both simultaneously. Use one at a time, switching between modes as needed.
-
----
-
 ## Common Mistake
 
 Don't do this:

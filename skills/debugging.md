@@ -23,6 +23,8 @@ reachy-mini-daemon
 # Or in simulation mode
 reachy-mini-daemon --sim
 ```
+- Access dashboard to verify robot is awake
+
 
 **For Wireless:**
 - Ensure robot is powered on

@@ -44,7 +44,7 @@ with ReachyMini() as mini:
 
 **Best example:** `~/reachy_mini_resources/reachy_mini_conversation_app/src/reachy_mini_conversation_app/moves.py`
 
-This file demonstrates sophisticated control with:
+This file demonstrates control with:
 
 ### Primary vs Secondary Moves
 
@@ -133,19 +133,6 @@ breathing = compute_breathing_offset(t)
 pose = create_head_pose(yaw=target_yaw, pitch=target_pitch + breathing, degrees=True)
 ```
 
-### Smoothing Input (Low-Pass Filter)
-
-```python
-class SmoothTarget:
-    def __init__(self, smoothing=0.1):
-        self.current = 0.0
-        self.smoothing = smoothing
-
-    def update(self, target: float) -> float:
-        self.current += self.smoothing * (target - self.current)
-        return self.current
-```
-
 ---
 
 ## Frequency Considerations
@@ -155,4 +142,4 @@ class SmoothTarget:
 | 100 Hz | Real-time tracking, games |
 | 50 Hz | Most interactive apps |
 | 30 Hz | Minimum for smooth motion |
-| < 30 Hz | Will look jerky |
+| < 30 Hz | Might look jerky |
