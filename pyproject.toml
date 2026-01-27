@@ -133,7 +133,6 @@ markers = [
     "video: mark test as requiring video hardware",
     "video_opencv: mark test as requiring OpenCV for video",
     "wireless: mark test as requiring wireless Reachy Mini",
-    "wireless_gstreamer: mark test as requiring GStreamer for wireless Reachy Mini",
 ]
 
 [tool.mypy]

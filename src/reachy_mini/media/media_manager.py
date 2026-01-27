@@ -50,7 +50,7 @@ class MediaBackend(Enum):
     WEBRTC = "webrtc"
 
     DEFAULT_NO_VIDEO = GSTREAMER_NO_VIDEO
-    DEFAULT = GSTREAMER 
+    DEFAULT = GSTREAMER
 
 
 class MediaManager:
@@ -93,12 +93,12 @@ class MediaManager:
             the appropriate camera and audio devices based on the backend choice.
 
         Available backends:
-	    - NO_MEDIA: No media devices (useful for headless operation)
-	    - SOUNDDEVICE_OPENCV: OpenCV + SoundDevice (former cross-platform default)
-	    - SOUNDDEVICE_NO_VIDEO: SoundDevice only (audio without video)
-    	    - GSTREAMER: GStreamer-based media (advanced features)- Alias: DEFAULT
- 	    - GSTREAMER_NO_VIDEO: GStreamer audio only- Alias: DEFAULT_NO_VIDEO
-	    - WEBRTC: WebRTC-based media for real-time communication
+            - NO_MEDIA: No media devices (useful for headless operation)
+            - SOUNDDEVICE_OPENCV: OpenCV + SoundDevice (former cross-platform default)
+            - SOUNDDEVICE_NO_VIDEO: SoundDevice only (audio without video)
+                - GSTREAMER: GStreamer-based media (advanced features)- Alias: DEFAULT
+             - GSTREAMER_NO_VIDEO: GStreamer audio only- Alias: DEFAULT_NO_VIDEO
+            - WEBRTC: WebRTC-based media for real-time communication
 
         Example usage:
             ```python
@@ -202,7 +202,7 @@ class MediaManager:
             if use_sim:
                 self.camera.open(udp_camera="udp://@127.0.0.1:5005")
             else:
-                self.camera.open()     
+                self.camera.open()
         elif self.backend == MediaBackend.GSTREAMER:
             self.logger.info("Using GStreamer camera backend.")
             from reachy_mini.media.camera_gstreamer import GStreamerCamera

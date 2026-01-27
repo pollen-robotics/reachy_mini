@@ -33,7 +33,7 @@ def test_get_frame_exists(backend: MediaBackend) -> None:
 
     # with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp_file:
     #    cv2.imwrite(tmp_file.name, frame)
-    #    print(f"Frame saved for inspection: {tmp_file.name}")    
+    #    print(f"Frame saved for inspection: {tmp_file.name}")
 
     media.close()
 
@@ -43,13 +43,18 @@ def test_get_frame_exists_all_resolutions(backend: MediaBackend) -> None:
     """Test that a frame can be retrieved from the camera for all supported resolutions."""
     media = MediaManager(backend=backend, signalling_host=SIGNALING_HOST if backend == MediaBackend.WEBRTC else "localhost")
     for resolution in media.camera.camera_specs.available_resolutions:
+        print(backend)
+        print(media.camera.camera_specs.name)
+        print(resolution)
+        media.camera.close()
         media.camera.set_resolution(resolution)
+        media.camera.open()
         time.sleep(2)
         frame = media.get_frame()
         assert frame is not None, f"No frame was retrieved from the camera at resolution {resolution}."
         assert isinstance(frame, np.ndarray), f"Frame is not a numpy array at resolution {resolution}."
         assert frame.size > 0, f"Frame is empty at resolution {resolution}."
-        assert frame.shape[0] == resolution.value[1] and frame.shape[1] == resolution.value[0], f"Frame has incorrect dimensions at resolution {resolution}: {frame.shape}" 
+        assert frame.shape[0] == resolution.value[1] and frame.shape[1] == resolution.value[0], f"Frame has incorrect dimensions at resolution {resolution}: {frame.shape}"
 
     media.close()
 
