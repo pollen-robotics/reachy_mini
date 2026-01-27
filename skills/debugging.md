@@ -31,29 +31,15 @@ reachy-mini-daemon --sim
 - Check WiFi connection
 - Access dashboard to verify robot is awake
 
-### Step 2: Run Minimal Test
+### Step 2: Test Basic Motion
 
-```python
-from reachy_mini import ReachyMini
+Run the minimal demo to verify connectivity and motion:
 
-with ReachyMini() as mini:
-    print("Connected!")
-    print(f"Head pose: {mini.get_current_head_pose()}")
+```bash
+python examples/minimal_demo.py
 ```
 
-If this fails, the problem is connectivity, not your app.
-
-### Step 3: Test Basic Motion
-
-```python
-from reachy_mini import ReachyMini
-from reachy_mini.utils import create_head_pose
-
-with ReachyMini() as mini:
-    pose = create_head_pose(yaw=20, degrees=True)
-    mini.goto_target(head=pose, duration=1.0)
-    print("Motion complete")
-```
+This connects to the robot and makes the head nod with antenna movement. If this fails, the problem is connectivity, not your app.
 
 ---
 
@@ -89,18 +75,12 @@ mini.enable_motors()
 2. Is your control loop too slow?
 3. Are you mixing goto_target and set_target?
 
-**Fix:** Single control point, maintain 50-100Hz, use one method at a time.
+**Fix:** Single control point, maintain 30Hz+, use one method at a time.
 
 ### Import errors
 
 1. Is `reachy-mini` installed in your environment?
 2. Are you in the right virtual environment?
-
-**Fix:**
-```bash
-source ~/reachy_mini_resources/.venv/bin/activate
-pip install reachy-mini
-```
 
 ### "Motors in different states" issues
 
