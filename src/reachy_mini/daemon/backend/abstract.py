@@ -791,6 +791,20 @@ class Backend:
         """Set the motor torque for specific motor names."""
         pass
 
+    def write_raw_packet(self, packet: bytes) -> bytes:
+        """Write a raw packet to the motor controller and return the response.
+
+        Args:
+            packet (bytes): The raw packet to send to the motor controller.
+
+        Returns:
+            bytes: The raw response packet from the motor controller.
+
+        """
+        raise NotImplementedError(
+            "The method write_raw_packet is only available for the real robot backend."
+        )
+
     def get_present_passive_joint_positions(self) -> Optional[Dict[str, float]]:
         """Get the present passive joint positions.
 

@@ -1,0 +1,240 @@
+# Daemon
+
+## Core Daemon Classes
+
+[[autodoc]] reachy_mini.daemon.daemon.Daemon
+
+[[autodoc]] reachy_mini.daemon.daemon.DaemonState
+
+[[autodoc]] reachy_mini.daemon.daemon.DaemonStatus
+
+## Backend Classes
+
+### Abstract Backend
+
+[[autodoc]] reachy_mini.daemon.backend.abstract.MotorControlMode
+
+### Robot Backend
+
+[[autodoc]] reachy_mini.daemon.backend.robot.RobotBackend
+
+[[autodoc]] reachy_mini.daemon.backend.robot.RobotBackendStatus
+
+### MuJoCo Backend
+
+[[autodoc]] reachy_mini.daemon.backend.mujoco.MujocoBackend
+
+[[autodoc]] reachy_mini.daemon.backend.mujoco.MujocoBackendStatus
+
+### Mockup Simulation Backend
+
+[[autodoc]] reachy_mini.daemon.backend.mockup_sim.MockupSimBackend
+
+[[autodoc]] reachy_mini.daemon.backend.mockup_sim.MockupSimBackendStatus
+
+## Daemon Utilities
+
+[[autodoc]] reachy_mini.daemon.utils.convert_enum_to_dict
+
+[[autodoc]] reachy_mini.daemon.utils.find_serial_port
+
+[[autodoc]] reachy_mini.daemon.utils.get_ip_address
+
+## App
+
+### Models
+
+[[autodoc]] reachy_mini.daemon.app.models.Matrix4x4Pose
+
+[[autodoc]] reachy_mini.daemon.app.models.XYZRPYPose
+
+[[autodoc]] reachy_mini.daemon.app.models.FullBodyTarget
+
+[[autodoc]] reachy_mini.daemon.app.models.DoAInfo
+
+[[autodoc]] reachy_mini.daemon.app.models.FullState
+
+### Dependencies
+
+[[autodoc]] reachy_mini.daemon.app.dependencies.get_daemon
+
+[[autodoc]] reachy_mini.daemon.app.dependencies.get_backend
+
+[[autodoc]] reachy_mini.daemon.app.dependencies.get_app_manager
+
+[[autodoc]] reachy_mini.daemon.app.dependencies.ws_get_backend
+
+### Jobs
+
+[[autodoc]] reachy_mini.daemon.app.bg_job_register.JobStatus
+
+[[autodoc]] reachy_mini.daemon.app.bg_job_register.JobInfo
+
+[[autodoc]] reachy_mini.daemon.app.bg_job_register.JobHandler
+
+[[autodoc]] reachy_mini.daemon.app.bg_job_register.run_command
+
+[[autodoc]] reachy_mini.daemon.app.bg_job_register.get_info
+
+[[autodoc]] reachy_mini.daemon.app.bg_job_register.ws_poll_info
+
+### Main Application
+
+[[autodoc]] reachy_mini.daemon.app.main.Args
+
+[[autodoc]] reachy_mini.daemon.app.main.create_app
+
+[[autodoc]] reachy_mini.daemon.app.main.run_app
+
+[[autodoc]] reachy_mini.daemon.app.main.main
+
+## App Routers
+
+### Daemon Router
+
+[[autodoc]] reachy_mini.daemon.app.routers.daemon.start_daemon
+
+[[autodoc]] reachy_mini.daemon.app.routers.daemon.stop_daemon
+
+[[autodoc]] reachy_mini.daemon.app.routers.daemon.restart_daemon
+
+[[autodoc]] reachy_mini.daemon.app.routers.daemon.get_daemon_status
+
+### State Router
+
+[[autodoc]] reachy_mini.daemon.app.routers.state.get_head_pose
+
+[[autodoc]] reachy_mini.daemon.app.routers.state.get_body_yaw
+
+[[autodoc]] reachy_mini.daemon.app.routers.state.get_antenna_joint_positions
+
+[[autodoc]] reachy_mini.daemon.app.routers.state.get_doa
+
+[[autodoc]] reachy_mini.daemon.app.routers.state.get_full_state
+
+[[autodoc]] reachy_mini.daemon.app.routers.state.ws_full_state
+
+### Motors Router
+
+
+[[autodoc]] reachy_mini.daemon.app.routers.motors.get_motor_status
+
+[[autodoc]] reachy_mini.daemon.app.routers.motors.set_motor_mode
+
+### Move Router
+
+
+
+[[autodoc]] reachy_mini.daemon.app.routers.move.get_running_moves
+
+[[autodoc]] reachy_mini.daemon.app.routers.move.goto
+
+[[autodoc]] reachy_mini.daemon.app.routers.move.play_wake_up
+
+[[autodoc]] reachy_mini.daemon.app.routers.move.play_goto_sleep
+
+[[autodoc]] reachy_mini.daemon.app.routers.move.list_recorded_move_dataset
+
+[[autodoc]] reachy_mini.daemon.app.routers.move.play_recorded_move_dataset
+
+[[autodoc]] reachy_mini.daemon.app.routers.move.stop_move
+
+[[autodoc]] reachy_mini.daemon.app.routers.move.set_target
+
+[[autodoc]] reachy_mini.daemon.app.routers.move.ws_move_updates
+
+### Apps Router
+
+
+[[autodoc]] reachy_mini.daemon.app.routers.apps.list_available_apps
+
+[[autodoc]] reachy_mini.daemon.app.routers.apps.list_all_available_apps
+
+[[autodoc]] reachy_mini.daemon.app.routers.apps.install_app
+
+[[autodoc]] reachy_mini.daemon.app.routers.apps.remove_app
+
+[[autodoc]] reachy_mini.daemon.app.routers.apps.job_status
+
+[[autodoc]] reachy_mini.daemon.app.routers.apps.ws_apps_manager
+
+[[autodoc]] reachy_mini.daemon.app.routers.apps.start_app
+
+[[autodoc]] reachy_mini.daemon.app.routers.apps.restart_app
+
+[[autodoc]] reachy_mini.daemon.app.routers.apps.stop_app
+
+[[autodoc]] reachy_mini.daemon.app.routers.apps.current_app_status
+
+[[autodoc]] reachy_mini.daemon.app.routers.apps.install_private_space
+
+
+<!-- ### WiFi Configuration Router -->
+
+ <!-- [[autodoc]] reachy_mini.daemon.app.routers.wifi_config.get_current_wifi_mode -->
+
+<!-- [[autodoc]] reachy_mini.daemon.app.routers.wifi_config.get_wifi_status -->
+
+<!-- [[autodoc]] reachy_mini.daemon.app.routers.wifi_config.get_last_wifi_error -->
+
+<!-- [[autodoc]] reachy_mini.daemon.app.routers.wifi_config.reset_last_wifi_error -->
+
+<!-- [[autodoc]] reachy_mini.daemon.app.routers.wifi_config.setup_hotspot -->
+
+<!-- [[autodoc]] reachy_mini.daemon.app.routers.wifi_config.connect_to_wifi_network -->
+
+<!-- [[autodoc]] reachy_mini.daemon.app.routers.wifi_config.scan_wifi -->
+
+<!-- [[autodoc]] reachy_mini.daemon.app.routers.wifi_config.forget_wifi_network -->
+
+<!-- [[autodoc]] reachy_mini.daemon.app.routers.wifi_config.forget_all_wifi_networks -->
+
+<!-- ### Update Router -->
+
+<!--[[autodoc]] reachy_mini.daemon.app.routers.update.available -->
+
+<!--[[autodoc]] reachy_mini.daemon.app.routers.update.start_update -->
+
+<!--[[autodoc]] reachy_mini.daemon.app.routers.update.get_update_info -->
+
+<!--[[autodoc]] reachy_mini.daemon.app.routers.update.websocket_logs -->
+
+### Cache Router
+
+[[autodoc]] reachy_mini.daemon.app.routers.cache.clear_huggingface_cache
+
+[[autodoc]] reachy_mini.daemon.app.routers.cache.reset_apps
+
+### Kinematics Router
+
+
+[[autodoc]] reachy_mini.daemon.app.routers.kinematics.get_kinematics_info
+
+[[autodoc]] reachy_mini.daemon.app.routers.kinematics.get_urdf
+
+[[autodoc]] reachy_mini.daemon.app.routers.kinematics.get_stl_file
+
+### Volume Router
+
+
+[[autodoc]] reachy_mini.daemon.app.routers.volume.get_volume
+
+[[autodoc]] reachy_mini.daemon.app.routers.volume.set_volume
+
+[[autodoc]] reachy_mini.daemon.app.routers.volume.play_test_sound
+
+[[autodoc]] reachy_mini.daemon.app.routers.volume.get_microphone_volume
+
+[[autodoc]] reachy_mini.daemon.app.routers.volume.set_microphone_volume
+
+### Logs Router
+
+[[autodoc]] reachy_mini.daemon.app.routers.logs.websocket_daemon_logs
+
+### HF Auth Router
+
+[[autodoc]] reachy_mini.daemon.app.routers.hf_auth.save_token
+
+[[autodoc]] reachy_mini.daemon.app.routers.hf_auth.get_auth_status
+
+[[autodoc]] reachy_mini.daemon.app.routers.hf_auth.delete_token

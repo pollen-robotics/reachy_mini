@@ -126,14 +126,14 @@ class GstWebRTCClient(CameraBase, AudioBase):
         self._pipeline_record.add(self._appsink_audio)
 
         self.camera_specs = cast(CameraSpecs, ReachyMiniWirelessCamSpecs)
-        self.set_resolution(self.camera_specs.default_resolution)
 
         self._appsink_video = Gst.ElementFactory.make("appsink")
-        caps_video = Gst.Caps.from_string("video/x-raw,format=BGR")
-        self._appsink_video.set_property("caps", caps_video)
         self._appsink_video.set_property("drop", True)  # avoid overflow
         self._appsink_video.set_property("max-buffers", 1)  # keep last image only
         self._pipeline_record.add(self._appsink_video)
+
+        # Set resolution after appsink is created so caps can be properly configured
+        self.set_resolution(self.camera_specs.default_resolution)
 
         webrtcsrc = self._configure_webrtcsrc(signaling_host, signaling_port, peer_id)
         self._pipeline_record.add(webrtcsrc)
@@ -157,7 +157,18 @@ class GstWebRTCClient(CameraBase, AudioBase):
     def set_resolution(self, resolution: CameraResolution) -> None:
         """Set the camera resolution."""
         super().set_resolution(resolution)
+
+        # Check if pipeline is not playing before changing resolution
+        if self._pipeline_record.get_state(0).state == Gst.State.PLAYING:
+            raise RuntimeError(
+                "Cannot change resolution while the camera is streaming. Please close the camera first."
+            )
+
         self._resolution = resolution
+        caps_video = Gst.Caps.from_string(
+            f"video/x-raw,format=BGR,width={self._resolution.value[0]},height={self._resolution.value[1]},framerate={self.framerate}/1"
+        )
+        self._appsink_video.set_property("caps", caps_video)
 
     def _configure_webrtcsrc(
         self, signaling_host: str, signaling_port: int, peer_id: str
@@ -173,6 +184,11 @@ class GstWebRTCClient(CameraBase, AudioBase):
         signaller.set_property("producer-peer-id", peer_id)
         signaller.set_property("uri", f"ws://{signaling_host}:{signaling_port}")
         return source
+
+    def _dump_latency(self) -> None:
+        query = Gst.Query.new_latency()
+        self._pipeline_record.query(query)
+        self.logger.debug(f"Pipeline latency {query.parse_latency()}")
 
     def _iterate_gst(self, iterator: Gst.Iterator) -> Iterator[Gst.Element]:
         """Iterate over GStreamer iterators."""
@@ -207,7 +223,7 @@ class GstWebRTCClient(CameraBase, AudioBase):
                 "Could not find webrtcbin element in webrtcsrc"
             )
             # jitterbuffer has a default 200 ms buffer. Should be ok to lower this in localnetwork config
-            webrtcbin.set_property("latency", 100)
+            webrtcbin.set_property("latency", 10)
 
     def _webrtcsrc_pad_added_cb(self, webrtcsrc: Gst.Element, pad: Gst.Pad) -> None:
         self._configure_webrtcbin(webrtcsrc)
@@ -248,6 +264,8 @@ class GstWebRTCClient(CameraBase, AudioBase):
             self._appsink_audio.sync_state_with_parent()
             audioconvert.sync_state_with_parent()
             audioresample.sync_state_with_parent()
+
+        GLib.timeout_add_seconds(5, self._dump_latency)
 
     def _on_bus_message(self, bus: Gst.Bus, msg: Gst.Message, loop) -> bool:  # type: ignore[no-untyped-def]
         t = msg.type

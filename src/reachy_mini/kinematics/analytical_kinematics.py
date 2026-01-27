@@ -57,7 +57,7 @@ class AnalyticalKinematics:
         # TODO test with init head pose instead of sleep pose
         sleep_head_pose = SLEEP_HEAD_POSE.copy()
         sleep_head_pose[:3, 3][2] += self.head_z_offset
-        self.kin.reset_forward_kinematics(sleep_head_pose)  # type: ignore[arg-type]
+        self.kin.reset_forward_kinematics(sleep_head_pose)
 
         self.logger = logging.getLogger(__name__)
         # self.logger.setLevel(logging.WARNING)
@@ -83,7 +83,7 @@ class AnalyticalKinematics:
             # additionally it makes sure the the relative yaw between the body and the head
             # stays within the mechanical limits (max_relative_yaw)
             reachy_joints = self.kin.inverse_kinematics_safe(
-                _pose,  # type: ignore[arg-type]
+                _pose,
                 body_yaw=body_yaw,
                 max_relative_yaw=np.deg2rad(65),
                 max_body_yaw=np.deg2rad(160),
@@ -91,7 +91,7 @@ class AnalyticalKinematics:
         else:
             # direct inverse kinematics solution with given body yaw
             # it does not modify the body yaw
-            stewart_joints = self.kin.inverse_kinematics(_pose, body_yaw)  # type: ignore[arg-type]
+            stewart_joints = self.kin.inverse_kinematics(_pose, body_yaw)
             reachy_joints = [body_yaw] + stewart_joints
 
         return np.array(reachy_joints)

@@ -224,6 +224,11 @@ class GStreamerAudio(AudioBase):
 
         return True
 
+    def _dump_latency(self) -> None:
+        query = Gst.Query.new_latency()
+        self._pipeline_playback.query(query)
+        self.logger.info(f"Audio pipeline latency {query.parse_latency()}")
+
     def start_recording(self) -> None:
         """Open the audio card using GStreamer.
 
@@ -299,6 +304,7 @@ class GStreamerAudio(AudioBase):
         See AudioBase.start_playing() for complete documentation.
         """
         self._pipeline_playback.set_state(Gst.State.PLAYING)
+        GLib.timeout_add_seconds(5, self._dump_latency)
 
     def stop_playing(self) -> None:
         """Stop playing audio and release resources.

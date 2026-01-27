@@ -236,15 +236,17 @@ class GStreamerCamera(CameraBase):
         )
         self._appsink_video.set_property("caps", caps_video)
 
-        # Restart the pipeline if it was playing before changing resolution
-        if should_restart:
-            self.open()
+    def _dump_latency(self) -> None:
+        query = Gst.Query.new_latency()
+        self.pipeline.query(query)
+        self.logger.info(f"Pipeline latency {query.parse_latency()}")
 
     def open(self) -> None:
         """Open the camera using GStreamer."""
         self.pipeline.set_state(Gst.State.PLAYING)
         self._thread_bus_calls = Thread(target=self._handle_bus_calls, daemon=True)
         self._thread_bus_calls.start()
+        GLib.timeout_add_seconds(5, self._dump_latency)
         # TODO: Add a small loop to wait for the frames to be ready after restarting the pipeline
 
     def _get_sample(self, appsink: GstApp.AppSink) -> Optional[bytes]:

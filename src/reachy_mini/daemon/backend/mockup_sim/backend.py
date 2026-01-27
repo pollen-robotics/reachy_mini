@@ -144,13 +144,13 @@ class MockupSimBackend(Backend):
         self,
     ) -> Annotated[npt.NDArray[np.float64], (7,)]:
         """Get the current joint positions of the head."""
-        return self._head_joint_positions.copy()
+        return self._head_joint_positions.copy()  # type: ignore[no-any-return]
 
     def get_present_antenna_joint_positions(
         self,
     ) -> Annotated[npt.NDArray[np.float64], (2,)]:
         """Get the current joint positions of the antennas."""
-        return self._antenna_joint_positions.copy()
+        return self._antenna_joint_positions.copy()  # type: ignore[no-any-return]
 
     def get_motor_control_mode(self) -> MotorControlMode:
         """Get the motor control mode."""
