@@ -109,6 +109,10 @@ class RobotBackend(Backend):
         self.target_antenna_joint_current = None  # Placeholder for antenna joint torque
         self.target_head_joint_current = None  # Placeholder for head joint torque
 
+        # Track last sent positions to avoid redundant writes
+        self._last_sent_head_positions = None
+        self._last_sent_antenna_positions = None
+
         if hardware_error_check_frequency <= 0:
             raise ValueError(
                 "hardware_error_check_frequency must be positive and non-zero (Hz)."
@@ -184,11 +188,15 @@ class RobotBackend(Backend):
 
         if self._torque_enabled:
             if self._current_head_operation_mode != 0:  # if position control mode
-                if self.target_head_joint_positions is not None:
+                if (
+                    self.target_head_joint_positions is not None
+                    and not np.array_equal(self.target_head_joint_positions, self._last_sent_head_positions)
+                ):
                     self.c.set_stewart_platform_position(
                         self.target_head_joint_positions[1:].tolist()
                     )
                     self.c.set_body_rotation(self.target_head_joint_positions[0])
+                    self._last_sent_head_positions = self.target_head_joint_positions.copy()
             else:  # it's in torque control mode
                 if self.gravity_compensation_mode:
                     # This function will set the head_joint_current
@@ -204,16 +212,14 @@ class RobotBackend(Backend):
                     # self.c.set_body_rotation_goal_current(int(self.target_head_joint_current[0]))
 
             if self._current_antennas_operation_mode != 0:  # if position control mode
-                if self.target_antenna_joint_positions is not None:
+                if (
+                    self.target_antenna_joint_positions is not None
+                    and not np.array_equal(self.target_antenna_joint_positions, self._last_sent_antenna_positions)
+                ):
                     self.c.set_antennas_positions(
                         self.target_antenna_joint_positions.tolist()
                     )
-            # Antenna torque control is not supported with feetech motors
-            # else:
-            #     if self.target_antenna_joint_current is not None:
-            #         self.c.set_antennas_goal_current(
-            #            np.round(self.target_antenna_joint_current, 0).astype(int).tolist()
-            #         )
+                    self._last_sent_antenna_positions = self.target_antenna_joint_positions.copy()
 
         if (
             self.joint_positions_publisher is not None
