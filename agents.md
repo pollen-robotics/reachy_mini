@@ -91,7 +91,9 @@ See and run `examples/minimal_demo.py` - demonstrates connection, head motion, a
 
 ### Before Writing Code
 
-Skim through `~/reachy_mini_resources/reachy_mini/src/reachy_mini/reachy_mini.py` to understand available methods. Focus on docstrings - don't read every line.
+- Read `docs/source/SDK/python-sdk.md` for API overview
+- Skim `src/reachy_mini/reachy_mini.py` for method signatures and docstrings
+- Check `examples/` for runnable code patterns
 
 ---
 
@@ -129,6 +131,8 @@ See `skills/rest-api.md` for details.
 
 Gentle collisions with body are safe. SDK clamps values automatically.
 
+For coordinate systems and architecture details, see `docs/source/SDK/core-concept.md`.
+
 ---
 
 ## Example Apps
@@ -143,6 +147,22 @@ Gentle collisions with body are safe. SDK clamps values automatically.
 | **reachy_mini_simon** | No-GUI pattern (antenna to start) | [HF Space](https://huggingface.co/spaces/apirrone/reachy_mini_simon) |
 | **hand_tracker_v2** | Camera-based control loop | [HF Space](https://huggingface.co/spaces/pollen-robotics/hand_tracker_v2) |
 | **reachy_mini_dances_library** | Symbolic motion definition | [GitHub](https://github.com/pollen-robotics/reachy_mini_dances_library) |
+
+---
+
+## Documentation
+
+Full SDK documentation is in `docs/source/`:
+
+| Topic | File |
+|-------|------|
+| Quickstart | `docs/source/SDK/quickstart.md` |
+| Python SDK | `docs/source/SDK/python-sdk.md` |
+| Core concepts | `docs/source/SDK/core-concept.md` |
+| AI integration | `docs/source/SDK/integration.md` |
+| Troubleshooting | `docs/source/troubleshooting.md` |
+
+For platform-specific guides (Lite, Wireless, Simulation), see `docs/source/platforms/`.
 
 ---
 

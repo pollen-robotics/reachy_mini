@@ -132,10 +132,19 @@ If this fails, debug before marking setup complete.
 
 ## Key Reference Paths (After Setup)
 
+**In this repository (always available):**
+
 | Purpose | Path |
 |---------|------|
-| SDK source | `~/reachy_mini_resources/reachy_mini/` |
-| Python SDK | `~/reachy_mini_resources/reachy_mini/src/reachy_mini/reachy_mini.py` |
-| App base class | `~/reachy_mini_resources/reachy_mini/src/reachy_mini/apps/app.py` |
-| Quickstart docs | `~/reachy_mini_resources/reachy_mini/docs/SDK/quickstart.md` |
-| Core concepts | `~/reachy_mini_resources/reachy_mini/docs/SDK/core-concept.md` |
+| SDK source | `src/reachy_mini/reachy_mini.py` |
+| App base class | `src/reachy_mini/apps/app.py` |
+| Documentation | `docs/source/` |
+| Examples | `examples/` |
+
+**In ~/reachy_mini_resources/ (after setup):**
+
+| Purpose | Path |
+|---------|------|
+| Conversation app | `~/reachy_mini_resources/reachy_mini_conversation_app/` |
+| Marionette | `~/reachy_mini_resources/marionette/` |
+| Other example apps | See `skills/deep-dive-docs.md` for full list |

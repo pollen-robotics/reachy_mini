@@ -133,10 +133,68 @@ Before asking for help or doing complex debugging:
 
 ---
 
+## Debugging by Dichotomy (Git Bisect)
+
+When your app breaks and you're not sure which change caused it, use git history to narrow down the problem efficiently.
+
+### The Strategy
+
+1. **First, verify basics work** - run `python examples/minimal_demo.py`
+2. **If basics work**, the problem is in your app code, not connectivity
+3. **Find a known-good commit** - go back in git history until your app works
+4. **Binary search** - narrow down between "works" and "broken" commits
+
+### Typical Workflow
+
+```bash
+# 1. Check current (broken) state
+git log --oneline -10
+
+# 2. Go back to a commit you know worked
+git checkout <older-commit-hash>
+python my_app/main.py  # Test it
+
+# 3. If it works, binary search forward
+# If it doesn't, go back further
+
+# 4. Once you find the gap (commit A works, commit B doesn't):
+git diff A B  # See exactly what changed
+```
+
+### When to Use This
+
+- App was working before, now it's broken
+- You've made many changes and lost track
+- Error messages aren't helpful
+- Faster than reading all code changes manually
+
+### Tips
+
+- **Commit often** - small commits make bisect more useful
+- **Write descriptive commit messages** - helps identify suspicious commits
+- **Don't mix features in one commit** - isolates problems better
+- Once you find the breaking diff, the bug is usually obvious
+
+---
+
+## Full Troubleshooting Reference
+
+For comprehensive troubleshooting (hardware issues, motor errors, audio problems, etc.), see:
+**`docs/source/troubleshooting.md`**
+
+This covers:
+- Motor diagnosis and "Overload Error" fixes
+- Connection issues (WiFi, USB, dashboard)
+- Audio/camera problems
+- Common error messages and solutions
+
+---
+
 ## Getting Help
 
 If basics work but your app doesn't:
 1. Isolate the problem (which part fails?)
-2. Check reference apps for similar functionality
-3. Add logging around the failing code
-4. Ask on Discord: https://discord.gg/Y7FgMqHsub
+2. Use git bisect to find when it broke
+3. Check reference apps for similar functionality
+4. Add logging around the failing code
+5. Ask on Discord: https://discord.gg/Y7FgMqHsub
