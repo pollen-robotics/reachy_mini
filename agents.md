@@ -14,6 +14,15 @@ Unless the user explicitly requests otherwise:
 - Guide non-technical users through each step
 - Don't assume prior knowledge
 
+### Always Create Python Apps
+
+When creating apps:
+- **Always use Python** - Python apps are discoverable and shareable via the robot's app store
+- **Always use the app assistant** - run `reachy-mini-app-assistant create` (see `skills/create-app.md`)
+- **Web UIs go in `static/`** - Python apps can have web frontends
+
+JS-only apps are not yet supported for discovery/sharing.
+
 ### Always Create plan.md Before Coding
 
 Before implementing any app:

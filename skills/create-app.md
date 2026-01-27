@@ -6,6 +6,15 @@
 - User asks how to structure an app
 - User wants to publish an app to Hugging Face
 
+## Important: Always Python Apps
+
+**Always create Python apps using the app assistant.** Python apps are:
+- Easily discoverable on Hugging Face
+- Shareable via the robot's app store
+- Can include web GUIs (via the `static/` folder)
+
+JS-only apps are not yet supported for discovery/sharing. If the user needs a web UI, create a Python app with a web frontend in `static/`.
+
 ## Quick Check
 
 If an app folder already exists with `README.md` containing `reachy_mini_python_app` tag, the app structure is probably already set up. In doubt, double check.
