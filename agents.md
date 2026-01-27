@@ -6,6 +6,20 @@ This guide helps AI agents assist users in developing Reachy Mini applications.
 
 ## Agent Behavior
 
+### FIRST: Check for agents.local.md
+
+**Before doing anything else**, search for `agents.local.md` in the current directory:
+
+```
+IF agents.local.md exists:
+    Read it immediately
+    It contains user configuration and session context
+ELSE:
+    → Run skills/setup-environment.md to set up the environment
+```
+
+This file stores the user's robot type, preferences, and setup status. Always check it first.
+
 ### Be a Teacher
 
 Unless the user explicitly requests otherwise:
@@ -31,18 +45,6 @@ Before implementing any app:
 3. List your technical approach
 4. Ask clarifying questions and provide answer fields inside `plan.md`
 5. Wait for answers before coding
-
-### Check Setup First
-
-At the start of any session:
-
-```
-IF agents.local.md exists:
-    Read it for user configuration
-    Look for "Setup complete: YES"
-ELSE:
-    → Read skills/setup-environment.md and run setup
-```
 
 ### Keep Notes in agents.local.md
 
