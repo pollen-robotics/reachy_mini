@@ -157,7 +157,7 @@ def test_record_audio_above_max_queue_seconds(backend: MediaBackend) -> None:
 
 
 @pytest.mark.audio
-@pytest.mark.parametrize("backend", NO_VIDEO_BACKENDS)
+@pytest.mark.parametrize("backend", [MediaBackend.GSTREAMER_NO_VIDEO, MediaBackend.SOUNDDEVICE_NO_VIDEO])
 def test_DoA(backend: MediaBackend) -> None:
     """Test Direction of Arrival (DoA) estimation."""
     media = MediaManager(backend=backend, signalling_host=SIGNALING_HOST if backend == MediaBackend.WEBRTC else "localhost")
