@@ -243,6 +243,17 @@ def parse_args() -> argparse.Namespace:
         default=False,
         help="Don't run checks before publishing the app.",
     )
+    privacy_group = publish_parser.add_mutually_exclusive_group()
+    privacy_group.add_argument(
+        "--private",
+        action="store_true",
+        help="Make the Hugging Face Space private.",
+    )
+    privacy_group.add_argument(
+        "--public",
+        action="store_true",
+        help="Make the Hugging Face Space public.",
+    )
 
     return parser.parse_args()
 
@@ -270,12 +281,20 @@ def main() -> None:
     elif args.command == "check":
         assistant.check(console, app_path=args.app_path)
     elif args.command == "publish":
+        # Determine privacy: --private → True, --public → False, neither → None (prompts)
+        if args.private:
+            private = True
+        elif args.public:
+            private = False
+        else:
+            private = None
         assistant.publish(
             console,
             app_path=args.app_path,
             commit_message=args.commit_message,
             official=args.official,
             no_check=args.nocheck,
+            private=private,
         )
 
 
