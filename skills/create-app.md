@@ -38,7 +38,7 @@ Example:
 reachy-mini-app-assistant create my_app_name . --publish
 ```
 
-- `--publish` creates a Git repo on Hugging Face immediately (public by default)
+- `--publish` creates a Git repo on Hugging Face immediately. Always use this option by default.
 - The assistant handles all boilerplate, metadata tags, and proper structure
 
 ### Step 2: Understand the Generated Structure
