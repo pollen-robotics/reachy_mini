@@ -23,6 +23,7 @@ XL_BAUDRATE_CONV_TABLE = {
     4000000: 6,
 }
 
+
 def find_serial_port(
     wireless_version: bool = False,
     vid: str = "1a86",
@@ -42,17 +43,22 @@ def find_serial_port(
 
     return [p.device for p in ports if f"USB VID:PID={vid}:{pid}" in p.hwid]
 
+
 def scan(port: str, baudrate: int) -> List[int]:
     """Scan the bus at the given baudrate and return detected IDs."""
     found_motors: list[int] = []
     try:
-        controller = Xl330PyController(port, baudrate, float(SERIAL_TIMEOUT) + float(COMMANDS_BITS_LENGTH["Ping"]) / baudrate)
+        controller = Xl330PyController(
+            port,
+            baudrate,
+            float(SERIAL_TIMEOUT) + float(COMMANDS_BITS_LENGTH["Ping"]) / baudrate,
+        )
         for motor_id in range(255):
             try:
                 if controller.ping(motor_id):
                     found_motors.append(motor_id)
             except Exception:
-                pass 
+                pass
     except Exception as e:
         print(f"Error while scanning port {port} at baudrate {baudrate}: {e}")
     finally:
@@ -65,6 +71,7 @@ def scan(port: str, baudrate: int) -> List[int]:
         # Small delay to ensure port is fully released
         time.sleep(SERIAL_TIMEOUT)
     return found_motors
+
 
 def main() -> None:
     """Iterate through baudrates and print the IDs found at each."""

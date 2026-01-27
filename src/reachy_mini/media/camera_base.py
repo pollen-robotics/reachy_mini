@@ -33,6 +33,7 @@ from reachy_mini.media.camera_constants import (
     CameraSpecs,
     MujocoCameraSpecs,
 )
+from reachy_mini.media.camera_utils import scale_intrinsics
 
 
 class CameraBase(ABC):
@@ -85,8 +86,10 @@ class CameraBase(ABC):
             RuntimeError: If camera resolution has not been set.
 
         Example:
-            >>> width, height = camera.resolution
-            >>> print(f"Camera resolution: {width}x{height}")
+            ```python
+            width, height = camera.resolution
+            print(f"Camera resolution: {width}x{height}")
+            ```
 
         """
         if self._resolution is None:
@@ -104,8 +107,10 @@ class CameraBase(ABC):
             RuntimeError: If camera resolution has not been set.
 
         Example:
-            >>> fps = camera.framerate
-            >>> print(f"Camera frame rate: {fps} fps")
+            ```python
+            fps = camera.framerate
+            print(f"Camera frame rate: {fps} fps")
+            ```
 
         """
         if self._resolution is None:
@@ -132,10 +137,12 @@ class CameraBase(ABC):
             camera resolution when set_resolution() is called.
 
         Example:
-            >>> K = camera.K
-            >>> if K is not None:
-            ...     fx, fy = K[0, 0], K[1, 1]
-            ...     cx, cy = K[0, 2], K[1, 2]
+            ```python
+            K = camera.K
+            if K is not None:
+                fx, fy = K[0, 0], K[1, 1]
+                cx, cy = K[0, 2], K[1, 2]
+            ```
 
         """
         return self.resized_K
@@ -154,9 +161,11 @@ class CameraBase(ABC):
             functions to undistort captured images.
 
         Example:
-            >>> D = camera.D
-            >>> if D is not None:
-            ...     print(f"Distortion coefficients: {D}")
+            ```python
+            D = camera.D
+            if D is not None:
+                print(f"Distortion coefficients: {D}")
+            ```
 
         """
         if self.camera_specs is not None:
@@ -182,8 +191,10 @@ class CameraBase(ABC):
             position relative to the image dimensions.
 
         Example:
-            >>> from reachy_mini.media.camera_constants import CameraResolution
-            >>> camera.set_resolution(CameraResolution.R1280x720at30fps)
+            ```python
+            from reachy_mini.media.camera_constants import CameraResolution
+            camera.set_resolution(CameraResolution.R1280x720at30fps)
+            ```
 
         """
         if self.camera_specs is None:
@@ -201,14 +212,14 @@ class CameraBase(ABC):
                 f"Resolution not supported by the camera. Available resolutions are : {self.camera_specs.available_resolutions}"
             )
 
-        w_ratio = resolution.value[0] / self.camera_specs.default_resolution.value[0]
-        h_ratio = resolution.value[1] / self.camera_specs.default_resolution.value[1]
-        self.resized_K = self.camera_specs.K.copy()
+        original_K = self.camera_specs.K
+        original_size: tuple[int, int] = (CameraResolution.R3840x2592at30fps.value[0], CameraResolution.R3840x2592at30fps.value[1])
+        target_size: tuple[int, int] = (resolution.value[0], resolution.value[1])
+        crop_scale = resolution.value[3]
 
-        self.resized_K[0, 0] *= w_ratio
-        self.resized_K[1, 1] *= h_ratio
-        self.resized_K[0, 2] *= w_ratio
-        self.resized_K[1, 2] *= h_ratio
+        self.resized_K = scale_intrinsics(
+            original_K, original_size, target_size, crop_scale
+        )
 
     @abstractmethod
     def open(self) -> None:
@@ -247,11 +258,13 @@ class CameraBase(ABC):
             The image resolution can be obtained via the resolution property.
 
         Example:
-            >>> camera.open()
-            >>> frame = camera.read()
-            >>> if frame is not None:
-            ...     cv2.imshow("Camera Frame", frame)
-            ...     cv2.waitKey(1)
+            ```python
+            camera.open()
+            frame = camera.read()
+            if frame is not None:
+                cv2.imshow("Camera Frame", frame)
+                cv2.waitKey(1)
+            ```
 
         """
         pass
