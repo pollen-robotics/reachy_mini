@@ -28,7 +28,14 @@ If an app folder already exists with `README.md` containing `reachy_mini_python_
 **Never manually create app folders.** Always use the assistant to get proper structure, metadata, and git setup:
 
 ```bash
-reachy-mini-app-assistant create my_app_name /path/to/create --publish
+reachy-mini-app-assistant create <app_name> <path> [--publish]
+```
+
+**IMPORTANT: Both `app_name` AND `path` are required for non-interactive mode.** If either is omitted, the command will prompt interactively (which fails in non-TTY environments like Claude Code).
+
+Example:
+```bash
+reachy-mini-app-assistant create my_app_name . --publish
 ```
 
 - `--publish` creates a Git repo on Hugging Face immediately (public by default)
