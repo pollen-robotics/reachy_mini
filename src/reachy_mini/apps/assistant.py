@@ -69,6 +69,8 @@ def create_cli(
     console: Console, app_name: str | None, app_path: Path | None
 ) -> tuple[str, str, Path]:
     """Create a new Reachy Mini app project using a CLI."""
+    interactive = app_name is None or app_path is None
+
     if app_name is None:
         # 1) App name
         console.print("$ What is the name of your app ?")
@@ -83,21 +85,24 @@ def create_cli(
             exit()
         app_name = app_name.strip().lower()
 
-    # 2) Language
-    console.print("\n$ Choose the language of your app")
-    language = questionary.select(
-        ">",
-        choices=["python", "js"],
-        default="python",
-    ).ask()
-    if language is None:
-        console.print("[red]Aborted.[/red]")
-        exit()
+    # 2) Language - only prompt interactively, default to python
+    if interactive:
+        console.print("\n$ Choose the language of your app")
+        language = questionary.select(
+            ">",
+            choices=["python", "js"],
+            default="python",
+        ).ask()
+        if language is None:
+            console.print("[red]Aborted.[/red]")
+            exit()
 
-    # js is not supported yet
-    if language != "python":
-        console.print("[red]Currently only Python apps are supported. Aborted.[/red]")
-        exit()
+        # js is not supported yet
+        if language != "python":
+            console.print("[red]Currently only Python apps are supported. Aborted.[/red]")
+            exit()
+    else:
+        language = "python"
 
     if app_path is None:
         # 3) App path
@@ -121,13 +126,16 @@ def create_cli(
     return app_name, language, app_path
 
 
-def create(console: Console, app_name: str, app_path: Path) -> None:
+def create(console: Console, app_name: str, app_path: Path) -> Path:
     """Create a new Reachy Mini app project with the given name at the specified path.
 
     Args:
         console (Console): The console object for printing messages.
         app_name (str): The name of the app to create.
         app_path (Path): The directory where the app project will be created.
+
+    Returns:
+        Path: The path to the created app project.
 
     """
     app_name, language, app_path = create_cli(console, app_name, app_path)
@@ -192,6 +200,7 @@ def create(console: Console, app_name: str, app_path: Path) -> None:
     # TODO assets dir with a .gif ?
 
     console.print(f"✅ Created app '{app_name}' in {base_path}/", style="bold green")
+    return base_path
 
 
 def install_app_with_progress(
@@ -615,6 +624,7 @@ def publish(
     commit_message: str,
     official: bool = False,
     no_check: bool = False,
+    private: bool | None = None,
 ) -> None:
     """Publish the app to the Reachy Mini app store.
 
@@ -624,6 +634,7 @@ def publish(
         commit_message (str): Commit message for the app publish.
         official (bool): Request to publish the app as an official Reachy Mini app.
         no_check (bool): Don't run checks before publishing the app.
+        private (bool | None): If True, make private. If False, make public. If None, prompt.
 
     """
     import huggingface_hub as hf
@@ -749,17 +760,22 @@ def publish(
             console.print(f"\n🔎 Running checks on the app at {app_path}/...")
             check(console, str(app_path))
 
-        console.print("Do you want your space to be created private or public?")
-        privacy = questionary.select(
-            ">",
-            choices=["private", "public"],
-            default="public",
-        ).ask()
+        # Determine privacy setting
+        if private is None:
+            console.print("Do you want your space to be created private or public?")
+            privacy = questionary.select(
+                ">",
+                choices=["private", "public"],
+                default="public",
+            ).ask()
+            is_private = (privacy == "private")
+        else:
+            is_private = private
 
         hf.create_repo(
             repo_path,
             repo_type="space",
-            private=(privacy == "private"),
+            private=is_private,
             exist_ok=False,
             space_sdk="static",
         )

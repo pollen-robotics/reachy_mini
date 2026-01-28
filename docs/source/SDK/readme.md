@@ -29,6 +29,10 @@ We provide a collection of ready-to-run scripts to help you understand how to us
 
 [**👉 Browse the Examples Folder**](https://github.com/pollen-robotics/reachy_mini/tree/main/examples)
 
+## 🤖 AI-Assisted Development
+
+Using an AI coding assistant (Claude, GPT, Copilot, etc.)? Check out [**agents.md**](../../agents.md) in the repo root - it helps AI agents understand the SDK and guide you through app development.
+
 ## ❓ Troubleshooting
 
 Encountering an issue? 👉 **[Check the Troubleshooting & FAQ Guide](../troubleshooting.md)**
