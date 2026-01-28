@@ -442,7 +442,7 @@ def _find_metadata_for_entry_point(ep_name: str) -> dict:  # type: ignore
 
 def _extract_package_info_from_pyproject(target_path: str) -> dict[str, str | None]:
     """Extract package name and entry point name from pyproject.toml file."""
-    import toml  # type: ignore
+    import toml
 
     pyproject_path = Path(target_path) / "pyproject.toml"
 
