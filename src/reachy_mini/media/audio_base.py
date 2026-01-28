@@ -59,6 +59,15 @@ class AudioBase(ABC):
 
     def __del__(self) -> None:
         """Destructor to ensure resources are released."""
+        self.cleanup()
+
+    def cleanup(self) -> None:
+        """Cleanup resources before destruction.
+
+        This method should be called to release any resources held by the audio
+        implementation before the object is destroyed.
+
+        """
         if self._respeaker:
             self._respeaker.close()
 

@@ -180,6 +180,7 @@ class MediaManager:
         if self.audio is not None:
             self.audio.stop_recording()
             self.audio.stop_playing()
+            self.audio.cleanup()
             del self.audio
             self.audio = None
 

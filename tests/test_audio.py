@@ -173,7 +173,7 @@ def test_DoA(backend: MediaBackend) -> None:
     assert doa_proxy is not None, "DoA is not defined."
     assert doa_proxy == doa, f"Proxy DoA is not equal to direct DoA"
 
-    media.close()
+    media.close()    
 
 
 def test_no_media() -> None:
