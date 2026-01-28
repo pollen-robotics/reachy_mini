@@ -103,6 +103,7 @@ class OpenCVCamera(CameraBase):
         """
         super().__init__(log_level=log_level)
         self.cap: Optional[cv2.VideoCapture] = None
+        self._resolution: Optional[CameraResolution] = None
 
     def set_resolution(self, resolution: CameraResolution) -> None:
         """Set the camera resolution."""
@@ -127,9 +128,10 @@ class OpenCVCamera(CameraBase):
             if self.cap is None or self.camera_specs is None:
                 raise RuntimeError("Camera not found")
 
-            self._resolution = self.camera_specs.default_resolution
             if self._resolution is None:
-                raise RuntimeError("Failed to get default camera resolution.")
+                self._resolution = self.camera_specs.default_resolution
+                if self._resolution is None:
+                    raise RuntimeError("Failed to get default camera resolution.")
 
             self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, self._resolution.value[0])
             self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self._resolution.value[1])

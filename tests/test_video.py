@@ -43,9 +43,6 @@ def test_get_frame_exists_all_resolutions(backend: MediaBackend) -> None:
     """Test that a frame can be retrieved from the camera for all supported resolutions."""
     media = MediaManager(backend=backend, signalling_host=SIGNALING_HOST if backend == MediaBackend.WEBRTC else "localhost")
     for resolution in media.camera.camera_specs.available_resolutions:
-        print(backend)
-        print(media.camera.camera_specs.name)
-        print(resolution)
         media.camera.close()
         media.camera.set_resolution(resolution)
         media.camera.open()
