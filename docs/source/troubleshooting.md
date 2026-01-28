@@ -352,7 +352,7 @@ ssh pollen@reachy-mini.local
 ```bash
 source /venvs/mini_daemon/bin/activate
 ```
-- And run the script: (Motors must be poweredonfor this!)
+- And run the script: (Motors must be powered on for this!)
 ```bash
 python scan_motors.py
 ```

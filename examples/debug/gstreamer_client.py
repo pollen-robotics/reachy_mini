@@ -4,7 +4,8 @@ import argparse
 from threading import Thread
 
 import gi
-from gst_signalling.utils import find_producer_peer_id_by_name
+
+from reachy_mini.media.webrtc_utils import find_producer_peer_id_by_name
 
 gi.require_version("Gst", "1.0")
 from gi.repository import GLib, Gst  # noqa: E402

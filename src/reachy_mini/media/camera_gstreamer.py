@@ -40,6 +40,8 @@ Example usage:
 """
 
 import os
+import platform
+import time
 from threading import Thread
 from typing import Optional, Tuple, cast
 
@@ -50,6 +52,7 @@ from reachy_mini.media.camera_constants import (
     ArducamSpecs,
     CameraResolution,
     CameraSpecs,
+    MujocoCameraSpecs,
     ReachyMiniLiteCamSpecs,
     ReachyMiniWirelessCamSpecs,
 )
@@ -60,7 +63,7 @@ try:
 except ImportError as e:
     raise ImportError(
         "The 'gi' module is required for GStreamerCamera but could not be imported. \
-                      Please install the GStreamer backend: pip install .[gstreamer]."
+        Please check the gstreamer installation."
     ) from e
 
 gi.require_version("Gst", "1.0")
@@ -78,6 +81,7 @@ class GStreamerCamera(CameraBase):
     def __init__(
         self,
         log_level: str = "INFO",
+        use_sim: bool = False,
     ) -> None:
         """Initialize the GStreamer camera."""
         super().__init__(log_level=log_level)
@@ -87,7 +91,11 @@ class GStreamerCamera(CameraBase):
 
         self.pipeline = Gst.Pipeline.new("camera_recorder")
 
-        cam_path, self.camera_specs = self.get_video_device()
+        if use_sim:
+            cam_path = "use_sim"
+            self.camera_specs = cast(CameraSpecs, MujocoCameraSpecs)
+        else:
+            cam_path, self.camera_specs = self.get_video_device()
 
         if self.camera_specs is None:
             raise RuntimeError("Camera specs not set")
@@ -107,6 +115,48 @@ class GStreamerCamera(CameraBase):
         if cam_path == "":
             self.logger.warning("Recording pipeline set without camera.")
             self.pipeline.remove(self._appsink_video)
+        elif cam_path == "use_sim":
+            udpsrc = Gst.ElementFactory.make("udpsrc")
+            udpsrc.set_property("port", 5005)
+            caps = Gst.Caps.from_string("image/jpeg")
+            udpsrc.set_property("caps", caps)
+            self.pipeline.add(udpsrc)
+            queue = Gst.ElementFactory.make("queue")
+            self.pipeline.add(queue)
+            jpegparse = Gst.ElementFactory.make("jpegparse")
+            self.pipeline.add(jpegparse)
+            # use vaapijpegdec or nvjpegdec for hardware acceleration
+            jpegdec = Gst.ElementFactory.make("jpegdec")
+            self.pipeline.add(jpegdec)
+            videoconvert = Gst.ElementFactory.make("videoconvert")
+            self.pipeline.add(videoconvert)
+            udpsrc.link(queue)
+            queue.link(jpegdec)
+            jpegdec.link(videoconvert)
+            videoconvert.link(self._appsink_video)
+
+        elif platform.system() == "Windows":
+            camsrc = Gst.ElementFactory.make("mfvideosrc")
+            camsrc.set_property("device-name", cam_path)
+            self.pipeline.add(camsrc)
+            queue = Gst.ElementFactory.make("queue")
+            self.pipeline.add(queue)
+            videoconvert = Gst.ElementFactory.make("videoconvert")
+            self.pipeline.add(videoconvert)
+            camsrc.link(queue)
+            queue.link(videoconvert)
+            videoconvert.link(self._appsink_video)
+        elif platform.system() == "Darwin":
+            camsrc = Gst.ElementFactory.make("avfvideosrc")
+            camsrc.set_property("device-index", int(cam_path))
+            self.pipeline.add(camsrc)
+            queue = Gst.ElementFactory.make("queue")
+            self.pipeline.add(queue)
+            videoconvert = Gst.ElementFactory.make("videoconvert")
+            self.pipeline.add(videoconvert)
+            camsrc.link(queue)
+            queue.link(videoconvert)
+            videoconvert.link(self._appsink_video)
         elif cam_path == "/tmp/reachymini_camera_socket":
             camsrc = Gst.ElementFactory.make("unixfdsrc")
             camsrc.set_property("socket-path", "/tmp/reachymini_camera_socket")
@@ -175,10 +225,10 @@ class GStreamerCamera(CameraBase):
         super().set_resolution(resolution)
 
         # Check if pipeline is not playing before changing resolution
+        should_restart = False
         if self.pipeline.get_state(0).state == Gst.State.PLAYING:
-            raise RuntimeError(
-                "Cannot change resolution while the camera is streaming. Please close the camera first."
-            )
+            self.close()
+            should_restart = True
 
         self._resolution = resolution
         caps_video = Gst.Caps.from_string(
@@ -197,6 +247,7 @@ class GStreamerCamera(CameraBase):
         self._thread_bus_calls = Thread(target=self._handle_bus_calls, daemon=True)
         self._thread_bus_calls.start()
         GLib.timeout_add_seconds(5, self._dump_latency)
+        # TODO: Add a small loop to wait for the frames to be ready after restarting the pipeline
 
     def _get_sample(self, appsink: GstApp.AppSink) -> Optional[bytes]:
         sample = appsink.try_pull_sample(20_000_000)
@@ -248,30 +299,53 @@ class GStreamerCamera(CameraBase):
         monitor.add_filter("Video/Source")
         monitor.start()
 
-        cam_names = ["Reachy", "Arducam_12MP", "imx708"]
+        try:
+            cam_names = ["Reachy", "Arducam_12MP", "imx708"]
+            devices = monitor.get_devices()
+            for cam_name in cam_names:
+                for device_index, device in enumerate(devices):
+                    name = device.get_display_name()
+                    device_props = device.get_properties()
 
-        devices = monitor.get_devices()
-        for cam_name in cam_names:
-            for device in devices:
-                name = device.get_display_name()
-                device_props = device.get_properties()
-
-                if cam_name in name:
-                    if device_props and device_props.has_field("api.v4l2.path"):
-                        device_path = device_props.get_string("api.v4l2.path")
-                        camera_specs = (
-                            cast(CameraSpecs, ArducamSpecs)
-                            if cam_name == "Arducam_12MP"
-                            else cast(CameraSpecs, ReachyMiniLiteCamSpecs)
-                        )
-                        self.logger.debug(f"Found {cam_name} camera at {device_path}")
-                        monitor.stop()
-                        return str(device_path), camera_specs
-                    elif cam_name == "imx708":
-                        camera_specs = cast(CameraSpecs, ReachyMiniWirelessCamSpecs)
-                        self.logger.debug(f"Found {cam_name} camera")
-                        monitor.stop()
-                        return cam_name, camera_specs
-        monitor.stop()
-        self.logger.warning("No camera found.")
+                    if cam_name in name:
+                        if device_props and device_props.has_field("api.v4l2.path"):
+                            device_path = device_props.get_string("api.v4l2.path")
+                            camera_specs = (
+                                cast(CameraSpecs, ArducamSpecs)
+                                if cam_name == "Arducam_12MP"
+                                else cast(CameraSpecs, ReachyMiniLiteCamSpecs)
+                            )
+                            self.logger.debug(
+                                f"Found {cam_name} camera at {device_path}"
+                            )
+                            return str(device_path), camera_specs
+                        elif platform.system() == "Windows":
+                            camera_specs = (
+                                cast(CameraSpecs, ArducamSpecs)
+                                if cam_name == "Arducam_12MP"
+                                else cast(CameraSpecs, ReachyMiniLiteCamSpecs)
+                            )
+                            self.logger.debug(f"Found {cam_name} camera for Windows")
+                            return str(name), camera_specs
+                        elif platform.system() == "Darwin":
+                            camera_specs = (
+                                cast(CameraSpecs, ArducamSpecs)
+                                if cam_name == "Arducam_12MP"
+                                else cast(CameraSpecs, ReachyMiniLiteCamSpecs)
+                            )
+                            self.logger.debug(
+                                f"Found {cam_name} camera at index {device_index} for macOS"
+                            )
+                            return str(device_index), camera_specs
+                        elif cam_name == "imx708":
+                            camera_specs = cast(CameraSpecs, ReachyMiniWirelessCamSpecs)
+                            self.logger.debug(f"Found {cam_name} camera")
+                            return cam_name, camera_specs
+            self.logger.warning("No camera found.")
+        except Exception as e:
+            self.logger.error(f"Error while getting video device: {e}")
+        finally:
+            self.logger.debug("Stopping monitor")
+            time.sleep(0.001)
+            monitor.stop()
         return "", None

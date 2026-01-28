@@ -1,32 +1,48 @@
+import importlib.util
 import os
 import tempfile
 import time
 
 import numpy as np
 import pytest
-import soundfile as sf
 
 from reachy_mini.media.audio_utils import _process_card_number_output
 from reachy_mini.media.media_manager import MediaBackend, MediaManager
 
+SIGNALING_HOST = "reachy-mini.local"
+
+# Check if sounddevice is installed
+_sounddevice_available = importlib.util.find_spec("sounddevice") is not None
+
+# All audio only backends to test
+NO_VIDEO_BACKENDS = [
+    pytest.param(backend, marks=pytest.mark.wireless) if backend == MediaBackend.WEBRTC else pytest.param(backend)
+    for backend in MediaBackend
+    if ("NO_VIDEO" in backend.name or backend == MediaBackend.WEBRTC)
+    and (_sounddevice_available or "SOUNDDEVICE" not in backend.name)
+]
 
 @pytest.mark.audio
-def test_play_sound_default_backend() -> None:
-    """Test playing a sound with the default backend."""
-    media = MediaManager(backend=MediaBackend.DEFAULT_NO_VIDEO)
+@pytest.mark.parametrize("backend", NO_VIDEO_BACKENDS)
+def test_play_sound(backend: MediaBackend) -> None:
+    """Test playing a sound with the given backend."""
+    media = MediaManager(backend=backend, signalling_host=SIGNALING_HOST if backend == MediaBackend.WEBRTC else "localhost")
     # Use a short sound file present in your assets directory
     sound_file = "wake_up.wav"  # Change to a valid file if needed
     media.play_sound(sound_file)
-    print("Playing sound with default backend...")
+    print(f"Playing sound with {backend.value} backend...")
     # Wait a bit to let the sound play (non-blocking backend)
     time.sleep(2)
     # No assertion: test passes if no exception is raised.
     # Sound should be audible if the audio device is correctly set up.
+    media.close()
+
 
 @pytest.mark.audio
-def test_push_audio_sample_default_backend() -> None:
-    """Test pushing an audio sample with the default backend."""
-    media = MediaManager(backend=MediaBackend.DEFAULT_NO_VIDEO)
+@pytest.mark.parametrize("backend", NO_VIDEO_BACKENDS)
+def test_push_audio_sample(backend: MediaBackend) -> None:
+    """Test pushing an audio sample with the given backend."""
+    media = MediaManager(backend=backend, signalling_host=SIGNALING_HOST if backend == MediaBackend.WEBRTC else "localhost")
     media.start_playing()
 
     #Stereo, channels last
@@ -64,108 +80,104 @@ def test_push_audio_sample_default_backend() -> None:
     # No sound should be audible if the audio device is correctly set up.
 
     media.stop_playing()
+    media.close()
+
 
 @pytest.mark.audio
-def test_record_audio_and_file_exists() -> None:
+@pytest.mark.parametrize("backend", NO_VIDEO_BACKENDS)
+def test_record_audio_and_file_exists(backend: MediaBackend) -> None:
     """Test recording audio and check that the file exists and is not empty."""
-    media = MediaManager(backend=MediaBackend.DEFAULT_NO_VIDEO)
+    import soundfile as sf
+    media = MediaManager(backend=backend, signalling_host=SIGNALING_HOST if backend == MediaBackend.WEBRTC else "localhost")
     DURATION = 2  # seconds
+    audio_samples = []
     tmpfile = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
     tmpfile.close()
+    
+    t0 = time.time()
     media.start_recording()
-    time.sleep(DURATION)
+
+    NB_SAMPLES = DURATION * media.get_input_audio_samplerate()
+    current_nb_samples = 0
+    while current_nb_samples < NB_SAMPLES or time.time() - t0 < DURATION + 2:
+        sample = media.get_audio_sample()
+        if sample is not None:
+            audio_samples.append(sample)
+            current_nb_samples += sample.shape[0]
+
     media.stop_recording()
-    audio = media.get_audio_sample()
-    samplerate = media.get_input_audio_samplerate()
-    assert audio is not None
-    sf.write(tmpfile.name, audio, samplerate)
-    assert os.path.exists(tmpfile.name)
-    assert os.path.getsize(tmpfile.name) > 0
-    # comment the following line if you want to keep the file for inspection
+
+    assert len(audio_samples) > 0, "No audio samples were recorded."
+    audio_data = np.concatenate(audio_samples, axis=0)
+    assert audio_data.ndim == 2 and audio_data.shape[1] == media.get_input_channels(), f"Audio data has incorrect number of channels: {audio_data.shape[1]} != {media.get_input_channels()}"    
+    assert audio_data.shape[0] == pytest.approx(DURATION * media.get_input_audio_samplerate(), rel=0.1), f"Audio data has incorrect number of samples: {audio_data.shape[0]} != {DURATION * media.get_input_audio_samplerate()}"
+
+    sf.write(tmpfile.name, audio_data, media.get_input_audio_samplerate())
+    assert os.path.exists(tmpfile.name), "File does not exist."
+    assert os.path.getsize(tmpfile.name) > 0, "File is empty."
+
     os.remove(tmpfile.name)
-    #print(f"Recorded audio saved to {tmpfile.name}")
+    media.close()
+
 
 @pytest.mark.audio
-def test_record_audio_without_start_recording() -> None:
+@pytest.mark.parametrize("backend", NO_VIDEO_BACKENDS)
+def test_record_audio_without_start_recording(backend: MediaBackend) -> None:
     """Test recording audio without starting recording."""
-    media = MediaManager(backend=MediaBackend.DEFAULT_NO_VIDEO)
+    media = MediaManager(backend=backend, signalling_host=SIGNALING_HOST if backend == MediaBackend.WEBRTC else "localhost")
     audio = media.get_audio_sample()
-    assert audio is None
+    assert audio is None, "Audio samples were recorded without starting recording."
+    media.close()
+
 
 @pytest.mark.audio
-def test_record_audio_above_max_queue_seconds() -> None:
+@pytest.mark.parametrize("backend", NO_VIDEO_BACKENDS)
+def test_push_audio_sample_without_start_playing(backend: MediaBackend) -> None:
+    """Test pushing an audio sample without starting playing."""
+    media = MediaManager(backend=backend, signalling_host=SIGNALING_HOST if backend == MediaBackend.WEBRTC else "localhost")
+    data = np.random.random((media.get_output_audio_samplerate(), 2)).astype(np.float32)
+    media.push_audio_sample(data)
+    time.sleep(1)
+    # No assertion: test passes if no exception is raised.
+    # Sound should not be audible if the audio device is correctly set up.
+    media.close()
+
+
+@pytest.mark.audio_sounddevice
+@pytest.mark.parametrize("backend", [MediaBackend.SOUNDDEVICE_NO_VIDEO])
+def test_record_audio_above_max_queue_seconds(backend: MediaBackend) -> None:
     """Test recording audio and check that the maximum queue seconds is respected."""
-    media = MediaManager(backend=MediaBackend.DEFAULT_NO_VIDEO)
+    media = MediaManager(backend=backend, signalling_host=SIGNALING_HOST if backend == MediaBackend.WEBRTC else "localhost")
     media.audio._input_max_queue_seconds = 1
     media.start_recording()
     time.sleep(5)
     audio = media.get_audio_sample()
     media.stop_recording()
 
-    assert audio is not None
-    assert audio.shape[0] < media.audio._input_max_queue_samples
+    assert audio is not None, "No audio samples were recorded."
+    assert audio.shape[0] < media.audio._input_max_queue_samples, f"Audio data has incorrect number of samples: {audio.shape[0]} >= {media.audio._input_max_queue_samples}"
+
+    media.close()
+
 
 @pytest.mark.audio
-def test_DoA() -> None:
+@pytest.mark.parametrize("backend", [MediaBackend.GSTREAMER_NO_VIDEO, MediaBackend.SOUNDDEVICE_NO_VIDEO])
+def test_DoA(backend: MediaBackend) -> None:
     """Test Direction of Arrival (DoA) estimation."""
-    media = MediaManager(backend=MediaBackend.DEFAULT_NO_VIDEO)
+    media = MediaManager(backend=backend, signalling_host=SIGNALING_HOST if backend == MediaBackend.WEBRTC else "localhost")
     # Test via AudioBase directly
     doa = media.audio.get_DoA()
-    assert doa is not None
-    assert isinstance(doa, tuple)
-    assert len(doa) == 2
-    assert isinstance(doa[0], float)
-    assert isinstance(doa[1], bool)
+    assert doa is not None, "DoA is not defined."
+    assert isinstance(doa, tuple), "DoA is not a tuple."
+    assert len(doa) == 2, f"DoA has incorrect length: {len(doa)} != 2"
+    assert isinstance(doa[0], float), f"DoA has incorrect first type: {type(doa[0])} != float"
+    assert isinstance(doa[1], bool), f"DoA has incorrect second type: {type(doa[1])} != bool"
     # Test via MediaManager proxy
     doa_proxy = media.get_DoA()
-    assert doa_proxy is not None
-    assert doa_proxy == doa
+    assert doa_proxy is not None, "DoA is not defined."
+    assert doa_proxy == doa, f"Proxy DoA is not equal to direct DoA"
 
-
-'''
-@pytest.mark.audio_gstreamer
-def test_play_sound_gstreamer_backend() -> None:
-    """Test playing a sound with the GStreamer backend."""
-    media = MediaManager(backend=MediaBackend.GSTREAMER)
-    time.sleep(2)  # Give some time for the audio system to initialize
-    # Use a short sound file present in your assets directory
-    sound_file = "wake_up.wav"  # Change to a valid file if needed
-    media.play_sound(sound_file)
-    print("Playing sound with GStreamer backend...")
-    # Wait a bit to let the sound play (non-blocking backend)
-    time.sleep(2)
-    # No assertion: test passes if no exception is raised.
-    # Sound should be audible if the audio device is correctly set up.
-'''
-
-@pytest.mark.audio_gstreamer
-def test_record_audio_and_file_exists_gstreamer() -> None:
-    """Test recording audio and check that the file exists and is not empty."""
-    media = MediaManager(backend=MediaBackend.GSTREAMER)
-    DURATION = 2  # seconds
-    tmpfile = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
-    tmpfile.close()
-    audio_samples = []
-    t0 = time.time()
-    media.start_recording()
-
-    while time.time() - t0 < DURATION:
-        sample = media.get_audio_sample()
-
-        if sample is not None:
-            audio_samples.append(sample)
-
-    media.stop_recording()
-    
-    assert len(audio_samples) > 0
-    audio_data = np.concatenate(audio_samples, axis=0)
-    assert audio_data.ndim == 2 and audio_data.shape[1] == 2
-    samplerate = media.get_input_audio_samplerate()
-    sf.write(tmpfile.name, audio_data, samplerate)
-    assert os.path.exists(tmpfile.name)
-    assert os.path.getsize(tmpfile.name) > 0
-    #os.remove(tmpfile.name)
-    print(f"Recorded audio saved to {tmpfile.name}")
+    media.close()    
 
 
 def test_no_media() -> None:
@@ -176,7 +188,11 @@ def test_no_media() -> None:
     assert media.get_audio_sample() is None
     assert media.get_input_audio_samplerate() == -1
     assert media.get_output_audio_samplerate() == -1
+    assert media.get_input_channels() == -1
+    assert media.get_output_channels() == -1
     assert media.get_DoA() is None
+
+    media.close()
 
 
 def test_get_respeaker_card_number() -> None:

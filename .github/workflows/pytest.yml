@@ -24,7 +24,7 @@ jobs:
           cache: "pip"
       - name: Install system dependencies (Ubuntu)
         if: matrix.os == 'ubuntu-latest'
-        run: sudo apt-get update && sudo apt-get install -y libportaudio2
+        run: sudo apt-get update && sudo apt-get install -y libportaudio2 libcairo2-dev libgirepository1.0-dev
       - name: Create virtual environment and install dependencies
         run: |
           python -m venv venv
@@ -34,6 +34,6 @@ jobs:
       - name: Run tests
         run: |
           source venv/bin/activate
-          pytest -vv -m 'not audio and not video and not audio_gstreamer and not video_gstreamer and not wireless and not wireless_gstreamer' --tb=short
+          pytest -vv -m 'not audio and not video and not audio_sounddevice and not video_opencv and not wireless and not wireless_gstreamer' --tb=short
         env:
           MUJOCO_GL: disable

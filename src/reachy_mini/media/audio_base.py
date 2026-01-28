@@ -59,6 +59,15 @@ class AudioBase(ABC):
 
     def __del__(self) -> None:
         """Destructor to ensure resources are released."""
+        self.cleanup()
+
+    def cleanup(self) -> None:
+        """Cleanup resources before destruction.
+
+        This method should be called to release any resources held by the audio
+        implementation before the object is destroyed.
+
+        """
         if self._respeaker:
             self._respeaker.close()
 
@@ -194,6 +203,16 @@ class AudioBase(ABC):
         Raises:
             RuntimeError: If audio playback cannot be started due to hardware
                         or configuration issues.
+
+        """
+        pass
+
+    def clear_output_buffer(self) -> None:
+        """Clear the output buffer.
+
+        This method flushes the output buffer to prevent push samples from being played.
+        Overwrite if necessary. It seems that set_max_output_buffers with a low value
+        may be enough for gstreamer backend.
 
         """
         pass

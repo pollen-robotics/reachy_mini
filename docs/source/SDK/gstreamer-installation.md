@@ -1,16 +1,16 @@
-# 📡 GStreamer Installation for Wireless Reachy Mini
+# 📡 GStreamer Installation
 
-> This guide will help you install [GStreamer](https://gstreamer.freedesktop.org) to receive video and audio streams from your wireless Reachy Mini.
+> This guide will help you install [GStreamer](https://gstreamer.freedesktop.org) for receiving video and audio streams from your Reachy Mini. See the [media architecture](/docs/SDK/media-architecture.md) to understand how streams are accessed locally or remotely depending on the configuration.
+
+Python wheels are available for the Windows and macOS platforms and are included in the project dependencies. Everything should work out of the box. For Linux users, a manual installation is required.
 
 <div align="center">
 
 | 🐧 **Linux** | 🍎 **macOS** | 🪟 **Windows** |
 |:---:|:---:|:---:|
-| ✅ Supported | ✅ Supported | ⚠️ Partial Support |
+| ⚠️ Manual installation | ✅ Python wheels | ✅ Python wheels |
 
 </div>
-
-> **Note**: Python wheels for easy install of GStreamer will be soon released an available on PyPI. They will be directly integrated. Meanwhile, please follow the instructions below to install GStreamer on your system.
 
 ## 🔧 Install GStreamer
 
@@ -21,7 +21,9 @@
 
 **For Ubuntu/Debian-based systems:**
 
-In you terminal, run:
+You need at least GStreamer >= 1.22. If the version provided by your distribution is too old, you'll have to [manually compile GStreamer](https://gstreamer.freedesktop.org/documentation/installing/building-from-source-using-meson.html?gi-language=c).
+
+In your terminal, run:
 
 ```bash
 sudo apt-get update
@@ -43,9 +45,11 @@ sudo apt-get install -y \
     python3-gi-cairo
 ```
 
+Other distributions may refer to the [official GStreamer documentation](https://gstreamer.freedesktop.org/documentation/installing/on-linux.html?gi-language=c).
+
 ### Step 2: Install Rust
 
-On Linux, the WebRTC plugin is not activated by default and needs to be compiled manually from the Rust source code. Install Rust from the commmand line using `rustup`:
+On Linux, the WebRTC plugin is not enabled by default and needs to be compiled manually from the Rust source code. Install Rust from the command line using `rustup`:
 
 ```bash
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
@@ -54,7 +58,7 @@ source $HOME/.cargo/env
 
 ### Step 3: Build and install WebRTC plugin
 
-The build and install the WebRTC plugin, run the following commands :
+To build and install the WebRTC plugin, run the following commands:
 
 ```bash
 # Clone the GStreamer Rust plugins repository
@@ -84,20 +88,22 @@ source ~/.bashrc
 <details>
 <summary>🍎 <strong>macOS</strong></summary>
 
+It is not necessary to install GStreamer manually since the wheels are provided. However, it is still possible to avoid using the wheels and rely on the system installation.
+
 ### Using Homebrew
 
 ```bash
 brew install gstreamer libnice-gstreamer
 ```
 
-The WebRTC plugin is activated by default in the Homebrew package.
+The WebRTC plugin is enabled by default in the Homebrew package.
 
 </details>
 
 <details>
 <summary>🪟 <strong>Windows</strong></summary>
 
-> ⚠️ **Note:** Windows support is currently partial. Some features may not work as expected.
+It is not necessary to install GStreamer manually since the wheels are provided. However, it is still possible to avoid using the wheels and rely on the system installation.
 
 ### Step 1: Install GStreamer using the official installer
 
@@ -108,13 +114,11 @@ The WebRTC plugin is activated by default in the Homebrew package.
 </div>
 
 1. Download the **runtime** installer (MSVC version)
-2. Install with **Complete** installation option
-3. Edit the environment variables and Add to system PATH: `C:\Program Files\gstreamer\1.0\msvc_x86_64\bin`
-4. Add to PYTHONPATH: `C:\gstreamer\1.0\msvc_x86_64\lib\site-packages`
+2. Install with the **Complete** installation option
+3. Edit the environment variables and add to system PATH: `C:\Program Files\gstreamer\1.0\msvc_x86_64\bin`
+4. Add to PYTHONPATH: `C:\Program Files\gstreamer\1.0\msvc_x86_64\lib\site-packages`
 
 > **💡 Important:** Replace `C:\Program Files\gstreamer` with your actual GStreamer installation folder if you installed it in a different location.
-
-
 
 </details>
 
@@ -124,7 +128,7 @@ Finally, you can test your GStreamer installation as follows:
 
 ```bash
 # Check version
-gst-launch-1.0 --version
+gst-launch-1.0(.exe) --version
 
 # Test basic functionalities
 gst-launch-1.0 videotestsrc ! autovideosink
@@ -133,30 +137,15 @@ gst-launch-1.0 videotestsrc ! autovideosink
 gst-inspect-1.0 webrtcsrc
 ```
 
-You should also be able to import gstreamer libraries in a Python environment:
+You should also be able to import GStreamer libraries in a Python environment:
 ```bash
 python -c "import gi"
 ```
 
-## 🔧 Python Dependencies
-
-When installing Reachy Mini Python package, you will also need to add the `gstreamer` extra :
-
-### Install from PyPI
-
-```bash
-uv pip install "reachy-mini[gstreamer]"
-```
-
-### Install from source
-
-```bash
-uv sync --extra gstreamer
-```
 
 ## Troubleshooting & Unit Tests
 
-If you encounter issues with the stream, you can test the components individually.
+If you encounter issues with the stream, you can test the components individually as follows.
 
 **Test 1: Manually create the WebRTC Server**
 Run this GStreamer pipeline on the robot to verify the camera and encoder stack:
