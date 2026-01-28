@@ -21,7 +21,7 @@
 
 **For Ubuntu/Debian-based systems:**
 
-In you terminal, run:
+In your terminal, run:
 
 ```bash
 sudo apt-get update
@@ -41,6 +41,24 @@ sudo apt-get install -y \
     gstreamer1.0-nice \
     python3-gi \
     python3-gi-cairo
+```
+
+**For Ubuntu 22.04 only:** The default GStreamer version is too old. You need to add a PPA to get GStreamer 1.24.x:
+
+```bash
+sudo add-apt-repository ppa:savoury1/multimedia
+sudo apt update
+sudo apt install \
+    libgstreamer1.0-dev \
+    libgstreamer-plugins-base1.0-dev \
+    libgstreamer-plugins-good1.0-dev \
+    libgstreamer-plugins-bad1.0-dev
+```
+
+Verify you have the correct version:
+```bash
+pkg-config --modversion gstreamer-1.0
+# Should output 1.24.x or higher
 ```
 
 ### Step 2: Install Rust
