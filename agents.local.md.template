@@ -15,8 +15,6 @@ Copy this to `agents.local.md` and customize, or let the AI create it during fir
 
 ```
 resources_folder: ~/reachy_mini_resources
-reachy_mini_repo: ~/reachy_mini_resources/reachy_mini
-apps_folder: ~/reachy_mini_apps
 ```
 
 ## Preferences
@@ -31,7 +29,7 @@ os: linux              # or: macos, windows
 
 | Repo | Path | Last Updated |
 |------|------|--------------|
-| reachy_mini | ~/reachy_mini_resources/reachy_mini | 2026-01-19 |
+| reachy_mini_conversation_app | ~/reachy_mini_resources/reachy_mini_conversation_app | 2026-01-19 |
 
 ## Notes
 

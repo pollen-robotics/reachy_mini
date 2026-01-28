@@ -20,14 +20,18 @@ This affects how testing works.
 
 ## Step 1: Prepare the Robot
 
+**The daemon must be running before your app can connect.**
+
 Ask the user how they want to test:
 
 | Test mode | Lite | Wireless |
 |-----------|------|----------|
-| **Simulation** | Terminal: `reachy-mini-daemon --sim` | Terminal: `reachy-mini-daemon --sim` |
-| **Physical robot** | Terminal: `reachy-mini-daemon` | Turn on robot, wake from dashboard |
+| **Simulation** | Start daemon: `reachy-mini-daemon --sim` | Start daemon: `reachy-mini-daemon --sim` |
+| **Physical robot** | Start daemon: `reachy-mini-daemon` | Turn on robot (daemon runs automatically) |
 
-**Important:** Make sure no other daemon is already running.
+**Important:**
+- Make sure no other daemon is already running
+- For Wireless, the daemon starts automatically on boot - just power on and wait for WiFi
 
 Wait for user to confirm they're ready.
 

@@ -4,7 +4,7 @@
 
 - Building an app that needs real-time reactivity (face tracking, games, joystick control)
 - User asks about `set_target()` or continuous motion control
-- App needs to respond to sensor input in real-time
+- App needs to respond to sensor input at > 10Hz (ideally 50Hz+)
 
 ## Quick Check
 

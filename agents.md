@@ -62,7 +62,7 @@ Use `agents.local.md` to store:
 
 | Component | Description |
 |-----------|-------------|
-| **Head** | 6 DOF: pitch, roll, yaw + x, y, z (via Stewart platform) |
+| **Head** | 6 DOF: x, y, z, roll, pitch, yaw (via Stewart platform) |
 | **Body** | Rotation around vertical axis |
 | **Antennas** | 2 motors, also usable as physical buttons |
 
@@ -87,14 +87,8 @@ with ReachyMini() as mini:
 
 | Method | Use when |
 |--------|----------|
-| `goto_target()` | **Default** - smooth interpolation for gestures, choreography |
-| `set_target()` | Real-time control loops (tracking, games) at 50-100Hz |
-
-### Units
-
-- **Head orientation**: degrees (with `degrees=True`) or radians
-- **Head position**: mm (with `mm=True`) or meters
-- **Antennas**: always **radians** - use `np.deg2rad()`
+| `goto_target()` | **Default** - smooth interpolation for gestures that last at least 0.5s each |
+| `set_target()` | Real-time control loops (e.g. tracking) at 10Hz+ |
 
 ### Basic Example
 
@@ -110,11 +104,14 @@ See and run `examples/minimal_demo.py` - demonstrates connection, head motion, a
 
 ## REST API
 
-The daemon also exposes an HTTP/WebSocket API at `http://localhost:8000/api`.
+The daemon exposes an HTTP/WebSocket API at `http://{daemon-ip}:8000/api`.
 
-**Use REST API for:** Web UIs, non-Python clients, remote control, AI/LLM integration via HTTP.
+- **Lite**: `localhost:8000` (daemon runs on your machine)
+- **Wireless**: `reachy-mini.local:8000` or the robot's IP address
 
-**Interactive docs:** `http://localhost:8000/docs` (when daemon is running)
+**Use REST API for:** Web UIs, non-Python clients, remote control, AI/LLM integration via HTTP. => Note: for the app to be discoverable, it must be a python app for now, this will change in a future release.
+
+**Interactive docs:** `http://{daemon-ip}:8000/docs` (when daemon is running)
 
 See `skills/rest-api.md` for details.
 

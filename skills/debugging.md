@@ -100,11 +100,24 @@ See `safe-torque.md` for the workaround when enabling/disabling motor subsets.
 
 ## Reading Logs
 
-### Daemon logs
+### Daemon logs (Lite)
 ```bash
 # If running in terminal, logs appear there
-# Otherwise check system logs or run with verbose flag
+# Otherwise run with verbose flag
 reachy-mini-daemon --verbose
+```
+
+### Daemon logs (Wireless)
+SSH into the robot and check system logs or even restart the daemon:
+```bash
+ssh pollen@reachy-mini.local  # password: root
+
+# View daemon logs
+journalctl -u reachy-mini-daemon.service
+
+# Restart the daemon
+systemctl restart reachy-mini-daemon.service # password: root
+
 ```
 
 ### App logs

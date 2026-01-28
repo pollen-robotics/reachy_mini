@@ -4,14 +4,14 @@
 
 - First conversation with a new user
 - `agents.local.md` does not exist
-- `~/reachy_mini_resources/` does not exist
+- Reference apps folder does not exist
 - User explicitly asks to set up or reset their environment
 
 ## Quick Check
 
 ```bash
 # If BOTH exist, setup is likely done - read agents.local.md to confirm
-ls ~/reachy_mini_resources/reachy_mini 2>/dev/null && ls agents.local.md 2>/dev/null
+ls ~/reachy_mini_resources/ 2>/dev/null && ls agents.local.md 2>/dev/null
 ```
 
 If `agents.local.md` exists, read it. Look for "Setup complete" or similar confirmation.
@@ -24,9 +24,12 @@ If `agents.local.md` exists, read it. Look for "Setup complete" or similar confi
 
 Tell the user:
 
-> "To help you develop Reachy Mini apps, I'll set up a local folder with the SDK source code and example apps. This gives me access to documentation and proven patterns.
+> "To help you develop Reachy Mini apps, I'll set up a folder with example apps and reference code. This gives me access to proven patterns.
 >
-> The default location is `~/reachy_mini_resources/`. Want to use a different location?"
+> The default location is `~/reachy_mini_resources/`. Is this OK, or would you prefer a different location?
+> (Another option: if you already have reachy_mini cloned, I can put resources inside it)"
+
+**Important:** Always use absolute paths for robustness. The location should be permanent to avoid re-downloading on each session. Store the chosen path in `agents.local.md`.
 
 ### Step 2: Check for Missing Tools
 

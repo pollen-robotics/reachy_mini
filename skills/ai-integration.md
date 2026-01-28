@@ -53,9 +53,9 @@ Different personalities with different instructions and enabled tools. Profiles 
 
 ### 3. Vision Processing
 
-Two options:
-- **Cloud (GPT)**: Higher quality, requires API
-- **Local (SmolVLM2)**: Runs on device, no external calls
+Two options for image analysis (e.g., "what do you see?"):
+- **Cloud (e.g. gpt_realtime)**: Higher quality, requires API key
+- **Local (SmolVLM2)**: Runs on device, no external calls, lower quality
 
 ---
 
