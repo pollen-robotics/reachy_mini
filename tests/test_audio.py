@@ -93,19 +93,23 @@ def test_record_audio_and_file_exists(backend: MediaBackend) -> None:
     audio_samples = []
     tmpfile = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
     tmpfile.close()
-
+    
     t0 = time.time()
     media.start_recording()
-    while time.time() - t0 < DURATION:
+
+    NB_SAMPLES = DURATION * media.get_input_audio_samplerate()
+    current_nb_samples = 0
+    while current_nb_samples < NB_SAMPLES or time.time() - t0 < DURATION + 2:
         sample = media.get_audio_sample()
         if sample is not None:
             audio_samples.append(sample)
+            current_nb_samples += sample.shape[0]
 
     media.stop_recording()
 
     assert len(audio_samples) > 0, "No audio samples were recorded."
     audio_data = np.concatenate(audio_samples, axis=0)
-    assert audio_data.ndim == 2 and audio_data.shape[1] == media.get_input_channels(), f"Audio data has incorrect number of channels: {audio_data.shape[1]} != {media.get_input_channels()}"
+    assert audio_data.ndim == 2 and audio_data.shape[1] == media.get_input_channels(), f"Audio data has incorrect number of channels: {audio_data.shape[1]} != {media.get_input_channels()}"    
     assert audio_data.shape[0] == pytest.approx(DURATION * media.get_input_audio_samplerate(), rel=0.1), f"Audio data has incorrect number of samples: {audio_data.shape[0]} != {DURATION * media.get_input_audio_samplerate()}"
 
     sf.write(tmpfile.name, audio_data, media.get_input_audio_samplerate())

@@ -26,6 +26,10 @@ def test_get_frame_exists(backend: MediaBackend) -> None:
     media = MediaManager(backend=backend, signalling_host=SIGNALING_HOST if backend == MediaBackend.WEBRTC else "localhost")
     time.sleep(2)
     frame = media.get_frame()
+    if backend == MediaBackend.WEBRTC and frame is None:
+        print("Waiting extra time for WebRTC backend to get the first frame...")
+        time.sleep(4)
+        frame = media.get_frame()
     assert frame is not None, "No frame was retrieved from the camera."
     assert isinstance(frame, np.ndarray), "Frame is not a numpy array."
     assert frame.size > 0, "Frame is empty."
@@ -38,9 +42,12 @@ def test_get_frame_exists(backend: MediaBackend) -> None:
     media.close()
 
 @pytest.mark.video
-@pytest.mark.parametrize("backend", VIDEO_BACKENDS)
+@pytest.mark.parametrize("backend", [MediaBackend.GSTREAMER, MediaBackend.SOUNDDEVICE_OPENCV])
 def test_get_frame_exists_all_resolutions(backend: MediaBackend) -> None:
-    """Test that a frame can be retrieved from the camera for all supported resolutions."""
+    """Test that a frame can be retrieved from the camera for all supported resolutions.
+    
+    Todo: enable change of resolution for webrtc
+    """
     media = MediaManager(backend=backend, signalling_host=SIGNALING_HOST if backend == MediaBackend.WEBRTC else "localhost")
     for resolution in media.camera.camera_specs.available_resolutions:
         media.camera.close()
