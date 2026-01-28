@@ -12,6 +12,7 @@ import time
 from dataclasses import asdict, dataclass
 from enum import Enum
 from importlib.metadata import PackageNotFoundError, version
+from pathlib import Path
 from threading import Event, Thread
 from typing import Any, Optional
 
@@ -59,6 +60,11 @@ class Daemon:
         self.desktop_app_daemon = desktop_app_daemon
 
         self.backend: "RobotBackend | MujocoBackend | MockupSimBackend | None" = None
+        
+        # === Storage for component registry -==
+        
+        self.components: dict[str, Any] = {}
+        
         # Get package version
         try:
             package_version = version("reachy_mini")
@@ -281,6 +287,14 @@ class Daemon:
             self._status.error = self.backend.error
             return self._status.state
 
+
+        # === Load All Components ===        
+        
+        self.components = self._load_external_components(
+            manifest_path=Path.home() / ".reachy-mini" / "components.txt",
+            simulation=sim or mockup_sim,
+        )
+        
         if wake_up_on_start:
             try:
                 self.logger.info("Waking up Reachy Mini...")
@@ -305,6 +319,91 @@ class Daemon:
         self.logger.info("Daemon started successfully.")
         self._status.state = DaemonState.RUNNING
         return self._status.state
+
+    
+    # === Implementation (Fetch & very source, instantiate component factory) ===    
+    
+    def _load_external_components(
+        self,
+        manifest_path: Path,
+        simulation: bool,
+    ) -> dict[str, Any]:
+        """Load components from manifest file.
+        
+        Args:
+            manifest_path: Path to components.txt manifest
+            simulation: Whether running in simulation mode
+        
+        Returns:
+            Dictionary mapping component names to component instances
+        
+        Example manifest format:
+        
+            # components.txt
+            my-component=alice/component:v2.1.0
+        
+        Component contract:
+        
+            Each component must export:
+            - __version__: str - Component version
+            - create(context) -> Any - Factory function
+        
+        Loading behavior:
+        
+            - Check for updates (informational)
+            - Fetch (or use cache if available)
+            - Verify version matches
+            - Call create() with aggressive timeout
+            - Log failures, continue loading others
+
+        """
+        if not manifest_path.exists():
+            self.logger.info("No components.txt found, skipping component loading")
+            return {}
+        
+        components = {}
+        manifest = self._parse_manifest(manifest_path)
+        
+        for name, spec in sorted(manifest.items()):
+            try:
+                repo, version = spec.split(':')
+                
+                # Check for updates
+                latest = self._check_component_version(repo)
+                if latest and latest != version:
+                    self.logger.info(f"{name}: {version} → {latest} available")
+                
+                # Fetch component
+                component_dir = self._fetch_component(repo, version)
+                
+                # Load with timeout (keeps the daemon lean spawn thread if more time needed)
+                component = self._load_component_with_timeout(
+                    component_dir, 
+                    simulation=simulation,
+                    timeout=1.0
+                )
+                if component:
+                    components[name] = component
+                    self.logger.info(f"✓ Loaded {name} v{version}")
+                
+            except Exception as e:
+                self.logger.warning(f"✗ Unable to load component {name}: {e}")
+                continue
+        
+        return components  
+
+    # Helpers, placeholders until decisions are confirmed 
+    def _parse_manifest(self, manifest_path: Path) -> dict[str, str]:
+        pass
+    
+    def _check_component_version(self, repo: str) -> Optional[str]:
+        pass
+
+    def _fetch_component(self, repo: str, version: str) -> Path:
+        pass
+
+    def _load_component_with_timeout(self, component_dir: Path, simulation: bool, timeout=1.0) -> Any | None:
+        pass
 
     def _publish_frames(self) -> None:
         """Publish the media to the WebSocket."""
@@ -398,6 +497,18 @@ class Daemon:
 
             # zenoh server must be closed after backend finishes to publish all data
             self.zenoh_server.stop()
+
+            
+            # === Optional component cleanup ===            
+            
+            for name, component in self.components.items():
+                try:
+                    if hasattr(component, 'cleanup'):
+                        component.cleanup()
+                except Exception as e:
+                    self.logger.warning(f"There was a problem cleaning up component {name}: {e}")
+            
+            self.components.clear()
 
             if self._status.state != DaemonState.ERROR:
                 self.logger.info("Daemon stopped successfully.")
