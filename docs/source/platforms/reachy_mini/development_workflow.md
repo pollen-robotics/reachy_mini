@@ -6,7 +6,30 @@ This guide covers efficient workflows for developing and testing code on the Wir
 
 - SSH access to your robot (`ssh pollen@reachy-mini.local`, password: `root`)
 - SSHFS installed on your computer (`sudo apt install sshfs` on Ubuntu/Debian)
-- Your robot's IP address (find it in the dashboard or router)
+- Your robot's IP address (find it in the dashboard, router, or run `ifconfig` after SSH)
+
+## Quick Cross-Platform Options
+
+Before diving into the full workflows, here are two simpler cross-platform approaches:
+
+### VS Code Remote SSH
+
+VS Code's [Remote - SSH extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-ssh) lets you edit files directly on the robot. Connect to `pollen@reachy-mini.local`, then open any folder. Changes are saved directly on the robot. This works on Windows, macOS, and Linux.
+
+### Rsync
+
+Use `rsync` to sync your local source code to the robot's site-packages. This is fast and works (almost) everywhere:
+
+```bash
+rsync -avz /path/to/your_app/src/your_app/ \
+    pollen@reachy-mini.local:/venvs/apps_venv/lib/python3.12/site-packages/your_app/
+```
+
+Run this after each edit to push changes. Add `--delete` to remove files that no longer exist locally.
+
+For both options, see [Step 3 of Approach A](#step-3-install-and-run-your-code-on-the-robot) to run your code on the robot.
+
+---
 
 ## Approach A: Clone on Robot, Edit Locally (Recommended)
 
