@@ -440,6 +440,38 @@ def _find_metadata_for_entry_point(ep_name: str) -> dict:  # type: ignore
     return {}
 
 
+def _extract_package_info_from_pyproject(target_path: str) -> dict[str, str | None]:
+    """Extract package name and entry point name from pyproject.toml file."""
+    import toml
+
+    pyproject_path = Path(target_path) / "pyproject.toml"
+
+    try:
+        data = toml.load(pyproject_path)
+
+        # Extract package name from [project] name
+        package_name = None
+        try:
+            package_name = data["project"]["name"]
+        except (KeyError, TypeError):
+            pass
+
+        # Extract entry point name from [project.entry-points."reachy_mini_apps"]
+        entry_point_name = None
+        try:
+            entry_points_dict = data["project"]["entry-points"]["reachy_mini_apps"]
+            entry_point_name = list(entry_points_dict.keys())[0]
+        except (KeyError, IndexError, TypeError):
+            pass
+
+        return {
+            "package_name": package_name,
+            "entry_point_name": entry_point_name,
+        }
+    except Exception:
+        return {}
+
+
 def _delete_app_metadata(app_name: str) -> None:
     """Delete metadata for an app."""
     metadata_path = _get_app_metadata_path(app_name)
@@ -560,6 +592,23 @@ async def install_package(
                     "If your package files are in a subdirectory, make sure they're in the root of the space. "
                     "Check that pyproject.toml or setup.py is committed to your HuggingFace Space."
                 )
+
+            # Extract entry point name from pyproject.toml
+            pkg_info = {}
+            if has_pyproject:
+                pkg_info = _extract_package_info_from_pyproject(target)
+
+                if pkg_info.get("entry_point_name"):
+                    # Initialize app.extra if needed
+                    if not app.extra:
+                        app.extra = {}
+                    # Save only the entry point name (needed for starting apps)
+                    app.extra["entry_point_name"] = pkg_info["entry_point_name"]
+                    logger.info(
+                        f"Detected entry point: {pkg_info['entry_point_name']} "
+                        f"for HF space: {app.name}"
+                    )
+
         except Exception as e:
             error_msg = str(e)
             if "401" in error_msg or "403" in error_msg:
@@ -714,9 +763,30 @@ def get_app_module(
         sys.path.insert(0, str(site_packages))
         try:
             eps = entry_points(group="reachy_mini_apps")
-            ep = eps.select(name=app_name)
+
+            # Get entry point name from metadata
+            metadata = _load_app_metadata(app_name)
+            entry_point_name = metadata.get("entry_point_name")
+
+            if entry_point_name:
+                ep = eps.select(name=entry_point_name)
+            else:
+                # Missing entry_point_name in metadata - try with app_name (for old installs)
+                ep = eps.select(name=app_name)
+
             if not ep:
-                raise ValueError(f"No entry point found for app '{app_name}'")
+                # Entry point not found
+                if entry_point_name:
+                    # Has entry_point_name but entry point doesn't exist - corrupted installation
+                    raise ValueError(
+                        f"No entry point found for app '{app_name}' (tried '{entry_point_name}')"
+                    )
+                else:
+                    # Missing entry_point_name in metadata (old install) and fallback failed
+                    raise ValueError(
+                        f"App '{app_name}' was installed before the entry point name fix. "
+                        f"Please uninstall and reinstall the app to use it."
+                    )
             # Get module name without loading (e.g., "my_app.main" from "my_app.main:MyApp")
             return list(ep)[0].module
         finally:
