@@ -25,21 +25,42 @@ If an app folder already exists with `README.md` containing `reachy_mini_python_
 
 ### Step 1: Use the App Assistant
 
-**Never manually create app folders.** Always use the assistant to get proper structure, metadata, and git setup:
+**CRITICAL: Never create app folders manually.** Always use the assistant - it handles boilerplate, metadata tags, entry points, and proper structure. Manual creation leads to subtle issues that are hard to debug.
+
+**If the command fails for any reason:** Ask the user to run it manually in their terminal rather than attempting complex workarounds.
 
 ```bash
-reachy-mini-app-assistant create <app_name> <path> [--publish]
+# Default template - minimal blank app (recommended for most cases):
+reachy-mini-app-assistant create <app_name> <path> [--publish] [--private]
+
+# Conversation template - fork of the conversation app:
+reachy-mini-app-assistant create --template conversation <app_name> <path> [--publish] [--private]
 ```
 
+#### Which template to choose?
+
+| Template | Use when |
+|----------|----------|
+| **default** | Most apps. Gives you a minimal working structure to build from scratch. |
+| **conversation** | App needs LLM integration, speech, or making the robot talk. Forks the conversation app with a locked profile - includes audio pipeline, LLM tools, and all the plumbing already set up. |
+
 **IMPORTANT: Both `app_name` AND `path` are required for non-interactive mode.** If either is omitted, the command will prompt interactively (which fails in non-TTY environments like Claude Code).
+
+Options:
+- `--template conversation` - Fork the conversation app (for LLM/speech apps)
+- `--publish` - Create a Git repo on Hugging Face immediately (recommended)
+- `--private` - Make the HF Space private (default is public)
+
+**Prerequisite for `--publish`:** Must be logged in to Hugging Face first:
+```bash
+hf auth login
+```
 
 Example:
 ```bash
 reachy-mini-app-assistant create my_app_name . --publish
+reachy-mini-app-assistant create --template conversation my_assistant . --publish
 ```
-
-- `--publish` creates a Git repo on Hugging Face immediately. Always use this option by default.
-- The assistant handles all boilerplate, metadata tags, and proper structure
 
 ### Step 2: Understand the Generated Structure
 
