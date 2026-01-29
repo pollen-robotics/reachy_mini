@@ -177,6 +177,13 @@ def parse_args() -> argparse.Namespace:
 
     create_parser = subparsers.add_parser("create", help="Create a new app project")
     create_parser.add_argument(
+        "--template",
+        type=str,
+        choices=["default", "conversation"],
+        default="default",
+        help="Template to use: 'default' (blank app) or 'conversation' (fork conversation app)",
+    )
+    create_parser.add_argument(
         "app_name",
         type=str,
         nargs="?",
@@ -267,7 +274,13 @@ def main() -> None:
     args = parse_args()
     console = Console()
     if args.command == "create":
-        created_path = assistant.create(console, app_name=args.app_name, app_path=args.path)
+        if args.template == "conversation":
+            from reachy_mini.apps.fork_conversation import create_from_conversation_app
+
+            created_path = create_from_conversation_app(console, args.app_name, args.path)
+        else:
+            created_path = assistant.create(console, app_name=args.app_name, app_path=args.path)
+
         if args.publish and created_path:
             console.print("\nPublishing to Hugging Face Spaces...", style="bold blue")
             assistant.publish(
