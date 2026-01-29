@@ -119,7 +119,10 @@ class GstWebRTC:
 
         self._configure_video(cam_path, self._pipeline_sender, webrtcsink)
         self._configure_audio(self._pipeline_sender, webrtcsink)
-        self._configure_data()
+
+        self._logger.debug("Configuring data channel")
+        self._data_channels: dict[str, Gst.Element] = {}  # peer_id -> channel
+        self._on_data_message: Optional[Callable[[str, str], None]] = None
 
         self._pipeline_receiver = Gst.Pipeline.new("reachymini_webrtc_receiver")
         self._bus_receiver = self._pipeline_receiver.get_bus()
@@ -167,7 +170,7 @@ class GstWebRTC:
         peer_id: str,
         webrtcbin: Gst.Element,
     ) -> None:
-        self._logger.info("consumer added")
+        self._logger.info(f"consumer added with peer id: {peer_id}")
 
         Gst.debug_bin_to_dot_file(
             self._pipeline_sender, Gst.DebugGraphDetails.ALL, "pipeline_full"
@@ -440,11 +443,6 @@ class GstWebRTC:
             # Broadcast to all connected peers
             for channel in self._data_channels.values():
                 channel.emit("send-string", message)
-
-    def _configure_data(self) -> None:
-        self._logger.debug("Configuring data channel")
-        self._data_channels: dict[str, Gst.Element] = {}  # peer_id -> channel
-        self._on_data_message: Optional[Callable[[str, str], None]] = None
 
     def _setup_data_channel(self, peer_id: str, webrtcbin: Gst.Element) -> None:
         self._logger.debug(f"Setting up data channel for peer {peer_id}")
