@@ -81,6 +81,11 @@ def create_from_conversation_app(
     console.print(f"  cd {target_path}")
     console.print("  uv sync")
     console.print("  reachy-mini-app-assistant check .")
+    console.print("")
+    console.print("To test your app locally:", style="bold")
+    console.print("  cd src/reachy_mini_conversation_app")
+    console.print("  python main.py --gradio")
+    console.print("  # Then open: http://127.0.0.1:7861/")
 
     return target_path
 
