@@ -221,7 +221,7 @@ def _update_readme(console: Console, app_path: Path, display_name: str, profile_
 
     if readme_path.exists():
         readme_path.rename(readme_old_path)
-        console.print(f"   Renamed README.md to README_OLD.md", style="dim")
+        console.print("   Renamed README.md to README_OLD.md", style="dim")
 
     env = Environment(loader=FileSystemLoader(CONVERSATION_TEMPLATE_DIR))
     template = env.get_template("README.md.j2")

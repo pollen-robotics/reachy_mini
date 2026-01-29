@@ -88,6 +88,7 @@ exclude = [
     "build/*",
     "conftest.py",
     "src/reachy_mini_dashboard/*",
+    "src/reachy_mini/apps/templates/*",
     "tests/*",
 ]
 lint.extend-select = ["I", "D"]
@@ -112,3 +113,4 @@ python_version = "3.10"
 files = ["src/"]
 ignore_missing_imports = true
 strict = true
+exclude = ["src/reachy_mini/apps/templates/"]
