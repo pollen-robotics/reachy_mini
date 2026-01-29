@@ -1,6 +1,7 @@
 """Simple gstreamer webrtc consumer example."""
 
 import argparse
+import time
 from threading import Thread
 
 import gi
@@ -26,6 +27,8 @@ class GstConsumer:
         self._thread_bus_calls = Thread(target=lambda: self._loop.run(), daemon=True)
         self._thread_bus_calls.start()
 
+        self._data_channel = None
+
         self.pipeline = Gst.Pipeline.new("webRTC-consumer")
         self.source = Gst.ElementFactory.make("webrtcsrc")
 
@@ -41,6 +44,9 @@ class GstConsumer:
             exit(-1)
 
         self.pipeline.add(self.source)
+
+        # Connect early to catch webrtcbin creation and set up data channel handler
+        self.source.connect("deep-element-added", self._on_element_added)
 
         peer_id = find_producer_peer_id_by_name(
             signalling_host, signalling_port, peer_name
@@ -58,6 +64,15 @@ class GstConsumer:
         self.pipeline.query(query)
         print(f"Pipeline latency {query.parse_latency()}")
 
+    def _on_element_added(
+        self, _bin: Gst.Bin, _sub_bin: Gst.Bin, element: Gst.Element
+    ) -> None:
+        """Handle element addition to catch webrtcbin early for data channel setup."""
+        if element.get_name().startswith("webrtcbin"):
+            print(f"webrtcbin detected: {element.get_name()}")
+            # Connect to data channel signal early
+            element.connect("on-data-channel", self._on_data_channel)
+
     def _configure_webrtcbin(self, webrtcsrc: Gst.Element) -> None:
         if isinstance(webrtcsrc, Gst.Bin):
             webrtcbin_name = "webrtcbin0"
@@ -65,6 +80,32 @@ class GstConsumer:
             assert webrtcbin is not None
             # jitterbuffer has a default 200 ms buffer.
             webrtcbin.set_property("latency", 50)
+
+    def _on_data_channel(self, _webrtcbin: Gst.Element, channel: Gst.Element) -> None:
+        """Handle incoming data channel from the server."""
+        print(f"Data channel received: {channel.get_property('label')}")
+        self._data_channel = channel
+        channel.connect("on-open", self._on_data_channel_open)
+        channel.connect("on-close", self._on_data_channel_close)
+        channel.connect("on-message-string", self._on_data_channel_message)
+        channel.connect("on-error", self._on_data_channel_error)
+
+    def _on_data_channel_open(self, _channel: Gst.Element) -> None:
+        """Handle data channel open event."""
+        print("Data channel opened")
+
+    def _on_data_channel_close(self, _channel: Gst.Element) -> None:
+        """Handle data channel close event."""
+        print("Data channel closed")
+        self._data_channel = None
+
+    def _on_data_channel_message(self, _channel: Gst.Element, message: str) -> None:
+        """Handle incoming data channel message."""
+        print(f"Data channel message: {message}")
+
+    def _on_data_channel_error(self, _channel: Gst.Element, error: str) -> None:
+        """Handle data channel error."""
+        print(f"Data channel error: {error}")
 
     def webrtcsrc_pad_added_cb(self, webrtcsrc: Gst.Element, pad: Gst.Pad) -> None:
         """Add webrtcsrc elements when a new pad is added."""
@@ -133,6 +174,29 @@ def process_msg(bus: Gst.Bus, pipeline: Gst.Pipeline) -> bool:
     return True
 
 
+def command_sender_loop(consumer: GstConsumer) -> None:
+    """Loop to send commands over the data channel."""
+    import json
+
+    import numpy as np
+
+    from reachy_mini.utils import create_head_pose
+
+    freq = 0.25
+    amp = 20.0
+
+    while True:
+        if consumer._data_channel:
+            yaw = amp * np.sin(2.0 * np.pi * freq * time.time())
+            cmd = create_head_pose(yaw=yaw, degrees=True)
+            msg = {
+                "set_target": cmd.tolist(),
+            }
+            consumer._data_channel.emit("send-string", json.dumps(msg))
+
+        time.sleep(0.01)
+
+
 def main() -> None:
     """Run the main function."""
     parser = argparse.ArgumentParser(description="webrtc gstreamer simple consumer")
@@ -153,6 +217,9 @@ def main() -> None:
         "reachymini",
     )
     consumer.play()
+
+    t = Thread(target=lambda: command_sender_loop(consumer), daemon=True)
+    t.start()
 
     # Wait until error or EOS
     bus = consumer.get_bus()
