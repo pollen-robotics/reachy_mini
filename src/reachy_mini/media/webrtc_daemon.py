@@ -31,7 +31,7 @@ Example usage:
 import logging
 import os
 from threading import Thread
-from typing import Optional, Tuple, cast
+from typing import Callable, Optional, Tuple, cast
 
 import gi
 
@@ -119,6 +119,7 @@ class GstWebRTC:
 
         self._configure_video(cam_path, self._pipeline_sender, webrtcsink)
         self._configure_audio(self._pipeline_sender, webrtcsink)
+        self._configure_data()
 
         self._pipeline_receiver = Gst.Pipeline.new("reachymini_webrtc_receiver")
         self._bus_receiver = self._pipeline_receiver.get_bus()
@@ -161,7 +162,10 @@ class GstWebRTC:
         return webrtcsink
 
     def _consumer_added(
-        self, webrtcbin: Gst.Bin, arg1: Gst.Element, udata: bytes
+        self,
+        webrtcsink: Gst.Bin,
+        peer_id: str,
+        webrtcbin: Gst.Element,
     ) -> None:
         self._logger.info("consumer added")
 
@@ -170,6 +174,8 @@ class GstWebRTC:
         )
 
         GLib.timeout_add_seconds(5, self._dump_latency)
+
+        self._setup_data_channel(peer_id, webrtcbin)
 
     def _configure_receiver(self, pipeline: Gst.Pipeline) -> None:
         udpsrc = Gst.ElementFactory.make("udpsrc")
@@ -403,6 +409,82 @@ class GstWebRTC:
 
         self._pipeline_sender.set_state(Gst.State.NULL)
         self._pipeline_receiver.set_state(Gst.State.NULL)
+
+    # Data channel setup / handling
+    def set_message_handler(
+        self,
+        handler: Callable[[str, str], None],  # cb(peer_id, message)
+    ) -> None:
+        """Set a callback for incoming data channel messages.
+
+        Args:
+            handler: Callback function that receives (peer_id, message)
+
+        """
+        self._on_data_message = handler
+
+    def send_data_message(self, peer_id: Optional[str], message: str) -> None:
+        """Send a message to connected peers via data channel.
+
+        Args:
+            message: The string message to send
+            peer_id: If specified, send only to this peer. Otherwise broadcast to all.
+
+        """
+        if peer_id:
+            if peer_id in self._data_channels:
+                self._data_channels[peer_id].emit("send-string", message)
+            else:
+                self._logger.warning(f"No data channel for peer {peer_id}")
+        else:
+            # Broadcast to all connected peers
+            for channel in self._data_channels.values():
+                channel.emit("send-string", message)
+
+    def _configure_data(self) -> None:
+        self._logger.debug("Configuring data channel")
+        self._data_channels: dict[str, Gst.Element] = {}  # peer_id -> channel
+        self._on_data_message: Optional[Callable[[str, str], None]] = None
+
+    def _setup_data_channel(self, peer_id: str, webrtcbin: Gst.Element) -> None:
+        self._logger.debug(f"Setting up data channel for peer {peer_id}")
+
+        # Create data channel options
+        options = Gst.Structure.from_string("options,ordered=true")[0]
+
+        # Create the data channel
+        channel = webrtcbin.emit("create-data-channel", "data", options)
+        if channel:
+            self._logger.debug(f"Data channel created for peer {peer_id}")
+            self._data_channels[peer_id] = channel
+
+            # Connect to data channel signals
+            channel.connect("on-open", self._on_data_channel_open, peer_id)
+            channel.connect("on-close", self._on_data_channel_close, peer_id)
+            channel.connect("on-message-string", self._on_data_channel_message, peer_id)
+            channel.connect("on-error", self._on_data_channel_error, peer_id)
+        else:
+            self._logger.error(f"Failed to create data channel for peer {peer_id}")
+
+    def _on_data_channel_open(self, channel: Gst.Element, peer_id: str) -> None:
+        self._logger.info(f"Data channel opened for peer {peer_id}")
+
+    def _on_data_channel_close(self, channel: Gst.Element, peer_id: str) -> None:
+        self._logger.info(f"Data channel closed for peer {peer_id}")
+        if peer_id in self._data_channels:
+            del self._data_channels[peer_id]
+
+    def _on_data_channel_message(
+        self, channel: Gst.Element, message: str, peer_id: str
+    ) -> None:
+        self._logger.info(f"Data channel message from peer {peer_id}: {message}")
+        if self._on_data_message:
+            self._on_data_message(peer_id, message)
+
+    def _on_data_channel_error(
+        self, channel: Gst.Element, error: str, peer_id: str
+    ) -> None:
+        self._logger.error(f"Data channel error for peer {peer_id}: {error}")
 
 
 if __name__ == "__main__":
