@@ -853,7 +853,7 @@ class Backend:
         gst_webrtc.set_message_handler(self._handle_webrtc_message)
         self._send_message_to_webrtc = gst_webrtc.send_data_message
 
-    def _handle_webrtc_message(self, message: str) -> None:
+    def _handle_webrtc_message(self, peer_id: str, message: str) -> None:
         message_data = json.loads(message)
         if "set_target" in message_data:
             target_pose = message_data["set_target"]
