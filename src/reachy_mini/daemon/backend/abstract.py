@@ -17,7 +17,7 @@ import typing
 from abc import abstractmethod
 from enum import Enum
 from pathlib import Path
-from typing import Annotated, Any, Dict, Optional
+from typing import Annotated, Any, Callable, Dict, Optional
 
 import numpy as np
 import zenoh
@@ -176,6 +176,11 @@ class Backend:
         self._play_move_lock = threading.RLock()
         self._active_move_depth = (
             0  # Tracks nested acquisitions within the owning thread
+        )
+
+        # WebRTC support
+        self._send_message_to_webrtc: Optional[Callable[[Optional[str], str], None]] = (
+            None
         )
 
     # Life cycle methods
@@ -837,3 +842,19 @@ class Backend:
             "passive_7_y": self.head_kinematics.get_joint("passive_7_y"),  # type: ignore [union-attr]
             "passive_7_z": self.head_kinematics.get_joint("passive_7_z"),  # type: ignore [union-attr]
         }
+
+    def setup_webrtc_interface(self, gst_webrtc: Any) -> None:
+        """Set up the WebRTC interface for motor control.
+
+        Args:
+            gst_webrtc (Any): The GstWebRTC instance to setup.
+
+        """
+        gst_webrtc.set_message_handler(self._handle_webrtc_message)
+        self._send_message_to_webrtc = gst_webrtc.send_data_message
+
+    def _handle_webrtc_message(self, message: str) -> None:
+        message_data = json.loads(message)
+        if "set_target" in message_data:
+            target_pose = message_data["set_target"]
+            self.set_target_head_pose(np.array(target_pose))
