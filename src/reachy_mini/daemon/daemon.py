@@ -230,6 +230,7 @@ class Daemon:
             await asyncio.sleep(
                 0.2
             )  # Give some time for the backend to release the audio device
+            self.backend.setup_webrtc_interface(self._webrtc)
             self._webrtc.start()
 
         self.logger.info("Daemon started successfully.")

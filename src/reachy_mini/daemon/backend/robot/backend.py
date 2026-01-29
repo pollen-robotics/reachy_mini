@@ -257,6 +257,14 @@ class RobotBackend(Backend):
                         )
                     )
 
+                    if self._send_message_to_webrtc is not None:
+                        message = json.dumps(
+                            {
+                                "head_pose": self.get_present_head_pose().tolist(),
+                            }
+                        )
+                        self._send_message_to_webrtc(None, message)
+
                     # Publish IMU data if available
                     if self.imu_publisher is not None and self.bmi088 is not None:
                         imu_data = self.get_imu_data()
