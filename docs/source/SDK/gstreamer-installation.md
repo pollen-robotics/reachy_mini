@@ -21,8 +21,6 @@ Python wheels are available for the Windows and macOS platforms and are included
 
 **For Ubuntu/Debian-based systems:**
 
-You need at least GStreamer >= 1.22. If the version provided by your distribution is too old, you'll have to [manually compile GStreamer](https://gstreamer.freedesktop.org/documentation/installing/building-from-source-using-meson.html?gi-language=c).
-
 In your terminal, run:
 
 ```bash
@@ -45,7 +43,23 @@ sudo apt-get install -y \
     python3-gi-cairo
 ```
 
-Other distributions may refer to the [official GStreamer documentation](https://gstreamer.freedesktop.org/documentation/installing/on-linux.html?gi-language=c).
+**For Ubuntu 22.04 only:** The default GStreamer version is too old. Gstreamer >=1.22 is required. You need to add a PPA to get GStreamer 1.24.x:
+
+```bash
+sudo add-apt-repository ppa:savoury1/multimedia
+sudo apt update
+sudo apt install \
+    libgstreamer1.0-dev \
+    libgstreamer-plugins-base1.0-dev \
+    libgstreamer-plugins-good1.0-dev \
+    libgstreamer-plugins-bad1.0-dev
+```
+
+Verify you have the correct version:
+```bash
+pkg-config --modversion gstreamer-1.0
+# Should output 1.24.x or higher
+```
 
 ### Step 2: Install Rust
 

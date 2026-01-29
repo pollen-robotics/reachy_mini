@@ -69,6 +69,8 @@ def create_cli(
     console: Console, app_name: str | None, app_path: Path | None
 ) -> tuple[str, str, Path]:
     """Create a new Reachy Mini app project using a CLI."""
+    interactive = app_name is None or app_path is None
+
     if app_name is None:
         # 1) App name
         console.print("$ What is the name of your app ?")
@@ -83,21 +85,24 @@ def create_cli(
             exit()
         app_name = app_name.strip().lower()
 
-    # 2) Language
-    console.print("\n$ Choose the language of your app")
-    language = questionary.select(
-        ">",
-        choices=["python", "js"],
-        default="python",
-    ).ask()
-    if language is None:
-        console.print("[red]Aborted.[/red]")
-        exit()
+    # 2) Language - only prompt interactively, default to python
+    if interactive:
+        console.print("\n$ Choose the language of your app")
+        language = questionary.select(
+            ">",
+            choices=["python", "js"],
+            default="python",
+        ).ask()
+        if language is None:
+            console.print("[red]Aborted.[/red]")
+            exit()
 
-    # js is not supported yet
-    if language != "python":
-        console.print("[red]Currently only Python apps are supported. Aborted.[/red]")
-        exit()
+        # js is not supported yet
+        if language != "python":
+            console.print("[red]Currently only Python apps are supported. Aborted.[/red]")
+            exit()
+    else:
+        language = "python"
 
     if app_path is None:
         # 3) App path
@@ -121,13 +126,16 @@ def create_cli(
     return app_name, language, app_path
 
 
-def create(console: Console, app_name: str, app_path: Path) -> None:
+def create(console: Console, app_name: str, app_path: Path) -> Path:
     """Create a new Reachy Mini app project with the given name at the specified path.
 
     Args:
         console (Console): The console object for printing messages.
         app_name (str): The name of the app to create.
         app_path (Path): The directory where the app project will be created.
+
+    Returns:
+        Path: The path to the created app project.
 
     """
     app_name, language, app_path = create_cli(console, app_name, app_path)
@@ -192,6 +200,7 @@ def create(console: Console, app_name: str, app_path: Path) -> None:
     # TODO assets dir with a .gif ?
 
     console.print(f"✅ Created app '{app_name}' in {base_path}/", style="bold green")
+    return base_path
 
 
 def install_app_with_progress(
@@ -280,7 +289,20 @@ def check(console: Console, app_path: str) -> None:
             sys.exit(1)
 
     entrypoint_name = app_name
-    pkg_name = app_name.replace("-", "_")
+
+    # Extract pkg_name from entry point (allows package name != project name)
+    entry_points = (
+        pyproject_content.get("project", {})
+        .get("entry-points", {})
+        .get("reachy_mini_apps", {})
+    )
+    app_name_normalized = app_name.replace("-", "_")
+    ep_value = entry_points.get(app_name) or entry_points.get(app_name_normalized)
+    if ep_value and ":" in ep_value:
+        pkg_name = ep_value.split(":")[0].split(".")[0]
+    else:
+        pkg_name = app_name.replace("-", "_")  # fallback to old behavior
+
     class_name = "".join(word.capitalize() for word in pkg_name.split("_"))
 
     console.print(f"\tExpected package name: {pkg_name}", style="dim")
@@ -299,12 +321,16 @@ def check(console: Console, app_path: str) -> None:
         sys.exit(1)
     console.print("✅ index.html and style.css exist in the root of the app.")
 
-    # - pkg_name and pkg_name/__init__.py exists
-    if not os.path.exists(os.path.join(abs_app_path, pkg_name)) or not os.path.exists(
-        os.path.join(abs_app_path, pkg_name, "__init__.py")
-    ):
-        console.print(f"❌ Package folder '{pkg_name}' is missing", style="bold red")
-        sys.exit(1)
+    # Check both flat and src layout
+    pkg_path = abs_app_path / pkg_name
+    if not (pkg_path / "__init__.py").exists():
+        pkg_path = abs_app_path / "src" / pkg_name
+        if not (pkg_path / "__init__.py").exists():
+            console.print(f"❌ Package folder '{pkg_name}' not found", style="bold red")
+            console.print(f"   Checked: {abs_app_path / pkg_name}/", style="dim")
+            console.print(f"   Checked: {abs_app_path / 'src' / pkg_name}/", style="dim")
+            sys.exit(1)
+    console.print(f"✅ Package '{pkg_name}' found at {pkg_path.relative_to(abs_app_path)}/")
 
     if "entry-points" not in pyproject_content["project"]:
         console.print(
@@ -337,28 +363,17 @@ def check(console: Console, app_path: str) -> None:
         )
         sys.exit(1)
 
-    # - <app_name>/__init__.py exists
-    pkg_path = Path(abs_app_path) / pkg_name
-    init_file = pkg_path / "__init__.py"
 
-    if not init_file.exists():
-        console.print("❌ __init__.py is missing", style="bold red")
-        sys.exit(1)
-
-    console.print(f"✅ {app_name}/__init__.py exists.")
-
+    # - main.py exists
     main_file = pkg_path / "main.py"
     if not main_file.exists():
         console.print("❌ main.py is missing", style="bold red")
         sys.exit(1)
-    console.print(f"✅ {app_name}/main.py exists.")
+    console.print(f"✅ {pkg_path.relative_to(abs_app_path)}/main.py exists.")
 
     # - <app_name>/main.py contains a class named <AppName> that inherits from ReachyMiniApp
     with open(main_file, "r") as f:
         main_content = f.read()
-    class_name = "".join(
-        word.capitalize() for word in app_name.replace("-", "_").split("_")
-    )
     if f"class {class_name}(ReachyMiniApp)" not in str(main_content):
         console.print(
             f"❌ main.py is missing the class {class_name} that inherits from ReachyMiniApp",
@@ -615,6 +630,7 @@ def publish(
     commit_message: str,
     official: bool = False,
     no_check: bool = False,
+    private: bool | None = None,
 ) -> None:
     """Publish the app to the Reachy Mini app store.
 
@@ -624,6 +640,7 @@ def publish(
         commit_message (str): Commit message for the app publish.
         official (bool): Request to publish the app as an official Reachy Mini app.
         no_check (bool): Don't run checks before publishing the app.
+        private (bool | None): If True, make private. If False, make public. If None, prompt.
 
     """
     import huggingface_hub as hf
@@ -749,17 +766,22 @@ def publish(
             console.print(f"\n🔎 Running checks on the app at {app_path}/...")
             check(console, str(app_path))
 
-        console.print("Do you want your space to be created private or public?")
-        privacy = questionary.select(
-            ">",
-            choices=["private", "public"],
-            default="public",
-        ).ask()
+        # Determine privacy setting
+        if private is None:
+            console.print("Do you want your space to be created private or public?")
+            privacy = questionary.select(
+                ">",
+                choices=["private", "public"],
+                default="public",
+            ).ask()
+            is_private = (privacy == "private")
+        else:
+            is_private = private
 
         hf.create_repo(
             repo_path,
             repo_type="space",
-            private=(privacy == "private"),
+            private=is_private,
             exist_ok=False,
             space_sdk="static",
         )
