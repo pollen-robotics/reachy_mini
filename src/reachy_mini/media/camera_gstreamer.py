@@ -236,6 +236,10 @@ class GStreamerCamera(CameraBase):
         )
         self._appsink_video.set_property("caps", caps_video)
 
+        # Restart the pipeline if it was playing before changing resolution
+        if should_restart:
+            self.open()
+
     def _dump_latency(self) -> None:
         query = Gst.Query.new_latency()
         self.pipeline.query(query)
