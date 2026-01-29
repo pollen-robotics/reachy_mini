@@ -12,12 +12,15 @@ from rich.console import Console
 
 from .assistant import validate_app_name, validate_location_and_git_repo
 
-CONVERSATION_APP_REPO = "https://github.com/pollen-robotics/reachy_mini_conversation_app"
+CONVERSATION_APP_REPO = (
+    "https://github.com/pollen-robotics/reachy_mini_conversation_app"
+)
 CONVERSATION_APP_PACKAGE = "reachy_mini_conversation_app"
 CONVERSATION_TEMPLATE_DIR = Path(__file__).parent / "templates" / "fork_conversation"
 
 _CLEANUP_DIRS = [".github", ".idea", ".vscode"]
 _CLEANUP_FILES = ["uv.lock"]
+
 
 def create_from_conversation_app(
     console: Console,
@@ -67,8 +70,12 @@ def create_from_conversation_app(
     console.print(f"   - Profile folder created: profiles/{profile_name}/", style="dim")
 
     console.print("\nFiles to customize:", style="bold yellow")
-    console.print(f"  profiles/{profile_name}/instructions.txt  - System prompt for the assistant")
-    console.print(f"  profiles/{profile_name}/tools.txt         - Available tools (or 'all')")
+    console.print(
+        f"  profiles/{profile_name}/instructions.txt  - System prompt for the assistant"
+    )
+    console.print(
+        f"  profiles/{profile_name}/tools.txt         - Available tools (or 'all')"
+    )
 
     console.print("\nNext steps:", style="bold")
     console.print(f"  cd {target_path}")
@@ -95,7 +102,9 @@ def _fork_cli(
 
     if app_path is None:
         console.print("\n$ Where do you want to create it?")
-        app_path_str = questionary.path(">",validate=validate_location_and_git_repo).ask()
+        app_path_str = questionary.path(
+            ">", validate=validate_location_and_git_repo
+        ).ask()
         if app_path_str is None:
             console.print("[red]Aborted.[/red]")
             exit()
@@ -119,7 +128,16 @@ def _clone_repo(console: Console, target_path: Path) -> None:
 
         # Shallow clone
         result = subprocess.run(
-            ["git", "clone", "--depth", "1", "-b", "develop", CONVERSATION_APP_REPO, str(tmp_clone)],
+            [
+                "git",
+                "clone",
+                "--depth",
+                "1",
+                "-b",
+                "develop",
+                CONVERSATION_APP_REPO,
+                str(tmp_clone),
+            ],
             capture_output=True,
             text=True,
         )
@@ -159,7 +177,7 @@ def _update_pyproject(console: Console, app_path: Path, app_name: str) -> None:
     # Update project name
     data["project"]["name"] = app_name
 
-    # Update scripts: reachy-mini-<profile> -> package.main:main
+    # Update scripts:
     script_name = app_name.replace("_", "-")
     data["project"]["scripts"] = {script_name: f"{CONVERSATION_APP_PACKAGE}.main:main"}
 
@@ -214,7 +232,9 @@ def _update_config(console: Console, app_path: Path, profile_name: str) -> None:
     config_path.write_text(content)
 
 
-def _update_readme(console: Console, app_path: Path, display_name: str, profile_name: str) -> None:
+def _update_readme(
+    console: Console, app_path: Path, display_name: str, profile_name: str
+) -> None:
     """Rename old README to README_OLD.md and create new README from template."""
     readme_path = app_path / "README.md"
     readme_old_path = app_path / "README_OLD.md"
@@ -225,7 +245,9 @@ def _update_readme(console: Console, app_path: Path, display_name: str, profile_
 
     env = Environment(loader=FileSystemLoader(CONVERSATION_TEMPLATE_DIR))
     template = env.get_template("README.md.j2")
-    readme_path.write_text(template.render(display_name=display_name, profile_name=profile_name))
+    readme_path.write_text(
+        template.render(display_name=display_name, profile_name=profile_name)
+    )
 
 
 def _create_landing_page(app_path: Path, display_name: str) -> None:
@@ -253,21 +275,33 @@ def _create_static_files(app_path: Path, display_name: str) -> None:
     static_dir = app_path / "src" / CONVERSATION_APP_PACKAGE / "static"
 
     # Render and write simplified static files
-    (static_dir / "index.html").write_text(env.get_template("index.html.j2").render(context))
+    (static_dir / "index.html").write_text(
+        env.get_template("index.html.j2").render(context)
+    )
     (static_dir / "main.js").write_text(env.get_template("main.js.j2").render(context))
-    (static_dir / "style.css").write_text(env.get_template("style.css.j2").render(context))
+    (static_dir / "style.css").write_text(
+        env.get_template("style.css.j2").render(context)
+    )
 
 
 def _create_profile(console: Console, app_path: Path, profile_name: str) -> None:
     """Create profile folder with template files."""
-    new_profile_dir = app_path / "src" / CONVERSATION_APP_PACKAGE / "profiles" / profile_name
+    new_profile_dir = (
+        app_path / "src" / CONVERSATION_APP_PACKAGE / "profiles" / profile_name
+    )
     new_profile_dir.mkdir(parents=True, exist_ok=True)
 
-    # Copy all files from profile template directory
+    # Render all .j2 templates from profile template directory
     template_dir = CONVERSATION_TEMPLATE_DIR / "profile"
+    env = Environment(loader=FileSystemLoader(template_dir))
+    context = {"profile_name": profile_name}
+
     for src_file in template_dir.iterdir():
-        if src_file.is_file():
-            shutil.copy(src_file, new_profile_dir / src_file.name)
+        if src_file.is_file() and src_file.suffix == ".j2":
+            # Remove .j2 extension for output filename
+            output_name = src_file.stem
+            template = env.get_template(src_file.name)
+            (new_profile_dir / output_name).write_text(template.render(context))
 
     console.print("   Created profile with template files:", style="dim")
     for f in sorted(new_profile_dir.iterdir()):
