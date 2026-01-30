@@ -27,14 +27,19 @@ If an app folder already exists with `README.md` containing `reachy_mini_python_
 
 **CRITICAL: Never create app folders manually.** Always use the assistant - it handles boilerplate, metadata tags, entry points, and proper structure. Manual creation leads to subtle issues that are hard to debug.
 
+**IMPORTANT: Always use `--publish` unless the user explicitly requests a local-only app.** Publishing immediately creates a Git repo on Hugging Face, enabling proper version control and sharing from the start.
+
 **If the command fails for any reason:** Ask the user to run it manually in their terminal rather than attempting complex workarounds.
 
 ```bash
 # Default template - minimal blank app (recommended for most cases):
-reachy-mini-app-assistant create <app_name> <path> [--publish] [--private]
+reachy-mini-app-assistant create <app_name> <path> --publish
 
 # Conversation template - fork of the conversation app:
-reachy-mini-app-assistant create --template conversation <app_name> <path> [--publish] [--private]
+reachy-mini-app-assistant create --template conversation <app_name> <path> --publish
+
+# Only if user explicitly wants local-only (no HF repo):
+reachy-mini-app-assistant create <app_name> <path>
 ```
 
 #### Which template to choose?
@@ -48,7 +53,7 @@ reachy-mini-app-assistant create --template conversation <app_name> <path> [--pu
 
 Options:
 - `--template conversation` - Fork the conversation app (for LLM/speech apps)
-- `--publish` - Create a Git repo on Hugging Face immediately (recommended)
+- `--publish` - Create a Git repo on Hugging Face immediately **(always use this)**
 - `--private` - Make the HF Space private (default is public)
 
 **Prerequisite for `--publish`:** Must be logged in to Hugging Face first:
