@@ -277,14 +277,21 @@ def check_and_sync_apps_venv_sdk() -> None:
         print("apps_venv not found, skipping SDK sync")
         return
 
-    # Get apps_venv install info
+    # Get apps_venv install info by reading metadata directly (avoid importing from apps_venv)
     try:
         result = subprocess.run(
             [
                 str(apps_venv_python),
                 "-c",
-                "from reachy_mini.utils.wireless_version.update_available import get_install_source; "
-                "import json; print(json.dumps(get_install_source('reachy_mini')))",
+                "import json; from importlib.metadata import distribution, version; "
+                "d = distribution('reachy_mini'); v = version('reachy_mini'); "
+                "r = {'version': v, 'source': 'pypi'}; "
+                "t = d.read_text('direct_url.json'); "
+                "u = json.loads(t) if t else None; "
+                "r.update({'source': 'editable'} if u and u.get('dir_info', {}).get('editable') else {}); "
+                "r.update({'source': 'git', 'git_ref': u.get('vcs_info', {}).get('requested_revision', 'unknown')} "
+                "if u and 'vcs_info' in u else {}); "
+                "print(json.dumps(r))",
             ],
             capture_output=True,
             text=True,
