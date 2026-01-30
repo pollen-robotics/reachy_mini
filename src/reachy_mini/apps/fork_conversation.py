@@ -1,5 +1,6 @@
 """Fork conversation app as a standalone customized app."""
 
+import re
 import shutil
 import subprocess
 import tempfile
@@ -40,11 +41,14 @@ def create_from_conversation_app(
     console.print(f"\nCloning conversation app from {CONVERSATION_APP_REPO}...")
     _clone_repo(console, target_path)
 
+    console.print(f"Renaming package to {app_name}...")
+    _rename_package(console, target_path, app_name)
+
     console.print("Customizing pyproject.toml...")
     _update_pyproject(console, target_path, app_name)
 
     console.print("Setting locked profile in config.py...")
-    _update_config(console, target_path, profile_name)
+    _update_config(console, target_path, app_name, profile_name)
 
     console.print("Creating README.md...")
     display_name = " ".join(word.capitalize() for word in app_name.split("_"))
@@ -54,13 +58,13 @@ def create_from_conversation_app(
     _create_landing_page(target_path, display_name)
 
     console.print("Creating simplified static files...")
-    _create_static_files(target_path, display_name)
+    _create_static_files(target_path, app_name, display_name)
 
     console.print(f"Creating profile folder: profiles/{profile_name}/")
-    _create_profile(console, target_path, profile_name)
+    _create_profile(console, target_path, app_name, profile_name)
 
     console.print("Cleaning up unnecessary files...")
-    _cleanup(target_path, profile_name)
+    _cleanup(target_path, app_name, profile_name)
 
     console.print("Initializing fresh git repository...")
     _init_git(target_path)
@@ -83,7 +87,7 @@ def create_from_conversation_app(
     console.print("  reachy-mini-app-assistant check .")
     console.print("")
     console.print("To test your app locally:", style="bold")
-    console.print("  cd src/reachy_mini_conversation_app")
+    console.print(f"  cd src/{app_name}")
     console.print("  python main.py --gradio")
     console.print("  # Then open: http://127.0.0.1:7861/")
 
@@ -161,6 +165,44 @@ def _clone_repo(console: Console, target_path: Path) -> None:
         shutil.copytree(tmp_clone, target_path)
 
 
+def _to_pascal_case(name: str) -> str:
+    """Convert snake_case to PascalCase."""
+    return "".join(word.capitalize() for word in name.split("_"))
+
+
+def _rename_package(console: Console, app_path: Path, app_name: str) -> None:
+    """Rename the package folder, update all imports, and rename the main class."""
+    old_package_dir = app_path / "src" / CONVERSATION_APP_PACKAGE
+    new_package_dir = app_path / "src" / app_name
+
+    if not old_package_dir.exists():
+        console.print(
+            f"❌ Package folder not found at {old_package_dir}",
+            style="bold red",
+        )
+        exit(1)
+
+    # Rename the package folder
+    old_package_dir.rename(new_package_dir)
+
+    # Calculate new class name
+    new_class_name = _to_pascal_case(app_name)
+
+    # Find and replace all imports and class name in .py files
+    for py_file in new_package_dir.rglob("*.py"):
+        content = py_file.read_text()
+        # Replace imports like "from reachy_mini_conversation_app" and "import reachy_mini_conversation_app"
+        new_content = re.sub(
+            rf"\b{CONVERSATION_APP_PACKAGE}\b",
+            app_name,
+            content,
+        )
+        # Replace the main class name
+        new_content = new_content.replace("ReachyMiniConversationApp", new_class_name)
+        if new_content != content:
+            py_file.write_text(new_content)
+
+
 def _update_pyproject(console: Console, app_path: Path, app_name: str) -> None:
     """Update pyproject.toml with new app name and entry points."""
     pyproject_path = app_path / "pyproject.toml"
@@ -184,22 +226,23 @@ def _update_pyproject(console: Console, app_path: Path, app_name: str) -> None:
 
     # Update scripts:
     script_name = app_name.replace("_", "-")
-    data["project"]["scripts"] = {script_name: f"{CONVERSATION_APP_PACKAGE}.main:main"}
+    class_name = _to_pascal_case(app_name)
+    data["project"]["scripts"] = {script_name: f"{app_name}.main:main"}
 
     # Update entry points
     data["project"]["entry-points"] = {
-        "reachy_mini_apps": {
-            app_name: f"{CONVERSATION_APP_PACKAGE}.main:ReachyMiniConversationApp"
-        }
+        "reachy_mini_apps": {app_name: f"{app_name}.main:{class_name}"}
     }
 
     with open(pyproject_path, "w") as f:
         toml.dump(data, f)
 
 
-def _update_config(console: Console, app_path: Path, profile_name: str) -> None:
+def _update_config(
+    console: Console, app_path: Path, app_name: str, profile_name: str
+) -> None:
     """Set LOCKED_PROFILE constant in config.py."""
-    config_path = app_path / "src" / CONVERSATION_APP_PACKAGE / "config.py"
+    config_path = app_path / "src" / app_name / "config.py"
 
     if not config_path.exists():
         console.print(
@@ -270,14 +313,14 @@ def _create_landing_page(app_path: Path, display_name: str) -> None:
     (app_path / "style.css").write_text(style_template.render(context))
 
 
-def _create_static_files(app_path: Path, display_name: str) -> None:
+def _create_static_files(app_path: Path, app_name: str, display_name: str) -> None:
     """Replace conversation app static files with simplified API-key-only version."""
     template_dir = CONVERSATION_TEMPLATE_DIR / "static"
     env = Environment(loader=FileSystemLoader(template_dir))
 
     context = {"display_name": display_name}
 
-    static_dir = app_path / "src" / CONVERSATION_APP_PACKAGE / "static"
+    static_dir = app_path / "src" / app_name / "static"
 
     # Render and write simplified static files
     (static_dir / "index.html").write_text(
@@ -289,17 +332,17 @@ def _create_static_files(app_path: Path, display_name: str) -> None:
     )
 
 
-def _create_profile(console: Console, app_path: Path, profile_name: str) -> None:
+def _create_profile(
+    console: Console, app_path: Path, app_name: str, profile_name: str
+) -> None:
     """Create profile folder with template files."""
-    new_profile_dir = (
-        app_path / "src" / CONVERSATION_APP_PACKAGE / "profiles" / profile_name
-    )
+    new_profile_dir = app_path / "src" / app_name / "profiles" / profile_name
     new_profile_dir.mkdir(parents=True, exist_ok=True)
 
     # Render all .j2 templates from profile template directory
     template_dir = CONVERSATION_TEMPLATE_DIR / "profile"
     env = Environment(loader=FileSystemLoader(template_dir))
-    context = {"profile_name": profile_name}
+    context = {"profile_name": profile_name, "app_name": app_name}
 
     for src_file in template_dir.iterdir():
         if src_file.is_file() and src_file.suffix == ".j2":
@@ -313,7 +356,7 @@ def _create_profile(console: Console, app_path: Path, profile_name: str) -> None
         console.print(f"     - {f.name}", style="dim")
 
 
-def _cleanup(app_path: Path, profile_name: str) -> None:
+def _cleanup(app_path: Path, app_name: str, profile_name: str) -> None:
     """Remove files not needed in the forked app."""
     for dir_name in _CLEANUP_DIRS:
         dir_path = app_path / dir_name
@@ -326,7 +369,7 @@ def _cleanup(app_path: Path, profile_name: str) -> None:
             file_path.unlink()
 
     # Remove all profile folders except the new locked profile
-    profiles_dir = app_path / "src" / CONVERSATION_APP_PACKAGE / "profiles"
+    profiles_dir = app_path / "src" / app_name / "profiles"
     if profiles_dir.exists():
         for profile_dir in profiles_dir.iterdir():
             if profile_dir.is_dir() and profile_dir.name != profile_name:
