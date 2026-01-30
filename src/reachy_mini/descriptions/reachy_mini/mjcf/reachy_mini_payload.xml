@@ -523,8 +523,8 @@
               <body name="fake_payload_head" pos="-0.105717 -0.0550178 0.015" quat="0.664652 0.38283 -0.641585 -0.00682952">
                 <!-- Inertial with CoM at origin (0,0,0) so we can change mass without affecting CoM position -->
                 <inertial pos="0 0 0" mass="0.050" fullinertia="1.5e-05 1.5e-05 1.5e-05 0 0 0"/>
-                <!-- Visible red box (5cm cube) -->
-                <geom type="box" size="0.025 0.025 0.025" rgba="1 0 0 0.7" class="visual"/>
+                <!-- Visible red box (5cm cube) - removed class, added contype/conaffinity for visual-only -->
+                <geom type="box" size="0.025 0.025 0.025" rgba="1 0 0 0.9" contype="0" conaffinity="0"/>
               </body>
             </body>
           </body>
