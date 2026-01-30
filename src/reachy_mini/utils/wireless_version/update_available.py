@@ -7,7 +7,6 @@ import json
 from importlib.metadata import distribution, version
 
 import requests
-import semver
 
 
 def get_install_source(package_name: str) -> dict[str, str]:
@@ -44,7 +43,7 @@ def is_update_available(package_name: str, pre_release: bool) -> bool:
     return is_update_available
 
 
-def get_pypi_version(package_name: str, pre_release: bool) -> semver.Version:
+def get_pypi_version(package_name: str, pre_release: bool) -> "semver.Version":
     """Get the latest version of a package from PyPI."""
     url = f"https://pypi.org/pypi/{package_name}/json"
     response = requests.get(url)
@@ -62,13 +61,15 @@ def get_pypi_version(package_name: str, pre_release: bool) -> semver.Version:
     return _semver_version(version)
 
 
-def get_local_version(package_name: str) -> semver.Version:
+def get_local_version(package_name: str) -> "semver.Version":
     """Get the currently installed version of a package."""
     return _semver_version(version(package_name))
 
 
-def _semver_version(v: str) -> semver.Version:
+def _semver_version(v: str) -> "semver.Version":
     """Convert a version string to a semver.Version object, handling pypi pre-release formats."""
+    import semver
+
     try:
         return semver.Version.parse(v)
     except ValueError:
