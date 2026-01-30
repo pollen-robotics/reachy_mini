@@ -253,96 +253,96 @@ def check_and_update_wireless_launcher() -> None:
 
 
 def check_and_sync_apps_venv_sdk() -> None:
-    """Check if the apps_venv SDK version matches daemon and update if needed.
+    """Check if apps_venv SDK matches daemon install source and sync if needed.
 
-    This ensures that when the daemon is updated, the SDK in the apps_venv
-    is also updated to match, so apps get the latest fixes automatically.
+    Compares both version AND install source (PyPI vs git ref). If daemon was
+    installed from a git ref, apps_venv will be synced to the same ref.
+
     """
-    from importlib.metadata import version
+    import json
+    import shutil
 
-    # Get daemon venv SDK version
+    from .update_available import get_install_source
+
+    # Get daemon install info
     try:
-        daemon_version = version("reachy_mini")
+        daemon_info = get_install_source("reachy_mini")
     except Exception as e:
-        print(f"Could not get daemon SDK version: {e}")
+        print(f"Could not get daemon SDK info: {e}")
         return
 
-    # Path to apps_venv python
+    # Check apps_venv exists
     apps_venv_python = Path("/venvs/apps_venv/bin/python")
     if not apps_venv_python.exists():
         print("apps_venv not found, skipping SDK sync")
         return
 
-    # Get apps_venv SDK version
+    # Get apps_venv install info
     try:
         result = subprocess.run(
             [
                 str(apps_venv_python),
                 "-c",
-                "from importlib.metadata import version; print(version('reachy_mini'))",
+                "from reachy_mini.utils.wireless_version.update_available import get_install_source; "
+                "import json; print(json.dumps(get_install_source('reachy_mini')))",
             ],
             capture_output=True,
             text=True,
             timeout=10,
         )
         if result.returncode != 0:
-            print(f"Could not get apps_venv SDK version: {result.stderr}")
+            print(f"Could not get apps_venv SDK info: {result.stderr}")
             return
-        apps_version = result.stdout.strip()
+        apps_info = json.loads(result.stdout.strip())
     except subprocess.TimeoutExpired:
-        print("Timeout getting apps_venv SDK version")
+        print("Timeout getting apps_venv SDK info")
         return
     except Exception as e:
-        print(f"Error getting apps_venv SDK version: {e}")
+        print(f"Error getting apps_venv SDK info: {e}")
         return
 
-    print(f"Daemon SDK version: {daemon_version}")
-    print(f"Apps venv SDK version: {apps_version}")
+    print(f"Daemon: {daemon_info['version']} (source={daemon_info['source']}, ref={daemon_info.get('git_ref')})")
+    print(f"Apps:   {apps_info['version']} (source={apps_info['source']}, ref={apps_info.get('git_ref')})")
 
-    if daemon_version == apps_version:
+    # Check if sync needed
+    if daemon_info["source"] == "git":
+        # Git install: sync if different ref
+        needs_sync = apps_info.get("git_ref") != daemon_info.get("git_ref")
+    else:
+        # PyPI install: sync if different version
+        needs_sync = apps_info["version"] != daemon_info["version"]
+
+    if not needs_sync:
         print("Apps venv SDK is up to date")
         return
 
-    # Versions differ, update apps_venv
-    print(f"Updating apps_venv SDK from {apps_version} to {daemon_version}...")
+    # Build install command
+    use_uv = shutil.which("uv") is not None
+    if daemon_info["source"] == "git" and daemon_info.get("git_ref"):
+        git_url = f"git+https://github.com/pollen-robotics/reachy_mini.git@{daemon_info['git_ref']}"
+        pkg = f"reachy-mini[gstreamer] @ {git_url}"
+        extra = ["--force-reinstall"]
+        print(f"Syncing apps_venv to git ref: {daemon_info['git_ref']}")
+    else:
+        pkg = f"reachy-mini[gstreamer]=={daemon_info['version']}"
+        extra = []
+        print(f"Syncing apps_venv to version: {daemon_info['version']}")
+
+    if use_uv:
+        cmd = ["uv", "pip", "install", "--python", str(apps_venv_python), pkg] + extra
+    else:
+        cmd = [str(Path("/venvs/apps_venv/bin/pip")), "install", pkg] + extra
+
     try:
-        # Use uv if available, otherwise pip
-        import shutil
-
-        apps_venv_pip = Path("/venvs/apps_venv/bin/pip")
-        use_uv = shutil.which("uv") is not None
-
-        if use_uv:
-            install_cmd = [
-                "uv",
-                "pip",
-                "install",
-                "--python",
-                str(apps_venv_python),
-                f"reachy-mini[gstreamer]=={daemon_version}",
-            ]
-        else:
-            install_cmd = [
-                str(apps_venv_pip),
-                "install",
-                f"reachy-mini[gstreamer]=={daemon_version}",
-            ]
-
-        result = subprocess.run(
-            install_cmd,
-            capture_output=True,
-            text=True,
-            timeout=300,  # 5 minute timeout for install
-        )
-
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
         if result.returncode == 0:
-            print(f"Successfully updated apps_venv SDK to {daemon_version}")
+            print("Successfully synced apps_venv SDK")
         else:
-            print(f"Failed to update apps_venv SDK: {result.stderr}")
+            print(f"Failed to sync apps_venv SDK: {result.stderr}")
     except subprocess.TimeoutExpired:
-        print("Timeout updating apps_venv SDK")
+        print("Timeout syncing apps_venv SDK")
     except Exception as e:
-        print(f"Error updating apps_venv SDK: {e}")
+        print(f"Error syncing apps_venv SDK: {e}")
 
 
 def check_and_fix_restore_venv() -> None:
