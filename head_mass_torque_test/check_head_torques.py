@@ -62,19 +62,27 @@ TEST_POSES = {
     },
     "translate_up_2cm": {
         "name": "Translate up 2cm",
-        "pose": create_head_pose(x=0, y=0, z=0.02, roll=0, pitch=0, yaw=0, degrees=True),
+        "pose": create_head_pose(
+            x=0, y=0, z=0.02, roll=0, pitch=0, yaw=0, degrees=True
+        ),
     },
     "translate_down_1cm": {
         "name": "Translate down 1cm",
-        "pose": create_head_pose(x=0, y=0, z=-0.01, roll=0, pitch=0, yaw=0, degrees=True),
+        "pose": create_head_pose(
+            x=0, y=0, z=-0.01, roll=0, pitch=0, yaw=0, degrees=True
+        ),
     },
     "translate_forward_1cm": {
         "name": "Translate forward 1cm",
-        "pose": create_head_pose(x=0.01, y=0, z=0, roll=0, pitch=0, yaw=0, degrees=True),
+        "pose": create_head_pose(
+            x=0.01, y=0, z=0, roll=0, pitch=0, yaw=0, degrees=True
+        ),
     },
     "translate_side_1cm": {
         "name": "Translate side 1cm",
-        "pose": create_head_pose(x=0, y=0.01, z=0, roll=0, pitch=0, yaw=0, degrees=True),
+        "pose": create_head_pose(
+            x=0, y=0.01, z=0, roll=0, pitch=0, yaw=0, degrees=True
+        ),
     },
 }
 
@@ -85,7 +93,7 @@ CONVERGENCE_VEL_TOL = 1e-5
 
 # Torque reference
 STALL_TORQUE_NM = 0.6  # Motor stall torque
-SAFE_LIMIT_NM = 0.45   # 75% of stall torque
+SAFE_LIMIT_NM = 0.45  # 75% of stall torque
 
 # Mass testing
 MASS_INCREMENT_KG = 0.05  # 50g increments
@@ -99,6 +107,7 @@ XML_PATH = REPO_ROOT / "src/reachy_mini/descriptions/reachy_mini/mjcf/reachy_min
 # ============================================================================
 # MASS MODIFICATION
 # ============================================================================
+
 
 def modify_head_mass_in_model(model, new_mass_kg):
     """
@@ -127,17 +136,19 @@ def get_original_head_mass():
     tree = ET.parse(XML_PATH)
     root = tree.getroot()
 
-    for body in root.iter('body'):
-        if body.get('name') == 'xl_330':
-            inertial = body.find('inertial')
+    for body in root.iter("body"):
+        if body.get("name") == "xl_330":
+            inertial = body.find("inertial")
             if inertial is not None:
-                return float(inertial.get('mass'))
+                return float(inertial.get("mass"))
 
     raise ValueError("Could not find xl_330 mass in XML")
+
 
 # ============================================================================
 # RENDERING AND PLOTTING
 # ============================================================================
+
 
 def render_robot_image(backend, output_path, width=800, height=600):
     """Render current robot state and save image."""
@@ -147,21 +158,21 @@ def render_robot_image(backend, output_path, width=800, height=600):
 
     plt.figure(figsize=(8, 6))
     plt.imshow(pixels)
-    plt.axis('off')
+    plt.axis("off")
     plt.tight_layout(pad=0)
-    plt.savefig(output_path, dpi=100, bbox_inches='tight', pad_inches=0)
+    plt.savefig(output_path, dpi=100, bbox_inches="tight", pad_inches=0)
     plt.close()
 
 
 def plot_torques(result, output_path):
     """Create bar chart of motor torques for a pose."""
-    torques = result['torques']
+    torques = result["torques"]
     motor_names = list(torques.keys())
     torque_values = [torques[name] for name in motor_names]
     abs_torques = [abs(t) for t in torque_values]
 
     # Shorten motor names for display
-    display_names = [name.replace('_actuator', '') for name in motor_names]
+    display_names = [name.replace("_actuator", "") for name in motor_names]
 
     # Create figure
     fig, ax = plt.subplots(figsize=(10, 6))
@@ -170,43 +181,69 @@ def plot_torques(result, output_path):
     colors = []
     for abs_torque in abs_torques:
         if abs_torque >= SAFE_LIMIT_NM:
-            colors.append('#e74c3c')  # Red - exceeds safe limit
+            colors.append("#e74c3c")  # Red - exceeds safe limit
         elif abs_torque > 0.3:
-            colors.append('#f39c12')  # Orange - high
+            colors.append("#f39c12")  # Orange - high
         else:
-            colors.append('#3498db')  # Blue - normal
+            colors.append("#3498db")  # Blue - normal
 
-    bars = ax.bar(range(len(motor_names)), torque_values, color=colors, alpha=0.7, edgecolor='black')
+    bars = ax.bar(
+        range(len(motor_names)),
+        torque_values,
+        color=colors,
+        alpha=0.7,
+        edgecolor="black",
+    )
 
     # Add safe limit lines
-    ax.axhline(y=SAFE_LIMIT_NM, color='red', linestyle='--', linewidth=2, label=f'Safe Limit (+{SAFE_LIMIT_NM} N·m)')
-    ax.axhline(y=-SAFE_LIMIT_NM, color='red', linestyle='--', linewidth=2, label=f'Safe Limit (-{SAFE_LIMIT_NM} N·m)')
-    ax.axhline(y=0, color='black', linestyle='-', linewidth=0.5)
+    ax.axhline(
+        y=SAFE_LIMIT_NM,
+        color="red",
+        linestyle="--",
+        linewidth=2,
+        label=f"Safe Limit (+{SAFE_LIMIT_NM} N·m)",
+    )
+    ax.axhline(
+        y=-SAFE_LIMIT_NM,
+        color="red",
+        linestyle="--",
+        linewidth=2,
+        label=f"Safe Limit (-{SAFE_LIMIT_NM} N·m)",
+    )
+    ax.axhline(y=0, color="black", linestyle="-", linewidth=0.5)
 
     # Labels and title
-    ax.set_xlabel('Motor', fontsize=12, fontweight='bold')
-    ax.set_ylabel('Torque (N·m)', fontsize=12, fontweight='bold')
+    ax.set_xlabel("Motor", fontsize=12, fontweight="bold")
+    ax.set_ylabel("Torque (N·m)", fontsize=12, fontweight="bold")
 
-    mass_g = result.get('head_mass_g', 'unknown')
-    ax.set_title(f"Motor Torques - {result['pose_name']} (Head: {mass_g}g)\n"
-                 f"Max: {result['max_torque']:.4f} N·m ({result['pct_of_stall']:.1f}% of stall)",
-                 fontsize=14, fontweight='bold')
+    mass_g = result.get("head_mass_g", "unknown")
+    ax.set_title(
+        f"Motor Torques - {result['pose_name']} (Head: {mass_g}g)\n"
+        f"Max: {result['max_torque']:.4f} N·m ({result['pct_of_stall']:.1f}% of stall)",
+        fontsize=14,
+        fontweight="bold",
+    )
 
     ax.set_xticks(range(len(motor_names)))
-    ax.set_xticklabels(display_names, rotation=45, ha='right')
-    ax.grid(axis='y', alpha=0.3)
-    ax.legend(loc='upper right')
+    ax.set_xticklabels(display_names, rotation=45, ha="right")
+    ax.grid(axis="y", alpha=0.3)
+    ax.legend(loc="upper right")
 
     # Add value labels on bars
     for i, (bar, val) in enumerate(zip(bars, torque_values)):
         height = bar.get_height()
-        ax.text(bar.get_x() + bar.get_width()/2., height,
-                f'{val:.3f}',
-                ha='center', va='bottom' if height > 0 else 'top',
-                fontsize=8, fontweight='bold')
+        ax.text(
+            bar.get_x() + bar.get_width() / 2.0,
+            height,
+            f"{val:.3f}",
+            ha="center",
+            va="bottom" if height > 0 else "top",
+            fontsize=8,
+            fontweight="bold",
+        )
 
     plt.tight_layout()
-    plt.savefig(output_path, dpi=150, bbox_inches='tight')
+    plt.savefig(output_path, dpi=150, bbox_inches="tight")
     plt.close()
 
 
@@ -217,55 +254,74 @@ def create_summary_figure(all_mass_results, output_path):
     # Group results by pose
     poses_data = {}
     for result in all_mass_results:
-        pose_key = result['pose_key']
+        pose_key = result["pose_key"]
         if pose_key not in poses_data:
             poses_data[pose_key] = {
-                'name': result['pose_name'],
-                'masses': [],
-                'max_torques': []
+                "name": result["pose_name"],
+                "masses": [],
+                "max_torques": [],
             }
-        poses_data[pose_key]['masses'].append(result['head_mass_g'])
-        poses_data[pose_key]['max_torques'].append(result['max_torque'])
+        poses_data[pose_key]["masses"].append(result["head_mass_g"])
+        poses_data[pose_key]["max_torques"].append(result["max_torque"])
 
     # Plot 1: Torque vs Mass for each pose
     for pose_key, data in poses_data.items():
-        ax1.plot(data['masses'], data['max_torques'], 'o-', label=data['name'], linewidth=2, markersize=6)
+        ax1.plot(
+            data["masses"],
+            data["max_torques"],
+            "o-",
+            label=data["name"],
+            linewidth=2,
+            markersize=6,
+        )
 
-    ax1.axhline(y=SAFE_LIMIT_NM, color='red', linestyle='--', linewidth=2, label=f'Safe Limit ({SAFE_LIMIT_NM} N·m)')
-    ax1.axhline(y=STALL_TORQUE_NM, color='darkred', linestyle='--', linewidth=2, label=f'Stall ({STALL_TORQUE_NM} N·m)')
-    ax1.set_xlabel('Head Mass (g)', fontsize=12, fontweight='bold')
-    ax1.set_ylabel('Max Torque (N·m)', fontsize=12, fontweight='bold')
-    ax1.set_title('Maximum Torque vs Head Mass', fontsize=14, fontweight='bold')
+    ax1.axhline(
+        y=SAFE_LIMIT_NM,
+        color="red",
+        linestyle="--",
+        linewidth=2,
+        label=f"Safe Limit ({SAFE_LIMIT_NM} N·m)",
+    )
+    ax1.axhline(
+        y=STALL_TORQUE_NM,
+        color="darkred",
+        linestyle="--",
+        linewidth=2,
+        label=f"Stall ({STALL_TORQUE_NM} N·m)",
+    )
+    ax1.set_xlabel("Head Mass (g)", fontsize=12, fontweight="bold")
+    ax1.set_ylabel("Max Torque (N·m)", fontsize=12, fontweight="bold")
+    ax1.set_title("Maximum Torque vs Head Mass", fontsize=14, fontweight="bold")
     ax1.grid(alpha=0.3)
-    ax1.legend(bbox_to_anchor=(1.05, 1), loc='upper left', fontsize=8)
+    ax1.legend(bbox_to_anchor=(1.05, 1), loc="upper left", fontsize=8)
 
     # Plot 2: Statistics and Information Panel
-    ax2.axis('off')
+    ax2.axis("off")
 
     # Find critical pose (highest final torque)
-    max_result = max(all_mass_results, key=lambda r: r['max_torque'])
+    max_result = max(all_mass_results, key=lambda r: r["max_torque"])
 
     # Find which poses exceeded limit
     exceeded_poses = {}
     safe_poses = {}
     for pose_key, data in poses_data.items():
-        max_torque_for_pose = max(data['max_torques'])
-        final_mass = data['masses'][-1]
+        max_torque_for_pose = max(data["max_torques"])
+        final_mass = data["masses"][-1]
 
         if max_torque_for_pose >= SAFE_LIMIT_NM:
-            exceeded_poses[data['name']] = {
-                'mass': final_mass,
-                'torque': max_torque_for_pose
+            exceeded_poses[data["name"]] = {
+                "mass": final_mass,
+                "torque": max_torque_for_pose,
             }
         else:
-            safe_poses[data['name']] = {
-                'mass': final_mass,
-                'torque': max_torque_for_pose,
-                'pct': (max_torque_for_pose / SAFE_LIMIT_NM) * 100
+            safe_poses[data["name"]] = {
+                "mass": final_mass,
+                "torque": max_torque_for_pose,
+                "pct": (max_torque_for_pose / SAFE_LIMIT_NM) * 100,
             }
 
     # Get mass range
-    all_masses = [r['head_mass_g'] for r in all_mass_results]
+    all_masses = [r["head_mass_g"] for r in all_mass_results]
     original_mass = min(all_masses)
     max_tested_mass = max(all_masses)
 
@@ -303,9 +359,9 @@ def create_summary_figure(all_mass_results, output_path):
     if safe_poses:
         stats_text += f"POSES STILL SAFE AT {max_tested_mass}g ({len(safe_poses)})\n"
         stats_text += "-" * 50 + "\n"
-        for pose_name in sorted(safe_poses.keys(),
-                                key=lambda p: safe_poses[p]['pct'],
-                                reverse=True):
+        for pose_name in sorted(
+            safe_poses.keys(), key=lambda p: safe_poses[p]["pct"], reverse=True
+        ):
             info = safe_poses[pose_name]
             stats_text += f"• {pose_name:35s} {info['pct']:5.1f}%\n"
         stats_text += "\n"
@@ -318,20 +374,26 @@ def create_summary_figure(all_mass_results, output_path):
     stats_text += "• Testing stopped when first pose hit limit\n"
 
     # Display text
-    ax2.text(0.05, 0.95, stats_text,
-             transform=ax2.transAxes,
-             fontfamily='monospace',
-             fontsize=10,
-             verticalalignment='top',
-             bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.3))
+    ax2.text(
+        0.05,
+        0.95,
+        stats_text,
+        transform=ax2.transAxes,
+        fontfamily="monospace",
+        fontsize=10,
+        verticalalignment="top",
+        bbox=dict(boxstyle="round", facecolor="wheat", alpha=0.3),
+    )
 
     plt.tight_layout()
-    plt.savefig(output_path, dpi=150, bbox_inches='tight')
+    plt.savefig(output_path, dpi=150, bbox_inches="tight")
     plt.close()
+
 
 # ============================================================================
 # TESTING
 # ============================================================================
+
 
 def test_pose(backend, kinematics, pose_dict, pose_key, head_mass_g, output_dir=None):
     """
@@ -343,14 +405,26 @@ def test_pose(backend, kinematics, pose_dict, pose_key, head_mass_g, output_dir=
     pose = pose_dict["pose"]
     pose_name = pose_dict["name"]
 
-    # Compute IK
+    # Compute IK first
     joint_positions = kinematics.ik(pose, body_yaw=0.0)
 
     if joint_positions is None or np.any(np.isnan(joint_positions)):
         return None
 
-    # Apply to MuJoCo
+    # Reset simulation (like pressing backspace in MuJoCo viewer)
+    mujoco.mj_resetData(backend.model, backend.data)
+
+    # Set control targets - actuators will move robot to target pose
     backend.data.ctrl[:7] = joint_positions
+
+    # Step simulation to stabilize
+    print("\n4. Stepping simulation to stabilize (500 steps)...")
+    for _ in range(500):
+        backend.data.ctrl[:7] = joint_positions
+        mujoco.mj_step(backend.model, backend.data)
+
+    # Re-apply head mass modification after reset
+    modify_head_mass_in_model(backend.model, head_mass_g / 1000.0)
 
     # Step until convergence
     prev_qpos = backend.data.qpos[backend.joint_qpos_addr[:7]].copy()
@@ -385,7 +459,9 @@ def test_pose(backend, kinematics, pose_dict, pose_key, head_mass_g, output_dir=
 
     # Find hardest working motor
     max_idx = np.argmax(abs_torques)
-    hardest_motor = mujoco.mj_id2name(backend.model, mujoco.mjtObj.mjOBJ_ACTUATOR, max_idx)
+    hardest_motor = mujoco.mj_id2name(
+        backend.model, mujoco.mjtObj.mjOBJ_ACTUATOR, max_idx
+    )
     hardest_torque = torque_vals[max_idx]
 
     # Calculate percentage of stall torque
@@ -467,9 +543,9 @@ def test_mass(mass_kg, output_dir):
     results = []
     limit_reached = False
 
-    print("-"*80)
+    print("-" * 80)
     print(f"{'POSE':<40s} {'MAX TORQUE':<15s} {'% STALL':<10s} {'STATUS':<10s}")
-    print("-"*80)
+    print("-" * 80)
 
     for pose_key, pose_dict in TEST_POSES.items():
         result = test_pose(backend, kinematics, pose_dict, pose_key, mass_g, output_dir)
@@ -486,20 +562,22 @@ def test_mass(mass_kg, output_dir):
             else:
                 status = "✓ OK"
 
-            print(f"{result['pose_name']:<40s} {result['max_torque']:>6.4f} N·m     "
-                  f"{result['pct_of_stall']:>5.1f}%     {status}")
+            print(
+                f"{result['pose_name']:<40s} {result['max_torque']:>6.4f} N·m     "
+                f"{result['pct_of_stall']:>5.1f}%     {status}"
+            )
         else:
             print(f"{pose_dict['name']:<40s} IK FAILED")
 
-    print("-"*80)
+    print("-" * 80)
 
     return results, limit_reached
 
 
 def main():
-    print("="*80)
+    print("=" * 80)
     print("HEAD MOTOR TORQUE CHECK - VARIABLE MASS")
-    print("="*80)
+    print("=" * 80)
     print(f"\nMotor stall torque: {STALL_TORQUE_NM} N·m")
     print(f"Safe limit (75%): {SAFE_LIMIT_NM} N·m")
     print(f"Test poses: {len(TEST_POSES)}")
@@ -513,7 +591,9 @@ def main():
 
     # Get original mass from XML
     original_mass_kg = get_original_head_mass()
-    print(f"Original head mass from XML: {original_mass_kg:.4f} kg ({int(original_mass_kg * 1000)}g)\n")
+    print(
+        f"Original head mass from XML: {original_mass_kg:.4f} kg ({int(original_mass_kg * 1000)}g)\n"
+    )
 
     # Test incrementally
     all_results = []
@@ -551,23 +631,25 @@ def main():
 
     if limit_reached:
         # Find the hardest pose at limit
-        limit_results = [r for r in all_results if r['exceeds_limit']]
+        limit_results = [r for r in all_results if r["exceeds_limit"]]
         if limit_results:
-            hardest = max(limit_results, key=lambda r: r['max_torque'])
+            hardest = max(limit_results, key=lambda r: r["max_torque"])
             print(f"\nLimit reached at: {hardest['head_mass_g']}g")
             print(f"Critical pose: {hardest['pose_name']}")
-            print(f"Peak torque: {hardest['max_torque']:.4f} N·m ({hardest['pct_of_stall']:.1f}% of stall)")
+            print(
+                f"Peak torque: {hardest['max_torque']:.4f} N·m ({hardest['pct_of_stall']:.1f}% of stall)"
+            )
             print(f"Critical motor: {hardest['hardest_motor']}")
     else:
         print(f"\nNo limit reached up to {int(MAX_MASS_KG * 1000)}g")
-        max_result = max(all_results, key=lambda r: r['max_torque'])
+        max_result = max(all_results, key=lambda r: r["max_torque"])
         print(f"Maximum torque observed: {max_result['max_torque']:.4f} N·m")
         print(f"At mass: {max_result['head_mass_g']}g, pose: {max_result['pose_name']}")
 
     print(f"\n✓ All results saved to: {output_dir}/")
     print(f"  - Individual renders and graphs for each mass/pose combination")
     print(f"  - Summary: mass_test_summary.png")
-    print("="*80)
+    print("=" * 80)
 
 
 if __name__ == "__main__":
