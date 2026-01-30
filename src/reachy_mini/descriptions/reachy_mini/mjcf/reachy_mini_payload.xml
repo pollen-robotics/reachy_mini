@@ -19,14 +19,8 @@
   <default>
     <default class="chosen_actuator">
       <geom contype="0" conaffinity="0"/>
-        <joint damping="0.03506216673421391" frictionloss="0.02056180265843287" armature="0.0017252511613451657"/>
-        <position kp=" 0.48444830188910154" forcerange="-0.6564340133998666 0.6564340133998666"/>
-      <!-- <default class="chosen_actuator"/> -->
-    </default>
-    <default class="passive_actuator">
-      <geom contype="0" conaffinity="0"/>
-        <joint damping="0.001" frictionloss="0.001" armature="0.001"/>
-      <!-- <default class="chosen_actuator"/> -->
+        <joint damping="0.15" frictionloss="0.1" armature="0.001"/>
+        <position kp="10.0" kv="0.1" forcerange="-20.0 20.0"/>
     </default>
     <default class="xc330m288t">
       <!-- probably wrong, would need to re-identify -->
@@ -266,7 +260,7 @@
           <!-- Link stewart_link_rod -->
           <body name="stewart_link_rod" pos="0.04 -1.6545e-10 0.007" quat="0.497033 0.00414178 -0.0814283 0.863893">
             <!-- Joint from dc15_a01_horn_dummy to stewart_link_rod -->
-            <joint axis="0 0 1" name="passive_1" type="ball" class="passive_actuator"/>
+            <joint axis="0 0 1" name="passive_1" type="ball" class="chosen_actuator"/>
             <inertial pos="0.0425001 8.43768e-11 -1.88428e-09" mass="0.00503424" fullinertia="2.63976e-08 3.65211e-06 3.66473e-06 -3.69517e-13 7.12534e-14 5.21041e-14"/>
             <!-- Part stewart_link_rod -->
             <geom type="mesh" class="visual" pos="0.0425 0 6.93889e-18" quat="1 -6.66292e-18 5.55112e-17 1.31391e-16" mesh="stewart_link_rod" material="stewart_link_rod_material"/>
@@ -288,7 +282,7 @@
           <!-- Link stewart_link_rod_2 -->
           <body name="stewart_link_rod_2" pos="0.04 1.249e-16 0.007" quat="6.10896e-15 6.31057e-15 1 -1.23174e-14">
             <!-- Joint from dc15_a01_horn_dummy_2 to stewart_link_rod_2 -->
-            <joint axis="0 0 1" name="passive_2" type="ball" class="passive_actuator"/>
+            <joint axis="0 0 1" name="passive_2" type="ball" class="chosen_actuator"/>
             <inertial pos="0.0214999 -0.0364688 -0.00374429" mass="0.00503424" fullinertia="2.72424e-06 9.82586e-07 3.63642e-06 1.57393e-06 1.6134e-07 -2.75528e-07"/>
             <!-- Part stewart_link_rod_2 -->
             <geom type="mesh" class="visual" pos="0.0215 -0.0364689 -0.0037443" quat="0.0195742 -0.496665 -0.866005 -0.0545625" mesh="stewart_link_rod" material="stewart_link_rod_material"/>
@@ -310,7 +304,7 @@
           <!-- Link stewart_link_rod_3 -->
           <body name="stewart_link_rod_3" pos="0.04 8.32667e-17 0.007" quat="0.848296 0.182577 -0.0544081 -0.494063">
             <!-- Joint from dc15_a01_horn_dummy_3 to stewart_link_rod_3 -->
-            <joint axis="0 0 1" name="passive_3" type="ball" class="passive_actuator"/>
+            <joint axis="0 0 1" name="passive_3" type="ball" class="chosen_actuator"/>
             <inertial pos="-0.0424999 8.43768e-11 -1.88428e-09" mass="0.00503424" fullinertia="2.63976e-08 3.65211e-06 3.66473e-06 -3.69517e-13 7.12534e-14 5.21041e-14"/>
             <!-- Part stewart_link_rod_3 -->
             <geom type="mesh" class="visual" pos="-0.0425 -1.38778e-17 0" quat="1 0 2.22045e-16 5.35987e-17" mesh="stewart_link_rod" material="stewart_link_rod_material"/>
@@ -332,7 +326,7 @@
           <!-- Link stewart_link_rod_4 -->
           <body name="stewart_link_rod_4" pos="0.04 2.77556e-17 0.007" quat="0.865702 -0.0591779 0.0169265 0.496762">
             <!-- Joint from dc15_a01_horn_dummy_4 to stewart_link_rod_4 -->
-            <joint axis="0 0 1" name="passive_4" type="ball" class="passive_actuator"/>
+            <joint axis="0 0 1" name="passive_4" type="ball" class="chosen_actuator"/>
             <inertial pos="-0.0424999 8.43769e-11 -1.88428e-09" mass="0.00503424" fullinertia="2.63976e-08 3.65211e-06 3.66473e-06 -3.69517e-13 7.12534e-14 5.21041e-14"/>
             <!-- Part stewart_link_rod_4 -->
             <geom type="mesh" class="visual" pos="-0.0425 1.38778e-17 0" quat="1 0 5.55112e-17 -1.17998e-16" mesh="stewart_link_rod" material="stewart_link_rod_material"/>
@@ -354,7 +348,7 @@
           <!-- Link stewart_link_rod_5 -->
           <body name="stewart_link_rod_5" pos="0.04 5.55112e-17 0.007" quat="0.864425 0.0755679 0.00751236 -0.496993">
             <!-- Joint from dc15_a01_horn_dummy_5 to stewart_link_rod_5 -->
-            <joint axis="0 0 1" name="passive_5" type="ball" class="passive_actuator"/>
+            <joint axis="0 0 1" name="passive_5" type="ball" class="chosen_actuator"/>
             <inertial pos="-0.0424999 8.43768e-11 -1.88428e-09" mass="0.00503424" fullinertia="2.63976e-08 3.65211e-06 3.66473e-06 -3.69517e-13 7.12534e-14 5.21041e-14"/>
             <!-- Part stewart_link_rod_5 -->
             <geom type="mesh" class="visual" pos="-0.0425 0 0" quat="1 0 1.11022e-16 2.31852e-16" mesh="stewart_link_rod" material="stewart_link_rod_material"/>
@@ -376,14 +370,14 @@
           <!-- Link stewart_link_rod_6 -->
           <body name="stewart_link_rod_6" pos="0.04 9.71445e-17 0.007" quat="0.0566689 0.865869 0.496711 -0.018366">
             <!-- Joint from dc15_a01_horn_dummy_6 to stewart_link_rod_6 -->
-            <joint axis="0 0 1" name="passive_6" type="ball" class="passive_actuator"/>
+            <joint axis="0 0 1" name="passive_6" type="ball" class="chosen_actuator"/>
             <inertial pos="-0.0424999 8.43768e-11 -1.88428e-09" mass="0.00503424" fullinertia="2.63976e-08 3.65211e-06 3.66473e-06 -3.69517e-13 7.12534e-14 5.21041e-14"/>
             <!-- Part stewart_link_rod_6 -->
             <geom type="mesh" class="visual" pos="-0.0425 0 0" quat="1 0 -1.11022e-16 5.66481e-17" mesh="stewart_link_rod" material="stewart_link_rod_material"/>
             <!-- Link xl_330 -->
             <body name="xl_330" pos="-0.085 0 0" quat="0 1 0 0">
               <!-- Joint from stewart_link_rod_6 to xl_330 -->
-              <joint axis="0 0 1" name="passive_7" type="ball" class="passive_actuator"/>
+              <joint axis="0 0 1" name="passive_7" type="ball" class="chosen_actuator"/>
               <inertial pos="-0.0487051 -0.0237648 0.020658" mass="0.259259" fullinertia="0.000634651 0.000587786 0.000460283 3.65691e-05 -2.18087e-05 9.29467e-05"/>
               <!-- Part m12_fisheye_lens_1_8mm -->
               <geom type="mesh" class="visual" pos="-0.0387195 -0.0329451 -0.0240431" quat="0.182968 0.474809 0.465151 0.724371" mesh="m12_fisheye_lens_1_8mm" material="m12_fisheye_lens_1_8mm_material"/>
@@ -524,6 +518,13 @@
                 <geom type="mesh" class="visual" pos="5.20417e-18 0 0" quat="4.58651e-14 -3.58073e-14 0.707107 -0.707107" mesh="antenna_interface_3dprint" material="antenna_interface_3dprint_material"/>
                 <!-- Part antenna_2 -->
                 <geom type="mesh" class="visual" pos="6.79838e-15 -0.0588 -0.0103" quat="1 -1.09379e-15 -2.58127e-15 5.78419e-14" mesh="antenna" material="antenna_material"/>
+              </body>
+              <!-- Payload simulation: Simple box on top of head (50g) -->
+              <body name="fake_payload_head" pos="-0.105717 -0.0550178 0.015" quat="0.664652 0.38283 -0.641585 -0.00682952">
+                <!-- Inertial with CoM at origin (0,0,0) so we can change mass without affecting CoM position -->
+                <inertial pos="0 0 0" mass="0.050" fullinertia="1.5e-05 1.5e-05 1.5e-05 0 0 0"/>
+                <!-- Visible red box (5cm cube) -->
+                <geom type="box" size="0.025 0.025 0.025" rgba="1 0 0 0.7" class="visual"/>
               </body>
             </body>
           </body>
