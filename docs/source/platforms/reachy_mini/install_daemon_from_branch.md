@@ -3,6 +3,8 @@
 > **⚠️ For Developers and Testers Only**
 >
 > This guide explains how to install the Reachy Mini daemon from a specific GitHub branch before it is officially released. Use this for testing new features or bug fixes.
+>
+> **💡 Tip:** Starting from v1.2.14, you can install a branch directly from **Settings → Reachy Mini Update** in the web dashboard.
 
 ## Prerequisites
 
@@ -74,12 +76,14 @@ Now you can modify the code in `~/reachy_mini` and test your changes without aff
 
    > _Remark_ : we have to use `pip` here and not `uv` because `uv pip install` [does not work correctly with `git lfs`](https://github.com/astral-sh/uv/issues/3312)
 
-4. **Restart the daemon service:**
+4. **(Only for versions ≤ 1.2.13)** Repeat steps 2 and 3 using `/venvs/apps_venv`.
+
+5. **Restart the daemon service:**
    ```bash
    sudo systemctl restart reachy-mini-daemon
    ```
 
-5. **Verify the installation was successful:**
+6. **Verify the installation was successful:**
    ```bash
    pip show reachy-mini | grep Version
    ```
