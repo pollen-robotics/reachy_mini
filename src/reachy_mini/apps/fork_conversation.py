@@ -20,7 +20,7 @@ CONVERSATION_APP_PACKAGE = "reachy_mini_conversation_app"
 CONVERSATION_TEMPLATE_DIR = Path(__file__).parent / "templates" / "fork_conversation"
 
 _CLEANUP_DIRS = [".github", ".idea", ".vscode"]
-_CLEANUP_FILES = ["uv.lock"]
+_CLEANUP_FILES = ["uv.lock", "CONTRIBUTING.md", "CODE_OF_CONDUCT.md"]
 
 
 def create_from_conversation_app(
@@ -52,16 +52,19 @@ def create_from_conversation_app(
 
     console.print("Creating README.md...")
     display_name = " ".join(word.capitalize() for word in app_name.split("_"))
-    _update_readme(console, target_path, display_name, profile_name)
+    _update_readme(console, target_path, app_name, display_name, profile_name)
 
     console.print("Creating landing page (index.html, style.css)...")
-    _create_landing_page(target_path, display_name)
+    _create_landing_page(target_path, app_name, display_name)
 
     console.print("Creating simplified static files...")
     _create_static_files(target_path, app_name, display_name)
 
     console.print(f"Creating profile folder: profiles/{profile_name}/")
     _create_profile(console, target_path, app_name, profile_name)
+
+    console.print("Updating .gitignore...")
+    _update_gitignore(target_path, app_name)
 
     console.print("Cleaning up unnecessary files...")
     _cleanup(target_path, app_name, profile_name)
@@ -83,12 +86,11 @@ def create_from_conversation_app(
 
     console.print("\nNext steps:", style="bold")
     console.print(f"  cd {target_path}")
-    console.print("  uv sync")
+    console.print("  pip install -e .")
     console.print("  reachy-mini-app-assistant check .")
     console.print("")
     console.print("To test your app locally:", style="bold")
-    console.print(f"  cd src/{app_name}")
-    console.print("  python main.py --gradio")
+    console.print(f"  python src/{app_name}/main.py --gradio")
     console.print("  # Then open: http://127.0.0.1:7861/")
 
     return target_path
@@ -188,19 +190,23 @@ def _rename_package(console: Console, app_path: Path, app_name: str) -> None:
     # Calculate new class name
     new_class_name = _to_pascal_case(app_name)
 
-    # Find and replace all imports and class name in .py files
-    for py_file in new_package_dir.rglob("*.py"):
-        content = py_file.read_text()
-        # Replace imports like "from reachy_mini_conversation_app" and "import reachy_mini_conversation_app"
-        new_content = re.sub(
-            rf"\b{CONVERSATION_APP_PACKAGE}\b",
-            app_name,
-            content,
-        )
-        # Replace the main class name
-        new_content = new_content.replace("ReachyMiniConversationApp", new_class_name)
-        if new_content != content:
-            py_file.write_text(new_content)
+    # Find and replace all imports and class name in .py files (src and tests)
+    py_dirs = [new_package_dir, app_path / "tests"]
+    for py_dir in py_dirs:
+        if not py_dir.exists():
+            continue
+        for py_file in py_dir.rglob("*.py"):
+            content = py_file.read_text()
+            # Replace imports like "from reachy_mini_conversation_app" and "import reachy_mini_conversation_app"
+            new_content = re.sub(
+                rf"\b{CONVERSATION_APP_PACKAGE}\b",
+                app_name,
+                content,
+            )
+            # Replace the main class name
+            new_content = new_content.replace("ReachyMiniConversationApp", new_class_name)
+            if new_content != content:
+                py_file.write_text(new_content)
 
 
 def _update_pyproject(console: Console, app_path: Path, app_name: str) -> None:
@@ -233,6 +239,21 @@ def _update_pyproject(console: Console, app_path: Path, app_name: str) -> None:
     data["project"]["entry-points"] = {
         "reachy_mini_apps": {app_name: f"{app_name}.main:{class_name}"}
     }
+
+    # Update package-data key from reachy_mini_conversation_app to app_name
+    if "tool" in data and "setuptools" in data["tool"]:
+        package_data = data["tool"]["setuptools"].get("package-data", {})
+        if CONVERSATION_APP_PACKAGE in package_data:
+            package_data[app_name] = package_data.pop(CONVERSATION_APP_PACKAGE)
+
+    # Update isort known-local-folder
+    if "tool" in data and "ruff" in data["tool"]:
+        isort_config = data["tool"]["ruff"].get("lint", {}).get("isort", {})
+        if "known-local-folder" in isort_config:
+            isort_config["known-local-folder"] = [
+                app_name if folder == CONVERSATION_APP_PACKAGE else folder
+                for folder in isort_config["known-local-folder"]
+            ]
 
     with open(pyproject_path, "w") as f:
         toml.dump(data, f)
@@ -281,7 +302,7 @@ def _update_config(
 
 
 def _update_readme(
-    console: Console, app_path: Path, display_name: str, profile_name: str
+    console: Console, app_path: Path, app_name: str, display_name: str, profile_name: str
 ) -> None:
     """Rename old README to README_OLD.md and create new README from template."""
     readme_path = app_path / "README.md"
@@ -294,15 +315,15 @@ def _update_readme(
     env = Environment(loader=FileSystemLoader(CONVERSATION_TEMPLATE_DIR))
     template = env.get_template("README.md.j2")
     readme_path.write_text(
-        template.render(display_name=display_name, profile_name=profile_name)
+        template.render(app_name=app_name, display_name=display_name, profile_name=profile_name)
     )
 
 
-def _create_landing_page(app_path: Path, display_name: str) -> None:
+def _create_landing_page(app_path: Path, app_name: str, display_name: str) -> None:
     """Create landing page (index.html, style.css) from templates."""
     env = Environment(loader=FileSystemLoader(CONVERSATION_TEMPLATE_DIR))
 
-    context = {"display_name": display_name}
+    context = {"app_name": app_name, "display_name": display_name}
 
     # Render and write index.html
     index_template = env.get_template("index.html.j2")
@@ -354,6 +375,21 @@ def _create_profile(
     console.print("   Created profile with template files:", style="dim")
     for f in sorted(new_profile_dir.iterdir()):
         console.print(f"     - {f.name}", style="dim")
+
+
+def _update_gitignore(app_path: Path, app_name: str) -> None:
+    """Update .gitignore to use new app name in paths."""
+    gitignore_path = app_path / ".gitignore"
+    if not gitignore_path.exists():
+        return
+
+    content = gitignore_path.read_text()
+    new_content = content.replace(
+        f"src/{CONVERSATION_APP_PACKAGE}/",
+        f"src/{app_name}/",
+    )
+    if new_content != content:
+        gitignore_path.write_text(new_content)
 
 
 def _cleanup(app_path: Path, app_name: str, profile_name: str) -> None:
