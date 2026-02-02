@@ -78,6 +78,8 @@
       title: Recorded Moves
     - local: examples/rerun_viewer
       title: Rerun Viewer
+    - local: examples/take_picture
+      title: Take Picture
   title: Examples
 - isExpanded: false
   sections:

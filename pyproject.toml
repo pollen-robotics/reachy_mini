@@ -80,7 +80,7 @@ where = ["src"]
 
 
 [tool.setuptools.package-data]
-reachy_mini = ["**/*"] # Inclut tous les fichiers non .py
+reachy_mini = ["**/*"] # includes all non .py files
 
 [tool.ruff]
 exclude = [
@@ -97,7 +97,7 @@ lint.ignore = [
 ]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["tests/unit_tests"]
 markers = [
     "audio: mark test as requiring audio hardware",
     "audio_gstreamer: mark test as requiring GStreamer for audio",
