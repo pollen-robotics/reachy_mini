@@ -1,5 +1,7 @@
 """Reachy Mini Motion Sequence Example."""
 
+# START doc_example
+
 import time
 
 import numpy as np
@@ -100,3 +102,5 @@ with ReachyMini(media_backend="no_media") as reachy_mini:
 
     except KeyboardInterrupt:
         pass
+
+# END doc_example

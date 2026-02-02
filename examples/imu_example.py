@@ -6,6 +6,8 @@ gyroscope, quaternion orientation, and temperature) from a wireless Reachy Mini.
 Note: IMU is only available on the wireless version of Reachy Mini.
 """
 
+# START doc_example
+
 import time
 
 from reachy_mini import ReachyMini
@@ -46,3 +48,5 @@ with ReachyMini(media_backend="no_media") as mini:
 
     except KeyboardInterrupt:
         print("\nStopping IMU monitoring")
+
+# END doc_example

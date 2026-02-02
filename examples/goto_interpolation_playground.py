@@ -6,6 +6,8 @@ minjerk, ease, and cartoon, allowing the user to observe how each method affects
 motion of the head and antennas.
 """
 
+# START doc_example
+
 import numpy as np
 
 from reachy_mini import ReachyMini
@@ -52,3 +54,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+# END doc_example

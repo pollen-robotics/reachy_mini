@@ -1,8 +1,7 @@
-"""Reachy Mini sound playback example.
+"""Reachy Mini rerun example.
 
-Open a wav and push samples to the speaker. This is a toy example, in real
-conditions output from a microphone or a text-to-speech engine would be
- pushed to the speaker instead.
+This examples shows how to use the Rerun utility to log and visualize Reachy Mini's state.
+It is based on the gravity compensation example, so the robot will be compliant and easy to move around.
 
 It requires the 'rerun-loader-urdf' package to be installed. It's not on PyPI,
 so you need to install it from the GitHub repository: pip install git+https://github.com/rerun-io/rerun-loader-python-example-urdf.git
