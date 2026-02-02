@@ -76,6 +76,8 @@
       title: Compliant Mode Demo
     - local: examples/recorded_moves
       title: Recorded Moves
+    - local: examples/rerun_viewer
+      title: Rerun Viewer
   title: Examples
 - isExpanded: false
   sections:

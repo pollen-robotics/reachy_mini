@@ -1,11 +1,14 @@
-"""Reachy Mini rerun example.
+"""Reachy Mini Rerun Viewer Example.
 
-This examples shows how to use the Rerun utility to log and visualize Reachy Mini's state.
+This example shows how to use the Rerun utility to log and visualize Reachy Mini's state.
 It is based on the gravity compensation example, so the robot will be compliant and easy to move around.
 
-It requires the 'rerun-loader-urdf' package to be installed. It's not on PyPI,
-so you need to install it from the GitHub repository: pip install git+https://github.com/rerun-io/rerun-loader-python-example-urdf.git
+Requirements:
+- Install with: pip install reachy-mini[rerun,placo_kinematics]
+- Start the daemon with: reachy-mini-daemon --kinematics-engine Placo
 """
+
+# START doc_example
 
 import logging
 import time
@@ -15,7 +18,7 @@ from reachy_mini.utils.rerun import Rerun
 
 
 def main():
-    """Play a wav file by pushing samples to the audio device."""
+    """Log and visualize Reachy Mini's state using Rerun."""
     logging.basicConfig(
         level=logging.DEBUG, format="%(asctime)s [%(levelname)s] %(message)s"
     )
@@ -39,3 +42,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+# END doc_example
