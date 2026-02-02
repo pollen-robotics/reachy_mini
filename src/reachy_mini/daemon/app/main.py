@@ -34,6 +34,7 @@ from reachy_mini.daemon.app.routers import (
     move,
     state,
     volume,
+    webrtc,
 )
 from reachy_mini.daemon.daemon import Daemon
 from reachy_mini.media.audio_utils import (
@@ -220,6 +221,9 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
         app.include_router(wifi_config.router)
 
     app.include_router(router)
+
+    # WebRTC signaling proxy (not under /api prefix)
+    app.include_router(webrtc.router)
 
     if health_check_event is not None:
 
