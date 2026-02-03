@@ -82,6 +82,10 @@
       title: Take Picture
     - local: examples/joy_controller
       title: Joystick Controller
+    - local: examples/mini_head_position_gui
+      title: Head Position GUI
+    - local: examples/sound_doa
+      title: Sound Direction of Arrival
   title: Examples
 - isExpanded: false
   sections:
