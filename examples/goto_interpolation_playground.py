@@ -15,7 +15,7 @@ from reachy_mini.utils import create_head_pose
 from reachy_mini.utils.interpolation import InterpolationTechnique
 
 
-def main():
+def main() -> None:
     """Run the different interpolation methods."""
     with ReachyMini(media_backend="no_media") as mini:
         try:

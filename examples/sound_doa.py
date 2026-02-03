@@ -58,7 +58,7 @@ def main() -> None:
                     print(
                         f"  In world coordinates: x={p_world[0]:.2f}, y={p_world[1]:.2f}, z={p_world[2]:.2f}"
                     )
-                    mini.look_at_world(*p_world, duration=0.5)
+                    mini.look_at_world(p_world[0], p_world[1], p_world[2], duration=0.5)
                     last_doa = angle
                 else:
                     if not speech_detected:

@@ -15,7 +15,7 @@ with ReachyMini(media_backend="no_media") as reachy_mini:
         while True:
             pose = np.eye(4)
 
-            t = 0
+            t = 0.0
             t0 = time.time()
             s = time.time()
             while time.time() - s < 2.0:

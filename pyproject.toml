@@ -109,6 +109,6 @@ markers = [
 
 [tool.mypy]
 python_version = "3.10"
-files = ["src/"]
+files = ["src/", "examples/"]
 ignore_missing_imports = true
 strict = true

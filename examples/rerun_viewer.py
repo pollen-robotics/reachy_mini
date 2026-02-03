@@ -17,7 +17,7 @@ from reachy_mini import ReachyMini
 from reachy_mini.utils.rerun import Rerun
 
 
-def main():
+def main() -> None:
     """Log and visualize Reachy Mini's state using Rerun."""
     logging.basicConfig(
         level=logging.DEBUG, format="%(asctime)s [%(levelname)s] %(message)s"

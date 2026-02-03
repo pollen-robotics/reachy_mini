@@ -19,7 +19,7 @@ import numpy as np
 import numpy.typing as npt
 import yaml
 
-from reachy_mini import ReachyMini  # type: ignore
+from reachy_mini import ReachyMini
 from reachy_mini.media.camera_constants import CameraResolution
 
 
@@ -89,7 +89,10 @@ def main() -> None:
     print("\nConnecting to Reachy Mini...")
     reachy_mini = ReachyMini(media_backend="gstreamer")
 
-    if reachy_mini.media.camera is None or reachy_mini.media.camera.camera_specs is None:
+    if (
+        reachy_mini.media.camera is None
+        or reachy_mini.media.camera.camera_specs is None
+    ):
         print("ERROR: Could not access camera")
         return
 
@@ -201,7 +204,9 @@ def main() -> None:
                 new_undist_w = int(undist_w * scale)
                 undistorted_resized = cv2.resize(undistorted, (new_undist_w, orig_h))
 
-                combined: npt.NDArray[Any] = np.zeros((orig_h, orig_w + new_undist_w, 3), dtype=np.uint8)
+                combined: npt.NDArray[Any] = np.zeros(
+                    (orig_h, orig_w + new_undist_w, 3), dtype=np.uint8
+                )
                 combined[:, :orig_w] = frame
                 combined[:, orig_w : orig_w + new_undist_w] = undistorted_resized
 

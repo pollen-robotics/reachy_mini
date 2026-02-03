@@ -152,7 +152,13 @@ def main() -> None:
                 # Create and send the command to the robot
                 mini.set_target(
                     utils.create_head_pose(
-                        *target_position, *target_orientation, degrees=False
+                        x=target_position[0],
+                        y=target_position[1],
+                        z=target_position[2],
+                        roll=target_orientation[0],
+                        pitch=target_orientation[1],
+                        yaw=target_orientation[2],
+                        degrees=False,
                     ),
                     body_yaw=target_body_yaw,
                 )
