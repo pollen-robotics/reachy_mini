@@ -87,11 +87,6 @@ def get_hf_install_info(
     This extracts both the space ID and installed commit SHA from pip metadata,
     without requiring any separately stored metadata.
 
-    Handles three deployment modes:
-    - Wireless: shared apps_venv
-    - Desktop daemon (Lite): separate {app_name}_venv per app
-    - SDK mode: apps in current environment
-
     Args:
         app_name: The app name.
         wireless_version: Whether running on wireless version.
@@ -102,27 +97,12 @@ def get_hf_install_info(
     """
     from . import local_common_venv
 
-    # Check if using separate venvs (Wireless or Desktop daemon)
-    use_separate_venvs = wireless_version or desktop_app_daemon
-
-    if use_separate_venvs:
-        # Get site-packages from app's venv
-        site_packages = local_common_venv.get_app_site_packages(
-            app_name, wireless_version, desktop_app_daemon
-        )
-        if site_packages:
-            result = _extract_hf_info_from_site_packages(site_packages, app_name)
-            if result:
-                return result
-
-    # Fallback: check current environment (SDK mode or if venv check failed)
-    import sys
-
-    for path in sys.path:
-        if "site-packages" in path:
-            result = _extract_hf_info_from_site_packages(path, app_name)
-            if result:
-                return result
+    # Use the existing system to get the correct site-packages path
+    site_packages = local_common_venv.get_app_site_packages(
+        app_name, wireless_version, desktop_app_daemon
+    )
+    if site_packages:
+        return _extract_hf_info_from_site_packages(site_packages, app_name)
 
     return None
 

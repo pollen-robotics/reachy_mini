@@ -66,6 +66,9 @@ async def install_app(
     app_manager: "AppManager" = Depends(get_app_manager),
 ) -> dict[str, str]:
     """Install a new app by its info (background, returns job_id)."""
+    global _update_cache
+    _update_cache = None  # Invalidate cache
+
     job_id = bg_job_register.run_command(
         "install", app_manager.install_new_app, app_info
     )
@@ -78,6 +81,9 @@ async def remove_app(
     app_manager: "AppManager" = Depends(get_app_manager),
 ) -> dict[str, str]:
     """Remove an installed app by its name (background, returns job_id)."""
+    global _update_cache
+    _update_cache = None  # Invalidate cache
+
     job_id = bg_job_register.run_command("remove", app_manager.remove_app, app_name)
     return {"job_id": job_id}
 
@@ -191,6 +197,9 @@ async def install_private_space(
         },
     )
 
+    global _update_cache
+    _update_cache = None  # Invalidate cache
+
     job_id = bg_job_register.run_command(
         "install", app_manager.install_new_app, app_info
     )
@@ -263,5 +272,9 @@ async def update_app(
     This reinstalls the app from HuggingFace, which downloads the latest version.
     Returns a job_id for tracking progress via WebSocket.
     """
+    global _update_cache
+    # Invalidate cache so next check-updates sees the new version
+    _update_cache = None
+
     job_id = bg_job_register.run_command("update", app_manager.update_app, app_name)
     return {"job_id": job_id}

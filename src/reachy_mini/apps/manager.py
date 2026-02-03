@@ -380,12 +380,25 @@ class AppManager:
 
         logger.info(f"Updating app '{app_name}' from {space_id}")
 
-        # Reinstall (install_package handles the update)
+        # First uninstall the old version (handles package name changes)
+        logger.info(f"Uninstalling old version of '{app_name}'")
+        try:
+            await local_common_venv.uninstall_package(
+                app_name,
+                logger,
+                wireless_version=self.wireless_version,
+                desktop_app_daemon=self.desktop_app_daemon,
+            )
+        except Exception as e:
+            logger.warning(f"Could not uninstall old version: {e}")
+
+        # Install the new version
         success = await local_common_venv.install_package(
             app_info,
             logger,
             wireless_version=self.wireless_version,
             desktop_app_daemon=self.desktop_app_daemon,
+            force_reinstall=True,
         )
 
         if success != 0:

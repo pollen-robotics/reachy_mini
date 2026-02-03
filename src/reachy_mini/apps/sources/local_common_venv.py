@@ -6,7 +6,6 @@ import platform
 import re
 import shutil
 import sys
-from datetime import datetime, timezone
 from importlib.metadata import entry_points
 from pathlib import Path
 
@@ -129,8 +128,18 @@ def get_app_site_packages(
     wireless_version: bool = False,
     desktop_app_daemon: bool = False,
 ) -> Path | None:
-    """Public API to get the site-packages directory for a given app's venv."""
-    return _get_app_site_packages(app_name, wireless_version, desktop_app_daemon)
+    """Public API to get the site-packages directory for a given app's venv.
+
+    For separate venvs: returns the app's venv site-packages
+    For shared environment (SDK mode): returns the current environment's site-packages
+    """
+    if _should_use_separate_venvs(wireless_version, desktop_app_daemon):
+        return _get_app_site_packages(app_name, wireless_version, desktop_app_daemon)
+    else:
+        # SDK mode: apps are in current environment
+        import sysconfig
+
+        return Path(sysconfig.get_paths()["purelib"])
 
 
 def get_app_python(
@@ -453,8 +462,17 @@ async def install_package(
     logger: logging.Logger,
     wireless_version: bool = False,
     desktop_app_daemon: bool = False,
+    force_reinstall: bool = False,
 ) -> int:
-    """Install a package given an AppInfo object, streaming logs."""
+    """Install a package given an AppInfo object, streaming logs.
+
+    Args:
+        app: AppInfo with package details.
+        logger: Logger for progress output.
+        wireless_version: Whether running on wireless version.
+        desktop_app_daemon: Whether running as desktop app daemon.
+        force_reinstall: If True, force reinstall even if already installed (for updates).
+    """
     # Check if uv is available
     use_uv = _check_uv_available()
     if not use_uv:
@@ -499,11 +517,6 @@ async def install_package(
                 logger.info(
                     f"Space found: {space_info.id} (private={space_info.private})"
                 )
-
-                # Store the commit SHA for update tracking
-                if space_info.sha:
-                    app.extra["installed_sha"] = space_info.sha
-                    app.extra["installed_at"] = datetime.now(timezone.utc).isoformat()
 
                 # List all files in the space to see what's available
                 try:
@@ -657,10 +670,15 @@ async def install_package(
                     "install",
                     "--python",
                     str(python_path),
-                    target,
                 ]
+                if force_reinstall:
+                    install_cmd.append("--force-reinstall")
+                install_cmd.append(target)
             else:
-                install_cmd = [str(python_path), "-m", "pip", "install", target]
+                install_cmd = [str(python_path), "-m", "pip", "install"]
+                if force_reinstall:
+                    install_cmd.append("--force-reinstall")
+                install_cmd.append(target)
 
             ret = await running_command(install_cmd, logger=logger)
 
@@ -688,9 +706,15 @@ async def install_package(
     else:
         # Original behavior: install into current environment
         if use_uv:
-            install_cmd = ["uv", "pip", "install", "--python", sys.executable, target]
+            install_cmd = ["uv", "pip", "install", "--python", sys.executable]
+            if force_reinstall:
+                install_cmd.append("--force-reinstall")
+            install_cmd.append(target)
         else:
-            install_cmd = [sys.executable, "-m", "pip", "install", target]
+            install_cmd = [sys.executable, "-m", "pip", "install"]
+            if force_reinstall:
+                install_cmd.append("--force-reinstall")
+            install_cmd.append(target)
 
         ret = await running_command(install_cmd, logger=logger)
 
