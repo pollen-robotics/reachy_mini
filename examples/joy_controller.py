@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Control Reachy Mini's head yaw angle with a joystick.
 
 This script connects to a Reachy Mini robot and allows you to pilot its head's
@@ -11,7 +10,13 @@ CONTROLS:
 - LEFT JOYSTICK (Left/Right): Control head yaw angle.
 - CIRCLE / B BUTTON (Button 1): Quit the application safely.
 - CTRL-C: Quit the application.
+
+
+Requirements:
+- pip install pygame
 """
+
+# START doc_example
 
 # Standard library imports
 import os
@@ -173,3 +178,5 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+# END doc_example

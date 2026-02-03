@@ -80,6 +80,8 @@
       title: Rerun Viewer
     - local: examples/take_picture
       title: Take Picture
+    - local: examples/joy_controller
+      title: Joystick Controller
   title: Examples
 - isExpanded: false
   sections:
