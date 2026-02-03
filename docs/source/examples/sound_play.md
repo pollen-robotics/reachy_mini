@@ -14,10 +14,6 @@ This example demonstrates how to play audio through Reachy Mini's speaker by loa
 - Chunked audio streaming (1024 samples per chunk)
 - Support for different media backends
 
-**Requirements:**
-- Install scipy: `pip install scipy`
-- Install soundfile: `pip install soundfile`
-- Wireless Reachy Mini (speaker required)
 
 **Usage:**
 ```bash

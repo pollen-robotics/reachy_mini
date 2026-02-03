@@ -12,13 +12,7 @@ This example demonstrates how to use the microphone array to detect the Directio
 - Automatic detection of robot IP (local or wireless)
 - Threshold-based filtering to avoid excessive head movements
 - Real-time transformation from head to world coordinates
-- Error handling for network issues
 
-**Requirements:**
-- Wireless Reachy Mini (microphone array required)
-- Install requests: `pip install requests`
-
-**Note:** This feature is only available on the wireless version of Reachy Mini with the microphone array.
 
 <literalinclude>
 {"path": "../../../examples/sound_doa.py",

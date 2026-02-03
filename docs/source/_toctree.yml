@@ -70,8 +70,8 @@
       title: Sequence
     - local: examples/goto_interpolation_playground
       title: Goto Interpolation Playground
-    - local: examples/imu_example
-      title: IMU Example
+    - local: examples/imu
+      title: IMU
     - local: examples/reachy_compliant_demo
       title: Compliant Mode Demo
     - local: examples/recorded_moves

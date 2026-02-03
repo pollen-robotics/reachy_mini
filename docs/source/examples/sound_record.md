@@ -15,10 +15,6 @@ This example demonstrates how to record audio from Reachy Mini's microphone arra
 - Timeout protection to prevent infinite loops
 - Support for different media backends
 
-**Requirements:**
-- Install soundfile: `pip install soundfile`
-- Wireless Reachy Mini (microphone array required)
-
 **Usage:**
 ```bash
 python sound_record.py --backend [default_no_video|gstreamer_no_video|webrtc]

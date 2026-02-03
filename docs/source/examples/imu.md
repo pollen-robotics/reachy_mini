@@ -1,4 +1,4 @@
-# IMU Example
+# IMU
 
 This example demonstrates how to access the IMU sensor data (accelerometer, gyroscope, quaternion orientation, and temperature) from a wireless Reachy Mini.
 
