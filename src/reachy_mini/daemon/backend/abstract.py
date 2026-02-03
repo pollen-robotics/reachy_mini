@@ -868,3 +868,18 @@ class Backend:
         if "set_target" in message_data:
             target_pose = message_data["set_target"]
             self.set_target_head_pose(np.array(target_pose))
+        elif "set_motor_mode" in message_data:
+            mode_str = message_data["set_motor_mode"]
+            try:
+                mode = MotorControlMode(mode_str)
+                self.set_motor_control_mode(mode)
+                self._send_webrtc_response(peer_id, {"motor_mode": mode_str, "status": "ok"})
+            except ValueError:
+                self._send_webrtc_response(peer_id, {"error": f"Invalid motor mode: {mode_str}"})
+        elif "get_motor_mode" in message_data:
+            mode = self.get_motor_control_mode()
+            self._send_webrtc_response(peer_id, {"motor_mode": mode.value})
+
+    def _send_webrtc_response(self, peer_id: str, response: dict) -> None:
+        if self._send_message_to_webrtc:
+            self._send_message_to_webrtc(peer_id, json.dumps(response))
