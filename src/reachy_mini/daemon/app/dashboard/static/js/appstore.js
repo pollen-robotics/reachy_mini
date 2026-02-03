@@ -166,6 +166,8 @@ const hfAppsStore = {
     advanced: {
         isAuthenticated: false,
         username: null,
+        isOAuthConfigured: false,
+        oauthSessionId: null,
 
         init: async () => {
             // Check if we're on wireless version
@@ -181,18 +183,68 @@ const hfAppsStore = {
                 // Show the advanced section
                 document.getElementById('hf-advanced-section').classList.remove('hidden');
 
+                // Check if OAuth is configured
+                try {
+                    const oauthConfig = await fetch('/api/hf-auth/oauth/configured').then(r => r.json());
+                    hfAppsStore.advanced.isOAuthConfigured = oauthConfig.configured;
+
+                    // Show/hide OAuth button based on configuration
+                    const oauthSection = document.getElementById('hf-oauth-login');
+                    const manualSection = document.getElementById('hf-manual-token-section');
+
+                    if (hfAppsStore.advanced.isOAuthConfigured) {
+                        // OAuth configured - show OAuth button, collapse manual
+                        oauthSection.classList.remove('hidden');
+                        manualSection.open = false;
+                    } else {
+                        // No OAuth - hide OAuth button, expand manual
+                        oauthSection.classList.add('hidden');
+                        manualSection.open = true;
+                    }
+                } catch {
+                    // OAuth check failed, just show manual
+                    document.getElementById('hf-manual-token-section').open = true;
+                }
+
                 // Set up event listeners
                 document.getElementById('hf-advanced-toggle').onclick = hfAppsStore.advanced.toggleSection;
                 document.getElementById('hf-login-button').onclick = hfAppsStore.advanced.login;
                 document.getElementById('hf-logout-button').onclick = hfAppsStore.advanced.logout;
                 document.getElementById('hf-install-private-button').onclick = hfAppsStore.advanced.installPrivateSpace;
 
-                // Add Enter key support for token input
-                document.getElementById('hf-token-input').addEventListener('keypress', (e) => {
-                    if (e.key === 'Enter') {
-                        hfAppsStore.advanced.login();
-                    }
-                });
+                // Chevron rotation for manual section
+                const manualSection = document.getElementById('hf-manual-token-section');
+                if (manualSection) {
+                    manualSection.addEventListener('toggle', () => {
+                        const chevron = document.getElementById('hf-manual-chevron');
+                        if (chevron) {
+                            chevron.style.transform = manualSection.open ? 'rotate(90deg)' : 'rotate(0deg)';
+                        }
+                    });
+                }
+
+                // Token input listeners for auto-enable button
+                const tokenInput = document.getElementById('hf-token-input');
+                if (tokenInput) {
+                    // Listen for input changes (typing, pasting)
+                    tokenInput.addEventListener('input', hfAppsStore.advanced.onTokenInput);
+
+                    // Listen for paste event
+                    tokenInput.addEventListener('paste', (e) => {
+                        // Small delay to let paste complete
+                        setTimeout(hfAppsStore.advanced.onTokenInput, 50);
+                    });
+
+                    // Enter key to submit
+                    tokenInput.addEventListener('keypress', (e) => {
+                        if (e.key === 'Enter') {
+                            const btn = document.getElementById('hf-login-button');
+                            if (!btn.disabled) {
+                                hfAppsStore.advanced.login();
+                            }
+                        }
+                    });
+                }
 
                 // Add Enter key support for space ID input
                 document.getElementById('hf-space-id-input').addEventListener('keypress', (e) => {
@@ -205,6 +257,119 @@ const hfAppsStore = {
                 await hfAppsStore.advanced.checkAuthStatus();
             } catch (error) {
                 console.error('Error initializing advanced section:', error);
+            }
+        },
+
+        startOAuthLogin: async () => {
+            const button = document.getElementById('hf-oauth-button');
+            const statusEl = document.getElementById('hf-oauth-status');
+
+            // Show loading state
+            button.disabled = true;
+            button.innerHTML = '⏳ Redirecting...';
+            statusEl.textContent = 'Opening Hugging Face login...';
+            statusEl.classList.remove('hidden');
+
+            try {
+                // Get the OAuth URL from the backend
+                const response = await fetch('/api/hf-auth/oauth/start');
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Failed to start OAuth');
+                }
+
+                const data = await response.json();
+
+                // Store session ID for polling
+                hfAppsStore.advanced.oauthSessionId = data.session_id;
+
+                // Open OAuth in new window/tab
+                window.open(data.auth_url, '_blank');
+
+                // Update status
+                statusEl.innerHTML = 'Complete login in the new window. This page will update automatically.';
+                button.innerHTML = '🤗 Login with Hugging Face';
+                button.disabled = false;
+
+                // Poll for completion
+                hfAppsStore.advanced.pollForAuth();
+
+            } catch (error) {
+                statusEl.textContent = 'Error: ' + error.message;
+                statusEl.style.color = '#dc2626';
+                button.innerHTML = '🤗 Login with Hugging Face';
+                button.disabled = false;
+            }
+        },
+
+        pollForAuth: () => {
+            // Poll every 2 seconds to check if user completed auth
+            const pollInterval = setInterval(async () => {
+                try {
+                    const response = await fetch('/api/hf-auth/status');
+                    const data = await response.json();
+
+                    if (data.is_logged_in) {
+                        // User logged in! Update UI
+                        clearInterval(pollInterval);
+                        hfAppsStore.advanced.isAuthenticated = true;
+                        hfAppsStore.advanced.username = data.username;
+                        hfAppsStore.advanced.updateAuthUI();
+                    }
+                } catch {
+                    // Ignore polling errors
+                }
+            }, 2000);
+
+            // Stop polling after 5 minutes
+            setTimeout(() => clearInterval(pollInterval), 300000);
+        },
+
+        onTokenInput: () => {
+            const tokenInput = document.getElementById('hf-token-input');
+            const loginButton = document.getElementById('hf-login-button');
+            const connectHint = document.getElementById('hf-connect-hint');
+            const tokenHint = document.getElementById('hf-token-hint');
+
+            const token = tokenInput.value.trim();
+            const isValidFormat = token.startsWith('hf_') && token.length > 10;
+
+            if (isValidFormat) {
+                // Enable the button with nice styling
+                loginButton.disabled = false;
+                loginButton.style.backgroundColor = '#10b981';
+                loginButton.style.color = 'white';
+                loginButton.style.cursor = 'pointer';
+                loginButton.classList.add('hover:bg-green-600');
+                connectHint.textContent = 'Click to connect!';
+                connectHint.style.color = '#10b981';
+                tokenHint.innerHTML = '✓ Token looks good!';
+                tokenHint.style.color = '#10b981';
+                tokenInput.style.borderColor = '#10b981';
+            } else if (token.length > 0) {
+                // Something entered but not valid format
+                loginButton.disabled = true;
+                loginButton.style.backgroundColor = '#d1d5db';
+                loginButton.style.color = '#6b7280';
+                loginButton.style.cursor = 'not-allowed';
+                loginButton.classList.remove('hover:bg-green-600');
+                tokenHint.innerHTML = 'Token should start with <code style="background: #e5e7eb; padding: 2px 6px; border-radius: 4px;">hf_</code>';
+                tokenHint.style.color = '#f59e0b';
+                tokenInput.style.borderColor = '#f59e0b';
+                connectHint.textContent = 'Check your token format';
+                connectHint.style.color = '#f59e0b';
+            } else {
+                // Empty
+                loginButton.disabled = true;
+                loginButton.style.backgroundColor = '#d1d5db';
+                loginButton.style.color = '#6b7280';
+                loginButton.style.cursor = 'not-allowed';
+                loginButton.classList.remove('hover:bg-green-600');
+                tokenHint.innerHTML = 'The token starts with <code style="background: #e5e7eb; padding: 2px 6px; border-radius: 4px;">hf_</code>';
+                tokenHint.style.color = '#6b7280';
+                tokenInput.style.borderColor = '#3b82f6';
+                connectHint.textContent = 'Paste your token above to enable this button';
+                connectHint.style.color = '#9ca3af';
             }
         },
 
@@ -243,20 +408,29 @@ const hfAppsStore = {
             const usernameSpan = document.getElementById('hf-username');
 
             if (hfAppsStore.advanced.isAuthenticated) {
-                // Authenticated state
+                // Connected state
                 indicator.classList.remove('bg-gray-400');
                 indicator.classList.add('bg-green-500');
-                authText.textContent = 'Authenticated';
+                authText.textContent = '🤗 Connected';
+                authText.style.color = '#065f46';
                 loginForm.classList.add('hidden');
                 loggedInView.classList.remove('hidden');
                 usernameSpan.textContent = hfAppsStore.advanced.username || 'Unknown';
             } else {
-                // Not authenticated state
+                // Not connected state
                 indicator.classList.remove('bg-green-500');
                 indicator.classList.add('bg-gray-400');
-                authText.textContent = 'Not authenticated';
+                authText.textContent = 'Not connected';
+                authText.style.color = '#374151';
                 loginForm.classList.remove('hidden');
                 loggedInView.classList.add('hidden');
+
+                // Reset token input state
+                const tokenInput = document.getElementById('hf-token-input');
+                if (tokenInput) {
+                    tokenInput.value = '';
+                    hfAppsStore.advanced.onTokenInput();
+                }
             }
         },
 
@@ -264,19 +438,24 @@ const hfAppsStore = {
             const tokenInput = document.getElementById('hf-token-input');
             const errorDiv = document.getElementById('hf-login-error');
             const loginButton = document.getElementById('hf-login-button');
+            const step1 = document.getElementById('hf-step1');
+            const step2 = document.getElementById('hf-step2');
+            const connectHint = document.getElementById('hf-connect-hint');
 
             const token = tokenInput.value.trim();
 
             if (!token) {
-                errorDiv.textContent = 'Please enter a token';
+                errorDiv.textContent = 'Please paste your token first';
                 errorDiv.classList.remove('hidden');
                 return;
             }
 
-            // Disable button during request
+            // Disable button and show loading state
             loginButton.disabled = true;
-            loginButton.textContent = 'Logging in...';
+            loginButton.innerHTML = '<span class="animate-pulse">⏳ Connecting...</span>';
+            loginButton.style.backgroundColor = '#6b7280';
             errorDiv.classList.add('hidden');
+            connectHint.textContent = 'Verifying your token...';
 
             try {
                 const response = await fetch('/api/hf-auth/save-token', {
@@ -292,24 +471,42 @@ const hfAppsStore = {
 
                 const data = await response.json();
 
+                // Success! Show celebration
+                loginButton.innerHTML = '🎉 Connected!';
+                loginButton.style.backgroundColor = '#10b981';
+                connectHint.textContent = `Welcome, ${data.username || 'friend'}!`;
+                connectHint.style.color = '#10b981';
+
+                // Fade out steps
+                step1.style.opacity = '0.5';
+                step2.style.opacity = '0.5';
+
                 // Clear token input
                 tokenInput.value = '';
 
-                // Update state
-                hfAppsStore.advanced.isAuthenticated = true;
-                hfAppsStore.advanced.username = data.username;
-                hfAppsStore.advanced.updateAuthUI();
+                // Update state after short delay for visual feedback
+                setTimeout(() => {
+                    hfAppsStore.advanced.isAuthenticated = true;
+                    hfAppsStore.advanced.username = data.username;
+                    hfAppsStore.advanced.updateAuthUI();
+                }, 1000);
 
             } catch (error) {
-                errorDiv.textContent = error.message;
+                errorDiv.innerHTML = `<strong>Oops!</strong> ${error.message}<br><small>Make sure you copied the entire token.</small>`;
                 errorDiv.classList.remove('hidden');
-            } finally {
+
+                // Reset button
                 loginButton.disabled = false;
-                loginButton.textContent = 'Login';
+                loginButton.innerHTML = '✓ Connect to Hugging Face';
+                hfAppsStore.advanced.onTokenInput(); // Reset button state based on input
             }
         },
 
         logout: async () => {
+            const logoutBtn = document.getElementById('hf-logout-button');
+            logoutBtn.textContent = 'Disconnecting...';
+            logoutBtn.disabled = true;
+
             try {
                 await fetch('/api/hf-auth/token', { method: 'DELETE' });
 
@@ -319,6 +516,8 @@ const hfAppsStore = {
 
             } catch (error) {
                 console.error('Error logging out:', error);
+                logoutBtn.textContent = 'Disconnect';
+                logoutBtn.disabled = false;
             }
         },
 
