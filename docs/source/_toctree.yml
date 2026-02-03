@@ -88,6 +88,8 @@
       title: Sound Direction of Arrival
     - local: examples/sound_play
       title: Sound Playback
+    - local: examples/sound_record
+      title: Sound Recording
   title: Examples
 - isExpanded: false
   sections:
