@@ -86,6 +86,8 @@
       title: Head Position GUI
     - local: examples/sound_doa
       title: Sound Direction of Arrival
+    - local: examples/sound_play
+      title: Sound Playback
   title: Examples
 - isExpanded: false
   sections:
