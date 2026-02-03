@@ -1,5 +1,8 @@
 """Apps router for apps management."""
 
+from datetime import datetime, timedelta
+from typing import Optional
+
 from fastapi import (
     APIRouter,
     Depends,
@@ -14,6 +17,30 @@ from reachy_mini.daemon.app import bg_job_register
 from reachy_mini.daemon.app.dependencies import get_app_manager
 
 router = APIRouter(prefix="/apps")
+
+
+# Update checking models and cache
+class AppUpdateStatus(BaseModel):
+    """Status of an app update check."""
+
+    app_name: str
+    space_id: str
+    installed_sha: str
+    latest_sha: str
+    update_available: bool
+    last_modified: Optional[str] = None
+
+
+class AppUpdatesResponse(BaseModel):
+    """Response for list of app updates."""
+
+    apps_with_updates: list[AppUpdateStatus]
+    apps_checked: int
+    apps_skipped: int  # Apps without SHA tracking
+
+
+_update_cache: Optional[tuple[datetime, AppUpdatesResponse]] = None
+_cache_ttl = timedelta(minutes=5)
 
 
 @router.get("/list-available/{source_kind}")
@@ -167,4 +194,74 @@ async def install_private_space(
     job_id = bg_job_register.run_command(
         "install", app_manager.install_new_app, app_info
     )
+    return {"job_id": job_id}
+
+
+@router.get("/check-updates")
+async def check_app_updates(
+    force: bool = False,
+    app_manager: "AppManager" = Depends(get_app_manager),
+) -> AppUpdatesResponse:
+    """Check all installed apps for available updates.
+
+    Results are cached for 5 minutes unless force=True.
+    This performs a 'slow' check with rate limiting to avoid overwhelming HuggingFace.
+    """
+    global _update_cache
+
+    # Return cached result if available and not expired
+    if not force and _update_cache:
+        cache_time, cached_result = _update_cache
+        if datetime.utcnow() - cache_time < _cache_ttl:
+            return cached_result
+
+    from reachy_mini.apps.sources import app_update_checker
+
+    # Get installed apps
+    installed = await app_manager.list_available_apps(SourceKind.INSTALLED)
+
+    # Check for updates
+    results = await app_update_checker.check_all_app_updates(
+        installed,
+        wireless_version=app_manager.wireless_version,
+        desktop_app_daemon=app_manager.desktop_app_daemon,
+    )
+
+    # Filter to only apps with updates
+    updates = [
+        AppUpdateStatus(
+            app_name=r.app_name,
+            space_id=r.space_id,
+            installed_sha=r.installed_sha,
+            latest_sha=r.latest_sha,
+            update_available=r.update_available,
+            last_modified=r.last_modified,
+        )
+        for r in results
+        if r.update_available
+    ]
+
+    response = AppUpdatesResponse(
+        apps_with_updates=updates,
+        apps_checked=len(results),
+        apps_skipped=len(installed) - len(results),
+    )
+
+    # Cache result
+    _update_cache = (datetime.utcnow(), response)
+
+    return response
+
+
+@router.post("/update/{app_name}")
+async def update_app(
+    app_name: str,
+    app_manager: "AppManager" = Depends(get_app_manager),
+) -> dict[str, str]:
+    """Update an installed app to the latest version.
+
+    This reinstalls the app from HuggingFace, which downloads the latest version.
+    Returns a job_id for tracking progress via WebSocket.
+    """
+    job_id = bg_job_register.run_command("update", app_manager.update_app, app_name)
     return {"job_id": job_id}

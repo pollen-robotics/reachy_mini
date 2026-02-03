@@ -6,6 +6,7 @@ import platform
 import re
 import shutil
 import sys
+from datetime import datetime, timezone
 from importlib.metadata import entry_points
 from pathlib import Path
 
@@ -498,6 +499,11 @@ async def install_package(
                 logger.info(
                     f"Space found: {space_info.id} (private={space_info.private})"
                 )
+
+                # Store the commit SHA for update tracking
+                if space_info.sha:
+                    app.extra["installed_sha"] = space_info.sha
+                    app.extra["installed_at"] = datetime.now(timezone.utc).isoformat()
 
                 # List all files in the space to see what's available
                 try:
