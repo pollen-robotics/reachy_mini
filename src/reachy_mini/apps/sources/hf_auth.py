@@ -1,5 +1,7 @@
 """HuggingFace authentication management for private spaces."""
 
+import asyncio
+import logging
 import os
 import secrets
 import time
@@ -9,6 +11,8 @@ from typing import Any, Optional
 import aiohttp
 from huggingface_hub import HfApi, get_token, login, logout, whoami
 from huggingface_hub.utils import HfHubHTTPError  # type: ignore
+
+logger = logging.getLogger(__name__)
 
 # =============================================================================
 # OAuth Configuration
@@ -284,6 +288,16 @@ async def exchange_code_for_token(
     session.access_token = access_token
     session.username = username
 
+    # Notify central relay of new token for immediate reconnection
+    try:
+        from reachy_mini.media.central_signaling_relay import notify_token_change
+        await notify_token_change(access_token)
+        logger.info("[HF Auth] Notified central relay of OAuth login")
+    except ImportError:
+        pass  # Central relay not available
+    except Exception as e:
+        logger.debug(f"[HF Auth] Could not notify relay: {e}")
+
     return {
         "status": "success",
         "username": username,
@@ -329,6 +343,32 @@ def is_oauth_configured() -> bool:
     return bool(OAUTH_CLIENT_ID)
 
 
+def _notify_relay_of_token_change(new_token: Optional[str] = None) -> None:
+    """Notify the central signaling relay of a token change.
+
+    This is called after login/logout to trigger reconnection with the
+    new (or no) token. It handles the async call in a background task.
+    """
+    try:
+        from reachy_mini.media.central_signaling_relay import notify_token_change
+
+        # Try to get the running event loop
+        try:
+            loop = asyncio.get_running_loop()
+            # If we're already in an async context, schedule as task
+            loop.create_task(notify_token_change(new_token))
+        except RuntimeError:
+            # No running loop - run in new loop (blocking but quick)
+            asyncio.run(notify_token_change(new_token))
+
+        logger.info("[HF Auth] Notified central relay of token change")
+    except ImportError:
+        # Central relay module not available (e.g., Lite version)
+        pass
+    except Exception as e:
+        logger.debug(f"[HF Auth] Could not notify relay: {e}")
+
+
 def save_hf_token(token: str) -> dict[str, Any]:
     """Save a HuggingFace access token securely.
 
@@ -354,6 +394,9 @@ def save_hf_token(token: str) -> dict[str, Any]:
         # Persist token for future runs (no prompt since token is provided)
         # add_to_git_credential=False keeps it from touching git credentials.
         login(token=token, add_to_git_credential=False)
+
+        # Notify central relay of new token for immediate reconnection
+        _notify_relay_of_token_change(token)
 
         return {
             "status": "success",
@@ -389,6 +432,8 @@ def delete_hf_token() -> bool:
     """
     try:
         logout()
+        # Notify central relay that user logged out
+        _notify_relay_of_token_change(None)
         return True
     except Exception:
         return False
