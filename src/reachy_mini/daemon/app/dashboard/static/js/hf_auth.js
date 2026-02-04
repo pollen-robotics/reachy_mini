@@ -51,19 +51,33 @@ const hfAuth = {
     },
 
     updateHeaderUI: () => {
-        const loginBtn = document.getElementById('hf-header-login-btn');
-        const loggedIn = document.getElementById('hf-header-logged-in');
+        const authBtn = document.getElementById('hf-header-auth-btn');
+        const userBadge = document.getElementById('hf-header-user-badge');
         const usernameSpan = document.getElementById('hf-header-username');
 
         if (hfAuth.isAuthenticated) {
-            if (loginBtn) loginBtn.classList.add('hidden');
-            if (loggedIn) loggedIn.classList.remove('hidden');
-            if (usernameSpan) {
-                usernameSpan.textContent = hfAuth.username || 'Connected';
+            // Show badge, change button to Logout
+            if (userBadge) userBadge.classList.remove('hidden');
+            if (usernameSpan) usernameSpan.textContent = hfAuth.username || 'Connected';
+            if (authBtn) {
+                authBtn.textContent = 'Logout';
+                authBtn.style.backgroundColor = '#fee2e2';
+                authBtn.style.color = '#dc2626';
+                authBtn.style.borderColor = '#fecaca';
+                authBtn.onmouseover = () => { authBtn.style.backgroundColor = '#fecaca'; };
+                authBtn.onmouseout = () => { authBtn.style.backgroundColor = '#fee2e2'; };
             }
         } else {
-            if (loginBtn) loginBtn.classList.remove('hidden');
-            if (loggedIn) loggedIn.classList.add('hidden');
+            // Hide badge, change button to Login
+            if (userBadge) userBadge.classList.add('hidden');
+            if (authBtn) {
+                authBtn.textContent = '🤗 Login';
+                authBtn.style.backgroundColor = '#fef3c7';
+                authBtn.style.color = '#92400e';
+                authBtn.style.borderColor = '#fcd34d';
+                authBtn.onmouseover = () => { authBtn.style.backgroundColor = '#fde68a'; };
+                authBtn.onmouseout = () => { authBtn.style.backgroundColor = '#fef3c7'; };
+            }
         }
 
         // Also update appstore section if it exists
@@ -80,6 +94,9 @@ const hfAuth = {
 
         if (modal) {
             modal.classList.remove('hidden');
+            // Trigger reflow for transition
+            modal.offsetHeight;
+            modal.classList.add('visible');
 
             // Show/hide OAuth based on configuration
             if (oauthSection) {
@@ -95,7 +112,11 @@ const hfAuth = {
     closeLoginModal: () => {
         const modal = document.getElementById('hf-login-modal');
         if (modal) {
-            modal.classList.add('hidden');
+            modal.classList.remove('visible');
+            // Wait for transition to complete before hiding
+            setTimeout(() => {
+                modal.classList.add('hidden');
+            }, 250);
         }
 
         // Reset state
@@ -268,10 +289,10 @@ const hfAuth = {
     },
 
     logout: async () => {
-        const logoutBtn = document.getElementById('hf-header-logout-btn');
-        if (logoutBtn) {
-            logoutBtn.textContent = '...';
-            logoutBtn.disabled = true;
+        const authBtn = document.getElementById('hf-header-auth-btn');
+        if (authBtn) {
+            authBtn.textContent = '...';
+            authBtn.disabled = true;
         }
 
         try {
@@ -284,9 +305,8 @@ const hfAuth = {
         } catch (error) {
             console.error('Error logging out:', error);
         } finally {
-            if (logoutBtn) {
-                logoutBtn.textContent = 'Logout';
-                logoutBtn.disabled = false;
+            if (authBtn) {
+                authBtn.disabled = false;
             }
         }
     }
