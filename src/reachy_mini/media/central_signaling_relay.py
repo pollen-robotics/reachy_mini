@@ -253,31 +253,35 @@ class CentralSignalingRelay:
     async def _run_loop(self) -> None:
         """Main loop that maintains connections and relays messages."""
         while self._running:
+            had_exception = False
             try:
                 await self._connect_and_relay()
             except asyncio.CancelledError:
                 break
             except Exception as e:
+                had_exception = True
                 self._connection_attempts += 1
                 if self._connection_attempts <= 3:
                     self._set_state(RelayState.RECONNECTING, f"Connection failed: {e}")
                 else:
                     self._set_state(RelayState.ERROR, f"Connection failed after {self._connection_attempts} attempts: {e}")
 
-            if self._running:
-                # Wait for either reconnect interval or token update
+            if self._running and had_exception:
+                # Only wait after connection failures, not after normal returns
+                # (e.g., when token update triggered reconnection)
                 self._token_updated.clear()
                 try:
                     await asyncio.wait_for(
                         self._token_updated.wait(),
                         timeout=RECONNECT_INTERVAL
                     )
-                    # Token was updated, retry immediately
                 except asyncio.TimeoutError:
-                    pass  # Normal timeout, continue with reconnection
+                    pass
 
     async def _connect_and_relay(self) -> None:
         """Connect to both servers and relay messages."""
+        logger.debug("[Central Relay] _connect_and_relay() called")
+
         # Always refresh the token on each connection attempt
         self._refresh_token()
 
@@ -290,9 +294,9 @@ class CentralSignalingRelay:
                     self._token_updated.wait(),
                     timeout=TOKEN_CHECK_INTERVAL
                 )
+                logger.info("[Central Relay] Token update received while waiting, will attempt connection")
             except asyncio.TimeoutError:
-                # Periodically re-check token even without explicit update
-                pass
+                logger.debug("[Central Relay] Token check timeout, will re-check")
             return
 
         # Create HTTP session for central server

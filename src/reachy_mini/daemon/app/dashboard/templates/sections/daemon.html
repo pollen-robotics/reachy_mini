@@ -9,6 +9,13 @@
             <div class="flex items-center gap-3">
                 <!-- HuggingFace Auth -->
                 <div id="hf-header-auth" class="flex items-center gap-2">
+                    <!-- HF Space Apps status (shown when logged in) -->
+                    <div id="hf-relay-status" class="hidden px-2 py-1 rounded-md flex items-center gap-1.5 cursor-help"
+                        style="background-color: #f3f4f6; border: 1px solid #d1d5db;"
+                        title="HF Space Apps">
+                        <div id="hf-relay-indicator" class="w-2 h-2 rounded-full" style="background-color: #9ca3af;"></div>
+                        <span id="hf-relay-text" class="text-xs font-medium" style="color: #6b7280;">--</span>
+                    </div>
                     <!-- User badge (shown when logged in) -->
                     <div id="hf-header-user-badge" class="hidden px-3 py-1.5 rounded-lg flex items-center gap-2"
                         style="background-color: #d1fae5; border: 1px solid #86efac;">
