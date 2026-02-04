@@ -861,9 +861,8 @@ class Backend:
             self.logger.error(f"WebRTC command error: {e}")
             self._send_webrtc_response(peer_id, {"error": str(e)})
 
-    def _process_webrtc_command(self, peer_id: str, data: dict) -> None:
+    def _process_webrtc_command(self, peer_id: str, data: dict[str, Any]) -> None:
         """Process a WebRTC command from the data channel."""
-
         # === HEAD POSE ===
         if "set_target" in data:
             target_pose = data["set_target"]
@@ -940,7 +939,9 @@ class Backend:
         else:
             self._send_webrtc_response(peer_id, {"error": "Unknown command", "received": list(data.keys())})
 
-    async def _webrtc_goto(self, peer_id: str, head, antennas, duration: float, body_yaw) -> None:
+    async def _webrtc_goto(
+        self, peer_id: str, head: Any, antennas: Any, duration: float, body_yaw: float | None
+    ) -> None:
         """Execute goto_target and send response when done."""
         try:
             await self.goto_target(head=head, antennas=antennas, duration=duration, body_yaw=body_yaw)
@@ -964,6 +965,6 @@ class Backend:
         except Exception as e:
             self._send_webrtc_response(peer_id, {"error": str(e), "command": "goto_sleep"})
 
-    def _send_webrtc_response(self, peer_id: str, response: dict) -> None:
+    def _send_webrtc_response(self, peer_id: str, response: dict[str, Any]) -> None:
         if self._send_message_to_webrtc:
             self._send_message_to_webrtc(peer_id, json.dumps(response))

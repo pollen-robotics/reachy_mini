@@ -87,6 +87,7 @@ def _generate_pkce_pair() -> tuple[str, str]:
 
     Returns:
         Tuple of (code_verifier, code_challenge)
+
     """
     import base64
     import hashlib
