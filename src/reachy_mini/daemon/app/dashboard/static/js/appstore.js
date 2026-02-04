@@ -170,16 +170,8 @@ const hfAppsStore = {
         oauthSessionId: null,
 
         init: async () => {
-            // Check if we're on wireless version
+            // Initialize advanced section for all versions (wireless and Lite)
             try {
-                const status = await fetch('/api/daemon/status').then(r => r.json());
-                const isWireless = status.wireless_version;
-
-                if (!isWireless) {
-                    // Don't show advanced section on non-wireless
-                    return;
-                }
-
                 // Show the advanced section
                 document.getElementById('hf-advanced-section').classList.remove('hidden');
 

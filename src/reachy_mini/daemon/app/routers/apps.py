@@ -128,15 +128,8 @@ async def install_private_space(
 ) -> dict[str, str]:
     """Install a private HuggingFace space.
 
-    Only available on wireless version.
     Requires HF token to be stored via /api/hf-auth/save-token first.
     """
-    if not app_manager.wireless_version:
-        raise HTTPException(
-            status_code=403,
-            detail="Private space installation only available on wireless version",
-        )
-
     from reachy_mini.apps.sources import hf_auth
 
     # Check if token is available
