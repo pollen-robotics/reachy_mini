@@ -33,7 +33,7 @@
         <ul id="hf-available-apps" class="overflow-y-auto max-h-96">Loading apps from 🤗...</ul>
     </div>
 
-    <!-- Advanced section for private spaces (wireless only) -->
+    <!-- Advanced section for private spaces -->
     <div id="hf-advanced-section" class="mt-6 hidden">
         <!-- Collapsible header -->
         <button
@@ -58,143 +58,21 @@
                 <span id="hf-auth-text" class="text-base font-semibold" style="color: #374151;">Not connected</span>
             </div>
 
-            <!-- Login form (shown when not authenticated) -->
-            <div id="hf-login-form" class="space-y-5">
-
-                <!-- One-click OAuth (shown when proxy is configured) -->
-                <div id="hf-oauth-login" class="hidden">
-                    <div class="p-6 rounded-xl border-2 text-center" style="background-color: #fef3c7; border-color: #fcd34d;">
-                        <p class="text-lg font-semibold mb-3" style="color: #92400e;">Connect your Hugging Face account</p>
-                        <p class="text-sm mb-5" style="color: #a16207;">Click the button below to login with your Hugging Face account</p>
-                        <button
-                            id="hf-oauth-button"
-                            onclick="hfAppsStore.advanced.startOAuthLogin()"
-                            style="padding: 16px 32px; font-size: 20px; font-weight: 700; background-color: #f59e0b; color: white; border: none; border-radius: 12px; cursor: pointer;"
-                            class="hover:bg-amber-600 transition-colors shadow-lg"
-                        >
-                            🤗 Login with Hugging Face
-                        </button>
-                        <p id="hf-oauth-status" class="mt-4 text-sm hidden" style="color: #6b7280;"></p>
-                    </div>
-
-                    <!-- Divider -->
-                    <div class="flex items-center gap-4 my-5">
-                        <div class="flex-1 border-t border-gray-300"></div>
-                        <span class="text-sm" style="color: #9ca3af;">or use manual token</span>
-                        <div class="flex-1 border-t border-gray-300"></div>
-                    </div>
-                </div>
-
-                <!-- Manual Token Entry (always available, collapsed when OAuth available) -->
-                <details id="hf-manual-token-section">
-                    <summary class="cursor-pointer text-base font-medium mb-4 list-none flex items-center gap-2" style="color: #6b7280;">
-                        <svg class="w-5 h-5 transition-transform" id="hf-manual-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
-                        </svg>
-                        Manual token entry
-                    </summary>
-
-                <!-- Step 1: Get Token -->
-                <div id="hf-step1" class="p-5 rounded-xl border-2 mt-4" style="background-color: #fef3c7; border-color: #fcd34d;">
-                    <div class="flex items-start gap-4">
-                        <div class="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center text-xl font-bold" style="background-color: #f59e0b; color: white;">
-                            1
-                        </div>
-                        <div class="flex-1">
-                            <p class="text-lg font-semibold mb-3" style="color: #92400e;">Get your access token</p>
-
-                            <a
-                                href="https://huggingface.co/settings/tokens/new?tokenType=read"
-                                target="_blank"
-                                id="hf-get-token-link"
-                                style="display: inline-block; padding: 14px 28px; font-size: 18px; font-weight: 600; background-color: #f59e0b; color: white; border: none; border-radius: 10px; cursor: pointer; text-decoration: none; margin-bottom: 16px;"
-                                class="hover:bg-amber-600 transition-colors shadow-md"
-                            >
-                                🤗 Open Hugging Face →
-                            </a>
-
-                            <div class="p-4 rounded-lg" style="background-color: #fffbeb; border: 1px solid #fcd34d;">
-                                <p class="text-sm font-semibold mb-2" style="color: #92400e;">On Hugging Face:</p>
-                                <ol class="text-sm space-y-1" style="color: #a16207; list-style: decimal; padding-left: 20px;">
-                                    <li>Create a free account if you don't have one</li>
-                                    <li>Give your token a name (e.g., "My Robot")</li>
-                                    <li>Click <strong>"Create token"</strong></li>
-                                    <li>Click <strong>"Copy"</strong> to copy the token</li>
-                                </ol>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Step 2: Copy & Paste Token -->
-                <div id="hf-step2" class="p-5 rounded-xl border-2" style="background-color: #dbeafe; border-color: #60a5fa;">
-                    <div class="flex items-start gap-4">
-                        <div class="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center text-xl font-bold" style="background-color: #3b82f6; color: white;">
-                            2
-                        </div>
-                        <div class="flex-1">
-                            <p class="text-lg font-semibold mb-2" style="color: #1e40af;">Paste your token here</p>
-                            <p class="text-sm mb-3" style="color: #1d4ed8;">After creating the token, copy it and paste it below:</p>
-                            <input
-                                type="text"
-                                id="hf-token-input"
-                                placeholder="Paste your token here (hf_...)"
-                                autocomplete="off"
-                                style="width: 100%; min-height: 56px; padding: 14px 18px; font-size: 18px; font-family: monospace; border: 3px solid #3b82f6; border-radius: 10px; background-color: #ffffff; color: #111827;"
-                                class="focus:outline-none focus:ring-4 focus:ring-blue-300"
-                            />
-                            <p id="hf-token-hint" class="mt-2 text-sm" style="color: #6b7280;">
-                                The token starts with <code style="background: #e5e7eb; padding: 2px 6px; border-radius: 4px;">hf_</code>
-                            </p>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Step 3: Connect -->
-                <div id="hf-step3">
-                    <button
-                        id="hf-login-button"
-                        disabled
-                        style="width: 100%; min-height: 60px; padding: 16px 28px; font-size: 20px; font-weight: 700; background-color: #d1d5db; color: #6b7280; border: none; border-radius: 12px; cursor: not-allowed; transition: all 0.2s;"
-                    >
-                        ✓ Connect to Hugging Face
-                    </button>
-                    <p id="hf-connect-hint" class="mt-2 text-center text-sm" style="color: #9ca3af;">
-                        Paste your token above to enable this button
-                    </p>
-                </div>
-
-                <div id="hf-login-error" class="hidden text-base font-medium p-4 rounded-lg border-2" style="color: #dc2626; background-color: #fee2e2; border-color: #fecaca;"></div>
-
-                </details>
+            <!-- Not logged in view -->
+            <div id="hf-login-form" class="text-center py-4">
+                <p class="text-gray-600 mb-4">You need to be logged in to Hugging Face to install private spaces.</p>
+                <button
+                    onclick="hfAuth.openLoginModal()"
+                    class="px-6 py-3 text-base font-semibold text-white bg-amber-500 hover:bg-amber-600 rounded-lg transition-colors shadow-md"
+                >
+                    🤗 Login to Hugging Face
+                </button>
             </div>
 
             <!-- Logged in view (shown when authenticated) -->
             <div id="hf-logged-in-view" class="hidden space-y-5">
-                <!-- Success banner -->
-                <div class="p-5 rounded-xl border-2" style="background-color: #d1fae5; border-color: #86efac;">
-                    <div class="flex items-center justify-between">
-                        <div class="flex items-center gap-3">
-                            <div class="w-10 h-10 rounded-full flex items-center justify-center text-xl" style="background-color: #10b981;">
-                                ✓
-                            </div>
-                            <div>
-                                <p class="text-lg font-semibold" style="color: #065f46;">Connected to Hugging Face</p>
-                                <p class="text-sm" style="color: #047857;">Logged in as <span id="hf-username" class="font-bold"></span></p>
-                            </div>
-                        </div>
-                        <button
-                            id="hf-logout-button"
-                            class="text-sm hover:underline font-medium px-3 py-1 rounded-lg"
-                            style="color: #dc2626; background-color: rgba(220, 38, 38, 0.1);"
-                        >
-                            Disconnect
-                        </button>
-                    </div>
-                </div>
-
                 <!-- Private space installation -->
-                <div class="p-5 rounded-xl border-2" style="background-color: #f3f4f6; border-color: #d1d5db;">
+                <div class="p-5 rounded-xl border-2" style="background-color: #f9fafb; border-color: #e5e7eb;">
                     <p class="text-lg font-semibold mb-2" style="color: #111827;">Install a Private Space</p>
                     <p class="text-sm mb-4" style="color: #6b7280;">Enter the ID of a private HuggingFace Space you have access to:</p>
                     <input
@@ -209,7 +87,7 @@
                         style="width: 100%; min-height: 52px; margin-top: 12px; padding: 14px 24px; font-size: 18px; font-weight: 600; background-color: #10b981; color: #ffffff; border: none; border-radius: 10px; cursor: pointer;"
                         class="hover:bg-green-600 transition-colors shadow-md"
                     >
-                        📦 Install Private Space
+                        Install Private Space
                     </button>
                 </div>
                 <div id="hf-private-install-error" class="hidden text-base font-medium p-4 rounded-lg border-2" style="color: #dc2626; background-color: #fee2e2; border-color: #fecaca;"></div>
