@@ -180,6 +180,112 @@ class GstWebRTC:
 
         self._setup_data_channel(peer_id, webrtcbin)
 
+        # Set up handling for incoming audio from client (telephone mode)
+        webrtcbin.connect("pad-added", self._on_incoming_pad, peer_id)
+
+    def _on_incoming_pad(
+        self, webrtcbin: Gst.Element, pad: Gst.Pad, peer_id: str
+    ) -> None:
+        """Handle incoming media pads from WebRTC peers (for telephone mode).
+
+        When a client sends audio, this creates a pipeline to play it through
+        the robot's speaker.
+        """
+        if pad.get_direction() != Gst.PadDirection.SRC:
+            return
+
+        caps = pad.get_current_caps()
+        if caps is None:
+            caps = pad.query_caps(None)
+
+        if caps is None:
+            self._logger.warning(f"No caps on incoming pad from peer {peer_id}")
+            return
+
+        struct = caps.get_structure(0)
+        media_type = struct.get_string("media")
+
+        self._logger.info(f"Incoming pad from peer {peer_id}: {media_type}")
+
+        if media_type == "audio":
+            self._logger.info(f"Setting up audio playback for peer {peer_id}")
+            self._setup_webrtc_audio_playback(pad, peer_id)
+        else:
+            self._logger.debug(f"Ignoring non-audio pad: {media_type}")
+
+    def _setup_webrtc_audio_playback(self, pad: Gst.Pad, peer_id: str) -> None:
+        """Create pipeline to play incoming WebRTC audio through speaker."""
+        # Create elements for audio playback
+        queue = Gst.ElementFactory.make("queue", f"webrtc_audio_queue_{peer_id}")
+        decodebin = Gst.ElementFactory.make("decodebin", f"webrtc_audio_decode_{peer_id}")
+
+        if not queue or not decodebin:
+            self._logger.error("Failed to create audio playback elements")
+            return
+
+        # Add elements to the sender pipeline (it's already running)
+        self._pipeline_sender.add(queue)
+        self._pipeline_sender.add(decodebin)
+
+        # Link the incoming pad to queue
+        queue.sync_state_with_parent()
+        decodebin.sync_state_with_parent()
+
+        pad.link(queue.get_static_pad("sink"))
+        queue.link(decodebin)
+
+        # When decodebin finds the audio stream, link to speaker
+        decodebin.connect("pad-added", self._on_decoded_audio_pad, peer_id)
+
+        self._logger.info(f"WebRTC audio playback pipeline created for peer {peer_id}")
+
+    def _on_decoded_audio_pad(
+        self, decodebin: Gst.Element, pad: Gst.Pad, peer_id: str
+    ) -> None:
+        """Handle decoded audio pad - link to speaker output."""
+        caps = pad.get_current_caps()
+        if caps is None:
+            return
+
+        struct = caps.get_structure(0)
+        name = struct.get_name()
+
+        if not name.startswith("audio/"):
+            return
+
+        self._logger.info(f"Decoded audio stream from peer {peer_id}, linking to speaker")
+
+        # Create audio processing chain
+        audioconvert = Gst.ElementFactory.make(
+            "audioconvert", f"webrtc_audioconvert_{peer_id}"
+        )
+        audioresample = Gst.ElementFactory.make(
+            "audioresample", f"webrtc_audioresample_{peer_id}"
+        )
+        alsasink = Gst.ElementFactory.make("alsasink", f"webrtc_alsasink_{peer_id}")
+
+        if not all([audioconvert, audioresample, alsasink]):
+            self._logger.error("Failed to create audio output elements")
+            return
+
+        alsasink.set_property("device", "reachymini_audio_sink")
+        alsasink.set_property("sync", False)
+
+        # Add to pipeline and link
+        self._pipeline_sender.add(audioconvert)
+        self._pipeline_sender.add(audioresample)
+        self._pipeline_sender.add(alsasink)
+
+        audioconvert.sync_state_with_parent()
+        audioresample.sync_state_with_parent()
+        alsasink.sync_state_with_parent()
+
+        pad.link(audioconvert.get_static_pad("sink"))
+        audioconvert.link(audioresample)
+        audioresample.link(alsasink)
+
+        self._logger.info(f"Audio from peer {peer_id} now playing through speaker")
+
     def _configure_receiver(self, pipeline: Gst.Pipeline) -> None:
         udpsrc = Gst.ElementFactory.make("udpsrc")
         udpsrc.set_property("port", 5000)
