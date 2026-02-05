@@ -52,6 +52,29 @@ async def get_auth_status() -> dict[str, Any]:
     return hf_auth.check_token_status()
 
 
+@router.get("/relay-status")
+async def get_relay_status(request: Request) -> dict[str, Any]:
+    """Get the central signaling relay connection status."""
+    # Check if this is a Lite version (no WebRTC support)
+    daemon = getattr(request.app.state, "daemon", None)
+    if daemon and not daemon.wireless_version:
+        return {
+            "state": "unavailable",
+            "message": "Coming soon to Lite version",
+            "is_connected": False,
+        }
+
+    try:
+        from reachy_mini.media.central_signaling_relay import get_relay_status
+        return get_relay_status()
+    except ImportError:
+        return {
+            "state": "unavailable",
+            "message": "Central relay not available",
+            "is_connected": False,
+        }
+
+
 @router.delete("/token")
 async def delete_token() -> dict[str, str]:
     """Delete stored HuggingFace token."""
