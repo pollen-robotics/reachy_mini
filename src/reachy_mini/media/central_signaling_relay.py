@@ -374,6 +374,12 @@ class CentralSignalingRelay:
             self._set_state(RelayState.ERROR, f"Central server unreachable: {e}")
         except Exception as e:
             logger.error(f"[Central Relay] Error in central SSE: {e}")
+        finally:
+            # Clean up all sessions when central connection drops
+            if self._local_to_central_session:
+                logger.info(f"[Central Relay] Central connection lost, cleaning up {len(self._local_to_central_session)} sessions")
+                for local_session_id in list(self._local_to_central_session.keys()):
+                    await self._send_to_local({"type": "endSession", "sessionId": local_session_id})
 
     async def _handle_local_messages(self) -> None:
         """Handle messages from local GStreamer signaling."""
@@ -443,8 +449,14 @@ class CentralSignalingRelay:
 
             # Store session mapping
             if session_id:
+                # Check if we already have this session (duplicate request)
+                if session_id in self._session_to_local_peer:
+                    logger.warning(f"[Central Relay] Duplicate session request for session_id={session_id}, ignoring")
+                    return
+
                 self._session_to_local_peer[session_id] = client_peer_id
                 self._pending_central_sessions.append(session_id)
+                logger.info(f"[Central Relay] Pending sessions: {len(self._pending_central_sessions)}, tracked sessions: {len(self._session_to_local_peer)}")
 
             # Request list of local producers to start session
             await self._send_to_local({"type": "list"})
@@ -474,12 +486,18 @@ class CentralSignalingRelay:
         elif msg_type == "endSession":
             central_session_id = msg.get("sessionId")
             if central_session_id:
+                logger.info(f"[Central Relay] Session ended from central: central_session_id={central_session_id}")
                 self._session_to_local_peer.pop(central_session_id, None)
+                # Also remove from pending if it never got started
+                if central_session_id in self._pending_central_sessions:
+                    self._pending_central_sessions.remove(central_session_id)
                 # Translate and forward to local
                 local_session_id = self._central_to_local_session.pop(central_session_id, None)
                 if local_session_id:
                     self._local_to_central_session.pop(local_session_id, None)
+                    logger.info(f"[Central Relay] Forwarding endSession to local: local_session_id={local_session_id}")
                     await self._send_to_local({"type": "endSession", "sessionId": local_session_id})
+                logger.info(f"[Central Relay] After cleanup - pending: {len(self._pending_central_sessions)}, active: {len(self._central_to_local_session)}")
 
         elif msg_type == "peerStatusChanged":
             # Another peer changed status - ignore for producers
@@ -509,8 +527,9 @@ class CentralSignalingRelay:
                 self._local_producer_id = producers[0].get("id")
                 logger.debug(f"[Central Relay] Local GStreamer producer found: producer_id={self._local_producer_id}")
 
-                # If we have pending sessions, start them
-                for session_id in list(self._session_to_local_peer.keys()):
+                # Only start sessions for PENDING requests, not all tracked sessions
+                for central_session_id in list(self._pending_central_sessions):
+                    logger.info(f"[Central Relay] Starting local session for pending central_session={central_session_id}")
                     await self._send_to_local({
                         "type": "startSession",
                         "peerId": self._local_producer_id,
@@ -560,12 +579,15 @@ class CentralSignalingRelay:
         elif msg_type == "endSession":
             local_session_id = msg.get("sessionId")
             if local_session_id:
+                logger.info(f"[Central Relay] Session ended from local: local_session_id={local_session_id}")
                 # Translate and forward to central
                 central_session_id = self._local_to_central_session.pop(local_session_id, None)
                 if central_session_id:
                     self._central_to_local_session.pop(central_session_id, None)
                     self._session_to_local_peer.pop(central_session_id, None)
+                    logger.info(f"[Central Relay] Forwarding endSession to central: central_session_id={central_session_id}")
                     await self._send_to_central({"type": "endSession", "sessionId": central_session_id})
+                logger.info(f"[Central Relay] After cleanup - pending: {len(self._pending_central_sessions)}, active: {len(self._central_to_local_session)}")
 
 
 # Singleton instance for integration
