@@ -1,7 +1,14 @@
 """HuggingFace authentication management for private spaces."""
 
+import asyncio
+import logging
+import os
+import secrets
+import time
+from dataclasses import dataclass, field
 from typing import Any, Optional
 
+import aiohttp
 from huggingface_hub import HfApi, get_token, login, logout, whoami
 from huggingface_hub.utils import HfHubHTTPError  # type: ignore
 
@@ -400,6 +407,9 @@ def save_hf_token(token: str) -> dict[str, Any]:
         # add_to_git_credential=False keeps it from touching git credentials.
         login(token=token, add_to_git_credential=False)
 
+        # Notify central relay of new token for immediate reconnection
+        _notify_relay_of_token_change(token)
+
         return {
             "status": "success",
             "username": user_info.get("name", ""),
@@ -434,6 +444,8 @@ def delete_hf_token() -> bool:
     """
     try:
         logout()
+        # Notify central relay that user logged out
+        _notify_relay_of_token_change(None)
         return True
     except Exception:
         return False

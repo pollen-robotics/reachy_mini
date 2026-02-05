@@ -30,6 +30,9 @@ from .backend.mockup_sim import MockupSimBackend, MockupSimBackendStatus
 from .backend.mujoco import MujocoBackend, MujocoBackendStatus
 from .backend.robot import RobotBackend, RobotBackendStatus
 
+# Central signaling relay for WebRTC (optional)
+_central_relay_task: Optional[asyncio.Task[Any]] = None
+
 
 class Daemon:
     """Daemon for simulated or real Reachy Mini robot.
@@ -96,6 +99,45 @@ class Daemon:
             self._webrtc.stop()
             self._webrtc.__del__()
             self._webrtc = None
+
+    async def _start_central_signaling_relay(self) -> None:
+        """Start the central signaling relay for remote WebRTC access."""
+        global _central_relay_task
+
+        if not self._webrtc:
+            return
+
+        try:
+            from huggingface_hub import get_token
+            hf_token = get_token()
+        except Exception as e:
+            self.logger.debug(f"No HF token available, central signaling disabled: {e}")
+            return
+
+        if not hf_token:
+            self.logger.info("No HF token found, central signaling relay disabled")
+            return
+
+        try:
+            from reachy_mini.media.central_signaling_relay import start_central_relay
+
+            self.logger.info("Starting central signaling relay...")
+            await start_central_relay(
+                hf_token=hf_token,
+                robot_name=self.robot_name,
+            )
+            self.logger.info("Central signaling relay started")
+        except Exception as e:
+            self.logger.warning(f"Failed to start central signaling relay: {e}")
+
+    async def _stop_central_signaling_relay(self) -> None:
+        """Stop the central signaling relay."""
+        try:
+            from reachy_mini.media.central_signaling_relay import stop_central_relay
+            await stop_central_relay()
+            self.logger.info("Central signaling relay stopped")
+        except Exception as e:
+            self.logger.debug(f"Error stopping central signaling relay: {e}")
 
     async def start(
         self,
@@ -230,7 +272,11 @@ class Daemon:
             await asyncio.sleep(
                 0.2
             )  # Give some time for the backend to release the audio device
+            self.backend.setup_webrtc_interface(self._webrtc)
             self._webrtc.start()
+
+            # Start central signaling relay for remote WebRTC access
+            await self._start_central_signaling_relay()
 
         self.logger.info("Daemon started successfully.")
         self._status.state = DaemonState.RUNNING
@@ -267,6 +313,8 @@ class Daemon:
             if self._webrtc:
                 # We use pause() instead of stop() to keep the signalling server running and the producer registered, allowing proper restart.
                 self._webrtc.pause()
+                # Stop the central signaling relay
+                await self._stop_central_signaling_relay()
 
             if goto_sleep_on_stop:
                 try:
