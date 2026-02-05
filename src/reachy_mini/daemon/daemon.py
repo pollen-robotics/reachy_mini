@@ -27,11 +27,11 @@ from reachy_mini.io import (
 from reachy_mini.tools.reflash_motors import reflash_motors
 
 from .backend.mockup_sim import MockupSimBackend, MockupSimBackendStatus
-
-# Central signaling relay for WebRTC (optional)
-_central_relay_task: Optional[asyncio.Task] = None
 from .backend.mujoco import MujocoBackend, MujocoBackendStatus
 from .backend.robot import RobotBackend, RobotBackendStatus
+
+# Central signaling relay for WebRTC (optional)
+_central_relay_task: Optional[asyncio.Task[Any]] = None
 
 
 class Daemon:
@@ -122,7 +122,7 @@ class Daemon:
             from reachy_mini.media.central_signaling_relay import start_central_relay
 
             self.logger.info("Starting central signaling relay...")
-            relay = await start_central_relay(
+            await start_central_relay(
                 hf_token=hf_token,
                 robot_name=self.robot_name,
             )
