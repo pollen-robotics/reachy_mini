@@ -74,10 +74,6 @@ all = [
     "reachy_mini[rerun]",
     "reachy_mini[wireless-version]",
 ]
-docs = [
-    "watchdog>=6.0.0",
-    "reachy_mini[all]",
-]
 
 [project.scripts]
 reachy-mini-daemon = "reachy_mini.daemon.app.main:main"
