@@ -1,0 +1,1 @@
+pose_key,pose_name,payload_g,time_s,current_m1_ma,current_m2_ma,current_m3_ma,current_m4_ma,current_m5_ma,current_m6_ma,temp_m1_c,temp_m2_c,temp_m3_c,temp_m4_c,temp_m5_c,temp_m6_c,torque_m1_nm,torque_m2_nm,torque_m3_nm,torque_m4_nm,torque_m5_nm,torque_m6_nm,max_current_ma,max_torque_nm,max_temp_c

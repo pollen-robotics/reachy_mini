@@ -30,6 +30,7 @@ from reachy_mini.daemon.app.routers import (
     hf_auth,
     kinematics,
     logs,
+    motor_monitoring,
     motors,
     move,
     state,
@@ -206,6 +207,7 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
     router.include_router(daemon.router)
     router.include_router(hf_auth.router)
     router.include_router(kinematics.router)
+    router.include_router(motor_monitoring.router)
     router.include_router(motors.router)
     router.include_router(move.router)
     router.include_router(state.router)
