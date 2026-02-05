@@ -12,6 +12,8 @@ The relay automatically:
 import asyncio
 import json
 import logging
+import threading
+import time
 from enum import Enum
 from typing import Callable, Optional
 
@@ -40,6 +42,11 @@ LOCAL_GSTREAMER_SIGNALING = "ws://127.0.0.1:8443"
 # Reconnection settings
 RECONNECT_INTERVAL = 5.0  # seconds
 TOKEN_CHECK_INTERVAL = 30.0  # seconds - how often to check for token when not connected
+LOCAL_WS_CONNECT_TIMEOUT = 5.0  # seconds - timeout for local websocket connection
+LOCAL_WS_WELCOME_TIMEOUT = 3.0  # seconds - timeout waiting for welcome message from local
+SSE_READ_TIMEOUT = 60.0  # seconds - timeout for reading from SSE stream (should receive keepalive)
+CONNECTION_WATCHDOG_INTERVAL = 30.0  # seconds - how often to check connection health
+CONNECTION_STALE_THRESHOLD = 90.0  # seconds - consider connection stale if no activity
 
 
 class CentralSignalingRelay:
@@ -81,7 +88,8 @@ class CentralSignalingRelay:
         self._running = False
         self._state = RelayState.STOPPED
         self._state_message: Optional[str] = None
-        self._task: Optional[asyncio.Task] = None
+        self._thread: Optional[threading.Thread] = None
+        self._thread_loop: Optional["asyncio.AbstractEventLoop"] = None
         self._local_ws: Optional[ClientConnection] = None
         self._central_peer_id: Optional[str] = None
         self._local_peer_id: Optional[str] = None
@@ -99,6 +107,9 @@ class CentralSignalingRelay:
         self._pending_central_sessions: list[str] = []  # Central sessions waiting for local session
         self._local_to_central_session: dict[str, str] = {}  # local_session_id -> central_session_id
         self._central_to_local_session: dict[str, str] = {}  # central_session_id -> local_session_id
+
+        # Connection health tracking
+        self._last_central_activity: float = 0.0
 
     @property
     def state(self) -> RelayState:
@@ -149,28 +160,52 @@ class CentralSignalingRelay:
     async def start(self) -> None:
         """Start the relay service."""
         if self._running:
+            logger.debug("[Central Relay] start() called but already running")
             return
 
+        logger.info("[Central Relay] Starting relay service...")
         self._running = True
         self._connection_attempts = 0
         self._token_updated.clear()
         self._set_state(RelayState.CONNECTING, "Starting relay service...")
-        self._task = asyncio.create_task(self._run_loop())
+
+        # Run the relay in its own thread with a dedicated event loop.
+        # This is necessary because the caller (daemon.start) may run in a temporary
+        # event loop that gets destroyed when the HTTP request handler completes.
+        self._thread = threading.Thread(target=self._run_in_thread, daemon=True)
+        self._thread.start()
+        logger.info(f"[Central Relay] Relay thread started: {self._thread.name}")
+
+    def _run_in_thread(self) -> None:
+        """Run the relay loop in a dedicated thread with its own event loop."""
+        logger.info("[Central Relay] Thread starting, creating event loop...")
+        self._thread_loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(self._thread_loop)
+        try:
+            self._thread_loop.run_until_complete(self._run_loop())
+        except Exception as e:
+            logger.error(f"[Central Relay] Thread event loop error: {e}")
+        finally:
+            logger.info("[Central Relay] Thread event loop finished")
+            self._thread_loop.close()
+            self._thread_loop = None
 
     async def stop(self) -> None:
         """Stop the relay service."""
+        logger.info("[Central Relay] Stopping relay service...")
         self._running = False
-        self._token_updated.set()  # Wake up any waiting
 
-        if self._task:
-            self._task.cancel()
-            try:
-                await self._task
-            except asyncio.CancelledError:
-                pass
-            self._task = None
+        # Wake up any waiting in the thread's event loop
+        if self._thread_loop and self._thread_loop.is_running():
+            self._thread_loop.call_soon_threadsafe(self._token_updated.set)
 
-        await self._close_connections()
+        # Wait for thread to finish
+        if self._thread and self._thread.is_alive():
+            self._thread.join(timeout=5.0)
+            if self._thread.is_alive():
+                logger.warning("[Central Relay] Thread did not stop within timeout")
+
+        self._thread = None
         self._set_state(RelayState.STOPPED, "Relay stopped")
 
     async def update_token(self, new_token: Optional[str]) -> None:
@@ -199,11 +234,15 @@ class CentralSignalingRelay:
         else:
             self._set_state(RelayState.WAITING_FOR_TOKEN, "Logged out from HuggingFace")
 
-        # Close existing connections to force reconnection
-        await self._close_connections()
-
-        # Signal the run loop to wake up and try connecting
-        self._token_updated.set()
+        # Signal the run loop to wake up and try connecting (thread-safe)
+        if self._thread_loop and self._thread_loop.is_running():
+            # Schedule _close_connections and token_updated.set in the thread's event loop
+            async def _reconnect() -> None:
+                await self._close_connections()
+                self._token_updated.set()
+            asyncio.run_coroutine_threadsafe(_reconnect(), self._thread_loop)
+        else:
+            self._token_updated.set()
 
     def _refresh_token(self) -> Optional[str]:
         """Refresh the HF token from huggingface_hub.
@@ -252,35 +291,51 @@ class CentralSignalingRelay:
 
     async def _run_loop(self) -> None:
         """Main loop that maintains connections and relays messages."""
-        while self._running:
-            had_exception = False
-            try:
-                await self._connect_and_relay()
-            except asyncio.CancelledError:
-                break
-            except Exception as e:
-                had_exception = True
-                self._connection_attempts += 1
-                if self._connection_attempts <= 3:
-                    self._set_state(RelayState.RECONNECTING, f"Connection failed: {e}")
-                else:
-                    self._set_state(RelayState.ERROR, f"Connection failed after {self._connection_attempts} attempts: {e}")
+        logger.info("[Central Relay] _run_loop started")
 
-            if self._running and had_exception:
-                # Only wait after connection failures, not after normal returns
-                # (e.g., when token update triggered reconnection)
-                self._token_updated.clear()
+        try:
+            # Small yield to allow event loop to process other events
+            await asyncio.sleep(0)
+            logger.info("[Central Relay] Starting connection attempts")
+
+            while self._running:
+                had_exception = False
                 try:
-                    await asyncio.wait_for(
-                        self._token_updated.wait(),
-                        timeout=RECONNECT_INTERVAL
-                    )
-                except asyncio.TimeoutError:
-                    pass
+                    await self._connect_and_relay()
+                except asyncio.CancelledError:
+                    logger.info("[Central Relay] _run_loop cancelled during connect")
+                    raise  # Re-raise to exit the outer try
+                except Exception as e:
+                    logger.warning(f"[Central Relay] Connection attempt failed with exception: {type(e).__name__}: {e}")
+                    had_exception = True
+                    self._connection_attempts += 1
+                    if self._connection_attempts <= 3:
+                        self._set_state(RelayState.RECONNECTING, f"Connection failed: {e}")
+                    else:
+                        self._set_state(RelayState.ERROR, f"Connection failed after {self._connection_attempts} attempts: {e}")
+
+                if self._running and had_exception:
+                    # Only wait after connection failures, not after normal returns
+                    # (e.g., when token update triggered reconnection)
+                    self._token_updated.clear()
+                    try:
+                        await asyncio.wait_for(
+                            self._token_updated.wait(),
+                            timeout=RECONNECT_INTERVAL
+                        )
+                    except asyncio.TimeoutError:
+                        pass
+
+        except asyncio.CancelledError:
+            logger.info("[Central Relay] Run loop cancelled (stop requested)")
+            raise
+        except Exception as e:
+            logger.error(f"[Central Relay] Unexpected error in run loop: {e}")
+            raise
 
     async def _connect_and_relay(self) -> None:
         """Connect to both servers and relay messages."""
-        logger.debug("[Central Relay] _connect_and_relay() called")
+        logger.info("[Central Relay] _connect_and_relay() starting")
 
         # Always refresh the token on each connection attempt
         self._refresh_token()
@@ -302,28 +357,96 @@ class CentralSignalingRelay:
         # Create HTTP session for central server
         self._http_session = aiohttp.ClientSession()
 
-        # Connect to local GStreamer signaling (WebSocket)
+        # Connect to local GStreamer signaling (WebSocket) with timeout
         self._set_state(RelayState.CONNECTING, "Connecting to local WebRTC...")
+        logger.info(f"[Central Relay] Attempting to connect to local websocket: {self.local_uri}")
         try:
-            self._local_ws = await websockets.connect(
-                self.local_uri,
-                ping_interval=20,
-                ping_timeout=10,
+            self._local_ws = await asyncio.wait_for(
+                websockets.connect(
+                    self.local_uri,
+                    ping_interval=20,
+                    ping_timeout=10,
+                ),
+                timeout=LOCAL_WS_CONNECT_TIMEOUT
             )
+            logger.info("[Central Relay] Local websocket connection established")
+        except asyncio.TimeoutError:
+            logger.error(f"[Central Relay] Local WebRTC connection timeout after {LOCAL_WS_CONNECT_TIMEOUT}s")
+            self._set_state(RelayState.ERROR, f"Local WebRTC connection timeout after {LOCAL_WS_CONNECT_TIMEOUT}s")
+            await self._http_session.close()
+            self._http_session = None
+            raise
         except Exception as e:
+            logger.error(f"[Central Relay] Local WebRTC connection failed: {e}")
             self._set_state(RelayState.ERROR, f"Local WebRTC unavailable: {e}")
             await self._http_session.close()
             self._http_session = None
             raise
 
+        # Wait for welcome message from local websocket to verify connection is working
+        self._local_welcome_received = asyncio.Event()
+        logger.info("[Central Relay] Waiting for welcome message from local websocket...")
         try:
-            # Start both handlers - central SSE and local WebSocket
-            self._set_state(RelayState.CONNECTING, f"Connecting to central server...")
-            await asyncio.gather(
-                self._handle_central_sse(),
-                self._handle_local_messages(),
-                self._watch_for_token_update(),
-            )
+            # Start reading local messages in background to receive welcome
+            local_task = asyncio.create_task(self._handle_local_messages())
+            logger.info("[Central Relay] Local message handler task started")
+
+            # Wait for welcome with timeout
+            try:
+                await asyncio.wait_for(
+                    self._local_welcome_received.wait(),
+                    timeout=LOCAL_WS_WELCOME_TIMEOUT
+                )
+                logger.info("[Central Relay] Local WebRTC connection verified (welcome received)")
+            except asyncio.TimeoutError:
+                logger.error(f"[Central Relay] Welcome message timeout after {LOCAL_WS_WELCOME_TIMEOUT}s")
+                local_task.cancel()
+                try:
+                    await local_task
+                except asyncio.CancelledError:
+                    pass
+                self._set_state(RelayState.ERROR, f"Local WebRTC did not respond within {LOCAL_WS_WELCOME_TIMEOUT}s")
+                raise
+
+            # Now connect to central server and run all handlers
+            # Use wait with FIRST_COMPLETED so we can reconnect if any handler exits
+            self._set_state(RelayState.CONNECTING, "Connecting to central server...")
+            central_task = asyncio.create_task(self._handle_central_sse())
+            token_task = asyncio.create_task(self._watch_for_token_update())
+            tasks = {central_task, local_task, token_task}
+
+            try:
+                done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+
+                # Log which task finished first
+                for task in done:
+                    if task == central_task:
+                        logger.info("[Central Relay] Central SSE handler exited, will reconnect")
+                    elif task == local_task:
+                        logger.info("[Central Relay] Local WebSocket handler exited, will reconnect")
+                    elif task == token_task:
+                        logger.info("[Central Relay] Token update triggered reconnect")
+
+                    # Check for exceptions
+                    if task.exception():
+                        logger.warning(f"[Central Relay] Task {task.get_name()} raised: {task.exception()}")
+
+                # Cancel remaining tasks
+                for task in pending:
+                    task.cancel()
+                    try:
+                        await task
+                    except asyncio.CancelledError:
+                        pass
+
+                # Update state to show we're reconnecting (unless already set)
+                if self._state == RelayState.CONNECTED:
+                    self._set_state(RelayState.RECONNECTING, "Connection lost, reconnecting...")
+            except asyncio.CancelledError:
+                # Cancel all tasks if we're cancelled
+                for task in tasks:
+                    task.cancel()
+                raise
         finally:
             await self._close_connections()
 
@@ -342,7 +465,9 @@ class CentralSignalingRelay:
         headers = {"Authorization": f"Bearer {self.hf_token}"}
 
         try:
-            async with self._http_session.get(events_url, headers=headers) as response:
+            # Use timeout for the initial connection
+            timeout = aiohttp.ClientTimeout(total=None, connect=10, sock_read=SSE_READ_TIMEOUT)
+            async with self._http_session.get(events_url, headers=headers, timeout=timeout) as response:
                 if response.status == 401:
                     self._set_state(RelayState.ERROR, "Authentication failed - token may be invalid")
                     return
@@ -352,11 +477,26 @@ class CentralSignalingRelay:
 
                 # Connection successful - will set CONNECTED after welcome message
                 self._connection_attempts = 0
+                self._last_central_activity = time.time()
 
-                async for line in response.content:
-                    if not self._running:
-                        break
+                # Read lines with timeout to detect dead connections
+                while self._running:
+                    try:
+                        line = await asyncio.wait_for(
+                            response.content.readline(),
+                            timeout=SSE_READ_TIMEOUT
+                        )
+                    except asyncio.TimeoutError:
+                        logger.warning(f"[Central Relay] SSE read timeout after {SSE_READ_TIMEOUT}s - connection may be dead")
+                        self._set_state(RelayState.RECONNECTING, "Connection timeout, reconnecting...")
+                        return
 
+                    if not line:
+                        # Empty line means connection closed
+                        logger.info("[Central Relay] SSE connection closed by server")
+                        return
+
+                    self._last_central_activity = time.time()
                     line = line.decode('utf-8').strip()
 
                     if line.startswith('data:'):
@@ -512,6 +652,10 @@ class CentralSignalingRelay:
             # Received our peer ID from local GStreamer
             self._local_peer_id = msg.get("peerId")
             logger.info(f"[Central Relay] Connected to local GStreamer signaling server peer_id={self._local_peer_id}")
+
+            # Signal that local connection is verified
+            if hasattr(self, '_local_welcome_received'):
+                self._local_welcome_received.set()
 
             # Register as listener to receive producer announcements
             await self._send_to_local({
