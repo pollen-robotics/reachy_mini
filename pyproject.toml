@@ -64,6 +64,17 @@ wireless-version = [
     "gpiozero>=2.0.0",
     "lgpio>=0.2.2.0",
 ]
+docs = [
+    "hf-doc-builder @ git+https://github.com/huggingface/doc-builder.git@main",
+    "watchdog>=6.0.0",
+    "reachy_mini[dev]",
+    "reachy_mini[examples]",
+    "reachy_mini[mujoco]",
+    "reachy_mini[nn_kinematics]",
+    "reachy_mini[placo_kinematics]",
+    "reachy_mini[gstreamer]",
+    "reachy_mini[rerun]",
+]
 
 [project.scripts]
 reachy-mini-daemon = "reachy_mini.daemon.app.main:main"
