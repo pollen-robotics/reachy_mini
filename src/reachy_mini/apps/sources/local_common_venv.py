@@ -653,10 +653,12 @@ async def install_package(
                     str(python_path),
                     target,
                 ]
+                extra_env = {"UV_GIT_LFS": "1"}
             else:
                 install_cmd = [str(python_path), "-m", "pip", "install", target]
+                extra_env = {}
 
-            ret = await running_command(install_cmd, logger=logger)
+            ret = await running_command(install_cmd, logger=logger, env=extra_env)
 
             if ret != 0:
                 return ret
@@ -683,10 +685,12 @@ async def install_package(
         # Original behavior: install into current environment
         if use_uv:
             install_cmd = ["uv", "pip", "install", "--python", sys.executable, target]
+            extra_env = {"UV_GIT_LFS": "1"}
         else:
             install_cmd = [sys.executable, "-m", "pip", "install", target]
+            extra_env = {}
 
-        ret = await running_command(install_cmd, logger=logger)
+        ret = await running_command(install_cmd, logger=logger, env=extra_env)
 
         if ret == 0 and app.extra:
             # Save app metadata so we can match by extra.id later

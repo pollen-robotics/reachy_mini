@@ -76,13 +76,13 @@ Now you can modify the code in `~/reachy_mini` and test your changes without aff
 
 3. **Install the specific branch:**
    ```bash
-   pip install --no-cache-dir --force-reinstall \
+   UV_GIT_LFS=1 uv pip install --no-cache-dir --force-reinstall \
      "reachy_mini[gstreamer,wireless-version] @ git+https://github.com/pollen-robotics/reachy_mini.git@<branch-name>"
    ```
    Replace `<branch-name>` with the branch you want to test (e.g., `develop`, `feature/my-feature`, `bugfix/issue-123`).
 
    > [!NOTE]
-   > We have to use `pip` here and not `uv` because `uv pip install` [does not work correctly with `git lfs`](https://github.com/astral-sh/uv/issues/3312).
+   > We have to specify `UV_GIT_LFS=1` to make sure `uv` uses `git lfs` correctly.
 
 4. **(Only for versions ≤ 1.2.13)** Repeat steps 2 and 3 using `/venvs/apps_venv`.
 
