@@ -54,15 +54,25 @@ dev = [
 examples = ["pynput"]
 mujoco = ["mujoco==3.3.0"]
 nn_kinematics = ["onnxruntime==1.22.1"]
-placo_kinematics = ["placo==0.9.14"]
+placo_kinematics = ["placo==0.9.14; sys_platform != 'win32'"]
 gstreamer = ["PyGObject>=3.42.2,<=3.46.0", "gst-signalling>=1.1.2"]
 rerun = ["rerun-sdk>=0.27.2", "urdf-parser-py==0.0.4"]
 wireless-version = [
     "semver>=3,<4",
-    "nmcli>=1.5",
-    "pollen_BMI088_imu_library",
-    "gpiozero>=2.0.0",
-    "lgpio>=0.2.2.0",
+    "nmcli>=1.5; sys_platform == 'linux'",
+    "pollen_BMI088_imu_library; sys_platform == 'linux'",
+    "gpiozero>=2.0.0; sys_platform == 'linux'",
+    "lgpio>=0.2.2.0; sys_platform == 'linux'",
+]
+all = [
+    "reachy_mini[dev]",
+    "reachy_mini[examples]",
+    "reachy_mini[mujoco]",
+    "reachy_mini[nn_kinematics]",
+    "reachy_mini[placo_kinematics]",
+    "reachy_mini[gstreamer]",
+    "reachy_mini[rerun]",
+    "reachy_mini[wireless-version]",
 ]
 
 [project.scripts]
