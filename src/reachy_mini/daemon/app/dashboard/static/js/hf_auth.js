@@ -7,6 +7,9 @@ const hfAuth = {
     username: null,
     isOAuthConfigured: false,
     oauthSessionId: null,
+    relayState: null,
+    relayMessage: null,
+    relayPollInterval: null,
 
     init: async () => {
         // Check OAuth configuration
@@ -34,6 +37,9 @@ const hfAuth = {
                 }
             });
         }
+
+        // Start relay status polling
+        hfAuth.startRelayStatusPolling();
     },
 
     checkAuthStatus: async () => {
@@ -85,6 +91,14 @@ const hfAuth = {
             hfAppsStore.advanced.isAuthenticated = hfAuth.isAuthenticated;
             hfAppsStore.advanced.username = hfAuth.username;
             hfAppsStore.advanced.updateAuthUI();
+        }
+
+        // Update relay status visibility
+        hfAuth.updateRelayUI();
+
+        // Trigger immediate relay status check on auth change
+        if (hfAuth.isAuthenticated) {
+            hfAuth.checkRelayStatus();
         }
     },
 
@@ -309,6 +323,93 @@ const hfAuth = {
                 authBtn.disabled = false;
             }
         }
+    },
+
+    // Central relay status methods
+    startRelayStatusPolling: () => {
+        // Initial check
+        hfAuth.checkRelayStatus();
+        // Poll every 5 seconds
+        hfAuth.relayPollInterval = setInterval(hfAuth.checkRelayStatus, 5000);
+    },
+
+    checkRelayStatus: async () => {
+        try {
+            const response = await fetch('/api/hf-auth/relay-status');
+            const data = await response.json();
+            hfAuth.relayState = data.state;
+            hfAuth.relayMessage = data.message;
+            hfAuth.updateRelayUI();
+        } catch {
+            hfAuth.relayState = 'error';
+            hfAuth.relayMessage = 'Cannot fetch status';
+            hfAuth.updateRelayUI();
+        }
+    },
+
+    updateRelayUI: () => {
+        const statusDiv = document.getElementById('hf-relay-status');
+        const indicator = document.getElementById('hf-relay-indicator');
+        const text = document.getElementById('hf-relay-text');
+
+        if (!statusDiv || !indicator || !text) return;
+
+        // Show for Lite (unavailable) always, otherwise only when authenticated
+        const isLite = hfAuth.relayState === 'unavailable';
+        if (!isLite && !hfAuth.isAuthenticated) {
+            statusDiv.classList.add('hidden');
+            return;
+        }
+
+        statusDiv.classList.remove('hidden');
+
+        // State-based styling - user-friendly labels
+        const states = {
+            'connected': {
+                color: '#10b981', bg: '#d1fae5', border: '#86efac',
+                textColor: '#065f46', label: 'Ready',
+                tooltip: 'HF Space Apps: Ready'
+            },
+            'connecting': {
+                color: '#f59e0b', bg: '#fef3c7', border: '#fcd34d',
+                textColor: '#92400e', label: 'Connecting...',
+                tooltip: 'HF Space Apps: Connecting...'
+            },
+            'reconnecting': {
+                color: '#f59e0b', bg: '#fef3c7', border: '#fcd34d',
+                textColor: '#92400e', label: 'Connecting...',
+                tooltip: 'HF Space Apps: Connecting...'
+            },
+            'waiting_for_token': {
+                color: '#6b7280', bg: '#f3f4f6', border: '#d1d5db',
+                textColor: '#6b7280', label: 'Offline',
+                tooltip: 'HF Space Apps: Login required'
+            },
+            'error': {
+                color: '#ef4444', bg: '#fee2e2', border: '#fecaca',
+                textColor: '#dc2626', label: 'Offline',
+                tooltip: 'HF Space Apps: Connection error'
+            },
+            'stopped': {
+                color: '#6b7280', bg: '#f3f4f6', border: '#d1d5db',
+                textColor: '#6b7280', label: 'Offline',
+                tooltip: 'HF Space Apps: Offline'
+            },
+            'unavailable': {
+                color: '#9ca3af', bg: '#f3f4f6', border: '#e5e7eb',
+                textColor: '#9ca3af', label: 'Lite',
+                tooltip: 'HF Space Apps: Coming soon to Lite version'
+            }
+        };
+
+        const style = states[hfAuth.relayState] || states['stopped'];
+
+        indicator.style.backgroundColor = style.color;
+        statusDiv.style.backgroundColor = style.bg;
+        statusDiv.style.borderColor = style.border;
+        text.style.color = style.textColor;
+        text.textContent = style.label;
+        statusDiv.title = style.tooltip;
     }
 };
 
