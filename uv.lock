@@ -3355,7 +3355,7 @@ requires-dist = [
     { name = "rustypot", specifier = ">=1.4.2" },
     { name = "scipy", specifier = ">=1.15.3,<2.0.0" },
     { name = "semver", marker = "extra == 'wireless-version'", specifier = ">=3,<4" },
-    { name = "sounddevice", specifier = "==0.5.1" },
+    { name = "sounddevice", specifier = ">=0.5.1,<0.6" },
     { name = "soundfile", specifier = "==0.13.1" },
     { name = "toml" },
     { name = "types-requests", marker = "extra == 'dev'" },
