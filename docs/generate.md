@@ -5,6 +5,7 @@ you can install them with the following command, at the root of the code reposit
 
 ```bash
 pip install -e ".[docs]"
+pip install "hf-doc-builder @ git+https://github.com/huggingface/doc-builder.git@main"
 ```
 
 You will also need:

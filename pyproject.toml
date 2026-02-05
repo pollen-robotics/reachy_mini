@@ -75,7 +75,6 @@ all = [
     "reachy_mini[wireless-version]",
 ]
 docs = [
-    "hf-doc-builder @ git+https://github.com/huggingface/doc-builder.git@main",
     "watchdog>=6.0.0",
     "reachy_mini[all]",
 ]
