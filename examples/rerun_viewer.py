@@ -35,6 +35,8 @@ def main() -> None:
                 time.sleep(0.02)
 
         except KeyboardInterrupt:
+            pass
+        finally:
             mini.disable_gravity_compensation()
             rerun.stop()
             print("Exiting... Reachy Mini is stiff again.")
