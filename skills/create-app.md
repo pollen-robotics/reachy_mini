@@ -119,3 +119,79 @@ When planning the app, consider which patterns apply:
 | Control loop | Real-time reactivity needed | `reachy_mini_conversation_app/moves.py` |
 | Head as controller | Games, recording | `fire_nation_attacked`, `marionette` |
 | LLM integration | AI-powered behavior | `reachy_mini_conversation_app` |
+
+---
+
+## Creating a Beautiful Landing Page (index.html)
+
+The root `index.html` is the landing page shown on Hugging Face Spaces. A well-designed landing page makes your app look professional and helps users understand what it does.
+
+**Reference template:** Use the [Marionette app](https://huggingface.co/spaces/RemiFabre/marionette) as a template for the structure and styling.
+
+### Structure
+
+A good landing page has three sections:
+
+1. **Hero Section** - Video/image + title + description
+2. **Technical Section** - "How it works" steps + features
+3. **Footer** - Resources, links, social media
+
+### Key Elements
+
+```
+index.html
+├── Hero Section
+│   ├── Demo video (autoplay, loop, muted)
+│   ├── App emoji + title
+│   ├── Tags (categories)
+│   └── Short description (1-2 sentences)
+│
+├── Technical Section
+│   ├── "How it works" (numbered steps)
+│   └── "Features" or additional info
+│
+└── Footer
+    ├── Resources (docs, troubleshooting)
+    ├── Reachy Mini Apps links
+    └── Social media icons
+```
+
+### Assets
+
+Put demo videos/images in `<app_name>/assets/`:
+
+```
+my_app/
+├── index.html              # References my_app/assets/demo.mp4
+├── my_app/
+│   ├── assets/
+│   │   └── demo.mp4        # Demo video
+│   ├── main.py
+│   └── static/             # Web UI (if any)
+```
+
+Video tag example:
+```html
+<video autoplay loop muted playsinline>
+  <source src="my_app/assets/demo.mp4" type="video/mp4" />
+</video>
+```
+
+### Styling
+
+Use the Marionette CSS as a starting point:
+- Inter font from Google Fonts
+- CSS variables for colors (`--primary: #FF9900` for Pollen orange)
+- Responsive grid layout (`grid-template-columns: 1fr 1fr` on desktop)
+- Numbered steps with orange circles
+- Footer with social media SVG icons
+
+### Quick Checklist
+
+- [ ] Hero with video/image showing the app in action
+- [ ] Clear title and short tagline
+- [ ] Tags describing the app's purpose
+- [ ] "How it works" numbered steps (4 steps max)
+- [ ] Footer with standard Pollen/Reachy links
+- [ ] Responsive design (works on mobile)
+- [ ] All CSS inline in `<style>` tag (no external stylesheet needed)

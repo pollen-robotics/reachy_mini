@@ -17,7 +17,7 @@ import typing
 from abc import abstractmethod
 from enum import Enum
 from pathlib import Path
-from typing import Annotated, Any, Dict, Optional
+from typing import Annotated, Any, Callable, Dict, Optional
 
 import numpy as np
 import zenoh
@@ -186,6 +186,11 @@ class Backend:
         self._play_move_lock = threading.RLock()
         self._active_move_depth = (
             0  # Tracks nested acquisitions within the owning thread
+        )
+
+        # WebRTC support
+        self._send_message_to_webrtc: Optional[Callable[[Optional[str], str], None]] = (
+            None
         )
 
     # Life cycle methods
@@ -847,3 +852,129 @@ class Backend:
             "passive_7_y": self.head_kinematics.get_joint("passive_7_y"),  # type: ignore [union-attr]
             "passive_7_z": self.head_kinematics.get_joint("passive_7_z"),  # type: ignore [union-attr]
         }
+
+    def setup_webrtc_interface(self, gst_webrtc: Any) -> None:
+        """Set up the WebRTC interface for motor control.
+
+        Args:
+            gst_webrtc (Any): The GstWebRTC instance to setup.
+
+        """
+        gst_webrtc.set_message_handler(self._handle_webrtc_message)
+        self._send_message_to_webrtc = gst_webrtc.send_data_message
+
+    def _handle_webrtc_message(self, peer_id: str, message: str) -> None:
+        message_data = json.loads(message)
+        try:
+            self._process_webrtc_command(peer_id, message_data)
+        except Exception as e:
+            self.logger.error(f"WebRTC command error: {e}")
+            self._send_webrtc_response(peer_id, {"error": str(e)})
+
+    def _process_webrtc_command(self, peer_id: str, data: dict[str, Any]) -> None:
+        """Process a WebRTC command from the data channel."""
+        # === HEAD POSE ===
+        if "set_target" in data:
+            target_pose = data["set_target"]
+            self.set_target_head_pose(np.array(target_pose))
+            self._send_webrtc_response(peer_id, {"status": "ok", "command": "set_target"})
+
+        # === BODY YAW ===
+        elif "set_body_yaw" in data:
+            yaw = float(data["set_body_yaw"])
+            self.set_target_body_yaw(yaw)
+            self._send_webrtc_response(peer_id, {"status": "ok", "command": "set_body_yaw"})
+
+        # === ANTENNAS ===
+        elif "set_antennas" in data:
+            positions = data["set_antennas"]  # [right, left] in radians
+            self.set_target_antenna_joint_positions(np.array(positions))
+            self._send_webrtc_response(peer_id, {"status": "ok", "command": "set_antennas"})
+
+        # === SMOOTH GOTO ===
+        elif "goto_target" in data:
+            params = data["goto_target"]
+            head = np.array(params["head"]) if params.get("head") else None
+            antennas = np.array(params["antennas"]) if params.get("antennas") else None
+            duration = float(params.get("duration", 0.5))
+            body_yaw = float(params["body_yaw"]) if params.get("body_yaw") is not None else None
+            # Run async goto in background
+            asyncio.create_task(self._webrtc_goto(peer_id, head, antennas, duration, body_yaw))
+
+        # === ANIMATIONS ===
+        elif "wake_up" in data:
+            asyncio.create_task(self._webrtc_wake_up(peer_id))
+
+        elif "goto_sleep" in data:
+            asyncio.create_task(self._webrtc_goto_sleep(peer_id))
+
+        # === AUDIO ===
+        elif "play_sound" in data:
+            sound_file = data["play_sound"]
+            self.play_sound(sound_file)
+            self._send_webrtc_response(peer_id, {"status": "ok", "command": "play_sound"})
+
+        # === MOTOR CONTROL ===
+        elif "set_motor_mode" in data:
+            mode_str = data["set_motor_mode"]
+            mode = MotorControlMode(mode_str)
+            self.set_motor_control_mode(mode)
+            self._send_webrtc_response(peer_id, {"motor_mode": mode_str, "status": "ok"})
+
+        elif "get_motor_mode" in data:
+            mode = self.get_motor_control_mode()
+            self._send_webrtc_response(peer_id, {"motor_mode": mode.value})
+
+        # === STATE QUERIES ===
+        elif "get_state" in data:
+            state = {
+                "head_pose": self.get_present_head_pose().tolist() if self.current_head_pose is not None else None,
+                "antennas": self.get_present_antenna_joint_positions().tolist() if self.current_antenna_joint_positions is not None else None,
+                "body_yaw": self.get_present_body_yaw(),
+                "motor_mode": self.get_motor_control_mode().value,
+                "is_recording": self.is_recording,
+                "is_move_running": self.is_move_running,
+            }
+            self._send_webrtc_response(peer_id, {"state": state})
+
+        # === RECORDING ===
+        elif "start_recording" in data:
+            self.start_recording()
+            self._send_webrtc_response(peer_id, {"status": "ok", "command": "start_recording", "is_recording": True})
+
+        elif "stop_recording" in data:
+            self.stop_recording()
+            self._send_webrtc_response(peer_id, {"status": "ok", "command": "stop_recording", "is_recording": False})
+
+        else:
+            self._send_webrtc_response(peer_id, {"error": "Unknown command", "received": list(data.keys())})
+
+    async def _webrtc_goto(
+        self, peer_id: str, head: Any, antennas: Any, duration: float, body_yaw: float | None
+    ) -> None:
+        """Execute goto_target and send response when done."""
+        try:
+            await self.goto_target(head=head, antennas=antennas, duration=duration, body_yaw=body_yaw)
+            self._send_webrtc_response(peer_id, {"status": "ok", "command": "goto_target", "completed": True})
+        except Exception as e:
+            self._send_webrtc_response(peer_id, {"error": str(e), "command": "goto_target"})
+
+    async def _webrtc_wake_up(self, peer_id: str) -> None:
+        """Execute wake_up and send response when done."""
+        try:
+            await self.wake_up()
+            self._send_webrtc_response(peer_id, {"status": "ok", "command": "wake_up", "completed": True})
+        except Exception as e:
+            self._send_webrtc_response(peer_id, {"error": str(e), "command": "wake_up"})
+
+    async def _webrtc_goto_sleep(self, peer_id: str) -> None:
+        """Execute goto_sleep and send response when done."""
+        try:
+            await self.goto_sleep()
+            self._send_webrtc_response(peer_id, {"status": "ok", "command": "goto_sleep", "completed": True})
+        except Exception as e:
+            self._send_webrtc_response(peer_id, {"error": str(e), "command": "goto_sleep"})
+
+    def _send_webrtc_response(self, peer_id: str, response: dict[str, Any]) -> None:
+        if self._send_message_to_webrtc:
+            self._send_message_to_webrtc(peer_id, json.dumps(response))

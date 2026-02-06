@@ -4,10 +4,16 @@ To generate the documentation, you first have to build it. Several packages are 
 you can install them with the following command, at the root of the code repository:
 
 ```bash
+pip install -e ".[all]"
 pip install "hf-doc-builder @ git+https://github.com/huggingface/doc-builder.git@main"
 ```
 
-You will also need `nodejs`. Please refer to their [installation page](https://nodejs.org/en/download)
+You will also need:
+- **GStreamer** — See the [installation guide](source/SDK/gstreamer-installation.md)
+- **Node.js** — See the [installation page](https://nodejs.org/en/download)
+
+> [!WARNING]
+> The documentation cannot currently be generated on Windows due to an unsupported dependency. Please use macOS or Linux.
 
 ---
 
