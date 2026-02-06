@@ -6,7 +6,7 @@
 > This guide explains how to install the Reachy Mini daemon from a specific GitHub branch before it is officially released. Use this for testing new features or bug fixes.
 
 > [!TIP]
-> Starting from v1.2.14, you can install a branch directly from _Settings → Reachy Mini Update_ in the web dashboard.
+> Starting from v1.3.0, you can install a branch directly from _Settings → Reachy Mini Update_ in the web dashboard.
 
 ## Prerequisites
 
