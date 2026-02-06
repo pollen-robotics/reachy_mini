@@ -7,7 +7,7 @@ body:
       value: |
         ### Thanks for contributing to Reachy Mini! 🙌
         Please include as much detail as possible so we can help quickly.
-        **Before filing a ticket, you must read our [Troubleshooting Guide](https://github.com/pollen-robotics/reachy_mini/blob/develop/docs/troubleshooting.md).**
+        **Before filing a ticket, you must read our [Troubleshooting Guide](https://huggingface.co/docs/reachy_mini/troubleshooting).**
 
   - type: dropdown
     id: issue-type
@@ -75,7 +75,7 @@ body:
       label: Troubleshooting
       description: Confirm you reviewed the troubleshooting guide before opening this ticket.
       options:
-        - label: I have read https://github.com/pollen-robotics/reachy_mini/blob/develop/docs/troubleshooting.md
+        - label: I have read https://huggingface.co/docs/reachy_mini/troubleshooting
     validations:
       required: true
 

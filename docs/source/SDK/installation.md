@@ -244,14 +244,12 @@ If you want to use the simulation mode, you need to add the `mujoco` extra:
 ```bash
 uv sync --extra mujoco
 ```
-### 🐧 Linux Users: USB Permission Setup
+### 🐧 Linux Users
 
 > **Linux + USB connection?** You need to grant access to Reachy Mini's serial port.
 
 <details>
 <summary>🔧 <strong>Click here to set up USB permissions</strong></summary>
-
-<br>
 
 Run these commands in your terminal:
 
@@ -265,6 +263,21 @@ sudo usermod -aG dialout $USER
 ```
 
 > ⚠️ **Important:** Log out and log back in for the changes to take effect!
+
+</details>
+
+<br />
+
+> **PortAudio** Make sure that portaudio is installed on your system to enable audio features with the default backend.
+
+<details>
+<summary>🔧 <strong>Installing PortAudio</strong></summary>
+
+Run this command in your terminal:
+
+```bash
+sudo apt-get install libportaudio2
+```
 
 </details>
 

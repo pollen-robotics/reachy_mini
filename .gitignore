@@ -256,3 +256,8 @@ $RECYCLE.BIN/
 src/reachy_mini_dashboard/installed_apps/*
 examples/debug/measures/*
 .DS_Store
+
+src/reachy_mini/tools/camera_calibration/images/*
+src/reachy_mini/tools/camera_calibration/images_for_crop_analysis/*
+src/reachy_mini/tools/camera_calibration/images_for_crop_analysis_lite/*
+src/reachy_mini/tools/camera_calibration/*.yaml

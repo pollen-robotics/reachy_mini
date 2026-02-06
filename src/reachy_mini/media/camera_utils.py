@@ -28,6 +28,8 @@ import platform
 from typing import Optional, Tuple, cast
 
 import cv2
+import numpy as np
+import numpy.typing as npt
 from cv2_enumerate_cameras import enumerate_cameras
 
 from reachy_mini.media.camera_constants import (
@@ -183,21 +185,53 @@ def find_camera_by_vid_pid(
     return selected_cap
 
 
-if __name__ == "__main__":
-    from reachy_mini.media.camera_constants import CameraResolution
+def scale_intrinsics(
+    K_original: npt.NDArray[np.float64],
+    original_size: Tuple[int, int],
+    target_size: Tuple[int, int],
+    crop_scale: float,
+) -> npt.NDArray[np.float64]:
+    """Scale camera intrinsics for a different resolution with cropping.
 
-    cam, _ = find_camera()
-    if cam is None:
-        exit("Camera not found")
+    Args:
+        K_original: Original 3x3 camera matrix
+        original_size: (width, height) of original calibration
+        target_size: (width, height) of target resolution
+        crop_scale: Scale factor due to digital zoom/crop (>1 means more zoomed in)
 
-    cam.set(cv2.CAP_PROP_FRAME_WIDTH, CameraResolution.R1280x720at30fps.value[0])
-    cam.set(cv2.CAP_PROP_FRAME_HEIGHT, CameraResolution.R1280x720at30fps.value[1])
+    Returns:
+        K_scaled: Adjusted camera matrix for target resolution
 
-    while True:
-        ret, frame = cam.read()
-        if not ret:
-            print("Failed to grab frame")
-            break
-        cv2.imshow("Camera Feed", frame)
-        if cv2.waitKey(1) & 0xFF == ord("q"):
-            break
+    """
+    K_scaled: npt.NDArray[np.float64] = K_original.copy()
+
+    orig_w, orig_h = original_size
+    target_w, target_h = target_size
+
+    # Extract original parameters
+    fx = K_original[0, 0]
+    fy = K_original[1, 1]
+    cx = K_original[0, 2]
+    cy = K_original[1, 2]
+
+    # Focal length scaling has two components:
+    # 1. Resolution scaling: focal length in pixels scales with image dimensions
+    # 2. Crop/zoom scaling: cropping increases effective focal length
+
+    resolution_scale_x = target_w / orig_w
+    resolution_scale_y = target_h / orig_h
+
+    fx_scaled = fx * resolution_scale_x * crop_scale
+    fy_scaled = fy * resolution_scale_y * crop_scale
+
+    # Principal point scales with resolution
+    # For centered crop, it stays at the image center after scaling
+    cx_scaled = (cx / orig_w) * target_w
+    cy_scaled = (cy / orig_h) * target_h
+
+    K_scaled[0, 0] = fx_scaled
+    K_scaled[1, 1] = fy_scaled
+    K_scaled[0, 2] = cx_scaled
+    K_scaled[1, 2] = cy_scaled
+
+    return K_scaled

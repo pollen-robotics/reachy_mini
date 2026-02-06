@@ -125,14 +125,14 @@ class GstWebRTCClient(CameraBase, AudioBase):
         self._pipeline_record.add(self._appsink_audio)
 
         self.camera_specs = cast(CameraSpecs, ReachyMiniWirelessCamSpecs)
-        self.set_resolution(self.camera_specs.default_resolution)
 
         self._appsink_video = Gst.ElementFactory.make("appsink")
-        caps_video = Gst.Caps.from_string("video/x-raw,format=BGR")
-        self._appsink_video.set_property("caps", caps_video)
         self._appsink_video.set_property("drop", True)  # avoid overflow
         self._appsink_video.set_property("max-buffers", 1)  # keep last image only
         self._pipeline_record.add(self._appsink_video)
+
+        # Set resolution after appsink is created so caps can be properly configured
+        self.set_resolution(self.camera_specs.default_resolution)
 
         webrtcsrc = self._configure_webrtcsrc(signaling_host, signaling_port, peer_id)
         self._pipeline_record.add(webrtcsrc)
@@ -156,7 +156,18 @@ class GstWebRTCClient(CameraBase, AudioBase):
     def set_resolution(self, resolution: CameraResolution) -> None:
         """Set the camera resolution."""
         super().set_resolution(resolution)
+
+        # Check if pipeline is not playing before changing resolution
+        if self._pipeline_record.get_state(0).state == Gst.State.PLAYING:
+            raise RuntimeError(
+                "Cannot change resolution while the camera is streaming. Please close the camera first."
+            )
+
         self._resolution = resolution
+        caps_video = Gst.Caps.from_string(
+            f"video/x-raw,format=BGR,width={self._resolution.value[0]},height={self._resolution.value[1]},framerate={self.framerate}/1"
+        )
+        self._appsink_video.set_property("caps", caps_video)
 
     def _configure_webrtcsrc(
         self, signaling_host: str, signaling_port: int, peer_id: str

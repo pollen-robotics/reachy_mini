@@ -11,9 +11,8 @@ import time
 from dataclasses import dataclass
 from importlib.resources import files
 from threading import Thread
-from typing import Annotated, Any, Optional
+from typing import Annotated, Any
 
-import cv2
 import log_throttling
 import mujoco
 import mujoco.viewer
@@ -21,7 +20,6 @@ import numpy as np
 import numpy.typing as npt
 
 import reachy_mini
-from reachy_mini.io.video_ws import AsyncWebSocketFrameSender
 
 from ..abstract import Backend, MotorControlMode
 from .utils import (
@@ -46,7 +44,6 @@ class MujocoBackend(Backend):
         kinematics_engine: str = "AnalyticalKinematics",
         headless: bool = False,
         use_audio: bool = False,
-        websocket_uri: Optional[str] = None,
     ) -> None:
         """Initialize the MujocoBackend with a specified scene.
 
@@ -56,7 +53,6 @@ class MujocoBackend(Backend):
             kinematics_engine (str): Kinematics engine to use. Defaults to "AnalyticalKinematics".
             headless (bool): If True, run Mujoco in headless mode (no GUI). Default is False.
             use_audio (bool): If True, use audio. Default is False.
-            websocket_uri (Optional[str]): If set, allow streaming of the robot view through a WebSocket connection to the specified uri. Defaults to None.
 
         """
         super().__init__(
@@ -66,7 +62,6 @@ class MujocoBackend(Backend):
         )
 
         self.headless = headless
-        self.websocket_uri = websocket_uri
 
         from reachy_mini.reachy_mini import (
             SLEEP_ANTENNAS_JOINT_POSITIONS,
@@ -134,31 +129,6 @@ class MujocoBackend(Backend):
         camera_size = CAMERA_SIZES[camera_name]
         return mujoco.Renderer(self.model, height=camera_size[1], width=camera_size[0])
 
-    def streaming_loop(self, camera_name: str, ws_uri: str) -> None:
-        """Streaming loop for the Mujoco simulation over WebSocket.
-
-        Capture the image from the virtual camera and send it over WebSocket to the ws_uri.
-        """
-        streamer = AsyncWebSocketFrameSender(ws_uri=ws_uri + "/video_stream")
-        offscreen_renderer = self._get_renderer(camera_name)
-        camera_id = self._get_camera_id(camera_name)
-
-        while not self.should_stop.is_set():
-            start_t = time.time()
-            offscreen_renderer.update_scene(self.data, camera_id)
-
-            # OPTIMIZATION: Disable expensive rendering effects on the scene
-            offscreen_renderer.scene.flags[mujoco.mjtRndFlag.mjRND_SHADOW] = 0
-            offscreen_renderer.scene.flags[mujoco.mjtRndFlag.mjRND_REFLECTION] = 0
-
-            im = offscreen_renderer.render()
-
-            im = cv2.cvtColor(im, cv2.COLOR_RGB2BGR)
-            streamer.send_frame(im)
-
-            took = time.time() - start_t
-            time.sleep(max(0, self.streaming_timestep - took))
-
     def rendering_loop(self, camera_name: str, port: int) -> None:
         """Offline Rendering loop for the Mujoco simulation.
 
@@ -185,13 +155,6 @@ class MujocoBackend(Backend):
         It updates the joint positions at a rate and publishes the joint positions.
         """
         step = 1
-        if self.websocket_uri:
-            robot_view_streaming_thread = Thread(
-                target=self.streaming_loop,
-                args=(CAMERA_STUDIO_CLOSE, self.websocket_uri),
-                daemon=True,
-            )
-            robot_view_streaming_thread.start()
 
         if not self.headless:
             viewer = mujoco.viewer.launch_passive(
@@ -320,8 +283,6 @@ class MujocoBackend(Backend):
         if not self.headless:
             viewer.close()
             rendering_thread.join()
-        if self.websocket_uri:
-            robot_view_streaming_thread.join()
 
     def get_mj_present_head_pose(self) -> Annotated[npt.NDArray[np.float64], (4, 4)]:
         """Get the current head pose from the Mujoco simulation.
