@@ -3,11 +3,12 @@
 This script connects to a Reachy Mini robot and allows you to pilot its head's
 left-right rotation (yaw) using the horizontal axis of a connected joystick.
 
-The yaw angle is mapped to a full range of +-pi/2 radians (+-90 degrees).
-The value from the right joystick is also printed but is not used for control.
+The yaw angle is mapped to a range of +-58.5 degrees using the left joystick,
+and the body yaw is controlled with the right joystick.
 
 CONTROLS:
 - LEFT JOYSTICK (Left/Right): Control head yaw angle.
+- RIGHT JOYSTICK (Left/Right): Control body yaw angle.
 - CIRCLE / B BUTTON (Button 1): Quit the application safely.
 - CTRL-C: Quit the application.
 
@@ -125,8 +126,6 @@ def main() -> None:
         # The 'with' statement ensures the robot is properly handled on exit
         with ReachyMini(automatic_body_yaw=True) as mini:
             print("Robot connected.")
-            # print("Robot connected. Waking up...")
-            # mini.wake_up()
 
             print("\n" + "=" * 50)
             print("  Reachy Head Yaw Joystick Controller")
@@ -165,8 +164,8 @@ def main() -> None:
 
                 # Print status, overwriting the line
                 print(
-                    f"\rSending Yaw: {target_yaw:6.2f} rad | "
-                    f"Unused Right Joy: {right_joy:6.2f}",
+                    f"\rHead Yaw: {target_yaw:6.2f} rad | "
+                    f"Body Yaw: {target_body_yaw:6.2f} rad",
                     end="",
                 )
                 sys.stdout.flush()
