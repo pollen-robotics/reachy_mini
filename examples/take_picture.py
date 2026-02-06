@@ -3,6 +3,7 @@
 # START doc_example
 
 import argparse
+import sys
 import time
 
 import cv2
@@ -18,7 +19,7 @@ def main(backend: str) -> None:
         while frame is None:
             if time.time() - start_time > 20:
                 print("Timeout: Failed to grab frame within 20 seconds.")
-                exit(1)
+                sys.exit(1)
             print("Failed to grab frame. Retrying...")
             frame = reachy_mini.media.get_frame()
             time.sleep(1)
