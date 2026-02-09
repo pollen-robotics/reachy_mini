@@ -27,13 +27,13 @@ async def update_reachy_mini(
         # Install from GitHub ref
         logger.info(f"Installing from GitHub ref: {git_ref}")
         git_url = f"git+https://github.com/{GITHUB_REPO}.git@{git_ref}"
-        daemon_pkg = f"reachy_mini[wireless-version] @ {git_url}"
+        daemon_pkg = f"reachy_mini[wireless-version, gstreamer] @ {git_url}"
         apps_pkg = f"reachy-mini[gstreamer] @ {git_url}"
         extra_args = ["--force-reinstall"]
     else:
         # Install from PyPI
         logger.info("Installing from PyPI...")
-        daemon_pkg = "reachy_mini[wireless-version]"
+        daemon_pkg = "reachy_mini[wireless-version, gstreamer]"
         apps_pkg = "reachy-mini[gstreamer]"
         extra_args = ["--pre"] if pre_release else []
 
