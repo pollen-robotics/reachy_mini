@@ -15,7 +15,7 @@ from typing import Any, Optional
 import cv2
 import numpy.typing as npt
 
-from reachy_mini import ReachyMini  # type: ignore
+from reachy_mini import ReachyMini
 from reachy_mini.media.camera_constants import CameraResolution
 
 
@@ -25,15 +25,15 @@ def main() -> None:
         description="Acquire calibration images at maximum resolution"
     )
     parser.add_argument(
-        '--headless',
-        action='store_true',
-        help='Run in headless mode (no display, use terminal input). For Raspberry Pi/wireless version.'
+        "--headless",
+        action="store_true",
+        help="Run in headless mode (no display, use terminal input). For Raspberry Pi/wireless version.",
     )
     parser.add_argument(
-        '--save-path',
+        "--save-path",
         type=str,
-        default='./images',
-        help='Directory to save images (default: ./images)'
+        default="./images",
+        help="Directory to save images (default: ./images)",
     )
 
     args = parser.parse_args()
@@ -41,23 +41,30 @@ def main() -> None:
     save_path = args.save_path
     os.makedirs(save_path, exist_ok=True)
 
-    print("="*70)
+    print("=" * 70)
     print("CALIBRATION IMAGE ACQUISITION")
-    print("="*70)
+    print("=" * 70)
     print(f"Save directory: {save_path}")
-    print(f"Mode: {'HEADLESS (terminal input)' if args.headless else 'GUI (press Enter to save)'}")
-    print("="*70 + "\n")
+    print(
+        f"Mode: {'HEADLESS (terminal input)' if args.headless else 'GUI (press Enter to save)'}"
+    )
+    print("=" * 70 + "\n")
 
     # Create window only if not headless
     if not args.headless:
         cv2.namedWindow("Reachy Mini Camera")
 
     with ReachyMini(media_backend="gstreamer") as reachy_mini:
-        if reachy_mini.media.camera is None or reachy_mini.media.camera.camera_specs is None:
+        if (
+            reachy_mini.media.camera is None
+            or reachy_mini.media.camera.camera_specs is None
+        ):
             print("ERROR: Could not access camera")
             return
 
-        available_resolutions = reachy_mini.media.camera.camera_specs.available_resolutions
+        available_resolutions = (
+            reachy_mini.media.camera.camera_specs.available_resolutions
+        )
 
         # Find maximum resolution
         max_resolution: Optional[CameraResolution] = None
@@ -108,9 +115,15 @@ def main() -> None:
             while True:
                 if args.headless:
                     # Headless mode: prompt for input
-                    user_input = input(f"[{i} images saved] Press ENTER to capture, or type 'q' to quit: ").strip().lower()
+                    user_input = (
+                        input(
+                            f"[{i} images saved] Press ENTER to capture, or type 'q' to quit: "
+                        )
+                        .strip()
+                        .lower()
+                    )
 
-                    if user_input == 'q':
+                    if user_input == "q":
                         print("Quitting...")
                         break
 
@@ -145,7 +158,7 @@ def main() -> None:
                         cv2.imwrite(image_save_path, frame)
                         print(f"✓ Saved [{i}]: {image_save_path}")
                         i += 1
-                    elif key == ord('q'):
+                    elif key == ord("q"):
                         print("Quitting...")
                         break
 
@@ -158,9 +171,9 @@ def main() -> None:
             if not args.headless:
                 cv2.destroyAllWindows()
 
-        print(f"\n{'='*70}")
+        print(f"\n{'=' * 70}")
         print(f"✓ Captured {i} images total")
-        print(f"{'='*70}")
+        print(f"{'=' * 70}")
 
 
 if __name__ == "__main__":

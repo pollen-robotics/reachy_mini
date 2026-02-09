@@ -25,7 +25,7 @@ with ReachyMini(media_backend="no_media") as mini:
                 degrees=False,
                 mm=False,
             )
-            mini.set_target(head=head_pose, antennas=(antennas_offset, antennas_offset))
+            mini.set_target(head=head_pose, antennas=[antennas_offset, antennas_offset])
     except KeyboardInterrupt:
         pass
 

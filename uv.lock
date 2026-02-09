@@ -3349,7 +3349,7 @@ requires-dist = [
     { name = "reachy-mini-motor-controller", specifier = ">=1.5.3" },
     { name = "reachy-mini-rust-kinematics", specifier = ">=1.0.3" },
     { name = "requests", specifier = ">=2.28.0" },
-    { name = "rerun-sdk", marker = "extra == 'rerun'", specifier = ">=0.27.2" },
+    { name = "rerun-sdk", marker = "extra == 'rerun'", specifier = "==0.27.2" },
     { name = "rich" },
     { name = "ruff", marker = "extra == 'dev'", specifier = "==0.12.0" },
     { name = "rustypot", specifier = ">=1.4.2" },
@@ -3539,7 +3539,7 @@ wheels = [
 
 [[package]]
 name = "rerun-sdk"
-version = "0.28.2"
+version = "0.27.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "attrs" },
@@ -3549,10 +3549,10 @@ dependencies = [
     { name = "typing-extensions" },
 ]
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/cd/7d/a86b9a2cf182942f15ce92aa2ebb30c55ccd9eb1f7d8ab6eecea5b929495/rerun_sdk-0.28.2-cp310-abi3-macosx_11_0_arm64.whl", hash = "sha256:bbc573a74863f71d1f64dc386af8f7b5d92745828421a8968194ee805b9793f5", size = 108607081, upload-time = "2026-01-08T13:48:21.955Z" },
-    { url = "https://files.pythonhosted.org/packages/92/f5/721f0aae6c071eb6ea7b04917041e81301cd76741d6e18bbc97ffe94cbf1/rerun_sdk-0.28.2-cp310-abi3-manylinux_2_28_aarch64.whl", hash = "sha256:968006d0b7d401910aca5c8f3d913c626e6d878739df4d95817f9523f5a9e356", size = 116446459, upload-time = "2026-01-08T13:48:29.794Z" },
-    { url = "https://files.pythonhosted.org/packages/11/6f/433ed77f07be45be33295df3f749239304eef2007869701541fc57dbb8c0/rerun_sdk-0.28.2-cp310-abi3-manylinux_2_28_x86_64.whl", hash = "sha256:0422373e1b8650472225d5dabdd633393305dc871227cd61ddf3115c2d45c797", size = 124332311, upload-time = "2026-01-08T13:48:36.892Z" },
-    { url = "https://files.pythonhosted.org/packages/e9/71/403e9fafa345b5de7f12584984801b781adac622e902e9c99122f6c27c4c/rerun_sdk-0.28.2-cp310-abi3-win_amd64.whl", hash = "sha256:b1ed6fa51baa7c9608bc9e4d0f11aa332d50a58bb5c2787ed57e1ffaf1011cbe", size = 106147976, upload-time = "2026-01-08T13:48:42.173Z" },
+    { url = "https://files.pythonhosted.org/packages/7d/ef/38ecd7fbb31b846d749299c2b848a30e85b7a6a7d496ea054373abfb3b08/rerun_sdk-0.27.2-cp310-abi3-macosx_11_0_arm64.whl", hash = "sha256:e3e180a97085e7d7e1f1aee20c45f96173c87d723ce155573b96441733ef1560", size = 99965645, upload-time = "2025-11-14T14:49:18.53Z" },
+    { url = "https://files.pythonhosted.org/packages/e7/67/ce06267c5fc5c7bb1cc027410a75cca0c5232afa1d4072ff2abe685cb923/rerun_sdk-0.27.2-cp310-abi3-manylinux_2_28_aarch64.whl", hash = "sha256:224d168b9673bf9237057db6beb62a3a63223d702602c2e57283089ed77acf42", size = 107368188, upload-time = "2025-11-14T14:49:24.538Z" },
+    { url = "https://files.pythonhosted.org/packages/2c/6e/0be74188a53af91572b466e6f672dae476b9058ca71c7d053e753a665087/rerun_sdk-0.27.2-cp310-abi3-manylinux_2_28_x86_64.whl", hash = "sha256:5583f9d67b485e405939ddb1f9da38cc7202b326a15b1110d71dc7d2fdacc28b", size = 114630744, upload-time = "2025-11-14T14:49:30.28Z" },
+    { url = "https://files.pythonhosted.org/packages/d4/8b/9fcb34b9d7bde9183372cc3dbaaca8d2ce49a43015e41dfe35bb62dfbef7/rerun_sdk-0.27.2-cp310-abi3-win_amd64.whl", hash = "sha256:d0437b73a807bb4643d3a7fee163e65e0df0459e6228eb2b087692610612ce99", size = 97879453, upload-time = "2025-11-14T14:49:35.062Z" },
 ]
 
 [[package]]

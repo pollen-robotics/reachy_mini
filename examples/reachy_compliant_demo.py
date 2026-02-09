@@ -6,6 +6,8 @@ You can now gently push the robot and it will follow your movements. And when yo
 This is useful for applications like human-robot interaction, where you want the robot to be compliant and follow the user's movements.
 """
 
+# START doc_example
+
 import time
 
 from reachy_mini import ReachyMini
@@ -26,3 +28,5 @@ with ReachyMini(media_backend="no_media") as mini:
     finally:
         mini.disable_gravity_compensation()
         print("Exiting... Reachy Mini is stiff again.")
+
+# END doc_example

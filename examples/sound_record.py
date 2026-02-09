@@ -1,4 +1,9 @@
-"""Reachy Mini sound recording example."""
+"""Reachy Mini sound recording example.
+
+The output audio will be saved to 'recorded_audio.wav'.
+"""
+
+# START doc_example
 
 import argparse
 import logging
@@ -24,15 +29,21 @@ def main(backend: str) -> None:
         audio_samples = []
         t0 = time.time()
         mini.media.start_recording()
-        while time.time() - t0 < DURATION:
-            sample = mini.media.get_audio_sample()
 
+        NB_SAMPLES = DURATION * mini.media.get_input_audio_samplerate()
+        current_nb_samples = 0
+        # make sure that we get the number of samples we want
+        # but we also set a timeout
+        while current_nb_samples < NB_SAMPLES and time.time() - t0 < DURATION + 2:
+            sample = mini.media.get_audio_sample()
             if sample is not None:
                 audio_samples.append(sample)
-            else:
-                print("No audio data available yet...")
-            if backend == "default":
+                current_nb_samples += sample.shape[0]
+
+            if backend == "default_no_video":
+                # we don't need to poll too fast for sounddevice backend
                 time.sleep(0.2)
+
         mini.media.stop_recording()
 
         # Concatenate all samples and save
@@ -52,10 +63,12 @@ if __name__ == "__main__":
     parser.add_argument(
         "--backend",
         type=str,
-        choices=["default", "gstreamer", "webrtc"],
-        default="default",
+        choices=["default_no_video", "gstreamer_no_video", "webrtc"],
+        default="default_no_video",
         help="Media backend to use.",
     )
 
     args = parser.parse_args()
     main(backend=args.backend)
+
+# END doc_example
