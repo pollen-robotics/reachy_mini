@@ -5,9 +5,11 @@ import time
 import numpy as np
 import pytest
 import soundfile as sf
+from unittest.mock import mock_open,patch
 
 from reachy_mini.media.audio_utils import _process_card_number_output
 from reachy_mini.media.media_manager import MediaBackend, MediaManager
+from reachy_mini.daemon.app.routers.volume import get_linux_card_name
 
 
 @pytest.mark.audio
@@ -156,7 +158,7 @@ def test_record_audio_and_file_exists_gstreamer() -> None:
             audio_samples.append(sample)
 
     media.stop_recording()
-    
+
     assert len(audio_samples) > 0
     audio_data = np.concatenate(audio_samples, axis=0)
     assert audio_data.ndim == 2 and audio_data.shape[1] == 2
@@ -191,3 +193,21 @@ def test_get_respeaker_card_number() -> None:
     alsa_output = "card 3: PCH [HDA Intel PCH], device 0: ALC255 Analog [ALC255 Analog]"
     card_number = _process_card_number_output(alsa_output)
     assert card_number == 0
+
+
+def test_get_linux_card_name_override(monkeypatch):
+      """Test that REACHY_MINI_AUDIO_DEVICE env var overrides auto-detection."""
+      monkeypatch.setenv("REACHY_MINI_AUDIO_DEVICE", "Audio_1")
+      with patch("builtins.open", mock_open(read_data=" 5 [Audio_1        ]: USB-Audio - Reachy Mini Audio")):
+          assert get_linux_card_name() == "Audio_1"
+
+
+def test_get_linux_card_name_invalid_override(monkeypatch):
+      """Test that an invalid override falls back to auto-detection."""
+      monkeypatch.setenv("REACHY_MINI_AUDIO_DEVICE", "NonExistent")
+      with patch("builtins.open", mock_open(read_data=" 5 [Audio_1        ]: USB-Audio - Reachy Mini Audio")):
+          with patch(
+              "reachy_mini.daemon.app.routers.volume.detect_audio_device",
+              return_value="reachy_mini_audio",
+          ):
+              assert get_linux_card_name() == "Audio"

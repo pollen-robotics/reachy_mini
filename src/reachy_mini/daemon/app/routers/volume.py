@@ -8,6 +8,7 @@ This exposes:
 """
 
 import logging
+import os
 import platform
 import subprocess
 from typing import Optional
@@ -92,8 +93,30 @@ def detect_audio_device() -> str:
 
 
 def get_linux_card_name() -> str:
-    """Get the appropriate card name for Linux amixer commands based on detected device."""
+    """Get the appropriate card name for Linux amixer commands based on detected device.
+
+    Can be overridden by setting the REACHY_MINI_AUDIO_DEVICE environment variable,
+    useful when other USB audio devices cause ALSA to rename the card (e.g. Audio -> Audio_1).
+    """
+    default_audio_device_override = os.environ.get("REACHY_MINI_AUDIO_DEVICE")
     device = detect_audio_device()
+    if default_audio_device_override:
+        if default_audio_device_override:
+            # Validate that the card actually exists in ALSA
+            try:
+                with open("/proc/asound/cards") as f:
+                    cards = f.read()
+                if f"[{default_audio_device_override}" in cards:
+                    return default_audio_device_override
+                else:
+                    logger.warning(
+                        f"REACHY_MINI_AUDIO_DEVICE='{default_audio_device_override}' not found in /proc/asound/cards, falling back to auto-detection"
+                    )
+            except FileNotFoundError:
+                logger.warning(
+                    "/proc/asound/cards not found, falling back to auto-detection"
+                )
+        return default_audio_device_override
     return DEVICE_CARD_NAMES.get(device, DEVICE_CARD_NAMES["default"])
 
 
