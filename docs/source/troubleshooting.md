@@ -212,6 +212,7 @@ You do not need to install them.
 
 - With Reachy Mini (Wireless), the daemon is already running on the embedded Raspberry Pi.
 - With Reachy Mini Lite, you can use [the desktop app](./platforms/reachy_mini_lite/get_started.md).
+- If the desktop app doesn't work on your system (e.g., ARM64, unusual distributions), you can [install and use the Python SDK](./SDK/installation.md) directly - it's a fully supported alternative!
 
 </details>
 
