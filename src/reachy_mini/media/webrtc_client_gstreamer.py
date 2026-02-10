@@ -104,7 +104,7 @@ class GstWebRTCClient(CameraBase, AudioBase):
 
         """
         super().__init__(log_level=log_level)
-        Gst.init(None)
+        Gst.init([])
         self._loop = GLib.MainLoop()
         self._thread_bus_calls = Thread(target=lambda: self._loop.run(), daemon=True)
         self._thread_bus_calls.start()

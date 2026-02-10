@@ -21,7 +21,7 @@ class GstConsumer:
         peer_name: str,
     ) -> None:
         """Initialize the consumer with signalling server details and peer name."""
-        Gst.init(None)
+        Gst.init([])
         self._loop = GLib.MainLoop()
         self._thread_bus_calls = Thread(target=lambda: self._loop.run(), daemon=True)
         self._thread_bus_calls.start()

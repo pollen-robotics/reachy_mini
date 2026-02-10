@@ -8,7 +8,7 @@
 > **💡 Tip:** Starting from v1.2.14, you can install a branch directly from **Settings → Reachy Mini Update** in the web dashboard.
 
 > [!TIP]
-> Starting from v1.2.14, you can install a branch directly from _Settings → Reachy Mini Update_ in the web dashboard.
+> Starting from v1.3.0, you can install a branch directly from _Settings → Reachy Mini Update_ in the web dashboard.
 
 ## Prerequisites
 

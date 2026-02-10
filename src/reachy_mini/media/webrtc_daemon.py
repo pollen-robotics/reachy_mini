@@ -94,7 +94,7 @@ class GstWebRTC:
         self._logger = logging.getLogger(__name__)
         self._logger.setLevel(log_level)
 
-        Gst.init(None)
+        Gst.init([])
         self._loop = GLib.MainLoop()
         self._thread_bus_calls = Thread(target=lambda: self._loop.run(), daemon=True)
         self._thread_bus_calls.start()

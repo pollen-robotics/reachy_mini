@@ -1,13 +1,9 @@
-"""Demonstrate how to make Reachy Mini look at a point in an image.
+"""Demonstrate how to take a picture with Reachy Mini."""
 
-When you click on the image, Reachy Mini will look at the point you clicked on.
-It uses OpenCV to capture video from a camera and display it, and Reachy Mini's
-look_at_image method to make the robot look at the specified point.
-
-Note: The daemon must be running before executing this script.
-"""
+# START doc_example
 
 import argparse
+import sys
 import time
 
 import cv2
@@ -23,7 +19,7 @@ def main(backend: str) -> None:
         while frame is None:
             if time.time() - start_time > 20:
                 print("Timeout: Failed to grab frame within 20 seconds.")
-                exit(1)
+                sys.exit(1)
             print("Failed to grab frame. Retrying...")
             frame = reachy_mini.media.get_frame()
             time.sleep(1)
@@ -34,7 +30,7 @@ def main(backend: str) -> None:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="Display Reachy Mini's camera feed and make it look at clicked points."
+        description="Take a picture using Reachy Mini camera."
     )
     parser.add_argument(
         "--backend",
@@ -46,3 +42,5 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     main(backend=args.backend)
+
+# END doc_example

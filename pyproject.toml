@@ -56,7 +56,7 @@ mujoco = ["mujoco==3.3.0"]
 nn_kinematics = ["onnxruntime==1.22.1"]
 placo_kinematics = ["placo==0.9.14; sys_platform != 'win32'"]
 gstreamer = ["PyGObject>=3.42.2,<=3.46.0", "gst-signalling>=1.1.2"]
-rerun = ["rerun-sdk>=0.27.2", "urdf-parser-py==0.0.4"]
+rerun = ["rerun-sdk==0.27.2", "urdf-parser-py==0.0.4"]
 wireless-version = [
     "semver>=3,<4",
     "nmcli>=1.5; sys_platform == 'linux'",
@@ -90,7 +90,7 @@ where = ["src"]
 
 
 [tool.setuptools.package-data]
-reachy_mini = ["**/*"] # Inclut tous les fichiers non .py
+reachy_mini = ["**/*"] # includes all non .py files
 
 [tool.ruff]
 exclude = [
@@ -107,7 +107,7 @@ lint.ignore = [
 ]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["tests/unit_tests"]
 markers = [
     "audio: mark test as requiring audio hardware",
     "audio_gstreamer: mark test as requiring GStreamer for audio",
@@ -119,6 +119,6 @@ markers = [
 
 [tool.mypy]
 python_version = "3.10"
-files = ["src/"]
+files = ["src/", "examples/"]
 ignore_missing_imports = true
 strict = true

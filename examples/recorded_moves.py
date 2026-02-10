@@ -2,8 +2,12 @@
 
 Run :
 
-python3 recorded_moves_example.py -l [dance, emotions]
+```python
+python recorded_moves_example.py -l [dance, emotions]
+```
 """
+
+# START doc_example
 
 import argparse
 
@@ -55,3 +59,5 @@ if __name__ == "__main__":
     args = parser.parse_args()
     dataset_path = args.dataset or LIBRARY_DATASETS[args.library]
     main(dataset_path)
+
+# END doc_example

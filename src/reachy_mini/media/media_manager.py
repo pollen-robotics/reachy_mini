@@ -318,7 +318,7 @@ class MediaManager:
             return
         self.audio.start_recording()
 
-    def get_audio_sample(self) -> Optional[bytes | npt.NDArray[np.float32]]:
+    def get_audio_sample(self) -> Optional[npt.NDArray[np.float32]]:
         """Get an audio sample from the audio device.
 
         Returns:

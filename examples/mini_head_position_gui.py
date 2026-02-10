@@ -1,5 +1,7 @@
 """Reachy Mini Head Position GUI Example."""
 
+# START doc_example
+
 import time
 import tkinter as tk
 
@@ -10,7 +12,7 @@ from reachy_mini import ReachyMini
 from reachy_mini.utils import create_head_pose
 
 
-def main():
+def main() -> None:
     """Run a GUI to set the head position and orientation of Reachy Mini."""
     with ReachyMini(media_backend="no_media") as mini:
         t0 = time.time()
@@ -85,33 +87,38 @@ def main():
 
         mini.goto_target(create_head_pose(), antennas=[0.0, 0.0], duration=1.0)
 
-        # Run the GUI in a non-blocking way
-        root.update()
+        def update_robot() -> None:
+            """Update robot position based on GUI values."""
+            t = time.time() - t0
+            target = np.deg2rad(30) * np.sin(2 * np.pi * 0.5 * t)
+
+            head = np.eye(4)
+            head[:3, 3] = [0, 0, 0.0]
+
+            # Read values from the GUI
+            roll = np.deg2rad(roll_var.get())
+            pitch = np.deg2rad(pitch_var.get())
+            yaw = np.deg2rad(yaw_var.get())
+            head[:3, :3] = R.from_euler(
+                "xyz", [roll, pitch, yaw], degrees=False
+            ).as_matrix()
+            head[:3, 3] = [x_var.get(), y_var.get(), z_var.get()]
+
+            mini.set_target(
+                head=head,
+                body_yaw=np.deg2rad(body_yaw_var.get()),
+                antennas=np.array([target, -target]),
+            )
+
+            # Schedule next update (20ms = 50Hz)
+            root.after(20, update_robot)
+
+        # Start the update loop
+        root.after(20, update_robot)
 
         try:
-            while True:
-                t = time.time() - t0
-                target = np.deg2rad(30) * np.sin(2 * np.pi * 0.5 * t)
-
-                head = np.eye(4)
-                head[:3, 3] = [0, 0, 0.0]
-
-                # Read values from the GUI
-                roll = np.deg2rad(roll_var.get())
-                pitch = np.deg2rad(pitch_var.get())
-                yaw = np.deg2rad(yaw_var.get())
-                head[:3, :3] = R.from_euler(
-                    "xyz", [roll, pitch, yaw], degrees=False
-                ).as_matrix()
-                head[:3, 3] = [x_var.get(), y_var.get(), z_var.get()]
-
-                root.update()
-
-                mini.set_target(
-                    head=head,
-                    body_yaw=np.deg2rad(body_yaw_var.get()),
-                    antennas=np.array([target, -target]),
-                )
+            # Run the Tkinter main loop
+            root.mainloop()
         except KeyboardInterrupt:
             pass
         finally:
@@ -120,3 +127,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+# END doc_example

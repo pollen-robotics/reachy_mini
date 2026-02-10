@@ -6,7 +6,10 @@ gyroscope, quaternion orientation, and temperature) from a wireless Reachy Mini.
 Note: IMU is only available on the wireless version of Reachy Mini.
 """
 
+# START doc_example
+
 import time
+from typing import cast
 
 from reachy_mini import ReachyMini
 
@@ -24,10 +27,10 @@ with ReachyMini(media_backend="no_media") as mini:
                 continue
 
             # Extract data
-            accel_x, accel_y, accel_z = imu_data["accelerometer"]
-            gyro_x, gyro_y, gyro_z = imu_data["gyroscope"]
-            quat_w, quat_x, quat_y, quat_z = imu_data["quaternion"]
-            temperature = imu_data["temperature"]
+            accel_x, accel_y, accel_z = cast(list[float], imu_data["accelerometer"])
+            gyro_x, gyro_y, gyro_z = cast(list[float], imu_data["gyroscope"])
+            quat_w, quat_x, quat_y, quat_z = cast(list[float], imu_data["quaternion"])
+            temperature = cast(float, imu_data["temperature"])
 
             # Display data
             print(
@@ -46,3 +49,5 @@ with ReachyMini(media_backend="no_media") as mini:
 
     except KeyboardInterrupt:
         print("\nStopping IMU monitoring")
+
+# END doc_example
