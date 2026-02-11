@@ -92,19 +92,25 @@ class AppManager:
                 exe = proc.info.get("exe") or ""
                 cmdline = proc.info.get("cmdline") or []
 
-                # Must be under the venv parent directory
-                if not exe.startswith(venv_parent + os.sep):
+                # Use cmdline[0] as primary path — psutil.exe() resolves symlinks
+                # which loses the original venv path information
+                cmd_exe = cmdline[0] if cmdline else ""
+
+                # Must be under the venv parent directory (check both exe and cmdline[0])
+                prefix = venv_parent + os.sep
+                if not cmd_exe.startswith(prefix) and not exe.startswith(prefix):
                     continue
 
                 # Must match *_venv/bin/python pattern (but NOT .venv — that's the daemon itself)
-                exe_parts = exe.split(os.sep)
+                check_path = cmd_exe if cmd_exe.startswith(prefix) else exe
+                path_parts = check_path.split(os.sep)
                 is_app_venv_python = False
-                for i, part in enumerate(exe_parts):
+                for i, part in enumerate(path_parts):
                     if (
                         part.endswith("_venv")
                         and part != ".venv"
-                        and i + 1 < len(exe_parts)
-                        and exe_parts[i + 1] == "bin"
+                        and i + 1 < len(path_parts)
+                        and path_parts[i + 1] == "bin"
                     ):
                         is_app_venv_python = True
                         break
