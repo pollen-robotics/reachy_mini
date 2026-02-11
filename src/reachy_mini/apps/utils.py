@@ -3,6 +3,7 @@
 import asyncio
 import logging
 import os
+from pathlib import Path
 
 
 async def running_command(
@@ -25,6 +26,7 @@ async def running_command(
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
         env={**os.environ, **env} if env else None,
+        cwd=Path.home(),
     )
 
     assert proc.stdout is not None  # for mypy
