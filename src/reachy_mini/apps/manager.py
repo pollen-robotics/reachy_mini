@@ -64,6 +64,86 @@ class AppManager:
         self.desktop_app_daemon = desktop_app_daemon
         self.running_on_wireless = wireless_version
         self.daemon = daemon
+        self._cleanup_orphaned_apps()
+
+    def _cleanup_orphaned_apps(self) -> None:
+        """Kill orphaned app subprocesses left by a previous daemon session.
+
+        When the daemon restarts, app subprocesses from the previous session
+        may still be running. This method detects and terminates them to prevent
+        conflicts (e.g., two processes sending commands to the robot simultaneously).
+        """
+        try:
+            venv_parent = str(local_common_venv._get_venv_parent_dir())
+        except Exception:
+            return
+
+        daemon_pid = os.getpid()
+        try:
+            daemon_children = {
+                c.pid for c in psutil.Process(daemon_pid).children(recursive=True)
+            }
+        except psutil.NoSuchProcess:
+            daemon_children = set()
+
+        orphans: list[psutil.Process] = []
+        for proc in psutil.process_iter(["pid", "exe", "cmdline"]):
+            try:
+                exe = proc.info.get("exe") or ""
+                cmdline = proc.info.get("cmdline") or []
+
+                # Must be under the venv parent directory
+                if not exe.startswith(venv_parent + os.sep):
+                    continue
+
+                # Must match *_venv/bin/python pattern (but NOT .venv — that's the daemon itself)
+                exe_parts = exe.split(os.sep)
+                is_app_venv_python = False
+                for i, part in enumerate(exe_parts):
+                    if (
+                        part.endswith("_venv")
+                        and part != ".venv"
+                        and i + 1 < len(exe_parts)
+                        and exe_parts[i + 1] == "bin"
+                    ):
+                        is_app_venv_python = True
+                        break
+                if not is_app_venv_python:
+                    continue
+
+                # Must be a module execution (python -m ...)
+                if "-m" not in cmdline:
+                    continue
+
+                # Must NOT be the current daemon or its children
+                pid = proc.info["pid"]
+                if pid == daemon_pid or pid in daemon_children:
+                    continue
+
+                orphans.append(proc)
+            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                continue
+
+        for proc in orphans:
+            pid = proc.pid
+            try:
+                self.logger.info(f"Terminating orphaned app process (PID {pid})")
+                proc.terminate()
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+
+        # Wait for graceful shutdown, then force-kill survivors
+        if orphans:
+            _, alive = psutil.wait_procs(orphans, timeout=3)
+            for proc in alive:
+                try:
+                    self.logger.warning(
+                        f"Force-killing orphaned app process (PID {proc.pid})"
+                    )
+                    self._kill_process_tree(proc.pid)
+                    proc.kill()
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    continue
 
     async def close(self) -> None:
         """Clean up the AppManager, stopping any running app."""
