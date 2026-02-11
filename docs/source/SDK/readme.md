@@ -31,7 +31,11 @@ We provide a collection of ready-to-run scripts to help you understand how to us
 
 ## 🤖 AI-Assisted Development
 
-Using an AI coding assistant (Claude, GPT, Copilot, etc.)? Check out [**agents.md**](../../agents.md) in the repo root - it helps AI agents understand the SDK and guide you through app development.
+Using an AI coding agent (Claude Code, Codex, Copilot, etc.)? You can start building apps right away. Paste this prompt to your agent:
+
+> *I'd like to create a Reachy Mini app. Start by reading https://github.com/pollen-robotics/reachy_mini/blob/develop/agents.md*
+
+This [**agents.md**](../../agents.md) guide gives AI agents everything they need: SDK patterns, best practices, example apps, and step-by-step skills.
 
 ## ❓ Troubleshooting
 
