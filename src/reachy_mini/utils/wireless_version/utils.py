@@ -81,7 +81,7 @@ def build_install_command(
         step3 = shlex.join(base + [f"reachy-mini[{extras}]", "--upgrade", "--upgrade-strategy", "only-if-needed"])
         cmd = f"{step1} && {step2} || {step3}"
         print(f"Git ref install: {cmd}")
-        extra_env: dict[str, str] = {}
+        extra_env: dict[str, str] = {"UV_GIT_LFS": "1"}
         return cmd, extra_env
 
     print(f"Installing from PyPI: {version if version else 'latest pre-release' if pre_release else 'latest stable'}")
