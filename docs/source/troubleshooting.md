@@ -338,14 +338,11 @@ If you command a pose outside these limits, the robot will automatically clamp t
 
 1. You can refer scanning the motors using the [scan_motors.py script](https://github.com/pollen-robotics/reachy_mini/tree/main/src/reachy_mini/tools/scan_motors.py).
 
-- If your robot is Lite, you can run the script directly on your computer. Go to the "tools" folder, where the script is located, and run the same command as below but without the scp and ssh part.
-- If your robot is Wireless, you need to copy the scanning script on the raspberry. Go to the "tools" folder, where the script is located,and run:
+- If your robot is Lite, you can run the script directly on your computer:
 ```bash
-sudo scp scan_motors.py pollen@reachy-minilocal:~/
-# password: ---your sudo password---
-# RPI password: root
+python -m reachy_mini.tools.scan_motors
 ```
-- Then ssh into the robot:
+- If your robot is Wireless, ssh into the robot:
 ```bash
 ssh pollen@reachy-mini.local
 ```
@@ -353,9 +350,9 @@ ssh pollen@reachy-mini.local
 ```bash
 source /venvs/mini_daemon/bin/activate
 ```
-- And run the script: (Motors must be poweredonfor this!)
+- And run the script (motors must be powered on for this!):
 ```bash
-python scan_motors.py
+python -m reachy_mini.tools.scan_motors --wireless
 ```
 - It should print the list of detected motors. You should have all motors on baudrate 1000000, with the following IDs: 10,11, 12, 13, 14, 15,17, 18. If some are missing, check the cables again. If there is a motor with a different ID or baudrate, please contact support.
 
