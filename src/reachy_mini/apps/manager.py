@@ -101,7 +101,10 @@ class AppManager:
                 if not cmd_exe.startswith(prefix) and not exe.startswith(prefix):
                     continue
 
-                # Must match *_venv/bin/python pattern (but NOT .venv — that's the daemon itself)
+                # Must match *_venv/{bin,Scripts}/python pattern
+                # (but NOT .venv — that's the daemon itself)
+                # Linux/macOS: *_venv/bin/python
+                # Windows:     *_venv/Scripts/python.exe
                 check_path = cmd_exe if cmd_exe.startswith(prefix) else exe
                 path_parts = check_path.split(os.sep)
                 is_app_venv_python = False
@@ -110,7 +113,7 @@ class AppManager:
                         part.endswith("_venv")
                         and part != ".venv"
                         and i + 1 < len(path_parts)
-                        and path_parts[i + 1] == "bin"
+                        and path_parts[i + 1] in ("bin", "Scripts")
                     ):
                         is_app_venv_python = True
                         break
