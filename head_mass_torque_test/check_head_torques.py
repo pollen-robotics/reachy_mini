@@ -11,9 +11,8 @@ import numpy as np
 import mujoco
 from pathlib import Path
 import matplotlib.pyplot as plt
-import xml.etree.ElementTree as ET
 
-sys.path.insert(0, str(Path(__file__).parent / "src"))
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from reachy_mini.daemon.backend.mujoco.backend import MujocoBackend
 from reachy_mini.utils import create_head_pose
@@ -22,71 +21,31 @@ from reachy_mini.utils import create_head_pose
 # CONFIGURATION
 # ============================================================================
 
-# Test poses - pitch, roll, and translations
+# Test poses - matching real robot test poses (20° angles)
 TEST_POSES = {
     "neutral": {
         "name": "Neutral (0°, 0°)",
         "pose": create_head_pose(roll=0, pitch=0, yaw=0, degrees=True),
     },
-    "pitch_up_30": {
-        "name": "Pitch up 30° (head looking up)",
-        "pose": create_head_pose(roll=0, pitch=-30, yaw=0, degrees=True),
+    "pitch_up_20": {
+        "name": "Pitch up 20°",
+        "pose": create_head_pose(roll=0, pitch=-20, yaw=0, degrees=True),
     },
-    "pitch_down_30": {
-        "name": "Pitch down 30° (head looking down)",
-        "pose": create_head_pose(roll=0, pitch=30, yaw=0, degrees=True),
+    "pitch_down_20": {
+        "name": "Pitch down 20°",
+        "pose": create_head_pose(roll=0, pitch=20, yaw=0, degrees=True),
     },
-    "roll_right_30": {
-        "name": "Roll right 30°",
-        "pose": create_head_pose(roll=30, pitch=0, yaw=0, degrees=True),
+    "roll_right_20": {
+        "name": "Roll right 20°",
+        "pose": create_head_pose(roll=20, pitch=0, yaw=0, degrees=True),
     },
-    "roll_left_30": {
-        "name": "Roll left 30°",
-        "pose": create_head_pose(roll=-30, pitch=0, yaw=0, degrees=True),
-    },
-    "pitch_up_15": {
-        "name": "Pitch up 15°",
-        "pose": create_head_pose(roll=0, pitch=-15, yaw=0, degrees=True),
-    },
-    "pitch_down_15": {
-        "name": "Pitch down 15°",
-        "pose": create_head_pose(roll=0, pitch=15, yaw=0, degrees=True),
-    },
-    "roll_right_15": {
-        "name": "Roll right 15°",
-        "pose": create_head_pose(roll=15, pitch=0, yaw=0, degrees=True),
-    },
-    "roll_left_15": {
-        "name": "Roll left 15°",
-        "pose": create_head_pose(roll=-15, pitch=0, yaw=0, degrees=True),
-    },
-    "translate_up_2cm": {
-        "name": "Translate up 2cm",
-        "pose": create_head_pose(
-            x=0, y=0, z=0.02, roll=0, pitch=0, yaw=0, degrees=True
-        ),
-    },
-    "translate_down_1cm": {
-        "name": "Translate down 1cm",
-        "pose": create_head_pose(
-            x=0, y=0, z=-0.01, roll=0, pitch=0, yaw=0, degrees=True
-        ),
-    },
-    "translate_forward_1cm": {
-        "name": "Translate forward 1cm",
-        "pose": create_head_pose(
-            x=0.01, y=0, z=0, roll=0, pitch=0, yaw=0, degrees=True
-        ),
-    },
-    "translate_side_1cm": {
-        "name": "Translate side 1cm",
-        "pose": create_head_pose(
-            x=0, y=0.01, z=0, roll=0, pitch=0, yaw=0, degrees=True
-        ),
+    "roll_left_20": {
+        "name": "Roll left 20°",
+        "pose": create_head_pose(roll=-20, pitch=0, yaw=0, degrees=True),
     },
 }
 
-SCENE = "empty"
+SCENE = "empty_payload"
 MAX_STEPS = 5000
 CONVERGENCE_POS_TOL = 1e-6
 CONVERGENCE_VEL_TOL = 1e-5
@@ -99,50 +58,31 @@ SAFE_LIMIT_NM = 0.45  # 75% of stall torque
 MASS_INCREMENT_KG = 0.05  # 50g increments
 MAX_MASS_KG = 2.0  # Maximum to test
 
-# XML path (relative to repo root)
-SCRIPT_DIR = Path(__file__).parent
-REPO_ROOT = SCRIPT_DIR.parent
-XML_PATH = REPO_ROOT / "src/reachy_mini/descriptions/reachy_mini/mjcf/reachy_mini.xml"
-
 # ============================================================================
 # MASS MODIFICATION
 # ============================================================================
 
 
-def modify_head_mass_in_model(model, new_mass_kg):
+def modify_payload_mass(model, mass_kg):
     """
-    Modify the xl_330 body mass directly in the MuJoCo model.
+    Modify the fake_payload_head mass in the MuJoCo model.
 
     Args:
         model: MuJoCo model object
-        new_mass_kg: New mass value in kg
+        mass_kg: New payload mass value in kg
 
     Returns:
-        original_mass_kg: The original mass value
+        original_mass_kg: The original payload mass value
     """
-    body_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "xl_330")
+    body_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "fake_payload_head")
 
     # Get original mass
     original_mass = model.body_mass[body_id]
 
-    # Set new mass (without changing COM)
-    model.body_mass[body_id] = new_mass_kg
+    # Set new mass
+    model.body_mass[body_id] = mass_kg
 
     return original_mass
-
-
-def get_original_head_mass():
-    """Get the original head mass from the XML file."""
-    tree = ET.parse(XML_PATH)
-    root = tree.getroot()
-
-    for body in root.iter("body"):
-        if body.get("name") == "xl_330":
-            inertial = body.find("inertial")
-            if inertial is not None:
-                return float(inertial.get("mass"))
-
-    raise ValueError("Could not find xl_330 mass in XML")
 
 
 # ============================================================================
@@ -423,8 +363,8 @@ def test_pose(backend, kinematics, pose_dict, pose_key, head_mass_g, output_dir=
         backend.data.ctrl[:7] = joint_positions
         mujoco.mj_step(backend.model, backend.data)
 
-    # Re-apply head mass modification after reset
-    modify_head_mass_in_model(backend.model, head_mass_g / 1000.0)
+    # Re-apply payload mass modification after reset
+    modify_payload_mass(backend.model, head_mass_g / 1000.0)
 
     # Step until convergence
     prev_qpos = backend.data.qpos[backend.joint_qpos_addr[:7]].copy()
@@ -520,13 +460,9 @@ def test_mass(mass_kg, output_dir):
         use_audio=False,
     )
 
-    # Modify head mass in the model
-    original_mass = modify_head_mass_in_model(backend.model, mass_kg)
-
-    if abs(mass_kg - original_mass) < 0.001:
-        print(f"Using original head mass: {original_mass:.4f} kg")
-    else:
-        print(f"Modified head mass from {original_mass:.4f} kg to {mass_kg:.4f} kg")
+    # Modify payload mass in the model
+    original_mass = modify_payload_mass(backend.model, mass_kg)
+    print(f"Set payload mass: {mass_kg:.3f} kg (original: {original_mass:.3f} kg)")
 
     kinematics = backend.head_kinematics
 
@@ -589,15 +525,10 @@ def main():
     output_dir.mkdir(exist_ok=True)
     print(f"Output directory: {output_dir}\n")
 
-    # Get original mass from XML
-    original_mass_kg = get_original_head_mass()
-    print(
-        f"Original head mass from XML: {original_mass_kg:.4f} kg ({int(original_mass_kg * 1000)}g)\n"
-    )
-
-    # Test incrementally
+    # Test incrementally starting from 0g payload
+    print("Testing with incrementing payload masses...\n")
     all_results = []
-    current_mass = original_mass_kg
+    current_mass = 0.0  # Start from 0g payload
     limit_reached = False
 
     while current_mass <= MAX_MASS_KG and not limit_reached:
