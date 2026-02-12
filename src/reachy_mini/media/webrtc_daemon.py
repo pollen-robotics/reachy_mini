@@ -307,6 +307,8 @@ class GstWebRTC:
             self._pipeline_receiver.remove(self._receiver_webrtcsrc)
             self._receiver_webrtcsrc = None
 
+        # known bug: the elements are not properly removed from the pipeline,
+        # and we get a warning. This might be a GStreamer bug.
         for elem in self._receiver_audio_elements:
             elem.set_state(Gst.State.NULL)
             self._pipeline_receiver.remove(elem)

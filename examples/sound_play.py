@@ -9,6 +9,7 @@ Two modes:
 
 import argparse
 import logging
+import os
 import time
 
 import numpy as np
@@ -18,8 +19,10 @@ from reachy_mini import ReachyMini
 
 def play_wav(mini: "ReachyMini", wav_path: str) -> None:
     """Play a wav file using the media play_sound API."""
+    wav_path = os.path.abspath(wav_path)
     print(f"Playing {wav_path}...")
     mini.media.play_sound(wav_path)
+    time.sleep(2)  # wait a bit for the sound to finish
     print("Playback finished.")
 
 
@@ -38,7 +41,7 @@ def play_live_tone(mini: "ReachyMini", tone_hz: float) -> None:
             mono = 0.5 * np.sin(2.0 * np.pi * tone_hz * t + phase).astype(np.float32)
             phase += 2.0 * np.pi * tone_hz * samples_per_chunk / sample_rate
             mini.media.push_audio_sample(mono)
-            time.sleep(chunk_duration)
+            time.sleep(0.01)
     except KeyboardInterrupt:
         print("\nStopping tone.")
     finally:
