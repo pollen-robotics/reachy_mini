@@ -30,7 +30,7 @@ except ImportError:
                 "NNKinematics could not be imported. Make sure you run pip install reachy_mini[nn_kinematics]."
             )
 
-    NNKinematics = MockupNNKinematics  # type: ignore[assignment, misc]
+    NNKinematics = MockupNNKinematics  # type: ignore[misc,assignment]
 
 try:
     from reachy_mini.kinematics.placo_kinematics import PlacoKinematics  # noqa: F401
@@ -57,7 +57,7 @@ except ImportError:
                 "PlacoKinematics could not be imported. Make sure you run pip install reachy_mini[placo_kinematics]."
             )
 
-    PlacoKinematics = MockupPlacoKinematics  # type: ignore[assignment, misc]
+    PlacoKinematics = MockupPlacoKinematics  # type: ignore[misc,assignment]
 
 
 from reachy_mini.kinematics.analytical_kinematics import (  # noqa: F401
