@@ -2,21 +2,28 @@
 
 import asyncio
 import logging
+import os
 from typing import Callable
 
 
-async def call_logger_wrapper(command: list[str], logger: logging.Logger) -> None:
+async def call_logger_wrapper(
+    command: list[str],
+    logger: logging.Logger,
+    env: dict[str, str] | None = None,
+) -> None:
     """Run a command asynchronously, streaming stdout and stderr to logger in real time.
 
     Args:
         command: list or tuple of command arguments (not a string)
         logger: logger object with .info and .error methods
+        env: Optional environment variables dict. If None, inherits current environment.
 
     """
     process = await asyncio.create_subprocess_exec(
         *command,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
+        env={**os.environ, **env} if env else None,
     )
 
     async def stream_output(

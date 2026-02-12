@@ -2,14 +2,29 @@
 
 import asyncio
 import logging
+import os
 
 
-async def running_command(command: list[str], logger: logging.Logger) -> int:
-    """Run a shell command and stream its output to the provided logger."""
+async def running_command(
+    command: list[str],
+    logger: logging.Logger,
+    env: dict[str, str] | None = None,
+) -> int:
+    """Run a shell command and stream its output to the provided logger.
+
+    Args:
+        command: The command to run as a list of strings.
+        logger: Logger instance for output streaming.
+        env: Optional environment variables dict. If None, inherits current environment.
+
+    """
     logger.info(f"Running command: {' '.join(command)}")
 
     proc = await asyncio.create_subprocess_exec(
-        *command, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+        *command,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+        env={**os.environ, **env} if env else None,
     )
 
     assert proc.stdout is not None  # for mypy
