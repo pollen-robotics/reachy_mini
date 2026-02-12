@@ -22,7 +22,7 @@ jobs:
           version: "0.12.0"
 
   mypy:
-    runs-on: pollenrobotics/reachymini_documentation
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Install uv
