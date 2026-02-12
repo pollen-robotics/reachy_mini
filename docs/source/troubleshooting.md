@@ -2,7 +2,7 @@
 
 Welcome to the Reachy Mini support page. Click on the questions below to reveal the answers.
 
-## 🛠️ Troubleshooting - Batch December 2025
+## 🛠️ Troubleshooting - Frequent issues
 
 **Essential troubleshooting - Please read this first, it solves all well-known issues!**
 
@@ -164,6 +164,8 @@ There is a switch on the board in the head that needs to be in a given position.
 Please check that the switch is on the "debug" and not on "download" position. See the picture below:
 
 ![switch_position](https://github.com/pollen-robotics/reachy_mini/raw/develop/docs/assets/wireless_switch.png)
+
+If this switch is in the right position and you still can't see the AP, you may need to re-flash the Raspberry Pi's iso, following the [reflash the RPI Iso tutorial](/docs/source/platforms/reachy_mini/reflash_the_rpi_ISO.md).
 
 </details>
 
@@ -422,8 +424,8 @@ However, since it can be confusing, we will update those motions to avoid this c
 <details>
 <summary><strong>Can I modify the appearance (Skins/CAD)?</strong></summary>
 
-* **CAD:** Not currently public.
-* **Skins:** Yes, the community has created custom builds (e.g., Star Wars droids).
+* **CAD:** The full STEP files havenot been released yet, but we plan to release them in the future. In the meantime, you can find some STL files in the [assets folder](/src/reachy_mini/descriptions/reachy_mini/mjcf/assets) of the repository.
+* **Skins:** Yes, the community has created custom builds. Some "skin" STEP files have been shared on discord, on the channel ["Pimp my Reachy Mini"](https://discord.com/channels/519098054377340948/1453340883775651861).
 
 </details>
 
