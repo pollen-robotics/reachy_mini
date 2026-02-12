@@ -6,7 +6,7 @@ Supports two modes: audiotestsrc (GStreamer built-in) or appsrc (manual push).
 
 import argparse
 import time
-from threading import Event, Thread
+from threading import Thread
 
 import gi
 import numpy as np
@@ -35,7 +35,6 @@ class GstSender:
         self._thread_bus_calls.start()
 
         self._use_appsrc = use_appsrc
-        self._consumer_ready = Event()
         self._appsrc_pts = 0
 
         self.pipeline = Gst.Pipeline.new("webRTC-sender")
@@ -48,8 +47,6 @@ class GstSender:
         meta_structure = Gst.Structure.new_empty("meta")
         meta_structure.set_value("name", "reachymini-client")
         webrtcsink.set_property("meta", meta_structure)
-
-        webrtcsink.connect("consumer-added", self._on_consumer_added)
 
         signaller = webrtcsink.get_property("signaller")
         signaller.set_property("uri", f"ws://{signalling_host}:{signalling_port}")
@@ -87,13 +84,6 @@ class GstSender:
 
             audiotestsrc.link(webrtcsink)
 
-    def _on_consumer_added(
-        self, _webrtcsink: Gst.Bin, peer_id: str, _webrtcbin: Gst.Element
-    ) -> None:
-        """Handle consumer connection."""
-        print(f"Consumer added: {peer_id}")
-        self._consumer_ready.set()
-
     def __del__(self) -> None:
         """Destructor to clean up GStreamer resources."""
         self._loop.quit()
@@ -110,12 +100,11 @@ class GstSender:
             print("Error starting pipeline.")
             exit(-1)
         mode = "appsrc" if self._use_appsrc else "audiotestsrc"
-        print(f"Pipeline playing ({mode}), waiting for consumer ...")
+        print(f"Pipeline playing ({mode})")
 
     def stop(self) -> None:
         """Stop the GStreamer pipeline."""
         print("stopping")
-        self._consumer_ready.clear()
         self._appsrc_pts = 0
         self.pipeline.send_event(Gst.Event.new_eos())
         self.pipeline.set_state(Gst.State.NULL)
