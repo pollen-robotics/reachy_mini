@@ -3,9 +3,12 @@
 import argparse
 import json
 import logging
-from typing import Dict
+from threading import Thread
+from typing import Callable, Dict, Optional
 
-from websockets.sync.client import connect
+from websockets.sync.client import ClientConnection, connect
+
+logger = logging.getLogger(__name__)
 
 
 def get_producer_list(host: str, port: int) -> Dict[str, Dict[str, str]]:
@@ -51,6 +54,152 @@ def find_producer_peer_id_by_name(host: str, port: int, name: str) -> str:
             return producer_id
 
     raise KeyError(f"Producer {name} not found.")
+
+
+class SignallingListener:
+    """WebSocket listener that monitors peer events on the signalling server.
+
+    Connects as a "listener" role and dispatches callbacks when producers
+    appear or disappear based on ``peerStatusChanged`` messages.
+
+    Args:
+        host: Signalling server hostname.
+        port: Signalling server port.
+        on_producer_added: Called with (peer_id, meta_dict) when a producer appears.
+        on_producer_removed: Called with (peer_id) when a producer disappears.
+
+    """
+
+    def __init__(  # noqa: D107
+        self,
+        host: str = "127.0.0.1",
+        port: int = 8443,
+        on_producer_added: Optional[Callable[[str, Dict[str, str]], None]] = None,
+        on_producer_removed: Optional[Callable[[str], None]] = None,
+    ) -> None:
+        self._uri = f"ws://{host}:{port}"
+        self._on_producer_added = on_producer_added
+        self._on_producer_removed = on_producer_removed
+        self._ws: Optional[ClientConnection] = None
+        self._thread: Optional[Thread] = None
+        self._running = False
+        # track known producers: peer_id -> meta dict
+        self._producers: Dict[str, Dict[str, str]] = {}
+
+    def start(self) -> None:
+        """Connect and start listening in a background thread."""
+        if self._running:
+            return
+        self._running = True
+        self._thread = Thread(target=self._run, daemon=True)
+        self._thread.start()
+
+    def stop(self) -> None:
+        """Disconnect and stop the listener thread."""
+        self._running = False
+        if self._ws is not None:
+            try:
+                self._ws.close()
+            except Exception:
+                pass
+        if self._thread is not None:
+            self._thread.join(timeout=5)
+            self._thread = None
+
+    def _run(self) -> None:
+        """Connect, register as listener, and process messages."""
+        try:
+            self._ws = connect(self._uri)
+        except Exception as e:
+            logger.error(f"SignallingListener: failed to connect to {self._uri}: {e}")
+            self._running = False
+            return
+
+        try:
+            # Read welcome message
+            welcome_raw = self._ws.recv()
+            welcome = json.loads(welcome_raw)
+            my_peer_id = welcome.get("peerId", "")
+            logger.debug(f"SignallingListener: connected as {my_peer_id}")
+
+            # Register as listener to receive peerStatusChanged events
+            self._ws.send(
+                json.dumps(
+                    {
+                        "type": "setPeerStatus",
+                        "roles": ["listener"],
+                        "meta": {"name": "signalling-listener"},
+                    }
+                )
+            )
+
+            # Get the initial producer list
+            self._ws.send(json.dumps({"type": "list"}))
+
+            while self._running:
+                try:
+                    raw = self._ws.recv()
+                except Exception:
+                    if self._running:
+                        logger.warning("SignallingListener: WebSocket connection lost")
+                    break
+
+                msg = json.loads(raw)
+                msg_type = msg.get("type", "")
+
+                if msg_type == "list":
+                    self._handle_list(msg)
+                elif msg_type == "peerStatusChanged":
+                    self._handle_peer_status_changed(msg)
+
+        except Exception as e:
+            if self._running:
+                logger.error(f"SignallingListener: error in listener loop: {e}")
+        finally:
+            self._running = False
+            if self._ws is not None:
+                try:
+                    self._ws.close()
+                except Exception:
+                    pass
+                self._ws = None
+
+    def _handle_list(self, msg: dict) -> None:
+        """Process initial producer list."""
+        for p in msg.get("producers", []):
+            peer_id = p["id"]
+            meta = p.get("meta", {})
+            if peer_id not in self._producers:
+                self._producers[peer_id] = meta
+                logger.info(
+                    f"SignallingListener: producer present: {peer_id} meta={meta}"
+                )
+                if self._on_producer_added:
+                    self._on_producer_added(peer_id, meta)
+
+    def _handle_peer_status_changed(self, msg: dict) -> None:
+        """Process peerStatusChanged: detect producer add / remove."""
+        peer_id = msg.get("peerId", "")
+        roles = msg.get("roles", [])
+        meta = msg.get("meta", {})
+
+        is_producer = "producer" in roles
+
+        if is_producer and peer_id not in self._producers:
+            # New producer
+            self._producers[peer_id] = meta
+            logger.info(f"SignallingListener: producer added: {peer_id} meta={meta}")
+            if self._on_producer_added:
+                self._on_producer_added(peer_id, meta)
+
+        elif not is_producer and peer_id in self._producers:
+            # Producer removed (roles became empty or no longer "producer")
+            old_meta = self._producers.pop(peer_id)
+            logger.info(
+                f"SignallingListener: producer removed: {peer_id} meta={old_meta}"
+            )
+            if self._on_producer_removed:
+                self._on_producer_removed(peer_id)
 
 
 def main() -> None:

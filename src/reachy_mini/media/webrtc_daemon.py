@@ -31,7 +31,7 @@ Example usage:
 import logging
 import os
 from threading import Thread
-from typing import Callable, Optional, Tuple, cast
+from typing import Callable, Iterator, List, Optional, Tuple, cast
 
 import gi
 
@@ -42,6 +42,7 @@ from reachy_mini.media.camera_constants import (
     ReachyMiniLiteCamSpecs,
     ReachyMiniWirelessCamSpecs,
 )
+from reachy_mini.media.webrtc_utils import SignallingListener
 
 gi.require_version("Gst", "1.0")
 gi.require_version("GstApp", "1.0")
@@ -129,7 +130,19 @@ class GstWebRTC:
         self._bus_receiver.add_watch(
             GLib.PRIORITY_DEFAULT, self._on_bus_message, self._loop
         )
-        self._configure_receiver(self._pipeline_receiver)
+
+        # Dynamic WebRTC audio receiver state
+        self._receiver_webrtcsrc: Optional[Gst.Element] = None
+        self._receiver_audio_elements: List[Gst.Element] = []
+        self._client_producer_id: Optional[str] = None
+
+        # WebSocket listener for producer add/remove events
+        self._signalling_listener = SignallingListener(
+            host="127.0.0.1",
+            port=8443,
+            on_producer_added=self._on_producer_added,
+            on_producer_removed=self._on_producer_removed,
+        )
 
     def __del__(self) -> None:
         """Destructor to ensure gstreamer resources are released."""
@@ -180,47 +193,125 @@ class GstWebRTC:
 
         self._setup_data_channel(peer_id, webrtcbin)
 
-    def _configure_receiver(self, pipeline: Gst.Pipeline) -> None:
-        udpsrc = Gst.ElementFactory.make("udpsrc")
-        udpsrc.set_property("port", 5000)
-        caps = Gst.Caps.from_string(
-            "application/x-rtp,media=audio,encoding-name=OPUS,payload=96"
-        )
-        capsfilter = Gst.ElementFactory.make("capsfilter")
-        capsfilter.set_property("caps", caps)
-        rtpjitterbuffer = Gst.ElementFactory.make("rtpjitterbuffer")
-        rtpjitterbuffer.set_property(
-            "latency", 200
-        )  # configure latency depending on network conditions
-        rtpopusdepay = Gst.ElementFactory.make("rtpopusdepay")
-        opusdec = Gst.ElementFactory.make("opusdec")
-        queue = Gst.ElementFactory.make("queue")
-        audioconvert = Gst.ElementFactory.make("audioconvert")
-        audioresample = Gst.ElementFactory.make("audioresample")
-        alsasink = Gst.ElementFactory.make("alsasink")
-        alsasink.set_property(
-            "device", "reachymini_audio_sink"
-        )  # f"hw:{self._id_audio_card},0")
-        alsasink.set_property("sync", False)
+    # --- Dynamic WebRTC audio receiver ---
 
-        pipeline.add(udpsrc)
-        pipeline.add(capsfilter)
-        pipeline.add(rtpjitterbuffer)
-        pipeline.add(rtpopusdepay)
-        pipeline.add(opusdec)
-        pipeline.add(queue)
-        pipeline.add(audioconvert)
-        pipeline.add(audioresample)
-        pipeline.add(alsasink)
+    _TARGET_PRODUCER_NAME = "reachymini-client"
 
-        udpsrc.link(capsfilter)
-        capsfilter.link(rtpjitterbuffer)
-        rtpjitterbuffer.link(rtpopusdepay)
-        rtpopusdepay.link(opusdec)
-        opusdec.link(queue)
-        queue.link(audioconvert)
-        audioconvert.link(audioresample)
-        audioresample.link(alsasink)
+    def _on_producer_added(
+        self,
+        producer_id: str,
+        meta: dict,
+    ) -> None:
+        """Handle a producer appearing on the signalling server."""
+        name = meta.get("name")
+        self._logger.info(f"Producer added: {producer_id} name={name}")
+
+        if name != self._TARGET_PRODUCER_NAME:
+            return
+
+        if self._receiver_webrtcsrc is not None:
+            if self._client_producer_id == producer_id:
+                self._logger.debug(
+                    f"Already connected to producer {producer_id}, ignoring"
+                )
+                return
+            self._logger.info("Tearing down previous receiver before reconnecting")
+            self._teardown_receiver()
+
+        self._logger.info(f"Creating webrtcsrc for producer {producer_id}")
+        webrtcsrc = Gst.ElementFactory.make("webrtcsrc")
+        if not webrtcsrc:
+            self._logger.error("Failed to create webrtcsrc element")
+            return
+
+        src_signaller = webrtcsrc.get_property("signaller")
+        src_signaller.set_property("producer-peer-id", producer_id)
+        src_signaller.set_property("uri", "ws://127.0.0.1:8443")
+
+        webrtcsrc.connect("pad-added", self._receiver_pad_added_cb)
+
+        self._pipeline_receiver.add(webrtcsrc)
+        webrtcsrc.sync_state_with_parent()
+
+        self._receiver_webrtcsrc = webrtcsrc
+        self._client_producer_id = producer_id
+
+    def _on_producer_removed(self, producer_id: str) -> None:
+        """Handle a producer disappearing from the signalling server."""
+        self._logger.info(f"Producer removed: {producer_id}")
+
+        if producer_id == self._client_producer_id:
+            self._teardown_receiver()
+
+    def _receiver_pad_added_cb(self, webrtcsrc: Gst.Element, pad: Gst.Pad) -> None:
+        """Handle new pads from the client webrtcsrc (expect audio only)."""
+        if pad.get_name().startswith("audio"):
+            self._logger.info(f"Audio pad added from client: {pad.get_name()}")
+            self._configure_receiver_webrtcbin(webrtcsrc)
+
+            audioconvert = Gst.ElementFactory.make("audioconvert")
+            audioresample = Gst.ElementFactory.make("audioresample")
+            alsasink = Gst.ElementFactory.make("alsasink")
+            alsasink.set_property("device", "reachymini_audio_sink")
+            alsasink.set_property("sync", False)
+
+            self._pipeline_receiver.add(audioconvert)
+            self._pipeline_receiver.add(audioresample)
+            self._pipeline_receiver.add(alsasink)
+
+            pad.link(audioconvert.get_static_pad("sink"))
+            audioconvert.link(audioresample)
+            audioresample.link(alsasink)
+
+            audioconvert.sync_state_with_parent()
+            audioresample.sync_state_with_parent()
+            alsasink.sync_state_with_parent()
+
+            self._receiver_audio_elements = [audioconvert, audioresample, alsasink]
+        else:
+            self._logger.warning(
+                f"Unexpected pad from client webrtcsrc: {pad.get_name()}"
+            )
+
+    def _configure_receiver_webrtcbin(self, webrtcsrc: Gst.Element) -> None:
+        """Set latency on the webrtcbin inside the webrtcsrc bin."""
+        if not isinstance(webrtcsrc, Gst.Bin):
+            return
+
+        webrtcbin = webrtcsrc.get_by_name("webrtcbin0")
+        if webrtcbin is None:
+            for elem in self._iterate_gst(webrtcsrc.iterate_recurse()):
+                if elem.get_factory().get_name() == "webrtcbin":
+                    webrtcbin = elem
+                    break
+        if webrtcbin:
+            webrtcbin.set_property("latency", 200)
+
+    def _iterate_gst(self, iterator: Gst.Iterator) -> Iterator[Gst.Element]:
+        """Iterate over a GStreamer iterator."""
+        while True:
+            result, elem = iterator.next()
+            if result == Gst.IteratorResult.DONE:
+                break
+            if result == Gst.IteratorResult.OK:
+                yield elem
+            elif result == Gst.IteratorResult.RESYNC:
+                iterator.resync()
+
+    def _teardown_receiver(self) -> None:
+        """Remove the dynamic webrtcsrc and downstream audio elements from the pipeline."""
+        if self._receiver_webrtcsrc is not None:
+            self._logger.info("Tearing down webrtcsrc receiver")
+            self._receiver_webrtcsrc.set_state(Gst.State.NULL)
+            self._pipeline_receiver.remove(self._receiver_webrtcsrc)
+            self._receiver_webrtcsrc = None
+
+        for elem in self._receiver_audio_elements:
+            elem.set_state(Gst.State.NULL)
+            self._pipeline_receiver.remove(elem)
+        self._receiver_audio_elements = []
+
+        self._client_producer_id = None
 
     @property
     def resolution(self) -> tuple[int, int]:
@@ -398,6 +489,7 @@ class GstWebRTC:
         self._logger.debug("Starting WebRTC")
         self._pipeline_sender.set_state(Gst.State.PLAYING)
         self._pipeline_receiver.set_state(Gst.State.PLAYING)
+        self._signalling_listener.start()
         GLib.timeout_add_seconds(5, self._dump_latency)
 
     def pause(self) -> None:
@@ -409,6 +501,8 @@ class GstWebRTC:
     def stop(self) -> None:
         """Stop the WebRTC pipeline."""
         self._logger.debug("Stopping WebRTC")
+        self._signalling_listener.stop()
+        self._teardown_receiver()
 
         self._pipeline_sender.set_state(Gst.State.NULL)
         self._pipeline_receiver.set_state(Gst.State.NULL)

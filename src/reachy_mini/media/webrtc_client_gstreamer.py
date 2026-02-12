@@ -38,7 +38,7 @@ Example usage via MediaManager:
 
 """
 
-from threading import Thread
+from threading import Event, Thread
 from typing import Iterator, Optional, cast
 
 import gi
@@ -137,6 +137,8 @@ class GstWebRTCClient(CameraBase, AudioBase):
         webrtcsrc = self._configure_webrtcsrc(signaling_host, signaling_port, peer_id)
         self._pipeline_record.add(webrtcsrc)
 
+        self._consumer_ready = Event()
+        self._appsrc_pts = 0  # running PTS in nanoseconds for appsrc buffers
         self._pipeline_playback = Gst.Pipeline.new("audio_player")
         self._init_pipeline_playback(
             self._pipeline_playback, signaling_host, signaling_port
@@ -356,7 +358,7 @@ class GstWebRTCClient(CameraBase, AudioBase):
     def _init_pipeline_playback(
         self, pipeline: Gst.Pipeline, signaling_host: str, signaling_port: int
     ) -> None:
-        """Initialize the audio playback pipeline."""
+        """Initialize the audio playback pipeline using webrtcsink."""
         self._appsrc = Gst.ElementFactory.make("appsrc")
         self._appsrc.set_property("format", Gst.Format.TIME)
         self._appsrc.set_property("is-live", True)
@@ -364,30 +366,40 @@ class GstWebRTCClient(CameraBase, AudioBase):
             f"audio/x-raw,format=F32LE,channels={self.CHANNELS},rate={self.SAMPLE_RATE},layout=interleaved"
         )
         self._appsrc.set_property("caps", caps)
+
         audioconvert = Gst.ElementFactory.make("audioconvert")
         audioresample = Gst.ElementFactory.make("audioresample")
-        opusenc = Gst.ElementFactory.make("opusenc")
-        queue = Gst.ElementFactory.make("queue")
-        rtpopuspay = Gst.ElementFactory.make("rtpopuspay")
-        udpsink = Gst.ElementFactory.make("udpsink")
 
-        udpsink.set_property("host", signaling_host)
-        udpsink.set_property("port", 5000)
+        webrtcsink = Gst.ElementFactory.make("webrtcsink")
+        if not webrtcsink:
+            raise RuntimeError(
+                "Failed to create webrtcsink element. Is the GStreamer webrtc rust plugin installed?"
+            )
+
+        meta_structure = Gst.Structure.new_empty("meta")
+        meta_structure.set_value("name", "reachymini-client")
+        webrtcsink.set_property("meta", meta_structure)
+
+        webrtcsink.connect("consumer-added", self._on_playback_consumer_added)
+
+        signaller = webrtcsink.get_property("signaller")
+        signaller.set_property("uri", f"ws://{signaling_host}:{signaling_port}")
 
         pipeline.add(self._appsrc)
         pipeline.add(audioconvert)
         pipeline.add(audioresample)
-        pipeline.add(opusenc)
-        pipeline.add(queue)
-        pipeline.add(rtpopuspay)
-        pipeline.add(udpsink)
+        pipeline.add(webrtcsink)
 
         self._appsrc.link(audioconvert)
         audioconvert.link(audioresample)
-        audioresample.link(opusenc)
-        opusenc.link(queue)
-        queue.link(rtpopuspay)
-        rtpopuspay.link(udpsink)
+        audioresample.link(webrtcsink)
+
+    def _on_playback_consumer_added(
+        self, webrtcsink: Gst.Bin, peer_id: str, webrtcbin: Gst.Element
+    ) -> None:
+        """Signal that a consumer has connected to the playback webrtcsink."""
+        self.logger.info(f"Playback consumer added: {peer_id}")
+        self._consumer_ready.set()
 
     def set_max_output_buffers(self, max_buffers: int) -> None:
         """Set the maximum number of output buffers to queue in the player.
@@ -416,18 +428,36 @@ class GstWebRTCClient(CameraBase, AudioBase):
 
         See AudioBase.stop_playing() for complete documentation.
         """
+        self._consumer_ready.clear()
+        self._appsrc_pts = 0
         self._pipeline_playback.set_state(Gst.State.NULL)
 
     def push_audio_sample(self, data: npt.NDArray[np.float32]) -> None:
-        """Push audio data to the output device."""
-        if self._appsrc is not None:
-            buf = Gst.Buffer.new_wrapped(data.tobytes())
-            self._appsrc.push_buffer(buf)
+        """Push audio data to the output device.
 
-        else:
+        Blocks until a WebRTC consumer is connected to the playback pipeline.
+        """
+        if self._appsrc is None:
             self.logger.warning(
                 "AppSrc is not initialized. Call start_playing() first."
             )
+            return
+
+        if not self._consumer_ready.wait(timeout=10):
+            self.logger.warning(
+                "No consumer connected to playback pipeline, dropping audio sample."
+            )
+            return
+
+        num_samples = data.shape[0]
+        duration_ns = (num_samples * Gst.SECOND) // self.SAMPLE_RATE
+
+        buf = Gst.Buffer.new_wrapped(data.tobytes())
+        buf.pts = self._appsrc_pts
+        buf.duration = duration_ns
+        self._appsrc_pts += duration_ns
+
+        self._appsrc.push_buffer(buf)
 
     def play_sound(self, sound_file: str) -> None:
         """Play a sound file.
