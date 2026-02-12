@@ -47,6 +47,7 @@ def build_install_command(
             If ``None``, uses the current environment's ``pip``.
         upgrade: If ``True``, add the ``--upgrade`` flag.
         verbose: If ``True``, add ``-vvv`` flag (only on step 2 for git ref).
+
     Returns:
         A tuple of the form ``(command, extra_env)`` where *command* is a shell string and *extra_env* contains any additional environment variables needed for the install.
 
@@ -80,7 +81,7 @@ def build_install_command(
         step3 = shlex.join(base + [f"reachy-mini[{extras}]", "--upgrade", "--upgrade-strategy", "only-if-needed"])
         cmd = f"{step1} && {step2} || {step3}"
         print(f"Git ref install: {cmd}")
-        extra_env = {}
+        extra_env: dict[str, str] = {}
         return cmd, extra_env
 
     print(f"Installing from PyPI: {version if version else 'latest pre-release' if pre_release else 'latest stable'}")
