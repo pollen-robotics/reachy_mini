@@ -427,6 +427,20 @@ However, since it can be confusing, we will update those motions to avoid this c
 
 </details>
 
+<details> <summary><strong>My mic flat cable is broken</strong></summary> 
+
+The specifications of the microphone's cable are as follows:  
+- FFC/FPC flat flexible cable
+- 12 pins
+- 0.5mm spacing
+- Type A (connectors on the same side)
+- 15mm length
+
+Here are a few references if you are looking for a replacement for your microphone cable:  
+- [Amazon](https://www.amazon.fr/dp/B09TR4X1BP?ref=cm_sw_r_cso_cp_apan_dp_1NV8C5T7V97Z78X6J80Z&ref_=cm_sw_r_cso_cp_apan_dp_1NV8C5T7V97Z78X6J80Z&social_share=cm_sw_r_cso_cp_apan_dp_1NV8C5T7V97Z78X6J80Z)
+- [Farnell](https://fr.farnell.com/molex/15020-0127/cordon-ffc-12-cond-152mm-blanc/dp/3862090)
+</details>
+
 
 
 ## 🐍 SDK, Apps & Programming
