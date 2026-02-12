@@ -260,10 +260,10 @@ def check_and_sync_apps_venv_sdk() -> None:
 
     """
     import json
+    import os
 
     from .update_available import get_install_source
     from .utils import build_install_command
-    import os
 
     # Get daemon install info
     try:
