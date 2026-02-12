@@ -117,6 +117,7 @@ class SignallingListener:
             else:
                 self.logger.debug("listener thread joined successfully")
             self._thread = None
+        self.logger.debug("end stop")
 
     def _run(self) -> None:
         """Connect, register as listener, and process messages."""
@@ -181,7 +182,7 @@ class SignallingListener:
             meta = p.get("meta", {})
             if peer_id not in self._producers:
                 self._producers[peer_id] = meta
-                logger.info(
+                self.logger.info(
                     f"SignallingListener: producer present: {peer_id} meta={meta}"
                 )
                 if self._on_producer_added:
@@ -198,14 +199,16 @@ class SignallingListener:
         if is_producer and peer_id not in self._producers:
             # New producer
             self._producers[peer_id] = meta
-            logger.info(f"SignallingListener: producer added: {peer_id} meta={meta}")
+            self.logger.info(
+                f"SignallingListener: producer added: {peer_id} meta={meta}"
+            )
             if self._on_producer_added:
                 self._on_producer_added(peer_id, meta)
 
         elif not is_producer and peer_id in self._producers:
             # Producer removed (roles became empty or no longer "producer")
             old_meta = self._producers.pop(peer_id)
-            logger.info(
+            self.logger.info(
                 f"SignallingListener: producer removed: {peer_id} meta={old_meta}"
             )
             if self._on_producer_removed:
