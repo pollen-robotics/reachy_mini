@@ -1,5 +1,12 @@
 # Build, play, and innovate with Reachy Mini 🤖
 
+<iframe
+  width="560"
+  height="315"
+  src="https://www.youtube.com/embed/h2lyqR2eMyM"
+  frameborder="0"
+  allowfullscreen
+/>
 
 ## ⚡️ Quick Look
 Control your robot in just **a few lines of code**:
