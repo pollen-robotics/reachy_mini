@@ -6,6 +6,8 @@ minjerk, ease, and cartoon, allowing the user to observe how each method affects
 motion of the head and antennas.
 """
 
+# START doc_example
+
 import numpy as np
 
 from reachy_mini import ReachyMini
@@ -13,7 +15,7 @@ from reachy_mini.utils import create_head_pose
 from reachy_mini.utils.interpolation import InterpolationTechnique
 
 
-def main():
+def main() -> None:
     """Run the different interpolation methods."""
     with ReachyMini(media_backend="no_media") as mini:
         try:
@@ -52,3 +54,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+# END doc_example

@@ -22,17 +22,16 @@ from reachy_mini.daemon.utils import (
     get_ip_address,
 )
 from reachy_mini.io import (
-    AsyncWebSocketAudioStreamer,
-    AsyncWebSocketController,
-    AsyncWebSocketFrameSender,
     ZenohServer,
 )
-from reachy_mini.media.media_manager import MediaManager
 from reachy_mini.tools.reflash_motors import reflash_motors
 
 from .backend.mockup_sim import MockupSimBackend, MockupSimBackendStatus
 from .backend.mujoco import MujocoBackend, MujocoBackendStatus
 from .backend.robot import RobotBackend, RobotBackendStatus
+
+# Central signaling relay for WebRTC (optional)
+_central_relay_task: Optional[asyncio.Task[Any]] = None
 
 
 class Daemon:
@@ -101,6 +100,45 @@ class Daemon:
             self._webrtc.__del__()
             self._webrtc = None
 
+    async def _start_central_signaling_relay(self) -> None:
+        """Start the central signaling relay for remote WebRTC access."""
+        global _central_relay_task
+
+        if not self._webrtc:
+            return
+
+        try:
+            from huggingface_hub import get_token
+            hf_token = get_token()
+        except Exception as e:
+            self.logger.debug(f"No HF token available, central signaling disabled: {e}")
+            return
+
+        if not hf_token:
+            self.logger.info("No HF token found, central signaling relay disabled")
+            return
+
+        try:
+            from reachy_mini.media.central_signaling_relay import start_central_relay
+
+            self.logger.info("Starting central signaling relay...")
+            await start_central_relay(
+                hf_token=hf_token,
+                robot_name=self.robot_name,
+            )
+            self.logger.info("Central signaling relay started")
+        except Exception as e:
+            self.logger.warning(f"Failed to start central signaling relay: {e}")
+
+    async def _stop_central_signaling_relay(self) -> None:
+        """Stop the central signaling relay."""
+        try:
+            from reachy_mini.media.central_signaling_relay import stop_central_relay
+            await stop_central_relay()
+            self.logger.info("Central signaling relay stopped")
+        except Exception as e:
+            self.logger.debug(f"Error stopping central signaling relay: {e}")
+
     async def start(
         self,
         sim: bool = False,
@@ -113,8 +151,6 @@ class Daemon:
         kinematics_engine: str = "AnalyticalKinematics",
         headless: bool = False,
         use_audio: bool = True,
-        websocket_uri: Optional[str] = None,
-        stream_media: bool = False,
         hardware_config_filepath: str | None = None,
     ) -> "DaemonState":
         """Start the Reachy Mini daemon.
@@ -129,9 +165,7 @@ class Daemon:
             check_collision (bool): If True, enable collision checking. Defaults to False.
             kinematics_engine (str): Kinematics engine to use. Defaults to "AnalyticalKinematics".
             headless (bool): If True, run Mujoco in headless mode (no GUI). Defaults to False.
-            websocket_uri (Optional[str]): If set, allow remote control and streaming of the robot through a WebSocket connection to the specified uri. Defaults to None.
             use_audio (bool): If True, enable audio. Defaults to True.
-            stream_media (bool): If True, stream media to the WebSocket. Defaults to False.
             hardware_config_filepath (str | None): Path to the hardware configuration YAML file. Defaults to None.
 
         Returns:
@@ -159,11 +193,9 @@ class Daemon:
             "mockup_sim": mockup_sim,
             "serialport": serialport,
             "headless": headless,
-            "websocket_uri": websocket_uri,
             "use_audio": use_audio,
             "scene": scene,
             "localhost_only": localhost_only,
-            "stream_media": stream_media,
         }
 
         self.logger.info("Starting Reachy Mini daemon...")
@@ -179,7 +211,6 @@ class Daemon:
                 check_collision=check_collision,
                 kinematics_engine=kinematics_engine,
                 headless=headless,
-                websocket_uri=websocket_uri,
                 use_audio=use_audio,
                 hardware_config_filepath=hardware_config_filepath,
             )
@@ -197,39 +228,6 @@ class Daemon:
         self._thread_publish_status = Thread(target=self._publish_status, daemon=True)
         self._thread_publish_status.start()
 
-        self.websocket_server: Optional[AsyncWebSocketController] = None
-        if websocket_uri is not None:
-            self.websocket_server = AsyncWebSocketController(
-                ws_uri=websocket_uri + "/robot", backend=self.backend
-            )
-
-        self._thread_publish_frames: Optional[Thread] = None
-        self._thread_event_publish_audio: Optional[Event] = None
-        self._thread_publish_audio: Optional[Thread] = None
-        self._thread_event_publish_frames: Optional[Event] = None
-        self.websocket_frame_sender: Optional[AsyncWebSocketFrameSender] = None
-        self.websocket_audio_sender: Optional[AsyncWebSocketAudioStreamer] = None
-        if stream_media:
-            if websocket_uri is None:
-                raise ValueError("WebSocket URI is required when streaming media.")
-            self.media_manager = MediaManager()
-            self.websocket_frame_sender = AsyncWebSocketFrameSender(
-                ws_uri=websocket_uri + "/video_stream"
-            )
-            self._thread_publish_frames = Thread(
-                target=self._publish_frames, daemon=True
-            )
-            self._thread_event_publish_frames = Event()
-            self._thread_publish_frames.start()
-            self.websocket_audio_sender = AsyncWebSocketAudioStreamer(
-                ws_uri=websocket_uri + "/audio_stream"
-            )
-            self._thread_publish_audio = Thread(target=self._publish_audio, daemon=True)
-            self._thread_event_publish_audio = Event()
-            self._thread_publish_audio.start()
-            self.media_manager.start_recording()
-            self.media_manager.start_playing()
-
         def backend_wrapped_run() -> None:
             assert self.backend is not None, (
                 "Backend should be initialized before running."
@@ -242,32 +240,6 @@ class Daemon:
                 self._status.state = DaemonState.ERROR
                 self._status.error = str(e)
                 self.zenoh_server.stop()
-                if self.websocket_server is not None:
-                    self.websocket_server.stop()
-                if (
-                    self._thread_publish_frames is not None
-                    and self._thread_publish_frames.is_alive()
-                    and self._thread_event_publish_frames is not None
-                ):
-                    self._thread_event_publish_frames.set()
-                    self._thread_publish_frames.join(timeout=2.0)
-                if (
-                    self._thread_publish_audio is not None
-                    and self._thread_publish_audio.is_alive()
-                    and self._thread_event_publish_audio is not None
-                ):
-                    self._thread_event_publish_audio.set()
-                    self._thread_publish_audio.join(timeout=2.0)
-                if (
-                    self.websocket_frame_sender is not None
-                    and self.websocket_frame_sender.connected.is_set()
-                ):
-                    self.websocket_frame_sender.stop_flag = True
-                if (
-                    self.websocket_audio_sender is not None
-                    and self.websocket_audio_sender.connected.is_set()
-                ):
-                    self.websocket_audio_sender.stop_flag = True
                 self.backend = None
 
         self.backend_run_thread = Thread(target=backend_wrapped_run)
@@ -300,43 +272,15 @@ class Daemon:
             await asyncio.sleep(
                 0.2
             )  # Give some time for the backend to release the audio device
+            self.backend.setup_webrtc_interface(self._webrtc)
             self._webrtc.start()
+
+            # Start central signaling relay for remote WebRTC access
+            await self._start_central_signaling_relay()
 
         self.logger.info("Daemon started successfully.")
         self._status.state = DaemonState.RUNNING
         return self._status.state
-
-    def _publish_frames(self) -> None:
-        """Publish the media to the WebSocket."""
-        if (
-            self._thread_event_publish_frames is None
-            or self.websocket_frame_sender is None
-        ):
-            self.logger.warning("_publish_frames called but not properly initialized.")
-            return
-        while self._thread_event_publish_frames.is_set() is False:
-            frame = self.media_manager.get_frame()
-            if frame is not None:
-                self.websocket_frame_sender.send_frame(frame)
-            time.sleep(0.04)
-
-    def _publish_audio(self) -> None:
-        """Publish the audio to the WebSocket."""
-        if (
-            self._thread_event_publish_audio is None
-            or self.websocket_audio_sender is None
-        ):
-            self.logger.warning("_publish_audio called but not properly initialized.")
-            return
-
-        while self._thread_event_publish_audio.is_set() is False:
-            audio = self.media_manager.get_audio_sample()
-            if audio is not None:
-                self.websocket_audio_sender.send_audio_chunk(audio)
-            received_audio = self.websocket_audio_sender.get_audio_chunk()
-            if received_audio is not None:
-                self.media_manager.push_audio_sample(received_audio)
-            time.sleep(0.05)
 
     async def stop(self, goto_sleep_on_stop: bool = True) -> "DaemonState":
         """Stop the Reachy Mini daemon.
@@ -366,12 +310,11 @@ class Daemon:
             self.backend.is_shutting_down = True
             self._thread_event_publish_status.set()
 
-            if self.websocket_server is not None:
-                self.websocket_server.stop()
-
             if self._webrtc:
                 # We use pause() instead of stop() to keep the signalling server running and the producer registered, allowing proper restart.
                 self._webrtc.pause()
+                # Stop the central signaling relay
+                await self._stop_central_signaling_relay()
 
             if goto_sleep_on_stop:
                 try:
@@ -426,8 +369,6 @@ class Daemon:
         scene: Optional[str] = None,
         headless: Optional[bool] = None,
         use_audio: Optional[bool] = None,
-        websocket_uri: Optional[str] = None,
-        stream_media: Optional[bool] = None,
         localhost_only: Optional[bool] = None,
         wake_up_on_start: Optional[bool] = None,
         goto_sleep_on_stop: Optional[bool] = None,
@@ -441,8 +382,6 @@ class Daemon:
             scene (str): Name of the scene to load in simulation mode ("empty" or "minimal"). Defaults to None (uses the previous value).
             headless (bool): If True, run Mujoco in headless mode (no GUI). Defaults to None (uses the previous value).
             use_audio (bool): If True, enable audio. Defaults to None (uses the previous value).
-            websocket_uri (Optional[str]): If set, allow remote control and streaming of the robot through a WebSocket connection to the specified uri. Defaults to None (uses the previous value).
-            stream_media (bool): If True, stream media to the WebSocket. Defaults to None (uses the previous value).
             localhost_only (bool): If True, restrict the server to localhost only clients. Defaults to None (uses the previous value).
             wake_up_on_start (bool): If True, wake up Reachy Mini on start. Defaults to None (don't wake up).
             goto_sleep_on_stop (bool): If True, put Reachy Mini to sleep on stop. Defaults to None (don't go to sleep).
@@ -478,12 +417,6 @@ class Daemon:
                 "use_audio": use_audio
                 if use_audio is not None
                 else self._start_params["use_audio"],
-                "websocket_uri": websocket_uri
-                if websocket_uri is not None
-                else self._start_params["websocket_uri"],
-                "stream_media": stream_media
-                if stream_media is not None
-                else self._start_params["stream_media"],
                 "localhost_only": localhost_only
                 if localhost_only is not None
                 else self._start_params["localhost_only"],
@@ -537,8 +470,6 @@ class Daemon:
         kinematics_engine: str = "AnalyticalKinematics",
         headless: bool = False,
         use_audio: bool = True,
-        websocket_uri: Optional[str] = None,
-        stream_media: bool = False,
     ) -> None:
         """Run the Reachy Mini daemon indefinitely.
 
@@ -556,8 +487,6 @@ class Daemon:
             kinematics_engine (str): Kinematics engine to use. Defaults to "AnalyticalKinematics".
             headless (bool): If True, run Mujoco in headless mode (no GUI). Defaults to False.
             use_audio (bool): If True, enable audio. Defaults to True.
-            websocket_uri (Optional[str]): If set, allow remote control and streaming of the robot through a WebSocket connection to the specified uri. Defaults to None.
-            stream_media (bool): If True, stream media to the WebSocket. Defaults to False.
 
         """
         await self.start(
@@ -570,9 +499,7 @@ class Daemon:
             check_collision=check_collision,
             kinematics_engine=kinematics_engine,
             headless=headless,
-            websocket_uri=websocket_uri,
             use_audio=use_audio,
-            stream_media=stream_media,
         )
 
         if self._status.state == DaemonState.RUNNING:
@@ -605,7 +532,6 @@ class Daemon:
         kinematics_engine: str,
         headless: bool,
         use_audio: bool,
-        websocket_uri: Optional[str],
         hardware_config_filepath: str | None = None,
         reflash_motors_on_start: bool = True,
     ) -> "RobotBackend | MujocoBackend | MockupSimBackend":
@@ -622,7 +548,6 @@ class Daemon:
                 kinematics_engine=kinematics_engine,
                 headless=headless,
                 use_audio=use_audio,
-                websocket_uri=websocket_uri,
             )
         else:
             if serialport == "auto":

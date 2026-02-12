@@ -10,18 +10,19 @@
 
 </div>
 
-> **Note**: Python wheels for easy install of GStreamer will be soon released an available on PyPI. They will be directly integrated. Meanwhile, please follow the instructions below to install GStreamer on your system.
+> [!NOTE]
+> Python wheels for easy install of GStreamer will soon be released and available on PyPI. They will be directly integrated. Meanwhile, please follow the instructions below to install GStreamer on your system.
 
 ## 🔧 Install GStreamer
 
-<details>
-<summary>🐧 <strong>Linux</strong></summary>
+<hfoptions id="gstreamer-install">
+<hfoption id="Linux">
 
 ### Step 1: Install GStreamer
 
 **For Ubuntu/Debian-based systems:**
 
-In you terminal, run:
+In your terminal, run:
 
 ```bash
 sudo apt-get update
@@ -43,9 +44,27 @@ sudo apt-get install -y \
     python3-gi-cairo
 ```
 
+**For Ubuntu 22.04 only:** The default GStreamer version is too old. You need to add a PPA to get GStreamer 1.24.x:
+
+```bash
+sudo add-apt-repository ppa:savoury1/multimedia
+sudo apt update
+sudo apt install \
+    libgstreamer1.0-dev \
+    libgstreamer-plugins-base1.0-dev \
+    libgstreamer-plugins-good1.0-dev \
+    libgstreamer-plugins-bad1.0-dev
+```
+
+Verify you have the correct version:
+```bash
+pkg-config --modversion gstreamer-1.0
+# Should output 1.24.x or higher
+```
+
 ### Step 2: Install Rust
 
-On Linux, the WebRTC plugin is not activated by default and needs to be compiled manually from the Rust source code. Install Rust from the commmand line using `rustup`:
+On Linux, the WebRTC plugin is not activated by default and needs to be compiled manually from the Rust source code. Install Rust from the command line using `rustup`:
 
 ```bash
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
@@ -54,7 +73,7 @@ source $HOME/.cargo/env
 
 ### Step 3: Build and install WebRTC plugin
 
-The build and install the WebRTC plugin, run the following commands :
+To build and install the WebRTC plugin, run the following commands:
 
 ```bash
 # Clone the GStreamer Rust plugins repository
@@ -77,12 +96,11 @@ echo 'export GST_PLUGIN_PATH=/opt/gst-plugins-rs/lib/x86_64-linux-gnu:$GST_PLUGI
 source ~/.bashrc
 ```
 
-> **💡 Note:** For ARM64 systems (like Raspberry Pi), replace `x86_64-linux-gnu` with `aarch64-linux-gnu` in the export command.
+> [!NOTE]
+> For ARM64 systems (like Raspberry Pi), replace `x86_64-linux-gnu` with `aarch64-linux-gnu` in the export command.
 
-</details>
-
-<details>
-<summary>🍎 <strong>macOS</strong></summary>
+</hfoption>
+<hfoption id="macOS">
 
 ### Using Homebrew
 
@@ -92,31 +110,27 @@ brew install gstreamer libnice-gstreamer
 
 The WebRTC plugin is activated by default in the Homebrew package.
 
-</details>
+</hfoption>
+<hfoption id="Windows">
 
-<details>
-<summary>🪟 <strong>Windows</strong></summary>
-
-> ⚠️ **Note:** Windows support is currently partial. Some features may not work as expected.
+> [!WARNING]
+> Windows support is currently partial. Some features may not work as expected.
 
 ### Step 1: Install GStreamer using the official installer
 
-<div align="center">
-
-[![Download GStreamer for Windows](https://img.shields.io/badge/Download-GStreamer%20for%20Windows-blue?style=for-the-badge&logo=windows&logoColor=white)](https://gstreamer.freedesktop.org/download/)
-
-</div>
+Download the GStreamer installer from the official website:  
+https://gstreamer.freedesktop.org/download/
 
 1. Download the **runtime** installer (MSVC version)
 2. Install with **Complete** installation option
-3. Edit the environment variables and Add to system PATH: `C:\Program Files\gstreamer\1.0\msvc_x86_64\bin`
+3. Edit the environment variables and add to system PATH: `C:\Program Files\gstreamer\1.0\msvc_x86_64\bin`
 4. Add to PYTHONPATH: `C:\gstreamer\1.0\msvc_x86_64\lib\site-packages`
 
-> **💡 Important:** Replace `C:\Program Files\gstreamer` with your actual GStreamer installation folder if you installed it in a different location.
+> [!TIP]
+> Replace `C:\Program Files\gstreamer` with your actual GStreamer installation folder if you installed it in a different location.
 
-
-
-</details>
+</hfoption>
+</hfoptions>
 
 ## ✅ Verify Installation
 

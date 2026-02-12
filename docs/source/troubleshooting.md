@@ -2,9 +2,9 @@
 
 Welcome to the Reachy Mini support page. Click on the questions below to reveal the answers.
 
-## 🛠️ Troubleshooting - Batch December 2025
+## 🛠️ Troubleshooting - Frequent issues
 
-### Essential troubleshooting - Please read this first, it solves all well-known issues!
+**Essential troubleshooting - Please read this first, it solves all well-known issues!**
 
 
 <details><summary><strong>Before anything else and for any issue: update & restart</strong></summary>
@@ -165,6 +165,8 @@ Please check that the switch is on the "debug" and not on "download" position. S
 
 ![switch_position](https://github.com/pollen-robotics/reachy_mini/raw/develop/docs/assets/wireless_switch.png)
 
+If this switch is in the right position and you still can't see the AP, you may need to re-flash the Raspberry Pi's iso, following the [reflash the RPI Iso tutorial](/docs/source/platforms/reachy_mini/reflash_the_rpi_ISO.md).
+
 </details>
 
 ## 🚀 Getting Started & Assembly
@@ -212,6 +214,7 @@ You do not need to install them.
 
 - With Reachy Mini (Wireless), the daemon is already running on the embedded Raspberry Pi.
 - With Reachy Mini Lite, you can use [the desktop app](./platforms/reachy_mini_lite/get_started.md).
+- If the desktop app doesn't work on your system (e.g., ARM64, unusual distributions), you can [install and use the Python SDK](./SDK/installation.md) directly - it's a fully supported alternative!
 
 </details>
 
@@ -337,14 +340,11 @@ If you command a pose outside these limits, the robot will automatically clamp t
 
 1. You can refer scanning the motors using the [scan_motors.py script](https://github.com/pollen-robotics/reachy_mini/tree/main/src/reachy_mini/tools/scan_motors.py).
 
-- If your robot is Lite, you can run the script directly on your computer. Go to the "tools" folder, where the script is located, and run the same command as below but without the scp and ssh part.
-- If your robot is Wireless, you need to copy the scanning script on the raspberry. Go to the "tools" folder, where the script is located,and run:
+- If your robot is Lite, you can run the script directly on your computer:
 ```bash
-sudo scp scan_motors.py pollen@reachy-minilocal:~/
-# password: ---your sudo password---
-# RPI password: root
+python -m reachy_mini.tools.scan_motors
 ```
-- Then ssh into the robot:
+- If your robot is Wireless, ssh into the robot:
 ```bash
 ssh pollen@reachy-mini.local
 ```
@@ -352,9 +352,9 @@ ssh pollen@reachy-mini.local
 ```bash
 source /venvs/mini_daemon/bin/activate
 ```
-- And run the script: (Motors must be poweredonfor this!)
+- And run the script (motors must be powered on for this!):
 ```bash
-python scan_motors.py
+python -m reachy_mini.tools.scan_motors --wireless
 ```
 - It should print the list of detected motors. You should have all motors on baudrate 1000000, with the following IDs: 10,11, 12, 13, 14, 15,17, 18. If some are missing, check the cables again. If there is a motor with a different ID or baudrate, please contact support.
 
@@ -421,11 +421,25 @@ However, since it can be confusing, we will update those motions to avoid this c
 <details>
 <summary><strong>Can I modify the appearance (Skins/CAD)?</strong></summary>
 
-* **CAD:** Not currently public.
-* **Skins:** Yes, the community has created custom builds (e.g., Star Wars droids).
+* **CAD:** The full STEP files havenot been released yet, but we plan to release them in the future. In the meantime, you can find some STL files in the [assets folder](/src/reachy_mini/descriptions/reachy_mini/mjcf/assets) of the repository.
+* **Skins:** Yes, the community has created custom builds. Some "skin" STEP files have been shared on discord, on the channel ["Pimp my Reachy Mini"](https://discord.com/channels/519098054377340948/1453340883775651861).
 
 </details>
 
+<details> <summary><strong>My mic flat cable is broken</strong></summary> 
+
+The specifications of the microphone's cable are as follows:  
+- FFC/FPC flat flexible cable
+- 12 pins
+- 0.5mm spacing
+- Type A (connectors on the same side)
+- 15mm length
+
+Here are a few references if you are looking for a replacement for your microphone cable:  
+- [Amazon](https://www.amazon.fr/dp/B09TR4X1BP?ref=cm_sw_r_cso_cp_apan_dp_1NV8C5T7V97Z78X6J80Z&ref_=cm_sw_r_cso_cp_apan_dp_1NV8C5T7V97Z78X6J80Z&social_share=cm_sw_r_cso_cp_apan_dp_1NV8C5T7V97Z78X6J80Z)
+- [Farnell](https://fr.farnell.com/molex/15020-0127/cordon-ffc-12-cond-152mm-blanc/dp/3862090)
+
+</details>
 
 
 ## 🐍 SDK, Apps & Programming
@@ -547,7 +561,7 @@ move = mini.stop_recording()
 ```
 
 **Replaying:**
-Use the `RecordedMoves` class to load moves from the [Hugging Face library](https://huggingface.co/pollen-robotics/reachy-mini-dances-library).
+Use the `RecordedMoves` class to load moves from the [Hugging Face library](https://github.com/pollen-robotics/reachy_mini_dances_library).
 
 ```python
 mini.play_move(recorded_moves.get("dance_1"))

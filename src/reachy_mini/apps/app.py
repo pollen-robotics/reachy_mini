@@ -177,6 +177,13 @@ def parse_args() -> argparse.Namespace:
 
     create_parser = subparsers.add_parser("create", help="Create a new app project")
     create_parser.add_argument(
+        "--template",
+        type=str,
+        choices=["default", "conversation"],
+        default="default",
+        help="Template to use: 'default' (blank app) or 'conversation' (fork conversation app)",
+    )
+    create_parser.add_argument(
         "app_name",
         type=str,
         nargs="?",
@@ -189,6 +196,18 @@ def parse_args() -> argparse.Namespace:
         nargs="?",
         default=None,
         help="Path where the app project will be created.",
+    )
+    create_parser.add_argument(
+        "--publish",
+        action="store_true",
+        default=False,
+        help="Publish the app to Hugging Face Spaces immediately after creation.",
+    )
+    create_parser.add_argument(
+        "--private",
+        action="store_true",
+        default=False,
+        help="Make the space private (default is public). Only used with --publish.",
     )
 
     check_parser = subparsers.add_parser("check", help="Check an existing app project")
@@ -231,6 +250,17 @@ def parse_args() -> argparse.Namespace:
         default=False,
         help="Don't run checks before publishing the app.",
     )
+    privacy_group = publish_parser.add_mutually_exclusive_group()
+    privacy_group.add_argument(
+        "--private",
+        action="store_true",
+        help="Make the Hugging Face Space private.",
+    )
+    privacy_group.add_argument(
+        "--public",
+        action="store_true",
+        help="Make the Hugging Face Space public.",
+    )
 
     return parser.parse_args()
 
@@ -244,16 +274,40 @@ def main() -> None:
     args = parse_args()
     console = Console()
     if args.command == "create":
-        assistant.create(console, app_name=args.app_name, app_path=args.path)
+        if args.template == "conversation":
+            from reachy_mini.apps.fork_conversation import create_from_conversation_app
+
+            created_path = create_from_conversation_app(console, args.app_name, args.path)
+        else:
+            created_path = assistant.create(console, app_name=args.app_name, app_path=args.path)
+
+        if args.publish and created_path:
+            console.print("\nPublishing to Hugging Face Spaces...", style="bold blue")
+            assistant.publish(
+                console,
+                app_path=str(created_path),
+                commit_message="Initial commit",
+                official=False,
+                no_check=False,
+                private=args.private,
+            )
     elif args.command == "check":
         assistant.check(console, app_path=args.app_path)
     elif args.command == "publish":
+        # Determine privacy: --private → True, --public → False, neither → None (prompts)
+        if args.private:
+            private = True
+        elif args.public:
+            private = False
+        else:
+            private = None
         assistant.publish(
             console,
             app_path=args.app_path,
             commit_message=args.commit_message,
             official=args.official,
             no_check=args.nocheck,
+            private=private,
         )
 
 

@@ -117,6 +117,14 @@ python hello.py
 Encountering an issue? 👉 **[Check the Troubleshooting & FAQ Guide](../troubleshooting.md)**
 
 
+## Using an AI Coding Agent?
+
+If you're using an AI agent like **Claude Code**, **Codex**, or **Copilot**, you can start building apps right away. Just paste this prompt:
+
+> *I'd like to create a Reachy Mini app. Start by reading https://github.com/pollen-robotics/reachy_mini/blob/develop/agents.md*
+
+This guide gives your AI agent everything it needs to know about the SDK, best practices, and available tools.
+
 ## Next Steps
 * **[Python SDK](python-sdk.md)**: Learn to move, see, speak, and hear.
 * **[Browse the Examples Folder](https://github.com/pollen-robotics/reachy_mini/tree/main/examples)**

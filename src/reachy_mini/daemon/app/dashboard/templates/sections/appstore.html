@@ -33,7 +33,7 @@
         <ul id="hf-available-apps" class="overflow-y-auto max-h-96">Loading apps from 🤗...</ul>
     </div>
 
-    <!-- Advanced section for private spaces (wireless only) -->
+    <!-- Advanced section for private spaces -->
     <div id="hf-advanced-section" class="mt-6 hidden">
         <!-- Collapsible header -->
         <button
@@ -54,73 +54,43 @@
 
             <!-- Auth status display -->
             <div id="hf-auth-status" class="flex items-center gap-3 mb-6 pb-4 border-b-2 border-gray-300" style="border-color: #d1d5db;">
-                <div id="hf-auth-indicator" class="w-3 h-3 rounded-full bg-gray-400"></div>
-                <span id="hf-auth-text" class="text-base font-semibold" style="color: #374151;">Not authenticated</span>
+                <div id="hf-auth-indicator" class="w-4 h-4 rounded-full bg-gray-400"></div>
+                <span id="hf-auth-text" class="text-base font-semibold" style="color: #374151;">Not connected</span>
             </div>
 
-            <!-- Login form (shown when not authenticated) -->
-            <div id="hf-login-form" class="space-y-4">
-                <div>
-                    <label for="hf-token-input" class="block text-lg font-bold mb-3" style="color: #111827;">
-                        HuggingFace Token
-                    </label>
-                    <input
-                        type="password"
-                        id="hf-token-input"
-                        placeholder="hf_..."
-                        style="width: 100%; min-height: 48px; padding: 12px 16px; font-size: 16px; font-family: monospace; border: 2px solid #9ca3af; border-radius: 8px; background-color: #ffffff; color: #111827;"
-                        class="focus:outline-none focus:ring-2 focus:ring-red-500"
-                    />
-                    <p class="mt-3 text-sm" style="color: #6b7280;">
-                        Get your token from <a href="https://huggingface.co/settings/tokens" target="_blank" class="hover:underline font-medium" style="color: #dc2626;">huggingface.co/settings/tokens</a>
-                    </p>
-                </div>
+            <!-- Not logged in view -->
+            <div id="hf-login-form" class="text-center py-4">
+                <p class="text-gray-600 mb-4">You need to be logged in to Hugging Face to install private spaces.</p>
                 <button
-                    id="hf-login-button"
-                    style="width: 100%; min-height: 48px; padding: 12px 24px; font-size: 18px; font-weight: 600; background-color: #dc2626; color: #ffffff; border: none; border-radius: 8px; cursor: pointer;"
-                    class="hover:bg-red-700 transition-colors shadow-md"
+                    onclick="hfAuth.openLoginModal()"
+                    class="px-6 py-3 text-base font-semibold text-white bg-amber-500 hover:bg-amber-600 rounded-lg transition-colors shadow-md"
                 >
-                    Login to HuggingFace
+                    🤗 Login to Hugging Face
                 </button>
-                <div id="hf-login-error" class="hidden text-base font-medium p-3 rounded-lg border-2" style="color: #dc2626; background-color: #fee2e2; border-color: #fecaca;"></div>
             </div>
 
             <!-- Logged in view (shown when authenticated) -->
             <div id="hf-logged-in-view" class="hidden space-y-5">
-                <div class="flex items-center justify-between p-4 rounded-lg border-2" style="background-color: #d1fae5; border-color: #86efac;">
-                    <span class="text-base" style="color: #065f46;">
-                        Logged in as <span id="hf-username" class="font-bold" style="color: #064e3b;"></span>
-                    </span>
-                    <button
-                        id="hf-logout-button"
-                        class="text-base hover:underline font-medium"
-                        style="color: #dc2626;"
-                    >
-                        Logout
-                    </button>
-                </div>
-
                 <!-- Private space installation -->
-                <div>
-                    <label for="hf-space-id-input" class="block text-lg font-bold mb-3" style="color: #111827;">
-                        Private Space ID
-                    </label>
+                <div class="p-5 rounded-xl border-2" style="background-color: #f9fafb; border-color: #e5e7eb;">
+                    <p class="text-lg font-semibold mb-2" style="color: #111827;">Install a Private Space</p>
+                    <p class="text-sm mb-4" style="color: #6b7280;">Enter the ID of a private HuggingFace Space you have access to:</p>
                     <input
                         type="text"
                         id="hf-space-id-input"
                         placeholder="username/space-name"
-                        style="width: 100%; min-height: 48px; padding: 12px 16px; font-size: 16px; font-family: monospace; border: 2px solid #9ca3af; border-radius: 8px; background-color: #ffffff; color: #111827;"
-                        class="focus:outline-none focus:ring-2 focus:ring-red-500"
+                        style="width: 100%; min-height: 52px; padding: 14px 16px; font-size: 16px; font-family: monospace; border: 2px solid #9ca3af; border-radius: 10px; background-color: #ffffff; color: #111827;"
+                        class="focus:outline-none focus:ring-2 focus:ring-green-500"
                     />
+                    <button
+                        id="hf-install-private-button"
+                        style="width: 100%; min-height: 52px; margin-top: 12px; padding: 14px 24px; font-size: 18px; font-weight: 600; background-color: #10b981; color: #ffffff; border: none; border-radius: 10px; cursor: pointer;"
+                        class="hover:bg-green-600 transition-colors shadow-md"
+                    >
+                        Install Private Space
+                    </button>
                 </div>
-                <button
-                    id="hf-install-private-button"
-                    style="width: 100%; min-height: 48px; padding: 12px 24px; font-size: 18px; font-weight: 600; background-color: #ffffff; color: #dc2626; border: 2px solid #dc2626; border-radius: 8px; cursor: pointer;"
-                    class="hover:bg-red-600 hover:text-white transition-colors shadow-md"
-                >
-                    Install Private Space
-                </button>
-                <div id="hf-private-install-error" class="hidden text-base font-medium p-3 rounded-lg border-2" style="color: #dc2626; background-color: #fee2e2; border-color: #fecaca;"></div>
+                <div id="hf-private-install-error" class="hidden text-base font-medium p-4 rounded-lg border-2" style="color: #dc2626; background-color: #fee2e2; border-color: #fecaca;"></div>
             </div>
         </div>
     </div>

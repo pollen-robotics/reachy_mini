@@ -74,6 +74,8 @@ Encountering an issue? 👉 **[Check the Troubleshooting & FAQ Guide](../../trou
 
 If you need to reinstall the Raspberry Pi from scratch or create a custom image, follow the expert guides.
 
-👉 **[Reflash the ISO](reflash_the_rpi_ISO.md)**
+**[Reflash the ISO](reflash_the_rpi_ISO.md)**
 
-👉 **[Install Daemon from a Specific Branch](install_daemon_from_branch.md)**
+**[Install Daemon from a Specific Branch](install_daemon_from_branch.md)**
+
+**[Development Workflow](development_workflow.md)** - Best practices for developing and testing code on the Wireless Reachy Mini

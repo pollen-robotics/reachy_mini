@@ -13,9 +13,126 @@
 
 
 <body class="bg-gray-50 min-h-screen flex items-center justify-center">
+    <!-- HuggingFace Login Modal -->
+    <style>
+        #hf-login-modal {
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.25s ease, visibility 0.25s ease;
+        }
+
+        #hf-login-modal.visible {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        #hf-login-modal .modal-content {
+            transform: scale(0.95) translateY(-10px);
+            transition: transform 0.25s ease;
+        }
+
+        #hf-login-modal.visible .modal-content {
+            transform: scale(1) translateY(0);
+        }
+
+        #hf-modal-token-input {
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        #hf-modal-token-input:focus {
+            box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.2);
+        }
+
+        #hf-modal-oauth-btn,
+        #hf-modal-token-btn {
+            transition: all 0.2s ease;
+        }
+
+        #hf-modal-oauth-btn:hover {
+            transform: translateY(-1px);
+        }
+
+        #hf-modal-oauth-btn:active,
+        #hf-modal-token-btn:active {
+            transform: translateY(0);
+        }
+    </style>
+    <div id="hf-login-modal" class="fixed inset-0 z-50 flex items-center justify-center hidden"
+        style="background-color: rgba(0, 0, 0, 0.5); backdrop-filter: blur(4px);">
+        <div class="modal-content max-w-md w-full mx-4"
+            style="background-color: #ffffff; border-radius: 20px; border: 2px solid #e5e7eb; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(0, 0, 0, 0.05); overflow: hidden;">
+            <!-- Modal header -->
+            <div class="flex items-center justify-between px-6 py-4"
+                style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border-bottom: 2px solid #fcd34d; border-radius: 18px 18px 0 0;">
+                <h3 style="color: #92400e; font-size: 18px; font-weight: 700;">🤗 Connect to Hugging Face</h3>
+                <button onclick="hfAuth.closeLoginModal()"
+                    class="flex items-center justify-center transition-all duration-200"
+                    style="color: #92400e; background-color: transparent; width: 32px; height: 32px; border-radius: 50%;"
+                    onmouseover="this.style.backgroundColor='rgba(146, 64, 14, 0.15)'"
+                    onmouseout="this.style.backgroundColor='transparent'">
+                    <svg style="width: 20px; height: 20px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+
+            <!-- Modal content -->
+            <div style="padding: 24px; background-color: #ffffff;">
+                <!-- OAuth login (primary) -->
+                <div id="hf-modal-oauth" class="hidden">
+                    <p style="color: #4b5563; font-size: 14px; margin-bottom: 16px;">Power your Reachy Mini with HF
+                        Space capabilities and exclusive apps!</p>
+                    <button id="hf-modal-oauth-btn" onclick="hfAuth.startOAuthLogin()"
+                        style="width: 100%; padding: 14px 16px; font-size: 16px; font-weight: 600; background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); color: #ffffff; border: none; border-radius: 12px; cursor: pointer; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
+                        🤗 Login with Hugging Face
+                    </button>
+                    <p id="hf-modal-oauth-status" class="hidden"
+                        style="margin-top: 12px; font-size: 14px; text-align: center; color: #6b7280;"></p>
+
+                    <div class="flex items-center" style="margin: 20px 0; gap: 12px;">
+                        <div style="flex: 1; height: 1px; background-color: #e5e7eb;"></div>
+                        <span style="font-size: 12px; font-weight: 500; color: #9ca3af;">or use token</span>
+                        <div style="flex: 1; height: 1px; background-color: #e5e7eb;"></div>
+                    </div>
+                </div>
+
+                <!-- Manual token entry -->
+                <div id="hf-modal-token-section">
+                    <p style="color: #4b5563; font-size: 14px; margin-bottom: 12px;">
+                        <a href="https://huggingface.co/settings/tokens/new?tokenType=write" target="_blank"
+                            style="color: #d97706; font-weight: 600; text-decoration: none;"
+                            onmouseover="this.style.textDecoration='underline'"
+                            onmouseout="this.style.textDecoration='none'">Get a token from Hugging Face</a>,
+                        then paste it below:
+                    </p>
+                    <input type="text" id="hf-modal-token-input" placeholder="hf_..." autocomplete="off"
+                        style="width: 100%; padding: 12px 16px; font-size: 16px; font-family: monospace; border: 2px solid #d1d5db; border-radius: 12px; background-color: #f9fafb; color: #111827; outline: none; box-sizing: border-box;"
+                        onfocus="this.style.borderColor='#f59e0b'; this.style.boxShadow='0 0 0 3px rgba(245, 158, 11, 0.2)'"
+                        onblur="this.style.borderColor='#d1d5db'; this.style.boxShadow='none'" />
+                    <p id="hf-modal-token-hint" style="margin-top: 8px; font-size: 12px; color: #9ca3af;">Token starts
+                        with hf_</p>
+
+                    <button id="hf-modal-token-btn" onclick="hfAuth.loginWithToken()" disabled
+                        style="width: 100%; margin-top: 16px; padding: 12px 16px; font-size: 16px; font-weight: 600; background-color: #e5e7eb; color: #9ca3af; border: none; border-radius: 12px; cursor: not-allowed;">
+                        Connect
+                    </button>
+                </div>
+
+                <!-- Error message -->
+                <div id="hf-modal-error" class="hidden"
+                    style="margin-top: 16px; padding: 12px; font-size: 14px; font-weight: 500; color: #dc2626; background-color: #fef2f2; border: 2px solid #fecaca; border-radius: 12px;">
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="container px-4 sm:px-8 md:px-8 lg:px-8 xl:px-8 mx-auto w-full md:w-2/3">
         {% block content %}{% endblock %}
     </div>
+
+    <!-- Global HF Auth Script -->
+    <script src="/static/js/hf_auth.js"></script>
 </body>
 
 </html>

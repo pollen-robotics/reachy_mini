@@ -15,6 +15,8 @@
       title: Reset
     - local: platforms/reachy_mini/install_daemon_from_branch
       title: Install Daemon from Branch
+    - local: platforms/reachy_mini/development_workflow
+      title: Development Workflow
     - local: platforms/reachy_mini/reflash_the_rpi_ISO
       title: Reflash the ISO
     - local: platforms/reachy_mini/motors_diagnosis
@@ -64,6 +66,30 @@
       title: Minimal demo
     - local: examples/look_at
       title: Look at
+    - local: examples/sequence
+      title: Sequence
+    - local: examples/goto_interpolation_playground
+      title: Goto Interpolation Playground
+    - local: examples/imu
+      title: IMU
+    - local: examples/reachy_compliant_demo
+      title: Compliant Mode Demo
+    - local: examples/recorded_moves
+      title: Recorded Moves
+    - local: examples/rerun_viewer
+      title: Rerun Viewer
+    - local: examples/take_picture
+      title: Take Picture
+    - local: examples/joy_controller
+      title: Joystick Controller
+    - local: examples/mini_head_position_gui
+      title: Head Position GUI
+    - local: examples/sound_doa
+      title: Sound Direction of Arrival
+    - local: examples/sound_play
+      title: Sound Playback
+    - local: examples/sound_record
+      title: Sound Recording
   title: Examples
 - isExpanded: false
   sections:

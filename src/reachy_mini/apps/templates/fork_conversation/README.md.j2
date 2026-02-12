@@ -1,0 +1,27 @@
+---
+title: {{ display_name }}
+emoji: 🤖
+colorFrom: purple
+colorTo: gray
+sdk: static
+pinned: false
+tags:
+  - reachy_mini
+  - reachy_mini_python_app
+---
+
+# {{ display_name }}
+
+Forked from the Reachy Mini conversation app.
+
+Use the `src/{{ app_name }}/profiles/{{ profile_name }}` folder to customize your own app from this template:
+- Edit instructions `{{ profile_name }}/instructions.txt`
+- Edit available tools in `{{ profile_name }}/tools.txt`
+- You can create your own tools in `{{ profile_name }}` by subclassing the `Tool` class.
+
+Do not forget to customize:
+- this `README.md` file
+- the `index.html` file (Hugging Face Spaces landing page)
+- the `src/{{ app_name }}/static/index.html` (the web app parameters page)
+
+The original README from the conversation app is available in `README_OLD.md`.

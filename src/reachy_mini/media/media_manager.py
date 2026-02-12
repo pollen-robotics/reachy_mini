@@ -280,9 +280,8 @@ class MediaManager:
         self, log_level: str, signalling_host: str, signalling_port: int
     ) -> None:
         """Initialize the WebRTC system (not implemented yet)."""
-        from gst_signalling.utils import find_producer_peer_id_by_name
-
         from reachy_mini.media.webrtc_client_gstreamer import GstWebRTCClient
+        from reachy_mini.media.webrtc_utils import find_producer_peer_id_by_name
 
         peer_id = find_producer_peer_id_by_name(
             signalling_host, signalling_port, "reachymini"
@@ -318,7 +317,7 @@ class MediaManager:
             return
         self.audio.start_recording()
 
-    def get_audio_sample(self) -> Optional[bytes | npt.NDArray[np.float32]]:
+    def get_audio_sample(self) -> Optional[npt.NDArray[np.float32]]:
         """Get an audio sample from the audio device.
 
         Returns:
