@@ -3,7 +3,7 @@
 import argparse
 import json
 import logging
-from threading import Thread
+from threading import Event, Thread
 from typing import Callable, Dict, Optional
 
 from websockets.sync.client import ClientConnection, connect
@@ -76,34 +76,46 @@ class SignallingListener:
         port: int = 8443,
         on_producer_added: Optional[Callable[[str, Dict[str, str]], None]] = None,
         on_producer_removed: Optional[Callable[[str], None]] = None,
+        log_level: str = "INFO",
     ) -> None:
+        self.logger = logging.getLogger(f"{__name__}.SignallingListener")
+        self.logger.setLevel(log_level)
         self._uri = f"ws://{host}:{port}"
         self._on_producer_added = on_producer_added
         self._on_producer_removed = on_producer_removed
         self._ws: Optional[ClientConnection] = None
         self._thread: Optional[Thread] = None
-        self._running = False
+        self._stop_event = Event()
         # track known producers: peer_id -> meta dict
         self._producers: Dict[str, Dict[str, str]] = {}
 
     def start(self) -> None:
         """Connect and start listening in a background thread."""
-        if self._running:
+        if self._thread is not None and self._thread.is_alive():
+            self.logger.debug("start() called but already running, skipping")
             return
-        self._running = True
+        self.logger.debug("starting listener thread")
+        self._stop_event.clear()
         self._thread = Thread(target=self._run, daemon=True)
         self._thread.start()
 
     def stop(self) -> None:
         """Disconnect and stop the listener thread."""
-        self._running = False
+        self.logger.debug("stop() called, setting stop event")
+        self._stop_event.set()
         if self._ws is not None:
             try:
+                self.logger.debug("closing websocket")
                 self._ws.close()
             except Exception:
                 pass
         if self._thread is not None:
+            self.logger.debug("joining listener thread (timeout=5s)")
             self._thread.join(timeout=5)
+            if self._thread.is_alive():
+                self.logger.debug("listener thread did NOT terminate within 5s")
+            else:
+                self.logger.debug("listener thread joined successfully")
             self._thread = None
 
     def _run(self) -> None:
@@ -111,8 +123,7 @@ class SignallingListener:
         try:
             self._ws = connect(self._uri)
         except Exception as e:
-            logger.error(f"SignallingListener: failed to connect to {self._uri}: {e}")
-            self._running = False
+            self.logger.error(f"failed to connect to {self._uri}: {e}")
             return
 
         try:
@@ -120,7 +131,7 @@ class SignallingListener:
             welcome_raw = self._ws.recv()
             welcome = json.loads(welcome_raw)
             my_peer_id = welcome.get("peerId", "")
-            logger.debug(f"SignallingListener: connected as {my_peer_id}")
+            self.logger.debug(f"connected as {my_peer_id}")
 
             # Register as listener to receive peerStatusChanged events
             self._ws.send(
@@ -136,12 +147,12 @@ class SignallingListener:
             # Get the initial producer list
             self._ws.send(json.dumps({"type": "list"}))
 
-            while self._running:
+            while not self._stop_event.is_set():
                 try:
                     raw = self._ws.recv()
                 except Exception:
-                    if self._running:
-                        logger.warning("SignallingListener: WebSocket connection lost")
+                    if not self._stop_event.is_set():
+                        self.logger.warning("WebSocket connection lost")
                     break
 
                 msg = json.loads(raw)
@@ -153,10 +164,9 @@ class SignallingListener:
                     self._handle_peer_status_changed(msg)
 
         except Exception as e:
-            if self._running:
-                logger.error(f"SignallingListener: error in listener loop: {e}")
+            if not self._stop_event.is_set():
+                self.logger.error(f"error in listener loop: {e}")
         finally:
-            self._running = False
             if self._ws is not None:
                 try:
                     self._ws.close()

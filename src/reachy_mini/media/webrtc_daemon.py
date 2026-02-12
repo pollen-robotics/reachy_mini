@@ -142,6 +142,7 @@ class GstWebRTC:
             port=8443,
             on_producer_added=self._on_producer_added,
             on_producer_removed=self._on_producer_removed,
+            log_level=log_level,
         )
 
     def __del__(self) -> None:
