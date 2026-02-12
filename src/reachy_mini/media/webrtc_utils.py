@@ -4,7 +4,7 @@ import argparse
 import json
 import logging
 from threading import Event, Thread
-from typing import Callable, Dict, Optional
+from typing import Any, Callable, Dict, Optional
 
 from websockets.sync.client import ClientConnection, connect
 
@@ -169,7 +169,7 @@ class SignallingListener:
                     pass
                 self._ws = None
 
-    def _handle_list(self, msg: dict) -> None:
+    def _handle_list(self, msg: Dict[str, Any]) -> None:
         """Process initial producer list."""
         for p in msg.get("producers", []):
             peer_id = p["id"]
@@ -182,7 +182,7 @@ class SignallingListener:
                 if self._on_producer_added:
                     self._on_producer_added(peer_id, meta)
 
-    def _handle_peer_status_changed(self, msg: dict) -> None:
+    def _handle_peer_status_changed(self, msg: Dict[str, Any]) -> None:
         """Process peerStatusChanged: detect producer add / remove."""
         peer_id = msg.get("peerId", "")
         roles = msg.get("roles", [])

@@ -31,7 +31,7 @@ Example usage:
 import logging
 import os
 from threading import Thread
-from typing import Callable, Iterator, List, Optional, Tuple, cast
+from typing import Callable, Dict, Iterator, List, Optional, Tuple, cast
 
 import gi
 
@@ -201,7 +201,7 @@ class GstWebRTC:
     def _on_producer_added(
         self,
         producer_id: str,
-        meta: dict,
+        meta: Dict[str, str],
     ) -> None:
         """Handle a producer appearing on the signalling server."""
         name = meta.get("name")
