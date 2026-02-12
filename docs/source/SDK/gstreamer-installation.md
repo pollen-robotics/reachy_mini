@@ -180,8 +180,8 @@ gst-launch-1.0 webrtcsink run-signalling-server=true meta="meta,name=reachymini"
 ```
 
 **Test 2: Send Audio to Reachy**
-Send an audio RTP stream to port 5000 to test the speakers:
+Send an audio stream via webrtc to the robot from your computer (replace `<ROBOT_IP>` with the actual IP address of your Reachy Mini). It requires the daemon to run:
 
 ```bash
-gst-launch-1.0 audiotestsrc ! audioconvert ! audioresample ! opusenc ! audio/x-opus, rate=48000, channels=2 ! rtpopuspay pt=96 ! udpsink host=<ROBOT_IP> port=5000
+gst-launch-1.0 audiotestsrc ! webrtcsink name=ws meta="meta,name=reachymini-client" signaller::uri="ws://<ROBOT_IP>:8443"
 ```
