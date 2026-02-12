@@ -50,6 +50,7 @@ dev = [
     "mypy==1.18.2",
     "types-requests",
     "types-toml",
+    "types-PyYAML"
 ]
 examples = ["pynput"]
 mujoco = ["mujoco==3.3.0"]
@@ -118,7 +119,7 @@ markers = [
 ]
 
 [tool.mypy]
-python_version = "3.10"
+python_version = "3.12"
 files = ["src/", "examples/"]
 ignore_missing_imports = true
 strict = true
