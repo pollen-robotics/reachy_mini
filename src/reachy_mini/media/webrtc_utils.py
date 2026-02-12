@@ -103,12 +103,7 @@ class SignallingListener:
         """Disconnect and stop the listener thread."""
         self.logger.debug("stop() called, setting stop event")
         self._stop_event.set()
-        if self._ws is not None:
-            try:
-                self.logger.debug("closing websocket")
-                self._ws.close()
-            except Exception:
-                pass
+
         if self._thread is not None:
             self.logger.debug("joining listener thread (timeout=5s)")
             self._thread.join(timeout=5)
@@ -117,7 +112,6 @@ class SignallingListener:
             else:
                 self.logger.debug("listener thread joined successfully")
             self._thread = None
-        self.logger.debug("end stop")
 
     def _run(self) -> None:
         """Connect, register as listener, and process messages."""
