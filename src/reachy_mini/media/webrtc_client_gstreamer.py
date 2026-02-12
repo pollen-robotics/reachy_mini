@@ -38,7 +38,7 @@ Example usage via MediaManager:
 
 """
 
-from threading import Event, Thread
+from threading import Thread
 from typing import Iterator, Optional, cast
 
 import gi
@@ -137,7 +137,6 @@ class GstWebRTCClient(CameraBase, AudioBase):
         webrtcsrc = self._configure_webrtcsrc(signaling_host, signaling_port, peer_id)
         self._pipeline_record.add(webrtcsrc)
 
-        self._consumer_ready = Event()
         self._appsrc_pts = 0  # running PTS in nanoseconds for appsrc buffers
         self._pipeline_playback = Gst.Pipeline.new("audio_player")
         self._init_pipeline_playback(
@@ -380,8 +379,6 @@ class GstWebRTCClient(CameraBase, AudioBase):
         meta_structure.set_value("name", "reachymini-client")
         webrtcsink.set_property("meta", meta_structure)
 
-        webrtcsink.connect("consumer-added", self._on_playback_consumer_added)
-
         signaller = webrtcsink.get_property("signaller")
         signaller.set_property("uri", f"ws://{signaling_host}:{signaling_port}")
 
@@ -393,13 +390,6 @@ class GstWebRTCClient(CameraBase, AudioBase):
         self._appsrc.link(audioconvert)
         audioconvert.link(audioresample)
         audioresample.link(webrtcsink)
-
-    def _on_playback_consumer_added(
-        self, webrtcsink: Gst.Bin, peer_id: str, webrtcbin: Gst.Element
-    ) -> None:
-        """Signal that a consumer has connected to the playback webrtcsink."""
-        self.logger.info(f"Playback consumer added: {peer_id}")
-        self._consumer_ready.set()
 
     def set_max_output_buffers(self, max_buffers: int) -> None:
         """Set the maximum number of output buffers to queue in the player.
@@ -428,7 +418,6 @@ class GstWebRTCClient(CameraBase, AudioBase):
 
         See AudioBase.stop_playing() for complete documentation.
         """
-        self._consumer_ready.clear()
         self._appsrc_pts = 0
         self._pipeline_playback.set_state(Gst.State.NULL)
 
@@ -440,12 +429,6 @@ class GstWebRTCClient(CameraBase, AudioBase):
         if self._appsrc is None:
             self.logger.warning(
                 "AppSrc is not initialized. Call start_playing() first."
-            )
-            return
-
-        if not self._consumer_ready.wait(timeout=10):
-            self.logger.warning(
-                "No consumer connected to playback pipeline, dropping audio sample."
             )
             return
 
