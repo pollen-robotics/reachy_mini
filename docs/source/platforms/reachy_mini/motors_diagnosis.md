@@ -99,6 +99,9 @@ If you are 100% sure the connection is okay, it can also be a motor not flashed 
 
 - If **two motors are missing** but the connection is okay, then maybe you got two same motors ID in your kit. Three is very unlikely. Check the "Flashing issue" section below.
 
+- If **all motors are missing**, check the connection of the "F" central motor (ID10). This motor is the first of the chain and if it's not detected, then all the following motors will not be detected too.
+This motor must be connected to the foot with a 100mm cable and to the head with a 300mm cable. Be sure these cables are well connected on each side and not damaged.
+
 ### Flashing issue
 If one or more motors are not detected, it can be due to a flashing issue affecting the motor IDs or baudrate. 
 

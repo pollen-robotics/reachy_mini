@@ -2,8 +2,6 @@ name: Build HF PR Documentation
 
 on:
   pull_request:
-    branches:
-      - main
     paths:
       - "docs/**"
       - "examples/**"
