@@ -277,21 +277,6 @@ sudo apt-get install libportaudio2
 
 </details>
 
-<br />
-
-> **PortAudio** Make sure that portaudio is installed on your system to enable audio features with the default backend.
-
-<details>
-<summary>🔧 <strong>Installing PortAudio</strong></summary>
-
-Run this command in your terminal:
-
-```bash
-sudo apt-get install libportaudio2
-```
-
-</details>
-
 ## 📡 Wireless Reachy Mini Setup
 
 > **Want to use the SDK from a remote laptop with a wireless Reachy Mini ?** You'll need to install GStreamer to receive video and audio streams.
