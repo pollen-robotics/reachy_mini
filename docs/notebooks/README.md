@@ -1,55 +1,51 @@
-# 📚 Reachy Mini Didactic Notebooks! 
+# 📚 Reachy Mini Tutorial Notebooks
 
-The notebooks are designed for **progressive learning**, from first connection to creative behaviors. You will learn how to use Reachy's SDK and understand its capabilities through practical examples.
+Welcome to the Reachy Mini tutorial notebooks! These interactive Jupyter notebooks are designed for **progressive learning**, from your first connection to creating interactive behaviors. You'll learn how to use Reachy's SDK and understand its capabilities through practical, hands-on examples.
 
-Each notebook is:
+Each notebook includes:
 
-* Executable in **simulation or on real hardware**
-* Focused on **hands-on experimentation**
-* Self-contained, with reminders and safety notes
-
----
-
-### 🟢 Level 1 — Discovery
-
-**Notebook 0 — Getting Started with Reachy Mini**
-👉 Installation checks, daemon, first connection, first motion
-
-**Notebook 1 — Moving Reachy Mini**
-👉 `goto_target` vs `set_target`, head pose, antennas, interpolation
+* ✅ **Executable code** — Works in simulation or on real hardware
+* 🎯 **Clear learning goals** — Know what you'll achieve
+* 🛠️ **Hands-on exercises** — Practice what you learn
+* 💡 **Self-contained explanations** — No need to jump between docs
+* ⚠️ **Safety reminders** — Proper usage guidelines
 
 ---
 
-### 🟡 Level 2 — Understanding
+## 📘 Available Notebooks
 
-**Notebook 2 — Compliant Mode & Physical Interaction**
-👉 Gravity compensation, safety, human–robot interaction
+### **Notebook 0 — First Connection and Movement**
+**Duration:** ~20 minutes | **Difficulty:** Beginner
 
-**Notebook 3 — Seeing with Reachy Mini (Camera & Gaze)**
-👉 Camera access, image coordinates, `look_at_image`
+Learn the fundamentals of connecting to Reachy Mini and controlling its movements.
 
-**Notebook 4 — Hearing & Speaking (Audio)**
-👉 Microphones, speakers, Direction of Arrival (DoA)
+**What you'll learn:**
+* 🔌 Connecting to Reachy Mini (both connection modes)
+* 🤖 Understanding Reachy's parts (head, antennas)
+* 🎯 Making your first movements with `goto_target()`
+* 📐 Creating head poses and controlling antennas
+* ⏱️ Using duration for smooth motion
 
-**Notebook 5 — Feeling Motion (IMU)**
-👉 Accelerometer, gyroscope, orientation (Wireless only)
+**Topics covered:** Connection modes, head poses, antennas, `goto_target()`, `set_target()`
 
 ---
 
-### 🔵 Level 3 — Creating
+### **Notebook 1 — Basic Media: Camera & Audio**
+**Duration:** ~20 minutes | **Difficulty:** Beginner
 
-**Notebook 6 — Recording & Replaying Motions**
-👉 Record moves, replay them, use motion libraries
+Make Reachy see and hear! Learn to capture images, record audio, and play sounds.
 
-**Notebook 7 — Building Complete Behaviors (Capstone)**
-👉 Combine vision, audio, motion, and interaction
+**What you'll learn:**
+* 📸 Capturing images from the camera
+* 🎬 Displaying video frames
+* 🎤 Recording audio from the microphone array
+* 🔊 Playing sounds through the speaker
+* 💾 Saving and loading media files
+* 🤖 Combining media with motion for interactive behaviors
 
-Examples:
+**Topics covered:** Camera access, image capture, audio recording/playback, real-time audio processing, media + motion
 
-* Look-at-click interaction
-* Sound-reactive motion
-* Teach-by-demonstration behavior
-
+---
 
 ### ❓ Troubleshooting
 
