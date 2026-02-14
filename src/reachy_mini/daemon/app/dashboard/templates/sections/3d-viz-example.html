@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>Reachy Mini 3D Viewer - CDN Example</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            overflow: hidden;
+            background: linear-gradient(180deg, #00bfae 0%, #0093d1 60%, #3f51b5 100%);
+        }
+
+        #container { width: 100vw; height: 100vh; }
+
+        #status {
+            position: absolute;
+            top: 16px;
+            left: 16px;
+            z-index: 100;
+            background: rgba(20, 20, 35, 0.75);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 12px 16px;
+            color: #fff;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #666;
+            flex-shrink: 0;
+        }
+        .status-dot.connected { background: #4ade80; box-shadow: 0 0 6px rgba(74, 222, 128, 0.5); }
+        .status-dot.disconnected { background: #f87171; box-shadow: 0 0 6px rgba(248, 113, 113, 0.5); }
+        .status-dot.loading { background: #fbbf24; animation: pulse 1s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+        #controls-hint {
+            position: absolute;
+            bottom: 12px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(20, 20, 35, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 6px;
+            padding: 6px 12px;
+            font-size: 11px;
+            color: rgba(255, 255, 255, 0.4);
+        }
+
+        #controls-hint kbd {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 1px 4px;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body>
+    <div id="status">
+        <span class="status-dot loading"></span>
+        <span id="status-text">Loading robot...</span>
+    </div>
+
+    <div id="container"></div>
+
+    <div id="controls-hint">
+        <kbd>Drag</kbd> rotate · <kbd>Scroll</kbd> zoom · <kbd>Shift+Drag</kbd> pan
+    </div>
+
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+        }
+    }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+        import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
+        import URDFLoader from 'https://cdn.jsdelivr.net/npm/urdf-loader@0.12.3/+esm';
+
+        // HuggingFace CDN base URL for all assets
+        const HF_BASE = "https://huggingface.co/spaces/8bitkick/reachy_mini_3d_web_viz/resolve/main/reachy_mini_3d_web_viz/static/";
+        const URDF_URL = HF_BASE + "assets/reachy-mini.urdf";
+        const MESH_BASE_URL = HF_BASE + "assets/meshes_optimized/";
+        const DEFAULT_STATE_URL = HF_BASE + "assets/default_state.json";
+
+        // Joint name constants
+        const HEAD_JOINT_NAMES = ['yaw_body', 'stewart_1', 'stewart_2', 'stewart_3', 'stewart_4', 'stewart_5', 'stewart_6'];
+        const PASSIVE_JOINT_NAMES = [];
+        for (let i = 1; i <= 7; i++) {
+            PASSIVE_JOINT_NAMES.push(`passive_${i}_x`, `passive_${i}_y`, `passive_${i}_z`);
+        }
+
+        // Status UI helper
+        function updateStatus(message, state = 'loading') {
+            const dot = document.querySelector('.status-dot');
+            const text = document.getElementById('status-text');
+            dot.className = 'status-dot ' + state;
+            if (message) text.textContent = message;
+        }
+
+        // Parse URDF for mesh colors
+        function parseUrdfColors(urdfText) {
+            const colors = {};
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(urdfText, 'application/xml');
+            const materials = doc.querySelectorAll('material');
+            const materialMap = {};
+
+            materials.forEach(mat => {
+                const name = mat.getAttribute('name');
+                const colorEl = mat.querySelector('color');
+                if (name && colorEl) {
+                    const rgba = colorEl.getAttribute('rgba')?.split(' ').map(Number) || [0.5, 0.5, 0.5, 1];
+                    materialMap[name] = {
+                        color: new THREE.Color(rgba[0], rgba[1], rgba[2]),
+                        opacity: rgba[3],
+                        name: name
+                    };
+                }
+            });
+
+            const visuals = doc.querySelectorAll('visual');
+            visuals.forEach(visual => {
+                const meshEl = visual.querySelector('mesh');
+                const matEl = visual.querySelector('material');
+                if (meshEl && matEl) {
+                    let filename = meshEl.getAttribute('filename');
+                    if (filename) {
+                        filename = filename.split('/').pop();
+                        const matName = matEl.getAttribute('name');
+                        if (matName && materialMap[matName]) {
+                            colors[filename] = materialMap[matName];
+                        }
+                    }
+                }
+            });
+            return colors;
+        }
+
+        // Main app
+        window.addEventListener('DOMContentLoaded', async () => {
+            const container = document.getElementById('container');
+
+            // Scene setup
+            const scene = new THREE.Scene();
+            const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.01, 100);
+            camera.position.set(0.4, 0.1, -0.4);
+            camera.lookAt(0, 0, 0);
+
+            const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            renderer.outputColorSpace = THREE.SRGBColorSpace;
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            renderer.toneMappingExposure = 1.0;
+            container.appendChild(renderer.domElement);
+
+            // Controls
+            const controls = new OrbitControls(camera, renderer.domElement);
+            controls.autoRotate = true;
+            controls.autoRotateSpeed = 2;
+            controls.target.set(0, 0.15, 0);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.minDistance = 0.2;
+            controls.maxDistance = 2;
+            controls.update();
+
+            // Lighting - Ambient light
+            scene.add(new THREE.AmbientLight(0xffffff, 0.4));
+
+            // Key light - main directional light with shadows
+            const keyLight = new THREE.DirectionalLight(0xffffff, 1.5);
+            keyLight.position.set(2, 1, 2);
+            keyLight.castShadow = true;
+            keyLight.shadow.mapSize.width = 1024;
+            keyLight.shadow.mapSize.height = 1024;
+            keyLight.shadow.camera.near = 0.1;
+            keyLight.shadow.camera.far = 10;
+            keyLight.shadow.camera.left = -1;
+            keyLight.shadow.camera.right = 1;
+            keyLight.shadow.camera.top = 1;
+            keyLight.shadow.camera.bottom = -1;
+            scene.add(keyLight);
+
+            // Fill light - softer, opposite side
+            const fillLight = new THREE.DirectionalLight(0xFFB366, 0.6);
+            fillLight.position.set(-2, 0.5, 1.5);
+            scene.add(fillLight);
+
+            // Rim/back light - for depth
+            const rimLight = new THREE.DirectionalLight(0xffffff, 0.4);
+            rimLight.position.set(0, 1.2, -2);
+            scene.add(rimLight);
+
+            // Hemisphere light for natural ambient
+            const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.3);
+            hemiLight.position.set(0, 1, 0);
+            scene.add(hemiLight);
+
+            // Ground
+            const ground = new THREE.Mesh(
+                new THREE.PlaneGeometry(2, 2),
+                new THREE.ShadowMaterial({ opacity: 0.3 })
+            );
+            ground.rotation.x = -Math.PI / 2;
+            ground.receiveShadow = true;
+            scene.add(ground);
+            const gridHelper = new THREE.GridHelper(1, 20, 0xbbbbbb, 0xbbbbbb);
+            gridHelper.position.y = 0.001;
+            scene.add(gridHelper);
+
+            // Resize handler
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+
+            // Load URDF
+            let robot = null;
+            let jointMap = {};
+            let meshColors = {};
+
+            try {
+                updateStatus('Loading URDF...', 'loading');
+                const response = await fetch(URDF_URL);
+                const urdfText = await response.text();
+                meshColors = parseUrdfColors(urdfText);
+
+                const blob = new Blob([urdfText], { type: 'application/xml' });
+                const blobUrl = URL.createObjectURL(blob);
+
+                const loader = new URDFLoader();
+                loader.packages = { 'assets': 'assets/', 'reachy_mini_description': 'assets/' };
+                loader.workingPath = 'assets/';
+
+                // Loaders
+                const gltfLoader = new GLTFLoader();
+                const dracoLoader = new DRACOLoader();
+                dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/');
+                gltfLoader.setDRACOLoader(dracoLoader);
+
+                loader.loadMeshCb = (path, manager, onComplete) => {
+                    const filename = path.split('/').pop();
+                    const matData = meshColors[filename] || {};
+
+                    const opacity = matData?.opacity ?? 1;
+                    const isTransparent = opacity < 0.4;
+
+                    const material = new THREE.MeshPhysicalMaterial({
+                        color: (filename?.includes('antenna_V2') || isTransparent || matData?.name === 'antenna_material') ? 0x202020 : matData?.color || 0x808080,
+                        metalness: 0.0,
+                        roughness: (filename?.includes('antenna_V2') || isTransparent || matData?.name === 'antenna_material') ? 0.05 : 0.7,
+                        transparent: isTransparent,
+                        opacity,
+                        side: isTransparent ? THREE.DoubleSide : THREE.FrontSide,
+                    });
+
+                    if (filename?.includes('link')) {
+                        material.color.setHex(0xffffff);
+                        material.metalness = 1.0;
+                        material.roughness = 0.3;
+                    }
+
+                    if (matData.name === 'antenna_material') {
+                        material.clearcoat = 1.0;
+                        material.clearcoatRoughness = 0.0;
+                        material.reflectivity = 1.0;
+                        material.envMapIntensity = 1.5;
+                    }
+
+                    const meshUrl = MESH_BASE_URL + filename.replace(/\.stl$/i, '.glb');
+
+                    gltfLoader.load(meshUrl, (gltf) => {
+                        let geometry = null;
+                        gltf.scene.traverse((child) => {
+                            if (child.isMesh && !geometry) geometry = child.geometry;
+                        });
+                        if (geometry) {
+                            const mesh = new THREE.Mesh(geometry, material);
+                            mesh.castShadow = true;
+                            mesh.receiveShadow = true;
+                            onComplete(mesh);
+                        } else {
+                            onComplete(gltf.scene);
+                        }
+                    }, undefined, (err) => {
+                        console.error('Mesh load error:', filename, err);
+                        onComplete(null, err);
+                    });
+                };
+
+                robot = await new Promise((resolve, reject) => {
+                    loader.load(blobUrl, (loadedRobot) => {
+                        URL.revokeObjectURL(blobUrl);
+                        resolve(loadedRobot);
+                    }, undefined, (err) => {
+                        URL.revokeObjectURL(blobUrl);
+                        reject(err);
+                    });
+                });
+
+                robot.rotation.x = -Math.PI / 2;
+                robot.traverse((child) => {
+                    if (child.isURDFJoint) jointMap[child.name] = child;
+                });
+                scene.add(robot);
+
+                updateStatus('Connecting...', 'loading');
+
+            } catch (err) {
+                console.error('Failed to load robot:', err);
+                updateStatus('Failed to load: ' + err.message, 'disconnected');
+            }
+
+            // WebSocket connection for live joint updates
+            const params = new URLSearchParams(location.search);
+            const WS_URL = params.get("ws") || "ws://127.0.0.1:8000/api/state/ws/full?with_head_joints=true";
+
+            function connectWebSocket() {
+                const ws = new WebSocket(WS_URL);
+
+                ws.onopen = () => {
+                    updateStatus('Connected', 'connected');
+                };
+
+                ws.onclose = () => {
+                    updateStatus('Disconnected - reconnecting...', 'disconnected');
+                    setTimeout(connectWebSocket, 2000);
+                };
+
+                ws.onerror = () => {
+                    updateStatus('Connection error', 'disconnected');
+                };
+
+                ws.onmessage = (event) => {
+                    if (!robot) return;
+                    try {
+                        const data = JSON.parse(event.data);
+
+                        // Get head joints from WebSocket or use body_yaw fallback
+                        const headJoints = (data.head_joints?.length === 7)
+                            ? data.head_joints
+                            : [data.body_yaw || 0, 0, 0, 0, 0, 0, 0];
+
+                        // Apply head joints
+                        for (let i = 0; i < 7; i++) {
+                            const joint = jointMap[HEAD_JOINT_NAMES[i]];
+                            if (joint) joint.setJointValue(headJoints[i]);
+                        }
+
+                        // Update antennas (swapped and inverted)
+                        if (data.antennas_position?.length >= 2) {
+                            jointMap['right_antenna']?.setJointValue(-data.antennas_position[0]);
+                            jointMap['left_antenna']?.setJointValue(-data.antennas_position[1]);
+                        }
+
+                    } catch (e) {
+                        console.error('Failed to parse WebSocket data:', e);
+                    }
+                };
+            }
+
+            connectWebSocket();
+
+            // Animation loop
+            function animate() {
+                requestAnimationFrame(animate);
+                controls.update();
+                renderer.render(scene, camera);
+            }
+            animate();
+        });
+    </script>
+</body>
+</html>

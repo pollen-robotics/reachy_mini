@@ -1,7 +1,31 @@
 <section class="flex flex-col md:flex-row gap-4">
-    <!-- Daemon Status Animation -->
-    <div class="flex-1 min-w-[50%] justify-center items-center flex">
-        <object id="daemon-status-anim" data="" type="image/svg+xml" class="w-full h-auto"></object>
+    <!-- Daemon Status Animation / 3D Viewer -->
+    <div class="flex-1 min-w-[50%] relative">
+        <!-- 3D Viewer Toggle -->
+        <div class="absolute top-2 right-2 z-10 flex items-center gap-2">
+            <span class="text-xs text-gray-400">3D</span>
+            <span>
+                <label>
+                    <input id="viz-3d-toggle" type="checkbox" value="" class="sr-only peer">
+                    <div class="relative w-20 h-8 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-gray-100 dark:peer-focus:ring-gray-100 rounded-full peer dark:bg-red-400 peer-checked:after:translate-x-[46px] rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:start-0.5 after:bg-white after:border-gray-300 after:border after:rounded-full after:h-7 after:w-7 after:transition-all dark:border-gray-600 peer-checked:bg-green-400 dark:peer-checked:bg-green-400">
+                        <span class="absolute top-1/2 start-1.5 -translate-y-1/2 justify-center items-center size-7 text-white peer-checked:text-white transition-colors duration-200 hidden">ON</span>
+                        <span class="absolute top-1/2 end-2.5 -translate-y-1/2 flex justify-center items-center size-7 text-white">OFF</span>
+                    </div>
+                </label>
+            </span>
+        </div>
+        <!-- Original SVG animation (shown by default) -->
+        <div id="daemon-anim-container" class="justify-center items-center flex w-full h-full">
+            <object id="daemon-status-anim" data="" type="image/svg+xml" class="w-full h-auto"></object>
+        </div>
+        <!-- 3D Viewer (hidden by default) -->
+        <div id="viewer-3d-container" class="hidden w-full rounded-lg overflow-hidden" style="height: 350px; background: linear-gradient(180deg, #e8f4f8 0%, #d1e8f0 60%, #b8ccd4 100%);">
+            <div id="viewer-3d-status" class="absolute top-2 left-2 z-10 flex items-center gap-1.5 px-2 py-1 rounded-md text-xs" style="background: rgba(20, 20, 35, 0.6); color: #fff; backdrop-filter: blur(6px);">
+                <span id="viewer-3d-dot" class="w-2 h-2 rounded-full bg-gray-400"></span>
+                <span id="viewer-3d-status-text">3D viewer off</span>
+            </div>
+            <div id="viewer-3d-canvas" class="w-full h-full"></div>
+        </div>
     </div>
     <div class="flex-1 py-2">
         <div class="flex justify-between items-center">

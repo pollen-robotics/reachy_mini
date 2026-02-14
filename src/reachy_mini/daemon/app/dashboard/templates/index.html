@@ -17,4 +17,39 @@
 <script src="/static/js/move_player.js"></script>
 <script src="/static/js/notification.js"></script>
 <script src="/static/js/volume_control.js"></script>
+<script type="importmap">
+{
+    "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+    }
+}
+</script>
+<script type="module">
+    const toggle = document.getElementById('viz-3d-toggle');
+    const animContainer = document.getElementById('daemon-anim-container');
+    const viewerContainer = document.getElementById('viewer-3d-container');
+    let viewerModule = null;
+
+    if (toggle) {
+        toggle.addEventListener('change', async () => {
+            if (toggle.checked) {
+                animContainer.classList.add('hidden');
+                viewerContainer.classList.remove('hidden');
+                if (!viewerModule) {
+                    viewerModule = await import('/static/js/3d_viewer.js');
+                    await viewerModule.init();
+                } else {
+                    const v = viewerModule.getViewer();
+                    if (v) v.start();
+                }
+            } else {
+                viewerContainer.classList.add('hidden');
+                animContainer.classList.remove('hidden');
+                const v = viewerModule?.getViewer();
+                if (v) v.stop();
+            }
+        });
+    }
+</script>
 {% endblock %}
