@@ -34,6 +34,10 @@
 
     if (openBtn) {
         openBtn.addEventListener('click', async () => {
+            // Match 3D viewer height to the SVG animation
+            const animHeight = animContainer.getBoundingClientRect().height;
+            viewerContainer.style.height = animHeight + 'px';
+
             animContainer.classList.add('hidden');
             viewerContainer.classList.remove('hidden');
             openBtn.classList.add('hidden');

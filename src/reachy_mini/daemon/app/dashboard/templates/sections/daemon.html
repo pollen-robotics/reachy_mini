@@ -9,17 +9,37 @@
                 <div id="daemon-toggle-slider"
                     class="relative w-20 h-8 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-gray-100 dark:peer-focus:ring-gray-100 rounded-full peer dark:bg-red-400 peer-checked:after:translate-x-[46px] rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:start-0.5 after:bg-white after:border-gray-300 after:border after:rounded-full after:h-7 after:w-7 after:transition-all dark:border-gray-600 peer-checked:bg-green-400 dark:peer-checked:bg-green-400 hidden">
                     <span id="daemon-toggle-on"
-                        class="absolute top-1/2 start-1.5 -translate-y-1/2 justify-center items-center size-7 text-white peer-checked:text-white transition-colors duration-200 hidden">ON</span>
+                        class="absolute top-1/2 -translate-y-1/2 flex justify-center items-center text-xs font-medium text-white transition-colors duration-200 hidden"
+                        style="left: 8px;">ON</span>
                     <span id="daemon-toggle-off"
-                        class="absolute top-1/2 end-2.5 -translate-y-1/2 flex justify-center items-center size-7 text-white">
-                        OFF
-                    </span>
+                        class="absolute top-1/2 -translate-y-1/2 flex justify-center items-center text-xs font-medium text-white"
+                        style="right: 8px;">OFF</span>
                 </div>
             </label>
         </span>
     </div>
 
-    <!-- Status row: status icon/text + lozenges -->
+    <!-- Daemon Status Animation / 3D Viewer (full width) -->
+    <div class="w-full relative">
+        <!-- 3D Viewer button -->
+        <button id="viz-3d-btn" class="absolute z-10 text-xs text-white cursor-pointer" style="background: rgba(20, 20, 35, 0.5); border: none; padding: 4px 10px; border-radius: 6px; backdrop-filter: blur(6px); top: 6px; left: 6px;">
+            3D
+        </button>
+        <!-- Back button (shown in 3D mode) -->
+        <button id="viz-3d-back-btn" class="hidden absolute z-10 text-xs text-white cursor-pointer" style="background: rgba(20, 20, 35, 0.5); border: none; padding: 4px 10px; border-radius: 6px; backdrop-filter: blur(6px); top: 6px; left: 6px;">
+            ✕
+        </button>
+        <!-- Original SVG animation (shown by default) -->
+        <div id="daemon-anim-container" class="justify-center items-center flex w-full">
+            <object id="daemon-status-anim" data="" type="image/svg+xml" class="w-full h-auto"></object>
+        </div>
+        <!-- 3D Viewer (hidden by default, sized to match SVG via JS) -->
+        <div id="viewer-3d-container" class="hidden w-full rounded-lg overflow-hidden" style="background: linear-gradient(180deg, #00bfae 0%, #0093d1 60%, #3f51b5 100%);">
+            <div id="viewer-3d-canvas" class="w-full h-full"></div>
+        </div>
+    </div>
+
+    <!-- Status + lozenges row (below viewer) -->
     <div id="backend-status" class="flex items-center justify-between">
         <div class="flex items-center">
             <span id="backend-status-icon" class="inline-block w-4 h-4 rounded-full align-middle mr-2"></span>
@@ -50,26 +70,6 @@
             >
                 🤗 Login
             </button>
-        </div>
-    </div>
-
-    <!-- Daemon Status Animation / 3D Viewer (full width) -->
-    <div class="w-full relative">
-        <!-- 3D Viewer button -->
-        <button id="viz-3d-btn" class="absolute top-2 right-2 z-10 text-xs text-gray-400 hover:text-gray-600 transition-colors cursor-pointer" style="background: none; border: none;">
-            3D ▸
-        </button>
-        <!-- Back button (shown in 3D mode) -->
-        <button id="viz-3d-back-btn" class="hidden absolute top-2 right-2 z-10 text-xs text-white transition-colors cursor-pointer" style="background: rgba(20, 20, 35, 0.5); border: none; padding: 4px 10px; border-radius: 6px; backdrop-filter: blur(6px);">
-            ✕ Close
-        </button>
-        <!-- Original SVG animation (shown by default) -->
-        <div id="daemon-anim-container" class="justify-center items-center flex w-full h-full">
-            <object id="daemon-status-anim" data="" type="image/svg+xml" class="w-full h-auto"></object>
-        </div>
-        <!-- 3D Viewer (hidden by default) -->
-        <div id="viewer-3d-container" class="hidden w-full rounded-lg overflow-hidden" style="height: 350px; background: linear-gradient(180deg, #00bfae 0%, #0093d1 60%, #3f51b5 100%);">
-            <div id="viewer-3d-canvas" class="w-full h-full"></div>
         </div>
     </div>
 

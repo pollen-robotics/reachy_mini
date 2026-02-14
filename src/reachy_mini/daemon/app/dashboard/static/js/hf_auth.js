@@ -396,8 +396,8 @@ const hfAuth = {
                 tooltip: 'HF Space Apps: Offline'
             },
             'unavailable': {
-                color: '#9ca3af', bg: '#f3f4f6', border: '#e5e7eb',
-                textColor: '#9ca3af', label: 'Lite',
+                color: '#7db8d4', bg: '#e0f0fa', border: '#b0d8ef',
+                textColor: '#4a8fad', label: 'Lite',
                 tooltip: 'HF Space Apps: Coming soon to Lite version'
             }
         };
