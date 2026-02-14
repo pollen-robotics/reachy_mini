@@ -26,29 +26,36 @@
 }
 </script>
 <script type="module">
-    const toggle = document.getElementById('viz-3d-toggle');
+    const openBtn = document.getElementById('viz-3d-btn');
+    const closeBtn = document.getElementById('viz-3d-back-btn');
     const animContainer = document.getElementById('daemon-anim-container');
     const viewerContainer = document.getElementById('viewer-3d-container');
     let viewerModule = null;
 
-    if (toggle) {
-        toggle.addEventListener('change', async () => {
-            if (toggle.checked) {
-                animContainer.classList.add('hidden');
-                viewerContainer.classList.remove('hidden');
-                if (!viewerModule) {
-                    viewerModule = await import('/static/js/3d_viewer.js');
-                    await viewerModule.init();
-                } else {
-                    const v = viewerModule.getViewer();
-                    if (v) v.start();
-                }
+    if (openBtn) {
+        openBtn.addEventListener('click', async () => {
+            animContainer.classList.add('hidden');
+            viewerContainer.classList.remove('hidden');
+            openBtn.classList.add('hidden');
+            closeBtn.classList.remove('hidden');
+            if (!viewerModule) {
+                viewerModule = await import('/static/js/3d_viewer.js');
+                await viewerModule.init();
             } else {
-                viewerContainer.classList.add('hidden');
-                animContainer.classList.remove('hidden');
-                const v = viewerModule?.getViewer();
-                if (v) v.stop();
+                const v = viewerModule.getViewer();
+                if (v) v.start();
             }
+        });
+    }
+
+    if (closeBtn) {
+        closeBtn.addEventListener('click', () => {
+            viewerContainer.classList.add('hidden');
+            animContainer.classList.remove('hidden');
+            closeBtn.classList.add('hidden');
+            openBtn.classList.remove('hidden');
+            const v = viewerModule?.getViewer();
+            if (v) v.stop();
         });
     }
 </script>

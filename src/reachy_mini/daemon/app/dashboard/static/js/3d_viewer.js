@@ -269,17 +269,6 @@ function applyJoints(jointMap, headJoints, headPose) {
 
 // ============= UI / Scene =============
 
-function updateStatus(message, state) {
-    const dot = document.getElementById('viewer-3d-dot');
-    const text = document.getElementById('viewer-3d-status-text');
-    if (!dot || !text) return;
-    dot.className = 'w-2 h-2 rounded-full';
-    if (state === 'connected') dot.classList.add('bg-green-400');
-    else if (state === 'disconnected') dot.classList.add('bg-red-400');
-    else dot.classList.add('bg-yellow-400', 'animate-pulse');
-    if (message) text.textContent = message;
-}
-
 function parseUrdfColors(urdfText) {
     const colors = {};
     const parser = new DOMParser();
@@ -323,8 +312,6 @@ export async function init() {
 
     const container = document.getElementById('viewer-3d-canvas');
     if (!container) return null;
-
-    updateStatus('Loading robot...', 'loading');
 
     const scene = new THREE.Scene();
     const rect = container.getBoundingClientRect();
@@ -503,11 +490,8 @@ export async function init() {
         };
         applyJoints(jointMap, defaultHeadJoints, defaultHeadPose);
 
-        updateStatus('Connecting...', 'loading');
-
     } catch (err) {
         console.error('Failed to load robot:', err);
-        updateStatus('Failed to load: ' + err.message, 'disconnected');
     }
 
     // WebSocket
@@ -518,12 +502,11 @@ export async function init() {
         const wsUrl = `${wsProto}//${location.host}/api/state/ws/full?with_head_joints=true`;
         ws = new WebSocket(wsUrl);
 
-        ws.onopen = () => updateStatus('Connected', 'connected');
+        ws.onopen = () => {};
         ws.onclose = () => {
-            updateStatus('Disconnected', 'disconnected');
             if (viewer?.active) setTimeout(connectWebSocket, 2000);
         };
-        ws.onerror = () => updateStatus('Connection error', 'disconnected');
+        ws.onerror = () => {};
 
         ws.onmessage = (event) => {
             if (!robot) return;
