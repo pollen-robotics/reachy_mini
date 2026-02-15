@@ -7,27 +7,27 @@ from .volume_control import SOUND_CARD_NAMES, DeviceType, VolumeControl
 
 
 def _get_macos_id(macos_four_char_code: str) -> int:
-    """
-    Convert a macOS FourCharCode into an integer ID.
+    """Convert a macOS FourCharCode into an integer ID.
 
     Args:
         macos_four_char_code: A macOS FourCharCode as a string.
 
     Returns:
         The corresponding integer ID.
+
     """
-    return unpack('!I', macos_four_char_code.encode())[0]
+    return int(unpack('!I', macos_four_char_code.encode())[0])
 
 
 def _get_macos_four_char_code(macos_id: int) -> str:
-    """
-    Convert an integer ID into a macOS FourCharCode.
+    """Convert an integer ID into a macOS FourCharCode.
 
     Args:
         macos_id: An integer ID.
 
     Returns:
         The corresponding macOS FourCharCode as a string.
+
     """
     return pack('!I', macos_id).decode('ascii')
 
@@ -50,23 +50,26 @@ kAudioDevicePropertyVolumeScalar = _get_macos_id('volm')
 
 @dataclass
 class VolumeControlMacOS(VolumeControl):
+    """Volume control class for macOS.
+    
+    Relies on the macOS CoreAudio framework.
     """
-    Volume control class for macOS. Relies on the macOS CoreAudio framework.
-    """
+
     input_device_id: int = field(init=False)
     output_device_id: int = field(init=False)
 
     # Define the AudioObjectPropertyAddress structure
     class AudioObjectPropertyAddress(Structure):
+        """Structure representing the address of an audio object property in CoreAudio."""
+
         _fields_ = [
             ('mSelector', c_uint32),
             ('mScope', c_uint32),
             ('mElement', c_uint32),
         ]
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Initialize the volume control. Loads the CoreAudio framework and defines the function prototypes."""
-
         # Load CoreAudio framework
         self.coreaudio = ctypes.CDLL('/System/Library/Frameworks/CoreAudio.framework/Versions/A/CoreAudio')
 
@@ -88,16 +91,15 @@ class VolumeControlMacOS(VolumeControl):
         self.input_device_id, self.output_device_id = self._get_input_output_device_ids()
 
     def _get_device_name(self, device_id: int) -> str:
-        """
-        Get the name of an audio device given its ID.
+        """Get the name of an audio device given its ID.
 
         Args:
             device_id: The ID of the audio device.
 
         Returns:
             The name of the audio device.
-        """
 
+        """
         property_address = self.AudioObjectPropertyAddress(
             mSelector=kAudioDevicePropertyDeviceName,
             mScope=kAudioObjectPropertyScopeGlobal,
@@ -132,11 +134,11 @@ class VolumeControlMacOS(VolumeControl):
         return device_name.value.decode('utf-8')
 
     def _get_input_output_device_ids(self) -> tuple[int, int]:
-        """
-        Get the input and output audio devices IDs corresponding to the Reachy Mini Audio sound card. If not found, get the default input and output audio devices IDs.
+        """Get the input and output audio devices IDs corresponding to the Reachy Mini Audio sound card. If not found, get the default input and output audio devices IDs.
         
         Returns:
             A tuple containing the input and output audio devices IDs: (input_device_id, output_device_id).
+
         """
         devices = self._get_all_devices()
 
@@ -146,17 +148,17 @@ class VolumeControlMacOS(VolumeControl):
 
         return self._get_default_device_id(DeviceType.INPUT), self._get_default_device_id(DeviceType.OUTPUT)
 
-    def _get_all_devices(self) -> list[dict[str, str]]:
-        """"
-        Get all available audio devices IDs and names.
+    def _get_all_devices(self) -> dict[int, str]:
+        """Get all available audio devices IDs and names.
         
         Returns:
             A list of dictionaries containing the ID and name of each audio device: [{id: int, name: str}, ...].
 
         Raises:
             RuntimeError: If AudioObjectGetPropertyDataSize or AudioObjectGetPropertyData fail when getting all audio devices.
+
         """
-        devices = {}
+        devices: dict[int, str] = {}
 
         property_address = self.AudioObjectPropertyAddress(
             mSelector=kAudioHardwarePropertyDevices,
@@ -195,12 +197,11 @@ class VolumeControlMacOS(VolumeControl):
 
         for device_id in device_ids:
             device_name = self._get_device_name(device_id)
-            devices.setdefault(device_id, device_name)
+            devices[device_id] = device_name
         return devices
 
     def _get_default_device_id(self, device_type: DeviceType) -> int:
-        """
-        Get the default audio device ID for a given device type.
+        """Get the default audio device ID for a given device type.
         
         Args:
             device_type: The type of device: INPUT or OUTPUT.
@@ -210,6 +211,7 @@ class VolumeControlMacOS(VolumeControl):
 
         Raises:
             RuntimeError: If AudioObjectGetPropertyData fails when getting the default audio devices.
+
         """
         selector = kAudioHardwarePropertyDefaultOutputDevice if device_type == DeviceType.OUTPUT else kAudioHardwarePropertyDefaultInputDevice
 
@@ -236,15 +238,15 @@ class VolumeControlMacOS(VolumeControl):
         return device_id.value
 
     def _get_device_volume(self, device_id: int, device_type: DeviceType) -> float:
-        """
-        Get the volume of an audio device given its ID and type.
+        """Get the volume of an audio device given its ID and type.
         
         Args:
             device_id: The ID of the audio device.
             device_type: The type of device: INPUT or OUTPUT.
 
         Returns:
-            The volume of the audio device.
+            The volume of the audio device as a value between 0 (minimum volume) and 1 (maximum volume). Returns -1.0 if the volume could not be read.
+
         """
         # Try master channel (0) first, then individual channels (1, 2)
         channels_to_try = [0, 1, 2]  # 0 = master, 1 = left, 2 = right
@@ -291,8 +293,7 @@ class VolumeControlMacOS(VolumeControl):
         return sum(volumes) / len(volumes)
 
     def _set_device_volume(self, device_id: int, device_type: DeviceType, volume: float) -> bool:
-        """
-        Set the volume of an audio device given its ID and type.
+        """Set the volume of an audio device given its ID and type.
         
         Args:
             device_id: The ID of the audio device.
@@ -301,6 +302,7 @@ class VolumeControlMacOS(VolumeControl):
 
         Returns:
             True if the volume was set successfully, False otherwise.
+
         """
         # Clamp volume to valid range
         volume = max(0.0, min(1.0, volume))
@@ -353,6 +355,7 @@ class VolumeControlMacOS(VolumeControl):
         
         Returns:
             The input volume as a value between 0 (minimum volume) and 1 (maximum volume).
+
         """
         return self._get_device_volume(self.input_device_id, DeviceType.INPUT)
 
@@ -364,6 +367,7 @@ class VolumeControlMacOS(VolumeControl):
 
         Returns:
             True if the volume was set successfully, False otherwise.
+
         """
         return self._set_device_volume(self.input_device_id, DeviceType.INPUT, volume)
 
@@ -372,6 +376,7 @@ class VolumeControlMacOS(VolumeControl):
         
         Returns:
             The output volume as a value between 0 (minimum volume) and 1 (maximum volume).
+
         """
         return self._get_device_volume(self.output_device_id, DeviceType.OUTPUT)
 
@@ -383,5 +388,6 @@ class VolumeControlMacOS(VolumeControl):
 
         Returns:
             True if the volume was set successfully, False otherwise.
+
         """
         return self._set_device_volume(self.output_device_id, DeviceType.OUTPUT, volume)
