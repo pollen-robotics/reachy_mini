@@ -30,6 +30,7 @@ Example usage:
 
 import logging
 import os
+import platform
 from threading import Thread
 from typing import Callable, Optional, Tuple, cast
 
@@ -95,11 +96,23 @@ class GstWebRTC:
         self._logger.setLevel(log_level)
 
         Gst.init([])
+
+        # On macOS, VideoToolbox H264 encoders produce stream-format=avc which
+        # webrtcsink's capsfilters reject. Demote them so webrtcsink picks
+        # x264enc/openh264enc instead.
+        if platform.system() == "Darwin":
+            for name in ("vtenc_h264", "vtenc_h265", "vtenc_h264_hw", "vtenc_h265_hw"):
+                factory = Gst.ElementFactory.find(name)
+                if factory:
+                    factory.set_rank(Gst.Rank.NONE)
+                    self._logger.info(f"Demoted {name} (macOS VideoToolbox workaround)")
+
         self._loop = GLib.MainLoop()
         self._thread_bus_calls = Thread(target=lambda: self._loop.run(), daemon=True)
         self._thread_bus_calls.start()
 
         cam_path, self.camera_specs = self._get_video_device()
+        self._logger.info(f"Using camera at {cam_path} with specs {self.camera_specs}")
 
         if self.camera_specs is None:
             raise RuntimeError("Camera specs not set")
@@ -197,11 +210,12 @@ class GstWebRTC:
         queue = Gst.ElementFactory.make("queue")
         audioconvert = Gst.ElementFactory.make("audioconvert")
         audioresample = Gst.ElementFactory.make("audioresample")
-        alsasink = Gst.ElementFactory.make("alsasink")
-        alsasink.set_property(
-            "device", "reachymini_audio_sink"
-        )  # f"hw:{self._id_audio_card},0")
-        alsasink.set_property("sync", False)
+        if platform.system() == "Darwin":
+            audiosink = Gst.ElementFactory.make("osxaudiosink")
+        else:
+            audiosink = Gst.ElementFactory.make("alsasink")
+            audiosink.set_property("device", "reachymini_audio_sink")
+        audiosink.set_property("sync", False)
 
         pipeline.add(udpsrc)
         pipeline.add(capsfilter)
@@ -211,7 +225,7 @@ class GstWebRTC:
         pipeline.add(queue)
         pipeline.add(audioconvert)
         pipeline.add(audioresample)
-        pipeline.add(alsasink)
+        pipeline.add(audiosink)
 
         udpsrc.link(capsfilter)
         capsfilter.link(rtpjitterbuffer)
@@ -220,7 +234,7 @@ class GstWebRTC:
         opusdec.link(queue)
         queue.link(audioconvert)
         audioconvert.link(audioresample)
-        audioresample.link(alsasink)
+        audioresample.link(audiosink)
 
     @property
     def resolution(self) -> tuple[int, int]:
@@ -236,6 +250,46 @@ class GstWebRTC:
         self, cam_path: str, pipeline: Gst.Pipeline, webrtcsink: Gst.Element
     ) -> None:
         self._logger.debug(f"Configuring video {cam_path}")
+
+        if platform.system() == "Darwin":
+            self._configure_video_darwin(cam_path, pipeline, webrtcsink)
+        else:
+            self._configure_video_linux(cam_path, pipeline, webrtcsink)
+
+    def _configure_video_darwin(
+        self, cam_path: str, pipeline: Gst.Pipeline, webrtcsink: Gst.Element
+    ) -> None:
+        camsrc = Gst.ElementFactory.make("avfvideosrc")
+        camsrc.set_property("device-index", int(cam_path))
+        queue = Gst.ElementFactory.make("queue")
+        videoconvert = Gst.ElementFactory.make("videoconvert")
+        # Feed raw video to webrtcsink — let it handle encoding internally.
+        # vtenc_h264 is demoted in __init__, so webrtcsink picks x264enc/openh264enc.
+        caps = Gst.Caps.from_string(
+            f"video/x-raw,"
+            f"width={self.resolution[0]},"
+            f"height={self.resolution[1]},"
+            f"framerate={self.framerate}/1"
+        )
+        capsfilter = Gst.ElementFactory.make("capsfilter")
+        capsfilter.set_property("caps", caps)
+
+        if not all([camsrc, queue, videoconvert, capsfilter]):
+            raise RuntimeError("Failed to create GStreamer video elements for macOS")
+
+        pipeline.add(camsrc)
+        pipeline.add(queue)
+        pipeline.add(videoconvert)
+        pipeline.add(capsfilter)
+
+        camsrc.link(queue)
+        queue.link(videoconvert)
+        videoconvert.link(capsfilter)
+        capsfilter.link(webrtcsink)
+
+    def _configure_video_linux(
+        self, cam_path: str, pipeline: Gst.Pipeline, webrtcsink: Gst.Element
+    ) -> None:
         camerasrc = Gst.ElementFactory.make("libcamerasrc")
         caps = Gst.Caps.from_string(
             f"video/x-raw,width={self.resolution[0]},height={self.resolution[1]},framerate={self.framerate}/1,format=YUY2,colorimetry=bt709,interlace-mode=progressive"
@@ -266,6 +320,8 @@ class GstWebRTC:
         )
         capsfilter_h264 = Gst.ElementFactory.make("capsfilter")
         capsfilter_h264.set_property("caps", caps_h264)
+        h264parse = Gst.ElementFactory.make("h264parse")
+        h264parse.set_property("config-interval", -1)
 
         if not all(
             [
@@ -277,6 +333,7 @@ class GstWebRTC:
                 queue_encoder,
                 v4l2h264enc,
                 capsfilter_h264,
+                h264parse,
             ]
         ):
             raise RuntimeError("Failed to create GStreamer video elements")
@@ -289,6 +346,7 @@ class GstWebRTC:
         pipeline.add(queue_encoder)
         pipeline.add(v4l2h264enc)
         pipeline.add(capsfilter_h264)
+        pipeline.add(h264parse)
 
         camerasrc.link(capsfilter)
         capsfilter.link(tee)
@@ -297,20 +355,24 @@ class GstWebRTC:
         tee.link(queue_encoder)
         queue_encoder.link(v4l2h264enc)
         v4l2h264enc.link(capsfilter_h264)
-        capsfilter_h264.link(webrtcsink)
+        capsfilter_h264.link(h264parse)
+        h264parse.link(webrtcsink)
 
     def _configure_audio(self, pipeline: Gst.Pipeline, webrtcsink: Gst.Element) -> None:
         self._logger.debug("Configuring audio")
 
-        alsasrc = Gst.ElementFactory.make("alsasrc")
-        alsasrc.set_property("device", "reachymini_audio_src")
-        # to optimize the latency, tune ~/.asoundrc file
+        if platform.system() == "Darwin":
+            audiosrc = Gst.ElementFactory.make("osxaudiosrc")
+        else:
+            audiosrc = Gst.ElementFactory.make("alsasrc")
+            audiosrc.set_property("device", "reachymini_audio_src")
+            # to optimize the latency, tune ~/.asoundrc file
 
-        if not all([alsasrc]):
+        if not audiosrc:
             raise RuntimeError("Failed to create GStreamer audio elements")
 
-        pipeline.add(alsasrc)
-        alsasrc.link(webrtcsink)
+        pipeline.add(audiosrc)
+        audiosrc.link(webrtcsink)
 
     def _get_audio_input_device(self) -> Optional[str]:
         """Use Gst.DeviceMonitor to find the pipewire audio card.
@@ -352,7 +414,7 @@ class GstWebRTC:
 
         devices = monitor.get_devices()
         for cam_name in cam_names:
-            for device in devices:
+            for device_index, device in enumerate(devices):
                 name = device.get_display_name()
                 device_props = device.get_properties()
 
@@ -367,6 +429,17 @@ class GstWebRTC:
                         self._logger.debug(f"Found {cam_name} camera at {device_path}")
                         monitor.stop()
                         return str(device_path), camera_specs
+                    elif platform.system() == "Darwin":
+                        camera_specs = (
+                            cast(CameraSpecs, ArducamSpecs)
+                            if cam_name == "Arducam_12MP"
+                            else cast(CameraSpecs, ReachyMiniLiteCamSpecs)
+                        )
+                        self._logger.debug(
+                            f"Found {cam_name} camera at index {device_index} for macOS"
+                        )
+                        monitor.stop()
+                        return str(device_index), camera_specs
                     elif cam_name == "imx708":
                         camera_specs = cast(CameraSpecs, ReachyMiniWirelessCamSpecs)
                         self._logger.debug(f"Found {cam_name} camera")
