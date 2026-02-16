@@ -153,8 +153,8 @@ class GstConsumer:
 
 
 def process_msg(bus: Gst.Bus, pipeline: Gst.Pipeline) -> bool:
-    """Process messages from the GStreamer bus."""
-    msg = bus.timed_pop_filtered(10 * Gst.MSECOND, Gst.MessageType.ANY)
+    """Process messages from the GStreamer bus."""    
+    msg = bus.timed_pop_filtered(10 * Gst.MSECOND, Gst.MessageType.ERROR | Gst.MessageType.EOS | Gst.MessageType.LATENCY)
     if msg:
         if msg.type == Gst.MessageType.ERROR:
             err, debug = msg.parse_error()
