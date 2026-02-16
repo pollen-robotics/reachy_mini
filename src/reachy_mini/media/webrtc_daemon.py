@@ -31,7 +31,7 @@ Example usage:
 import logging
 import os
 from threading import Thread
-from typing import Callable, Dict, Iterator, List, Optional, Tuple, cast
+from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple, cast
 
 import gi
 
@@ -125,6 +125,9 @@ class GstWebRTC:
         self._data_channels: dict[str, Gst.Element] = {}  # peer_id -> channel
         self._on_data_message: Optional[Callable[[str, str], None]] = None
 
+        # Track incoming audio per peer (for bidirectional audio cleanup)
+        self._incoming_audio: Dict[str, Dict[str, Any]] = {}
+
         self._pipeline_receiver = Gst.Pipeline.new("reachymini_webrtc_receiver")
         self._bus_receiver = self._pipeline_receiver.get_bus()
         self._bus_receiver.add_watch(
@@ -173,6 +176,7 @@ class GstWebRTC:
         webrtcsink.set_property("run-signalling-server", True)
 
         webrtcsink.connect("consumer-added", self._consumer_added)
+        webrtcsink.connect("consumer-removed", self._consumer_removed)
 
         pipeline.add(webrtcsink)
 
@@ -193,6 +197,150 @@ class GstWebRTC:
         GLib.timeout_add_seconds(5, self._dump_latency)
 
         self._setup_data_channel(peer_id, webrtcbin)
+
+        # Make audio bidirectional before SDP offer is generated
+        self._enable_audio_receive(webrtcbin)
+
+        # Listen for incoming audio pads from the browser (bidirectional audio)
+        webrtcbin.connect("pad-added", self._on_consumer_pad_added, peer_id)
+
+    # GstWebRTCRTPTransceiverDirection enum values
+    _WEBRTC_DIRECTION_SENDRECV = 4
+
+    def _enable_audio_receive(self, webrtcbin: Gst.Element) -> None:
+        """Set media transceivers to sendrecv for bidirectional audio.
+
+        Must be called before the SDP offer is generated (in consumer-added).
+        The m-line order can vary (audio/video may swap), so we set all
+        transceivers to sendrecv. Video sendrecv is harmless since the
+        browser answers recvonly (it has no video track to send).
+        """
+        for i in range(4):
+            try:
+                trans = webrtcbin.emit("get-transceiver", i)
+                if trans is None:
+                    break
+                current_dir = trans.get_property("direction")
+                self._logger.info(f"Transceiver {i} direction: {current_dir}")
+                trans.set_property("direction", self._WEBRTC_DIRECTION_SENDRECV)
+                new_dir = trans.get_property("direction")
+                self._logger.info(f"Transceiver {i} set to: {new_dir}")
+            except Exception:
+                break
+
+    def _consumer_removed(
+        self,
+        webrtcsink: Gst.Bin,
+        peer_id: str,
+        webrtcbin: Gst.Element,
+    ) -> None:
+        self._logger.info(f"consumer removed: {peer_id}")
+        self._cleanup_incoming_audio(peer_id)
+
+    def _on_consumer_pad_added(
+        self,
+        webrtcbin: Gst.Element,
+        pad: Gst.Pad,
+        peer_id: str,
+    ) -> None:
+        """Handle incoming pads from the browser for bidirectional audio.
+
+        We must NOT add elements (like decodebin) to _pipeline_sender because
+        webrtcsink manages that pipeline internally and dynamic additions crash
+        the connection.  Instead we use a pad probe to intercept RTP buffers and
+        forward them to a completely separate playback pipeline.
+        """
+        if pad.get_direction() != Gst.PadDirection.SRC:
+            return
+
+        pad_name = pad.get_name()
+        caps = pad.get_current_caps()
+        if caps is None:
+            caps = pad.query_caps(None)
+
+        self._logger.info(
+            f"Consumer pad: {pad_name}, caps: {caps.to_string() if caps else 'none'}"
+        )
+
+        if caps is None or caps.get_size() == 0:
+            return
+
+        struct = caps.get_structure(0)
+        media = struct.get_string("media") if struct.has_field("media") else ""
+        if media != "audio":
+            return
+
+        self._logger.info(f"Setting up incoming audio playback for peer {peer_id}")
+
+        # Build a separate pipeline: appsrc → depay → decode → convert → speaker
+        try:
+            playback_pipe = Gst.parse_launch(
+                "appsrc name=audio_in format=time is-live=true ! "
+                "rtpopusdepay ! opusdec ! audioconvert ! audioresample ! "
+                "alsasink device=reachymini_audio_sink sync=false"
+            )
+        except Exception as e:
+            self._logger.error(f"Failed to create audio playback pipeline: {e}")
+            return
+
+        appsrc = playback_pipe.get_by_name("audio_in")
+        appsrc.set_property("caps", caps)
+
+        play_bus = playback_pipe.get_bus()
+        play_bus.add_watch(
+            GLib.PRIORITY_DEFAULT, self._on_playback_bus_message, peer_id
+        )
+
+        playback_pipe.set_state(Gst.State.PLAYING)
+
+        # Pad probe: intercept every RTP buffer on webrtcbin's src pad,
+        # copy it into the separate playback pipeline, then DROP so
+        # webrtcsink's pipeline doesn't need a downstream element.
+        def _buffer_probe(pad: Gst.Pad, info: Gst.PadProbeInfo, _: None) -> int:
+            buf = info.get_buffer()
+            if buf is not None:
+                appsrc.emit("push-buffer", buf.copy())
+            return Gst.PadProbeReturn.DROP
+
+        probe_id = pad.add_probe(Gst.PadProbeType.BUFFER, _buffer_probe, None)
+
+        self._incoming_audio[peer_id] = {
+            "playback_pipeline": playback_pipe,
+            "probe_id": probe_id,
+            "pad": pad,
+        }
+        self._logger.info(f"Audio playback pipeline started for peer {peer_id}")
+
+    def _on_playback_bus_message(
+        self, bus: Gst.Bus, msg: Gst.Message, peer_id: str
+    ) -> bool:
+        """Handle messages from a per-peer audio playback pipeline."""
+        if msg.type == Gst.MessageType.ERROR:
+            err, debug = msg.parse_error()
+            self._logger.error(
+                f"Audio playback error for {peer_id}: {err} {debug}"
+            )
+            return False
+        if msg.type == Gst.MessageType.EOS:
+            self._logger.info(f"Audio playback EOS for {peer_id}")
+            return False
+        return True
+
+    def _cleanup_incoming_audio(self, peer_id: str) -> None:
+        """Remove the incoming-audio pad probe and playback pipeline for a peer."""
+        info = self._incoming_audio.pop(peer_id, None)
+        if info is None:
+            return
+
+        pad = info.get("pad")
+        probe_id = info.get("probe_id")
+        if pad is not None and probe_id is not None:
+            pad.remove_probe(probe_id)
+
+        playback_pipe = info.get("playback_pipeline")
+        if playback_pipe is not None:
+            playback_pipe.set_state(Gst.State.NULL)
+        self._logger.info(f"Cleaned up incoming audio for peer {peer_id}")
 
     # --- Dynamic WebRTC audio receiver ---
 
