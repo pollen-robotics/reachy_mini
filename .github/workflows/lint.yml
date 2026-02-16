@@ -23,12 +23,9 @@ jobs:
 
   mypy:
     runs-on: ubuntu-latest
-    container:
-      image: ghcr.io/pollen-robotics/reachymini_documentation:1.0.0
-      credentials:
-        username: ${{ github.actor }}
-        password: ${{ secrets.GHCR_TOKEN }}
     steps:
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libportaudio2 libcairo2-dev libgirepository1.0-dev
       - uses: actions/checkout@v4
       - name: Install uv
         uses: astral-sh/setup-uv@v7
