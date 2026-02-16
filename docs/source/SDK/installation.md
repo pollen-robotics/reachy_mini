@@ -28,7 +28,8 @@ A **command line** (also called terminal or command prompt) is a text-based inte
 * Press `Enter` after typing each command to run it
 * You can copy and paste commands (right-click to paste in most command line interfaces)
 
-> **💡 Don't be intimidated!** The command line is just another way to give instructions to your computer. Follow the commands step by step, and you'll be controlling your Reachy Mini in no time!
+> [!TIP]
+> _Don't be intimidated!_ The command line is just another way to give instructions to your computer. Follow the commands step by step, and you'll be controlling your Reachy Mini in no time!
 
 </details>
 
@@ -42,7 +43,6 @@ A **command line** (also called terminal or command prompt) is a text-based inte
 | 📂 **Git** | Latest | Download source code and apps |
 | 📦 **Git LFS** | Latest | Download model assets |
 
-
 </div>
 
 ### 🐍 Install Python
@@ -51,25 +51,24 @@ We'll use `uv` - a fast Python package manager that makes installation simple!
 
 #### Step 1: Install uv
 
-<details>
-<summary>🐧 <strong>Linux</strong> & 🍎 <strong>macOS</strong></summary>
+<hfoptions id="install-uv">
+<hfoption id="Linux / macOS">
 
 In your terminal, run:
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
-</details>
-
-<details>
-<summary>🪟 <strong>Windows</strong></summary>
+</hfoption>
+<hfoption id="Windows">
 
 In your terminal, run:
 ```powershell
 powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
 ```
 
-</details>
+</hfoption>
+</hfoptions>
 
 **✅ Verify installation:**
 
@@ -85,13 +84,14 @@ In your terminal, run:
 uv python install 3.12 --default
 ```
 
-> **💡 Tip:** We recommend Python 3.12 as it's the latest supported version for Reachy Mini.
+> [!TIP]
+> We recommend Python 3.12 as it's the latest supported version for Reachy Mini.
 
 
 ### 📂 Install Git and Git LFS
 
-<details>
-<summary>🐧 <strong>Linux</strong></summary>
+<hfoptions id="install-git">
+<hfoption id="Linux">
 
 #### Install Git and Git LFS
 
@@ -100,10 +100,8 @@ In your terminal, run:
 sudo apt install git git-lfs
 ```
 
-</details>
-
-<details>
-<summary>🍎 <strong>macOS</strong></summary>
+</hfoption>
+<hfoption id="macOS">
 
 #### 1. Install Homebrew (if not already installed)
 
@@ -112,7 +110,7 @@ In your terminal, run:
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 ```
 
-For Apple Silicon (M1, M2, etc.), you will also be prompted to run :
+For Apple Silicon (M1, M2, etc.), you will also be prompted to run:
 
 ```zsh
 echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> ~/.zprofile
@@ -121,7 +119,7 @@ eval "$(/opt/homebrew/bin/brew shellenv)"
 
 ✅ Verify Homebrew:
 
-Once the installation is completed you can check if it went fine with :
+Once the installation is completed you can check if it went fine with:
 ```zsh
 brew --version
 ```
@@ -133,20 +131,16 @@ In your terminal, run:
 brew install git git-lfs
 ```
 
-</details>
-
-<details>
-<summary>🪟 <strong>Windows</strong></summary>
+</hfoption>
+<hfoption id="Windows">
 
 #### Download and install Git for Windows
 
-<div align="center">
+Download and install Git for Windows:  
+https://git-scm.com/install/windows
 
-[![Download Git for Windows](https://img.shields.io/badge/Download-Git%20for%20Windows-blue?style=for-the-badge&logo=git&logoColor=white)](https://git-scm.com/install/windows)
-
-</div>
-
-</details>
+</hfoption>
+</hfoptions>
 
 **✅ Finalize installation:**
 
@@ -169,20 +163,19 @@ uv venv reachy_mini_env --python 3.12
 
 ### Activate the environment
 
-<details>
-<summary>🐧 <strong>Linux</strong> & 🍎 <strong>macOS</strong></summary>
+<hfoptions id="activate-venv">
+<hfoption id="Linux / macOS">
 
 In your terminal, run:
 ```bash
 source reachy_mini_env/bin/activate
 ```
 
-</details>
+</hfoption>
+<hfoption id="Windows">
 
-<details>
-<summary>🪟 <strong>Windows</strong></summary>
-
-> **⚠️ First-time setup:** Before you can activate your virtual environment, Windows needs permission to run scripts. You only need to do this once!
+> [!WARNING]
+> _First-time setup:_ Before you can activate your virtual environment, Windows needs permission to run scripts. You only need to do this once!
 
 **Step 1:** Open terminal as Administrator
 - Press `Win + R`, type `powershell`
@@ -202,7 +195,8 @@ Now you can activate your virtual environment by running:
 reachy_mini_env\Scripts\activate
 ```
 
-</details>
+</hfoption>
+</hfoptions>
 
 > **✅ Success indicator:** You should see `(reachy_mini_env)` at the start of your command line prompt!
 
@@ -247,14 +241,10 @@ uv sync --extra mujoco
 ```
 ### 🐧 Linux Users
 
-#### USB Permission Setup
-
 > **Linux + USB connection?** You need to grant access to Reachy Mini's serial port.
 
 <details>
 <summary>🔧 <strong>Click here to set up USB permissions</strong></summary>
-
-<br>
 
 Run these commands in your terminal:
 
@@ -267,10 +257,25 @@ sudo udevadm control --reload-rules && sudo udevadm trigger
 sudo usermod -aG dialout $USER
 ```
 
-> ⚠️ **Important:** Log out and log back in for the changes to take effect!
+> [!WARNING]
+> Log out and log back in for the changes to take effect!
 
 </details>
 
+<br />
+
+> **PortAudio** Make sure that portaudio is installed on your system to enable audio features with the default backend.
+
+<details>
+<summary>🔧 <strong>Installing PortAudio</strong></summary>
+
+Run this command in your terminal:
+
+```bash
+sudo apt-get install libportaudio2
+```
+
+</details>
 
 #### Gstreamer
 

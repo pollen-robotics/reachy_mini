@@ -78,7 +78,7 @@ class GStreamerAudio(AudioBase):
     def __init__(self, log_level: str = "INFO") -> None:
         """Initialize the GStreamer audio."""
         super().__init__(log_level=log_level)
-        Gst.init(None)
+        Gst.init([])
         self._loop = GLib.MainLoop()
         self._thread_bus_calls = Thread(target=lambda: self._loop.run(), daemon=True)
         self._thread_bus_calls.start()

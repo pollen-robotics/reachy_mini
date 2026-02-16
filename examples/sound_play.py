@@ -5,6 +5,8 @@ conditions output from a microphone or a text-to-speech engine would be
  pushed to the speaker instead.
 """
 
+# START doc_example
+
 import argparse
 import logging
 import os
@@ -67,10 +69,12 @@ if __name__ == "__main__":
     parser.add_argument(
         "--backend",
         type=str,
-        choices=["default", "gstreamer", "webrtc"],
-        default="default",
+        choices=["default_no_video", "gstreamer_no_video", "webrtc"],
+        default="default_no_video",
         help="Media backend to use.",
     )
 
     args = parser.parse_args()
     main(backend=args.backend)
+
+# END doc_example

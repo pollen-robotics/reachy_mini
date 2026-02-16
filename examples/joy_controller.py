@@ -1,17 +1,23 @@
-#!/usr/bin/env python3
 """Control Reachy Mini's head yaw angle with a joystick.
 
 This script connects to a Reachy Mini robot and allows you to pilot its head's
 left-right rotation (yaw) using the horizontal axis of a connected joystick.
 
-The yaw angle is mapped to a full range of +-pi/2 radians (+-90 degrees).
-The value from the right joystick is also printed but is not used for control.
+The yaw angle is mapped to a range of +-58.5 degrees using the left joystick,
+and the body yaw is controlled with the right joystick.
 
 CONTROLS:
 - LEFT JOYSTICK (Left/Right): Control head yaw angle.
+- RIGHT JOYSTICK (Left/Right): Control body yaw angle.
 - CIRCLE / B BUTTON (Button 1): Quit the application safely.
 - CTRL-C: Quit the application.
+
+
+Requirements:
+- pip install pygame
 """
+
+# START doc_example
 
 # Standard library imports
 import os
@@ -120,8 +126,6 @@ def main() -> None:
         # The 'with' statement ensures the robot is properly handled on exit
         with ReachyMini(automatic_body_yaw=True) as mini:
             print("Robot connected.")
-            # print("Robot connected. Waking up...")
-            # mini.wake_up()
 
             print("\n" + "=" * 50)
             print("  Reachy Head Yaw Joystick Controller")
@@ -147,15 +151,21 @@ def main() -> None:
                 # Create and send the command to the robot
                 mini.set_target(
                     utils.create_head_pose(
-                        *target_position, *target_orientation, degrees=False
+                        x=target_position[0],
+                        y=target_position[1],
+                        z=target_position[2],
+                        roll=target_orientation[0],
+                        pitch=target_orientation[1],
+                        yaw=target_orientation[2],
+                        degrees=False,
                     ),
                     body_yaw=target_body_yaw,
                 )
 
                 # Print status, overwriting the line
                 print(
-                    f"\rSending Yaw: {target_yaw:6.2f} rad | "
-                    f"Unused Right Joy: {right_joy:6.2f}",
+                    f"\rHead Yaw: {target_yaw:6.2f} rad | "
+                    f"Body Yaw: {target_body_yaw:6.2f} rad",
                     end="",
                 )
                 sys.stdout.flush()
@@ -173,3 +183,5 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+# END doc_example

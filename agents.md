@@ -32,10 +32,19 @@ Unless the user explicitly requests otherwise:
 
 When creating apps:
 - **Always use Python** - Python apps are discoverable and shareable via the robot's app store
-- **Always use the app assistant** - run `reachy-mini-app-assistant create` (see `skills/create-app.md`)
+- **NEVER create app folders manually** - always use the app assistant (handles metadata, entry points, structure)
+- **If the command fails** - ask the user to run it in their terminal; don't attempt complex workarounds
 - **Web UIs go in `static/`** - Python apps can have web frontends
 
-JS-only apps are not yet supported for discovery/sharing.
+```bash
+# Default template (minimal app - good for most cases):
+reachy-mini-app-assistant create <app_name> <path> --publish
+
+# Conversation template (for LLM integration, speech, making robot talk):
+reachy-mini-app-assistant create --template conversation <app_name> <path> --publish
+```
+
+See `skills/create-app.md` for details. JS-only apps are not yet supported for discovery/sharing.
 
 ### Always Create plan.md Before Coding
 

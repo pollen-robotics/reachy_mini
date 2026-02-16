@@ -1,8 +1,12 @@
 # Install the Daemon from a Specific Branch
 
-> **⚠️ For Developers and Testers Only**
+> [!WARNING]
+> _⚠️ For Developers and Testers Only_
 >
 > This guide explains how to install the Reachy Mini daemon from a specific GitHub branch before it is officially released. Use this for testing new features or bug fixes.
+
+> [!TIP]
+> Starting from v1.3.0, you can install a branch directly from _Settings → Reachy Mini Update_ in the web dashboard.
 
 ## Prerequisites
 
@@ -11,7 +15,9 @@
 
 ## Option A: Local Development Setup
 
+> [!NOTE]
 > This option is intended for active development and fast debugging cycles. It allows you to safely test changes without affecting the system-wide installation.
+>
 > ⚠️ Avoid installing dashboard apps with this option—any changes made to the local `reachy_mini` version won’t be propagated correctly.
 
 ### Steps:
@@ -39,7 +45,9 @@
    ```bash
    sudo systemctl stop reachy-mini-daemon
    ```
-   **Note:** This step must be repeated after each reboot since the system service restarts automatically.
+   
+   > [!TIP]
+   > This step must be repeated after each reboot since the system service restarts automatically.
 
 5. **Start the local daemon for testing:**
    ```bash
@@ -50,7 +58,8 @@ Now you can modify the code in `~/reachy_mini` and test your changes without aff
 
 ## Option B: System-Wide Custom Installation
 
-> This option installs a branch build of reachy-mini as the system-wide daemon. It’s better suited for thorough, end-to-end testing and supports seamless app installation from the dashboard.
+> [!NOTE]
+> This option installs a branch build of reachy-mini as the system-wide daemon. It's better suited for thorough, end-to-end testing and supports seamless app installation from the dashboard.
 
 ### Steps:
 
@@ -72,14 +81,17 @@ Now you can modify the code in `~/reachy_mini` and test your changes without aff
    ```
    Replace `<branch-name>` with the branch you want to test (e.g., `develop`, `feature/my-feature`, `bugfix/issue-123`).
 
-   > _Remark_ : we have to use `pip` here and not `uv` because `uv pip install` [does not work correctly with `git lfs`](https://github.com/astral-sh/uv/issues/3312)
+   > [!NOTE]
+   > We have to use `pip` here and not `uv` because `uv pip install` [does not work correctly with `git lfs`](https://github.com/astral-sh/uv/issues/3312).
 
-4. **Restart the daemon service:**
+4. **(Only for versions ≤ 1.2.13)** Repeat steps 2 and 3 using `/venvs/apps_venv`.
+
+5. **Restart the daemon service:**
    ```bash
    sudo systemctl restart reachy-mini-daemon
    ```
 
-5. **Verify the installation was successful:**
+6. **Verify the installation was successful:**
    ```bash
    pip show reachy-mini | grep Version
    ```

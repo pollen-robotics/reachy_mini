@@ -1,0 +1,113 @@
+:root {
+  --bg: #060b1a;
+  --bg-2: #071023;
+  --panel: rgba(11, 18, 36, 0.8);
+  --border: rgba(255, 255, 255, 0.08);
+  --text: #eaf2ff;
+  --muted: #9fb6d7;
+  --accent: #45c4ff;
+  --accent-2: #5ef0c1;
+  --shadow: 0 20px 70px rgba(0, 0, 0, 0.45);
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: "Space Grotesk", "Inter", "Segoe UI", sans-serif;
+  background: radial-gradient(circle at 20% 20%, rgba(69, 196, 255, 0.16), transparent 35%),
+              radial-gradient(circle at 80% 0%, rgba(94, 240, 193, 0.16), transparent 32%),
+              linear-gradient(135deg, var(--bg), var(--bg-2));
+  color: var(--text);
+}
+
+.ambient {
+  position: fixed;
+  inset: 0;
+  background: radial-gradient(circle at 30% 60%, rgba(255, 255, 255, 0.05), transparent 35%),
+              radial-gradient(circle at 75% 30%, rgba(69, 196, 255, 0.08), transparent 32%);
+  filter: blur(60px);
+  z-index: 0;
+  pointer-events: none;
+}
+
+.container {
+  position: relative;
+  max-width: 600px;
+  margin: 10vh auto;
+  padding: 0 24px 40px;
+  z-index: 1;
+}
+
+.hero {
+  margin-bottom: 24px;
+}
+.hero h1 {
+  margin: 6px 0 6px;
+  font-size: 32px;
+  letter-spacing: -0.4px;
+}
+.subtitle {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(94, 240, 193, 0.1);
+  color: var(--accent-2);
+  font-size: 12px;
+  letter-spacing: 0.3px;
+  border: 1px solid rgba(94, 240, 193, 0.25);
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 18px 18px 16px;
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(10px);
+  margin-top: 16px;
+}
+.panel-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.panel-heading h2 {
+  margin: 2px 0;
+  font-size: 22px;
+}
+.eyebrow {
+  margin: 0;
+  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: 0.5px;
+  color: var(--muted);
+}
+.muted { color: var(--muted); }
+
+pre {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  overflow-x: auto;
+  margin: 12px 0 0;
+}
+code {
+  font-family: "SF Mono", "Fira Code", monospace;
+  font-size: 13px;
+  color: var(--accent);
+}
+
+@media (max-width: 760px) {
+  .hero h1 { font-size: 26px; }
+}

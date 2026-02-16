@@ -417,7 +417,7 @@ def check(console: Console, app_path: str) -> None:
 
     #   - README.md contains at least a title and the tags "reachy_mini" and "reachy_mini_{python/js}_app"
     readme_metadata = parse_readme(os.path.join(abs_app_path, "README.md"))
-    if len(readme_metadata) == 0:
+    if readme_metadata is None or len(readme_metadata) == 0:
         console.print("❌ README.md is missing metadata section.", style="bold red")
         sys.exit(1)
     if "title" not in readme_metadata.keys():
@@ -737,13 +737,14 @@ def publish(
             console.print(f"\n🔎 Running checks on the app at {app_path}/...")
             check(console, str(app_path))
 
-        commit_message = questionary.text(
-            "\n$ Enter a commit message for the update:",
-            default="Update app",
-        ).ask()
         if commit_message is None:
-            console.print("[red]Aborted.[/red]")
-            exit()
+            commit_message = questionary.text(
+                "\n$ Enter a commit message for the update:",
+                default="Update app",
+            ).ask()
+            if commit_message is None:
+                console.print("[red]Aborted.[/red]")
+                exit()
 
         # commit local changes
         console.print("Committing changes locally ...", style="bold blue")

@@ -85,7 +85,7 @@ class GStreamerCamera(CameraBase):
     ) -> None:
         """Initialize the GStreamer camera."""
         super().__init__(log_level=log_level)
-        Gst.init(None)
+        Gst.init([])
         self._loop = GLib.MainLoop()
         self._thread_bus_calls: Optional[Thread] = None
 

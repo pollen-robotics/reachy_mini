@@ -14,8 +14,8 @@ Python wheels are available for the Windows and macOS platforms and are included
 
 ## 🔧 Install GStreamer
 
-<details>
-<summary>🐧 <strong>Linux</strong></summary>
+<hfoptions id="gstreamer-install">
+<hfoption id="Linux">
 
 ### Step 1: Install GStreamer
 
@@ -97,10 +97,9 @@ source ~/.bashrc
 
 > **💡 Note:** For ARM64 systems (like Raspberry Pi), replace `x86_64-linux-gnu` with `aarch64-linux-gnu` in the export command.
 
-</details>
 
-<details>
-<summary>🍎 <strong>macOS</strong></summary>
+</hfoption>
+<hfoption id="macOS">
 
 It is not necessary to install GStreamer manually since the wheels are provided. However, it is still possible to avoid using the wheels and rely on the system installation.
 
@@ -112,10 +111,9 @@ brew install gstreamer libnice-gstreamer
 
 The WebRTC plugin is enabled by default in the Homebrew package.
 
-</details>
 
-<details>
-<summary>🪟 <strong>Windows</strong></summary>
+</hfoption>
+<hfoption id="Windows">
 
 It is not necessary to install GStreamer manually since the wheels are provided. However, it is still possible to avoid using the wheels and rely on the system installation.
 
@@ -134,7 +132,8 @@ It is not necessary to install GStreamer manually since the wheels are provided.
 
 > **💡 Important:** Replace `C:\Program Files\gstreamer` with your actual GStreamer installation folder if you installed it in a different location.
 
-</details>
+</hfoption>
+</hfoptions>
 
 ## ✅ Verify Installation
 

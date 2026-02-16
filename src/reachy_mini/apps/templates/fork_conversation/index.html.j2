@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{ display_name }}</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="ambient"></div>
+    <div class="container">
+      <header class="hero">
+        <div class="pill">Reachy Mini App</div>
+        <h1>{{ display_name }}</h1>
+        <p class="subtitle">A conversation app for Reachy Mini robot.</p>
+      </header>
+
+      <div class="panel">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Getting Started</p>
+            <h2>Installation</h2>
+          </div>
+        </div>
+        <p class="muted">Install this app on your Reachy Mini using the app store, or run it locally:</p>
+        <pre><code>uv sync
+reachy-mini-daemon --sim  # in another terminal
+python -m {{ app_name }}</code></pre>
+      </div>
+
+      <div class="panel">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Configuration</p>
+            <h2>OpenAI API Key</h2>
+          </div>
+        </div>
+        <p class="muted">This app requires an OpenAI API key for voice conversations. Set it via the web interface or environment variable.</p>
+      </div>
+    </div>
+  </body>
+</html>
