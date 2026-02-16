@@ -68,17 +68,17 @@ def test_factory_raises_on_unsupported_platform():
 
 
 def test_get_output_volume(volume_control):
-    """Getting output volume should return a float between 0.0 and 1.0."""
+    """Getting output volume should return an int between 0 and 100."""
     volume = volume_control.get_output_volume()
-    assert isinstance(volume, float)
-    assert 0.0 <= volume <= 1.0
+    assert isinstance(volume, int)
+    assert 0 <= volume <= 100
 
 
 def test_get_input_volume(volume_control):
-    """Getting input volume should return a float between 0.0 and 1.0."""
+    """Getting input volume should return an int between 0 and 100."""
     volume = volume_control.get_input_volume()
-    assert isinstance(volume, float)
-    assert 0.0 <= volume <= 1.0
+    assert isinstance(volume, int)
+    assert 0 <= volume <= 100
 
 
 # ---- Set volume tests ----
@@ -88,12 +88,12 @@ def test_set_and_restore_output_volume(volume_control):
     """Setting output volume should apply the value, then restore the original."""
     original = volume_control.get_output_volume()
 
-    target = 0.5 if original != 0.5 else 0.3
+    target = 50 if original != 50 else 30
     result = volume_control.set_output_volume(target)
     assert result is True
 
     current = volume_control.get_output_volume()
-    assert abs(current - target) < 0.05  # allow small rounding tolerance
+    assert abs(current - target) <= 5  # allow small rounding tolerance
 
     # Restore original volume
     volume_control.set_output_volume(original)
@@ -103,26 +103,26 @@ def test_set_and_restore_input_volume(volume_control):
     """Setting input volume should apply the value, then restore the original."""
     original = volume_control.get_input_volume()
 
-    target = 0.5 if original != 0.5 else 0.3
+    target = 50 if original != 50 else 30
     result = volume_control.set_input_volume(target)
     assert result is True
 
     current = volume_control.get_input_volume()
-    assert abs(current - target) < 0.05  # allow small rounding tolerance
+    assert abs(current - target) <= 5  # allow small rounding tolerance
 
     # Restore original volume
     volume_control.set_input_volume(original)
 
 
 def test_set_output_volume_clamps(volume_control):
-    """Volume values outside [0, 1] should be clamped, not rejected."""
+    """Volume values outside [0, 100] should be clamped, not rejected."""
     original = volume_control.get_output_volume()
 
-    assert volume_control.set_output_volume(0.0) is True
-    assert volume_control.get_output_volume() == pytest.approx(0.0, abs=0.05)
+    assert volume_control.set_output_volume(0) is True
+    assert volume_control.get_output_volume() == pytest.approx(0, abs=5)
 
-    assert volume_control.set_output_volume(1.0) is True
-    assert volume_control.get_output_volume() == pytest.approx(1.0, abs=0.05)
+    assert volume_control.set_output_volume(100) is True
+    assert volume_control.get_output_volume() == pytest.approx(100, abs=5)
 
     # Restore original volume
     volume_control.set_output_volume(original)

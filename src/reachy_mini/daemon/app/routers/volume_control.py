@@ -21,23 +21,23 @@ class VolumeControl(ABC):
     logger: logging.Logger = field(init=False, default_factory=lambda: logging.getLogger(f"[VolumeControl {platform.system()}]"))
 
     @abstractmethod
-    def set_output_volume(self, volume: float) -> bool:
-        """Set the output volume to the provided value between 0 (minimum volume) and 1 (maximum volume)."""
+    def set_output_volume(self, volume: int) -> bool:
+        """Set the output volume to the provided value between 0 (minimum volume) and 100 (maximum volume)."""
         pass
 
     @abstractmethod
-    def get_output_volume(self) -> float:
-        """Get the output volume as a value between 0 (minimum volume) and 1 (maximum volume)."""
+    def get_output_volume(self) -> int:
+        """Get the output volume as a value between 0 (minimum volume) and 100 (maximum volume)."""
         pass
 
     @abstractmethod
-    def set_input_volume(self, volume: float) -> bool:
-        """Set the input volume to the provided value between 0 (minimum volume) and 1 (maximum volume)."""
+    def set_input_volume(self, volume: int) -> bool:
+        """Set the input volume to the provided value between 0 (minimum volume) and 100 (maximum volume)."""
         pass
 
     @abstractmethod
-    def get_input_volume(self) -> float:
-        """Get the input volume as a value between 0 (minimum volume) and 1 (maximum volume)."""
+    def get_input_volume(self) -> int:
+        """Get the input volume as a value between 0 (minimum volume) and 100 (maximum volume)."""
         pass
 
 

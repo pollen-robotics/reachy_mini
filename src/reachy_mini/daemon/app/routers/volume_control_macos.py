@@ -240,20 +240,20 @@ class VolumeControlMacOS(VolumeControl):
 
         return device_id.value
 
-    def _get_device_volume(self, device_id: int, device_type: DeviceType) -> float:
+    def _get_device_volume(self, device_id: int, device_type: DeviceType) -> int:
         """Get the volume of an audio device given its ID and type.
-        
+
         Args:
             device_id: The ID of the audio device.
             device_type: The type of device: INPUT or OUTPUT.
 
         Returns:
-            The volume of the audio device as a value between 0 (minimum volume) and 1 (maximum volume). Returns -1.0 if the volume could not be read.
+            The volume as a value between 0 and 100. Returns -1 if the volume could not be read.
 
         """
         # Try master channel (0) first, then individual channels (1, 2)
         channels_to_try = [0, 1, 2]  # 0 = master, 1 = left, 2 = right
-        volumes = []
+        volumes: list[float] = []
 
         # Get the appropriate scope based on device type
         scope = kAudioDevicePropertyScopeInput if device_type == DeviceType.INPUT else kAudioDevicePropertyScopeOutput
@@ -286,29 +286,29 @@ class VolumeControlMacOS(VolumeControl):
                 volumes.append(volume.value)
                 # If we have a master channel (0), use it and stop
                 if channel == 0:
-                    return volume.value
+                    return round(volume.value * 100)
 
         if not volumes:
-            self.logger.error(f"No volume channels found on device {device_id} — cannot read volume")    
-            return -1.0
+            self.logger.error(f"No volume channels found on device {device_id} — cannot read volume")
+            return -1
 
         # Return average of available channels (if no master channel)
-        return sum(volumes) / len(volumes)
+        return round(sum(volumes) / len(volumes) * 100)
 
-    def _set_device_volume(self, device_id: int, device_type: DeviceType, volume: float) -> bool:
+    def _set_device_volume(self, device_id: int, device_type: DeviceType, volume: int) -> bool:
         """Set the volume of an audio device given its ID and type.
-        
+
         Args:
             device_id: The ID of the audio device.
             device_type: The type of device: INPUT or OUTPUT.
-            volume: The volume to set between 0 (minimum volume) and 1 (maximum volume).
+            volume: The volume to set between 0 (minimum volume) and 100 (maximum volume).
 
         Returns:
             True if the volume was set successfully, False otherwise.
 
         """
-        # Clamp volume to valid range
-        volume = max(0.0, min(1.0, volume))
+        # Clamp volume to valid range and convert to 0.0-1.0 for CoreAudio
+        volume_scalar = max(0.0, min(1.0, volume / 100.0))
 
         # Try master channel (0) first, then individual channels (1, 2)
         channels_to_try = [0, 1, 2]  # 0 = master, 1 = left, 2 = right
@@ -329,7 +329,7 @@ class VolumeControlMacOS(VolumeControl):
             if not has_property:
                 continue  # Skip this channel if the property doesn't exist
 
-            volume_value = c_float(volume)
+            volume_value = c_float(volume_scalar)
             property_data_size = c_uint32(ctypes.sizeof(c_float))
 
             status = self.coreaudio.AudioObjectSetPropertyData(
@@ -353,20 +353,20 @@ class VolumeControlMacOS(VolumeControl):
 
         return True
 
-    def get_input_volume(self) -> float:
+    def get_input_volume(self) -> int:
         """Get the input volume.
-        
+
         Returns:
-            The input volume as a value between 0 (minimum volume) and 1 (maximum volume).
+            The input volume as a value between 0 (minimum volume) and 100 (maximum volume). Returns -1 on failure.
 
         """
         return self._get_device_volume(self.input_device_id, DeviceType.INPUT)
 
-    def set_input_volume(self, volume: float) -> bool:
+    def set_input_volume(self, volume: int) -> bool:
         """Set the input volume.
-        
+
         Args:
-            volume: The volume to set between 0 (minimum volume) and 1 (maximum volume).
+            volume: The volume to set between 0 (minimum volume) and 100 (maximum volume).
 
         Returns:
             True if the volume was set successfully, False otherwise.
@@ -374,20 +374,20 @@ class VolumeControlMacOS(VolumeControl):
         """
         return self._set_device_volume(self.input_device_id, DeviceType.INPUT, volume)
 
-    def get_output_volume(self) -> float:
+    def get_output_volume(self) -> int:
         """Get the output volume.
-        
+
         Returns:
-            The output volume as a value between 0 (minimum volume) and 1 (maximum volume).
+            The output volume as a value between 0 (minimum volume) and 100 (maximum volume). Returns -1 on failure.
 
         """
         return self._get_device_volume(self.output_device_id, DeviceType.OUTPUT)
 
-    def set_output_volume(self, volume: float) -> bool:
+    def set_output_volume(self, volume: int) -> bool:
         """Set the output volume.
-        
+
         Args:
-            volume: The volume to set between 0 (minimum volume) and 1 (maximum volume).
+            volume: The volume to set between 0 (minimum volume) and 100 (maximum volume).
 
         Returns:
             True if the volume was set successfully, False otherwise.

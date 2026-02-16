@@ -67,7 +67,7 @@ class VolumeControlLinux(VolumeControl):
             return self._pulse_get_input_output_device_ids()
         return self._alsa_get_input_output_device_ids()
 
-    def _get_device_volume(self, device_id: int | str | None, device_type: DeviceType) -> float:
+    def _get_device_volume(self, device_id: int | str | None, device_type: DeviceType) -> int:
         """Get the volume of an audio device given its ID and type.
 
         Args:
@@ -75,20 +75,20 @@ class VolumeControlLinux(VolumeControl):
             device_type: The type of device: INPUT or OUTPUT.
 
         Returns:
-            The volume as a value between 0 (minimum) and 1 (maximum). Returns -1.0 if the volume could not be read.
+            The volume as a value between 0 and 100. Returns -1 if the volume could not be read.
 
         """
         if _PULSECTL_AVAILABLE:
             return self._pulse_get_device_volume(device_id, device_type)
         return self._alsa_get_device_volume(device_id, device_type)
 
-    def _set_device_volume(self, device_id: int | str | None, device_type: DeviceType, volume: float) -> bool:
+    def _set_device_volume(self, device_id: int | str | None, device_type: DeviceType, volume: int) -> bool:
         """Set the volume of an audio device given its ID and type.
 
         Args:
             device_id: The ID of the audio device.
             device_type: The type of device: INPUT or OUTPUT.
-            volume: The volume to set between 0 (minimum volume) and 1 (maximum volume).
+            volume: The volume to set between 0 (minimum volume) and 100 (maximum volume).
 
         Returns:
             True if the volume was set successfully, False otherwise.
@@ -181,7 +181,7 @@ class VolumeControlLinux(VolumeControl):
         except Exception as e:
             raise RuntimeError(f"Failed to get default {device_type.value} device via pulsectl: {e}")
 
-    def _pulse_get_device_volume(self, device_id: int | str | None, device_type: DeviceType) -> float:
+    def _pulse_get_device_volume(self, device_id: int | str | None, device_type: DeviceType) -> int:
         """Get the volume of an audio device via pulsectl.
 
         Args:
@@ -189,7 +189,7 @@ class VolumeControlLinux(VolumeControl):
             device_type: The type of device: INPUT or OUTPUT.
 
         Returns:
-            The volume as a value between 0 and 1. Returns -1.0 on failure.
+            The volume as a value between 0 and 100. Returns -1 on failure.
 
         """
         try:
@@ -198,32 +198,32 @@ class VolumeControlLinux(VolumeControl):
                     device = pulse.get_source_by_name(device_id)
                 else:
                     device = pulse.get_sink_by_name(device_id)
-                return float(pulse.volume_get_all_chans(device))
+                return round(float(pulse.volume_get_all_chans(device)) * 100)
         except Exception as e:
             logger.error(f"Failed to get volume on device {device_id} - pulsectl error: {e}")
-            return -1.0
+            return -1
 
-    def _pulse_set_device_volume(self, device_id: int | str | None, device_type: DeviceType, volume: float) -> bool:
+    def _pulse_set_device_volume(self, device_id: int | str | None, device_type: DeviceType, volume: int) -> bool:
         """Set the volume of an audio device via pulsectl.
 
         Args:
             device_id: The audio device name.
             device_type: The type of device: INPUT or OUTPUT.
-            volume: The volume to set between 0 (minimum volume) and 1 (maximum volume).
+            volume: The volume to set between 0 (minimum volume) and 100 (maximum volume).
 
         Returns:
             True if the volume was set successfully, False otherwise.
 
         """
-        # Clamp volume to valid range
-        volume = max(0.0, min(1.0, volume))
+        # Clamp and convert to 0.0-1.0 for pulsectl API
+        volume_scalar = max(0.0, min(1.0, volume / 100.0))
         try:
             with pulsectl.Pulse("reachy-mini") as pulse:
                 if device_type == DeviceType.INPUT:
                     device = pulse.get_source_by_name(device_id)
                 else:
                     device = pulse.get_sink_by_name(device_id)
-                pulse.volume_set_all_chans(device, volume)  #We set all channels to the same volume
+                pulse.volume_set_all_chans(device, volume_scalar)
             return True
         except Exception as e:
             logger.error(f"Failed to set volume on device {device_id} - pulsectl error: {e}")
@@ -306,21 +306,19 @@ class VolumeControlLinux(VolumeControl):
         full_command = " || ".join(sub_commands)
         return full_command.split(" ")
 
-    def _build_amixer_set_command(self, device_id: int | str | None, device_type: DeviceType, volume: float) -> list[str]:
+    def _build_amixer_set_command(self, device_id: int | str | None, device_type: DeviceType, volume: int) -> list[str]:
         """Build the amixer command to set the volume of a specific device and control.
 
         Args:
             device_id: The ID of the audio device. If None, uses the default audio device.
             device_type: The type of device: INPUT or OUTPUT.
-            volume: The volume to set between 0 (minimum volume) and 1 (maximum volume).
+            volume: The volume to set between 0 (minimum volume) and 100 (maximum volume).
 
         Returns:
             The amixer command to set the volume of the requested device.
 
         """
-        # Convert from 0.0-1.0 to 0-100 and clamp to valid range
-        volume_percent = int(volume * 100)
-        volume_percent = max(0, min(100, volume_percent))
+        volume_percent = max(0, min(100, volume))
 
         sub_commands = []
         if device_id is None:
@@ -339,7 +337,7 @@ class VolumeControlLinux(VolumeControl):
         full_command = " || ".join(sub_commands)
         return full_command.split(" ")
 
-    def _alsa_get_device_volume(self, device_id: int | str | None, device_type: DeviceType) -> float:
+    def _alsa_get_device_volume(self, device_id: int | str | None, device_type: DeviceType) -> int:
         """Get the volume of an audio device via amixer.
 
         Args:
@@ -347,7 +345,7 @@ class VolumeControlLinux(VolumeControl):
             device_type: The type of device: INPUT or OUTPUT.
 
         Returns:
-            The volume as a value between 0 and 1. Returns -1.0 on failure.
+            The volume as a value between 0 and 100. Returns -1 on failure.
 
         """
         try:
@@ -365,20 +363,20 @@ class VolumeControlLinux(VolumeControl):
                     for part in parts:
                         if "%" in part:
                             volume_str = part.split("%")[0]
-                            return float(volume_str) / 100.0
+                            return int(volume_str)
 
         except (subprocess.TimeoutExpired, FileNotFoundError, ValueError, subprocess.CalledProcessError) as e:
             logger.error(f"Failed to get volume on device {device_id} - amixer failed with error: {e}")
 
-        return -1.0
+        return -1
 
-    def _alsa_set_device_volume(self, device_id: int | str | None, device_type: DeviceType, volume: float) -> bool:
+    def _alsa_set_device_volume(self, device_id: int | str | None, device_type: DeviceType, volume: int) -> bool:
         """Set the volume of an audio device via amixer.
 
         Args:
             device_id: The ALSA card number.
             device_type: The type of device: INPUT or OUTPUT.
-            volume: The volume to set between 0 (minimum volume) and 1 (maximum volume).
+            volume: The volume to set between 0 (minimum volume) and 100 (maximum volume).
 
         Returns:
             True if the volume was set successfully, False otherwise.
@@ -400,20 +398,20 @@ class VolumeControlLinux(VolumeControl):
 
     # ---- Public API ----
 
-    def get_output_volume(self) -> float:
+    def get_output_volume(self) -> int:
         """Get the output volume.
 
         Returns:
-            The output volume as a value between 0 (minimum volume) and 1 (maximum volume).
+            The output volume as a value between 0 (minimum volume) and 100 (maximum volume). Returns -1 on failure.
 
         """
         return self._get_device_volume(self.output_device_id, DeviceType.OUTPUT)
 
-    def set_output_volume(self, volume: float) -> bool:
+    def set_output_volume(self, volume: int) -> bool:
         """Set the output volume.
 
         Args:
-            volume: The volume to set between 0 (minimum volume) and 1 (maximum volume).
+            volume: The volume to set between 0 (minimum volume) and 100 (maximum volume).
 
         Returns:
             True if the volume was set successfully, False otherwise.
@@ -421,20 +419,20 @@ class VolumeControlLinux(VolumeControl):
         """
         return self._set_device_volume(self.output_device_id, DeviceType.OUTPUT, volume)
 
-    def get_input_volume(self) -> float:
+    def get_input_volume(self) -> int:
         """Get the input volume.
 
         Returns:
-            The input volume as a value between 0 (minimum volume) and 1 (maximum volume).
+            The input volume as a value between 0 (minimum volume) and 100 (maximum volume). Returns -1 on failure.
 
         """
         return self._get_device_volume(self.input_device_id, DeviceType.INPUT)
 
-    def set_input_volume(self, volume: float) -> bool:
+    def set_input_volume(self, volume: int) -> bool:
         """Set the input volume.
 
         Args:
-            volume: The volume to set between 0 (minimum volume) and 1 (maximum volume).
+            volume: The volume to set between 0 (minimum volume) and 100 (maximum volume).
 
         Returns:
             True if the volume was set successfully, False otherwise.

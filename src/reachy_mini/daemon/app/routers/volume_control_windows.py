@@ -141,7 +141,7 @@ class VolumeControlWindows(VolumeControl):
         except Exception as e:
             raise RuntimeError(f"Failed to get volume interface for device {device_id}: {e}")
 
-    def _get_device_volume(self, device_id: str, device_type: DeviceType) -> float:
+    def _get_device_volume(self, device_id: str, device_type: DeviceType) -> int:
         """Get the volume of an audio device.
 
         Args:
@@ -149,7 +149,7 @@ class VolumeControlWindows(VolumeControl):
             device_type: The type of device: INPUT or OUTPUT.
 
         Returns:
-            The volume as a value between 0 and 1. Returns -1.0 on failure.
+            The volume as a value between 0 and 100. Returns -1 on failure.
 
         """
         try:
@@ -158,53 +158,53 @@ class VolumeControlWindows(VolumeControl):
             min_db, max_db, _ = volume_interface.GetVolumeRange()
 
             if max_db == min_db:
-                return 1.0  # Avoid division by zero
+                return 100  # Avoid division by zero
 
             linear_volume = (volume_db - min_db) / (max_db - min_db)
-            return float(max(0.0, min(1.0, linear_volume)))
+            return round(max(0.0, min(1.0, linear_volume)) * 100)
         except Exception as e:
             logger.error(f"Failed to get volume on {device_type.value} device: {e}")
-            return -1.0
+            return -1
 
-    def _set_device_volume(self, device_id: str, device_type: DeviceType, volume: float) -> bool:
+    def _set_device_volume(self, device_id: str, device_type: DeviceType, volume: int) -> bool:
         """Set the volume of an audio device.
 
         Args:
             device_id: The endpoint ID string of the audio device.
             device_type: The type of device: INPUT or OUTPUT.
-            volume: The volume to set between 0 (minimum volume) and 1 (maximum volume).
+            volume: The volume to set between 0 (minimum volume) and 100 (maximum volume).
 
         Returns:
             True if the volume was set successfully, False otherwise.
 
         """
-        # Clamp volume to valid range
-        volume = max(0.0, min(1.0, volume))
+        # Clamp and convert to 0.0-1.0 for WASAPI dB calculation
+        volume_scalar = max(0.0, min(1.0, volume / 100.0))
 
         try:
             volume_interface = self._get_device_volume_interface(device_id)
             min_db, max_db, _ = volume_interface.GetVolumeRange()
-            db_volume = min_db + (volume * (max_db - min_db))
+            db_volume = min_db + (volume_scalar * (max_db - min_db))
             volume_interface.SetMasterVolumeLevel(db_volume, None)
             return True
         except Exception as e:
             logger.error(f"Failed to set volume on {device_type.value} device: {e}")
             return False
 
-    def get_output_volume(self) -> float:
+    def get_output_volume(self) -> int:
         """Get the output volume.
 
         Returns:
-            The output volume as a value between 0 (minimum volume) and 1 (maximum volume).
+            The output volume as a value between 0 (minimum volume) and 100 (maximum volume). Returns -1 on failure.
 
         """
         return self._get_device_volume(self.output_device_id, DeviceType.OUTPUT)
 
-    def set_output_volume(self, volume: float) -> bool:
+    def set_output_volume(self, volume: int) -> bool:
         """Set the output volume.
 
         Args:
-            volume: The volume to set between 0 (minimum volume) and 1 (maximum volume).
+            volume: The volume to set between 0 (minimum volume) and 100 (maximum volume).
 
         Returns:
             True if the volume was set successfully, False otherwise.
@@ -212,20 +212,20 @@ class VolumeControlWindows(VolumeControl):
         """
         return self._set_device_volume(self.output_device_id, DeviceType.OUTPUT, volume)
 
-    def get_input_volume(self) -> float:
+    def get_input_volume(self) -> int:
         """Get the input volume.
 
         Returns:
-            The input volume as a value between 0 (minimum volume) and 1 (maximum volume).
+            The input volume as a value between 0 (minimum volume) and 100 (maximum volume). Returns -1 on failure.
 
         """
         return self._get_device_volume(self.input_device_id, DeviceType.INPUT)
 
-    def set_input_volume(self, volume: float) -> bool:
+    def set_input_volume(self, volume: int) -> bool:
         """Set the input volume.
 
         Args:
-            volume: The volume to set between 0 (minimum volume) and 1 (maximum volume).
+            volume: The volume to set between 0 (minimum volume) and 100 (maximum volume).
 
         Returns:
             True if the volume was set successfully, False otherwise.
