@@ -128,7 +128,7 @@ class VolumeControlWindows(VolumeControl):
             raise RuntimeError(f"Failed to get default {device_type.value} device: {e}")
 
     @staticmethod
-    def _get_device_volume_interface(device_id: str) -> Any:
+    def _get_device_volume_interface(device_id: int | str | None) -> Any:
         """Get the IAudioEndpointVolume interface for a device.
 
         Uses AudioUtilities.CreateDevice() to wrap the raw IMMDevice and access its EndpointVolume property.
@@ -155,7 +155,7 @@ class VolumeControlWindows(VolumeControl):
         except Exception as e:
             raise RuntimeError(f"Failed to get volume interface for device {device_id}: {e}")
 
-    def _get_device_volume(self, device_id: str, device_type: DeviceType) -> int:
+    def _get_device_volume(self, device_id: int | str | None, device_type: DeviceType) -> int:
         """Get the volume of an audio device.
 
         Args:
@@ -175,12 +175,12 @@ class VolumeControlWindows(VolumeControl):
                 return 100  # Avoid division by zero
 
             linear_volume = (volume_db - min_db) / (max_db - min_db)
-            return round(max(0.0, min(1.0, linear_volume)) * 100)
+            return int(round(max(0.0, min(1.0, linear_volume)) * 100))
         except Exception as e:
             logger.error(f"Failed to get volume on {device_type.value} device: {e}")
             return -1
 
-    def _set_device_volume(self, device_id: str, device_type: DeviceType, volume: int) -> bool:
+    def _set_device_volume(self, device_id: int | str | None, device_type: DeviceType, volume: int) -> bool:
         """Set the volume of an audio device.
 
         Args:

@@ -239,7 +239,7 @@ class VolumeControlMacOS(VolumeControl):
 
         return device_id.value
 
-    def _get_device_volume(self, device_id: int, device_type: DeviceType) -> int:
+    def _get_device_volume(self, device_id: int | str | None, device_type: DeviceType) -> int:
         """Get the volume of an audio device given its ID and type.
 
         Args:
@@ -294,7 +294,7 @@ class VolumeControlMacOS(VolumeControl):
         # Return average of available channels (if no master channel)
         return round(sum(volumes) / len(volumes) * 100)
 
-    def _set_device_volume(self, device_id: int, device_type: DeviceType, volume: int) -> bool:
+    def _set_device_volume(self, device_id: int | str | None, device_type: DeviceType, volume: int) -> bool:
         """Set the volume of an audio device given its ID and type.
 
         Args:
