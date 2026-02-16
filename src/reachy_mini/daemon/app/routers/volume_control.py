@@ -1,3 +1,5 @@
+"""Volume control base class and factory for platform-specific implementations."""
+
 import logging
 import platform
 from abc import ABC, abstractmethod

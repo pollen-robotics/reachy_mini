@@ -1,3 +1,5 @@
+"""Volume control implementation for macOS systems."""
+
 import ctypes
 from ctypes import POINTER, Structure, byref, c_float, c_int, c_uint32, c_void_p
 from dataclasses import dataclass, field
@@ -144,6 +146,7 @@ class VolumeControlMacOS(VolumeControl):
 
         for device_id, device_name in devices.items():
             if device_name in SOUND_CARD_NAMES:
+                # Input and output devices will appear with the same ID
                 return device_id, device_id
 
         return self._get_default_device_id(DeviceType.INPUT), self._get_default_device_id(DeviceType.OUTPUT)
@@ -197,7 +200,7 @@ class VolumeControlMacOS(VolumeControl):
 
         for device_id in device_ids:
             device_name = self._get_device_name(device_id)
-            devices[device_id] = device_name
+            devices.setdefault(device_id, device_name)
         return devices
 
     def _get_default_device_id(self, device_type: DeviceType) -> int:
