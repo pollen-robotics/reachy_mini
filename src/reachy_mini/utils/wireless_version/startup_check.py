@@ -308,8 +308,12 @@ def check_and_sync_apps_venv_sdk() -> None:
         print(f"Error getting apps_venv SDK info: {e}")
         return
 
-    print(f"Daemon: {daemon_info['version']} (source={daemon_info['source']}, ref={daemon_info.get('git_ref')})")
-    print(f"Apps:   {apps_info['version']} (source={apps_info['source']}, ref={apps_info.get('git_ref')})")
+    print(
+        f"Daemon: {daemon_info['version']} (source={daemon_info['source']}, ref={daemon_info.get('git_ref')})"
+    )
+    print(
+        f"Apps:   {apps_info['version']} (source={apps_info['source']}, ref={apps_info.get('git_ref')})"
+    )
 
     # Check if sync needed
     if daemon_info["source"] == "git":

@@ -51,13 +51,20 @@ async def update_reachy_mini(
 
         if shutil.which("uv"):
             install_cmd = [
-                "uv", "pip", "install", "--python", str(apps_venv_python),
-                "--upgrade", apps_pkg,
+                "uv",
+                "pip",
+                "install",
+                "--python",
+                str(apps_venv_python),
+                "--upgrade",
+                apps_pkg,
             ] + extra_args
         else:
             install_cmd = [
                 str(Path("/venvs/apps_venv/bin/pip")),
-                "install", "--upgrade", apps_pkg,
+                "install",
+                "--upgrade",
+                apps_pkg,
             ] + extra_args
 
         await call_logger_wrapper(install_cmd, logger)
