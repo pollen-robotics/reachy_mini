@@ -23,6 +23,8 @@ jobs:
 
   mypy:
     runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/pollen-robotics/reachymini_documentation:1.0.0
     steps:
       - uses: actions/checkout@v4
       - name: Install uv
