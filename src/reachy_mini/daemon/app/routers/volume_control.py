@@ -60,8 +60,10 @@ def create_volume_control() -> VolumeControl:
         from .volume_control_macos import VolumeControlMacOS
         return VolumeControlMacOS()
     elif system == "Linux":
-        raise RuntimeError("Linux volume control is not implemented yet")
+        from .volume_control_linux import VolumeControlLinux
+        return VolumeControlLinux()
     elif system == "Windows":
-        raise RuntimeError("Windows volume control is not implemented yet")
+        from .volume_control_windows import VolumeControlWindows
+        return VolumeControlWindows()
     else:
         raise RuntimeError(f"Unsupported platform for volume control: {system}")
