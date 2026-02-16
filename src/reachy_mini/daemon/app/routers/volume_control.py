@@ -17,8 +17,13 @@ class DeviceType(Enum):
 @dataclass
 class VolumeControl(ABC):
     """Base class for volume control."""
-    
+
     logger: logging.Logger = field(init=False, default_factory=lambda: logging.getLogger(f"[VolumeControl {platform.system()}]"))
+    platform_name: str = field(init=False, default_factory=platform.system)
+    input_device_id: int | str | None = field(init=False, default=None)
+    output_device_id: int | str | None = field(init=False, default=None)
+    input_device_name: str = field(init=False, default="unknown")
+    output_device_name: str = field(init=False, default="unknown")
 
     @abstractmethod
     def set_output_volume(self, volume: int) -> bool:

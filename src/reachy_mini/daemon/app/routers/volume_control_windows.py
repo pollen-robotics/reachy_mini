@@ -2,7 +2,7 @@
 
 import logging
 import warnings
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 from pycaw.pycaw import DEVICE_STATE, AudioUtilities, EDataFlow, ERole
@@ -19,13 +19,27 @@ class VolumeControlWindows(VolumeControl):
     Relies on the pycaw library.
     """
 
-    input_device_id: str = field(init=False)
-    output_device_id: str = field(init=False)
-
     def __post_init__(self) -> None:
         """Initialize device IDs based on detected audio devices."""
         # TODO: use a property instead to account for dynamic audio devices
         self.input_device_id, self.output_device_id = self._get_input_output_device_ids()
+        self.input_device_name = self._get_device_name(self.input_device_id)
+        self.output_device_name = self._get_device_name(self.output_device_id)
+
+    def _get_device_name(self, device_id: str | None) -> str:
+        """Get the name of an audio device given its ID.
+
+        Args:
+            device_id: The endpoint ID string of the audio device.
+
+        Returns:
+            The name of the audio device, or "unknown" if not found.
+
+        """
+        if device_id is None:
+            return "unknown"
+        all_devices = {**self._get_all_devices(DeviceType.INPUT), **self._get_all_devices(DeviceType.OUTPUT)}
+        return all_devices.get(device_id, f"Unknown device (id={device_id})")
 
     def _get_all_devices(self, device_type: DeviceType | None = None) -> dict[str, str]:
         """Get all available audio devices IDs and names.

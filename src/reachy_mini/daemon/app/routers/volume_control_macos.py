@@ -2,7 +2,7 @@
 
 import ctypes
 from ctypes import POINTER, Structure, byref, c_float, c_int, c_uint32, c_void_p
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from struct import pack, unpack
 
 from .volume_control import SOUND_CARD_NAMES, DeviceType, VolumeControl
@@ -57,9 +57,6 @@ class VolumeControlMacOS(VolumeControl):
     Relies on the macOS CoreAudio framework.
     """
 
-    input_device_id: int = field(init=False)
-    output_device_id: int = field(init=False)
-
     # Define the AudioObjectPropertyAddress structure
     class AudioObjectPropertyAddress(Structure):
         """Structure representing the address of an audio object property in CoreAudio."""
@@ -91,6 +88,8 @@ class VolumeControlMacOS(VolumeControl):
         # Initialize audio devices IDs
         # TODO: use a property instead to account for dynamic audio devices
         self.input_device_id, self.output_device_id = self._get_input_output_device_ids()
+        self.input_device_name = self._get_device_name(self.input_device_id)
+        self.output_device_name = self._get_device_name(self.output_device_id)
 
     def _get_device_name(self, device_id: int) -> str:
         """Get the name of an audio device given its ID.
