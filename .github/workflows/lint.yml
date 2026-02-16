@@ -25,6 +25,9 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: ghcr.io/pollen-robotics/reachymini_documentation:1.0.0
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GHCR_TOKEN }}
     steps:
       - uses: actions/checkout@v4
       - name: Install uv
