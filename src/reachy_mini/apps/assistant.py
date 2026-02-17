@@ -178,26 +178,28 @@ def create(console: Console, app_name: str, app_path: Path) -> Path:
 
     (base_path / module_name / "__init__.py").touch()
     (base_path / module_name / "main.py").write_text(
-        render_template("main.py.j2", context)
+        render_template("main.py.j2", context), encoding="utf-8"
     )
     (base_path / module_name / "static" / "index.html").write_text(
-        render_template("static/index.html.j2", context)
+        render_template("static/index.html.j2", context), encoding="utf-8"
     )
     (base_path / module_name / "static" / "style.css").write_text(
-        render_template("static/style.css.j2", context)
+        render_template("static/style.css.j2", context), encoding="utf-8"
     )
     (base_path / module_name / "static" / "main.js").write_text(
-        render_template("static/main.js.j2", context)
+        render_template("static/main.js.j2", context), encoding="utf-8"
     )
 
     (base_path / "pyproject.toml").write_text(
-        render_template("pyproject.toml.j2", context)
+        render_template("pyproject.toml.j2", context), encoding="utf-8"
     )
-    (base_path / "README.md").write_text(render_template("README.md.j2", context))
+    (base_path / "README.md").write_text(
+        render_template("README.md.j2", context), encoding="utf-8"
+    )
 
-    (base_path / "index.html").write_text(render_template("index.html.j2", context))
-    (base_path / "style.css").write_text(render_template("style.css.j2", context))
-    (base_path / ".gitignore").write_text(render_template("gitignore.j2", context))
+    (base_path / "index.html").write_text(render_template("index.html.j2", context), encoding="utf-8")
+    (base_path / "style.css").write_text(render_template("style.css.j2", context), encoding="utf-8")
+    (base_path / ".gitignore").write_text(render_template("gitignore.j2", context), encoding="utf-8")
 
     # TODO assets dir with a .gif ?
 
