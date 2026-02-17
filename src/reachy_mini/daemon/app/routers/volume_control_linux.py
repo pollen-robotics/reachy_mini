@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 try:
     import pulsectl
     _PULSECTL_AVAILABLE = True
-except ImportError:
+except (ImportError, OSError):
     _PULSECTL_AVAILABLE = False
 
 # Constants
