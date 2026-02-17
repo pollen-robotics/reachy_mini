@@ -55,6 +55,24 @@ It can also be the same issue as "Motor blinking red or Overload Error" describe
 </details>
 
 <details>
+<summary><strong>Microphone not working</strong></summary>
+
+If you have one of the following symptoms:
+- Audio recording not working / returns silence
+- Audio recording returning zeros
+
+You may have plugged the microphone cable upside down.
+- If your cable is white and blue, please check again the assembly instruction to be sure the blue side is up.
+- If your cable is black, check that the side with the writing "Main Board" is up (see picture below).
+![mic_cable](/docs/assets/black_fpc_cable.png)
+
+
+If your cable is plugged properly and you still have issues, it is likely that the FPC cable of the microphone is damaged. Please refer to the tutorial [How to change the FPC cable of the microphone of Reachy Mini?](./platforms/reachy_mini/change_mic_fpc_cable.md) to fix this issue.
+
+</details>
+
+
+<details>
 
 <summary><strong>Low audio volume</strong></summary>
 
