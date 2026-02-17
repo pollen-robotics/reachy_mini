@@ -5,7 +5,12 @@ from ctypes import POINTER, Structure, byref, c_float, c_int, c_uint32, c_void_p
 from dataclasses import dataclass
 from struct import pack, unpack
 
-from .volume_control import SOUND_CARD_NAMES, AudioDevice, AudioDeviceType, VolumeControl
+from .volume_control import (
+    SOUND_CARD_NAMES,
+    AudioDevice,
+    AudioDeviceType,
+    VolumeControl,
+)
 
 
 def _get_macos_id(macos_four_char_code: str) -> int:

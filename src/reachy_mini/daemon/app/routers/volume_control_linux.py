@@ -5,7 +5,12 @@ import re
 import subprocess
 from dataclasses import dataclass
 
-from .volume_control import SOUND_CARD_NAMES, AudioDevice, AudioDeviceType, VolumeControl
+from .volume_control import (
+    SOUND_CARD_NAMES,
+    AudioDevice,
+    AudioDeviceType,
+    VolumeControl,
+)
 
 logger = logging.getLogger(__name__)
 

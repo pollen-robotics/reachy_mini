@@ -7,7 +7,12 @@ from typing import Any
 
 from pycaw.pycaw import DEVICE_STATE, AudioUtilities, EDataFlow, ERole
 
-from .volume_control import SOUND_CARD_NAMES, AudioDevice, AudioDeviceType, VolumeControl
+from .volume_control import (
+    SOUND_CARD_NAMES,
+    AudioDevice,
+    AudioDeviceType,
+    VolumeControl,
+)
 
 logger = logging.getLogger(__name__)
 
