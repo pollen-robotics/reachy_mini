@@ -121,12 +121,11 @@ class VolumeControlLinux(VolumeControl):
             with pulsectl.Pulse("reachy-mini") as pulse:
                 if device_type == AudioDeviceType.OUTPUT or device_type is None:
                     for sink in pulse.sink_list():
-                        if not sink.monitor_source_name:
-                                devices[sink.name] = sink.description or f"Unknown device (id={sink.name})"
+                        devices[sink.name] = sink.description or f"Unknown device (id={sink.name})"
                 if device_type == AudioDeviceType.INPUT or device_type is None:
                     for source in pulse.source_list():
                         if not source.monitor_of_sink_name:
-                                devices[source.name] = source.description or f"Unknown device (id={source.name})"
+                            devices[source.name] = source.description or f"Unknown device (id={source.name})"
         except Exception as e:
             raise RuntimeError(f"Could not scan audio devices, pulsectl failed with error: {e}")
         return devices
