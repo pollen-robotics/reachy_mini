@@ -33,4 +33,4 @@ Ready to write your own logic? Reachy Mini is controlled via a simple Python SDK
 
 ## ❓ Troubleshooting
 
-Encountering an issue? 👉 **[Check the Troubleshooting & FAQ Guide](../../troubleshooting.md)**
+Encountering an issue? 👉 **[Check the Troubleshooting & FAQ Guide](../../troubleshooting/troubleshooting.md)**

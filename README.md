@@ -83,7 +83,7 @@ Reachy Mini robots are sold as kits and generally take **2 to 3 hours** to assem
 
 ## ❓ Troubleshooting
 
-Encountering an issue? 👉 **[Check the Troubleshooting & FAQ Guide](https://huggingface.co/docs/reachy_mini/troubleshooting)**
+Encountering an issue? 👉 **[Check the Troubleshooting & FAQ Guide](https://huggingface.co/docs/reachy_mini/troubleshooting/troubleshooting)**
 
 <br>
 

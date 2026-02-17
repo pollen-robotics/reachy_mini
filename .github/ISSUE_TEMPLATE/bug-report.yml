@@ -7,7 +7,7 @@ body:
       value: |
         ### Thanks for contributing to Reachy Mini! 🙌
         Please include as much detail as possible so we can help quickly.
-        **Before filing a ticket, you must read our [Troubleshooting Guide](https://huggingface.co/docs/reachy_mini/troubleshooting).**
+        **Before filing a ticket, you must read our [Troubleshooting Guide](https://huggingface.co/docs/reachy_mini/troubleshooting/troubleshooting).**
 
   - type: dropdown
     id: issue-type
