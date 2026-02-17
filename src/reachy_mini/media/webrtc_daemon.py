@@ -322,56 +322,32 @@ class GstWebRTC:
         monitor.add_filter("Audio/Source")
         monitor.start()
 
-        target = "Reachy Mini Audio"
-        try:
-            for device in monitor.get_devices():
-                name = device.get_display_name() or ""
-                props = device.get_properties()
+        snd_card_name = "Reachy Mini Audio"
 
-                if target not in name:
-                    continue
+        devices = monitor.get_devices()
+        for device in devices:
+            name = device.get_display_name()
+            device_props = device.get_properties()
 
-                # Prefer PipeWire node.name if present
-                if props and props.has_field("node.name"):
-                    node_name = props.get_string("node.name")
-                    self._logger.debug(
-                        f"Found audio input device with node name {node_name}"
-                    )
-                    return str(node_name)
-                elif (
-                    platform.system() == "Windows"
-                    and props
-                    and props.has_field("device.api")
-                    and props.get_string("device.api") == "wasapi2"
-                ):
-                    device_id = props.get_string("device.id")
-                    self._logger.debug(
-                        f"Found audio input device {name} for Windows"
-                    )
-                    return str(device_id)
-                elif platform.system() == "Darwin":
-                    device_id = props.get_string("unique-id")
-                    self._logger.debug(f"Found audio input device {name} for macOS")
-                    return str(device_id)
-                elif platform.system() == "Linux":
-                    # Linux PulseAudio / ALSA fallback
-                    udev_id = props.get_string("udev.id") if props and props.has_field("udev.id") else None
-                    profile = props.get_string("device.profile.name") if props and props.has_field("device.profile.name") else None
+            if snd_card_name in name:
+                # PipeWire
+                if device_props and device_props.has_field("object.serial"):
+                    serial = device_props.get_string("object.serial")
+                    self._logger.debug(f"Found audio input device with serial {serial}")
+                    monitor.stop()
+                    return str(serial)
+
+                # Linux PulseAudio fallback
+                if device_props and platform.system() == "Linux":
+                    udev_id = device_props.get_string("udev.id") if device_props.has_field("udev.id") else None
+                    profile = device_props.get_string("device.profile.name") if device_props.has_field("device.profile.name") else None
                     if udev_id and profile:
                         pa_device = f"alsa_input.{udev_id}.{profile}"
-                        self._logger.debug(
-                            f"Found audio input device {name} via PulseAudio: {pa_device}"
-                        )
+                        self._logger.debug(f"Found audio input device {name} via PulseAudio: {pa_device}")
+                        monitor.stop()
                         return pa_device
-                    elif props and props.has_field("device.string"):
-                        device_id = props.get_string("device.string")
-                        self._logger.debug(
-                            f"Found audio input device {name} via ALSA: {device_id}"
-                        )
-                        return str(device_id)
-        finally:
-            monitor.stop()
 
+        monitor.stop()
         self._logger.warning("No source audio card found.")
         return None
 
