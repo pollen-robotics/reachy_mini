@@ -99,7 +99,9 @@ def create_cli(
 
         # js is not supported yet
         if language != "python":
-            console.print("[red]Currently only Python apps are supported. Aborted.[/red]")
+            console.print(
+                "[red]Currently only Python apps are supported. Aborted.[/red]"
+            )
             exit()
     else:
         language = "python"
@@ -328,9 +330,13 @@ def check(console: Console, app_path: str) -> None:
         if not (pkg_path / "__init__.py").exists():
             console.print(f"❌ Package folder '{pkg_name}' not found", style="bold red")
             console.print(f"   Checked: {abs_app_path / pkg_name}/", style="dim")
-            console.print(f"   Checked: {abs_app_path / 'src' / pkg_name}/", style="dim")
+            console.print(
+                f"   Checked: {abs_app_path / 'src' / pkg_name}/", style="dim"
+            )
             sys.exit(1)
-    console.print(f"✅ Package '{pkg_name}' found at {pkg_path.relative_to(abs_app_path)}/")
+    console.print(
+        f"✅ Package '{pkg_name}' found at {pkg_path.relative_to(abs_app_path)}/"
+    )
 
     if "entry-points" not in pyproject_content["project"]:
         console.print(
@@ -362,7 +368,6 @@ def check(console: Console, app_path: str) -> None:
             style="bold red",
         )
         sys.exit(1)
-
 
     # - main.py exists
     main_file = pkg_path / "main.py"
@@ -775,7 +780,7 @@ def publish(
                 choices=["private", "public"],
                 default="public",
             ).ask()
-            is_private = (privacy == "private")
+            is_private = privacy == "private"
         else:
             is_private = private
 

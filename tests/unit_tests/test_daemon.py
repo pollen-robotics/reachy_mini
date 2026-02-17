@@ -2,31 +2,33 @@ import asyncio
 import numpy as np
 import pytest
 
-from reachy_mini.daemon.daemon import Daemon    
+from reachy_mini.daemon.daemon import Daemon
 from reachy_mini.reachy_mini import ReachyMini
 
 @pytest.mark.asyncio
 async def test_daemon_start_stop() -> None:
-    from reachy_mini.daemon.daemon import Daemon    
-    
+    from reachy_mini.daemon.daemon import Daemon
+
     daemon = Daemon()
     await daemon.start(
         sim=True,
         headless=True,
         wake_up_on_start=False,
+        use_audio=False,
     )
     await daemon.stop(goto_sleep_on_stop=False)
 
 
 @pytest.mark.asyncio
-async def test_daemon_multiple_start_stop() -> None:    
+async def test_daemon_multiple_start_stop() -> None:
     daemon = Daemon()
-    
+
     for _ in range(3):
         await daemon.start(
             sim=True,
             headless=True,
             wake_up_on_start=False,
+            use_audio=False,
         )
         await daemon.stop(goto_sleep_on_stop=False)
 
@@ -38,6 +40,7 @@ async def test_daemon_client_disconnection() -> None:
         sim=True,
         headless=True,
         wake_up_on_start=False,
+        use_audio=False,
     )
 
     client_connected = asyncio.Event()
@@ -56,7 +59,7 @@ async def test_daemon_client_disconnection() -> None:
     async def wait_for_client() -> None:
         await client_connected.wait()
         await daemon.stop(goto_sleep_on_stop=False)
-    
+
     await asyncio.gather(simple_client(), wait_for_client())
 
 @pytest.mark.asyncio
@@ -66,6 +69,7 @@ async def test_daemon_early_stop() -> None:
         sim=True,
         headless=True,
         wake_up_on_start=False,
+        use_audio=False,
     )
 
     client_connected = asyncio.Event()
@@ -89,4 +93,3 @@ async def test_daemon_early_stop() -> None:
         daemon_stopped.set()
 
     await asyncio.gather(client_bg(), will_stop_soon())
-

@@ -98,7 +98,9 @@ def main() -> None:
     else:
         ports = find_serial_port(wireless_version=args.wireless)
         if not ports:
-            print("No serial port found. Please check your USB connection and permissions.")
+            print(
+                "No serial port found. Please check your USB connection and permissions."
+            )
             return
         port = ports[0]
 
