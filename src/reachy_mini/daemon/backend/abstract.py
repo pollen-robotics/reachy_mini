@@ -850,7 +850,13 @@ class Backend:
             gst_webrtc (Any): The GstWebRTC instance to setup.
 
         """
-        gst_webrtc.set_message_handler(self._handle_webrtc_message)
+        _loop = asyncio.new_event_loop()
+        threading.Thread(target=_loop.run_forever, daemon=True).start()
+
+        def _threadsafe_handler(peer_id: str, message: str) -> None:
+            _loop.call_soon_threadsafe(self._handle_webrtc_message, peer_id, message)
+
+        gst_webrtc.set_message_handler(_threadsafe_handler)
         self._send_message_to_webrtc = gst_webrtc.send_data_message
 
     def _handle_webrtc_message(self, peer_id: str, message: str) -> None:
