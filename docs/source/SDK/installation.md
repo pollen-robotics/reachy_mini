@@ -219,12 +219,18 @@ Choose your installation method:
 In your terminal, run:
 ```bash
 uv pip install "reachy-mini"
+uv pip install --upgrade --index-url https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/simple gstreamer==1.28.0
 ```
 
 If you want to use the simulation mode, you need to add the `mujoco` extra:
 ```bash
 uv pip install "reachy-mini[mujoco]"
+uv pip install --upgrade --index-url https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/simple gstreamer==1.28.0
 ```
+
+> [!TIP]
+> The post installation of gstreamer is due to an [issue](https://github.com/pypi/support/issues/8847#issuecomment-3899714506) with PyPi and should be solved in the future.
+
 
 ### 🔧 Option B: Install from Source  
 > **For developers** - Want to modify the SDK or contribute? Choose this option!
@@ -233,11 +239,13 @@ In your terminal, run:
 ```bash
 git clone https://github.com/pollen-robotics/reachy_mini && cd reachy_mini
 uv sync
+uv pip install --upgrade --index-url https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/simple gstreamer==1.28.0
 ```
 
 If you want to use the simulation mode, you need to add the `mujoco` extra:
 ```bash
 uv sync --extra mujoco
+uv pip install --upgrade --index-url https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/simple gstreamer==1.28.0
 ```
 ### 🐧 Linux Users
 
@@ -277,15 +285,17 @@ sudo apt-get install libportaudio2
 
 </details>
 
-## 📡 Wireless Reachy Mini Setup
+#### Gstreamer
 
-> **Want to use the SDK from a remote laptop with a wireless Reachy Mini ?** You'll need to install GStreamer to receive video and audio streams.
-
-### 🔧 Install GStreamer
+Media management is performed by the GStreamer library. Windows and MacOSX users can use pip to install it:
+```bash
+uv pip install --upgrade --index-url https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/simple gstreamer==1.28.0
+```
+Linux users have extra steps to follow:
 
 <div align="center">
 
-[![GStreamer Installation Guide](https://img.shields.io/badge/📖-GStreamer%20Installation%20Guide-blue?style=for-the-badge)](gstreamer-installation.md)
+[![GStreamer Installation Guide](https://img.shields.io/badge/📖-GStreamer%20Installation%20Guide-blue?style=for-the-badge)](gstreamer-installation)
 
 </div>
 

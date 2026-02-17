@@ -43,8 +43,12 @@ LOCAL_GSTREAMER_SIGNALING = "ws://127.0.0.1:8443"
 RECONNECT_INTERVAL = 5.0  # seconds
 TOKEN_CHECK_INTERVAL = 30.0  # seconds - how often to check for token when not connected
 LOCAL_WS_CONNECT_TIMEOUT = 5.0  # seconds - timeout for local websocket connection
-LOCAL_WS_WELCOME_TIMEOUT = 3.0  # seconds - timeout waiting for welcome message from local
-SSE_READ_TIMEOUT = 60.0  # seconds - timeout for reading from SSE stream (should receive keepalive)
+LOCAL_WS_WELCOME_TIMEOUT = (
+    3.0  # seconds - timeout waiting for welcome message from local
+)
+SSE_READ_TIMEOUT = (
+    60.0  # seconds - timeout for reading from SSE stream (should receive keepalive)
+)
 CONNECTION_WATCHDOG_INTERVAL = 30.0  # seconds - how often to check connection health
 CONNECTION_STALE_THRESHOLD = 90.0  # seconds - consider connection stale if no activity
 
@@ -104,9 +108,15 @@ class CentralSignalingRelay:
         self._local_producer_id: Optional[str] = None
 
         # Session ID mapping between central and local
-        self._pending_central_sessions: list[str] = []  # Central sessions waiting for local session
-        self._local_to_central_session: dict[str, str] = {}  # local_session_id -> central_session_id
-        self._central_to_local_session: dict[str, str] = {}  # central_session_id -> local_session_id
+        self._pending_central_sessions: list[
+            str
+        ] = []  # Central sessions waiting for local session
+        self._local_to_central_session: dict[
+            str, str
+        ] = {}  # local_session_id -> central_session_id
+        self._central_to_local_session: dict[
+            str, str
+        ] = {}  # central_session_id -> local_session_id
 
         # Connection health tracking
         self._last_central_activity: float = 0.0
@@ -131,7 +141,9 @@ class CentralSignalingRelay:
         self._state_message = message
 
         # Log state transition with appropriate level
-        log_msg = f"[Central Relay] State transition: {old_state.value} -> {state.value}"
+        log_msg = (
+            f"[Central Relay] State transition: {old_state.value} -> {state.value}"
+        )
         if message:
             log_msg += f" | {message}"
 
@@ -229,7 +241,9 @@ class CentralSignalingRelay:
             return
 
         if new_token:
-            self._set_state(RelayState.RECONNECTING, "HF token updated, reconnecting...")
+            self._set_state(
+                RelayState.RECONNECTING, "HF token updated, reconnecting..."
+            )
             self._connection_attempts = 0  # Reset retry counter on new token
         else:
             self._set_state(RelayState.WAITING_FOR_TOKEN, "Logged out from HuggingFace")
@@ -240,6 +254,7 @@ class CentralSignalingRelay:
             async def _reconnect() -> None:
                 await self._close_connections()
                 self._token_updated.set()
+
             asyncio.run_coroutine_threadsafe(_reconnect(), self._thread_loop)
         else:
             self._token_updated.set()
@@ -253,6 +268,7 @@ class CentralSignalingRelay:
         """
         try:
             from huggingface_hub import get_token
+
             token = get_token()
             if token != self.hf_token:
                 if token:
@@ -306,13 +322,20 @@ class CentralSignalingRelay:
                     logger.info("[Central Relay] _run_loop cancelled during connect")
                     raise  # Re-raise to exit the outer try
                 except Exception as e:
-                    logger.warning(f"[Central Relay] Connection attempt failed with exception: {type(e).__name__}: {e}")
+                    logger.warning(
+                        f"[Central Relay] Connection attempt failed with exception: {type(e).__name__}: {e}"
+                    )
                     had_exception = True
                     self._connection_attempts += 1
                     if self._connection_attempts <= 3:
-                        self._set_state(RelayState.RECONNECTING, f"Connection failed: {e}")
+                        self._set_state(
+                            RelayState.RECONNECTING, f"Connection failed: {e}"
+                        )
                     else:
-                        self._set_state(RelayState.ERROR, f"Connection failed after {self._connection_attempts} attempts: {e}")
+                        self._set_state(
+                            RelayState.ERROR,
+                            f"Connection failed after {self._connection_attempts} attempts: {e}",
+                        )
 
                 if self._running and had_exception:
                     # Only wait after connection failures, not after normal returns
@@ -320,8 +343,7 @@ class CentralSignalingRelay:
                     self._token_updated.clear()
                     try:
                         await asyncio.wait_for(
-                            self._token_updated.wait(),
-                            timeout=RECONNECT_INTERVAL
+                            self._token_updated.wait(), timeout=RECONNECT_INTERVAL
                         )
                     except asyncio.TimeoutError:
                         pass
@@ -341,15 +363,19 @@ class CentralSignalingRelay:
         self._refresh_token()
 
         if not self.hf_token:
-            self._set_state(RelayState.WAITING_FOR_TOKEN, "Login to HuggingFace to enable remote access")
+            self._set_state(
+                RelayState.WAITING_FOR_TOKEN,
+                "Login to HuggingFace to enable remote access",
+            )
             # Wait longer when no token - user needs to log in
             self._token_updated.clear()
             try:
                 await asyncio.wait_for(
-                    self._token_updated.wait(),
-                    timeout=TOKEN_CHECK_INTERVAL
+                    self._token_updated.wait(), timeout=TOKEN_CHECK_INTERVAL
                 )
-                logger.info("[Central Relay] Token update received while waiting, will attempt connection")
+                logger.info(
+                    "[Central Relay] Token update received while waiting, will attempt connection"
+                )
             except asyncio.TimeoutError:
                 logger.debug("[Central Relay] Token check timeout, will re-check")
             return
@@ -359,7 +385,9 @@ class CentralSignalingRelay:
 
         # Connect to local GStreamer signaling (WebSocket) with timeout
         self._set_state(RelayState.CONNECTING, "Connecting to local WebRTC...")
-        logger.info(f"[Central Relay] Attempting to connect to local websocket: {self.local_uri}")
+        logger.info(
+            f"[Central Relay] Attempting to connect to local websocket: {self.local_uri}"
+        )
         try:
             self._local_ws = await asyncio.wait_for(
                 websockets.connect(
@@ -367,12 +395,17 @@ class CentralSignalingRelay:
                     ping_interval=20,
                     ping_timeout=10,
                 ),
-                timeout=LOCAL_WS_CONNECT_TIMEOUT
+                timeout=LOCAL_WS_CONNECT_TIMEOUT,
             )
             logger.info("[Central Relay] Local websocket connection established")
         except asyncio.TimeoutError:
-            logger.error(f"[Central Relay] Local WebRTC connection timeout after {LOCAL_WS_CONNECT_TIMEOUT}s")
-            self._set_state(RelayState.ERROR, f"Local WebRTC connection timeout after {LOCAL_WS_CONNECT_TIMEOUT}s")
+            logger.error(
+                f"[Central Relay] Local WebRTC connection timeout after {LOCAL_WS_CONNECT_TIMEOUT}s"
+            )
+            self._set_state(
+                RelayState.ERROR,
+                f"Local WebRTC connection timeout after {LOCAL_WS_CONNECT_TIMEOUT}s",
+            )
             await self._http_session.close()
             self._http_session = None
             raise
@@ -385,7 +418,9 @@ class CentralSignalingRelay:
 
         # Wait for welcome message from local websocket to verify connection is working
         self._local_welcome_received = asyncio.Event()
-        logger.info("[Central Relay] Waiting for welcome message from local websocket...")
+        logger.info(
+            "[Central Relay] Waiting for welcome message from local websocket..."
+        )
         try:
             # Start reading local messages in background to receive welcome
             local_task = asyncio.create_task(self._handle_local_messages())
@@ -395,17 +430,24 @@ class CentralSignalingRelay:
             try:
                 await asyncio.wait_for(
                     self._local_welcome_received.wait(),
-                    timeout=LOCAL_WS_WELCOME_TIMEOUT
+                    timeout=LOCAL_WS_WELCOME_TIMEOUT,
                 )
-                logger.info("[Central Relay] Local WebRTC connection verified (welcome received)")
+                logger.info(
+                    "[Central Relay] Local WebRTC connection verified (welcome received)"
+                )
             except asyncio.TimeoutError:
-                logger.error(f"[Central Relay] Welcome message timeout after {LOCAL_WS_WELCOME_TIMEOUT}s")
+                logger.error(
+                    f"[Central Relay] Welcome message timeout after {LOCAL_WS_WELCOME_TIMEOUT}s"
+                )
                 local_task.cancel()
                 try:
                     await local_task
                 except asyncio.CancelledError:
                     pass
-                self._set_state(RelayState.ERROR, f"Local WebRTC did not respond within {LOCAL_WS_WELCOME_TIMEOUT}s")
+                self._set_state(
+                    RelayState.ERROR,
+                    f"Local WebRTC did not respond within {LOCAL_WS_WELCOME_TIMEOUT}s",
+                )
                 raise
 
             # Now connect to central server and run all handlers
@@ -416,20 +458,28 @@ class CentralSignalingRelay:
             tasks = {central_task, local_task, token_task}
 
             try:
-                done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+                done, pending = await asyncio.wait(
+                    tasks, return_when=asyncio.FIRST_COMPLETED
+                )
 
                 # Log which task finished first
                 for task in done:
                     if task == central_task:
-                        logger.info("[Central Relay] Central SSE handler exited, will reconnect")
+                        logger.info(
+                            "[Central Relay] Central SSE handler exited, will reconnect"
+                        )
                     elif task == local_task:
-                        logger.info("[Central Relay] Local WebSocket handler exited, will reconnect")
+                        logger.info(
+                            "[Central Relay] Local WebSocket handler exited, will reconnect"
+                        )
                     elif task == token_task:
                         logger.info("[Central Relay] Token update triggered reconnect")
 
                     # Check for exceptions
                     if task.exception():
-                        logger.warning(f"[Central Relay] Task {task.get_name()} raised: {task.exception()}")
+                        logger.warning(
+                            f"[Central Relay] Task {task.get_name()} raised: {task.exception()}"
+                        )
 
                 # Cancel remaining tasks
                 for task in pending:
@@ -441,7 +491,9 @@ class CentralSignalingRelay:
 
                 # Update state to show we're reconnecting (unless already set)
                 if self._state == RelayState.CONNECTED:
-                    self._set_state(RelayState.RECONNECTING, "Connection lost, reconnecting...")
+                    self._set_state(
+                        RelayState.RECONNECTING, "Connection lost, reconnecting..."
+                    )
             except asyncio.CancelledError:
                 # Cancel all tasks if we're cancelled
                 for task in tasks:
@@ -453,7 +505,9 @@ class CentralSignalingRelay:
     async def _watch_for_token_update(self) -> None:
         """Watch for token updates and close connections to trigger reconnect."""
         await self._token_updated.wait()
-        logger.debug("[Central Relay] Token update signal received, closing connections")
+        logger.debug(
+            "[Central Relay] Token update signal received, closing connections"
+        )
         await self._close_connections()
 
     async def _handle_central_sse(self) -> None:
@@ -466,13 +520,22 @@ class CentralSignalingRelay:
 
         try:
             # Use timeout for the initial connection
-            timeout = aiohttp.ClientTimeout(total=None, connect=10, sock_read=SSE_READ_TIMEOUT)
-            async with self._http_session.get(events_url, headers=headers, timeout=timeout) as response:
+            timeout = aiohttp.ClientTimeout(
+                total=None, connect=10, sock_read=SSE_READ_TIMEOUT
+            )
+            async with self._http_session.get(
+                events_url, headers=headers, timeout=timeout
+            ) as response:
                 if response.status == 401:
-                    self._set_state(RelayState.ERROR, "Authentication failed - token may be invalid")
+                    self._set_state(
+                        RelayState.ERROR, "Authentication failed - token may be invalid"
+                    )
                     return
                 elif response.status != 200:
-                    self._set_state(RelayState.ERROR, f"Central server returned HTTP {response.status}")
+                    self._set_state(
+                        RelayState.ERROR,
+                        f"Central server returned HTTP {response.status}",
+                    )
                     return
 
                 # Connection successful - will set CONNECTED after welcome message
@@ -483,12 +546,16 @@ class CentralSignalingRelay:
                 while self._running:
                     try:
                         line = await asyncio.wait_for(
-                            response.content.readline(),
-                            timeout=SSE_READ_TIMEOUT
+                            response.content.readline(), timeout=SSE_READ_TIMEOUT
                         )
                     except asyncio.TimeoutError:
-                        logger.warning(f"[Central Relay] SSE read timeout after {SSE_READ_TIMEOUT}s - connection may be dead")
-                        self._set_state(RelayState.RECONNECTING, "Connection timeout, reconnecting...")
+                        logger.warning(
+                            f"[Central Relay] SSE read timeout after {SSE_READ_TIMEOUT}s - connection may be dead"
+                        )
+                        self._set_state(
+                            RelayState.RECONNECTING,
+                            "Connection timeout, reconnecting...",
+                        )
                         return
 
                     if not line:
@@ -497,16 +564,18 @@ class CentralSignalingRelay:
                         return
 
                     self._last_central_activity = time.time()
-                    line_str = line.decode('utf-8').strip()
+                    line_str = line.decode("utf-8").strip()
 
-                    if line_str.startswith('data:'):
+                    if line_str.startswith("data:"):
                         data = line_str[5:].strip()
                         if data:
                             try:
                                 msg = json.loads(data)
                                 await self._process_central_message(msg)
                             except json.JSONDecodeError:
-                                logger.warning(f"[Central Relay] Invalid JSON from central: {data[:100]}")
+                                logger.warning(
+                                    f"[Central Relay] Invalid JSON from central: {data[:100]}"
+                                )
 
         except asyncio.CancelledError:
             raise
@@ -517,9 +586,13 @@ class CentralSignalingRelay:
         finally:
             # Clean up all sessions when central connection drops
             if self._local_to_central_session:
-                logger.info(f"[Central Relay] Central connection lost, cleaning up {len(self._local_to_central_session)} sessions")
+                logger.info(
+                    f"[Central Relay] Central connection lost, cleaning up {len(self._local_to_central_session)} sessions"
+                )
                 for local_session_id in list(self._local_to_central_session.keys()):
-                    await self._send_to_local({"type": "endSession", "sessionId": local_session_id})
+                    await self._send_to_local(
+                        {"type": "endSession", "sessionId": local_session_id}
+                    )
 
     async def _handle_local_messages(self) -> None:
         """Handle messages from local GStreamer signaling."""
@@ -529,15 +602,21 @@ class CentralSignalingRelay:
         try:
             async for message in self._local_ws:
                 try:
-                    message_str = message if isinstance(message, str) else message.decode('utf-8')
+                    message_str = (
+                        message if isinstance(message, str) else message.decode("utf-8")
+                    )
                     msg = json.loads(message_str)
                     await self._process_local_message(msg)
                 except json.JSONDecodeError:
-                    logger.warning(f"[Central Relay] Invalid JSON from local GStreamer: {str(message)[:100]}")
+                    logger.warning(
+                        f"[Central Relay] Invalid JSON from local GStreamer: {str(message)[:100]}"
+                    )
         except websockets.ConnectionClosed:
             logger.info("[Central Relay] Local GStreamer WebSocket connection closed")
         except Exception as e:
-            logger.error(f"[Central Relay] Error handling local GStreamer messages: {e}")
+            logger.error(
+                f"[Central Relay] Error handling local GStreamer messages: {e}"
+            )
 
     async def _send_to_central(self, msg: dict[str, Any]) -> None:
         """Send a message to the central server via HTTP POST."""
@@ -547,11 +626,17 @@ class CentralSignalingRelay:
         send_url = f"{self.central_uri}/send?token={self.hf_token}"
         headers = {"Authorization": f"Bearer {self.hf_token}"}
         try:
-            async with self._http_session.post(send_url, json=msg, headers=headers) as response:
+            async with self._http_session.post(
+                send_url, json=msg, headers=headers
+            ) as response:
                 if response.status != 200:
-                    logger.warning(f"[Central Relay] Failed to send message to central server: HTTP {response.status}")
+                    logger.warning(
+                        f"[Central Relay] Failed to send message to central server: HTTP {response.status}"
+                    )
         except Exception as e:
-            logger.error(f"[Central Relay] Error sending message to central server: {e}")
+            logger.error(
+                f"[Central Relay] Error sending message to central server: {e}"
+            )
 
     async def _send_to_local(self, msg: dict[str, Any]) -> None:
         """Send a message to local GStreamer signaling."""
@@ -559,7 +644,9 @@ class CentralSignalingRelay:
             try:
                 await self._local_ws.send(json.dumps(msg))
             except Exception as e:
-                logger.error(f"[Central Relay] Failed to send message to local GStreamer: {e}")
+                logger.error(
+                    f"[Central Relay] Failed to send message to local GStreamer: {e}"
+                )
 
     async def _process_central_message(self, msg: dict[str, Any]) -> None:
         """Process a message from the central server."""
@@ -569,14 +656,18 @@ class CentralSignalingRelay:
         if msg_type == "welcome":
             # Received our peer ID from central server
             self._central_peer_id = msg.get("peerId")
-            self._set_state(RelayState.CONNECTED, f"Remote access enabled as '{self.robot_name}'")
+            self._set_state(
+                RelayState.CONNECTED, f"Remote access enabled as '{self.robot_name}'"
+            )
 
             # Register as producer
-            await self._send_to_central({
-                "type": "setPeerStatus",
-                "roles": ["producer"],
-                "meta": {"name": self.robot_name},
-            })
+            await self._send_to_central(
+                {
+                    "type": "setPeerStatus",
+                    "roles": ["producer"],
+                    "meta": {"name": self.robot_name},
+                }
+            )
 
         elif msg_type == "list":
             # Ignore list messages - we're a producer
@@ -586,18 +677,24 @@ class CentralSignalingRelay:
             # A client wants to connect - forward to local GStreamer
             client_peer_id: str = msg.get("peerId", "")
             session_id: Optional[str] = msg.get("sessionId")
-            logger.info(f"[Central Relay] Received session request from remote client peer_id={client_peer_id} session_id={session_id}")
+            logger.info(
+                f"[Central Relay] Received session request from remote client peer_id={client_peer_id} session_id={session_id}"
+            )
 
             # Store session mapping
             if session_id:
                 # Check if we already have this session (duplicate request)
                 if session_id in self._session_to_local_peer:
-                    logger.warning(f"[Central Relay] Duplicate session request for session_id={session_id}, ignoring")
+                    logger.warning(
+                        f"[Central Relay] Duplicate session request for session_id={session_id}, ignoring"
+                    )
                     return
 
                 self._session_to_local_peer[session_id] = client_peer_id
                 self._pending_central_sessions.append(session_id)
-                logger.info(f"[Central Relay] Pending sessions: {len(self._pending_central_sessions)}, tracked sessions: {len(self._session_to_local_peer)}")
+                logger.info(
+                    f"[Central Relay] Pending sessions: {len(self._pending_central_sessions)}, tracked sessions: {len(self._session_to_local_peer)}"
+                )
 
             # Request list of local producers to start session
             await self._send_to_local({"type": "list"})
@@ -607,9 +704,13 @@ class CentralSignalingRelay:
             central_session_id = msg.get("sessionId")
             if central_session_id and self._local_ws:
                 # Translate central session ID to local session ID
-                local_session_id = self._central_to_local_session.get(central_session_id)
+                local_session_id = self._central_to_local_session.get(
+                    central_session_id
+                )
                 if not local_session_id:
-                    logger.warning(f"[Central Relay] No local session mapping found for central_session_id={central_session_id}")
+                    logger.warning(
+                        f"[Central Relay] No local session mapping found for central_session_id={central_session_id}"
+                    )
                     return
 
                 local_msg = {
@@ -621,24 +722,36 @@ class CentralSignalingRelay:
                 if "ice" in msg:
                     local_msg["ice"] = msg["ice"]
 
-                logger.debug(f"[Central Relay] Relaying peer message: central_session={central_session_id} -> local_session={local_session_id}")
+                logger.debug(
+                    f"[Central Relay] Relaying peer message: central_session={central_session_id} -> local_session={local_session_id}"
+                )
                 await self._send_to_local(local_msg)
 
         elif msg_type == "endSession":
             central_session_id = msg.get("sessionId")
             if central_session_id:
-                logger.info(f"[Central Relay] Session ended from central: central_session_id={central_session_id}")
+                logger.info(
+                    f"[Central Relay] Session ended from central: central_session_id={central_session_id}"
+                )
                 self._session_to_local_peer.pop(central_session_id, None)
                 # Also remove from pending if it never got started
                 if central_session_id in self._pending_central_sessions:
                     self._pending_central_sessions.remove(central_session_id)
                 # Translate and forward to local
-                local_session_id = self._central_to_local_session.pop(central_session_id, None)
+                local_session_id = self._central_to_local_session.pop(
+                    central_session_id, None
+                )
                 if local_session_id:
                     self._local_to_central_session.pop(local_session_id, None)
-                    logger.info(f"[Central Relay] Forwarding endSession to local: local_session_id={local_session_id}")
-                    await self._send_to_local({"type": "endSession", "sessionId": local_session_id})
-                logger.info(f"[Central Relay] After cleanup - pending: {len(self._pending_central_sessions)}, active: {len(self._central_to_local_session)}")
+                    logger.info(
+                        f"[Central Relay] Forwarding endSession to local: local_session_id={local_session_id}"
+                    )
+                    await self._send_to_local(
+                        {"type": "endSession", "sessionId": local_session_id}
+                    )
+                logger.info(
+                    f"[Central Relay] After cleanup - pending: {len(self._pending_central_sessions)}, active: {len(self._central_to_local_session)}"
+                )
 
         elif msg_type == "peerStatusChanged":
             # Another peer changed status - ignore for producers
@@ -652,60 +765,80 @@ class CentralSignalingRelay:
         if msg_type == "welcome":
             # Received our peer ID from local GStreamer
             self._local_peer_id = msg.get("peerId")
-            logger.info(f"[Central Relay] Connected to local GStreamer signaling server peer_id={self._local_peer_id}")
+            logger.info(
+                f"[Central Relay] Connected to local GStreamer signaling server peer_id={self._local_peer_id}"
+            )
 
             # Signal that local connection is verified
-            if hasattr(self, '_local_welcome_received'):
+            if hasattr(self, "_local_welcome_received"):
                 self._local_welcome_received.set()
 
             # Register as listener to receive producer announcements
-            await self._send_to_local({
-                "type": "setPeerStatus",
-                "roles": ["listener"],
-                "meta": {"name": "central-relay"},
-            })
+            await self._send_to_local(
+                {
+                    "type": "setPeerStatus",
+                    "roles": ["listener"],
+                    "meta": {"name": "central-relay"},
+                }
+            )
 
         elif msg_type == "list":
             # List of local producers
             producers = msg.get("producers", [])
             if producers:
                 self._local_producer_id = producers[0].get("id")
-                logger.debug(f"[Central Relay] Local GStreamer producer found: producer_id={self._local_producer_id}")
+                logger.debug(
+                    f"[Central Relay] Local GStreamer producer found: producer_id={self._local_producer_id}"
+                )
 
                 # Only start sessions for PENDING requests, not all tracked sessions
                 for central_session_id in list(self._pending_central_sessions):
-                    logger.info(f"[Central Relay] Starting local session for pending central_session={central_session_id}")
-                    await self._send_to_local({
-                        "type": "startSession",
-                        "peerId": self._local_producer_id,
-                    })
+                    logger.info(
+                        f"[Central Relay] Starting local session for pending central_session={central_session_id}"
+                    )
+                    await self._send_to_local(
+                        {
+                            "type": "startSession",
+                            "peerId": self._local_producer_id,
+                        }
+                    )
 
         elif msg_type == "peerStatusChanged":
             peer_id = msg.get("peerId")
             roles = msg.get("roles", [])
             if "producer" in roles:
                 self._local_producer_id = peer_id
-                logger.debug(f"[Central Relay] Local GStreamer producer registered: producer_id={peer_id}")
+                logger.debug(
+                    f"[Central Relay] Local GStreamer producer registered: producer_id={peer_id}"
+                )
 
         elif msg_type == "sessionStarted":
             local_session_id: Optional[str] = msg.get("sessionId")
-            logger.info(f"[Central Relay] Local GStreamer session started: local_session_id={local_session_id}")
+            logger.info(
+                f"[Central Relay] Local GStreamer session started: local_session_id={local_session_id}"
+            )
 
             # Map local session ID to the pending central session ID
             if self._pending_central_sessions and local_session_id:
                 central_session_id = self._pending_central_sessions.pop(0)
                 self._local_to_central_session[local_session_id] = central_session_id
                 self._central_to_local_session[central_session_id] = local_session_id
-                logger.info(f"[Central Relay] Session mapping established: local_session={local_session_id} <-> central_session={central_session_id}")
+                logger.info(
+                    f"[Central Relay] Session mapping established: local_session={local_session_id} <-> central_session={central_session_id}"
+                )
 
         elif msg_type == "peer":
             # SDP/ICE from local GStreamer - relay to central
             local_session_id_peer: Optional[str] = msg.get("sessionId")
             if local_session_id_peer:
                 # Translate local session ID to central session ID
-                central_session_id_peer: Optional[str] = self._local_to_central_session.get(local_session_id_peer)
+                central_session_id_peer: Optional[str] = (
+                    self._local_to_central_session.get(local_session_id_peer)
+                )
                 if not central_session_id_peer:
-                    logger.warning(f"[Central Relay] No central session mapping found for local_session_id={local_session_id_peer}")
+                    logger.warning(
+                        f"[Central Relay] No central session mapping found for local_session_id={local_session_id_peer}"
+                    )
                     return
 
                 # Build message with translated session ID
@@ -718,21 +851,33 @@ class CentralSignalingRelay:
                 if "ice" in msg:
                     central_msg["ice"] = msg["ice"]
 
-                logger.debug(f"[Central Relay] Relaying peer message: local_session={local_session_id_peer} -> central_session={central_session_id_peer}")
+                logger.debug(
+                    f"[Central Relay] Relaying peer message: local_session={local_session_id_peer} -> central_session={central_session_id_peer}"
+                )
                 await self._send_to_central(central_msg)
 
         elif msg_type == "endSession":
             local_session_id_end: Optional[str] = msg.get("sessionId")
             if local_session_id_end:
-                logger.info(f"[Central Relay] Session ended from local: local_session_id={local_session_id_end}")
+                logger.info(
+                    f"[Central Relay] Session ended from local: local_session_id={local_session_id_end}"
+                )
                 # Translate and forward to central
-                central_session_id_end: Optional[str] = self._local_to_central_session.pop(local_session_id_end, None)
+                central_session_id_end: Optional[str] = (
+                    self._local_to_central_session.pop(local_session_id_end, None)
+                )
                 if central_session_id_end:
                     self._central_to_local_session.pop(central_session_id_end, None)
                     self._session_to_local_peer.pop(central_session_id_end, None)
-                    logger.info(f"[Central Relay] Forwarding endSession to central: central_session_id={central_session_id_end}")
-                    await self._send_to_central({"type": "endSession", "sessionId": central_session_id_end})
-                logger.info(f"[Central Relay] After cleanup - pending: {len(self._pending_central_sessions)}, active: {len(self._central_to_local_session)}")
+                    logger.info(
+                        f"[Central Relay] Forwarding endSession to central: central_session_id={central_session_id_end}"
+                    )
+                    await self._send_to_central(
+                        {"type": "endSession", "sessionId": central_session_id_end}
+                    )
+                logger.info(
+                    f"[Central Relay] After cleanup - pending: {len(self._pending_central_sessions)}, active: {len(self._central_to_local_session)}"
+                )
 
 
 # Singleton instance for integration
@@ -797,6 +942,7 @@ async def start_central_relay(
     if hf_token is None:
         try:
             from huggingface_hub import get_token
+
             hf_token = get_token()
         except Exception:
             pass
@@ -838,6 +984,7 @@ async def notify_token_change(new_token: Optional[str] = None) -> None:
     if new_token is None:
         try:
             from huggingface_hub import get_token
+
             new_token = get_token()
         except Exception:
             pass

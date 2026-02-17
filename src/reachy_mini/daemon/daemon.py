@@ -109,6 +109,7 @@ class Daemon:
 
         try:
             from huggingface_hub import get_token
+
             hf_token = get_token()
         except Exception as e:
             self.logger.debug(f"No HF token available, central signaling disabled: {e}")
@@ -134,6 +135,7 @@ class Daemon:
         """Stop the central signaling relay."""
         try:
             from reachy_mini.media.central_signaling_relay import stop_central_relay
+
             await stop_central_relay()
             self.logger.info("Central signaling relay stopped")
         except Exception as e:

@@ -192,7 +192,9 @@ def calibrate_camera(
     for corners, ids in zip(all_charuco_corners, all_charuco_ids):
         # Get 3D points from board
         chessboard_corners = board.getChessboardCorners()
-        obj_pts = np.array([chessboard_corners[i] for i in ids.flatten().tolist()], dtype=np.float32)
+        obj_pts = np.array(
+            [chessboard_corners[i] for i in ids.flatten().tolist()], dtype=np.float32
+        )
         all_obj_points.append(obj_pts)
         all_img_points.append(corners)
 
