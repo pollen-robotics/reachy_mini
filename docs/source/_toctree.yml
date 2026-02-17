@@ -21,6 +21,8 @@
       title: Reflash the ISO
     - local: platforms/reachy_mini/motors_diagnosis
       title: Motors Diagnosis
+    - local: platforms/reachy_mini/change_mic_fpc_cable
+      title: Change Mic FPC Cable
   title: Reachy Mini (Wireless)
 - sections:
     - local: platforms/reachy_mini_lite/get_started
