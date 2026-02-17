@@ -52,7 +52,7 @@ dev = [
     "mypy==1.18.2",
     "types-requests",
     "types-toml",
-    "types-PyYAML"
+    "types-PyYAML",
 ]
 examples = ["pynput", "soundfile"]
 mujoco = ["mujoco==3.3.0"]
