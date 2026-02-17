@@ -4,7 +4,6 @@ This module provides a class to send JPEG frames over UDP. It encodes the frames
 """
 
 import socket
-import struct
 
 import cv2
 import numpy as np
@@ -44,13 +43,8 @@ class UDPJPEGFrameSender:
             ".jpg", frame_cvt, [int(cv2.IMWRITE_JPEG_QUALITY), 80]
         )
         data = jpeg_bytes.tobytes()
-        total_size = len(data)
-        n_chunks = (total_size + self.max_packet_size - 1) // self.max_packet_size
-        self.sock.sendto(struct.pack("!II", n_chunks, total_size), self.addr)
-        for i in range(n_chunks):
-            start = i * self.max_packet_size
-            end = min(start + self.max_packet_size, total_size)
-            self.sock.sendto(data[start:end], self.addr)
+
+        self.sock.sendto(data, self.addr)
 
     def close(self) -> None:
         """Close the socket."""

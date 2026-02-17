@@ -204,7 +204,9 @@ def _rename_package(console: Console, app_path: Path, app_name: str) -> None:
                 content,
             )
             # Replace the main class name
-            new_content = new_content.replace("ReachyMiniConversationApp", new_class_name)
+            new_content = new_content.replace(
+                "ReachyMiniConversationApp", new_class_name
+            )
             if new_content != content:
                 py_file.write_text(new_content)
 
@@ -302,7 +304,11 @@ def _update_config(
 
 
 def _update_readme(
-    console: Console, app_path: Path, app_name: str, display_name: str, profile_name: str
+    console: Console,
+    app_path: Path,
+    app_name: str,
+    display_name: str,
+    profile_name: str,
 ) -> None:
     """Rename old README to README_OLD.md and create new README from template."""
     readme_path = app_path / "README.md"
@@ -315,7 +321,9 @@ def _update_readme(
     env = Environment(loader=FileSystemLoader(CONVERSATION_TEMPLATE_DIR))
     template = env.get_template("README.md.j2")
     readme_path.write_text(
-        template.render(app_name=app_name, display_name=display_name, profile_name=profile_name)
+        template.render(
+            app_name=app_name, display_name=display_name, profile_name=profile_name
+        )
     )
 
 
