@@ -314,6 +314,10 @@ class GstWebRTC:
         alsasrc.link(webrtcsink)
 
     def _get_audio_input_device(self) -> Optional[str]:
+        """Use Gst.DeviceMonitor to find the audio card.
+
+        Returns the device ID of the found audio card, None if not.
+        """
         monitor = Gst.DeviceMonitor()
         monitor.add_filter("Audio/Source")
         monitor.start()
