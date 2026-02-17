@@ -5,14 +5,22 @@ import platform
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
+from typing import NamedTuple
 
 SOUND_CARD_NAMES = ["Reachy Mini Audio", "respeaker"]
 
-class DeviceType(Enum):
+class AudioDeviceType(Enum):
     """Type of device: INPUT or OUTPUT."""
 
     INPUT = "input"
     OUTPUT = "output"
+
+class AudioDevice(NamedTuple):
+    """An audio device with its ID, name, and type."""
+
+    id: int | str | None
+    name: str
+    device_type: AudioDeviceType
 
 @dataclass
 class VolumeControl(ABC):
@@ -20,10 +28,8 @@ class VolumeControl(ABC):
 
     logger: logging.Logger = field(init=False, default_factory=lambda: logging.getLogger(f"[VolumeControl {platform.system()}]"))
     platform_name: str = field(init=False, default_factory=platform.system)
-    input_device_id: int | str | None = field(init=False, default=None)
-    output_device_id: int | str | None = field(init=False, default=None)
-    input_device_name: str = field(init=False, default="unknown")
-    output_device_name: str = field(init=False, default="unknown")
+    input_device: AudioDevice = field(init=False)
+    output_device: AudioDevice = field(init=False)
 
     @abstractmethod
     def set_output_volume(self, volume: int) -> bool:

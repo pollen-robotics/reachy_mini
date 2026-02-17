@@ -7,7 +7,7 @@ from typing import Any
 
 from pycaw.pycaw import DEVICE_STATE, AudioUtilities, EDataFlow, ERole
 
-from .volume_control import SOUND_CARD_NAMES, DeviceType, VolumeControl
+from .volume_control import SOUND_CARD_NAMES, AudioDevice, AudioDeviceType, VolumeControl
 
 logger = logging.getLogger(__name__)
 
@@ -22,9 +22,7 @@ class VolumeControlWindows(VolumeControl):
     def __post_init__(self) -> None:
         """Initialize device IDs based on detected audio devices."""
         # TODO: use a property instead to account for dynamic audio devices
-        self.input_device_id, self.output_device_id = self._get_input_output_device_ids()
-        self.input_device_name = self._get_device_name(self.input_device_id)
-        self.output_device_name = self._get_device_name(self.output_device_id)
+        self.input_device, self.output_device = self._get_input_output_devices()
 
     def _get_device_name(self, device_id: str | None) -> str:
         """Get the name of an audio device given its ID.
@@ -38,10 +36,10 @@ class VolumeControlWindows(VolumeControl):
         """
         if device_id is None:
             return "unknown"
-        all_devices = {**self._get_all_devices(DeviceType.INPUT), **self._get_all_devices(DeviceType.OUTPUT)}
+        all_devices = {**self._get_all_devices(AudioDeviceType.INPUT), **self._get_all_devices(AudioDeviceType.OUTPUT)}
         return all_devices.get(device_id, f"Unknown device (id={device_id})")
 
-    def _get_all_devices(self, device_type: DeviceType | None = None) -> dict[str, str]:
+    def _get_all_devices(self, device_type: AudioDeviceType | None = None) -> dict[str, str]:
         """Get all available audio devices IDs and names.
 
         Args:
@@ -54,9 +52,9 @@ class VolumeControlWindows(VolumeControl):
             RuntimeError: If the audio device list could not be retrieved.
 
         """
-        if device_type == DeviceType.INPUT:
+        if device_type == AudioDeviceType.INPUT:
             data_flow = EDataFlow.eCapture.value
-        elif device_type == DeviceType.OUTPUT:
+        elif device_type == AudioDeviceType.OUTPUT:
             data_flow = EDataFlow.eRender.value
         else:
             data_flow = EDataFlow.eAll.value
@@ -73,40 +71,43 @@ class VolumeControlWindows(VolumeControl):
                     device_id = device.id
                     devices[device_id] = device.FriendlyName or f"Unknown device (id={device_id})"
         except Exception as e:
-            raise RuntimeError(f"Could not scan audio devices, pycaw failed: {e}")
+            raise RuntimeError(f"Could not scan audio devices, pycaw failed with error: {e}")
         return devices
 
-    def _get_input_output_device_ids(self) -> tuple[str, str]:
-        """Get the input and output audio device IDs corresponding to the Reachy Mini Audio sound card.
+    def _get_input_output_devices(self) -> tuple[AudioDevice, AudioDevice]:
+        """Get the input and output audio devices corresponding to the Reachy Mini Audio sound card.
 
         If not found, falls back to the default input and output audio devices.
 
         Returns:
-            A tuple containing the input and output audio devices: (input_device_id, output_device_id).
+            A tuple of two AudioDevice: (input_device, output_device).
 
         """
-        input_devices = self._get_all_devices(DeviceType.INPUT)
-        output_devices = self._get_all_devices(DeviceType.OUTPUT)
+        input_devices = self._get_all_devices(AudioDeviceType.INPUT)
+        output_devices = self._get_all_devices(AudioDeviceType.OUTPUT)
 
-        input_device_id, output_device_id = None, None
+        input_device: AudioDevice | None = None
+        output_device: AudioDevice | None = None
         for device_id, device_name in input_devices.items():
             if device_name in SOUND_CARD_NAMES:
-                input_device_id = device_id
+                input_device = AudioDevice(device_id, device_name, AudioDeviceType.INPUT)
                 break
         for device_id, device_name in output_devices.items():
             if device_name in SOUND_CARD_NAMES:
-                output_device_id = device_id
+                output_device = AudioDevice(device_id, device_name, AudioDeviceType.OUTPUT)
                 break
 
-        if input_device_id is None:
-            input_device_id = self._get_default_device_id(DeviceType.INPUT)
-        if output_device_id is None:
-            output_device_id = self._get_default_device_id(DeviceType.OUTPUT)
+        if input_device is None:
+            default_id = self._get_default_device_id(AudioDeviceType.INPUT)
+            input_device = AudioDevice(default_id, self._get_device_name(default_id), AudioDeviceType.INPUT)
+        if output_device is None:
+            default_id = self._get_default_device_id(AudioDeviceType.OUTPUT)
+            output_device = AudioDevice(default_id, self._get_device_name(default_id), AudioDeviceType.OUTPUT)
 
-        return input_device_id, output_device_id
+        return input_device, output_device
 
     @staticmethod
-    def _get_default_device_id(device_type: DeviceType) -> str:
+    def _get_default_device_id(device_type: AudioDeviceType) -> str:
         """Get the default audio device ID for a given device type.
 
         Args:
@@ -119,7 +120,7 @@ class VolumeControlWindows(VolumeControl):
             RuntimeError: If the default audio device could not be retrieved.
 
         """
-        data_flow = EDataFlow.eCapture if device_type == DeviceType.INPUT else EDataFlow.eRender
+        data_flow = EDataFlow.eCapture if device_type == AudioDeviceType.INPUT else EDataFlow.eRender
         try:
             enumerator = AudioUtilities.GetDeviceEnumerator()
             device = enumerator.GetDefaultAudioEndpoint(data_flow.value, ERole.eMultimedia.value)
@@ -155,19 +156,18 @@ class VolumeControlWindows(VolumeControl):
         except Exception as e:
             raise RuntimeError(f"Failed to get volume interface for device {device_id}: {e}")
 
-    def _get_device_volume(self, device_id: int | str | None, device_type: DeviceType) -> int:
+    def _get_device_volume(self, device: AudioDevice) -> int:
         """Get the volume of an audio device.
 
         Args:
-            device_id: The endpoint ID string of the audio device.
-            device_type: The type of device: INPUT or OUTPUT.
+            device: The audio device.
 
         Returns:
             The volume as a value between 0 and 100. Returns -1 on failure.
 
         """
         try:
-            volume_interface = self._get_device_volume_interface(device_id)
+            volume_interface = self._get_device_volume_interface(device.id)
             volume_db = volume_interface.GetMasterVolumeLevel()
             min_db, max_db, _ = volume_interface.GetVolumeRange()
 
@@ -177,15 +177,14 @@ class VolumeControlWindows(VolumeControl):
             linear_volume = (volume_db - min_db) / (max_db - min_db)
             return int(round(max(0.0, min(1.0, linear_volume)) * 100))
         except Exception as e:
-            logger.error(f"Failed to get volume on {device_type.value} device: {e}")
+            logger.error(f"Failed to get volume on {device.device_type.value} device: {e}")
             return -1
 
-    def _set_device_volume(self, device_id: int | str | None, device_type: DeviceType, volume: int) -> bool:
+    def _set_device_volume(self, device: AudioDevice, volume: int) -> bool:
         """Set the volume of an audio device.
 
         Args:
-            device_id: The endpoint ID string of the audio device.
-            device_type: The type of device: INPUT or OUTPUT.
+            device: The audio device.
             volume: The volume to set between 0 (minimum volume) and 100 (maximum volume).
 
         Returns:
@@ -196,13 +195,13 @@ class VolumeControlWindows(VolumeControl):
         volume_scalar = max(0.0, min(1.0, volume / 100.0))
 
         try:
-            volume_interface = self._get_device_volume_interface(device_id)
+            volume_interface = self._get_device_volume_interface(device.id)
             min_db, max_db, _ = volume_interface.GetVolumeRange()
             db_volume = min_db + (volume_scalar * (max_db - min_db))
             volume_interface.SetMasterVolumeLevel(db_volume, None)
             return True
         except Exception as e:
-            logger.error(f"Failed to set volume on {device_type.value} device: {e}")
+            logger.error(f"Failed to set volume on {device.device_type.value} device: {e}")
             return False
 
     def get_output_volume(self) -> int:
@@ -212,7 +211,7 @@ class VolumeControlWindows(VolumeControl):
             The output volume as a value between 0 (minimum volume) and 100 (maximum volume). Returns -1 on failure.
 
         """
-        return self._get_device_volume(self.output_device_id, DeviceType.OUTPUT)
+        return self._get_device_volume(self.output_device)
 
     def set_output_volume(self, volume: int) -> bool:
         """Set the output volume.
@@ -224,7 +223,7 @@ class VolumeControlWindows(VolumeControl):
             True if the volume was set successfully, False otherwise.
 
         """
-        return self._set_device_volume(self.output_device_id, DeviceType.OUTPUT, volume)
+        return self._set_device_volume(self.output_device, volume)
 
     def get_input_volume(self) -> int:
         """Get the input volume.
@@ -233,7 +232,7 @@ class VolumeControlWindows(VolumeControl):
             The input volume as a value between 0 (minimum volume) and 100 (maximum volume). Returns -1 on failure.
 
         """
-        return self._get_device_volume(self.input_device_id, DeviceType.INPUT)
+        return self._get_device_volume(self.input_device)
 
     def set_input_volume(self, volume: int) -> bool:
         """Set the input volume.
@@ -245,4 +244,4 @@ class VolumeControlWindows(VolumeControl):
             True if the volume was set successfully, False otherwise.
 
         """
-        return self._set_device_volume(self.input_device_id, DeviceType.INPUT, volume)
+        return self._set_device_volume(self.input_device, volume)
