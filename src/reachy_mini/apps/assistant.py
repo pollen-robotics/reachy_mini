@@ -462,78 +462,81 @@ def check(console: Console, app_path: str) -> None:
     # - <app_name>/main.py exists
 
     # Now, create a temporary python venv in a temp dir, `pip install . the app, check that it works and that the entrypoint is registered
+    original_cwd = Path.cwd()
     with tempfile.TemporaryDirectory() as tmpdir:
-        # change dir to tmpdir
-        os.chdir(tmpdir)
+        try :
+            # change dir to tmpdir
+            os.chdir(tmpdir)
 
-        console.print(
-            f"\nCreating a temporary virtual environment to test the app... (tmp dir: {tmpdir})"
-        )
-        venv_path = os.path.join(tmpdir, "venv")
-        subprocess.run([sys.executable, "-m", "venv", venv_path], check=True)
-
-        pip_executable = os.path.join(
-            venv_path,
-            "Scripts" if os.name == "nt" else "bin",
-            "pip",
-        )
-        python_executable = os.path.join(
-            venv_path,
-            "Scripts" if os.name == "nt" else "bin",
-            "python",
-        )
-
-        install_app_with_progress(console, pip_executable, abs_app_path)
-
-        console.print("Checking that the app entrypoint is registered...")
-
-        # use from importlib.metadata import entry_points
-
-        check_script = (
-            f"from importlib.metadata import entry_points; "
-            f"eps = entry_points(group='reachy_mini_apps'); "
-            f"app_names = [ep.name for ep in eps]; "
-            f"import sys; "
-            f"sys.exit(0) if '{app_name}' in app_names else sys.exit(1)"
-        )
-        if (
-            subprocess.run(
-                [python_executable, "-c", check_script],
-                # capture_output=True,
-                text=True,
-            ).returncode
-            != 0
-        ):
             console.print(
-                f"❌ App '{app_name}' entrypoint is not registered correctly.",
-                style="bold red",
+                f"\nCreating a temporary virtual environment to test the app... (tmp dir: {tmpdir})"
             )
-            sys.exit(1)
-        console.print("✅ App entrypoint is registered correctly.")
+            venv_path = os.path.join(tmpdir, "venv")
+            subprocess.run([sys.executable, "-m", "venv", venv_path], check=True)
 
-        # Now try to uninstall the app and check that it uninstalls correctly
-        console.print("Uninstalling the app from the temporary virtual environment...")
-        subprocess.run(
-            [pip_executable, "uninstall", "-y", app_name],
-            check=True,
-        )
+            pip_executable = os.path.join(
+                venv_path,
+                "Scripts" if os.name == "nt" else "bin",
+                "pip",
+            )
+            python_executable = os.path.join(
+                venv_path,
+                "Scripts" if os.name == "nt" else "bin",
+                "python",
+            )
 
-        if (
+            install_app_with_progress(console, pip_executable, abs_app_path)
+
+            console.print("Checking that the app entrypoint is registered...")
+
+            # use from importlib.metadata import entry_points
+
+            check_script = (
+                f"from importlib.metadata import entry_points; "
+                f"eps = entry_points(group='reachy_mini_apps'); "
+                f"app_names = [ep.name for ep in eps]; "
+                f"import sys; "
+                f"sys.exit(0) if '{app_name}' in app_names else sys.exit(1)"
+            )
+            if (
+                subprocess.run(
+                    [python_executable, "-c", check_script],
+                    # capture_output=True,
+                    text=True,
+                ).returncode
+                != 0
+            ):
+                console.print(
+                    f"❌ App '{app_name}' entrypoint is not registered correctly.",
+                    style="bold red",
+                )
+                sys.exit(1)
+            console.print("✅ App entrypoint is registered correctly.")
+
+            # Now try to uninstall the app and check that it uninstalls correctly
+            console.print("Uninstalling the app from the temporary virtual environment...")
             subprocess.run(
-                [python_executable, "-c", check_script],
-                capture_output=True,
-                text=True,
-            ).returncode
-            == 0
-        ):
-            console.print(
-                f"❌ App '{app_name}' was not uninstalled correctly.",
-                style="bold red",
+                [pip_executable, "uninstall", "-y", app_name],
+                check=True,
             )
-            sys.exit(1)
 
-        console.print("✅ App installation and uninstallation tests passed.")
+            if (
+                subprocess.run(
+                    [python_executable, "-c", check_script],
+                    capture_output=True,
+                    text=True,
+                ).returncode
+                == 0
+            ):
+                console.print(
+                    f"❌ App '{app_name}' was not uninstalled correctly.",
+                    style="bold red",
+                )
+                sys.exit(1)
 
+            console.print("✅ App installation and uninstallation tests passed.")
+        finally :
+            os.chdir(original_cwd)
     console.print(f"\n✅ App '{app_name}' passed all checks!", style="bold green")
 
 
