@@ -36,7 +36,7 @@ This concerns issues like:
 - Motors showing errors like "Overload Error"
 - Missing motors: "No motor found on port", "Missing motor", etc.  
 
-If you have any of the following symptoms, please refer to the [Motors diagnosis and troubleshooting guide](./platforms/reachy_mini/motors_diagnosis.md) for detailed steps to diagnose and fix motor-related issues.  
+If you have any of the following symptoms, please refer to the [Motors diagnosis and troubleshooting guide](./troubleshooting/motors_diagnosis.md) for detailed steps to diagnose and fix motor-related issues.  
 
 Using the Reachy Mini Testbench app will help you identify and resolve these problems effectively.
 
@@ -67,7 +67,7 @@ You may have plugged the microphone cable upside down.
 ![mic_cable](/docs/assets/black_fpc_cable.png)
 
 
-If your cable is plugged properly and you still have issues, it is likely that the FPC cable of the microphone is damaged. Please refer to the tutorial [How to change the FPC cable of the microphone of Reachy Mini?](./platforms/reachy_mini/change_mic_fpc_cable.md) to fix this issue.
+If your cable is plugged properly and you still have issues, it is likely that the FPC cable of the microphone is damaged. Please refer to the tutorial [How to change the FPC cable of the microphone of Reachy Mini?](./troubleshooting/change_mic_fpc_cable.md) to fix this issue.
 
 </details>
 
