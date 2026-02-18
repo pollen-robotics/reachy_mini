@@ -33,7 +33,7 @@ def volume_control(request):
 
 # ---- Factory tests ----
 
-
+@pytest.mark.audio
 def test_factory_returns_correct_subclass(volume_control):
     """The factory should return the platform-specific VolumeControl subclass."""
     system = platform.system()
@@ -55,7 +55,7 @@ def test_factory_returns_correct_subclass(volume_control):
     else:
         pytest.fail(f"Unexpected platform: {system}")
 
-
+@pytest.mark.audio
 def test_factory_raises_on_unsupported_platform():
     """The factory should raise RuntimeError on an unsupported platform."""
     with patch("reachy_mini.daemon.app.routers.volume_control.platform") as mock_platform:
@@ -67,6 +67,7 @@ def test_factory_raises_on_unsupported_platform():
 # ---- Get volume tests ----
 
 
+@pytest.mark.audio
 def test_get_output_volume(volume_control):
     """Getting output volume should return an int between 0 and 100."""
     volume = volume_control.get_output_volume()
@@ -74,6 +75,7 @@ def test_get_output_volume(volume_control):
     assert 0 <= volume <= 100
 
 
+@pytest.mark.audio
 def test_get_input_volume(volume_control):
     """Getting input volume should return an int between 0 and 100."""
     volume = volume_control.get_input_volume()
@@ -84,6 +86,7 @@ def test_get_input_volume(volume_control):
 # ---- Set volume tests ----
 
 
+@pytest.mark.audio
 def test_set_and_restore_output_volume(volume_control):
     """Setting output volume should apply the value, then restore the original."""
     original = volume_control.get_output_volume()
@@ -99,6 +102,7 @@ def test_set_and_restore_output_volume(volume_control):
     volume_control.set_output_volume(original)
 
 
+@pytest.mark.audio
 def test_set_and_restore_input_volume(volume_control):
     """Setting input volume should apply the value, then restore the original."""
     original = volume_control.get_input_volume()
@@ -114,6 +118,7 @@ def test_set_and_restore_input_volume(volume_control):
     volume_control.set_input_volume(original)
 
 
+@pytest.mark.audio
 def test_set_output_volume_clamps(volume_control):
     """Volume values outside [0, 100] should be clamped, not rejected."""
     original = volume_control.get_output_volume()
