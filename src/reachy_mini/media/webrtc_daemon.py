@@ -31,7 +31,7 @@ Example usage:
 import logging
 import os
 from threading import Thread
-from typing import Callable, Optional, Tuple, cast
+from typing import Any, Callable, Dict, Optional, Tuple, cast
 
 import gi
 
@@ -44,6 +44,7 @@ from reachy_mini.media.camera_constants import (
 )
 
 gi.require_version("Gst", "1.0")
+gi.require_version("GstApp", "1.0")
 
 from gi.repository import GLib, Gst  # noqa: E402
 
@@ -123,8 +124,8 @@ class GstWebRTC:
         self._data_channels: dict[str, Gst.Element] = {}  # peer_id -> channel
         self._on_data_message: Optional[Callable[[str, str], None]] = None
 
-        # Track incoming audio elements per peer (for bidirectional audio cleanup)
-        self._incoming_audio: dict[str, list[Gst.Element]] = {}
+        # Track incoming audio per peer (for bidirectional audio cleanup)
+        self._incoming_audio: Dict[str, Dict[str, Any]] = {}
 
     def __del__(self) -> None:
         """Destructor to ensure gstreamer resources are released."""
@@ -222,8 +223,10 @@ class GstWebRTC:
     ) -> None:
         """Handle incoming pads from the browser for bidirectional audio.
 
-        Adds depay/decode/playback elements directly into _pipeline_sender and
-        links the webrtcbin audio src pad to them, avoiding any buffer copy.
+        We cannot add elements to _pipeline_sender because webrtcsink manages
+        that pipeline internally and dynamic additions crash the connection.
+        Instead we use a pad probe to intercept RTP buffers and forward them
+        to a completely separate playback pipeline via appsrc.
         """
         if pad.get_direction() != Gst.PadDirection.SRC:
             return
@@ -247,44 +250,73 @@ class GstWebRTC:
 
         self._logger.info(f"Setting up incoming audio playback for peer {peer_id}")
 
-        rtpopusdepay = Gst.ElementFactory.make("rtpopusdepay")
-        opusdec = Gst.ElementFactory.make("opusdec")
-        audioconvert = Gst.ElementFactory.make("audioconvert")
-        audioresample = Gst.ElementFactory.make("audioresample")
-        alsasink = Gst.ElementFactory.make("alsasink")
-        alsasink.set_property("device", "reachymini_audio_sink")
-        alsasink.set_property("sync", False)
-
-        elements = [rtpopusdepay, opusdec, audioconvert, audioresample, alsasink]
-
-        if not all(elements):
-            self._logger.error("Failed to create audio playback elements")
+        # Build a separate pipeline: appsrc → depay → decode → convert → speaker
+        try:
+            playback_pipe = Gst.parse_launch(
+                "appsrc name=audio_in format=time is-live=true ! "
+                "rtpopusdepay ! opusdec ! audioconvert ! audioresample ! "
+                "alsasink device=reachymini_audio_sink sync=false"
+            )
+        except Exception as e:
+            self._logger.error(f"Failed to create audio playback pipeline: {e}")
             return
 
-        for elem in elements:
-            self._pipeline_sender.add(elem)
+        appsrc = playback_pipe.get_by_name("audio_in")
+        appsrc.set_property("caps", caps)
 
-        pad.link(rtpopusdepay.get_static_pad("sink"))
-        rtpopusdepay.link(opusdec)
-        opusdec.link(audioconvert)
-        audioconvert.link(audioresample)
-        audioresample.link(alsasink)
+        play_bus = playback_pipe.get_bus()
+        play_bus.add_watch(
+            GLib.PRIORITY_DEFAULT, self._on_playback_bus_message, peer_id
+        )
 
-        for elem in elements:
-            elem.sync_state_with_parent()
+        playback_pipe.set_state(Gst.State.PLAYING)
 
-        self._incoming_audio[peer_id] = elements
-        self._logger.info(f"Audio playback linked in pipeline for peer {peer_id}")
+        # Pad probe: intercept every RTP buffer, forward to the separate
+        # playback pipeline, then DROP so webrtcsink's pipeline is unaffected.
+        def _buffer_probe(pad: Gst.Pad, info: Gst.PadProbeInfo, _: None) -> int:
+            buf = info.get_buffer()
+            if buf is not None:
+                appsrc.emit("push-buffer", buf.copy())
+            return Gst.PadProbeReturn.DROP
+
+        probe_id = pad.add_probe(Gst.PadProbeType.BUFFER, _buffer_probe, None)
+
+        self._incoming_audio[peer_id] = {
+            "playback_pipeline": playback_pipe,
+            "probe_id": probe_id,
+            "pad": pad,
+        }
+        self._logger.info(f"Audio playback pipeline started for peer {peer_id}")
+
+    def _on_playback_bus_message(
+        self, bus: Gst.Bus, msg: Gst.Message, peer_id: str
+    ) -> bool:
+        """Handle messages from a per-peer audio playback pipeline."""
+        if msg.type == Gst.MessageType.ERROR:
+            err, debug = msg.parse_error()
+            self._logger.error(
+                f"Audio playback error for {peer_id}: {err} {debug}"
+            )
+            return False
+        if msg.type == Gst.MessageType.EOS:
+            self._logger.info(f"Audio playback EOS for {peer_id}")
+            return False
+        return True
 
     def _cleanup_incoming_audio(self, peer_id: str) -> None:
-        """Remove incoming-audio elements from the sender pipeline for a peer."""
-        elements = self._incoming_audio.pop(peer_id, None)
-        if elements is None:
+        """Remove the incoming-audio pad probe and playback pipeline for a peer."""
+        info = self._incoming_audio.pop(peer_id, None)
+        if info is None:
             return
 
-        for elem in elements:
-            elem.set_state(Gst.State.NULL)
-            self._pipeline_sender.remove(elem)
+        pad = info.get("pad")
+        probe_id = info.get("probe_id")
+        if pad is not None and probe_id is not None:
+            pad.remove_probe(probe_id)
+
+        playback_pipe = info.get("playback_pipeline")
+        if playback_pipe is not None:
+            playback_pipe.set_state(Gst.State.NULL)
         self._logger.info(f"Cleaned up incoming audio for peer {peer_id}")
 
     @property
