@@ -20,6 +20,7 @@ import numpy as np
 import numpy.typing as npt
 
 import reachy_mini
+from reachy_mini.media.gstreamer_udp_camera import GStreamerUDPCamera
 
 from ..abstract import Backend, MotorControlMode
 from .utils import (
@@ -27,7 +28,6 @@ from .utils import (
     get_joint_addr_from_name,
     get_joint_id_from_name,
 )
-from .video_udp import UDPJPEGFrameSender
 
 CAMERA_REACHY = "eye_camera"
 CAMERA_STUDIO_CLOSE = "studio_close"
@@ -134,7 +134,13 @@ class MujocoBackend(Backend):
 
         Capture the image from the virtual camera_name and send it over UDP to the port or over WebSocket to the ws_uri.
         """
-        streamer = UDPJPEGFrameSender(dest_port=port)
+        camera_size = CAMERA_SIZES[camera_name]
+        frame_sender = GStreamerUDPCamera(
+            width=camera_size[0],
+            height=camera_size[1],
+            log_level=self.logger.level,
+        )
+        frame_sender.start()
         offscreen_renderer = self._get_renderer(camera_name)
         camera_id = self._get_camera_id(camera_name)
 
@@ -143,7 +149,7 @@ class MujocoBackend(Backend):
             offscreen_renderer.update_scene(self.data, camera_id)
 
             im = offscreen_renderer.render()
-            streamer.send_frame(im)
+            frame_sender.send_frame(im)
 
             took = time.time() - start_t
             time.sleep(max(0, self.rendering_timestep - took))
