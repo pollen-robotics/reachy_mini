@@ -23,11 +23,6 @@ except (ImportError, OSError):
 # Constants
 AUDIO_COMMAND_TIMEOUT = 2  # Timeout in seconds for audio commands
 
-DEFAULT_INPUT_CONTROLS = ["Master", "PCM"]
-DEFAULT_OUTPUT_CONTROLS = ["Capture", "Mic"]
-REACHY_MINI_INPUT_CONTROLS = ["Headset"]
-REACHY_MINI_OUTPUT_CONTROLS = ["PCM"]
-
 
 @dataclass
 class VolumeControlLinux(VolumeControl):
@@ -469,7 +464,7 @@ class VolumeControlLinux(VolumeControl):
             )
             return True
 
-        except (subprocess.TimeoutExpired, FileNotFoundError, ValueError, subprocess.CalledProcessError) as e:
+        except (subprocess.TimeoutExpired, FileNotFoundError, subprocess.CalledProcessError) as e:
             logger.error(f"Failed to set volume on device {device.id} - amixer failed with error: {e}")
             return False
 
@@ -536,16 +531,16 @@ class VolumeControlLinux(VolumeControl):
                 capture_output=True,
                 text=True,
                 timeout=AUDIO_COMMAND_TIMEOUT,
+                check=True,
             )
-            if result.returncode == 0:
-                for line in result.stdout.splitlines():
-                    if "Simple mixer control" in line:
-                        start = line.find("'") + 1
-                        end = line.find("'", start)
-                        if start > 0 and end > start:
-                            controls.append(line[start:end])
+            for line in result.stdout.splitlines():
+                if "Simple mixer control" in line:
+                    start = line.find("'") + 1
+                    end = line.find("'", start)
+                    if start > 0 and end > start:
+                        controls.append(line[start:end])
 
-        except (subprocess.TimeoutExpired, FileNotFoundError) as e:
+        except (subprocess.TimeoutExpired, FileNotFoundError, subprocess.CalledProcessError) as e:
             logger.error(f"Failed to list controls for device {device_id} - amixer failed with error: {e}")
             return []
 
