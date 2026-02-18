@@ -31,7 +31,7 @@ Example usage:
 import logging
 import os
 from threading import Thread
-from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple, cast
+from typing import Callable, Optional, Tuple, cast
 
 import gi
 
@@ -42,10 +42,8 @@ from reachy_mini.media.camera_constants import (
     ReachyMiniLiteCamSpecs,
     ReachyMiniWirelessCamSpecs,
 )
-from reachy_mini.media.webrtc_utils import SignallingListener
 
 gi.require_version("Gst", "1.0")
-gi.require_version("GstApp", "1.0")
 
 from gi.repository import GLib, Gst  # noqa: E402
 
@@ -125,35 +123,14 @@ class GstWebRTC:
         self._data_channels: dict[str, Gst.Element] = {}  # peer_id -> channel
         self._on_data_message: Optional[Callable[[str, str], None]] = None
 
-        # Track incoming audio per peer (for bidirectional audio cleanup)
-        self._incoming_audio: Dict[str, Dict[str, Any]] = {}
-
-        self._pipeline_receiver = Gst.Pipeline.new("reachymini_webrtc_receiver")
-        self._bus_receiver = self._pipeline_receiver.get_bus()
-        self._bus_receiver.add_watch(
-            GLib.PRIORITY_DEFAULT, self._on_bus_message, self._loop
-        )
-
-        # Dynamic WebRTC audio receiver state
-        self._receiver_webrtcsrc: Optional[Gst.Element] = None
-        self._receiver_audio_elements: List[Gst.Element] = []
-        self._client_producer_id: Optional[str] = None
-
-        # WebSocket listener for producer add/remove events
-        self._signalling_listener = SignallingListener(
-            host="127.0.0.1",
-            port=8443,
-            on_producer_added=self._on_producer_added,
-            on_producer_removed=self._on_producer_removed,
-            log_level=log_level,
-        )
+        # Track incoming audio elements per peer (for bidirectional audio cleanup)
+        self._incoming_audio: dict[str, list[Gst.Element]] = {}
 
     def __del__(self) -> None:
         """Destructor to ensure gstreamer resources are released."""
         self._logger.debug("Cleaning up GstWebRTC")
         self._loop.quit()
         self._bus_sender.remove_watch()
-        self._bus_receiver.remove_watch()
         # Enable if need to dump logs
         # Gst.deinit()
 
@@ -245,10 +222,8 @@ class GstWebRTC:
     ) -> None:
         """Handle incoming pads from the browser for bidirectional audio.
 
-        We must NOT add elements (like decodebin) to _pipeline_sender because
-        webrtcsink manages that pipeline internally and dynamic additions crash
-        the connection.  Instead we use a pad probe to intercept RTP buffers and
-        forward them to a completely separate playback pipeline.
+        Adds depay/decode/playback elements directly into _pipeline_sender and
+        links the webrtcbin audio src pad to them, avoiding any buffer copy.
         """
         if pad.get_direction() != Gst.PadDirection.SRC:
             return
@@ -272,197 +247,45 @@ class GstWebRTC:
 
         self._logger.info(f"Setting up incoming audio playback for peer {peer_id}")
 
-        # Build a separate pipeline: appsrc → depay → decode → convert → speaker
-        try:
-            playback_pipe = Gst.parse_launch(
-                "appsrc name=audio_in format=time is-live=true ! "
-                "rtpopusdepay ! opusdec ! audioconvert ! audioresample ! "
-                "alsasink device=reachymini_audio_sink sync=false"
-            )
-        except Exception as e:
-            self._logger.error(f"Failed to create audio playback pipeline: {e}")
+        rtpopusdepay = Gst.ElementFactory.make("rtpopusdepay")
+        opusdec = Gst.ElementFactory.make("opusdec")
+        audioconvert = Gst.ElementFactory.make("audioconvert")
+        audioresample = Gst.ElementFactory.make("audioresample")
+        alsasink = Gst.ElementFactory.make("alsasink")
+        alsasink.set_property("device", "reachymini_audio_sink")
+        alsasink.set_property("sync", False)
+
+        elements = [rtpopusdepay, opusdec, audioconvert, audioresample, alsasink]
+
+        if not all(elements):
+            self._logger.error("Failed to create audio playback elements")
             return
 
-        appsrc = playback_pipe.get_by_name("audio_in")
-        appsrc.set_property("caps", caps)
+        for elem in elements:
+            self._pipeline_sender.add(elem)
 
-        play_bus = playback_pipe.get_bus()
-        play_bus.add_watch(
-            GLib.PRIORITY_DEFAULT, self._on_playback_bus_message, peer_id
-        )
+        pad.link(rtpopusdepay.get_static_pad("sink"))
+        rtpopusdepay.link(opusdec)
+        opusdec.link(audioconvert)
+        audioconvert.link(audioresample)
+        audioresample.link(alsasink)
 
-        playback_pipe.set_state(Gst.State.PLAYING)
+        for elem in elements:
+            elem.sync_state_with_parent()
 
-        # Pad probe: intercept every RTP buffer on webrtcbin's src pad,
-        # copy it into the separate playback pipeline, then DROP so
-        # webrtcsink's pipeline doesn't need a downstream element.
-        def _buffer_probe(pad: Gst.Pad, info: Gst.PadProbeInfo, _: None) -> int:
-            buf = info.get_buffer()
-            if buf is not None:
-                appsrc.emit("push-buffer", buf.copy())
-            return Gst.PadProbeReturn.DROP
-
-        probe_id = pad.add_probe(Gst.PadProbeType.BUFFER, _buffer_probe, None)
-
-        self._incoming_audio[peer_id] = {
-            "playback_pipeline": playback_pipe,
-            "probe_id": probe_id,
-            "pad": pad,
-        }
-        self._logger.info(f"Audio playback pipeline started for peer {peer_id}")
-
-    def _on_playback_bus_message(
-        self, bus: Gst.Bus, msg: Gst.Message, peer_id: str
-    ) -> bool:
-        """Handle messages from a per-peer audio playback pipeline."""
-        if msg.type == Gst.MessageType.ERROR:
-            err, debug = msg.parse_error()
-            self._logger.error(
-                f"Audio playback error for {peer_id}: {err} {debug}"
-            )
-            return False
-        if msg.type == Gst.MessageType.EOS:
-            self._logger.info(f"Audio playback EOS for {peer_id}")
-            return False
-        return True
+        self._incoming_audio[peer_id] = elements
+        self._logger.info(f"Audio playback linked in pipeline for peer {peer_id}")
 
     def _cleanup_incoming_audio(self, peer_id: str) -> None:
-        """Remove the incoming-audio pad probe and playback pipeline for a peer."""
-        info = self._incoming_audio.pop(peer_id, None)
-        if info is None:
+        """Remove incoming-audio elements from the sender pipeline for a peer."""
+        elements = self._incoming_audio.pop(peer_id, None)
+        if elements is None:
             return
 
-        pad = info.get("pad")
-        probe_id = info.get("probe_id")
-        if pad is not None and probe_id is not None:
-            pad.remove_probe(probe_id)
-
-        playback_pipe = info.get("playback_pipeline")
-        if playback_pipe is not None:
-            playback_pipe.set_state(Gst.State.NULL)
-        self._logger.info(f"Cleaned up incoming audio for peer {peer_id}")
-
-    # --- Dynamic WebRTC audio receiver ---
-
-    _TARGET_PRODUCER_NAME = "reachymini-client"
-
-    def _on_producer_added(
-        self,
-        producer_id: str,
-        meta: Dict[str, str],
-    ) -> None:
-        """Handle a producer appearing on the signalling server."""
-        name = meta.get("name")
-        self._logger.info(f"Producer added: {producer_id} name={name}")
-
-        if name != self._TARGET_PRODUCER_NAME:
-            return
-
-        if self._receiver_webrtcsrc is not None:
-            if self._client_producer_id == producer_id:
-                self._logger.debug(
-                    f"Already connected to producer {producer_id}, ignoring"
-                )
-                return
-            self._logger.info("Tearing down previous receiver before reconnecting")
-            self._teardown_receiver()
-
-        self._logger.info(f"Creating webrtcsrc for producer {producer_id}")
-        webrtcsrc = Gst.ElementFactory.make("webrtcsrc")
-        if not webrtcsrc:
-            self._logger.error("Failed to create webrtcsrc element")
-            return
-
-        src_signaller = webrtcsrc.get_property("signaller")
-        src_signaller.set_property("producer-peer-id", producer_id)
-        src_signaller.set_property("uri", "ws://127.0.0.1:8443")
-
-        webrtcsrc.connect("pad-added", self._receiver_pad_added_cb)
-
-        self._pipeline_receiver.add(webrtcsrc)
-        webrtcsrc.sync_state_with_parent()
-
-        self._receiver_webrtcsrc = webrtcsrc
-        self._client_producer_id = producer_id
-
-    def _on_producer_removed(self, producer_id: str) -> None:
-        """Handle a producer disappearing from the signalling server."""
-        self._logger.info(f"Producer removed: {producer_id}")
-
-        if producer_id == self._client_producer_id:
-            self._teardown_receiver()
-
-    def _receiver_pad_added_cb(self, webrtcsrc: Gst.Element, pad: Gst.Pad) -> None:
-        """Handle new pads from the client webrtcsrc (expect audio only)."""
-        if pad.get_name().startswith("audio"):
-            self._logger.info(f"Audio pad added from client: {pad.get_name()}")
-            self._configure_receiver_webrtcbin(webrtcsrc)
-
-            audioconvert = Gst.ElementFactory.make("audioconvert")
-            audioresample = Gst.ElementFactory.make("audioresample")
-            alsasink = Gst.ElementFactory.make("alsasink")
-            alsasink.set_property("device", "reachymini_audio_sink")
-            alsasink.set_property("sync", False)
-
-            self._pipeline_receiver.add(audioconvert)
-            self._pipeline_receiver.add(audioresample)
-            self._pipeline_receiver.add(alsasink)
-
-            pad.link(audioconvert.get_static_pad("sink"))
-            audioconvert.link(audioresample)
-            audioresample.link(alsasink)
-
-            audioconvert.sync_state_with_parent()
-            audioresample.sync_state_with_parent()
-            alsasink.sync_state_with_parent()
-
-            self._receiver_audio_elements = [audioconvert, audioresample, alsasink]
-        else:
-            self._logger.warning(
-                f"Unexpected pad from client webrtcsrc: {pad.get_name()}"
-            )
-
-    def _configure_receiver_webrtcbin(self, webrtcsrc: Gst.Element) -> None:
-        """Set latency on the webrtcbin inside the webrtcsrc bin."""
-        if not isinstance(webrtcsrc, Gst.Bin):
-            return
-
-        webrtcbin = webrtcsrc.get_by_name("webrtcbin0")
-        if webrtcbin is None:
-            for elem in self._iterate_gst(webrtcsrc.iterate_recurse()):
-                if elem.get_factory().get_name() == "webrtcbin":
-                    webrtcbin = elem
-                    break
-        if webrtcbin:
-            webrtcbin.set_property("latency", 200)
-
-    def _iterate_gst(self, iterator: Gst.Iterator) -> Iterator[Gst.Element]:
-        """Iterate over a GStreamer iterator."""
-        while True:
-            result, elem = iterator.next()
-            if result == Gst.IteratorResult.DONE:
-                break
-            if result == Gst.IteratorResult.OK:
-                yield elem
-            elif result == Gst.IteratorResult.RESYNC:
-                iterator.resync()
-
-    def _teardown_receiver(self) -> None:
-        """Remove the dynamic webrtcsrc and downstream audio elements from the pipeline."""
-        if self._receiver_webrtcsrc is not None:
-            self._logger.info("Tearing down webrtcsrc receiver")
-            self._receiver_webrtcsrc.set_state(Gst.State.NULL)
-            self._pipeline_receiver.remove(self._receiver_webrtcsrc)
-            self._receiver_webrtcsrc = None
-
-        # known bug: the elements are not properly removed from the pipeline,
-        # and we get a warning. This might be a GStreamer bug.
-        for elem in self._receiver_audio_elements:
+        for elem in elements:
             elem.set_state(Gst.State.NULL)
-            self._pipeline_receiver.remove(elem)
-        self._receiver_audio_elements = []
-
-        self._client_producer_id = None
+            self._pipeline_sender.remove(elem)
+        self._logger.info(f"Cleaned up incoming audio for peer {peer_id}")
 
     @property
     def resolution(self) -> tuple[int, int]:
@@ -639,24 +462,17 @@ class GstWebRTC:
         """Start the WebRTC pipeline."""
         self._logger.debug("Starting WebRTC")
         self._pipeline_sender.set_state(Gst.State.PLAYING)
-        self._pipeline_receiver.set_state(Gst.State.PLAYING)
-        self._signalling_listener.start()
         GLib.timeout_add_seconds(5, self._dump_latency)
 
     def pause(self) -> None:
         """Pause the WebRTC pipeline."""
         self._logger.debug("Pausing WebRTC")
         self._pipeline_sender.set_state(Gst.State.PAUSED)
-        self._pipeline_receiver.set_state(Gst.State.PAUSED)
 
     def stop(self) -> None:
         """Stop the WebRTC pipeline."""
         self._logger.debug("Stopping WebRTC")
-        self._signalling_listener.stop()
-        self._teardown_receiver()
-
         self._pipeline_sender.set_state(Gst.State.NULL)
-        self._pipeline_receiver.set_state(Gst.State.NULL)
 
     # Data channel setup / handling
     def set_message_handler(
