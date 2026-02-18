@@ -277,7 +277,7 @@ class GstWebRTC:
             buf = info.get_buffer()
             if buf is not None:
                 appsrc.emit("push-buffer", buf.copy())
-            return Gst.PadProbeReturn.DROP
+            return int(Gst.PadProbeReturn.DROP)
 
         probe_id = pad.add_probe(Gst.PadProbeType.BUFFER, _buffer_probe, None)
 
