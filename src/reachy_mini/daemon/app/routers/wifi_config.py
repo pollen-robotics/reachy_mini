@@ -277,18 +277,45 @@ def remove_connection(name: str) -> None:
         nmcli.connection.delete(name)
 
 
-# Setup WiFi connection on startup
+WIFI_INIT_MAX_RETRIES = 5
+WIFI_INIT_RETRY_DELAY = 3  # seconds
 
-# This make sure the wlan0 is up and running
-scan_available_wifi()
 
-# On startup, if no WiFi connection is active, set up the default hotspot
-if get_current_wifi_mode() == WifiMode.DISCONNECTED:
-    logger.info("No WiFi connection active. Setting up hotspot...")
+def ensure_wifi_on_startup() -> None:
+    """Ensure WiFi is configured on daemon startup.
 
-    setup_wifi_connection(
-        name="Hotspot",
-        ssid=HOTSPOT_SSID,
-        password=HOTSPOT_PASSWORD,
-        is_hotspot=True,
+    Retries if NetworkManager or the WiFi interface isn't ready yet.
+    On final failure the daemon keeps running so the robot stays
+    reachable via Bluetooth for recovery.
+    """
+    import time
+
+    for attempt in range(1, WIFI_INIT_MAX_RETRIES + 1):
+        try:
+            # Make sure wlan0 is up and running
+            scan_available_wifi()
+
+            # If no WiFi connection is active, set up the default hotspot
+            if get_current_wifi_mode() == WifiMode.DISCONNECTED:
+                logger.info("No WiFi connection active. Setting up hotspot...")
+                setup_wifi_connection(
+                    name="Hotspot",
+                    ssid=HOTSPOT_SSID,
+                    password=HOTSPOT_PASSWORD,
+                    is_hotspot=True,
+                )
+            return
+        except Exception as e:
+            logger.warning(
+                f"WiFi init attempt {attempt}/{WIFI_INIT_MAX_RETRIES} failed: {e}"
+            )
+            if attempt < WIFI_INIT_MAX_RETRIES:
+                time.sleep(WIFI_INIT_RETRY_DELAY)
+
+    logger.error(
+        f"WiFi initialization failed after {WIFI_INIT_MAX_RETRIES} attempts. "
+        "Daemon will start without WiFi configured."
     )
+
+
+ensure_wifi_on_startup()
