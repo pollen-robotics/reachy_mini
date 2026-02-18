@@ -236,7 +236,8 @@ class Daemon:
                 self.logger.error(f"Backend encountered an error: {e}")
                 self._status.state = DaemonState.ERROR
                 self._status.error = str(e)
-                self.ws_server.stop()
+                if self.ws_server is not None:
+                    self.ws_server.stop()
                 self.backend = None
 
         self.backend_run_thread = Thread(target=backend_wrapped_run)
@@ -337,7 +338,8 @@ class Daemon:
             self.backend.ready.clear()
 
             # WS server must be closed after backend finishes to publish all data
-            self.ws_server.stop()
+            if self.ws_server is not None:
+                self.ws_server.stop()
 
             if self._status.state != DaemonState.ERROR:
                 self.logger.info("Daemon stopped successfully.")
@@ -451,7 +453,12 @@ class Daemon:
             json_str = json.dumps(
                 asdict(self.status(), dict_factory=convert_enum_to_dict)
             )
-            self.ws_server.publish_status(json_str)
+            if self.ws_server is None:
+                self.logger.warning(
+                    f"WS server not initialized, cannot publish status: {json_str}"
+                )
+            else:
+                self.ws_server.publish_status(json_str)
             time.sleep(1)
 
     async def run4ever(
