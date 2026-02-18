@@ -55,7 +55,7 @@ from reachy_mini.media.camera_constants import (
 
 gi.require_version("Gst", "1.0")
 gi.require_version("GstApp", "1.0")
-from gi.repository import GLib, Gst, GstApp  # noqa: E402, F401
+from gi.repository import GLib, GObject, Gst, GstApp  # noqa: E402, F401
 
 
 class GstWebRTCClient(CameraBase, AudioBase):
@@ -190,7 +190,7 @@ class GstWebRTCClient(CameraBase, AudioBase):
             self._webrtcbin = element
             element.connect("on-new-transceiver", self._on_new_transceiver)
 
-    def _on_new_transceiver(self, webrtcbin: Gst.Element, transceiver: object) -> None:
+    def _on_new_transceiver(self, webrtcbin: Gst.Element, transceiver: GObject.Object) -> None:
         """Set audio transceiver to SENDRECV so the SDP answer allows bidirectional audio."""
         # Only set audio transceivers to SENDRECV (not video) to avoid unnecessary sink pads
         caps = transceiver.get_property("codec-preferences")
