@@ -6,7 +6,6 @@ It includes methods for running the simulation, getting joint positions, and con
 
 """
 
-import json
 import time
 from dataclasses import dataclass
 from importlib.resources import files
@@ -20,6 +19,7 @@ import numpy as np
 import numpy.typing as npt
 
 import reachy_mini
+from reachy_mini.io.protocol import HeadPoseMsg, JointPositionsMsg
 
 from ..abstract import Backend, MotorControlMode
 from .utils import (
@@ -254,19 +254,15 @@ class MujocoBackend(Backend):
                 ):
                     if not self.is_shutting_down:
                         self.joint_positions_publisher.put(
-                            json.dumps(
-                                {
-                                    "head_joint_positions": self.current_head_joint_positions.tolist(),
-                                    "antennas_joint_positions": self.current_antenna_joint_positions.tolist(),
-                                }
-                            ).encode("utf-8")
+                            JointPositionsMsg(
+                                head_joint_positions=self.current_head_joint_positions.tolist(),
+                                antennas_joint_positions=self.current_antenna_joint_positions.tolist(),
+                            )
                         )
                         self.pose_publisher.put(
-                            json.dumps(
-                                {
-                                    "head_pose": self.get_present_head_pose().tolist(),
-                                }
-                            ).encode("utf-8")
+                            HeadPoseMsg(
+                                head_pose=self.get_present_head_pose().tolist(),
+                            )
                         )
                     self.ready.set()
 

@@ -21,9 +21,7 @@ from reachy_mini.daemon.utils import (
     find_serial_port,
     get_ip_address,
 )
-from reachy_mini.io import (
-    ZenohServer,
-)
+from reachy_mini.io.ws_server import WSServer
 from reachy_mini.tools.reflash_motors import reflash_motors
 
 from .backend.mockup_sim import MockupSimBackend, MockupSimBackendStatus
@@ -221,12 +219,8 @@ class Daemon:
             self._status.error = str(e)
             raise e
 
-        self.zenoh_server = ZenohServer(
-            prefix=self.robot_name,
-            backend=self.backend,
-            localhost_only=localhost_only,
-        )
-        self.zenoh_server.start()
+        self.ws_server = WSServer(backend=self.backend)
+        self.ws_server.start()
         self._thread_publish_status = Thread(target=self._publish_status, daemon=True)
         self._thread_publish_status.start()
 
@@ -241,7 +235,7 @@ class Daemon:
                 self.logger.error(f"Backend encountered an error: {e}")
                 self._status.state = DaemonState.ERROR
                 self._status.error = str(e)
-                self.zenoh_server.stop()
+                self.ws_server.stop()
                 self.backend = None
 
         self.backend_run_thread = Thread(target=backend_wrapped_run)
@@ -341,8 +335,8 @@ class Daemon:
             self.backend.close()
             self.backend.ready.clear()
 
-            # zenoh server must be closed after backend finishes to publish all data
-            self.zenoh_server.stop()
+            # WS server must be closed after backend finishes to publish all data
+            self.ws_server.stop()
 
             if self._status.state != DaemonState.ERROR:
                 self.logger.info("Daemon stopped successfully.")
@@ -456,7 +450,7 @@ class Daemon:
             json_str = json.dumps(
                 asdict(self.status(), dict_factory=convert_enum_to_dict)
             )
-            self.zenoh_server.pub_status.put(json_str)
+            self.ws_server.publish_status(json_str)
             time.sleep(1)
 
     async def run4ever(

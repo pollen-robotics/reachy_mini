@@ -2,7 +2,7 @@
 
 This module defines a simple Publisher class that wraps a callback function,
 allowing backends to call .put(data) without knowing the underlying transport
-(WebSocket, zenoh, etc.).
+(WebSocket, etc.).
 """
 
 from typing import Callable

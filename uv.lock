@@ -762,24 +762,6 @@ wheels = [
 ]
 
 [[package]]
-name = "eclipse-zenoh"
-version = "1.7.2"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/75/09/9534eea23b59cee13b5430c7874f71c5e800d412ac04572517733812b8f3/eclipse_zenoh-1.7.2.tar.gz", hash = "sha256:cfcbc3fc9eb001be2b7adc303f34ae22570ff2e0f942d51973bfd30f4ac37d6a", size = 160083, upload-time = "2026-01-08T17:42:38.711Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/85/48/a52169789207ff80f3b1d7f768c901fa117bd729ed665b37736b68ca2699/eclipse_zenoh-1.7.2-cp39-abi3-linux_armv6l.whl", hash = "sha256:194ee61191a126e544b264587eb3659ae3952e9126e74d2d4a6e6f2ba163920a", size = 9400470, upload-time = "2026-01-08T17:42:07.714Z" },
-    { url = "https://files.pythonhosted.org/packages/76/91/484df5bdfd42102f9b5d99654c67f318d4967f3828dfd297d88c1262e143/eclipse_zenoh-1.7.2-cp39-abi3-macosx_10_12_x86_64.macosx_11_0_arm64.macosx_10_12_universal2.whl", hash = "sha256:d068c7ce2cb4f5ffe965f2d103f7173de732733a5102b6968313cedea1704694", size = 17458869, upload-time = "2026-01-08T17:42:10.264Z" },
-    { url = "https://files.pythonhosted.org/packages/06/8a/6bb29455e16f119ec9db996d50f5ce40fdd7e1369fcfb6665144b50a0b7b/eclipse_zenoh-1.7.2-cp39-abi3-macosx_10_12_x86_64.whl", hash = "sha256:7d0429933d9abeb70939a2cb02e32b8c8929651fd1762f1308b5fbd4ae41c3d9", size = 8871746, upload-time = "2026-01-08T17:42:12.587Z" },
-    { url = "https://files.pythonhosted.org/packages/b4/d3/d1a7cfa1894baf801323423e56ab79fd17c39af922b6aad1a01aa5b4a57a/eclipse_zenoh-1.7.2-cp39-abi3-manylinux_2_17_armv7l.manylinux2014_armv7l.whl", hash = "sha256:8e53005eae75b3edac44d7f46d9678be784a67657f3dd871f5efabf351081a41", size = 9265387, upload-time = "2026-01-08T17:42:14.364Z" },
-    { url = "https://files.pythonhosted.org/packages/fe/76/9520c1c583013bf8eefcd037c307615f5513592ba12166ec91fedefefbf0/eclipse_zenoh-1.7.2-cp39-abi3-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:296885d49ef20e3e14777007e3ff519403ec4c0c9e4358b70bb2157985b29548", size = 10027406, upload-time = "2026-01-08T17:42:16.609Z" },
-    { url = "https://files.pythonhosted.org/packages/63/8c/39ea3c158ca403f3acb915dacd80787ac1afd0ce6d2be66a92d0dc2dd1ad/eclipse_zenoh-1.7.2-cp39-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:ede3dfb4072577e9a81f466364b9293be345801db9734bf0b3f7321194190035", size = 9439037, upload-time = "2026-01-08T17:42:18.824Z" },
-    { url = "https://files.pythonhosted.org/packages/8d/4a/ad58417a73271e1a667b8bec1f6d42b500c0966c5e48a10c321e8c3f4634/eclipse_zenoh-1.7.2-cp39-abi3-manylinux_2_28_aarch64.whl", hash = "sha256:07cf23f7de43a9008f9dd81bf5028a0459e43227087bc7838a0ba36c1eb232e7", size = 9400470, upload-time = "2026-01-08T17:42:25.097Z" },
-    { url = "https://files.pythonhosted.org/packages/d7/d5/87a56e70a25fac485988efc45b27d7b31c2d228039dfef44e5ddd67fd343/eclipse_zenoh-1.7.2-cp39-abi3-win_amd64.whl", hash = "sha256:af3c857bcb964b000e770e3f758a8920e270ee32e79f67f25f845c51f258cc90", size = 7931636, upload-time = "2026-01-08T17:42:27.344Z" },
-    { url = "https://files.pythonhosted.org/packages/ad/23/229ebcb1554b068bf9aa56e4440b6d66e80458240fd8d7cb46f3b179ccef/eclipse_zenoh-1.7.2-pp310-pypy310_pp73-manylinux_2_17_armv7l.manylinux2014_armv7l.whl", hash = "sha256:9acfc65dbb83e94ed9c5f24f4539a045479948fa413ab4d33be99b06f7ae9da2", size = 9264619, upload-time = "2026-01-08T17:42:28.8Z" },
-    { url = "https://files.pythonhosted.org/packages/07/d9/cfe6b59de5b3d139ceb6277afef0f0a505524eb83bf1295d449edb53d641/eclipse_zenoh-1.7.2-pp310-pypy310_pp73-manylinux_2_28_aarch64.whl", hash = "sha256:75ce69656a6ef21d414a82b90980abfa2d0fc98607e7f051cf912673e98be08a", size = 9399435, upload-time = "2026-01-08T17:42:31.753Z" },
-]
-
-[[package]]
 name = "eigenpy"
 version = "3.10.3"
 source = { registry = "https://pypi.org/simple" }
@@ -3173,7 +3155,6 @@ dependencies = [
     { name = "aiohttp" },
     { name = "asgiref" },
     { name = "cv2-enumerate-cameras" },
-    { name = "eclipse-zenoh" },
     { name = "fastapi" },
     { name = "huggingface-hub" },
     { name = "jinja2" },
@@ -3275,7 +3256,6 @@ requires-dist = [
     { name = "asgiref" },
     { name = "cv2-enumerate-cameras", specifier = ">=1.2.1" },
     { name = "cv2-enumerate-cameras", marker = "extra == 'opencv'", specifier = ">=1.2.1" },
-    { name = "eclipse-zenoh", specifier = "~=1.7.0" },
     { name = "fastapi" },
     { name = "gpiozero", marker = "sys_platform == 'linux' and extra == 'wireless-version'", specifier = ">=2.0.0" },
     { name = "huggingface-hub", specifier = "==1.3.0" },

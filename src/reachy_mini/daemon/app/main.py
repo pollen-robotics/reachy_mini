@@ -32,6 +32,7 @@ from reachy_mini.daemon.app.routers import (
     logs,
     motors,
     move,
+    sdk_ws,
     state,
     volume,
 )
@@ -216,6 +217,7 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
         app.include_router(wifi_config.router)
 
     app.include_router(router)
+    app.include_router(sdk_ws.router)
 
     if health_check_event is not None:
 
@@ -520,7 +522,7 @@ def main() -> None:
         dest="dataset_update_interval_hours",
         help="Interval in hours for background dataset update checks (default: 24.0, 0 to disable).",
     )
-    # Zenoh server options
+    # Server options
     parser.add_argument(
         "--localhost-only",
         action="store_true",

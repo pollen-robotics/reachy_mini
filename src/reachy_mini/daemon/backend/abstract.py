@@ -21,9 +21,31 @@ from typing import Annotated, Any, Callable, Dict, Optional
 
 import numpy as np
 from numpy.typing import NDArray
-
-from reachy_mini.io.publisher import Publisher
 from scipy.spatial.transform import Rotation as R
+
+from reachy_mini.io.protocol import (
+    AnyCommand,
+    AppendRecordCmd,
+    GetMotorModeCmd,
+    GetStateCmd,
+    GotoSleepCmd,
+    GotoTargetCmd,
+    PlaySoundCmd,
+    RecordedDataMsg,
+    SetAntennasCmd,
+    SetAutomaticBodyYawCmd,
+    SetBodyYawCmd,
+    SetGravityCompensationCmd,
+    SetHeadJointsCmd,
+    SetMotorModeCmd,
+    SetTargetCmd,
+    SetTorqueCmd,
+    StartRecordingCmd,
+    StopRecordingCmd,
+    WakeUpCmd,
+    command_adapter,
+)
+from reachy_mini.io.publisher import Publisher
 
 if typing.TYPE_CHECKING:
     from reachy_mini.daemon.backend.mockup_sim.backend import MockupSimBackendStatus
@@ -570,7 +592,7 @@ class Backend:
             recorded_data, self.recorded_data = self.recorded_data, []
         # Publish outside the lock
         if self.recording_publisher is not None:
-            self.recording_publisher.put(json.dumps(recorded_data))
+            self.recording_publisher.put(RecordedDataMsg(data=recorded_data))
         else:
             self.logger.warning(
                 "stop_recording called but recording_publisher is not set; dropping data."
@@ -850,14 +872,13 @@ class Backend:
 
     def process_command(
         self,
-        data: dict[str, Any],
+        cmd: AnyCommand,
         send_response: Callable[[dict[str, Any]], None],
     ) -> None:
-        """Process a command from any transport (WebRTC data channel, WebSocket, …).
+        """Process a command from any transport (WebRTC data channel, WebSocket, ...).
 
         Args:
-            data: The parsed JSON command dict. The first matching key
-                  determines the command (e.g. {"set_target": [...]}).
+            cmd: A validated command model (parsed via command_adapter).
             send_response: Callback to send a response dict back to the caller.
 
         """
@@ -871,88 +892,65 @@ class Backend:
             )
             return True
 
-        # === HEAD POSE ===
-        if "set_target" in data:
+        if isinstance(cmd, SetTargetCmd):
             if not _maybe_ignore("set_target"):
-                self.set_target_head_pose(np.array(data["set_target"]))
+                self.set_target_head_pose(np.array(cmd.head))
             send_response({"status": "ok", "command": "set_target"})
 
-        # === HEAD JOINT POSITIONS ===
-        elif "set_head_joints" in data:
+        elif isinstance(cmd, SetHeadJointsCmd):
             if not _maybe_ignore("set_head_joints"):
-                self.set_target_head_joint_positions(
-                    np.array(data["set_head_joints"])
-                )
+                self.set_target_head_joint_positions(np.array(cmd.joints))
             send_response({"status": "ok", "command": "set_head_joints"})
 
-        # === BODY YAW ===
-        elif "set_body_yaw" in data:
+        elif isinstance(cmd, SetBodyYawCmd):
             if not _maybe_ignore("set_body_yaw"):
-                self.set_target_body_yaw(float(data["set_body_yaw"]))
+                self.set_target_body_yaw(cmd.body_yaw)
             send_response({"status": "ok", "command": "set_body_yaw"})
 
-        # === ANTENNAS ===
-        elif "set_antennas" in data:
+        elif isinstance(cmd, SetAntennasCmd):
             if not _maybe_ignore("set_antennas"):
-                self.set_target_antenna_joint_positions(
-                    np.array(data["set_antennas"])
-                )
+                self.set_target_antenna_joint_positions(np.array(cmd.antennas))
             send_response({"status": "ok", "command": "set_antennas"})
 
-        # === SMOOTH GOTO ===
-        elif "goto_target" in data:
-            params = data["goto_target"]
-            head = np.array(params["head"]) if params.get("head") else None
-            antennas = np.array(params["antennas"]) if params.get("antennas") else None
-            duration = float(params.get("duration", 0.5))
-            body_yaw = (
-                float(params["body_yaw"])
-                if params.get("body_yaw") is not None
-                else None
-            )
+        elif isinstance(cmd, GotoTargetCmd):
+            head = np.array(cmd.head) if cmd.head else None
+            antennas = np.array(cmd.antennas) if cmd.antennas else None
             asyncio.create_task(
-                self._async_goto(send_response, head, antennas, duration, body_yaw)
+                self._async_goto(
+                    send_response, head, antennas, cmd.duration, cmd.body_yaw
+                )
             )
 
-        # === ANIMATIONS ===
-        elif "wake_up" in data:
+        elif isinstance(cmd, WakeUpCmd):
             asyncio.create_task(self._async_wake_up(send_response))
 
-        elif "goto_sleep" in data:
+        elif isinstance(cmd, GotoSleepCmd):
             asyncio.create_task(self._async_goto_sleep(send_response))
 
-        # === AUDIO ===
-        elif "play_sound" in data:
-            self.play_sound(data["play_sound"])
+        elif isinstance(cmd, PlaySoundCmd):
+            self.play_sound(cmd.file)
             send_response({"status": "ok", "command": "play_sound"})
 
-        # === MOTOR CONTROL ===
-        elif "set_motor_mode" in data:
-            mode_str = data["set_motor_mode"]
-            self.set_motor_control_mode(MotorControlMode(mode_str))
-            send_response({"motor_mode": mode_str, "status": "ok"})
+        elif isinstance(cmd, SetMotorModeCmd):
+            self.set_motor_control_mode(MotorControlMode(cmd.mode))
+            send_response({"motor_mode": cmd.mode, "status": "ok"})
 
-        elif "set_torque" in data:
-            ids = data.get("ids")
-            torque = data["set_torque"]
-            if ids is not None:
-                self.set_motor_torque_ids(ids, torque)
-            elif torque:
+        elif isinstance(cmd, SetTorqueCmd):
+            if cmd.ids is not None:
+                self.set_motor_torque_ids(cmd.ids, cmd.on)
+            elif cmd.on:
                 self.set_motor_control_mode(MotorControlMode.Enabled)
             else:
                 self.set_motor_control_mode(MotorControlMode.Disabled)
             send_response({"status": "ok", "command": "set_torque"})
 
-        elif "get_motor_mode" in data:
+        elif isinstance(cmd, GetMotorModeCmd):
             send_response({"motor_mode": self.get_motor_control_mode().value})
 
-        # === GRAVITY COMPENSATION ===
-        elif "set_gravity_compensation" in data:
+        elif isinstance(cmd, SetGravityCompensationCmd):
             try:
-                if data["set_gravity_compensation"]:
-                    self.set_motor_control_mode(
-                        MotorControlMode.GravityCompensation
-                    )
+                if cmd.enabled:
+                    self.set_motor_control_mode(MotorControlMode.GravityCompensation)
                 else:
                     self.set_motor_control_mode(MotorControlMode.Enabled)
             except ValueError as e:
@@ -960,13 +958,11 @@ class Backend:
                 return
             send_response({"status": "ok", "command": "set_gravity_compensation"})
 
-        # === AUTOMATIC BODY YAW ===
-        elif "set_automatic_body_yaw" in data:
-            self.set_automatic_body_yaw(data["set_automatic_body_yaw"])
+        elif isinstance(cmd, SetAutomaticBodyYawCmd):
+            self.set_automatic_body_yaw(cmd.enabled)
             send_response({"status": "ok", "command": "set_automatic_body_yaw"})
 
-        # === STATE QUERIES ===
-        elif "get_state" in data:
+        elif isinstance(cmd, GetStateCmd):
             state = {
                 "head_pose": self.get_present_head_pose().tolist()
                 if self.current_head_pose is not None
@@ -981,25 +977,19 @@ class Backend:
             }
             send_response({"state": state})
 
-        # === RECORDING ===
-        elif "start_recording" in data:
+        elif isinstance(cmd, StartRecordingCmd):
             self.start_recording()
             send_response(
                 {"status": "ok", "command": "start_recording", "is_recording": True}
             )
-        elif "stop_recording" in data:
+        elif isinstance(cmd, StopRecordingCmd):
             self.stop_recording()
             send_response(
                 {"status": "ok", "command": "stop_recording", "is_recording": False}
             )
-        elif "append_record" in data:
-            self.append_record(data["append_record"])
+        elif isinstance(cmd, AppendRecordCmd):
+            self.append_record(cmd.record)
             send_response({"status": "ok", "command": "append_record"})
-
-        else:
-            send_response(
-                {"error": "Unknown command", "received": list(data.keys())}
-            )
 
     async def _async_goto(
         self,
@@ -1014,9 +1004,7 @@ class Backend:
             await self.goto_target(
                 head=head, antennas=antennas, duration=duration, body_yaw=body_yaw
             )
-            send_response(
-                {"status": "ok", "command": "goto_target", "completed": True}
-            )
+            send_response({"status": "ok", "command": "goto_target", "completed": True})
         except Exception as e:
             send_response({"error": str(e), "command": "goto_target"})
 
@@ -1026,9 +1014,7 @@ class Backend:
         """Execute wake_up and send response when done."""
         try:
             await self.wake_up()
-            send_response(
-                {"status": "ok", "command": "wake_up", "completed": True}
-            )
+            send_response({"status": "ok", "command": "wake_up", "completed": True})
         except Exception as e:
             send_response({"error": str(e), "command": "wake_up"})
 
@@ -1038,9 +1024,7 @@ class Backend:
         """Execute goto_sleep and send response when done."""
         try:
             await self.goto_sleep()
-            send_response(
-                {"status": "ok", "command": "goto_sleep", "completed": True}
-            )
+            send_response({"status": "ok", "command": "goto_sleep", "completed": True})
         except Exception as e:
             send_response({"error": str(e), "command": "goto_sleep"})
 
@@ -1066,14 +1050,21 @@ class Backend:
 
     def _handle_webrtc_message(self, peer_id: str, message: str) -> None:
         data = json.loads(message)
+
+        def send(resp: dict[str, Any]) -> None:
+            self._send_webrtc_response(peer_id, resp)
+
         try:
-            self.process_command(
-                data,
-                send_response=lambda resp: self._send_webrtc_response(peer_id, resp),
-            )
+            cmd = command_adapter.validate_python(data)
+        except Exception as e:
+            self.logger.error(f"WebRTC invalid command: {e}")
+            send({"error": f"Invalid command: {e}"})
+            return
+        try:
+            self.process_command(cmd, send_response=send)
         except Exception as e:
             self.logger.error(f"WebRTC command error: {e}")
-            self._send_webrtc_response(peer_id, {"error": str(e)})
+            send({"error": str(e)})
 
     def _send_webrtc_response(self, peer_id: str, response: dict[str, Any]) -> None:
         if self._send_message_to_webrtc:
