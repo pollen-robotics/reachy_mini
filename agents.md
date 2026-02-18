@@ -177,7 +177,7 @@ Full SDK documentation is in `docs/source/`:
 | Python SDK | `docs/source/SDK/python-sdk.md` |
 | Core concepts | `docs/source/SDK/core-concept.md` |
 | AI integration | `docs/source/SDK/integration.md` |
-| Troubleshooting | `docs/source/troubleshooting/troubleshooting.md` |
+| Troubleshooting | `docs/source/troubleshooting.md` |
 
 For platform-specific guides (Lite, Wireless, Simulation), see `docs/source/platforms/`.
 

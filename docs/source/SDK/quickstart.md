@@ -114,7 +114,7 @@ python hello.py
 🎉 If everything went well, your robot should now wiggle its antennas!
 
 ## ❓ Troubleshooting
-Encountering an issue? 👉 **[Check the Troubleshooting & FAQ Guide](../troubleshooting/troubleshooting.md)**
+Encountering an issue? 👉 **[Check the Troubleshooting & FAQ Guide](../troubleshooting.md)**
 
 
 ## Using an AI Coding Agent?

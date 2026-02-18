@@ -19,6 +19,10 @@
       title: Development Workflow
     - local: platforms/reachy_mini/reflash_the_rpi_ISO
       title: Reflash the ISO
+    - local: platforms/reachy_mini/motors_diagnosis
+      title: Motors Diagnosis
+    - local: platforms/reachy_mini/change_mic_fpc_cable
+      title: Change Mic FPC Cable
   title: Reachy Mini (Wireless)
 - sections:
     - local: platforms/reachy_mini_lite/get_started
@@ -55,12 +59,8 @@
       title: GStreamer Installation
   title: Software guide
 - sections:
-    - local: troubleshooting/troubleshooting
+    - local: troubleshooting
       title: Troubleshooting & FAQ
-    - local: troubleshooting/motors_diagnosis
-      title: Motors Diagnosis
-    - local: troubleshooting/change_mic_fpc_cable
-      title: Change Mic FPC Cable 
   title: Help and support
 - isExpanded: false
   sections:

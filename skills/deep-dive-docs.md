@@ -27,7 +27,7 @@ Located in `docs/source/` (in this repository).
 | AI/LLM integration | `docs/source/SDK/integration.md` |
 | Media architecture | `docs/source/SDK/media-architecture.md` |
 | GStreamer setup | `docs/source/SDK/gstreamer-installation.md` |
-| Troubleshooting | `docs/source/troubleshooting/troubleshooting.md` |
+| Troubleshooting | `docs/source/troubleshooting.md` |
 
 ### API Reference (auto-generated from docstrings)
 

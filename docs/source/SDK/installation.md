@@ -304,7 +304,7 @@ Linux users have extra steps to follow:
 You've successfully installed Reachy Mini! Your robot is ready to come to life.
 
 ## ❓ Troubleshooting
-Encountering an issue? 👉 **[Check the Troubleshooting & FAQ Guide](../troubleshooting/troubleshooting.md)**
+Encountering an issue? 👉 **[Check the Troubleshooting & FAQ Guide](../troubleshooting.md)**
 
 ## Next Steps
 * **[Quickstart Guide](quickstart.md)**: Run your first behavior on Reachy Mini

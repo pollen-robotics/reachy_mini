@@ -196,7 +196,7 @@ The key insight: you don't always need to bisect all the way down. At each step,
 ## Full Troubleshooting Reference
 
 For comprehensive troubleshooting (hardware issues, motor errors, audio problems, etc.), see:
-**`docs/source/troubleshooting/troubleshooting.md`**
+**`docs/source/troubleshooting.md`**
 
 This covers:
 - Motor diagnosis and "Overload Error" fixes

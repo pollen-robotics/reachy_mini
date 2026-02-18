@@ -46,7 +46,7 @@ This [**agents.md**](../../agents.md) guide gives AI agents everything they need
 
 ## ❓ Troubleshooting
 
-Encountering an issue? 👉 **[Check the Troubleshooting & FAQ Guide](../troubleshooting/troubleshooting.md)**
+Encountering an issue? 👉 **[Check the Troubleshooting & FAQ Guide](../troubleshooting.md)**
 
 ## 💬 Community
 * [Discord](https://discord.gg/Y7FgMqHsub) - Get help and share projects.
