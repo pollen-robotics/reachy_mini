@@ -232,6 +232,7 @@ AnyTaskRequest = GotoTaskRequest | PlayMoveTaskRequest
 class TaskRequest(BaseModel):
     """Any task request (sent by client with type="task")."""
 
+    type: Literal["task"] = "task"
     uuid: UUID
     req: AnyTaskRequest
     timestamp: datetime
