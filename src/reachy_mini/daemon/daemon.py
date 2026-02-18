@@ -76,6 +76,7 @@ class Daemon:
             wlan_ip=None,
             version=package_version,
         )
+        self.ws_server: "WSServer | None" = None
         self._thread_event_publish_status = Event()
 
         self._webrtc: Optional[Any] = (
