@@ -279,6 +279,7 @@ def remove_connection(name: str) -> None:
 
 WIFI_INIT_MAX_RETRIES = 5
 WIFI_INIT_RETRY_DELAY = 3  # seconds
+WIFI_INIT_TIMEOUT = 30  # seconds
 
 
 def ensure_wifi_on_startup() -> None:
@@ -318,4 +319,11 @@ def ensure_wifi_on_startup() -> None:
     )
 
 
-ensure_wifi_on_startup()
+_wifi_init_thread = Thread(target=ensure_wifi_on_startup, daemon=True)
+_wifi_init_thread.start()
+_wifi_init_thread.join(timeout=WIFI_INIT_TIMEOUT)
+if _wifi_init_thread.is_alive():
+    logger.error(
+        f"WiFi initialization timed out after {WIFI_INIT_TIMEOUT}s. "
+        "Daemon will start without WiFi configured."
+    )
