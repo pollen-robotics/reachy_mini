@@ -392,15 +392,12 @@ class GstWebRTCClient(CameraBase, AudioBase):
 
         webrtcbin_parent = self._webrtcbin.get_parent()
 
-        # Find the audio sink pad on webrtcbin by checking which pad expects OPUS.
-        # We set all transceivers to SENDRECV, so webrtcbin creates sink pads for each.
-        # Pad numbering may not match transceiver index, so check caps.
+        # Find the audio sink pad on webrtcbin by iterating all sink pads and
+        # checking which one expects OPUS. Pad numbering may not match transceiver
+        # index, so we can't assume a fixed sink_N.
         sink_pad = None
         pt = 96
-        for i in range(10):
-            pad = self._webrtcbin.get_static_pad(f"sink_{i}")
-            if pad is None:
-                continue
+        for pad in self._iterate_gst(self._webrtcbin.iterate_sink_pads()):
             if pad.is_linked():
                 continue
             caps = pad.query_caps(None)
@@ -412,7 +409,7 @@ class GstWebRTCClient(CameraBase, AudioBase):
                     ok, val = s.get_int("payload")
                     if ok:
                         pt = val
-                    self.logger.info(f"Found audio sink pad: sink_{i}, pt={pt}")
+                    self.logger.info(f"Found audio sink pad: {pad.get_name()}, pt={pt}")
                     break
 
         if sink_pad is None:
