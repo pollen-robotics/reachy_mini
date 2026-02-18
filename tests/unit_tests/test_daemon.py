@@ -127,3 +127,60 @@ async def test_daemon_early_stop() -> None:
         daemon_stopped.set()
 
     await asyncio.gather(client_bg(), will_stop_soon())
+
+
+@pytest.mark.asyncio
+async def test_multi_robot_isolation() -> None:
+    """Two daemons on different ports must be fully independent.
+
+    Commands sent to one robot must not affect the other.
+    """
+    daemon1, server1, thread1, port1 = await _start_app_server()
+    daemon2, server2, thread2, port2 = await _start_app_server()
+
+    try:
+        with (
+            ReachyMini(
+                host="localhost", port=port1, media_backend="no_media"
+            ) as mini1,
+            ReachyMini(
+                host="localhost", port=port2, media_backend="no_media"
+            ) as mini2,
+        ):
+            # Both robots should be running independently
+            status1 = mini1.client.get_status()
+            status2 = mini2.client.get_status()
+            assert status1["state"] == "running"
+            assert status2["state"] == "running"
+
+            # Read initial antenna positions from both robots
+            _, ant1_before = mini1.client.get_current_joints()
+            _, ant2_before = mini2.client.get_current_joints()
+
+            # Send antenna command ONLY to robot 1
+            new_antennas = [0.5, -0.5]
+            mini1.set_target_antenna_joint_positions(new_antennas)
+
+            # Wait for the command to take effect
+            await asyncio.sleep(0.5)
+
+            _, ant1_after = mini1.client.get_current_joints()
+            _, ant2_after = mini2.client.get_current_joints()
+
+            # Robot 1 antennas should have moved toward the target
+            delta1 = np.max(np.abs(np.array(ant1_after) - np.array(ant1_before)))
+            assert delta1 > 0.1, (
+                f"Robot 1 antennas did not move after command (max delta={delta1})"
+            )
+
+            # Robot 2 antennas should be untouched (only sim noise)
+            delta2 = np.max(np.abs(np.array(ant2_after) - np.array(ant2_before)))
+            assert delta2 < 0.01, (
+                f"Robot 2 antennas moved after commanding robot 1 (max delta={delta2})"
+            )
+
+    finally:
+        await daemon1.stop(goto_sleep_on_stop=False)
+        await daemon2.stop(goto_sleep_on_stop=False)
+        await _stop_app_server(server1, thread1)
+        await _stop_app_server(server2, thread2)

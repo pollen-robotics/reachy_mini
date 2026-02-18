@@ -894,7 +894,7 @@ class Backend:
 
         if isinstance(cmd, SetTargetCmd):
             if not _maybe_ignore("set_target"):
-                self.set_target_head_pose(np.array(cmd.head))
+                self.set_target_head_pose(np.array(cmd.head).reshape(4, 4))
             send_response({"status": "ok", "command": "set_target"})
 
         elif isinstance(cmd, SetHeadJointsCmd):
