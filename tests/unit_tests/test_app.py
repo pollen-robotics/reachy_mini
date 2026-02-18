@@ -102,14 +102,28 @@ async def test_app_manager() -> None:
 
 @pytest.mark.asyncio
 async def test_faulty_app() -> None:
-    daemon = Daemon()
-    await daemon.start(
+    # Start a real app server on port 8000 so the faulty app subprocess
+    # can connect immediately (its _check_daemon_on_localhost checks port 8000).
+    # Without a server, the subprocess falls back to reachy-mini.local DNS
+    # resolution which hangs in CI, causing the test to time out.
+    args = Args(
         sim=True,
         headless=True,
         wake_up_on_start=False,
         use_audio=False,
+        autostart=True,
+        fastapi_port=8000,
     )
+    app = create_app(args)
+    config = uvicorn.Config(app, host="127.0.0.1", port=8000, log_level="warning")
+    server = uvicorn.Server(config)
+    server_thread = threading.Thread(target=server.run, daemon=True)
+    server_thread.start()
 
+    while not server.started:
+        await asyncio.sleep(0.05)
+
+    daemon = app.state.daemon
     app_mngr = AppManager()
 
     app_info = AppInfo(
@@ -134,7 +148,7 @@ async def test_faulty_app() -> None:
                 break
 
         await app_mngr.remove_app("faulty_app", daemon.logger)
-  
+
         if not success:
             pytest.fail("Faulty app did not reach ERROR state in time")
 
@@ -142,3 +156,5 @@ async def test_faulty_app() -> None:
         pytest.fail(f"install_new_app raised an exception: {e}")
     finally:
         await daemon.stop(goto_sleep_on_stop=False)
+        server.should_exit = True
+        server_thread.join(timeout=10)
