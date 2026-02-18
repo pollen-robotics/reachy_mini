@@ -1,11 +1,13 @@
 [Unit]
 Description=Reachy Mini AP Launcher Service
-After=network.target
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
 ExecStart=/venvs/mini_daemon/lib/python3.12/site-packages/reachy_mini/daemon/app/services/wireless/launcher.sh
 Restart=on-failure
+RestartSec=3s
 User=pollen
 WorkingDirectory=/venvs/mini_daemon/lib/python3.12/site-packages/reachy_mini/daemon/app/services/wireless
 
