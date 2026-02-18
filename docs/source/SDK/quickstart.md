@@ -88,6 +88,8 @@ The **Daemon** is a background service that handles the low-level communication 
 **Step 2:** Create a new file called `hello.py` and copy-paste the following code into it:
 
 > Tip: The constructor now auto-detects Lite vs Wireless and switches between localhost and network automatically. Only override it for advanced cases, e.g. `ReachyMini(connection_mode="network")`.
+
+
 ```python
 from reachy_mini import ReachyMini
 
@@ -107,6 +109,7 @@ with ReachyMini() as mini:
 **Step 3:** Save the file and run your script:
 
 In your new terminal, run:
+
 ```bash
 python hello.py
 ```
@@ -114,6 +117,7 @@ python hello.py
 🎉 If everything went well, your robot should now wiggle its antennas!
 
 ## ❓ Troubleshooting
+
 Encountering an issue? 👉 **[Check the Troubleshooting & FAQ Guide](../troubleshooting.md)**
 
 
