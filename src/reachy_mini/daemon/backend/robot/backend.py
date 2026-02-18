@@ -17,7 +17,6 @@ from typing import Annotated, Any
 import log_throttling
 import numpy as np
 import numpy.typing as npt
-import zenoh
 from reachy_mini_motor_controller import ReachyMiniPyControlLoop
 
 from reachy_mini.utils.hardware_config.parser import parse_yaml_config
@@ -131,7 +130,6 @@ class RobotBackend(Backend):
         else:
             self.bmi088 = None
 
-        self.imu_publisher: zenoh.Publisher | None = None
 
     def run(self) -> None:
         """Run the control loop for the robot backend.

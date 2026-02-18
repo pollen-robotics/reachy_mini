@@ -1,4 +1,12 @@
-"""Protocol definitions for Reachy Mini client/server communication."""
+"""Protocol definitions for Reachy Mini client/server communication.
+
+Client→Server commands use the same flat dict format as the WebRTC data channel
+(e.g. {"set_target": [...]}). See Backend._process_webrtc_command for the
+full command reference.
+
+Server→Client state messages include a "type" field for dispatch
+(e.g. {"type": "joint_positions", "head_joint_positions": [...], ...}).
+"""
 
 from datetime import datetime
 from uuid import UUID
