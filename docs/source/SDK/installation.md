@@ -219,13 +219,11 @@ Choose your installation method:
 In your terminal, run:
 ```bash
 uv pip install "reachy-mini"
-uv pip install --upgrade --index-url https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/simple gstreamer==1.28.0
 ```
 
 If you want to use the simulation mode, you need to add the `mujoco` extra:
 ```bash
 uv pip install "reachy-mini[mujoco]"
-uv pip install --upgrade --index-url https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/simple gstreamer==1.28.0
 ```
 
 > [!TIP]
@@ -239,13 +237,11 @@ In your terminal, run:
 ```bash
 git clone https://github.com/pollen-robotics/reachy_mini && cd reachy_mini
 uv sync
-uv pip install --upgrade --index-url https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/simple gstreamer==1.28.0
 ```
 
 If you want to use the simulation mode, you need to add the `mujoco` extra:
 ```bash
 uv sync --extra mujoco
-uv pip install --upgrade --index-url https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/simple gstreamer==1.28.0
 ```
 ### 🐧 Linux Users
 
@@ -287,10 +283,7 @@ sudo apt-get install libportaudio2
 
 #### Gstreamer
 
-Media management is performed by the GStreamer library. Windows and MacOSX users can use pip to install it:
-```bash
-uv pip install --upgrade --index-url https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/simple gstreamer==1.28.0
-```
+Media management is performed by the GStreamer library. It is installed with all the dependencies for Mac and Windows users.
 Linux users have extra steps to follow:
 
 <div align="center">
