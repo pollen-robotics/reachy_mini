@@ -640,8 +640,8 @@ def try_to_push(console: Console, _app_path: Path) -> bool:
     """Try to push changes to the remote repository."""
     console.print("Pushing changes to the remote repository ...", style="bold blue")
     push_result = subprocess.run(
-        f"cd {_app_path} && git push",
-        shell=True,
+        ["git", "push"],
+        cwd=_app_path,
         capture_output=True,
         text=True,
     )
@@ -731,12 +731,20 @@ def publish(
             exit()
 
         console.print("App already exists on Hugging Face Spaces.", style="bold blue")
-        os.system(f"cd {app_path} && git pull {repo_url} main")
+        pull_result = subprocess.run(
+            ["git", "pull", repo_url, "main"],
+            cwd=app_path,
+            capture_output=True,
+            text=True,
+        )
+        if pull_result.returncode != 0:
+            console.print(
+                f"[red]Failed to pull latest changes: {pull_result.stderr}[/red]"
+            )
+            sys.exit(1)
 
         status_output = (
-            subprocess.check_output(
-                f"cd {app_path} && git status --porcelain", shell=True
-            )
+            subprocess.check_output(["git", "status", "--porcelain"], cwd=app_path)
             .decode("utf-8")
             .strip()
         )
@@ -777,7 +785,22 @@ def publish(
 
         # commit local changes
         console.print("Committing changes locally ...", style="bold blue")
-        os.system(f"cd {app_path} && git add . && git commit -m '{commit_message}'")
+        add_result = subprocess.run(
+            ["git", "add", "."], cwd=app_path, capture_output=True, text=True
+        )
+        if add_result.returncode != 0:
+            console.print(f"[red]git add failed: {add_result.stderr}[/red]")
+            sys.exit(1)
+
+        commit_result = subprocess.run(
+            ["git", "commit", "-m", commit_message],
+            cwd=app_path,
+            capture_output=True,
+            text=True,
+        )
+        if commit_result.returncode != 0:
+            console.print(f"[red]git commit failed: {commit_result.stderr}[/red]")
+            sys.exit(1)
 
         # && git push HEAD:main"
 
@@ -815,9 +838,67 @@ def publish(
             exist_ok=False,
             space_sdk="static",
         )
-        os.system(
-            f"cd {app_path} && git init && git remote add space {repo_url} && git add . && git commit -m 'Initial commit' && git push --set-upstream -f space HEAD:main"
+        if not (app_path / ".git").exists():
+            init_result = subprocess.run(
+                ["git", "init"], cwd=app_path, capture_output=True, text=True
+            )
+            if init_result.returncode != 0:
+                console.print(f"[red]git init failed: {init_result.stderr}[/red]")
+                sys.exit(1)
+
+        # Be tolerant to previous partial runs: if the remote already exists, update it.
+        remote_exists = subprocess.run(
+            ["git", "remote", "get-url", "space"],
+            cwd=app_path,
+            capture_output=True,
+            text=True,
+        ).returncode == 0
+        if remote_exists:
+            remote_result = subprocess.run(
+                ["git", "remote", "set-url", "space", repo_url],
+                cwd=app_path,
+                capture_output=True,
+                text=True,
+            )
+        else:
+            remote_result = subprocess.run(
+                ["git", "remote", "add", "space", repo_url],
+                cwd=app_path,
+                capture_output=True,
+                text=True,
+            )
+        if remote_result.returncode != 0:
+            console.print(
+                f"[red]Failed to configure remote 'space': {remote_result.stderr}[/red]"
+            )
+            sys.exit(1)
+
+        add_result = subprocess.run(
+            ["git", "add", "."], cwd=app_path, capture_output=True, text=True
         )
+        if add_result.returncode != 0:
+            console.print(f"[red]git add failed: {add_result.stderr}[/red]")
+            sys.exit(1)
+
+        commit_result = subprocess.run(
+            ["git", "commit", "-m", "Initial commit"],
+            cwd=app_path,
+            capture_output=True,
+            text=True,
+        )
+        if commit_result.returncode != 0:
+            console.print(f"[red]git commit failed: {commit_result.stderr}[/red]")
+            sys.exit(1)
+
+        push_result = subprocess.run(
+            ["git", "push", "--set-upstream", "-f", "space", "HEAD:main"],
+            cwd=app_path,
+            capture_output=True,
+            text=True,
+        )
+        if push_result.returncode != 0:
+            console.print(f"[red]git push failed: {push_result.stderr}[/red]")
+            sys.exit(1)
 
         console.print("✅ App published successfully.", style="bold green")
 
