@@ -7,6 +7,7 @@ It includes methods for running the simulation, getting joint positions, and con
 """
 
 import json
+import logging
 import time
 from dataclasses import dataclass
 from importlib.resources import files
@@ -138,7 +139,7 @@ class MujocoBackend(Backend):
         frame_sender = GStreamerUDPCamera(
             width=camera_size[0],
             height=camera_size[1],
-            log_level=self.logger.level,
+            log_level=logging.getLevelName(self.logger.level),
         )
         frame_sender.start()
         offscreen_renderer = self._get_renderer(camera_name)
