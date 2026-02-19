@@ -72,7 +72,7 @@ class GStreamerUDPCamera:
         self._logger.debug("Configuring UDP sender pipeline")
 
         # Create elements
-        appsrc = Gst.ElementFactory.make("appsrc", "src")
+        appsrc: GstApp = Gst.ElementFactory.make("appsrc", "src")
         capsfilter_input = Gst.ElementFactory.make("capsfilter", "capsfilter_input")
         queue = Gst.ElementFactory.make("queue", "queue")
         rtpvrawpay = Gst.ElementFactory.make("rtpvrawpay", "rtpvrawpay")
