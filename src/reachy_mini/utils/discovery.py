@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import socket
+import threading
 import time
 from dataclasses import dataclass, field
 from importlib.metadata import version
@@ -40,9 +41,36 @@ class MdnsServiceRegistration:
         self._port = port
         self._zeroconf: Zeroconf | None = None
         self._info: ServiceInfo | None = None
+        self._register_thread: threading.Thread | None = None
 
     def register(self) -> None:
-        """Register the mDNS service. Logs warning on failure, never raises."""
+        """Register the mDNS service in a background thread.
+
+        Runs in a separate thread so it's safe to call from an async context.
+        Logs warning on failure, never raises.
+        """
+        self._register_thread = threading.Thread(target=self._do_register, daemon=True)
+        self._register_thread.start()
+
+    def unregister(self) -> None:
+        """Unregister the mDNS service. No-op if not registered.
+
+        Runs in a separate thread and waits for completion so the service
+        is guaranteed to be unregistered before the caller continues.
+        """
+        # Wait for register to finish first
+        if self._register_thread is not None:
+            self._register_thread.join(timeout=10.0)
+            self._register_thread = None
+
+        if self._zeroconf is None or self._info is None:
+            return
+
+        thread = threading.Thread(target=self._do_unregister, daemon=True)
+        thread.start()
+        thread.join(timeout=5.0)
+
+    def _do_register(self) -> None:
         try:
             pkg_version = version("reachy_mini")
         except Exception:
@@ -73,12 +101,9 @@ class MdnsServiceRegistration:
             logger.warning("Failed to register mDNS service", exc_info=True)
             self._close_zeroconf()
 
-    def unregister(self) -> None:
-        """Unregister the mDNS service. No-op if not registered."""
-        if self._zeroconf is None or self._info is None:
-            return
-
+    def _do_unregister(self) -> None:
         try:
+            assert self._zeroconf is not None and self._info is not None
             self._zeroconf.unregister_service(self._info)
             logger.info("mDNS service unregistered: %s", self._robot_name)
         except Exception:

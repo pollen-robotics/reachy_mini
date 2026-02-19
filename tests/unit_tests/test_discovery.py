@@ -44,6 +44,9 @@ def test_register_unregister_lifecycle():
     """MdnsServiceRegistration can register and unregister without error."""
     reg = MdnsServiceRegistration("test_robot", 9999)
     reg.register()
+    # Wait for background registration thread to complete
+    assert reg._register_thread is not None
+    reg._register_thread.join(timeout=10.0)
     try:
         assert reg._zeroconf is not None
         assert reg._info is not None
