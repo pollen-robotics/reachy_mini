@@ -193,18 +193,17 @@ class GstWebRTC:
         transceivers to sendrecv. Video sendrecv is harmless since the
         browser answers recvonly (it has no video track to send).
         """
-        for i in range(4):
-            try:
-                trans = webrtcbin.emit("get-transceiver", i)
-                if trans is None:
-                    break
-                current_dir = trans.get_property("direction")
-                self._logger.info(f"Transceiver {i} direction: {current_dir}")
-                trans.set_property("direction", self._WEBRTC_DIRECTION_SENDRECV)
-                new_dir = trans.get_property("direction")
-                self._logger.info(f"Transceiver {i} set to: {new_dir}")
-            except Exception:
+        i = 0
+        while True:
+            trans = webrtcbin.emit("get-transceiver", i)
+            if trans is None:
                 break
+            current_dir = trans.get_property("direction")
+            self._logger.info(f"Transceiver {i} direction: {current_dir}")
+            trans.set_property("direction", self._WEBRTC_DIRECTION_SENDRECV)
+            new_dir = trans.get_property("direction")
+            self._logger.info(f"Transceiver {i} set to: {new_dir}")
+            i += 1
 
     def _consumer_removed(
         self,
