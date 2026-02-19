@@ -134,15 +134,14 @@ class GstWebRTCClient(CameraBase, AudioBase):
         # Set resolution after appsink is created so caps can be properly configured
         self.set_resolution(self.camera_specs.default_resolution)
 
-        webrtcsrc = self._configure_webrtcsrc(signaling_host, signaling_port, peer_id)
-        self._pipeline_record.add(webrtcsrc)
+        self._webrtcsrc = self._configure_webrtcsrc(signaling_host, signaling_port, peer_id)
+        self._pipeline_record.add(self._webrtcsrc)
 
         self._webrtcbin = None
-        self._webrtcsrc = webrtcsrc
         self._audio_send_ready = False
         self._appsrc = None
         self._appsrc_pts = 0  # running PTS in nanoseconds for appsrc buffers
-        webrtcsrc.connect("deep-element-added", self._on_deep_element_added)
+        self._webrtcsrc.connect("deep-element-added", self._on_deep_element_added)
         self.logger.info("GstWebRTCClient initialized (bidirectional audio support)")
 
     def __del__(self) -> None:
@@ -358,7 +357,6 @@ class GstWebRTCClient(CameraBase, AudioBase):
 
         See CameraBase.close() for complete documentation.
         """
-        # self._loop.quit()
         self._pipeline_record.set_state(Gst.State.NULL)
 
     def start_recording(self) -> None:
@@ -428,6 +426,8 @@ class GstWebRTCClient(CameraBase, AudioBase):
         audioconvert = Gst.ElementFactory.make("audioconvert")
         audioresample = Gst.ElementFactory.make("audioresample")
         opusenc = Gst.ElementFactory.make("opusenc")
+        opusenc.set_property("audio-type", "restricted-lowdelay")
+        opusenc.set_property("frame-size", 10)
         rtpopuspay = Gst.ElementFactory.make("rtpopuspay")
         rtpopuspay.set_property("pt", pt)
 
