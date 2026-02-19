@@ -838,7 +838,7 @@ def publish(
             exist_ok=False,
             space_sdk="static",
         )
-        if not (app_path / ".git").exists():
+        if not (Path(app_path) / ".git").exists():
             init_result = subprocess.run(
                 ["git", "init"], cwd=app_path, capture_output=True, text=True
             )
