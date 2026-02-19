@@ -163,7 +163,7 @@ class _RobotCollector(ServiceListener):
         """Handle an updated service."""
 
 
-def find_robots(timeout: float = 3.0) -> List[DiscoveredRobot]:
+def find_robots(timeout: float = 5.0) -> List[DiscoveredRobot]:
     """Discover Reachy Mini robots on the local network via mDNS.
 
     On macOS, uses the native ``dns-sd`` command because mDNSResponder
@@ -206,86 +206,118 @@ def _find_robots_dnssd(timeout: float) -> List[DiscoveredRobot]:
     service_type = "_reachy-mini._tcp"
     robots: List[DiscoveredRobot] = []
 
-    # dns-sd -B never exits on its own — run it, wait, then terminate.
+    instance_names = _dnssd_browse(service_type, timeout)
+
+    for name in instance_names:
+        resolved = _dnssd_resolve(name, service_type)
+        if resolved is not None:
+            robots.append(resolved)
+
+    return robots
+
+
+def _dnssd_browse(service_type: str, timeout: float) -> List[str]:
+    """Run dns-sd -B and collect instance names as they arrive."""
     try:
         proc = subprocess.Popen(
             ["dns-sd", "-B", service_type],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            text=True,
+            text=False,
         )
-        time.sleep(timeout)
-        proc.terminate()
-        stdout, _ = proc.communicate(timeout=2)
     except (FileNotFoundError, OSError):
         return []
 
-    # Parse instance names from output lines like:
-    # 14:43:00.099  Add  2  14  local.  _reachy-mini._tcp.  reachy_mini
+    assert proc.stdout is not None
+    lines: List[str] = []
+
+    def reader() -> None:
+        assert proc.stdout is not None
+        for raw_line in proc.stdout:
+            lines.append(raw_line.decode(errors="replace"))
+
+    t = threading.Thread(target=reader, daemon=True)
+    t.start()
+    time.sleep(timeout)
+    proc.terminate()
+    t.join(timeout=1)
+
     instance_names: List[str] = []
-    for line in stdout.splitlines():
+    for line in lines:
         if "Add" in line and service_type in line:
             parts = line.split()
             if len(parts) >= 7:
-                instance_names.append(parts[-1])
+                instance_names.append(parts[-1].strip())
 
-    # Step 2: resolve each instance
-    for name in instance_names:
-        try:
-            proc = subprocess.Popen(
-                ["dns-sd", "-L", name, service_type],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-            )
-            time.sleep(0.5)
-            proc.terminate()
-            stdout, _ = proc.communicate(timeout=1)
-        except (FileNotFoundError, OSError):
-            continue
+    return instance_names
 
-        # Parse output like:
-        # reachy_mini._reachy-mini._tcp.local. can be reached at reachy-mini.local.:8000
-        #  version=1.3.1 robot_name=reachy_mini ws_path=/ws/sdk
-        host = ""
-        port = 0
-        properties: Dict[str, str] = {}
 
-        for line in stdout.splitlines():
-            reach_match = re.search(r"can be reached at (.+):(\d+)", line)
-            if reach_match:
-                host = reach_match.group(1)
-                port = int(reach_match.group(2))
-            # TXT record line starts with whitespace
-            if line.startswith(" ") or line.startswith("\t"):
-                for pair in line.split():
-                    if "=" in pair:
-                        k, v = pair.split("=", 1)
-                        properties[k] = v
+def _dnssd_resolve(name: str, service_type: str) -> DiscoveredRobot | None:
+    """Run dns-sd -L to resolve a single service instance."""
+    try:
+        proc = subprocess.Popen(
+            ["dns-sd", "-L", name, service_type],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=False,
+        )
+    except (FileNotFoundError, OSError):
+        return None
 
-        if host and port:
-            # Resolve hostname to IP addresses
-            addresses: List[str] = []
-            try:
-                for addrinfo in socket.getaddrinfo(host, port, socket.AF_INET):
-                    addr = str(addrinfo[4][0])
-                    if addr not in addresses:
-                        addresses.append(addr)
-            except socket.gaierror:
-                pass
+    assert proc.stdout is not None
+    lines: List[str] = []
 
-            robot_name = properties.get("robot_name", name)
-            robots.append(
-                DiscoveredRobot(
-                    name=robot_name,
-                    host=host,
-                    port=port,
-                    addresses=addresses,
-                    properties=properties,
-                )
-            )
+    def reader() -> None:
+        assert proc.stdout is not None
+        for raw_line in proc.stdout:
+            lines.append(raw_line.decode(errors="replace"))
 
-    return robots
+    t = threading.Thread(target=reader, daemon=True)
+    t.start()
+    time.sleep(0.5)
+    proc.terminate()
+    t.join(timeout=1)
+
+    # Parse output like:
+    # reachy_mini._reachy-mini._tcp.local. can be reached at reachy-mini.local.:8000
+    #  version=1.3.1 robot_name=reachy_mini ws_path=/ws/sdk
+    host = ""
+    port = 0
+    properties: Dict[str, str] = {}
+
+    for line in lines:
+        reach_match = re.search(r"can be reached at (.+):(\d+)", line)
+        if reach_match:
+            host = reach_match.group(1)
+            port = int(reach_match.group(2))
+        # TXT record line starts with whitespace
+        if line.startswith(" ") or line.startswith("\t"):
+            for pair in line.split():
+                if "=" in pair:
+                    k, v = pair.split("=", 1)
+                    properties[k] = v
+
+    if not host or not port:
+        return None
+
+    # Resolve hostname to IP addresses
+    addresses: List[str] = []
+    try:
+        for addrinfo in socket.getaddrinfo(host, port, socket.AF_INET):
+            addr = str(addrinfo[4][0])
+            if addr not in addresses:
+                addresses.append(addr)
+    except socket.gaierror:
+        pass
+
+    robot_name = properties.get("robot_name", name)
+    return DiscoveredRobot(
+        name=robot_name,
+        host=host,
+        port=port,
+        addresses=addresses,
+        properties=properties,
+    )
 
 
 def _filter_alive(robots: List[DiscoveredRobot]) -> List[DiscoveredRobot]:
@@ -306,7 +338,7 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(description="Discover Reachy Mini robots on the local network.")
-    parser.add_argument("--timeout", type=float, default=3.0, help="Discovery timeout in seconds (default: 3.0)")
+    parser.add_argument("--timeout", type=float, default=5.0, help="Discovery timeout in seconds (default: 5.0)")
     args = parser.parse_args()
 
     robots = find_robots(timeout=args.timeout)
