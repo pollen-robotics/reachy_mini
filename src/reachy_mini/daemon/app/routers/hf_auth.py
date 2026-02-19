@@ -66,6 +66,7 @@ async def get_relay_status(request: Request) -> dict[str, Any]:
 
     try:
         from reachy_mini.media.central_signaling_relay import get_relay_status
+
         return get_relay_status()
     except ImportError:
         return {

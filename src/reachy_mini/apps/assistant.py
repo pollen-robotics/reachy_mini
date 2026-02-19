@@ -99,7 +99,9 @@ def create_cli(
 
         # js is not supported yet
         if language != "python":
-            console.print("[red]Currently only Python apps are supported. Aborted.[/red]")
+            console.print(
+                "[red]Currently only Python apps are supported. Aborted.[/red]"
+            )
             exit()
     else:
         language = "python"
@@ -176,26 +178,28 @@ def create(console: Console, app_name: str, app_path: Path) -> Path:
 
     (base_path / module_name / "__init__.py").touch()
     (base_path / module_name / "main.py").write_text(
-        render_template("main.py.j2", context)
+        render_template("main.py.j2", context), encoding="utf-8"
     )
     (base_path / module_name / "static" / "index.html").write_text(
-        render_template("static/index.html.j2", context)
+        render_template("static/index.html.j2", context), encoding="utf-8"
     )
     (base_path / module_name / "static" / "style.css").write_text(
-        render_template("static/style.css.j2", context)
+        render_template("static/style.css.j2", context), encoding="utf-8"
     )
     (base_path / module_name / "static" / "main.js").write_text(
-        render_template("static/main.js.j2", context)
+        render_template("static/main.js.j2", context), encoding="utf-8"
     )
 
     (base_path / "pyproject.toml").write_text(
-        render_template("pyproject.toml.j2", context)
+        render_template("pyproject.toml.j2", context), encoding="utf-8"
     )
-    (base_path / "README.md").write_text(render_template("README.md.j2", context))
+    (base_path / "README.md").write_text(
+        render_template("README.md.j2", context), encoding="utf-8"
+    )
 
-    (base_path / "index.html").write_text(render_template("index.html.j2", context))
-    (base_path / "style.css").write_text(render_template("style.css.j2", context))
-    (base_path / ".gitignore").write_text(render_template("gitignore.j2", context))
+    (base_path / "index.html").write_text(render_template("index.html.j2", context), encoding="utf-8")
+    (base_path / "style.css").write_text(render_template("style.css.j2", context), encoding="utf-8")
+    (base_path / ".gitignore").write_text(render_template("gitignore.j2", context), encoding="utf-8")
 
     # TODO assets dir with a .gif ?
 
@@ -328,9 +332,13 @@ def check(console: Console, app_path: str) -> None:
         if not (pkg_path / "__init__.py").exists():
             console.print(f"❌ Package folder '{pkg_name}' not found", style="bold red")
             console.print(f"   Checked: {abs_app_path / pkg_name}/", style="dim")
-            console.print(f"   Checked: {abs_app_path / 'src' / pkg_name}/", style="dim")
+            console.print(
+                f"   Checked: {abs_app_path / 'src' / pkg_name}/", style="dim"
+            )
             sys.exit(1)
-    console.print(f"✅ Package '{pkg_name}' found at {pkg_path.relative_to(abs_app_path)}/")
+    console.print(
+        f"✅ Package '{pkg_name}' found at {pkg_path.relative_to(abs_app_path)}/"
+    )
 
     if "entry-points" not in pyproject_content["project"]:
         console.print(
@@ -362,7 +370,6 @@ def check(console: Console, app_path: str) -> None:
             style="bold red",
         )
         sys.exit(1)
-
 
     # - main.py exists
     main_file = pkg_path / "main.py"
@@ -455,78 +462,81 @@ def check(console: Console, app_path: str) -> None:
     # - <app_name>/main.py exists
 
     # Now, create a temporary python venv in a temp dir, `pip install . the app, check that it works and that the entrypoint is registered
+    original_cwd = Path.cwd()
     with tempfile.TemporaryDirectory() as tmpdir:
-        # change dir to tmpdir
-        os.chdir(tmpdir)
+        try :
+            # change dir to tmpdir
+            os.chdir(tmpdir)
 
-        console.print(
-            f"\nCreating a temporary virtual environment to test the app... (tmp dir: {tmpdir})"
-        )
-        venv_path = os.path.join(tmpdir, "venv")
-        subprocess.run([sys.executable, "-m", "venv", venv_path], check=True)
-
-        pip_executable = os.path.join(
-            venv_path,
-            "Scripts" if os.name == "nt" else "bin",
-            "pip",
-        )
-        python_executable = os.path.join(
-            venv_path,
-            "Scripts" if os.name == "nt" else "bin",
-            "python",
-        )
-
-        install_app_with_progress(console, pip_executable, abs_app_path)
-
-        console.print("Checking that the app entrypoint is registered...")
-
-        # use from importlib.metadata import entry_points
-
-        check_script = (
-            f"from importlib.metadata import entry_points; "
-            f"eps = entry_points(group='reachy_mini_apps'); "
-            f"app_names = [ep.name for ep in eps]; "
-            f"import sys; "
-            f"sys.exit(0) if '{app_name}' in app_names else sys.exit(1)"
-        )
-        if (
-            subprocess.run(
-                [python_executable, "-c", check_script],
-                # capture_output=True,
-                text=True,
-            ).returncode
-            != 0
-        ):
             console.print(
-                f"❌ App '{app_name}' entrypoint is not registered correctly.",
-                style="bold red",
+                f"\nCreating a temporary virtual environment to test the app... (tmp dir: {tmpdir})"
             )
-            sys.exit(1)
-        console.print("✅ App entrypoint is registered correctly.")
+            venv_path = os.path.join(tmpdir, "venv")
+            subprocess.run([sys.executable, "-m", "venv", venv_path], check=True)
 
-        # Now try to uninstall the app and check that it uninstalls correctly
-        console.print("Uninstalling the app from the temporary virtual environment...")
-        subprocess.run(
-            [pip_executable, "uninstall", "-y", app_name],
-            check=True,
-        )
+            pip_executable = os.path.join(
+                venv_path,
+                "Scripts" if os.name == "nt" else "bin",
+                "pip",
+            )
+            python_executable = os.path.join(
+                venv_path,
+                "Scripts" if os.name == "nt" else "bin",
+                "python",
+            )
 
-        if (
+            install_app_with_progress(console, pip_executable, abs_app_path)
+
+            console.print("Checking that the app entrypoint is registered...")
+
+            # use from importlib.metadata import entry_points
+
+            check_script = (
+                f"from importlib.metadata import entry_points; "
+                f"eps = entry_points(group='reachy_mini_apps'); "
+                f"app_names = [ep.name for ep in eps]; "
+                f"import sys; "
+                f"sys.exit(0) if '{app_name}' in app_names else sys.exit(1)"
+            )
+            if (
+                subprocess.run(
+                    [python_executable, "-c", check_script],
+                    # capture_output=True,
+                    text=True,
+                ).returncode
+                != 0
+            ):
+                console.print(
+                    f"❌ App '{app_name}' entrypoint is not registered correctly.",
+                    style="bold red",
+                )
+                sys.exit(1)
+            console.print("✅ App entrypoint is registered correctly.")
+
+            # Now try to uninstall the app and check that it uninstalls correctly
+            console.print("Uninstalling the app from the temporary virtual environment...")
             subprocess.run(
-                [python_executable, "-c", check_script],
-                capture_output=True,
-                text=True,
-            ).returncode
-            == 0
-        ):
-            console.print(
-                f"❌ App '{app_name}' was not uninstalled correctly.",
-                style="bold red",
+                [pip_executable, "uninstall", "-y", app_name],
+                check=True,
             )
-            sys.exit(1)
 
-        console.print("✅ App installation and uninstallation tests passed.")
+            if (
+                subprocess.run(
+                    [python_executable, "-c", check_script],
+                    capture_output=True,
+                    text=True,
+                ).returncode
+                == 0
+            ):
+                console.print(
+                    f"❌ App '{app_name}' was not uninstalled correctly.",
+                    style="bold red",
+                )
+                sys.exit(1)
 
+            console.print("✅ App installation and uninstallation tests passed.")
+        finally :
+            os.chdir(original_cwd)
     console.print(f"\n✅ App '{app_name}' passed all checks!", style="bold green")
 
 
@@ -775,7 +785,7 @@ def publish(
                 choices=["private", "public"],
                 default="public",
             ).ask()
-            is_private = (privacy == "private")
+            is_private = privacy == "private"
         else:
             is_private = private
 
