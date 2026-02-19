@@ -44,7 +44,7 @@ mjpython -m reachy_mini.daemon.app.main --sim
 
 You can access the Dashboard at **[http://localhost:8000](http://localhost:8000)**.
 
-* **Apps:** You can install and run Apps! They will execute inside the simulation (e.g., the robot will dance in the 3D viewer).
+* **Apps:** You can install and run Apps! They will execute inside the simulation (e.g., the robot will move in the 3D viewer).
 
 ## 4. Scenes & Options
 

@@ -5,6 +5,7 @@ on:
     workflows: ["Build HF PR Documentation"]
     branches:
       - main
+      - develop
     types:
       - completed
 
