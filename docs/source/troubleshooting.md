@@ -1,6 +1,6 @@
 # Troubleshooting & FAQ
 
-Welcome to the Reachy Mini support page. Click on the questions below to reveal the answers.
+Welcome to the Reachy Mini support page. Click on the questions below to reveal the answers. test changes
 
 ## 🛠️ Troubleshooting - Frequent issues
 
