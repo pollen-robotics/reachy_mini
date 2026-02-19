@@ -45,6 +45,8 @@
       title: Quickstart Guide
     - local: SDK/python-sdk
       title: Python SDK
+    - local: SDK/javascript-sdk
+      title: JavaScript SDK & Web Apps
     - local: SDK/integration
       title: AI Integrations
     - local: SDK/core-concept
