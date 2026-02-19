@@ -449,6 +449,24 @@ class GStreamerAudio(AudioBase):
                         device_id = device_props.get_string("unique-id")
                         self.logger.debug(f"Found audio input device {name} for macOS")
                         return str(device_id)
+                    elif platform.system() == "Linux":
+                        # Linux PulseAudio / ALSA fallback
+                        # Construct PulseAudio device name from udev.id
+                        udev_id = device_props.get_string("udev.id") if device_props.has_field("udev.id") else None
+                        profile = device_props.get_string("device.profile.name") if device_props.has_field("device.profile.name") else None
+                        if udev_id and profile:
+                            prefix = "alsa_output" if device_type == "Sink" else "alsa_input"
+                            pa_device = f"{prefix}.{udev_id}.{profile}"
+                            self.logger.debug(
+                                f"Found audio {device_type} device {name} via PulseAudio: {pa_device}"
+                            )
+                            return pa_device
+                        elif device_props.has_field("device.string"):
+                            device_id = device_props.get_string("device.string")
+                            self.logger.debug(
+                                f"Found audio {device_type} device {name} via ALSA: {device_id}"
+                            )
+                            return str(device_id)
 
             self.logger.warning(f"No {device_type} audio card found.")
         except Exception as e:
