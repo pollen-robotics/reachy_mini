@@ -30,6 +30,7 @@ Example usage:
 
 import logging
 import os
+import platform
 from threading import Thread
 from typing import Any, Callable, Dict, Optional, Tuple, cast
 
@@ -409,7 +410,7 @@ class GstWebRTC:
         alsasrc.link(webrtcsink)
 
     def _get_audio_input_device(self) -> Optional[str]:
-        """Use Gst.DeviceMonitor to find the pipewire audio card.
+        """Use Gst.DeviceMonitor to find the audio card.
 
         Returns the device ID of the found audio card, None if not.
         """
@@ -425,11 +426,22 @@ class GstWebRTC:
             device_props = device.get_properties()
 
             if snd_card_name in name:
+                # PipeWire
                 if device_props and device_props.has_field("object.serial"):
                     serial = device_props.get_string("object.serial")
                     self._logger.debug(f"Found audio input device with serial {serial}")
                     monitor.stop()
                     return str(serial)
+
+                # Linux PulseAudio fallback
+                if device_props and platform.system() == "Linux":
+                    udev_id = device_props.get_string("udev.id") if device_props.has_field("udev.id") else None
+                    profile = device_props.get_string("device.profile.name") if device_props.has_field("device.profile.name") else None
+                    if udev_id and profile:
+                        pa_device = f"alsa_input.{udev_id}.{profile}"
+                        self._logger.debug(f"Found audio input device {name} via PulseAudio: {pa_device}")
+                        monitor.stop()
+                        return pa_device
 
         monitor.stop()
         self._logger.warning("No source audio card found.")
