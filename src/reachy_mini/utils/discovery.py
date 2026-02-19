@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import logging
+import re
 import socket
+import subprocess
+import sys
 import threading
 import time
 from dataclasses import dataclass, field
@@ -129,8 +132,10 @@ class _RobotCollector(ServiceListener):
 
     def add_service(self, zc: Zeroconf, type_: str, name: str) -> None:
         """Handle a newly discovered service."""
+        logger.debug("Discovered mDNS service: %s", name)
         info = zc.get_service_info(type_, name)
         if info is None:
+            logger.debug("Could not resolve service info for: %s", name)
             return
 
         addresses = [socket.inet_ntoa(addr) for addr in info.addresses]
@@ -161,7 +166,9 @@ class _RobotCollector(ServiceListener):
 def find_robots(timeout: float = 3.0) -> List[DiscoveredRobot]:
     """Discover Reachy Mini robots on the local network via mDNS.
 
-    Returns as soon as at least one robot is found, or after ``timeout`` seconds.
+    On macOS, uses the native ``dns-sd`` command because mDNSResponder
+    holds port 5353 exclusively. On other platforms, uses the zeroconf
+    library directly.
 
     Args:
         timeout: Maximum time to wait for responses, in seconds.
@@ -170,6 +177,16 @@ def find_robots(timeout: float = 3.0) -> List[DiscoveredRobot]:
         A list of discovered robots.
 
     """
+    if sys.platform == "darwin":
+        robots = _find_robots_dnssd(timeout)
+    else:
+        robots = _find_robots_zeroconf(timeout)
+
+    return _filter_alive(robots)
+
+
+def _find_robots_zeroconf(timeout: float) -> List[DiscoveredRobot]:
+    """Browse for robots using the zeroconf library."""
     zc = Zeroconf()
 
     collector = _RobotCollector()
@@ -181,9 +198,100 @@ def find_robots(timeout: float = 3.0) -> List[DiscoveredRobot]:
         browser.cancel()
         zc.close()
 
-    # Filter out stale entries by checking TCP connectivity
+    return collector.robots
+
+
+def _find_robots_dnssd(timeout: float) -> List[DiscoveredRobot]:
+    """Browse for robots using macOS dns-sd command."""
+    service_type = "_reachy-mini._tcp"
+    robots: List[DiscoveredRobot] = []
+
+    # dns-sd -B never exits on its own — run it, wait, then terminate.
+    try:
+        proc = subprocess.Popen(
+            ["dns-sd", "-B", service_type],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        time.sleep(timeout)
+        proc.terminate()
+        stdout, _ = proc.communicate(timeout=2)
+    except (FileNotFoundError, OSError):
+        return []
+
+    # Parse instance names from output lines like:
+    # 14:43:00.099  Add  2  14  local.  _reachy-mini._tcp.  reachy_mini
+    instance_names: List[str] = []
+    for line in stdout.splitlines():
+        if "Add" in line and service_type in line:
+            parts = line.split()
+            if len(parts) >= 7:
+                instance_names.append(parts[-1])
+
+    # Step 2: resolve each instance
+    for name in instance_names:
+        try:
+            proc = subprocess.Popen(
+                ["dns-sd", "-L", name, service_type],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            time.sleep(0.5)
+            proc.terminate()
+            stdout, _ = proc.communicate(timeout=1)
+        except (FileNotFoundError, OSError):
+            continue
+
+        # Parse output like:
+        # reachy_mini._reachy-mini._tcp.local. can be reached at reachy-mini.local.:8000
+        #  version=1.3.1 robot_name=reachy_mini ws_path=/ws/sdk
+        host = ""
+        port = 0
+        properties: Dict[str, str] = {}
+
+        for line in stdout.splitlines():
+            reach_match = re.search(r"can be reached at (.+):(\d+)", line)
+            if reach_match:
+                host = reach_match.group(1)
+                port = int(reach_match.group(2))
+            # TXT record line starts with whitespace
+            if line.startswith(" ") or line.startswith("\t"):
+                for pair in line.split():
+                    if "=" in pair:
+                        k, v = pair.split("=", 1)
+                        properties[k] = v
+
+        if host and port:
+            # Resolve hostname to IP addresses
+            addresses: List[str] = []
+            try:
+                for addrinfo in socket.getaddrinfo(host, port, socket.AF_INET):
+                    addr = str(addrinfo[4][0])
+                    if addr not in addresses:
+                        addresses.append(addr)
+            except socket.gaierror:
+                pass
+
+            robot_name = properties.get("robot_name", name)
+            robots.append(
+                DiscoveredRobot(
+                    name=robot_name,
+                    host=host,
+                    port=port,
+                    addresses=addresses,
+                    properties=properties,
+                )
+            )
+
+    return robots
+
+
+def _filter_alive(robots: List[DiscoveredRobot]) -> List[DiscoveredRobot]:
+    """Filter out stale entries by checking TCP connectivity."""
     alive: List[DiscoveredRobot] = []
-    for robot in collector.robots:
+    for robot in robots:
         for addr in robot.addresses:
             try:
                 with socket.create_connection((addr, robot.port), timeout=0.5):
@@ -191,7 +299,6 @@ def find_robots(timeout: float = 3.0) -> List[DiscoveredRobot]:
                     break
             except OSError:
                 continue
-
     return alive
 
 

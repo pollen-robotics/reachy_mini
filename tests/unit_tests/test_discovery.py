@@ -102,68 +102,68 @@ def test_robot_collector_skips_none_info():
     assert len(collector.robots) == 0
 
 
-@patch("reachy_mini.utils.discovery.socket.create_connection")
-@patch("reachy_mini.utils.discovery.ServiceBrowser")
-@patch("reachy_mini.utils.discovery.time.sleep")
-def test_find_robots_returns_collected(mock_sleep, mock_browser_cls, mock_conn):
-    """find_robots() returns robots collected by the listener and verified alive."""
-    import socket as sock
-
-    info = ServiceInfo(
-        SERVICE_TYPE,
-        name=f"test.{SERVICE_TYPE}",
-        port=7777,
-        properties={b"robot_name": b"test", b"version": b"1.0"},
-        server="test.local.",
-        addresses=[sock.inet_aton("10.0.0.1")],
+@patch("reachy_mini.utils.discovery._filter_alive")
+@patch("reachy_mini.utils.discovery._find_robots_dnssd")
+@patch("reachy_mini.utils.discovery._find_robots_zeroconf")
+def test_find_robots_returns_collected(mock_zeroconf, mock_dnssd, mock_alive):
+    """find_robots() returns robots from the platform-appropriate backend."""
+    robot = DiscoveredRobot(
+        name="test", host="test.local.", port=7777, addresses=["10.0.0.1"],
     )
 
-    def fake_browser(zc, stype, listener):
-        # Simulate discovery by calling the listener
-        mock_zc = MagicMock(spec=Zeroconf)
-        mock_zc.get_service_info.return_value = info
-        listener.add_service(mock_zc, stype, f"test.{stype}")
-        browser = MagicMock()
-        return browser
+    # Simulate: zeroconf finds nothing, dnssd finds the robot (macOS path),
+    # or zeroconf finds the robot directly (Linux path).
+    import sys
+    if sys.platform == "darwin":
+        mock_zeroconf.return_value = []
+        mock_dnssd.return_value = [robot]
+    else:
+        mock_zeroconf.return_value = [robot]
 
-    mock_browser_cls.side_effect = fake_browser
-    mock_conn.return_value.__enter__ = MagicMock()
-    mock_conn.return_value.__exit__ = MagicMock(return_value=False)
+    mock_alive.side_effect = lambda robots: robots
 
     robots = find_robots(timeout=0.1)
     assert len(robots) == 1
     assert robots[0].name == "test"
     assert robots[0].port == 7777
-    assert robots[0].addresses == ["10.0.0.1"]
+    mock_alive.assert_called_once()
+
+
+@patch("reachy_mini.utils.discovery._filter_alive", return_value=[])
+@patch("reachy_mini.utils.discovery._find_robots_dnssd", return_value=[])
+@patch("reachy_mini.utils.discovery._find_robots_zeroconf", return_value=[])
+def test_find_robots_returns_empty(mock_zeroconf, mock_dnssd, mock_alive):
+    """find_robots() returns empty list when no robots are found."""
+    robots = find_robots(timeout=0.1)
+    assert len(robots) == 0
+
+
+@patch("reachy_mini.utils.discovery.socket.create_connection")
+def test_filter_alive_keeps_reachable(mock_conn):
+    """_filter_alive keeps robots that accept TCP connections."""
+    from reachy_mini.utils.discovery import _filter_alive
+
+    mock_conn.return_value.__enter__ = MagicMock()
+    mock_conn.return_value.__exit__ = MagicMock(return_value=False)
+
+    robot = DiscoveredRobot(
+        name="test", host="test.local.", port=7777, addresses=["10.0.0.1"],
+    )
+    result = _filter_alive([robot])
+    assert len(result) == 1
     mock_conn.assert_called_once_with(("10.0.0.1", 7777), timeout=0.5)
 
 
 @patch("reachy_mini.utils.discovery.socket.create_connection", side_effect=OSError)
-@patch("reachy_mini.utils.discovery.ServiceBrowser")
-@patch("reachy_mini.utils.discovery.time.sleep")
-def test_find_robots_filters_unreachable(mock_sleep, mock_browser_cls, mock_conn):
-    """find_robots() filters out robots that fail the liveness check."""
-    import socket as sock
+def test_filter_alive_removes_unreachable(mock_conn):
+    """_filter_alive removes robots that can't be reached."""
+    from reachy_mini.utils.discovery import _filter_alive
 
-    info = ServiceInfo(
-        SERVICE_TYPE,
-        name=f"stale.{SERVICE_TYPE}",
-        port=8000,
-        properties={b"robot_name": b"stale", b"version": b"1.0"},
-        server="stale.local.",
-        addresses=[sock.inet_aton("10.0.0.99")],
+    robot = DiscoveredRobot(
+        name="stale", host="stale.local.", port=8000, addresses=["10.0.0.99"],
     )
-
-    def fake_browser(zc, stype, listener):
-        mock_zc = MagicMock(spec=Zeroconf)
-        mock_zc.get_service_info.return_value = info
-        listener.add_service(mock_zc, stype, f"stale.{stype}")
-        return MagicMock()
-
-    mock_browser_cls.side_effect = fake_browser
-
-    robots = find_robots(timeout=0.1)
-    assert len(robots) == 0
+    result = _filter_alive([robot])
+    assert len(result) == 0
 
 
 def test_service_type_constant():
