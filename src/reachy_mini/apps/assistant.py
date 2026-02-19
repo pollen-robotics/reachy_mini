@@ -208,7 +208,7 @@ def create(console: Console, app_name: str, app_path: Path) -> Path:
 
 
 def install_app_with_progress(
-    console: Console, pip_executable: str, app_path: Path
+    console: Console, python_executable: str, app_path: Path, env: dict[str, str] | None = None
 ) -> None:
     """Install the app in a temporary virtual environment with a progress spinner."""
     console.print("Installing the app in the temporary virtual environment...")
@@ -216,13 +216,16 @@ def install_app_with_progress(
     # Start pip in the background, discard its output
     process = subprocess.Popen(
         [
-            pip_executable,
+            python_executable,
+            "-m",
+            "pip",
             "install",
             "-q",  # quiet
             str(app_path),
         ],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.STDOUT,
+        env=env,
     )
 
     with Progress(
@@ -474,18 +477,19 @@ def check(console: Console, app_path: str) -> None:
             venv_path = os.path.join(tmpdir, "venv")
             subprocess.run([sys.executable, "-m", "venv", venv_path], check=True)
 
-            pip_executable = os.path.join(
-                venv_path,
-                "Scripts" if os.name == "nt" else "bin",
-                "pip",
-            )
             python_executable = os.path.join(
                 venv_path,
                 "Scripts" if os.name == "nt" else "bin",
                 "python",
             )
 
-            install_app_with_progress(console, pip_executable, abs_app_path)
+            isolated_env = os.environ.copy()
+            isolated_env.pop("PYTHONPATH", None)
+            isolated_env["VIRTUAL_ENV"] = venv_path
+
+            install_app_with_progress(
+                console, python_executable, abs_app_path, env=isolated_env
+            )
 
             console.print("Checking that the app entrypoint is registered...")
 
@@ -503,6 +507,7 @@ def check(console: Console, app_path: str) -> None:
                     [python_executable, "-c", check_script],
                     # capture_output=True,
                     text=True,
+                    env=isolated_env,
                 ).returncode
                 != 0
             ):
@@ -515,16 +520,30 @@ def check(console: Console, app_path: str) -> None:
 
             # Now try to uninstall the app and check that it uninstalls correctly
             console.print("Uninstalling the app from the temporary virtual environment...")
-            subprocess.run(
-                [pip_executable, "uninstall", "-y", app_name],
-                check=True,
+            uninstall_process = subprocess.run(
+                [python_executable, "-m", "pip", "uninstall", "-y", app_name],
+                capture_output=True,
+                text=True,
+                env=isolated_env,
             )
+            if uninstall_process.returncode != 0:
+                stdout_lower = (uninstall_process.stdout or "").lower()
+                stderr_lower = (uninstall_process.stderr or "").lower()
+                outside_env_error = "outside environment" in stdout_lower or "outside environment" in stderr_lower
+                if not outside_env_error:
+                    raise subprocess.CalledProcessError(
+                        uninstall_process.returncode,
+                        uninstall_process.args,
+                        output=uninstall_process.stdout,
+                        stderr=uninstall_process.stderr,
+                    )
 
             if (
                 subprocess.run(
                     [python_executable, "-c", check_script],
                     capture_output=True,
                     text=True,
+                    env=isolated_env,
                 ).returncode
                 == 0
             ):
