@@ -166,10 +166,3 @@ Run this GStreamer pipeline on the robot to verify the camera and encoder stack:
 ```bash
 gst-launch-1.0 webrtcsink run-signalling-server=true meta="meta,name=reachymini" name=ws libcamerasrc ! capsfilter caps=video/x-raw,width=1280,height=720,framerate=60/1,format=YUY2,colorimetry=bt709,interlace-mode=progressive ! queue !  v4l2h264enc extra-controls="controls,repeat_sequence_header=1" ! 'video/x-h264,level=(string)4' ! ws. alsasrc device=hw:4 ! queue ! audioconvert ! audioresample ! opusenc ! audio/x-opus, rate=48000, channels=2 ! ws.
 ```
-
-**Test 2: Send Audio to Reachy**
-Send an audio RTP stream to port 5000 to test the speakers:
-
-```bash
-gst-launch-1.0 audiotestsrc ! webrtcsink name=ws meta="meta,name=reachymini-client" signaller::uri="ws://<ROBOT_IP>:8443"
-```
