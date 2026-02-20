@@ -137,6 +137,15 @@ class FullBodyTarget(BaseModel):
     }
 
 
+class KinematicsLimits(BaseModel):
+    """Task-space motion limits for the robot."""
+
+    head_cone_angle_deg: float
+    head_yaw_deg: dict[str, float]
+    body_yaw_deg: dict[str, float]
+    yaw_delta_max_deg: float
+
+
 class DoAInfo(BaseModel):
     """Direction of Arrival info from the microphone array."""
 
@@ -155,3 +164,4 @@ class FullState(BaseModel):
     timestamp: datetime | None = None
     passive_joints: list[float] | None = None
     doa: DoAInfo | None = None
+    ik_status: str | None = None  # "ok", "clamped", "unreachable" when with_ik_status=True

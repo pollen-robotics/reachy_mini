@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response
 
 from ....daemon.backend.abstract import Backend
 from ..dependencies import get_backend
+from ..models import FullBodyTarget
 
 router = APIRouter(
     prefix="/kinematics",
@@ -37,6 +38,31 @@ async def get_kinematics_info(
             "collision check": backend.check_collision,
         }
     }
+
+
+@router.get("/limits")
+async def get_kinematics_limits(
+    backend: Backend = Depends(get_backend),
+) -> dict[str, Any]:
+    """Get the task-space motion limits of the robot."""
+    return {"limits": backend.get_limits()}
+
+
+@router.post("/is_reachable")
+async def check_reachable(
+    target: FullBodyTarget,
+    backend: Backend = Depends(get_backend),
+) -> dict[str, bool]:
+    """Check if a target pose is within the reachable workspace."""
+    if target.target_head_pose is None:
+        raise HTTPException(
+            status_code=422,
+            detail="target_head_pose is required",
+        )
+    pose = target.target_head_pose.to_pose_array()
+    body_yaw = target.target_body_yaw if target.target_body_yaw is not None else 0.0
+    reachable = backend.is_pose_reachable(pose, body_yaw)
+    return {"reachable": reachable}
 
 
 @router.get("/urdf")

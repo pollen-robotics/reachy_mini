@@ -337,10 +337,12 @@ Refer to the [Reachy Mini Hardware page](./platforms/reachy_mini/hardware.md) fo
 
 If you command a pose outside these limits, the robot will automatically clamp to the nearest safe pose.
 
-* **Body Yaw:** [-180°, 180°].
-* **Head Pitch/Roll:** [-40°, 40°].
-* **Head Yaw:** [-180°, 180°].
-* **Combined Limit:** The difference between `body_yaw` and `head_yaw` must be within **[-65°, 65°]**.
+* **Body Yaw:** [-160°, 160°].
+* **Head cone (tilt):** Max 35° from vertical (pitch/roll coupled).
+* **Head Yaw:** [-179°, 179°].
+* **Combined Limit:** The difference between `body_yaw` and `head_yaw` must be within **[-55°, 55°]**.
+
+In code, use `mini.limits` to read these values and `mini.is_reachable(head_pose, body_yaw)` to check if a pose is reachable before sending it.
 
 </details>
 

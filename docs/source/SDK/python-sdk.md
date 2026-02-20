@@ -28,6 +28,10 @@ with ReachyMini() as mini:
 ### Instant Control (`set_target`)
 Bypasses interpolation. Use this for high-frequency control (e.g., following a joystick or generated trajectory).
 
+### Limits and reachability
+* **`mini.limits`** — Task-space motion limits (head cone, head yaw, body yaw, yaw delta). Use this to know the physical envelope instead of probing.
+* **`mini.is_reachable(head_pose, body_yaw=0.0)`** — Returns `True` if the given 4×4 head pose is reachable for the given body yaw. Raises `ConnectionError` if the daemon REST endpoint is unreachable. Use before sending additive or extreme poses to avoid the robot holding at the last valid pose without feedback.
+
 ## Sensors & Media
 
 The media architecture is described in detail in the [Media Architecture](media-architecture.md) section. Although accesssing audio and video from the SDK is similar across Reachy Mini versions, the underlying implementation differs.

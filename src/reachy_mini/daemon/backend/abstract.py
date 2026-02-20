@@ -48,8 +48,24 @@ class MotorControlMode(str, Enum):
     GravityCompensation = "gravity_compensation"  # Torque ON and controlled in current to compensate for gravity
 
 
+class IKStatus(str, Enum):
+    """Status of the last inverse kinematics computation."""
+
+    OK = "ok"  # target achieved
+    CLAMPED = "clamped"  # IK found a valid solution but constraints limited it
+    UNREACHABLE = "unreachable"  # IK failed entirely, holding last valid pose
+
+
 class Backend:
     """Base class for robot backends, simulated or real."""
+
+    # Task-space motion limits (physical envelope); same for all kinematics engines
+    LIMITS: Dict[str, Any] = {
+        "head_cone_angle_deg": 35.0,  # max tilt from vertical (pitch/roll coupled)
+        "head_yaw_deg": {"min": -179.0, "max": 179.0},
+        "body_yaw_deg": {"min": -160.0, "max": 160.0},
+        "yaw_delta_max_deg": 55.0,  # max |head_yaw - body_yaw|
+    }
 
     def __init__(
         self,
@@ -148,6 +164,7 @@ class Backend:
             None  # Placeholder for head joint torque
         )
         self.ik_required = False  # Flag to indicate if IK computation is required
+        self.ik_status: IKStatus = IKStatus.OK  # Status of last IK (ok, clamped, unreachable)
 
         self.is_shutting_down = False
 
@@ -271,6 +288,19 @@ class Backend:
         """
         self.imu_publisher = publisher
 
+    def get_limits(self) -> Dict[str, Any]:
+        """Return the task-space motion limits of the robot."""
+        return dict(self.LIMITS)
+
+    def is_pose_reachable(
+        self,
+        pose: Annotated[NDArray[np.float64], (4, 4)],
+        body_yaw: float = 0.0,
+    ) -> bool:
+        """Return True if the given head pose is reachable for the given body yaw."""
+        joints = self.head_kinematics.ik(pose, body_yaw=body_yaw)
+        return joints is not None and not np.any(np.isnan(joints))
+
     def update_target_head_joints_from_ik(
         self,
         pose: Annotated[NDArray[np.float64], (4, 4)] | None = None,
@@ -296,6 +326,7 @@ class Backend:
         # Compute the inverse kinematics to get the head joint positions
         joints = self.head_kinematics.ik(pose, body_yaw=body_yaw)
         if joints is None or np.any(np.isnan(joints)):
+            self.ik_status = IKStatus.UNREACHABLE
             raise ValueError("WARNING: Collision detected or head pose not achievable!")
 
         # update the target head pose and body yaw
@@ -303,6 +334,18 @@ class Backend:
         self._last_target_body_yaw = body_yaw
 
         self.target_head_joint_positions = joints
+        # Detect clamping: achieved pose differs from requested (IK solved constrained QP)
+        achieved_pose = self.head_kinematics.fk(joints)
+        if achieved_pose is not None:
+            dist_translation, dist_angle, _ = distance_between_poses(
+                achieved_pose, pose
+            )
+            if dist_translation > 1e-3 or dist_angle > np.deg2rad(1.0):
+                self.ik_status = IKStatus.CLAMPED
+            else:
+                self.ik_status = IKStatus.OK
+        else:
+            self.ik_status = IKStatus.OK
 
     def set_target_head_pose(
         self,
