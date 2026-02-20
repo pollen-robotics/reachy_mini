@@ -237,7 +237,8 @@ uv pip install --upgrade --index-url https://gitlab.freedesktop.org/api/v4/proje
 
 In your terminal, run:
 ```bash
-git clone https://github.com/pollen-robotics/reachy_mini && cd reachy_mini
+git clone https://github.com/pollen-robotics/reachy_mini
+cd reachy_mini
 uv pip install -e .
 uv pip install --upgrade --index-url https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/simple gstreamer==1.28.0
 ```
