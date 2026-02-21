@@ -147,7 +147,7 @@ class VolumeControlMacOS(VolumeControl):
         devices = self._get_all_devices()
 
         for device_id, device_name in devices.items():
-            if device_name in SOUND_CARD_NAMES:
+            if any([sound_card in device_name.lower() for sound_card in SOUND_CARD_NAMES]):
                 # Input and output devices will appear with the same ID
                 return AudioDevice(device_id, device_name, AudioDeviceType.INPUT), AudioDevice(device_id, device_name, AudioDeviceType.OUTPUT)
 

@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import NamedTuple
 
-SOUND_CARD_NAMES = ["Reachy Mini Audio", "respeaker"]
+SOUND_CARD_NAMES = ["reachy mini audio", "respeaker"]
 
 class AudioDeviceType(Enum):
     """Type of device: INPUT or OUTPUT."""

@@ -94,11 +94,11 @@ class VolumeControlWindows(VolumeControl):
         input_device: AudioDevice | None = None
         output_device: AudioDevice | None = None
         for device_id, device_name in input_devices.items():
-            if device_name in SOUND_CARD_NAMES:
+            if any([sound_card in device_name.lower() for sound_card in SOUND_CARD_NAMES]):
                 input_device = AudioDevice(device_id, device_name, AudioDeviceType.INPUT)
                 break
         for device_id, device_name in output_devices.items():
-            if device_name in SOUND_CARD_NAMES:
+            if any([sound_card in device_name.lower() for sound_card in SOUND_CARD_NAMES]):
                 output_device = AudioDevice(device_id, device_name, AudioDeviceType.OUTPUT)
                 break
 
