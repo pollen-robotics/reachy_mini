@@ -281,9 +281,13 @@ class GstWebRTC:
         appsrc.set_property("caps", caps)
 
         play_bus = playback_pipe.get_bus()
-        play_bus.add_watch(
-            GLib.PRIORITY_DEFAULT, self._on_playback_bus_message, peer_id
-        )
+        self._context.push_thread_default()
+        try:
+            play_bus.add_watch(
+                GLib.PRIORITY_DEFAULT, self._on_playback_bus_message, peer_id
+            )
+        finally:
+            self._context.pop_thread_default()
 
         playback_pipe.set_state(Gst.State.PLAYING)
 
