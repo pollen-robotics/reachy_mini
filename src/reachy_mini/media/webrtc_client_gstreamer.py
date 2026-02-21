@@ -115,15 +115,31 @@ class GstWebRTCClient(CameraBase, AudioBase):
         super().__init__(log_level=log_level)
         AudioBase.__init__(self, log_level=log_level)
         Gst.init([])
-        self._loop = GLib.MainLoop()
-        self._thread_bus_calls = Thread(target=lambda: self._loop.run(), daemon=True)
+        self._context = GLib.MainContext.new()
+        self._loop = GLib.MainLoop.new(self._context, False)
+
+        def _run_glib_loop() -> None:
+            self._context.push_thread_default()
+            try:
+                self._loop.run()
+            finally:
+                self._context.pop_thread_default()
+
+        self._thread_bus_calls = Thread(target=_run_glib_loop, daemon=True)
         self._thread_bus_calls.start()
 
         self._pipeline_record = Gst.Pipeline.new("audio_recorder")
         self._bus_record = self._pipeline_record.get_bus()
-        self._bus_record.add_watch(
-            GLib.PRIORITY_DEFAULT, self._on_bus_message, self._loop
-        )
+
+        # Push our dedicated context so bus watches are attached to it
+        # (not the shared default context), preventing GIL deadlocks.
+        self._context.push_thread_default()
+        try:
+            self._bus_record.add_watch(
+                GLib.PRIORITY_DEFAULT, self._on_bus_message, self._loop
+            )
+        finally:
+            self._context.pop_thread_default()
 
         self._appsink_audio = Gst.ElementFactory.make("appsink")
         caps = Gst.Caps.from_string(
@@ -295,7 +311,9 @@ class GstWebRTCClient(CameraBase, AudioBase):
             # Send path: set up appsrc → encode → webrtcbin for bidirectional audio
             self._setup_audio_send_chain()
 
-        GLib.timeout_add_seconds(5, self._dump_latency)
+        source = GLib.timeout_source_new_seconds(5)
+        source.set_callback(self._dump_latency)
+        source.attach(self._context)
 
     def _on_bus_message(self, bus: Gst.Bus, msg: Gst.Message, loop) -> bool:  # type: ignore[no-untyped-def]
         t = msg.type

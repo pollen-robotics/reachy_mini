@@ -87,7 +87,8 @@ class GStreamerCamera(CameraBase):
         """Initialize the GStreamer camera."""
         super().__init__(log_level=log_level)
         Gst.init([])
-        self._loop = GLib.MainLoop()
+        self._context = GLib.MainContext.new()
+        self._loop = GLib.MainLoop.new(self._context, False)
         self._thread_bus_calls: Optional[Thread] = None
 
         self.pipeline = Gst.Pipeline.new("camera_recorder")
@@ -215,10 +216,14 @@ class GStreamerCamera(CameraBase):
 
     def _handle_bus_calls(self) -> None:
         self.logger.debug("starting bus message loop")
-        bus = self.pipeline.get_bus()
-        bus.add_watch(GLib.PRIORITY_DEFAULT, self._on_bus_message, self._loop)
-        self._loop.run()
-        bus.remove_watch()
+        self._context.push_thread_default()
+        try:
+            bus = self.pipeline.get_bus()
+            bus.add_watch(GLib.PRIORITY_DEFAULT, self._on_bus_message, self._loop)
+            self._loop.run()
+            bus.remove_watch()
+        finally:
+            self._context.pop_thread_default()
         self.logger.debug("bus message loop stopped")
 
     def set_resolution(self, resolution: CameraResolution) -> None:
@@ -251,7 +256,9 @@ class GStreamerCamera(CameraBase):
         self.pipeline.set_state(Gst.State.PLAYING)
         self._thread_bus_calls = Thread(target=self._handle_bus_calls, daemon=True)
         self._thread_bus_calls.start()
-        GLib.timeout_add_seconds(5, self._dump_latency)
+        source = GLib.timeout_source_new_seconds(5)
+        source.set_callback(self._dump_latency)
+        source.attach(self._context)
         # TODO: Add a small loop to wait for the frames to be ready after restarting the pipeline
 
     def _get_sample(self, appsink: GstApp.AppSink) -> Optional[bytes]:

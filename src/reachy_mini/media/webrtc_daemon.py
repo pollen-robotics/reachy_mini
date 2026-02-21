@@ -96,8 +96,17 @@ class GstWebRTC:
         self._logger.setLevel(log_level)
 
         Gst.init([])
-        self._loop = GLib.MainLoop()
-        self._thread_bus_calls = Thread(target=lambda: self._loop.run(), daemon=True)
+        self._context = GLib.MainContext.new()
+        self._loop = GLib.MainLoop.new(self._context, False)
+
+        def _run_glib_loop() -> None:
+            self._context.push_thread_default()
+            try:
+                self._loop.run()
+            finally:
+                self._context.pop_thread_default()
+
+        self._thread_bus_calls = Thread(target=_run_glib_loop, daemon=True)
         self._thread_bus_calls.start()
 
         cam_path, self.camera_specs = self._get_video_device()
@@ -112,14 +121,21 @@ class GstWebRTC:
 
         self._pipeline_sender = Gst.Pipeline.new("reachymini_webrtc_sender")
         self._bus_sender = self._pipeline_sender.get_bus()
-        self._bus_sender.add_watch(
-            GLib.PRIORITY_DEFAULT, self._on_bus_message, self._loop
-        )
 
-        webrtcsink = self._configure_webrtc(self._pipeline_sender)
+        # Push our dedicated context so bus watches and other GLib sources
+        # are attached to it (not the shared default context).
+        self._context.push_thread_default()
+        try:
+            self._bus_sender.add_watch(
+                GLib.PRIORITY_DEFAULT, self._on_bus_message, self._loop
+            )
 
-        self._configure_video(cam_path, self._pipeline_sender, webrtcsink)
-        self._configure_audio(self._pipeline_sender, webrtcsink)
+            webrtcsink = self._configure_webrtc(self._pipeline_sender)
+
+            self._configure_video(cam_path, self._pipeline_sender, webrtcsink)
+            self._configure_audio(self._pipeline_sender, webrtcsink)
+        finally:
+            self._context.pop_thread_default()
 
         self._logger.debug("Configuring data channel")
         self._data_channels: dict[str, Gst.Element] = {}  # peer_id -> channel
@@ -173,7 +189,7 @@ class GstWebRTC:
             self._pipeline_sender, Gst.DebugGraphDetails.ALL, "pipeline_full"
         )
 
-        GLib.timeout_add_seconds(5, self._dump_latency)
+        self._timeout_add_seconds(5, self._dump_latency)
 
         self._setup_data_channel(peer_id, webrtcbin)
 
@@ -501,11 +517,17 @@ class GstWebRTC:
 
         return True
 
+    def _timeout_add_seconds(self, interval: int, callback: Any) -> None:
+        """Add a timeout to this component's dedicated GLib context."""
+        source = GLib.timeout_source_new_seconds(interval)
+        source.set_callback(callback)
+        source.attach(self._context)
+
     def start(self) -> None:
         """Start the WebRTC pipeline."""
         self._logger.debug("Starting WebRTC")
         self._pipeline_sender.set_state(Gst.State.PLAYING)
-        GLib.timeout_add_seconds(5, self._dump_latency)
+        self._timeout_add_seconds(5, self._dump_latency)
 
     def pause(self) -> None:
         """Pause the WebRTC pipeline."""

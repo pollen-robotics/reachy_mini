@@ -80,8 +80,17 @@ class GStreamerAudio(AudioBase):
         """Initialize the GStreamer audio."""
         super().__init__(log_level=log_level)
         Gst.init([])
-        self._loop = GLib.MainLoop()
-        self._thread_bus_calls = Thread(target=lambda: self._loop.run(), daemon=True)
+        self._context = GLib.MainContext.new()
+        self._loop = GLib.MainLoop.new(self._context, False)
+
+        def _run_glib_loop() -> None:
+            self._context.push_thread_default()
+            try:
+                self._loop.run()
+            finally:
+                self._context.pop_thread_default()
+
+        self._thread_bus_calls = Thread(target=_run_glib_loop, daemon=True)
         self._thread_bus_calls.start()
 
         # self._id_audio_card = get_respeaker_card_number()
@@ -90,17 +99,24 @@ class GStreamerAudio(AudioBase):
         self._appsink_audio: Optional[GstApp] = None
         self._init_pipeline_record(self._pipeline_record)
         self._bus_record = self._pipeline_record.get_bus()
-        self._bus_record.add_watch(
-            GLib.PRIORITY_DEFAULT, self._on_bus_message, self._loop
-        )
 
         self._pipeline_playback = Gst.Pipeline.new("audio_player")
         self._appsrc: Optional[GstApp] = None
         self._init_pipeline_playback(self._pipeline_playback)
         self._bus_playback = self._pipeline_playback.get_bus()
-        self._bus_playback.add_watch(
-            GLib.PRIORITY_DEFAULT, self._on_bus_message, self._loop
-        )
+
+        # Push our dedicated context so bus watches are attached to it
+        # (not the shared default context), preventing GIL deadlocks.
+        self._context.push_thread_default()
+        try:
+            self._bus_record.add_watch(
+                GLib.PRIORITY_DEFAULT, self._on_bus_message, self._loop
+            )
+            self._bus_playback.add_watch(
+                GLib.PRIORITY_DEFAULT, self._on_bus_message, self._loop
+            )
+        finally:
+            self._context.pop_thread_default()
 
     def _init_pipeline_record(self, pipeline: Gst.Pipeline) -> None:
         self._appsink_audio = Gst.ElementFactory.make("appsink")
@@ -305,7 +321,9 @@ class GStreamerAudio(AudioBase):
         See AudioBase.start_playing() for complete documentation.
         """
         self._pipeline_playback.set_state(Gst.State.PLAYING)
-        GLib.timeout_add_seconds(5, self._dump_latency)
+        source = GLib.timeout_source_new_seconds(5)
+        source.set_callback(self._dump_latency)
+        source.attach(self._context)
 
     def stop_playing(self) -> None:
         """Stop playing audio and release resources.
