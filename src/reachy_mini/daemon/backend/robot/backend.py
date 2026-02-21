@@ -119,8 +119,8 @@ class RobotBackend(Backend):
         self.hardware_error_check_period = (
             1.0 / hardware_error_check_frequency
         )  # seconds
-        self._hw_error_check_in_progress = False
-        self._hw_error_check_thread: threading.Thread | None = None
+        self._hw_error_check_requested = threading.Event()
+        self._hw_error_check_busy = False
 
         # Install a no-op SIGUSR1 handler so we can use pthread_kill to
         # interrupt threads stuck in blocking serial reads without terminating
@@ -128,6 +128,14 @@ class RobotBackend(Backend):
         # signal.signal() must be called from the main thread.
         if threading.current_thread() is threading.main_thread():
             signal.signal(signal.SIGUSR1, lambda *_: None)
+
+        # Start a persistent worker thread for hardware error checks.
+        # Must be started here (before any Rust thread can hold the GIL)
+        # because Thread.start() needs the new thread to acquire the GIL.
+        self._hw_error_check_thread = threading.Thread(
+            target=self._hw_error_check_loop, daemon=True, name="hw-error-check"
+        )
+        self._hw_error_check_thread.start()
 
         # Initialize IMU for wireless version
         if wireless_version:
@@ -316,12 +324,8 @@ class RobotBackend(Backend):
                 time.time() - self.last_hardware_error_check_time
                 > self.hardware_error_check_period
             ):
-                if not self._hw_error_check_in_progress:
-                    self._hw_error_check_in_progress = True
-                    self._hw_error_check_thread = threading.Thread(
-                        target=self._do_hardware_error_check, daemon=True
-                    )
-                    self._hw_error_check_thread.start()
+                if not self._hw_error_check_busy:
+                    self._hw_error_check_requested.set()
                 else:
                     # Previous check is stuck in a blocking serial read.
                     # Send SIGUSR1 to interrupt the syscall (causes EINTR).
@@ -638,20 +642,25 @@ class RobotBackend(Backend):
             except (OSError, ProcessLookupError):
                 pass
 
-    def _do_hardware_error_check(self) -> None:
-        """Run hardware error check in a background thread. Logs results directly."""
-        try:
-            hardware_errors = self.read_hardware_errors()
-            if hardware_errors:
-                for motor_name, errors in hardware_errors.items():
-                    self.logger.error(
-                        f"Motor '{motor_name}' hardware errors: {errors}"
-                    )
-        except Exception as e:
-            self.logger.warning(f"Hardware error check failed: {e}. Skipping.")
-        finally:
-            self._hw_error_check_in_progress = False
-            self._hw_error_check_thread = None
+    def _hw_error_check_loop(self) -> None:
+        """Persistent worker loop for hardware error checks."""
+        while not self.should_stop.is_set():
+            triggered = self._hw_error_check_requested.wait(timeout=5.0)
+            if not triggered:
+                continue  # Timeout — just re-check should_stop
+            self._hw_error_check_requested.clear()
+            self._hw_error_check_busy = True
+            try:
+                hardware_errors = self.read_hardware_errors()
+                if hardware_errors:
+                    for motor_name, errors in hardware_errors.items():
+                        self.logger.error(
+                            f"Motor '{motor_name}' hardware errors: {errors}"
+                        )
+            except Exception as e:
+                self.logger.warning(f"Hardware error check failed: {e}. Skipping.")
+            finally:
+                self._hw_error_check_busy = False
 
     def read_hardware_errors(self) -> dict[str, list[str]]:
         """Read hardware errors from the motor controller."""
