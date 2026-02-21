@@ -7,7 +7,9 @@ It uses the `ReachyMiniMotorController` to communicate with the robot's motors.
 
 import json
 import logging
+import signal
 import struct
+import threading
 import time
 from dataclasses import dataclass
 from datetime import timedelta
@@ -117,6 +119,15 @@ class RobotBackend(Backend):
         self.hardware_error_check_period = (
             1.0 / hardware_error_check_frequency
         )  # seconds
+        self._hw_error_check_in_progress = False
+        self._hw_error_check_thread: threading.Thread | None = None
+
+        # Install a no-op SIGUSR1 handler so we can use pthread_kill to
+        # interrupt threads stuck in blocking serial reads without terminating
+        # the process (SIGUSR1's default action is terminate).
+        # signal.signal() must be called from the main thread.
+        if threading.current_thread() is threading.main_thread():
+            signal.signal(signal.SIGUSR1, lambda *_: None)
 
         # Initialize IMU for wireless version
         if wireless_version:
@@ -305,12 +316,19 @@ class RobotBackend(Backend):
                 time.time() - self.last_hardware_error_check_time
                 > self.hardware_error_check_period
             ):
-                hardware_errors = self.read_hardware_errors()
-                if hardware_errors:
-                    for motor_name, errors in hardware_errors.items():
-                        self.logger.error(
-                            f"Motor '{motor_name}' hardware errors: {errors}"
-                        )
+                if not self._hw_error_check_in_progress:
+                    self._hw_error_check_in_progress = True
+                    self._hw_error_check_thread = threading.Thread(
+                        target=self._do_hardware_error_check, daemon=True
+                    )
+                    self._hw_error_check_thread.start()
+                else:
+                    # Previous check is stuck in a blocking serial read.
+                    # Send SIGUSR1 to interrupt the syscall (causes EINTR).
+                    self._interrupt_hw_error_check_thread()
+                    self.logger.warning(
+                        "Previous hardware error check still running (motor not responding). Skipping."
+                    )
                 self.last_hardware_error_check_time = time.time()
 
     def close(self) -> None:
@@ -610,6 +628,30 @@ class RobotBackend(Backend):
             return MotorControlMode.GravityCompensation
         else:
             raise ValueError(f"Unknown motor control mode: {mode}")
+
+    def _interrupt_hw_error_check_thread(self) -> None:
+        """Send SIGUSR1 to interrupt a thread stuck in a blocking serial read."""
+        thread = self._hw_error_check_thread
+        if thread is not None and thread.is_alive():
+            try:
+                signal.pthread_kill(thread.ident, signal.SIGUSR1)
+            except (OSError, ProcessLookupError):
+                pass
+
+    def _do_hardware_error_check(self) -> None:
+        """Run hardware error check in a background thread. Logs results directly."""
+        try:
+            hardware_errors = self.read_hardware_errors()
+            if hardware_errors:
+                for motor_name, errors in hardware_errors.items():
+                    self.logger.error(
+                        f"Motor '{motor_name}' hardware errors: {errors}"
+                    )
+        except Exception as e:
+            self.logger.warning(f"Hardware error check failed: {e}. Skipping.")
+        finally:
+            self._hw_error_check_in_progress = False
+            self._hw_error_check_thread = None
 
     def read_hardware_errors(self) -> dict[str, list[str]]:
         """Read hardware errors from the motor controller."""
