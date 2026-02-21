@@ -31,7 +31,7 @@ from .video_udp import UDPJPEGFrameSender
 
 CAMERA_REACHY = "eye_camera"
 CAMERA_STUDIO_CLOSE = "studio_close"
-CAMERA_SIZES = {CAMERA_REACHY: (1280, 720), CAMERA_STUDIO_CLOSE: (640, 640)}
+CAMERA_SIZES = {CAMERA_REACHY: (640, 360), CAMERA_STUDIO_CLOSE: (640, 640)}
 
 
 class MujocoBackend(Backend):
