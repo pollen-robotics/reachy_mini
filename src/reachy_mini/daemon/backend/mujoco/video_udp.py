@@ -1,6 +1,7 @@
 """UDP JPEG Frame Sender.
 
-This module provides a class to send JPEG frames over UDP. It encodes the frames as JPEG images and splits them into chunks to fit within the maximum packet size for UDP transmission.
+This module provides a class to send JPEG frames over UDP. It encodes the frames as JPEG images
+and automatically reduces quality to fit within the maximum packet size for UDP transmission.
 """
 
 import socket
@@ -43,11 +44,20 @@ class UDPJPEGFrameSender:
         self.jpeg_quality = jpeg_quality
         self.min_jpeg_quality = min_jpeg_quality
 
-    def send_frame(self, frame: npt.NDArray[np.uint8], min_quality: int = 10) -> None:
-        frame_cvt = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
-        quality = 80
+    def send_frame(self, frame: npt.NDArray[np.uint8]) -> None:
+        """Send a frame as a JPEG image over UDP.
 
-        while quality >= min_quality:
+        Automatically reduces JPEG quality until the encoded frame fits
+        within max_packet_size.
+
+        Args:
+            frame (np.ndarray): The frame to be sent, in RGB format.
+
+        """
+        frame_cvt = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+        quality = self.jpeg_quality
+
+        while quality >= self.min_jpeg_quality:
             ret, jpeg_bytes = cv2.imencode(
                 ".jpg", frame_cvt, [int(cv2.IMWRITE_JPEG_QUALITY), quality]
             )

@@ -7,6 +7,7 @@ It includes methods for running the simulation, getting joint positions, and con
 """
 
 import json
+import platform
 import time
 from dataclasses import dataclass
 from importlib.resources import files
@@ -31,7 +32,24 @@ from .video_udp import UDPJPEGFrameSender
 
 CAMERA_REACHY = "eye_camera"
 CAMERA_STUDIO_CLOSE = "studio_close"
-CAMERA_SIZES = {CAMERA_REACHY: (640, 360), CAMERA_STUDIO_CLOSE: (640, 640)}
+
+
+def _get_udp_max_dgram() -> int:
+    """Get the default maximum UDP datagram size for the current platform.
+
+    macOS defaults to 9216 bytes, while Linux and Windows default to 65535 bytes.
+    """
+    if platform.system() == "Darwin":
+        return 9216
+    return 65535
+
+
+UDP_MAX_DGRAM = _get_udp_max_dgram()
+
+CAMERA_SIZES = {
+    CAMERA_REACHY: (1280, 720) if UDP_MAX_DGRAM > 9216 else (640, 360),
+    CAMERA_STUDIO_CLOSE: (640, 640),
+}
 
 
 class MujocoBackend(Backend):
