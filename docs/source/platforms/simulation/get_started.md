@@ -27,8 +27,6 @@ To start the simulated robot, simply run the daemon command with the `--sim` fla
 reachy-mini-daemon --sim
 ```
 
-> If you are using `uv`, you need to add `uv run` before `reachy-mini-daemon`.
-
 A window should open displaying the 3D view of the robot. You can interact with the view using your mouse (drag to rotate, right-click to pan, scroll to zoom).
 
 ### 🍎 Mac Users (Apple Silicon / Intel)

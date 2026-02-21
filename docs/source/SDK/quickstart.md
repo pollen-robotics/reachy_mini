@@ -59,15 +59,15 @@ The **Daemon** is a background service that handles the low-level communication 
 * **On Reachy Mini Lite (USB)** - You have two options :
   - Start the [desktop application](../platforms/reachy_mini_lite/get_started.md#3--download-reachy-mini-control)
   - Open a terminal and run :
-  ```bash
-  uv run reachy-mini-daemon
-  ```
+    ```bash
+    reachy-mini-daemon
+    ```
 * **For Simulation (No robot needed)** - You have two options :
   - Start the [desktop application](../platforms/reachy_mini_lite/get_started.md#3--download-reachy-mini-control)
   - Open a terminal and run:
-    - **Linux/Windows:**
+    - **Linux & Windows:**
       ```bash
-      uv run reachy-mini-daemon --sim
+      reachy-mini-daemon --sim
       ```
     - **macOS:**
       ```bash
