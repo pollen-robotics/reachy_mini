@@ -91,6 +91,7 @@ Encountering an issue? 👉 **[Check the Troubleshooting & FAQ Guide](https://hu
 
 * **Join the Community:** Join [Discord](https://discord.gg/2bAhWfXme9) to share your moments with Reachy, build apps together, and get help.
 * **Found a bug?** Open an issue on this repository.
+* **Guidelines:** Review our [contributing guidelines](docs/contributing.md) to learn how to contribute code, report issues, or suggest features.
 
 
 ## License

@@ -44,16 +44,17 @@ def analyze_image(
     # Store marker centers indexed by ID (normalized to [0,1] range)
     marker_centers: Dict[int, npt.NDArray[np.float64]] = {}
     marker_centers_pixels: Dict[int, npt.NDArray[Any]] = {}
-    for i, marker_id in enumerate(marker_ids):
+    flat_ids: list[int] = [int(x) for x in marker_ids.flatten()]
+    for i, mid in enumerate(flat_ids):
         corners = marker_corners[i][0]
         center = corners.mean(axis=0)
-        marker_centers_pixels[int(marker_id[0])] = center
+        marker_centers_pixels[mid] = center
         # Normalize to image dimensions
-        marker_centers[int(marker_id[0])] = np.array(
+        marker_centers[mid] = np.array(
             [float(center[0]) / width, float(center[1]) / height]
         )
 
-    marker_ids_set: Set[int] = set(int(mid[0]) for mid in marker_ids)
+    marker_ids_set: Set[int] = set(flat_ids)
 
     return {
         "path": image_path,
