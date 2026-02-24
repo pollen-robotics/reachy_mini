@@ -65,10 +65,62 @@ class AppManager:
         self.running_on_wireless = wireless_version
         self.daemon = daemon
 
+        # Pre-warmed process for faster app startup (wireless only)
+        self._warm_process: Optional[asyncio.subprocess.Process] = None
+        self._warm_ready: bool = False
+
+    async def initialize(self) -> None:
+        """Async initialization — call after __init__ to start warm process."""
+        if self.wireless_version:
+            asyncio.create_task(self._spawn_warm_process())
+
+    async def _spawn_warm_process(self) -> None:
+        """Spawn a pre-warmed Python process that pre-imports heavy packages."""
+        try:
+            python_path = local_common_venv.get_app_python(
+                "dummy", self.wireless_version, self.desktop_app_daemon
+            )
+            process = await asyncio.create_subprocess_exec(
+                str(python_path),
+                "-u",
+                "-m",
+                "reachy_mini.apps.warm_launcher",
+                stdin=asyncio.subprocess.PIPE,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+
+            assert process.stdout is not None
+            try:
+                line = await asyncio.wait_for(
+                    process.stdout.readline(), timeout=120.0
+                )
+            except asyncio.TimeoutError:
+                self.logger.warning("[WARM] Warm process timed out during init")
+                process.kill()
+                await process.wait()
+                return
+
+            if b"WARM_READY" in line:
+                self._warm_process = process
+                self._warm_ready = True
+                self.logger.info(f"[WARM] Pre-warmed process ready ({line.decode().strip()})")
+            else:
+                self.logger.warning(f"[WARM] Unexpected output: {line!r}")
+                process.kill()
+                await process.wait()
+        except Exception as e:
+            self.logger.warning(f"[WARM] Failed to spawn warm process: {e}")
+
     async def close(self) -> None:
         """Clean up the AppManager, stopping any running app."""
         if self.is_app_running():
             await self.stop_current_app()
+        # Kill idle warm process
+        if self._warm_process is not None and self._warm_process.returncode is None:
+            self._warm_process.kill()
+            await self._warm_process.wait()
+            self._warm_process = None
 
     def _kill_process_tree(self, pid: int) -> None:
         """Kill a process and all its children recursively."""
@@ -121,16 +173,37 @@ class AppManager:
             app_name, self.wireless_version, self.desktop_app_daemon
         )
 
-        # Launch app as subprocess with unbuffered output
-        self.logger.getChild("runner").info(f"Starting app {app_name}")
-        process = await asyncio.create_subprocess_exec(
-            str(python_path),
-            "-u",  # Unbuffered stdout/stderr for real-time logging
-            "-m",
-            module_name,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
+        # Try to use the pre-warmed process (avoids ~3.5 s of import time on CM4)
+        if (
+            self._warm_ready
+            and self._warm_process is not None
+            and self._warm_process.returncode is None
+        ):
+            process = self._warm_process
+            self._warm_process = None
+            self._warm_ready = False
+
+            self.logger.getChild("runner").info(
+                f"[WARM] Starting app {app_name} via warm process"
+            )
+            assert process.stdin is not None
+            process.stdin.write(f"{module_name}\n".encode())
+            await process.stdin.drain()
+            process.stdin.close()
+
+            # Spawn next warm process in background for the next start
+            asyncio.create_task(self._spawn_warm_process())
+        else:
+            # Cold fallback
+            self.logger.getChild("runner").info(f"Starting app {app_name} (cold)")
+            process = await asyncio.create_subprocess_exec(
+                str(python_path),
+                "-u",  # Unbuffered stdout/stderr for real-time logging
+                "-m",
+                module_name,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
 
         # Create status and monitor task
         status = AppStatus(

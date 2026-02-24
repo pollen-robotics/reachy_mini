@@ -156,6 +156,9 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
                     hardware_config_filepath=args.hardware_config_filepath,
                 )
 
+            # Start pre-warmed app process (imports heavy packages in background)
+            await app.state.app_manager.initialize()
+
             yield
         finally:
             # Cancel dataset updater task if running
