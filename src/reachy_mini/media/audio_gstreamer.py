@@ -94,6 +94,7 @@ class GStreamerAudio(AudioBase):
             GLib.PRIORITY_DEFAULT, self._on_bus_message, self._loop
         )
 
+        self._playbin: Optional[Gst.Element] = None
         self._pipeline_playback = Gst.Pipeline.new("audio_player")
         self._appsrc: Optional[GstApp] = None
         self._init_pipeline_playback(self._pipeline_playback)
@@ -313,6 +314,9 @@ class GStreamerAudio(AudioBase):
         See AudioBase.stop_playing() for complete documentation.
         """
         self._pipeline_playback.set_state(Gst.State.NULL)
+        if self._playbin is not None:
+            self._playbin.set_state(Gst.State.NULL)
+            self._playbin = None
 
     def push_audio_sample(self, data: npt.NDArray[np.float32]) -> None:
         """Push audio data to the output device.
@@ -374,6 +378,9 @@ class GStreamerAudio(AudioBase):
             audiosink.set_property("device", f"{id_audio_card}")
             self.logger.info(f"Using audio device {id_audio_card} for playback.")
 
+        if self._playbin is not None:
+            self._playbin.set_state(Gst.State.NULL)
+
         playbin = Gst.ElementFactory.make("playbin", "player")
         if not playbin:
             self.logger.error("Failed to create playbin element")
@@ -393,6 +400,7 @@ class GStreamerAudio(AudioBase):
         if audiosink is not None:
             playbin.set_property("audio-sink", audiosink)
 
+        self._playbin = playbin
         playbin.set_state(Gst.State.PLAYING)
 
     def clear_player(self) -> None:
