@@ -120,8 +120,8 @@ class ZenohClient(AbstractClient):
         """
         start = time.time()
         while not self.joint_position_received.wait(
-            timeout=1.0
-        ) or not self.head_pose_received.wait(timeout=1.0):
+            timeout=0.1
+        ) or not self.head_pose_received.wait(timeout=0.1):
             if time.time() - start > timeout:
                 self.disconnect()
                 raise TimeoutError(

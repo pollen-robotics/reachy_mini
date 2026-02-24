@@ -12,12 +12,10 @@ import logging
 import time
 from typing import Dict, List, Literal, Optional, Union, cast
 
-import cv2
 import numpy as np
 import numpy.typing as npt
 import zenoh
 from asgiref.sync import async_to_sync
-from scipy.spatial.transform import Rotation as R
 
 from reachy_mini.daemon.utils import daemon_check, is_local_camera_available
 from reachy_mini.io.protocol import GotoTaskRequest
@@ -225,10 +223,10 @@ class ReachyMini:
                     )
 
         return MediaManager(
-            use_sim=self.client.get_status()["simulation_enabled"],
+            use_sim=daemon_status["simulation_enabled"],
             backend=mbackend,
             log_level=log_level,
-            signalling_host=self.client.get_status()["wlan_ip"],
+            signalling_host=daemon_status["wlan_ip"],
         )
 
     def _normalize_connection_mode(
@@ -432,6 +430,8 @@ class ReachyMini:
 
     def wake_up(self) -> None:
         """Wake up the robot - go to the initial head position and play the wake up emote and sound."""
+        from scipy.spatial.transform import Rotation as R
+
         self.goto_target(INIT_HEAD_POSE, antennas=[0.0, 0.0], duration=2)
         time.sleep(0.1)
 
@@ -498,6 +498,8 @@ class ReachyMini:
             ValueError: If duration is negative.
 
         """
+        import cv2
+
         if self.media_manager.camera is None:
             raise RuntimeError("Camera is not initialized.")
 
@@ -569,6 +571,8 @@ class ReachyMini:
             ValueError: If duration is negative.
 
         """
+        from scipy.spatial.transform import Rotation as R
+
         if duration < 0:
             raise ValueError("Duration can't be negative.")
 
