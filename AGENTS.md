@@ -208,7 +208,7 @@ Read these files in `skills/` when you need detailed knowledge:
 
 **Motor names:** `body_rotation`, `stewart_1-6`, `right_antenna`, `left_antenna`
 
-**Interpolation methods:** `linear`, `minjerk` (default), `ease`, `cartoon`
+**Interpolation methods:** `linear`, `minjerk` (default), `ease_in_out`, `cartoon`
 
 **Emotions library:**
 ```python

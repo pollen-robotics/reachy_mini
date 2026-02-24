@@ -385,7 +385,7 @@ class ReachyMini:
             Union[npt.NDArray[np.float64], List[float]]
         ] = None,  # [right_angle, left_angle] (in rads)
         duration: float = 0.5,  # Duration in seconds for the movement, default is 0.5 seconds.
-        method: InterpolationTechnique = InterpolationTechnique.MIN_JERK,  # can be "linear", "minjerk", "ease" or "cartoon", default is "minjerk")
+        method: InterpolationTechnique = InterpolationTechnique.MIN_JERK,  # can be "linear", "minjerk", "ease_in_out" or "cartoon", default is "minjerk")
         body_yaw: float | None = 0.0,  # Body yaw angle in radians
     ) -> None:
         """Go to a target head pose and/or antennas position using task space interpolation, in "duration" seconds.
