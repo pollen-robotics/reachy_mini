@@ -55,7 +55,7 @@ class GotoModelRequest(BaseModel):
                     "antennas": [0.0, 0.0],
                     "body_yaw": 0.0,
                     "duration": 2.0,
-                    "interpolation": "min_jerk",
+                    "interpolation": "minjerk",
                 },
                 {
                     "antennas": [0.0, 0.0],

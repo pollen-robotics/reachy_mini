@@ -88,7 +88,7 @@ class InterpolationTechnique(str, Enum):
     """Enumeration of interpolation techniques."""
 
     LINEAR = "linear"
-    MIN_JERK = "min_jerk"
+    MIN_JERK = "minjerk"
     EASE_IN_OUT = "ease_in_out"
     CARTOON = "cartoon"
 

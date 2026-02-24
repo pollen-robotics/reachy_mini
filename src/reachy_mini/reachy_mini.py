@@ -385,7 +385,7 @@ class ReachyMini:
             Union[npt.NDArray[np.float64], List[float]]
         ] = None,  # [right_angle, left_angle] (in rads)
         duration: float = 0.5,  # Duration in seconds for the movement, default is 0.5 seconds.
-        method: InterpolationTechnique = InterpolationTechnique.MIN_JERK,  # can be "linear", "min_jerk", "ease_in_out" or "cartoon", default is "min_jerk")
+        method: InterpolationTechnique = InterpolationTechnique.MIN_JERK,  # can be "linear", "minjerk", "ease_in_out" or "cartoon", default is "minjerk")
         body_yaw: float | None = 0.0,  # Body yaw angle in radians
     ) -> None:
         """Go to a target head pose and/or antennas position using task space interpolation, in "duration" seconds.
@@ -394,7 +394,7 @@ class ReachyMini:
             head (Optional[np.ndarray]): 4x4 pose matrix representing the target head pose.
             antennas (Optional[Union[np.ndarray, List[float]]]): 1D array with two elements representing the angles of the antennas in radians.
             duration (float): Duration of the movement in seconds.
-            method (InterpolationTechnique): Interpolation method to use ("linear", "min_jerk", "ease_in_out", "cartoon"). Default is "min_jerk".
+            method (InterpolationTechnique): Interpolation method to use ("linear", "minjerk", "ease_in_out", "cartoon"). Default is "minjerk".
             body_yaw (float | None): Body yaw angle in radians. Use None to keep the current yaw.
 
         Raises:

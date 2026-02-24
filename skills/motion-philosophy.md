@@ -27,7 +27,7 @@ from reachy_mini.utils import create_head_pose
 
 with ReachyMini() as mini:
     pose = create_head_pose(yaw=30, pitch=10, degrees=True)
-    mini.goto_target(head=pose, duration=1.0, method="min_jerk")
+    mini.goto_target(head=pose, duration=1.0, method="minjerk")
 ```
 
 ### Interpolation Methods
@@ -35,7 +35,7 @@ with ReachyMini() as mini:
 | Method | Character |
 |--------|-----------|
 | `linear` | Constant speed |
-| `min_jerk` | Natural, smooth (default) |
+| `minjerk` | Natural, smooth (default) |
 | `ease_in_out` | Slow start/end |
 | `cartoon` | Exaggerated, bouncy |
 

@@ -19,11 +19,11 @@ with ReachyMini() as mini:
         antennas=np.deg2rad([45, 45]),           # Antennas out
         body_yaw=np.deg2rad(30),                 # Turn body
         duration=2.0,                            # Take 2 seconds
-        method="min_jerk"                         # Smooth acceleration
+        method="minjerk"                         # Smooth acceleration
     )
 ```
 
-**Interpolation methods:** `linear`, `min_jerk` (default), `ease_in_out`, `cartoon`.
+**Interpolation methods:** `linear`, `minjerk` (default), `ease_in_out`, `cartoon`.
 
 ### Instant Control (`set_target`)
 Bypasses interpolation. Use this for high-frequency control (e.g., following a joystick or generated trajectory).
