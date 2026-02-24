@@ -129,9 +129,10 @@ class ReachyMini:
 
         self.media_manager = self._configure_mediamanager(media_backend, log_level)
         _t3 = _time.perf_counter()
-        self.logger.info(
+        print(
             f"[BOOT] SDK init: daemon_check={_t1-_t0:.3f}s "
-            f"client={_t2-_t1:.3f}s media={_t3-_t2:.3f}s total={_t3-_t0:.3f}s"
+            f"client={_t2-_t1:.3f}s media={_t3-_t2:.3f}s total={_t3-_t0:.3f}s",
+            flush=True,
         )
 
     def __del__(self) -> None:
