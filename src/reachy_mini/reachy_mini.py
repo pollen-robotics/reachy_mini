@@ -98,16 +98,21 @@ class ReachyMini:
         It will try to connect to the daemon, and if it fails, it will raise an exception.
 
         """
+        import time as _time
+
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(log_level)
         self.robot_name = robot_name
+        _t0 = _time.perf_counter()
         daemon_check(spawn_daemon, use_sim)
+        _t1 = _time.perf_counter()
         normalized_mode = self._normalize_connection_mode(
             connection_mode, localhost_only
         )
         self.client, self.connection_mode = self._initialize_client(
             normalized_mode, timeout
         )
+        _t2 = _time.perf_counter()
         self.set_automatic_body_yaw(automatic_body_yaw)
         self._last_head_pose: Optional[npt.NDArray[np.float64]] = None
         self.is_recording = False
@@ -123,6 +128,11 @@ class ReachyMini:
         )
 
         self.media_manager = self._configure_mediamanager(media_backend, log_level)
+        _t3 = _time.perf_counter()
+        self.logger.info(
+            f"[BOOT] SDK init: daemon_check={_t1-_t0:.3f}s "
+            f"client={_t2-_t1:.3f}s media={_t3-_t2:.3f}s total={_t3-_t0:.3f}s"
+        )
 
     def __del__(self) -> None:
         """Destroy the Reachy Mini instance.
