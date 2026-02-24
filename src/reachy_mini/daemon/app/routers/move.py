@@ -19,6 +19,7 @@ from huggingface_hub.errors import RepositoryNotFoundError
 from pydantic import BaseModel
 
 from reachy_mini.motion.recorded_move import RecordedMoves
+from reachy_mini.utils.interpolation import InterpolationTechnique
 
 from ....daemon.backend.abstract import Backend
 from ..dependencies import get_backend, ws_get_backend
@@ -31,17 +32,6 @@ move_listeners: list[WebSocket] = []
 router = APIRouter(prefix="/move")
 
 
-class InterpolationMode(str, Enum):
-    """Interpolation modes for movement."""
-
-    # TODO: This should be the same as for the backend
-
-    LINEAR = "linear"
-    MINJERK = "minjerk"
-    EASE = "ease"
-    CARTOON = "cartoon"
-
-
 class GotoModelRequest(BaseModel):
     """Request model for the goto endpoint."""
 
@@ -49,7 +39,7 @@ class GotoModelRequest(BaseModel):
     antennas: tuple[float, float] | None = None
     body_yaw: float | None = None
     duration: float
-    interpolation: InterpolationMode = InterpolationMode.MINJERK
+    interpolation: InterpolationTechnique = InterpolationTechnique.MIN_JERK
 
     model_config = {
         "json_schema_extra": {
@@ -66,7 +56,7 @@ class GotoModelRequest(BaseModel):
                     "antennas": [0.0, 0.0],
                     "body_yaw": 0.0,
                     "duration": 2.0,
-                    "interpolation": "minjerk",
+                    "interpolation": "min_jerk",
                 },
                 {
                     "antennas": [0.0, 0.0],

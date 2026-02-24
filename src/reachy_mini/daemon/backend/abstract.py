@@ -446,7 +446,7 @@ class Backend:
         antennas: Annotated[NDArray[np.float64], (2,)]
         | None = None,  # [right_angle, left_angle] (in rads)
         duration: float = 0.5,  # Duration in seconds for the movement, default is 0.5 seconds.
-        method: InterpolationTechnique = InterpolationTechnique.MIN_JERK,  # can be "linear", "minjerk", "ease" or "cartoon", default is "minjerk"
+        method: InterpolationTechnique = InterpolationTechnique.MIN_JERK,  # can be "linear", "min_jerk", "ease_in_out" or "cartoon", default is "min_jerk"
         body_yaw: float | None = 0.0,  # Body yaw angle in radians
     ) -> None:
         """Asynchronously go to a target head pose and/or antennas position using task space interpolation, in "duration" seconds.
@@ -455,7 +455,7 @@ class Backend:
             head (np.ndarray | None): 4x4 pose matrix representing the target head pose.
             antennas (np.ndarray | list[float] | None): 1D array with two elements representing the angles of the antennas in radians.
             duration (float): Duration of the movement in seconds.
-            method (str): Interpolation method to use ("linear", "minjerk", "ease", "cartoon"). Default is "minjerk".
+            method (str): Interpolation method to use ("linear", "min_jerk", "ease_in_out", "cartoon"). Default is "min_jerk".
             body_yaw (float | None): Body yaw angle in radians.
 
         Raises:
@@ -482,7 +482,7 @@ class Backend:
         antennas_joint_positions: list[float]
         | None = None,  # [right_angle, left_angle] length 2
         duration: float = 0.5,  # Duration in seconds for the movement
-        method: InterpolationTechnique = InterpolationTechnique.MIN_JERK,  # can be "linear", "minjerk", "ease" or "cartoon", default is "minjerk"
+        method: InterpolationTechnique = InterpolationTechnique.MIN_JERK,  # can be "linear", "min_jerk", "ease_in_out" or "cartoon", default is "min_jerk"
     ) -> None:
         """Asynchronously go to a target head joint positions and/or antennas joint positions using joint space interpolation, in "duration" seconds.
 
@@ -492,7 +492,7 @@ class Backend:
             head_joint_positions (Optional[List[float]]): List of head joint positions in radians (length 7).
             antennas_joint_positions (Optional[List[float]]): List of antennas joint positions in radians (length 2).
             duration (float): Duration of the movement in seconds. Default is 0.5 seconds.
-            method (str): Interpolation method to use ("linear", "minjerk", "ease", "cartoon"). Default is "minjerk".
+            method (str): Interpolation method to use ("linear", "min_jerk", "ease_in_out", "cartoon"). Default is "min_jerk".
 
         Raises:
             ValueError: If neither head_joint_positions nor antennas_joint_positions are provided, or if duration is not positive.
