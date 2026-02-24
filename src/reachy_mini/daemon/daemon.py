@@ -457,7 +457,7 @@ class Daemon:
                 asdict(self.status(), dict_factory=convert_enum_to_dict)
             )
             self.zenoh_server.pub_status.put(json_str)
-            time.sleep(1)
+            time.sleep(0.2)
 
     async def run4ever(
         self,
