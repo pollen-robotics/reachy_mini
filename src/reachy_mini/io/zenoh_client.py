@@ -226,7 +226,6 @@ class ZenohClient(AbstractClient):
         """Get the last received status. Returns DaemonStatus as a dict."""
         if wait and not self.status_received.wait(timeout):
             raise TimeoutError("Status not received in time.")
-        self.status_received.clear()  # ready for next run
         return self._last_status
 
     def get_current_imu_data(self) -> Optional[Dict[str, List[float] | float]]:

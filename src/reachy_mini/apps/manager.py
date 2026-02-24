@@ -99,6 +99,15 @@ class AppManager:
         if self.is_app_running():
             raise RuntimeError("An app is already running")
 
+        # Play a loading sound immediately so the user knows the app is starting.
+        # This happens before the subprocess is spawned (which takes several seconds
+        # for Python imports), giving instant audio feedback after clicking "Start".
+        if self.daemon is not None and self.daemon.backend is not None:
+            try:
+                self.daemon.backend.play_sound("count.wav")
+            except Exception:
+                pass  # non-critical, don't block app start
+
         # Get module name and Python path for subprocess execution
         module_name = local_common_venv.get_app_module(
             app_name, self.wireless_version, self.desktop_app_daemon
