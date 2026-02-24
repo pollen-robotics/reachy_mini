@@ -46,6 +46,7 @@ Reachy Mini comes with an app store powered by Hugging Face Spaces. You can inst
 * **[Core Concepts](https://huggingface.co/docs/reachy_mini/SDK/core-concept)**: Architecture, coordinate systems, and safety limits.
 * 🤗[**Share your app with the community**](https://huggingface.co/blog/pollen-robotics/make-and-publish-your-reachy-mini-apps)
 * 📂 [**Browse the Examples Folder**](examples)
+* 📓 [**Tutorial Notebooks**](docs/notebooks): Step-by-step Jupyter notebooks covering connection, movement, camera, and audio
 
 ### 🤖 AI-Assisted Development
 
