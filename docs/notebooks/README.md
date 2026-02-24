@@ -9,8 +9,16 @@ Each notebook includes:
 * 🛠️ **Hands-on exercises** — Practice what you learn
 * 💡 **Self-contained explanations** — No need to jump between docs
 * ⚠️ **Safety reminders** — Proper usage guidelines
-
 ---
+## Requirements
+To run the notebooks, make sure that you have a python environment with Reachy Mini's SDK and Jupyter installed.
+- **Reachy Mini SDK** — Install the SDK by following the [installation guide](https://huggingface.co/docs/reachy_mini/SDK/installation).
+- **Jupyter** — A Jupyter environment is required to run the notebooks. Install it with:
+```bash
+pip install notebook
+```
+
+Also, you'll need to have Reachy Mini daemon's up and running by checking the [dashboard](https://huggingface.co/docs/reachy_mini/platforms/reachy_mini/usage#1-the-dashboard-).
 
 ## 📘 Available Notebooks
 
