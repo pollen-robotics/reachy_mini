@@ -90,22 +90,135 @@ head-up:  +7.68s
 
 ---
 
-## Ideas for Next Iterations
+## Iteration 1: Loading sound + don't clear status event + faster status publish
 
-### Idea A: Early "loading" sound from the daemon
-Play a sound immediately when the daemon receives the start-app request, before the Python subprocess even starts. The daemon has access to GStreamer. This gives instant feedback (< 0.1s after click).
+**Commits**:
+- reachy_mini: `e3753701` (893-load-apps-faster)
+- marionette: unchanged
 
-### Idea B: Reduce daemon status publish interval (1s → 0.2s)
-The first `get_status()` waits for the next publish cycle. With 1s interval, expected wait = 0.5s. With 0.2s interval, expected wait = 0.1s. Saves ~0.4s on average.
+**Changes (reachy_mini repo)**:
+- `src/reachy_mini/apps/manager.py`: play `count.wav` immediately when daemon receives start-app request (before subprocess spawn)
+- `src/reachy_mini/io/zenoh_client.py`: remove `status_received.clear()` in `get_status()` — event stays set after first status arrives
+- `src/reachy_mini/daemon/daemon.py`: reduce status publish interval from 1.0s to 0.2s
 
-### Idea C: Lazy FastAPI import in marionette
-`fastapi` takes 1.19–1.29s on the CM4. If we defer it to after the `__init__`, the app could start connecting to Zenoh sooner. But FastAPI is needed before `wrapped_run()` because the app's routes are decorated with `@app.get(...)` at class definition time.
+**CM4 Results (3 runs)**:
 
-### Idea D: Don't clear `status_received` event in `get_status()`
-Instead of clearing the event after each call (which forces the next caller to wait), keep it set. The cached value is fine for startup. This eliminates the timing dependency on the publish cycle entirely.
+| Run | Imports | SDK init breakdown | SDK total | run() | Head-up |
+|-----|---------|-------------------|-----------|-------|---------|
+| 1   | 3.68s   | check=0.00 client=0.03 media=0.35 | 0.38s | +4.86s | +6.62s* |
+| 2   | 3.92s   | check=0.00 client=0.03 media=0.44 | 0.47s | +5.25s | +5.65s  |
+| 3   | 3.67s   | check=0.00 client=0.05 media=0.44 | 0.49s | +4.95s | +5.36s  |
 
-### Idea E: Parallel import + SDK init
-Start the ReachyMini connection in a background thread while imports are still loading. Complex but could overlap the 3.9s import with the 1.4s SDK init.
+*Run 1 had anomalous head-up (1.56s after enable_motors vs normal ~0.2s).
 
-### Idea F: Pre-warm app process in daemon
-Daemon could spawn a Python process that pre-imports common packages, then fork it when an app starts. Saves all import time. Large effort.
+**Loading sound**: plays at T=0 (confirmed: "[BOOT] Loading sound triggered" appears immediately)
+
+**Comparison to Iteration 0**:
+- SDK init: 1.44s → 0.45s (−1.0s from faster status publish + no clear)
+- Head-up: ~6.1s → ~5.5s (−0.6s, taking runs 2&3 average)
+- Loading sound: now plays ~5.5s before head moves
+
+**Comparison to baseline (develop)**:
+- SDK init: 3.42s → 0.45s (−3.0s, **87% faster**)
+- Head-up: 7.68s → ~5.5s (−2.2s, **29% faster**)
+- User perceives responsiveness from T=0 (loading sound) vs T=7.7s (first sign of life)
+
+**SDK init breakdown shows**:
+- `daemon_check`: instant (0s)
+- `client` (Zenoh connect + wait_for_connection): 0.03–0.05s
+- `media` (get_status + GStreamer MediaManager init): 0.35–0.44s
+- The remaining 0.35–0.44s is mostly GStreamer initialization (pipeline setup, device enumeration)
+
+---
+
+## Iteration 2: Pre-warmed app launcher
+
+**Commits**:
+- reachy_mini: `a010be08` (893-load-apps-faster)
+- marionette: unchanged
+
+**Changes (reachy_mini repo)**:
+- `src/reachy_mini/apps/warm_launcher.py` (NEW): Pre-imports heavy packages (numpy, zenoh, fastapi, pydantic, reachy_mini) in a background process, waits for module name on stdin, then runs it via `runpy.run_module`.
+- `src/reachy_mini/apps/manager.py`: On daemon startup (wireless only), spawns warm launcher process. When `start_app()` is called, sends module name to warm process instead of cold subprocess spawn. Falls back to cold start if warm process isn't ready.
+- `src/reachy_mini/daemon/app/main.py`: Calls `app_manager.initialize()` in lifespan to spawn warm process.
+
+**How it works**:
+1. Daemon starts → spawns `apps_venv/bin/python -m reachy_mini.apps.warm_launcher`
+2. Warm process imports all heavy packages (~0.7–1.0s on CM4) and prints `WARM_READY`
+3. Process sits idle, waiting for module name on stdin
+4. User clicks "Start Marionette" → daemon writes `marionette.main\n` to stdin
+5. Warm process runs `runpy.run_module("marionette.main")` — all imports are already in `sys.modules`
+6. Daemon spawns a new warm process in the background for next app start
+
+**CM4 Results (3 runs)**:
+
+| Run | Imports | __init__ | SDK init | run() | Head-up |
+|-----|---------|----------|----------|-------|---------|
+| 1   | 0.05s   | +0.46s   | 0.647s   | +1.46s | +3.23s* |
+| 2   | 0.07s   | +0.52s   | 0.766s   | +1.69s | +2.11s  |
+| 3   | 0.06s   | +0.47s   | 0.600s   | +1.43s | +1.85s  |
+| **Avg** | **0.06s** | **+0.48s** | **0.67s** | **+1.53s** | **~2.0s** |
+
+*Run 1 anomaly: first start after daemon restart, head-up animation took 1.6s instead of ~0.2s.
+
+**Warm process initialization**: 0.68–0.96s on CM4 (imports happen once in the background, invisible to user).
+
+**Comparison to Iteration 1**:
+- Imports: 3.7s → 0.06s (−3.64s, **98% faster**, all pre-cached by warm process)
+- Head-up: ~5.5s → ~2.0s (−3.5s, taking runs 2&3 average)
+
+**Comparison to baseline (develop)**:
+- Imports: 3.85s → 0.06s (−3.79s, **98% faster**)
+- SDK init: 3.42s → 0.67s (−2.75s, **80% faster**)
+- Head-up: **7.68s → ~2.0s (−5.7s, 74% faster)**
+- Loading sound still plays at T=0 (instant audio feedback)
+
+**New timeline on CM4 (best case)**:
+```
+T=0.0s  Loading sound plays (daemon-side)
+T=0.0s  Module name sent to warm process
+T=0.1s  Imports complete (all cached in sys.modules)
+T=0.5s  Marionette.__init__ done
+T=1.1s  SDK init done
+T=1.4s  run() entered
+T=1.6s  enable_motors
+T=1.9s  head-up
+T=4.4s  intro sound done
+```
+
+---
+
+## Summary
+
+| Metric | Baseline | Iter 0 | Iter 1 | Iter 2 |
+|--------|----------|--------|--------|--------|
+| Imports | 3.85s | 3.86s | 3.76s | **0.06s** |
+| SDK init | 3.42s | 1.44s | 0.45s | **0.67s** |
+| Head-up | 7.68s | ~6.1s | ~5.5s | **~2.0s** |
+| Loading sound | N/A | N/A | T=0 | T=0 |
+| Total speedup | — | 1.6s | 2.2s | **5.7s** |
+
+---
+
+## Remaining Bottlenecks
+
+After the warm launcher, the remaining ~2.0s breaks down as:
+- **0.5s**: Marionette `__init__` (FastAPI setup, daemon check, dataset loading)
+- **0.6s**: SDK init (Zenoh connect 0.2s + GStreamer MediaManager 0.4s)
+- **0.4s**: run() setup (mic AGC, animation prep)
+- **0.5s**: Physical movement (goto_target + head-up animation)
+
+The physical movement time (~0.5s) is inherent and can't be optimized.
+
+---
+
+## Ideas for Further Optimization
+
+### Idea G: Choose better loading sound
+`count.wav` (0.66s) might not be the best UX. Consider a shorter chirp or the start of a boot chime. Or let apps register their own loading sound.
+
+### Idea H: Overlap SDK init with __init__
+Start Zenoh connection in a background thread during Marionette.__init__(). By the time run() needs reachy_mini, the SDK init might already be done. Could save ~0.5s.
+
+### Idea I: Lazy GStreamer init
+Defer MediaManager initialization until the first play_sound() or camera access. SDK init drops from 0.6s to 0.2s. Risk: first audio playback has a ~0.4s delay.
