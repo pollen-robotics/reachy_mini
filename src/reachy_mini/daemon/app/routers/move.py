@@ -9,7 +9,6 @@ This exposes:
 
 import asyncio
 import json
-from enum import Enum
 from typing import Any, Coroutine
 from uuid import UUID, uuid4
 
