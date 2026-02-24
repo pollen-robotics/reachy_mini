@@ -105,8 +105,13 @@ class AppManager:
         if self.daemon is not None and self.daemon.backend is not None:
             try:
                 self.daemon.backend.play_sound("count.wav")
-            except Exception:
-                pass  # non-critical, don't block app start
+                self.logger.getChild("runner").info(
+                    "[BOOT] Loading sound triggered"
+                )
+            except Exception as e:
+                self.logger.getChild("runner").warning(
+                    f"[BOOT] Loading sound failed: {e}"
+                )
 
         # Get module name and Python path for subprocess execution
         module_name = local_common_venv.get_app_module(
