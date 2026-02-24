@@ -245,20 +245,40 @@ Total:                    ~0.320s
 
 ---
 
-## Expected CM4 Impact
+## CM4 (Wireless Robot) Results
 
-The daemon's status publish rate (1 second) is the same on the CM4 as locally. So the triple-get_status fix should save the same ~2 seconds on the CM4.
+Tested on the Reachy Mini Wireless (CM4) by rsyncing the changed files directly to the installed package at `/venvs/apps_venv/lib/python3.12/site-packages/reachy_mini/`. Marionette was restarted via `deploy_wireless.sh` and boot timing captured from `journalctl`.
 
-Combined with lazy cv2/scipy imports (~0.8s savings on CM4):
+### Before (develop branch)
 
-| Phase | Before (CM4) | After (estimated) |
-|-------|-------------|-------------------|
-| Imports | 3.48s | ~2.68s (−0.8s from lazy cv2/scipy) |
-| SDK init | 3.42s | ~1.22s (−2.2s from cached get_status) |
-| Animation | 0.4s | 0.4s (unchanged) |
-| **First head movement** | **~7.3s** | **~4.3s** |
+```
+[BOOT] imports: reachy_mini=3.06s total=3.85s
+[BOOT] __init__ done at +3.86s
+[BOOT] run() entered at +7.27s        ← SDK init took 3.42s
+[BOOT] anim: head-up done at +7.68s
+```
 
-**Expected improvement: ~3 seconds faster to first movement.**
+### After (893-load-apps-faster)
+
+```
+[BOOT] imports: reachy_mini=1.89s total=3.82s
+[BOOT] __init__ done at +3.82s
+[BOOT] run() entered at +4.53s        ← SDK init took 0.71s
+[BOOT] anim: head-up done at +4.93s
+```
+
+### Comparison
+
+| Metric | Before | After | Improvement |
+|--------|--------|-------|-------------|
+| reachy_mini import | 3.06s | 1.89s | −1.17s (lazy cv2/scipy) |
+| Total imports | 3.85s | 3.82s | −0.03s (savings inside reachy_mini offset by variance) |
+| SDK init (run − init) | 3.42s | 0.71s | **−2.71s** (cached get_status) |
+| First head movement | 7.68s | 4.93s | **−2.75s (36% faster)** |
+
+The `reachy_mini` import dropped by 1.17s (cv2 + scipy no longer loaded). Total import time barely changed because other imports (FastAPI, numpy, etc.) still dominate. The SDK init gap collapsed from 3.42s to 0.71s — exactly matching the triple-get_status fix eliminating ~2.7s of blocked waits.
+
+**Result: First head movement 2.75 seconds faster (7.68s → 4.93s).**
 
 ---
 
