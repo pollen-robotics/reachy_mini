@@ -27,6 +27,9 @@ jobs:
           python-version: 3.12
       - name: Install the project
         run: uv sync --frozen --all-extras
+      - name: Install gstreamer Python bindings (macOS)
+        if: matrix.os == 'macos-latest'
+        run: uv pip install --upgrade --index-url https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/simple gstreamer==1.28.0
       - name: Run tests
         run: |
           uv run pytest -vv -m 'not audio and not video and not audio_sounddevice and not video_opencv and not wireless' --tb=short
