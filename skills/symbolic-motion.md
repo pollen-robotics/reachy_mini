@@ -138,6 +138,6 @@ def dance_move(t_beats):
 ## Tips
 
 - Use `t_beats` (not raw seconds) for music-synced motion
-- Keep amplitudes reasonable (check safety limits in agents.md)
+- Keep amplitudes reasonable (check safety limits in AGENTS.md)
 - Test with different BPMs to ensure motion scales well
 - Combine simple functions for complex motion

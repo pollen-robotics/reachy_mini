@@ -5,7 +5,7 @@ on:
 
   push:
     branches:
-      - main
+      - develop
     paths:
       - "docs/**"
       - "examples/**"
@@ -17,6 +17,7 @@ jobs:
       repo_owner: pollen-robotics
       commit_sha: ${{ github.sha }}
       package: reachy_mini
+      custom_container: pollenrobotics/reachymini_documentation
     secrets:
       token: ${{ secrets.HUGGINGFACE_PUSH }}
       hf_token: ${{ secrets.HF_DOC_BUILD_PUSH }}

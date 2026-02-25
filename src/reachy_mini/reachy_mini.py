@@ -9,7 +9,6 @@ It also includes methods for multimedia interactions like playing sounds and loo
 import asyncio
 import json
 import logging
-import platform
 import time
 from typing import Dict, List, Literal, Optional, Union, cast
 
@@ -215,32 +214,15 @@ class ReachyMini:
                 # Lite version: use specified backend if compatible
                 try:
                     mbackend = MediaBackend(media_backend.lower())
-                    if mbackend == MediaBackend.WEBRTC:
-                        self.logger.warning(
-                            f"Incompatible media backend on Lite: {media_backend}, using default backend."
-                        )
-                        mbackend = MediaBackend.DEFAULT
-                    # TODO : Remove when wheel is released !
-                    elif "gstreamer" in media_backend.lower() and (
-                        platform.system() == "Darwin" or platform.system() == "Windows"
-                    ):
-                        self.logger.warning(
-                            f"Unsupported media backend on Lite for {platform.system()}: {media_backend}, using default backend."
-                        )
-                        mbackend = (
-                            MediaBackend.DEFAULT_NO_VIDEO
-                            if "no_video" in media_backend.lower()
-                            else MediaBackend.DEFAULT
-                        )
-                    else:
-                        self.logger.info(
-                            f"Auto-detected: Lite. Using {mbackend} backend."
-                        )
                 except ValueError:
                     self.logger.warning(
                         f"Invalid media backend on Lite: {media_backend}, using default backend."
                     )
-                    mbackend = MediaBackend.DEFAULT
+                    mbackend = (
+                        MediaBackend.DEFAULT_NO_VIDEO
+                        if "no_video" in media_backend.lower()
+                        else MediaBackend.DEFAULT
+                    )
 
         return MediaManager(
             use_sim=self.client.get_status()["simulation_enabled"],
@@ -403,7 +385,7 @@ class ReachyMini:
             Union[npt.NDArray[np.float64], List[float]]
         ] = None,  # [right_angle, left_angle] (in rads)
         duration: float = 0.5,  # Duration in seconds for the movement, default is 0.5 seconds.
-        method: InterpolationTechnique = InterpolationTechnique.MIN_JERK,  # can be "linear", "minjerk", "ease" or "cartoon", default is "minjerk")
+        method: InterpolationTechnique = InterpolationTechnique.MIN_JERK,  # can be "linear", "minjerk", "ease_in_out" or "cartoon", default is "minjerk")
         body_yaw: float | None = 0.0,  # Body yaw angle in radians
     ) -> None:
         """Go to a target head pose and/or antennas position using task space interpolation, in "duration" seconds.
@@ -412,7 +394,7 @@ class ReachyMini:
             head (Optional[np.ndarray]): 4x4 pose matrix representing the target head pose.
             antennas (Optional[Union[np.ndarray, List[float]]]): 1D array with two elements representing the angles of the antennas in radians.
             duration (float): Duration of the movement in seconds.
-            method (InterpolationTechnique): Interpolation method to use ("linear", "minjerk", "ease", "cartoon"). Default is "minjerk".
+            method (InterpolationTechnique): Interpolation method to use ("linear", "minjerk", "ease_in_out", "cartoon"). Default is "minjerk".
             body_yaw (float | None): Body yaw angle in radians. Use None to keep the current yaw.
 
         Raises:

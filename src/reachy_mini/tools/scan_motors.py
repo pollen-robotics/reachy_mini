@@ -1,5 +1,6 @@
 """Scan a serial bus to find which motor IDs respond at common baudrates."""
 
+import argparse
 import os
 import time
 from typing import List
@@ -75,11 +76,34 @@ def scan(port: str, baudrate: int) -> List[int]:
 
 def main() -> None:
     """Iterate through baudrates and print the IDs found at each."""
-    try:
-        port = find_serial_port()[0]
-    except IndexError:
-        print("No serial port found. Please check your USB connection and permissions.")
-        return
+    parser = argparse.ArgumentParser(
+        description="Scan a serial bus to find which motor IDs respond at common baudrates.",
+    )
+    parser.add_argument(
+        "-p",
+        "--port",
+        type=str,
+        default=None,
+        help="Serial port (e.g. /dev/ttyUSB0 or COM3). Auto-detected if not specified.",
+    )
+    parser.add_argument(
+        "--wireless",
+        action="store_true",
+        help="Use the wireless version of Reachy Mini (Raspberry Pi UART).",
+    )
+    args = parser.parse_args()
+
+    if args.port:
+        port = args.port
+    else:
+        ports = find_serial_port(wireless_version=args.wireless)
+        if not ports:
+            print(
+                "No serial port found. Please check your USB connection and permissions."
+            )
+            return
+        port = ports[0]
+
     for baudrate in XL_BAUDRATE_CONV_TABLE.keys():
         print(f"Trying baudrate: {baudrate}")
         found_motors = scan(port, baudrate)

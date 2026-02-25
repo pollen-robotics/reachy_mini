@@ -28,13 +28,13 @@ async def update_reachy_mini(
         logger.info(f"Installing from GitHub ref: {git_ref}")
         git_url = f"git+https://github.com/{GITHUB_REPO}.git@{git_ref}"
         daemon_pkg = f"reachy_mini[wireless-version] @ {git_url}"
-        apps_pkg = f"reachy-mini[gstreamer] @ {git_url}"
+        apps_pkg = f"reachy-mini @ {git_url}"
         extra_args = ["--force-reinstall"]
     else:
         # Install from PyPI
         logger.info("Installing from PyPI...")
         daemon_pkg = "reachy_mini[wireless-version]"
-        apps_pkg = "reachy-mini[gstreamer]"
+        apps_pkg = "reachy-mini"
         extra_args = ["--pre"] if pre_release else []
 
     # Update daemon venv
@@ -51,13 +51,20 @@ async def update_reachy_mini(
 
         if shutil.which("uv"):
             install_cmd = [
-                "uv", "pip", "install", "--python", str(apps_venv_python),
-                "--upgrade", apps_pkg,
+                "uv",
+                "pip",
+                "install",
+                "--python",
+                str(apps_venv_python),
+                "--upgrade",
+                apps_pkg,
             ] + extra_args
         else:
             install_cmd = [
                 str(Path("/venvs/apps_venv/bin/pip")),
-                "install", "--upgrade", apps_pkg,
+                "install",
+                "--upgrade",
+                apps_pkg,
             ] + extra_args
 
         await call_logger_wrapper(install_cmd, logger)

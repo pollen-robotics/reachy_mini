@@ -30,8 +30,9 @@ Example usage:
 
 import logging
 import os
+import platform
 from threading import Thread
-from typing import Optional, Tuple, cast
+from typing import Any, Callable, Dict, Optional, Tuple, cast
 
 import gi
 
@@ -94,7 +95,7 @@ class GstWebRTC:
         self._logger = logging.getLogger(__name__)
         self._logger.setLevel(log_level)
 
-        Gst.init(None)
+        Gst.init([])
         self._loop = GLib.MainLoop()
         self._thread_bus_calls = Thread(target=lambda: self._loop.run(), daemon=True)
         self._thread_bus_calls.start()
@@ -120,19 +121,18 @@ class GstWebRTC:
         self._configure_video(cam_path, self._pipeline_sender, webrtcsink)
         self._configure_audio(self._pipeline_sender, webrtcsink)
 
-        self._pipeline_receiver = Gst.Pipeline.new("reachymini_webrtc_receiver")
-        self._bus_receiver = self._pipeline_receiver.get_bus()
-        self._bus_receiver.add_watch(
-            GLib.PRIORITY_DEFAULT, self._on_bus_message, self._loop
-        )
-        self._configure_receiver(self._pipeline_receiver)
+        self._logger.debug("Configuring data channel")
+        self._data_channels: dict[str, Gst.Element] = {}  # peer_id -> channel
+        self._on_data_message: Optional[Callable[[str, str], None]] = None
+
+        # Track incoming audio per peer (for bidirectional audio cleanup)
+        self._incoming_audio: Dict[str, Dict[str, Any]] = {}
 
     def __del__(self) -> None:
         """Destructor to ensure gstreamer resources are released."""
         self._logger.debug("Cleaning up GstWebRTC")
         self._loop.quit()
         self._bus_sender.remove_watch()
-        self._bus_receiver.remove_watch()
         # Enable if need to dump logs
         # Gst.deinit()
 
@@ -155,15 +155,19 @@ class GstWebRTC:
         webrtcsink.set_property("run-signalling-server", True)
 
         webrtcsink.connect("consumer-added", self._consumer_added)
+        webrtcsink.connect("consumer-removed", self._consumer_removed)
 
         pipeline.add(webrtcsink)
 
         return webrtcsink
 
     def _consumer_added(
-        self, webrtcbin: Gst.Bin, arg1: Gst.Element, udata: bytes
+        self,
+        webrtcsink: Gst.Bin,
+        peer_id: str,
+        webrtcbin: Gst.Element,
     ) -> None:
-        self._logger.info("consumer added")
+        self._logger.info(f"consumer added with peer id: {peer_id}")
 
         Gst.debug_bin_to_dot_file(
             self._pipeline_sender, Gst.DebugGraphDetails.ALL, "pipeline_full"
@@ -171,47 +175,149 @@ class GstWebRTC:
 
         GLib.timeout_add_seconds(5, self._dump_latency)
 
-    def _configure_receiver(self, pipeline: Gst.Pipeline) -> None:
-        udpsrc = Gst.ElementFactory.make("udpsrc")
-        udpsrc.set_property("port", 5000)
-        caps = Gst.Caps.from_string(
-            "application/x-rtp,media=audio,encoding-name=OPUS,payload=96"
+        self._setup_data_channel(peer_id, webrtcbin)
+
+        # Make audio bidirectional before SDP offer is generated
+        self._enable_audio_receive(webrtcbin)
+
+        # Listen for incoming audio pads from the browser (bidirectional audio)
+        webrtcbin.connect("pad-added", self._on_consumer_pad_added, peer_id)
+
+    # GstWebRTCRTPTransceiverDirection enum values
+    _WEBRTC_DIRECTION_SENDRECV = 4
+
+    def _enable_audio_receive(self, webrtcbin: Gst.Element) -> None:
+        """Set media transceivers to sendrecv for bidirectional audio.
+
+        Must be called before the SDP offer is generated (in consumer-added).
+        The m-line order can vary (audio/video may swap), so we set all
+        transceivers to sendrecv. Video sendrecv is harmless since the
+        browser answers recvonly (it has no video track to send).
+        """
+        i = 0
+        while True:
+            trans = webrtcbin.emit("get-transceiver", i)
+            if trans is None:
+                break
+            current_dir = trans.get_property("direction")
+            self._logger.info(f"Transceiver {i} direction: {current_dir}")
+            trans.set_property("direction", self._WEBRTC_DIRECTION_SENDRECV)
+            new_dir = trans.get_property("direction")
+            self._logger.info(f"Transceiver {i} set to: {new_dir}")
+            i += 1
+
+    def _consumer_removed(
+        self,
+        webrtcsink: Gst.Bin,
+        peer_id: str,
+        webrtcbin: Gst.Element,
+    ) -> None:
+        self._logger.info(f"consumer removed: {peer_id}")
+        self._cleanup_incoming_audio(peer_id)
+
+    def _on_consumer_pad_added(
+        self,
+        webrtcbin: Gst.Element,
+        pad: Gst.Pad,
+        peer_id: str,
+    ) -> None:
+        """Handle incoming pads from the browser for bidirectional audio.
+
+        We cannot add elements to _pipeline_sender because webrtcsink manages
+        that pipeline internally and dynamic additions crash the connection.
+        Instead we use a pad probe to intercept RTP buffers and forward them
+        to a completely separate playback pipeline via appsrc.
+        """
+        if pad.get_direction() != Gst.PadDirection.SRC:
+            return
+
+        pad_name = pad.get_name()
+        caps = pad.get_current_caps()
+        if caps is None:
+            caps = pad.query_caps(None)
+
+        self._logger.info(
+            f"Consumer pad: {pad_name}, caps: {caps.to_string() if caps else 'none'}"
         )
-        capsfilter = Gst.ElementFactory.make("capsfilter")
-        capsfilter.set_property("caps", caps)
-        rtpjitterbuffer = Gst.ElementFactory.make("rtpjitterbuffer")
-        rtpjitterbuffer.set_property(
-            "latency", 200
-        )  # configure latency depending on network conditions
-        rtpopusdepay = Gst.ElementFactory.make("rtpopusdepay")
-        opusdec = Gst.ElementFactory.make("opusdec")
-        queue = Gst.ElementFactory.make("queue")
-        audioconvert = Gst.ElementFactory.make("audioconvert")
-        audioresample = Gst.ElementFactory.make("audioresample")
-        alsasink = Gst.ElementFactory.make("alsasink")
-        alsasink.set_property(
-            "device", "reachymini_audio_sink"
-        )  # f"hw:{self._id_audio_card},0")
-        alsasink.set_property("sync", False)
 
-        pipeline.add(udpsrc)
-        pipeline.add(capsfilter)
-        pipeline.add(rtpjitterbuffer)
-        pipeline.add(rtpopusdepay)
-        pipeline.add(opusdec)
-        pipeline.add(queue)
-        pipeline.add(audioconvert)
-        pipeline.add(audioresample)
-        pipeline.add(alsasink)
+        if caps is None or caps.get_size() == 0:
+            return
 
-        udpsrc.link(capsfilter)
-        capsfilter.link(rtpjitterbuffer)
-        rtpjitterbuffer.link(rtpopusdepay)
-        rtpopusdepay.link(opusdec)
-        opusdec.link(queue)
-        queue.link(audioconvert)
-        audioconvert.link(audioresample)
-        audioresample.link(alsasink)
+        struct = caps.get_structure(0)
+        media = struct.get_string("media") if struct.has_field("media") else ""
+        if media != "audio":
+            return
+
+        self._logger.info(f"Setting up incoming audio playback for peer {peer_id}")
+
+        # Build a separate pipeline: appsrc → depay → decode → convert → speaker
+        try:
+            playback_pipe = Gst.parse_launch(
+                "appsrc name=audio_in format=time is-live=true ! "
+                "rtpopusdepay ! opusdec ! audioconvert ! audioresample ! "
+                "alsasink device=reachymini_audio_sink sync=false"
+            )
+        except Exception as e:
+            self._logger.error(f"Failed to create audio playback pipeline: {e}")
+            return
+
+        appsrc = playback_pipe.get_by_name("audio_in")
+        appsrc.set_property("caps", caps)
+
+        play_bus = playback_pipe.get_bus()
+        play_bus.add_watch(
+            GLib.PRIORITY_DEFAULT, self._on_playback_bus_message, peer_id
+        )
+
+        playback_pipe.set_state(Gst.State.PLAYING)
+
+        # Pad probe: intercept every RTP buffer, forward to the separate
+        # playback pipeline, then DROP so webrtcsink's pipeline is unaffected.
+        def _buffer_probe(pad: Gst.Pad, info: Gst.PadProbeInfo, _: None) -> int:
+            buf = info.get_buffer()
+            if buf is not None:
+                appsrc.emit("push-buffer", buf.copy())
+            return int(Gst.PadProbeReturn.DROP)
+
+        probe_id = pad.add_probe(Gst.PadProbeType.BUFFER, _buffer_probe, None)
+
+        self._incoming_audio[peer_id] = {
+            "playback_pipeline": playback_pipe,
+            "probe_id": probe_id,
+            "pad": pad,
+        }
+        self._logger.info(f"Audio playback pipeline started for peer {peer_id}")
+
+    def _on_playback_bus_message(
+        self, bus: Gst.Bus, msg: Gst.Message, peer_id: str
+    ) -> bool:
+        """Handle messages from a per-peer audio playback pipeline."""
+        if msg.type == Gst.MessageType.ERROR:
+            err, debug = msg.parse_error()
+            self._logger.error(
+                f"Audio playback error for {peer_id}: {err} {debug}"
+            )
+            return False
+        if msg.type == Gst.MessageType.EOS:
+            self._logger.info(f"Audio playback EOS for {peer_id}")
+            return False
+        return True
+
+    def _cleanup_incoming_audio(self, peer_id: str) -> None:
+        """Remove the incoming-audio pad probe and playback pipeline for a peer."""
+        info = self._incoming_audio.pop(peer_id, None)
+        if info is None:
+            return
+
+        pad = info.get("pad")
+        probe_id = info.get("probe_id")
+        if pad is not None and probe_id is not None:
+            pad.remove_probe(probe_id)
+
+        playback_pipe = info.get("playback_pipeline")
+        if playback_pipe is not None:
+            playback_pipe.set_state(Gst.State.NULL)
+        self._logger.info(f"Cleaned up incoming audio for peer {peer_id}")
 
     @property
     def resolution(self) -> tuple[int, int]:
@@ -304,7 +410,7 @@ class GstWebRTC:
         alsasrc.link(webrtcsink)
 
     def _get_audio_input_device(self) -> Optional[str]:
-        """Use Gst.DeviceMonitor to find the pipewire audio card.
+        """Use Gst.DeviceMonitor to find the audio card.
 
         Returns the device ID of the found audio card, None if not.
         """
@@ -320,11 +426,22 @@ class GstWebRTC:
             device_props = device.get_properties()
 
             if snd_card_name in name:
+                # PipeWire
                 if device_props and device_props.has_field("object.serial"):
                     serial = device_props.get_string("object.serial")
                     self._logger.debug(f"Found audio input device with serial {serial}")
                     monitor.stop()
                     return str(serial)
+
+                # Linux PulseAudio fallback
+                if device_props and platform.system() == "Linux":
+                    udev_id = device_props.get_string("udev.id") if device_props.has_field("udev.id") else None
+                    profile = device_props.get_string("device.profile.name") if device_props.has_field("device.profile.name") else None
+                    if udev_id and profile:
+                        pa_device = f"alsa_input.{udev_id}.{profile}"
+                        self._logger.debug(f"Found audio input device {name} via PulseAudio: {pa_device}")
+                        monitor.stop()
+                        return pa_device
 
         monitor.stop()
         self._logger.warning("No source audio card found.")
@@ -388,21 +505,88 @@ class GstWebRTC:
         """Start the WebRTC pipeline."""
         self._logger.debug("Starting WebRTC")
         self._pipeline_sender.set_state(Gst.State.PLAYING)
-        self._pipeline_receiver.set_state(Gst.State.PLAYING)
         GLib.timeout_add_seconds(5, self._dump_latency)
 
     def pause(self) -> None:
         """Pause the WebRTC pipeline."""
         self._logger.debug("Pausing WebRTC")
         self._pipeline_sender.set_state(Gst.State.PAUSED)
-        self._pipeline_receiver.set_state(Gst.State.PAUSED)
 
     def stop(self) -> None:
         """Stop the WebRTC pipeline."""
         self._logger.debug("Stopping WebRTC")
-
         self._pipeline_sender.set_state(Gst.State.NULL)
-        self._pipeline_receiver.set_state(Gst.State.NULL)
+
+    # Data channel setup / handling
+    def set_message_handler(
+        self,
+        handler: Callable[[str, str], None],  # cb(peer_id, message)
+    ) -> None:
+        """Set a callback for incoming data channel messages.
+
+        Args:
+            handler: Callback function that receives (peer_id, message)
+
+        """
+        self._on_data_message = handler
+
+    def send_data_message(self, peer_id: Optional[str], message: str) -> None:
+        """Send a message to connected peers via data channel.
+
+        Args:
+            message: The string message to send
+            peer_id: If specified, send only to this peer. Otherwise broadcast to all.
+
+        """
+        if peer_id:
+            if peer_id in self._data_channels:
+                self._data_channels[peer_id].emit("send-string", message)
+            else:
+                self._logger.warning(f"No data channel for peer {peer_id}")
+        else:
+            # Broadcast to all connected peers
+            for channel in self._data_channels.values():
+                channel.emit("send-string", message)
+
+    def _setup_data_channel(self, peer_id: str, webrtcbin: Gst.Element) -> None:
+        self._logger.debug(f"Setting up data channel for peer {peer_id}")
+
+        # Create data channel options
+        options = Gst.Structure.from_string("options,ordered=true")[0]
+
+        # Create the data channel
+        channel = webrtcbin.emit("create-data-channel", "data", options)
+        if channel:
+            self._logger.debug(f"Data channel created for peer {peer_id}")
+            self._data_channels[peer_id] = channel
+
+            # Connect to data channel signals
+            channel.connect("on-open", self._on_data_channel_open, peer_id)
+            channel.connect("on-close", self._on_data_channel_close, peer_id)
+            channel.connect("on-message-string", self._on_data_channel_message, peer_id)
+            channel.connect("on-error", self._on_data_channel_error, peer_id)
+        else:
+            self._logger.error(f"Failed to create data channel for peer {peer_id}")
+
+    def _on_data_channel_open(self, channel: Gst.Element, peer_id: str) -> None:
+        self._logger.info(f"Data channel opened for peer {peer_id}")
+
+    def _on_data_channel_close(self, channel: Gst.Element, peer_id: str) -> None:
+        self._logger.info(f"Data channel closed for peer {peer_id}")
+        if peer_id in self._data_channels:
+            del self._data_channels[peer_id]
+
+    def _on_data_channel_message(
+        self, channel: Gst.Element, message: str, peer_id: str
+    ) -> None:
+        self._logger.info(f"Data channel message from peer {peer_id}: {message}")
+        if self._on_data_message:
+            self._on_data_message(peer_id, message)
+
+    def _on_data_channel_error(
+        self, channel: Gst.Element, error: str, peer_id: str
+    ) -> None:
+        self._logger.error(f"Data channel error for peer {peer_id}: {error}")
 
 
 if __name__ == "__main__":

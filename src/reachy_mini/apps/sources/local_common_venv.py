@@ -639,7 +639,7 @@ async def install_package(
                             "install",
                             "--python",
                             str(python_path),
-                            "reachy-mini[gstreamer]",
+                            "reachy-mini",
                         ]
                     else:
                         install_cmd = [
@@ -647,7 +647,7 @@ async def install_package(
                             "-m",
                             "pip",
                             "install",
-                            "reachy-mini[gstreamer]",
+                            "reachy-mini",
                         ]
 
                     ret = await running_command(install_cmd, logger=logger)

@@ -1,40 +1,61 @@
-# Advanced: Reflash the Raspberry Pi's ISO
+# Advanced: Reflash the Raspberry Pi OS image
 
+> [!WARNING]
 > **⚠️ Expert Guide Only**
 >
-> This guide explains how to reflash the ReachyMiniOS ISO to Reachy Mini's CM4. Doing that will do a factory reset to your Reachy Mini.
+> This guide explains how to reflash the ReachyMiniOS image to Reachy Mini's CM4. Doing this will _factory reset_ your Reachy Mini.
 > 
-> **Most users do not need this.** Reachy Mini comes pre-installed. Only follow these steps if you have a broken installation that you couldn't debug.
+> _Most users do not need this._ Reachy Mini comes pre-installed. Only follow these steps if you have a broken installation that you couldn't debug.
 
 ---
 
-## Download the ISO and bmap
+## Download the OS image (and bmap)
 
-First, download the latest ISO and `.bmap` file from:  
+First, download the latest OS image and `.bmap` file from:  
 https://github.com/pollen-robotics/reachy-mini-os/releases
+
+> [!TIP]
+> The `.bmap` file is used by `bmaptool` (Linux/macOS). If you're flashing with Raspberry Pi Imager (Windows), you only need the OS image file.
 
 ---
 
 ## Install rpiboot
 
-Follow the instructions here:  
+<hfoptions id="rpiboot">
+<hfoption id="Linux / macOS">
+
+Follow the building instructions here:  
 https://github.com/raspberrypi/usbboot?tab=readme-ov-file#building-1
+
+
+
+</hfoption>
+<hfoption id="Windows">
+
+Download and install the rpiboot GUI from the official Raspberry Pi repository:  
+https://github.com/raspberrypi/usbboot/raw/master/win32/rpiboot_setup.exe
+
+</hfoption>
+</hfoptions>
 
 ---
 
-## Install bmaptool
+## Install a flashing tool
 
-<details>
-<summary><strong>Linux</strong></summary>
+<hfoptions id="flash-tool">
+<hfoption id="Linux">
+
+Install bmaptool:
 
 ```bash
 sudo apt install bmap-tools
 ```
 
-</details>
+> [!TIP]
+> _Linux users can use either `bmaptool` or Raspberry Pi Imager (the Windows option)._ Raspberry Pi Imager is generally _much slower_ than `bmaptool` for this workflow, so prefer `bmaptool` when available.
 
-<details>
-<summary><strong>macOS</strong></summary>
+</hfoption>
+<hfoption id="macOS">
 
 Install bmaptool from the official repository:
 
@@ -44,7 +65,17 @@ export PATH="$HOME/.local/bin:$PATH"
 bmaptool --version
 ```
 
-</details>
+> [!TIP]
+> _macOS users can use either `bmaptool` or Raspberry Pi Imager (the Windows option)._ Raspberry Pi Imager is generally _much slower_ than `bmaptool` for this workflow, so prefer `bmaptool` when available.
+
+</hfoption>
+<hfoption id="Windows">
+
+Download and install Raspberry Pi Imager:  
+https://www.raspberrypi.com/software/
+
+</hfoption>
+</hfoptions>
 
 ---
 
@@ -52,11 +83,15 @@ bmaptool --version
 
 1. **Shut down the robot completely** before proceeding.
 
-2. Run the `rpiboot` command in your terminal (it will wait for the robot to be connected):
+2. Start **rpiboot** (it will wait for the robot to be connected):
 
-   ```bash
-   sudo ./rpiboot -d mass-storage-gadget64
-   ```
+   - **Linux / macOS**: run the `rpiboot` command in your terminal:
+
+     ```bash
+     sudo ./rpiboot -d mass-storage-gadget64
+     ```
+
+   - **Windows**: run the **RPiBoot** executable that you installed in the previous step.
    
 3. Set the switch to **DOWNLOAD (SW1)** on the head PCB:
 
@@ -71,10 +106,11 @@ bmaptool --version
 
 ## Unmount and Flash the ISO
 
-⚠️ **Make sure the device is unmounted before flashing**
+<hfoptions id="flash-iso">
+<hfoption id="Linux">
 
-<details>
-<summary><strong>Linux Instructions</strong></summary>
+> [!WARNING]
+> ⚠️ Make sure the device is unmounted before flashing.
 
 ### Check and Unmount the Device
 
@@ -111,10 +147,11 @@ For example with the `v0.0.10` release:
 sudo bmaptool copy image_2025-11-19-reachyminios-lite-v0.0.10.zip --bmap 2025-11-19-reachyminios-lite-v0.0.10.bmap /dev/sda
 ```
 
-</details>
+</hfoption>
+<hfoption id="macOS">
 
-<details>
-<summary><strong>macOS Instructions</strong></summary>
+> [!WARNING]
+> ⚠️ Make sure the device is unmounted before flashing.
 
 ### Check and Unmount the Device
 
@@ -135,11 +172,13 @@ diskutil unmountDisk /dev/disk4
 
 Replace `/dev/disk4` with your actual disk identifier.
 
-> **Note:** `unmountDisk` unmounts all volumes on the disk (`bootfs`, `rootfs`...) at once.
+> [!NOTE]
+> `unmountDisk` unmounts all volumes on the disk (`bootfs`, `rootfs`...) at once.
 
 ### Flash the ISO
 
-> **⚠️ Critical:** Use `/dev/`**`r`**`diskX` (note the **`r`** prefix!) instead of `/dev/diskX`. The **`r`** prefix provides raw disk access which is mandatory for the flash command to succeed.
+> [!WARNING]
+> Use `/dev/rdiskX` (note the **`r`** prefix!) instead of `/dev/diskX`. The `r` prefix provides raw disk access, which is mandatory for the flash command to succeed.
 
 ```bash
 sudo bmaptool copy <reachy_mini_os>.zip --bmap <reachy_mini_os>.bmap /dev/rdiskX
@@ -151,7 +190,19 @@ For example with the `v0.0.10` release (replace `/dev/rdisk4` with your actual d
 sudo bmaptool copy image_2025-11-19-reachyminios-lite-v0.0.10.zip --bmap 2025-11-19-reachyminios-lite-v0.0.10.bmap /dev/rdisk4
 ```
 
-</details>
+</hfoption>
+<hfoption id="Windows (Raspberry Pi Imager)">
+
+Use the **Raspberry Pi Imager** executable to flash the OS image:
+
+1. Open **Raspberry Pi Imager**
+2. Select `Raspberry Pi 4` as the device
+3. Select `Use custom` for the operating system, and provide the downloaded OS image (`.zip`, or the extracted `.img`)
+4. Select the only available disk for the storage system (typically `RPi-MSD- 0001`)
+5. Click **Write**
+
+</hfoption>
+</hfoptions>
 
 ---
 

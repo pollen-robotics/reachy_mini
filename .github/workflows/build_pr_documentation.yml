@@ -2,8 +2,6 @@ name: Build HF PR Documentation
 
 on:
   pull_request:
-    branches:
-      - main
     paths:
       - "docs/**"
       - "examples/**"
@@ -20,3 +18,4 @@ jobs:
       commit_sha: ${{ github.event.pull_request.head.sha }}
       pr_number: ${{ github.event.number }}
       package: reachy_mini
+      custom_container: pollenrobotics/reachymini_documentation

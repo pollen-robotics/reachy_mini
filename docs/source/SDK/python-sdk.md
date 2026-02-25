@@ -23,7 +23,7 @@ with ReachyMini() as mini:
     )
 ```
 
-**Interpolation methods:** `linear`, `minjerk` (default), `ease`, `cartoon`.
+**Interpolation methods:** `linear`, `minjerk` (default), `ease_in_out`, `cartoon`.
 
 ### Instant Control (`set_target`)
 Bypasses interpolation. Use this for high-frequency control (e.g., following a joystick or generated trajectory).

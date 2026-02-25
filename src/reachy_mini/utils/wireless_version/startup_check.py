@@ -308,8 +308,12 @@ def check_and_sync_apps_venv_sdk() -> None:
         print(f"Error getting apps_venv SDK info: {e}")
         return
 
-    print(f"Daemon: {daemon_info['version']} (source={daemon_info['source']}, ref={daemon_info.get('git_ref')})")
-    print(f"Apps:   {apps_info['version']} (source={apps_info['source']}, ref={apps_info.get('git_ref')})")
+    print(
+        f"Daemon: {daemon_info['version']} (source={daemon_info['source']}, ref={daemon_info.get('git_ref')})"
+    )
+    print(
+        f"Apps:   {apps_info['version']} (source={apps_info['source']}, ref={apps_info.get('git_ref')})"
+    )
 
     # Check if sync needed
     if daemon_info["source"] == "git":
@@ -327,11 +331,11 @@ def check_and_sync_apps_venv_sdk() -> None:
     use_uv = shutil.which("uv") is not None
     if daemon_info["source"] == "git" and daemon_info.get("git_ref"):
         git_url = f"git+https://github.com/pollen-robotics/reachy_mini.git@{daemon_info['git_ref']}"
-        pkg = f"reachy-mini[gstreamer] @ {git_url}"
+        pkg = f"reachy-mini @ {git_url}"
         extra = ["--force-reinstall"]
         print(f"Syncing apps_venv to git ref: {daemon_info['git_ref']}")
     else:
-        pkg = f"reachy-mini[gstreamer]=={daemon_info['version']}"
+        pkg = f"reachy-mini=={daemon_info['version']}"
         extra = []
         print(f"Syncing apps_venv to version: {daemon_info['version']}")
 
