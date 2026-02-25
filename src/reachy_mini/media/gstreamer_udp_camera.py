@@ -48,7 +48,7 @@ class GStreamerUDPCamera:
         self._logger = logging.getLogger(__name__)
         self._logger.setLevel(log_level)
 
-        Gst.init(None)
+        Gst.init([])
 
         self.width = width
         self.height = height
