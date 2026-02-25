@@ -5,7 +5,7 @@ Your microphone may not work anymore because of a damaged FPC cable. This tutori
 
 ## Damaged FPC cable example
 Here is an example of a damaged FPC cable of the microphone:
-![Damaged FPC cable](/docs/assets/fpc_collage.jpg)
+![Damaged FPC cable](https://github.com/pollen-robotics/reachy_mini/raw/develop/docs/assets/fpc_collage.jpg)
 
 ## New FPC cable for the microphone
 To change the FPC cable of the microphone, you will need to get a new FPC cable that matches the specifications of the original one.
@@ -28,16 +28,16 @@ Here are a few references if you are looking for a replacement for your micropho
 4. Carefully disconnect the FPC cable from the head's board.
 
 Now you should have the microphone+top head assembly with the damaged FPC cable like on the picture below:
-![Microphone assembly with damaged FPC cable](/docs/assets/microphone_assembly.jpg)
+![Microphone assembly with damaged FPC cable](https://github.com/pollen-robotics/reachy_mini/raw/develop/docs/assets/microphone_assembly.jpg)
 
 5. Gently open the rubber isolation case on one side first. No tool is required, just use your fingers to peel it off.
-![Peeling off the rubber isolation case](/docs/assets/peeling_rubber_case_1.jpg)
+![Peeling off the rubber isolation case](https://github.com/pollen-robotics/reachy_mini/raw/develop/docs/assets/peeling_rubber_case_1.jpg)
 6. Do the same thing on the other side of the rubber isolation case. Be careful not to pull abruptly.
-![Peeling off the rubber isolation case](/docs/assets/peeling_rubber_case_2.jpg)
+![Peeling off the rubber isolation case](https://github.com/pollen-robotics/reachy_mini/raw/develop/docs/assets/peeling_rubber_case_2.jpg)
 7. Remove the rubber isolation case and set it aside.
-![Rubber isolation case removed](/docs/assets/rubber_case_removed.jpg)
+![Rubber isolation case removed](https://github.com/pollen-robotics/reachy_mini/raw/develop/docs/assets/rubber_case_removed.jpg)
 8. Now you can see the FPC cable and the microphone board. Gently remove the black tape and disconnect the FPC cable from the microphone board. Be careful not to damage the connectors.
-![Disconnecting the FPC cable from the microphone board](/docs/assets/disconnect_fpc_microphone.jpg)
+![Disconnecting the FPC cable from the microphone board](https://github.com/pollen-robotics/reachy_mini/raw/develop/docs/assets/disconnect_fpc_microphone.jpg)
 9. Take the new FPC cable and connect it to the microphone board by doing the steps in reverse order. Make sure it is securely connected but do not apply too much force.
 10. Place the rubber isolation case back on the microphone assembly and gently press it to secure it in place.
 
