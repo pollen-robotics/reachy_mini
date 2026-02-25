@@ -336,6 +336,7 @@ class AppManager:
 
         Raises:
             RuntimeError: If app is running, not found, or update fails.
+
         """
         # Check if this app is currently running
         if (
@@ -357,12 +358,11 @@ class AppManager:
         # Fall back to stored metadata
         metadata = local_common_venv._load_app_metadata(app_name)
 
+        space_id: str | None = None
         if hf_info:
             space_id = hf_info.space_id
         elif metadata:
             space_id = metadata.get("id")
-        else:
-            space_id = None
 
         if not space_id:
             raise RuntimeError(

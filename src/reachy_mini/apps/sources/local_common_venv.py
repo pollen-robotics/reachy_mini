@@ -472,6 +472,7 @@ async def install_package(
         wireless_version: Whether running on wireless version.
         desktop_app_daemon: Whether running as desktop app daemon.
         force_reinstall: If True, force reinstall even if already installed (for updates).
+
     """
     # Check if uv is available
     use_uv = _check_uv_available()

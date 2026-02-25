@@ -4,6 +4,7 @@ import asyncio
 import json
 import re
 from dataclasses import dataclass
+from pathlib import Path
 
 import aiohttp
 
@@ -40,11 +41,9 @@ class HfInstallInfo:
 
 
 def _extract_hf_info_from_site_packages(
-    site_packages_path, app_name: str
+    site_packages_path: str | Path, app_name: str
 ) -> HfInstallInfo | None:
     """Search for HuggingFace install info in dist-info within a site-packages directory."""
-    from pathlib import Path
-
     site_packages = Path(site_packages_path)
     if not site_packages.exists():
         return None
@@ -94,6 +93,7 @@ def get_hf_install_info(
 
     Returns:
         HfInstallInfo with space_id and installed_sha, or None if not found.
+
     """
     from . import local_common_venv
 
@@ -118,6 +118,7 @@ async def get_space_latest_sha(
 
     Returns:
         Tuple of (sha, lastModified) or None if request fails.
+
     """
     url = f"{HF_SPACES_API_URL}/{space_id}"
     headers = {}
@@ -149,10 +150,13 @@ async def check_app_update(
 
     Returns:
         AppUpdateInfo if check succeeded, None if unable to check.
+
     """
     # Try to get install info from pip metadata (most reliable, works without stored metadata)
     hf_info = get_hf_install_info(app.name, wireless_version, desktop_app_daemon)
 
+    space_id: str | None = None
+    installed_sha: str | None = None
     if hf_info:
         space_id = hf_info.space_id
         installed_sha = hf_info.installed_sha
@@ -208,6 +212,7 @@ async def check_all_app_updates(
     Returns:
         List of AppUpdateInfo for apps that could be checked (includes apps with
         and without updates).
+
     """
     results: list[AppUpdateInfo] = []
 
