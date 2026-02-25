@@ -117,24 +117,30 @@ class GStreamerCamera(CameraBase):
             self.logger.warning("Recording pipeline set without camera.")
             self.pipeline.remove(self._appsink_video)
         elif cam_path == "use_sim":
+            # Receive UDP stream from MuJoCo simulation
             udpsrc = Gst.ElementFactory.make("udpsrc")
             udpsrc.set_property("port", 5005)
-            caps = Gst.Caps.from_string("image/jpeg")
+            # Match the caps from rtpvrawpay with explicit types
+            caps = Gst.Caps.from_string(
+                "application/x-rtp,media=(string)video,clock-rate=(int)90000,"
+                "encoding-name=(string)RAW,sampling=(string)RGB,depth=(string)8,"
+                "width=(string)1280,height=(string)720,payload=(int)96"
+            )
             udpsrc.set_property("caps", caps)
             self.pipeline.add(udpsrc)
             queue = Gst.ElementFactory.make("queue")
             self.pipeline.add(queue)
-            jpegparse = Gst.ElementFactory.make("jpegparse")
-            self.pipeline.add(jpegparse)
-            # use vaapijpegdec or nvjpegdec for hardware acceleration
-            jpegdec = Gst.ElementFactory.make("jpegdec")
-            self.pipeline.add(jpegdec)
+            rtpvrawdepay = Gst.ElementFactory.make("rtpvrawdepay")
+            self.pipeline.add(rtpvrawdepay)
             videoconvert = Gst.ElementFactory.make("videoconvert")
             self.pipeline.add(videoconvert)
+            videorate = Gst.ElementFactory.make("videorate")
+            self.pipeline.add(videorate)
             udpsrc.link(queue)
-            queue.link(jpegdec)
-            jpegdec.link(videoconvert)
-            videoconvert.link(self._appsink_video)
+            queue.link(rtpvrawdepay)
+            rtpvrawdepay.link(videoconvert)
+            videoconvert.link(videorate)
+            videorate.link(self._appsink_video)
 
         elif platform.system() == "Windows":
             camsrc = Gst.ElementFactory.make("mfvideosrc")

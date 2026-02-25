@@ -27,8 +27,6 @@ To start the simulated robot, simply run the daemon command with the `--sim` fla
 reachy-mini-daemon --sim
 ```
 
-> If you are using `uv`, you need to add `uv run` before `reachy-mini-daemon`.
-
 A window should open displaying the 3D view of the robot. You can interact with the view using your mouse (drag to rotate, right-click to pan, scroll to zoom).
 
 ### 🍎 Mac Users (Apple Silicon / Intel)
@@ -44,7 +42,7 @@ mjpython -m reachy_mini.daemon.app.main --sim
 
 You can access the Dashboard at **[http://localhost:8000](http://localhost:8000)**.
 
-* **Apps:** You can install and run Apps! They will execute inside the simulation (e.g., the robot will dance in the 3D viewer).
+* **Apps:** You can install and run Apps! They will execute inside the simulation (e.g., the robot will move in the 3D viewer).
 
 ## 4. Scenes & Options
 

@@ -324,3 +324,84 @@ class AppManager:
         )
         if success != 0:
             raise RuntimeError(f"Failed to uninstall app '{app_name}'")
+
+    async def update_app(self, app_name: str, logger: logging.Logger) -> None:
+        """Update an installed app by reinstalling it from HuggingFace.
+
+        This preserves the original source info and reinstalls to get the latest version.
+
+        Args:
+            app_name: Name of the app to update.
+            logger: Logger for progress output.
+
+        Raises:
+            RuntimeError: If app is running, not found, or update fails.
+
+        """
+        # Check if this app is currently running
+        if (
+            self.is_app_running()
+            and self.current_app is not None
+            and self.current_app.status.info.name == app_name
+        ):
+            raise RuntimeError(
+                f"Cannot update '{app_name}' while it is running. Please stop it first."
+            )
+
+        # Try to get space_id from pip install info (works without stored metadata)
+        from .sources.app_update_checker import get_hf_install_info
+
+        hf_info = get_hf_install_info(
+            app_name, self.wireless_version, self.desktop_app_daemon
+        )
+
+        # Fall back to stored metadata
+        metadata = local_common_venv._load_app_metadata(app_name)
+
+        space_id: str | None = None
+        if hf_info:
+            space_id = hf_info.space_id
+        elif metadata:
+            space_id = metadata.get("id")
+
+        if not space_id:
+            raise RuntimeError(
+                f"App '{app_name}' was not installed from HuggingFace - cannot update"
+            )
+
+        # Create AppInfo for reinstallation
+        app_info = AppInfo(
+            name=app_name,
+            description=metadata.get("cardData", {}).get("short_description", "") if metadata else "",
+            url=f"https://huggingface.co/spaces/{space_id}",
+            source_kind=SourceKind.HF_SPACE,
+            extra=metadata if metadata else {"id": space_id},
+        )
+
+        logger.info(f"Updating app '{app_name}' from {space_id}")
+
+        # First uninstall the old version (handles package name changes)
+        logger.info(f"Uninstalling old version of '{app_name}'")
+        try:
+            await local_common_venv.uninstall_package(
+                app_name,
+                logger,
+                wireless_version=self.wireless_version,
+                desktop_app_daemon=self.desktop_app_daemon,
+            )
+        except Exception as e:
+            logger.warning(f"Could not uninstall old version: {e}")
+
+        # Install the new version
+        success = await local_common_venv.install_package(
+            app_info,
+            logger,
+            wireless_version=self.wireless_version,
+            desktop_app_daemon=self.desktop_app_daemon,
+            force_reinstall=True,
+        )
+
+        if success != 0:
+            raise RuntimeError(f"Failed to update app '{app_name}'")
+
+        logger.info(f"Successfully updated '{app_name}'")
