@@ -3206,37 +3206,17 @@ all = [
     { name = "gpiozero", marker = "sys_platform == 'linux'" },
     { name = "lgpio", marker = "sys_platform == 'linux'" },
     { name = "mujoco" },
-    { name = "mypy" },
     { name = "nmcli", marker = "sys_platform == 'linux'" },
     { name = "onnxruntime" },
-    { name = "onshape-to-robot" },
     { name = "opencv-python" },
     { name = "placo", marker = "sys_platform != 'win32'" },
     { name = "pollen-bmi088-imu-library", marker = "sys_platform == 'linux'" },
-    { name = "pre-commit" },
     { name = "pynput" },
-    { name = "pytest" },
-    { name = "pytest-asyncio" },
     { name = "rerun-sdk" },
-    { name = "ruff" },
     { name = "semver" },
     { name = "sounddevice" },
     { name = "soundfile" },
-    { name = "types-pyyaml" },
-    { name = "types-requests" },
-    { name = "types-toml" },
     { name = "urdf-parser-py" },
-]
-dev = [
-    { name = "mypy" },
-    { name = "onshape-to-robot" },
-    { name = "pre-commit" },
-    { name = "pytest" },
-    { name = "pytest-asyncio" },
-    { name = "ruff" },
-    { name = "types-pyyaml" },
-    { name = "types-requests" },
-    { name = "types-toml" },
 ]
 examples = [
     { name = "pynput" },
@@ -3271,6 +3251,18 @@ wireless-version = [
     { name = "semver" },
 ]
 
+[package.dev-dependencies]
+dev = [
+    { name = "mypy" },
+    { name = "onshape-to-robot" },
+    { name = "pre-commit" },
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "ruff" },
+    { name = "types-requests" },
+    { name = "types-toml" },
+]
+
 [package.metadata]
 requires-dist = [
     { name = "aiohttp" },
@@ -3286,27 +3278,21 @@ requires-dist = [
     { name = "libusb-package", specifier = ">=1.0.26.3" },
     { name = "log-throttling", specifier = "==0.0.3" },
     { name = "mujoco", marker = "extra == 'mujoco'", specifier = "==3.3.0" },
-    { name = "mypy", marker = "extra == 'dev'", specifier = "==1.18.2" },
     { name = "nmcli", marker = "sys_platform == 'linux' and extra == 'wireless-version'", specifier = ">=1.5" },
     { name = "numpy", specifier = ">=2.2.5" },
     { name = "onnxruntime", marker = "extra == 'nn-kinematics'", specifier = "==1.22.1" },
-    { name = "onshape-to-robot", marker = "extra == 'dev'", specifier = "==1.7.6" },
     { name = "opencv-python", specifier = "<=5.0" },
     { name = "opencv-python", marker = "extra == 'opencv'", specifier = "<=5.0" },
     { name = "pip", specifier = ">=25" },
     { name = "placo", marker = "sys_platform != 'win32' and extra == 'placo-kinematics'", specifier = "==0.9.14" },
     { name = "pollen-bmi088-imu-library", marker = "sys_platform == 'linux' and extra == 'wireless-version'" },
-    { name = "pre-commit", marker = "extra == 'dev'" },
     { name = "psutil" },
     { name = "pygobject", marker = "sys_platform == 'linux'", specifier = ">=3.42.2,<=3.46.0" },
     { name = "pynput", marker = "extra == 'examples'" },
     { name = "pyserial" },
-    { name = "pytest", marker = "extra == 'dev'" },
-    { name = "pytest-asyncio", marker = "extra == 'dev'" },
     { name = "pyusb", specifier = ">=1.2.1" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "questionary" },
-    { name = "reachy-mini", extras = ["dev"], marker = "extra == 'all'" },
     { name = "reachy-mini", extras = ["examples"], marker = "extra == 'all'" },
     { name = "reachy-mini", extras = ["gstreamer"], marker = "extra == 'all'" },
     { name = "reachy-mini", extras = ["mujoco"], marker = "extra == 'all'" },
@@ -3321,7 +3307,6 @@ requires-dist = [
     { name = "requests", specifier = ">=2.28.0" },
     { name = "rerun-sdk", marker = "extra == 'rerun'", specifier = "==0.27.2" },
     { name = "rich" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = "==0.12.0" },
     { name = "rustypot", specifier = ">=1.4.2" },
     { name = "scipy", specifier = ">=1.15.3,<2.0.0" },
     { name = "semver", marker = "extra == 'wireless-version'", specifier = ">=3,<4" },
@@ -3329,14 +3314,23 @@ requires-dist = [
     { name = "soundfile", marker = "extra == 'examples'" },
     { name = "soundfile", marker = "extra == 'sounddevice'" },
     { name = "toml" },
-    { name = "types-pyyaml", marker = "extra == 'dev'" },
-    { name = "types-requests", marker = "extra == 'dev'" },
-    { name = "types-toml", marker = "extra == 'dev'" },
     { name = "urdf-parser-py", marker = "extra == 'rerun'", specifier = "==0.0.4" },
     { name = "uvicorn", extras = ["standard"] },
     { name = "websockets", specifier = ">=12,<16" },
 ]
-provides-extras = ["dev", "examples", "mujoco", "nn-kinematics", "placo-kinematics", "rerun", "wireless-version", "sounddevice", "opencv", "all"]
+provides-extras = ["examples", "mujoco", "nn-kinematics", "placo-kinematics", "rerun", "wireless-version", "sounddevice", "opencv", "all"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "mypy", specifier = "==1.18.2" },
+    { name = "onshape-to-robot", specifier = "==1.7.6" },
+    { name = "pre-commit" },
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "ruff", specifier = "==0.12.0" },
+    { name = "types-requests" },
+    { name = "types-toml" },
+]
 
 [[package]]
 name = "reachy-mini-motor-controller"
@@ -4056,15 +4050,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/da/22/b9c47b8655937b6877d40791b937931702ba9c5f9d28753199266aa96f50/typer_slim-0.23.1.tar.gz", hash = "sha256:dfe92a6317030ee2380f65bf92e540d7c77fefcc689e10d585b4925b45b5e06a", size = 4762, upload-time = "2026-02-13T10:04:26.416Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/ad/8a/5764b851659345f34787f1b6eb30b9d308bbd6c294825cbe38b6b869c97a/typer_slim-0.23.1-py3-none-any.whl", hash = "sha256:8146d5df1eb89f628191c4c604c8464fa841885d0733c58e6e700ff0228adac5", size = 3397, upload-time = "2026-02-13T10:04:27.132Z" },
-]
-
-[[package]]
-name = "types-pyyaml"
-version = "6.0.12.20250915"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/7e/69/3c51b36d04da19b92f9e815be12753125bd8bc247ba0470a982e6979e71c/types_pyyaml-6.0.12.20250915.tar.gz", hash = "sha256:0f8b54a528c303f0e6f7165687dd33fafa81c807fcac23f632b63aa624ced1d3", size = 17522, upload-time = "2025-09-15T03:01:00.728Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/bd/e0/1eed384f02555dde685fff1a1ac805c1c7dcb6dd019c916fe659b1c1f9ec/types_pyyaml-6.0.12.20250915-py3-none-any.whl", hash = "sha256:e7d4d9e064e89a3b3cae120b4990cd370874d2bf12fa5f46c97018dd5d3c9ab6", size = 20338, upload-time = "2025-09-15T03:00:59.218Z" },
 ]
 
 [[package]]
