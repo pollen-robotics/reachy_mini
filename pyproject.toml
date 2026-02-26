@@ -79,6 +79,7 @@ dev = [
     "mypy==1.18.2",
     "types-requests",
     "types-toml",
+    "types-PyYAML",
 ]
 
 [project.scripts]
