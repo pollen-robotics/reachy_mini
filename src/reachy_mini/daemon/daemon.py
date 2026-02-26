@@ -22,7 +22,7 @@ from reachy_mini.daemon.utils import (
     get_ip_address,
 )
 from reachy_mini.io.ws_server import WSServer
-from reachy_mini.tools.reflash_motors import reflash_motors
+from reachy_mini.tools.reflash_motors import reflash_motors_if_needed
 
 from .backend.mockup_sim import MockupSimBackend, MockupSimBackendStatus
 from .backend.mujoco import MujocoBackend, MujocoBackendStatus
@@ -577,7 +577,7 @@ class Daemon:
             )
 
             if reflash_motors_on_start:
-                reflash_motors(serialport, dont_light_up=True)
+                reflash_motors_if_needed(serialport, dont_light_up=True)
 
             return RobotBackend(
                 serialport=serialport,
