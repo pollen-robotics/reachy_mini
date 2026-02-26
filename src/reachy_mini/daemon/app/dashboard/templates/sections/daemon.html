@@ -1,79 +1,95 @@
-<section class="flex flex-col md:flex-row gap-4">
-    <!-- Daemon Status Animation -->
-    <div class="flex-1 min-w-[50%] justify-center items-center flex">
-        <object id="daemon-status-anim" data="" type="image/svg+xml" class="w-full h-auto"></object>
-    </div>
-    <div class="flex-1 py-2">
-        <div class="flex justify-between items-center">
-            <div class="daemon-status-title">Reachy Mini</div>
-            <div class="flex items-center gap-3">
-                <!-- HuggingFace Auth -->
-                <div id="hf-header-auth" class="flex items-center gap-2">
-                    <!-- HF Space Apps status (shown when logged in) -->
-                    <div id="hf-relay-status" class="hidden px-2 py-1 rounded-md flex items-center gap-1.5 cursor-help"
-                        style="background-color: #f3f4f6; border: 1px solid #d1d5db;"
-                        title="HF Space Apps">
-                        <div id="hf-relay-indicator" class="w-2 h-2 rounded-full" style="background-color: #9ca3af;"></div>
-                        <span id="hf-relay-text" class="text-xs font-medium" style="color: #6b7280;">--</span>
-                    </div>
-                    <!-- User badge (shown when logged in) -->
-                    <div id="hf-header-user-badge" class="hidden px-3 py-1.5 rounded-lg flex items-center gap-2"
-                        style="background-color: #d1fae5; border: 1px solid #86efac;">
-                        <div class="w-2 h-2 rounded-full" style="background-color: #10b981;"></div>
-                        <span class="text-sm font-medium" style="color: #065f46;">🤗 <span id="hf-header-username"></span></span>
-                    </div>
-                    <!-- Login/Logout button -->
-                    <button
-                        id="hf-header-auth-btn"
-                        onclick="hfAuth.isAuthenticated ? hfAuth.logout() : hfAuth.openLoginModal()"
-                        class="px-4 py-2 text-sm font-semibold rounded-xl shadow-sm transition-all hover:shadow-md"
-                        style="background-color: #fef3c7; color: #92400e; border: 1px solid #fcd34d;"
-                        onmouseover="this.style.backgroundColor='#fde68a'"
-                        onmouseout="this.style.backgroundColor='#fef3c7'"
-                    >
-                        🤗 Login
-                    </button>
+<section class="flex flex-col gap-4">
+    <!-- Header row: title + daemon toggle -->
+    <div class="flex justify-between items-center">
+        <div class="daemon-status-title">Reachy Mini</div>
+        <!-- Toggle Daemon slider -->
+        <span>
+            <label>
+                <input id="daemon-toggle" type="checkbox" value="" class="sr-only peer">
+                <div id="daemon-toggle-slider"
+                    class="relative w-20 h-8 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-gray-100 dark:peer-focus:ring-gray-100 rounded-full peer dark:bg-red-400 peer-checked:after:translate-x-[46px] rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:start-0.5 after:bg-white after:border-gray-300 after:border after:rounded-full after:h-7 after:w-7 after:transition-all dark:border-gray-600 peer-checked:bg-green-400 dark:peer-checked:bg-green-400 hidden">
+                    <span id="daemon-toggle-on"
+                        class="absolute top-1/2 -translate-y-1/2 flex justify-center items-center text-xs font-medium text-white transition-colors duration-200 hidden"
+                        style="left: 8px;">ON</span>
+                    <span id="daemon-toggle-off"
+                        class="absolute top-1/2 -translate-y-1/2 flex justify-center items-center text-xs font-medium text-white"
+                        style="right: 8px;">OFF</span>
                 </div>
-                <!-- Toggle Daemon slider -->
-                <span>
-                    <label>
-                        <input id="daemon-toggle" type="checkbox" value="" class="sr-only peer">
-                        <div id="daemon-toggle-slider"
-                            class="relative w-20 h-8 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-gray-100 dark:peer-focus:ring-gray-100 rounded-full peer dark:bg-red-400 peer-checked:after:translate-x-[46px] rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:start-0.5 after:bg-white after:border-gray-300 after:border after:rounded-full after:h-7 after:w-7 after:transition-all dark:border-gray-600 peer-checked:bg-green-400 dark:peer-checked:bg-green-400 hidden">
-                            <span id="daemon-toggle-on"
-                                class="absolute top-1/2 start-1.5 -translate-y-1/2 justify-center items-center size-7 text-white peer-checked:text-white transition-colors duration-200 hidden">ON</span>
-                            <span id="daemon-toggle-off"
-                                class="absolute top-1/2 end-2.5 -translate-y-1/2 flex justify-center items-center size-7 text-white">
-                                OFF
-                            </span>
-                        </div>
-                    </label>
-                </span>
-            </div>
-        </div>
-        <!-- Daemon status: -->
-        <div id="backend-status" class="">
-            <div class="flex items-center pt-1 w-full">
-                <span id="backend-status-icon" class="inline-block w-4 h-4 rounded-full align-middle mr-2"></span>
-                <span id="backend-status-text" class="daemon-status-collapse"></span>
-            </div>
-        </div>
+            </label>
+        </span>
+    </div>
 
-        <div class="mt-4">
-            {% include 'sections/move_player.html' %}
+    <!-- Daemon Status Animation / 3D Viewer (full width) -->
+    <div class="w-full relative">
+        <!-- 3D Viewer button -->
+        <button id="viz-3d-btn" class="absolute z-10 text-xs text-white cursor-pointer" style="background: rgba(20, 20, 35, 0.5); border: none; padding: 4px 10px; border-radius: 6px; backdrop-filter: blur(6px); top: 6px; left: 6px;">
+            3D
+        </button>
+        <!-- Back button (shown in 3D mode) -->
+        <button id="viz-3d-back-btn" class="hidden absolute z-10 text-xs text-white cursor-pointer" style="background: rgba(20, 20, 35, 0.5); border: none; padding: 4px 10px; border-radius: 6px; backdrop-filter: blur(6px); top: 6px; left: 6px;">
+            ✕
+        </button>
+        <!-- Original SVG animation (shown by default) -->
+        <div id="daemon-anim-container" class="justify-center items-center flex w-full">
+            <object id="daemon-status-anim" data="" type="image/svg+xml" class="w-full h-auto"></object>
         </div>
-        {% if args.wireless_version %}
-        <div class="w-full flex  pt-4 gap-4 justify-center">
-            <a id="daemon-logs-btn"
-                class="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-300 rounded-lg shadow border border-gray-300"
-                href="/logs">
-                Logs
-            </a>
-            <a id="daemon-settings-btn"
-                class="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-300 rounded-lg shadow border border-gray-300"
-                href="/settings">
-                Settings
-            </a>
+        <!-- 3D Viewer (hidden by default, sized to match SVG via JS) -->
+        <div id="viewer-3d-container" class="hidden w-full rounded-lg overflow-hidden" style="background: linear-gradient(180deg, #00bfae 0%, #0093d1 60%, #3f51b5 100%);">
+            <div id="viewer-3d-canvas" class="w-full h-full"></div>
         </div>
-        {% endif %}
+    </div>
+
+    <!-- Status + lozenges row (below viewer) -->
+    <div id="backend-status" class="flex items-center justify-between">
+        <div class="flex items-center">
+            <span id="backend-status-icon" class="inline-block w-4 h-4 rounded-full align-middle mr-2"></span>
+            <span id="backend-status-text" class="daemon-status-collapse"></span>
+        </div>
+        <div id="hf-header-auth" class="flex items-center gap-2">
+            <!-- HF Space Apps status (shown when logged in) -->
+            <div id="hf-relay-status" class="hidden flex items-center cursor-help"
+                style="height: 32px; padding: 0 12px; border-radius: 8px; gap: 6px; background-color: #f3f4f6; border: 1px solid #d1d5db;"
+                title="HF Space Apps">
+                <div id="hf-relay-indicator" class="w-2 h-2 rounded-full" style="background-color: #9ca3af;"></div>
+                <span id="hf-relay-text" class="text-xs font-medium" style="color: #6b7280;">--</span>
+            </div>
+            <!-- User badge (shown when logged in) -->
+            <div id="hf-header-user-badge" class="hidden flex items-center"
+                style="height: 32px; padding: 0 12px; border-radius: 8px; gap: 6px; background-color: #d1fae5; border: 1px solid #86efac;">
+                <div class="w-2 h-2 rounded-full" style="background-color: #10b981;"></div>
+                <span class="text-xs font-medium" style="color: #065f46;">🤗 <span id="hf-header-username"></span></span>
+            </div>
+            <!-- Login/Logout button -->
+            <button
+                id="hf-header-auth-btn"
+                onclick="hfAuth.isAuthenticated ? hfAuth.logout() : hfAuth.openLoginModal()"
+                class="flex items-center text-xs font-semibold shadow-sm transition-all hover:shadow-md"
+                style="height: 32px; padding: 0 12px; border-radius: 8px; background-color: #fef3c7; color: #92400e; border: 1px solid #fcd34d;"
+                onmouseover="this.style.backgroundColor='#fde68a'"
+                onmouseout="this.style.backgroundColor='#fef3c7'"
+            >
+                🤗 Login
+            </button>
+        </div>
+    </div>
+
+    <!-- Move player -->
+    <div class="grid gap-4">
+        {% include 'sections/move_player.html' %}
+    </div>
+
+    {% if args.wireless_version %}
+    <div class="w-full flex gap-4 justify-center">
+        <a id="daemon-logs-btn"
+            class="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-300 rounded-lg shadow border border-gray-300"
+            href="/logs">
+            Logs
+        </a>
+        <a id="daemon-settings-btn"
+            class="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-300 rounded-lg shadow border border-gray-300"
+            href="/settings">
+            Settings
+        </a>
+    </div>
+    {% endif %}
 </section>
