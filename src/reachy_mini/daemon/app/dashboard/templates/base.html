@@ -127,7 +127,28 @@
         </div>
     </div>
 
-    <div class="container px-4 sm:px-8 md:px-8 lg:px-8 xl:px-8 mx-auto w-full md:w-2/3">
+    <!-- Deprecation Banner -->
+    <div
+        style="background-color: #fef3c7; border-bottom: 2px solid #fcd34d; padding: 12px 16px; text-align: center; width: 100%; position: fixed; top: 0; left: 0; right: 0; z-index: 40;">
+        <div style="display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap;">
+            <svg style="width: 20px; height: 20px; color: #d97706; flex-shrink: 0;" fill="none" stroke="currentColor"
+                viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4.5c-.77-.833-2.694-.833-3.464 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z" />
+            </svg>
+            <span style="color: #92400e; font-size: 14px; font-weight: 600;">
+                This web version of the dashboard is being deprecated soon. Please use the Reachy Mini Control app
+                instead.
+            </span>
+            <a href="https://pollen-robotics-reachy-mini.hf.space/download" target="_blank"
+                style="display: inline-block; padding: 4px 12px; font-size: 13px; font-weight: 600; color: #ffffff; background-color: #d97706; border-radius: 6px; text-decoration: none;"
+                onmouseover="this.style.backgroundColor='#b45309'" onmouseout="this.style.backgroundColor='#d97706'">
+                Download the app
+            </a>
+        </div>
+    </div>
+
+    <div class="container px-4 sm:px-8 md:px-8 lg:px-8 xl:px-8 mx-auto w-full md:w-2/3" style="margin-top: 52px;">
         {% block content %}{% endblock %}
     </div>
 
