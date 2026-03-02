@@ -45,17 +45,6 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = [
-    "pytest",
-    "pytest-asyncio",
-    "ruff==0.12.0",
-    "onshape-to-robot==1.7.6",
-    "pre-commit",
-    "mypy==1.18.2",
-    "types-requests",
-    "types-toml",
-    "types-PyYAML",
-]
 examples = ["pynput", "soundfile"]
 mujoco = ["mujoco==3.3.0"]
 nn_kinematics = ["onnxruntime==1.22.1"]
@@ -71,7 +60,6 @@ wireless-version = [
 sounddevice = ["sounddevice==0.5.1", "soundfile"]
 opencv = ["opencv-python<=5.0", "cv2_enumerate_cameras>=1.2.1"]
 all = [
-    "reachy_mini[dev]",
     "reachy_mini[examples]",
     "reachy_mini[mujoco]",
     "reachy_mini[nn_kinematics]",
@@ -81,6 +69,19 @@ all = [
     "reachy_mini[wireless-version]",
     "reachy_mini[sounddevice]",
     "reachy_mini[opencv]"
+]
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+    "ruff==0.12.0",
+    "onshape-to-robot==1.7.6",
+    "pre-commit",
+    "mypy==1.18.2",
+    "types-requests",
+    "types-toml",
+    "types-PyYAML",
 ]
 
 [project.scripts]
