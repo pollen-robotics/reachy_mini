@@ -36,7 +36,7 @@ with ReachyMini() as mini:
 |--------|-----------|
 | `linear` | Constant speed |
 | `minjerk` | Natural, smooth (default) |
-| `ease` | Slow start/end |
+| `ease_in_out` | Slow start/end |
 | `cartoon` | Exaggerated, bouncy |
 
 ### Key Insight

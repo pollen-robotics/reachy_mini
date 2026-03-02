@@ -34,10 +34,10 @@ def main() -> None:
         "If not specified, the script will try to automatically find it.",
     )
     args = parser.parse_args()
-    reflash_motors(args.serialport)
+    reflash_motors_if_needed(args.serialport)
 
 
-def reflash_motors(
+def reflash_motors_if_needed(
     serialport: Optional[str] = None, dont_light_up: bool = False
 ) -> None:
     """Reflash Reachy Mini's motors."""
@@ -78,6 +78,23 @@ def reflash_motors(
 
     for motor_name in motors:
         motor_config = config.motors[motor_name]
+
+        try:
+            check_configuration(
+                motor_config,
+                serialport,
+                baudrate=config.serial.baudrate,
+            )
+            console.print(
+                f"[SKIP] Motor '{motor_name}' is already correctly configured.",
+                style="yellow",
+            )
+            continue
+        except RuntimeError:
+            console.print(
+                f"[INFO] Motor '{motor_name}' needs to be reflashed.",
+                style="blue",
+            )
 
         from_id = motor_config.id
 

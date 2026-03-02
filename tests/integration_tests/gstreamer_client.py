@@ -5,7 +5,8 @@ import time
 from threading import Thread
 
 import gi
-from gst_signalling.utils import find_producer_peer_id_by_name
+
+from reachy_mini.media.webrtc_utils import find_producer_peer_id_by_name
 
 gi.require_version("Gst", "1.0")
 from gi.repository import GLib, Gst  # noqa: E402
@@ -152,8 +153,8 @@ class GstConsumer:
 
 
 def process_msg(bus: Gst.Bus, pipeline: Gst.Pipeline) -> bool:
-    """Process messages from the GStreamer bus."""
-    msg = bus.timed_pop_filtered(10 * Gst.MSECOND, Gst.MessageType.ANY)
+    """Process messages from the GStreamer bus."""    
+    msg = bus.timed_pop_filtered(10 * Gst.MSECOND, Gst.MessageType.ERROR | Gst.MessageType.EOS | Gst.MessageType.LATENCY)
     if msg:
         if msg.type == Gst.MessageType.ERROR:
             err, debug = msg.parse_error()

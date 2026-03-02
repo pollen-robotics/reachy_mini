@@ -13,6 +13,7 @@ import numpy as np
 import soundfile as sf
 
 from reachy_mini import ReachyMini
+from reachy_mini.media.media_manager import MediaBackend
 
 DURATION = 5  # seconds
 OUTPUT_FILE = "recorded_audio.wav"
@@ -40,7 +41,7 @@ def main(backend: str) -> None:
                 audio_samples.append(sample)
                 current_nb_samples += sample.shape[0]
 
-            if backend == "default_no_video":
+            if mini.media.backend == MediaBackend.DEFAULT_NO_VIDEO:
                 # we don't need to poll too fast for sounddevice backend
                 time.sleep(0.2)
 

@@ -36,7 +36,7 @@ This concerns issues like:
 - Motors showing errors like "Overload Error"
 - Missing motors: "No motor found on port", "Missing motor", etc.  
 
-If you have any of the following symptoms, please refer to the [Motors diagnosis and troubleshooting guide](./platforms/reachy_mini/motors_diagnosis.md) for detailed steps to diagnose and fix motor-related issues.  
+If you have any of the following symptoms, please refer to the [Motors diagnosis and troubleshooting guide](./troubleshooting/motors_diagnosis.md) for detailed steps to diagnose and fix motor-related issues.  
 
 Using the Reachy Mini Testbench app will help you identify and resolve these problems effectively.
 
@@ -53,6 +53,24 @@ Please check if any cable is damaged, from the foot PCB to the head. Especially 
 It can also be the same issue as "Motor blinking red or Overload Error" described above.
 
 </details>
+
+<details>
+<summary><strong>Microphone not working</strong></summary>
+
+If you have one of the following symptoms:
+- Audio recording not working / returns silence
+- Audio recording returning zeros
+
+You may have plugged the microphone cable upside down.
+- If your cable is white and blue, please check again the assembly instruction to be sure the blue side is up.
+- If your cable is black, check that the side with the writing "Main Board" is up (see picture below).
+![mic_cable](https://github.com/pollen-robotics/reachy_mini/raw/develop/docs/assets/black_fpc_cable.png)
+
+
+If your cable is plugged properly and you still have issues, it is likely that the FPC cable of the microphone is damaged. Please refer to the tutorial [How to change the FPC cable of the microphone of Reachy Mini?](./troubleshooting/change_mic_fpc_cable.md) to fix this issue.
+
+</details>
+
 
 <details>
 

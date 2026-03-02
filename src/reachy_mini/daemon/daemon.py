@@ -24,7 +24,7 @@ from reachy_mini.daemon.utils import (
 from reachy_mini.io import (
     ZenohServer,
 )
-from reachy_mini.tools.reflash_motors import reflash_motors
+from reachy_mini.tools.reflash_motors import reflash_motors_if_needed
 
 from .backend.mockup_sim import MockupSimBackend, MockupSimBackendStatus
 from .backend.mujoco import MujocoBackend, MujocoBackendStatus
@@ -109,6 +109,7 @@ class Daemon:
 
         try:
             from huggingface_hub import get_token
+
             hf_token = get_token()
         except Exception as e:
             self.logger.debug(f"No HF token available, central signaling disabled: {e}")
@@ -134,6 +135,7 @@ class Daemon:
         """Stop the central signaling relay."""
         try:
             from reachy_mini.media.central_signaling_relay import stop_central_relay
+
             await stop_central_relay()
             self.logger.info("Central signaling relay stopped")
         except Exception as e:
@@ -573,7 +575,7 @@ class Daemon:
             )
 
             if reflash_motors_on_start:
-                reflash_motors(serialport, dont_light_up=True)
+                reflash_motors_if_needed(serialport, dont_light_up=True)
 
             return RobotBackend(
                 serialport=serialport,

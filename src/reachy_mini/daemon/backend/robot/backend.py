@@ -643,18 +643,23 @@ class RobotBackend(Backend):
 
         errors = {}
         for name, id in self.c.get_motor_name_id().items():
-            # https://emanual.robotis.com/docs/en/dxl/x/xl330-m288/#hardware-error-status
-            err_byte = self.c.async_read_raw_bytes(id, 70, 1)
-            assert len(err_byte) == 1
-            err = decode_hardware_error_byte(err_byte[0])
-            if err:
-                if "Input Voltage Error" in err:
-                    if voltage_ok(id):
-                        err.remove("Input Voltage Error")
+            try:
+                # https://emanual.robotis.com/docs/en/dxl/x/xl330-m288/#hardware-error-status
+                err_byte = self.c.async_read_raw_bytes(id, 70, 1)
+                assert len(err_byte) == 1
+                err = decode_hardware_error_byte(err_byte[0])
+                if err:
+                    if "Input Voltage Error" in err:
+                        if voltage_ok(id):
+                            err.remove("Input Voltage Error")
 
-                # To avoid logging empty errors like "Motor 1: []"
-                if len(err) > 0:
-                    errors[name] = err
+                    # To avoid logging empty errors like "Motor 1: []"
+                    if len(err) > 0:
+                        errors[name] = err
+            except (RuntimeError, AssertionError) as e:
+                self.logger.warning(
+                    f"Failed to read hardware errors for motor '{name}' (id={id}): {e}"
+                )
 
         return errors
 

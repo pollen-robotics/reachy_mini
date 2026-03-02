@@ -11,12 +11,14 @@ LAUNCHER_PATH="$SCRIPT_DIR/launcher.sh"
 cat <<EOF | sudo tee $SERVICE_FILE > /dev/null
 [Unit]
 Description=Reachy Mini AP Launcher Service
-After=network.target
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
 ExecStart=$LAUNCHER_PATH
 Restart=on-failure
+RestartSec=3s
 User=$(whoami)
 WorkingDirectory=$(dirname "$LAUNCHER_PATH")
 

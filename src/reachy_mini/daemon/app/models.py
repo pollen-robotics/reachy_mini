@@ -1,6 +1,7 @@
 """Common pydantic models definitions."""
 
 from datetime import datetime
+from typing import cast
 
 import numpy as np
 from numpy.typing import NDArray
@@ -36,24 +37,27 @@ class Matrix4x4Pose(BaseModel):
     def from_pose_array(cls, arr: NDArray[np.float64]) -> "Matrix4x4Pose":
         """Create a Matrix4x4 pose representation from a 4x4 pose array."""
         assert arr.shape == (4, 4), "Array must be of shape (4, 4)"
-        m: tuple[
-            float,
-            float,
-            float,
-            float,
-            float,
-            float,
-            float,
-            float,
-            float,
-            float,
-            float,
-            float,
-            float,
-            float,
-            float,
-            float,
-        ] = tuple(arr.flatten().tolist())
+        m = cast(
+            tuple[
+                float,
+                float,
+                float,
+                float,
+                float,
+                float,
+                float,
+                float,
+                float,
+                float,
+                float,
+                float,
+                float,
+                float,
+                float,
+                float,
+            ],
+            tuple(arr.flatten().tolist()),
+        )
         return cls(m=m)
 
     def to_pose_array(self) -> NDArray[np.float64]:

@@ -19,8 +19,6 @@
       title: Development Workflow
     - local: platforms/reachy_mini/reflash_the_rpi_ISO
       title: Reflash the ISO
-    - local: platforms/reachy_mini/motors_diagnosis
-      title: Motors Diagnosis
   title: Reachy Mini (Wireless)
 - sections:
     - local: platforms/reachy_mini_lite/get_started
@@ -47,6 +45,8 @@
       title: Quickstart Guide
     - local: SDK/python-sdk
       title: Python SDK
+    - local: SDK/javascript-sdk
+      title: JavaScript SDK & Web Apps
     - local: SDK/integration
       title: AI Integrations
     - local: SDK/core-concept
@@ -59,6 +59,10 @@
 - sections:
     - local: troubleshooting
       title: Troubleshooting & FAQ
+    - local: troubleshooting/motors_diagnosis
+      title: Motors Diagnosis
+    - local: troubleshooting/change_mic_fpc_cable
+      title: Change Mic FPC Cable
   title: Help and support
 - isExpanded: false
   sections:
