@@ -34,6 +34,7 @@ OUTPUT_PATH = Path(__file__).resolve().parent.parent / "docs" / "source" / "API"
 
 
 def main() -> None:
+    """Extract the OpenAPI schema from the FastAPI app and write it to docs."""
     # create_app(Args()) builds the FastAPI app with all routes registered,
     # but does NOT start the lifespan (no hardware, no server).
     app = create_app(Args())
