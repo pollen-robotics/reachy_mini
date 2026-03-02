@@ -1,0 +1,116 @@
+name: Release Version Sync
+
+on:
+  release:
+    types: [created]
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+
+jobs:
+  sync-version:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Extract version from tag
+        id: version
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Invalid tag format: $GITHUB_REF_NAME (expected vX.Y.Z)"
+            exit 1
+          fi
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+
+      # === PUSH TO MAIN ===
+      - name: Create release branch for main
+        run: git checkout -b release/${{ steps.version.outputs.VERSION }}
+
+      - name: Update version in pyproject.toml and uv.lock
+        run: |
+          sed -i "s/^version = .*/version = \"${{ steps.version.outputs.VERSION }}\"/" pyproject.toml
+          sed -i '/^name = "reachy-mini"/,/^version = /s/^version = ".*"$/version = "${{ steps.version.outputs.VERSION }}"/' uv.lock
+
+      - name: Commit release version
+        run: |
+          git add pyproject.toml uv.lock
+          git commit -m "Set version to ${{ steps.version.outputs.VERSION }}"
+
+      - name: Push release branch
+        run: git push origin release/${{ steps.version.outputs.VERSION }}
+
+      - name: Create PR to main
+        id: main_pr
+        run: |
+          gh pr create \
+            --base main \
+            --title "Release ${{ steps.version.outputs.VERSION }}" \
+            --body "Auto-generated release PR for version ${{ steps.version.outputs.VERSION }}."
+          echo "PR_NUMBER=$(gh pr view release/${{ steps.version.outputs.VERSION }} --json number -q '.number')" >> $GITHUB_OUTPUT
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Enable auto-merge for main PR
+        run: gh pr merge ${{ steps.main_pr.outputs.PR_NUMBER }} --auto --merge --delete-branch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Trigger documentation build
+        run: gh workflow run build_documentation.yml
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # === PUSH TO DEVELOP ===
+      - name: Checkout develop
+        run: git checkout develop
+
+      - name: Create dev version branch
+        run: git checkout -b dev-version/${{ steps.version.outputs.VERSION }}
+
+      - name: Update version in pyproject.toml and uv.lock
+        run: |
+          sed -i "s/^version = .*/version = \"${{ steps.version.outputs.VERSION }}.dev0\"/" pyproject.toml
+          sed -i '/^name = "reachy-mini"/,/^version = /s/^version = ".*"$/version = "${{ steps.version.outputs.VERSION }}.dev0"/' uv.lock
+
+      - name: Commit dev version
+        run: |
+          git add pyproject.toml uv.lock
+          git commit -m "Set version to ${{ steps.version.outputs.VERSION }}.dev0"
+
+      - name: Push dev version branch
+        run: git push origin dev-version/${{ steps.version.outputs.VERSION }}
+
+      - name: Create PR to develop
+        id: develop_pr
+        run: |
+          gh pr create \
+            --base develop \
+            --title "Set version to ${{ steps.version.outputs.VERSION }}.dev0" \
+            --body "Auto-generated PR to set dev version after release ${{ steps.version.outputs.VERSION }}."
+          echo "PR_NUMBER=$(gh pr view dev-version/${{ steps.version.outputs.VERSION }} --json number -q '.number')" >> $GITHUB_OUTPUT
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Enable auto-merge for develop PR
+        run: gh pr merge ${{ steps.develop_pr.outputs.PR_NUMBER }} --auto --merge --delete-branch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # === CLEANUP ON FAILURE ===
+      - name: Cleanup branches on failure
+        if: failure()
+        run: |
+          git push origin --delete release/${{ steps.version.outputs.VERSION }} 2>/dev/null || true
+          git push origin --delete dev-version/${{ steps.version.outputs.VERSION }} 2>/dev/null || true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
