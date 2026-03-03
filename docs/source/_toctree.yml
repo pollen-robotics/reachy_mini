@@ -45,6 +45,10 @@
       title: Quickstart Guide
     - local: SDK/python-sdk
       title: Python SDK
+    - local: API/rest-api
+      title: REST API
+    - local: SDK/javascript-sdk
+      title: JavaScript SDK & Web Apps
     - local: SDK/integration
       title: AI Integrations
     - local: SDK/core-concept

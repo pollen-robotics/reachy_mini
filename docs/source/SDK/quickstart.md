@@ -59,15 +59,15 @@ The **Daemon** is a background service that handles the low-level communication 
 * **On Reachy Mini Lite (USB)** - You have two options :
   - Start the [desktop application](../platforms/reachy_mini_lite/get_started.md#3--download-reachy-mini-control)
   - Open a terminal and run :
-  ```bash
-  uv run reachy-mini-daemon
-  ```
+    ```bash
+    reachy-mini-daemon
+    ```
 * **For Simulation (No robot needed)** - You have two options :
   - Start the [desktop application](../platforms/reachy_mini_lite/get_started.md#3--download-reachy-mini-control)
   - Open a terminal and run:
-    - **Linux/Windows:**
+    - **Linux & Windows:**
       ```bash
-      uv run reachy-mini-daemon --sim
+      reachy-mini-daemon --sim
       ```
     - **macOS:**
       ```bash
@@ -121,7 +121,7 @@ Encountering an issue? 👉 **[Check the Troubleshooting & FAQ Guide](../trouble
 
 If you're using an AI agent like **Claude Code**, **Codex**, or **Copilot**, you can start building apps right away. Just paste this prompt:
 
-> *I'd like to create a Reachy Mini app. Start by reading https://github.com/pollen-robotics/reachy_mini/blob/develop/agents.md*
+> *I'd like to create a Reachy Mini app. Start by reading https://github.com/pollen-robotics/reachy_mini/blob/develop/AGENTS.md*
 
 This guide gives your AI agent everything it needs to know about the SDK, best practices, and available tools.
 

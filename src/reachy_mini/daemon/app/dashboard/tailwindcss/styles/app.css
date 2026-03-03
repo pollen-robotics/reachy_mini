@@ -68,6 +68,18 @@ body {
     font-weight: 600;
 }
 
+.update-badge {
+    display: inline-block;
+    background-color: #3b82f6;
+    color: white;
+    font-size: 0.65rem;
+    font-weight: 600;
+    padding: 0.125rem 0.375rem;
+    border-radius: 0.25rem;
+    margin-left: 0.5rem;
+    vertical-align: middle;
+}
+
 /* Hugging Face App Store Styles */
 
 .app-section-title {

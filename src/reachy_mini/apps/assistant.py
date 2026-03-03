@@ -208,7 +208,7 @@ def create(console: Console, app_name: str, app_path: Path) -> Path:
 
 
 def install_app_with_progress(
-    console: Console, pip_executable: str, app_path: Path
+    console: Console, python_executable: str, app_path: Path, env: dict[str, str] | None = None
 ) -> None:
     """Install the app in a temporary virtual environment with a progress spinner."""
     console.print("Installing the app in the temporary virtual environment...")
@@ -216,13 +216,16 @@ def install_app_with_progress(
     # Start pip in the background, discard its output
     process = subprocess.Popen(
         [
-            pip_executable,
+            python_executable,
+            "-m",
+            "pip",
             "install",
             "-q",  # quiet
             str(app_path),
         ],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.STDOUT,
+        env=env,
     )
 
     with Progress(
@@ -462,78 +465,97 @@ def check(console: Console, app_path: str) -> None:
     # - <app_name>/main.py exists
 
     # Now, create a temporary python venv in a temp dir, `pip install . the app, check that it works and that the entrypoint is registered
+    original_cwd = Path.cwd()
     with tempfile.TemporaryDirectory() as tmpdir:
-        # change dir to tmpdir
-        os.chdir(tmpdir)
+        try :
+            # change dir to tmpdir
+            os.chdir(tmpdir)
 
-        console.print(
-            f"\nCreating a temporary virtual environment to test the app... (tmp dir: {tmpdir})"
-        )
-        venv_path = os.path.join(tmpdir, "venv")
-        subprocess.run([sys.executable, "-m", "venv", venv_path], check=True)
-
-        pip_executable = os.path.join(
-            venv_path,
-            "Scripts" if os.name == "nt" else "bin",
-            "pip",
-        )
-        python_executable = os.path.join(
-            venv_path,
-            "Scripts" if os.name == "nt" else "bin",
-            "python",
-        )
-
-        install_app_with_progress(console, pip_executable, abs_app_path)
-
-        console.print("Checking that the app entrypoint is registered...")
-
-        # use from importlib.metadata import entry_points
-
-        check_script = (
-            f"from importlib.metadata import entry_points; "
-            f"eps = entry_points(group='reachy_mini_apps'); "
-            f"app_names = [ep.name for ep in eps]; "
-            f"import sys; "
-            f"sys.exit(0) if '{app_name}' in app_names else sys.exit(1)"
-        )
-        if (
-            subprocess.run(
-                [python_executable, "-c", check_script],
-                # capture_output=True,
-                text=True,
-            ).returncode
-            != 0
-        ):
             console.print(
-                f"❌ App '{app_name}' entrypoint is not registered correctly.",
-                style="bold red",
+                f"\nCreating a temporary virtual environment to test the app... (tmp dir: {tmpdir})"
             )
-            sys.exit(1)
-        console.print("✅ App entrypoint is registered correctly.")
+            venv_path = os.path.join(tmpdir, "venv")
+            subprocess.run([sys.executable, "-m", "venv", venv_path], check=True)
 
-        # Now try to uninstall the app and check that it uninstalls correctly
-        console.print("Uninstalling the app from the temporary virtual environment...")
-        subprocess.run(
-            [pip_executable, "uninstall", "-y", app_name],
-            check=True,
-        )
+            python_executable = os.path.join(
+                venv_path,
+                "Scripts" if os.name == "nt" else "bin",
+                "python",
+            )
 
-        if (
-            subprocess.run(
-                [python_executable, "-c", check_script],
+            isolated_env = os.environ.copy()
+            isolated_env.pop("PYTHONPATH", None)
+            isolated_env["VIRTUAL_ENV"] = venv_path
+
+            install_app_with_progress(
+                console, python_executable, abs_app_path, env=isolated_env
+            )
+
+            console.print("Checking that the app entrypoint is registered...")
+
+            # use from importlib.metadata import entry_points
+
+            check_script = (
+                f"from importlib.metadata import entry_points; "
+                f"eps = entry_points(group='reachy_mini_apps'); "
+                f"app_names = [ep.name for ep in eps]; "
+                f"import sys; "
+                f"sys.exit(0) if '{app_name}' in app_names else sys.exit(1)"
+            )
+            if (
+                subprocess.run(
+                    [python_executable, "-c", check_script],
+                    # capture_output=True,
+                    text=True,
+                    env=isolated_env,
+                ).returncode
+                != 0
+            ):
+                console.print(
+                    f"❌ App '{app_name}' entrypoint is not registered correctly.",
+                    style="bold red",
+                )
+                sys.exit(1)
+            console.print("✅ App entrypoint is registered correctly.")
+
+            # Now try to uninstall the app and check that it uninstalls correctly
+            console.print("Uninstalling the app from the temporary virtual environment...")
+            uninstall_process = subprocess.run(
+                [python_executable, "-m", "pip", "uninstall", "-y", app_name],
                 capture_output=True,
                 text=True,
-            ).returncode
-            == 0
-        ):
-            console.print(
-                f"❌ App '{app_name}' was not uninstalled correctly.",
-                style="bold red",
+                env=isolated_env,
             )
-            sys.exit(1)
+            if uninstall_process.returncode != 0:
+                stdout_lower = (uninstall_process.stdout or "").lower()
+                stderr_lower = (uninstall_process.stderr or "").lower()
+                outside_env_error = "outside environment" in stdout_lower or "outside environment" in stderr_lower
+                if not outside_env_error:
+                    raise subprocess.CalledProcessError(
+                        uninstall_process.returncode,
+                        uninstall_process.args,
+                        output=uninstall_process.stdout,
+                        stderr=uninstall_process.stderr,
+                    )
 
-        console.print("✅ App installation and uninstallation tests passed.")
+            if (
+                subprocess.run(
+                    [python_executable, "-c", check_script],
+                    capture_output=True,
+                    text=True,
+                    env=isolated_env,
+                ).returncode
+                == 0
+            ):
+                console.print(
+                    f"❌ App '{app_name}' was not uninstalled correctly.",
+                    style="bold red",
+                )
+                sys.exit(1)
 
+            console.print("✅ App installation and uninstallation tests passed.")
+        finally :
+            os.chdir(original_cwd)
     console.print(f"\n✅ App '{app_name}' passed all checks!", style="bold green")
 
 
@@ -618,8 +640,8 @@ def try_to_push(console: Console, _app_path: Path) -> bool:
     """Try to push changes to the remote repository."""
     console.print("Pushing changes to the remote repository ...", style="bold blue")
     push_result = subprocess.run(
-        f"cd {_app_path} && git push",
-        shell=True,
+        ["git", "push"],
+        cwd=_app_path,
         capture_output=True,
         text=True,
     )
@@ -709,12 +731,20 @@ def publish(
             exit()
 
         console.print("App already exists on Hugging Face Spaces.", style="bold blue")
-        os.system(f"cd {app_path} && git pull {repo_url} main")
+        pull_result = subprocess.run(
+            ["git", "pull", repo_url, "main"],
+            cwd=app_path,
+            capture_output=True,
+            text=True,
+        )
+        if pull_result.returncode != 0:
+            console.print(
+                f"[red]Failed to pull latest changes: {pull_result.stderr}[/red]"
+            )
+            sys.exit(1)
 
         status_output = (
-            subprocess.check_output(
-                f"cd {app_path} && git status --porcelain", shell=True
-            )
+            subprocess.check_output(["git", "status", "--porcelain"], cwd=app_path)
             .decode("utf-8")
             .strip()
         )
@@ -755,7 +785,22 @@ def publish(
 
         # commit local changes
         console.print("Committing changes locally ...", style="bold blue")
-        os.system(f"cd {app_path} && git add . && git commit -m '{commit_message}'")
+        add_result = subprocess.run(
+            ["git", "add", "."], cwd=app_path, capture_output=True, text=True
+        )
+        if add_result.returncode != 0:
+            console.print(f"[red]git add failed: {add_result.stderr}[/red]")
+            sys.exit(1)
+
+        commit_result = subprocess.run(
+            ["git", "commit", "-m", commit_message],
+            cwd=app_path,
+            capture_output=True,
+            text=True,
+        )
+        if commit_result.returncode != 0:
+            console.print(f"[red]git commit failed: {commit_result.stderr}[/red]")
+            sys.exit(1)
 
         # && git push HEAD:main"
 
@@ -793,9 +838,67 @@ def publish(
             exist_ok=False,
             space_sdk="static",
         )
-        os.system(
-            f"cd {app_path} && git init && git remote add space {repo_url} && git add . && git commit -m 'Initial commit' && git push --set-upstream -f space HEAD:main"
+        if not (Path(app_path) / ".git").exists():
+            init_result = subprocess.run(
+                ["git", "init"], cwd=app_path, capture_output=True, text=True
+            )
+            if init_result.returncode != 0:
+                console.print(f"[red]git init failed: {init_result.stderr}[/red]")
+                sys.exit(1)
+
+        # Be tolerant to previous partial runs: if the remote already exists, update it.
+        remote_exists = subprocess.run(
+            ["git", "remote", "get-url", "space"],
+            cwd=app_path,
+            capture_output=True,
+            text=True,
+        ).returncode == 0
+        if remote_exists:
+            remote_result = subprocess.run(
+                ["git", "remote", "set-url", "space", repo_url],
+                cwd=app_path,
+                capture_output=True,
+                text=True,
+            )
+        else:
+            remote_result = subprocess.run(
+                ["git", "remote", "add", "space", repo_url],
+                cwd=app_path,
+                capture_output=True,
+                text=True,
+            )
+        if remote_result.returncode != 0:
+            console.print(
+                f"[red]Failed to configure remote 'space': {remote_result.stderr}[/red]"
+            )
+            sys.exit(1)
+
+        add_result = subprocess.run(
+            ["git", "add", "."], cwd=app_path, capture_output=True, text=True
         )
+        if add_result.returncode != 0:
+            console.print(f"[red]git add failed: {add_result.stderr}[/red]")
+            sys.exit(1)
+
+        commit_result = subprocess.run(
+            ["git", "commit", "-m", "Initial commit"],
+            cwd=app_path,
+            capture_output=True,
+            text=True,
+        )
+        if commit_result.returncode != 0:
+            console.print(f"[red]git commit failed: {commit_result.stderr}[/red]")
+            sys.exit(1)
+
+        push_result = subprocess.run(
+            ["git", "push", "--set-upstream", "-f", "space", "HEAD:main"],
+            cwd=app_path,
+            capture_output=True,
+            text=True,
+        )
+        if push_result.returncode != 0:
+            console.print(f"[red]git push failed: {push_result.stderr}[/red]")
+            sys.exit(1)
 
         console.print("✅ App published successfully.", style="bold green")
 

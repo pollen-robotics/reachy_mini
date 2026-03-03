@@ -51,9 +51,9 @@ Reachy Mini comes with an app store powered by Hugging Face Spaces. You can inst
 
 Using an AI coding agent (Claude Code, Codex, Copilot, etc.)? You can start building apps right away. Paste this prompt to your agent:
 
-> *I'd like to create a Reachy Mini app. Start by reading https://github.com/pollen-robotics/reachy_mini/blob/develop/agents.md*
+> *I'd like to create a Reachy Mini app. Start by reading https://github.com/pollen-robotics/reachy_mini/blob/develop/AGENTS.md*
 
-This [**agents.md**](agents.md) guide gives AI agents everything they need: SDK patterns, best practices, example apps, and step-by-step skills.
+This [**AGENTS.md**](AGENTS.md) guide gives AI agents everything they need: SDK patterns, best practices, example apps, and step-by-step skills.
 
 ### Quick Look
 After [installing the SDK](https://huggingface.co/docs/reachy_mini/SDK/installation), once your robot is awake, you can control it in just **a few lines of code**:
@@ -91,6 +91,7 @@ Encountering an issue? 👉 **[Check the Troubleshooting & FAQ Guide](https://hu
 
 * **Join the Community:** Join [Discord](https://discord.gg/2bAhWfXme9) to share your moments with Reachy, build apps together, and get help.
 * **Found a bug?** Open an issue on this repository.
+* **Guidelines:** Review our [contributing guidelines](docs/contributing.md) to learn how to contribute code, report issues, or suggest features.
 
 
 ## License
