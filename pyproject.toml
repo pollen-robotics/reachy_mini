@@ -37,43 +37,10 @@ dependencies = [
     "pyyaml>=6.0",
     "requests>=2.28.0",
 
-    "gstreamer-bundle==1.28.0; sys_platform != 'linux'",
+    "gstreamer-bundle==1.28.1; sys_platform != 'linux'",
     # OS-specific: use PyGObject for Linux
     "PyGObject>=3.42.2,<=3.46.0; sys_platform == 'linux'",
 ]
-
-# patch to avoid false error with uv. Should be fixed in gstreamer 1.28.1
-[[tool.uv.dependency-metadata]]
-name = "gstreamer-cli"
-requires-python = ">=3.9"
-
-[[tool.uv.dependency-metadata]]
-name = "gstreamer-gtk"
-requires-python = ">=3.9"
-
-[[tool.uv.dependency-metadata]]
-name = "gstreamer-libs"
-requires-python = ">=3.9"
-
-[[tool.uv.dependency-metadata]]
-name = "gstreamer-plugins"
-requires-python = ">=3.9"
-
-[[tool.uv.dependency-metadata]]
-name = "gstreamer-plugins-gpl"
-requires-python = ">=3.9"
-
-[[tool.uv.dependency-metadata]]
-name = "gstreamer-plugins-libs"
-requires-python = ">=3.9"
-
-[[tool.uv.dependency-metadata]]
-name = "gstreamer-plugins-restricted"
-requires-python = ">=3.9"
-
-[[tool.uv.dependency-metadata]]
-name = "gstreamer-plugins-gpl-restricted"
-requires-python = ">=3.9"
 
 [project.optional-dependencies]
 dev = [
