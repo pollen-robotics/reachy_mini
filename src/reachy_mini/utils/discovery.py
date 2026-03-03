@@ -94,7 +94,7 @@ class MdnsServiceRegistration:
                 properties=properties,
                 server=f"{socket.gethostname()}.local.",
             )
-            self._zeroconf.register_service(self._info)
+            self._zeroconf.register_service(self._info, allow_name_change=True)
             logger.info(
                 "mDNS service registered: %s on port %d",
                 self._robot_name,
