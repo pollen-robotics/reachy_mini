@@ -143,7 +143,9 @@ class GstWebRTCClient(CameraBase, AudioBase):
         # Set resolution after appsink is created so caps can be properly configured
         self.set_resolution(self.camera_specs.default_resolution)
 
-        self._webrtcsrc = self._configure_webrtcsrc(signaling_host, signaling_port, peer_id)
+        self._webrtcsrc = self._configure_webrtcsrc(
+            signaling_host, signaling_port, peer_id
+        )
         self._pipeline_record.add(self._webrtcsrc)
 
         self._webrtcbin = None
@@ -190,7 +192,9 @@ class GstWebRTCClient(CameraBase, AudioBase):
         signaller.set_property("uri", f"ws://{signaling_host}:{signaling_port}")
         return source
 
-    def _on_deep_element_added(self, bin: Gst.Bin, sub_bin: Gst.Bin, element: Gst.Element) -> None:
+    def _on_deep_element_added(
+        self, bin: Gst.Bin, sub_bin: Gst.Bin, element: Gst.Element
+    ) -> None:
         """Detect the internal webrtcbin element created by webrtcsrc."""
         factory = element.get_factory()
         if factory and factory.get_name() == "webrtcbin":
@@ -198,7 +202,9 @@ class GstWebRTCClient(CameraBase, AudioBase):
             self._webrtcbin = element
             element.connect("on-new-transceiver", self._on_new_transceiver)
 
-    def _on_new_transceiver(self, webrtcbin: Gst.Element, transceiver: GObject.Object) -> None:
+    def _on_new_transceiver(
+        self, webrtcbin: Gst.Element, transceiver: GObject.Object
+    ) -> None:
         """Set audio transceiver to SENDRECV so the SDP answer allows bidirectional audio."""
         # Only set audio transceivers to SENDRECV (not video) to avoid unnecessary sink pads
         caps = transceiver.get_property("codec-preferences")
@@ -207,7 +213,9 @@ class GstWebRTCClient(CameraBase, AudioBase):
             media = s.get_string("media")
             if media != "audio":
                 return
-        transceiver.set_property("direction", 4)  # GstWebRTCRTPTransceiverDirection.SENDRECV
+        transceiver.set_property(
+            "direction", 4
+        )  # GstWebRTCRTPTransceiverDirection.SENDRECV
         self.logger.info("Audio transceiver configured for SENDRECV")
 
     def _dump_latency(self) -> None:
@@ -389,7 +397,9 @@ class GstWebRTCClient(CameraBase, AudioBase):
         """
         if self._audio_send_ready:
             return  # already set up or in progress
-        self._audio_send_ready = True  # prevent re-entry from concurrent pad-added calls
+        self._audio_send_ready = (
+            True  # prevent re-entry from concurrent pad-added calls
+        )
 
         self.logger.info("Setting up audio send chain...")
         if self._webrtcbin is None:
@@ -420,7 +430,9 @@ class GstWebRTCClient(CameraBase, AudioBase):
                     break
 
         if sink_pad is None:
-            self.logger.error("No OPUS sink pad found on webrtcbin, audio send disabled")
+            self.logger.error(
+                "No OPUS sink pad found on webrtcbin, audio send disabled"
+            )
             self._audio_send_ready = False
             return
 
@@ -446,7 +458,9 @@ class GstWebRTCClient(CameraBase, AudioBase):
         target_bin = webrtcbin_parent if webrtcbin_parent else self._webrtcsrc
         for elem in elems:
             if not target_bin.add(elem):
-                self.logger.error(f"Failed to add {elem.get_name()} to {target_bin.get_name()}")
+                self.logger.error(
+                    f"Failed to add {elem.get_name()} to {target_bin.get_name()}"
+                )
                 self._audio_send_ready = False
                 return
 

@@ -197,9 +197,15 @@ def create(console: Console, app_name: str, app_path: Path) -> Path:
         render_template("README.md.j2", context), encoding="utf-8"
     )
 
-    (base_path / "index.html").write_text(render_template("index.html.j2", context), encoding="utf-8")
-    (base_path / "style.css").write_text(render_template("style.css.j2", context), encoding="utf-8")
-    (base_path / ".gitignore").write_text(render_template("gitignore.j2", context), encoding="utf-8")
+    (base_path / "index.html").write_text(
+        render_template("index.html.j2", context), encoding="utf-8"
+    )
+    (base_path / "style.css").write_text(
+        render_template("style.css.j2", context), encoding="utf-8"
+    )
+    (base_path / ".gitignore").write_text(
+        render_template("gitignore.j2", context), encoding="utf-8"
+    )
 
     # TODO assets dir with a .gif ?
 
@@ -208,7 +214,10 @@ def create(console: Console, app_name: str, app_path: Path) -> Path:
 
 
 def install_app_with_progress(
-    console: Console, python_executable: str, app_path: Path, env: dict[str, str] | None = None
+    console: Console,
+    python_executable: str,
+    app_path: Path,
+    env: dict[str, str] | None = None,
 ) -> None:
     """Install the app in a temporary virtual environment with a progress spinner."""
     console.print("Installing the app in the temporary virtual environment...")
@@ -467,7 +476,7 @@ def check(console: Console, app_path: str) -> None:
     # Now, create a temporary python venv in a temp dir, `pip install . the app, check that it works and that the entrypoint is registered
     original_cwd = Path.cwd()
     with tempfile.TemporaryDirectory() as tmpdir:
-        try :
+        try:
             # change dir to tmpdir
             os.chdir(tmpdir)
 
@@ -519,7 +528,9 @@ def check(console: Console, app_path: str) -> None:
             console.print("✅ App entrypoint is registered correctly.")
 
             # Now try to uninstall the app and check that it uninstalls correctly
-            console.print("Uninstalling the app from the temporary virtual environment...")
+            console.print(
+                "Uninstalling the app from the temporary virtual environment..."
+            )
             uninstall_process = subprocess.run(
                 [python_executable, "-m", "pip", "uninstall", "-y", app_name],
                 capture_output=True,
@@ -529,7 +540,10 @@ def check(console: Console, app_path: str) -> None:
             if uninstall_process.returncode != 0:
                 stdout_lower = (uninstall_process.stdout or "").lower()
                 stderr_lower = (uninstall_process.stderr or "").lower()
-                outside_env_error = "outside environment" in stdout_lower or "outside environment" in stderr_lower
+                outside_env_error = (
+                    "outside environment" in stdout_lower
+                    or "outside environment" in stderr_lower
+                )
                 if not outside_env_error:
                     raise subprocess.CalledProcessError(
                         uninstall_process.returncode,
@@ -554,7 +568,7 @@ def check(console: Console, app_path: str) -> None:
                 sys.exit(1)
 
             console.print("✅ App installation and uninstallation tests passed.")
-        finally :
+        finally:
             os.chdir(original_cwd)
     console.print(f"\n✅ App '{app_name}' passed all checks!", style="bold green")
 
@@ -847,12 +861,15 @@ def publish(
                 sys.exit(1)
 
         # Be tolerant to previous partial runs: if the remote already exists, update it.
-        remote_exists = subprocess.run(
-            ["git", "remote", "get-url", "space"],
-            cwd=app_path,
-            capture_output=True,
-            text=True,
-        ).returncode == 0
+        remote_exists = (
+            subprocess.run(
+                ["git", "remote", "get-url", "space"],
+                cwd=app_path,
+                capture_output=True,
+                text=True,
+            ).returncode
+            == 0
+        )
         if remote_exists:
             remote_result = subprocess.run(
                 ["git", "remote", "set-url", "space", repo_url],

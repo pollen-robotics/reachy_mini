@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 
 try:
     import pulsectl
+
     with pulsectl.Pulse("dummy"):
         pass
     _PULSECTL_AVAILABLE = True
@@ -35,7 +36,9 @@ class VolumeControlLinux(VolumeControl):
 
     def __post_init__(self) -> None:
         """Initialize device IDs based on detected audio devices."""
-        logger.info(f"Using {'pulsectl (PulseAudio/PipeWire)' if _PULSECTL_AVAILABLE else 'amixer (ALSA)'} backend")
+        logger.info(
+            f"Using {'pulsectl (PulseAudio/PipeWire)' if _PULSECTL_AVAILABLE else 'amixer (ALSA)'} backend"
+        )
         # TODO: use a property instead to account for dynamic audio devices
         self.input_device, self.output_device = self._get_input_output_devices()
 
@@ -105,7 +108,9 @@ class VolumeControlLinux(VolumeControl):
 
     # ---- PulseAudio/PipeWire (pulsectl) backend ----
 
-    def _pulse_get_all_devices(self, device_type: AudioDeviceType | None = None) -> dict[int | str, str]:
+    def _pulse_get_all_devices(
+        self, device_type: AudioDeviceType | None = None
+    ) -> dict[int | str, str]:
         """Get all available audio devices IDs and names via pulsectl.
 
         Args:
@@ -123,13 +128,20 @@ class VolumeControlLinux(VolumeControl):
             with pulsectl.Pulse("reachy-mini") as pulse:
                 if device_type == AudioDeviceType.OUTPUT or device_type is None:
                     for sink in pulse.sink_list():
-                        devices[sink.name] = sink.description or f"Unknown device (id={sink.name})"
+                        devices[sink.name] = (
+                            sink.description or f"Unknown device (id={sink.name})"
+                        )
                 if device_type == AudioDeviceType.INPUT or device_type is None:
                     for source in pulse.source_list():
                         if not source.monitor_of_sink_name:
-                            devices[source.name] = source.description or f"Unknown device (id={source.name})"
+                            devices[source.name] = (
+                                source.description
+                                or f"Unknown device (id={source.name})"
+                            )
         except Exception as e:
-            raise RuntimeError(f"Could not scan audio devices, pulsectl failed with error: {e}")
+            raise RuntimeError(
+                f"Could not scan audio devices, pulsectl failed with error: {e}"
+            )
         return devices
 
     def _pulse_get_input_output_devices(self) -> tuple[AudioDevice, AudioDevice]:
@@ -148,21 +160,37 @@ class VolumeControlLinux(VolumeControl):
         input_device: AudioDevice | None = None
         output_device: AudioDevice | None = None
         for device_id, device_name in input_devices.items():
-            if any([sound_card in device_name.lower() for sound_card in SOUND_CARD_NAMES]):
-                input_device = AudioDevice(device_id, device_name, AudioDeviceType.INPUT)
+            if any(
+                [sound_card in device_name.lower() for sound_card in SOUND_CARD_NAMES]
+            ):
+                input_device = AudioDevice(
+                    device_id, device_name, AudioDeviceType.INPUT
+                )
                 break
         for device_id, device_name in output_devices.items():
-            if any([sound_card in device_name.lower() for sound_card in SOUND_CARD_NAMES]):
-                output_device = AudioDevice(device_id, device_name, AudioDeviceType.OUTPUT)
+            if any(
+                [sound_card in device_name.lower() for sound_card in SOUND_CARD_NAMES]
+            ):
+                output_device = AudioDevice(
+                    device_id, device_name, AudioDeviceType.OUTPUT
+                )
                 break
 
         # Fall back to default devices if no matching device found
         if input_device is None:
             default_id = self._pulse_get_default_device(AudioDeviceType.INPUT)
-            input_device = AudioDevice(default_id, input_devices.get(default_id, f"Unknown device (id={default_id})"), AudioDeviceType.INPUT)
+            input_device = AudioDevice(
+                default_id,
+                input_devices.get(default_id, f"Unknown device (id={default_id})"),
+                AudioDeviceType.INPUT,
+            )
         if output_device is None:
             default_id = self._pulse_get_default_device(AudioDeviceType.OUTPUT)
-            output_device = AudioDevice(default_id, output_devices.get(default_id, f"Unknown device (id={default_id})"), AudioDeviceType.OUTPUT)
+            output_device = AudioDevice(
+                default_id,
+                output_devices.get(default_id, f"Unknown device (id={default_id})"),
+                AudioDeviceType.OUTPUT,
+            )
 
         return input_device, output_device
 
@@ -186,7 +214,9 @@ class VolumeControlLinux(VolumeControl):
                     return str(server_info.default_source_name)
                 return str(server_info.default_sink_name)
         except Exception as e:
-            raise RuntimeError(f"Failed to get default {device_type.value} device via pulsectl: {e}")
+            raise RuntimeError(
+                f"Failed to get default {device_type.value} device via pulsectl: {e}"
+            )
 
     def _pulse_get_device_volume(self, device: AudioDevice) -> int:
         """Get the volume of an audio device via pulsectl.
@@ -206,7 +236,9 @@ class VolumeControlLinux(VolumeControl):
                     pulse_device = pulse.get_sink_by_name(device.id)
                 return round(float(pulse.volume_get_all_chans(pulse_device)) * 100)
         except Exception as e:
-            logger.error(f"Failed to get volume on device {device.id} - pulsectl error: {e}")
+            logger.error(
+                f"Failed to get volume on device {device.id} - pulsectl error: {e}"
+            )
             return -1
 
     def _pulse_set_device_volume(self, device: AudioDevice, volume: int) -> bool:
@@ -231,7 +263,9 @@ class VolumeControlLinux(VolumeControl):
                 pulse.volume_set_all_chans(pulse_device, volume_scalar)
             return True
         except Exception as e:
-            logger.error(f"Failed to set volume on device {device.id} - pulsectl error: {e}")
+            logger.error(
+                f"Failed to set volume on device {device.id} - pulsectl error: {e}"
+            )
             return False
 
     # ---- ALSA (amixer/aplay/arecord) backend ----
@@ -250,9 +284,15 @@ class VolumeControlLinux(VolumeControl):
             The list of ALSA control names matching the requested type.
 
         """
-        capability = "pvolume" if device.device_type == AudioDeviceType.OUTPUT else "cvolume"
+        capability = (
+            "pvolume" if device.device_type == AudioDeviceType.OUTPUT else "cvolume"
+        )
 
-        command = ["amixer", "-c", str(device.id), "scontents"] if device.id is not None else ["amixer", "scontents"]
+        command = (
+            ["amixer", "-c", str(device.id), "scontents"]
+            if device.id is not None
+            else ["amixer", "scontents"]
+        )
 
         try:
             result = subprocess.run(
@@ -262,7 +302,11 @@ class VolumeControlLinux(VolumeControl):
                 timeout=AUDIO_COMMAND_TIMEOUT,
                 check=True,
             )
-        except (subprocess.TimeoutExpired, FileNotFoundError, subprocess.CalledProcessError) as e:
+        except (
+            subprocess.TimeoutExpired,
+            FileNotFoundError,
+            subprocess.CalledProcessError,
+        ) as e:
             logger.warning(f"Failed to list controls for device {device.id}: {e}")
             return []
 
@@ -298,8 +342,14 @@ class VolumeControlLinux(VolumeControl):
                 check=True,
                 shell=True,
             )
-        except (subprocess.TimeoutExpired, FileNotFoundError, subprocess.CalledProcessError) as e:
-            logger.warning(f"Failed to initialize {device.id} device, amixer failed with error: {e}")
+        except (
+            subprocess.TimeoutExpired,
+            FileNotFoundError,
+            subprocess.CalledProcessError,
+        ) as e:
+            logger.warning(
+                f"Failed to initialize {device.id} device, amixer failed with error: {e}"
+            )
 
     def _alsa_get_all_devices(self) -> dict[int | str, str]:
         """Get all available audio devices IDs and names via ALSA.
@@ -329,8 +379,14 @@ class VolumeControlLinux(VolumeControl):
                 device_name = match.group(2)
                 devices.setdefault(device_id, device_name)
             return devices
-        except (subprocess.TimeoutExpired, FileNotFoundError, subprocess.CalledProcessError) as e:
-            raise RuntimeError(f"Could not scan audio devices, aplay or arecord failed with error: {e}")
+        except (
+            subprocess.TimeoutExpired,
+            FileNotFoundError,
+            subprocess.CalledProcessError,
+        ) as e:
+            raise RuntimeError(
+                f"Could not scan audio devices, aplay or arecord failed with error: {e}"
+            )
 
     def _alsa_get_input_output_devices(self) -> tuple[AudioDevice, AudioDevice]:
         """Get the input and output audio devices via ALSA.
@@ -344,11 +400,17 @@ class VolumeControlLinux(VolumeControl):
         devices = self._alsa_get_all_devices()
 
         for device_id, device_name in devices.items():
-            if any([sound_card in device_name.lower() for sound_card in SOUND_CARD_NAMES]):
+            if any(
+                [sound_card in device_name.lower() for sound_card in SOUND_CARD_NAMES]
+            ):
                 # Input and output devices will appear with the same ID
-                return AudioDevice(device_id, device_name, AudioDeviceType.INPUT), AudioDevice(device_id, device_name, AudioDeviceType.OUTPUT)
+                return AudioDevice(
+                    device_id, device_name, AudioDeviceType.INPUT
+                ), AudioDevice(device_id, device_name, AudioDeviceType.OUTPUT)
 
-        return AudioDevice(None, "Default", AudioDeviceType.INPUT), AudioDevice(None, "Default", AudioDeviceType.OUTPUT)
+        return AudioDevice(None, "Default", AudioDeviceType.INPUT), AudioDevice(
+            None, "Default", AudioDeviceType.OUTPUT
+        )
 
     def _build_amixer_get_command(
         self,
@@ -442,8 +504,15 @@ class VolumeControlLinux(VolumeControl):
                             volume_str = part.split("%")[0]
                             return int(volume_str)
 
-        except (subprocess.TimeoutExpired, FileNotFoundError, ValueError, subprocess.CalledProcessError) as e:
-            logger.error(f"Failed to get volume on device {device.id} - amixer failed with error: {e}")
+        except (
+            subprocess.TimeoutExpired,
+            FileNotFoundError,
+            ValueError,
+            subprocess.CalledProcessError,
+        ) as e:
+            logger.error(
+                f"Failed to get volume on device {device.id} - amixer failed with error: {e}"
+            )
 
         return -1
 
@@ -469,8 +538,14 @@ class VolumeControlLinux(VolumeControl):
             )
             return True
 
-        except (subprocess.TimeoutExpired, FileNotFoundError, subprocess.CalledProcessError) as e:
-            logger.error(f"Failed to set volume on device {device.id} - amixer failed with error: {e}")
+        except (
+            subprocess.TimeoutExpired,
+            FileNotFoundError,
+            subprocess.CalledProcessError,
+        ) as e:
+            logger.error(
+                f"Failed to set volume on device {device.id} - amixer failed with error: {e}"
+            )
             return False
 
     # ---- Public API ----
@@ -545,8 +620,14 @@ class VolumeControlLinux(VolumeControl):
                     if start > 0 and end > start:
                         controls.append(line[start:end])
 
-        except (subprocess.TimeoutExpired, FileNotFoundError, subprocess.CalledProcessError) as e:
-            logger.error(f"Failed to list controls for device {device_id} - amixer failed with error: {e}")
+        except (
+            subprocess.TimeoutExpired,
+            FileNotFoundError,
+            subprocess.CalledProcessError,
+        ) as e:
+            logger.error(
+                f"Failed to list controls for device {device_id} - amixer failed with error: {e}"
+            )
             return []
 
         return controls
@@ -564,7 +645,11 @@ class VolumeControlLinux(VolumeControl):
             "output_device_id": self.output_device.id,
         }
         if not _PULSECTL_AVAILABLE and isinstance(self.input_device.id, int):
-            info["available_input_controls"] = self._get_device_controls(self.input_device.id)
+            info["available_input_controls"] = self._get_device_controls(
+                self.input_device.id
+            )
         if not _PULSECTL_AVAILABLE and isinstance(self.output_device.id, int):
-            info["available_output_controls"] = self._get_device_controls(self.output_device.id)
+            info["available_output_controls"] = self._get_device_controls(
+                self.output_device.id
+            )
         return info
