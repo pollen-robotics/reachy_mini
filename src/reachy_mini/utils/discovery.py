@@ -73,6 +73,22 @@ class MdnsServiceRegistration:
         thread.start()
         thread.join(timeout=5.0)
 
+    @staticmethod
+    def _get_local_ips() -> List[str]:
+        """Return non-loopback IPv4 addresses of this machine."""
+        ips: List[str] = []
+        # UDP connect trick: doesn't send data but reveals which local
+        # IP the OS would use to reach the network.
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+                s.connect(("10.255.255.255", 1))
+                addr = s.getsockname()[0]
+                if not addr.startswith("127."):
+                    ips.append(addr)
+        except OSError:
+            pass
+        return ips
+
     def _do_register(self) -> None:
         try:
             pkg_version = version("reachy_mini")
@@ -87,12 +103,13 @@ class MdnsServiceRegistration:
 
         try:
             self._zeroconf = Zeroconf()
+            local_ips = self._get_local_ips()
             self._info = ServiceInfo(
                 SERVICE_TYPE,
                 name=f"{self._robot_name}.{SERVICE_TYPE}",
                 port=self._port,
                 properties=properties,
-                server=f"{socket.gethostname()}.local.",
+                parsed_addresses=local_ips,
             )
             self._zeroconf.register_service(self._info, allow_name_change=True)
             logger.info(
