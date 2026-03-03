@@ -2,13 +2,16 @@ version = 1
 revision = 3
 requires-python = ">=3.10"
 resolution-markers = [
-    "python_full_version >= '3.11' and sys_platform != 'darwin' and sys_platform != 'win32'",
-    "python_full_version < '3.11' and sys_platform != 'darwin' and sys_platform != 'win32'",
-    "python_full_version >= '3.11' and sys_platform == 'win32'",
-    "python_full_version < '3.11' and sys_platform == 'win32'",
-    "python_full_version >= '3.11' and sys_platform == 'darwin'",
-    "python_full_version < '3.11' and sys_platform == 'darwin'",
+    "python_full_version >= '3.11'",
+    "python_full_version < '3.11'",
 ]
+
+[manifest]
+
+[[manifest.dependency-metadata]]
+name = "gstreamer-libs"
+version = "1.28.1"
+requires-dist = ["gstreamer-msvc-runtime ; sys_platform == 'win32'", "setuptools"]
 
 [[package]]
 name = "absl-py"
@@ -24,8 +27,8 @@ name = "ahrs"
 version = "0.4.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "docutils", marker = "sys_platform != 'darwin' and sys_platform != 'win32'" },
-    { name = "numpy", marker = "sys_platform != 'darwin' and sys_platform != 'win32'" },
+    { name = "docutils" },
+    { name = "numpy" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/dc/29/1232576b1f6769bf7d1436e5ae5f7234b56bb7bbc255b68a483165090cf3/ahrs-0.4.0.tar.gz", hash = "sha256:4b632b9e53b9cfd1cecadefa543a3534574baeafeef048db703ab33a07dcca21", size = 530456, upload-time = "2025-10-13T11:05:58.675Z" }
 wheels = [
@@ -460,7 +463,7 @@ name = "cmeel"
 version = "0.59.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "tomli", marker = "python_full_version < '3.11' and sys_platform != 'win32'" },
+    { name = "tomli", marker = "python_full_version < '3.11'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/85/58/2448af92b3761a1b321014a653f79d322026681728f96ebe9f419ae0d6b8/cmeel-0.59.0.tar.gz", hash = "sha256:d9871f96ad0499c1cf8671e69622c805265a6be4383a1abfd18f20b4a33e3e3a", size = 14890, upload-time = "2026-01-19T11:48:25.431Z" }
 wheels = [
@@ -472,8 +475,8 @@ name = "cmeel-assimp"
 version = "5.4.3.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "cmeel", marker = "sys_platform != 'win32'" },
-    { name = "cmeel-zlib", marker = "sys_platform != 'win32'" },
+    { name = "cmeel" },
+    { name = "cmeel-zlib" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/79/ac/f01a4e8c93e7e76f04788bad60bc5eaf7d4862eef24c11dd38bc8b61e819/cmeel_assimp-5.4.3.1.tar.gz", hash = "sha256:bd663a65ed143e71fe4723e787cbf1480e42cea4d2450c15cb5d9d4223d24f3d", size = 53703174, upload-time = "2025-02-11T15:04:22.36Z" }
 wheels = [
@@ -492,8 +495,8 @@ name = "cmeel-boost"
 version = "1.87.0.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "cmeel", marker = "sys_platform != 'win32'" },
-    { name = "numpy", marker = "sys_platform != 'win32'" },
+    { name = "cmeel" },
+    { name = "numpy" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/98/ee/a4c9eff9efe87945b770a3b773630cd72cb5f178de2daec719507e0f6024/cmeel_boost-1.87.0.1.tar.gz", hash = "sha256:c1b706e1f0c878693a96f6c92072596dcdf27bd14833b1cbbffd65a8b7e8d00f", size = 4075, upload-time = "2025-02-13T03:46:52.858Z" }
 wheels = [
@@ -524,7 +527,7 @@ name = "cmeel-console-bridge"
 version = "1.0.2.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "cmeel", marker = "sys_platform != 'win32'" },
+    { name = "cmeel" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/83/13/2e9e9d23db8548aef975564055bdb4fb6da8a397a1e7df8cb61f5afebefb/cmeel_console_bridge-1.0.2.3.tar.gz", hash = "sha256:3b2837da7ab408e9d1a775c83c0a7772356062b3a3672e4ce247f2da71a8ecd9", size = 262061, upload-time = "2025-03-19T18:22:06.845Z" }
 wheels = [
@@ -543,7 +546,7 @@ name = "cmeel-octomap"
 version = "1.10.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "cmeel", marker = "sys_platform != 'win32'" },
+    { name = "cmeel" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/89/ab/2fed2dbee13e4b39949591685419f1dbb691295e32a6bbbaf87edc005922/cmeel_octomap-1.10.0.tar.gz", hash = "sha256:bd79d1d17adede534de242e42e13ef0d9f04bdd27daf7d56c57f7c43670c9b05", size = 1694189, upload-time = "2025-01-06T17:57:05.477Z" }
 wheels = [
@@ -566,7 +569,7 @@ name = "cmeel-qhull"
 version = "8.0.2.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "cmeel", marker = "sys_platform != 'win32'" },
+    { name = "cmeel" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/51/dd/8d0bcfb18771b2ea02bf85dfbbc587c97b274496fb5419b72134eb69430b/cmeel_qhull-8.0.2.1.tar.gz", hash = "sha256:68e8d41d95f61830f2d460af1e4d760f0dbe4d46413d7c736f0ed701153ebe52", size = 1308055, upload-time = "2023-11-17T14:21:06.003Z" }
 wheels = [
@@ -590,7 +593,7 @@ name = "cmeel-tinyxml2"
 version = "10.0.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "cmeel", marker = "sys_platform != 'win32'" },
+    { name = "cmeel" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/28/9f/030eca702c485f7a641f975f167fa93164911b3329f005fb0730ff5e793f/cmeel_tinyxml2-10.0.0.tar.gz", hash = "sha256:00252aefc1c94a55b89f25ad08ee79fda2da8d1d94703e051598ddb52a9088fe", size = 645297, upload-time = "2025-02-06T10:29:00.106Z" }
 wheels = [
@@ -609,9 +612,9 @@ name = "cmeel-urdfdom"
 version = "4.0.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "cmeel", marker = "sys_platform != 'win32'" },
-    { name = "cmeel-console-bridge", marker = "sys_platform != 'win32'" },
-    { name = "cmeel-tinyxml2", marker = "sys_platform != 'win32'" },
+    { name = "cmeel" },
+    { name = "cmeel-console-bridge" },
+    { name = "cmeel-tinyxml2" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/31/09/be81a5e7db56f34b6ccdbe7afe855c95a18c8439e173519e0146e9276a8c/cmeel_urdfdom-4.0.1.tar.gz", hash = "sha256:2e3f41e8483889e195b574acb326a4464cf11a3c0a8724031ac28bcda2223efc", size = 291511, upload-time = "2025-02-12T12:07:09.699Z" }
 wheels = [
@@ -634,7 +637,7 @@ name = "cmeel-zlib"
 version = "1.3.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "cmeel", marker = "sys_platform != 'win32'" },
+    { name = "cmeel" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/5a/74/b458f2fbfb652479c06400937cd67022e50d312033221602a9eca75022bc/cmeel_zlib-1.3.1.tar.gz", hash = "sha256:ebb34c54d1b7921dee5e7cd7003c9203b3297a5ba9d93983f1b7d3bb04976c3a", size = 3051, upload-time = "2025-02-11T12:20:39.574Z" }
 wheels = [
@@ -651,12 +654,12 @@ name = "coal-library"
 version = "3.0.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "cmeel", marker = "sys_platform != 'win32'" },
-    { name = "cmeel-assimp", marker = "sys_platform != 'win32'" },
-    { name = "cmeel-boost", marker = "sys_platform != 'win32'" },
-    { name = "cmeel-octomap", marker = "sys_platform != 'win32'" },
-    { name = "cmeel-qhull", marker = "sys_platform != 'win32'" },
-    { name = "eigenpy", marker = "sys_platform != 'win32'" },
+    { name = "cmeel" },
+    { name = "cmeel-assimp" },
+    { name = "cmeel-boost" },
+    { name = "cmeel-octomap" },
+    { name = "cmeel-qhull" },
+    { name = "eigenpy" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/d0/20/ad159b6d9eb7f4158c7dfa71e335cd89c35288de1ae23be06e24a986a6d0/coal_library-3.0.1.tar.gz", hash = "sha256:40aa6d4e7d6dbe259d3637e697380c8fdec0dcec89886e9cf0cbd36d2a9df2e5", size = 3349502, upload-time = "2025-02-12T19:25:48.349Z" }
 wheels = [
@@ -704,7 +707,7 @@ name = "colorzero"
 version = "2.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "setuptools", marker = "sys_platform != 'darwin' and sys_platform != 'win32'" },
+    { name = "setuptools" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/b3/ca/688824a06e8c4d04c7d2fd2af2d8da27bed51af20ee5f094154e1d680334/colorzero-2.0.tar.gz", hash = "sha256:e7d5a5c26cd0dc37b164ebefc609f388de24f8593b659191e12d85f8f9d5eb58", size = 25382, upload-time = "2021-03-15T23:42:23.261Z" }
 wheels = [
@@ -793,8 +796,8 @@ name = "eigenpy"
 version = "3.10.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "cmeel", marker = "sys_platform != 'win32'" },
-    { name = "cmeel-boost", marker = "sys_platform != 'win32'" },
+    { name = "cmeel" },
+    { name = "cmeel-boost" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/39/d3/ffe0d1b75223013420bf8645aa06e29745366e6f8777e88d78947ef47846/eigenpy-3.10.3.tar.gz", hash = "sha256:95fc73d29ee9d175d8a35484f1cdc79349e54f9b3da5a1a695889c37b0c5d2e4", size = 6529791, upload-time = "2025-02-12T00:19:52.366Z" }
 wheels = [
@@ -821,8 +824,8 @@ name = "eiquadprog"
 version = "1.2.9"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "cmeel", marker = "sys_platform != 'win32'" },
-    { name = "cmeel-boost", marker = "sys_platform != 'win32'" },
+    { name = "cmeel" },
+    { name = "cmeel-boost" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/c1/14/3e7fa16567e08e43e6e58aaeba9299977dd0d1c4ac5415e3b9a4a366a64f/eiquadprog-1.2.9.tar.gz", hash = "sha256:7fc82c4c476f636ff1aea4fd3c0baf301b4a6d349a0f3333d1600913d228ca3c", size = 879999, upload-time = "2025-02-17T19:00:17.851Z" }
 wheels = [
@@ -1070,11 +1073,202 @@ name = "gpiozero"
 version = "2.0.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "colorzero", marker = "sys_platform != 'darwin' and sys_platform != 'win32'" },
+    { name = "colorzero" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/e4/47/334b8db8a981eca9a0fb1e7e48e1997a5eaa8f40bb31c504299dcca0e6ff/gpiozero-2.0.1.tar.gz", hash = "sha256:d4ea1952689ec7e331f9d4ebc9adb15f1d01c2c9dcfabb72e752c9869ab7e97e", size = 136176, upload-time = "2024-02-15T11:07:02.919Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/02/eb/6518a1b00488d48995034226846653c382d676cf5f04be62b3c3fae2c6a1/gpiozero-2.0.1-py3-none-any.whl", hash = "sha256:8f621de357171d574c0b7ea0e358cb66e560818a47b0eeedf41ce1cdbd20c70b", size = 150818, upload-time = "2024-02-15T11:07:00.451Z" },
+]
+
+[[package]]
+name = "gstreamer-bundle"
+version = "1.28.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "gstreamer-cli" },
+    { name = "gstreamer-gtk" },
+    { name = "gstreamer-libs" },
+    { name = "gstreamer-plugins" },
+    { name = "gstreamer-plugins-gpl" },
+    { name = "gstreamer-plugins-gpl-restricted" },
+    { name = "gstreamer-plugins-restricted" },
+    { name = "gstreamer-python" },
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b0/81/45d9a7f25ae0ddc3afbfecab658163124cc46384844f05cfca30c4c23f15/gstreamer_bundle-1.28.1-py3-none-any.whl", hash = "sha256:ef40bcf15a5894d3f06b242fe9a24480dedf8a038c702a60b6396f81af722ca6", size = 2574, upload-time = "2026-03-03T10:46:10.358Z" },
+]
+
+[[package]]
+name = "gstreamer-cli"
+version = "1.28.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "gstreamer-libs" },
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a7/3a/c4a32dc1ae1a846d6dacbcb4ed7e51ccce177b8f86977d401f4465a905cc/gstreamer_cli-1.28.1-cp313-cp313t-win32.whl", hash = "sha256:ee8c5a92ae082871a1747bd67d53fd6adbb2ba6e037c444543fb1914ab7d74c6", size = 5652960, upload-time = "2026-02-26T21:12:08.043Z" },
+    { url = "https://files.pythonhosted.org/packages/89/b9/0093c37fb1b807c0dc81ee2194081ae6b2b92ab9a7113c305564c7be15a9/gstreamer_cli-1.28.1-cp313-cp313t-win_amd64.whl", hash = "sha256:90c11da93d82adc34b94c898ce568a3f2300d88ec6159f448eae38fe34eaecfc", size = 6342641, upload-time = "2026-02-26T21:12:11.6Z" },
+    { url = "https://files.pythonhosted.org/packages/6a/6f/37b932ad1a93eac430476a44447641a8434db3b54a9d9a8389c3dbf442b6/gstreamer_cli-1.28.1-cp314-cp314t-win32.whl", hash = "sha256:ad07e85cd588b83106d2b4f866bfa667d28f3dfd2992ca02773c866232623971", size = 5760743, upload-time = "2026-02-26T21:12:14.051Z" },
+    { url = "https://files.pythonhosted.org/packages/db/a8/e4e09058cc6283602444810a47a14b0c0ff6381280902a59951eb5833c6f/gstreamer_cli-1.28.1-cp314-cp314t-win_amd64.whl", hash = "sha256:ea9800a187e688098a1e2ac7bb77c47d377982702d9d7c68e6c2be35ed8489e6", size = 6596793, upload-time = "2026-02-26T21:12:16.022Z" },
+    { url = "https://files.pythonhosted.org/packages/81/f8/0093779a9694e723a393c33561295e8ea4157084f2a135d2821d7efef561/gstreamer_cli-1.28.1-cp39-abi3-macosx_10_13_universal2.whl", hash = "sha256:35f029d28e1eef856dfb332bcb9753b6bdbe61c2bf31799370e4e0c1b4f3a5f3", size = 15838524, upload-time = "2026-02-26T21:03:42.731Z" },
+    { url = "https://files.pythonhosted.org/packages/10/15/e8e5848affb075ab2b42f06b54e55bbdcad318a93e0bbd4276d5d84d0a74/gstreamer_cli-1.28.1-cp39-abi3-win32.whl", hash = "sha256:2605d356ea8047c6560fe0ee6216ae80dd9436457590d67fe410183df2aa67cb", size = 5652959, upload-time = "2026-02-26T21:03:47.205Z" },
+    { url = "https://files.pythonhosted.org/packages/76/f4/29a15ff600d85cfecb755e69fdc9b4f7b6058d66998417476248e9c77be2/gstreamer_cli-1.28.1-cp39-abi3-win_amd64.whl", hash = "sha256:a118663496603c710ca86e9ba370183e4a2c6016fac4b7091fdfa7b884cf6bd7", size = 6342642, upload-time = "2026-02-26T21:03:51.092Z" },
+]
+
+[[package]]
+name = "gstreamer-gtk"
+version = "1.28.1"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b0/a6/ffc8803db0d11f835e837e54c3c0c0904f2d114e84f05c209306da447ef4/gstreamer_gtk-1.28.1-cp313-cp313t-win32.whl", hash = "sha256:ea0caed6450984aa0ae073e5c0e7bcf4cee15118d9b527312e0865c3df35f572", size = 4860466, upload-time = "2026-02-26T21:12:18.283Z" },
+    { url = "https://files.pythonhosted.org/packages/2d/e8/6cf412933e2bd41b50ce6025aa8235b713b6eb0c253ba67307f3cef354ca/gstreamer_gtk-1.28.1-cp313-cp313t-win_amd64.whl", hash = "sha256:9439f6f64a6f729f6f60d13559b577e1987d6486b897d0d25100a582f86922ad", size = 5879984, upload-time = "2026-02-26T21:12:20.852Z" },
+    { url = "https://files.pythonhosted.org/packages/85/75/42e0276c06e083e9a6ccc496cc4684667161f972eb626b3da4b9e9be1805/gstreamer_gtk-1.28.1-cp314-cp314t-win32.whl", hash = "sha256:c931429b37c836a5b73989b81ee27b420efdde2b0b69ab0a37672e3b5e87884a", size = 4979348, upload-time = "2026-02-26T21:12:23.254Z" },
+    { url = "https://files.pythonhosted.org/packages/cf/11/16f611905791d683980615932c1ff304401eba2d18decafa5e1572ee0e6b/gstreamer_gtk-1.28.1-cp314-cp314t-win_amd64.whl", hash = "sha256:1cbbdaf97e88e90febe23e694c77b3dbd089d8ae7cd5106085f1bba9cd716cf3", size = 6133672, upload-time = "2026-02-26T21:12:25.492Z" },
+    { url = "https://files.pythonhosted.org/packages/3e/19/f9ec3383dd27f8903332e2ece66dff4404a6f08080c2f6477a0fd350e69d/gstreamer_gtk-1.28.1-cp39-abi3-macosx_10_15_universal2.whl", hash = "sha256:553483771017daa1685412a3ad396bcaab2e20842f1199e7d16228e9dcb167d6", size = 20437250, upload-time = "2026-02-26T21:09:15.801Z" },
+    { url = "https://files.pythonhosted.org/packages/53/6e/97e915dc603fcca897e7e5758f9c65e0e4d8ad5fa36cc1631e9786724666/gstreamer_gtk-1.28.1-cp39-abi3-win32.whl", hash = "sha256:0e18b8b821226ee4384d2260a6bb90492260fda52d9e76660a04ff11434fcce0", size = 4860460, upload-time = "2026-02-26T21:09:18.593Z" },
+    { url = "https://files.pythonhosted.org/packages/27/04/6fcf0e6129a231bc3ba35ee737c0cf0030e26ecffb75fb8e600c861c8615/gstreamer_gtk-1.28.1-cp39-abi3-win_amd64.whl", hash = "sha256:267b0e313be24563a77164b115ffd166e6281d088540564fe251e371675fdbf9", size = 5879980, upload-time = "2026-02-26T21:09:20.952Z" },
+]
+
+[[package]]
+name = "gstreamer-libs"
+version = "1.28.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "gstreamer-msvc-runtime", marker = "sys_platform == 'win32'" },
+    { name = "setuptools" },
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/18/df/663c1e022dc9b03367fdeb1abb2a65a6f284bb7a8fe8a95678d5e8447d76/gstreamer_libs-1.28.1-cp313-cp313t-win32.whl", hash = "sha256:02cb213f23dcf39cd2c91d58956aff1513aaf6603aab83ce3382bb431061271a", size = 29122870, upload-time = "2026-02-26T21:12:30.075Z" },
+    { url = "https://files.pythonhosted.org/packages/86/77/b553a002fb0c6d9be9e105e0478b65f029f10883af451e2c40d9ac5eee78/gstreamer_libs-1.28.1-cp313-cp313t-win_amd64.whl", hash = "sha256:822fc751625be19a713811e4aa4aa7110d862c6694a92e8fc3f37467c404c442", size = 33028433, upload-time = "2026-02-26T21:12:36.001Z" },
+    { url = "https://files.pythonhosted.org/packages/fe/db/c34fe5566fa385b5d8934579d70f5e5fc84f225671f9cef4c5dd8cf1bec7/gstreamer_libs-1.28.1-cp314-cp314t-win32.whl", hash = "sha256:647187198f1384281d0a396a84f5930f6eac67d58d10aeef28177975e68398c1", size = 29932834, upload-time = "2026-02-26T21:12:41.611Z" },
+    { url = "https://files.pythonhosted.org/packages/6a/82/3fdd5e44112e69e9cd4e3f1b327c4fbac44a446337cbf21f88eda4f8161c/gstreamer_libs-1.28.1-cp314-cp314t-win_amd64.whl", hash = "sha256:33fd0e9e074a580987c19d909cc5f692a167f6c0377d0bca47efce493bc00aef", size = 34118760, upload-time = "2026-02-26T21:12:47.691Z" },
+    { url = "https://files.pythonhosted.org/packages/9b/a0/3754ae28c50e12d87bd70af3e7441da6921e09c30a76e308ddc58fc305bc/gstreamer_libs-1.28.1-cp39-abi3-macosx_10_13_universal2.whl", hash = "sha256:928dfbd0660571cdf4be7f0397f0c3cda5876744dc9389b7cc4008a8cdbe60df", size = 95892243, upload-time = "2026-02-26T21:09:30.957Z" },
+    { url = "https://files.pythonhosted.org/packages/a4/21/0a4b14b623de87d60664a6237cb8b7214989d606a15d204967540fec6813/gstreamer_libs-1.28.1-cp39-abi3-win32.whl", hash = "sha256:671bf425383ffbfcb8838acf301f63765f1c19ff94c1610a4516669f45d6fd45", size = 29122869, upload-time = "2026-02-26T21:09:39.295Z" },
+    { url = "https://files.pythonhosted.org/packages/6f/fc/d1f67da1a1267fa2db072abe105f7a44a32ac66a200e6c5484397f1e708a/gstreamer_libs-1.28.1-cp39-abi3-win_amd64.whl", hash = "sha256:99c7c4482a91209b15c51bcaee872dade7c6a2da446dad84f04f189baf4f016b", size = 33028432, upload-time = "2026-02-26T21:09:44.858Z" },
+]
+
+[[package]]
+name = "gstreamer-msvc-runtime"
+version = "1.28.1"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/7a/85/1d358cc27394bc5e946d4eeb00f72ddc6cc500b2121b4b45554a8a4ee2bf/gstreamer_msvc_runtime-1.28.1-cp313-cp313t-win32.whl", hash = "sha256:15ee719b6b4efc1b7f0e1b649f196b9accac75d107a27ebf45dc073c0d78bb26", size = 871800, upload-time = "2026-02-26T21:12:52.098Z" },
+    { url = "https://files.pythonhosted.org/packages/1c/9c/316dd8d6a66b93779e77fd9957b0a220306b2bbf676788a27d7d887e7eb2/gstreamer_msvc_runtime-1.28.1-cp313-cp313t-win_amd64.whl", hash = "sha256:da0ccf967c1a178955b2d8e6bb22ebb02e1ca4c6134a4eadf313ab4bbc0d0539", size = 1004137, upload-time = "2026-02-26T21:12:55.034Z" },
+    { url = "https://files.pythonhosted.org/packages/72/74/97c3841b78253ff783367444e2551b976d263990709363bc175c24692faf/gstreamer_msvc_runtime-1.28.1-cp314-cp314t-win32.whl", hash = "sha256:c1027a34ab55bb5686120aa48b42779338570c4412ab225ecb885e374481dd18", size = 895016, upload-time = "2026-02-26T21:12:56.683Z" },
+    { url = "https://files.pythonhosted.org/packages/05/4d/610a7bf09a1e462cfe621f54c222cdea92efc61db517522af364c68862b0/gstreamer_msvc_runtime-1.28.1-cp314-cp314t-win_amd64.whl", hash = "sha256:b93410a59b02bbf4cbc42a41ba060f8160d026e3dac9af4ca28c19ed336e00cc", size = 1032546, upload-time = "2026-02-26T21:12:58.836Z" },
+    { url = "https://files.pythonhosted.org/packages/a8/85/676d95c0b7074c8cb28faf0744b6661bd3e58f89ca96d4fc1a4250b49bc7/gstreamer_msvc_runtime-1.28.1-cp39-abi3-win32.whl", hash = "sha256:1a2fc1193f896063e65be8ae783e00fb0dfe6905a8381a05173bca1ff3352ebe", size = 871802, upload-time = "2026-02-26T21:09:47.516Z" },
+    { url = "https://files.pythonhosted.org/packages/86/9d/3e7709400ef91b098f79186392d056ff0eb807dac90065f275d86a1834a3/gstreamer_msvc_runtime-1.28.1-cp39-abi3-win_amd64.whl", hash = "sha256:7af9f11b1c22c2278f0668ad63ea901d4fb88b6b7d2612c8cc3ff99ead24f56e", size = 1004135, upload-time = "2026-02-26T21:09:49.306Z" },
+]
+
+[[package]]
+name = "gstreamer-plugins"
+version = "1.28.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "gstreamer-plugins-libs" },
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/6d/63/ed51317953aa6aa45d80e599243ae5788d70e03c09550e137e1993aeac46/gstreamer_plugins-1.28.1-cp313-cp313t-win32.whl", hash = "sha256:7bfc078428a37f1124f091cdaea4af4ca504be3dfeea8e9f1b90b06cfab8d8de", size = 39436302, upload-time = "2026-02-26T21:13:06.276Z" },
+    { url = "https://files.pythonhosted.org/packages/46/a7/225f45816d23912863e481ec44c4202c36f692b34d2e2c63e2c55f67b664/gstreamer_plugins-1.28.1-cp313-cp313t-win_amd64.whl", hash = "sha256:21114a6c883ec1f220f9906e3ce1402f6f5a83bf350fa3275f0efdf556c1b286", size = 45757982, upload-time = "2026-02-26T21:13:13.468Z" },
+    { url = "https://files.pythonhosted.org/packages/22/50/ea3fd8a41d60ebb17fd4c1c0e7a27b3ede1d078778301bd56d3ac46290e2/gstreamer_plugins-1.28.1-cp314-cp314t-win32.whl", hash = "sha256:c21567f8a8897219b049535331267fb316f7e6dd93829353e3c2202bd7f91a30", size = 40490064, upload-time = "2026-02-26T21:13:20.084Z" },
+    { url = "https://files.pythonhosted.org/packages/df/67/c6e2e1414f6997f699b2f23de7af6ae1d56adbdeca0b8587effec1f99615/gstreamer_plugins-1.28.1-cp314-cp314t-win_amd64.whl", hash = "sha256:ccc796a337bc1a46d1cfed97506254ee9eba64ed089341932b2f9c90fe7f9c2a", size = 47176696, upload-time = "2026-02-26T21:13:27.508Z" },
+    { url = "https://files.pythonhosted.org/packages/b9/6d/9b2325a7a877847db4d4c2d1121ff4342d2841528aa59ab96807436feca3/gstreamer_plugins-1.28.1-cp39-abi3-macosx_10_13_universal2.whl", hash = "sha256:3caf60c6c4aeaecb1e6c6ee340b59a3014685bd7c82ca9d3168f4151e075b516", size = 99561570, upload-time = "2026-02-26T21:09:59.616Z" },
+    { url = "https://files.pythonhosted.org/packages/e3/35/1d903593c245aba172f73d5f38e07558f2eb87d0662de80367472194405f/gstreamer_plugins-1.28.1-cp39-abi3-win32.whl", hash = "sha256:243da1884c62dbbfdabfc3e8034774a53b5dea1816a36a8c85bfea4fc135400d", size = 39436300, upload-time = "2026-02-26T21:10:07.248Z" },
+    { url = "https://files.pythonhosted.org/packages/2e/8e/c44165f8356289cd531dd0659a829a4716987071f4aa52197a8e2cc886de/gstreamer_plugins-1.28.1-cp39-abi3-win_amd64.whl", hash = "sha256:14f39fd3941af78d58587babff2f3aa3b12c896a9ec39c1d27363eba7010ed69", size = 45757981, upload-time = "2026-02-26T21:10:13.786Z" },
+]
+
+[[package]]
+name = "gstreamer-plugins-gpl"
+version = "1.28.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "gstreamer-plugins-libs" },
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/93/7c/fcf55cc2833d5733e53d3288c37320bf498f9fb676c6556438ef9079794c/gstreamer_plugins_gpl-1.28.1-cp313-cp313t-win32.whl", hash = "sha256:c92934d38ba55147706006157a9949067311287c22e7fc6630ee845e42ed81e8", size = 318810, upload-time = "2026-02-26T21:13:40.228Z" },
+    { url = "https://files.pythonhosted.org/packages/b7/e9/32d247876a0c7fdc5f60bb37f30ae87f3e8e4ceacc89d04ef1d1e4a7af04/gstreamer_plugins_gpl-1.28.1-cp313-cp313t-win_amd64.whl", hash = "sha256:d28bdadfe015068d50236d6c00c9f5486d083fba1aed7244cdb4bd4d1743da6e", size = 356488, upload-time = "2026-02-26T21:13:42.068Z" },
+    { url = "https://files.pythonhosted.org/packages/52/0e/4a0ebbf7cca7b0ad4a16589af8c145aaa22198d9d28a8425921086ad2982/gstreamer_plugins_gpl-1.28.1-cp314-cp314t-win32.whl", hash = "sha256:d139e1da7c8c9cc01706d9dba2e0d57f2776f97c8447dc6c9a86c66e2bd29cfa", size = 326021, upload-time = "2026-02-26T21:13:43.641Z" },
+    { url = "https://files.pythonhosted.org/packages/24/a4/538756305b09e1b02d42b0f84f28e9ec59d6ed554c9afed8ef059226896f/gstreamer_plugins_gpl-1.28.1-cp314-cp314t-win_amd64.whl", hash = "sha256:a5f48691fc6687bd152edf3de6a35da90f1287e36223180c6d1bbf6b64727554", size = 363944, upload-time = "2026-02-26T21:13:45.172Z" },
+    { url = "https://files.pythonhosted.org/packages/8b/15/bab73b906b13feb971b38a668021180d8f4903c50d4f45095f5810cc4bec/gstreamer_plugins_gpl-1.28.1-cp39-abi3-macosx_10_13_universal2.whl", hash = "sha256:36fead4cd7834db0ac03216d85e1725df03257197347769fe820a0fe665e6c8a", size = 1045780, upload-time = "2026-02-26T21:10:22.269Z" },
+    { url = "https://files.pythonhosted.org/packages/7f/e7/a3705d059a0e83c002f4590c9a679f6b5a5737d36e69c2fef6afc88ff69f/gstreamer_plugins_gpl-1.28.1-cp39-abi3-win32.whl", hash = "sha256:0aa307c60325d426e2a2d07b44762ed4dd4e84d18c27d01d58d34309cd04a532", size = 318809, upload-time = "2026-02-26T21:10:24.277Z" },
+    { url = "https://files.pythonhosted.org/packages/f3/d0/94b7aad8b8062888159e8bcc84345711025a9010cd495aac851a5a13efd2/gstreamer_plugins_gpl-1.28.1-cp39-abi3-win_amd64.whl", hash = "sha256:8f7b165f28b69104bdac43957263ace40fb0641b71334ee7f0d9f94fc91ef1a5", size = 356488, upload-time = "2026-02-26T21:10:26.256Z" },
+]
+
+[[package]]
+name = "gstreamer-plugins-gpl-restricted"
+version = "1.28.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "gstreamer-plugins-libs" },
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/7a/4f/b028dd2d5a0cf847298cf004ae651409acac956a1c3f066b85951f85bf65/gstreamer_plugins_gpl_restricted-1.28.1-cp313-cp313t-win32.whl", hash = "sha256:50052dacdd334caf481dac2be7b44ca8b32f47333ef6a024f7344fa36762a165", size = 2149261, upload-time = "2026-02-26T21:13:47.289Z" },
+    { url = "https://files.pythonhosted.org/packages/0c/f5/7c3979e1e9b6dd6aa47c8419f37c679fdacb5b3a663808431685d4a813ba/gstreamer_plugins_gpl_restricted-1.28.1-cp313-cp313t-win_amd64.whl", hash = "sha256:eeee40261b9221ccab3f0308242c86ae0431d3ebd6980d2c1e88f41005de82b4", size = 3404130, upload-time = "2026-02-26T21:13:49.459Z" },
+    { url = "https://files.pythonhosted.org/packages/8b/c9/d6dba070e0870c2585305092d17c00ec373aec6c02dfdb44e34dc58b1664/gstreamer_plugins_gpl_restricted-1.28.1-cp314-cp314t-win32.whl", hash = "sha256:078fc419e5ef51f8a0e15dfe9c3204c83cd20ba1247ce26e00c8d852211b1c11", size = 2202697, upload-time = "2026-02-26T21:13:50.981Z" },
+    { url = "https://files.pythonhosted.org/packages/18/a4/83b50c06cc89178326dcd0fcab185a68657bafa5006afbe37ad972c91033/gstreamer_plugins_gpl_restricted-1.28.1-cp314-cp314t-win_amd64.whl", hash = "sha256:8c3a42e1e67ad3055ebce58bba5ff42b28690c30c962475b85ccb74abea66b83", size = 3499001, upload-time = "2026-02-26T21:13:52.833Z" },
+    { url = "https://files.pythonhosted.org/packages/3e/83/aa78f47dd00999c63efe0292501652b59a2f544caeb4d2095fd84583fe8d/gstreamer_plugins_gpl_restricted-1.28.1-cp39-abi3-macosx_10_13_universal2.whl", hash = "sha256:9199e3d6ae0ea81e6a44afa6d277d1336744e470a7991e6d5830c53044a4c807", size = 13315116, upload-time = "2026-02-26T21:10:29.478Z" },
+    { url = "https://files.pythonhosted.org/packages/e4/35/85cfdcf3beb4a70c93447556969cafd1074dfe6ea3da77935b1cfada5c71/gstreamer_plugins_gpl_restricted-1.28.1-cp39-abi3-win32.whl", hash = "sha256:e309c5eeb6a72410b542cbd13819dab3f1c5a95d966da83754a36f1dc5639d43", size = 2149262, upload-time = "2026-02-26T21:10:31.873Z" },
+    { url = "https://files.pythonhosted.org/packages/ac/17/28583e847d9cdc3391f6cdca6ad73b9cb95fecd39e7dba68b431fc1cb995/gstreamer_plugins_gpl_restricted-1.28.1-cp39-abi3-win_amd64.whl", hash = "sha256:85ec578c5453eafb69b56153b0df57f0ce43b78ffc79daf8f7895bbc17eceb65", size = 3404123, upload-time = "2026-02-26T21:10:33.593Z" },
+]
+
+[[package]]
+name = "gstreamer-plugins-libs"
+version = "1.28.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "gstreamer-libs" },
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/70/ad/06118e0b6d018e03d4b1414518151b03a2205b08c94776f8e3b738232e3e/gstreamer_plugins_libs-1.28.1-cp313-cp313t-win32.whl", hash = "sha256:0c244d87f1ba6777a3b434b7d759d1ea885286b195d6573d58cb9bd2923a27c0", size = 16417439, upload-time = "2026-02-26T21:13:56.034Z" },
+    { url = "https://files.pythonhosted.org/packages/85/d6/183a469297f29ee5dd04206875644973815f337d62402bb601b0619a0608/gstreamer_plugins_libs-1.28.1-cp313-cp313t-win_amd64.whl", hash = "sha256:aa430ebefb571a39a8ffe43ac525da3359441b2ef835cb027e6f56334cb0acf4", size = 21187932, upload-time = "2026-02-26T21:14:00.261Z" },
+    { url = "https://files.pythonhosted.org/packages/46/63/98463ffacaffa34da0811dce47ec8edb373628d44088864d8d9f8fc8cdde/gstreamer_plugins_libs-1.28.1-cp314-cp314t-win32.whl", hash = "sha256:466a481af0762ae23d2b9bc6077f124a61f0e9712e2b3ac5be116734153c5c89", size = 16709879, upload-time = "2026-02-26T21:14:04.394Z" },
+    { url = "https://files.pythonhosted.org/packages/dd/15/4816b3cf2f551b5435818d9aa91bf4940a94968b22a836b9739b0b924171/gstreamer_plugins_libs-1.28.1-cp314-cp314t-win_amd64.whl", hash = "sha256:8b5663ba5e4600a5994efd88e10ee08547b66e0de53b3267cef18c7edac507b5", size = 21670454, upload-time = "2026-02-26T21:14:10.189Z" },
+    { url = "https://files.pythonhosted.org/packages/90/f4/17978e002bf158b17739662073b6035d6fa81f02f265877c303e064b0d83/gstreamer_plugins_libs-1.28.1-cp39-abi3-macosx_10_13_universal2.whl", hash = "sha256:ba05b91d23ebd2316ff16d8d317a39c6f91dec0b092ae4f289536097b4a2ea32", size = 82885943, upload-time = "2026-02-26T21:10:42.598Z" },
+    { url = "https://files.pythonhosted.org/packages/37/6c/105aad9005b631b57383db14a9102ce72e164a6ce16d216550da32378ed4/gstreamer_plugins_libs-1.28.1-cp39-abi3-win32.whl", hash = "sha256:f03875952cff7c26c61ad1dc804a6d9e689b272cf5a912c6b5361220b46972d3", size = 16417435, upload-time = "2026-02-26T21:10:48.349Z" },
+    { url = "https://files.pythonhosted.org/packages/67/2d/71abda97695419fc21be144cea386ff5da7b5c75294ba37e1e21a4431dcf/gstreamer_plugins_libs-1.28.1-cp39-abi3-win_amd64.whl", hash = "sha256:dbcf0e14da94a5f9fc584c419bacf0e096730ef50d5f331f4d5ea3f026a72314", size = 21187934, upload-time = "2026-02-26T21:10:52.405Z" },
+]
+
+[[package]]
+name = "gstreamer-plugins-restricted"
+version = "1.28.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "gstreamer-plugins-libs" },
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/6e/ee/ded9f9f1bb68141461c53770da07f66f36479948de08647c04717e8dc81c/gstreamer_plugins_restricted-1.28.1-cp313-cp313t-win32.whl", hash = "sha256:9c2ac0ebb5e8d3153b0a49985e1a0f435b5fbb190f9997361fabdc5a793be586", size = 1392966, upload-time = "2026-02-26T21:14:12.591Z" },
+    { url = "https://files.pythonhosted.org/packages/13/77/f4c0efcbe090f86b940f73630a958f160745378e6367b6416d5513bf5f98/gstreamer_plugins_restricted-1.28.1-cp313-cp313t-win_amd64.whl", hash = "sha256:e80fb98322d6544a31223d2b6eb55717f92dcc279f476b31019d6af2d526abc9", size = 1487953, upload-time = "2026-02-26T21:14:14.305Z" },
+    { url = "https://files.pythonhosted.org/packages/c8/df/146e2247f021e93027302060a4a8e152b4f682ab002a6c4b10f859bfd0ee/gstreamer_plugins_restricted-1.28.1-cp314-cp314t-win32.whl", hash = "sha256:e0cfaab8e73c4f15badc133a0c24766b3b7e7aab888158fd5282522eb36cbfcb", size = 1428504, upload-time = "2026-02-26T21:14:16.383Z" },
+    { url = "https://files.pythonhosted.org/packages/00/29/86ef332206c1880dedb5d7aaa96fcd90dc10fd9dadd0a36a4ecbeb76f280/gstreamer_plugins_restricted-1.28.1-cp314-cp314t-win_amd64.whl", hash = "sha256:e11d2519ccfb331e0082b8b243993b51dc5c22fa10de356ab4facf044366a9af", size = 1535114, upload-time = "2026-02-26T21:14:18.709Z" },
+    { url = "https://files.pythonhosted.org/packages/f4/18/bfe6f20308f9cc4d4cf4156323601e064c82974b3cb411b5ac2bb53d3d3d/gstreamer_plugins_restricted-1.28.1-cp39-abi3-macosx_10_13_universal2.whl", hash = "sha256:04e067a2539d41e0e7ad98f85abe183542f3450282015bcc971f8f49d7237ebf", size = 6013959, upload-time = "2026-02-26T21:10:55.86Z" },
+    { url = "https://files.pythonhosted.org/packages/f8/40/7c52a5bb3782f493a7e2e84a96c6907b8e380e07aeb528a062835de941b3/gstreamer_plugins_restricted-1.28.1-cp39-abi3-win32.whl", hash = "sha256:2fd1672c1bc65cf586865b18766cf33337936faf0daca2ffa378cf207c2a340d", size = 1392964, upload-time = "2026-02-26T21:10:57.713Z" },
+    { url = "https://files.pythonhosted.org/packages/d1/2f/eac30d50e8524e7b21099553ffdd6223c3789814b7219e3f69c632be1f88/gstreamer_plugins_restricted-1.28.1-cp39-abi3-win_amd64.whl", hash = "sha256:12029da1de4025f674cd2724b76f65c61ccc23c369b72918d3ff827da94df2c1", size = 1487947, upload-time = "2026-02-26T21:10:59.176Z" },
+]
+
+[[package]]
+name = "gstreamer-python"
+version = "1.28.1"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d0/cf/eed77c79ea2211930696d094322c4f240a3b643ef926f7df83f671ce3203/gstreamer_python-1.28.1-cp310-cp310-macosx_10_13_universal2.whl", hash = "sha256:603006a64beff9654c8fb27addaf01d024088718643ad49ebdf1e47471777e9a", size = 1187238, upload-time = "2026-02-26T21:14:20.577Z" },
+    { url = "https://files.pythonhosted.org/packages/ad/02/f274c5c3d8a606771d3d9d9077cb5e5cce97f3b24075e18b46018b4d2a14/gstreamer_python-1.28.1-cp310-cp310-win32.whl", hash = "sha256:ab00d1add3b5333f4013f9f71738f4d480abdd5acd0f459579707b271512ad5d", size = 930471, upload-time = "2026-02-26T21:14:22.81Z" },
+    { url = "https://files.pythonhosted.org/packages/4d/c6/44332775b04a24d3a22286280d89dd003a9545c83ba37e587082457b6b10/gstreamer_python-1.28.1-cp310-cp310-win_amd64.whl", hash = "sha256:b390153a1b56ff43f435c2db23eb5b6dc55d324fef7e4f21cfddd1e573a2e96e", size = 969885, upload-time = "2026-02-26T21:14:24.591Z" },
+    { url = "https://files.pythonhosted.org/packages/f9/67/f1c7892e70f3c821d9ac830280814d3330e17bb20a97fcaafab09ec2f0b3/gstreamer_python-1.28.1-cp311-cp311-macosx_10_13_universal2.whl", hash = "sha256:c1dd1dd1d46b3dd17f1221b4046c25beb32f56fc038f581f13eb835fb2ecd8fa", size = 1187166, upload-time = "2026-02-26T21:14:26.496Z" },
+    { url = "https://files.pythonhosted.org/packages/c3/ff/bde5435f4af19e6ae4538db004f0763e4731200cfa0ce3628c1c906b6772/gstreamer_python-1.28.1-cp311-cp311-win32.whl", hash = "sha256:d06537bd483fce6064e8a7f84223b4b8f89aee63b18ae374d44d86b27c533840", size = 930890, upload-time = "2026-02-26T21:14:28.214Z" },
+    { url = "https://files.pythonhosted.org/packages/9e/da/f70f117ff1ab38a073f6da218586e802151dbfb4900f201bcc6c62d48727/gstreamer_python-1.28.1-cp311-cp311-win_amd64.whl", hash = "sha256:bd8d151184fc0de7eba908893e85dfaeb35078205b60d579fcc2393ab2c6af32", size = 970914, upload-time = "2026-02-26T21:14:29.937Z" },
+    { url = "https://files.pythonhosted.org/packages/de/a3/df628de6c69b499119450b087ebadcdbc17b2029ffa11caccaec4a9f9b21/gstreamer_python-1.28.1-cp312-cp312-macosx_10_13_universal2.whl", hash = "sha256:cc21fa0f61854462fbf82880733acde586d33411c9c9785a4b9be7a272763547", size = 1194980, upload-time = "2026-02-26T21:14:32.146Z" },
+    { url = "https://files.pythonhosted.org/packages/0e/64/fde015354f9d40be9e83714c769fac0eaf95f106566ff70a50b267ed8cb2/gstreamer_python-1.28.1-cp312-cp312-win32.whl", hash = "sha256:4e02948dc4924c4098afdeb1f4f646826cfff474305ca02500b160da15d18e9c", size = 932980, upload-time = "2026-02-26T21:14:34.373Z" },
+    { url = "https://files.pythonhosted.org/packages/24/7e/7aa3edd47b2032287f431a28eac452438bf8a6ab05bb9a63bdab02d9e5f4/gstreamer_python-1.28.1-cp312-cp312-win_amd64.whl", hash = "sha256:1f72d326cd43107559698d6bddde7af545661a746ab423769ac4d7af2885069b", size = 973663, upload-time = "2026-02-26T21:14:36.145Z" },
+    { url = "https://files.pythonhosted.org/packages/5a/14/8e2fb245de8e72c9e73f57f2a10b0b3380ca021bd8bf8a4d38f24e5b866c/gstreamer_python-1.28.1-cp313-cp313-macosx_10_13_universal2.whl", hash = "sha256:a317011337c5e7b12cf96ab4f467245e9d29949eacf608ac2f7e91ff16cc9881", size = 1203789, upload-time = "2026-02-26T21:14:37.835Z" },
+    { url = "https://files.pythonhosted.org/packages/fb/c5/40093d0a4b0ee3b96fd92afe87ccee63c6604f00f979222d470a6f2caa74/gstreamer_python-1.28.1-cp313-cp313-win32.whl", hash = "sha256:6fa8dc2f536598428623ba1805bef52d9e0868f78213b8f8e8f4061e3aa74dd0", size = 933750, upload-time = "2026-02-26T21:14:43.525Z" },
+    { url = "https://files.pythonhosted.org/packages/ea/b9/774081b6987252ae900abbdd4e4921279f8f25465659f440547a7353f09d/gstreamer_python-1.28.1-cp313-cp313-win_amd64.whl", hash = "sha256:de202b5a276928c9062343e3e90e8849effa5fdb88d7d0655faf6f805fbb9c3b", size = 974799, upload-time = "2026-02-26T21:14:45.246Z" },
+    { url = "https://files.pythonhosted.org/packages/ef/56/e93e17f8fa76476c00740a5e86e4aba1fe6a6199b8541e870e2fc0c8ad36/gstreamer_python-1.28.1-cp313-cp313t-win32.whl", hash = "sha256:fdd8e95794fe92040e7e02c2317cfbbfdeea1014d78ff6cb39050c4941f646c8", size = 947840, upload-time = "2026-02-26T21:14:40.075Z" },
+    { url = "https://files.pythonhosted.org/packages/09/c8/afda085e4de3421a88b6ae9d4d30b81414365b42a4443d0d9d93b76e4000/gstreamer_python-1.28.1-cp313-cp313t-win_amd64.whl", hash = "sha256:e1e73480b4d8951d930cd30a8c7ce4d52b509191ae80449d5613fc25343eb15e", size = 994224, upload-time = "2026-02-26T21:14:41.792Z" },
+    { url = "https://files.pythonhosted.org/packages/7b/a1/0b40f2d6135f8252e418b51c4ade3dcfdcf21833279d4b17169bc7f555cb/gstreamer_python-1.28.1-cp314-cp314-macosx_10_15_universal2.whl", hash = "sha256:a10d01c0e4f6cfe0bfada409547e14c785bd0c4538917dd130d13420556fbf3a", size = 1203798, upload-time = "2026-02-26T21:14:47.092Z" },
+    { url = "https://files.pythonhosted.org/packages/b0/37/63e78619a1f3f3d7a276e9bdb9b9c129464922754eb011ccfd9064bba69e/gstreamer_python-1.28.1-cp314-cp314-win32.whl", hash = "sha256:b13cd51c358f9142912db850f4ae98a6de68f217cbc5f7e54add86ea17637e0a", size = 959220, upload-time = "2026-02-26T21:14:53.402Z" },
+    { url = "https://files.pythonhosted.org/packages/74/29/70cb841fae8ea4c4878f158971ca12db77f8f3dc0c1d2d0e1460f4ddcff7/gstreamer_python-1.28.1-cp314-cp314-win_amd64.whl", hash = "sha256:84c5ded17dcb2515cc3800a5140315edef46bf1d91d35857f685c28f2eeaa6a6", size = 1000668, upload-time = "2026-02-26T21:14:55.209Z" },
+    { url = "https://files.pythonhosted.org/packages/be/c8/0f246365f5fb91356f42e37a743f0293aa183aa462fe2409aa3961585cac/gstreamer_python-1.28.1-cp314-cp314t-win32.whl", hash = "sha256:aa2ab0a970fe862af32e266a8774926675f0ea4e8cc93d36935c83c0e9ddf74e", size = 974554, upload-time = "2026-02-26T21:14:49.276Z" },
+    { url = "https://files.pythonhosted.org/packages/85/f6/ddda0653b981099f43b316002e5cf1bacf6976b27a766695c4cd9e832762/gstreamer_python-1.28.1-cp314-cp314t-win_amd64.whl", hash = "sha256:12fbc7beea0f63486f8a0c9732afe78823cd6bb8356f66e7b1d4d19ee8f8ef0b", size = 1022968, upload-time = "2026-02-26T21:14:51.182Z" },
 ]
 
 [[package]]
@@ -1260,20 +1454,20 @@ name = "ipython"
 version = "8.38.0"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
-    "python_full_version < '3.11' and sys_platform != 'darwin' and sys_platform != 'win32'",
-    "python_full_version < '3.11' and sys_platform == 'darwin'",
+    "python_full_version < '3.11'",
 ]
 dependencies = [
-    { name = "decorator", marker = "python_full_version < '3.11' and sys_platform != 'win32'" },
-    { name = "exceptiongroup", marker = "python_full_version < '3.11' and sys_platform != 'win32'" },
-    { name = "jedi", marker = "python_full_version < '3.11' and sys_platform != 'win32'" },
-    { name = "matplotlib-inline", marker = "python_full_version < '3.11' and sys_platform != 'win32'" },
+    { name = "colorama", marker = "python_full_version < '3.11' and sys_platform == 'win32'" },
+    { name = "decorator", marker = "python_full_version < '3.11'" },
+    { name = "exceptiongroup", marker = "python_full_version < '3.11'" },
+    { name = "jedi", marker = "python_full_version < '3.11'" },
+    { name = "matplotlib-inline", marker = "python_full_version < '3.11'" },
     { name = "pexpect", marker = "python_full_version < '3.11' and sys_platform != 'emscripten' and sys_platform != 'win32'" },
-    { name = "prompt-toolkit", marker = "python_full_version < '3.11' and sys_platform != 'win32'" },
-    { name = "pygments", marker = "python_full_version < '3.11' and sys_platform != 'win32'" },
-    { name = "stack-data", marker = "python_full_version < '3.11' and sys_platform != 'win32'" },
-    { name = "traitlets", marker = "python_full_version < '3.11' and sys_platform != 'win32'" },
-    { name = "typing-extensions", marker = "python_full_version < '3.11' and sys_platform != 'win32'" },
+    { name = "prompt-toolkit", marker = "python_full_version < '3.11'" },
+    { name = "pygments", marker = "python_full_version < '3.11'" },
+    { name = "stack-data", marker = "python_full_version < '3.11'" },
+    { name = "traitlets", marker = "python_full_version < '3.11'" },
+    { name = "typing-extensions", marker = "python_full_version < '3.11'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/e5/61/1810830e8b93c72dcd3c0f150c80a00c3deb229562d9423807ec92c3a539/ipython-8.38.0.tar.gz", hash = "sha256:9cfea8c903ce0867cc2f23199ed8545eb741f3a69420bfcf3743ad1cec856d39", size = 5513996, upload-time = "2026-01-05T10:59:06.901Z" }
 wheels = [
@@ -1285,20 +1479,20 @@ name = "ipython"
 version = "9.10.0"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
-    "python_full_version >= '3.11' and sys_platform != 'darwin' and sys_platform != 'win32'",
-    "python_full_version >= '3.11' and sys_platform == 'darwin'",
+    "python_full_version >= '3.11'",
 ]
 dependencies = [
-    { name = "decorator", marker = "python_full_version >= '3.11' and sys_platform != 'win32'" },
-    { name = "ipython-pygments-lexers", marker = "python_full_version >= '3.11' and sys_platform != 'win32'" },
-    { name = "jedi", marker = "python_full_version >= '3.11' and sys_platform != 'win32'" },
-    { name = "matplotlib-inline", marker = "python_full_version >= '3.11' and sys_platform != 'win32'" },
+    { name = "colorama", marker = "python_full_version >= '3.11' and sys_platform == 'win32'" },
+    { name = "decorator", marker = "python_full_version >= '3.11'" },
+    { name = "ipython-pygments-lexers", marker = "python_full_version >= '3.11'" },
+    { name = "jedi", marker = "python_full_version >= '3.11'" },
+    { name = "matplotlib-inline", marker = "python_full_version >= '3.11'" },
     { name = "pexpect", marker = "python_full_version >= '3.11' and sys_platform != 'emscripten' and sys_platform != 'win32'" },
-    { name = "prompt-toolkit", marker = "python_full_version >= '3.11' and sys_platform != 'win32'" },
-    { name = "pygments", marker = "python_full_version >= '3.11' and sys_platform != 'win32'" },
-    { name = "stack-data", marker = "python_full_version >= '3.11' and sys_platform != 'win32'" },
-    { name = "traitlets", marker = "python_full_version >= '3.11' and sys_platform != 'win32'" },
-    { name = "typing-extensions", marker = "python_full_version == '3.11.*' and sys_platform != 'win32'" },
+    { name = "prompt-toolkit", marker = "python_full_version >= '3.11'" },
+    { name = "pygments", marker = "python_full_version >= '3.11'" },
+    { name = "stack-data", marker = "python_full_version >= '3.11'" },
+    { name = "traitlets", marker = "python_full_version >= '3.11'" },
+    { name = "typing-extensions", marker = "python_full_version == '3.11.*'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/a6/60/2111715ea11f39b1535bed6024b7dec7918b71e5e5d30855a5b503056b50/ipython-9.10.0.tar.gz", hash = "sha256:cd9e656be97618a0676d058134cd44e6dc7012c0e5cb36a9ce96a8c904adaf77", size = 4426526, upload-time = "2026-02-02T10:00:33.594Z" }
 wheels = [
@@ -1310,7 +1504,7 @@ name = "ipython-pygments-lexers"
 version = "1.1.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pygments", marker = "python_full_version >= '3.11' and sys_platform != 'win32'" },
+    { name = "pygments", marker = "python_full_version >= '3.11'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/ef/4c/5dd1d8af08107f88c7f741ead7a40854b8ac24ddf9ae850afbcf698aa552/ipython_pygments_lexers-1.1.1.tar.gz", hash = "sha256:09c0138009e56b6854f9535736f4171d855c8c08a563a0dcd8022f78355c7e81", size = 8393, upload-time = "2025-01-17T11:24:34.505Z" }
 wheels = [
@@ -1331,7 +1525,7 @@ name = "jedi"
 version = "0.19.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "parso", marker = "sys_platform != 'win32'" },
+    { name = "parso" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/72/3a/79a912fbd4d8dd6fbb02bf69afd3bb72cf0c729bb3063c6f4498603db17a/jedi-0.19.2.tar.gz", hash = "sha256:4770dc3de41bde3966b02eb84fbcf557fb33cce26ad23da12c742fb50ecb11f0", size = 1231287, upload-time = "2024-11-11T01:41:42.873Z" }
 wheels = [
@@ -1664,7 +1858,7 @@ name = "matplotlib-inline"
 version = "0.2.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "traitlets", marker = "sys_platform != 'win32'" },
+    { name = "traitlets" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/c7/74/97e72a36efd4ae2bccb3463284300f8953f199b5ffbc04cbbb0ec78f74b1/matplotlib_inline-0.2.1.tar.gz", hash = "sha256:e1ee949c340d771fc39e241ea75683deb94762c8fa5f2927ec57c83c4dffa9fe", size = 8110, upload-time = "2025-10-23T09:00:22.126Z" }
 wheels = [
@@ -1685,14 +1879,14 @@ name = "meshcat"
 version = "0.3.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "ipython", version = "8.38.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11' and sys_platform != 'win32'" },
-    { name = "ipython", version = "9.10.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11' and sys_platform != 'win32'" },
-    { name = "numpy", marker = "sys_platform != 'win32'" },
-    { name = "pillow", marker = "sys_platform != 'win32'" },
-    { name = "pyngrok", marker = "sys_platform != 'win32'" },
-    { name = "pyzmq", marker = "sys_platform != 'win32'" },
-    { name = "tornado", marker = "sys_platform != 'win32'" },
-    { name = "u-msgpack-python", marker = "sys_platform != 'win32'" },
+    { name = "ipython", version = "8.38.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "ipython", version = "9.10.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
+    { name = "numpy" },
+    { name = "pillow" },
+    { name = "pyngrok" },
+    { name = "pyzmq" },
+    { name = "tornado" },
+    { name = "u-msgpack-python" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/af/c2/fae203e8e2119d4c793c9d7d2b8d1fea10752bb39b7b330beb8e67b6117c/meshcat-0.3.2.tar.gz", hash = "sha256:2cfe17cde4fe85d072a3de018a9dabf5626f80c255fff2ce63b26a48d2484ad9", size = 611361, upload-time = "2021-11-07T20:31:55.305Z" }
 wheels = [
@@ -2126,7 +2320,7 @@ name = "pexpect"
 version = "4.9.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "ptyprocess", marker = "sys_platform != 'win32'" },
+    { name = "ptyprocess" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/42/92/cc564bf6381ff43ce1f4d06852fc19a2f11d180f23dc32d9588bee2f149d/pexpect-4.9.0.tar.gz", hash = "sha256:ee7d41123f3c9911050ea2c2dac107568dc43b2d3b0c7557a33212c398ead30f", size = 166450, upload-time = "2023-11-25T09:07:26.339Z" }
 wheels = [
@@ -2236,10 +2430,10 @@ name = "pin"
 version = "3.4.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "cmeel", marker = "sys_platform != 'win32'" },
-    { name = "cmeel-boost", marker = "sys_platform != 'win32'" },
-    { name = "cmeel-urdfdom", marker = "sys_platform != 'win32'" },
-    { name = "coal-library", marker = "sys_platform != 'win32'" },
+    { name = "cmeel" },
+    { name = "cmeel-boost" },
+    { name = "cmeel-urdfdom" },
+    { name = "coal-library" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/4c/00/0e2b8344ea7af3185909ddc91876abe0274d5b1257caf191414732495c9d/pin-3.4.0.tar.gz", hash = "sha256:95c8e9c707dad9c412247874ca3f8ac77f0d5f51e49f02856f88146478e2660b", size = 99748596, upload-time = "2025-02-13T01:08:55.83Z" }
 wheels = [
@@ -2275,12 +2469,12 @@ name = "placo"
 version = "0.9.14"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "cmeel", marker = "sys_platform != 'win32'" },
-    { name = "eiquadprog", marker = "sys_platform != 'win32'" },
-    { name = "ischedule", marker = "sys_platform != 'win32'" },
-    { name = "meshcat", marker = "sys_platform != 'win32'" },
-    { name = "pin", marker = "sys_platform != 'win32'" },
-    { name = "rhoban-cmeel-jsoncpp", marker = "sys_platform != 'win32'" },
+    { name = "cmeel" },
+    { name = "eiquadprog" },
+    { name = "ischedule" },
+    { name = "meshcat" },
+    { name = "pin" },
+    { name = "rhoban-cmeel-jsoncpp" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/4b/45/293c9afc05a018bd2e2d6ec88a44958f09724686c826f576b04775d0d19b/placo-0.9.14.tar.gz", hash = "sha256:2ac04ede402a60fdfff240bd06dbb01fcd7b291bdb7b2d1d5ef595e7ca581b74", size = 136457, upload-time = "2025-07-07T23:43:26.547Z" }
 wheels = [
@@ -2325,9 +2519,9 @@ name = "pollen-bmi088-imu-library"
 version = "1.0.0rc1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "ahrs", marker = "sys_platform != 'darwin' and sys_platform != 'win32'" },
-    { name = "numpy", marker = "sys_platform != 'darwin' and sys_platform != 'win32'" },
-    { name = "smbus3", marker = "sys_platform != 'darwin' and sys_platform != 'win32'" },
+    { name = "ahrs" },
+    { name = "numpy" },
+    { name = "smbus3" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/64/ca/f74143ec89fbc502c7d9fc6a4d20a7f56fad822389716daee5e2bfe9e364/pollen_bmi088_imu_library-1.0.0rc1.tar.gz", hash = "sha256:6a82eafa448807a87c7a9e1ed8ef395b0ce5f2f57fa536b5b3a3f428e72d8fcf", size = 3273, upload-time = "2025-10-30T08:57:43.422Z" }
 wheels = [
@@ -2614,8 +2808,8 @@ name = "pycaw"
 version = "20251023"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "comtypes", marker = "sys_platform == 'win32'" },
-    { name = "psutil", marker = "sys_platform == 'win32'" },
+    { name = "comtypes" },
+    { name = "psutil" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/d1/81/19181e3118a503f94d8689fbbed60616e85d08cee3a295c11245ae73018f/pycaw-20251023.tar.gz", hash = "sha256:19935b92eb5efc3f3ea5ee8a2d37ca49009e9dc00f83d067b74b9922e84b5b3b", size = 23421, upload-time = "2025-10-23T18:26:45.087Z" }
 wheels = [
@@ -2778,7 +2972,7 @@ name = "pygobject"
 version = "3.46.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pycairo", marker = "sys_platform != 'darwin' and sys_platform != 'win32'" },
+    { name = "pycairo" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/ac/4a/f24ddf1d20cc4b56affc7921e29928559a06c922eb60077448392792b914/PyGObject-3.46.0.tar.gz", hash = "sha256:481437b05af0a66b7c366ea052710eb3aacbb979d22d30b797f7ec29347ab1e6", size = 723367, upload-time = "2023-09-10T09:56:26.737Z" }
 
@@ -2787,7 +2981,7 @@ name = "pyngrok"
 version = "7.5.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyyaml", marker = "sys_platform != 'win32'" },
+    { name = "pyyaml" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/f6/7c/788a44567ffbad7c2d838e79a388ae5045520410f953c5097ad664d4763d/pyngrok-7.5.0.tar.gz", hash = "sha256:2fe91cba2c2531ecfb124b5071f377808b61a68a14ca3c99fcb7f3fdae05278f", size = 43149, upload-time = "2025-11-17T17:36:50.463Z" }
 wheels = [
@@ -2830,10 +3024,10 @@ name = "pyobjc-framework-applicationservices"
 version = "12.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core", marker = "sys_platform == 'darwin'" },
-    { name = "pyobjc-framework-cocoa", marker = "sys_platform == 'darwin'" },
-    { name = "pyobjc-framework-coretext", marker = "sys_platform == 'darwin'" },
-    { name = "pyobjc-framework-quartz", marker = "sys_platform == 'darwin'" },
+    { name = "pyobjc-core" },
+    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-framework-coretext" },
+    { name = "pyobjc-framework-quartz" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/be/6a/d4e613c8e926a5744fc47a9e9fea08384a510dc4f27d844f7ad7a2d793bd/pyobjc_framework_applicationservices-12.1.tar.gz", hash = "sha256:c06abb74f119bc27aeb41bf1aef8102c0ae1288aec1ac8665ea186a067a8945b", size = 103247, upload-time = "2025-11-14T10:08:52.18Z" }
 wheels = [
@@ -2851,11 +3045,11 @@ name = "pyobjc-framework-avfoundation"
 version = "12.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core", marker = "sys_platform == 'darwin'" },
-    { name = "pyobjc-framework-cocoa", marker = "sys_platform == 'darwin'" },
-    { name = "pyobjc-framework-coreaudio", marker = "sys_platform == 'darwin'" },
-    { name = "pyobjc-framework-coremedia", marker = "sys_platform == 'darwin'" },
-    { name = "pyobjc-framework-quartz", marker = "sys_platform == 'darwin'" },
+    { name = "pyobjc-core" },
+    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-framework-coreaudio" },
+    { name = "pyobjc-framework-coremedia" },
+    { name = "pyobjc-framework-quartz" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/cd/42/c026ab308edc2ed5582d8b4b93da6b15d1b6557c0086914a4aabedd1f032/pyobjc_framework_avfoundation-12.1.tar.gz", hash = "sha256:eda0bb60be380f9ba2344600c4231dd58a3efafa99fdc65d3673ecfbb83f6fcb", size = 310047, upload-time = "2025-11-14T10:09:40.069Z" }
 wheels = [
@@ -2873,7 +3067,7 @@ name = "pyobjc-framework-cocoa"
 version = "12.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core", marker = "sys_platform == 'darwin'" },
+    { name = "pyobjc-core" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/02/a3/16ca9a15e77c061a9250afbae2eae26f2e1579eb8ca9462ae2d2c71e1169/pyobjc_framework_cocoa-12.1.tar.gz", hash = "sha256:5556c87db95711b985d5efdaaf01c917ddd41d148b1e52a0c66b1a2e2c5c1640", size = 2772191, upload-time = "2025-11-14T10:13:02.069Z" }
 wheels = [
@@ -2891,8 +3085,8 @@ name = "pyobjc-framework-coreaudio"
 version = "12.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core", marker = "sys_platform == 'darwin'" },
-    { name = "pyobjc-framework-cocoa", marker = "sys_platform == 'darwin'" },
+    { name = "pyobjc-core" },
+    { name = "pyobjc-framework-cocoa" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/84/d1/0b884c5564ab952ff5daa949128c64815300556019c1bba0cf2ca752a1a0/pyobjc_framework_coreaudio-12.1.tar.gz", hash = "sha256:a9e72925fcc1795430496ce0bffd4ddaa92c22460a10308a7283ade830089fe1", size = 75077, upload-time = "2025-11-14T10:13:22.345Z" }
 wheels = [
@@ -2910,8 +3104,8 @@ name = "pyobjc-framework-coremedia"
 version = "12.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core", marker = "sys_platform == 'darwin'" },
-    { name = "pyobjc-framework-cocoa", marker = "sys_platform == 'darwin'" },
+    { name = "pyobjc-core" },
+    { name = "pyobjc-framework-cocoa" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/da/7d/5ad600ff7aedfef8ba8f51b11d9aaacdf247b870bd14045d6e6f232e3df9/pyobjc_framework_coremedia-12.1.tar.gz", hash = "sha256:166c66a9c01e7a70103f3ca44c571431d124b9070612ef63a1511a4e6d9d84a7", size = 89566, upload-time = "2025-11-14T10:13:49.788Z" }
 wheels = [
@@ -2929,9 +3123,9 @@ name = "pyobjc-framework-coretext"
 version = "12.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core", marker = "sys_platform == 'darwin'" },
-    { name = "pyobjc-framework-cocoa", marker = "sys_platform == 'darwin'" },
-    { name = "pyobjc-framework-quartz", marker = "sys_platform == 'darwin'" },
+    { name = "pyobjc-core" },
+    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-framework-quartz" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/29/da/682c9c92a39f713bd3c56e7375fa8f1b10ad558ecb075258ab6f1cdd4a6d/pyobjc_framework_coretext-12.1.tar.gz", hash = "sha256:e0adb717738fae395dc645c9e8a10bb5f6a4277e73cba8fa2a57f3b518e71da5", size = 90124, upload-time = "2025-11-14T10:14:38.596Z" }
 wheels = [
@@ -2949,8 +3143,8 @@ name = "pyobjc-framework-quartz"
 version = "12.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core", marker = "sys_platform == 'darwin'" },
-    { name = "pyobjc-framework-cocoa", marker = "sys_platform == 'darwin'" },
+    { name = "pyobjc-core" },
+    { name = "pyobjc-framework-cocoa" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/94/18/cc59f3d4355c9456fc945eae7fe8797003c4da99212dd531ad1b0de8a0c6/pyobjc_framework_quartz-12.1.tar.gz", hash = "sha256:27f782f3513ac88ec9b6c82d9767eef95a5cf4175ce88a1e5a65875fee799608", size = 3159099, upload-time = "2025-11-14T10:21:24.31Z" }
 wheels = [
@@ -3133,7 +3327,7 @@ name = "pyzmq"
 version = "27.1.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "cffi", marker = "implementation_name == 'pypy' and sys_platform != 'win32'" },
+    { name = "cffi", marker = "implementation_name == 'pypy'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/04/0b/3c9baedbdf613ecaa7aa07027780b8867f57b6293b6ee50de316c9f3222b/pyzmq-27.1.0.tar.gz", hash = "sha256:ac0765e3d44455adb6ddbf4417dcce460fc40a05978c08efdf2948072f6db540", size = 281750, upload-time = "2025-09-08T23:10:18.157Z" }
 wheels = [
@@ -3206,6 +3400,7 @@ dependencies = [
     { name = "cv2-enumerate-cameras" },
     { name = "eclipse-zenoh" },
     { name = "fastapi" },
+    { name = "gstreamer-bundle", marker = "sys_platform != 'linux'" },
     { name = "huggingface-hub" },
     { name = "jinja2" },
     { name = "libusb-package" },
@@ -3306,6 +3501,7 @@ requires-dist = [
     { name = "eclipse-zenoh", specifier = "~=1.7.0" },
     { name = "fastapi" },
     { name = "gpiozero", marker = "sys_platform == 'linux' and extra == 'wireless-version'", specifier = ">=2.0.0" },
+    { name = "gstreamer-bundle", marker = "sys_platform != 'linux'", specifier = "==1.28.1" },
     { name = "huggingface-hub", specifier = "==1.3.0" },
     { name = "jinja2" },
     { name = "lgpio", marker = "sys_platform == 'linux' and extra == 'wireless-version'", specifier = ">=0.2.2.0" },
@@ -3563,7 +3759,7 @@ name = "rhoban-cmeel-jsoncpp"
 version = "1.9.4.9"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "cmeel", marker = "sys_platform != 'win32'" },
+    { name = "cmeel" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/f5/0d/8686269eecbea32f314865075521b6305df709fe6bf0793397e31ef7506a/rhoban_cmeel_jsoncpp-1.9.4.9.tar.gz", hash = "sha256:953003fd1ce3b447170ef21747180f70a50ec2e0b81c6e193088adc9a90d37da", size = 220876, upload-time = "2025-06-24T18:54:10.885Z" }
 wheels = [
@@ -3700,9 +3896,7 @@ name = "scipy"
 version = "1.15.3"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
-    "python_full_version < '3.11' and sys_platform != 'darwin' and sys_platform != 'win32'",
-    "python_full_version < '3.11' and sys_platform == 'win32'",
-    "python_full_version < '3.11' and sys_platform == 'darwin'",
+    "python_full_version < '3.11'",
 ]
 dependencies = [
     { name = "numpy", marker = "python_full_version < '3.11'" },
@@ -3761,9 +3955,7 @@ name = "scipy"
 version = "1.17.0"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
-    "python_full_version >= '3.11' and sys_platform != 'darwin' and sys_platform != 'win32'",
-    "python_full_version >= '3.11' and sys_platform == 'win32'",
-    "python_full_version >= '3.11' and sys_platform == 'darwin'",
+    "python_full_version >= '3.11'",
 ]
 dependencies = [
     { name = "numpy", marker = "python_full_version >= '3.11'" },
@@ -3916,9 +4108,9 @@ name = "stack-data"
 version = "0.6.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "asttokens", marker = "sys_platform != 'win32'" },
-    { name = "executing", marker = "sys_platform != 'win32'" },
-    { name = "pure-eval", marker = "sys_platform != 'win32'" },
+    { name = "asttokens" },
+    { name = "executing" },
+    { name = "pure-eval" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/28/e3/55dcc2cfbc3ca9c29519eb6884dd1415ecb53b0e934862d3559ddcb7e20b/stack_data-0.6.3.tar.gz", hash = "sha256:836a778de4fec4dcd1dcd89ed8abff8a221f58308462e1c4aa2a3cf30148f0b9", size = 44707, upload-time = "2023-09-30T13:58:05.479Z" }
 wheels = [

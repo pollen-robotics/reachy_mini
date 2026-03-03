@@ -55,6 +55,18 @@ The `preview` command only works with existing doc files. When you add a complet
 
 ---
 
+## Regenerating the REST API reference
+
+The file `docs/source/API/openapi.json` is generated from the FastAPI app. After
+changing any route, model, or docstring in the daemon, regenerate it with:
+
+```bash
+uv run python scripts/generate_openapi.py
+```
+
+Commit the updated JSON alongside your code changes. CI will fail if the
+committed spec drifts from the code.
+
 ## Adding a new element to the navigation bar
 
 Accepted files are Markdown (.md).

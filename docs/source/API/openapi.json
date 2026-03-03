@@ -1,0 +1,2760 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Reachy Mini REST API",
+    "version": "0.1.0",
+    "description": "HTTP and WebSocket API exposed by the Reachy Mini daemon. Interactive Swagger docs are available at `/docs` when the daemon is running."
+  },
+  "paths": {
+    "/api/apps/list-available/{source_kind}": {
+      "get": {
+        "summary": "List Available Apps",
+        "description": "List available apps (including not installed).",
+        "operationId": "list_available_apps_api_apps_list_available__source_kind__get",
+        "parameters": [
+          {
+            "name": "source_kind",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/SourceKind"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AppInfo"
+                  },
+                  "title": "Response List Available Apps Api Apps List Available  Source Kind  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/apps/list-available": {
+      "get": {
+        "summary": "List All Available Apps",
+        "description": "List all available apps (including not installed).",
+        "operationId": "list_all_available_apps_api_apps_list_available_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AppInfo"
+                  },
+                  "type": "array",
+                  "title": "Response List All Available Apps Api Apps List Available Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/apps/install": {
+      "post": {
+        "summary": "Install App",
+        "description": "Install a new app by its info (background, returns job_id).",
+        "operationId": "install_app_api_apps_install_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AppInfo"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Install App Api Apps Install Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/apps/remove/{app_name}": {
+      "post": {
+        "summary": "Remove App",
+        "description": "Remove an installed app by its name (background, returns job_id).",
+        "operationId": "remove_app_api_apps_remove__app_name__post",
+        "parameters": [
+          {
+            "name": "app_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "App Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Remove App Api Apps Remove  App Name  Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/apps/job-status/{job_id}": {
+      "get": {
+        "summary": "Job Status",
+        "description": "Get status/logs for a job.",
+        "operationId": "job_status_api_apps_job_status__job_id__get",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobInfo"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/apps/start-app/{app_name}": {
+      "post": {
+        "summary": "Start App",
+        "description": "Start an app by its name.",
+        "operationId": "start_app_api_apps_start_app__app_name__post",
+        "parameters": [
+          {
+            "name": "app_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "App Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppStatus"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/apps/restart-current-app": {
+      "post": {
+        "summary": "Restart App",
+        "description": "Restart the currently running app.",
+        "operationId": "restart_app_api_apps_restart_current_app_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppStatus"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/apps/stop-current-app": {
+      "post": {
+        "summary": "Stop App",
+        "description": "Stop the currently running app.",
+        "operationId": "stop_app_api_apps_stop_current_app_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/apps/current-app-status": {
+      "get": {
+        "summary": "Current App Status",
+        "description": "Get the status of the currently running app, if any.",
+        "operationId": "current_app_status_api_apps_current_app_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/AppStatus"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Response Current App Status Api Apps Current App Status Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/apps/install-private-space": {
+      "post": {
+        "summary": "Install Private Space",
+        "description": "Install a private HuggingFace space.\n\nRequires HF token to be stored via /api/hf-auth/save-token first.",
+        "operationId": "install_private_space_api_apps_install_private_space_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PrivateSpaceInstallRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Install Private Space Api Apps Install Private Space Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/apps/check-updates": {
+      "get": {
+        "summary": "Check App Updates",
+        "description": "Check all installed apps for available updates.\n\nResults are cached for 5 minutes unless force=True.\nThis performs a 'slow' check with rate limiting to avoid overwhelming HuggingFace.",
+        "operationId": "check_app_updates_api_apps_check_updates_get",
+        "parameters": [
+          {
+            "name": "force",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Force"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppUpdatesResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/apps/update/{app_name}": {
+      "post": {
+        "summary": "Update App",
+        "description": "Update an installed app to the latest version.\n\nThis reinstalls the app from HuggingFace, which downloads the latest version.\nReturns a job_id for tracking progress via WebSocket.",
+        "operationId": "update_app_api_apps_update__app_name__post",
+        "parameters": [
+          {
+            "name": "app_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "App Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Update App Api Apps Update  App Name  Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/daemon/start": {
+      "post": {
+        "summary": "Start Daemon",
+        "description": "Start the daemon.",
+        "operationId": "start_daemon_api_daemon_start_post",
+        "parameters": [
+          {
+            "name": "wake_up",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "boolean",
+              "title": "Wake Up"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Start Daemon Api Daemon Start Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/daemon/stop": {
+      "post": {
+        "summary": "Stop Daemon",
+        "description": "Stop the daemon, optionally putting the robot to sleep.",
+        "operationId": "stop_daemon_api_daemon_stop_post",
+        "parameters": [
+          {
+            "name": "goto_sleep",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "boolean",
+              "title": "Goto Sleep"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Stop Daemon Api Daemon Stop Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/daemon/restart": {
+      "post": {
+        "summary": "Restart Daemon",
+        "description": "Restart the daemon.",
+        "operationId": "restart_daemon_api_daemon_restart_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Restart Daemon Api Daemon Restart Post"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/daemon/status": {
+      "get": {
+        "summary": "Get Daemon Status",
+        "description": "Get the current status of the daemon.",
+        "operationId": "get_daemon_status_api_daemon_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DaemonStatus"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/hf-auth/save-token": {
+      "post": {
+        "summary": "Save Token",
+        "description": "Save HuggingFace token after validation.",
+        "operationId": "save_token_api_hf_auth_save_token_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TokenRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/hf-auth/status": {
+      "get": {
+        "summary": "Get Auth Status",
+        "description": "Check if user is authenticated with HuggingFace.",
+        "operationId": "get_auth_status_api_hf_auth_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Get Auth Status Api Hf Auth Status Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/hf-auth/relay-status": {
+      "get": {
+        "summary": "Get Relay Status",
+        "description": "Get the central signaling relay connection status.",
+        "operationId": "get_relay_status_api_hf_auth_relay_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Get Relay Status Api Hf Auth Relay Status Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/hf-auth/token": {
+      "delete": {
+        "summary": "Delete Token",
+        "description": "Delete stored HuggingFace token.",
+        "operationId": "delete_token_api_hf_auth_token_delete",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Delete Token Api Hf Auth Token Delete"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/hf-auth/oauth/configured": {
+      "get": {
+        "summary": "Is Oauth Configured",
+        "description": "Check if OAuth is configured.",
+        "operationId": "is_oauth_configured_api_hf_auth_oauth_configured_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Is Oauth Configured Api Hf Auth Oauth Configured Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/hf-auth/oauth/start": {
+      "get": {
+        "summary": "Start Oauth",
+        "description": "Start a new OAuth authorization session.\n\nReturns the auth_url to redirect the user to HuggingFace.",
+        "operationId": "start_oauth_api_hf_auth_oauth_start_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Start Oauth Api Hf Auth Oauth Start Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/hf-auth/oauth/status/{session_id}": {
+      "get": {
+        "summary": "Get Oauth Status",
+        "description": "Poll for OAuth session status.\n\nThe frontend polls this endpoint to check if the user has\ncompleted authorization.",
+        "operationId": "get_oauth_status_api_hf_auth_oauth_status__session_id__get",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Get Oauth Status Api Hf Auth Oauth Status  Session Id  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/hf-auth/oauth/session/{session_id}": {
+      "delete": {
+        "summary": "Cancel Oauth Session",
+        "description": "Cancel an OAuth session.",
+        "operationId": "cancel_oauth_session_api_hf_auth_oauth_session__session_id__delete",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Cancel Oauth Session Api Hf Auth Oauth Session  Session Id  Delete"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/hf-auth/oauth/callback": {
+      "get": {
+        "summary": "Oauth Callback",
+        "description": "Handle OAuth callback from HuggingFace.\n\nThis is where HF redirects after user authorizes.\nShows a success/error page that the user can close.",
+        "operationId": "oauth_callback_api_hf_auth_oauth_callback_get",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Code"
+            }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "State"
+            }
+          },
+          {
+            "name": "error",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Error"
+            }
+          },
+          {
+            "name": "error_description",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Error Description"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/kinematics/info": {
+      "get": {
+        "summary": "Get Kinematics Info",
+        "description": "Get the current information of the kinematics.",
+        "operationId": "get_kinematics_info_api_kinematics_info_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Get Kinematics Info Api Kinematics Info Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/kinematics/urdf": {
+      "get": {
+        "summary": "Get Urdf",
+        "description": "Get the URDF representation of the robot.",
+        "operationId": "get_urdf_api_kinematics_urdf_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Get Urdf Api Kinematics Urdf Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/kinematics/stl/{filename}": {
+      "get": {
+        "summary": "Get Stl File",
+        "description": "Get the path to an STL asset file.",
+        "operationId": "get_stl_file_api_kinematics_stl__filename__get",
+        "parameters": [
+          {
+            "name": "filename",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "path",
+              "title": "Filename"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/motors/status": {
+      "get": {
+        "summary": "Get Motor Status",
+        "description": "Get the current status of the motors.",
+        "operationId": "get_motor_status_api_motors_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MotorStatus"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/motors/set_mode/{mode}": {
+      "post": {
+        "summary": "Set Motor Mode",
+        "description": "Set the motor control mode.",
+        "operationId": "set_motor_mode_api_motors_set_mode__mode__post",
+        "parameters": [
+          {
+            "name": "mode",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/MotorControlMode"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Set Motor Mode Api Motors Set Mode  Mode  Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/move/running": {
+      "get": {
+        "summary": "Get Running Moves",
+        "description": "Get a list of currently running move tasks.",
+        "operationId": "get_running_moves_api_move_running_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/MoveUUID"
+                  },
+                  "type": "array",
+                  "title": "Response Get Running Moves Api Move Running Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/move/goto": {
+      "post": {
+        "summary": "Goto",
+        "description": "Request a movement to a specific target.",
+        "operationId": "goto_api_move_goto_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GotoModelRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MoveUUID"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/move/play/wake_up": {
+      "post": {
+        "summary": "Play Wake Up",
+        "description": "Request the robot to wake up.",
+        "operationId": "play_wake_up_api_move_play_wake_up_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MoveUUID"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/move/play/goto_sleep": {
+      "post": {
+        "summary": "Play Goto Sleep",
+        "description": "Request the robot to go to sleep.",
+        "operationId": "play_goto_sleep_api_move_play_goto_sleep_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MoveUUID"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/move/recorded-move-datasets/list/{dataset_name}": {
+      "get": {
+        "summary": "List Recorded Move Dataset",
+        "description": "List available recorded moves in a dataset.",
+        "operationId": "list_recorded_move_dataset_api_move_recorded_move_datasets_list__dataset_name__get",
+        "parameters": [
+          {
+            "name": "dataset_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Dataset Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "title": "Response List Recorded Move Dataset Api Move Recorded Move Datasets List  Dataset Name  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/move/play/recorded-move-dataset/{dataset_name}/{move_name}": {
+      "post": {
+        "summary": "Play Recorded Move Dataset",
+        "description": "Request the robot to play a predefined recorded move from a dataset.",
+        "operationId": "play_recorded_move_dataset_api_move_play_recorded_move_dataset__dataset_name___move_name__post",
+        "parameters": [
+          {
+            "name": "dataset_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Dataset Name"
+            }
+          },
+          {
+            "name": "move_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Move Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MoveUUID"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/move/stop": {
+      "post": {
+        "summary": "Stop Move",
+        "description": "Stop a running move task.",
+        "operationId": "stop_move_api_move_stop_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MoveUUID"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Stop Move Api Move Stop Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/move/set_target": {
+      "post": {
+        "summary": "Set Target",
+        "description": "POST route to set a single FullBodyTarget.",
+        "operationId": "set_target_api_move_set_target_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FullBodyTarget"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Set Target Api Move Set Target Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/state/present_head_pose": {
+      "get": {
+        "summary": "Get Head Pose",
+        "description": "Get the present head pose.\n\nArguments:\n    use_pose_matrix (bool): Whether to use the pose matrix representation (4x4 flattened) or the translation + Euler angles representation (x, y, z, roll, pitch, yaw).\n    backend (Backend): The backend instance.\n\nReturns:\n    AnyPose: The present head pose.",
+        "operationId": "get_head_pose_api_state_present_head_pose_get",
+        "parameters": [
+          {
+            "name": "use_pose_matrix",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Use Pose Matrix"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/XYZRPYPose"
+                    },
+                    {
+                      "$ref": "#/components/schemas/Matrix4x4Pose"
+                    }
+                  ],
+                  "title": "Response Get Head Pose Api State Present Head Pose Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/state/present_body_yaw": {
+      "get": {
+        "summary": "Get Body Yaw",
+        "description": "Get the present body yaw (in radians).",
+        "operationId": "get_body_yaw_api_state_present_body_yaw_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "number",
+                  "title": "Response Get Body Yaw Api State Present Body Yaw Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/state/present_antenna_joint_positions": {
+      "get": {
+        "summary": "Get Antenna Joint Positions",
+        "description": "Get the present antenna joint positions (in radians) - (left, right).",
+        "operationId": "get_antenna_joint_positions_api_state_present_antenna_joint_positions_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "prefixItems": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ],
+                  "type": "array",
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "title": "Response Get Antenna Joint Positions Api State Present Antenna Joint Positions Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/state/doa": {
+      "get": {
+        "summary": "Get Doa",
+        "description": "Get the Direction of Arrival from the microphone array.\n\nReturns the angle in radians (0=left, \u03c0/2=front, \u03c0=right) and speech detection status.\nReturns None if the audio device is not available.",
+        "operationId": "get_doa_api_state_doa_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/DoAInfo"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Response Get Doa Api State Doa Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/state/full": {
+      "get": {
+        "summary": "Get Full State",
+        "description": "Get the full robot state, with optional fields.",
+        "operationId": "get_full_state_api_state_full_get",
+        "parameters": [
+          {
+            "name": "with_control_mode",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": true,
+              "title": "With Control Mode"
+            }
+          },
+          {
+            "name": "with_head_pose",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": true,
+              "title": "With Head Pose"
+            }
+          },
+          {
+            "name": "with_target_head_pose",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "With Target Head Pose"
+            }
+          },
+          {
+            "name": "with_head_joints",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "With Head Joints"
+            }
+          },
+          {
+            "name": "with_target_head_joints",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "With Target Head Joints"
+            }
+          },
+          {
+            "name": "with_body_yaw",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": true,
+              "title": "With Body Yaw"
+            }
+          },
+          {
+            "name": "with_target_body_yaw",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "With Target Body Yaw"
+            }
+          },
+          {
+            "name": "with_antenna_positions",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": true,
+              "title": "With Antenna Positions"
+            }
+          },
+          {
+            "name": "with_target_antenna_positions",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "With Target Antenna Positions"
+            }
+          },
+          {
+            "name": "with_passive_joints",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "With Passive Joints"
+            }
+          },
+          {
+            "name": "with_doa",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "With Doa"
+            }
+          },
+          {
+            "name": "use_pose_matrix",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Use Pose Matrix"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FullState"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/volume/current": {
+      "get": {
+        "summary": "Get Volume",
+        "description": "Get the current output volume level.",
+        "operationId": "get_volume_api_volume_current_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VolumeResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/volume/set": {
+      "post": {
+        "summary": "Set Volume",
+        "description": "Set the output volume level and play a test sound.",
+        "operationId": "set_volume_api_volume_set_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VolumeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VolumeResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/volume/test-sound": {
+      "post": {
+        "summary": "Play Test Sound",
+        "description": "Play a test sound.",
+        "operationId": "play_test_sound_api_volume_test_sound_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TestSoundResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/volume/microphone/current": {
+      "get": {
+        "summary": "Get Microphone Volume",
+        "description": "Get the current microphone input volume level.",
+        "operationId": "get_microphone_volume_api_volume_microphone_current_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VolumeResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/volume/microphone/set": {
+      "post": {
+        "summary": "Set Microphone Volume",
+        "description": "Set the microphone input volume level.",
+        "operationId": "set_microphone_volume_api_volume_microphone_set_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VolumeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VolumeResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/": {
+      "get": {
+        "summary": "Dashboard",
+        "description": "Render the dashboard.",
+        "operationId": "dashboard__get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AppInfo": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "source_kind": {
+            "$ref": "#/components/schemas/SourceKind"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description",
+            "default": ""
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          },
+          "extra": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Extra"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "source_kind"
+        ],
+        "title": "AppInfo"
+      },
+      "AppState": {
+        "type": "string",
+        "enum": [
+          "starting",
+          "running",
+          "done",
+          "stopping",
+          "error"
+        ],
+        "title": "AppState",
+        "description": "Status of a running app."
+      },
+      "AppStatus": {
+        "properties": {
+          "info": {
+            "$ref": "#/components/schemas/AppInfo"
+          },
+          "state": {
+            "$ref": "#/components/schemas/AppState"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          }
+        },
+        "type": "object",
+        "required": [
+          "info",
+          "state"
+        ],
+        "title": "AppStatus",
+        "description": "Status of an app."
+      },
+      "AppUpdateStatus": {
+        "properties": {
+          "app_name": {
+            "type": "string",
+            "title": "App Name"
+          },
+          "space_id": {
+            "type": "string",
+            "title": "Space Id"
+          },
+          "installed_sha": {
+            "type": "string",
+            "title": "Installed Sha"
+          },
+          "latest_sha": {
+            "type": "string",
+            "title": "Latest Sha"
+          },
+          "update_available": {
+            "type": "boolean",
+            "title": "Update Available"
+          },
+          "last_modified": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Modified"
+          }
+        },
+        "type": "object",
+        "required": [
+          "app_name",
+          "space_id",
+          "installed_sha",
+          "latest_sha",
+          "update_available"
+        ],
+        "title": "AppUpdateStatus",
+        "description": "Status of an app update check."
+      },
+      "AppUpdatesResponse": {
+        "properties": {
+          "apps_with_updates": {
+            "items": {
+              "$ref": "#/components/schemas/AppUpdateStatus"
+            },
+            "type": "array",
+            "title": "Apps With Updates"
+          },
+          "apps_checked": {
+            "type": "integer",
+            "title": "Apps Checked"
+          },
+          "apps_skipped": {
+            "type": "integer",
+            "title": "Apps Skipped"
+          }
+        },
+        "type": "object",
+        "required": [
+          "apps_with_updates",
+          "apps_checked",
+          "apps_skipped"
+        ],
+        "title": "AppUpdatesResponse",
+        "description": "Response for list of app updates."
+      },
+      "DaemonState": {
+        "type": "string",
+        "enum": [
+          "not_initialized",
+          "starting",
+          "running",
+          "stopping",
+          "stopped",
+          "error"
+        ],
+        "title": "DaemonState",
+        "description": "Enum representing the state of the Reachy Mini daemon."
+      },
+      "DaemonStatus": {
+        "properties": {
+          "robot_name": {
+            "type": "string",
+            "title": "Robot Name"
+          },
+          "state": {
+            "$ref": "#/components/schemas/DaemonState"
+          },
+          "wireless_version": {
+            "type": "boolean",
+            "title": "Wireless Version"
+          },
+          "desktop_app_daemon": {
+            "type": "boolean",
+            "title": "Desktop App Daemon"
+          },
+          "simulation_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Simulation Enabled"
+          },
+          "mockup_sim_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mockup Sim Enabled"
+          },
+          "backend_status": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RobotBackendStatus"
+              },
+              {
+                "$ref": "#/components/schemas/MujocoMockupBackendStatus"
+              },
+              {
+                "$ref": "#/components/schemas/MockupSimBackendStatus"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Backend Status"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "wlan_ip": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wlan Ip"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "robot_name",
+          "state",
+          "wireless_version",
+          "desktop_app_daemon",
+          "simulation_enabled",
+          "mockup_sim_enabled",
+          "backend_status"
+        ],
+        "title": "DaemonStatus"
+      },
+      "DoAInfo": {
+        "properties": {
+          "angle": {
+            "type": "number",
+            "title": "Angle"
+          },
+          "speech_detected": {
+            "type": "boolean",
+            "title": "Speech Detected"
+          }
+        },
+        "type": "object",
+        "required": [
+          "angle",
+          "speech_detected"
+        ],
+        "title": "DoAInfo",
+        "description": "Direction of Arrival info from the microphone array."
+      },
+      "FullBodyTarget": {
+        "properties": {
+          "target_head_pose": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/XYZRPYPose"
+              },
+              {
+                "$ref": "#/components/schemas/Matrix4x4Pose"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Head Pose"
+          },
+          "target_antennas": {
+            "anyOf": [
+              {
+                "prefixItems": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "type": "array",
+                "maxItems": 2,
+                "minItems": 2
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Antennas"
+          },
+          "target_body_yaw": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Body Yaw"
+          },
+          "timestamp": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timestamp"
+          }
+        },
+        "type": "object",
+        "title": "FullBodyTarget",
+        "description": "Represent the full body including the head pose and the joints for antennas.",
+        "examples": [
+          {
+            "target_antennas": [
+              0.0,
+              0.0
+            ],
+            "target_body_yaw": 0.0,
+            "target_head_pose": {
+              "pitch": 0.0,
+              "roll": 0.0,
+              "x": 0.0,
+              "y": 0.0,
+              "yaw": 0.0,
+              "z": 0.0
+            }
+          }
+        ]
+      },
+      "FullState": {
+        "properties": {
+          "control_mode": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MotorControlMode"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "head_pose": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/XYZRPYPose"
+              },
+              {
+                "$ref": "#/components/schemas/Matrix4x4Pose"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Head Pose"
+          },
+          "head_joints": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Head Joints"
+          },
+          "body_yaw": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Body Yaw"
+          },
+          "antennas_position": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Antennas Position"
+          },
+          "timestamp": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timestamp"
+          },
+          "passive_joints": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Passive Joints"
+          },
+          "doa": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DoAInfo"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "title": "FullState",
+        "description": "Represent the full state of the robot including all joint positions and poses."
+      },
+      "GotoModelRequest": {
+        "properties": {
+          "head_pose": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/XYZRPYPose"
+              },
+              {
+                "$ref": "#/components/schemas/Matrix4x4Pose"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Head Pose"
+          },
+          "antennas": {
+            "anyOf": [
+              {
+                "prefixItems": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "type": "array",
+                "maxItems": 2,
+                "minItems": 2
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Antennas"
+          },
+          "body_yaw": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Body Yaw"
+          },
+          "duration": {
+            "type": "number",
+            "title": "Duration"
+          },
+          "interpolation": {
+            "$ref": "#/components/schemas/InterpolationTechnique",
+            "default": "minjerk"
+          }
+        },
+        "type": "object",
+        "required": [
+          "duration"
+        ],
+        "title": "GotoModelRequest",
+        "description": "Request model for the goto endpoint.",
+        "examples": [
+          {
+            "antennas": [
+              0.0,
+              0.0
+            ],
+            "body_yaw": 0.0,
+            "duration": 2.0,
+            "head_pose": {
+              "pitch": 0.0,
+              "roll": 0.0,
+              "x": 0.0,
+              "y": 0.0,
+              "yaw": 0.0,
+              "z": 0.0
+            },
+            "interpolation": "minjerk"
+          },
+          {
+            "antennas": [
+              0.0,
+              0.0
+            ],
+            "duration": 1.0,
+            "interpolation": "linear"
+          }
+        ]
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "InterpolationTechnique": {
+        "type": "string",
+        "enum": [
+          "linear",
+          "minjerk",
+          "ease_in_out",
+          "cartoon"
+        ],
+        "title": "InterpolationTechnique",
+        "description": "Enumeration of interpolation techniques."
+      },
+      "JobInfo": {
+        "properties": {
+          "command": {
+            "type": "string",
+            "title": "Command"
+          },
+          "status": {
+            "$ref": "#/components/schemas/JobStatus"
+          },
+          "logs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Logs"
+          }
+        },
+        "type": "object",
+        "required": [
+          "command",
+          "status",
+          "logs"
+        ],
+        "title": "JobInfo",
+        "description": "Pydantic model for install job status."
+      },
+      "JobStatus": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "in_progress",
+          "done",
+          "failed"
+        ],
+        "title": "JobStatus",
+        "description": "Enum for job status."
+      },
+      "Matrix4x4Pose": {
+        "properties": {
+          "m": {
+            "prefixItems": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "type": "array",
+            "maxItems": 16,
+            "minItems": 16,
+            "title": "M"
+          }
+        },
+        "type": "object",
+        "required": [
+          "m"
+        ],
+        "title": "Matrix4x4Pose",
+        "description": "Represent a 3D pose by its 4x4 transformation matrix (translation is expressed in meters)."
+      },
+      "MockupSimBackendStatus": {
+        "properties": {
+          "motor_control_mode": {
+            "$ref": "#/components/schemas/MotorControlMode"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          }
+        },
+        "type": "object",
+        "required": [
+          "motor_control_mode"
+        ],
+        "title": "MockupSimBackendStatus"
+      },
+      "MotorControlMode": {
+        "type": "string",
+        "enum": [
+          "enabled",
+          "disabled",
+          "gravity_compensation"
+        ],
+        "title": "MotorControlMode",
+        "description": "Enum for motor control modes."
+      },
+      "MotorStatus": {
+        "properties": {
+          "mode": {
+            "$ref": "#/components/schemas/MotorControlMode"
+          }
+        },
+        "type": "object",
+        "required": [
+          "mode"
+        ],
+        "title": "MotorStatus",
+        "description": "Represents the status of the motors.\n\nExposes\n- mode: The current motor control mode (enabled, disabled, gravity_compensation)."
+      },
+      "MoveUUID": {
+        "properties": {
+          "uuid": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Uuid"
+          }
+        },
+        "type": "object",
+        "required": [
+          "uuid"
+        ],
+        "title": "MoveUUID",
+        "description": "Model representing a unique identifier for a move task."
+      },
+      "MujocoMockupBackendStatus": {
+        "properties": {},
+        "type": "object",
+        "title": "MujocoMockupBackendStatus"
+      },
+      "PrivateSpaceInstallRequest": {
+        "properties": {
+          "space_id": {
+            "type": "string",
+            "title": "Space Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "space_id"
+        ],
+        "title": "PrivateSpaceInstallRequest",
+        "description": "Request model for installing a private HuggingFace space."
+      },
+      "RobotBackendStatus": {
+        "properties": {
+          "ready": {
+            "type": "boolean",
+            "title": "Ready"
+          },
+          "motor_control_mode": {
+            "$ref": "#/components/schemas/MotorControlMode"
+          },
+          "last_alive": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Alive"
+          },
+          "control_loop_stats": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Control Loop Stats"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ready",
+          "motor_control_mode",
+          "last_alive",
+          "control_loop_stats"
+        ],
+        "title": "RobotBackendStatus"
+      },
+      "SourceKind": {
+        "type": "string",
+        "enum": [
+          "hf_space",
+          "dashboard_selection",
+          "local",
+          "installed"
+        ],
+        "title": "SourceKind",
+        "description": "Kinds of app source."
+      },
+      "TestSoundResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "message"
+        ],
+        "title": "TestSoundResponse",
+        "description": "Response model for test sound operations."
+      },
+      "TokenRequest": {
+        "properties": {
+          "token": {
+            "type": "string",
+            "title": "Token"
+          }
+        },
+        "type": "object",
+        "required": [
+          "token"
+        ],
+        "title": "TokenRequest",
+        "description": "Request model for saving a HuggingFace token."
+      },
+      "TokenResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "username": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Username"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "TokenResponse",
+        "description": "Response model for token operations."
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      },
+      "VolumeRequest": {
+        "properties": {
+          "volume": {
+            "type": "integer",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Volume",
+            "description": "Volume level (0-100)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "volume"
+        ],
+        "title": "VolumeRequest",
+        "description": "Request model for setting volume."
+      },
+      "VolumeResponse": {
+        "properties": {
+          "volume": {
+            "type": "integer",
+            "title": "Volume"
+          },
+          "platform": {
+            "type": "string",
+            "title": "Platform"
+          },
+          "device": {
+            "type": "string",
+            "title": "Device"
+          }
+        },
+        "type": "object",
+        "required": [
+          "volume",
+          "platform",
+          "device"
+        ],
+        "title": "VolumeResponse",
+        "description": "Response model for volume operations."
+      },
+      "XYZRPYPose": {
+        "properties": {
+          "x": {
+            "type": "number",
+            "title": "X",
+            "default": 0.0
+          },
+          "y": {
+            "type": "number",
+            "title": "Y",
+            "default": 0.0
+          },
+          "z": {
+            "type": "number",
+            "title": "Z",
+            "default": 0.0
+          },
+          "roll": {
+            "type": "number",
+            "title": "Roll",
+            "default": 0.0
+          },
+          "pitch": {
+            "type": "number",
+            "title": "Pitch",
+            "default": 0.0
+          },
+          "yaw": {
+            "type": "number",
+            "title": "Yaw",
+            "default": 0.0
+          }
+        },
+        "type": "object",
+        "title": "XYZRPYPose",
+        "description": "Represent a 3D pose using position (x, y, z) in meters and orientation (roll, pitch, yaw) angles in radians."
+      }
+    }
+  }
+}

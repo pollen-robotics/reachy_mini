@@ -16,8 +16,10 @@ logger = logging.getLogger(__name__)
 
 try:
     import pulsectl
+    with pulsectl.Pulse("dummy"):
+        pass
     _PULSECTL_AVAILABLE = True
-except (ImportError, OSError):
+except (ImportError, OSError, pulsectl.PulseError):
     _PULSECTL_AVAILABLE = False
 
 # Constants
@@ -294,6 +296,7 @@ class VolumeControlLinux(VolumeControl):
                 text=True,
                 timeout=AUDIO_COMMAND_TIMEOUT,
                 check=True,
+                shell=True,
             )
         except (subprocess.TimeoutExpired, FileNotFoundError, subprocess.CalledProcessError) as e:
             logger.warning(f"Failed to initialize {device.id} device, amixer failed with error: {e}")
@@ -352,7 +355,7 @@ class VolumeControlLinux(VolumeControl):
         device: AudioDevice,
         controls: list[str] | None = None,
         index: int = 0,
-    ) -> list[str]:
+    ) -> str:
         """Build the amixer command to get the volume of a specific device and control.
 
         Args:
@@ -375,7 +378,7 @@ class VolumeControlLinux(VolumeControl):
             sub_commands.append(cmd)
 
         full_command = " || ".join(sub_commands)
-        return full_command.split(" ")
+        return full_command
 
     def _build_amixer_set_command(
         self,
@@ -383,7 +386,7 @@ class VolumeControlLinux(VolumeControl):
         volume: int,
         controls: list[str] | None = None,
         index: int = 0,
-    ) -> list[str]:
+    ) -> str:
         """Build the amixer command to set the volume of a specific device and control.
 
         Args:
@@ -409,7 +412,7 @@ class VolumeControlLinux(VolumeControl):
             sub_commands.append(cmd)
 
         full_command = " || ".join(sub_commands)
-        return full_command.split(" ")
+        return full_command
 
     def _alsa_get_device_volume(self, device: AudioDevice) -> int:
         """Get the volume of an audio device via amixer.
@@ -428,6 +431,7 @@ class VolumeControlLinux(VolumeControl):
                 text=True,
                 timeout=AUDIO_COMMAND_TIMEOUT,
                 check=True,
+                shell=True,
             )
             for line in result.stdout.splitlines():
                 # TODO: add support for other channels ?
@@ -461,6 +465,7 @@ class VolumeControlLinux(VolumeControl):
                 text=True,
                 timeout=AUDIO_COMMAND_TIMEOUT,
                 check=True,
+                shell=True,
             )
             return True
 
