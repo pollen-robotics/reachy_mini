@@ -69,6 +69,7 @@ class MotorControlMode(str, Enum):
     Enabled = "enabled"  # Torque ON and controlled in position
     Disabled = "disabled"  # Torque OFF
     GravityCompensation = "gravity_compensation"  # Torque ON and controlled in current to compensate for gravity
+    Error = "error"  # An error occurred, motor state is unreliable
 
 
 class Backend:

@@ -202,6 +202,8 @@ class Daemon:
         self.logger.info("Starting Reachy Mini daemon...")
         self._status.state = DaemonState.STARTING
 
+        self.backend = None
+
         try:
             self.backend = self._setup_backend(
                 wireless_version=self.wireless_version,
@@ -218,66 +220,71 @@ class Daemon:
         except Exception as e:
             self._status.state = DaemonState.ERROR
             self._status.error = str(e)
-            raise e
+            self.logger.error(f"Failed to set up backend: {e}")
 
-        self.ws_server = WSServer(backend=self.backend)
-        self.ws_server.start()
-        self._thread_publish_status = Thread(target=self._publish_status, daemon=True)
-        self._thread_publish_status.start()
+        if self.backend is not None:
+            self.ws_server = WSServer(backend=self.backend)
+            self.ws_server.start()
+            self._thread_publish_status = Thread(target=self._publish_status, daemon=True)
+            self._thread_publish_status.start()
 
-        def backend_wrapped_run() -> None:
-            assert self.backend is not None, (
-                "Backend should be initialized before running."
-            )
+            def backend_wrapped_run() -> None:
+                assert self.backend is not None, (
+                    "Backend should be initialized before running."
+                )
 
-            try:
-                self.backend.wrapped_run()
-            except Exception as e:
-                self.logger.error(f"Backend encountered an error: {e}")
+                try:
+                    self.backend.wrapped_run()
+                except Exception as e:
+                    self.logger.error(f"Backend encountered an error: {e}")
+                    self._status.state = DaemonState.ERROR
+                    self._status.error = str(e)
+                    if self.ws_server is not None:
+                        self.ws_server.stop()
+                    self.backend = None
+
+            self.backend_run_thread = Thread(target=backend_wrapped_run)
+            self.backend_run_thread.start()
+
+            if not self.backend.ready.wait(timeout=2.0):
+                self.logger.error(
+                    "Backend is not ready after 2 seconds. Some error occurred."
+                )
                 self._status.state = DaemonState.ERROR
-                self._status.error = str(e)
-                if self.ws_server is not None:
-                    self.ws_server.stop()
-                self.backend = None
-
-        self.backend_run_thread = Thread(target=backend_wrapped_run)
-        self.backend_run_thread.start()
-
-        if not self.backend.ready.wait(timeout=2.0):
-            self.logger.error(
-                "Backend is not ready after 2 seconds. Some error occurred."
-            )
-            self._status.state = DaemonState.ERROR
-            self._status.error = self.backend.error
-            return self._status.state
-
-        if wake_up_on_start:
-            try:
-                self.logger.info("Waking up Reachy Mini...")
-                self.backend.set_motor_control_mode(MotorControlMode.Enabled)
-                await self.backend.wake_up()
-            except Exception as e:
-                self.logger.error(f"Error while waking up Reachy Mini: {e}")
-                self._status.state = DaemonState.ERROR
-                self._status.error = str(e)
+                self._status.error = self.backend.error
                 return self._status.state
-            except KeyboardInterrupt:
-                self.logger.warning("Wake up interrupted by user.")
-                self._status.state = DaemonState.STOPPING
-                return self._status.state
+
+            if wake_up_on_start:
+                try:
+                    self.logger.info("Waking up Reachy Mini...")
+                    self.backend.set_motor_control_mode(MotorControlMode.Enabled)
+                    await self.backend.wake_up()
+                except Exception as e:
+                    self.logger.error(f"Error while waking up Reachy Mini: {e}")
+                    self._status.state = DaemonState.ERROR
+                    self._status.error = str(e)
+                    return self._status.state
+                except KeyboardInterrupt:
+                    self.logger.warning("Wake up interrupted by user.")
+                    self._status.state = DaemonState.STOPPING
+                    return self._status.state
 
         if self._webrtc:
             await asyncio.sleep(
                 0.2
             )  # Give some time for the backend to release the audio device
-            self.backend.setup_webrtc_interface(self._webrtc)
+            if self.backend is not None:
+                self.backend.setup_webrtc_interface(self._webrtc)
             self._webrtc.start()
 
             # Start central signaling relay for remote WebRTC access
             await self._start_central_signaling_relay()
 
-        self.logger.info("Daemon started successfully.")
-        self._status.state = DaemonState.RUNNING
+        if self._status.state != DaemonState.ERROR:
+            self.logger.info("Daemon started successfully.")
+            self._status.state = DaemonState.RUNNING
+        else:
+            self.logger.error("Daemon started with errors. Backend is not available.")
         return self._status.state
 
     async def stop(self, goto_sleep_on_stop: bool = True) -> "DaemonState":
@@ -296,6 +303,8 @@ class Daemon:
 
         if self.backend is None:
             self.logger.info("Daemon backend is not initialized.")
+            if self.ws_server is not None:
+                self.ws_server.stop()
             self._status.state = DaemonState.STOPPED
             return self._status.state
 
@@ -442,8 +451,6 @@ class Daemon:
             if self._status.backend_status.error:
                 self._status.state = DaemonState.ERROR
             self._status.error = self._status.backend_status.error
-        else:
-            self._status.backend_status = None
 
         return self._status
 
@@ -558,12 +565,19 @@ class Daemon:
                 ports = find_serial_port(wireless_version=wireless_version)
 
                 if len(ports) == 0:
+                    self._status.backend_status = RobotBackendStatus.default_error(
+                        error="No Reachy Mini serial port found. Check USB connection and permissions. Or directly specify the serial port using --serialport."
+                    )
+
                     raise RuntimeError(
                         "No Reachy Mini serial port found. "
                         "Check USB connection and permissions. "
                         "Or directly specify the serial port using --serialport."
                     )
                 elif len(ports) > 1:
+                    self._status.backend_status = RobotBackendStatus.default_error(
+                        error=f"Multiple Reachy Mini serial ports found {ports}. Please specify the serial port using --serialport."
+                    )
                     raise RuntimeError(
                         f"Multiple Reachy Mini serial ports found {ports}."
                         "Please specify the serial port using --serialport."
@@ -576,18 +590,22 @@ class Daemon:
                 f"Creating RobotBackend with parameters: serialport={serialport}, check_collision={check_collision}, kinematics_engine={kinematics_engine}"
             )
 
-            if reflash_motors_on_start:
-                reflash_motors_if_needed(serialport, dont_light_up=True)
+            try:
+                if reflash_motors_on_start:
+                    reflash_motors_if_needed(serialport, dont_light_up=True)
 
-            return RobotBackend(
-                serialport=serialport,
-                log_level=self.log_level,
-                check_collision=check_collision,
-                kinematics_engine=kinematics_engine,
-                use_audio=use_audio,
-                wireless_version=wireless_version,
-                hardware_config_filepath=hardware_config_filepath,
-            )
+                return RobotBackend(
+                    serialport=serialport,
+                    log_level=self.log_level,
+                    check_collision=check_collision,
+                    kinematics_engine=kinematics_engine,
+                    use_audio=use_audio,
+                    wireless_version=wireless_version,
+                    hardware_config_filepath=hardware_config_filepath,
+                )
+            except RuntimeError as e:
+                self._status.backend_status = RobotBackendStatus.default_error(error=str(e))
+                raise
 
 
 class DaemonState(Enum):
