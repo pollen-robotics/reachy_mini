@@ -84,6 +84,7 @@ async def get_full_state(
     with_target_antenna_positions: bool = False,
     with_passive_joints: bool = False,
     with_doa: bool = False,
+    with_ik_status: bool = False,
     use_pose_matrix: bool = False,
     backend: Backend = Depends(get_backend),
 ) -> FullState:
@@ -122,6 +123,8 @@ async def get_full_state(
         doa_result = backend.audio.get_DoA()
         if doa_result:
             result["doa"] = DoAInfo(angle=doa_result[0], speech_detected=doa_result[1])
+    if with_ik_status:
+        result["ik_status"] = backend.ik_status.value
 
     result["timestamp"] = datetime.now(timezone.utc)
     return FullState.model_validate(result)
@@ -141,6 +144,7 @@ async def ws_full_state(
     with_target_antenna_positions: bool = False,
     with_passive_joints: bool = False,
     with_doa: bool = False,
+    with_ik_status: bool = False,
     use_pose_matrix: bool = False,
     backend: Backend = Depends(ws_get_backend),
 ) -> None:
@@ -161,6 +165,7 @@ async def ws_full_state(
                 with_target_antenna_positions=with_target_antenna_positions,
                 with_passive_joints=with_passive_joints,
                 with_doa=with_doa,
+                with_ik_status=with_ik_status,
                 use_pose_matrix=use_pose_matrix,
                 backend=backend,
             )

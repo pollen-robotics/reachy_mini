@@ -10,11 +10,12 @@ import asyncio
 import json
 import logging
 import time
-from typing import Dict, List, Literal, Optional, Union, cast
+from typing import Any, Dict, List, Literal, Optional, Union, cast
 
 import cv2
 import numpy as np
 import numpy.typing as npt
+import requests
 import zenoh
 from asgiref.sync import async_to_sync
 from scipy.spatial.transform import Rotation as R
@@ -51,6 +52,13 @@ SLEEP_HEAD_POSE = np.array(
 )
 
 ConnectionMode = Literal["auto", "localhost_only", "network"]
+DEFAULT_DAEMON_API_BASE_URL = "http://localhost:8000"
+DEFAULT_LIMITS: Dict[str, Any] = {
+    "head_cone_angle_deg": 35.0,
+    "head_yaw_deg": {"min": -179.0, "max": 179.0},
+    "body_yaw_deg": {"min": -160.0, "max": 160.0},
+    "yaw_delta_max_deg": 55.0,
+}
 
 
 class ReachyMini:
@@ -125,6 +133,58 @@ class ReachyMini:
         )
 
         self.media_manager = self._configure_mediamanager(media_backend, log_level)
+
+    @property
+    def limits(self) -> Dict[str, Any]:
+        """Task-space motion limits.
+
+        The value is fetched from the connected daemon REST API and cached.
+        Falls back to SDK defaults if the REST API is unavailable.
+        """
+        if not hasattr(self, "_limits_cache"):
+            last_error: Exception | None = None
+            for daemon_base_url in self._daemon_api_base_urls():
+                url = f"{daemon_base_url}/api/kinematics/limits"
+                try:
+                    response = requests.get(url, timeout=5.0)
+                    response.raise_for_status()
+                    limits = response.json()["limits"]
+                    if not isinstance(limits, dict):
+                        raise ValueError(
+                            f"Expected 'limits' dict in response, got {type(limits)}."
+                        )
+                    self._limits_cache = dict(limits)
+                    break
+                except (requests.RequestException, KeyError, TypeError, ValueError) as e:
+                    last_error = e
+
+            if not hasattr(self, "_limits_cache"):
+                if not hasattr(self, "_limits_fallback_warned"):
+                    self.logger.warning(
+                        "Could not fetch limits from daemon (%s). Using SDK defaults.",
+                        last_error,
+                    )
+                    self._limits_fallback_warned = True
+                return dict(DEFAULT_LIMITS)
+
+        return dict(self._limits_cache)
+
+    def _daemon_api_base_urls(self, base_url: Optional[str] = None) -> List[str]:
+        """Return candidate daemon API base URLs to try, in priority order."""
+        if base_url is not None:
+            normalized = base_url.rstrip("/")
+            if normalized == "":
+                raise ValueError("base_url must not be empty.")
+            return [normalized]
+
+        urls: List[str] = []
+        status = self.client.get_status(wait=False)
+        wlan_ip = status.get("wlan_ip")
+        if self.connection_mode == "network" and isinstance(wlan_ip, str) and wlan_ip:
+            urls.append(f"http://{wlan_ip}:8000")
+
+        urls.append(DEFAULT_DAEMON_API_BASE_URL)
+        return list(dict.fromkeys(urls))
 
     def __del__(self) -> None:
         """Destroy the Reachy Mini instance.
@@ -852,6 +912,62 @@ class ReachyMini:
 
         """
         self.client.send_command(json.dumps({"automatic_body_yaw": body_yaw}))
+
+    def is_reachable(
+        self,
+        head: npt.NDArray[np.float64],
+        body_yaw: float = 0.0,
+        base_url: Optional[str] = None,
+    ) -> bool:
+        """Check if a head pose is reachable given body yaw.
+
+        Calls the daemon REST API. If `base_url` is not provided, the SDK tries the
+        currently connected daemon first (network mode) and falls back to localhost.
+
+        Args:
+            head: 4x4 head pose matrix.
+            body_yaw: Body yaw in radians (default 0.0).
+            base_url: Optional daemon API base URL override.
+
+        Returns:
+            True if the pose is within the reachable workspace.
+
+        Raises:
+            ConnectionError: If the daemon REST API cannot be reached.
+            RuntimeError: If the daemon response payload is invalid.
+
+        """
+        if head.shape != (4, 4):
+            raise ValueError(f"Head pose must be a 4x4 matrix, got shape {head.shape}.")
+
+        payload = {
+            "target_head_pose": {"m": head.flatten().tolist()},
+            "target_body_yaw": body_yaw,
+        }
+
+        errors: List[str] = []
+        for daemon_base_url in self._daemon_api_base_urls(base_url):
+            url = f"{daemon_base_url}/api/kinematics/is_reachable"
+            try:
+                response = requests.post(url, json=payload, timeout=5.0)
+                response.raise_for_status()
+                reachable = response.json()["reachable"]
+                if not isinstance(reachable, bool):
+                    raise RuntimeError(
+                        f"Invalid 'reachable' payload from daemon at {url}: {reachable!r}"
+                    )
+                return reachable
+            except requests.RequestException as e:
+                errors.append(f"{url}: {e}")
+            except (KeyError, TypeError) as e:
+                raise RuntimeError(
+                    f"Invalid response from daemon at {url}: missing or malformed 'reachable'."
+                ) from e
+
+        raise ConnectionError(
+            "Failed to query daemon reachability endpoint. Tried: "
+            + "; ".join(errors)
+        )
 
     async def async_play_move(
         self,

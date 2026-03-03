@@ -22,7 +22,7 @@ from reachy_mini_motor_controller import ReachyMiniPyControlLoop
 
 from reachy_mini.utils.hardware_config.parser import parse_yaml_config
 
-from ..abstract import Backend, MotorControlMode
+from ..abstract import Backend, IKStatus, MotorControlMode
 
 
 class RobotBackend(Backend):
@@ -236,6 +236,7 @@ class RobotBackend(Backend):
                             self.target_head_pose, self.target_body_yaw
                         )
                     except ValueError as e:
+                        self.ik_status = IKStatus.UNREACHABLE
                         log_throttling.by_time(self.logger, interval=0.5).warning(
                             f"IK error: {e}"
                         )

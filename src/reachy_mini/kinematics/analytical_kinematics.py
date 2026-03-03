@@ -85,7 +85,7 @@ class AnalyticalKinematics:
             reachy_joints = self.kin.inverse_kinematics_safe(
                 _pose.tolist(),
                 body_yaw=body_yaw,
-                max_relative_yaw=np.deg2rad(65),
+                max_relative_yaw=np.deg2rad(55),
                 max_body_yaw=np.deg2rad(160),
             )
         else:

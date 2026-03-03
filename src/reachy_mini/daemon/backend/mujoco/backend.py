@@ -23,7 +23,7 @@ import numpy.typing as npt
 import reachy_mini
 from reachy_mini.media.gstreamer_udp_camera import GStreamerUDPCamera
 
-from ..abstract import Backend, MotorControlMode
+from ..abstract import Backend, IKStatus, MotorControlMode
 from .utils import (
     get_actuator_names,
     get_joint_addr_from_name,
@@ -246,6 +246,7 @@ class MujocoBackend(Backend):
                             self.target_head_pose, self.target_body_yaw
                         )
                     except ValueError as e:
+                        self.ik_status = IKStatus.UNREACHABLE
                         log_throttling.by_time(self.logger, interval=0.5).warning(
                             f"IK error: {e}"
                         )

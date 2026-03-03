@@ -36,10 +36,12 @@ Reachy Mini has physical and software limits to prevent self-collision and damag
 
 | Joint / Axis | Limit Range |
 | :--- | :--- |
-| **Head Pitch/Roll** | [-40°, +40°] |
-| **Head Yaw** | [-180°, +180°] |
+| **Head cone (tilt)** | Max 35° from vertical (pitch/roll coupled) |
+| **Head Yaw** | [-179°, +179°] |
 | **Body Yaw** | [-160°, +160°] |
-| **Yaw Delta** | Max 65° difference between Head and Body Yaw |
+| **Yaw Delta** | Max 55° difference between Head and Body Yaw |
+
+You can read these limits in code via `mini.limits` and check reachability with `mini.is_reachable(head_pose, body_yaw)`.
 
 ## Motor Modes
 
