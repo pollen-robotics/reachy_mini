@@ -77,6 +77,7 @@ class Daemon:
             version=package_version,
         )
         self.ws_server: "WSServer | None" = None
+        self.backend_run_thread: "Thread | None" = None
         self._thread_event_publish_status = Event()
 
         self._webrtc: Optional[Any] = (
@@ -202,8 +203,6 @@ class Daemon:
         self.logger.info("Starting Reachy Mini daemon...")
         self._status.state = DaemonState.STARTING
 
-        self.backend = None
-
         try:
             self.backend = self._setup_backend(
                 wireless_version=self.wireless_version,
@@ -217,12 +216,7 @@ class Daemon:
                 use_audio=use_audio,
                 hardware_config_filepath=hardware_config_filepath,
             )
-        except Exception as e:
-            self._status.state = DaemonState.ERROR
-            self._status.error = str(e)
-            self.logger.error(f"Failed to set up backend: {e}")
 
-        if self.backend is not None:
             self.ws_server = WSServer(backend=self.backend)
             self.ws_server.start()
             self._thread_publish_status = Thread(target=self._publish_status, daemon=True)
@@ -269,22 +263,28 @@ class Daemon:
                     self._status.state = DaemonState.STOPPING
                     return self._status.state
 
-        if self._webrtc:
-            await asyncio.sleep(
-                0.2
-            )  # Give some time for the backend to release the audio device
-            if self.backend is not None:
-                self.backend.setup_webrtc_interface(self._webrtc)
-            self._webrtc.start()
+            if self._webrtc:
+                await asyncio.sleep(
+                    0.2
+                )  # Give some time for the backend to release the audio device
+                if self.backend is not None:
+                    self.backend.setup_webrtc_interface(self._webrtc)
+                self._webrtc.start()
 
-            # Start central signaling relay for remote WebRTC access
-            await self._start_central_signaling_relay()
+                # Start central signaling relay for remote WebRTC access
+                await self._start_central_signaling_relay()
 
-        if self._status.state != DaemonState.ERROR:
-            self.logger.info("Daemon started successfully.")
-            self._status.state = DaemonState.RUNNING
-        else:
-            self.logger.error("Daemon started with errors. Backend is not available.")
+            if self._status.state != DaemonState.ERROR:
+                self.logger.info("Daemon started successfully.")
+                self._status.state = DaemonState.RUNNING
+            else:
+                self.logger.error("Daemon started with errors.")
+
+        except Exception as e:
+            self._status.state = DaemonState.ERROR
+            self._status.error = str(e)
+            self.logger.error(f"Failed to start daemon: {e}")
+
         return self._status.state
 
     async def stop(self, goto_sleep_on_stop: bool = True) -> "DaemonState":
@@ -338,10 +338,11 @@ class Daemon:
                     self._status.state = DaemonState.STOPPING
 
             self.backend.should_stop.set()
-            self.backend_run_thread.join(timeout=5.0)
-            if self.backend_run_thread.is_alive():
-                self.logger.warning("Backend did not stop in time, forcing shutdown.")
-                self._status.state = DaemonState.ERROR
+            if self.backend_run_thread is not None:
+                self.backend_run_thread.join(timeout=5.0)
+                if self.backend_run_thread.is_alive():
+                    self.logger.warning("Backend did not stop in time, forcing shutdown.")
+                    self._status.state = DaemonState.ERROR
 
             self.backend.close()
             self.backend.ready.clear()
