@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version tag (e.g. v1.4.0) - Leave empty for standard main build'
+        description: "Version tag (e.g. v1.4.0) - Leave empty for standard main build"
         required: false
         type: string
 
@@ -21,7 +21,6 @@ on:
 
 jobs:
   build:
-    if: github.event_name != 'pull_request'
     uses: huggingface/doc-builder/.github/workflows/build_main_documentation.yml@main
     with:
       repo_owner: pollen-robotics
