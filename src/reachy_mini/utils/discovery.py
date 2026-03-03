@@ -35,6 +35,21 @@ class DiscoveredRobot:
         return f"DiscoveredRobot(name={self.name!r}, host={self.host!r}, port={self.port})"
 
 
+def _get_local_ip() -> str:
+    """Get the primary local IP address (works without internet)."""
+    try:
+        # Use a link-local multicast address — no actual packet is sent,
+        # but the OS picks the interface that would route to the LAN.
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            s.connect(("224.0.0.1", 0))
+            return s.getsockname()[0]
+        finally:
+            s.close()
+    except OSError:
+        return "127.0.0.1"
+
+
 class MdnsServiceRegistration:
     """Register a Reachy Mini daemon as an mDNS service."""
 
@@ -83,6 +98,7 @@ class MdnsServiceRegistration:
             "version": pkg_version,
             "robot_name": self._robot_name,
             "ws_path": "/ws/sdk",
+            "address": _get_local_ip(),
         }
 
         try:
@@ -94,7 +110,7 @@ class MdnsServiceRegistration:
                 properties=properties,
                 server=f"{socket.gethostname()}.local.",
             )
-            self._zeroconf.register_service(self._info)
+            self._zeroconf.register_service(self._info, allow_name_change=True)
             logger.info(
                 "mDNS service registered: %s on port %d",
                 self._robot_name,
@@ -245,9 +261,13 @@ def _dnssd_browse(service_type: str, timeout: float) -> List[str]:
     instance_names: List[str] = []
     for line in lines:
         if "Add" in line and service_type in line:
-            parts = line.split()
-            if len(parts) >= 7:
-                instance_names.append(parts[-1].strip())
+            # Instance name is everything after the service type column
+            # and may contain spaces (e.g. "reachy_mini (2)")
+            idx = line.find(service_type)
+            if idx >= 0:
+                name = line[idx + len(service_type) :].lstrip(".").strip()
+                if name and name not in instance_names:
+                    instance_names.append(name)
 
     return instance_names
 
@@ -300,15 +320,18 @@ def _dnssd_resolve(name: str, service_type: str) -> DiscoveredRobot | None:
     if not host or not port:
         return None
 
-    # Resolve hostname to IP addresses
+    # Prefer the explicit address from the TXT record (handles same-hostname Pis)
     addresses: List[str] = []
-    try:
-        for addrinfo in socket.getaddrinfo(host, port, socket.AF_INET):
-            addr = str(addrinfo[4][0])
-            if addr not in addresses:
-                addresses.append(addr)
-    except socket.gaierror:
-        pass
+    if "address" in properties:
+        addresses.append(properties["address"])
+    else:
+        try:
+            for addrinfo in socket.getaddrinfo(host, port, socket.AF_INET):
+                addr = str(addrinfo[4][0])
+                if addr not in addresses:
+                    addresses.append(addr)
+        except socket.gaierror:
+            pass
 
     robot_name = properties.get("robot_name", name)
     return DiscoveredRobot(
