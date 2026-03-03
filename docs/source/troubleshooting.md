@@ -64,7 +64,7 @@ If you have one of the following symptoms:
 You may have plugged the microphone cable upside down.
 - If your cable is white and blue, please check again the assembly instruction to be sure the blue side is up.
 - If your cable is black, check that the side with the writing "Main Board" is up (see picture below).
-![mic_cable](https://github.com/pollen-robotics/reachy_mini/raw/develop/docs/assets/black_fpc_cable.png)
+![mic_cable](/docs/assets/black_fpc_cable.png)
 
 
 If your cable is plugged properly and you still have issues, it is likely that the FPC cable of the microphone is damaged. Please refer to the tutorial [How to change the FPC cable of the microphone of Reachy Mini?](./troubleshooting/change_mic_fpc_cable.md) to fix this issue.

@@ -19,12 +19,6 @@ HF_CACHE_PATTERN = re.compile(
     r"spaces--([^/]+)--([^/]+)/snapshots/([a-f0-9]{40})(?:/|$)"
 )
 
-# Pattern to extract space ID from a HuggingFace spaces URL (git+https installs)
-# e.g., https://huggingface.co/spaces/RemiFabre/marionette
-HF_SPACES_URL_PATTERN = re.compile(
-    r"huggingface\.co/spaces/([^/]+)/([^/?#]+)"
-)
-
 
 @dataclass
 class AppUpdateInfo:
@@ -54,15 +48,8 @@ def _extract_hf_info_from_site_packages(
     if not site_packages.exists():
         return None
 
-    # Try different name variations (underscore vs dash, case)
-    name_variants = [
-        app_name,
-        app_name.replace("_", "-"),
-        app_name.replace("-", "_"),
-        app_name.lower(),
-        app_name.lower().replace("_", "-"),
-        app_name.lower().replace("-", "_"),
-    ]
+    # Try different name variations (underscore vs dash)
+    name_variants = [app_name, app_name.replace("_", "-"), app_name.replace("-", "_")]
     seen = set()
 
     for name in name_variants:
@@ -76,8 +63,6 @@ def _extract_hf_info_from_site_packages(
                 try:
                     direct_url = json.loads(direct_url_path.read_text())
                     url = direct_url.get("url", "")
-
-                    # Method 1: Installed from HF cache (snapshot_download + pip install)
                     match = HF_CACHE_PATTERN.search(url)
                     if match:
                         owner, repo, sha = match.groups()
@@ -85,18 +70,6 @@ def _extract_hf_info_from_site_packages(
                             space_id=f"{owner}/{repo}",
                             installed_sha=sha,
                         )
-
-                    # Method 2: Installed via git+https (vcs_info has commit_id)
-                    vcs_info = direct_url.get("vcs_info")
-                    if vcs_info:
-                        commit_id = vcs_info.get("commit_id")
-                        url_match = HF_SPACES_URL_PATTERN.search(url)
-                        if commit_id and url_match:
-                            owner, repo = url_match.groups()
-                            return HfInstallInfo(
-                                space_id=f"{owner}/{repo}",
-                                installed_sha=commit_id,
-                            )
                 except Exception:
                     pass
 

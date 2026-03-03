@@ -531,7 +531,7 @@ export class ReachyMini extends EventTarget {
      * @returns {boolean}
      */
     setHeadPose(roll, pitch, yaw) {
-        return this._sendCommand({ set_target: rpyToMatrix(roll, pitch, yaw) });
+        return this._sendCommand({ type: "set_target", head: rpyToMatrix(roll, pitch, yaw).flat() });
     }
 
     /**
@@ -540,7 +540,7 @@ export class ReachyMini extends EventTarget {
      * @returns {boolean}
      */
     setAntennas(rightDeg, leftDeg) {
-        return this._sendCommand({ set_antennas: [degToRad(rightDeg), degToRad(leftDeg)] });
+        return this._sendCommand({ type: "set_antennas", antennas: [degToRad(rightDeg), degToRad(leftDeg)] });
     }
 
     /**
@@ -549,7 +549,7 @@ export class ReachyMini extends EventTarget {
      * @returns {boolean}
      */
     playSound(file) {
-        return this._sendCommand({ play_sound: file });
+        return this._sendCommand({ type: "play_sound", file });
     }
 
     /**
@@ -566,7 +566,7 @@ export class ReachyMini extends EventTarget {
      * @returns {boolean}
      */
     requestState() {
-        return this._sendCommand({ get_state: true });
+        return this._sendCommand({ type: "get_state" });
     }
 
     // ─── Audio ───────────────────────────────────────────────────────────
