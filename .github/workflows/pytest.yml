@@ -30,7 +30,7 @@ jobs:
           python-version: 3.12
           enable-cache: true
       - name: Install the project
-        run: uv sync --frozen --all-extras
+        run: uv sync --frozen --all-extras --group dev
       - name: Install gstreamer Python bindings (macOS)
         if: matrix.os == 'macos-latest'
         run: uv pip install --upgrade --index-url https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/simple gstreamer==1.28.0

@@ -1,0 +1,40 @@
+# REST API
+
+The Reachy Mini daemon exposes an HTTP and WebSocket API at `http://<daemon-ip>:8000/api`.
+
+- **Lite** — the daemon runs on your machine: `http://localhost:8000`
+- **Wireless** — the daemon runs on the robot: `http://reachy-mini.local:8000`
+
+When the daemon is running you can browse the interactive **Swagger UI** at
+
+- [http://localhost:8000/docs](http://localhost:8000/docs) (Lite — daemon on your machine)
+- [http://reachy-mini.local:8000/docs](http://reachy-mini.local:8000/docs) (Wireless — daemon on the robot)
+
+The reference below is generated from the same OpenAPI spec and can be consulted
+without a running daemon.
+
+## Endpoint overview
+
+| Category | Prefix | Description |
+|----------|--------|-------------|
+| **Apps** | `/api/apps` | List, install, start and stop apps |
+| **Daemon** | `/api/daemon` | Start, stop and restart the daemon |
+| **State** | `/api/state` | Read head pose, body yaw, antennas, DoA |
+| **Move** | `/api/move` | Goto, set target, play recorded moves |
+| **Motors** | `/api/motors` | Get motor status, set control mode |
+| **Kinematics** | `/api/kinematics` | IK info, URDF and STL mesh files |
+| **Volume** | `/api/volume` | Speaker and microphone volume control |
+| **HF Auth** | `/api/hf-auth` | Hugging Face token management |
+
+## Full reference
+
+<iframe
+  src="https://redocly.github.io/redoc/?url=https://raw.githubusercontent.com/pollen-robotics/reachy_mini/develop/docs/source/API/openapi.json"
+  style="width:100%; height:80vh; border:none;"
+></iframe>
+
+[Open in full page](https://redocly.github.io/redoc/?url=https://raw.githubusercontent.com/pollen-robotics/reachy_mini/develop/docs/source/API/openapi.json) · [Download OpenAPI spec (JSON)](https://raw.githubusercontent.com/pollen-robotics/reachy_mini/develop/docs/source/API/openapi.json)
+
+## More complex apps
+
+See the [../SDK/javascript-sdk.md](../SDK/javascript-sdk.md) page for examples of more complex apps using the JavaScript SDK, which leverages the WebRTC transport and provides higher-level abstractions for video, audio, and robot control.

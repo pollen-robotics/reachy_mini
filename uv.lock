@@ -3180,7 +3180,7 @@ wheels = [
 
 [[package]]
 name = "reachy-mini"
-version = "1.3.1.dev0"
+version = "1.4.0.dev0"
 source = { editable = "." }
 dependencies = [
     { name = "aiohttp" },
@@ -3220,37 +3220,17 @@ all = [
     { name = "gpiozero", marker = "sys_platform == 'linux'" },
     { name = "lgpio", marker = "sys_platform == 'linux'" },
     { name = "mujoco" },
-    { name = "mypy" },
     { name = "nmcli", marker = "sys_platform == 'linux'" },
     { name = "onnxruntime" },
-    { name = "onshape-to-robot" },
     { name = "opencv-python" },
     { name = "placo", marker = "sys_platform != 'win32'" },
     { name = "pollen-bmi088-imu-library", marker = "sys_platform == 'linux'" },
-    { name = "pre-commit" },
     { name = "pynput" },
-    { name = "pytest" },
-    { name = "pytest-asyncio" },
     { name = "rerun-sdk" },
-    { name = "ruff" },
     { name = "semver" },
     { name = "sounddevice" },
     { name = "soundfile" },
-    { name = "types-pyyaml" },
-    { name = "types-requests" },
-    { name = "types-toml" },
     { name = "urdf-parser-py" },
-]
-dev = [
-    { name = "mypy" },
-    { name = "onshape-to-robot" },
-    { name = "pre-commit" },
-    { name = "pytest" },
-    { name = "pytest-asyncio" },
-    { name = "ruff" },
-    { name = "types-pyyaml" },
-    { name = "types-requests" },
-    { name = "types-toml" },
 ]
 examples = [
     { name = "pynput" },
@@ -3285,6 +3265,19 @@ wireless-version = [
     { name = "semver" },
 ]
 
+[package.dev-dependencies]
+dev = [
+    { name = "mypy" },
+    { name = "onshape-to-robot" },
+    { name = "pre-commit" },
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "ruff" },
+    { name = "types-pyyaml" },
+    { name = "types-requests" },
+    { name = "types-toml" },
+]
+
 [package.metadata]
 requires-dist = [
     { name = "aiohttp" },
@@ -3299,29 +3292,23 @@ requires-dist = [
     { name = "libusb-package", specifier = ">=1.0.26.3" },
     { name = "log-throttling", specifier = "==0.0.3" },
     { name = "mujoco", marker = "extra == 'mujoco'", specifier = "==3.3.0" },
-    { name = "mypy", marker = "extra == 'dev'", specifier = "==1.18.2" },
     { name = "nmcli", marker = "sys_platform == 'linux' and extra == 'wireless-version'", specifier = ">=1.5" },
     { name = "numpy", specifier = ">=2.2.5" },
     { name = "onnxruntime", marker = "extra == 'nn-kinematics'", specifier = "==1.22.1" },
-    { name = "onshape-to-robot", marker = "extra == 'dev'", specifier = "==1.7.6" },
     { name = "opencv-python", specifier = "<=5.0" },
     { name = "opencv-python", marker = "extra == 'opencv'", specifier = "<=5.0" },
     { name = "pip", specifier = ">=25" },
     { name = "placo", marker = "sys_platform != 'win32' and extra == 'placo-kinematics'", specifier = "==0.9.14" },
     { name = "pollen-bmi088-imu-library", marker = "sys_platform == 'linux' and extra == 'wireless-version'" },
-    { name = "pre-commit", marker = "extra == 'dev'" },
     { name = "psutil" },
     { name = "pulsectl", marker = "sys_platform == 'linux'", specifier = ">=24.1.0" },
     { name = "pycaw", marker = "sys_platform == 'win32'", specifier = ">=20240210" },
     { name = "pygobject", marker = "sys_platform == 'linux'", specifier = ">=3.42.2,<=3.46.0" },
     { name = "pynput", marker = "extra == 'examples'" },
     { name = "pyserial" },
-    { name = "pytest", marker = "extra == 'dev'" },
-    { name = "pytest-asyncio", marker = "extra == 'dev'" },
     { name = "pyusb", specifier = ">=1.2.1" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "questionary" },
-    { name = "reachy-mini", extras = ["dev"], marker = "extra == 'all'" },
     { name = "reachy-mini", extras = ["examples"], marker = "extra == 'all'" },
     { name = "reachy-mini", extras = ["gstreamer"], marker = "extra == 'all'" },
     { name = "reachy-mini", extras = ["mujoco"], marker = "extra == 'all'" },
@@ -3336,7 +3323,6 @@ requires-dist = [
     { name = "requests", specifier = ">=2.28.0" },
     { name = "rerun-sdk", marker = "extra == 'rerun'", specifier = "==0.27.2" },
     { name = "rich" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = "==0.12.0" },
     { name = "rustypot", specifier = ">=1.4.2" },
     { name = "scipy", specifier = ">=1.15.3,<2.0.0" },
     { name = "semver", marker = "extra == 'wireless-version'", specifier = ">=3,<4" },
@@ -3344,14 +3330,24 @@ requires-dist = [
     { name = "soundfile", marker = "extra == 'examples'" },
     { name = "soundfile", marker = "extra == 'sounddevice'" },
     { name = "toml" },
-    { name = "types-pyyaml", marker = "extra == 'dev'" },
-    { name = "types-requests", marker = "extra == 'dev'" },
-    { name = "types-toml", marker = "extra == 'dev'" },
     { name = "urdf-parser-py", marker = "extra == 'rerun'", specifier = "==0.0.4" },
     { name = "uvicorn", extras = ["standard"] },
     { name = "websockets", specifier = ">=12,<16" },
 ]
-provides-extras = ["dev", "examples", "mujoco", "nn-kinematics", "placo-kinematics", "rerun", "wireless-version", "sounddevice", "opencv", "all"]
+provides-extras = ["examples", "mujoco", "nn-kinematics", "placo-kinematics", "rerun", "wireless-version", "sounddevice", "opencv", "all"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "mypy", specifier = "==1.18.2" },
+    { name = "onshape-to-robot", specifier = "==1.7.6" },
+    { name = "pre-commit" },
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "ruff", specifier = "==0.12.0" },
+    { name = "types-pyyaml" },
+    { name = "types-requests" },
+    { name = "types-toml" },
+]
 
 [[package]]
 name = "reachy-mini-motor-controller"

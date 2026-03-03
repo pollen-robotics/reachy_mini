@@ -35,7 +35,7 @@ mypy
 Please note that mpy results depend on the installed package. The [CI](../.github/workflows/lint.yml) runs mypy with the full installation with uv on linux. Any differences between the CI and the local environment are probably due to missing dependencies. To ensure you have the same environment as the CI, you can install the package with all the extras with uv:
 
 ```bash
-uv sync --all-extras
+uv sync --all-extras --group dev
 ```
 
 ## Code testing
