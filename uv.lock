@@ -6,6 +6,13 @@ resolution-markers = [
     "python_full_version < '3.11'",
 ]
 
+[manifest]
+
+[[manifest.dependency-metadata]]
+name = "gstreamer-libs"
+version = "1.28.1"
+requires-dist = ["gstreamer-msvc-runtime ; sys_platform == 'win32'", "setuptools"]
+
 [[package]]
 name = "absl-py"
 version = "2.4.0"
@@ -1127,7 +1134,7 @@ name = "gstreamer-libs"
 version = "1.28.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "gstreamer-msvc-runtime" },
+    { name = "gstreamer-msvc-runtime", marker = "sys_platform == 'win32'" },
     { name = "setuptools" },
 ]
 wheels = [
@@ -2801,8 +2808,8 @@ name = "pycaw"
 version = "20251023"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "comtypes", marker = "sys_platform == 'win32'" },
-    { name = "psutil", marker = "sys_platform == 'win32'" },
+    { name = "comtypes" },
+    { name = "psutil" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/d1/81/19181e3118a503f94d8689fbbed60616e85d08cee3a295c11245ae73018f/pycaw-20251023.tar.gz", hash = "sha256:19935b92eb5efc3f3ea5ee8a2d37ca49009e9dc00f83d067b74b9922e84b5b3b", size = 23421, upload-time = "2025-10-23T18:26:45.087Z" }
 wheels = [

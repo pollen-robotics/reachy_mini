@@ -89,6 +89,13 @@ reachy-mini-daemon = "reachy_mini.daemon.app.main:main"
 reachy-mini-app-assistant = "reachy_mini.apps.app:main"
 reachy-mini-reflash-motors = "reachy_mini.tools.reflash_motors:main"
 
+[tool.uv]
+dependency-metadata = [
+    # Upstream metadata currently marks `gstreamer-msvc-runtime` as unconditional.
+    # It should only be required on Windows.
+    { name = "gstreamer-libs", version = "1.28.1", requires-dist = ["gstreamer-msvc-runtime; sys_platform == 'win32'", "setuptools"] },
+]
+
 [tool.setuptools]
 package-dir = { "" = "src" }
 include-package-data = true
