@@ -1,0 +1,561 @@
+name: Reachy Mini Physical CI
+
+on:
+  workflow_dispatch:
+
+jobs:
+  linux_wireless:
+    runs-on: ci-runner-linux
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create virtual environment
+        run: python3 -m venv .venv
+
+      - name: Install dependencies
+        run: |
+          source .venv/bin/activate
+          python3 -m pip install --upgrade pip
+          pip install reachy-mini
+
+      - name: Start Reachy Mini Wireless daemon
+        run: |
+          echo "Starting Reachy Mini Wireless daemon..."
+          curl -X POST "http://reachy-mini-ci.local:8000/api/daemon/start?wake_up=true" || echo "Daemon may already be running"
+
+      - name: Wait for Wireless daemon to be running
+        run: |
+          echo "Waiting for Wireless daemon to start..."
+          for i in {1..20}; do
+            STATUS=$(curl -s http://reachy-mini-ci.local:8000/api/daemon/status | grep -o '"state":"[^"]*"' | cut -d'"' -f4)
+            echo "Attempt $i: Daemon status is '$STATUS'"
+            if [ "$STATUS" = "running" ]; then
+              echo "[OK] Wireless daemon is now running!"
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "[ERROR] Wireless daemon failed to start after 60 seconds"
+          exit 1
+
+      - name: Stop Reachy Mini Wireless daemon
+        if: always()
+        run: |
+          echo "Stopping Wireless daemon..."
+          curl -X POST "http://reachy-mini-ci.local:8000/api/daemon/stop?goto_sleep=true" || echo "Failed to stop daemon"
+
+      - name: Cleanup virtual environment
+        if: always()
+        run: rm -rf .venv
+
+  linux_lite:
+    needs: linux_wireless
+    runs-on: ci-runner-linux
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create virtual environment
+        run: python3 -m venv .venv
+
+      - name: Install dependencies
+        run: |
+          source .venv/bin/activate
+          python3 -m pip install --upgrade pip
+          pip install reachy-mini
+
+      - name: Start Reachy Mini Lite daemon
+        run: |
+          echo "Starting Reachy Mini Lite daemon..."
+          source .venv/bin/activate
+          reachy-mini-daemon --robot-name reachy_mini_lite --serialport auto --localhost-only &
+          echo $! > lite_daemon.pid
+          echo "Daemon PID: $(cat lite_daemon.pid)"
+
+      - name: Wait for Lite daemon to be running
+        run: |
+          echo "Waiting for Lite daemon to start..."
+          for i in {1..20}; do
+            STATUS=$(curl -s http://localhost:8000/api/daemon/status | grep -o '"state":"[^"]*"' | cut -d'"' -f4)
+            echo "Attempt $i: Daemon status is '$STATUS'"
+            if [ "$STATUS" = "running" ]; then
+              echo "[OK] Lite daemon is now running!"
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "[ERROR] Lite daemon failed to start after 60 seconds"
+          exit 1
+
+      - name: Stop Reachy Mini Lite daemon
+        if: always()
+        run: |
+          echo "Stopping Lite daemon..."
+          curl -X POST "http://localhost:8000/api/daemon/stop?goto_sleep=true" || echo "Failed to stop daemon via API"
+          sleep 2
+          if [ -f lite_daemon.pid ]; then
+            kill $(cat lite_daemon.pid) 2>/dev/null || echo "Daemon already stopped"
+            rm lite_daemon.pid
+          fi
+
+      - name: Cleanup virtual environment
+        if: always()
+        run: rm -rf .venv
+
+  linux_sim:
+    needs: linux_lite
+    runs-on: ci-runner-linux
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create virtual environment
+        run: python3 -m venv .venv
+
+      - name: Install dependencies with MuJoCo
+        run: |
+          source .venv/bin/activate
+          python3 -m pip install --upgrade pip
+          pip install reachy-mini[mujoco]
+
+      - name: Start Reachy Mini Simulation daemon
+        run: |
+          echo "Starting Reachy Mini Simulation daemon..."
+          source .venv/bin/activate
+          reachy-mini-daemon --robot-name reachy_mini_sim --sim --headless --localhost-only &
+          echo $! > sim_daemon.pid
+          echo "Daemon PID: $(cat sim_daemon.pid)"
+
+      - name: Wait for Simulation daemon to be running
+        run: |
+          echo "Waiting for Simulation daemon to start..."
+          for i in {1..20}; do
+            STATUS=$(curl -s http://localhost:8000/api/daemon/status | grep -o '"state":"[^"]*"' | cut -d'"' -f4)
+            echo "Attempt $i: Daemon status is '$STATUS'"
+            if [ "$STATUS" = "running" ]; then
+              echo "[OK] Simulation daemon is now running!"
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "[ERROR] Simulation daemon failed to start after 60 seconds"
+          exit 1
+
+      - name: Stop Reachy Mini Simulation daemon
+        if: always()
+        run: |
+          echo "Stopping Simulation daemon..."
+          curl -X POST "http://localhost:8000/api/daemon/stop?goto_sleep=true" || echo "Failed to stop daemon via API"
+          sleep 2
+          if [ -f sim_daemon.pid ]; then
+            kill $(cat sim_daemon.pid) 2>/dev/null || echo "Daemon already stopped"
+            rm sim_daemon.pid
+          fi
+
+      - name: Cleanup virtual environment
+        if: always()
+        run: rm -rf .venv
+
+  windows_lite:
+    runs-on: ci-runner-windows
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cleanup any existing daemon process
+        shell: powershell
+        run: |
+          Write-Host "Checking for existing daemon processes..."
+          Get-Process | Where-Object {$_.ProcessName -like "*reachy*"} | ForEach-Object {
+            Write-Host "Killing existing process: $($_.ProcessName) (PID: $($_.Id))"
+            Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue
+          }
+          Write-Host "Cleanup complete"
+
+      - name: Create virtual environment
+        shell: powershell
+        run: python -m venv .venv
+
+      - name: Install dependencies
+        shell: powershell
+        run: |
+          .venv\Scripts\Activate.ps1
+          python -m pip install --upgrade pip
+          pip install reachy-mini
+
+      - name: Start Reachy Mini Lite daemon
+        shell: powershell
+        run: |
+          Write-Host "Starting Reachy Mini Lite daemon with detached process..."
+          .venv\Scripts\Activate.ps1
+          cmd /c "start /B .venv\Scripts\reachy-mini-daemon.exe --robot-name reachy_mini_lite --serialport auto --localhost-only"
+          Start-Sleep -Seconds 5
+          Write-Host "Finding daemon PID..."
+          $process = Get-Process | Where-Object {$_.ProcessName -eq "reachy-mini-daemon"} | Select-Object -First 1
+          if ($process) {
+            $process.Id | Out-File -FilePath lite_daemon.pid
+            Write-Host "Daemon PID: $($process.Id)"
+          } else {
+            Write-Host "[ERROR] Could not find daemon process"
+            exit 1
+          }
+
+      - name: Wait for Lite daemon to be running
+        shell: powershell
+        run: |
+          Write-Host "Waiting for Lite daemon to start..."
+          for ($i = 1; $i -le 20; $i++) {
+            try {
+              $response = Invoke-RestMethod -Uri "http://127.0.0.1:8000/api/daemon/status" -Method Get
+              $status = $response.state
+              Write-Host "Attempt $i : Daemon status is '$status'"
+              if ($status -eq "running") {
+                Write-Host "[OK] Lite daemon is now running!"
+                exit 0
+              }
+            } catch {
+              Write-Host "Attempt $i : Failed to get status"
+            }
+            Start-Sleep -Seconds 3
+          }
+          Write-Host "[ERROR] Lite daemon failed to start after 60 seconds"
+          exit 1
+
+      - name: Stop Reachy Mini Lite daemon
+        if: always()
+        shell: powershell
+        run: |
+          Write-Host "Stopping Lite daemon via API..."
+          curl.exe -X POST "http://127.0.0.1:8000/api/daemon/stop?goto_sleep=true"
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host "API stop successful"
+          } else {
+            Write-Host "API stop failed, will force kill"
+          }
+          Start-Sleep -Seconds 3
+          if (Test-Path lite_daemon.pid) {
+            $daemonPid = Get-Content lite_daemon.pid
+            Write-Host "Killing process PID: $daemonPid"
+            Stop-Process -Id $daemonPid -Force -ErrorAction SilentlyContinue
+            Remove-Item lite_daemon.pid
+            Write-Host "Process stopped and PID file removed"
+          } else {
+            Write-Host "No PID file found"
+          }
+
+      - name: Cleanup virtual environment
+        if: always()
+        shell: powershell
+        run: Remove-Item -Recurse -Force .venv -ErrorAction SilentlyContinue
+
+  windows_wireless:
+    needs: [linux_wireless, windows_lite]
+    runs-on: ci-runner-windows
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create virtual environment
+        shell: powershell
+        run: python -m venv .venv
+
+      - name: Install dependencies
+        shell: powershell
+        run: |
+          .venv\Scripts\Activate.ps1
+          python -m pip install --upgrade pip
+          pip install reachy-mini
+
+      - name: Start Reachy Mini Wireless daemon
+        shell: powershell
+        run: |
+          Write-Host "Starting Reachy Mini Wireless daemon..."
+          curl.exe -X POST "http://reachy-mini-ci.local:8000/api/daemon/start?wake_up=true"
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "Daemon may already be running"
+          }
+
+      - name: Wait for Wireless daemon to be running
+        shell: powershell
+        run: |
+          Write-Host "Waiting for Wireless daemon to start..."
+          for ($i = 1; $i -le 20; $i++) {
+            try {
+              $response = Invoke-RestMethod -Uri "http://reachy-mini-ci.local:8000/api/daemon/status" -Method Get
+              $status = $response.state
+              Write-Host "Attempt $i : Daemon status is '$status'"
+              if ($status -eq "running") {
+                Write-Host "[OK] Wireless daemon is now running!"
+                exit 0
+              }
+            } catch {
+              Write-Host "Attempt $i : Failed to get status"
+            }
+            Start-Sleep -Seconds 3
+          }
+          Write-Host "[ERROR] Wireless daemon failed to start after 60 seconds"
+          exit 1
+
+      - name: Stop Reachy Mini Wireless daemon
+        if: always()
+        shell: powershell
+        run: |
+          Write-Host "Stopping Wireless daemon..."
+          curl.exe -X POST "http://reachy-mini-ci.local:8000/api/daemon/stop?goto_sleep=true"
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "Failed to stop daemon"
+          }
+
+      - name: Cleanup virtual environment
+        if: always()
+        shell: powershell
+        run: Remove-Item -Recurse -Force .venv -ErrorAction SilentlyContinue
+
+  windows_sim:
+    needs: windows_wireless
+    runs-on: ci-runner-windows
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cleanup any existing daemon process
+        shell: powershell
+        run: |
+          Write-Host "Checking for existing daemon processes..."
+          Get-Process | Where-Object {$_.ProcessName -like "*reachy*"} | ForEach-Object {
+            Write-Host "Killing existing process: $($_.ProcessName) (PID: $($_.Id))"
+            Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue
+          }
+          Write-Host "Cleanup complete"
+
+      - name: Create virtual environment
+        shell: powershell
+        run: python -m venv .venv
+
+      - name: Install dependencies with MuJoCo
+        shell: powershell
+        run: |
+          .venv\Scripts\Activate.ps1
+          python -m pip install --upgrade pip
+          pip install reachy-mini[mujoco]
+
+      - name: Start Reachy Mini Simulation daemon
+        shell: powershell
+        run: |
+          Write-Host "Starting Reachy Mini Simulation daemon with detached process..."
+          .venv\Scripts\Activate.ps1
+          cmd /c "start /B .venv\Scripts\reachy-mini-daemon.exe --robot-name reachy_mini_sim --sim --headless --localhost-only"
+          Start-Sleep -Seconds 5
+          Write-Host "Finding daemon PID..."
+          $process = Get-Process | Where-Object {$_.ProcessName -eq "reachy-mini-daemon"} | Select-Object -First 1
+          if ($process) {
+            $process.Id | Out-File -FilePath sim_daemon.pid
+            Write-Host "Daemon PID: $($process.Id)"
+          } else {
+            Write-Host "[ERROR] Could not find daemon process"
+            exit 1
+          }
+
+      - name: Wait for Simulation daemon to be running
+        shell: powershell
+        run: |
+          Write-Host "Waiting for Simulation daemon to start..."
+          for ($i = 1; $i -le 20; $i++) {
+            try {
+              $response = Invoke-RestMethod -Uri "http://127.0.0.1:8000/api/daemon/status" -Method Get
+              $status = $response.state
+              Write-Host "Attempt $i : Daemon status is '$status'"
+              if ($status -eq "running") {
+                Write-Host "[OK] Simulation daemon is now running!"
+                exit 0
+              }
+            } catch {
+              Write-Host "Attempt $i : Failed to get status"
+            }
+            Start-Sleep -Seconds 3
+          }
+          Write-Host "[ERROR] Simulation daemon failed to start after 60 seconds"
+          exit 1
+
+      - name: Stop Reachy Mini Simulation daemon
+        if: always()
+        shell: powershell
+        run: |
+          Write-Host "Stopping Simulation daemon via API..."
+          curl.exe -X POST "http://127.0.0.1:8000/api/daemon/stop?goto_sleep=true"
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host "API stop successful"
+          } else {
+            Write-Host "API stop failed, will force kill"
+          }
+          Start-Sleep -Seconds 3
+          if (Test-Path sim_daemon.pid) {
+            $daemonPid = Get-Content sim_daemon.pid
+            Write-Host "Killing process PID: $daemonPid"
+            Stop-Process -Id $daemonPid -Force -ErrorAction SilentlyContinue
+            Remove-Item sim_daemon.pid
+            Write-Host "Process stopped and PID file removed"
+          } else {
+            Write-Host "No PID file found"
+          }
+
+      - name: Cleanup virtual environment
+        if: always()
+        shell: powershell
+        run: |
+          Write-Host "Cleaning up virtual environment..."
+          Remove-Item -Recurse -Force .venv -ErrorAction SilentlyContinue
+          Write-Host "Cleanup complete"
+
+  mac_sim:
+    runs-on: ci-runner-mac
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create virtual environment
+        run: python3.12 -m venv .venv
+
+      - name: Install dependencies with MuJoCo
+        run: |
+          source .venv/bin/activate
+          python3.12 -m pip install --upgrade pip
+          pip install "reachy-mini[mujoco]"
+
+      - name: Start Reachy Mini Simulation daemon
+        run: |
+          echo "Starting Reachy Mini Simulation daemon..."
+          source .venv/bin/activate
+          reachy-mini-daemon --robot-name reachy_mini_sim --sim --headless --localhost-only &
+          echo $! > sim_daemon.pid
+          echo "Daemon PID: $(cat sim_daemon.pid)"
+
+      - name: Wait for Simulation daemon to be running
+        run: |
+          echo "Waiting for Simulation daemon to start..."
+          for i in {1..20}; do
+            STATUS=$(curl -s http://localhost:8000/api/daemon/status | grep -o '"state":"[^"]*"' | cut -d'"' -f4)
+            echo "Attempt $i: Daemon status is '$STATUS'"
+            if [ "$STATUS" = "running" ]; then
+              echo "[OK] Simulation daemon is now running!"
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "[ERROR] Simulation daemon failed to start after 60 seconds"
+          exit 1
+
+      - name: Stop Reachy Mini Simulation daemon
+        if: always()
+        run: |
+          echo "Stopping Simulation daemon..."
+          curl -X POST "http://localhost:8000/api/daemon/stop?goto_sleep=true" || echo "Failed to stop daemon via API"
+          sleep 2
+          if [ -f sim_daemon.pid ]; then
+            kill $(cat sim_daemon.pid) 2>/dev/null || echo "Daemon already stopped"
+            rm sim_daemon.pid
+          fi
+
+      - name: Cleanup virtual environment
+        if: always()
+        run: rm -rf .venv
+
+  mac_lite:
+    needs: mac_sim
+    runs-on: ci-runner-mac
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create virtual environment
+        run: python3.12 -m venv .venv
+
+      - name: Install dependencies
+        run: |
+          source .venv/bin/activate
+          python3.12 -m pip install --upgrade pip
+          pip install reachy-mini
+
+      - name: Start Reachy Mini Lite daemon
+        run: |
+          echo "Starting Reachy Mini Lite daemon..."
+          source .venv/bin/activate
+          reachy-mini-daemon --robot-name reachy_mini_lite --serialport auto --localhost-only &
+          echo $! > lite_daemon.pid
+          echo "Daemon PID: $(cat lite_daemon.pid)"
+
+      - name: Wait for Lite daemon to be running
+        run: |
+          echo "Waiting for Lite daemon to start..."
+          for i in {1..20}; do
+            STATUS=$(curl -s http://localhost:8000/api/daemon/status | grep -o '"state":"[^"]*"' | cut -d'"' -f4)
+            echo "Attempt $i: Daemon status is '$STATUS'"
+            if [ "$STATUS" = "running" ]; then
+              echo "[OK] Lite daemon is now running!"
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "[ERROR] Lite daemon failed to start after 60 seconds"
+          exit 1
+
+      - name: Stop Reachy Mini Lite daemon
+        if: always()
+        run: |
+          echo "Stopping Lite daemon..."
+          curl -X POST "http://localhost:8000/api/daemon/stop?goto_sleep=true" || echo "Failed to stop daemon via API"
+          sleep 2
+          if [ -f lite_daemon.pid ]; then
+            kill $(cat lite_daemon.pid) 2>/dev/null || echo "Daemon already stopped"
+            rm lite_daemon.pid
+          fi
+
+      - name: Cleanup virtual environment
+        if: always()
+        run: rm -rf .venv
+
+  mac_wireless:
+    needs: [linux_wireless, windows_wireless, mac_lite]
+    runs-on: ci-runner-mac
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create virtual environment
+        run: python3.12 -m venv .venv
+
+      - name: Install dependencies
+        run: |
+          source .venv/bin/activate
+          python3.12 -m pip install --upgrade pip
+          pip install reachy-mini
+
+      - name: Start Reachy Mini Wireless daemon
+        run: |
+          echo "Starting Reachy Mini Wireless daemon..."
+          curl -X POST "http://reachy-mini-ci.local:8000/api/daemon/start?wake_up=true" || echo "Daemon may already be running"
+
+      - name: Wait for Wireless daemon to be running
+        run: |
+          echo "Waiting for Wireless daemon to start..."
+          for i in {1..20}; do
+            STATUS=$(curl -s http://reachy-mini-ci.local:8000/api/daemon/status | grep -o '"state":"[^"]*"' | cut -d'"' -f4)
+            echo "Attempt $i: Daemon status is '$STATUS'"
+            if [ "$STATUS" = "running" ]; then
+              echo "[OK] Wireless daemon is now running!"
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "[ERROR] Wireless daemon failed to start after 60 seconds"
+
+      - name: Stop Reachy Mini Wireless daemon
+        if: always()
+        run: |
+          echo "Stopping Wireless daemon..."
+          curl -X POST "http://reachy-mini-ci.local:8000/api/daemon/stop?goto_sleep=true" || echo "Failed to stop daemon"
+
+      - name: Cleanup virtual environment
+        if: always()
+        run: rm -rf .venv

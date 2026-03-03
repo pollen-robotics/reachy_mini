@@ -7,6 +7,8 @@ from typing import Dict
 
 from websockets.sync.client import connect
 
+logger = logging.getLogger(__name__)
+
 
 def get_producer_list(host: str, port: int) -> Dict[str, Dict[str, str]]:
     """Get the list of gstreamer producers from the signalling server.

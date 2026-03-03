@@ -3,8 +3,6 @@ name: Upload PR Documentation
 on:
   workflow_run:
     workflows: ["Build HF PR Documentation"]
-    branches:
-      - main
     types:
       - completed
 

@@ -63,7 +63,7 @@ from reachy_mini.media.camera_constants import (
 
 gi.require_version("Gst", "1.0")
 gi.require_version("GstApp", "1.0")
-from gi.repository import GLib, Gst, GstApp  # noqa: E402, F401
+from gi.repository import GLib, GObject, Gst, GstApp  # noqa: E402, F401
 
 
 class GstWebRTCClient(CameraBase, AudioBase):
@@ -143,24 +143,21 @@ class GstWebRTCClient(CameraBase, AudioBase):
         # Set resolution after appsink is created so caps can be properly configured
         self.set_resolution(self.camera_specs.default_resolution)
 
-        webrtcsrc = self._configure_webrtcsrc(signaling_host, signaling_port, peer_id)
-        self._pipeline_record.add(webrtcsrc)
+        self._webrtcsrc = self._configure_webrtcsrc(signaling_host, signaling_port, peer_id)
+        self._pipeline_record.add(self._webrtcsrc)
 
-        self._pipeline_playback = Gst.Pipeline.new("audio_player")
-        self._init_pipeline_playback(
-            self._pipeline_playback, signaling_host, signaling_port
-        )
-        self._bus_playback = self._pipeline_playback.get_bus()
-        self._bus_playback.add_watch(
-            GLib.PRIORITY_DEFAULT, self._on_bus_message, self._loop
-        )
+        self._webrtcbin = None
+        self._audio_send_ready = False
+        self._appsrc = None
+        self._appsrc_pts = 0  # running PTS in nanoseconds for appsrc buffers
+        self._webrtcsrc.connect("deep-element-added", self._on_deep_element_added)
+        self.logger.info("GstWebRTCClient initialized (bidirectional audio support)")
 
     def __del__(self) -> None:
         """Destructor to ensure gstreamer resources are released."""
         super().__del__()
         self._loop.quit()
         self._bus_record.remove_watch()
-        self._bus_playback.remove_watch()
 
     def set_resolution(self, resolution: CameraResolution) -> None:
         """Set the camera resolution."""
@@ -192,6 +189,26 @@ class GstWebRTCClient(CameraBase, AudioBase):
         signaller.set_property("producer-peer-id", peer_id)
         signaller.set_property("uri", f"ws://{signaling_host}:{signaling_port}")
         return source
+
+    def _on_deep_element_added(self, bin: Gst.Bin, sub_bin: Gst.Bin, element: Gst.Element) -> None:
+        """Detect the internal webrtcbin element created by webrtcsrc."""
+        factory = element.get_factory()
+        if factory and factory.get_name() == "webrtcbin":
+            self.logger.info(f"Captured webrtcbin: {element.get_name()}")
+            self._webrtcbin = element
+            element.connect("on-new-transceiver", self._on_new_transceiver)
+
+    def _on_new_transceiver(self, webrtcbin: Gst.Element, transceiver: GObject.Object) -> None:
+        """Set audio transceiver to SENDRECV so the SDP answer allows bidirectional audio."""
+        # Only set audio transceivers to SENDRECV (not video) to avoid unnecessary sink pads
+        caps = transceiver.get_property("codec-preferences")
+        if caps and caps.get_size() > 0:
+            s = caps.get_structure(0)
+            media = s.get_string("media")
+            if media != "audio":
+                return
+        transceiver.set_property("direction", 4)  # GstWebRTCRTPTransceiverDirection.SENDRECV
+        self.logger.info("Audio transceiver configured for SENDRECV")
 
     def _dump_latency(self) -> None:
         query = Gst.Query.new_latency()
@@ -260,6 +277,7 @@ class GstWebRTCClient(CameraBase, AudioBase):
             self._appsink_video.sync_state_with_parent()
 
         elif pad.get_name().startswith("audio"):
+            # Receive path: decode incoming audio to appsink
             audioconvert = Gst.ElementFactory.make("audioconvert")
             audioresample = Gst.ElementFactory.make("audioresample")
             self._pipeline_record.add(audioconvert)
@@ -272,6 +290,9 @@ class GstWebRTCClient(CameraBase, AudioBase):
             self._appsink_audio.sync_state_with_parent()
             audioconvert.sync_state_with_parent()
             audioresample.sync_state_with_parent()
+
+            # Send path: set up appsrc → encode → webrtcbin for bidirectional audio
+            self._setup_audio_send_chain()
 
         GLib.timeout_add_seconds(5, self._dump_latency)
 
@@ -345,7 +366,6 @@ class GstWebRTCClient(CameraBase, AudioBase):
 
         See CameraBase.close() for complete documentation.
         """
-        # self._loop.quit()
         self._pipeline_record.set_state(Gst.State.NULL)
 
     def start_recording(self) -> None:
@@ -362,41 +382,94 @@ class GstWebRTCClient(CameraBase, AudioBase):
         """
         pass  # managed in close()
 
-    def _init_pipeline_playback(
-        self, pipeline: Gst.Pipeline, signaling_host: str, signaling_port: int
-    ) -> None:
-        """Initialize the audio playback pipeline."""
-        self._appsrc = Gst.ElementFactory.make("appsrc")
-        self._appsrc.set_property("format", Gst.Format.TIME)
-        self._appsrc.set_property("is-live", True)
+    def _setup_audio_send_chain(self) -> None:
+        """Set up the audio send chain through the existing webrtcbin connection.
+
+        Builds: appsrc → audioconvert → audioresample → opusenc → rtpopuspay → webrtcbin sink pad
+        """
+        if self._audio_send_ready:
+            return  # already set up or in progress
+        self._audio_send_ready = True  # prevent re-entry from concurrent pad-added calls
+
+        self.logger.info("Setting up audio send chain...")
+        if self._webrtcbin is None:
+            self.logger.error("webrtcbin not found, cannot set up audio send chain")
+            self._audio_send_ready = False
+            return
+
+        webrtcbin_parent = self._webrtcbin.get_parent()
+
+        # Find the audio sink pad on webrtcbin by iterating all sink pads and
+        # checking which one expects OPUS. Pad numbering may not match transceiver
+        # index, so we can't assume a fixed sink_N.
+        sink_pad = None
+        pt = 96
+        for pad in self._iterate_gst(self._webrtcbin.iterate_sink_pads()):
+            if pad.is_linked():
+                continue
+            caps = pad.query_caps(None)
+            if caps and caps.get_size() > 0:
+                s = caps.get_structure(0)
+                enc = s.get_string("encoding-name")
+                if enc and enc.upper() == "OPUS":
+                    sink_pad = pad
+                    ok, val = s.get_int("payload")
+                    if ok:
+                        pt = val
+                    self.logger.info(f"Found audio sink pad: {pad.get_name()}, pt={pt}")
+                    break
+
+        if sink_pad is None:
+            self.logger.error("No OPUS sink pad found on webrtcbin, audio send disabled")
+            self._audio_send_ready = False
+            return
+
+        appsrc = Gst.ElementFactory.make("appsrc")
+        appsrc.set_property("format", Gst.Format.TIME)
+        appsrc.set_property("is-live", True)
         caps = Gst.Caps.from_string(
             f"audio/x-raw,format=F32LE,channels={self.CHANNELS},rate={self.SAMPLE_RATE},layout=interleaved"
         )
-        self._appsrc.set_property("caps", caps)
+        appsrc.set_property("caps", caps)
+
         audioconvert = Gst.ElementFactory.make("audioconvert")
         audioresample = Gst.ElementFactory.make("audioresample")
         opusenc = Gst.ElementFactory.make("opusenc")
-        queue = Gst.ElementFactory.make("queue")
+        opusenc.set_property("audio-type", "restricted-lowdelay")
+        opusenc.set_property("frame-size", 10)
         rtpopuspay = Gst.ElementFactory.make("rtpopuspay")
-        udpsink = Gst.ElementFactory.make("udpsink")
+        rtpopuspay.set_property("pt", pt)
 
-        udpsink.set_property("host", signaling_host)
-        udpsink.set_property("port", 5000)
+        elems = (appsrc, audioconvert, audioresample, opusenc, rtpopuspay)
 
-        pipeline.add(self._appsrc)
-        pipeline.add(audioconvert)
-        pipeline.add(audioresample)
-        pipeline.add(opusenc)
-        pipeline.add(queue)
-        pipeline.add(rtpopuspay)
-        pipeline.add(udpsink)
+        # Add elements to webrtcbin's parent bin so they share the same hierarchy
+        target_bin = webrtcbin_parent if webrtcbin_parent else self._webrtcsrc
+        for elem in elems:
+            if not target_bin.add(elem):
+                self.logger.error(f"Failed to add {elem.get_name()} to {target_bin.get_name()}")
+                self._audio_send_ready = False
+                return
 
-        self._appsrc.link(audioconvert)
+        appsrc.link(audioconvert)
         audioconvert.link(audioresample)
         audioresample.link(opusenc)
-        opusenc.link(queue)
-        queue.link(rtpopuspay)
-        rtpopuspay.link(udpsink)
+        opusenc.link(rtpopuspay)
+
+        src_pad = rtpopuspay.get_static_pad("src")
+        # Skip caps check during link — webrtcbin's sink pad has strict SDP-derived caps
+        # that include parameters (ssrc, encoding-params) not in rtpopuspay's output caps.
+        # Runtime caps negotiation will handle the actual format agreement.
+        link_result = src_pad.link_full(sink_pad, Gst.PadLinkCheck.NOTHING)
+        if link_result != Gst.PadLinkReturn.OK:
+            self.logger.error(f"Failed to link rtpopuspay to webrtcbin: {link_result}")
+            self._audio_send_ready = False
+            return
+
+        for elem in elems:
+            elem.sync_state_with_parent()
+
+        self._appsrc = appsrc
+        self.logger.info("Audio send chain ready (bidirectional audio enabled)")
 
     def set_max_output_buffers(self, max_buffers: int) -> None:
         """Set the maximum number of output buffers to queue in the player.
@@ -418,25 +491,29 @@ class GstWebRTCClient(CameraBase, AudioBase):
 
         See AudioBase.start_playing() for complete documentation.
         """
-        self._pipeline_playback.set_state(Gst.State.PLAYING)
+        pass  # audio send chain is set up automatically on WebRTC connection
 
     def stop_playing(self) -> None:
         """Stop playing audio and release resources.
 
         See AudioBase.stop_playing() for complete documentation.
         """
-        self._pipeline_playback.set_state(Gst.State.NULL)
+        self._appsrc_pts = 0
 
     def push_audio_sample(self, data: npt.NDArray[np.float32]) -> None:
-        """Push audio data to the output device."""
-        if self._appsrc is not None:
-            buf = Gst.Buffer.new_wrapped(data.tobytes())
-            self._appsrc.push_buffer(buf)
+        """Push audio data to the output device via the bidirectional WebRTC connection."""
+        if self._appsrc is None:
+            return  # send chain not ready yet, silently drop
 
-        else:
-            self.logger.warning(
-                "AppSrc is not initialized. Call start_playing() first."
-            )
+        num_samples = data.shape[0]
+        duration_ns = (num_samples * Gst.SECOND) // self.SAMPLE_RATE
+
+        buf = Gst.Buffer.new_wrapped(data.tobytes())
+        buf.pts = self._appsrc_pts
+        buf.duration = duration_ns
+        self._appsrc_pts += duration_ns
+
+        self._appsrc.push_buffer(buf)
 
     def play_sound(self, sound_file: str) -> None:
         """Play a sound file.
