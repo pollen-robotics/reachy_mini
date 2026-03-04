@@ -1906,6 +1906,12 @@
       },
       "DaemonStatus": {
         "properties": {
+          "type": {
+            "type": "string",
+            "const": "daemon_status",
+            "title": "Type",
+            "default": "daemon_status"
+          },
           "robot_name": {
             "type": "string",
             "title": "Robot Name"
@@ -1949,7 +1955,7 @@
                 "$ref": "#/components/schemas/RobotBackendStatus"
               },
               {
-                "$ref": "#/components/schemas/MujocoMockupBackendStatus"
+                "$ref": "#/components/schemas/MujocoBackendStatus"
               },
               {
                 "$ref": "#/components/schemas/MockupSimBackendStatus"
@@ -2004,7 +2010,8 @@
           "mockup_sim_enabled",
           "backend_status"
         ],
-        "title": "DaemonStatus"
+        "title": "DaemonStatus",
+        "description": "Status of the Reachy Mini daemon."
       },
       "DoAInfo": {
         "properties": {
@@ -2452,7 +2459,8 @@
         "required": [
           "motor_control_mode"
         ],
-        "title": "MockupSimBackendStatus"
+        "title": "MockupSimBackendStatus",
+        "description": "Status of the MockupSim backend."
       },
       "MotorControlMode": {
         "type": "string",
@@ -2492,10 +2500,29 @@
         "title": "MoveUUID",
         "description": "Model representing a unique identifier for a move task."
       },
-      "MujocoMockupBackendStatus": {
-        "properties": {},
+      "MujocoBackendStatus": {
+        "properties": {
+          "motor_control_mode": {
+            "$ref": "#/components/schemas/MotorControlMode"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          }
+        },
         "type": "object",
-        "title": "MujocoMockupBackendStatus"
+        "required": [
+          "motor_control_mode"
+        ],
+        "title": "MujocoBackendStatus",
+        "description": "Status of the Mujoco backend."
       },
       "PrivateSpaceInstallRequest": {
         "properties": {
@@ -2555,7 +2582,8 @@
           "last_alive",
           "control_loop_stats"
         ],
-        "title": "RobotBackendStatus"
+        "title": "RobotBackendStatus",
+        "description": "Status of the Robot Backend."
       },
       "SourceKind": {
         "type": "string",
