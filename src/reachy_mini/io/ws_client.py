@@ -61,6 +61,7 @@ class WSClient(AbstractClient):
         self._last_status: DaemonStatus | None = None
 
         self.tasks: dict[UUID, TaskState] = {}
+        self._tasks_lock = threading.Lock()
 
         self._ws: ws_sync.ClientConnection | None = None
         self._recv_thread: threading.Thread | None = None
@@ -175,11 +176,13 @@ class WSClient(AbstractClient):
             self._last_status = msg
             self.status_received.set()
         elif isinstance(msg, TaskProgress):
-            if msg.uuid in self.tasks:
+            with self._tasks_lock:
+                task = self.tasks.get(msg.uuid)
+            if task is not None:
                 if msg.error:
-                    self.tasks[msg.uuid].error = msg.error
+                    task.error = msg.error
                 if msg.finished:
-                    self.tasks[msg.uuid].event.set()
+                    task.event.set()
         elif isinstance(msg, RecordedDataMsg):
             self._last_recorded_data = msg
             self._recorded_data_ready.set()
@@ -249,7 +252,8 @@ class WSClient(AbstractClient):
             raise ConnectionError("Lost connection with the server.")
 
         task = TaskRequest(uuid=uuid4(), req=task_req, timestamp=datetime.now())
-        self.tasks[task.uuid] = TaskState(event=threading.Event(), error=None)
+        with self._tasks_lock:
+            self.tasks[task.uuid] = TaskState(event=threading.Event(), error=None)
 
         assert self._ws is not None
         self._ws.send(task.model_dump_json())
@@ -258,17 +262,22 @@ class WSClient(AbstractClient):
 
     def wait_for_task_completion(self, task_uid: UUID, timeout: float = 5.0) -> None:
         """Wait for the specified task to complete."""
-        if task_uid not in self.tasks:
+        with self._tasks_lock:
+            task = self.tasks.get(task_uid)
+        if task is None:
             raise ValueError("Task not found.")
 
-        self.tasks[task_uid].event.wait(timeout)
+        task.event.wait(timeout)
 
-        if not self.tasks[task_uid].event.is_set():
+        if not task.event.is_set():
             raise TimeoutError("Task did not complete in time.")
-        if self.tasks[task_uid].error is not None:
-            raise Exception(f"Task failed with error: {self.tasks[task_uid].error}")
+        if task.error is not None:
+            with self._tasks_lock:
+                del self.tasks[task_uid]
+            raise Exception(f"Task failed with error: {task.error}")
 
-        del self.tasks[task_uid]
+        with self._tasks_lock:
+            del self.tasks[task_uid]
 
 
 @dataclass
