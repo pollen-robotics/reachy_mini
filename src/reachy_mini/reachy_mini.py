@@ -139,6 +139,7 @@ class ReachyMini:
         self.set_automatic_body_yaw(automatic_body_yaw)
         self._last_head_pose: Optional[npt.NDArray[np.float64]] = None
         self.is_recording = False
+        self._move_cancelled = False
 
         self.T_head_cam = np.eye(4)
         self.T_head_cam[:3, 3][:] = [0.0437, 0, 0.0512]
@@ -885,6 +886,16 @@ class ReachyMini:
         """
         self.client.send_command(SetAutomaticBodyYawCmd(enabled=enabled))
 
+    def cancel_move(self) -> None:
+        """Cancel the currently playing move.
+
+        This will cause any running play_move or async_play_move to stop
+        at the next iteration of the playback loop. Audio is also stopped.
+        """
+        self._move_cancelled = True
+        self.media_manager.stop_playing()
+        self.logger.info("Move cancellation requested")
+
     async def async_play_move(
         self,
         move: Move,
@@ -901,6 +912,8 @@ class ReachyMini:
             sound (bool): If True, play the sound associated with the move (if any).
 
         """
+        self._move_cancelled = False
+
         if initial_goto_duration > 0.0:
             start_head_pose, start_antennas_positions, start_body_yaw = move.evaluate(
                 0.0
@@ -919,6 +932,10 @@ class ReachyMini:
 
         t0 = time.time()
         while time.time() - t0 < move.duration:
+            if self._move_cancelled:
+                self.logger.info("Move cancelled, stopping playback")
+                break
+
             t = min(time.time() - t0, move.duration - 1e-2)
 
             head, antennas, body_yaw = move.evaluate(t)
