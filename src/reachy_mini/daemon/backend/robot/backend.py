@@ -673,3 +673,5 @@ class RobotBackend(Backend):
 
         result: bytes = bytes(self.c.write_raw_packet(packet))
         return result
+
+
