@@ -23,7 +23,7 @@ def _get_macos_id(macos_four_char_code: str) -> int:
         The corresponding integer ID.
 
     """
-    return int(unpack('!I', macos_four_char_code.encode())[0])
+    return int(unpack("!I", macos_four_char_code.encode())[0])
 
 
 def _get_macos_four_char_code(macos_id: int) -> str:
@@ -36,29 +36,29 @@ def _get_macos_four_char_code(macos_id: int) -> str:
         The corresponding macOS FourCharCode as a string.
 
     """
-    return pack('!I', macos_id).decode('ascii')
+    return pack("!I", macos_id).decode("ascii")
 
 
 # Device and scope constants
 kAudioObjectSystemObject = 1
-kAudioObjectPropertyScopeGlobal = _get_macos_id('glob')
+kAudioObjectPropertyScopeGlobal = _get_macos_id("glob")
 kAudioObjectPropertyElementMaster = 0
-kAudioHardwarePropertyDevices = _get_macos_id('dev#')
-kAudioDevicePropertyDeviceNameCFString = _get_macos_id('lnam')
-kAudioDevicePropertyDeviceName = _get_macos_id('name')
+kAudioHardwarePropertyDevices = _get_macos_id("dev#")
+kAudioDevicePropertyDeviceNameCFString = _get_macos_id("lnam")
+kAudioDevicePropertyDeviceName = _get_macos_id("name")
 
 # Volume control constants
-kAudioHardwarePropertyDefaultOutputDevice = _get_macos_id('dOut')
-kAudioHardwarePropertyDefaultInputDevice = _get_macos_id('dIn ')
-kAudioDevicePropertyScopeOutput = _get_macos_id('outp')
-kAudioDevicePropertyScopeInput = _get_macos_id('inpt')
-kAudioDevicePropertyVolumeScalar = _get_macos_id('volm')
+kAudioHardwarePropertyDefaultOutputDevice = _get_macos_id("dOut")
+kAudioHardwarePropertyDefaultInputDevice = _get_macos_id("dIn ")
+kAudioDevicePropertyScopeOutput = _get_macos_id("outp")
+kAudioDevicePropertyScopeInput = _get_macos_id("inpt")
+kAudioDevicePropertyVolumeScalar = _get_macos_id("volm")
 
 
 @dataclass
 class VolumeControlMacOS(VolumeControl):
     """Volume control class for macOS.
-    
+
     Relies on the macOS CoreAudio framework.
     """
 
@@ -67,27 +67,52 @@ class VolumeControlMacOS(VolumeControl):
         """Structure representing the address of an audio object property in CoreAudio."""
 
         _fields_ = [
-            ('mSelector', c_uint32),
-            ('mScope', c_uint32),
-            ('mElement', c_uint32),
+            ("mSelector", c_uint32),
+            ("mScope", c_uint32),
+            ("mElement", c_uint32),
         ]
 
     def __post_init__(self) -> None:
         """Initialize the volume control. Loads the CoreAudio framework and defines the function prototypes."""
         # Load CoreAudio framework
-        self.coreaudio = ctypes.CDLL('/System/Library/Frameworks/CoreAudio.framework/Versions/A/CoreAudio')
+        self.coreaudio = ctypes.CDLL(
+            "/System/Library/Frameworks/CoreAudio.framework/Versions/A/CoreAudio"
+        )
 
         # Define function prototypes
-        self.coreaudio.AudioObjectGetPropertyDataSize.argtypes = [c_uint32, POINTER(self.AudioObjectPropertyAddress), c_uint32, c_void_p, POINTER(c_uint32)]
+        self.coreaudio.AudioObjectGetPropertyDataSize.argtypes = [
+            c_uint32,
+            POINTER(self.AudioObjectPropertyAddress),
+            c_uint32,
+            c_void_p,
+            POINTER(c_uint32),
+        ]
         self.coreaudio.AudioObjectGetPropertyDataSize.restype = c_int
-        
-        self.coreaudio.AudioObjectGetPropertyData.argtypes = [c_uint32, POINTER(self.AudioObjectPropertyAddress), c_uint32, c_void_p, POINTER(c_uint32), c_void_p]
+
+        self.coreaudio.AudioObjectGetPropertyData.argtypes = [
+            c_uint32,
+            POINTER(self.AudioObjectPropertyAddress),
+            c_uint32,
+            c_void_p,
+            POINTER(c_uint32),
+            c_void_p,
+        ]
         self.coreaudio.AudioObjectGetPropertyData.restype = c_int
 
-        self.coreaudio.AudioObjectSetPropertyData.argtypes = [c_uint32, POINTER(self.AudioObjectPropertyAddress), c_uint32, c_void_p, c_uint32, c_void_p]
+        self.coreaudio.AudioObjectSetPropertyData.argtypes = [
+            c_uint32,
+            POINTER(self.AudioObjectPropertyAddress),
+            c_uint32,
+            c_void_p,
+            c_uint32,
+            c_void_p,
+        ]
         self.coreaudio.AudioObjectSetPropertyData.restype = c_int
 
-        self.coreaudio.AudioObjectHasProperty.argtypes = [c_uint32, POINTER(self.AudioObjectPropertyAddress)]
+        self.coreaudio.AudioObjectHasProperty.argtypes = [
+            c_uint32,
+            POINTER(self.AudioObjectPropertyAddress),
+        ]
         self.coreaudio.AudioObjectHasProperty.restype = c_int
 
         # Initialize audio devices
@@ -107,16 +132,12 @@ class VolumeControlMacOS(VolumeControl):
         property_address = self.AudioObjectPropertyAddress(
             mSelector=kAudioDevicePropertyDeviceName,
             mScope=kAudioObjectPropertyScopeGlobal,
-            mElement=kAudioObjectPropertyElementMaster
+            mElement=kAudioObjectPropertyElementMaster,
         )
 
         property_data_size = c_uint32(0)
         status = self.coreaudio.AudioObjectGetPropertyDataSize(
-            device_id,
-            byref(property_address),
-            0,
-            None,
-            byref(property_data_size)
+            device_id, byref(property_address), 0, None, byref(property_data_size)
         )
 
         if status != 0:
@@ -129,17 +150,17 @@ class VolumeControlMacOS(VolumeControl):
             0,
             None,
             byref(property_data_size),
-            byref(device_name)
+            byref(device_name),
         )
 
         if status != 0:
             return f"Unknown device (id={device_id})"
 
-        return device_name.value.decode('utf-8')
+        return device_name.value.decode("utf-8")
 
     def _get_input_output_devices(self) -> tuple[AudioDevice, AudioDevice]:
         """Get the input and output audio devices corresponding to the Reachy Mini Audio sound card. If not found, get the default input and output audio devices.
-        
+
         Returns:
             A tuple of two AudioDevice: (input_device, output_device).
 
@@ -147,17 +168,25 @@ class VolumeControlMacOS(VolumeControl):
         devices = self._get_all_devices()
 
         for device_id, device_name in devices.items():
-            if any([sound_card in device_name.lower() for sound_card in SOUND_CARD_NAMES]):
+            if any(
+                [sound_card in device_name.lower() for sound_card in SOUND_CARD_NAMES]
+            ):
                 # Input and output devices will appear with the same ID
-                return AudioDevice(device_id, device_name, AudioDeviceType.INPUT), AudioDevice(device_id, device_name, AudioDeviceType.OUTPUT)
+                return AudioDevice(
+                    device_id, device_name, AudioDeviceType.INPUT
+                ), AudioDevice(device_id, device_name, AudioDeviceType.OUTPUT)
 
         input_id = self._get_default_device_id(AudioDeviceType.INPUT)
         output_id = self._get_default_device_id(AudioDeviceType.OUTPUT)
-        return AudioDevice(input_id, self._get_device_name(input_id), AudioDeviceType.INPUT), AudioDevice(output_id, self._get_device_name(output_id), AudioDeviceType.OUTPUT)
+        return AudioDevice(
+            input_id, self._get_device_name(input_id), AudioDeviceType.INPUT
+        ), AudioDevice(
+            output_id, self._get_device_name(output_id), AudioDeviceType.OUTPUT
+        )
 
     def _get_all_devices(self) -> dict[int, str]:
         """Get all available audio devices IDs and names.
-        
+
         Returns:
             A list of dictionaries containing the ID and name of each audio device: [{id: int, name: str}, ...].
 
@@ -170,7 +199,7 @@ class VolumeControlMacOS(VolumeControl):
         property_address = self.AudioObjectPropertyAddress(
             mSelector=kAudioHardwarePropertyDevices,
             mScope=kAudioObjectPropertyScopeGlobal,
-            mElement=kAudioObjectPropertyElementMaster
+            mElement=kAudioObjectPropertyElementMaster,
         )
 
         property_data_size = c_uint32(0)
@@ -180,11 +209,13 @@ class VolumeControlMacOS(VolumeControl):
             byref(property_address),
             0,
             None,
-            byref(property_data_size)
+            byref(property_data_size),
         )
 
         if status != 0:
-            raise RuntimeError(f"Could not query audio device list size (CoreAudio error {status})")
+            raise RuntimeError(
+                f"Could not query audio device list size (CoreAudio error {status})"
+            )
 
         # Determine the number of devices and create an array to hold the device IDs
         device_count = property_data_size.value // ctypes.sizeof(c_uint32)
@@ -196,11 +227,13 @@ class VolumeControlMacOS(VolumeControl):
             0,
             None,
             byref(property_data_size),
-            byref(device_ids)
+            byref(device_ids),
         )
 
         if status != 0:
-            raise RuntimeError(f"Could not retrieve audio device list (CoreAudio error {status})")
+            raise RuntimeError(
+                f"Could not retrieve audio device list (CoreAudio error {status})"
+            )
 
         for device_id in device_ids:
             device_name = self._get_device_name(device_id)
@@ -209,7 +242,7 @@ class VolumeControlMacOS(VolumeControl):
 
     def _get_default_device_id(self, device_type: AudioDeviceType) -> int:
         """Get the default audio device ID for a given device type.
-        
+
         Args:
             device_type: The type of device: INPUT or OUTPUT.
 
@@ -220,12 +253,16 @@ class VolumeControlMacOS(VolumeControl):
             RuntimeError: If AudioObjectGetPropertyData fails when getting the default audio devices.
 
         """
-        selector = kAudioHardwarePropertyDefaultOutputDevice if device_type == AudioDeviceType.OUTPUT else kAudioHardwarePropertyDefaultInputDevice
+        selector = (
+            kAudioHardwarePropertyDefaultOutputDevice
+            if device_type == AudioDeviceType.OUTPUT
+            else kAudioHardwarePropertyDefaultInputDevice
+        )
 
         property_address = self.AudioObjectPropertyAddress(
             mSelector=selector,
             mScope=kAudioObjectPropertyScopeGlobal,
-            mElement=kAudioObjectPropertyElementMaster
+            mElement=kAudioObjectPropertyElementMaster,
         )
         device_id = c_uint32(0)
         property_data_size = c_uint32(ctypes.sizeof(c_uint32))
@@ -236,11 +273,13 @@ class VolumeControlMacOS(VolumeControl):
             0,
             None,
             byref(property_data_size),
-            byref(device_id)
+            byref(device_id),
         )
 
         if status != 0:
-            raise RuntimeError(f"Could not retrieve the default {device_type.value} device (CoreAudio error {status})")
+            raise RuntimeError(
+                f"Could not retrieve the default {device_type.value} device (CoreAudio error {status})"
+            )
 
         return device_id.value
 
@@ -259,17 +298,23 @@ class VolumeControlMacOS(VolumeControl):
         volumes: list[float] = []
 
         # Get the appropriate scope based on device type
-        scope = kAudioDevicePropertyScopeInput if device.device_type == AudioDeviceType.INPUT else kAudioDevicePropertyScopeOutput
+        scope = (
+            kAudioDevicePropertyScopeInput
+            if device.device_type == AudioDeviceType.INPUT
+            else kAudioDevicePropertyScopeOutput
+        )
 
         for channel in channels_to_try:
             property_address = self.AudioObjectPropertyAddress(
                 mSelector=kAudioDevicePropertyVolumeScalar,
                 mScope=scope,
-                mElement=channel
+                mElement=channel,
             )
 
             # Check if this device has the volume scalar property
-            has_property = self.coreaudio.AudioObjectHasProperty(device.id, byref(property_address))
+            has_property = self.coreaudio.AudioObjectHasProperty(
+                device.id, byref(property_address)
+            )
             if not has_property:
                 continue  # Skip this channel if the property doesn't exist
 
@@ -282,7 +327,7 @@ class VolumeControlMacOS(VolumeControl):
                 0,
                 None,
                 byref(property_data_size),
-                byref(volume)
+                byref(volume),
             )
 
             if status == 0:
@@ -292,7 +337,9 @@ class VolumeControlMacOS(VolumeControl):
                     return round(volume.value * 100)
 
         if not volumes:
-            self.logger.error(f"No volume channels found on device {device.id} — cannot read volume")
+            self.logger.error(
+                f"No volume channels found on device {device.id} — cannot read volume"
+            )
             return -1
 
         # Return average of available channels (if no master channel)
@@ -317,17 +364,23 @@ class VolumeControlMacOS(VolumeControl):
         success_count = 0
 
         # Get the appropriate scope based on device type
-        scope = kAudioDevicePropertyScopeInput if device.device_type == AudioDeviceType.INPUT else kAudioDevicePropertyScopeOutput
+        scope = (
+            kAudioDevicePropertyScopeInput
+            if device.device_type == AudioDeviceType.INPUT
+            else kAudioDevicePropertyScopeOutput
+        )
 
         for channel in channels_to_try:
             property_address = self.AudioObjectPropertyAddress(
                 mSelector=kAudioDevicePropertyVolumeScalar,
                 mScope=scope,
-                mElement=channel
+                mElement=channel,
             )
 
             # Check if this device has the volume scalar property
-            has_property = self.coreaudio.AudioObjectHasProperty(device.id, byref(property_address))
+            has_property = self.coreaudio.AudioObjectHasProperty(
+                device.id, byref(property_address)
+            )
             if not has_property:
                 continue  # Skip this channel if the property doesn't exist
 
@@ -340,7 +393,7 @@ class VolumeControlMacOS(VolumeControl):
                 0,
                 None,
                 property_data_size,
-                byref(volume_value)
+                byref(volume_value),
             )
 
             if status == 0:
@@ -350,7 +403,9 @@ class VolumeControlMacOS(VolumeControl):
                     return True
 
         if success_count == 0:
-            self.logger.error(f"No volume channels found on device {device.id} — cannot set volume")
+            self.logger.error(
+                f"No volume channels found on device {device.id} — cannot set volume"
+            )
             return False
 
         return True
