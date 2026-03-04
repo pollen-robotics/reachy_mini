@@ -422,6 +422,7 @@ jobs:
       - name: Install dependencies with MuJoCo
         run: |
           source .venv/bin/activate
+          which python
           python3.12 -m pip install --upgrade pip
           pip install --force-reinstall "reachy_mini[mujoco] @ git+https://github.com/pollen-robotics/reachy_mini.git@main"  
 
@@ -459,9 +460,9 @@ jobs:
             rm sim_daemon.pid
           fi
 
-      - name: Cleanup virtual environment
-        if: always()
-        run: rm -rf .venv
+      # - name: Cleanup virtual environment
+      #   if: always()
+      #   run: rm -rf .venv
 
   mac_lite:
     needs: mac_sim
