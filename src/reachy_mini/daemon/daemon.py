@@ -450,9 +450,9 @@ class Daemon:
     def _publish_status(self) -> None:
         self._thread_event_publish_status.clear()
         while self._thread_event_publish_status.is_set() is False:
-            json_str = json.dumps(
-                asdict(self.status(), dict_factory=convert_enum_to_dict)
-            )
+            status_dict = asdict(self.status(), dict_factory=convert_enum_to_dict)
+            status_dict["type"] = "daemon_status"
+            json_str = json.dumps(status_dict)
             if self.ws_server is None:
                 self.logger.warning(
                     f"WS server not initialized, cannot publish status: {json_str}"

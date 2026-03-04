@@ -99,10 +99,8 @@ class WSServer(AbstractServer):
         """Publish daemon status to all connected clients.
 
         Called from the daemon's 1 Hz status thread.
-        The json_str is a raw JSON object without a type field,
-        so we prepend one via string concatenation.
         """
-        self._broadcast('{"type":"daemon_status",' + json_str[1:])
+        self._broadcast(json_str)
 
     # ------------------------------------------------------------------
     # WebSocket client handler (called from the FastAPI router)
