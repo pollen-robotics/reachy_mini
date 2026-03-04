@@ -330,7 +330,7 @@ def check_and_sync_apps_venv_sdk() -> None:
 
     # Build install command
     cmd, extra_env = build_install_command(
-        extras="gstreamer",
+        extras="",
         git_ref=daemon_info.get("git_ref") if daemon_info["source"] == "git" else None,
         version=daemon_info["version"] if daemon_info["source"] != "git" else None,
         python=apps_venv_python,

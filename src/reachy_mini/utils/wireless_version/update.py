@@ -22,7 +22,7 @@ async def update_reachy_mini(
     # Update daemon venv
     logger.info("Updating daemon venv...")
     cmd, extra_env = build_install_command(
-        extras="wireless-version,gstreamer",
+        extras="wireless-version",
         git_ref=git_ref, 
         pre_release=pre_release, 
         upgrade=True,
@@ -34,7 +34,7 @@ async def update_reachy_mini(
     if apps_venv_python.exists():
         logger.info("Updating apps_venv SDK...")
         cmd, extra_env = build_install_command( 
-            extras="gstreamer",
+            extras="",
             git_ref=git_ref, 
             pre_release=pre_release,
             python=apps_venv_python, 
