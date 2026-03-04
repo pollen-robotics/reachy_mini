@@ -2467,7 +2467,8 @@
         "enum": [
           "enabled",
           "disabled",
-          "gravity_compensation"
+          "gravity_compensation",
+          "error"
         ],
         "title": "MotorControlMode",
         "description": "Enum for motor control modes."
@@ -2688,13 +2689,6 @@
           "type": {
             "type": "string",
             "title": "Error Type"
-          },
-          "input": {
-            "title": "Input"
-          },
-          "ctx": {
-            "type": "object",
-            "title": "Context"
           }
         },
         "type": "object",
