@@ -434,14 +434,14 @@ jobs:
       - name: Wait for Simulation daemon to be running
         run: |
           echo "Waiting for Simulation daemon to start..."
-          for i in {1..20}; do
+          for i in {1..30}; do
             STATUS=$(curl -s http://localhost:8000/api/daemon/status | grep -o '"state":"[^"]*"' | cut -d'"' -f4)
             echo "Attempt $i: Daemon status is '$STATUS'"
             if [ "$STATUS" = "running" ]; then
               echo "[OK] Simulation daemon is now running!"
               exit 0
             fi
-            sleep 3
+            sleep 5
           done
           echo "[ERROR] Simulation daemon failed to start after 60 seconds"
           exit 1
