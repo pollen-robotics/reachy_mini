@@ -66,6 +66,7 @@ class WSClient(AbstractClient):
         self._ws: ws_sync.ClientConnection | None = None
         self._recv_thread: threading.Thread | None = None
         self._stop_event = threading.Event()
+        self._heartbeat = threading.Event()
 
         uri = f"ws://{host}:{port}/ws/sdk"
         self._ws = ws_sync.connect(uri)
@@ -107,12 +108,9 @@ class WSClient(AbstractClient):
             time.sleep(1.0)
 
     def is_connected(self) -> bool:
-        """Check if the client is connected to the server."""
-        self.joint_position_received.clear()
-        self.head_pose_received.clear()
-        return self.joint_position_received.wait(
-            timeout=1.0
-        ) and self.head_pose_received.wait(timeout=1.0)
+        """Check if the client is still receiving data from the server."""
+        self._heartbeat.clear()
+        return self._heartbeat.wait(timeout=1.0)
 
     def disconnect(self) -> None:
         """Disconnect the client from the server."""
@@ -157,6 +155,7 @@ class WSClient(AbstractClient):
                     msg = server_msg_adapter.validate_json(raw)
                 except ValidationError:
                     continue
+                self._heartbeat.set()
                 self._dispatch(msg)
         except websockets.exceptions.ConnectionClosed:
             pass
