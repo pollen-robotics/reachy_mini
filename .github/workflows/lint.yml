@@ -32,6 +32,11 @@ jobs:
   check-api-docs:
     runs-on: ubuntu-latest
     steps:
+      - name: Install system dependencies
+        uses: awalsh128/cache-apt-pkgs-action@latest
+        with:
+          packages: libportaudio2 libcairo2-dev libgirepository1.0-dev
+          version: 1.0
       - uses: actions/checkout@v6
       - name: Install uv
         uses: astral-sh/setup-uv@v7
@@ -48,7 +53,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Install system dependencies
-        run: sudo apt-get update && sudo apt-get install -y libportaudio2 libcairo2-dev libgirepository1.0-dev
+        uses: awalsh128/cache-apt-pkgs-action@latest
+        with:
+          packages: libportaudio2 libcairo2-dev libgirepository1.0-dev
+          version: 1.0
       - uses: actions/checkout@v6
       - name: Install uv
         uses: astral-sh/setup-uv@v7
