@@ -13,7 +13,6 @@ import numpy as np
 import soundfile as sf
 
 from reachy_mini import ReachyMini
-from reachy_mini.media.media_manager import MediaBackend
 
 TIMEOUT = 1
 DURATION = 5  # seconds
@@ -28,15 +27,16 @@ def main(backend: str) -> None:
 
     with ReachyMini(log_level="INFO", media_backend=backend) as mini:
         audio_samples = []
-        t0 = time.time()
         mini.media.start_recording()
 
         # Wait to actually get an audio sample
         print("Waiting for the microphone to be ready...")
         start_time = time.time()
-        while mini.media.get_audio_sample() is None and time.time() - start_time < TIMEOUT:
+        while (
+            mini.media.get_audio_sample() is None and time.time() - start_time < TIMEOUT
+        ):
             time.sleep(0.005)
-        
+
         if time.time() - start_time >= TIMEOUT:
             print(f"Timeout: the microphone did not respond in {TIMEOUT} seconds.")
             return
