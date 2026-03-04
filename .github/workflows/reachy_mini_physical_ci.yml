@@ -205,7 +205,7 @@ jobs:
         shell: powershell
         run: |
           Write-Host "Waiting for Lite daemon to start..."
-          for ($i = 1; $i -le 20; $i++) {
+          for ($i = 1; $i -le 30; $i++) {
             try {
               $response = Invoke-RestMethod -Uri "http://127.0.0.1:8000/api/daemon/status" -Method Get
               $status = $response.state
@@ -217,7 +217,7 @@ jobs:
             } catch {
               Write-Host "Attempt $i : Failed to get status"
             }
-            Start-Sleep -Seconds 3
+            Start-Sleep -Seconds 5
           }
           Write-Host "[ERROR] Lite daemon failed to start after 60 seconds"
           exit 1
@@ -280,7 +280,7 @@ jobs:
         shell: powershell
         run: |
           Write-Host "Waiting for Wireless daemon to start..."
-          for ($i = 1; $i -le 20; $i++) {
+          for ($i = 1; $i -le 30; $i++) {
             try {
               $response = Invoke-RestMethod -Uri "http://reachy-mini-ci.local:8000/api/daemon/status" -Method Get
               $status = $response.state
@@ -292,7 +292,7 @@ jobs:
             } catch {
               Write-Host "Attempt $i : Failed to get status"
             }
-            Start-Sleep -Seconds 3
+            Start-Sleep -Seconds 5
           }
           Write-Host "[ERROR] Wireless daemon failed to start after 60 seconds"
           exit 1
@@ -361,7 +361,7 @@ jobs:
         shell: powershell
         run: |
           Write-Host "Waiting for Simulation daemon to start..."
-          for ($i = 1; $i -le 20; $i++) {
+          for ($i = 1; $i -le 30; $i++) {
             try {
               $response = Invoke-RestMethod -Uri "http://127.0.0.1:8000/api/daemon/status" -Method Get
               $status = $response.state
@@ -373,7 +373,7 @@ jobs:
             } catch {
               Write-Host "Attempt $i : Failed to get status"
             }
-            Start-Sleep -Seconds 3
+            Start-Sleep -Seconds 5
           }
           Write-Host "[ERROR] Simulation daemon failed to start after 60 seconds"
           exit 1
@@ -415,7 +415,9 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Create virtual environment
-        run: python3.12 -m venv .venv
+        run: |
+          rm -rf .venv 
+          python3.12 -m venv .venv
 
       - name: Install dependencies with MuJoCo
         run: |
