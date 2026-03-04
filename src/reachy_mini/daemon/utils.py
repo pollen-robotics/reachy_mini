@@ -4,8 +4,6 @@ import os
 import struct
 import subprocess
 import time
-from enum import Enum
-from typing import Any, List
 
 import psutil
 import serial.tools.list_ports
@@ -159,14 +157,3 @@ def get_ip_address(ifname: str = "wlan0") -> str | None:
     else:
         print(f"Platform {platform.system()} not supported for get_ip_address.")
         return None
-
-
-def convert_enum_to_dict(data: List[Any]) -> dict[str, Any]:
-    """Convert a dataclass containing Enums to a dictionary with enum values."""
-
-    def convert_value(obj: Any) -> Any:
-        if isinstance(obj, Enum):
-            return obj.value
-        return obj
-
-    return dict((k, convert_value(v)) for k, v in data)

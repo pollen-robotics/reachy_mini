@@ -32,6 +32,7 @@ from reachy_mini.daemon.app.routers import (
     logs,
     motors,
     move,
+    sdk_ws,
     state,
     volume,
 )
@@ -41,6 +42,7 @@ from reachy_mini.media.audio_utils import (
     write_asoundrc_to_home,
 )
 from reachy_mini.motion.recorded_move import preload_default_datasets
+from reachy_mini.utils.discovery import MdnsServiceRegistration
 from reachy_mini.utils.wireless_version.startup_check import (
     check_and_fix_restore_venv,
     check_and_fix_venvs_ownership,
@@ -102,6 +104,8 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
         args = app.state.args  # type: Args
         dataset_updater_task: asyncio.Task[None] | None = None
 
+        mdns = MdnsServiceRegistration(args.robot_name, args.fastapi_port)
+
         def preload_with_logging() -> None:
             """Download datasets with logging."""
             try:
@@ -156,6 +160,9 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
                     hardware_config_filepath=args.hardware_config_filepath,
                 )
 
+            # Register mDNS service only after the daemon is ready
+            mdns.register()
+
             yield
         finally:
             # Cancel dataset updater task if running
@@ -165,6 +172,9 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
                     await dataset_updater_task
                 except asyncio.CancelledError:
                     pass
+
+            # Unregister mDNS service
+            mdns.unregister()
 
             # Ensure cleanup happens even if there's an exception
             try:
@@ -217,6 +227,7 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
         app.include_router(wifi_config.router)
 
     app.include_router(router)
+    app.include_router(sdk_ws.router)
 
     if health_check_event is not None:
 
@@ -521,7 +532,7 @@ def main() -> None:
         dest="dataset_update_interval_hours",
         help="Interval in hours for background dataset update checks (default: 24.0, 0 to disable).",
     )
-    # Zenoh server options
+    # Server options
     parser.add_argument(
         "--localhost-only",
         action="store_true",
