@@ -16,7 +16,7 @@ from reachy_mini.daemon.utils import (
     find_serial_port,
     get_ip_address,
 )
-from reachy_mini.io.protocol import DaemonState, DaemonStatus, MotorControlMode
+from reachy_mini.io.protocol import DaemonState, DaemonStatus, MotorControlMode, RobotBackendStatus
 from reachy_mini.io.ws_server import WSServer
 from reachy_mini.tools.reflash_motors import reflash_motors_if_needed
 
@@ -563,12 +563,19 @@ class Daemon:
                 ports = find_serial_port(wireless_version=wireless_version)
 
                 if len(ports) == 0:
+                    self._status.backend_status = RobotBackendStatus.default_error(
+                        error="No Reachy Mini serial port found. Check USB connection and permissions. Or directly specify the serial port using --serialport."
+                    )
+
                     raise RuntimeError(
                         "No Reachy Mini serial port found. "
                         "Check USB connection and permissions. "
                         "Or directly specify the serial port using --serialport."
                     )
                 elif len(ports) > 1:
+                    self._status.backend_status = RobotBackendStatus.default_error(
+                        error=f"Multiple Reachy Mini serial ports found {ports}. Please specify the serial port using --serialport."
+                    )
                     raise RuntimeError(
                         f"Multiple Reachy Mini serial ports found {ports}."
                         "Please specify the serial port using --serialport."
@@ -581,17 +588,21 @@ class Daemon:
                 f"Creating RobotBackend with parameters: serialport={serialport}, check_collision={check_collision}, kinematics_engine={kinematics_engine}"
             )
 
-            if reflash_motors_on_start:
-                reflash_motors_if_needed(serialport, dont_light_up=True)
+            try:
+                if reflash_motors_on_start:
+                    reflash_motors_if_needed(serialport, dont_light_up=True)
 
-            return RobotBackend(
-                serialport=serialport,
-                log_level=self.log_level,
-                check_collision=check_collision,
-                kinematics_engine=kinematics_engine,
-                use_audio=use_audio,
-                wireless_version=wireless_version,
-                hardware_config_filepath=hardware_config_filepath,
-            )
+                return RobotBackend(
+                    serialport=serialport,
+                    log_level=self.log_level,
+                    check_collision=check_collision,
+                    kinematics_engine=kinematics_engine,
+                    use_audio=use_audio,
+                    wireless_version=wireless_version,
+                    hardware_config_filepath=hardware_config_filepath,
+                )
+            except RuntimeError as e:
+                self._status.backend_status = RobotBackendStatus.default_error(error=str(e))
+                raise
 
 
