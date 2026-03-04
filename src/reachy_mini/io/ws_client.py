@@ -69,7 +69,10 @@ class WSClient(AbstractClient):
         self._heartbeat = threading.Event()
 
         uri = f"ws://{host}:{port}/ws/sdk"
-        self._ws = ws_sync.connect(uri)
+        try:
+            self._ws = ws_sync.connect(uri)
+        except (OSError, websockets.exceptions.InvalidHandshake, TimeoutError) as e:
+            raise ConnectionError(f"Failed to connect to {uri}: {e}") from e
 
         # Start receive loop in background thread
         self._recv_thread = threading.Thread(target=self._recv_loop, daemon=True)
