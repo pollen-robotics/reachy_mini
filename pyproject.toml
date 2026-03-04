@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "reachy_mini"
-version = "1.4.0.dev0"
+version = "1.4.1"
 authors = [{ name = "Pollen Robotics", email = "contact@pollen-robotics.com" }]
 description = ""
 readme = "README.md"
@@ -39,9 +39,9 @@ dependencies = [
     "pycaw>=20240210; sys_platform == 'win32'",
     "pulsectl>=24.1.0; sys_platform == 'linux'",
 
+    "gstreamer-bundle==1.28.1; sys_platform != 'linux'",
     # OS-specific: use PyGObject for Linux
     "PyGObject>=3.42.2,<=3.46.0; sys_platform == 'linux'",
-    # ToDO: for other platforms use: uv pip install --upgrade --index-url https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/simple gstreamer==1.28.0
 ]
 
 [project.optional-dependencies]
@@ -88,6 +88,13 @@ dev = [
 reachy-mini-daemon = "reachy_mini.daemon.app.main:main"
 reachy-mini-app-assistant = "reachy_mini.apps.app:main"
 reachy-mini-reflash-motors = "reachy_mini.tools.reflash_motors:main"
+
+[tool.uv]
+dependency-metadata = [
+    # Upstream metadata currently marks `gstreamer-msvc-runtime` as unconditional.
+    # It should only be required on Windows.
+    { name = "gstreamer-libs", version = "1.28.1", requires-dist = ["gstreamer-msvc-runtime; sys_platform == 'win32'", "setuptools"] },
+]
 
 [tool.setuptools]
 package-dir = { "" = "src" }
