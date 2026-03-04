@@ -16,7 +16,12 @@ from reachy_mini.daemon.utils import (
     find_serial_port,
     get_ip_address,
 )
-from reachy_mini.io.protocol import DaemonState, DaemonStatus, MotorControlMode, RobotBackendStatus
+from reachy_mini.io.protocol import (
+    DaemonState,
+    DaemonStatus,
+    MotorControlMode,
+    RobotBackendStatus,
+)
 from reachy_mini.io.ws_server import WSServer
 from reachy_mini.tools.reflash_motors import reflash_motors_if_needed
 
