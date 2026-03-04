@@ -8,7 +8,6 @@ It includes methods for running the simulation, getting joint positions, and con
 
 import logging
 import time
-from dataclasses import dataclass
 from importlib.resources import files
 from threading import Thread
 from typing import Annotated, Any
@@ -20,10 +19,15 @@ import numpy as np
 import numpy.typing as npt
 
 import reachy_mini
-from reachy_mini.io.protocol import HeadPoseMsg, JointPositionsMsg
+from reachy_mini.io.protocol import (
+    HeadPoseMsg,
+    JointPositionsMsg,
+    MotorControlMode,
+    MujocoBackendStatus,
+)
 from reachy_mini.media.gstreamer_udp_camera import GStreamerUDPCamera
 
-from ..abstract import Backend, MotorControlMode
+from ..abstract import Backend
 from .utils import (
     get_actuator_names,
     get_joint_addr_from_name,
@@ -343,12 +347,3 @@ class MujocoBackend(Backend):
         pass
 
 
-@dataclass
-class MujocoBackendStatus:
-    """Dataclass to represent the status of the Mujoco backend.
-
-    Empty for now, as the Mujoco backend does not have a specific status to report.
-    """
-
-    motor_control_mode: MotorControlMode
-    error: str | None = None

@@ -13,7 +13,7 @@ from uuid import UUID
 import numpy as np
 import numpy.typing as npt
 
-from reachy_mini.io.protocol import AnyCommand, AnyTaskRequest, ImuDataMsg
+from reachy_mini.io.protocol import AnyCommand, AnyTaskRequest, DaemonStatus, ImuDataMsg
 
 
 class AbstractServer(ABC):
@@ -69,7 +69,7 @@ class AbstractClient(ABC):
         pass
 
     @abstractmethod
-    def get_status(self, wait: bool = True, timeout: float = 5.0) -> Dict[str, Any]:
+    def get_status(self, wait: bool = True, timeout: float = 5.0) -> DaemonStatus:
         """Get the last received daemon status."""
         pass
 

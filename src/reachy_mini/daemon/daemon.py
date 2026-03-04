@@ -6,27 +6,23 @@ It also provides a command-line interface for easy interaction.
 """
 
 import asyncio
-import json
 import logging
 import time
-from dataclasses import asdict, dataclass
-from enum import Enum
 from importlib.metadata import PackageNotFoundError, version
 from threading import Event, Thread
 from typing import Any, Optional
 
-from reachy_mini.daemon.backend.abstract import MotorControlMode
 from reachy_mini.daemon.utils import (
-    convert_enum_to_dict,
     find_serial_port,
     get_ip_address,
 )
+from reachy_mini.io.protocol import DaemonState, DaemonStatus, MotorControlMode
 from reachy_mini.io.ws_server import WSServer
 from reachy_mini.tools.reflash_motors import reflash_motors_if_needed
 
-from .backend.mockup_sim import MockupSimBackend, MockupSimBackendStatus
-from .backend.mujoco import MujocoBackend, MujocoBackendStatus
-from .backend.robot import RobotBackend, RobotBackendStatus
+from .backend.mockup_sim import MockupSimBackend
+from .backend.mujoco import MujocoBackend
+from .backend.robot import RobotBackend
 
 # Central signaling relay for WebRTC (optional)
 _central_relay_task: Optional[asyncio.Task[Any]] = None
@@ -450,9 +446,7 @@ class Daemon:
     def _publish_status(self) -> None:
         self._thread_event_publish_status.clear()
         while self._thread_event_publish_status.is_set() is False:
-            status_dict = asdict(self.status(), dict_factory=convert_enum_to_dict)
-            status_dict["type"] = "daemon_status"
-            json_str = json.dumps(status_dict)
+            json_str = self.status().model_dump_json()
             if self.ws_server is None:
                 self.logger.warning(
                     f"WS server not initialized, cannot publish status: {json_str}"
@@ -590,30 +584,3 @@ class Daemon:
             )
 
 
-class DaemonState(Enum):
-    """Enum representing the state of the Reachy Mini daemon."""
-
-    NOT_INITIALIZED = "not_initialized"
-    STARTING = "starting"
-    RUNNING = "running"
-    STOPPING = "stopping"
-    STOPPED = "stopped"
-    ERROR = "error"
-
-
-@dataclass
-class DaemonStatus:
-    """Dataclass representing the status of the Reachy Mini daemon."""
-
-    robot_name: str
-    state: DaemonState
-    wireless_version: bool
-    desktop_app_daemon: bool
-    simulation_enabled: Optional[bool]
-    mockup_sim_enabled: Optional[bool]
-    backend_status: Optional[
-        RobotBackendStatus | MujocoBackendStatus | MockupSimBackendStatus
-    ]
-    error: Optional[str] = None
-    wlan_ip: Optional[str] = None
-    version: Optional[str] = None

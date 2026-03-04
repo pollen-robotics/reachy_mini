@@ -209,7 +209,7 @@ class ReachyMini:
         self, media_backend: str, log_level: str
     ) -> MediaManager:
         daemon_status = self.client.get_status()
-        is_wireless = daemon_status.get("wireless_version", False)
+        is_wireless = daemon_status.wireless_version
 
         # If no_media is requested, skip all media initialization
         if media_backend.lower() == "no_media":
@@ -254,10 +254,10 @@ class ReachyMini:
                     )
 
         return MediaManager(
-            use_sim=self.client.get_status()["simulation_enabled"],
+            use_sim=daemon_status.simulation_enabled or False,
             backend=mbackend,
             log_level=log_level,
-            signalling_host=self.client.get_status()["wlan_ip"],
+            signalling_host=daemon_status.wlan_ip or "",
         )
 
     def _normalize_connection_mode(

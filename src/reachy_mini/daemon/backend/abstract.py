@@ -15,7 +15,6 @@ import threading
 import time
 import typing
 from abc import abstractmethod
-from enum import Enum
 from pathlib import Path
 from typing import Annotated, Any, Callable, Dict, Optional
 
@@ -30,8 +29,12 @@ from reachy_mini.io.protocol import (
     GetStateCmd,
     GotoSleepCmd,
     GotoTargetCmd,
+    MockupSimBackendStatus,
+    MotorControlMode,
+    MujocoBackendStatus,
     PlaySoundCmd,
     RecordedDataMsg,
+    RobotBackendStatus,
     SetAntennasCmd,
     SetAutomaticBodyYawCmd,
     SetBodyYawCmd,
@@ -48,9 +51,6 @@ from reachy_mini.io.protocol import (
 from reachy_mini.io.publisher import Publisher
 
 if typing.TYPE_CHECKING:
-    from reachy_mini.daemon.backend.mockup_sim.backend import MockupSimBackendStatus
-    from reachy_mini.daemon.backend.mujoco.backend import MujocoBackendStatus
-    from reachy_mini.daemon.backend.robot.backend import RobotBackendStatus
     from reachy_mini.kinematics import AnyKinematics
 from reachy_mini.media.media_manager import MediaBackend, MediaManager
 from reachy_mini.motion.goto import GotoMove
@@ -61,14 +61,6 @@ from reachy_mini.utils.interpolation import (
     distance_between_poses,
     time_trajectory,
 )
-
-
-class MotorControlMode(str, Enum):
-    """Enum for motor control modes."""
-
-    Enabled = "enabled"  # Torque ON and controlled in position
-    Disabled = "disabled"  # Torque OFF
-    GravityCompensation = "gravity_compensation"  # Torque ON and controlled in current to compensate for gravity
 
 
 class Backend:

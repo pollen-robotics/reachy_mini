@@ -8,7 +8,6 @@ It uses the `ReachyMiniMotorController` to communicate with the robot's motors.
 import logging
 import struct
 import time
-from dataclasses import dataclass
 from datetime import timedelta
 from multiprocessing import Event  # It seems to be more accurate than threading.Event
 from typing import Annotated, Any
@@ -18,10 +17,16 @@ import numpy as np
 import numpy.typing as npt
 from reachy_mini_motor_controller import ReachyMiniPyControlLoop
 
-from reachy_mini.io.protocol import HeadPoseMsg, ImuDataMsg, JointPositionsMsg
+from reachy_mini.io.protocol import (
+    HeadPoseMsg,
+    ImuDataMsg,
+    JointPositionsMsg,
+    MotorControlMode,
+    RobotBackendStatus,
+)
 from reachy_mini.utils.hardware_config.parser import parse_yaml_config
 
-from ..abstract import Backend, MotorControlMode
+from ..abstract import Backend
 
 
 class RobotBackend(Backend):
@@ -670,12 +675,3 @@ class RobotBackend(Backend):
         return result
 
 
-@dataclass
-class RobotBackendStatus:
-    """Status of the Robot Backend."""
-
-    ready: bool
-    motor_control_mode: MotorControlMode
-    last_alive: float | None
-    control_loop_stats: dict[str, Any]
-    error: str | None = None

@@ -15,12 +15,83 @@ Server->Client message types:
 """
 
 from datetime import datetime
-from typing import Annotated, Any, Literal
+from enum import Enum
+from typing import Annotated, Any, Literal, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, Field, TypeAdapter
 
 from reachy_mini.utils.interpolation import InterpolationTechnique
+
+# ------------------------------------------------------------------
+# Shared enums
+# ------------------------------------------------------------------
+
+
+class MotorControlMode(str, Enum):
+    """Enum for motor control modes."""
+
+    Enabled = "enabled"
+    Disabled = "disabled"
+    GravityCompensation = "gravity_compensation"
+
+
+class DaemonState(str, Enum):
+    """Enum representing the state of the Reachy Mini daemon."""
+
+    NOT_INITIALIZED = "not_initialized"
+    STARTING = "starting"
+    RUNNING = "running"
+    STOPPING = "stopping"
+    STOPPED = "stopped"
+    ERROR = "error"
+
+
+# ------------------------------------------------------------------
+# Backend status models
+# ------------------------------------------------------------------
+
+
+class RobotBackendStatus(BaseModel):
+    """Status of the Robot Backend."""
+
+    ready: bool
+    motor_control_mode: MotorControlMode
+    last_alive: float | None
+    control_loop_stats: dict[str, Any]
+    error: str | None = None
+
+
+class MujocoBackendStatus(BaseModel):
+    """Status of the Mujoco backend."""
+
+    motor_control_mode: MotorControlMode
+    error: str | None = None
+
+
+class MockupSimBackendStatus(BaseModel):
+    """Status of the MockupSim backend."""
+
+    motor_control_mode: MotorControlMode
+    error: str | None = None
+
+
+class DaemonStatus(BaseModel):
+    """Status of the Reachy Mini daemon."""
+
+    type: Literal["daemon_status"] = "daemon_status"
+    robot_name: str
+    state: DaemonState
+    wireless_version: bool
+    desktop_app_daemon: bool
+    simulation_enabled: Optional[bool]
+    mockup_sim_enabled: Optional[bool]
+    backend_status: Optional[
+        RobotBackendStatus | MujocoBackendStatus | MockupSimBackendStatus
+    ]
+    error: Optional[str] = None
+    wlan_ip: Optional[str] = None
+    version: Optional[str] = None
 
 # ------------------------------------------------------------------
 # Client -> Server commands
@@ -250,3 +321,10 @@ class TaskProgress(BaseModel):
     finished: bool = False
     error: str | None = None
     timestamp: datetime
+
+
+AnyServerMsg = Annotated[
+    JointPositionsMsg | HeadPoseMsg | ImuDataMsg | RecordedDataMsg | DaemonStatus | TaskProgress,
+    Field(discriminator="type"),
+]
+server_msg_adapter: TypeAdapter[AnyServerMsg] = TypeAdapter(AnyServerMsg)

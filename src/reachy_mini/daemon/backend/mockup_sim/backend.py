@@ -8,15 +8,19 @@ Apps open the webcam/microphone directly (like with a real robot).
 """
 
 import time
-from dataclasses import dataclass
 from typing import Annotated
 
 import numpy as np
 import numpy.typing as npt
 
-from reachy_mini.io.protocol import HeadPoseMsg, JointPositionsMsg
+from reachy_mini.io.protocol import (
+    HeadPoseMsg,
+    JointPositionsMsg,
+    MockupSimBackendStatus,
+    MotorControlMode,
+)
 
-from ..abstract import Backend, MotorControlMode
+from ..abstract import Backend
 
 
 class MockupSimBackend(Backend):
@@ -164,9 +168,3 @@ class MockupSimBackend(Backend):
         pass
 
 
-@dataclass
-class MockupSimBackendStatus:
-    """Status of the MockupSim backend."""
-
-    motor_control_mode: MotorControlMode
-    error: str | None = None

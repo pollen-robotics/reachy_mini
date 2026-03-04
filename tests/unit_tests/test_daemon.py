@@ -81,12 +81,13 @@ async def test_daemon_client_disconnection() -> None:
             host="localhost", port=port, media_backend="no_media"
         ) as mini:
             status = mini.client.get_status()
-            assert status["state"] == "running"
-            assert status["simulation_enabled"]
-            assert status["error"] is None
-            assert status["backend_status"]["motor_control_mode"] == "enabled"
-            assert status["backend_status"]["error"] is None
-            assert status["wlan_ip"] is None
+            assert status.state == "running"
+            assert status.simulation_enabled
+            assert status.error is None
+            assert status.backend_status is not None
+            assert status.backend_status.motor_control_mode == "enabled"
+            assert status.backend_status.error is None
+            assert status.wlan_ip is None
             client_connected.set()
 
     async def wait_for_client() -> None:
@@ -150,8 +151,8 @@ async def test_multi_robot_isolation() -> None:
             # Both robots should be running independently
             status1 = mini1.client.get_status()
             status2 = mini2.client.get_status()
-            assert status1["state"] == "running"
-            assert status2["state"] == "running"
+            assert status1.state == "running"
+            assert status2.state == "running"
 
             # Read initial antenna positions from both robots
             _, ant1_before = mini1.client.get_current_joints()

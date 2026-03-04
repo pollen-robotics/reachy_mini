@@ -4,7 +4,6 @@ Connects to the daemon's /ws/sdk endpoint and provides cached state,
 fire-and-forget commands, and task request/progress tracking.
 """
 
-import json
 import logging
 import threading
 import time
@@ -15,18 +14,22 @@ from uuid import UUID, uuid4
 
 import numpy as np
 import numpy.typing as npt
+import websockets.exceptions
 import websockets.sync.client as ws_sync
+from pydantic import ValidationError
 
 from reachy_mini.io.abstract import AbstractClient
 from reachy_mini.io.protocol import (
     AnyCommand,
     AnyTaskRequest,
+    DaemonStatus,
     HeadPoseMsg,
     ImuDataMsg,
     JointPositionsMsg,
     RecordedDataMsg,
     TaskProgress,
     TaskRequest,
+    server_msg_adapter,
 )
 
 
@@ -55,7 +58,7 @@ class WSClient(AbstractClient):
         self._last_recorded_data: RecordedDataMsg | None = None
         self._recorded_data_ready = threading.Event()
         self._is_alive = False
-        self._last_status: Dict[str, Any] = {}  # DaemonStatus (dataclass, not Pydantic)
+        self._last_status: DaemonStatus | None = None
 
         self.tasks: dict[UUID, TaskState] = {}
 
@@ -150,39 +153,35 @@ class WSClient(AbstractClient):
                 if isinstance(raw, bytes):
                     raw = raw.decode("utf-8")
                 try:
-                    msg = json.loads(raw)
-                except json.JSONDecodeError:
+                    msg = server_msg_adapter.validate_json(raw)
+                except ValidationError:
                     continue
                 self._dispatch(msg)
-        except Exception:
-            # Connection closed or error
+        except websockets.exceptions.ConnectionClosed:
             pass
 
-    def _dispatch(self, msg: dict[str, Any]) -> None:
+    def _dispatch(self, msg: Any) -> None:
         """Route an incoming message to the appropriate handler."""
-        msg_type = msg.get("type")
-        if msg_type == "joint_positions":
-            self._last_joint_positions = JointPositionsMsg.model_validate(msg)
+        if isinstance(msg, JointPositionsMsg):
+            self._last_joint_positions = msg
             self.joint_position_received.set()
-        elif msg_type == "head_pose":
-            self._last_head_pose = HeadPoseMsg.model_validate(msg)
+        elif isinstance(msg, HeadPoseMsg):
+            self._last_head_pose = msg
             self.head_pose_received.set()
-        elif msg_type == "imu_data":
-            self._last_imu_data = ImuDataMsg.model_validate(msg)
+        elif isinstance(msg, ImuDataMsg):
+            self._last_imu_data = msg
             self.imu_data_received.set()
-        elif msg_type == "daemon_status":
-            # DaemonStatus is a dataclass on the server, not a Pydantic model
-            self._last_status = {k: v for k, v in msg.items() if k != "type"}
+        elif isinstance(msg, DaemonStatus):
+            self._last_status = msg
             self.status_received.set()
-        elif msg_type == "task_progress":
-            progress = TaskProgress.model_validate(msg)
-            if progress.uuid in self.tasks:
-                if progress.error:
-                    self.tasks[progress.uuid].error = progress.error
-                if progress.finished:
-                    self.tasks[progress.uuid].event.set()
-        elif msg_type == "recorded_data":
-            self._last_recorded_data = RecordedDataMsg.model_validate(msg)
+        elif isinstance(msg, TaskProgress):
+            if msg.uuid in self.tasks:
+                if msg.error:
+                    self.tasks[msg.uuid].error = msg.error
+                if msg.finished:
+                    self.tasks[msg.uuid].event.set()
+        elif isinstance(msg, RecordedDataMsg):
+            self._last_recorded_data = msg
             self._recorded_data_ready.set()
 
     # ------------------------------------------------------------------
@@ -204,11 +203,12 @@ class WSClient(AbstractClient):
         assert self._last_head_pose is not None, "No head pose received yet."
         return np.array(self._last_head_pose.head_pose)
 
-    def get_status(self, wait: bool = True, timeout: float = 5.0) -> Dict[str, Any]:
-        """Get the last received status. Returns DaemonStatus as a dict."""
+    def get_status(self, wait: bool = True, timeout: float = 5.0) -> DaemonStatus:
+        """Get the last received daemon status."""
         if wait and not self.status_received.wait(timeout):
             raise TimeoutError("Status not received in time.")
         self.status_received.clear()
+        assert self._last_status is not None
         return self._last_status
 
     def get_current_imu_data(self) -> ImuDataMsg | None:
