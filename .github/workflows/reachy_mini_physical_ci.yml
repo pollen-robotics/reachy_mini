@@ -17,7 +17,7 @@ jobs:
         run: |
           source .venv/bin/activate
           python3 -m pip install --upgrade pip
-          pip install reachy-mini
+          pip install --force-reinstall git+https://github.com/pollen-robotics/reachy_mini.git@main
 
       - name: Start Reachy Mini Wireless daemon
         run: |
@@ -63,7 +63,7 @@ jobs:
         run: |
           source .venv/bin/activate
           python3 -m pip install --upgrade pip
-          pip install reachy-mini
+          pip install --force-reinstall git+https://github.com/pollen-robotics/reachy_mini.git@main
 
       - name: Start Reachy Mini Lite daemon
         run: |
@@ -117,7 +117,7 @@ jobs:
         run: |
           source .venv/bin/activate
           python3 -m pip install --upgrade pip
-          pip install reachy-mini[mujoco]
+          pip install --force-reinstall "reachy_mini[mujoco] @ git+https://github.com/pollen-robotics/reachy_mini.git@main"
 
       - name: Start Reachy Mini Simulation daemon
         run: |
@@ -182,7 +182,7 @@ jobs:
         run: |
           .venv\Scripts\Activate.ps1
           python -m pip install --upgrade pip
-          pip install reachy-mini
+          pip install --force-reinstall git+https://github.com/pollen-robotics/reachy_mini.git@main
 
       - name: Start Reachy Mini Lite daemon
         shell: powershell
@@ -265,7 +265,7 @@ jobs:
         run: |
           .venv\Scripts\Activate.ps1
           python -m pip install --upgrade pip
-          pip install reachy-mini
+          pip install --force-reinstall git+https://github.com/pollen-robotics/reachy_mini.git@main
 
       - name: Start Reachy Mini Wireless daemon
         shell: powershell
@@ -338,7 +338,7 @@ jobs:
         run: |
           .venv\Scripts\Activate.ps1
           python -m pip install --upgrade pip
-          pip install reachy-mini[mujoco]
+          pip install --force-reinstall "reachy_mini[mujoco] @ git+https://github.com/pollen-robotics/reachy_mini.git@main"
 
       - name: Start Reachy Mini Simulation daemon
         shell: powershell
@@ -421,7 +421,7 @@ jobs:
         run: |
           source .venv/bin/activate
           python3.12 -m pip install --upgrade pip
-          pip install "reachy-mini[mujoco]"
+          pip install --force-reinstall "reachy_mini[mujoco] @ git+https://github.com/pollen-robotics/reachy_mini.git@main"  
 
       - name: Start Reachy Mini Simulation daemon
         run: |
@@ -475,7 +475,7 @@ jobs:
         run: |
           source .venv/bin/activate
           python3.12 -m pip install --upgrade pip
-          pip install reachy-mini
+          pip install --force-reinstall git+https://github.com/pollen-robotics/reachy_mini.git@main
 
       - name: Start Reachy Mini Lite daemon
         run: |
@@ -529,7 +529,7 @@ jobs:
         run: |
           source .venv/bin/activate
           python3.12 -m pip install --upgrade pip
-          pip install reachy-mini
+          pip install --force-reinstall git+https://github.com/pollen-robotics/reachy_mini.git@main
 
       - name: Start Reachy Mini Wireless daemon
         run: |
