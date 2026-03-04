@@ -6,7 +6,9 @@ Provides endpoints to get and set the motor control mode.
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
-from ....daemon.backend.abstract import Backend, MotorControlMode
+from reachy_mini.io.protocol import MotorControlMode
+
+from ....daemon.backend.abstract import Backend
 from ..dependencies import get_backend
 
 router = APIRouter(

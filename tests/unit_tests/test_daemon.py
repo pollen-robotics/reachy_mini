@@ -37,7 +37,7 @@ async def _start_app_server(
     while not server.started:
         await asyncio.sleep(0.05)
 
-    sockets = server.servers[0].sockets  # type: ignore[union-attr]
+    sockets = server.servers[0].sockets
     port: int = sockets[0].getsockname()[1]
 
     return app.state.daemon, server, thread, port
