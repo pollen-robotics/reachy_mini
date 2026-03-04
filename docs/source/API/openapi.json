@@ -2467,8 +2467,7 @@
         "enum": [
           "enabled",
           "disabled",
-          "gravity_compensation",
-          "error"
+          "gravity_compensation"
         ],
         "title": "MotorControlMode",
         "description": "Enum for motor control modes."

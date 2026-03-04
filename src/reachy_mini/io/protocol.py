@@ -34,7 +34,6 @@ class MotorControlMode(str, Enum):
     Enabled = "enabled"
     Disabled = "disabled"
     GravityCompensation = "gravity_compensation"
-    Error = "error"
 
 
 class DaemonState(str, Enum):
@@ -61,17 +60,6 @@ class RobotBackendStatus(BaseModel):
     last_alive: float | None
     control_loop_stats: dict[str, Any]
     error: str | None = None
-
-    @classmethod
-    def default_error(cls, error: str) -> "RobotBackendStatus":
-        """Return a new RobotBackendStatus with the error field set to the given error."""
-        return RobotBackendStatus(
-            ready=False,
-            motor_control_mode=MotorControlMode.Error,
-            last_alive=None,
-            control_loop_stats={},
-            error=error,
-        )
 
 
 class MujocoBackendStatus(BaseModel):

@@ -16,12 +16,7 @@ from reachy_mini.daemon.utils import (
     find_serial_port,
     get_ip_address,
 )
-from reachy_mini.io.protocol import (
-    DaemonState,
-    DaemonStatus,
-    MotorControlMode,
-    RobotBackendStatus,
-)
+from reachy_mini.io.protocol import DaemonState, DaemonStatus, MotorControlMode
 from reachy_mini.io.ws_server import WSServer
 from reachy_mini.tools.reflash_motors import reflash_motors_if_needed
 
@@ -470,71 +465,6 @@ class Daemon:
                 self.ws_server.publish_status(json_str)
             time.sleep(1)
 
-    async def run4ever(
-        self,
-        sim: bool = False,
-        mockup_sim: bool = False,
-        serialport: str = "auto",
-        scene: str = "empty",
-        localhost_only: bool = True,
-        wake_up_on_start: bool = True,
-        goto_sleep_on_stop: bool = True,
-        check_collision: bool = False,
-        kinematics_engine: str = "AnalyticalKinematics",
-        headless: bool = False,
-        use_audio: bool = True,
-    ) -> None:
-        """Run the Reachy Mini daemon indefinitely.
-
-        First, it starts the daemon, then it keeps checking the status and allows for graceful shutdown on user interrupt (Ctrl+C).
-
-        Args:
-            sim (bool): If True, run in simulation mode using Mujoco. Defaults to False.
-            mockup_sim (bool): If True, run in lightweight simulation mode (no MuJoCo). Defaults to False.
-            serialport (str): Serial port for real motors. Defaults to "auto", which will try to find the port automatically.
-            scene (str): Name of the scene to load in simulation mode ("empty" or "minimal"). Defaults to "empty".
-            localhost_only (bool): If True, restrict the server to localhost only clients. Defaults to True.
-            wake_up_on_start (bool): If True, wake up Reachy Mini on start. Defaults to True.
-            goto_sleep_on_stop (bool): If True, put Reachy Mini to sleep on stop. Defaults to True
-            check_collision (bool): If True, enable collision checking. Defaults to False.
-            kinematics_engine (str): Kinematics engine to use. Defaults to "AnalyticalKinematics".
-            headless (bool): If True, run Mujoco in headless mode (no GUI). Defaults to False.
-            use_audio (bool): If True, enable audio. Defaults to True.
-
-        """
-        await self.start(
-            sim=sim,
-            mockup_sim=mockup_sim,
-            serialport=serialport,
-            scene=scene,
-            localhost_only=localhost_only,
-            wake_up_on_start=wake_up_on_start,
-            check_collision=check_collision,
-            kinematics_engine=kinematics_engine,
-            headless=headless,
-            use_audio=use_audio,
-        )
-
-        if self._status.state == DaemonState.RUNNING:
-            try:
-                self.logger.info("Daemon is running. Press Ctrl+C to stop.")
-                while self.backend_run_thread is not None and self.backend_run_thread.is_alive():
-                    self.logger.info(f"Daemon status: {self.status()}")
-                    for _ in range(10):
-                        if self.backend_run_thread is not None:
-                            self.backend_run_thread.join(timeout=1.0)
-                else:
-                    self.logger.error("Backend thread has stopped unexpectedly.")
-                    self._status.state = DaemonState.ERROR
-            except KeyboardInterrupt:
-                self.logger.warning("Daemon interrupted by user.")
-            except Exception as e:
-                self.logger.error(f"An error occurred: {e}")
-                self._status.state = DaemonState.ERROR
-                self._status.error = str(e)
-
-        await self.stop(goto_sleep_on_stop)
-
     def _setup_backend(
         self,
         wireless_version: bool,
@@ -568,21 +498,14 @@ class Daemon:
                 ports = find_serial_port(wireless_version=wireless_version)
 
                 if len(ports) == 0:
-                    self._status.backend_status = RobotBackendStatus.default_error(
-                        error="No Reachy Mini serial port found. Check USB connection and permissions. Or directly specify the serial port using --serialport."
-                    )
-
                     raise RuntimeError(
                         "No Reachy Mini serial port found. "
                         "Check USB connection and permissions. "
                         "Or directly specify the serial port using --serialport."
                     )
                 elif len(ports) > 1:
-                    self._status.backend_status = RobotBackendStatus.default_error(
-                        error=f"Multiple Reachy Mini serial ports found {ports}. Please specify the serial port using --serialport."
-                    )
                     raise RuntimeError(
-                        f"Multiple Reachy Mini serial ports found {ports}."
+                        f"Multiple Reachy Mini serial ports found {ports}. "
                         "Please specify the serial port using --serialport."
                     )
 
@@ -593,21 +516,17 @@ class Daemon:
                 f"Creating RobotBackend with parameters: serialport={serialport}, check_collision={check_collision}, kinematics_engine={kinematics_engine}"
             )
 
-            try:
-                if reflash_motors_on_start:
-                    reflash_motors_if_needed(serialport, dont_light_up=True)
+            if reflash_motors_on_start:
+                reflash_motors_if_needed(serialport, dont_light_up=True)
 
-                return RobotBackend(
-                    serialport=serialport,
-                    log_level=self.log_level,
-                    check_collision=check_collision,
-                    kinematics_engine=kinematics_engine,
-                    use_audio=use_audio,
-                    wireless_version=wireless_version,
-                    hardware_config_filepath=hardware_config_filepath,
-                )
-            except RuntimeError as e:
-                self._status.backend_status = RobotBackendStatus.default_error(error=str(e))
-                raise
+            return RobotBackend(
+                serialport=serialport,
+                log_level=self.log_level,
+                check_collision=check_collision,
+                kinematics_engine=kinematics_engine,
+                use_audio=use_audio,
+                wireless_version=wireless_version,
+                hardware_config_filepath=hardware_config_filepath,
+            )
 
 
