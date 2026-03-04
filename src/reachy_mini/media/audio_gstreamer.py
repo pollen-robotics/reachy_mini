@@ -487,7 +487,7 @@ class GStreamerAudio(AudioBase):
                             )
                             return str(device_id)
 
-            self.logger.warning(f"No {device_type} audio card found.")
+            self.logger.warning(f"No Reachy Mini Audio {device_type} card found.")
         except Exception as e:
             self.logger.error(f"Error while getting audio input device: {e}")
         finally:
