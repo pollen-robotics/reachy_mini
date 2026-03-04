@@ -9,11 +9,13 @@ from typing import NamedTuple
 
 SOUND_CARD_NAMES = ["reachy mini audio", "respeaker"]
 
+
 class AudioDeviceType(Enum):
     """Type of device: INPUT or OUTPUT."""
 
     INPUT = "input"
     OUTPUT = "output"
+
 
 class AudioDevice(NamedTuple):
     """An audio device with its ID, name, and type."""
@@ -22,11 +24,17 @@ class AudioDevice(NamedTuple):
     name: str
     device_type: AudioDeviceType
 
+
 @dataclass
 class VolumeControl(ABC):
     """Base class for volume control."""
 
-    logger: logging.Logger = field(init=False, default_factory=lambda: logging.getLogger(f"[VolumeControl {platform.system()}]"))
+    logger: logging.Logger = field(
+        init=False,
+        default_factory=lambda: logging.getLogger(
+            f"[VolumeControl {platform.system()}]"
+        ),
+    )
     platform_name: str = field(init=False, default_factory=platform.system)
     input_device: AudioDevice = field(init=False)
     output_device: AudioDevice = field(init=False)
@@ -54,13 +62,13 @@ class VolumeControl(ABC):
 
 def create_volume_control() -> VolumeControl:
     """Return the correct VolumeControl subclass for the current platform.
-    
+
     Imports are lazy to avoid loading platform-specific dependencies on the wrong OS
     (e.g. CoreAudio on Linux, pycaw on macOS).
-    
+
     Returns:
         A VolumeControl instance for the current platform.
-    
+
     Raises:
         RuntimeError: If the current platform is not supported.
 
@@ -69,12 +77,15 @@ def create_volume_control() -> VolumeControl:
 
     if system == "Darwin":
         from .volume_control_macos import VolumeControlMacOS
+
         return VolumeControlMacOS()
     elif system == "Linux":
         from .volume_control_linux import VolumeControlLinux
+
         return VolumeControlLinux()
     elif system == "Windows":
         from .volume_control_windows import VolumeControlWindows
+
         return VolumeControlWindows()
     else:
         raise RuntimeError(f"Unsupported platform for volume control: {system}")

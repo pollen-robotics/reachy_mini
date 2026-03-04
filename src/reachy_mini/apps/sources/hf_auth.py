@@ -36,7 +36,8 @@ OAUTH_CLIENT_ID: Optional[str] = os.environ.get(
 )
 OAUTH_CLIENT_SECRET: Optional[str] = os.environ.get("HF_OAUTH_CLIENT_SECRET")
 OAUTH_SCOPES = os.environ.get(
-    "HF_OAUTH_SCOPES", "openid profile read-repos write-repos manage-repos inference-api"
+    "HF_OAUTH_SCOPES",
+    "openid profile read-repos write-repos manage-repos inference-api",
 )
 
 # Fixed redirect URIs (must match what's registered with HuggingFace)

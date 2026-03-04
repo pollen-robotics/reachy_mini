@@ -451,10 +451,20 @@ class GStreamerAudio(AudioBase):
                     elif platform.system() == "Linux":
                         # Linux PulseAudio / ALSA fallback
                         # Construct PulseAudio device name from udev.id
-                        udev_id = device_props.get_string("udev.id") if device_props.has_field("udev.id") else None
-                        profile = device_props.get_string("device.profile.name") if device_props.has_field("device.profile.name") else None
+                        udev_id = (
+                            device_props.get_string("udev.id")
+                            if device_props.has_field("udev.id")
+                            else None
+                        )
+                        profile = (
+                            device_props.get_string("device.profile.name")
+                            if device_props.has_field("device.profile.name")
+                            else None
+                        )
                         if udev_id and profile:
-                            prefix = "alsa_output" if device_type == "Sink" else "alsa_input"
+                            prefix = (
+                                "alsa_output" if device_type == "Sink" else "alsa_input"
+                            )
                             pa_device = f"{prefix}.{udev_id}.{profile}"
                             self.logger.debug(
                                 f"Found audio {device_type} device {name} via PulseAudio: {pa_device}"
