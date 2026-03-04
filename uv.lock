@@ -3516,7 +3516,6 @@ requires-dist = [
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "questionary" },
     { name = "reachy-mini", extras = ["examples"], marker = "extra == 'all'" },
-    { name = "reachy-mini", extras = ["gstreamer"], marker = "extra == 'all'" },
     { name = "reachy-mini", extras = ["mujoco"], marker = "extra == 'all'" },
     { name = "reachy-mini", extras = ["nn-kinematics"], marker = "extra == 'all'" },
     { name = "reachy-mini", extras = ["opencv"], marker = "extra == 'all'" },
