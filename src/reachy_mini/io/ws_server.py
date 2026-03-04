@@ -66,7 +66,8 @@ class WSServer(AbstractServer):
 
     def stop(self) -> None:
         """Stop the WebSocket server."""
-        pass
+        self._clients.clear()
+        self._loop = None
 
     def command_received_event(self) -> threading.Event:
         """Return the event that is set when a command is received."""
@@ -133,12 +134,9 @@ class WSServer(AbstractServer):
 
     async def _send_loop(self, websocket: WebSocket, queue: asyncio.Queue[str]) -> None:
         """Forward queued messages to the WebSocket client."""
-        try:
-            while True:
-                msg = await queue.get()
-                await websocket.send_text(msg)
-        except Exception:
-            pass
+        while True:
+            msg = await queue.get()
+            await websocket.send_text(msg)
 
     async def _recv_loop(self, websocket: WebSocket) -> None:
         """Receive and dispatch client messages."""
