@@ -10,6 +10,8 @@ from typing import Callable
 
 GITHUB_REPO = "pollen-robotics/reachy_mini"
 
+logger = logging.getLogger(__name__)
+
 
 def _check_uv_available() -> bool:
     """Check if uv is available on the system."""
@@ -56,24 +58,24 @@ def build_install_command(
     if python is not None:
         if _check_uv_available():
             base = ["uv", "pip", "install", "--python", str(python)]
-            print(f"Using uv with python: {python}")
+            logger.info(f"Using uv with python: {python}")
         else:
             base = [str(python.parent / "pip"), "install"]
-            print(f"Using pip from venv: {python.parent / 'pip'}")
+            logger.info(f"Using pip from venv: {python.parent / 'pip'}")
     else:
         if _check_uv_available():
             base = ["uv", "pip", "install"]
-            print("Using uv pip with current environment")
+            logger.info("Using uv pip with current environment")
         else:
             base = ["pip", "install"]
-            print("Using pip with current environment")
+            logger.info("Using pip with current environment")
 
     if verbose:
         base.append("-vvv")
 
     # --- Package, extra args & env ---
     if git_ref:
-        print(f"Installing from git ref: {git_ref}")
+        logger.info(f"Installing from git ref: {git_ref}")
         git_url = f"git+https://github.com/{GITHUB_REPO}.git@{git_ref}"
         git_package = f"reachy-mini[{extras}] @ {git_url}"
         # Step 1: force reinstall the package without the dependencies
@@ -84,11 +86,11 @@ def build_install_command(
         # Step 3: update dependencies if needed
         step3 = shlex.join(base + [f"reachy-mini[{extras}]", "--upgrade", "--upgrade-strategy", "only-if-needed"])
         cmd = f"{step1} && {step2} || {step3}"
-        print(f"Git ref install: {cmd}")
+        logger.info(f"Git ref install: {cmd}")
         extra_env: dict[str, str] = {}
         return cmd, extra_env
 
-    print(f"Installing from PyPI: {version if version else 'latest pre-release' if pre_release else 'latest stable'}")
+    logger.info(f"Installing from PyPI: {version if version else 'latest pre-release' if pre_release else 'latest stable'}")
     package = f"reachy-mini[{extras}]"
     if version:
         package = f"{package}=={version}"
@@ -100,7 +102,7 @@ def build_install_command(
     extra_env = {}
 
     cmd = shlex.join(base + [package] + extra_args)
-    print(f"Install command: {cmd}")
+    logger.info(f"Install command: {cmd}")
     return cmd, extra_env
 
 
