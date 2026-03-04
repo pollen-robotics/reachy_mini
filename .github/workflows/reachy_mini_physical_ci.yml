@@ -430,7 +430,7 @@ jobs:
         run: |
           echo "Starting Reachy Mini Simulation daemon..."
           source .venv/bin/activate
-          reachy-mini-daemon --robot-name reachy_mini_sim --sim --headless --localhost-only &
+          reachy-mini-daemon --robot-name reachy_mini_sim --sim --headless --localhost-only > daemon.log 2>&1 &
           echo $! > sim_daemon.pid
           echo "Daemon PID: $(cat sim_daemon.pid)"
 
