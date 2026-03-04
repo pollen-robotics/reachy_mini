@@ -238,6 +238,10 @@ class TaskRequest(BaseModel):
     timestamp: datetime
 
 
+AnyMessage = Annotated[AnyCommand | TaskRequest, Field(discriminator="type")]
+message_adapter: TypeAdapter[AnyMessage] = TypeAdapter(AnyMessage)
+
+
 class TaskProgress(BaseModel):
     """Task progress (broadcast to all clients)."""
 

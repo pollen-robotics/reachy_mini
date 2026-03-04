@@ -1049,13 +1049,11 @@ class Backend:
         self._send_message_to_webrtc = gst_webrtc.send_data_message
 
     def _handle_webrtc_message(self, peer_id: str, message: str) -> None:
-        data = json.loads(message)
-
         def send(resp: dict[str, Any]) -> None:
             self._send_webrtc_response(peer_id, resp)
 
         try:
-            cmd = command_adapter.validate_python(data)
+            cmd = command_adapter.validate_json(message)
         except Exception as e:
             self.logger.error(f"WebRTC invalid command: {e}")
             send({"error": f"Invalid command: {e}"})

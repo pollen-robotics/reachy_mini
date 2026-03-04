@@ -13,7 +13,6 @@ Server->Client messages are Pydantic models serialized to JSON, e.g.:
 """
 
 import asyncio
-import json
 import logging
 import threading
 from datetime import datetime
@@ -25,11 +24,12 @@ from fastapi import WebSocket, WebSocketDisconnect
 from reachy_mini.daemon.backend.abstract import Backend
 from reachy_mini.io.abstract import AbstractServer
 from reachy_mini.io.protocol import (
+    AnyCommand,
     GotoTaskRequest,
     PlayMoveTaskRequest,
     TaskProgress,
     TaskRequest,
-    command_adapter,
+    message_adapter,
 )
 from reachy_mini.io.publisher import Publisher
 
@@ -144,35 +144,32 @@ class WSServer(AbstractServer):
         """Receive and dispatch client messages."""
         while True:
             raw = await websocket.receive_text()
-            data = json.loads(raw)
 
-            if data.get("type") == "task":
-                await self._handle_task_request(data)
+            try:
+                msg = message_adapter.validate_json(raw)
+            except Exception as e:
+                logger.warning(f"WS invalid message: {e}")
+                continue
+
+            if isinstance(msg, TaskRequest):
+                await self._handle_task_request(msg)
             else:
-                self._handle_command(data)
+                self._handle_command(msg)
 
     # ------------------------------------------------------------------
     # Command handling (delegates to Backend.process_command)
     # ------------------------------------------------------------------
 
-    def _handle_command(self, data: dict[str, Any]) -> None:
-        """Parse and dispatch a command through Backend.process_command."""
-        try:
-            cmd = command_adapter.validate_python(data)
-        except Exception as e:
-            logger.warning(f"WS invalid command: {e}")
-            return
-
+    def _handle_command(self, cmd: AnyCommand) -> None:
+        """Dispatch a validated command through Backend.process_command."""
         def send(resp: dict[str, Any]) -> None:
             pass  # SDK commands are fire-and-forget
 
         self.backend.process_command(cmd, send_response=send)
         self._cmd_event.set()
 
-    async def _handle_task_request(self, data: dict[str, Any]) -> None:
+    async def _handle_task_request(self, task_req: TaskRequest) -> None:
         """Handle a task request (goto, play_move) and broadcast progress."""
-        task_req = TaskRequest.model_validate(data)
-
         if isinstance(task_req.req, GotoTaskRequest):
             req = task_req.req
 
