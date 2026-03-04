@@ -517,10 +517,11 @@ class Daemon:
         if self._status.state == DaemonState.RUNNING:
             try:
                 self.logger.info("Daemon is running. Press Ctrl+C to stop.")
-                while self.backend_run_thread.is_alive():
+                while self.backend_run_thread is not None and self.backend_run_thread.is_alive():
                     self.logger.info(f"Daemon status: {self.status()}")
                     for _ in range(10):
-                        self.backend_run_thread.join(timeout=1.0)
+                        if self.backend_run_thread is not None:
+                            self.backend_run_thread.join(timeout=1.0)
                 else:
                     self.logger.error("Backend thread has stopped unexpectedly.")
                     self._status.state = DaemonState.ERROR

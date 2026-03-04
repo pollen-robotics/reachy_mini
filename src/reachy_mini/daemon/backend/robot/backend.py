@@ -676,7 +676,7 @@ class RobotBackendStatus:
     error: str | None = None
 
     @classmethod
-    def default_error(cls, error) -> "RobotBackendStatus":
+    def default_error(cls, error: str) -> "RobotBackendStatus":
         """Return a new RobotBackendStatus with the error field set to the given error."""
         return RobotBackendStatus(
             ready=False,
