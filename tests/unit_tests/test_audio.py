@@ -40,6 +40,23 @@ def test_play_sound(backend: MediaBackend) -> None:
 
 @pytest.mark.audio
 @pytest.mark.parametrize("backend", NO_VIDEO_BACKENDS)
+def test_stop_play_sound(backend: MediaBackend) -> None:
+    """Test that stop_playing() actually stops a sound started by play_sound()."""
+    media = MediaManager(backend=backend, signalling_host=SIGNALING_HOST if backend == MediaBackend.WEBRTC else "localhost")
+    sound_file = "confused1.wav"
+    media.play_sound(sound_file)
+    print(f"Playing sound with {backend.value} backend...")
+    time.sleep(1)
+    media.stop_playing()
+    print(f"Stopped playing sound with {backend.value} backend.")
+    assert media.audio._playbin is None, "Playbin should be None after stop_playing()"
+    # Give a moment to confirm no crash after stopping
+    time.sleep(0.5)
+    media.close()
+
+
+@pytest.mark.audio
+@pytest.mark.parametrize("backend", NO_VIDEO_BACKENDS)
 def test_push_audio_sample(backend: MediaBackend) -> None:
     """Test pushing an audio sample with the given backend."""
     media = MediaManager(backend=backend, signalling_host=SIGNALING_HOST if backend == MediaBackend.WEBRTC else "localhost")
