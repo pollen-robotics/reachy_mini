@@ -64,7 +64,6 @@ all = [
     "reachy_mini[mujoco]",
     "reachy_mini[nn_kinematics]",
     "reachy_mini[placo_kinematics]",
-    "reachy_mini[gstreamer]",
     "reachy_mini[rerun]",
     "reachy_mini[wireless-version]",
     "reachy_mini[sounddevice]",
