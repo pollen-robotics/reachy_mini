@@ -22,7 +22,7 @@ def play_wav(mini: "ReachyMini", wav_path: str) -> None:
     wav_path = os.path.abspath(wav_path)
     print(f"Playing {wav_path}...")
     mini.media.play_sound(wav_path)
-    
+
     wav_duration = os.path.getsize(wav_path) / mini.media.get_output_audio_samplerate()
     time.sleep(wav_duration)
     print("Playback finished.")

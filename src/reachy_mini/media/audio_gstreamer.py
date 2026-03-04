@@ -115,17 +115,21 @@ class GStreamerAudio(AudioBase):
         id_audio_card = self._get_audio_device("Source")
 
         if id_audio_card is None:
-            audiosrc = Gst.ElementFactory.make("autoaudiosrc")  # use default mic
+            if has_reachymini_asoundrc():
+                # reachy mini wireless has a preconfigured asoundrc
+                audiosrc = Gst.ElementFactory.make("alsasrc")
+                audiosrc.set_property("device", "reachymini_audio_src")
+            else:
+                self.logger.warning(
+                    "No specific audio card found, using default audio source."
+                )
+                audiosrc = Gst.ElementFactory.make("autoaudiosrc")  # use default mic
         elif platform.system() == "Windows":
             audiosrc = Gst.ElementFactory.make("wasapi2src")
             audiosrc.set_property("device", id_audio_card)
         elif platform.system() == "Darwin":
             audiosrc = Gst.ElementFactory.make("osxaudiosrc")
             audiosrc.set_property("unique-id", id_audio_card)
-        elif has_reachymini_asoundrc():
-            # reachy mini wireless has a preconfigured asoundrc
-            audiosrc = Gst.ElementFactory.make("alsasrc")
-            audiosrc.set_property("device", "reachymini_audio_src")
         else:
             audiosrc = Gst.ElementFactory.make("pulsesrc")
             audiosrc.set_property("device", f"{id_audio_card}")
@@ -187,11 +191,17 @@ class GStreamerAudio(AudioBase):
         id_audio_card = self._get_audio_device("Sink")
 
         if id_audio_card is None:
-            audiosink = Gst.ElementFactory.make("autoaudiosink")  # use default speaker
-        elif has_reachymini_asoundrc():
-            # reachy mini wireless has a preconfigured asoundrc
-            audiosink = Gst.ElementFactory.make("alsasink")
-            audiosink.set_property("device", "reachymini_audio_sink")
+            if has_reachymini_asoundrc():
+                # reachy mini wireless has a preconfigured asoundrc
+                audiosink = Gst.ElementFactory.make("alsasink")
+                audiosink.set_property("device", "reachymini_audio_sink")
+            else:
+                self.logger.warning(
+                    "No specific audio card found, using default audio sink."
+                )
+                audiosink = Gst.ElementFactory.make(
+                    "autoaudiosink"
+                )  # use default speaker
         elif platform.system() == "Windows":
             audiosink = Gst.ElementFactory.make("wasapi2sink")
             audiosink.set_property("device", id_audio_card)
@@ -477,7 +487,7 @@ class GStreamerAudio(AudioBase):
                             )
                             return str(device_id)
 
-            self.logger.warning(f"No {device_type} audio card found.")
+            self.logger.warning(f"No Reachy Mini Audio {device_type} card found.")
         except Exception as e:
             self.logger.error(f"Error while getting audio input device: {e}")
         finally:

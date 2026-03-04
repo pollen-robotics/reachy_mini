@@ -32,9 +32,11 @@ def main(backend: str) -> None:
         # Wait to actually get an audio sample
         print("Waiting for the microphone to be ready...")
         start_time = time.time()
-        while mini.media.get_audio_sample() is None and time.time() - start_time < TIMEOUT:
+        while (
+            mini.media.get_audio_sample() is None and time.time() - start_time < TIMEOUT
+        ):
             time.sleep(0.005)
-        
+
         if time.time() - start_time >= TIMEOUT:
             print(f"Timeout: the microphone did not respond in {TIMEOUT} seconds.")
             return
