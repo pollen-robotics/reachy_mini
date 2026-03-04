@@ -115,6 +115,7 @@ exclude = [
     "conftest.py",
     "src/reachy_mini_dashboard/*",
     "tests/*",
+    "docs/notebooks/*",
 ]
 lint.extend-select = ["I", "D"]
 lint.ignore = [
