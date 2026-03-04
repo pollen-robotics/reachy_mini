@@ -61,8 +61,12 @@ def build_install_command(
             base = [str(python.parent / "pip"), "install"]
             print(f"Using pip from venv: {python.parent / 'pip'}")
     else:
-        base = ["pip", "install"]
-        print("Using current environment pip")
+        if _check_uv_available():
+            base = ["uv", "pip", "install"]
+            print("Using uv pip with current environment")
+        else:
+            base = ["pip", "install"]
+            print("Using pip with current environment")
 
     if verbose:
         base.append("-vvv")
