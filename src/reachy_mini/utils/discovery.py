@@ -43,7 +43,8 @@ def _get_local_ip() -> str:
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         try:
             s.connect(("224.0.0.1", 0))
-            return s.getsockname()[0]
+            ip: str = s.getsockname()[0]
+            return ip
         finally:
             s.close()
     except OSError:
