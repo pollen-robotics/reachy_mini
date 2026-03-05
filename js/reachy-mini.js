@@ -578,7 +578,18 @@ export class ReachyMini extends EventTarget {
      */
     setAudioMuted(muted) {
         this._audioMuted = muted;
-        if (this._videoElement) this._videoElement.muted = muted;
+        if (this._videoElement) {
+            this._videoElement.muted = muted;
+            // When unmuting, flush the stale audio buffer by toggling the
+            // audio track off/on.  This forces the browser to resync to the
+            // live edge instead of playing seconds-old buffered audio.
+            if (!muted && this._videoElement.srcObject) {
+                for (const t of this._videoElement.srcObject.getAudioTracks()) {
+                    t.enabled = false;
+                    t.enabled = true;
+                }
+            }
+        }
     }
 
     /**
