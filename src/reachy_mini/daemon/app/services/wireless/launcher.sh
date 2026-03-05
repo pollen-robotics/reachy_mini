@@ -7,4 +7,4 @@ export PATH=$PATH:/opt/uv
 sudo rfkill unblock wifi
 
 # Run Python in unbuffered mode (-u) to ensure logs are immediately forwarded to systemd
-python -u -m reachy_mini.daemon.app.main --wireless-version --no-autostart
+python -u -m reachy_mini.daemon.app.main --wireless-version --no-wake-up-on-start
