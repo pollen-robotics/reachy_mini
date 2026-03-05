@@ -17,11 +17,9 @@ from pathlib import Path
 from typing import Any, AsyncGenerator
 
 import uvicorn
-from fastapi import APIRouter, FastAPI, Request
+from fastapi import APIRouter, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
-from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
 
 from reachy_mini.apps.manager import AppManager
 from reachy_mini.daemon.app.routers import (
@@ -244,30 +242,125 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
         allow_headers=["*"],
     )
 
-    STATIC_DIR = Path(__file__).parent / "dashboard" / "static"
-    TEMPLATES_DIR = Path(__file__).parent / "dashboard" / "templates"
+    STICKER_BASE = "https://huggingface.co/spaces/tfrere/reachy-sticker-generator/resolve/main/examples"
+    COMMUNITY_BASE = "https://tfrere-reachy-sticker-generator.hf.space/api/community"
 
-    app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
-    templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
+    REDIRECT_HTML = f"""\
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reachy Mini Dashboard - Deprecated</title>
+    <style>
+        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: #fffbeb;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            position: relative;
+        }}
+        .sticker {{
+            position: absolute;
+            opacity: 0.18;
+            pointer-events: none;
+            z-index: 0;
+        }}
+        .sticker-1 {{ top: -30px; left: -20px; width: 220px; transform: rotate(-15deg); }}
+        .sticker-2 {{ bottom: -20px; right: -30px; width: 200px; transform: rotate(12deg); }}
+        .sticker-3 {{ top: 10%; right: 5%; width: 160px; transform: rotate(20deg); }}
+        .sticker-4 {{ bottom: 15%; left: 3%; width: 170px; transform: rotate(-10deg); }}
+        .sticker-5 {{ top: 50%; left: 8%; width: 140px; transform: rotate(8deg) translateY(-50%); }}
+        .sticker-6 {{ top: 5%; left: 40%; width: 130px; transform: rotate(-5deg); }}
+        .card {{
+            position: relative;
+            z-index: 1;
+            background: #fff;
+            border: 2px solid #fcd34d;
+            border-radius: 20px;
+            padding: 48px 40px;
+            max-width: 460px;
+            text-align: center;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.08);
+        }}
+        .reachy-img {{
+            width: 200px;
+            margin: 0 auto 20px;
+            filter: drop-shadow(0 4px 8px rgba(0,0,0,0.1));
+        }}
+        h1 {{
+            color: #92400e;
+            font-size: 24px;
+            margin-bottom: 12px;
+            font-weight: 700;
+        }}
+        p {{
+            color: #6b7280;
+            font-size: 15px;
+            line-height: 1.6;
+            margin-bottom: 24px;
+        }}
+        .btn {{
+            display: inline-block;
+            padding: 14px 32px;
+            font-size: 16px;
+            font-weight: 600;
+            color: #fff;
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+            border-radius: 12px;
+            text-decoration: none;
+            transition: transform 0.2s, box-shadow 0.2s;
+            box-shadow: 0 4px 12px rgba(217, 119, 6, 0.3);
+        }}
+        .btn:hover {{
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(217, 119, 6, 0.4);
+        }}
+    </style>
+</head>
+<body>
+    <img class="sticker sticker-1" src="{STICKER_BASE}/astronaut.png" alt="">
+    <img class="sticker sticker-2" src="{STICKER_BASE}/cowboy.png" alt="">
+    <img class="sticker sticker-3" src="{STICKER_BASE}/magician.png" alt="">
+    <img class="sticker sticker-4" src="{STICKER_BASE}/explorer.png" alt="">
+    <img class="sticker sticker-5" src="{STICKER_BASE}/cooking-chief.png" alt="">
+    <img class="sticker sticker-6" src="{STICKER_BASE}/hacker.png" alt="">
+
+    <div class="card">
+        <img class="reachy-img" src="{COMMUNITY_BASE}/c8afc0207cb7.svg" alt="Reachy Mini construction worker">
+        <h1>Web Dashboard Deprecated</h1>
+        <p>
+            The web dashboard has been replaced by the
+            <strong>Reachy Mini Control</strong> desktop app,
+            which offers a better experience with more features.
+        </p>
+        <a class="btn" href="https://pollen-robotics-reachy-mini.hf.space/download">
+            Download the app
+        </a>
+    </div>
+</body>
+</html>"""
 
     @app.get("/")
-    async def dashboard(request: Request) -> HTMLResponse:
-        """Render the dashboard."""
-        return templates.TemplateResponse(
-            "index.html", {"request": request, "args": args}
-        )
+    async def dashboard() -> HTMLResponse:
+        """Redirect to the desktop app download page."""
+        return HTMLResponse(content=REDIRECT_HTML)
 
     if args.wireless_version:
 
         @app.get("/settings")
-        async def settings(request: Request) -> HTMLResponse:
-            """Render the settings page."""
-            return templates.TemplateResponse("settings.html", {"request": request})
+        async def settings() -> HTMLResponse:
+            """Redirect to the desktop app download page."""
+            return HTMLResponse(content=REDIRECT_HTML)
 
         @app.get("/logs")
-        async def logs_page(request: Request) -> HTMLResponse:
-            """Render the logs page."""
-            return templates.TemplateResponse("logs.html", {"request": request})
+        async def logs_page() -> HTMLResponse:
+            """Redirect to the desktop app download page."""
+            return HTMLResponse(content=REDIRECT_HTML)
 
     return app
 
