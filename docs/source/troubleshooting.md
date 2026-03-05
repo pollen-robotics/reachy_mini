@@ -321,6 +321,30 @@ Helps prevent package conflicts during SDK installation.
 
 </details>
 
+<details>
+<summary><strong>How to access to HuggingFace services from China?</strong></summary>
+
+You can use this mirror : https://hf-mirror.com/
+
+You will need to set the following environment variable :
+```bash
+export HF_ENDPOINT=https://hf-mirror.com/
+```
+
+Note that you may also need to use mirrors to reach services like PyPI and GitHub.
+
+</details>
+
+<details>
+<summary><strong>How to make the conversation app work in China?</strong></summary>
+
+Reachy Mini conversation app relies on OpenAI gpt-realtime API, which might be inaccessible from China.
+
+The best workaround at the moment is to set up a VPN on your machine (Lite version) or on the robot (Wireless version), or on your router directly.
+
+_Approaches based on open weight models are in the works, stay tuned!_
+
+</details>
 
 
 ## 🤖 Hardware, Motors & Limits
