@@ -153,6 +153,8 @@ class GstWebRTC:
         meta_structure.set_value("name", "reachymini")
         webrtcsink.set_property("meta", meta_structure)
         webrtcsink.set_property("run-signalling-server", True)
+        webrtcsink.set_property("do-retransmission", False)
+        webrtcsink.set_property("do-fec", False)
 
         webrtcsink.connect("consumer-added", self._consumer_added)
         webrtcsink.connect("consumer-removed", self._consumer_removed)
@@ -347,7 +349,11 @@ class GstWebRTC:
             os.remove(CAMERA_SOCKET_PATH)
         unixfdsink.set_property("socket-path", CAMERA_SOCKET_PATH)
         queue_unixfd = Gst.ElementFactory.make("queue", "queue_unixfd")
+        queue_unixfd.set_property("max-size-buffers", 1)
+        queue_unixfd.set_property("leaky", 2)  # downstream — drop oldest
         queue_encoder = Gst.ElementFactory.make("queue", "queue_encoder")
+        queue_encoder.set_property("max-size-buffers", 1)
+        queue_encoder.set_property("leaky", 2)  # downstream — drop oldest
         v4l2h264enc = Gst.ElementFactory.make("v4l2h264enc")
         extra_controls_structure = Gst.Structure.new_empty("extra-controls")
         # doc: https://docs.qualcomm.com/doc/80-70014-50/topic/v4l2h264enc.html
@@ -401,13 +407,22 @@ class GstWebRTC:
 
         alsasrc = Gst.ElementFactory.make("alsasrc")
         alsasrc.set_property("device", "reachymini_audio_src")
-        # to optimize the latency, tune ~/.asoundrc file
+        alsasrc.set_property("buffer-time", 20000)  # 20ms ring buffer
+        alsasrc.set_property("latency-time", 10000)  # 10ms read granularity
 
-        if not all([alsasrc]):
+        queue_audio = Gst.ElementFactory.make("queue", "queue_audio")
+        queue_audio.set_property("max-size-buffers", 1)
+        queue_audio.set_property("max-size-time", 0)
+        queue_audio.set_property("max-size-bytes", 0)
+        queue_audio.set_property("leaky", 2)  # downstream — drop oldest
+
+        if not all([alsasrc, queue_audio]):
             raise RuntimeError("Failed to create GStreamer audio elements")
 
         pipeline.add(alsasrc)
-        alsasrc.link(webrtcsink)
+        pipeline.add(queue_audio)
+        alsasrc.link(queue_audio)
+        queue_audio.link(webrtcsink)
 
     def _get_audio_input_device(self) -> Optional[str]:
         """Use Gst.DeviceMonitor to find the audio card.
