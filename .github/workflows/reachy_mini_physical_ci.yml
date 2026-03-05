@@ -437,7 +437,7 @@ jobs:
       - name: Wait for Simulation daemon to be running
         run: |
           echo "Waiting for Simulation daemon to start..."
-          for i in {1..30}; do
+          for i in {1..60}; do
             STATUS=$(curl -s http://localhost:8000/api/daemon/status | grep -o '"state":"[^"]*"' | cut -d'"' -f4)
             echo "Attempt $i: Daemon status is '$STATUS'"
             if [ "$STATUS" = "running" ]; then
@@ -491,7 +491,7 @@ jobs:
       - name: Wait for Lite daemon to be running
         run: |
           echo "Waiting for Lite daemon to start..."
-          for i in {1..30}; do
+          for i in {1..60}; do
             STATUS=$(curl -s http://localhost:8000/api/daemon/status | grep -o '"state":"[^"]*"' | cut -d'"' -f4)
             echo "Attempt $i: Daemon status is '$STATUS'"
             if [ "$STATUS" = "running" ]; then
@@ -542,7 +542,7 @@ jobs:
       - name: Wait for Wireless daemon to be running
         run: |
           echo "Waiting for Wireless daemon to start..."
-          for i in {1..30}; do
+          for i in {1..60}; do
             STATUS=$(curl -s http://reachy-mini-ci.local:8000/api/daemon/status | grep -o '"state":"[^"]*"' | cut -d'"' -f4)
             echo "Attempt $i: Daemon status is '$STATUS'"
             if [ "$STATUS" = "running" ]; then
