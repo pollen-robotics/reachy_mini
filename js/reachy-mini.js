@@ -397,6 +397,13 @@ export class ReachyMini extends EventTarget {
             this._sessionReject = reject;
 
             this._pc.ontrack = (e) => {
+                // Cap the jitter buffer to limit worst-case live-stream latency.
+                // jitterBufferTarget (Chrome 113+) sets an upper bound — the
+                // browser still adapts within [0, target] based on network
+                // conditions, but won't grow beyond this on transient jitter.
+                if (e.receiver && 'jitterBufferTarget' in e.receiver) {
+                    e.receiver.jitterBufferTarget = 200;  // ms
+                }
                 if (e.track.kind === 'video') {
                     this._emit('videoTrack', { track: e.track, stream: e.streams[0] });
                 }
