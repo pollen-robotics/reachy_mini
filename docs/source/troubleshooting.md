@@ -342,6 +342,8 @@ Reachy Mini conversation app relies on OpenAI gpt-realtime API, which might be i
 
 The best workaround at the moment is to set up a VPN on your machine (Lite version) or on the robot (Wireless version), or on your router directly.
 
+_Approaches based on open weight models are in the works, stay tuned!_
+
 </details>
 
 
