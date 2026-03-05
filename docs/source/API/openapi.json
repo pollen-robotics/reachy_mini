@@ -1724,7 +1724,7 @@
     "/": {
       "get": {
         "summary": "Dashboard",
-        "description": "Render the dashboard.",
+        "description": "Redirect to the desktop app download page.",
         "operationId": "dashboard__get",
         "responses": {
           "200": {
