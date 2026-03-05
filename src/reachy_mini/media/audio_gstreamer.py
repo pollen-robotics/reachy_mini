@@ -442,6 +442,10 @@ class GStreamerAudio(AudioBase):
                 device_props = device.get_properties()
 
                 if snd_card_name in name:
+                    # Skip monitor/loopback sources (e.g. "Monitor of Reachy Mini Audio")
+                    if device_props and device_props.has_field("device.class"):
+                        if device_props.get_string("device.class") == "monitor":
+                            continue
                     if device_props and device_props.has_field("node.name"):
                         node_name = device_props.get_string("node.name")
                         self.logger.debug(
