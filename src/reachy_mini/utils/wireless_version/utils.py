@@ -90,7 +90,7 @@ def build_install_command(
         step3 = shlex.join(step3_args)
         cmd = f"{step1} && {step2} || {step3}"
         logger.info(f"Git ref install: {cmd}")
-        extra_env: dict[str, str] = {}
+        extra_env: dict[str, str] = {"GIT_LFS_SKIP_SMUDGE": "1"}
         return cmd, extra_env
 
     logger.info(f"Installing from PyPI: {version if version else 'latest pre-release' if pre_release else 'latest stable'}")
