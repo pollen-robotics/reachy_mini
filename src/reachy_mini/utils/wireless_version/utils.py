@@ -84,7 +84,10 @@ def build_install_command(
         check_base = [arg if arg != "install" else "check" for arg in base]
         step2 = shlex.join(check_base)
         # Step 3: update dependencies if needed
-        step3 = shlex.join(base + [f"reachy-mini[{extras}]", "--upgrade", "--upgrade-strategy", "only-if-needed"])
+        step3_args = base + [f"reachy-mini[{extras}]", "--upgrade"]
+        if not _check_uv_available():
+            step3_args += ["--upgrade-strategy", "only-if-needed"]
+        step3 = shlex.join(step3_args)
         cmd = f"{step1} && {step2} || {step3}"
         logger.info(f"Git ref install: {cmd}")
         extra_env: dict[str, str] = {}
