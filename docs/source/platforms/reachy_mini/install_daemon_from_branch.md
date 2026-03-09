@@ -16,7 +16,7 @@
 > [!NOTE]
 > This option is intended for active development and fast debugging cycles. It allows you to safely test changes without affecting the system-wide installation.
 >
-> ⚠️ Avoid installing dashboard apps with this option—any changes made to the local `reachy_mini` version won’t be propagated correctly.
+> ⚠️ Avoid installing apps with this option as any changes made to the local `reachy_mini` version won’t be propagated correctly.
 
 ### Steps:
 
@@ -57,7 +57,7 @@ Now you can modify the code in `~/reachy_mini` and test your changes without aff
 ## Option B: System-Wide Custom Installation
 
 > [!NOTE]
-> This option installs a branch build of reachy-mini as the system-wide daemon. It's better suited for thorough, end-to-end testing and supports seamless app installation from the dashboard.
+> This option installs a branch build of reachy-mini as the system-wide daemon. It's better suited for thorough, end-to-end testing and supports seamless app installation from Reachy Mini Control.
 
 ### Steps:
 

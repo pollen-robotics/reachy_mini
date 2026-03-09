@@ -20,9 +20,9 @@ Thanks to webrtc, the audio and video streams can also be accessed directly from
 
 ## Reachy Mini Lite
 
-In the case of Reachy Mini Lite, the Daemon doesn't manage the camera, microphone, and speaker. It only plays a sound during startup and exit or if moves are triggered from the dashboard.
+In the case of Reachy Mini Lite, the Daemon doesn't manage the camera, microphone, and speaker. It only plays a sound during startup and exit or if moves are triggered from Reachy Mini Control.
 
-> **Note:** Sounddevice locks the audio card when playing a sound. Keep this in mind when you use the sound from the SDK and trigger a move from the dashboard.
+> **Note:** Sounddevice locks the audio card when playing a sound. Keep this in mind when you use the sound from the SDK and trigger a move from Reachy Mini Control.
 
 [![Reachy Mini Media Daemon](https://github.com/pollen-robotics/reachy_mini/raw/develop/docs/assets/reachyminilite_media_daemon.png)]()
 
