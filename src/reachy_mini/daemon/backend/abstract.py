@@ -18,6 +18,7 @@ from abc import abstractmethod
 from pathlib import Path
 from typing import Annotated, Any, Callable, Dict, Optional
 
+import cv2
 import numpy as np
 from numpy.typing import NDArray
 from scipy.spatial.transform import Rotation as R
@@ -29,6 +30,7 @@ from reachy_mini.io.protocol import (
     GetStateCmd,
     GotoSleepCmd,
     GotoTargetCmd,
+    LookAtImageCmd,
     MockupSimBackendStatus,
     MotorControlMode,
     MujocoBackendStatus,
@@ -186,6 +188,22 @@ class Backend:
             self.audio = MediaManager(
                 backend=MediaBackend.GSTREAMER_NO_VIDEO, log_level=log_level
             )
+
+        # Camera specs for look_at_image (set via set_camera_specs)
+        self._camera_K: Optional[NDArray[np.float64]] = None
+        self._camera_D: Optional[NDArray[np.float64]] = None
+        self._camera_resolution: Optional[tuple[int, int]] = None
+
+        # Head-to-camera transform (fixed for Reachy Mini)
+        self._T_head_cam = np.eye(4)
+        self._T_head_cam[:3, 3][:] = [0.0437, 0, 0.0512]
+        self._T_head_cam[:3, :3] = np.array(
+            [
+                [0, 0, 1],
+                [-1, 0, 0],
+                [0, -1, 0],
+            ]
+        )
 
         # Guard to ensure only one play_move/goto is executed at a time (goto itself uses play_move, so we need an RLock)
         self._play_move_lock = threading.RLock()
@@ -859,6 +877,87 @@ class Backend:
         }
 
     # ------------------------------------------------------------------
+    # Camera specs for look_at_image
+    # ------------------------------------------------------------------
+
+    def set_camera_specs(
+        self,
+        K: NDArray[np.float64],
+        D: NDArray[np.float64],
+        resolution: tuple[int, int],
+    ) -> None:
+        """Set camera intrinsics for look_at_image support.
+
+        Args:
+            K: 3x3 camera intrinsic matrix.
+            D: Distortion coefficients.
+            resolution: (width, height) of the camera.
+
+        """
+        self._camera_K = K
+        self._camera_D = D
+        self._camera_resolution = resolution
+        self.logger.info(
+            f"Camera specs set: resolution={resolution}"
+        )
+
+    def _look_at_image(self, u: float, v: float, duration: float = 0.0) -> NDArray[np.float64]:
+        """Compute and optionally apply head pose to look at pixel (u, v).
+
+        Args:
+            u: Horizontal pixel coordinate.
+            v: Vertical pixel coordinate.
+            duration: Movement duration in seconds. 0 = immediate.
+
+        Returns:
+            The computed 4x4 head pose matrix.
+
+        """
+        if self._camera_K is None or self._camera_D is None:
+            raise RuntimeError("Camera specs not set.")
+
+        points = np.array([[[u, v]]], dtype=np.float32)
+        x_n, y_n = cv2.undistortPoints(points, self._camera_K, self._camera_D)[0, 0]
+
+        ray_cam = np.array([x_n, y_n, 1.0])
+        ray_cam /= np.linalg.norm(ray_cam)
+
+        T_world_head = self.get_current_head_pose()
+        T_world_cam = T_world_head @ self._T_head_cam
+
+        R_wc = T_world_cam[:3, :3]
+        t_wc = T_world_cam[:3, 3]
+
+        ray_world = R_wc @ ray_cam
+        P_world = t_wc + ray_world
+
+        # look_at_world: compute rotation to align head forward with target
+        target_vector = P_world / np.linalg.norm(P_world)
+        straight_head_vector = np.array([1, 0, 0])
+
+        v1 = straight_head_vector
+        v2 = target_vector
+        axis = np.cross(v1, v2)
+        axis_norm = np.linalg.norm(axis)
+        if axis_norm < 1e-8:
+            if np.dot(v1, v2) > 0:
+                rot_mat = np.eye(3)
+            else:
+                perp = np.array([0, 1, 0]) if abs(v1[0]) < 0.9 else np.array([0, 0, 1])
+                axis = np.cross(v1, perp)
+                axis /= np.linalg.norm(axis)
+                rot_mat = R.from_rotvec(np.pi * axis).as_matrix()
+        else:
+            axis = axis / axis_norm
+            angle = np.arccos(np.clip(np.dot(v1, v2), -1.0, 1.0))
+            rot_mat = R.from_rotvec(angle * axis).as_matrix()
+
+        target_head_pose = np.eye(4)
+        target_head_pose[:3, :3] = rot_mat
+
+        return target_head_pose
+
+    # ------------------------------------------------------------------
     # Transport-agnostic command processing
     # ------------------------------------------------------------------
 
@@ -912,6 +1011,24 @@ class Backend:
                     send_response, head, antennas, cmd.duration, cmd.body_yaw
                 )
             )
+
+        elif isinstance(cmd, LookAtImageCmd):
+            if not _maybe_ignore("look_at_image"):
+                try:
+                    target_pose = self._look_at_image(cmd.u, cmd.v, cmd.duration)
+                    if cmd.duration > 0:
+                        asyncio.create_task(
+                            self._async_goto(
+                                send_response, target_pose, None, cmd.duration, None
+                            )
+                        )
+                    else:
+                        self.set_target_head_pose(target_pose)
+                        send_response({"status": "ok", "command": "look_at_image"})
+                except Exception as e:
+                    send_response({"error": str(e), "command": "look_at_image"})
+            else:
+                send_response({"status": "ignored", "command": "look_at_image"})
 
         elif isinstance(cmd, WakeUpCmd):
             asyncio.create_task(self._async_wake_up(send_response))
