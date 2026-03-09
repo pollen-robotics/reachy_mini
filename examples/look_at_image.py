@@ -9,6 +9,7 @@ Note:
     Install with: pip install reachy_mini[opencv]
 
     The daemon must be running before executing this script.
+
 """
 
 # START doc_example
