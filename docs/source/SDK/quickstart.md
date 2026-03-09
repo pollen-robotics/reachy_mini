@@ -75,7 +75,7 @@ The **Daemon** is a background service that handles the low-level communication 
       ```
       > **⚠️ macOS Users:** `uv` may have compatibility issues with MuJoCo on macOS. If you encounter installation or runtime problems, it's recommended to use `pip` directly instead of `uv` for MuJoCo-related packages.
 
-✅ **Verification:** Open [http://localhost:8000](http://localhost:8000) in your browser. If you see the Reachy Dashboard, you are ready!
+✅ **Verification:** Open [http://localhost:8000/docs](http://localhost:8000/docs) in your browser. If you see the Reachy SDK API documentation, you are ready!
 
 ## 3. Your First Script
 

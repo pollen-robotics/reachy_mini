@@ -6,7 +6,7 @@ This guide covers efficient workflows for developing and testing code on the Wir
 
 - SSH access to your robot (`ssh pollen@reachy-mini.local`, password: `root`)
 - SSHFS installed on your computer (`sudo apt install sshfs` on Ubuntu/Debian)
-- Your robot's IP address (find it in the dashboard, router, or run `ifconfig` after SSH)
+- Your robot's IP address (find it in Reachy Mini Control, router, or run `ifconfig` after SSH)
 
 ## Quick Cross-Platform Options
 
@@ -81,7 +81,7 @@ fusermount -u ~/wireless_dev
 
 ## Approach B: Override Installed App Sources
 
-If you already installed an app via the dashboard and want to modify its source code directly by mounting your local files onto the robot.
+If you already installed an app via Reachy Mini Control and want to modify its source code directly by mounting your local files onto the robot.
 
 ### Step 1: Locate the installed app on the robot
 
@@ -109,7 +109,7 @@ Now edit files on your PC. Changes apply immediately when you restart the app.
 
 ## Approach C: Mount Local Source and Run Directly
 
-Similar to Approach B, but without using pip install or the dashboard. You mount your local source onto the robot and run the app directly.
+Similar to Approach B, but without using pip install or Reachy Mini Control. You mount your local source onto the robot and run the app directly.
 
 ### Step 1: Mount your local source onto the robot
 
@@ -130,7 +130,7 @@ cd /home/pollen/my_app_mount
 /venvs/apps_venv/bin/python main.py
 ```
 
-This approach is fast for testing, but you won't have the app registered in the dashboard.
+This approach is fast for testing, but you won't have the app registered in Reachy Mini Control.
 
 ## Installing a Specific Branch or Version
 

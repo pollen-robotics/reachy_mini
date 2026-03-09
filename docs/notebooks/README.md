@@ -18,7 +18,8 @@ To run the notebooks, make sure that you have a python environment with Reachy M
 pip install notebook
 ```
 
-Also, you'll need to have Reachy Mini daemon's up and running by checking the [dashboard](https://huggingface.co/docs/reachy_mini/platforms/reachy_mini/usage#1-the-dashboard-), the robot is considered ready when the toggle in the top right corner is on.
+Also, you'll need to have Reachy Mini daemon's up and running by using Reachy Mini Control. Please refer to the [installation guide](https://huggingface.co/docs/reachy_mini/platforms/reachy_mini/usage#2-installation).
+
 
 <details>
 <summary><strong>In case <code>ipykernel</code> is asked to be installed</strong></summary>
