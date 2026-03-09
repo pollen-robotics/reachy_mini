@@ -6,10 +6,8 @@ It includes methods for running the simulation, getting joint positions, and con
 
 """
 
-import json
 import logging
 import time
-from dataclasses import dataclass
 from importlib.resources import files
 from threading import Thread
 from typing import Annotated, Any
@@ -21,9 +19,15 @@ import numpy as np
 import numpy.typing as npt
 
 import reachy_mini
+from reachy_mini.io.protocol import (
+    HeadPoseMsg,
+    JointPositionsMsg,
+    MotorControlMode,
+    MujocoBackendStatus,
+)
 from reachy_mini.media.gstreamer_udp_camera import GStreamerUDPCamera
 
-from ..abstract import Backend, MotorControlMode
+from ..abstract import Backend
 from .utils import (
     get_actuator_names,
     get_joint_addr_from_name,
@@ -261,19 +265,15 @@ class MujocoBackend(Backend):
                 ):
                     if not self.is_shutting_down:
                         self.joint_positions_publisher.put(
-                            json.dumps(
-                                {
-                                    "head_joint_positions": self.current_head_joint_positions.tolist(),
-                                    "antennas_joint_positions": self.current_antenna_joint_positions.tolist(),
-                                }
-                            ).encode("utf-8")
+                            JointPositionsMsg(
+                                head_joint_positions=self.current_head_joint_positions.tolist(),
+                                antennas_joint_positions=self.current_antenna_joint_positions.tolist(),
+                            )
                         )
                         self.pose_publisher.put(
-                            json.dumps(
-                                {
-                                    "head_pose": self.get_present_head_pose().tolist(),
-                                }
-                            ).encode("utf-8")
+                            HeadPoseMsg(
+                                head_pose=self.get_present_head_pose().tolist(),
+                            )
                         )
                     self.ready.set()
 
@@ -347,12 +347,3 @@ class MujocoBackend(Backend):
         pass
 
 
-@dataclass
-class MujocoBackendStatus:
-    """Dataclass to represent the status of the Mujoco backend.
-
-    Empty for now, as the Mujoco backend does not have a specific status to report.
-    """
-
-    motor_control_mode: MotorControlMode
-    error: str | None = None

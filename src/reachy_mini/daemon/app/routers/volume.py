@@ -58,7 +58,9 @@ class TestSoundResponse(BaseModel):
 # ---- Helpers ----
 
 
-def _read_volume(getter: Callable[[], int], vc: VolumeControl, device_name: str, error_detail: str) -> VolumeResponse:
+def _read_volume(
+    getter: Callable[[], int], vc: VolumeControl, device_name: str, error_detail: str
+) -> VolumeResponse:
     """Read a volume value and return a VolumeResponse or raise on failure."""
     volume = getter()
     if volume < 0:
@@ -66,7 +68,13 @@ def _read_volume(getter: Callable[[], int], vc: VolumeControl, device_name: str,
     return VolumeResponse(volume=volume, platform=vc.platform_name, device=device_name)
 
 
-def _write_volume(setter: Callable[[int], bool], volume: int, vc: VolumeControl, device_name: str, error_detail: str) -> VolumeResponse:
+def _write_volume(
+    setter: Callable[[int], bool],
+    volume: int,
+    vc: VolumeControl,
+    device_name: str,
+    error_detail: str,
+) -> VolumeResponse:
     """Write a volume value and return a VolumeResponse or raise on failure."""
     if not setter(volume):
         raise HTTPException(status_code=500, detail=error_detail)
@@ -80,7 +88,9 @@ def _write_volume(setter: Callable[[int], bool], volume: int, vc: VolumeControl,
 async def get_volume() -> VolumeResponse:
     """Get the current output volume level."""
     vc = _get_volume_control()
-    return _read_volume(vc.get_output_volume, vc, vc.output_device.name, "Failed to get volume")
+    return _read_volume(
+        vc.get_output_volume, vc, vc.output_device.name, "Failed to get volume"
+    )
 
 
 @router.post("/set")
@@ -90,7 +100,13 @@ async def set_volume(
 ) -> VolumeResponse:
     """Set the output volume level and play a test sound."""
     vc = _get_volume_control()
-    response = _write_volume(vc.set_output_volume, volume_req.volume, vc, vc.output_device.name, "Failed to set volume")
+    response = _write_volume(
+        vc.set_output_volume,
+        volume_req.volume,
+        vc,
+        vc.output_device.name,
+        "Failed to set volume",
+    )
 
     daemon = getattr(request.app.state, "daemon", None)
     backend: Backend | None = daemon.backend if daemon is not None else None
@@ -141,11 +157,19 @@ async def play_test_sound(backend: Backend = Depends(get_backend)) -> TestSoundR
 async def get_microphone_volume() -> VolumeResponse:
     """Get the current microphone input volume level."""
     vc = _get_volume_control()
-    return _read_volume(vc.get_input_volume, vc, vc.input_device.name, "Failed to get microphone volume")
+    return _read_volume(
+        vc.get_input_volume, vc, vc.input_device.name, "Failed to get microphone volume"
+    )
 
 
 @router.post("/microphone/set")
 async def set_microphone_volume(volume_req: VolumeRequest) -> VolumeResponse:
     """Set the microphone input volume level."""
     vc = _get_volume_control()
-    return _write_volume(vc.set_input_volume, volume_req.volume, vc, vc.input_device.name, "Failed to set microphone volume")
+    return _write_volume(
+        vc.set_input_volume,
+        volume_req.volume,
+        vc,
+        vc.input_device.name,
+        "Failed to set microphone volume",
+    )

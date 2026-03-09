@@ -14,15 +14,12 @@ To restart your robot, press OFF, wait 5 seconds, then press ON. This simple pro
 
 **How to update the software:**
 
-- **If you are using the dashboard in a web browser**  
-  Open `Settings`, then click **Check for updates**.  
-  ![Update](https://github.com/pollen-robotics/reachy_mini/raw/develop/docs/assets/update.png)
-- **If you are using the new dashboard/app**  
-  Since 0.8.5 of the app, 
+- **If you are using Reachy Mini Control**
+  From the "⚙️" settings tab, "Check for updates". If an update is available, click on "Update now".
 - **If you are using a cloned repository**  
   Make sure you are either:
   - On the latest tagged release, or
-  - Up to date with the `develop` branch (`git pull`).
+  - Up to date with the `main` branch (`git pull`).
 
 **Wireless Reachy Mini**: run `reachyminios_check` to make sure everything is fine (see [Get Started](./platforms/reachy_mini/get_started.md))  
 
@@ -171,7 +168,7 @@ Wireless units do not expose the robot over USB the way the Lite version does, s
 Instead:
 
 - Join the robot to your Wi-Fi network and use the SDK client on your laptop to control it remotely.
-- If you want to run code directly on the embedded Raspberry Pi, SSH in and execute your scripts there (this is what the Dashboard does after you publish/install an app).
+- If you want to run code directly on the embedded Raspberry Pi, SSH in and execute your scripts there (this is what Reachy Mini Control does after you publish/install an app).
 - For a tethered link, use a USB-C-to-Ethernet adapter plus an Ethernet cable—this simply replaces Wi-Fi with wired Ethernet.
 
 </details>
@@ -238,7 +235,7 @@ You do not need to install them.
 
 
 
-## 🔌 Connection & Dashboard
+## 🔌 Connection & Reachy Mini Control
 
 <details>
 <summary><strong>How do I connect the robot to Wi-Fi?</strong></summary>
@@ -251,33 +248,6 @@ See the [Reachy Mini Wireless guide](./platforms/reachy_mini/get_started.md) for
 <summary><strong>How do I reset the Wi-Fi hotspot?</strong></summary>
 
 If you need to reset the robot's Wi-Fi hotspot (for example, if you can't connect or want to change the network), follow the instructions in the [Wi-Fi Reset Guide](./platforms/reachy_mini/reset.md).
-
-</details>
-
-<details>
-<summary><strong>The dashboard at http://localhost:8000 doesn't work.</strong></summary>
-
-1. **Check browser permissions**: Ensure your browser can access local networks.  On _macOS_, these permissions are found in System Settings → Privacy & Security → Local Network.
-
-2. **For Wireless Reachy Mini**: Ensure both your computer and the robot are connected to the **same network**, then verify connectivity by running the following command in your terminal:
-```bash
-ping reachy-mini
-```
-
-3. **For Lite Reachy Mini**: Perform these checks.
-- _Virtual Environment:_ Ensure you are running inside your virtual environment (`.venv`, `reachy_mini_env`,...).
-- _SDK Update:_ Ensure you have the latest version.
-
-With `pip`, run :
-```bash
-pip install -U reachy-mini
-```
-With `uv`, run :
-```bash
-uv pip install -U reachy-mini
-```
-
-- _Daemon:_ Make sure the daemon `reachy-mini-daemon` is running in a terminal.
 
 </details>
 
@@ -321,6 +291,30 @@ Helps prevent package conflicts during SDK installation.
 
 </details>
 
+<details>
+<summary><strong>How to access to HuggingFace services from China?</strong></summary>
+
+You can use this mirror : https://hf-mirror.com/
+
+You will need to set the following environment variable :
+```bash
+export HF_ENDPOINT=https://hf-mirror.com/
+```
+
+Note that you may also need to use mirrors to reach services like PyPI and GitHub.
+
+</details>
+
+<details>
+<summary><strong>How to make the conversation app work in China?</strong></summary>
+
+Reachy Mini conversation app relies on OpenAI gpt-realtime API, which might be inaccessible from China.
+
+The best workaround at the moment is to set up a VPN on your machine (Lite version) or on the robot (Wireless version), or on your router directly.
+
+_Approaches based on open weight models are in the works, stay tuned!_
+
+</details>
 
 
 ## 🤖 Hardware, Motors & Limits
@@ -488,9 +482,9 @@ Check the [Hugging Face Tutorial](https://huggingface.co/blog/pollen-robotics/ma
 
 </details>
 
-<details><summary><strong>Is installing apps directly from the dashboard supported?</strong></summary>
+<details><summary><strong>Is installing apps directly from Reachy Mini Control supported?</strong></summary>
 
-Sure! You can install apps directly from your Dashboard if they’re native, or add them to your favourites if they’re web-based.
+Sure! You can install apps directly from Reachy Mini Control if they’re native, or add them to your favourites if they’re web-based.
 
 </details>
 
@@ -527,7 +521,7 @@ Yes, via MuJoCo. It is still a work in progress, but you can run code with the `
 <details>
 <summary><strong>How do I debug an app on the Wireless?</strong></summary>
 
-SSH into the embedded computer, clone (or copy) your app, and run it manually. This reproduces what the dashboard does when launching your app.
+SSH into the embedded computer, clone (or copy) your app, and run it manually. This reproduces what Reachy Mini Control does when launching your app.
 
 ```bash
 ssh pollen@reachy-mini.local
@@ -596,7 +590,7 @@ You can check that the motor control loop runs correctly by checking the daemon 
 mini = ReachyMini()
 print(mini.client.get_status())
 ```
-- via the dashboard API at `http://localhost:8000/docs` on a lite and `http://reachy-mini.local:8000/docs` for the wireless (look for `/api/daemon/status` endpoint)
+- via the REST API at `http://localhost:8000/docs` on a Lite and `http://reachy-mini.local:8000/docs` for the Wireless (look for `/api/daemon/status` endpoint)
 
 You should see values around 50Hz (~20ms period): 
 ```python

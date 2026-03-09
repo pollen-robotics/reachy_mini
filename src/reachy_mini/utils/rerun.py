@@ -49,8 +49,9 @@ class Rerun:
         self.logger.setLevel(reachymini.logger.getEffectiveLevel())
 
         self._robot_ip = "localhost"
-        if self._reachymini.client.get_status()["wireless_version"]:
-            self._robot_ip = self._reachymini.client.get_status()["wlan_ip"]
+        status = self._reachymini.client.get_status()
+        if status.wireless_version and status.wlan_ip:
+            self._robot_ip = status.wlan_ip
 
         self.recording = rr.get_global_data_recording()
 

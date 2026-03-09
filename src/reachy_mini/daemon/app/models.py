@@ -8,7 +8,7 @@ from numpy.typing import NDArray
 from pydantic import BaseModel
 from scipy.spatial.transform import Rotation as R
 
-from reachy_mini.daemon.backend.abstract import MotorControlMode
+from reachy_mini.io.protocol import MotorControlMode
 
 
 class Matrix4x4Pose(BaseModel):

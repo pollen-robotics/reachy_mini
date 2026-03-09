@@ -60,8 +60,7 @@ try:
 except ImportError as e:
     raise ImportError(
         "The 'gi' module is required for GStreamerAudio but could not be imported. \
-        Please check the gstreamer installation. \
-        uv pip install --upgrade --index-url https://gitlab.freedesktop.org/api/v4/projects/1340/packages/pypi/simple gstreamer==1.28.0"
+        Please check the gstreamer installation."
     ) from e
 
 gi.require_version("Gst", "1.0")
@@ -94,6 +93,7 @@ class GStreamerAudio(AudioBase):
             GLib.PRIORITY_DEFAULT, self._on_bus_message, self._loop
         )
 
+        self._playbin: Optional[Gst.Element] = None
         self._pipeline_playback = Gst.Pipeline.new("audio_player")
         self._appsrc: Optional[GstApp] = None
         self._init_pipeline_playback(self._pipeline_playback)
@@ -116,17 +116,21 @@ class GStreamerAudio(AudioBase):
         id_audio_card = self._get_audio_device("Source")
 
         if id_audio_card is None:
-            audiosrc = Gst.ElementFactory.make("autoaudiosrc")  # use default mic
+            if has_reachymini_asoundrc():
+                # reachy mini wireless has a preconfigured asoundrc
+                audiosrc = Gst.ElementFactory.make("alsasrc")
+                audiosrc.set_property("device", "reachymini_audio_src")
+            else:
+                self.logger.warning(
+                    "No specific audio card found, using default audio source."
+                )
+                audiosrc = Gst.ElementFactory.make("autoaudiosrc")  # use default mic
         elif platform.system() == "Windows":
             audiosrc = Gst.ElementFactory.make("wasapi2src")
             audiosrc.set_property("device", id_audio_card)
         elif platform.system() == "Darwin":
             audiosrc = Gst.ElementFactory.make("osxaudiosrc")
             audiosrc.set_property("unique-id", id_audio_card)
-        elif has_reachymini_asoundrc():
-            # reachy mini wireless has a preconfigured asoundrc
-            audiosrc = Gst.ElementFactory.make("alsasrc")
-            audiosrc.set_property("device", "reachymini_audio_src")
         else:
             audiosrc = Gst.ElementFactory.make("pulsesrc")
             audiosrc.set_property("device", f"{id_audio_card}")
@@ -188,11 +192,17 @@ class GStreamerAudio(AudioBase):
         id_audio_card = self._get_audio_device("Sink")
 
         if id_audio_card is None:
-            audiosink = Gst.ElementFactory.make("autoaudiosink")  # use default speaker
-        elif has_reachymini_asoundrc():
-            # reachy mini wireless has a preconfigured asoundrc
-            audiosink = Gst.ElementFactory.make("alsasink")
-            audiosink.set_property("device", "reachymini_audio_sink")
+            if has_reachymini_asoundrc():
+                # reachy mini wireless has a preconfigured asoundrc
+                audiosink = Gst.ElementFactory.make("alsasink")
+                audiosink.set_property("device", "reachymini_audio_sink")
+            else:
+                self.logger.warning(
+                    "No specific audio card found, using default audio sink."
+                )
+                audiosink = Gst.ElementFactory.make(
+                    "autoaudiosink"
+                )  # use default speaker
         elif platform.system() == "Windows":
             audiosink = Gst.ElementFactory.make("wasapi2sink")
             audiosink.set_property("device", id_audio_card)
@@ -313,6 +323,9 @@ class GStreamerAudio(AudioBase):
         See AudioBase.stop_playing() for complete documentation.
         """
         self._pipeline_playback.set_state(Gst.State.NULL)
+        if self._playbin is not None:
+            self._playbin.set_state(Gst.State.NULL)
+            self._playbin = None
 
     def push_audio_sample(self, data: npt.NDArray[np.float32]) -> None:
         """Push audio data to the output device.
@@ -374,6 +387,9 @@ class GStreamerAudio(AudioBase):
             audiosink.set_property("device", f"{id_audio_card}")
             self.logger.info(f"Using audio device {id_audio_card} for playback.")
 
+        if self._playbin is not None:
+            self._playbin.set_state(Gst.State.NULL)
+
         playbin = Gst.ElementFactory.make("playbin", "player")
         if not playbin:
             self.logger.error("Failed to create playbin element")
@@ -393,6 +409,7 @@ class GStreamerAudio(AudioBase):
         if audiosink is not None:
             playbin.set_property("audio-sink", audiosink)
 
+        self._playbin = playbin
         playbin.set_state(Gst.State.PLAYING)
 
     def clear_player(self) -> None:
@@ -425,6 +442,10 @@ class GStreamerAudio(AudioBase):
                 device_props = device.get_properties()
 
                 if snd_card_name in name:
+                    # Skip monitor/loopback sources (e.g. "Monitor of Reachy Mini Audio")
+                    if device_props and device_props.has_field("device.class"):
+                        if device_props.get_string("device.class") == "monitor":
+                            continue
                     if device_props and device_props.has_field("node.name"):
                         node_name = device_props.get_string("node.name")
                         self.logger.debug(
@@ -452,10 +473,20 @@ class GStreamerAudio(AudioBase):
                     elif platform.system() == "Linux":
                         # Linux PulseAudio / ALSA fallback
                         # Construct PulseAudio device name from udev.id
-                        udev_id = device_props.get_string("udev.id") if device_props.has_field("udev.id") else None
-                        profile = device_props.get_string("device.profile.name") if device_props.has_field("device.profile.name") else None
+                        udev_id = (
+                            device_props.get_string("udev.id")
+                            if device_props.has_field("udev.id")
+                            else None
+                        )
+                        profile = (
+                            device_props.get_string("device.profile.name")
+                            if device_props.has_field("device.profile.name")
+                            else None
+                        )
                         if udev_id and profile:
-                            prefix = "alsa_output" if device_type == "Sink" else "alsa_input"
+                            prefix = (
+                                "alsa_output" if device_type == "Sink" else "alsa_input"
+                            )
                             pa_device = f"{prefix}.{udev_id}.{profile}"
                             self.logger.debug(
                                 f"Found audio {device_type} device {name} via PulseAudio: {pa_device}"
@@ -468,7 +499,7 @@ class GStreamerAudio(AudioBase):
                             )
                             return str(device_id)
 
-            self.logger.warning(f"No {device_type} audio card found.")
+            self.logger.warning(f"No Reachy Mini Audio {device_type} card found.")
         except Exception as e:
             self.logger.error(f"Error while getting audio input device: {e}")
         finally:

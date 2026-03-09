@@ -4,27 +4,10 @@ This document provides a guide to diagnose and troubleshoot common issues relate
 
 ## Reachy Mini Testbench app
 To help diagnose motor issues, we have developed the [Reachy Mini Testbench app](https://huggingface.co/spaces/pollen-robotics/reachy_mini_testbench). This app allows you to test individual motors, check their status, and identify potential problems.
-You need to install this app on the robot before using it. If you have a lite version, you will need to run the daemon without autostart in a terminal and access the dashboard, as explained below:
-<details>
-<summary>Instructions for Lite version</summary>
 
-- _Virtual Environment:_ Ensure you are running inside your virtual environment (`.venv`, `reachy_mini_env`,...).
-- _SDK Update:_ Ensure you have the latest version.
-    With `pip`, run :
-    ```bash
-    pip install -U reachy-mini
-    ```
-    With `uv`, run :
-    ```bash
-    uv pip install -U reachy-mini
-    ```
+You need to install this app using Reachy Mini Control before using it (refer to the [installation guide](https://huggingface.co/docs/reachy_mini/platforms/reachy_mini/usage#2-installation)).
 
-- _Daemon:_ Run the daemon `reachy-mini-daemon --no-autostart`
-- _Access Dashboard:_ Open your web browser and go to `http://localhost:8000/`.  
-There, you can find the Testbench app in the "Apps" section, install it then run it.
-
-
-</details>
+![Reachy Mini Testbench app](https://github.com/pollen-robotics/reachy_mini/raw/main/docs/assets/control-app-testbench.png)
 
 ## Motors typical troubleshooting process
 If you have any of the following symptoms, please follow the diagnosis steps below.

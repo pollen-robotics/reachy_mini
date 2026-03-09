@@ -22,24 +22,22 @@ Reachy Mini comes as a kit. Building it is the first step of your journey!
 Once assembled, you need to connect the robot to your Wi-Fi network.
 
 1.  **Power On:** Turn on your Reachy Mini.
-2.  **Connect to Reachy:** Wait a few moments. The robot will create a Wi-Fi network named **`reachy-mini-ap`**.
-    * **Password:** `reachy-mini`
-    * *Or scan the QR Code:*
-    
-    ![QR-Code reachy-mini-ap](https://github.com/pollen-robotics/reachy_mini/raw/develop/docs/assets/qrcode-ap.png)
-
-3.  **Configure Wi-Fi:**
-    * Open your browser and go to: **[http://reachy-mini.local:8000/settings](http://reachy-mini.local:8000/settings)**.
-    * Enter your local Wi-Fi credentials (SSID & Password) and click **"Connect"**.
-    * Wait a few moments for Reachy Mini to connect to your Wi-Fi network. The access point will disappear once connected. If the connection fails, Reachy Mini will restart the access point, and you can try again.
+2. **Download Reachy Mini Control:** If you haven't already, download and install the **Reachy Mini Control** app from the [official website](https://hf.co/reachy-mini/#/download).
+3. **Run the App:** Open **Reachy Mini Control** and click on the bottom link **"First time connecting..."**.
+![First time connecting](https://github.com/pollen-robotics/reachy_mini/raw/main/docs/assets/first-setup-wifi-1.png)
+4. **Follow the Instructions:** The app will guide you through the connection process. It will ask you to connect to the robot's Wi-Fi AP and then configure your Wi-Fi.
+![Configuring your WiFi](https://github.com/pollen-robotics/reachy_mini/raw/main/docs/assets/first-setup-wifi-2.png)
 
 ## 3. 🔄 Update System
 
 Before going further, it is highly recommended to update your robot to the latest version.
 
-1.  **Open Settings:** Go to **[http://reachy-mini.local:8000/settings](http://reachy-mini.local:8000/settings)**.
-2.  **Check for Updates:** Click the **"Check for updates"** button.
-3.  **Install:** If a new version is available, follow the on-screen instructions to install it.
+1. Connect to your robot using **Reachy Mini Control**.
+2. Once connected, click on the **"⚙️"** settings tab.
+![Settings Tab](https://github.com/pollen-robotics/reachy_mini/raw/main/docs/assets/control-app-settings.png)
+3. Go to the **System Updates** section.
+![System Update Section](https://github.com/pollen-robotics/reachy_mini/raw/main/docs/assets/control-app-update.png)
+4.  **Install:** If a new version is available, follow the on-screen instructions to install it.
 
 
 ## 4. 🕹️ Next Step: Using the Robot
@@ -47,7 +45,7 @@ Before going further, it is highly recommended to update your robot to the lates
 Now that your robot is online and up to date, you can start controlling it!
 
 👉 **[Go to the Usage Guide](usage.md)** to learn how to:
-* Access the **Dashboard**.
+* Use the **Reachy Mini Control**.
 * Install and run **Apps** (like Conversation or Games).
 * Program your Reachy with **Python**.
 

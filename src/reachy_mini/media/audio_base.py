@@ -56,6 +56,7 @@ class AudioBase(ABC):
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(log_level)
         self._respeaker: Optional[ReSpeaker] = init_respeaker_usb()
+        self._playbin = None
 
     def __del__(self) -> None:
         """Destructor to ensure resources are released."""

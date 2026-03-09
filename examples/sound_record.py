@@ -13,8 +13,8 @@ import numpy as np
 import soundfile as sf
 
 from reachy_mini import ReachyMini
-from reachy_mini.media.media_manager import MediaBackend
 
+TIMEOUT = 1
 DURATION = 5  # seconds
 OUTPUT_FILE = "recorded_audio.wav"
 
@@ -26,24 +26,28 @@ def main(backend: str) -> None:
     )
 
     with ReachyMini(log_level="INFO", media_backend=backend) as mini:
-        print(f"Recording for {DURATION} seconds...")
         audio_samples = []
-        t0 = time.time()
         mini.media.start_recording()
 
-        NB_SAMPLES = DURATION * mini.media.get_input_audio_samplerate()
-        current_nb_samples = 0
-        # make sure that we get the number of samples we want
-        # but we also set a timeout
-        while current_nb_samples < NB_SAMPLES and time.time() - t0 < DURATION + 2:
+        # Wait to actually get an audio sample
+        print("Waiting for the microphone to be ready...")
+        start_time = time.time()
+        while (
+            mini.media.get_audio_sample() is None and time.time() - start_time < TIMEOUT
+        ):
+            time.sleep(0.005)
+
+        if time.time() - start_time >= TIMEOUT:
+            print(f"Timeout: the microphone did not respond in {TIMEOUT} seconds.")
+            return
+
+        print(f"Recording for {DURATION} seconds...")
+
+        start_time = time.time()
+        while time.time() - start_time < DURATION:
             sample = mini.media.get_audio_sample()
             if sample is not None:
                 audio_samples.append(sample)
-                current_nb_samples += sample.shape[0]
-
-            if mini.media.backend == MediaBackend.DEFAULT_NO_VIDEO:
-                # we don't need to poll too fast for sounddevice backend
-                time.sleep(0.2)
 
         mini.media.stop_recording()
 

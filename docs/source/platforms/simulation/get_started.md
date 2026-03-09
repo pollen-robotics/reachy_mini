@@ -38,9 +38,11 @@ mjpython -m reachy_mini.daemon.app.main --sim
 
 > **⚠️ macOS Users:** `uv` may have compatibility issues with MuJoCo on macOS. If you encounter installation or runtime problems, it's recommended to use `pip` directly instead of `uv` for MuJoCo-related packages.
 
-## 3. Dashboard and Apps
+## 3. Reachy Mini Control and Apps
 
-You can access the Dashboard at **[http://localhost:8000](http://localhost:8000)**.
+You can use **Reachy Mini Control** to interact with the simulated robot. Simply open the app and connect to the local simulation.
+
+![Control App with local daemon](https://github.com/pollen-robotics/reachy_mini/raw/main/docs/assets/control-app-external-daemon.png)
 
 * **Apps:** You can install and run Apps! They will execute inside the simulation (e.g., the robot will move in the 3D viewer).
 

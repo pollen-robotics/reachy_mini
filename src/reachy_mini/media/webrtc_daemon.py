@@ -296,9 +296,7 @@ class GstWebRTC:
         """Handle messages from a per-peer audio playback pipeline."""
         if msg.type == Gst.MessageType.ERROR:
             err, debug = msg.parse_error()
-            self._logger.error(
-                f"Audio playback error for {peer_id}: {err} {debug}"
-            )
+            self._logger.error(f"Audio playback error for {peer_id}: {err} {debug}")
             return False
         if msg.type == Gst.MessageType.EOS:
             self._logger.info(f"Audio playback EOS for {peer_id}")
@@ -450,11 +448,21 @@ class GstWebRTC:
 
                 # Linux PulseAudio fallback
                 if device_props and platform.system() == "Linux":
-                    udev_id = device_props.get_string("udev.id") if device_props.has_field("udev.id") else None
-                    profile = device_props.get_string("device.profile.name") if device_props.has_field("device.profile.name") else None
+                    udev_id = (
+                        device_props.get_string("udev.id")
+                        if device_props.has_field("udev.id")
+                        else None
+                    )
+                    profile = (
+                        device_props.get_string("device.profile.name")
+                        if device_props.has_field("device.profile.name")
+                        else None
+                    )
                     if udev_id and profile:
                         pa_device = f"alsa_input.{udev_id}.{profile}"
-                        self._logger.debug(f"Found audio input device {name} via PulseAudio: {pa_device}")
+                        self._logger.debug(
+                            f"Found audio input device {name} via PulseAudio: {pa_device}"
+                        )
                         monitor.stop()
                         return pa_device
 

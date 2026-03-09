@@ -372,7 +372,9 @@ class AppManager:
         # Create AppInfo for reinstallation
         app_info = AppInfo(
             name=app_name,
-            description=metadata.get("cardData", {}).get("short_description", "") if metadata else "",
+            description=metadata.get("cardData", {}).get("short_description", "")
+            if metadata
+            else "",
             url=f"https://huggingface.co/spaces/{space_id}",
             source_kind=SourceKind.HF_SPACE,
             extra=metadata if metadata else {"id": space_id},

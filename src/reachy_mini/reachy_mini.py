@@ -7,7 +7,6 @@ It also includes methods for multimedia interactions like playing sounds and loo
 """
 
 import asyncio
-import json
 import logging
 import time
 from typing import Dict, List, Literal, Optional, Union, cast
@@ -15,13 +14,24 @@ from typing import Dict, List, Literal, Optional, Union, cast
 import cv2
 import numpy as np
 import numpy.typing as npt
-import zenoh
 from asgiref.sync import async_to_sync
 from scipy.spatial.transform import Rotation as R
 
 from reachy_mini.daemon.utils import daemon_check, is_local_camera_available
-from reachy_mini.io.protocol import GotoTaskRequest
-from reachy_mini.io.zenoh_client import ZenohClient
+from reachy_mini.io.protocol import (
+    AppendRecordCmd,
+    GotoTaskRequest,
+    SetAntennasCmd,
+    SetAutomaticBodyYawCmd,
+    SetBodyYawCmd,
+    SetGravityCompensationCmd,
+    SetHeadJointsCmd,
+    SetTargetCmd,
+    SetTorqueCmd,
+    StartRecordingCmd,
+    StopRecordingCmd,
+)
+from reachy_mini.io.ws_client import WSClient
 from reachy_mini.media.media_manager import MediaBackend, MediaManager
 from reachy_mini.motion.move import Move
 from reachy_mini.utils.interpolation import InterpolationTechnique, minimum_jerk
@@ -57,10 +67,17 @@ class ReachyMini:
     """Reachy Mini class for controlling a simulated or real Reachy Mini robot.
 
     Args:
+        robot_name: Name of the robot, defaults to "reachy_mini".
+        host: Hostname or IP of the daemon. Defaults to "reachy-mini.local".
+            In ``"auto"`` mode this is only used as a fallback when localhost
+            is unreachable, so the default works out of the box for local
+            development.
+        port: Port of the daemon's FastAPI server. Defaults to 8000.
         connection_mode: Select how to connect to the daemon. Use
             `"localhost_only"` to restrict connections to daemons running on
-            localhost, `"network"` to scout for daemons on the LAN, or `"auto"`
-            (default) to try localhost first then fall back to the network.
+            localhost, `"network"` to connect to a remote daemon at *host:port*,
+            or `"auto"` (default) to try localhost first then fall back to
+            *host:port*.
         spawn_daemon (bool): If True, will spawn a daemon to control the robot, defaults to False.
         use_sim (bool): If True and spawn_daemon is True, will spawn a simulated robot, defaults to True.
 
@@ -69,6 +86,8 @@ class ReachyMini:
     def __init__(
         self,
         robot_name: str = "reachy_mini",
+        host: str = "reachy-mini.local",
+        port: int = 8000,
         connection_mode: ConnectionMode = "auto",
         spawn_daemon: bool = False,
         use_sim: bool = False,
@@ -82,9 +101,14 @@ class ReachyMini:
 
         Args:
             robot_name (str): Name of the robot, defaults to "reachy_mini".
+            host (str): Hostname or IP of the daemon. Defaults to
+                "reachy-mini.local".  In ``"auto"`` mode (the default) the
+                client first tries ``localhost``; *host* is only used as a
+                fallback or when *connection_mode* is ``"network"``.
+            port (int): Port of the daemon's FastAPI server. Defaults to 8000.
             connection_mode: `"auto"` (default), `"localhost_only"` or `"network"`.
                 `"auto"` will first try daemons on localhost and fall back to
-                network discovery if no local daemon responds.
+                *host:port* if no local daemon responds.
             localhost_only (Optional[bool]): Deprecated alias for the connection
                 mode. Set `False` to search for network daemons. Will be removed
                 in a future release.
@@ -103,6 +127,8 @@ class ReachyMini:
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(log_level)
         self.robot_name = robot_name
+        self.host = host
+        self.port = port
         daemon_check(spawn_daemon, use_sim)
         normalized_mode = self._normalize_connection_mode(
             connection_mode, localhost_only
@@ -113,6 +139,7 @@ class ReachyMini:
         self.set_automatic_body_yaw(automatic_body_yaw)
         self._last_head_pose: Optional[npt.NDArray[np.float64]] = None
         self.is_recording = False
+        self._move_cancelled = False
 
         self.T_head_cam = np.eye(4)
         self.T_head_cam[:3, 3][:] = [0.0437, 0, 0.0512]
@@ -162,7 +189,7 @@ class ReachyMini:
             - 'temperature': float in °C
 
         Note:
-            - Data is cached from the last Zenoh update at 50Hz
+            - Data is cached from the last update at 50Hz
             - Quaternion is in [w, x, y, z] format
 
         Example:
@@ -174,13 +201,16 @@ class ReachyMini:
             >>>     temp = imu_data['temperature']
 
         """
-        return self.client.get_current_imu_data()
+        imu_msg = self.client.get_current_imu_data()
+        if imu_msg is None:
+            return None
+        return imu_msg.model_dump(exclude={"type"})
 
     def _configure_mediamanager(
         self, media_backend: str, log_level: str
     ) -> MediaManager:
         daemon_status = self.client.get_status()
-        is_wireless = daemon_status.get("wireless_version", False)
+        is_wireless = daemon_status.wireless_version
 
         # If no_media is requested, skip all media initialization
         if media_backend.lower() == "no_media":
@@ -225,10 +255,10 @@ class ReachyMini:
                     )
 
         return MediaManager(
-            use_sim=self.client.get_status()["simulation_enabled"],
+            use_sim=daemon_status.simulation_enabled or False,
             backend=mbackend,
             log_level=log_level,
-            signalling_host=self.client.get_status()["wlan_ip"],
+            signalling_host=daemon_status.wlan_ip or "",
         )
 
     def _normalize_connection_mode(
@@ -265,24 +295,29 @@ class ReachyMini:
 
     def _initialize_client(
         self, requested_mode: ConnectionMode, timeout: float
-    ) -> tuple[ZenohClient, ConnectionMode]:
+    ) -> tuple[WSClient, ConnectionMode]:
         """Create a client according to the requested mode, adding auto fallback."""
         requested_mode = cast(ConnectionMode, requested_mode.lower())
         if requested_mode == "auto":
             try:
-                client = self._connect_single(localhost_only=True, timeout=timeout)
+                client = self._connect_single(
+                    host="localhost", port=self.port, timeout=timeout
+                )
                 selected: ConnectionMode = "localhost_only"
             except Exception as err:
                 self.logger.info(
                     "Auto connection: localhost attempt failed (%s). "
-                    "Trying network discovery.",
+                    "Trying remote host %s.",
                     err,
+                    self.host,
                 )
                 try:
-                    client = self._connect_single(localhost_only=False, timeout=timeout)
-                except (zenoh.ZError, TimeoutError):
+                    client = self._connect_single(
+                        host=self.host, port=self.port, timeout=timeout
+                    )
+                except (ConnectionError, TimeoutError):
                     raise ConnectionError(
-                        "Auto connection: both localhost and network attempts failed. "
+                        "Auto connection: both localhost and remote attempts failed. "
                         "Make sure a Reachy Mini daemon is running and accessible."
                     )
 
@@ -292,16 +327,20 @@ class ReachyMini:
 
         if requested_mode == "localhost_only":
             try:
-                client = self._connect_single(localhost_only=True, timeout=timeout)
-            except (zenoh.ZError, TimeoutError):
+                client = self._connect_single(
+                    host="localhost", port=self.port, timeout=timeout
+                )
+            except (ConnectionError, TimeoutError):
                 raise ConnectionError(
                     "Could not connect to daemon on localhost. Is the Reachy Mini daemon running?"
                 )
             selected = "localhost_only"
         else:
             try:
-                client = self._connect_single(localhost_only=False, timeout=timeout)
-            except (zenoh.ZError, TimeoutError):
+                client = self._connect_single(
+                    host=self.host, port=self.port, timeout=timeout
+                )
+            except (ConnectionError, TimeoutError):
                 raise ConnectionError(
                     "Network connection attempt failed. "
                     "Make sure a Reachy Mini daemon is running and accessible."
@@ -311,9 +350,9 @@ class ReachyMini:
         self.logger.info("Connection mode selected: %s", selected)
         return client, selected
 
-    def _connect_single(self, localhost_only: bool, timeout: float) -> ZenohClient:
-        """Connect once with the requested tunneling mode and guard cleanup."""
-        client = ZenohClient(self.robot_name, localhost_only)
+    def _connect_single(self, host: str, port: int, timeout: float) -> WSClient:
+        """Connect once with the requested host/port and guard cleanup."""
+        client = WSClient(host, port)
         client.wait_for_connection(timeout=timeout)
         return client
 
@@ -721,24 +760,24 @@ class ReachyMini:
             record (Optional[Dict]): If provided, the command will be logged with the given record data.
 
         """
-        cmd = {}
-
         if head_joint_positions is not None:
             assert len(head_joint_positions) == 7, (
                 f"Head joint positions must have length 7, got {head_joint_positions}."
             )
-            cmd["head_joint_positions"] = list(head_joint_positions)
+            self.client.send_command(
+                SetHeadJointsCmd(joints=list(head_joint_positions))
+            )
 
         if antennas_joint_positions is not None:
             assert len(antennas_joint_positions) == 2, "Antennas must have length 2."
-            cmd["antennas_joint_positions"] = list(antennas_joint_positions)
+            self.client.send_command(
+                SetAntennasCmd(antennas=list(antennas_joint_positions))
+            )
 
-        if not cmd:
+        if head_joint_positions is None and antennas_joint_positions is None:
             raise ValueError(
                 "At least one of head_joint_positions or antennas must be provided."
             )
-
-        self.client.send_command(json.dumps(cmd))
 
     def set_target_head_pose(self, pose: npt.NDArray[np.float64]) -> None:
         """Set the head pose to a specific 4x4 matrix.
@@ -751,23 +790,18 @@ class ReachyMini:
             ValueError: If the shape of the pose is not (4, 4).
 
         """
-        cmd = {}
-
         if pose is not None:
             assert pose.shape == (
                 4,
                 4,
             ), f"Head pose should be a 4x4 matrix, got {pose.shape}."
-            cmd["head_pose"] = pose.tolist()
+            self.client.send_command(SetTargetCmd(head=pose.flatten().tolist()))
         else:
             raise ValueError("Pose must be provided as a 4x4 matrix.")
 
-        self.client.send_command(json.dumps(cmd))
-
     def set_target_antenna_joint_positions(self, antennas: List[float]) -> None:
         """Set the target joint positions of the antennas."""
-        cmd = {"antennas_joint_positions": antennas}
-        self.client.send_command(json.dumps(cmd))
+        self.client.send_command(SetAntennasCmd(antennas=antennas))
 
     def set_target_body_yaw(self, body_yaw: float) -> None:
         """Set the target body yaw.
@@ -776,19 +810,18 @@ class ReachyMini:
             body_yaw (float): The yaw angle of the body in radians.
 
         """
-        cmd = {"body_yaw": body_yaw}
-        self.client.send_command(json.dumps(cmd))
+        self.client.send_command(SetBodyYawCmd(body_yaw=body_yaw))
 
     def start_recording(self) -> None:
         """Start recording data."""
-        self.client.send_command(json.dumps({"start_recording": True}))
+        self.client.send_command(StartRecordingCmd())
         self.is_recording = True
 
     def stop_recording(
         self,
     ) -> Optional[List[Dict[str, float | List[float] | List[List[float]]]]]:
         """Stop recording data and return the recorded data."""
-        self.client.send_command(json.dumps({"stop_recording": True}))
+        self.client.send_command(StopRecordingCmd())
         self.is_recording = False
         if not self.client.wait_for_recorded_data(timeout=5):
             raise RuntimeError("Daemon did not provide recorded data in time!")
@@ -809,7 +842,7 @@ class ReachyMini:
             raise ValueError("Record must be a dictionary.")
 
         # Send the record data to the backend
-        self.client.send_command(json.dumps({"set_target_record": record}))
+        self.client.send_command(AppendRecordCmd(record=record))
 
     def enable_motors(self, ids: List[str] | None = None) -> None:
         """Enable the motors.
@@ -834,24 +867,34 @@ class ReachyMini:
         self._set_torque(False, ids=ids)
 
     def _set_torque(self, on: bool, ids: List[str] | None = None) -> None:
-        self.client.send_command(json.dumps({"torque": on, "ids": ids}))
+        self.client.send_command(SetTorqueCmd(on=on, ids=ids))
 
     def enable_gravity_compensation(self) -> None:
         """Enable gravity compensation for the head motors."""
-        self.client.send_command(json.dumps({"gravity_compensation": True}))
+        self.client.send_command(SetGravityCompensationCmd(enabled=True))
 
     def disable_gravity_compensation(self) -> None:
         """Disable gravity compensation for the head motors."""
-        self.client.send_command(json.dumps({"gravity_compensation": False}))
+        self.client.send_command(SetGravityCompensationCmd(enabled=False))
 
-    def set_automatic_body_yaw(self, body_yaw: float) -> None:
-        """Set the automatic body yaw.
+    def set_automatic_body_yaw(self, enabled: bool) -> None:
+        """Enable or disable automatic body yaw.
 
         Args:
-            body_yaw (float): The yaw angle of the body in radians.
+            enabled (bool): Whether automatic body yaw is enabled.
 
         """
-        self.client.send_command(json.dumps({"automatic_body_yaw": body_yaw}))
+        self.client.send_command(SetAutomaticBodyYawCmd(enabled=enabled))
+
+    def cancel_move(self) -> None:
+        """Cancel the currently playing move.
+
+        This will cause any running play_move or async_play_move to stop
+        at the next iteration of the playback loop. Audio is also stopped.
+        """
+        self._move_cancelled = True
+        self.media_manager.stop_playing()
+        self.logger.info("Move cancellation requested")
 
     async def async_play_move(
         self,
@@ -869,6 +912,8 @@ class ReachyMini:
             sound (bool): If True, play the sound associated with the move (if any).
 
         """
+        self._move_cancelled = False
+
         if initial_goto_duration > 0.0:
             start_head_pose, start_antennas_positions, start_body_yaw = move.evaluate(
                 0.0
@@ -887,6 +932,10 @@ class ReachyMini:
 
         t0 = time.time()
         while time.time() - t0 < move.duration:
+            if self._move_cancelled:
+                self.logger.info("Move cancelled, stopping playback")
+                break
+
             t = min(time.time() - t0, move.duration - 1e-2)
 
             head, antennas, body_yaw = move.evaluate(t)
