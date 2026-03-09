@@ -185,6 +185,140 @@ def find_camera_by_vid_pid(
     return selected_cap
 
 
+def undistort_points(
+    u: float,
+    v: float,
+    K: npt.NDArray[np.float64],
+    D: npt.NDArray[np.float64],
+    max_iterations: int = 20,
+    epsilon: float = 0.01,
+) -> Tuple[float, float]:
+    """Undistort a single pixel coordinate to normalized camera coordinates.
+
+    Pure numpy equivalent of cv2.undistortPoints(). Supports the OpenCV distortion
+    model with up to 12 coefficients (rational model + thin prism):
+        D = (k1, k2, p1, p2, k3, k4, k5, k6, s1, s2, s3, s4)
+
+    Also works with 5-coefficient models (k1, k2, p1, p2, k3) and zero-distortion.
+
+    The algorithm matches OpenCV's cvUndistortPointsInternal:
+        1. Remove camera intrinsics to get normalized distorted coordinates.
+        2. Iteratively solve for undistorted coordinates using a damped
+           fixed-point method with adaptive step size.
+
+    Args:
+        u: Horizontal pixel coordinate.
+        v: Vertical pixel coordinate.
+        K: 3x3 camera intrinsic matrix [[fx, 0, cx], [0, fy, cy], [0, 0, 1]].
+        D: Distortion coefficients array. Supports lengths 0, 4, 5, 8, 12, or 14.
+            Unused positions default to 0.
+        max_iterations: Maximum number of iterations (default 20).
+        epsilon: Convergence threshold in pixel reprojection error (default 0.01).
+
+    Returns:
+        Tuple (x_n, y_n): Normalized undistorted coordinates (on the z=1 plane).
+
+    Reference:
+        OpenCV distortion model and undistortPoints algorithm:
+        https://docs.opencv.org/4.x/d9/d0c/group__calib3d.html
+        https://github.com/opencv/opencv/blob/4.x/modules/calib3d/src/undistort.dispatch.cpp
+
+    """
+    # Extract intrinsics
+    fx = float(K[0, 0])
+    fy = float(K[1, 1])
+    cx = float(K[0, 2])
+    cy = float(K[1, 2])
+
+    # Step 1: Remove intrinsics to get normalized distorted coordinates
+    x0 = (u - cx) / fx
+    y0 = (v - cy) / fy
+
+    # Pad D to 14 elements so indexing is safe (OpenCV convention)
+    d = np.zeros(14)
+    n = min(len(D), 14)
+    d[:n] = D[:n]
+
+    # OpenCV coefficient ordering: k1=d[0], k2=d[1], p1=d[2], p2=d[3], k3=d[4],
+    # k4=d[5], k5=d[6], k6=d[7], s1=d[8], s2=d[9], s3=d[10], s4=d[11]
+
+    # Step 2: Damped fixed-point iteration matching OpenCV's algorithm.
+    # We want to find (x, y) such that distort(x, y) = (x0, y0).
+    x = x0
+    y = y0
+    alpha = 1.0  # damping factor
+    prev_error = float("inf")
+
+    for _ in range(max_iterations):
+        r2 = x * x + y * y
+
+        # icdist = (1 + k4*r2 + k5*r4 + k6*r6) / (1 + k1*r2 + k2*r4 + k3*r6)
+        # This is the inverse of the radial distortion factor.
+        numerator = 1.0 + (d[7] * r2 + d[6]) * r2 + d[5]  # k6*r2 + k5
+        numerator = numerator * r2 + 1.0  # full: 1 + k4*r2 + k5*r4 + k6*r6
+        # Recompute correctly using Horner's method:
+        numerator = 1.0 + ((d[7] * r2 + d[6]) * r2 + d[5]) * r2
+        denominator = 1.0 + ((d[4] * r2 + d[1]) * r2 + d[0]) * r2
+
+        if denominator == 0.0:
+            icdist = 1.0
+        else:
+            icdist = numerator / denominator
+
+        if icdist < 0:
+            # Distortion model is invalid at this radius, fall back to pinhole
+            return float(x0), float(y0)
+
+        # Tangential distortion
+        delta_x = (
+            2.0 * d[2] * x * y + d[3] * (r2 + 2.0 * x * x) + d[8] * r2 + d[9] * r2 * r2
+        )
+        delta_y = (
+            d[2] * (r2 + 2.0 * y * y)
+            + 2.0 * d[3] * x * y
+            + d[10] * r2
+            + d[11] * r2 * r2
+        )
+
+        # Damped fixed-point update
+        new_x = (1.0 - alpha) * x + alpha * (x0 - delta_x) * icdist
+        new_y = (1.0 - alpha) * y + alpha * (y0 - delta_y) * icdist
+
+        # Compute reprojection error to check convergence
+        # Forward-project (new_x, new_y) back to pixel coordinates
+        nr2 = new_x * new_x + new_y * new_y
+        nr4 = nr2 * nr2
+        nr6 = nr4 * nr2
+        cdist = 1.0 + d[0] * nr2 + d[1] * nr4 + d[4] * nr6
+        icdist2_den = 1.0 + d[5] * nr2 + d[6] * nr4 + d[7] * nr6
+        icdist2 = 1.0 / icdist2_den if icdist2_den != 0.0 else 1.0
+
+        a1 = 2.0 * new_x * new_y
+        a2 = nr2 + 2.0 * new_x * new_x
+        a3 = nr2 + 2.0 * new_y * new_y
+
+        xd = new_x * cdist * icdist2 + d[2] * a1 + d[3] * a2 + d[8] * nr2 + d[9] * nr4
+        yd = new_y * cdist * icdist2 + d[2] * a3 + d[3] * a1 + d[10] * nr2 + d[11] * nr4
+
+        x_proj = xd * fx + cx
+        y_proj = yd * fy + cy
+        error = ((x_proj - u) ** 2 + (y_proj - v) ** 2) ** 0.5
+
+        if error < epsilon:
+            return float(new_x), float(new_y)
+
+        if error > prev_error:
+            # Reduce step size when diverging
+            alpha *= 0.5
+        else:
+            x = new_x
+            y = new_y
+
+        prev_error = error
+
+    return float(x), float(y)
+
+
 def scale_intrinsics(
     K_original: npt.NDArray[np.float64],
     original_size: Tuple[int, int],
