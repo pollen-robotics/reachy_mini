@@ -4,15 +4,25 @@ When you click on the image, Reachy Mini will look at the point you clicked on.
 It uses OpenCV to capture video from a camera and display it, and Reachy Mini's
 look_at_image method to make the robot look at the specified point.
 
-Note: The daemon must be running before executing this script.
+Note:
+    This example requires the OpenCV optional dependency.
+    Install with: pip install reachy_mini[opencv]
+
+    The daemon must be running before executing this script.
 """
 
 # START doc_example
 
 import argparse
+import sys
 from typing import Any
 
-import cv2
+try:
+    import cv2
+except ImportError:
+    print("Error: OpenCV is required for this example but not installed.")
+    print("Install it with: pip install reachy_mini[opencv]")
+    sys.exit(1)
 
 from reachy_mini import ReachyMini
 
