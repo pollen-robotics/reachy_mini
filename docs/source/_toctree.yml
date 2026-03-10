@@ -66,6 +66,12 @@
     - local: troubleshooting/change_mic_fpc_cable
       title: Change Mic FPC Cable
   title: Help and support
+- sections:
+    - local: notebooks/0-First-Connection-and-Movement
+      title: First Connection and Movement
+    - local: notebooks/1-Basic-Media-Camera-and-Audio
+      title: Basic Media - Camera and Audio
+  title: Tutorials
 - isExpanded: false
   sections:
     - local: examples/minimal_demo
