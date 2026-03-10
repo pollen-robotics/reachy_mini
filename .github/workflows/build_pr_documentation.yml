@@ -19,3 +19,4 @@ jobs:
       pr_number: ${{ github.event.number }}
       package: reachy_mini
       custom_container: pollenrobotics/reachymini_documentation
+      convert_notebooks: true
