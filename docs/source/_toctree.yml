@@ -66,6 +66,10 @@
     - local: troubleshooting/change_mic_fpc_cable
       title: Change Mic FPC Cable
   title: Help and support
+- sections:
+    - local: sdk-tutorials
+      title: SDKTutorials
+  title: Tutorials
 - isExpanded: false
   sections:
     - local: examples/minimal_demo
