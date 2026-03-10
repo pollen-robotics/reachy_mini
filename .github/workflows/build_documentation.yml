@@ -27,6 +27,7 @@ jobs:
       commit_sha: ${{ github.sha }}
       package: reachy_mini
       custom_container: pollenrobotics/reachymini_documentation
+      convert_notebooks: true
       additional_args: >-
         ${{
           (github.event_name == 'release' && format('--version {0}', github.event.release.tag_name)) ||
