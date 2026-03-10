@@ -86,12 +86,14 @@ class DaemonStatus(BaseModel):
     desktop_app_daemon: bool
     simulation_enabled: Optional[bool]
     mockup_sim_enabled: Optional[bool]
+    no_media: bool = False
     backend_status: Optional[
         RobotBackendStatus | MujocoBackendStatus | MockupSimBackendStatus
     ]
     error: Optional[str] = None
     wlan_ip: Optional[str] = None
     version: Optional[str] = None
+
 
 # ------------------------------------------------------------------
 # Client -> Server commands
@@ -324,7 +326,12 @@ class TaskProgress(BaseModel):
 
 
 AnyServerMsg = Annotated[
-    JointPositionsMsg | HeadPoseMsg | ImuDataMsg | RecordedDataMsg | DaemonStatus | TaskProgress,
+    JointPositionsMsg
+    | HeadPoseMsg
+    | ImuDataMsg
+    | RecordedDataMsg
+    | DaemonStatus
+    | TaskProgress,
     Field(discriminator="type"),
 ]
 server_msg_adapter: TypeAdapter[AnyServerMsg] = TypeAdapter(AnyServerMsg)

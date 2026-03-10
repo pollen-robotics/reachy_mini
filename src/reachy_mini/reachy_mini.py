@@ -117,9 +117,9 @@ class ReachyMini:
             timeout (float): Timeout for the client connection, defaults to 5.0 seconds.
             automatic_body_yaw (bool): If True, the body yaw will be used to compute the IK and FK. Default is False.
             log_level (str): Logging level, defaults to "INFO".
-            media_backend (str): Use "no_media" to disable media entirely. Any other value
-                triggers auto-detection: Lite uses OpenCV, Wireless uses GStreamer (local)
-                or WebRTC (remote) based on environment.
+            media_backend (str): ``"default"`` for auto-detection (LOCAL if on the
+                same machine as the daemon, otherwise WebRTC), ``"no_media"`` to
+                skip all media, or a specific ``MediaBackend`` value name.
 
         It will try to connect to the daemon, and if it fails, it will raise an exception.
 
@@ -209,53 +209,55 @@ class ReachyMini:
     def _configure_mediamanager(
         self, media_backend: str, log_level: str
     ) -> MediaManager:
-        daemon_status = self.client.get_status()
-        is_wireless = daemon_status.wireless_version
+        """Select the right media backend and return a configured MediaManager.
 
-        # If no_media is requested, skip all media initialization
+        Decision logic (in order of priority):
+        1. User explicitly passed ``"no_media"`` → NO_MEDIA.
+        2. Daemon reports ``no_media=True`` → NO_MEDIA (daemon has no media).
+        3. The daemon's IPC camera endpoint is reachable locally → LOCAL.
+        4. Otherwise → WEBRTC (remote streaming from daemon).
+
+        If the user passes a specific backend string that maps to an enum
+        value it is honoured directly (with deprecation warnings for old
+        names handled by ``_resolve_backend``).
+        """
+        daemon_status = self.client.get_status()
+
+        # Honour explicit no_media from user or daemon
         if media_backend.lower() == "no_media":
-            self.logger.info("No media backend requested.")
+            self.logger.info("No media backend requested by user.")
             mbackend = MediaBackend.NO_MEDIA
-        else:
-            if is_wireless:
-                if is_local_camera_available():
-                    # Local client on CM4: use GStreamer to read from unix socket
-                    # This avoids WebRTC encode/decode overhead
-                    if "no_video" in media_backend.lower():
-                        mbackend = MediaBackend.GSTREAMER_NO_VIDEO
-                        self.logger.info(
-                            "Auto-detected: Wireless + local camera socket. "
-                            "Using GStreamer audio-only backend (no WebRTC overhead)."
-                        )
-                    else:
-                        mbackend = MediaBackend.GSTREAMER
-                        self.logger.info(
-                            "Auto-detected: Wireless + local camera socket. "
-                            "Using GStreamer backend (no WebRTC overhead)."
-                        )
-                else:
-                    # Remote client: use WebRTC for streaming
-                    self.logger.info(
-                        "Auto-detected: Wireless + remote client. "
-                        "Using WebRTC backend for streaming."
-                    )
-                    mbackend = MediaBackend.WEBRTC
+        elif getattr(daemon_status, "no_media", False):
+            self.logger.info(
+                "Daemon reports no_media=True — skipping media initialisation."
+            )
+            mbackend = MediaBackend.NO_MEDIA
+        elif media_backend.lower() in ("default", "auto"):
+            # Auto-detect: local IPC if available, else WebRTC
+            if is_local_camera_available():
+                self.logger.info(
+                    "Auto-detected local IPC endpoint. Using LOCAL backend."
+                )
+                mbackend = MediaBackend.LOCAL
             else:
-                # Lite version: use specified backend if compatible
-                try:
-                    mbackend = MediaBackend(media_backend.lower())
-                except ValueError:
-                    self.logger.warning(
-                        f"Invalid media backend on Lite: {media_backend}, using default backend."
-                    )
-                    mbackend = (
-                        MediaBackend.DEFAULT_NO_VIDEO
-                        if "no_video" in media_backend.lower()
-                        else MediaBackend.DEFAULT
-                    )
+                self.logger.info(
+                    "No local IPC endpoint. Using WebRTC backend for streaming."
+                )
+                mbackend = MediaBackend.WEBRTC
+        else:
+            # User specified a particular backend name — try to resolve it
+            try:
+                mbackend = MediaBackend(media_backend.lower())
+            except ValueError:
+                self.logger.warning(
+                    f"Unknown media backend '{media_backend}', falling back to auto-detect."
+                )
+                if is_local_camera_available():
+                    mbackend = MediaBackend.LOCAL
+                else:
+                    mbackend = MediaBackend.WEBRTC
 
         return MediaManager(
-            use_sim=daemon_status.simulation_enabled or False,
             backend=mbackend,
             log_level=log_level,
             signalling_host=daemon_status.wlan_ip or "",

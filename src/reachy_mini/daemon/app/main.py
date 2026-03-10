@@ -69,7 +69,7 @@ class Args:
     mockup_sim: bool = False
     scene: str = "empty"
     headless: bool = False
-    use_audio: bool = True
+    no_media: bool = False
 
     kinematics_engine: str = "AnalyticalKinematics"
     check_collision: bool = False
@@ -152,7 +152,7 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
                     mockup_sim=args.mockup_sim,
                     scene=args.scene,
                     headless=args.headless,
-                    use_audio=args.use_audio,
+                    use_audio=not args.no_media,
                     kinematics_engine=args.kinematics_engine,
                     check_collision=args.check_collision,
                     wake_up_on_start=args.wake_up_on_start,
@@ -201,6 +201,8 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
         wireless_version=args.wireless_version,
         desktop_app_daemon=args.desktop_app_daemon,
         log_level=args.log_level,
+        no_media=args.no_media,
+        use_sim=args.sim,
     )
     app.state.app_manager = AppManager(
         wireless_version=args.wireless_version,
@@ -464,11 +466,10 @@ def main() -> None:
         help="Run the daemon in headless mode (default: False).",
     )
     parser.add_argument(
-        "--deactivate-audio",
-        action="store_false",
-        dest="use_audio",
-        default=default_args.use_audio,
-        help="Deactivate audio (default: True).",
+        "--no-media",
+        action="store_true",
+        default=default_args.no_media,
+        help="Disable all media (camera, audio, WebRTC). Use if you handle media yourself.",
     )
     # Daemon options
     parser.add_argument(

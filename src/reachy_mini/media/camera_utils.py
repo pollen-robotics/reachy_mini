@@ -7,14 +7,9 @@ OpenCV or other computer vision libraries.
 
 Note:
     This module does NOT require OpenCV and contains only pure mathematical
-    operations. For camera device detection and video capture, see
-    ``reachy_mini.media.camera_opencv`` (OpenCV backend) or
-    ``reachy_mini.media.camera_gstreamer`` (GStreamer backend).
-
-Deprecation Notice:
-    The camera detection functions ``find_camera()`` and ``find_camera_by_vid_pid()``
-    have been moved to the ``OpenCVCamera`` class in ``camera_opencv.py``.
-    These functions are OpenCV-specific and are no longer available in this module.
+    operations. For camera frame reading, see
+    ``reachy_mini.media.camera_gstreamer`` (local IPC reader) or
+    ``reachy_mini.media.webrtc_client_gstreamer`` (WebRTC client).
 
 Functions:
     undistort_points: Convert distorted pixel coordinates to normalized camera coordinates.

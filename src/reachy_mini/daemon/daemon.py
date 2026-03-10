@@ -40,6 +40,8 @@ class Daemon:
         robot_name: str = "reachy_mini",
         wireless_version: bool = False,
         desktop_app_daemon: bool = False,
+        no_media: bool = False,
+        use_sim: bool = False,
     ) -> None:
         """Initialize the Reachy Mini daemon."""
         self.log_level = log_level
@@ -50,6 +52,7 @@ class Daemon:
 
         self.wireless_version = wireless_version
         self.desktop_app_daemon = desktop_app_daemon
+        self.no_media = no_media
 
         self.backend: "RobotBackend | MujocoBackend | MockupSimBackend | None" = None
         # Get package version
@@ -67,6 +70,7 @@ class Daemon:
             desktop_app_daemon=desktop_app_daemon,
             simulation_enabled=None,
             mockup_sim_enabled=None,
+            no_media=no_media,
             backend_status=None,
             error=None,
             wlan_ip=None,
@@ -76,17 +80,19 @@ class Daemon:
         self.backend_run_thread: "Thread | None" = None
         self._thread_event_publish_status = Event()
 
-        self._webrtc: Optional[Any] = (
-            None  # type GstWebRTC imported for wireless version only
-        )
-        if wireless_version:
+        self._webrtc: Optional[Any] = None  # GstWebRTC when media is enabled
+        if not no_media:
             from reachy_mini.media.webrtc_daemon import GstWebRTC
 
             try:
-                self._webrtc = GstWebRTC(log_level)
+                self._webrtc = GstWebRTC(log_level, use_sim=use_sim)
             except Exception as e:
                 self.logger.error(f"Failed to initialize WebRTC: {e}")
                 self._webrtc = None
+        else:
+            self.logger.info(
+                "Media disabled (--no-media). No camera, audio, or WebRTC."
+            )
 
     def __del__(self) -> None:
         """Destructor to ensure proper cleanup."""
@@ -148,7 +154,7 @@ class Daemon:
         check_collision: bool = False,
         kinematics_engine: str = "AnalyticalKinematics",
         headless: bool = False,
-        use_audio: bool = True,
+        use_audio: bool = True,  # kept for backward compat, overridden by no_media
         hardware_config_filepath: str | None = None,
     ) -> "DaemonState":
         """Start the Reachy Mini daemon.
@@ -186,12 +192,15 @@ class Daemon:
         if not localhost_only:
             self._status.wlan_ip = get_ip_address()
 
+        # When no_media is set, override use_audio to False
+        effective_use_audio = use_audio and not self.no_media
+
         self._start_params = {
             "sim": sim,
             "mockup_sim": mockup_sim,
             "serialport": serialport,
             "headless": headless,
-            "use_audio": use_audio,
+            "use_audio": effective_use_audio,
             "scene": scene,
             "localhost_only": localhost_only,
         }
@@ -215,7 +224,9 @@ class Daemon:
 
             self.ws_server = WSServer(backend=self.backend)
             self.ws_server.start()
-            self._thread_publish_status = Thread(target=self._publish_status, daemon=True)
+            self._thread_publish_status = Thread(
+                target=self._publish_status, daemon=True
+            )
             self._thread_publish_status.start()
 
             def backend_wrapped_run() -> None:
@@ -337,7 +348,9 @@ class Daemon:
             if self.backend_run_thread is not None:
                 self.backend_run_thread.join(timeout=5.0)
                 if self.backend_run_thread.is_alive():
-                    self.logger.warning("Backend did not stop in time, forcing shutdown.")
+                    self.logger.warning(
+                        "Backend did not stop in time, forcing shutdown."
+                    )
                     self._status.state = DaemonState.ERROR
 
             self.backend.close()
@@ -528,5 +541,3 @@ class Daemon:
                 wireless_version=wireless_version,
                 hardware_config_filepath=hardware_config_filepath,
             )
-
-

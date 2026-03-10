@@ -70,8 +70,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--backend",
         type=str,
-        choices=["default_no_video", "gstreamer_no_video", "webrtc"],
-        default="default_no_video",
+        choices=["default", "local", "webrtc"],
+        default="default",
         help="Media backend to use.",
     )
 

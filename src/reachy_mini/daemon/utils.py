@@ -8,8 +8,11 @@ import time
 import psutil
 import serial.tools.list_ports
 
-# Path to the unix socket created by WebRTC daemon for local camera access
+# Path to the unix socket created by WebRTC daemon for local camera access (Linux/macOS)
 CAMERA_SOCKET_PATH = "/tmp/reachymini_camera_socket"
+
+# Named pipe for local camera access on Windows
+CAMERA_PIPE_NAME = "reachymini_camera_pipe"
 
 
 def is_localhost(ip: str | None) -> bool:
@@ -35,18 +38,24 @@ def is_localhost(ip: str | None) -> bool:
 
 
 def is_local_camera_available() -> bool:
-    """Check if local camera access is available via the unix socket.
+    """Check if local camera access is available via IPC.
 
-    On wireless Reachy Mini, the WebRTC daemon exposes raw camera frames
-    via a unix socket at /tmp/reachymini_camera_socket. Local clients
-    (running on the CM4) can access this socket directly without going
-    through WebRTC encoding/decoding, which saves CPU and reduces latency.
+    The WebRTC daemon exposes raw camera frames via a local IPC mechanism
+    so that on-device clients can read frames without WebRTC overhead:
+    - Linux/macOS: Unix domain socket at CAMERA_SOCKET_PATH
+    - Windows: Named pipe at CAMERA_PIPE_NAME
 
     Returns:
-        True if the local camera socket exists and is accessible.
+        True if the local camera IPC endpoint exists and is accessible.
 
     """
-    return os.path.exists(CAMERA_SOCKET_PATH)
+    import platform
+
+    if platform.system() == "Windows":
+        pipe_path = f"\\\\.\\pipe\\{CAMERA_PIPE_NAME}"
+        return os.path.exists(pipe_path)
+    else:
+        return os.path.exists(CAMERA_SOCKET_PATH)
 
 
 def daemon_check(spawn_daemon: bool, use_sim: bool) -> None:

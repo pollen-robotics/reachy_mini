@@ -55,7 +55,6 @@ wireless-version = [
     "gpiozero>=2.0.0; sys_platform == 'linux'",
     "lgpio>=0.2.2.0; sys_platform == 'linux'",
 ]
-sounddevice = ["sounddevice==0.5.1", "soundfile"]
 opencv = ["opencv-python<=5.0", "cv2_enumerate_cameras>=1.2.1"]
 all = [
     "reachy_mini[examples]",
@@ -64,7 +63,6 @@ all = [
     "reachy_mini[placo_kinematics]",
     "reachy_mini[rerun]",
     "reachy_mini[wireless-version]",
-    "reachy_mini[sounddevice]",
     "reachy_mini[opencv]"
 ]
 
@@ -123,9 +121,7 @@ lint.ignore = [
 testpaths = ["tests/unit_tests"]
 markers = [
     "audio: mark test as requiring audio hardware",
-    "audio_sounddevice: mark test as requiring Sounddevice for audio",
     "video: mark test as requiring video hardware",
-    "video_opencv: mark test as requiring OpenCV for video",
     "wireless: mark test as requiring wireless Reachy Mini",
 ]
 

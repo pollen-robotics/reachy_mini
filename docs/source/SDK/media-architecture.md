@@ -1,37 +1,42 @@
 # Media Architecture
 
-Understanding the media architecture of Reachy Mini is essential for effectively utilizing its audio and visual capabilities. They operate differently based on the specific model of Reachy Mini you are using.
+Understanding the media architecture of Reachy Mini is essential for effectively utilizing its audio and visual capabilities.
 
-> **Note** : There is ongoing work to unify the media architecture across all Reachy Mini models. The information below reflects the current state as of the latest update.
+## Unified Architecture
 
-## Reachy Mini
+The daemon always manages the camera and audio hardware via its WebRTC media backend (`webrtc_daemon.py`), regardless of whether you are using a Reachy Mini (Wireless) or Reachy Mini Lite. This unification means both models work the same way:
 
-Video and audio streams can be accessed locally in the case of an embedded app, or remotely (through WebRTC protocol) with the Python SDK from a remote machine. GStreamer is used to handle this aspect.
+- The **daemon** owns the physical camera and audio devices.
+- **Local clients** (same machine) read camera frames from a local IPC endpoint and open the audio device directly via GStreamer — the `LOCAL` backend.
+- **Remote clients** stream camera + audio over WebRTC from the daemon — the `WEBRTC` backend.
+- The SDK auto-detects which backend to use based on whether the daemon's IPC endpoint is reachable.
 
-The streams are managed by the Daemon so that multiple applications can access them simultaneously. Technically, the video stream is shared between a Unix socket and a WebRTC server. The audio card is configured with `.asoundrc` to be accessible by multiple applications, under the names `reachymini_audio_src` and `reachymini_audio_sink`.
+### Daemon Side
+
+The daemon starts its media pipeline automatically unless the `--no-media` flag is passed. It:
+1. Opens the camera (platform-aware: v4l2, libcamera, DirectShow, AVFoundation, or UDP for simulation).
+2. Opens the audio device (platform-aware: PulseAudio, ALSA, WASAPI, CoreAudio).
+3. Feeds both into a WebRTC server (`webrtcsink`) for remote streaming.
+4. Exposes raw camera frames via a local IPC endpoint (`unixfdsink` on Linux/macOS, `win32ipcvideosink` on Windows).
 
 [![Reachy Mini Media Daemon](https://github.com/pollen-robotics/reachy_mini/raw/develop/docs/assets/reachymini_media_daemon.png)]()
 
+### Client Side
+
+The SDK `MediaManager` selects the backend automatically:
+
+- **LOCAL**: Used when the client runs on the same machine as the daemon. Reads camera frames from IPC and opens the audio device directly via GStreamer. No encode/decode overhead.
+- **WEBRTC**: Used when the client is remote. Streams camera + audio over WebRTC.
+- **NO_MEDIA**: Skips all media initialisation (headless operation).
+
 [![Reachy Mini Media Client](https://github.com/pollen-robotics/reachy_mini/raw/develop/docs/assets/reachymini_media_client.png)]()
 
-Thanks to webrtc, the audio and video streams can also be accessed directly from a web browser. For instance the [desktop application](../platforms/reachy_mini_lite/get_started.md#3--download-reachy-mini-control) uses this feature.
+### Web Access
 
-[![Reachy Mini Media Client](https://github.com/pollen-robotics/reachy_mini/raw/develop/docs/assets/reachymini_media_web.png)]()
+Thanks to WebRTC, the audio and video streams can also be accessed directly from a web browser. For instance the [desktop application](../platforms/reachy_mini_lite/get_started.md#3--download-reachy-mini-control) uses this feature.
 
-## Reachy Mini Lite
+[![Reachy Mini Media Web](https://github.com/pollen-robotics/reachy_mini/raw/develop/docs/assets/reachymini_media_web.png)]()
 
-In the case of Reachy Mini Lite, the Daemon doesn't manage the camera, microphone, and speaker. It only plays a sound during startup and exit or if moves are triggered from Reachy Mini Control.
-
-> **Note:** Sounddevice locks the audio card when playing a sound. Keep this in mind when you use the sound from the SDK and trigger a move from Reachy Mini Control.
-
-[![Reachy Mini Media Daemon](https://github.com/pollen-robotics/reachy_mini/raw/develop/docs/assets/reachyminilite_media_daemon.png)]()
-
-Two backends are available. The default one relies on the combination of OpenCV for the camera and sounddevice for the audio card.
-
-An experimental GStreamer backend is also available. While it is mostly tuned for Linux systems, it should work on other platforms. It requires more manual installation at the moment (see [gstreamer-installation](gstreamer-installation.md))
-
-[![Reachy Mini Media Client](https://github.com/pollen-robotics/reachy_mini/raw/develop/docs/assets/reachyminilite_media_client.png)]()
-
-## Advanced Controls 
+## Advanced Controls
 
 Please refer to the dedicated pages to fine-tune camera and microphone parameters for [Reachy Mini](../platforms/reachy_mini/media_advanced_controls.md) and [Reachy Mini Lite](../platforms/reachy_mini_lite/media_advanced_controls.md).
