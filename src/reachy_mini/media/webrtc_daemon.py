@@ -416,12 +416,30 @@ class GstWebRTC:
 
         last_source = source_elements[-1]
 
+        is_rpi = cam_path == "imx708"
+
+        # Pin the raw video format before the tee so that both branches
+        # receive a known format.  On non-RPi paths this must be a format
+        # that differs from BGR (the IPC branch output format), otherwise
+        # the IPC-branch videoconvert would run in passthrough mode and
+        # skip the FD-backed buffer re-allocation that unixfdsink requires.
+        if not is_rpi:
+            caps_raw = Gst.Caps.from_string(
+                f"video/x-raw,format=I420,"
+                f"width={self.resolution[0]},"
+                f"height={self.resolution[1]},"
+                f"framerate={self.framerate}/1"
+            )
+            capsfilter_raw = Gst.ElementFactory.make("capsfilter", "pre_tee_caps")
+            capsfilter_raw.set_property("caps", caps_raw)
+            pipeline.add(capsfilter_raw)
+            last_source.link(capsfilter_raw)
+            last_source = capsfilter_raw
+
         # --- Tee: split into IPC + WebRTC branches ---
         tee = Gst.ElementFactory.make("tee")
         pipeline.add(tee)
         last_source.link(tee)
-
-        is_rpi = cam_path == "imx708"
 
         # IPC branch: share camera with local applications
         self._build_ipc_branch(tee, pipeline, is_rpi=is_rpi)
@@ -674,6 +692,12 @@ class GstWebRTC:
         if audiosrc is None:
             self._logger.warning("No audio source available. Audio not configured.")
             return
+
+        # Prevent the audio source from becoming the pipeline clock provider.
+        # PulseAudio/PipeWire sources provide their own clock which, when
+        # selected as the pipeline clock, causes unixfdsink to stall because
+        # it cannot synchronise video buffers against the audio clock.
+        audiosrc.set_property("provide-clock", False)
 
         pipeline.add(audiosrc)
         audiosrc.link(webrtcsink)

@@ -66,3 +66,30 @@ Deprecated aliases: `"gstreamer"`, `"sounddevice_opencv"`, `"gstreamer_no_video"
 - [x] `platforms/reachy_mini_lite/media_advanced_controls.md` — remove opencv refs
 - [ ] `SDK/python-sdk.md` — update backend options (if references exist)
 - [ ] `troubleshooting.md` — update media_backend strings (if references exist)
+
+## Resolved: Audio source breaks IPC video
+
+### Root cause
+`pulsesrc` (and other PulseAudio/PipeWire audio sources) provides its own clock.
+When added to the pipeline, GStreamer selects the PulseAudio clock as the pipeline
+clock instead of the video source's clock. `unixfdsink` cannot synchronise video
+buffers against the audio clock, causing the IPC branch to stall.
+
+This was reproducible in both Python and `gst-launch-1.0` — not Python-specific.
+
+### Fix
+Set `provide-clock=false` on the audio source element in `_configure_audio()`.
+This keeps the video source (v4l2src / libcamerasrc) as the pipeline clock provider.
+
+```python
+audiosrc.set_property("provide-clock", False)
+```
+
+### Debugging journey
+1. Initially thought it was Python-specific (CLI appeared to work) — turned out
+   the CLI test was missing audio, so it wasn't a valid comparison.
+2. Tried `sync=false` on `unixfdsink` — no effect (buffers never reached the sink).
+3. Tried reordering `_configure_audio` before `_configure_video` — no effect.
+4. Tried `leaky=downstream` on queue, removing `identity`, replacing `webrtcsink`
+   with `fakesink` — none worked.
+5. Confirmed `pulsesrc provide-clock=false` fixes it in CLI, then applied to Python.
