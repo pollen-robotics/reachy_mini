@@ -317,7 +317,17 @@ Note that you may also need to use mirrors to reach services like PyPI and GitHu
 
 Reachy Mini conversation app relies on OpenAI gpt-realtime API, which might be inaccessible from China.
 
-The best workaround at the moment is to set up a VPN on your machine (Lite version) or on the robot (Wireless version), or on your router directly.
+The best workaround at the moment is to set up a VPN on your machine (Lite version) or on the robot (Wireless version), or on your router directly. **Make sure port 443 (HTTPS) is routed through the VPN**.
+
+For the Wireless version, **do not route port 22 (SSH) and 8000 (Reachy Mini daemon) through the VPN**, you won't be able to reach the robot otherwise. Once the VPN is set on the robot, you will need to restart the daemon for the changes to be effective :
+```bash
+sudo systemctl restart reachy-mini-daemon
+```
+
+Because of the VPN, the Reachy Mini web dashboard will no longer be available at http://reachy-mini.local:8000. You will need to connect to http:/<reachy_mini_ip>:8000 with <reachy_mini_ip> the IP address of the robot on your local network. To find this IP address, run the following command from a device on the same network as the robot (without VPN):
+```bash
+ping reachy-mini.local
+```
 
 _Approaches based on open weight models are in the works, stay tuned!_
 
