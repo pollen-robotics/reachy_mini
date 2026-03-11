@@ -59,7 +59,7 @@ class ReachyMiniApp(ABC):
             async def no_cache_middleware(
                 request: Request, call_next: Any
             ) -> Response:
-                response = await call_next(request)
+                response: Response = await call_next(request)
                 response.headers["Cache-Control"] = "no-store"
                 return response
 
