@@ -101,13 +101,20 @@ It is easy to fix by following this guide:
 <details>
 <summary><strong>A motor is shaky</strong></summary>
 
-This can happen if the motor's PID values are not optimal. Often, motors 10 (foot), 17 and 18 (the antennas) can exhibit slight jitters when holding position.
-These are fine "adjustments" that the motor is making, which in this case is an overcorrection.
-The good news is that you can [tune PID Control values](https://github.com/pollen-robotics/reachy_mini/tree/main/src/reachy_mini/assets/config/hardware_config.yaml#L66C1-L67C1) to calm these jitters. 
+**Antennas shaking**
 
-You can try first to reduce P to 180 on motors, 10, 17, and 18.
+This is the most common case. The antennas (motors 17 and 18) tend to shake when set to their vertical position (0°). At this angle, the gearbox backlash puts the motor in an unstable equilibrium — like an inverted pendulum. The motor constantly tries to correct its position around a point where friction is very low, which causes the oscillation.
+
+The simplest fix is to offset the antennas by a few degrees (typically 10° is enough). This lets gravity apply a small bias that takes up the mechanical play in one direction, eliminating the shaking.
+
+This is now the default behavior in Reachy Mini — see [PR #952](https://github.com/pollen-robotics/reachy_mini/pull/952) for details.
+
+**Tuning PID values**
+
+Another option is to [tune PID Control values](https://github.com/pollen-robotics/reachy_mini/tree/main/src/reachy_mini/assets/config/hardware_config.yaml#L66C1-L67C1). The optimal values may vary between robot units, as tiny differences in friction from manufacturing are enough to change the behavior.
+
+You can try first to reduce P to 180 on motors 10 (foot), 17 and 18 (antennas).
 If it doesn't help, you can also try to increase D to 10 on the same motors.
-
 
 </details>
 
