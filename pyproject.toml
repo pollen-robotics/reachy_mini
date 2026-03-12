@@ -123,6 +123,7 @@ markers = [
     "audio: mark test as requiring audio hardware",
     "video: mark test as requiring video hardware",
     "wireless: mark test as requiring wireless Reachy Mini",
+    "ipc_resolution: override the resolution used by the ipc_video_source fixture",
 ]
 
 [tool.mypy]

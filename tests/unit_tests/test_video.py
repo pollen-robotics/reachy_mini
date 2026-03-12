@@ -1,10 +1,12 @@
 import time
+from typing import cast
 
 import numpy as np
 import pytest
 
 from reachy_mini.media.camera_constants import (
     CameraResolution,
+    CameraSpecs,
     MujocoCameraSpecs,
     ReachyMiniLiteCamSpecs,
 )
@@ -20,18 +22,36 @@ VIDEO_BACKENDS = [
 
 
 @pytest.mark.video
-@pytest.mark.parametrize("backend", VIDEO_BACKENDS)
-def test_get_frame_exists(backend: MediaBackend) -> None:
-    """Test that a frame can be retrieved from the camera and is not None."""
+def test_get_frame_exists(ipc_video_source: CameraSpecs) -> None:
+    """Test that a frame can be retrieved from the LOCAL IPC camera."""
     media = MediaManager(
-        backend=backend,
-        signalling_host=SIGNALING_HOST
-        if backend == MediaBackend.WEBRTC
-        else "localhost",
+        backend=MediaBackend.LOCAL,
+        camera_specs=ipc_video_source,
+    )
+    time.sleep(1)
+    frame = media.get_frame()
+    assert frame is not None, "No frame was retrieved from the camera."
+    assert isinstance(frame, np.ndarray), "Frame is not a numpy array."
+    assert frame.size > 0, "Frame is empty."
+    assert (
+        frame.shape[0] == media.camera.resolution[1]
+        and frame.shape[1] == media.camera.resolution[0]
+    ), f"Frame has incorrect dimensions: {frame.shape} != {media.camera.resolution}"
+
+    media.close()
+
+
+@pytest.mark.video
+@pytest.mark.wireless
+def test_get_frame_exists_webrtc() -> None:
+    """Test that a frame can be retrieved from the WebRTC camera."""
+    media = MediaManager(
+        backend=MediaBackend.WEBRTC,
+        signalling_host=SIGNALING_HOST,
     )
     time.sleep(2)
     frame = media.get_frame()
-    if backend == MediaBackend.WEBRTC and frame is None:
+    if frame is None:
         print("Waiting extra time for WebRTC backend to get the first frame...")
         time.sleep(4)
         frame = media.get_frame()
@@ -47,30 +67,31 @@ def test_get_frame_exists(backend: MediaBackend) -> None:
 
 
 @pytest.mark.video
-@pytest.mark.parametrize("backend", [MediaBackend.LOCAL])
-def test_get_frame_exists_all_resolutions(backend: MediaBackend) -> None:
-    """Test that a frame can be retrieved from the camera for all supported resolutions.
+def test_get_frame_exists_all_resolutions(ipc_video_source: CameraSpecs) -> None:
+    """Test that a frame can be retrieved at the default resolution.
 
-    Todo: enable change of resolution for webrtc
+    Note: changing resolution on the IPC reader does not change the
+    daemon-side output resolution, so we only test that the default
+    resolution works end-to-end.  Resolution validation logic is covered
+    by ``test_change_resolution_errors``.
     """
-    media = MediaManager(backend=backend)
-    for resolution in media.camera.camera_specs.available_resolutions:
-        media.camera.close()
-        media.camera.set_resolution(resolution)
-        media.camera.open()
-        time.sleep(2)
-        frame = media.get_frame()
-        assert frame is not None, (
-            f"No frame was retrieved from the camera at resolution {resolution}."
-        )
-        assert isinstance(frame, np.ndarray), (
-            f"Frame is not a numpy array at resolution {resolution}."
-        )
-        assert frame.size > 0, f"Frame is empty at resolution {resolution}."
-        assert (
-            frame.shape[0] == resolution.value[1]
-            and frame.shape[1] == resolution.value[0]
-        ), f"Frame has incorrect dimensions at resolution {resolution}: {frame.shape}"
+    media = MediaManager(
+        backend=MediaBackend.LOCAL,
+        camera_specs=ipc_video_source,
+    )
+    time.sleep(1)
+    frame = media.get_frame()
+    resolution = ipc_video_source.default_resolution
+    assert frame is not None, (
+        f"No frame was retrieved from the camera at resolution {resolution}."
+    )
+    assert isinstance(frame, np.ndarray), (
+        f"Frame is not a numpy array at resolution {resolution}."
+    )
+    assert frame.size > 0, f"Frame is empty at resolution {resolution}."
+    assert (
+        frame.shape[0] == resolution.value[1] and frame.shape[1] == resolution.value[0]
+    ), f"Frame has incorrect dimensions at resolution {resolution}: {frame.shape}"
 
     media.close()
 
@@ -78,7 +99,7 @@ def test_get_frame_exists_all_resolutions(backend: MediaBackend) -> None:
 @pytest.mark.video
 @pytest.mark.parametrize("backend", VIDEO_BACKENDS)
 def test_change_resolution_errors(backend: MediaBackend) -> None:
-    """Test that changing resolution raises a runtime error if not allowed."""
+    """Test that changing resolution raises errors for invalid specs/resolutions."""
     media = MediaManager(
         backend=backend,
         signalling_host=SIGNALING_HOST
