@@ -52,7 +52,7 @@ from reachy_mini.io.publisher import Publisher
 
 if typing.TYPE_CHECKING:
     from reachy_mini.kinematics import AnyKinematics
-# MediaManager no longer used here — play_sound delegated to WebRTC daemon
+# MediaManager no longer used here — play_sound delegated to GstMediaServer
 from reachy_mini.motion.goto import GotoMove
 from reachy_mini.motion.move import Move
 from reachy_mini.utils.constants import MODELS_ROOT_PATH, URDF_ROOT_PATH
@@ -62,6 +62,7 @@ from reachy_mini.utils.interpolation import (
     time_trajectory,
 )
 from reachy_mini.media.audio_doa import AudioDoA
+
 
 class Backend:
     """Base class for robot backends, simulated or real."""
@@ -182,9 +183,9 @@ class Backend:
         # Recording lock to guard buffer swaps and appends
         self._rec_lock = threading.Lock()
 
-        # Reference to the WebRTC daemon for play_sound delegation.
-        # Set via setup_webrtc_interface().
-        self._webrtc_daemon: Optional[Any] = None
+        # Reference to the media server for play_sound delegation.
+        # Set via setup_media_server().
+        self._media_server: Optional[Any] = None
 
         # Guard to ensure only one play_move/goto is executed at a time (goto itself uses play_move, so we need an RLock)
         self._play_move_lock = threading.RLock()
@@ -224,7 +225,7 @@ class Backend:
         Subclasses must still implement their own cleanup for backend-specific resources.
         """
         self.logger.debug("Backend.close() - cleaning up resources")
-        self._webrtc_daemon = None
+        self._media_server = None
 
     @property
     def is_move_running(self) -> bool:
@@ -684,15 +685,15 @@ class Backend:
     def play_sound(self, sound_file: str) -> None:
         """Play a sound file from the assets directory.
 
-        Delegates to the WebRTC daemon's play_sound method. If the daemon
+        Delegates to the media server's play_sound method.  If the server
         is not available (no_media mode), this is a no-op.
 
         Args:
             sound_file (str): The name of the sound file to play (e.g., "wake_up.wav").
 
         """
-        if self._webrtc_daemon is not None:
-            self._webrtc_daemon.play_sound(sound_file)
+        if self._media_server is not None:
+            self._media_server.play_sound(sound_file)
 
     # Basic move definitions
     INIT_HEAD_POSE = np.eye(4)
@@ -1014,18 +1015,18 @@ class Backend:
     # WebRTC data channel interface (delegates to process_command)
     # ------------------------------------------------------------------
 
-    def setup_webrtc_interface(self, gst_webrtc: Any) -> None:
-        """Set up the WebRTC interface for motor control and media.
+    def setup_media_server(self, media_server: Any) -> None:
+        """Connect the backend to the media server.
 
-        Stores a reference to the WebRTC daemon for:
-        - Data channel message handling (robot control)
+        Stores a reference to the ``GstMediaServer`` for:
+        - WebRTC data channel message handling (robot control)
         - Sound playback delegation (play_sound)
 
         Args:
-            gst_webrtc (Any): The GstWebRTC instance to setup.
+            media_server: The ``GstMediaServer`` instance.
 
         """
-        self._webrtc_daemon = gst_webrtc
+        self._media_server = media_server
 
         _loop = asyncio.new_event_loop()
         threading.Thread(target=_loop.run_forever, daemon=True).start()
@@ -1033,8 +1034,8 @@ class Backend:
         def _threadsafe_handler(peer_id: str, message: str) -> None:
             _loop.call_soon_threadsafe(self._handle_webrtc_message, peer_id, message)
 
-        gst_webrtc.set_message_handler(_threadsafe_handler)
-        self._send_message_to_webrtc = gst_webrtc.send_data_message
+        media_server.set_message_handler(_threadsafe_handler)
+        self._send_message_to_webrtc = media_server.send_data_message
 
     def _handle_webrtc_message(self, peer_id: str, message: str) -> None:
         def send(resp: dict[str, Any]) -> None:

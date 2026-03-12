@@ -9,7 +9,7 @@ platforms and use cases.
 
 Architecture overview:
     The daemon always owns the physical camera and audio hardware via
-    ``webrtc_daemon.py``.  Clients pick one of three strategies:
+    ``GstMediaServer`` (``media_server.py``).  Clients pick one of three strategies:
 
     * **LOCAL** – read camera frames from the daemon's IPC endpoint
       (``unixfdsrc`` / ``win32ipcvideosrc``) and open the local audio

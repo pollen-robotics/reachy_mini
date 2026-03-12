@@ -80,34 +80,34 @@ class Daemon:
         self.backend_run_thread: "Thread | None" = None
         self._thread_event_publish_status = Event()
 
-        self._webrtc: Optional[Any] = None  # GstWebRTC when media is enabled
+        self._media_server: Optional[Any] = None  # GstMediaServer when media is enabled
         if not no_media:
-            from reachy_mini.media.webrtc_daemon import GstWebRTC
+            from reachy_mini.media.media_server import GstMediaServer
 
             try:
-                self._webrtc = GstWebRTC(log_level, use_sim=use_sim)
-                self._status.camera_specs_name = self._webrtc.camera_specs.name
+                self._media_server = GstMediaServer(log_level, use_sim=use_sim)
+                self._status.camera_specs_name = self._media_server.camera_specs.name
             except Exception as e:
-                self.logger.error(f"Failed to initialize WebRTC: {e}")
-                self._webrtc = None
+                self.logger.error(f"Failed to initialize media server: {e}")
+                self._media_server = None
         else:
             self.logger.info(
-                "Media disabled (--no-media). No camera, audio, or WebRTC."
+                "Media disabled (--no-media). No camera, audio, or media server."
             )
 
     def __del__(self) -> None:
         """Destructor to ensure proper cleanup."""
         self.logger.debug("Cleaning up Daemon resources...")
-        if self._webrtc is not None:
-            self._webrtc.stop()
-            self._webrtc.__del__()
-            self._webrtc = None
+        if self._media_server is not None:
+            self._media_server.stop()
+            self._media_server.__del__()
+            self._media_server = None
 
     async def _start_central_signaling_relay(self) -> None:
         """Start the central signaling relay for remote WebRTC access."""
         global _central_relay_task
 
-        if not self._webrtc:
+        if not self._media_server:
             return
 
         try:
@@ -271,13 +271,13 @@ class Daemon:
                     self._status.state = DaemonState.STOPPING
                     return self._status.state
 
-            if self._webrtc:
+            if self._media_server:
                 await asyncio.sleep(
                     0.2
                 )  # Give some time for the backend to release the audio device
                 if self.backend is not None:
-                    self.backend.setup_webrtc_interface(self._webrtc)
-                self._webrtc.start()
+                    self.backend.setup_media_server(self._media_server)
+                self._media_server.start()
 
                 # Start central signaling relay for remote WebRTC access
                 await self._start_central_signaling_relay()
@@ -325,9 +325,9 @@ class Daemon:
             self.backend.is_shutting_down = True
             self._thread_event_publish_status.set()
 
-            if self._webrtc:
+            if self._media_server:
                 # We use pause() instead of stop() to keep the signalling server running and the producer registered, allowing proper restart.
-                self._webrtc.pause()
+                self._media_server.pause()
                 # Stop the central signaling relay
                 await self._stop_central_signaling_relay()
 

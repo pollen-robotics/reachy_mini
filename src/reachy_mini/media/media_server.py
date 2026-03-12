@@ -1,23 +1,25 @@
-"""WebRTC daemon.
+"""GStreamer media server for the Reachy Mini daemon.
 
-Starts a GStreamer WebRTC pipeline to stream video and audio from the Reachy Mini
-robot to WebRTC clients. Also exposes the camera via a local IPC socket/pipe so
-that on-device apps can read frames without WebRTC encode/decode overhead.
+Owns the physical camera and audio hardware and distributes media to
+consumers through two channels:
 
-The daemon is started by the Reachy Mini daemon on **all** platforms (Lite and
-Wireless). It is the single owner of the camera and streams media to:
-- WebRTC clients (browsers, remote Python SDK)
-- Local clients via IPC (unixfdsink on Linux/macOS, win32ipcvideosink on Windows)
+- **WebRTC** — streams video + audio to remote clients (browsers, remote
+  Python SDK) via ``webrtcsink`` and a signalling server.
+- **IPC** — shares raw BGR frames with on-device applications via
+  ``unixfdsink`` (Linux / macOS) or ``win32ipcvideosink`` (Windows),
+  avoiding encode / decode overhead.
 
-The daemon also provides a ``play_sound()`` method for playing sound files
-directly on the robot's speaker (used for wake-up / sleep sounds).
+The server is started by the Reachy Mini daemon on **all** platforms
+(Lite and Wireless).  It also provides a ``play_sound()`` method for
+playing sound files directly on the robot's speaker.
 
-Example usage:
-    >>> from reachy_mini.media.webrtc_daemon import GstWebRTC
+Example usage::
+
+    >>> from reachy_mini.media.media_server import GstMediaServer
     >>>
-    >>> webrtc_daemon = GstWebRTC(log_level="INFO")
-    >>> webrtc_daemon.start()
-    >>> # The daemon is now streaming and ready to accept client connections
+    >>> server = GstMediaServer(log_level="INFO")
+    >>> server.start()
+    >>> # The server is now streaming and ready to accept client connections
 """
 
 import logging
@@ -49,20 +51,16 @@ gi.require_version("GstApp", "1.0")
 from gi.repository import GLib, Gst  # noqa: E402
 
 
-class GstWebRTC:
-    """WebRTC pipeline using GStreamer.
+class GstMediaServer:
+    """Daemon-side GStreamer media server.
 
-    This class implements a WebRTC server using GStreamer that streams video
-    and audio from the Reachy Mini robot to connected WebRTC clients. It runs
-    on all platforms (Lite and Wireless) and handles:
+    Owns the camera and audio hardware and distributes media to consumers:
 
-    - Platform-aware camera capture (V4L2, libcamera, MFVideo, AVFoundation, UDP sim)
-    - Platform-aware audio capture and playback
-    - Local IPC for on-device clients (unixfdsink / win32ipcvideosink)
-    - WebRTC streaming with signaling server
-    - Bidirectional audio
-    - Data channels for robot control
-    - Sound file playback via playbin
+    - **IPC branch** — raw BGR frames via ``unixfdsink`` / ``win32ipcvideosink``
+      for on-device applications (``GStreamerCamera`` reads from this).
+    - **WebRTC branch** — encoded video + audio via ``webrtcsink`` for remote
+      clients (``GstWebRTCClient`` connects to this).
+    - **Sound playback** — ``playbin`` for playing WAV files on the speaker.
 
     Attributes:
         camera_specs (CameraSpecs): Specifications of the detected camera.
@@ -137,7 +135,7 @@ class GstWebRTC:
 
     def __del__(self) -> None:
         """Destructor to ensure gstreamer resources are released."""
-        self._logger.debug("Cleaning up GstWebRTC")
+        self._logger.debug("Cleaning up GstMediaServer")
         self._loop.quit()
         self._bus_sender.remove_watch()
 
@@ -1141,13 +1139,13 @@ if __name__ == "__main__":
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     )
 
-    webrtc = GstWebRTC(log_level="DEBUG")
-    webrtc.start()
+    server = GstMediaServer(log_level="DEBUG")
+    server.start()
     try:
         while True:
             time.sleep(1)
     except KeyboardInterrupt:
         logging.info("User interrupted")
     finally:
-        webrtc.stop()
-        webrtc.__del__()
+        server.stop()
+        server.__del__()

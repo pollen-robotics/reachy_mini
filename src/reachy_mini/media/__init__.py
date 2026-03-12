@@ -5,7 +5,7 @@ supporting multiple backends and offering a unified interface for media operatio
 
 Architecture:
     The daemon always owns the physical camera and audio hardware via
-    ``webrtc_daemon.py``.  Client-side code selects a backend through
+    ``media_server.py`` (``GstMediaServer``).  Client-side code selects a backend through
     ``MediaManager``:
 
     * **LOCAL** – reads camera frames from the daemon's IPC endpoint and opens
@@ -47,5 +47,5 @@ For more information on specific components, see:
     - audio_gstreamer.py: GStreamer audio implementation (LOCAL backend)
     - audio_doa.py: Direction of Arrival estimation
     - webrtc_client_gstreamer.py: WebRTC client (WEBRTC backend)
-    - webrtc_daemon.py: WebRTC daemon/server (runs on the daemon side)
+    - media_server.py: GstMediaServer (daemon-side media hub: camera, IPC, WebRTC, audio)
 """
