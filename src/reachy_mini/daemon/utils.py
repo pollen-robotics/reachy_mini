@@ -11,8 +11,10 @@ import serial.tools.list_ports
 # Path to the unix socket created by WebRTC daemon for local camera access (Linux/macOS)
 CAMERA_SOCKET_PATH = "/tmp/reachymini_camera_socket"
 
-# Named pipe for local camera access on Windows
-CAMERA_PIPE_NAME = "reachymini_camera_pipe"
+# Named pipe for local camera access on Windows.
+# GStreamer's win32ipcvideosink / win32ipcvideosrc expect the full
+# Windows named-pipe path (e.g. \\.\pipe\<name>).
+CAMERA_PIPE_NAME = "\\\\.\\pipe\\reachymini_camera_pipe"
 
 
 def is_localhost(ip: str | None) -> bool:
@@ -52,10 +54,35 @@ def is_local_camera_available() -> bool:
     import platform
 
     if platform.system() == "Windows":
-        pipe_path = f"\\\\.\\pipe\\{CAMERA_PIPE_NAME}"
-        return os.path.exists(pipe_path)
+        return _win32_pipe_exists(CAMERA_PIPE_NAME)
     else:
         return os.path.exists(CAMERA_SOCKET_PATH)
+
+
+def _win32_pipe_exists(pipe_path: str) -> bool:
+    """Check if a Windows named pipe exists by attempting to open it.
+
+    ``os.path.exists()`` is unreliable for Windows named pipes — it may
+    return ``False`` even when the pipe is live and connectable.  Using
+    the Win32 ``CreateFileW`` API directly gives a definitive answer.
+
+    Returns:
+        True if the pipe can be opened (exists), False otherwise.
+
+    """
+    import ctypes
+
+    INVALID_HANDLE_VALUE = ctypes.c_void_p(-1).value
+    GENERIC_READ = 0x80000000
+    OPEN_EXISTING = 3
+
+    handle = ctypes.windll.kernel32.CreateFileW(  # type: ignore[union-attr]
+        pipe_path, GENERIC_READ, 0, None, OPEN_EXISTING, 0, None
+    )
+    if handle == INVALID_HANDLE_VALUE:
+        return False
+    ctypes.windll.kernel32.CloseHandle(handle)  # type: ignore[union-attr]
+    return True
 
 
 def daemon_check(spawn_daemon: bool, use_sim: bool) -> None:

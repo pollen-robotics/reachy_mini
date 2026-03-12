@@ -520,14 +520,30 @@ class GstMediaServer:
         return elements
 
     def _build_windows_source(self, device_name: str) -> list[Gst.Element]:
-        """Build source chain for Windows Media Foundation camera."""
+        """Build source chain for Windows Media Foundation camera.
+
+        A capsfilter is placed after mfvideosrc to explicitly negotiate the
+        MJPEG format, resolution and framerate.  Without it, mfvideosrc may
+        auto-negotiate a format (e.g. NV12 at a low fps) that cannot satisfy
+        the downstream I420 capsfilter, causing the source to error out with
+        "streaming stopped, reason error (-5)".
+        """
         camsrc = Gst.ElementFactory.make("mfvideosrc")
         camsrc.set_property("device-name", device_name)
 
+        caps_mjpeg = Gst.Caps.from_string(
+            f"image/jpeg,width={self.resolution[0]},"
+            f"height={self.resolution[1]},"
+            f"framerate={self.framerate}/1"
+        )
+        capsfilter = Gst.ElementFactory.make("capsfilter")
+        capsfilter.set_property("caps", caps_mjpeg)
+
         queue = Gst.ElementFactory.make("queue")
+        jpegdec = Gst.ElementFactory.make("jpegdec")
         videoconvert = Gst.ElementFactory.make("videoconvert")
 
-        elements = [camsrc, queue, videoconvert]
+        elements = [camsrc, capsfilter, queue, jpegdec, videoconvert]
         if not all(elements):
             raise RuntimeError("Failed to create Windows video source elements")
         return elements

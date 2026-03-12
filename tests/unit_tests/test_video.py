@@ -4,6 +4,7 @@ from typing import cast
 import numpy as np
 import pytest
 
+from reachy_mini.daemon.utils import is_local_camera_available
 from reachy_mini.media.camera_constants import (
     CameraResolution,
     CameraSpecs,
@@ -19,6 +20,19 @@ VIDEO_BACKENDS = [
     pytest.param(MediaBackend.LOCAL),
     pytest.param(MediaBackend.WEBRTC, marks=pytest.mark.wireless),
 ]
+
+
+@pytest.mark.video
+def test_is_local_camera_available(ipc_video_source: CameraSpecs) -> None:
+    """Test that is_local_camera_available() detects the IPC endpoint.
+
+    The ipc_video_source fixture creates a videotestsrc → IPC sink pipeline
+    (unixfdsink on Linux/macOS, win32ipcvideosink on Windows).
+    While it's running, ``is_local_camera_available()`` must return True.
+    """
+    assert is_local_camera_available(), (
+        "is_local_camera_available() returned False while the IPC fixture is running"
+    )
 
 
 @pytest.mark.video
