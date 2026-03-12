@@ -61,7 +61,7 @@ from reachy_mini.utils.interpolation import (
     distance_between_poses,
     time_trajectory,
 )
-
+from reachy_mini.media.audio_doa import AudioDoA
 
 class Backend:
     """Base class for robot backends, simulated or real."""
@@ -79,6 +79,8 @@ class Backend:
         self.logger.setLevel(log_level)
 
         self.use_audio = use_audio
+
+        self.doa = AudioDoA() if use_audio else None
 
         self.should_stop = threading.Event()
         self.ready = threading.Event()

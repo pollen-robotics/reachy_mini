@@ -16,8 +16,10 @@ Architecture:
 
 Key Components:
     - MediaManager: Unified interface for managing audio and video devices
-    - CameraBase: Abstract base class for camera implementations
-    - AudioBase: Abstract base class for audio implementations
+    - GStreamerCamera: Local IPC camera reader (LOCAL backend)
+    - GStreamerAudio: GStreamer audio backend (LOCAL backend)
+    - GstWebRTCClient: WebRTC client handling both audio and video (WEBRTC backend)
+    - AudioDoA: Direction of Arrival estimation via the ReSpeaker mic array
 
 Example usage::
 
@@ -41,10 +43,9 @@ Example usage::
 
 For more information on specific components, see:
     - media_manager.py: Media management and backend selection
-    - camera_base.py: Camera interface definition
-    - audio_base.py: Audio interface definition
     - camera_gstreamer.py: GStreamer IPC camera reader (LOCAL backend)
     - audio_gstreamer.py: GStreamer audio implementation (LOCAL backend)
+    - audio_doa.py: Direction of Arrival estimation
     - webrtc_client_gstreamer.py: WebRTC client (WEBRTC backend)
     - webrtc_daemon.py: WebRTC daemon/server (runs on the daemon side)
 """
