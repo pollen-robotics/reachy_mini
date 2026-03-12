@@ -317,15 +317,33 @@ Note that you may also need to use mirrors to reach services like PyPI and GitHu
 
 Reachy Mini conversation app relies on OpenAI gpt-realtime API, which might be inaccessible from China.
 
-The best workaround at the moment is to set up a VPN on your machine (Lite version) or on the robot (Wireless version), or on your router directly. **Make sure port 443 (HTTPS) is routed through the VPN**.
+The best workaround at the moment is to set up a VPN on your machine (Lite version), on the robot (Wireless version), or directly on your router.
 
-For the Wireless version, **do not route port 22 (SSH) and 8000 (Reachy Mini daemon) through the VPN**, you won't be able to reach the robot otherwise. Once the VPN is set on the robot, you will need to restart the daemon for the changes to be effective :
-```bash
+When configuring the VPN routing rules:
+
+1) Route traffic through the VPN except for local network traffic, so the device remains accessible from your local network.
+
+You should whitelist:
+- Your local LAN IP range (for example 192.168.0.0/16, 192.168.1.0/24, etc., depending on your network setup).
+- The following ports:
+  - 22 (SSH)
+  - 8000 (Reachy Mini daemon)
+  - 5353 TCP/UDP (mDNS / local discovery)
+
+This ensures the robot remains reachable and discoverable locally, and mDNS (`reachy-mini.local`) should continue to work on the network.
+
+2) If your VPN supports selective routing, a better approach is to route only the required external services through the VPN, instead of tunneling all HTTPS traffic.
+
+If possible, configure the VPN to be used only for `huggingface.co` and `api.openai.com`.
+
+This minimizes network side effects and keeps local services functioning normally.
+
+For the Wireless version, once the VPN is configured on the robot, restart the daemon for the changes to take effect:
+```
 sudo systemctl restart reachy-mini-daemon
 ```
-
-Because of the VPN, the Reachy Mini web dashboard will no longer be available at http://reachy-mini.local:8000. You will need to connect to http:/<reachy_mini_ip>:8000 with <reachy_mini_ip> the IP address of the robot on your local network. To find this IP address, run the following command from a device on the same network as the robot (without VPN):
-```bash
+To verify the robot is reachable from a device on the same network, you can run:
+```
 ping reachy-mini.local
 ```
 
