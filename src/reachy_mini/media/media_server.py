@@ -549,14 +549,30 @@ class GstMediaServer:
         return elements
 
     def _build_macos_source(self, device_index: str) -> list[Gst.Element]:
-        """Build source chain for macOS AVFoundation camera."""
+        """Build source chain for macOS AVFoundation camera.
+
+        Unlike v4l2src and mfvideosrc which expose raw MJPEG streams,
+        avfvideosrc typically decodes MJPEG internally and presents raw
+        video to GStreamer.  A capsfilter pins the resolution and
+        framerate so that auto-negotiation does not pick an undesirable
+        mode (e.g. low-fps NV12 instead of the camera's preferred
+        1920x1080@60).
+        """
         camsrc = Gst.ElementFactory.make("avfvideosrc")
         camsrc.set_property("device-index", int(device_index))
+
+        caps_raw = Gst.Caps.from_string(
+            f"video/x-raw,width={self.resolution[0]},"
+            f"height={self.resolution[1]},"
+            f"framerate={self.framerate}/1"
+        )
+        capsfilter = Gst.ElementFactory.make("capsfilter")
+        capsfilter.set_property("caps", caps_raw)
 
         queue = Gst.ElementFactory.make("queue")
         videoconvert = Gst.ElementFactory.make("videoconvert")
 
-        elements = [camsrc, queue, videoconvert]
+        elements = [camsrc, capsfilter, queue, videoconvert]
         if not all(elements):
             raise RuntimeError("Failed to create macOS video source elements")
         return elements

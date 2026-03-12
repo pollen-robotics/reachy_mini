@@ -265,7 +265,7 @@ class ReachyMini:
         return MediaManager(
             backend=mbackend,
             log_level=log_level,
-            signalling_host=daemon_status.wlan_ip or "",
+            signalling_host=daemon_status.wlan_ip or "localhost",
             camera_specs=camera_specs,
         )
 
