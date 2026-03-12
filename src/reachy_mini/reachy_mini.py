@@ -17,6 +17,7 @@ from asgiref.sync import async_to_sync
 from scipy.spatial.transform import Rotation as R
 
 from reachy_mini.daemon.utils import daemon_check, is_local_camera_available
+from reachy_mini.media.camera_constants import get_camera_specs_by_name
 from reachy_mini.io.protocol import (
     AppendRecordCmd,
     GotoTaskRequest,
@@ -223,6 +224,10 @@ class ReachyMini:
         """
         daemon_status = self.client.get_status()
 
+        # Resolve camera specs from the daemon-detected camera name
+        specs_name = getattr(daemon_status, "camera_specs_name", "")
+        camera_specs = get_camera_specs_by_name(specs_name) if specs_name else None
+
         # Honour explicit no_media from user or daemon
         if media_backend.lower() == "no_media":
             self.logger.info("No media backend requested by user.")
@@ -261,6 +266,7 @@ class ReachyMini:
             backend=mbackend,
             log_level=log_level,
             signalling_host=daemon_status.wlan_ip or "",
+            camera_specs=camera_specs,
         )
 
     def _normalize_connection_mode(

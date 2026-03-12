@@ -52,7 +52,7 @@ from reachy_mini.media.camera_constants import (
     CameraResolution,
     CameraSpecs,
     MujocoCameraSpecs,
-    ReachyMiniWirelessCamSpecs,
+    ReachyMiniLiteCamSpecs,
 )
 from reachy_mini.media.camera_utils import scale_intrinsics
 
@@ -91,11 +91,15 @@ class GStreamerCamera:
     def __init__(
         self,
         log_level: str = "INFO",
+        camera_specs: Optional[CameraSpecs] = None,
     ) -> None:
         """Initialize the GStreamer local camera reader.
 
         Args:
             log_level: Logging level for camera operations.
+            camera_specs: Camera specifications detected by the daemon.
+                When ``None`` falls back to ``ReachyMiniLiteCamSpecs``
+                with a warning (e.g. direct instantiation without SDK).
 
         Raises:
             RuntimeError: If the IPC source element cannot be created.
@@ -108,8 +112,13 @@ class GStreamerCamera:
         self._loop = GLib.MainLoop()
         self._thread_bus_calls: Optional[Thread] = None
 
-        # Default to wireless specs (daemon manages the camera)
-        self.camera_specs: CameraSpecs = cast(CameraSpecs, ReachyMiniWirelessCamSpecs)
+        if camera_specs is not None:
+            self.camera_specs: CameraSpecs = camera_specs
+        else:
+            self.logger.warning(
+                "No camera_specs provided — defaulting to ReachyMiniLiteCamSpecs."
+            )
+            self.camera_specs = cast(CameraSpecs, ReachyMiniLiteCamSpecs)
         self._resolution: Optional[CameraResolution] = (
             self.camera_specs.default_resolution
         )

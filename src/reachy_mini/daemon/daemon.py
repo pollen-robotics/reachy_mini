@@ -86,6 +86,7 @@ class Daemon:
 
             try:
                 self._webrtc = GstWebRTC(log_level, use_sim=use_sim)
+                self._status.camera_specs_name = self._webrtc.camera_specs.name
             except Exception as e:
                 self.logger.error(f"Failed to initialize WebRTC: {e}")
                 self._webrtc = None

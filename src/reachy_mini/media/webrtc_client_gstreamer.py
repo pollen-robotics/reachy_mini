@@ -54,7 +54,7 @@ from reachy_mini.media.camera_constants import (
     CameraResolution,
     CameraSpecs,
     MujocoCameraSpecs,
-    ReachyMiniWirelessCamSpecs,
+    ReachyMiniLiteCamSpecs,
 )
 from reachy_mini.media.camera_utils import scale_intrinsics
 
@@ -88,6 +88,7 @@ class GstWebRTCClient:
         peer_id: str = "",
         signaling_host: str = "",
         signaling_port: int = 8443,
+        camera_specs: Optional[CameraSpecs] = None,
     ):
         """Initialize the WebRTC client.
 
@@ -96,6 +97,9 @@ class GstWebRTCClient:
             peer_id: WebRTC peer ID to connect to.
             signaling_host: Host address of the signaling server.
             signaling_port: Port of the signaling server.
+            camera_specs: Camera specifications detected by the daemon.
+                When ``None`` falls back to ``ReachyMiniLiteCamSpecs``
+                with a warning.
 
         """
         self.logger = logging.getLogger(__name__)
@@ -123,7 +127,13 @@ class GstWebRTCClient:
         self._appsink_audio.set_property("max-buffers", 500)
         self._pipeline_record.add(self._appsink_audio)
 
-        self.camera_specs: CameraSpecs = cast(CameraSpecs, ReachyMiniWirelessCamSpecs)
+        if camera_specs is not None:
+            self.camera_specs: CameraSpecs = camera_specs
+        else:
+            self.logger.warning(
+                "No camera_specs provided — defaulting to ReachyMiniLiteCamSpecs."
+            )
+            self.camera_specs = cast(CameraSpecs, ReachyMiniLiteCamSpecs)
         self._resolution: Optional[CameraResolution] = None
         self.resized_K: Optional[npt.NDArray[np.float64]] = self.camera_specs.K
 

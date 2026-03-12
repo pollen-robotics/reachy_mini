@@ -94,6 +94,7 @@ def _resolve_backend(backend: MediaBackend) -> MediaBackend:
 # We import them lazily inside the init helpers, but declare the union
 # here so the type annotations stay narrow.
 
+from reachy_mini.media.camera_constants import CameraSpecs  # noqa: E402
 from reachy_mini.media.camera_gstreamer import GStreamerCamera  # noqa: E402
 from reachy_mini.media.audio_gstreamer import GStreamerAudio  # noqa: E402
 from reachy_mini.media.webrtc_client_gstreamer import GstWebRTCClient  # noqa: E402
@@ -123,6 +124,7 @@ class MediaManager:
         log_level: str = "INFO",
         use_sim: bool = False,
         signalling_host: str = "localhost",
+        camera_specs: Optional[CameraSpecs] = None,
     ) -> None:
         """Initialize the media manager.
 
@@ -132,6 +134,9 @@ class MediaManager:
             use_sim: Whether to use simulation mode (for testing).
             signalling_host: Host address for WebRTC signalling server.
                 Only used with the ``WEBRTC`` backend.
+            camera_specs: Camera specifications detected by the daemon.
+                When ``None`` the concrete camera class will fall back to
+                ``ReachyMiniLiteCamSpecs`` with a warning.
 
         Example::
 
@@ -155,11 +160,11 @@ class MediaManager:
                 self.logger.info(
                     "Using LOCAL backend (GStreamer IPC camera + GStreamer audio)."
                 )
-                self._init_camera(log_level)
+                self._init_camera(log_level, camera_specs)
                 self._init_audio(log_level)
             case MediaBackend.WEBRTC:
                 self.logger.info("Using WebRTC streaming backend.")
-                self._init_webrtc(log_level, signalling_host, 8443)
+                self._init_webrtc(log_level, signalling_host, 8443, camera_specs)
             case _:
                 raise NotImplementedError(f"Media backend {backend} not implemented.")
 
@@ -188,10 +193,12 @@ class MediaManager:
     # Private init helpers
     # ------------------------------------------------------------------
 
-    def _init_camera(self, log_level: str) -> None:
+    def _init_camera(
+        self, log_level: str, camera_specs: Optional[CameraSpecs] = None
+    ) -> None:
         """Initialize the camera via local IPC."""
         self.logger.debug("Initializing camera (LOCAL IPC reader)...")
-        self.camera = GStreamerCamera(log_level=log_level)
+        self.camera = GStreamerCamera(log_level=log_level, camera_specs=camera_specs)
         self.camera.open()
 
     def _init_audio(self, log_level: str) -> None:
@@ -200,7 +207,11 @@ class MediaManager:
         self.audio = GStreamerAudio(log_level=log_level)
 
     def _init_webrtc(
-        self, log_level: str, signalling_host: str, signalling_port: int
+        self,
+        log_level: str,
+        signalling_host: str,
+        signalling_port: int,
+        camera_specs: Optional[CameraSpecs] = None,
     ) -> None:
         """Initialize the WebRTC client (camera + audio)."""
         from reachy_mini.media.webrtc_utils import find_producer_peer_id_by_name
@@ -214,6 +225,7 @@ class MediaManager:
             peer_id=peer_id,
             signaling_host=signalling_host,
             signaling_port=signalling_port,
+            camera_specs=camera_specs,
         )
 
         self.camera = webrtc_media
