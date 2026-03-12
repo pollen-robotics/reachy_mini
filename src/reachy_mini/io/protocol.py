@@ -3,7 +3,7 @@
 All messages use a {"type": "...", ...payload} envelope.
 
 Client->Server command types:
-    set_target, set_head_joints, set_body_yaw, set_antennas,
+    set_target, set_head_joints, set_body_yaw, set_antennas, set_full_target,
     goto_target, wake_up, goto_sleep, play_sound,
     set_motor_mode, set_torque, get_motor_mode,
     set_gravity_compensation, set_automatic_body_yaw,
@@ -126,6 +126,20 @@ class SetAntennasCmd(BaseModel):
     antennas: list[float]
 
 
+class SetFullTargetCmd(BaseModel):
+    """Set head, antennas, and body_yaw in a single message.
+
+    All fields are optional so callers can send any subset.
+    This avoids the overhead of three separate WebSocket messages
+    when updating head + antennas + body_yaw together.
+    """
+
+    type: Literal["set_full_target"] = "set_full_target"
+    head: list[float] | None = None
+    antennas: list[float] | None = None
+    body_yaw: float | None = None
+
+
 class GotoTargetCmd(BaseModel):
     """Smooth interpolated goto with optional head, antennas, and body yaw."""
 
@@ -220,6 +234,7 @@ AnyCommand = Annotated[
     | SetHeadJointsCmd
     | SetBodyYawCmd
     | SetAntennasCmd
+    | SetFullTargetCmd
     | GotoTargetCmd
     | WakeUpCmd
     | GotoSleepCmd
