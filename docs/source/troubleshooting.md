@@ -317,7 +317,35 @@ Note that you may also need to use mirrors to reach services like PyPI and GitHu
 
 Reachy Mini conversation app relies on OpenAI gpt-realtime API, which might be inaccessible from China.
 
-The best workaround at the moment is to set up a VPN on your machine (Lite version) or on the robot (Wireless version), or on your router directly.
+The best workaround at the moment is to set up a VPN on your machine (Lite version), on the robot (Wireless version), or directly on your router.
+
+When configuring the VPN routing rules:
+
+1) Route traffic through the VPN except for local network traffic, so the device remains accessible from your local network.
+
+You should whitelist:
+- Your local LAN IP range (for example 192.168.0.0/16, 192.168.1.0/24, etc., depending on your network setup).
+- The following ports:
+  - 22 (SSH)
+  - 8000 (Reachy Mini daemon)
+  - 5353 TCP/UDP (mDNS / local discovery)
+
+This ensures the robot remains reachable and discoverable locally, and mDNS (`reachy-mini.local`) should continue to work on the network.
+
+2) If your VPN supports selective routing, a better approach is to route only the required external services through the VPN, instead of tunneling all HTTPS traffic.
+
+If possible, configure the VPN to be used only for `huggingface.co` and `api.openai.com`.
+
+This minimizes network side effects and keeps local services functioning normally.
+
+For the Wireless version, once the VPN is configured on the robot, restart the daemon for the changes to take effect:
+```
+sudo systemctl restart reachy-mini-daemon
+```
+To verify the robot is reachable from a device on the same network, you can run:
+```
+ping reachy-mini.local
+```
 
 _Approaches based on open weight models are in the works, stay tuned!_
 
