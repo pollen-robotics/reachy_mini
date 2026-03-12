@@ -256,6 +256,14 @@ class Daemon:
                 self._status.error = self.backend.error
                 return self._status.state
 
+            if self._media_server:
+                if self.backend is not None:
+                    self.backend.setup_media_server(self._media_server)
+                self._media_server.start()
+
+                # Start central signaling relay for remote WebRTC access
+                await self._start_central_signaling_relay()
+
             if wake_up_on_start:
                 try:
                     self.logger.info("Waking up Reachy Mini...")
@@ -270,17 +278,6 @@ class Daemon:
                     self.logger.warning("Wake up interrupted by user.")
                     self._status.state = DaemonState.STOPPING
                     return self._status.state
-
-            if self._media_server:
-                await asyncio.sleep(
-                    0.2
-                )  # Give some time for the backend to release the audio device
-                if self.backend is not None:
-                    self.backend.setup_media_server(self._media_server)
-                self._media_server.start()
-
-                # Start central signaling relay for remote WebRTC access
-                await self._start_central_signaling_relay()
 
             if self._status.state != DaemonState.ERROR:
                 self.logger.info("Daemon started successfully.")
