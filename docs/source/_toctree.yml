@@ -68,7 +68,7 @@
   title: Help and support
 - sections:
     - local: sdk-tutorials
-      title: SDKTutorials
+      title: SDK Tutorials
   title: Tutorials
 - isExpanded: false
   sections:
