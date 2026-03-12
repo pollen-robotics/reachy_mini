@@ -238,8 +238,11 @@ class ReachyMini:
             )
             mbackend = MediaBackend.NO_MEDIA
         elif media_backend.lower() in ("default", "auto"):
-            # Auto-detect: local IPC if available, else WebRTC
-            if is_local_camera_available():
+            # Auto-detect: local IPC if available, else WebRTC.
+            # IPC only makes sense when the daemon runs on the same machine
+            # (connection_mode == "localhost_only").  For network connections
+            # (wireless robot) we always stream via WebRTC.
+            if self.connection_mode == "localhost_only" and is_local_camera_available():
                 self.logger.info(
                     "Auto-detected local IPC endpoint. Using LOCAL backend."
                 )
@@ -257,7 +260,10 @@ class ReachyMini:
                 self.logger.warning(
                     f"Unknown media backend '{media_backend}', falling back to auto-detect."
                 )
-                if is_local_camera_available():
+                if (
+                    self.connection_mode == "localhost_only"
+                    and is_local_camera_available()
+                ):
                     mbackend = MediaBackend.LOCAL
                 else:
                     mbackend = MediaBackend.WEBRTC
