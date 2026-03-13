@@ -52,9 +52,6 @@ def play_live_tone(mini: "ReachyMini", tone_hz: float) -> None:
 
 def main(backend: str, wav_path: str | None, tone_hz: float) -> None:
     """Run the sound playback example."""
-    logging.basicConfig(
-        level=logging.DEBUG, format="%(asctime)s [%(levelname)s] %(message)s"
-    )
 
     with ReachyMini(log_level="DEBUG", media_backend=backend) as mini:
         if wav_path:

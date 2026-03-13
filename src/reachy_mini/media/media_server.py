@@ -199,23 +199,27 @@ class GstMediaServer:
     _WEBRTC_DIRECTION_SENDRECV = 4
 
     def _enable_audio_receive(self, webrtcbin: Gst.Element) -> None:
-        """Set media transceivers to sendrecv for bidirectional audio.
+        """Set all transceivers to sendrecv for bidirectional audio.
 
         Must be called before the SDP offer is generated (in consumer-added).
-        The m-line order can vary (audio/video may swap), so we set all
-        transceivers to sendrecv. Video sendrecv is harmless since the
-        browser answers recvonly (it has no video track to send).
+
+        All transceivers are set to sendrecv.  For the video transceiver
+        this is harmless when the peer is a browser (it answers recvonly).
+        When the peer is ``webrtcsrc`` (Python SDK), the video sendrecv
+        causes it to create an internal appsrc that emits a non-fatal
+        ``not-negotiated`` error — the client's bus-message handler
+        ignores this specific error so the pipeline stays alive.
         """
         i = 0
         while True:
             trans = webrtcbin.emit("get-transceiver", i)
             if trans is None:
                 break
+
             current_dir = trans.get_property("direction")
-            self._logger.info(f"Transceiver {i} direction: {current_dir}")
             trans.set_property("direction", self._WEBRTC_DIRECTION_SENDRECV)
             new_dir = trans.get_property("direction")
-            self._logger.info(f"Transceiver {i} set to: {new_dir}")
+            self._logger.info(f"Transceiver {i}: {current_dir} -> {new_dir}")
             i += 1
 
     def _consumer_removed(
@@ -723,11 +727,25 @@ class GstMediaServer:
             self._logger.warning("No audio source available. Audio not configured.")
             return
 
-        # Prevent the audio source from becoming the pipeline clock provider.
-        # PulseAudio/PipeWire sources provide their own clock which, when
-        # selected as the pipeline clock, causes unixfdsink to stall because
-        # it cannot synchronise video buffers against the audio clock.
-        audiosrc.set_property("provide-clock", False)
+        # Prevent PulseAudio/PipeWire audio sources from becoming the
+        # pipeline clock provider.  Their clock causes unixfdsink to stall
+        # because it cannot synchronise video buffers against the audio
+        # clock.  ALSA sources (wireless CM4) don't have this issue and
+        # must keep their default clock behaviour to match the original
+        # daemon.  autoaudiosrc is a GstBin and does not expose the
+        # property at all.
+        factory = audiosrc.get_factory()
+        factory_name = factory.get_name() if factory else ""
+        if (
+            factory_name != "alsasrc"
+            and audiosrc.find_property("provide-clock") is not None
+        ):
+            audiosrc.set_property("provide-clock", False)
+            self._logger.debug(f"Set provide-clock=False on {factory_name}")
+        else:
+            self._logger.debug(
+                f"{factory_name} — keeping default provide-clock behaviour."
+            )
 
         pipeline.add(audiosrc)
         audiosrc.link(webrtcsink)
@@ -735,64 +753,78 @@ class GstMediaServer:
     def _build_audio_source(self) -> Optional[Gst.Element]:
         """Build a platform-aware audio source element.
 
+        Detection order:
+        1. .asoundrc — on the wireless CM4 the ``.asoundrc`` file defines
+           ALSA aliases (``reachymini_audio_src``).  When present we use
+           ``alsasrc`` directly, matching the behaviour of the original
+           daemon and avoiding PipeWire clock issues.
+        2. GstDeviceMonitor — finds the Reachy Mini Audio card by name and
+           returns a platform-native element (pulsesrc, wasapi2src,
+           osxaudiosrc).  Used on Lite and desktop platforms.
+        3. autoaudiosrc — last resort when no Reachy Mini card is found.
+
         Returns:
             A GStreamer audio source element, or None if no audio is available.
 
         """
+        # Wireless CM4: .asoundrc defines reachymini_audio_src alias
+        if has_reachymini_asoundrc():
+            audiosrc = Gst.ElementFactory.make("alsasrc")
+            audiosrc.set_property("device", "reachymini_audio_src")
+            self._logger.info("Using ALSA device reachymini_audio_src for capture.")
+            return audiosrc
+
         id_audio_card = self._get_audio_device("Source")
 
-        if id_audio_card is None:
-            if has_reachymini_asoundrc():
-                audiosrc = Gst.ElementFactory.make("alsasrc")
-                audiosrc.set_property("device", "reachymini_audio_src")
-                self._logger.info("Using ALSA device reachymini_audio_src for capture.")
-                return audiosrc
-            else:
-                self._logger.warning(
-                    "No specific audio card found, using default audio source."
+        if id_audio_card is not None:
+            if platform.system() == "Windows":
+                audiosrc = Gst.ElementFactory.make("wasapi2src")
+                audiosrc.set_property("device", id_audio_card)
+                self._logger.info(f"Using WASAPI device {id_audio_card} for capture.")
+            elif platform.system() == "Darwin":
+                audiosrc = Gst.ElementFactory.make("osxaudiosrc")
+                audiosrc.set_property("unique-id", id_audio_card)
+                self._logger.info(
+                    f"Using CoreAudio device {id_audio_card} for capture."
                 )
-                return Gst.ElementFactory.make("autoaudiosrc")
+            else:
+                audiosrc = Gst.ElementFactory.make("pulsesrc")
+                audiosrc.set_property("device", f"{id_audio_card}")
+                self._logger.info(
+                    f"Using PulseAudio/PipeWire device {id_audio_card} for capture."
+                )
+            return audiosrc
 
-        if platform.system() == "Windows":
-            audiosrc = Gst.ElementFactory.make("wasapi2src")
-            audiosrc.set_property("device", id_audio_card)
-            self._logger.info(f"Using WASAPI device {id_audio_card} for capture.")
-        elif platform.system() == "Darwin":
-            audiosrc = Gst.ElementFactory.make("osxaudiosrc")
-            audiosrc.set_property("unique-id", id_audio_card)
-            self._logger.info(f"Using CoreAudio device {id_audio_card} for capture.")
-        else:
-            audiosrc = Gst.ElementFactory.make("pulsesrc")
-            audiosrc.set_property("device", f"{id_audio_card}")
-            self._logger.info(
-                f"Using PulseAudio/PipeWire device {id_audio_card} for capture."
-            )
-
-        return audiosrc
+        self._logger.warning(
+            "No Reachy Mini audio card found, using default audio source."
+        )
+        return Gst.ElementFactory.make("autoaudiosrc")
 
     def _get_audiosink_description(self) -> str:
         """Get a GStreamer audio sink description string for the current platform.
 
-        Used for building playback pipelines (bidirectional audio, play_sound).
+        Same detection order as ``_build_audio_source()``: .asoundrc first
+        (wireless CM4), then DeviceMonitor, then autoaudiosink.
 
         Returns:
             A GStreamer element description string for the audio sink.
 
         """
+        # Wireless CM4: .asoundrc defines reachymini_audio_sink alias
+        if has_reachymini_asoundrc():
+            return "alsasink device=reachymini_audio_sink"
+
         id_audio_card = self._get_audio_device("Sink")
 
-        if id_audio_card is None:
-            if has_reachymini_asoundrc():
-                return "alsasink device=reachymini_audio_sink"
+        if id_audio_card is not None:
+            if platform.system() == "Windows":
+                return f'wasapi2sink device="{id_audio_card}"'
+            elif platform.system() == "Darwin":
+                return f'osxaudiosink unique-id="{id_audio_card}"'
             else:
-                return "autoaudiosink"
+                return f'pulsesink device="{id_audio_card}"'
 
-        if platform.system() == "Windows":
-            return f'wasapi2sink device="{id_audio_card}"'
-        elif platform.system() == "Darwin":
-            return f'osxaudiosink unique-id="{id_audio_card}"'
-        else:
-            return f'pulsesink device="{id_audio_card}"'
+        return "autoaudiosink"
 
     # ------------------------------------------------------------------ #
     #  Audio / Video device detection                                      #
@@ -1054,39 +1086,42 @@ class GstMediaServer:
     def _build_audiosink_element(self) -> Optional[Gst.Element]:
         """Build a platform-aware audio sink GStreamer element.
 
+        Same detection order as ``_build_audio_source()``: .asoundrc first
+        (wireless CM4), then DeviceMonitor, then autoaudiosink.
+
         Returns:
             A GStreamer audio sink element, or None to use the default.
 
         """
+        # Wireless CM4: .asoundrc defines reachymini_audio_sink alias
+        if has_reachymini_asoundrc():
+            audiosink = Gst.ElementFactory.make("alsasink")
+            audiosink.set_property("device", "reachymini_audio_sink")
+            self._logger.info("Using ALSA device reachymini_audio_sink for playback.")
+            return audiosink
+
         id_audio_card = self._get_audio_device("Sink")
 
-        if id_audio_card is None:
-            if has_reachymini_asoundrc():
-                audiosink = Gst.ElementFactory.make("alsasink")
-                audiosink.set_property("device", "reachymini_audio_sink")
+        if id_audio_card is not None:
+            if platform.system() == "Windows":
+                audiosink = Gst.ElementFactory.make("wasapi2sink")
+                audiosink.set_property("device", id_audio_card)
+                self._logger.info(f"Using WASAPI device {id_audio_card} for playback.")
+            elif platform.system() == "Darwin":
+                audiosink = Gst.ElementFactory.make("osxaudiosink")
+                audiosink.set_property("unique-id", id_audio_card)
                 self._logger.info(
-                    "Using ALSA device reachymini_audio_sink for playback."
+                    f"Using CoreAudio device {id_audio_card} for playback."
                 )
-                return audiosink
             else:
-                return Gst.ElementFactory.make("autoaudiosink")
+                audiosink = Gst.ElementFactory.make("pulsesink")
+                audiosink.set_property("device", f"{id_audio_card}")
+                self._logger.info(
+                    f"Using PulseAudio/PipeWire device {id_audio_card} for playback."
+                )
+            return audiosink
 
-        if platform.system() == "Windows":
-            audiosink = Gst.ElementFactory.make("wasapi2sink")
-            audiosink.set_property("device", id_audio_card)
-            self._logger.info(f"Using WASAPI device {id_audio_card} for playback.")
-        elif platform.system() == "Darwin":
-            audiosink = Gst.ElementFactory.make("osxaudiosink")
-            audiosink.set_property("unique-id", id_audio_card)
-            self._logger.info(f"Using CoreAudio device {id_audio_card} for playback.")
-        else:
-            audiosink = Gst.ElementFactory.make("pulsesink")
-            audiosink.set_property("device", f"{id_audio_card}")
-            self._logger.info(
-                f"Using PulseAudio/PipeWire device {id_audio_card} for playback."
-            )
-
-        return audiosink
+        return Gst.ElementFactory.make("autoaudiosink")
 
     # ------------------------------------------------------------------ #
     #  Data channel setup / handling                                       #

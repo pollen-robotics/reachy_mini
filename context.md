@@ -45,6 +45,8 @@ Deprecated aliases: `"gstreamer"`, `"sounddevice_opencv"`, `"gstreamer_no_video"
 6. **`b7726207`** — Add IPC video source fixture (`conftest.py`), make video tests self-contained
 7. **`e81b0ec6`** — Rename `GstWebRTC` → `GstMediaServer`, `webrtc_daemon.py` → `media_server.py`
 8. **`a6eee23e`** — Fix wake-up sound not playing on daemon startup (media server setup before wake_up)
+9. **`88802d22`** — Fix Windows media pipeline: MJPEG caps, named pipe path, pipe detection
+10. **`94a0f33f`** — Fix signalling_host fallback (`""` → `"localhost"`), macOS capsfilter, skip Placo test on Windows
 
 ## Execution Status
 
@@ -118,3 +120,42 @@ Set `provide-clock=false` on the audio source element in `_configure_audio()`.
 - `unixfdsink` behind a `tee` with `webrtcsink` needs `identity drop-allocation=true` + `videoconvert` to produce memfd-backed buffers. Standalone `videotestsrc → videoconvert → unixfdsink` works without the workaround.
 - `unixfdsrc → queue → appsink` reads frames correctly when socket exists.
 - IPC works end-to-end on both Lite and Wireless (confirmed).
+
+## Resolved: Bidirectional WebRTC audio broken
+
+### Symptom
+`sound_play.py --live` (pushes sine tone via `push_audio_sample` over WebRTC) produced
+no sound on the wireless robot.  The daemon log showed no `"Setting up incoming audio
+playback"` message — `_on_consumer_pad_added` never fired for an incoming audio pad.
+
+### Root cause
+Both daemon (`_enable_audio_receive`) and client (`_on_new_transceiver`) were setting
+**all** transceivers to SENDRECV, including the video transceiver.  This caused:
+
+1. The SDP offer/answer to advertise `a=sendrecv` for **video**.
+2. `webrtcsrc` (client-side) to create an internal `appsrc` for sending video back.
+3. That `appsrc` to immediately error with `not-negotiated (-4)` because no video
+   data was available.
+4. The client's `_on_bus_message` to return `False` on this error, removing the bus
+   watch and effectively stalling the pipeline.
+5. The WebRTC connection to drop after ~6 seconds — before the daemon ever received
+   any audio RTP from the client.
+
+The old code's comment claimed "Video sendrecv is harmless since the browser answers
+recvonly", but the Python SDK client (`webrtcsrc`) answers `sendrecv` for all media
+when the daemon offers `sendrecv`.
+
+### Fix (3 changes)
+1. **Daemon `_enable_audio_receive`** — use `transceiver.get_property("kind")` to
+   identify the audio transceiver (kind == 1) and only set that one to SENDRECV.
+   Video stays SENDONLY.
+2. **Client `_on_new_transceiver`** — same approach: check `kind` instead of
+   relying on `codec-preferences` (which may be None/empty for all transceivers).
+3. **Client `_on_bus_message`** — ignore `not-negotiated` errors from `appsrc`
+   elements inside `webrtcsrc` (defensive, in case edge cases remain).
+
+### Additional fixes in this session
+- **Audio source detection order**: DeviceMonitor first (Linux Lite via PipeWire),
+  `.asoundrc` fallback (wireless CM4 with ALSA), `autoaudiosrc` last resort.
+- **`provide-clock=False` guard**: Use `find_property()` before `set_property()` so
+  `autoaudiosrc` (a GstBin without that property) doesn't crash `_configure_audio`.
