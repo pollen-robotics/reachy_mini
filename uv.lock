@@ -3388,7 +3388,6 @@ source = { editable = "." }
 dependencies = [
     { name = "aiohttp" },
     { name = "asgiref" },
-    { name = "cv2-enumerate-cameras" },
     { name = "fastapi" },
     { name = "gstreamer-bundle", marker = "sys_platform != 'linux'" },
     { name = "huggingface-hub" },
@@ -3396,7 +3395,6 @@ dependencies = [
     { name = "libusb-package" },
     { name = "log-throttling" },
     { name = "numpy" },
-    { name = "opencv-python" },
     { name = "pip" },
     { name = "psutil" },
     { name = "pulsectl", marker = "sys_platform == 'linux'" },
@@ -3438,6 +3436,8 @@ all = [
     { name = "urdf-parser-py" },
 ]
 examples = [
+    { name = "cv2-enumerate-cameras" },
+    { name = "opencv-python" },
     { name = "pynput" },
     { name = "soundfile" },
 ]
@@ -3487,7 +3487,7 @@ dev = [
 requires-dist = [
     { name = "aiohttp" },
     { name = "asgiref" },
-    { name = "cv2-enumerate-cameras", specifier = ">=1.2.1" },
+    { name = "cv2-enumerate-cameras", marker = "extra == 'examples'", specifier = ">=1.2.1" },
     { name = "cv2-enumerate-cameras", marker = "extra == 'opencv'", specifier = ">=1.2.1" },
     { name = "fastapi" },
     { name = "gpiozero", marker = "sys_platform == 'linux' and extra == 'wireless-version'", specifier = ">=2.0.0" },
@@ -3501,7 +3501,7 @@ requires-dist = [
     { name = "nmcli", marker = "sys_platform == 'linux' and extra == 'wireless-version'", specifier = ">=1.5" },
     { name = "numpy", specifier = ">=2.2.5" },
     { name = "onnxruntime", marker = "extra == 'nn-kinematics'", specifier = "==1.22.1" },
-    { name = "opencv-python", specifier = "<=5.0" },
+    { name = "opencv-python", marker = "extra == 'examples'", specifier = "<=5.0" },
     { name = "opencv-python", marker = "extra == 'opencv'", specifier = "<=5.0" },
     { name = "pip", specifier = ">=25" },
     { name = "placo", marker = "sys_platform != 'win32' and extra == 'placo-kinematics'", specifier = "==0.9.14" },
