@@ -4,7 +4,7 @@ Understanding the media architecture of Reachy Mini is essential for effectively
 
 ## Unified Architecture
 
-The daemon always manages the camera and audio hardware via its WebRTC media backend (`webrtc_daemon.py`), regardless of whether you are using a Reachy Mini (Wireless) or Reachy Mini Lite. This unification means both models work the same way:
+The daemon always manages the camera and audio hardware via `GstMediaServer` (`media_server.py`), regardless of whether you are using a Reachy Mini (Wireless) or Reachy Mini Lite. This unification means both models work the same way:
 
 - The **daemon** owns the physical camera and audio devices.
 - **Local clients** (same machine) read camera frames from a local IPC endpoint and open the audio device directly via GStreamer — the `LOCAL` backend.
