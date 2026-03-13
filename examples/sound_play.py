@@ -8,7 +8,6 @@ Two modes:
 # START doc_example
 
 import argparse
-import logging
 import os
 import time
 
@@ -52,7 +51,6 @@ def play_live_tone(mini: "ReachyMini", tone_hz: float) -> None:
 
 def main(backend: str, wav_path: str | None, tone_hz: float) -> None:
     """Run the sound playback example."""
-
     with ReachyMini(log_level="DEBUG", media_backend=backend) as mini:
         if wav_path:
             play_wav(mini, wav_path)
