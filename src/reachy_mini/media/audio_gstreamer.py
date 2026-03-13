@@ -142,27 +142,29 @@ class GStreamerAudio:
 
         audiosrc: Optional[Gst.Element] = None
 
-        id_audio_card = self._get_audio_device("Source")
+        if has_reachymini_asoundrc():
+            # Wireless CM4: use the preconfigured .asoundrc ALSA devices
+            # which route through the XMOS AEC loopback properly.
+            audiosrc = Gst.ElementFactory.make("alsasrc")
+            audiosrc.set_property("device", "reachymini_audio_src")
+            self.logger.info("Using .asoundrc audio source: reachymini_audio_src")
+        else:
+            id_audio_card = self._get_audio_device("Source")
 
-        if id_audio_card is None:
-            if has_reachymini_asoundrc():
-                # reachy mini wireless has a preconfigured asoundrc
-                audiosrc = Gst.ElementFactory.make("alsasrc")
-                audiosrc.set_property("device", "reachymini_audio_src")
-            else:
+            if id_audio_card is None:
                 self.logger.warning(
                     "No specific audio card found, using default audio source."
                 )
                 audiosrc = Gst.ElementFactory.make("autoaudiosrc")  # use default mic
-        elif platform.system() == "Windows":
-            audiosrc = Gst.ElementFactory.make("wasapi2src")
-            audiosrc.set_property("device", id_audio_card)
-        elif platform.system() == "Darwin":
-            audiosrc = Gst.ElementFactory.make("osxaudiosrc")
-            audiosrc.set_property("unique-id", id_audio_card)
-        else:
-            audiosrc = Gst.ElementFactory.make("pulsesrc")
-            audiosrc.set_property("device", f"{id_audio_card}")
+            elif platform.system() == "Windows":
+                audiosrc = Gst.ElementFactory.make("wasapi2src")
+                audiosrc.set_property("device", id_audio_card)
+            elif platform.system() == "Darwin":
+                audiosrc = Gst.ElementFactory.make("osxaudiosrc")
+                audiosrc.set_property("unique-id", id_audio_card)
+            else:
+                audiosrc = Gst.ElementFactory.make("pulsesrc")
+                audiosrc.set_property("device", f"{id_audio_card}")
 
         queue = Gst.ElementFactory.make("queue")
         audioconvert = Gst.ElementFactory.make("audioconvert")
@@ -196,38 +198,44 @@ class GStreamerAudio:
 
         audiosink: Optional[Gst.Element] = None
 
-        id_audio_card = self._get_audio_device("Sink")
+        if has_reachymini_asoundrc():
+            # Wireless CM4: use the preconfigured .asoundrc ALSA devices
+            # which route through the XMOS AEC loopback properly.
+            audiosink = Gst.ElementFactory.make("alsasink")
+            audiosink.set_property("device", "reachymini_audio_sink")
+            self.logger.info("Using .asoundrc audio sink: reachymini_audio_sink")
+        else:
+            id_audio_card = self._get_audio_device("Sink")
 
-        if id_audio_card is None:
-            if has_reachymini_asoundrc():
-                # reachy mini wireless has a preconfigured asoundrc
-                audiosink = Gst.ElementFactory.make("alsasink")
-                audiosink.set_property("device", "reachymini_audio_sink")
-            else:
+            if id_audio_card is None:
                 self.logger.warning(
                     "No specific audio card found, using default audio sink."
                 )
                 audiosink = Gst.ElementFactory.make(
                     "autoaudiosink"
                 )  # use default speaker
-        elif platform.system() == "Windows":
-            audiosink = Gst.ElementFactory.make("wasapi2sink")
-            audiosink.set_property("device", id_audio_card)
-        elif platform.system() == "Darwin":
-            audiosink = Gst.ElementFactory.make("osxaudiosink")
-            audiosink.set_property("unique-id", id_audio_card)
-        else:
-            audiosink = Gst.ElementFactory.make("pulsesink")
-            audiosink.set_property("device", f"{id_audio_card}")
+            elif platform.system() == "Windows":
+                audiosink = Gst.ElementFactory.make("wasapi2sink")
+                audiosink.set_property("device", id_audio_card)
+            elif platform.system() == "Darwin":
+                audiosink = Gst.ElementFactory.make("osxaudiosink")
+                audiosink.set_property("unique-id", id_audio_card)
+            else:
+                audiosink = Gst.ElementFactory.make("pulsesink")
+                audiosink.set_property("device", f"{id_audio_card}")
+
+        queue = Gst.ElementFactory.make("queue")
 
         pipeline.add(audiosink)
         pipeline.add(self._appsrc)
         pipeline.add(audioconvert)
         pipeline.add(audioresample)
+        pipeline.add(queue)
 
         self._appsrc.link(audioconvert)
         audioconvert.link(audioresample)
-        audioresample.link(audiosink)
+        audioresample.link(queue)
+        queue.link(audiosink)
 
     # ------------------------------------------------------------------
     # Bus handling
