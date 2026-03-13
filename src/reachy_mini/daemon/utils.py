@@ -76,12 +76,12 @@ def _win32_pipe_exists(pipe_path: str) -> bool:
     GENERIC_READ = 0x80000000
     OPEN_EXISTING = 3
 
-    handle = ctypes.windll.kernel32.CreateFileW(  # type: ignore[union-attr]
+    handle = ctypes.windll.kernel32.CreateFileW(  # type: ignore[attr-defined]
         pipe_path, GENERIC_READ, 0, None, OPEN_EXISTING, 0, None
     )
     if handle == INVALID_HANDLE_VALUE:
         return False
-    ctypes.windll.kernel32.CloseHandle(handle)  # type: ignore[union-attr]
+    ctypes.windll.kernel32.CloseHandle(handle)  # type: ignore[attr-defined]
     return True
 
 

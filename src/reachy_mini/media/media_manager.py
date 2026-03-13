@@ -94,9 +94,9 @@ def _resolve_backend(backend: MediaBackend) -> MediaBackend:
 # We import them lazily inside the init helpers, but declare the union
 # here so the type annotations stay narrow.
 
+from reachy_mini.media.audio_gstreamer import GStreamerAudio  # noqa: E402
 from reachy_mini.media.camera_constants import CameraSpecs  # noqa: E402
 from reachy_mini.media.camera_gstreamer import GStreamerCamera  # noqa: E402
-from reachy_mini.media.audio_gstreamer import GStreamerAudio  # noqa: E402
 from reachy_mini.media.webrtc_client_gstreamer import GstWebRTCClient  # noqa: E402
 
 CameraLike = Union[GStreamerCamera, GstWebRTCClient]

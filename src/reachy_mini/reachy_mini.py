@@ -18,7 +18,6 @@ from asgiref.sync import async_to_sync
 from scipy.spatial.transform import Rotation as R
 
 from reachy_mini.daemon.utils import daemon_check, is_local_camera_available
-from reachy_mini.media.camera_constants import get_camera_specs_by_name
 from reachy_mini.io.protocol import (
     AppendRecordCmd,
     GotoTaskRequest,
@@ -33,6 +32,7 @@ from reachy_mini.io.protocol import (
     StopRecordingCmd,
 )
 from reachy_mini.io.ws_client import WSClient
+from reachy_mini.media.camera_constants import get_camera_specs_by_name
 from reachy_mini.media.camera_utils import undistort_points
 from reachy_mini.media.media_manager import MediaBackend, MediaManager
 from reachy_mini.motion.move import Move

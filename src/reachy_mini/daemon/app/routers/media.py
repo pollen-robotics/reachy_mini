@@ -6,8 +6,8 @@ for direct access (e.g. OpenCV, sounddevice), then re-acquire when done.
 
 from fastapi import APIRouter, Depends
 
-from ..dependencies import get_daemon
 from ...daemon import Daemon
+from ..dependencies import get_daemon
 
 router = APIRouter(
     prefix="/media",

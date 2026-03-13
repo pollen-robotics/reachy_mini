@@ -479,11 +479,11 @@ class GstWebRTCClient:
         return self.SAMPLE_RATE
 
     def get_input_channels(self) -> int:
-        """Number of input channels (2)."""
+        """Return the number of input channels (2)."""
         return self.CHANNELS
 
     def get_output_channels(self) -> int:
-        """Number of output channels (2)."""
+        """Return the number of output channels (2)."""
         return self.CHANNELS
 
     def stop_recording(self) -> None:
