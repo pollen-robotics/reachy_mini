@@ -22,7 +22,7 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         uses: awalsh128/cache-apt-pkgs-action@latest
         with:
-          packages: libportaudio2 libcairo2-dev libgirepository1.0-dev python3-gi python3-gi-cairo gstreamer1.0-plugins-base gstreamer1.0-plugins-good gir1.2-gst-plugins-base-1.0
+          packages: libcairo2-dev libgirepository1.0-dev python3-gi python3-gi-cairo gstreamer1.0-plugins-base gstreamer1.0-plugins-good gir1.2-gst-plugins-base-1.0
           version: 1.0
       - name: Install uv
         uses: astral-sh/setup-uv@v7
@@ -33,6 +33,6 @@ jobs:
         run: uv sync --frozen --all-extras --group dev
       - name: Run tests
         run: |
-          uv run pytest -vv -m 'not audio and not video and not audio_sounddevice and not video_opencv and not wireless' --tb=short
+          uv run pytest -vv -m 'not audio and not video and not wireless and not ipc_resolution' --tb=short
         env:
           MUJOCO_GL: disable
