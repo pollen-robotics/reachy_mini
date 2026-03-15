@@ -3,68 +3,118 @@
 Provides camera and audio access based on the selected backend.
 
 This module offers a unified interface for managing both camera and audio
-devices with support for multiple backends. It simplifies the process of
+devices with support for multiple backends.  It simplifies the process of
 initializing, configuring, and using media devices across different
 platforms and use cases.
+
+Architecture overview:
+    The daemon always owns the physical camera and audio hardware via
+    ``GstMediaServer`` (``media_server.py``).  Clients pick one of three strategies:
+
+    * **LOCAL** – read camera frames from the daemon's IPC endpoint
+      (``unixfdsrc`` / ``win32ipcvideosrc``) and open the local audio
+      device directly via GStreamer.  Best for on-device apps (no
+      encode/decode overhead).
+    * **WEBRTC** – stream camera + audio over WebRTC from the daemon.
+      Best for remote clients.
+    * **NO_MEDIA** – skip all media initialisation (headless operation).
 """
 
 import logging
+import warnings
 from enum import Enum
-from typing import Optional
+from typing import Optional, Union
 
 import numpy as np
 import numpy.typing as npt
-
-from reachy_mini.media.audio_base import AudioBase
-from reachy_mini.media.camera_base import CameraBase
-
-# actual backends are dynamically imported
 
 
 class MediaBackend(Enum):
     """Media backends.
 
-    Enumeration of available media backends that can be used with MediaManager.
-    Each backend provides different capabilities and performance characteristics.
-
     Attributes:
-        NO_MEDIA: No media devices - useful for headless operation or when
-                 media devices are not needed.
-        SOUNDDEVICE_OPENCV: Default backend using OpenCV for video and SoundDevice for audio.
-                Cross-platform and widely compatible.
-        SOUNDDEVICE_NO_VIDEO: SoundDevice audio only - for audio processing without video.
-        GSTREAMER: GStreamer-based media backend with advanced video and audio
-                  processing capabilities. Alias: DEFAULT
-        GSTREAMER_NO_VIDEO: GStreamer audio only - for advanced audio processing
-                           without video. Alias: DEFAULT_NO_VIDEO
-        WEBRTC: WebRTC-based media backend for real-time communication and
-               streaming applications.
+        NO_MEDIA: No media devices — headless operation.
+        LOCAL: GStreamer IPC camera reader + GStreamer local audio.
+            Use when the client runs on the same machine as the daemon.
+        WEBRTC: WebRTC streaming from the daemon (camera + audio).
+            Use when the client is remote.
+        DEFAULT: Alias for LOCAL.
+
+    Deprecated values (emit ``FutureWarning``):
+        GSTREAMER, GSTREAMER_NO_VIDEO, SOUNDDEVICE_OPENCV,
+        SOUNDDEVICE_NO_VIDEO, DEFAULT_NO_VIDEO.
 
     """
 
     NO_MEDIA = "no_media"
+    LOCAL = "local"
+    WEBRTC = "webrtc"
+
+    # Primary alias
+    DEFAULT = LOCAL
+
+    # ------------------------------------------------------------------
+    # Deprecated aliases — kept so old code keeps working for one release
+    # ------------------------------------------------------------------
     GSTREAMER = "gstreamer"
     GSTREAMER_NO_VIDEO = "gstreamer_no_video"
     SOUNDDEVICE_NO_VIDEO = "sounddevice_no_video"
     SOUNDDEVICE_OPENCV = "sounddevice_opencv"
-    WEBRTC = "webrtc"
-
     DEFAULT_NO_VIDEO = GSTREAMER_NO_VIDEO
-    DEFAULT = GSTREAMER
+
+
+# Mapping from deprecated enum members to their replacement
+_DEPRECATED_BACKENDS: dict[MediaBackend, MediaBackend] = {
+    MediaBackend.GSTREAMER: MediaBackend.LOCAL,
+    MediaBackend.GSTREAMER_NO_VIDEO: MediaBackend.LOCAL,
+    MediaBackend.SOUNDDEVICE_NO_VIDEO: MediaBackend.LOCAL,
+    MediaBackend.SOUNDDEVICE_OPENCV: MediaBackend.LOCAL,
+}
+
+
+def _resolve_backend(backend: MediaBackend) -> MediaBackend:
+    """Return the canonical backend, emitting a deprecation warning if needed."""
+    replacement = _DEPRECATED_BACKENDS.get(backend)
+    if replacement is not None:
+        warnings.warn(
+            f"MediaBackend.{backend.name} is deprecated and will be removed in a "
+            f"future release. Use MediaBackend.{replacement.name} instead.",
+            FutureWarning,
+            stacklevel=3,
+        )
+        return replacement
+    return backend
+
+
+# -- Type aliases for the concrete backends ----------------------------
+# Both GStreamerCamera and GstWebRTCClient expose the same camera API
+# (open, read, close, set_resolution, resolution, K, D, …).
+# Both GStreamerAudio and GstWebRTCClient expose the same audio API
+# (start_recording, get_audio_sample, push_audio_sample, play_sound, …).
+# We import them lazily inside the init helpers, but declare the union
+# here so the type annotations stay narrow.
+
+from reachy_mini.media.audio_gstreamer import GStreamerAudio  # noqa: E402
+from reachy_mini.media.camera_constants import CameraSpecs  # noqa: E402
+from reachy_mini.media.camera_gstreamer import GStreamerCamera  # noqa: E402
+from reachy_mini.media.webrtc_client_gstreamer import GstWebRTCClient  # noqa: E402
+
+CameraLike = Union[GStreamerCamera, GstWebRTCClient]
+AudioLike = Union[GStreamerAudio, GstWebRTCClient]
 
 
 class MediaManager:
     """Media Manager for handling camera and audio devices.
 
-        This class provides a unified interface for managing both camera and audio
-    devices across different backends. It handles initialization, configuration,
-    and cleanup of media resources.
+    This class provides a unified interface for managing both camera and audio
+    devices across different backends.  It handles initialization,
+    configuration, and cleanup of media resources.
 
     Attributes:
-            logger (logging.Logger): Logger instance for media-related messages.
-            backend (MediaBackend): The selected media backend.
-            camera (Optional[CameraBase]): Camera device instance.
-            audio (Optional[AudioBase]): Audio device instance.
+        logger: Logger instance for media-related messages.
+        backend: The selected media backend (after deprecation resolution).
+        camera: Camera device instance, or ``None``.
+        audio: Audio device instance, or ``None``.
 
     """
 
@@ -74,105 +124,56 @@ class MediaManager:
         log_level: str = "INFO",
         use_sim: bool = False,
         signalling_host: str = "localhost",
+        camera_specs: Optional[CameraSpecs] = None,
     ) -> None:
         """Initialize the media manager.
 
         Args:
-            backend (MediaBackend): The media backend to use. Default is DEFAULT.
-            log_level (str): Logging level for media operations.
-                          Options: 'DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'.
-                          Default: 'INFO'.
-            use_sim (bool): Whether to use simulation mode (for testing).
-                          Default: False.
-            signalling_host (str): Host address for WebRTC signalling server.
-                                 Only used with WEBRTC backend.
-                                 Default: 'localhost'.
+            backend: The media backend to use.  Default is ``LOCAL``.
+            log_level: Logging level for media operations.
+            use_sim: Whether to use simulation mode (for testing).
+            signalling_host: Host address for WebRTC signalling server.
+                Only used with the ``WEBRTC`` backend.
+            camera_specs: Camera specifications detected by the daemon.
+                When ``None`` the concrete camera class will fall back to
+                ``ReachyMiniLiteCamSpecs`` with a warning.
 
-        Note:
-            The constructor initializes the selected media backend and sets up
-            the appropriate camera and audio devices based on the backend choice.
+        Example::
 
-        Available backends:
-            - NO_MEDIA: No media devices (useful for headless operation)
-            - SOUNDDEVICE_OPENCV: OpenCV + SoundDevice (former cross-platform default)
-            - SOUNDDEVICE_NO_VIDEO: SoundDevice only (audio without video)
-                - GSTREAMER: GStreamer-based media (advanced features)- Alias: DEFAULT
-             - GSTREAMER_NO_VIDEO: GStreamer audio only- Alias: DEFAULT_NO_VIDEO
-            - WEBRTC: WebRTC-based media for real-time communication
-
-        Example usage:
-            ```python
             from reachy_mini.media.media_manager import MediaManager, MediaBackend
 
-            # Initialize with default backend
             media = MediaManager(backend=MediaBackend.DEFAULT)
-
-            # Capture a frame
             frame = media.get_frame()
-            if frame is not None:
-                cv2.imshow("Frame", frame)
-                cv2.waitKey(1)
-
-            # Play a sound
-            media.play_sound("/path/to/sound.wav")
-
-            # Clean up
             media.close()
-            ```
 
         """
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(log_level)
-        self.backend = backend
-        self.camera: Optional[CameraBase] = None
-        self.audio: Optional[AudioBase] = None
+        self.backend = _resolve_backend(backend)
+        self.camera: Optional[CameraLike] = None
+        self.audio: Optional[AudioLike] = None
 
-        match backend:
+        match self.backend:
             case MediaBackend.NO_MEDIA:
                 self.logger.info("No media backend selected.")
-            case MediaBackend.SOUNDDEVICE_OPENCV:
-                self.logger.info("Using OpenCV + SoundDevice media backend.")
-                self._init_camera(use_sim, log_level)
-                self._init_audio(log_level)
-            case MediaBackend.SOUNDDEVICE_NO_VIDEO:
-                self.logger.info("Using SoundDevice audio only backend.")
-                self._init_audio(log_level)
-            case MediaBackend.GSTREAMER:
-                self.logger.info("Using GStreamer media backend.")
-                self._init_camera(use_sim, log_level)
-                self._init_audio(log_level)
-            case MediaBackend.GSTREAMER_NO_VIDEO:
-                self.logger.info("Using GStreamer audio only backend.")
+            case MediaBackend.LOCAL:
+                self.logger.info(
+                    "Using LOCAL backend (GStreamer IPC camera + GStreamer audio)."
+                )
+                self._init_camera(log_level, camera_specs)
                 self._init_audio(log_level)
             case MediaBackend.WEBRTC:
-                self.logger.info("Using WebRTC GStreamer backend.")
-                self._init_webrtc(log_level, signalling_host, 8443)
+                self.logger.info("Using WebRTC streaming backend.")
+                self._init_webrtc(log_level, signalling_host, 8443, camera_specs)
             case _:
                 raise NotImplementedError(f"Media backend {backend} not implemented.")
 
+    # ------------------------------------------------------------------
+    # Lifecycle
+    # ------------------------------------------------------------------
+
     def close(self) -> None:
-        """Close the media manager and release resources.
-
-        This method should be called when the media manager is no longer needed
-        to properly clean up and release all media resources. It stops any ongoing
-        audio recording/playback and closes the camera device.
-
-        Note:
-            After calling this method, the media manager can be reused by calling
-            the appropriate initialization methods again, but it's generally
-            recommended to create a new MediaManager instance if needed.
-
-        Example:
-            ```python
-            media = MediaManager()
-            try:
-                # Use media devices
-                frame = media.get_frame()
-            finally:
-                media.close()
-            ```
-
-        """
+        """Close the media manager and release resources."""
         if self.camera is not None:
             self.camera.close()
             del self.camera
@@ -188,58 +189,60 @@ class MediaManager:
         """Destructor to ensure resources are released."""
         self.close()
 
+    # ------------------------------------------------------------------
+    # Private init helpers
+    # ------------------------------------------------------------------
+
     def _init_camera(
-        self,
-        use_sim: bool,
-        log_level: str,
+        self, log_level: str, camera_specs: Optional[CameraSpecs] = None
     ) -> None:
-        """Initialize the camera."""
-        self.logger.debug("Initializing camera...")
-        if self.backend == MediaBackend.SOUNDDEVICE_OPENCV:
-            self.logger.info("Using OpenCV camera backend.")
-            from reachy_mini.media.camera_opencv import OpenCVCamera
+        """Initialize the camera via local IPC."""
+        self.logger.debug("Initializing camera (LOCAL IPC reader)...")
+        self.camera = GStreamerCamera(log_level=log_level, camera_specs=camera_specs)
+        self.camera.open()
 
-            self.camera = OpenCVCamera(log_level=log_level)
-            if use_sim:
-                self.camera.open(udp_camera="udp://@127.0.0.1:5005")
-            else:
-                self.camera.open()
-        elif self.backend == MediaBackend.GSTREAMER:
-            self.logger.info("Using GStreamer camera backend.")
-            from reachy_mini.media.camera_gstreamer import GStreamerCamera
+    def _init_audio(self, log_level: str) -> None:
+        """Initialize the audio system via GStreamer."""
+        self.logger.debug("Initializing audio (GStreamer)...")
+        self.audio = GStreamerAudio(log_level=log_level)
 
-            self.camera = GStreamerCamera(log_level=log_level, use_sim=use_sim)
-            self.camera.open()
-        else:
-            raise NotImplementedError(f"Camera backend {self.backend} not implemented.")
+    def _init_webrtc(
+        self,
+        log_level: str,
+        signalling_host: str,
+        signalling_port: int,
+        camera_specs: Optional[CameraSpecs] = None,
+    ) -> None:
+        """Initialize the WebRTC client (camera + audio)."""
+        from reachy_mini.media.webrtc_utils import find_producer_peer_id_by_name
+
+        peer_id = find_producer_peer_id_by_name(
+            signalling_host, signalling_port, "reachymini"
+        )
+
+        webrtc_media = GstWebRTCClient(
+            log_level=log_level,
+            peer_id=peer_id,
+            signaling_host=signalling_host,
+            signaling_port=signalling_port,
+            camera_specs=camera_specs,
+        )
+
+        self.camera = webrtc_media
+        self.audio = webrtc_media  # GstWebRTCClient handles both audio and video
+        self.camera.open()
+
+    # ------------------------------------------------------------------
+    # Camera helpers
+    # ------------------------------------------------------------------
 
     def get_frame(self) -> Optional[npt.NDArray[np.uint8]]:
         """Get a frame from the camera.
 
         Returns:
-            Optional[npt.NDArray[np.uint8]]: The captured BGR frame as a numpy array
-            with shape (height, width, 3), or None if the camera is not available
-            or an error occurred.
-
-            The image is in BGR format (OpenCV convention) and can be directly
-            used with OpenCV functions or converted to RGB if needed.
-
-        Note:
-            This method returns None if the camera is not initialized or if
-            there's an error capturing the frame. Always check the return value
-            before using the frame.
-
-        Example:
-            ```python
-            frame = media.get_frame()
-            if frame is not None:
-                # Process the frame
-                cv2.imshow("Camera", frame)
-                cv2.waitKey(1)
-
-                # Convert to RGB if needed
-                rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            ```
+            The captured BGR frame as a numpy array with shape
+            ``(height, width, 3)``, or ``None`` if the camera is not
+            available.
 
         """
         if self.camera is None:
@@ -247,55 +250,15 @@ class MediaManager:
             return None
         return self.camera.read()
 
-    def _init_audio(self, log_level: str) -> None:
-        """Initialize the audio system."""
-        self.logger.debug("Initializing audio...")
-        if (
-            self.backend == MediaBackend.SOUNDDEVICE_OPENCV
-            or self.backend == MediaBackend.SOUNDDEVICE_NO_VIDEO
-        ):
-            self.logger.info("Using SoundDevice audio backend.")
-            from reachy_mini.media.audio_sounddevice import SoundDeviceAudio
-
-            self.audio = SoundDeviceAudio(log_level=log_level)
-        elif (
-            self.backend == MediaBackend.GSTREAMER
-            or self.backend == MediaBackend.GSTREAMER_NO_VIDEO
-        ):
-            self.logger.info("Using GStreamer audio backend.")
-            from reachy_mini.media.audio_gstreamer import GStreamerAudio
-
-            self.audio = GStreamerAudio(log_level=log_level)
-        else:
-            raise NotImplementedError(f"Audio backend {self.backend} not implemented.")
-
-    def _init_webrtc(
-        self, log_level: str, signalling_host: str, signalling_port: int
-    ) -> None:
-        """Initialize the WebRTC system (not implemented yet)."""
-        from reachy_mini.media.webrtc_client_gstreamer import GstWebRTCClient
-        from reachy_mini.media.webrtc_utils import find_producer_peer_id_by_name
-
-        peer_id = find_producer_peer_id_by_name(
-            signalling_host, signalling_port, "reachymini"
-        )
-
-        webrtc_media: GstWebRTCClient = GstWebRTCClient(
-            log_level=log_level,
-            peer_id=peer_id,
-            signaling_host=signalling_host,
-            signaling_port=signalling_port,
-        )
-
-        self.camera = webrtc_media
-        self.audio = webrtc_media  # GstWebRTCClient handles both audio and video
-        self.camera.open()
+    # ------------------------------------------------------------------
+    # Audio helpers
+    # ------------------------------------------------------------------
 
     def play_sound(self, sound_file: str) -> None:
         """Play a sound file.
 
         Args:
-            sound_file (str): Path to the sound file to play.
+            sound_file: Path to the sound file to play.
 
         """
         if self.audio is None:
@@ -314,7 +277,7 @@ class MediaManager:
         """Get an audio sample from the audio device.
 
         Returns:
-            Optional[np.ndarray]: The recorded audio sample, or None if no data is available.
+            The recorded audio sample, or ``None`` if no data is available.
 
         """
         if self.audio is None:
@@ -368,7 +331,7 @@ class MediaManager:
         """Push audio data to the output device.
 
         Args:
-            data (npt.NDArray[np.float32]): The audio data to push to the output device (mono format).
+            data: The audio data to push (mono format).
 
         """
         if self.audio is None:
@@ -411,8 +374,8 @@ class MediaManager:
         """Get the Direction of Arrival (DoA) from the microphone array.
 
         Returns:
-            tuple[float, bool] | None: A tuple (angle_radians, speech_detected),
-            or None if the audio system is not available.
+            A tuple ``(angle_radians, speech_detected)``, or ``None`` if the
+            audio system is not available.
 
         """
         if self.audio is None:

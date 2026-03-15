@@ -110,13 +110,11 @@ async def set_volume(
 
     daemon = getattr(request.app.state, "daemon", None)
     backend: Backend | None = daemon.backend if daemon is not None else None
-    if backend is not None and backend.ready.is_set() and backend.audio:
+    if backend is not None and backend.ready.is_set():
         try:
-            backend.audio.play_sound("impatient1.wav")
+            backend.play_sound("impatient1.wav")
         except Exception as e:
             logger.warning("Failed to play test sound: %s", e)
-    else:
-        logger.warning("No audio backend available, skipping test sound.")
 
     return response
 
@@ -124,11 +122,8 @@ async def set_volume(
 @router.post("/test-sound")
 async def play_test_sound(backend: Backend = Depends(get_backend)) -> TestSoundResponse:
     """Play a test sound."""
-    if not backend.audio:
-        raise HTTPException(status_code=503, detail="Audio device not available")
-
     try:
-        backend.audio.play_sound("impatient1.wav")
+        backend.play_sound("impatient1.wav")
         return TestSoundResponse(status="ok", message="Test sound played")
     except Exception as e:
         msg = str(e).lower()

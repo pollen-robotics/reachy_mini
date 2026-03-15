@@ -21,7 +21,7 @@ async def _start_app_server(
         sim=True,
         headless=True,
         wake_up_on_start=False,
-        use_audio=False,
+        no_media=True,
         autostart=True,
         fastapi_port=0,  # let OS pick a free port
     )
@@ -43,9 +43,7 @@ async def _start_app_server(
     return app.state.daemon, server, thread, port
 
 
-async def _stop_app_server(
-    server: uvicorn.Server, thread: threading.Thread
-) -> None:
+async def _stop_app_server(server: uvicorn.Server, thread: threading.Thread) -> None:
     """Gracefully shut down the uvicorn server."""
     server.should_exit = True
     thread.join(timeout=10)
@@ -77,9 +75,7 @@ async def test_daemon_client_disconnection() -> None:
     client_connected = asyncio.Event()
 
     async def simple_client() -> None:
-        with ReachyMini(
-            host="localhost", port=port, media_backend="no_media"
-        ) as mini:
+        with ReachyMini(host="localhost", port=port, media_backend="no_media") as mini:
             status = mini.client.get_status()
             assert status.state == "running"
             assert status.simulation_enabled
@@ -141,12 +137,8 @@ async def test_multi_robot_isolation() -> None:
 
     try:
         with (
-            ReachyMini(
-                host="localhost", port=port1, media_backend="no_media"
-            ) as mini1,
-            ReachyMini(
-                host="localhost", port=port2, media_backend="no_media"
-            ) as mini2,
+            ReachyMini(host="localhost", port=port1, media_backend="no_media") as mini1,
+            ReachyMini(host="localhost", port=port2, media_backend="no_media") as mini2,
         ):
             # Both robots should be running independently
             status1 = mini1.client.get_status()
