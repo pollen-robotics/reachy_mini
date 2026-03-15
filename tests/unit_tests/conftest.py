@@ -7,6 +7,12 @@ from typing import Generator, cast
 
 import pytest
 
+try:
+    # Hack: import placo before reachy mini to fix an error with the Ubuntu CI
+    import placo
+except ImportError:
+    pass
+
 from reachy_mini.daemon.utils import (
     CAMERA_PIPE_NAME,
     CAMERA_SOCKET_PATH,

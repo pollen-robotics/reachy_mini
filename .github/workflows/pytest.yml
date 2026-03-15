@@ -33,6 +33,6 @@ jobs:
         run: uv sync --frozen --all-extras --group dev
       - name: Run tests
         run: |
-          uv run pytest -vv -m 'not audio and not video and not wireless and not ipc_resolution' --tb=short
+          uv run pytest -vv -m 'not audio and not video and not wireless' --tb=short
         env:
           MUJOCO_GL: disable
