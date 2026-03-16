@@ -80,7 +80,10 @@ class Daemon:
         self.backend_run_thread: "Thread | None" = None
         self._thread_event_publish_status = Event()
 
-        self._media_server: Optional[Any] = None  # GstMediaServer when media is enabled
+        self._media_server: Optional["GstMediaServer"] = (
+            None  # GstMediaServer when media is enabled
+        )
+        self._media_released = False
         if not no_media:
             from reachy_mini.media.media_server import GstMediaServer
 
@@ -102,6 +105,43 @@ class Daemon:
             self._media_server.stop()
             self._media_server.__del__()
             self._media_server = None
+
+    @property
+    def media_released(self) -> bool:
+        """Whether media hardware has been released for direct access."""
+        return self._media_released
+
+    async def release_media(self) -> None:
+        """Release camera and audio hardware so clients can access them directly.
+
+        Stops the GstMediaServer pipeline and central signalling relay.
+        Idempotent: no-op if already released or no media server.
+        """
+        if self._media_released or self._media_server is None:
+            return
+
+        self.logger.info("Releasing media hardware for direct access...")
+        self._media_server.stop()
+        await self._stop_central_signaling_relay()
+        self._media_released = True
+        self._status.media_released = True
+        self.logger.info("Media hardware released.")
+
+    async def acquire_media(self) -> None:
+        """Re-acquire camera and audio hardware after a release.
+
+        Restarts the GstMediaServer pipeline and central signalling relay.
+        Idempotent: no-op if not currently released or no media server.
+        """
+        if not self._media_released or self._media_server is None:
+            return
+
+        self.logger.info("Re-acquiring media hardware...")
+        self._media_server.start()
+        await self._start_central_signaling_relay()
+        self._media_released = False
+        self._status.media_released = False
+        self.logger.info("Media hardware re-acquired.")
 
     async def _start_central_signaling_relay(self) -> None:
         """Start the central signaling relay for remote WebRTC access."""
@@ -256,7 +296,7 @@ class Daemon:
                 self._status.error = self.backend.error
                 return self._status.state
 
-            if self._media_server:
+            if self._media_server and not self._media_released:
                 if self.backend is not None:
                     self.backend.setup_media_server(self._media_server)
                 self._media_server.start()
@@ -322,7 +362,7 @@ class Daemon:
             self.backend.is_shutting_down = True
             self._thread_event_publish_status.set()
 
-            if self._media_server:
+            if self._media_server and not self._media_released:
                 # We use pause() instead of stop() to keep the signalling server running and the producer registered, allowing proper restart.
                 self._media_server.pause()
                 # Stop the central signaling relay

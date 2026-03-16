@@ -12,6 +12,7 @@ Note:
     The firmware is located in ``src/reachy_mini/assets/firmware/*.bin``.
     Refer to https://wiki.seeedstudio.com/respeaker_xvf3800_introduction/#update-firmware
     for the upgrade process.
+
 """
 
 import logging
@@ -41,6 +42,7 @@ class AudioDoA:
     """
 
     def __init__(self) -> None:
+        """Initialize the DoA helper, probing for a ReSpeaker USB device."""
         self._respeaker: Optional[ReSpeaker] = init_respeaker_usb()
 
     def get_DoA(self) -> tuple[float, bool] | None:

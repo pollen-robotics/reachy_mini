@@ -274,17 +274,29 @@ class GstWebRTCClient:
     def _on_new_transceiver(
         self, webrtcbin: Gst.Element, transceiver: GObject.Object
     ) -> None:
-        """Set audio transceiver to SENDRECV for bidirectional audio."""
+        """Set transceivers to SENDRECV for bidirectional audio.
+
+        When ``codec-preferences`` indicates audio, we set SENDRECV so
+        the client can push audio samples back to the daemon.
+
+        When ``codec-preferences`` is absent (video transceiver created
+        by webrtcsrc before SDP caps propagate), we also set SENDRECV to
+        match the daemon's offer.  This causes webrtcsrc to create an
+        internal appsrc for video that emits a non-fatal
+        ``not-negotiated`` error — the bus-message handler ignores it.
+
+        Only transceivers explicitly identified as non-audio with known
+        caps are left unchanged.
+        """
         caps = transceiver.get_property("codec-preferences")
-        if caps and caps.get_size() > 0:
-            s = caps.get_structure(0)
-            media = s.get_string("media")
+        if caps is not None and caps.get_size() > 0:
+            media = caps.get_structure(0).get_string("media")
             if media != "audio":
                 return
         transceiver.set_property(
             "direction", 4
         )  # GstWebRTCRTPTransceiverDirection.SENDRECV
-        self.logger.info("Audio transceiver configured for SENDRECV")
+        self.logger.info("Transceiver configured for SENDRECV")
 
     def _dump_latency(self) -> None:
         query = Gst.Query.new_latency()
@@ -374,6 +386,26 @@ class GstWebRTCClient:
             return False
         elif t == Gst.MessageType.ERROR:
             err, debug = msg.parse_error()
+            src = msg.src
+
+            # webrtcsrc may emit non-fatal errors from its internal
+            # elements (e.g. appsrc not-negotiated when a sendrecv
+            # transceiver has no data to send).  GStreamer wraps the
+            # actual reason as "Internal data stream error." in the
+            # GError, with "not-negotiated" only in the debug string.
+            # These should not tear down the whole pipeline.
+            if (
+                src is not None
+                and src.get_factory() is not None
+                and src.get_factory().get_name() == "appsrc"
+                and (
+                    "not-negotiated" in str(err)
+                    or "Internal data stream error" in str(err)
+                )
+            ):
+                self.logger.debug(f"Ignoring non-fatal webrtcsrc internal error: {err}")
+                return True
+
             self.logger.error(f"Error: {err} {debug}")
             return False
         return True
@@ -447,11 +479,11 @@ class GstWebRTCClient:
         return self.SAMPLE_RATE
 
     def get_input_channels(self) -> int:
-        """Number of input channels (2)."""
+        """Return the number of input channels (2)."""
         return self.CHANNELS
 
     def get_output_channels(self) -> int:
-        """Number of output channels (2)."""
+        """Return the number of output channels (2)."""
         return self.CHANNELS
 
     def stop_recording(self) -> None:

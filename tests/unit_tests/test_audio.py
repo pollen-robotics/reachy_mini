@@ -201,7 +201,7 @@ def test_push_audio_sample_without_start_playing(backend: MediaBackend) -> None:
 def test_DoA(backend: MediaBackend) -> None:
     """Test Direction of Arrival (DoA) estimation."""
     media = MediaManager(backend=backend)
-    # Test via AudioBase directly
+    # Test via GStreamerAudio directly
     doa = media.audio.get_DoA()
     assert doa is not None, "DoA is not defined."
     assert isinstance(doa, tuple), "DoA is not a tuple."

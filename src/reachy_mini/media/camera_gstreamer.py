@@ -6,9 +6,12 @@ daemon:
 * **Linux / macOS**: Unix domain socket via ``unixfdsrc``
 * **Windows**: Win32 named shared memory via ``win32ipcvideosrc``
 
-Frames arrive in BGR format from the daemon's IPC branch, so no
-``videoconvert`` is needed on the reader side — the appsink receives
-BGR data directly and converts it to a NumPy array.
+A ``v4l2convert`` (hardware-accelerated on RPi) or ``videoconvert``
+(software fallback) element converts the daemon's native frame format
+to BGR before the appsink, so the reader works regardless of what
+format the daemon sends (YUY2 from RPi libcamerasrc, BGR from Lite
+v4l2src, I420 from simulation, etc.).  When the daemon already sends
+BGR the converter runs in passthrough mode (zero-copy).
 
 This backend is used by the ``LOCAL`` media backend when the SDK client
 runs on the same machine as the daemon.  It avoids the overhead of WebRTC
@@ -255,8 +258,12 @@ class GStreamerCamera:
     def _build_ipc_source(self) -> None:
         """Build the IPC source pipeline for the current platform.
 
-        The daemon's IPC branch already outputs BGR frames, so no
-        ``videoconvert`` is needed here — just ``source → queue → appsink``.
+        Pipeline: ``source → queue → v4l2convert/videoconvert → appsink``
+
+        The converter ensures BGR output regardless of the daemon's native
+        format.  ``v4l2convert`` is preferred (hardware-accelerated on RPi);
+        ``videoconvert`` is the software fallback.  When the daemon already
+        sends BGR the converter runs in passthrough mode (zero-copy).
         """
         if platform.system() == "Windows":
             camsrc = Gst.ElementFactory.make("win32ipcvideosrc")
@@ -280,11 +287,27 @@ class GStreamerCamera:
         if queue is None:
             raise RuntimeError("Failed to create GStreamer queue element")
 
+        # Prefer v4l2convert (hardware-accelerated on RPi), fall back to
+        # videoconvert (software) on other platforms.
+        try:
+            convert = Gst.ElementFactory.make("v4l2convert")
+        except Exception:
+            convert = None
+        if convert is None:
+            self.logger.debug(
+                "v4l2convert not available, falling back to videoconvert."
+            )
+            convert = Gst.ElementFactory.make("videoconvert")
+        if convert is None:
+            raise RuntimeError("Failed to create video converter element")
+
         self.pipeline.add(camsrc)
         self.pipeline.add(queue)
+        self.pipeline.add(convert)
 
         camsrc.link(queue)
-        queue.link(self._appsink_video)
+        queue.link(convert)
+        convert.link(self._appsink_video)
 
     # ------------------------------------------------------------------
     # Bus handling

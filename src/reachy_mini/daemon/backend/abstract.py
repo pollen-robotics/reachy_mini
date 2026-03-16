@@ -53,6 +53,7 @@ from reachy_mini.io.publisher import Publisher
 if typing.TYPE_CHECKING:
     from reachy_mini.kinematics import AnyKinematics
 # MediaManager no longer used here — play_sound delegated to GstMediaServer
+from reachy_mini.media.audio_doa import AudioDoA
 from reachy_mini.motion.goto import GotoMove
 from reachy_mini.motion.move import Move
 from reachy_mini.utils.constants import MODELS_ROOT_PATH, URDF_ROOT_PATH
@@ -61,7 +62,6 @@ from reachy_mini.utils.interpolation import (
     distance_between_poses,
     time_trajectory,
 )
-from reachy_mini.media.audio_doa import AudioDoA
 
 
 class Backend:

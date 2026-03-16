@@ -637,7 +637,7 @@ Use the `media` object.
 ```python
 with ReachyMini() as mini:
     frame = mini.media.get_frame()
-    # Returns an OpenCV-compatible numpy array
+    # Returns a numpy array (BGR format, compatible with OpenCV)
 ```
 
 </details>
@@ -666,7 +666,7 @@ mini.media.push_audio_sample(numpy_chunk)
 <details>
 <summary><strong>Face tracking feels slow.</strong></summary>
 
-Performance relies heavily on lighting conditions. Ensure the face is well-lit. Using the GStreamer backend can also improve latency compared to the default OpenCV backend.
+Performance relies heavily on lighting conditions. Ensure the face is well-lit. The LOCAL backend (GStreamer IPC) provides the lowest latency for on-device applications.
 
 </details>
 
@@ -716,12 +716,11 @@ We are using a higher voltage on Reachy Mini, it's on purpose :)
 <details>
 <summary><strong>Error: "OSError: PortAudio library not found"</strong></summary>
 
-You are missing a system dependency. Run:
+This error occurs when using `sounddevice` directly (e.g. after calling `release_media()`). Install the system dependency:
 
 ```bash
 sudo apt-get install libportaudio2
 ```
-Then restart the daemon.
 
 </details>
 

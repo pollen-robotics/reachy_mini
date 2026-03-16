@@ -13,11 +13,11 @@ from typing import Dict, List, Literal, Optional, Union, cast
 
 import numpy as np
 import numpy.typing as npt
+import requests
 from asgiref.sync import async_to_sync
 from scipy.spatial.transform import Rotation as R
 
 from reachy_mini.daemon.utils import daemon_check, is_local_camera_available
-from reachy_mini.media.camera_constants import get_camera_specs_by_name
 from reachy_mini.io.protocol import (
     AppendRecordCmd,
     GotoTaskRequest,
@@ -32,6 +32,7 @@ from reachy_mini.io.protocol import (
     StopRecordingCmd,
 )
 from reachy_mini.io.ws_client import WSClient
+from reachy_mini.media.camera_constants import get_camera_specs_by_name
 from reachy_mini.media.camera_utils import undistort_points
 from reachy_mini.media.media_manager import MediaBackend, MediaManager
 from reachy_mini.motion.move import Move
@@ -141,6 +142,9 @@ class ReachyMini:
         self._last_head_pose: Optional[npt.NDArray[np.float64]] = None
         self.is_recording = False
         self._move_cancelled = False
+        self._media_released = False
+        self._log_level = log_level
+        self._media_backend = media_backend
 
         self.T_head_cam = np.eye(4)
         self.T_head_cam[:3, 3][:] = [0.0437, 0, 0.0512]
@@ -169,6 +173,8 @@ class ReachyMini:
 
     def __exit__(self, exc_type, exc_value, traceback) -> None:  # type: ignore [no-untyped-def]
         """Context manager exit point for Reachy Mini."""
+        if self._media_released:
+            self.acquire_media()
         self.media_manager.close()
         self.client.disconnect()
 
@@ -176,6 +182,68 @@ class ReachyMini:
     def media(self) -> MediaManager:
         """Expose the MediaManager instance used by ReachyMini."""
         return self.media_manager
+
+    @property
+    def _daemon_http_url(self) -> str:
+        """Base URL for the daemon's HTTP API."""
+        return f"http://{self.client.host}:{self.client.port}"
+
+    @property
+    def media_released(self) -> bool:
+        """Whether the daemon's media hardware has been released for direct access."""
+        return self._media_released
+
+    def release_media(self) -> None:
+        """Tell the daemon to release camera and audio hardware.
+
+        After calling this, the camera and microphone are available for direct
+        access via OpenCV / sounddevice / etc.  The SDK's media_manager is
+        switched to NO_MEDIA.
+
+        Idempotent: safe to call multiple times.
+        """
+        if self._media_released:
+            return
+
+        try:
+            resp = requests.post(
+                f"{self._daemon_http_url}/api/media/release", timeout=10
+            )
+            resp.raise_for_status()
+        except requests.RequestException as e:
+            self.logger.warning(
+                f"Failed to release media on daemon (media may already be released): {e}"
+            )
+
+        if hasattr(self, "media_manager"):
+            self.media_manager.close()
+        self._media_released = True
+        self.logger.info("Media released — camera/mic available for direct access.")
+
+    def acquire_media(self) -> None:
+        """Tell the daemon to re-acquire camera and audio hardware.
+
+        The SDK's media_manager is re-created with the original backend
+        auto-detection logic.
+
+        Idempotent: safe to call multiple times.
+        """
+        if not self._media_released:
+            return
+
+        try:
+            resp = requests.post(
+                f"{self._daemon_http_url}/api/media/acquire", timeout=10
+            )
+            resp.raise_for_status()
+        except requests.RequestException as e:
+            self.logger.error(f"Failed to re-acquire media on daemon: {e}")
+            return
+
+        self.media_manager.close()
+        self.media_manager = self._configure_mediamanager("default", self._log_level)
+        self._media_released = False
+        self.logger.info("Media re-acquired by daemon.")
 
     @property
     def imu(self) -> Dict[str, List[float] | float] | None:
@@ -231,6 +299,12 @@ class ReachyMini:
         # Honour explicit no_media from user or daemon
         if media_backend.lower() == "no_media":
             self.logger.info("No media backend requested by user.")
+            # If the daemon owns media hardware, release it for direct access
+            if (
+                not getattr(daemon_status, "no_media", False)
+                and not self._media_released
+            ):
+                self.release_media()
             mbackend = MediaBackend.NO_MEDIA
         elif getattr(daemon_status, "no_media", False):
             self.logger.info(

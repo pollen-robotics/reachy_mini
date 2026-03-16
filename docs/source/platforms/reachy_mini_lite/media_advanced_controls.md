@@ -77,7 +77,7 @@ Using GStreamer allows you to directly visualize the effect of parameter changes
 gst-launch-1.0 v4l2src device=/dev/video2 extra-controls=s,exposure_auto=1,exposure_absolute=100,saturation=0 ! videoconvert ! autovideosink
 ```
 
-At the daemon level, the camera is controlled by GStreamer using the [v4l2src](https://github.com/pollen-robotics/reachy_mini/tree/main/src/reachy_mini/media/webrtc_daemon.py) component. The parameters can be set in the daemon's camera pipeline code:
+At the daemon level, the camera is controlled by GStreamer using the [v4l2src](https://github.com/pollen-robotics/reachy_mini/tree/main/src/reachy_mini/media/media_server.py) component. The parameters can be set in the daemon's camera pipeline code:
 
 ```python
 camsrc = Gst.ElementFactory.make("v4l2src")
