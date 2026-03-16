@@ -80,7 +80,9 @@ class Daemon:
         self.backend_run_thread: "Thread | None" = None
         self._thread_event_publish_status = Event()
 
-        self._media_server: Optional[Any] = None  # GstMediaServer when media is enabled
+        self._media_server: Optional["GstMediaServer"] = (
+            None  # GstMediaServer when media is enabled
+        )
         self._media_released = False
         if not no_media:
             from reachy_mini.media.media_server import GstMediaServer

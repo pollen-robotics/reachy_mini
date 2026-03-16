@@ -205,8 +205,15 @@ class ReachyMini:
         if self._media_released:
             return
 
-        resp = requests.post(f"{self._daemon_http_url}/api/media/release", timeout=10)
-        resp.raise_for_status()
+        try:
+            resp = requests.post(
+                f"{self._daemon_http_url}/api/media/release", timeout=10
+            )
+            resp.raise_for_status()
+        except requests.RequestException as e:
+            self.logger.warning(
+                f"Failed to release media on daemon (media may already be released): {e}"
+            )
 
         if hasattr(self, "media_manager"):
             self.media_manager.close()
@@ -224,8 +231,14 @@ class ReachyMini:
         if not self._media_released:
             return
 
-        resp = requests.post(f"{self._daemon_http_url}/api/media/acquire", timeout=10)
-        resp.raise_for_status()
+        try:
+            resp = requests.post(
+                f"{self._daemon_http_url}/api/media/acquire", timeout=10
+            )
+            resp.raise_for_status()
+        except requests.RequestException as e:
+            self.logger.error(f"Failed to re-acquire media on daemon: {e}")
+            return
 
         self.media_manager.close()
         self.media_manager = self._configure_mediamanager("default", self._log_level)

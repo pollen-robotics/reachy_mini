@@ -122,7 +122,6 @@ class MediaManager:
         self,
         backend: MediaBackend = MediaBackend.DEFAULT,
         log_level: str = "INFO",
-        use_sim: bool = False,
         signalling_host: str = "localhost",
         camera_specs: Optional[CameraSpecs] = None,
     ) -> None:
@@ -131,7 +130,6 @@ class MediaManager:
         Args:
             backend: The media backend to use.  Default is ``LOCAL``.
             log_level: Logging level for media operations.
-            use_sim: Whether to use simulation mode (for testing).
             signalling_host: Host address for WebRTC signalling server.
                 Only used with the ``WEBRTC`` backend.
             camera_specs: Camera specifications detected by the daemon.
