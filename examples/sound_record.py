@@ -6,7 +6,6 @@ The output audio will be saved to 'recorded_audio.wav'.
 # START doc_example
 
 import argparse
-import logging
 import time
 
 import numpy as np
