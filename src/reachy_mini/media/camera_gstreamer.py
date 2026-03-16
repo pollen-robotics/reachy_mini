@@ -289,7 +289,10 @@ class GStreamerCamera:
 
         # Prefer v4l2convert (hardware-accelerated on RPi), fall back to
         # videoconvert (software) on other platforms.
-        convert = Gst.ElementFactory.make("v4l2convert")
+        try:
+            convert = Gst.ElementFactory.make("v4l2convert")
+        except Exception:
+            convert = None
         if convert is None:
             self.logger.debug(
                 "v4l2convert not available, falling back to videoconvert."
