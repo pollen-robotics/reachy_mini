@@ -270,20 +270,39 @@ class GstMediaServer:
 
         self._logger.info(f"Setting up incoming audio playback for peer {peer_id}")
 
-        # Build platform-aware playback pipeline
-        audiosink_desc = self._get_audiosink_description()
-        try:
-            playback_pipe = Gst.parse_launch(
-                "appsrc name=audio_in format=time is-live=true ! "
-                "rtpopusdepay ! opusdec ! audioconvert ! audioresample ! "
-                f"{audiosink_desc} sync=false"
-            )
-        except Exception as e:
-            self._logger.error(f"Failed to create audio playback pipeline: {e}")
-            return
+        # Build playback pipeline element-by-element
+        playback_pipe = Gst.Pipeline.new(f"audio_playback_{peer_id}")
 
-        appsrc = playback_pipe.get_by_name("audio_in")
+        appsrc = Gst.ElementFactory.make("appsrc", "audio_in")
+        appsrc.set_property("format", Gst.Format.TIME)
+        appsrc.set_property("is-live", True)
         appsrc.set_property("caps", caps)
+
+        rtpopusdepay = Gst.ElementFactory.make("rtpopusdepay")
+        opusdec = Gst.ElementFactory.make("opusdec")
+        audioconvert = Gst.ElementFactory.make("audioconvert")
+        audioresample = Gst.ElementFactory.make("audioresample")
+
+        audiosink = self._build_audiosink_element()
+        if audiosink is None:
+            self._logger.error("Failed to create audio sink element")
+            return
+        audiosink.set_property("sync", False)
+
+        for elem in [
+            appsrc,
+            rtpopusdepay,
+            opusdec,
+            audioconvert,
+            audioresample,
+            audiosink,
+        ]:
+            playback_pipe.add(elem)
+        appsrc.link(rtpopusdepay)
+        rtpopusdepay.link(opusdec)
+        opusdec.link(audioconvert)
+        audioconvert.link(audioresample)
+        audioresample.link(audiosink)
 
         play_bus = playback_pipe.get_bus()
         play_bus.add_watch(
@@ -799,32 +818,6 @@ class GstMediaServer:
             "No Reachy Mini audio card found, using default audio source."
         )
         return Gst.ElementFactory.make("autoaudiosrc")
-
-    def _get_audiosink_description(self) -> str:
-        """Get a GStreamer audio sink description string for the current platform.
-
-        Same detection order as ``_build_audio_source()``: .asoundrc first
-        (wireless CM4), then DeviceMonitor, then autoaudiosink.
-
-        Returns:
-            A GStreamer element description string for the audio sink.
-
-        """
-        # Wireless CM4: .asoundrc defines reachymini_audio_sink alias
-        if has_reachymini_asoundrc():
-            return "alsasink device=reachymini_audio_sink"
-
-        id_audio_card = self._get_audio_device("Sink")
-
-        if id_audio_card is not None:
-            if platform.system() == "Windows":
-                return f'wasapi2sink device="{id_audio_card}"'
-            elif platform.system() == "Darwin":
-                return f'osxaudiosink unique-id="{id_audio_card}"'
-            else:
-                return f'pulsesink device="{id_audio_card}"'
-
-        return "autoaudiosink"
 
     # ------------------------------------------------------------------ #
     #  Audio / Video device detection                                      #
