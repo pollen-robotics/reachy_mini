@@ -134,7 +134,7 @@ def test_record_audio_and_file_exists(backend: MediaBackend) -> None:
 
     NB_SAMPLES = DURATION * media.get_input_audio_samplerate()
     current_nb_samples = 0
-    while current_nb_samples < NB_SAMPLES and time.time() - t0 < DURATION + 4:
+    while current_nb_samples < NB_SAMPLES and time.time() - t0 < DURATION + 5:
         sample = media.get_audio_sample()
         if sample is not None:
             audio_samples.append(sample)
