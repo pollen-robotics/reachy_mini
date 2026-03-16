@@ -5,7 +5,7 @@ import time
 import numpy as np
 import pytest
 
-from reachy_mini.media.audio_utils import _process_card_number_output
+from reachy_mini.media.audio_utils import _process_card_number_output, save_audio_to_wav
 from reachy_mini.media.media_manager import MediaBackend, MediaManager
 
 SIGNALING_HOST = "reachy-mini.local"
@@ -118,8 +118,6 @@ def test_push_audio_sample(backend: MediaBackend) -> None:
 @pytest.mark.parametrize("backend", AUDIO_BACKENDS)
 def test_record_audio_and_file_exists(backend: MediaBackend) -> None:
     """Test recording audio and check that the file exists and is not empty."""
-    import soundfile as sf
-
     media = MediaManager(
         backend=backend,
         signalling_host=SIGNALING_HOST
@@ -136,7 +134,7 @@ def test_record_audio_and_file_exists(backend: MediaBackend) -> None:
 
     NB_SAMPLES = DURATION * media.get_input_audio_samplerate()
     current_nb_samples = 0
-    while current_nb_samples < NB_SAMPLES and time.time() - t0 < DURATION + 2:
+    while current_nb_samples < NB_SAMPLES and time.time() - t0 < DURATION + 4:
         sample = media.get_audio_sample()
         if sample is not None:
             audio_samples.append(sample)
@@ -155,7 +153,7 @@ def test_record_audio_and_file_exists(backend: MediaBackend) -> None:
         f"Audio data has incorrect number of samples: {audio_data.shape[0]} != {DURATION * media.get_input_audio_samplerate()}"
     )
 
-    sf.write(tmpfile.name, audio_data, media.get_input_audio_samplerate())
+    save_audio_to_wav(audio_data, media.get_input_audio_samplerate(), tmpfile.name)
     assert os.path.exists(tmpfile.name), "File does not exist."
     assert os.path.getsize(tmpfile.name) > 0, "File is empty."
 

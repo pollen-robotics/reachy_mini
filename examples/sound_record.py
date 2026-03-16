@@ -10,9 +10,9 @@ import logging
 import time
 
 import numpy as np
-import soundfile as sf
 
 from reachy_mini import ReachyMini
+from reachy_mini.media.audio_utils import save_audio_to_wav
 
 TIMEOUT = 1
 DURATION = 5  # seconds
@@ -21,10 +21,6 @@ OUTPUT_FILE = "recorded_audio.wav"
 
 def main(backend: str) -> None:
     """Record audio for 5 seconds and save to a WAV file."""
-    logging.basicConfig(
-        level=logging.DEBUG, format="%(asctime)s [%(levelname)s] %(message)s"
-    )
-
     with ReachyMini(log_level="INFO", media_backend=backend) as mini:
         audio_samples = []
         mini.media.start_recording()
@@ -55,7 +51,7 @@ def main(backend: str) -> None:
         if audio_samples:
             audio_data = np.concatenate(audio_samples, axis=0)
             samplerate = mini.media.get_input_audio_samplerate()
-            sf.write(OUTPUT_FILE, audio_data, samplerate)
+            save_audio_to_wav(audio_data, samplerate, OUTPUT_FILE)
             print(f"Audio saved to {OUTPUT_FILE}")
         else:
             print("No audio data recorded.")
