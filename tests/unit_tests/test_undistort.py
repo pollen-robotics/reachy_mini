@@ -107,7 +107,6 @@ class TestUndistortPointsDistortion:
 # ── Cross-validation against cv2 (only runs if opencv is installed) ──────────
 
 
-@pytest.mark.video_opencv
 @pytest.mark.skipif(not _opencv_available, reason="OpenCV not installed")
 class TestUndistortPointsVsOpenCV:
     """Cross-validate our implementation against cv2.undistortPoints."""
