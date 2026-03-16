@@ -787,8 +787,9 @@ def get_hotspot_ip() -> str:
 def main():
     """Run the Bluetooth Command Service."""
     pin = get_pin()
+    name = f"ReachyMini-{pin[-3:]}"
 
-    bt_service = BluetoothCommandService(device_name="ReachyMini", pin_code=pin)
+    bt_service = BluetoothCommandService(device_name=name, pin_code=pin)
     bt_service.run()
 
 
