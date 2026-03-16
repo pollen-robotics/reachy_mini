@@ -505,8 +505,6 @@ class GstWebRTCClient:
             self._audio_send_ready = False
             return
 
-        webrtcbin_parent = self._webrtcbin.get_parent()
-
         # Find the audio sink pad on webrtcbin
         sink_pad = None
         pt = 96
@@ -550,9 +548,10 @@ class GstWebRTCClient:
 
         elems = (appsrc, audioconvert, audioresample, opusenc, rtpopuspay)
 
-        target_bin = webrtcbin_parent if webrtcbin_parent else self._webrtcsrc
+        target_bin = self._pipeline_record
         for elem in elems:
-            if not target_bin.add(elem):
+            target_bin.add(elem)
+            if elem.get_parent() is None:
                 self.logger.error(
                     f"Failed to add {elem.get_name()} to {target_bin.get_name()}"
                 )
