@@ -52,6 +52,17 @@ class MediaBackend(Enum):
     DEFAULT_NO_VIDEO = GSTREAMER_NO_VIDEO
     DEFAULT = GSTREAMER
 
+    @classmethod
+    def _missing_(cls, value: object) -> "MediaBackend | None":
+        """Handle missing legacy values: default -> GSTREAMER, default_no_video -> GSTREAMER_NO_VIDEO."""
+        if isinstance(value, str):
+            aliases = {
+                "default": cls.GSTREAMER,
+                "default_no_video": cls.GSTREAMER_NO_VIDEO,
+            }
+            return aliases.get(value.lower())
+        return None
+
 
 class MediaManager:
     """Media Manager for handling camera and audio devices.
