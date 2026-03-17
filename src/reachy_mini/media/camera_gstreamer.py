@@ -213,8 +213,14 @@ class GStreamerCamera(CameraBase):
 
         elif t == Gst.MessageType.ERROR:
             err, debug = msg.parse_error()
-            self.logger.error(f"Error: {err} {debug}")
-            return False
+            self.logger.warning(
+                f"GStreamer pipeline error (domain={err.domain}, code={err.code}): {err.message}"
+            )
+            self.logger.debug(f"GStreamer error debug info: {debug}")
+            # Keep the bus watch active — some errors are transient and the pipeline
+            # will self-recover. Fatal errors should be handled by inspecting
+            # err.domain and err.code.
+            return True
 
         return True
 
@@ -257,7 +263,15 @@ class GStreamerCamera(CameraBase):
         self._thread_bus_calls = Thread(target=self._handle_bus_calls, daemon=True)
         self._thread_bus_calls.start()
         GLib.timeout_add_seconds(5, self._dump_latency)
-        # TODO: Add a small loop to wait for the frames to be ready after restarting the pipeline
+        # Best-effort wait for the first frame before returning, so callers can
+        # read immediately without getting None.
+        deadline = time.monotonic() + 2.0
+        try:
+            while time.monotonic() < deadline:
+                if self._appsink_video.emit("try-pull-sample", 100_000_000) is not None:
+                    break
+        except Exception:
+            pass
 
     def _get_sample(self, appsink: GstApp.AppSink) -> Optional[bytes]:
         sample = appsink.try_pull_sample(20_000_000)
