@@ -937,7 +937,7 @@ class GstMediaServer:
 
         devices = monitor.get_devices()
         for cam_name in cam_names:
-            for device in devices:
+            for device_index, device in enumerate(devices):
                 name = device.get_display_name()
                 device_props = device.get_properties()
 
@@ -970,16 +970,15 @@ class GstMediaServer:
                         return name, cast(CameraSpecs, ReachyMiniLiteCamSpecs)
 
                     # macOS (device index)
+                    # macOS/AVFoundation cameras use the device index in the devices list as a unique identifier
                     if platform.system() == "Darwin":
-                        if device_props and device_props.has_field("device.index"):
-                            device_index = device_props.get_string("device.index")
-                            self._logger.debug(
-                                f"Found {cam_name} camera on macOS at index {device_index}"
-                            )
-                            monitor.stop()
-                            return str(device_index), cast(
-                                CameraSpecs, ReachyMiniLiteCamSpecs
-                            )
+                        self._logger.debug(
+                            f"Found {cam_name} camera on macOS at index {device_index}"
+                        )
+                        monitor.stop()
+                        return str(device_index), cast(
+                            CameraSpecs, ReachyMiniLiteCamSpecs
+                        )
 
         monitor.stop()
         self._logger.warning("No camera found.")
