@@ -708,6 +708,7 @@ class Backend:
         1.0032234352772091,
     ]
 
+    INIT_ANTENNAS_JOINT_POSITIONS = np.array((-0.1745, 0.1745))  # ~10° offset to reduce shaking at vertical
     SLEEP_ANTENNAS_JOINT_POSITIONS = np.array((-3.05, 3.05))
     SLEEP_HEAD_POSE = np.array(
         [
@@ -728,7 +729,7 @@ class Backend:
 
         await self.goto_target(
             self.INIT_HEAD_POSE,
-            antennas=np.array((0.0, 0.0)),
+            antennas=self.INIT_ANTENNAS_JOINT_POSITIONS,
             duration=magic_distance * 20 / 1000,  # ms_per_magic_mm = 10
         )
         await asyncio.sleep(0.1)
@@ -766,7 +767,7 @@ class Backend:
             if dist_to_init_pose > 30:
                 # Move to the initial position
                 await self.goto_target(
-                    self.INIT_HEAD_POSE, antennas=np.array((0.0, 0.0)), duration=1
+                    self.INIT_HEAD_POSE, antennas=self.INIT_ANTENNAS_JOINT_POSITIONS, duration=1
                 )
                 await asyncio.sleep(0.2)
 

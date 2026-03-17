@@ -102,6 +102,17 @@ from reachy_mini.media.webrtc_client_gstreamer import GstWebRTCClient  # noqa: E
 CameraLike = Union[GStreamerCamera, GstWebRTCClient]
 AudioLike = Union[GStreamerAudio, GstWebRTCClient]
 
+    @classmethod
+    def _missing_(cls, value: object) -> "MediaBackend | None":
+        """Handle missing legacy values: default -> GSTREAMER, default_no_video -> GSTREAMER_NO_VIDEO."""
+        if isinstance(value, str):
+            aliases = {
+                "default": cls.GSTREAMER,
+                "default_no_video": cls.GSTREAMER_NO_VIDEO,
+            }
+            return aliases.get(value.lower())
+        return None
+
 
 class MediaManager:
     """Media Manager for handling camera and audio devices.

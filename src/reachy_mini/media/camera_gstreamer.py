@@ -320,8 +320,14 @@ class GStreamerCamera:
             return False
         elif t == Gst.MessageType.ERROR:
             err, debug = msg.parse_error()
-            self.logger.error(f"Error: {err} {debug}")
-            return False
+            self.logger.warning(
+                f"GStreamer pipeline error (domain={err.domain}, code={err.code}): {err.message}"
+            )
+            self.logger.debug(f"GStreamer error debug info: {debug}")
+            # Keep the bus watch active — some errors are transient and the pipeline
+            # will self-recover. Fatal errors should be handled by inspecting
+            # err.domain and err.code.
+            return True
         return True
 
     def _handle_bus_calls(self) -> None:
@@ -347,6 +353,28 @@ class GStreamerCamera:
         self._thread_bus_calls = Thread(target=self._handle_bus_calls, daemon=True)
         self._thread_bus_calls.start()
         GLib.timeout_add_seconds(5, self._dump_latency)
+        # Best-effort wait for the first frame before returning, so callers can
+        # read immediately without getting None.
+        deadline = time.monotonic() + 2.0
+        try:
+            while time.monotonic() < deadline:
+                if self._appsink_video.emit("try-pull-sample", 100_000_000) is not None:
+                    break
+        except Exception:
+            pass
+
+    def _get_sample(self, appsink: GstApp.AppSink) -> Optional[bytes]:
+        sample = appsink.try_pull_sample(20_000_000)
+        if sample is None:
+            return None
+        data = None
+        if isinstance(sample, Gst.Sample):
+            buf = sample.get_buffer()
+            if buf is None:
+                self.logger.warning("Buffer is None")
+
+            data = buf.extract_dup(0, buf.get_size())
+        return data
 
     def read(self) -> Optional[npt.NDArray[np.uint8]]:
         """Pull the latest BGR frame from the IPC endpoint.

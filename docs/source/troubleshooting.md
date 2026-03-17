@@ -101,13 +101,20 @@ It is easy to fix by following this guide:
 <details>
 <summary><strong>A motor is shaky</strong></summary>
 
-This can happen if the motor's PID values are not optimal. Often, motors 10 (foot), 17 and 18 (the antennas) can exhibit slight jitters when holding position.
-These are fine "adjustments" that the motor is making, which in this case is an overcorrection.
-The good news is that you can [tune PID Control values](https://github.com/pollen-robotics/reachy_mini/tree/main/src/reachy_mini/assets/config/hardware_config.yaml#L66C1-L67C1) to calm these jitters. 
+**Antennas shaking**
 
-You can try first to reduce P to 180 on motors, 10, 17, and 18.
+This is the most common case. The antennas (motors 17 and 18) tend to shake when set to their vertical position (0°). At this angle, the gearbox backlash puts the motor in an unstable equilibrium — like an inverted pendulum. The motor constantly tries to correct its position around a point where friction is very low, which causes the oscillation.
+
+The simplest fix is to offset the antennas by a few degrees (typically 10° is enough). This lets gravity apply a small bias that takes up the mechanical play in one direction, eliminating the shaking.
+
+This is now the default behavior in Reachy Mini — see [PR #952](https://github.com/pollen-robotics/reachy_mini/pull/952) for details.
+
+**Tuning PID values**
+
+Another option is to [tune PID Control values](https://github.com/pollen-robotics/reachy_mini/tree/main/src/reachy_mini/assets/config/hardware_config.yaml#L66C1-L67C1). The optimal values may vary between robot units, as tiny differences in friction from manufacturing are enough to change the behavior.
+
+You can try first to reduce P to 180 on motors 10 (foot), 17 and 18 (antennas).
 If it doesn't help, you can also try to increase D to 10 on the same motors.
-
 
 </details>
 
@@ -310,7 +317,35 @@ Note that you may also need to use mirrors to reach services like PyPI and GitHu
 
 Reachy Mini conversation app relies on OpenAI gpt-realtime API, which might be inaccessible from China.
 
-The best workaround at the moment is to set up a VPN on your machine (Lite version) or on the robot (Wireless version), or on your router directly.
+The best workaround at the moment is to set up a VPN on your machine (Lite version), on the robot (Wireless version), or directly on your router.
+
+When configuring the VPN routing rules:
+
+1) Route traffic through the VPN except for local network traffic, so the device remains accessible from your local network.
+
+You should whitelist:
+- Your local LAN IP range (for example 192.168.0.0/16, 192.168.1.0/24, etc., depending on your network setup).
+- The following ports:
+  - 22 (SSH)
+  - 8000 (Reachy Mini daemon)
+  - 5353 TCP/UDP (mDNS / local discovery)
+
+This ensures the robot remains reachable and discoverable locally, and mDNS (`reachy-mini.local`) should continue to work on the network.
+
+2) If your VPN supports selective routing, a better approach is to route only the required external services through the VPN, instead of tunneling all HTTPS traffic.
+
+If possible, configure the VPN to be used only for `huggingface.co` and `api.openai.com`.
+
+This minimizes network side effects and keeps local services functioning normally.
+
+For the Wireless version, once the VPN is configured on the robot, restart the daemon for the changes to take effect:
+```
+sudo systemctl restart reachy-mini-daemon
+```
+To verify the robot is reachable from a device on the same network, you can run:
+```
+ping reachy-mini.local
+```
 
 _Approaches based on open weight models are in the works, stay tuned!_
 

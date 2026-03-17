@@ -1,6 +1,8 @@
 - sections:
     - local: index
       title: Reachy Mini
+    - local: sdk-tutorials
+      title: SDK Tutorials
   title: Get Started
 - sections:
     - local: platforms/reachy_mini/get_started
