@@ -355,11 +355,26 @@ def run(self, reachy_mini, stop_event):
 
 The app subprocess **inherits the daemon's environment variables**. There is no special injection mechanism — your app sees whatever the daemon process sees.
 
-If your app needs runtime configuration (API keys, server URLs, etc.), recommended approaches:
+If your app needs runtime configuration (API keys, server URLs, etc.), the recommended approach is to use **the app's web UI**. Set `custom_app_url` on your class and add a settings page where users can enter values (API keys, server addresses, etc.) directly from their browser. This is the most user-friendly option and works across all platforms. See [Optional: Web UI for Your App](#optional-web-ui-for-your-app) above for how to set this up.
+
+Other approaches:
 
 - **Config file**: Read from a known path (e.g., `~/.config/my_app/config.json`).
-- **Hardcoded defaults**: Simple and debuggable.
-- **Web UI**: Use `custom_app_url` to let users configure settings through a browser.
+- **Hardcoded defaults**: Simple and debuggable for development.
+
+---
+
+## Using Audio in Your App
+
+Audio recording, playback, and direction-of-arrival detection work the same way inside an app as in a standalone script — use the SDK methods directly (`start_recording()`, `get_audio_sample()`, `push_audio_sample()`, `play_sound()`).
+
+Refer to the official examples for working code:
+
+- **[Sound Recording](../examples/sound_record)**: Record from the mic array and save to WAV.
+- **[Sound Playback](../examples/sound_play)**: Play a WAV file or push real-time audio (e.g., from a TTS engine).
+- **[Sound Direction of Arrival](../examples/sound_doa)**: Detect who is speaking and make the robot look at them.
+
+For details on how audio streams differ between Wireless and Lite, see [Media Architecture](media-architecture.md).
 
 ---
 

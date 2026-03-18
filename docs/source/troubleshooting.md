@@ -538,11 +538,30 @@ with ReachyMini() as mini:
 <details>
 <summary><strong>How do I create a new App?</strong></summary>
 
-1.  Use the generator: `reachy-mini-make-app my_app_name`.
-2.  Edit `main.py` in the generated folder.
-3.  Run it: `python my_app_name/main.py`.
+Use the app assistant CLI:
 
-Check the [Hugging Face Tutorial](https://huggingface.co/blog/pollen-robotics/make-and-publish-your-reachy-mini-apps) for details.
+```bash
+reachy-mini-app-assistant create my_app_name /path/to/destination --publish
+```
+
+See the full guide: [Building & Publishing Apps](./SDK/apps.md) — covers app structure, testing, publishing, debugging, and deployment.
+
+</details>
+
+<details>
+<summary><strong>My app crashes silently or doesn't start</strong></summary>
+
+If your app depends on a package not installed in the environment, it will crash on import with no visible error. Test imports manually:
+
+```bash
+# On Wireless
+ssh pollen@reachy-mini.local "/venvs/apps_venv/bin/python3 -c 'from my_app.main import MyApp'"
+
+# On Lite / local
+python -c "from my_app.main import MyApp"
+```
+
+For more debugging tips (viewing logs, common pitfalls), see [Debugging Apps](./SDK/apps.md#debugging-apps).
 
 </details>
 
