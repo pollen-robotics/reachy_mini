@@ -7,8 +7,6 @@ fire-and-forget commands, and task request/progress tracking.
 import logging
 import threading
 import time
-
-logger = logging.getLogger(__name__)
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Dict, List, Optional
@@ -33,6 +31,8 @@ from reachy_mini.io.protocol import (
     TaskRequest,
     server_msg_adapter,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class WSClient(AbstractClient):

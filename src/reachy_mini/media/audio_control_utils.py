@@ -23,14 +23,14 @@ import argparse
 import logging
 import struct
 import sys
-
-logger = logging.getLogger(__name__)
 import time
 from typing import Any, Optional
 
 import usb.core
 import usb.util
 from libusb_package import get_libusb1_backend
+
+logger = logging.getLogger(__name__)
 
 CONTROL_SUCCESS = 0
 SERVICER_COMMAND_RETRY = 64
