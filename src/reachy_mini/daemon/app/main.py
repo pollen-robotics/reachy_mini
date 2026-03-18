@@ -286,7 +286,7 @@ def run_app(args: Args) -> None:
     handler = logging.StreamHandler(sys.stderr)
     handler.setLevel(args.log_level)
     handler.setFormatter(
-        logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+        logging.Formatter("%(name)s - %(levelname)s - %(message)s")
     )
     root_logger.addHandler(handler)
 
@@ -593,7 +593,7 @@ def main() -> None:
     if args.log_file:
         file_handler = logging.FileHandler(args.log_file, mode="a")
         file_handler.setFormatter(
-            logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+            logging.Formatter("%(name)s - %(levelname)s - %(message)s")
         )
         logging.getLogger().addHandler(file_handler)
         logging.getLogger().setLevel(args.log_level)
