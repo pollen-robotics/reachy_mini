@@ -53,6 +53,8 @@
       title: JavaScript SDK & Web Apps
     - local: SDK/integration
       title: AI Integrations
+    - local: SDK/apps
+      title: Building & Publishing Apps
     - local: SDK/core-concept
       title: Core Concepts
     - local: SDK/media-architecture
