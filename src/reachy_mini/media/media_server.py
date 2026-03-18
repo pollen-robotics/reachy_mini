@@ -26,7 +26,7 @@ import logging
 import os
 import platform
 from threading import Thread
-from typing import Any, Callable, Dict, Optional, Tuple, cast
+from typing import Any, Callable, Dict, Optional, cast
 
 import gi
 
@@ -37,12 +37,11 @@ from reachy_mini.daemon.utils import (
 )
 from reachy_mini.media.audio_utils import has_reachymini_asoundrc
 from reachy_mini.media.camera_constants import (
-    ArducamSpecs,
     CameraSpecs,
     MujocoCameraSpecs,
     ReachyMiniLiteCamSpecs,
-    ReachyMiniWirelessCamSpecs,
 )
+from reachy_mini.media.device_detection import get_audio_device, get_video_device
 from reachy_mini.utils.constants import ASSETS_ROOT_PATH
 
 gi.require_version("Gst", "1.0")
@@ -99,7 +98,7 @@ class GstMediaServer:
             cam_path = "use_sim"
             self.camera_specs: CameraSpecs = cast(CameraSpecs, MujocoCameraSpecs)
         else:
-            cam_path, detected_specs = self._get_video_device()
+            cam_path, detected_specs = get_video_device()
             if detected_specs is None:
                 self._logger.warning("No camera found. Video will not be available.")
                 self.camera_specs = cast(CameraSpecs, ReachyMiniLiteCamSpecs)
@@ -144,10 +143,6 @@ class GstMediaServer:
         self._pipeline_sender.query(query)
         self._logger.info(f"Pipeline latency {query.parse_latency()}")
 
-    # ------------------------------------------------------------------ #
-    #  WebRTC sink configuration                                          #
-    # ------------------------------------------------------------------ #
-
     def _configure_webrtc(self, pipeline: Gst.Pipeline) -> Gst.Element:
         self._logger.debug("Configuring WebRTC")
         webrtcsink = Gst.ElementFactory.make("webrtcsink")
@@ -168,10 +163,6 @@ class GstMediaServer:
         pipeline.add(webrtcsink)
 
         return webrtcsink
-
-    # ------------------------------------------------------------------ #
-    #  Consumer lifecycle (WebRTC peers)                                   #
-    # ------------------------------------------------------------------ #
 
     def _consumer_added(
         self,
@@ -230,10 +221,6 @@ class GstMediaServer:
     ) -> None:
         self._logger.info(f"consumer removed: {peer_id}")
         self._cleanup_incoming_audio(peer_id)
-
-    # ------------------------------------------------------------------ #
-    #  Bidirectional audio (incoming from browser)                         #
-    # ------------------------------------------------------------------ #
 
     def _on_consumer_pad_added(
         self,
@@ -357,10 +344,6 @@ class GstMediaServer:
             playback_pipe.set_state(Gst.State.NULL)
         self._logger.info(f"Cleaned up incoming audio for peer {peer_id}")
 
-    # ------------------------------------------------------------------ #
-    #  Properties                                                          #
-    # ------------------------------------------------------------------ #
-
     @property
     def resolution(self) -> tuple[int, int]:
         """Get the current camera resolution as a tuple (width, height)."""
@@ -370,10 +353,6 @@ class GstMediaServer:
     def framerate(self) -> int:
         """Get the current camera framerate."""
         return self._resolution.value[2]
-
-    # ------------------------------------------------------------------ #
-    #  Video pipeline (platform-aware)                                     #
-    # ------------------------------------------------------------------ #
 
     def _configure_video(
         self, cam_path: str, pipeline: Gst.Pipeline, webrtcsink: Gst.Element
@@ -729,10 +708,6 @@ class GstMediaServer:
         v4l2h264enc.link(capsfilter_h264)
         capsfilter_h264.link(webrtcsink)
 
-    # ------------------------------------------------------------------ #
-    #  Audio pipeline (platform-aware)                                     #
-    # ------------------------------------------------------------------ #
-
     def _configure_audio(self, pipeline: Gst.Pipeline, webrtcsink: Gst.Element) -> None:
         """Configure the audio capture pipeline.
 
@@ -793,7 +768,7 @@ class GstMediaServer:
             self._logger.info("Using ALSA device reachymini_audio_src for capture.")
             return audiosrc
 
-        id_audio_card = self._get_audio_device("Source")
+        id_audio_card = get_audio_device("Source")
 
         if id_audio_card is not None:
             if platform.system() == "Windows":
@@ -819,175 +794,6 @@ class GstMediaServer:
         )
         return Gst.ElementFactory.make("autoaudiosrc")
 
-    # ------------------------------------------------------------------ #
-    #  Audio / Video device detection                                      #
-    # ------------------------------------------------------------------ #
-
-    def _get_audio_device(self, device_type: str = "Source") -> Optional[str]:
-        """Use Gst.DeviceMonitor to find the Reachy Mini audio device.
-
-        Args:
-            device_type: "Source" for input (mic) or "Sink" for output (speaker).
-
-        Returns:
-            The device ID of the found audio card, or None if not found.
-
-        """
-        monitor = Gst.DeviceMonitor()
-        monitor.add_filter(f"Audio/{device_type}")
-        monitor.start()
-
-        snd_card_name = "Reachy Mini Audio"
-
-        try:
-            devices = monitor.get_devices()
-            for device in devices:
-                name = device.get_display_name()
-                device_props = device.get_properties()
-
-                if snd_card_name in name:
-                    # Skip monitor/loopback sources
-                    if device_props and device_props.has_field("device.class"):
-                        if device_props.get_string("device.class") == "monitor":
-                            continue
-
-                    # PipeWire (node.name)
-                    if device_props and device_props.has_field("node.name"):
-                        node_name = device_props.get_string("node.name")
-                        self._logger.debug(
-                            f"Found audio {device_type} device: {node_name}"
-                        )
-                        return str(node_name)
-
-                    # Windows WASAPI
-                    if (
-                        platform.system() == "Windows"
-                        and device_props
-                        and device_props.has_field("device.api")
-                        and device_props.get_string("device.api") == "wasapi2"
-                    ):
-                        if device_type == "Source" and device_props.get_value(
-                            "wasapi2.device.loopback"
-                        ):
-                            continue
-                        device_id = device_props.get_string("device.id")
-                        self._logger.debug(
-                            f"Found audio {device_type} device (WASAPI): {device_id}"
-                        )
-                        return str(device_id)
-
-                    # macOS CoreAudio
-                    if platform.system() == "Darwin" and device_props:
-                        device_id = device_props.get_string("unique-id")
-                        self._logger.debug(
-                            f"Found audio {device_type} device (CoreAudio): {device_id}"
-                        )
-                        return str(device_id)
-
-                    # Linux PulseAudio fallback
-                    if platform.system() == "Linux" and device_props:
-                        udev_id = (
-                            device_props.get_string("udev.id")
-                            if device_props.has_field("udev.id")
-                            else None
-                        )
-                        profile = (
-                            device_props.get_string("device.profile.name")
-                            if device_props.has_field("device.profile.name")
-                            else None
-                        )
-                        if udev_id and profile:
-                            prefix = (
-                                "alsa_output" if device_type == "Sink" else "alsa_input"
-                            )
-                            pa_device = f"{prefix}.{udev_id}.{profile}"
-                            self._logger.debug(
-                                f"Found audio {device_type} device (PulseAudio): {pa_device}"
-                            )
-                            return pa_device
-                        elif device_props.has_field("device.string"):
-                            device_id = device_props.get_string("device.string")
-                            self._logger.debug(
-                                f"Found audio {device_type} device (ALSA): {device_id}"
-                            )
-                            return str(device_id)
-
-            self._logger.warning(f"No Reachy Mini Audio {device_type} card found.")
-        except Exception as e:
-            self._logger.error(f"Error detecting audio {device_type} device: {e}")
-        finally:
-            monitor.stop()
-        return None
-
-    def _get_video_device(self) -> Tuple[str, Optional[CameraSpecs]]:
-        """Detect the camera device using Gst.DeviceMonitor.
-
-        Supports Linux V4L2, RPi CSI (imx708), Windows, and macOS cameras.
-
-        Returns:
-            A tuple of (device_path, camera_specs). device_path is '' if no
-            camera is found.
-
-        """
-        monitor = Gst.DeviceMonitor()
-        monitor.add_filter("Video/Source")
-        monitor.start()
-
-        cam_names = ["Reachy", "Arducam_12MP", "imx708"]
-
-        devices = monitor.get_devices()
-        for cam_name in cam_names:
-            for device_index, device in enumerate(devices):
-                name = device.get_display_name()
-                device_props = device.get_properties()
-
-                if cam_name in name:
-                    # Linux V4L2 path
-                    if device_props and device_props.has_field("api.v4l2.path"):
-                        device_path = device_props.get_string("api.v4l2.path")
-                        camera_specs = (
-                            cast(CameraSpecs, ArducamSpecs)
-                            if cam_name == "Arducam_12MP"
-                            else cast(CameraSpecs, ReachyMiniLiteCamSpecs)
-                        )
-                        self._logger.debug(f"Found {cam_name} camera at {device_path}")
-                        monitor.stop()
-                        return str(device_path), camera_specs
-
-                    # RPi CSI camera (imx708, no V4L2 path)
-                    if cam_name == "imx708":
-                        camera_specs = cast(CameraSpecs, ReachyMiniWirelessCamSpecs)
-                        self._logger.debug(f"Found {cam_name} camera")
-                        monitor.stop()
-                        return cam_name, camera_specs
-
-                    # Windows (device display name)
-                    if platform.system() == "Windows":
-                        self._logger.debug(
-                            f"Found {cam_name} camera on Windows: {name}"
-                        )
-                        monitor.stop()
-                        return name, cast(CameraSpecs, ReachyMiniLiteCamSpecs)
-
-                    # macOS (device index)
-                    # macOS/AVFoundation cameras use the device index in the devices list as a unique identifier
-                    if platform.system() == "Darwin":
-                        self._logger.debug(
-                            f"Found {cam_name} camera on macOS at index {device_index}"
-                        )
-                        monitor.stop()
-                        return str(device_index), cast(
-                            CameraSpecs, ReachyMiniLiteCamSpecs
-                        )
-
-        monitor.stop()
-        self._logger.warning("No camera found.")
-        return "", None
-
-    # ------------------------------------------------------------------ #
-    #  Bus message handler                                                 #
-    # ------------------------------------------------------------------ #
-
     def _on_bus_message(self, bus: Gst.Bus, msg: Gst.Message, loop) -> bool:  # type: ignore[no-untyped-def]
         t = msg.type
         if t == Gst.MessageType.EOS:
@@ -1000,10 +806,6 @@ class GstMediaServer:
             return False
 
         return True
-
-    # ------------------------------------------------------------------ #
-    #  Lifecycle                                                           #
-    # ------------------------------------------------------------------ #
 
     def start(self) -> None:
         """Start the WebRTC pipeline."""
@@ -1020,10 +822,6 @@ class GstMediaServer:
         """Stop the WebRTC pipeline."""
         self._logger.debug("Stopping WebRTC")
         self._pipeline_sender.set_state(Gst.State.NULL)
-
-    # ------------------------------------------------------------------ #
-    #  Sound playback (daemon-side)                                        #
-    # ------------------------------------------------------------------ #
 
     def play_sound(self, sound_file: str) -> None:
         """Play a sound file on the robot's speaker.
@@ -1092,7 +890,7 @@ class GstMediaServer:
             self._logger.info("Using ALSA device reachymini_audio_sink for playback.")
             return audiosink
 
-        id_audio_card = self._get_audio_device("Sink")
+        id_audio_card = get_audio_device("Sink")
 
         if id_audio_card is not None:
             if platform.system() == "Windows":
@@ -1114,10 +912,6 @@ class GstMediaServer:
             return audiosink
 
         return Gst.ElementFactory.make("autoaudiosink")
-
-    # ------------------------------------------------------------------ #
-    #  Data channel setup / handling                                       #
-    # ------------------------------------------------------------------ #
 
     def set_message_handler(
         self,

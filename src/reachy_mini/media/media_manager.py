@@ -53,9 +53,6 @@ class MediaBackend(Enum):
     # Primary alias
     DEFAULT = LOCAL
 
-    # ------------------------------------------------------------------
-    # Deprecated aliases — kept so old code keeps working for one release
-    # ------------------------------------------------------------------
     GSTREAMER = "gstreamer"
     GSTREAMER_NO_VIDEO = "gstreamer_no_video"
     SOUNDDEVICE_NO_VIDEO = "sounddevice_no_video"
@@ -166,10 +163,6 @@ class MediaManager:
             case _:
                 raise NotImplementedError(f"Media backend {backend} not implemented.")
 
-    # ------------------------------------------------------------------
-    # Lifecycle
-    # ------------------------------------------------------------------
-
     def close(self) -> None:
         """Close the media manager and release resources."""
         if self.camera is not None:
@@ -186,10 +179,6 @@ class MediaManager:
     def __del__(self) -> None:
         """Destructor to ensure resources are released."""
         self.close()
-
-    # ------------------------------------------------------------------
-    # Private init helpers
-    # ------------------------------------------------------------------
 
     def _init_camera(
         self, log_level: str, camera_specs: Optional[CameraSpecs] = None
@@ -230,10 +219,6 @@ class MediaManager:
         self.audio = webrtc_media  # GstWebRTCClient handles both audio and video
         self.camera.open()
 
-    # ------------------------------------------------------------------
-    # Camera helpers
-    # ------------------------------------------------------------------
-
     def get_frame(self) -> Optional[npt.NDArray[np.uint8]]:
         """Get a frame from the camera.
 
@@ -247,10 +232,6 @@ class MediaManager:
             self.logger.warning("Camera is not initialized.")
             return None
         return self.camera.read()
-
-    # ------------------------------------------------------------------
-    # Audio helpers
-    # ------------------------------------------------------------------
 
     def play_sound(self, sound_file: str) -> None:
         """Play a sound file.
