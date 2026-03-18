@@ -323,9 +323,12 @@ def find_audio_device(
                 if props.get("device.api") != "wasapi2":
                     continue
                 # Skip loopback capture devices when looking for a real source.
+                # Use .lower() because the live GStreamer API returns Python bools
+                # whose str() representation is "True"/"False" (capital), while the
+                # text dump from gst-device-monitor uses lowercase "true"/"false".
                 if (
                     device_type == "Source"
-                    and props.get("wasapi2.device.loopback", "false") == "true"
+                    and props.get("wasapi2.device.loopback", "false").lower() == "true"
                 ):
                     continue
                 device_id = props.get("device.id", "")

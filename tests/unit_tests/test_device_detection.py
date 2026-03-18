@@ -48,7 +48,6 @@ def _filter_class(devices: List[DeviceInfo], device_class: str) -> List[DeviceIn
     return [d for d in devices if d.device_class == device_class]
 
 
-
 @pytest.fixture()
 def pipewire_devices() -> List[DeviceInfo]:
     return _parse("gst-device-monitor-linux-pipewire.txt")
@@ -67,7 +66,6 @@ def macos_devices() -> List[DeviceInfo]:
 @pytest.fixture()
 def windows_devices() -> List[DeviceInfo]:
     return _parse("gst-device-monitor-windows.txt")
-
 
 
 class TestParser:
@@ -134,10 +132,8 @@ class TestParser:
         assert any("Reachy Mini Camera" in n for n in names)
 
 
-
 class TestFindAudioDevice:
     """Test find_audio_device across all platforms."""
-
 
     def test_pipewire_source(self, pipewire_devices: List[DeviceInfo]) -> None:
         devices = _filter_class(pipewire_devices, "Audio/Source")
@@ -151,7 +147,6 @@ class TestFindAudioDevice:
         result = find_audio_device(devices, "Sink", "Linux")
         assert result is not None
         assert result.startswith("alsa_output.")
-
 
     def test_pulseaudio_source(self, pulseaudio_devices: List[DeviceInfo]) -> None:
         devices = _filter_class(pulseaudio_devices, "Audio/Source")
@@ -182,7 +177,6 @@ class TestFindAudioDevice:
         assert result is not None
         assert "monitor" not in result.lower()
 
-
     def test_macos_source(self, macos_devices: List[DeviceInfo]) -> None:
         devices = _filter_class(macos_devices, "Audio/Source")
         result = find_audio_device(devices, "Source", "Darwin")
@@ -194,7 +188,6 @@ class TestFindAudioDevice:
         result = find_audio_device(devices, "Sink", "Darwin")
         assert result is not None
         assert "Pollen Robotics" in result or "Reachy Mini Audio" in result
-
 
     def test_windows_source(self, windows_devices: List[DeviceInfo]) -> None:
         devices = _filter_class(windows_devices, "Audio/Source")
@@ -219,6 +212,36 @@ class TestFindAudioDevice:
         # has a different device.id.
         assert result != "{0.0.0.00000000}.{e79e8ab7-4b13-4542-bb4b-edad0943c8ee}"
 
+    def test_windows_skips_loopback_source_uppercase_bool(self) -> None:
+        """Loopback must be skipped even when the value is 'True' (uppercase).
+
+        The live GStreamer API converts GBoolean properties via Python's
+        ``str(True)`` → ``"True"``, while the text dump from
+        ``gst-device-monitor`` uses lowercase ``"true"``.  Both must be
+        rejected for loopback devices so the real capture device is selected.
+        """
+        devices = [
+            DeviceInfo(
+                display_name="Echo Cancelling Speakerphone (Reachy Mini Audio)",
+                device_class="Audio/Source",
+                properties={
+                    "device.api": "wasapi2",
+                    "device.id": "{0.0.0.00000000}.{e79e8ab7-4b13-4542-bb4b-edad0943c8ee}",
+                    "wasapi2.device.loopback": "True",  # str(True) from live GStreamer
+                },
+            ),
+            DeviceInfo(
+                display_name="Echo Cancelling Speakerphone (Reachy Mini Audio)",
+                device_class="Audio/Source",
+                properties={
+                    "device.api": "wasapi2",
+                    "device.id": "{0.0.1.00000000}.{d9fee2b6-0d5d-42b2-9785-df20fd39ac3b}",
+                    "wasapi2.device.loopback": "False",  # str(False) from live GStreamer
+                },
+            ),
+        ]
+        result = find_audio_device(devices, "Source", "Windows")
+        assert result == "{0.0.1.00000000}.{d9fee2b6-0d5d-42b2-9785-df20fd39ac3b}"
 
     def test_empty_device_list(self) -> None:
         result = find_audio_device([], "Source", "Linux")
@@ -249,10 +272,8 @@ class TestFindAudioDevice:
         assert result == "custom_node"
 
 
-
 class TestFindVideoDevice:
     """Test find_video_device across all platforms."""
-
 
     def test_linux_pipewire_reachy_camera(
         self, pipewire_devices: List[DeviceInfo]
@@ -281,7 +302,6 @@ class TestFindVideoDevice:
         assert path == "/dev/video4"
         assert specs is not None
 
-
     def test_macos_reachy_camera(self, macos_devices: List[DeviceInfo]) -> None:
         devices = _filter_class(macos_devices, "Video/Source")
         path, specs = find_video_device(devices, "Darwin")
@@ -290,7 +310,6 @@ class TestFindVideoDevice:
         assert specs is not None
         assert isinstance(specs, type(ReachyMiniLiteCamSpecs))
 
-
     def test_windows_reachy_camera(self, windows_devices: List[DeviceInfo]) -> None:
         devices = _filter_class(windows_devices, "Video/Source")
         path, specs = find_video_device(devices, "Windows")
@@ -298,7 +317,6 @@ class TestFindVideoDevice:
         assert "Reachy Mini Camera" in path
         assert specs is not None
         assert isinstance(specs, type(ReachyMiniLiteCamSpecs))
-
 
     def test_arducam_only(self) -> None:
         """When only an Arducam is present, it should be found with ArducamSpecs."""
@@ -312,7 +330,6 @@ class TestFindVideoDevice:
         path, specs = find_video_device(devices, "Linux")
         assert path == "/dev/video0"
         assert isinstance(specs, type(ArducamSpecs))
-
 
     def test_empty_device_list(self) -> None:
         path, specs = find_video_device([], "Linux")
