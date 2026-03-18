@@ -7,6 +7,8 @@ fire-and-forget commands, and task request/progress tracking.
 import logging
 import threading
 import time
+
+logger = logging.getLogger(__name__)
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Dict, List, Optional
@@ -97,7 +99,7 @@ class WSClient(AbstractClient):
                 raise TimeoutError(
                     "Timeout while waiting for connection with the server."
                 )
-            logging.info("Waiting for connection with the server...")
+            logger.info("Waiting for connection with the server...")
 
         self._is_alive = True
         self._check_alive_evt = threading.Event()
