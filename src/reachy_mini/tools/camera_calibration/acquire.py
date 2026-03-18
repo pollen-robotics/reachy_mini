@@ -27,7 +27,7 @@ def main() -> None:
     parser.add_argument(
         "--headless",
         action="store_true",
-        help="Run in headless mode (no display, use terminal input). For Raspberry Pi/wireless version.",
+        help="Run in headless mode (no display, use terminal input). For RPi CM4/wireless version.",
     )
     parser.add_argument(
         "--save-path",
