@@ -38,6 +38,7 @@ from reachy_mini.io.protocol import (
     SetAntennasCmd,
     SetAutomaticBodyYawCmd,
     SetBodyYawCmd,
+    SetFullTargetCmd,
     SetGravityCompensationCmd,
     SetHeadJointsCmd,
     SetMotorModeCmd,
@@ -904,6 +905,16 @@ class Backend:
             if not _maybe_ignore("set_antennas"):
                 self.set_target_antenna_joint_positions(np.array(cmd.antennas))
             send_response({"status": "ok", "command": "set_antennas"})
+
+        elif isinstance(cmd, SetFullTargetCmd):
+            if not _maybe_ignore("set_full_target"):
+                if cmd.head is not None:
+                    self.set_target_head_pose(np.array(cmd.head).reshape(4, 4))
+                if cmd.body_yaw is not None:
+                    self.set_target_body_yaw(cmd.body_yaw)
+                if cmd.antennas is not None:
+                    self.set_target_antenna_joint_positions(np.array(cmd.antennas))
+            send_response({"status": "ok", "command": "set_full_target"})
 
         elif isinstance(cmd, GotoTargetCmd):
             head = np.array(cmd.head) if cmd.head else None
