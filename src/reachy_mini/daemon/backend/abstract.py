@@ -52,7 +52,8 @@ from reachy_mini.io.publisher import Publisher
 
 if typing.TYPE_CHECKING:
     from reachy_mini.kinematics import AnyKinematics
-from reachy_mini.media.media_manager import MediaBackend, MediaManager
+# MediaManager no longer used here — play_sound delegated to GstMediaServer
+from reachy_mini.media.audio_doa import AudioDoA
 from reachy_mini.motion.goto import GotoMove
 from reachy_mini.motion.move import Move
 from reachy_mini.utils.constants import MODELS_ROOT_PATH, URDF_ROOT_PATH
@@ -79,6 +80,8 @@ class Backend:
         self.logger.setLevel(log_level)
 
         self.use_audio = use_audio
+
+        self.doa = AudioDoA() if use_audio else None
 
         self.should_stop = threading.Event()
         self.ready = threading.Event()
@@ -180,12 +183,9 @@ class Backend:
         # Recording lock to guard buffer swaps and appends
         self._rec_lock = threading.Lock()
 
-        self.audio: Optional[MediaManager] = None
-        if self.use_audio:
-            self.logger.debug("Initializing daemon audio backend.")
-            self.audio = MediaManager(
-                backend=MediaBackend.GSTREAMER_NO_VIDEO, log_level=log_level
-            )
+        # Reference to the media server for play_sound delegation.
+        # Set via setup_media_server().
+        self._media_server: Optional[Any] = None
 
         # Guard to ensure only one play_move/goto is executed at a time (goto itself uses play_move, so we need an RLock)
         self._play_move_lock = threading.RLock()
@@ -219,15 +219,13 @@ class Backend:
         """Close the backend and release resources.
 
         Subclasses should override this method to add their own cleanup logic,
-        and call super().close() at the end to ensure audio resources are released.
+        and call super().close() at the end.
 
-        Note: This base implementation handles common cleanup (audio).
+        Note: This base implementation handles common cleanup.
         Subclasses must still implement their own cleanup for backend-specific resources.
         """
-        self.logger.debug("Backend.close() - cleaning up audio resources")
-        if self.audio is not None:
-            self.audio.close()
-            self.audio = None
+        self.logger.debug("Backend.close() - cleaning up resources")
+        self._media_server = None
 
     @property
     def is_move_running(self) -> bool:
@@ -429,7 +427,7 @@ class Backend:
                 )
             sleep_period = 1.0 / play_frequency
 
-            if move.sound_path is not None and self.audio is not None:
+            if move.sound_path is not None:
                 self.play_sound(str(move.sound_path))
 
             t0 = time.time()
@@ -450,9 +448,6 @@ class Backend:
                 else:
                     await asyncio.sleep(0.001)
         finally:
-            if move.sound_path is not None and self.audio is not None:
-                # release audio resources after playing the move sound
-                self.audio.stop_playing()
             self._end_move()
 
     async def goto_target(
@@ -690,15 +685,15 @@ class Backend:
     def play_sound(self, sound_file: str) -> None:
         """Play a sound file from the assets directory.
 
-        If the file is not found in the assets directory, try to load the path itself.
+        Delegates to the media server's play_sound method.  If the server
+        is not available (no_media mode), this is a no-op.
 
         Args:
             sound_file (str): The name of the sound file to play (e.g., "wake_up.wav").
 
         """
-        if self.audio:
-            self.audio.start_playing()
-            self.audio.play_sound(sound_file)
+        if self._media_server is not None:
+            self._media_server.play_sound(sound_file)
 
     # Basic move definitions
     INIT_HEAD_POSE = np.eye(4)
@@ -749,8 +744,6 @@ class Backend:
 
         # Go back to the initial position
         await self.goto_target(self.INIT_HEAD_POSE, duration=0.2)
-        if self.audio:
-            self.audio.stop_playing()
 
     async def goto_sleep(self) -> None:
         """Put the robot to sleep by moving the head and antennas to a predefined sleep position.
@@ -793,8 +786,6 @@ class Backend:
 
         self._last_head_pose = self.SLEEP_HEAD_POSE
         await asyncio.sleep(sleep_time)
-        if self.audio:
-            self.audio.stop_playing()
 
     # Motor control modes
     @abstractmethod
@@ -1025,21 +1016,27 @@ class Backend:
     # WebRTC data channel interface (delegates to process_command)
     # ------------------------------------------------------------------
 
-    def setup_webrtc_interface(self, gst_webrtc: Any) -> None:
-        """Set up the WebRTC interface for motor control.
+    def setup_media_server(self, media_server: Any) -> None:
+        """Connect the backend to the media server.
+
+        Stores a reference to the ``GstMediaServer`` for:
+        - WebRTC data channel message handling (robot control)
+        - Sound playback delegation (play_sound)
 
         Args:
-            gst_webrtc (Any): The GstWebRTC instance to setup.
+            media_server: The ``GstMediaServer`` instance.
 
         """
+        self._media_server = media_server
+
         _loop = asyncio.new_event_loop()
         threading.Thread(target=_loop.run_forever, daemon=True).start()
 
         def _threadsafe_handler(peer_id: str, message: str) -> None:
             _loop.call_soon_threadsafe(self._handle_webrtc_message, peer_id, message)
 
-        gst_webrtc.set_message_handler(_threadsafe_handler)
-        self._send_message_to_webrtc = gst_webrtc.send_data_message
+        media_server.set_message_handler(_threadsafe_handler)
+        self._send_message_to_webrtc = media_server.send_data_message
 
     def _handle_webrtc_message(self, peer_id: str, message: str) -> None:
         def send(resp: dict[str, Any]) -> None:
