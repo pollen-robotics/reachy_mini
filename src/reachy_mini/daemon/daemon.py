@@ -121,7 +121,7 @@ class Daemon:
             return
 
         self.logger.info("Releasing media hardware for direct access...")
-        self._media_server.stop()
+        self._media_server.release_hardware()
         await self._stop_central_signaling_relay()
         self._media_released = True
         self._status.media_released = True
@@ -137,7 +137,7 @@ class Daemon:
             return
 
         self.logger.info("Re-acquiring media hardware...")
-        self._media_server.start()
+        self._media_server.acquire_hardware()
         await self._start_central_signaling_relay()
         self._media_released = False
         self._status.media_released = False
@@ -299,7 +299,7 @@ class Daemon:
             if self._media_server and not self._media_released:
                 if self.backend is not None:
                     self.backend.setup_media_server(self._media_server)
-                self._media_server.start()
+                self._media_server.acquire_hardware()
 
                 # Start central signaling relay for remote WebRTC access
                 await self._start_central_signaling_relay()
@@ -363,8 +363,10 @@ class Daemon:
             self._thread_event_publish_status.set()
 
             if self._media_server and not self._media_released:
-                # We use pause() instead of stop() to keep the signalling server running and the producer registered, allowing proper restart.
-                self._media_server.pause()
+                # Release only camera/audio hardware so external tools
+                # (rpicam-still, etc.) can access them while daemon is stopped.
+                # The pipeline and webrtcsink signalling stay in PAUSED for fast restart.
+                self._media_server.release_hardware()
                 # Stop the central signaling relay
                 await self._stop_central_signaling_relay()
 
