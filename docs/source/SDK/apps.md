@@ -184,14 +184,14 @@ Install your app locally and test it through the dashboard, as users would:
 
 ```bash
 # Install in development mode
-pip install -e /path/to/my_app
+uv pip install -e /path/to/my_app
 
 # Start the daemon
 reachy-mini-daemon          # Lite
 reachy-mini-daemon --sim    # Simulation
-
-# Open http://127.0.0.1:8000/ — your app appears in the installed list
 ```
+
+Then open <a href="http://127.0.0.1:8000/">http://127.0.0.1:8000/</a> — your app appears in the installed list.
 
 ---
 
@@ -200,7 +200,7 @@ reachy-mini-daemon --sim    # Simulation
 ### 1. Log in to Hugging Face
 
 ```bash
-pip install --upgrade huggingface_hub
+uv pip install --upgrade huggingface_hub
 hf auth login
 ```
 
