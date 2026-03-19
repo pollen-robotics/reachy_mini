@@ -208,6 +208,16 @@ class MediaManager:
         self.logger.debug("Initializing camera...")
         if self.backend == MediaBackend.SOUNDDEVICE_OPENCV:
             self.logger.info("Using OpenCV camera backend.")
+
+            # Check OpenCV availability
+            try:
+                import cv2  # noqa: F401
+            except ImportError:
+                raise ImportError(
+                    "OpenCV backend requested but opencv-python is not installed. "
+                    "Install with: pip install reachy_mini[opencv]"
+                )
+
             from reachy_mini.media.camera_opencv import OpenCVCamera
 
             self.camera = OpenCVCamera(log_level=log_level)

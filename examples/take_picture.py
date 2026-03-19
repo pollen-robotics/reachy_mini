@@ -1,4 +1,10 @@
-"""Demonstrate how to take a picture with Reachy Mini."""
+"""Demonstrate how to take a picture with Reachy Mini.
+
+Note:
+    This example requires the OpenCV optional dependency.
+    Install with: pip install reachy_mini[opencv]
+
+"""
 
 # START doc_example
 
@@ -6,7 +12,12 @@ import argparse
 import sys
 import time
 
-import cv2
+try:
+    import cv2
+except ImportError:
+    print("Error: OpenCV is required for this example but not installed.")
+    print("Install it with: pip install reachy_mini[opencv]")
+    sys.exit(1)
 
 from reachy_mini import ReachyMini
 
