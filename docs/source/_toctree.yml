@@ -43,20 +43,20 @@
       title: SDK Overview
     - local: SDK/installation
       title: Installation
+    - local: SDK/core-concept
+      title: Core Concepts
     - local: SDK/quickstart
       title: Quickstart Guide
     - local: SDK/python-sdk
       title: Python SDK
-    - local: API/rest-api
-      title: REST API
-    - local: SDK/javascript-sdk
-      title: JavaScript SDK & Web Apps
     - local: SDK/integration
       title: AI Integrations
     - local: SDK/apps
       title: Building & Publishing Apps
-    - local: SDK/core-concept
-      title: Core Concepts
+    - local: API/rest-api
+      title: REST API
+    - local: SDK/javascript-sdk
+      title: JavaScript SDK & Web Apps
     - local: SDK/media-architecture
       title: Media Architecture
     - local: SDK/gstreamer-installation
