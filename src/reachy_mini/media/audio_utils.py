@@ -22,6 +22,8 @@ import logging
 import subprocess
 from pathlib import Path
 
+logger = logging.getLogger(__name__)
+
 
 def _process_card_number_output(output: str) -> int:
     """Process the output of 'arecord -l' to find the ReSpeaker or Reachy Mini Audio card number.
@@ -51,16 +53,16 @@ def _process_card_number_output(output: str) -> int:
     for line in lines:
         if "reachy mini audio" in line.lower():
             card_number = line.split(" ")[1].split(":")[0]
-            logging.debug(f"Found Reachy Mini Audio sound card: {card_number}")
+            logger.debug(f"Found Reachy Mini Audio sound card: {card_number}")
             return int(card_number)
         elif "respeaker" in line.lower():
             card_number = line.split(" ")[1].split(":")[0]
-            logging.warning(
+            logger.warning(
                 f"Found ReSpeaker sound card: {card_number}. Please update firmware!"
             )
             return int(card_number)
 
-    logging.warning("Reachy Mini Audio sound card not found. Returning default card")
+    logger.warning("Reachy Mini Audio sound card not found. Returning default card")
     return 0  # default sound card
 
 
@@ -103,7 +105,7 @@ def get_respeaker_card_number() -> int:
         return _process_card_number_output(output)
 
     except subprocess.CalledProcessError as e:
-        logging.error(f"Cannot find sound card: {e}")
+        logger.error(f"Cannot find sound card: {e}")
         return -1
 
 
