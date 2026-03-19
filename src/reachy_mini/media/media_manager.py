@@ -124,6 +124,7 @@ class MediaManager:
         log_level: str = "INFO",
         signalling_host: str = "localhost",
         camera_specs: Optional[CameraSpecs] = None,
+        daemon_url: str = "",
     ) -> None:
         """Initialize the media manager.
 
@@ -135,6 +136,10 @@ class MediaManager:
             camera_specs: Camera specifications detected by the daemon.
                 When ``None`` the concrete camera class will fall back to
                 ``ReachyMiniLiteCamSpecs`` with a warning.
+            daemon_url: Base URL of the daemon's HTTP API
+                (e.g. ``"http://reachy-mini.local:8000"``).  Only used
+                with the ``WEBRTC`` backend for remote sound playback
+                and file management.
 
         Example::
 
@@ -150,6 +155,7 @@ class MediaManager:
         self.backend = _resolve_backend(backend)
         self.camera: Optional[CameraLike] = None
         self.audio: Optional[AudioLike] = None
+        self._daemon_url = daemon_url
 
         match self.backend:
             case MediaBackend.NO_MEDIA:
@@ -162,7 +168,9 @@ class MediaManager:
                 self._init_audio(log_level)
             case MediaBackend.WEBRTC:
                 self.logger.info("Using WebRTC streaming backend.")
-                self._init_webrtc(log_level, signalling_host, 8443, camera_specs)
+                self._init_webrtc(
+                    log_level, signalling_host, 8443, camera_specs, daemon_url
+                )
             case _:
                 raise NotImplementedError(f"Media backend {backend} not implemented.")
 
@@ -210,6 +218,7 @@ class MediaManager:
         signalling_host: str,
         signalling_port: int,
         camera_specs: Optional[CameraSpecs] = None,
+        daemon_url: str = "",
     ) -> None:
         """Initialize the WebRTC client (camera + audio)."""
         from reachy_mini.media.webrtc_utils import find_producer_peer_id_by_name
@@ -225,6 +234,7 @@ class MediaManager:
             signaling_port=signalling_port,
             camera_specs=camera_specs,
         )
+        webrtc_media.daemon_url = daemon_url
 
         self.camera = webrtc_media
         self.audio = webrtc_media  # GstWebRTCClient handles both audio and video
@@ -263,6 +273,52 @@ class MediaManager:
             self.logger.warning("Audio system is not initialized.")
             return
         self.audio.play_sound(sound_file)
+
+    def upload_sound(self, sound_file: str) -> str:
+        """Upload a local sound file to the daemon's temporary directory.
+
+        Only meaningful for the ``WEBRTC`` backend — when using the
+        ``LOCAL`` backend the file is already accessible so the path is
+        returned as-is.
+
+        Args:
+            sound_file: Local path to the sound file.
+
+        Returns:
+            The path of the file on the daemon.
+
+        """
+        if self.audio is None:
+            self.logger.warning("Audio system is not initialized.")
+            return sound_file
+        return self.audio.upload_sound(sound_file)
+
+    def list_sounds(self) -> list[str]:
+        """List sound files in the daemon's temporary sound directory.
+
+        Returns:
+            A list of filenames.  Empty for the ``LOCAL`` backend.
+
+        """
+        if self.audio is None:
+            self.logger.warning("Audio system is not initialized.")
+            return []
+        return self.audio.list_sounds()
+
+    def delete_sound(self, filename: str) -> bool:
+        """Delete a sound file from the daemon's temporary sound directory.
+
+        Args:
+            filename: Name of the file to delete (not a path).
+
+        Returns:
+            ``True`` if the file was deleted, ``False`` otherwise.
+
+        """
+        if self.audio is None:
+            self.logger.warning("Audio system is not initialized.")
+            return False
+        return self.audio.delete_sound(filename)
 
     def start_recording(self) -> None:
         """Start recording audio."""

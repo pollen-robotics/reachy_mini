@@ -463,6 +463,37 @@ class GStreamerAudio:
         playbin.set_state(Gst.State.PLAYING)
 
     # ------------------------------------------------------------------
+    # Remote sound file management (no-ops for the LOCAL backend)
+    # ------------------------------------------------------------------
+
+    def upload_sound(self, sound_file: str) -> str:
+        """No-op for the local backend — the file is already accessible.
+
+        Returns:
+            The unchanged *sound_file* path.
+
+        """
+        return sound_file
+
+    def list_sounds(self) -> list[str]:
+        """No-op for the local backend.
+
+        Returns:
+            An empty list.
+
+        """
+        return []
+
+    def delete_sound(self, filename: str) -> bool:
+        """No-op for the local backend.
+
+        Returns:
+            Always ``False``.
+
+        """
+        return False
+
+    # ------------------------------------------------------------------
     # Direction of Arrival
     # ------------------------------------------------------------------
 
