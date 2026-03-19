@@ -234,7 +234,8 @@ class MediaManager:
             signaling_port=signalling_port,
             camera_specs=camera_specs,
         )
-        webrtc_media.daemon_url = daemon_url
+        # Auto-derive daemon URL from signalling host when not provided.
+        webrtc_media.daemon_url = daemon_url or f"http://{signalling_host}:8000"
 
         self.camera = webrtc_media
         self.audio = webrtc_media  # GstWebRTCClient handles both audio and video
@@ -269,6 +270,7 @@ class MediaManager:
             sound_file: Path to the sound file to play.
 
         """
+        print("test")
         if self.audio is None:
             self.logger.warning("Audio system is not initialized.")
             return
