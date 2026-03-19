@@ -39,7 +39,6 @@ Example usage::
     camera.close()
 """
 
-import logging
 import platform
 import time
 from threading import Thread
@@ -52,13 +51,13 @@ from reachy_mini.daemon.utils import (
     CAMERA_PIPE_NAME,
     CAMERA_SOCKET_PATH,
 )
+from reachy_mini.media.camera_base import CameraBase
 from reachy_mini.media.camera_constants import (
     CameraResolution,
     CameraSpecs,
-    MujocoCameraSpecs,
     ReachyMiniLiteCamSpecs,
 )
-from reachy_mini.media.camera_utils import scale_intrinsics
+from reachy_mini.media.gstreamer_utils import get_sample
 
 try:
     import gi
@@ -74,7 +73,7 @@ gi.require_version("GstApp", "1.0")
 from gi.repository import GLib, Gst, GstApp  # noqa: E402
 
 
-class GStreamerCamera:
+class GStreamerCamera(CameraBase):
     """Camera that reads BGR frames from the daemon's local IPC endpoint.
 
     The WebRTC daemon exposes BGR camera frames via a local IPC mechanism:
@@ -85,10 +84,6 @@ class GStreamerCamera:
     Since the daemon's IPC branch already converts to BGR, the reader
     pipeline is simply ``source → queue → appsink`` with no extra
     conversion.
-
-    Attributes:
-        camera_specs: Camera specifications (resolutions, intrinsics, …).
-        resized_K: Intrinsic matrix rescaled to the current resolution.
 
     """
 
@@ -109,24 +104,21 @@ class GStreamerCamera:
             RuntimeError: If the IPC source element cannot be created.
 
         """
-        self.logger = logging.getLogger(__name__)
-        self.logger.setLevel(log_level)
+        super().__init__(log_level=log_level)
 
         Gst.init([])
         self._loop = GLib.MainLoop()
         self._thread_bus_calls: Optional[Thread] = None
 
         if camera_specs is not None:
-            self.camera_specs: CameraSpecs = camera_specs
+            self.camera_specs = camera_specs
         else:
             self.logger.warning(
                 "No camera_specs provided — defaulting to ReachyMiniLiteCamSpecs."
             )
             self.camera_specs = cast(CameraSpecs, ReachyMiniLiteCamSpecs)
-        self._resolution: Optional[CameraResolution] = (
-            self.camera_specs.default_resolution
-        )
-        self.resized_K: Optional[npt.NDArray[np.float64]] = self.camera_specs.K
+        self._resolution = self.camera_specs.default_resolution
+        self.resized_K = self.camera_specs.K
 
         self.pipeline = Gst.Pipeline.new("camera_ipc_reader")
 
@@ -140,101 +132,8 @@ class GStreamerCamera:
         # Build platform-specific IPC source pipeline
         self._build_ipc_source()
 
-    # ------------------------------------------------------------------
-    # Resolution / calibration properties
-    # ------------------------------------------------------------------
-
-    @property
-    def resolution(self) -> tuple[int, int]:
-        """Current resolution as ``(width, height)`` in pixels.
-
-        Raises:
-            RuntimeError: If the resolution has not been set yet.
-
-        """
-        if self._resolution is None:
-            raise RuntimeError("Camera resolution is not set.")
-        return (self._resolution.value[0], self._resolution.value[1])
-
-    @property
-    def framerate(self) -> int:
-        """Current frame rate in fps.
-
-        Raises:
-            RuntimeError: If the resolution has not been set yet.
-
-        """
-        if self._resolution is None:
-            raise RuntimeError("Camera resolution is not set.")
-        return int(self._resolution.value[2])
-
-    @property
-    def K(self) -> Optional[npt.NDArray[np.float64]]:
-        """Camera intrinsic matrix rescaled to the current resolution.
-
-        Returns the 3×3 matrix::
-
-            [[fx,  0, cx],
-             [ 0, fy, cy],
-             [ 0,  0,  1]]
-
-        or ``None`` if not yet available.
-
-        """
-        return self.resized_K
-
-    @property
-    def D(self) -> Optional[npt.NDArray[np.float64]]:
-        """Distortion coefficients ``[k1, k2, p1, p2, k3]``, or ``None``."""
-        if self.camera_specs is not None:
-            return self.camera_specs.D
-        return None
-
-    def set_resolution(self, resolution: CameraResolution) -> None:
-        """Change the camera resolution.
-
-        Updates the appsink caps and rescales the intrinsic matrix.
-        If the pipeline is already playing it is restarted automatically.
-
-        Args:
-            resolution: Desired resolution from ``CameraResolution``.
-
-        Raises:
-            RuntimeError: If camera specs are not set or if the camera is a
-                MuJoCo simulated camera (resolution change not supported).
-            ValueError: If the resolution is not in the camera's
-                ``available_resolutions``.
-
-        """
-        if self.camera_specs is None:
-            raise RuntimeError(
-                "Camera specs not set. Open the camera before setting the resolution."
-            )
-
-        if isinstance(self.camera_specs, MujocoCameraSpecs):
-            raise RuntimeError(
-                "Cannot change resolution of Mujoco simulated camera for now."
-            )
-
-        if resolution not in self.camera_specs.available_resolutions:
-            raise ValueError(
-                f"Resolution not supported by the camera. "
-                f"Available resolutions are: {self.camera_specs.available_resolutions}"
-            )
-
-        # Rescale intrinsic matrix
-        original_K = self.camera_specs.K
-        original_size: tuple[int, int] = (
-            CameraResolution.R3840x2592at30fps.value[0],
-            CameraResolution.R3840x2592at30fps.value[1],
-        )
-        target_size: tuple[int, int] = (resolution.value[0], resolution.value[1])
-        crop_scale = resolution.value[3]
-        self.resized_K = scale_intrinsics(
-            original_K, original_size, target_size, crop_scale
-        )
-
-        # Restart pipeline if needed
+    def _apply_resolution(self, resolution: CameraResolution) -> None:
+        """Apply resolution: restart the pipeline if it is already playing."""
         should_restart = False
         if self.pipeline.get_state(0).state == Gst.State.PLAYING:
             self.close()
@@ -251,10 +150,6 @@ class GStreamerCamera:
 
         if should_restart:
             self.open()
-
-    # ------------------------------------------------------------------
-    # Pipeline construction
-    # ------------------------------------------------------------------
 
     def _build_ipc_source(self) -> None:
         """Build the IPC source pipeline for the current platform.
@@ -310,10 +205,6 @@ class GStreamerCamera:
         queue.link(convert)
         convert.link(self._appsink_video)
 
-    # ------------------------------------------------------------------
-    # Bus handling
-    # ------------------------------------------------------------------
-
     def _on_bus_message(self, bus: Gst.Bus, msg: Gst.Message, loop) -> bool:  # type: ignore[no-untyped-def]
         t = msg.type
         if t == Gst.MessageType.EOS:
@@ -344,10 +235,6 @@ class GStreamerCamera:
         self.pipeline.query(query)
         self.logger.info(f"Pipeline latency {query.parse_latency()}")
 
-    # ------------------------------------------------------------------
-    # Lifecycle
-    # ------------------------------------------------------------------
-
     def open(self) -> None:
         """Start the GStreamer pipeline and begin receiving frames."""
         self.pipeline.set_state(Gst.State.PLAYING)
@@ -364,19 +251,6 @@ class GStreamerCamera:
         except Exception:
             pass
 
-    def _get_sample(self, appsink: GstApp.AppSink) -> Optional[bytes]:
-        sample = appsink.try_pull_sample(20_000_000)
-        if sample is None:
-            return None
-        data = None
-        if isinstance(sample, Gst.Sample):
-            buf = sample.get_buffer()
-            if buf is None:
-                self.logger.warning("Buffer is None")
-
-            data = buf.extract_dup(0, buf.get_size())
-        return data
-
     def read(self) -> Optional[npt.NDArray[np.uint8]]:
         """Pull the latest BGR frame from the IPC endpoint.
 
@@ -385,20 +259,12 @@ class GStreamerCamera:
             or ``None`` if no frame is available within the timeout.
 
         """
-        sample = self._appsink_video.try_pull_sample(20_000_000)
-        if sample is None:
+        data = get_sample(self._appsink_video, self.logger)
+        if data is None:
             return None
-
-        buf = sample.get_buffer()
-        if buf is None:
-            self.logger.warning("Buffer is None")
-            return None
-        data = buf.extract_dup(0, buf.get_size())
-
-        arr = np.frombuffer(data, dtype=np.uint8).reshape(
+        return np.frombuffer(data, dtype=np.uint8).reshape(
             (self.resolution[1], self.resolution[0], 3)
         )
-        return arr
 
     def close(self) -> None:
         """Stop the pipeline and release resources."""

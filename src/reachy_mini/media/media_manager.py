@@ -23,10 +23,14 @@ Architecture overview:
 import logging
 import warnings
 from enum import Enum
-from typing import Optional, Union
+from typing import Optional
 
 import numpy as np
 import numpy.typing as npt
+
+from reachy_mini.media.audio_base import AudioBase
+from reachy_mini.media.camera_base import CameraBase
+from reachy_mini.media.camera_constants import CameraSpecs
 
 
 class MediaBackend(Enum):
@@ -86,23 +90,6 @@ def _resolve_backend(backend: MediaBackend) -> MediaBackend:
     return backend
 
 
-# -- Type aliases for the concrete backends ----------------------------
-# Both GStreamerCamera and GstWebRTCClient expose the same camera API
-# (open, read, close, set_resolution, resolution, K, D, …).
-# Both GStreamerAudio and GstWebRTCClient expose the same audio API
-# (start_recording, get_audio_sample, push_audio_sample, play_sound, …).
-# We import them lazily inside the init helpers, but declare the union
-# here so the type annotations stay narrow.
-
-from reachy_mini.media.audio_gstreamer import GStreamerAudio  # noqa: E402
-from reachy_mini.media.camera_constants import CameraSpecs  # noqa: E402
-from reachy_mini.media.camera_gstreamer import GStreamerCamera  # noqa: E402
-from reachy_mini.media.webrtc_client_gstreamer import GstWebRTCClient  # noqa: E402
-
-CameraLike = Union[GStreamerCamera, GstWebRTCClient]
-AudioLike = Union[GStreamerAudio, GstWebRTCClient]
-
-
 class MediaManager:
     """Media Manager for handling camera and audio devices.
 
@@ -148,8 +135,8 @@ class MediaManager:
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(log_level)
         self.backend = _resolve_backend(backend)
-        self.camera: Optional[CameraLike] = None
-        self.audio: Optional[AudioLike] = None
+        self.camera: Optional[CameraBase] = None
+        self.audio: Optional[AudioBase] = None
 
         match self.backend:
             case MediaBackend.NO_MEDIA:
@@ -195,12 +182,16 @@ class MediaManager:
         self, log_level: str, camera_specs: Optional[CameraSpecs] = None
     ) -> None:
         """Initialize the camera via local IPC."""
+        from reachy_mini.media.camera_gstreamer import GStreamerCamera
+
         self.logger.debug("Initializing camera (LOCAL IPC reader)...")
         self.camera = GStreamerCamera(log_level=log_level, camera_specs=camera_specs)
         self.camera.open()
 
     def _init_audio(self, log_level: str) -> None:
         """Initialize the audio system via GStreamer."""
+        from reachy_mini.media.audio_gstreamer import GStreamerAudio
+
         self.logger.debug("Initializing audio (GStreamer)...")
         self.audio = GStreamerAudio(log_level=log_level)
 
@@ -212,6 +203,7 @@ class MediaManager:
         camera_specs: Optional[CameraSpecs] = None,
     ) -> None:
         """Initialize the WebRTC client (camera + audio)."""
+        from reachy_mini.media.webrtc_client_gstreamer import GstWebRTCClient
         from reachy_mini.media.webrtc_utils import find_producer_peer_id_by_name
 
         peer_id = find_producer_peer_id_by_name(
