@@ -290,13 +290,13 @@ class ResponseCharacteristic(Characteristic):
 
     @dbus.service.method(GATT_CHRC_IFACE, in_signature="", out_signature="")
     def StartNotify(self):
-        """Called by BlueZ when a client subscribes to notifications."""
+        """Handle BlueZ notification subscription from a client."""
         self.notifying = True
         logger.info("Response notifications enabled")
 
     @dbus.service.method(GATT_CHRC_IFACE, in_signature="", out_signature="")
     def StopNotify(self):
-        """Called by BlueZ when a client unsubscribes."""
+        """Handle BlueZ notification unsubscription from a client."""
         self.notifying = False
         logger.info("Response notifications disabled")
         # Stop journal streaming if running (client disconnected without JOURNAL_STOP)
