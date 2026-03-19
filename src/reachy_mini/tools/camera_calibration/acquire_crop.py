@@ -51,7 +51,7 @@ def main() -> None:
     if not args.headless:
         cv2.namedWindow("Reachy Mini Camera")
 
-    with ReachyMini(media_backend="gstreamer") as reachy_mini:
+    with ReachyMini(media_backend="local") as reachy_mini:
         if (
             reachy_mini.media.camera is None
             or reachy_mini.media.camera.camera_specs is None

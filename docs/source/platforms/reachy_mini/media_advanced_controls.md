@@ -32,7 +32,7 @@ rpicam-still -t 1 -r -o test.jpg --width 4608 --height 2592 --autofocus-mode man
 rpicam-still -t 1 -r -o test.jpg --width 4608 --height 2592 --autofocus-mode manual --lens-position 1000
 ```
 
-At the SDK level, the camera is controlled by GStreamer using the [libcamerasrc](https://github.com/pollen-robotics/reachy_mini/tree/main/src/reachy_mini/media/webrtc_daemon.py) component. You can view available parameters with the following command:
+At the daemon level, the camera is controlled by GStreamer using the [libcamerasrc](https://github.com/pollen-robotics/reachy_mini/tree/main/src/reachy_mini/media/media_server.py) component. You can view available parameters with the following command:
 
 ```bash
 gst-inspect-1.0 libcamerasrc
