@@ -118,8 +118,6 @@ class GstMediaServer:
         self._on_data_message: Optional[Callable[[str, str], None]] = None
         self._incoming_audio: Dict[str, Dict[str, Any]] = {}
         self._playbin: Optional[Gst.Element] = None
-        self._camera_source: Optional[Gst.Element] = None
-        self._audio_source: Optional[Gst.Element] = None
 
         self._build_pipeline()
 
@@ -433,9 +431,6 @@ class GstMediaServer:
         if not source_elements:
             self._logger.error("Failed to create camera source elements.")
             return
-
-        # Store the first element (the actual camera source) for release/acquire
-        self._camera_source = source_elements[0]
 
         # --- Add all source elements to the pipeline and link them ---
         for elem in source_elements:
@@ -774,7 +769,6 @@ class GstMediaServer:
                 f"{factory_name} — keeping default provide-clock behaviour."
             )
 
-        self._audio_source = audiosrc
         pipeline.add(audiosrc)
         audiosrc.link(webrtcsink)
 
@@ -1015,32 +1009,19 @@ class GstMediaServer:
     # ------------------------------------------------------------------ #
 
     def start(self) -> None:
-        """Start the WebRTC pipeline."""
-        self._logger.debug("Starting WebRTC")
-        self._pipeline_sender.set_state(Gst.State.PLAYING)
-        GLib.timeout_add_seconds(5, self._dump_latency)
+        """Rebuild the pipeline from scratch and start it.
 
-    def pause(self) -> None:
-        """Pause the WebRTC pipeline."""
-        self._logger.debug("Pausing WebRTC")
-        self._pipeline_sender.set_state(Gst.State.PAUSED)
-
-    def stop(self) -> None:
-        """Stop the WebRTC pipeline."""
-        self._logger.debug("Stopping WebRTC")
-        self._pipeline_sender.set_state(Gst.State.NULL)
-
-    def release_hardware(self) -> None:
-        """Fully stop the pipeline to release camera/audio hardware."""
-        self._logger.debug("Releasing hardware (pipeline → NULL)")
-        self._pipeline_sender.set_state(Gst.State.NULL)
-
-    def acquire_hardware(self) -> None:
-        """Rebuild the pipeline from scratch and start it."""
-        self._logger.debug("Acquiring hardware (rebuilding pipeline)")
+        Rebuilding ensures a clean state after stop() released all hardware.
+        """
+        self._logger.debug("Starting WebRTC (rebuilding pipeline)")
         self._build_pipeline()
         self._pipeline_sender.set_state(Gst.State.PLAYING)
         GLib.timeout_add_seconds(5, self._dump_latency)
+
+    def stop(self) -> None:
+        """Stop the pipeline and release all hardware (camera, audio)."""
+        self._logger.debug("Stopping WebRTC")
+        self._pipeline_sender.set_state(Gst.State.NULL)
 
     # ------------------------------------------------------------------ #
     #  Sound playback (daemon-side)                                        #
