@@ -127,10 +127,6 @@ class GStreamerAudio:
             GLib.PRIORITY_DEFAULT, self._on_bus_message, self._loop
         )
 
-    # ------------------------------------------------------------------
-    # Pipeline construction
-    # ------------------------------------------------------------------
-
     def _init_pipeline_record(self, pipeline: Gst.Pipeline) -> None:
         self._appsink_audio = Gst.ElementFactory.make("appsink")
         caps = Gst.Caps.from_string(
@@ -237,10 +233,6 @@ class GStreamerAudio:
         audioresample.link(queue)
         queue.link(audiosink)
 
-    # ------------------------------------------------------------------
-    # Bus handling
-    # ------------------------------------------------------------------
-
     def _on_bus_message(self, bus: Gst.Bus, msg: Gst.Message, loop) -> bool:  # type: ignore[no-untyped-def]
         t = msg.type
         if t == Gst.MessageType.EOS:
@@ -258,10 +250,6 @@ class GStreamerAudio:
         query = Gst.Query.new_latency()
         self._pipeline_playback.query(query)
         self.logger.info(f"Audio pipeline latency {query.parse_latency()}")
-
-    # ------------------------------------------------------------------
-    # Recording
-    # ------------------------------------------------------------------
 
     def start_recording(self) -> None:
         """Start capturing audio from the microphone."""
@@ -312,10 +300,6 @@ class GStreamerAudio:
     def stop_recording(self) -> None:
         """Stop the recording pipeline."""
         self._pipeline_record.set_state(Gst.State.NULL)
-
-    # ------------------------------------------------------------------
-    # Playback (push-based)
-    # ------------------------------------------------------------------
 
     def start_playing(self) -> None:
         """Start the playback pipeline so ``push_audio_sample`` can feed data."""
@@ -382,10 +366,6 @@ class GStreamerAudio:
             self.logger.warning(
                 "AppSrc is not initialized. Call start_playing() first."
             )
-
-    # ------------------------------------------------------------------
-    # Sound-file playback (one-shot)
-    # ------------------------------------------------------------------
 
     def play_sound(self, sound_file: str) -> None:
         """Play a sound file through the Reachy Mini Audio card.
@@ -462,10 +442,6 @@ class GStreamerAudio:
         self._playbin = playbin
         playbin.set_state(Gst.State.PLAYING)
 
-    # ------------------------------------------------------------------
-    # Remote sound file management (no-ops for the LOCAL backend)
-    # ------------------------------------------------------------------
-
     def upload_sound(self, sound_file: str) -> str:
         """No-op for the local backend — the file is already accessible.
 
@@ -493,10 +469,6 @@ class GStreamerAudio:
         """
         return False
 
-    # ------------------------------------------------------------------
-    # Direction of Arrival
-    # ------------------------------------------------------------------
-
     def get_DoA(self) -> tuple[float, bool] | None:
         """Get the Direction of Arrival (DoA) from the ReSpeaker.
 
@@ -506,10 +478,6 @@ class GStreamerAudio:
 
         """
         return self._doa.get_DoA()
-
-    # ------------------------------------------------------------------
-    # Lifecycle
-    # ------------------------------------------------------------------
 
     def cleanup(self) -> None:
         """Release all resources (pipelines, USB devices)."""
@@ -521,10 +489,6 @@ class GStreamerAudio:
         self._loop.quit()
         self._bus_record.remove_watch()
         self._bus_playback.remove_watch()
-
-    # ------------------------------------------------------------------
-    # Device discovery
-    # ------------------------------------------------------------------
 
     def _get_audio_device(self, device_type: str = "Source") -> Optional[str]:
         """Use ``Gst.DeviceMonitor`` to find the Reachy Mini Audio card.

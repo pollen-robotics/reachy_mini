@@ -24,11 +24,6 @@ router = APIRouter(
 SOUNDS_TMP_DIR = "/tmp/reachy_mini_sounds"
 
 
-# ------------------------------------------------------------------
-# Media release / acquire
-# ------------------------------------------------------------------
-
-
 @router.post("/release")
 async def release_media(daemon: Daemon = Depends(get_daemon)) -> dict[str, str]:
     """Release camera and audio hardware for direct client access."""
@@ -51,11 +46,6 @@ async def media_status(daemon: Daemon = Depends(get_daemon)) -> dict[str, bool]:
         "released": daemon.media_released,
         "no_media": daemon.no_media,
     }
-
-
-# ------------------------------------------------------------------
-# Sound playback
-# ------------------------------------------------------------------
 
 
 class PlaySoundRequest(BaseModel):
@@ -103,11 +93,6 @@ async def stop_sound(
 
     backend.stop_sound()
     return {"status": "ok"}
-
-
-# ------------------------------------------------------------------
-# Sound file management (remote temp directory)
-# ------------------------------------------------------------------
 
 
 @router.post("/sounds/upload")
