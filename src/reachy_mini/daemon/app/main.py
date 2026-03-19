@@ -295,6 +295,19 @@ def run_app(args: Args) -> None:
     apps_logger.setLevel(args.log_level)
     apps_logger.propagate = True  # Ensure it propagates to root logger
 
+    # Downgrade noisy polling routes to DEBUG in uvicorn access logs
+    class AccessLogFilter(logging.Filter):
+        _POLLING_PATHS = {"/health-check", "/api/hf-auth/relay-status"}
+
+        def filter(self, record: logging.LogRecord) -> bool:
+            msg = record.getMessage()
+            if any(path in msg for path in self._POLLING_PATHS):
+                record.levelno = logging.DEBUG
+                record.levelname = "DEBUG"
+            return True
+
+    logging.getLogger("uvicorn.access").addFilter(AccessLogFilter())
+
     # Install exception hook to catch uncaught exceptions
     def exception_hook(
         exc_type: type[BaseException],
