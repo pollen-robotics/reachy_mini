@@ -64,7 +64,7 @@ class GstMediaServer:
 
     Attributes:
         camera_specs (CameraSpecs): Specifications of the detected camera.
-        resized_K (npt.NDArray[np.float64]): Camera intrinsic matrix for current resolution.
+
 
     """
 
@@ -87,7 +87,6 @@ class GstMediaServer:
         """
         self._logger = logging.getLogger(__name__)
         self._logger.setLevel(log_level)
-        self._log_level = log_level
         self._use_sim = use_sim
 
         Gst.init([])
@@ -107,7 +106,6 @@ class GstMediaServer:
                 self.camera_specs = detected_specs
 
         self._resolution = self.camera_specs.default_resolution
-        self.resized_K = self.camera_specs.K
 
         if self._resolution is None:
             raise RuntimeError("Failed to get default camera resolution.")

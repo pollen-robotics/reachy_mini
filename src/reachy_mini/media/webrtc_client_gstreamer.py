@@ -141,7 +141,6 @@ class GstWebRTCClient(CameraBase, AudioBase):
         self._audio_send_ready = False
         self._appsrc = None
         self._appsrc_pts = 0  # running PTS in nanoseconds for appsrc buffers
-        self._playbin: Optional[Gst.Element] = None  # for play_sound
         self._webrtcsrc.connect("deep-element-added", self._on_deep_element_added)
         self.logger.info("GstWebRTCClient initialized (bidirectional audio support)")
 
