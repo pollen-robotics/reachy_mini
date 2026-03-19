@@ -1056,6 +1056,185 @@
         }
       }
     },
+    "/api/media/play_sound": {
+      "post": {
+        "summary": "Play Sound",
+        "description": "Play a sound file on the robot's speaker.\n\nThe *file* field can be:\n- An absolute path on the daemon's filesystem.\n- A filename relative to the built-in assets directory.\n- A filename previously uploaded to the sounds temp directory.",
+        "operationId": "play_sound_api_media_play_sound_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlaySoundRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Play Sound Api Media Play Sound Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/media/stop_sound": {
+      "post": {
+        "summary": "Stop Sound",
+        "description": "Stop the currently playing sound file.",
+        "operationId": "stop_sound_api_media_stop_sound_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Stop Sound Api Media Stop Sound Post"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/media/sounds/upload": {
+      "post": {
+        "summary": "Upload Sound",
+        "description": "Upload a sound file to the daemon's temporary sound directory.\n\nThe file is saved to ``/tmp/reachy_mini_sounds/<original_filename>``.\nIf a file with the same name already exists it is overwritten.\n\nReturns:\n    JSON with the absolute *path* of the saved file on the daemon.",
+        "operationId": "upload_sound_api_media_sounds_upload_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_sound_api_media_sounds_upload_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Upload Sound Api Media Sounds Upload Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/media/sounds": {
+      "get": {
+        "summary": "List Sounds",
+        "description": "List sound files in the daemon's temporary sound directory.",
+        "operationId": "list_sounds_api_media_sounds_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "type": "object",
+                  "title": "Response List Sounds Api Media Sounds Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/media/sounds/{filename}": {
+      "delete": {
+        "summary": "Delete Sound",
+        "description": "Delete a sound file from the daemon's temporary sound directory.\n\nOnly files inside the temp directory can be deleted (no path traversal).",
+        "operationId": "delete_sound_api_media_sounds__filename__delete",
+        "parameters": [
+          {
+            "name": "filename",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Filename"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Delete Sound Api Media Sounds  Filename  Delete"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/motors/status": {
       "get": {
         "summary": "Get Motor Status",
@@ -1979,6 +2158,20 @@
         "title": "AppUpdatesResponse",
         "description": "Response for list of app updates."
       },
+      "Body_upload_sound_api_media_sounds_upload_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "format": "binary",
+            "title": "File"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_upload_sound_api_media_sounds_upload_post"
+      },
       "CameraSpecsResponse": {
         "properties": {
           "name": {
@@ -2671,6 +2864,20 @@
         ],
         "title": "MujocoBackendStatus",
         "description": "Status of the Mujoco backend."
+      },
+      "PlaySoundRequest": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "title": "File"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "PlaySoundRequest",
+        "description": "Request body for the play_sound endpoint."
       },
       "PrivateSpaceInstallRequest": {
         "properties": {

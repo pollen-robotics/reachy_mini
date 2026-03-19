@@ -144,10 +144,6 @@ class GstMediaServer:
         self._pipeline_sender.query(query)
         self._logger.info(f"Pipeline latency {query.parse_latency()}")
 
-    # ------------------------------------------------------------------ #
-    #  WebRTC sink configuration                                          #
-    # ------------------------------------------------------------------ #
-
     def _configure_webrtc(self, pipeline: Gst.Pipeline) -> Gst.Element:
         self._logger.debug("Configuring WebRTC")
         webrtcsink = Gst.ElementFactory.make("webrtcsink")
@@ -168,10 +164,6 @@ class GstMediaServer:
         pipeline.add(webrtcsink)
 
         return webrtcsink
-
-    # ------------------------------------------------------------------ #
-    #  Consumer lifecycle (WebRTC peers)                                   #
-    # ------------------------------------------------------------------ #
 
     def _consumer_added(
         self,
@@ -230,10 +222,6 @@ class GstMediaServer:
     ) -> None:
         self._logger.info(f"consumer removed: {peer_id}")
         self._cleanup_incoming_audio(peer_id)
-
-    # ------------------------------------------------------------------ #
-    #  Bidirectional audio (incoming from browser)                         #
-    # ------------------------------------------------------------------ #
 
     def _on_consumer_pad_added(
         self,
@@ -357,10 +345,6 @@ class GstMediaServer:
             playback_pipe.set_state(Gst.State.NULL)
         self._logger.info(f"Cleaned up incoming audio for peer {peer_id}")
 
-    # ------------------------------------------------------------------ #
-    #  Properties                                                          #
-    # ------------------------------------------------------------------ #
-
     @property
     def resolution(self) -> tuple[int, int]:
         """Get the current camera resolution as a tuple (width, height)."""
@@ -370,10 +354,6 @@ class GstMediaServer:
     def framerate(self) -> int:
         """Get the current camera framerate."""
         return self._resolution.value[2]
-
-    # ------------------------------------------------------------------ #
-    #  Video pipeline (platform-aware)                                     #
-    # ------------------------------------------------------------------ #
 
     def _configure_video(
         self, cam_path: str, pipeline: Gst.Pipeline, webrtcsink: Gst.Element
@@ -729,10 +709,6 @@ class GstMediaServer:
         v4l2h264enc.link(capsfilter_h264)
         capsfilter_h264.link(webrtcsink)
 
-    # ------------------------------------------------------------------ #
-    #  Audio pipeline (platform-aware)                                     #
-    # ------------------------------------------------------------------ #
-
     def _configure_audio(self, pipeline: Gst.Pipeline, webrtcsink: Gst.Element) -> None:
         """Configure the audio capture pipeline.
 
@@ -818,10 +794,6 @@ class GstMediaServer:
             "No Reachy Mini audio card found, using default audio source."
         )
         return Gst.ElementFactory.make("autoaudiosrc")
-
-    # ------------------------------------------------------------------ #
-    #  Audio / Video device detection                                      #
-    # ------------------------------------------------------------------ #
 
     def _get_audio_device(self, device_type: str = "Source") -> Optional[str]:
         """Use Gst.DeviceMonitor to find the Reachy Mini audio device.
@@ -984,10 +956,6 @@ class GstMediaServer:
         self._logger.warning("No camera found.")
         return "", None
 
-    # ------------------------------------------------------------------ #
-    #  Bus message handler                                                 #
-    # ------------------------------------------------------------------ #
-
     def _on_bus_message(self, bus: Gst.Bus, msg: Gst.Message, loop) -> bool:  # type: ignore[no-untyped-def]
         t = msg.type
         if t == Gst.MessageType.EOS:
@@ -1000,10 +968,6 @@ class GstMediaServer:
             return False
 
         return True
-
-    # ------------------------------------------------------------------ #
-    #  Lifecycle                                                           #
-    # ------------------------------------------------------------------ #
 
     def start(self) -> None:
         """Start the WebRTC pipeline."""
@@ -1020,10 +984,6 @@ class GstMediaServer:
         """Stop the WebRTC pipeline."""
         self._logger.debug("Stopping WebRTC")
         self._pipeline_sender.set_state(Gst.State.NULL)
-
-    # ------------------------------------------------------------------ #
-    #  Sound playback (daemon-side)                                        #
-    # ------------------------------------------------------------------ #
 
     def play_sound(self, sound_file: str) -> None:
         """Play a sound file on the robot's speaker.
@@ -1075,6 +1035,15 @@ class GstMediaServer:
         self._playbin = playbin
         playbin.set_state(Gst.State.PLAYING)
 
+    def stop_sound(self) -> None:
+        """Stop the currently playing sound file.
+
+        If no sound is currently playing this is a no-op.
+        """
+        if self._playbin is not None:
+            self._playbin.set_state(Gst.State.NULL)
+            self._playbin = None
+
     def _build_audiosink_element(self) -> Optional[Gst.Element]:
         """Build a platform-aware audio sink GStreamer element.
 
@@ -1114,10 +1083,6 @@ class GstMediaServer:
             return audiosink
 
         return Gst.ElementFactory.make("autoaudiosink")
-
-    # ------------------------------------------------------------------ #
-    #  Data channel setup / handling                                       #
-    # ------------------------------------------------------------------ #
 
     def set_message_handler(
         self,
