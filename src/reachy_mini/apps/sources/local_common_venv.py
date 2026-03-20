@@ -2,15 +2,16 @@
 
 import asyncio
 import logging
+import os
 import platform
 import re
 import shutil
 import sys
-import os
 from importlib.metadata import entry_points
 from pathlib import Path
 
 from huggingface_hub import snapshot_download
+
 from .. import AppInfo, SourceKind
 from ..utils import running_command
 
