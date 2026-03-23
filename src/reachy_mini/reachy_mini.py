@@ -11,7 +11,6 @@ import logging
 import time
 from typing import Dict, List, Literal, Optional, Union, cast
 
-import cv2
 import numpy as np
 import numpy.typing as npt
 from asgiref.sync import async_to_sync
@@ -32,6 +31,7 @@ from reachy_mini.io.protocol import (
     StopRecordingCmd,
 )
 from reachy_mini.io.ws_client import WSClient
+from reachy_mini.media.camera_utils import undistort_points
 from reachy_mini.media.media_manager import MediaBackend, MediaManager
 from reachy_mini.motion.move import Move
 from reachy_mini.utils.interpolation import InterpolationTechnique, minimum_jerk
@@ -555,12 +555,12 @@ class ReachyMini:
         if self.media.camera is None or self.media.camera.camera_specs is None:
             raise RuntimeError("Camera specs not set.")
 
-        points = np.array([[[u, v]]], dtype=np.float32)
-        x_n, y_n = cv2.undistortPoints(
-            points,
+        x_n, y_n = undistort_points(
+            u,
+            v,
             self.media.camera.K,  # type: ignore
-            self.media.camera.D,
-        )[0, 0]
+            self.media.camera.D,  # type: ignore
+        )
 
         ray_cam = np.array([x_n, y_n, 1.0])
         ray_cam /= np.linalg.norm(ray_cam)
