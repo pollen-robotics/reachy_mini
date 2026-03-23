@@ -242,7 +242,7 @@ class ReachyMini:
             return
 
         self.media_manager.close()
-        self.media_manager = self._configure_mediamanager("default", self._log_level)
+        self.media_manager = self._configure_mediamanager(self._media_backend, self._log_level)
         self._media_released = False
         self.logger.info("Media re-acquired by daemon.")
 
