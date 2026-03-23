@@ -966,20 +966,30 @@ class GstMediaServer:
 
                     # Windows (device display name)
                     if platform.system() == "Windows":
+                        camera_specs = (
+                            ArducamSpecs()
+                            if cam_name == "Arducam_12MP"
+                            else ReachyMiniLiteCamSpecs()
+                        )
                         self._logger.debug(
                             f"Found {cam_name} camera on Windows: {name}"
                         )
                         monitor.stop()
-                        return name, ReachyMiniLiteCamSpecs()
+                        return name, camera_specs
 
                     # macOS (device index)
                     # macOS/AVFoundation cameras use the device index in the devices list as a unique identifier
                     if platform.system() == "Darwin":
+                        camera_specs = (
+                            ArducamSpecs()
+                            if cam_name == "Arducam_12MP"
+                            else ReachyMiniLiteCamSpecs()
+                        )
                         self._logger.debug(
                             f"Found {cam_name} camera on macOS at index {device_index}"
                         )
                         monitor.stop()
-                        return str(device_index), ReachyMiniLiteCamSpecs()
+                        return str(device_index), camera_specs
 
         monitor.stop()
         self._logger.warning("No camera found.")
