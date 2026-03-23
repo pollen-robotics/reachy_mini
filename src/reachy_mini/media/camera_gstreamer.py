@@ -42,7 +42,7 @@ Example usage::
 import platform
 import time
 from threading import Thread
-from typing import Optional, cast
+from typing import Optional
 
 import numpy as np
 import numpy.typing as npt
