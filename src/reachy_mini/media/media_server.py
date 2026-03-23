@@ -26,7 +26,7 @@ import logging
 import os
 import platform
 from threading import Thread
-from typing import Any, Callable, Dict, Optional, Tuple, cast
+from typing import Any, Callable, Dict, Optional, Tuple
 
 import gi
 
@@ -97,12 +97,12 @@ class GstMediaServer:
 
         if use_sim:
             cam_path = "use_sim"
-            self.camera_specs: CameraSpecs = cast(CameraSpecs, MujocoCameraSpecs)
+            self.camera_specs: CameraSpecs = MujocoCameraSpecs()
         else:
             cam_path, detected_specs = self._get_video_device()
             if detected_specs is None:
                 self._logger.warning("No camera found. Video will not be available.")
-                self.camera_specs = cast(CameraSpecs, ReachyMiniLiteCamSpecs)
+                self.camera_specs = ReachyMiniLiteCamSpecs()
             else:
                 self.camera_specs = detected_specs
 
@@ -949,9 +949,9 @@ class GstMediaServer:
                     if device_props and device_props.has_field("api.v4l2.path"):
                         device_path = device_props.get_string("api.v4l2.path")
                         camera_specs = (
-                            cast(CameraSpecs, ArducamSpecs)
+                            ArducamSpecs()
                             if cam_name == "Arducam_12MP"
-                            else cast(CameraSpecs, ReachyMiniLiteCamSpecs)
+                            else ReachyMiniLiteCamSpecs()
                         )
                         self._logger.debug(f"Found {cam_name} camera at {device_path}")
                         monitor.stop()
@@ -959,7 +959,7 @@ class GstMediaServer:
 
                     # RPi CSI camera (imx708, no V4L2 path)
                     if cam_name == "imx708":
-                        camera_specs = cast(CameraSpecs, ReachyMiniWirelessCamSpecs)
+                        camera_specs = ReachyMiniWirelessCamSpecs()
                         self._logger.debug(f"Found {cam_name} camera")
                         monitor.stop()
                         return cam_name, camera_specs
@@ -970,7 +970,7 @@ class GstMediaServer:
                             f"Found {cam_name} camera on Windows: {name}"
                         )
                         monitor.stop()
-                        return name, cast(CameraSpecs, ReachyMiniLiteCamSpecs)
+                        return name, ReachyMiniLiteCamSpecs()
 
                     # macOS (device index)
                     # macOS/AVFoundation cameras use the device index in the devices list as a unique identifier
@@ -979,9 +979,7 @@ class GstMediaServer:
                             f"Found {cam_name} camera on macOS at index {device_index}"
                         )
                         monitor.stop()
-                        return str(device_index), cast(
-                            CameraSpecs, ReachyMiniLiteCamSpecs
-                        )
+                        return str(device_index), ReachyMiniLiteCamSpecs()
 
         monitor.stop()
         self._logger.warning("No camera found.")
