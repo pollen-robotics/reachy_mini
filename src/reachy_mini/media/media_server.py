@@ -112,6 +112,17 @@ class GstMediaServer:
         if self._resolution is None:
             raise RuntimeError("Failed to get default camera resolution.")
 
+        self._cam_path = cam_path
+
+        self._data_channels: dict[str, Gst.Element] = {}  # peer_id -> channel
+        self._on_data_message: Optional[Callable[[str, str], None]] = None
+        self._incoming_audio: Dict[str, Dict[str, Any]] = {}
+        self._playbin: Optional[Gst.Element] = None
+
+        self._build_pipeline()
+
+    def _build_pipeline(self) -> None:
+        """Build (or rebuild) the GStreamer pipeline from scratch."""
         self._pipeline_sender = Gst.Pipeline.new("reachymini_webrtc_sender")
         self._bus_sender = self._pipeline_sender.get_bus()
         self._bus_sender.add_watch(
@@ -120,18 +131,10 @@ class GstMediaServer:
 
         webrtcsink = self._configure_webrtc(self._pipeline_sender)
 
-        self._configure_video(cam_path, self._pipeline_sender, webrtcsink)
+        self._configure_video(self._cam_path, self._pipeline_sender, webrtcsink)
         self._configure_audio(self._pipeline_sender, webrtcsink)
 
-        self._logger.debug("Configuring data channel")
-        self._data_channels: dict[str, Gst.Element] = {}  # peer_id -> channel
-        self._on_data_message: Optional[Callable[[str, str], None]] = None
-
-        # Track incoming audio per peer (for bidirectional audio cleanup)
-        self._incoming_audio: Dict[str, Dict[str, Any]] = {}
-
-        # Playbin for daemon-side sound file playback
-        self._playbin: Optional[Gst.Element] = None
+        self._logger.debug("Pipeline built")
 
     def __del__(self) -> None:
         """Destructor to ensure gstreamer resources are released."""
@@ -1006,18 +1009,17 @@ class GstMediaServer:
     # ------------------------------------------------------------------ #
 
     def start(self) -> None:
-        """Start the WebRTC pipeline."""
-        self._logger.debug("Starting WebRTC")
+        """Rebuild the pipeline from scratch and start it.
+
+        Rebuilding ensures a clean state after stop() released all hardware.
+        """
+        self._logger.debug("Starting WebRTC (rebuilding pipeline)")
+        self._build_pipeline()
         self._pipeline_sender.set_state(Gst.State.PLAYING)
         GLib.timeout_add_seconds(5, self._dump_latency)
 
-    def pause(self) -> None:
-        """Pause the WebRTC pipeline."""
-        self._logger.debug("Pausing WebRTC")
-        self._pipeline_sender.set_state(Gst.State.PAUSED)
-
     def stop(self) -> None:
-        """Stop the WebRTC pipeline."""
+        """Stop the pipeline and release all hardware (camera, audio)."""
         self._logger.debug("Stopping WebRTC")
         self._pipeline_sender.set_state(Gst.State.NULL)
 
