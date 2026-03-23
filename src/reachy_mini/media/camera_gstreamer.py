@@ -43,7 +43,7 @@ import logging
 import platform
 import time
 from threading import Thread
-from typing import Optional, cast
+from typing import Optional
 
 import numpy as np
 import numpy.typing as npt
@@ -122,7 +122,7 @@ class GStreamerCamera:
             self.logger.warning(
                 "No camera_specs provided — defaulting to ReachyMiniLiteCamSpecs."
             )
-            self.camera_specs = cast(CameraSpecs, ReachyMiniLiteCamSpecs)
+            self.camera_specs = ReachyMiniLiteCamSpecs()
         self._resolution: Optional[CameraResolution] = (
             self.camera_specs.default_resolution
         )

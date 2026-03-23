@@ -53,6 +53,9 @@ class MediaBackend(Enum):
     # Primary alias
     DEFAULT = LOCAL
 
+    # ------------------------------------------------------------------
+    # Deprecated aliases — kept so old code keeps working for one release
+    # ------------------------------------------------------------------
     GSTREAMER = "gstreamer"
     GSTREAMER_NO_VIDEO = "gstreamer_no_video"
     SOUNDDEVICE_NO_VIDEO = "sounddevice_no_video"
