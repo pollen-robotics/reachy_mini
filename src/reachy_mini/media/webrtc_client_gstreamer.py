@@ -37,7 +37,7 @@ Example usage via MediaManager::
 import logging
 import os
 from threading import Thread
-from typing import Iterator, Optional, cast
+from typing import Iterator, Optional
 
 import requests as _requests
 
