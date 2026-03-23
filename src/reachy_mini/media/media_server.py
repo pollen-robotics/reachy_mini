@@ -136,11 +136,15 @@ class GstMediaServer:
 
         self._logger.debug("Pipeline built")
 
-    def __del__(self) -> None:
-        """Destructor to ensure gstreamer resources are released."""
+    def close(self) -> None:
+        """Release GStreamer resources (MainLoop, bus watch)."""
         self._logger.debug("Cleaning up GstMediaServer")
         self._loop.quit()
         self._bus_sender.remove_watch()
+
+    def __del__(self) -> None:
+        """Destructor to ensure gstreamer resources are released."""
+        self.close()
 
     def _dump_latency(self) -> None:
         query = Gst.Query.new_latency()
@@ -1207,4 +1211,4 @@ if __name__ == "__main__":
         logging.info("User interrupted")
     finally:
         server.stop()
-        server.__del__()
+        server.close()
