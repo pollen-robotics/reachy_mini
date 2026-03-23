@@ -26,7 +26,7 @@ import logging
 import os
 import platform
 from threading import Thread
-from typing import Any, Callable, Dict, Optional, Tuple
+from typing import Any, Callable, Dict, Optional
 
 import gi
 
@@ -37,11 +37,9 @@ from reachy_mini.daemon.utils import (
 )
 from reachy_mini.media.audio_utils import has_reachymini_asoundrc
 from reachy_mini.media.camera_constants import (
-    ArducamSpecs,
     CameraSpecs,
     MujocoCameraSpecs,
     ReachyMiniLiteCamSpecs,
-    ReachyMiniWirelessCamSpecs,
 )
 from reachy_mini.media.device_detection import get_audio_device, get_video_device
 from reachy_mini.utils.constants import ASSETS_ROOT_PATH
