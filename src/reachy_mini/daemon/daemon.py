@@ -259,7 +259,7 @@ class Daemon:
                 check_collision=check_collision,
                 kinematics_engine=kinematics_engine,
                 headless=headless,
-                use_audio=use_audio,
+                use_audio=effective_use_audio,
                 hardware_config_filepath=hardware_config_filepath,
             )
 
@@ -363,8 +363,10 @@ class Daemon:
             self._thread_event_publish_status.set()
 
             if self._media_server and not self._media_released:
-                # We use pause() instead of stop() to keep the signalling server running and the producer registered, allowing proper restart.
-                self._media_server.pause()
+                # Stop pipeline (NULL) to release camera/audio hardware so
+                # external tools (rpicam-still, etc.) can access them.
+                # start() will rebuild the pipeline from scratch.
+                self._media_server.stop()
                 # Stop the central signaling relay
                 await self._stop_central_signaling_relay()
 

@@ -136,7 +136,7 @@ class GstWebRTCClient:
             self.logger.warning(
                 "No camera_specs provided — defaulting to ReachyMiniLiteCamSpecs."
             )
-            self.camera_specs = cast(CameraSpecs, ReachyMiniLiteCamSpecs)
+            self.camera_specs = ReachyMiniLiteCamSpecs()
         self._resolution: Optional[CameraResolution] = None
         self.resized_K: Optional[npt.NDArray[np.float64]] = self.camera_specs.K
 

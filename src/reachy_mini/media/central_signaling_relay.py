@@ -392,8 +392,8 @@ class CentralSignalingRelay:
             self._local_ws = await asyncio.wait_for(
                 websockets.connect(
                     self.local_uri,
-                    ping_interval=20,
-                    ping_timeout=10,
+                    ping_interval=None,
+                    ping_timeout=None,
                 ),
                 timeout=LOCAL_WS_CONNECT_TIMEOUT,
             )

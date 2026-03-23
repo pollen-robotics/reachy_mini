@@ -252,7 +252,6 @@ class MediaManager:
             sound_file: Path to the sound file to play.
 
         """
-        print("test")
         if self.audio is None:
             self.logger.warning("Audio system is not initialized.")
             return

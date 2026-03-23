@@ -24,9 +24,9 @@ Example usage:
 """
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 from enum import Enum
-from typing import List, cast
+from typing import List
 
 import numpy as np
 import numpy.typing as npt
@@ -160,6 +160,20 @@ class CameraSpecs:
     pid = 0
     K: npt.NDArray[np.float64] = field(default_factory=lambda: np.eye(3))
     D: npt.NDArray[np.float64] = field(default_factory=lambda: np.zeros((5,)))
+
+    def __post_init__(self) -> None:
+        """Restore subclass class-variable overrides after dataclass __init__."""
+        # Subclasses override dataclass fields as class variables.
+        # The generated __init__ overwrites them with base-class defaults,
+        # so restore the class-level values here.
+        cls = type(self)
+        for f in fields(self):
+            for klass in cls.__mro__:
+                if klass is CameraSpecs:
+                    break
+                if f.name in klass.__dict__:
+                    setattr(self, f.name, klass.__dict__[f.name])
+                    break
 
 
 @dataclass
@@ -333,7 +347,7 @@ def get_camera_specs_by_name(name: str) -> CameraSpecs:
             "Empty camera_specs_name received (older daemon?) "
             "— falling back to ReachyMiniLiteCamSpecs."
         )
-        return cast(CameraSpecs, ReachyMiniLiteCamSpecs)
+        return ReachyMiniLiteCamSpecs()
 
     cls = _SPECS_BY_NAME.get(name)
     if cls is None:
@@ -341,5 +355,5 @@ def get_camera_specs_by_name(name: str) -> CameraSpecs:
             "Unknown camera specs name %r — falling back to ReachyMiniLiteCamSpecs.",
             name,
         )
-        return cast(CameraSpecs, ReachyMiniLiteCamSpecs)
-    return cast(CameraSpecs, cls)
+        return ReachyMiniLiteCamSpecs()
+    return cls()
