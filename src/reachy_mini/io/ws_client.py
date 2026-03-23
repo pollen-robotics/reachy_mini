@@ -32,6 +32,8 @@ from reachy_mini.io.protocol import (
     server_msg_adapter,
 )
 
+logger = logging.getLogger(__name__)
+
 
 class WSClient(AbstractClient):
     """WebSocket client for Reachy Mini."""
@@ -97,7 +99,7 @@ class WSClient(AbstractClient):
                 raise TimeoutError(
                     "Timeout while waiting for connection with the server."
                 )
-            logging.info("Waiting for connection with the server...")
+            logger.info("Waiting for connection with the server...")
 
         self._is_alive = True
         self._check_alive_evt = threading.Event()

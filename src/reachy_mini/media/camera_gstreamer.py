@@ -111,14 +111,16 @@ class GStreamerCamera(CameraBase):
         self._thread_bus_calls: Optional[Thread] = None
 
         if camera_specs is not None:
-            self.camera_specs = camera_specs
+            self.camera_specs: CameraSpecs = camera_specs
         else:
             self.logger.warning(
                 "No camera_specs provided — defaulting to ReachyMiniLiteCamSpecs."
             )
-            self.camera_specs = cast(CameraSpecs, ReachyMiniLiteCamSpecs)
-        self._resolution = self.camera_specs.default_resolution
-        self.resized_K = self.camera_specs.K
+            self.camera_specs = ReachyMiniLiteCamSpecs()
+        self._resolution: Optional[CameraResolution] = (
+            self.camera_specs.default_resolution
+        )
+        self.resized_K: Optional[npt.NDArray[np.float64]] = self.camera_specs.K
 
         self.pipeline = Gst.Pipeline.new("camera_ipc_reader")
 

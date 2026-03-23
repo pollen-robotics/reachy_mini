@@ -26,7 +26,7 @@ import logging
 import os
 import platform
 from threading import Thread
-from typing import Any, Callable, Dict, Optional, Tuple, cast
+from typing import Any, Callable, Dict, Optional, Tuple
 
 import gi
 
@@ -64,7 +64,7 @@ class GstMediaServer:
 
     Attributes:
         camera_specs (CameraSpecs): Specifications of the detected camera.
-
+        resized_K (npt.NDArray[np.float64]): Camera intrinsic matrix for current resolution.
 
     """
 
@@ -87,6 +87,7 @@ class GstMediaServer:
         """
         self._logger = logging.getLogger(__name__)
         self._logger.setLevel(log_level)
+        self._log_level = log_level
         self._use_sim = use_sim
 
         Gst.init([])
@@ -96,20 +97,32 @@ class GstMediaServer:
 
         if use_sim:
             cam_path = "use_sim"
-            self.camera_specs: CameraSpecs = cast(CameraSpecs, MujocoCameraSpecs)
+            self.camera_specs: CameraSpecs = MujocoCameraSpecs()
         else:
             cam_path, detected_specs = self._get_video_device()
             if detected_specs is None:
                 self._logger.warning("No camera found. Video will not be available.")
-                self.camera_specs = cast(CameraSpecs, ReachyMiniLiteCamSpecs)
+                self.camera_specs = ReachyMiniLiteCamSpecs()
             else:
                 self.camera_specs = detected_specs
 
         self._resolution = self.camera_specs.default_resolution
+        self.resized_K = self.camera_specs.K
 
         if self._resolution is None:
             raise RuntimeError("Failed to get default camera resolution.")
 
+        self._cam_path = cam_path
+
+        self._data_channels: dict[str, Gst.Element] = {}  # peer_id -> channel
+        self._on_data_message: Optional[Callable[[str, str], None]] = None
+        self._incoming_audio: Dict[str, Dict[str, Any]] = {}
+        self._playbin: Optional[Gst.Element] = None
+
+        self._build_pipeline()
+
+    def _build_pipeline(self) -> None:
+        """Build (or rebuild) the GStreamer pipeline from scratch."""
         self._pipeline_sender = Gst.Pipeline.new("reachymini_webrtc_sender")
         self._bus_sender = self._pipeline_sender.get_bus()
         self._bus_sender.add_watch(
@@ -118,18 +131,10 @@ class GstMediaServer:
 
         webrtcsink = self._configure_webrtc(self._pipeline_sender)
 
-        self._configure_video(cam_path, self._pipeline_sender, webrtcsink)
+        self._configure_video(self._cam_path, self._pipeline_sender, webrtcsink)
         self._configure_audio(self._pipeline_sender, webrtcsink)
 
-        self._logger.debug("Configuring data channel")
-        self._data_channels: dict[str, Gst.Element] = {}  # peer_id -> channel
-        self._on_data_message: Optional[Callable[[str, str], None]] = None
-
-        # Track incoming audio per peer (for bidirectional audio cleanup)
-        self._incoming_audio: Dict[str, Dict[str, Any]] = {}
-
-        # Playbin for daemon-side sound file playback
-        self._playbin: Optional[Gst.Element] = None
+        self._logger.debug("Pipeline built")
 
     def __del__(self) -> None:
         """Destructor to ensure gstreamer resources are released."""
@@ -944,9 +949,9 @@ class GstMediaServer:
                     if device_props and device_props.has_field("api.v4l2.path"):
                         device_path = device_props.get_string("api.v4l2.path")
                         camera_specs = (
-                            cast(CameraSpecs, ArducamSpecs)
+                            ArducamSpecs()
                             if cam_name == "Arducam_12MP"
-                            else cast(CameraSpecs, ReachyMiniLiteCamSpecs)
+                            else ReachyMiniLiteCamSpecs()
                         )
                         self._logger.debug(f"Found {cam_name} camera at {device_path}")
                         monitor.stop()
@@ -954,7 +959,7 @@ class GstMediaServer:
 
                     # RPi CSI camera (imx708, no V4L2 path)
                     if cam_name == "imx708":
-                        camera_specs = cast(CameraSpecs, ReachyMiniWirelessCamSpecs)
+                        camera_specs = ReachyMiniWirelessCamSpecs()
                         self._logger.debug(f"Found {cam_name} camera")
                         monitor.stop()
                         return cam_name, camera_specs
@@ -965,7 +970,7 @@ class GstMediaServer:
                             f"Found {cam_name} camera on Windows: {name}"
                         )
                         monitor.stop()
-                        return name, cast(CameraSpecs, ReachyMiniLiteCamSpecs)
+                        return name, ReachyMiniLiteCamSpecs()
 
                     # macOS (device index)
                     # macOS/AVFoundation cameras use the device index in the devices list as a unique identifier
@@ -974,9 +979,7 @@ class GstMediaServer:
                             f"Found {cam_name} camera on macOS at index {device_index}"
                         )
                         monitor.stop()
-                        return str(device_index), cast(
-                            CameraSpecs, ReachyMiniLiteCamSpecs
-                        )
+                        return str(device_index), ReachyMiniLiteCamSpecs()
 
         monitor.stop()
         self._logger.warning("No camera found.")
@@ -1004,18 +1007,17 @@ class GstMediaServer:
     # ------------------------------------------------------------------ #
 
     def start(self) -> None:
-        """Start the WebRTC pipeline."""
-        self._logger.debug("Starting WebRTC")
+        """Rebuild the pipeline from scratch and start it.
+
+        Rebuilding ensures a clean state after stop() released all hardware.
+        """
+        self._logger.debug("Starting WebRTC (rebuilding pipeline)")
+        self._build_pipeline()
         self._pipeline_sender.set_state(Gst.State.PLAYING)
         GLib.timeout_add_seconds(5, self._dump_latency)
 
-    def pause(self) -> None:
-        """Pause the WebRTC pipeline."""
-        self._logger.debug("Pausing WebRTC")
-        self._pipeline_sender.set_state(Gst.State.PAUSED)
-
     def stop(self) -> None:
-        """Stop the WebRTC pipeline."""
+        """Stop the pipeline and release all hardware (camera, audio)."""
         self._logger.debug("Stopping WebRTC")
         self._pipeline_sender.set_state(Gst.State.NULL)
 

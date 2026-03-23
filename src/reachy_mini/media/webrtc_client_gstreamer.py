@@ -35,7 +35,7 @@ Example usage via MediaManager::
 """
 
 from threading import Thread
-from typing import Iterator, Optional, cast
+from typing import Iterator, Optional
 
 try:
     import gi
@@ -116,13 +116,14 @@ class GstWebRTCClient(CameraBase, AudioBase):
         self._pipeline_record.add(self._appsink_audio)
 
         if camera_specs is not None:
-            self.camera_specs = camera_specs
+            self.camera_specs: CameraSpecs = camera_specs
         else:
             self.logger.warning(
                 "No camera_specs provided — defaulting to ReachyMiniLiteCamSpecs."
             )
-            self.camera_specs = cast(CameraSpecs, ReachyMiniLiteCamSpecs)
-        self.resized_K = self.camera_specs.K
+            self.camera_specs = ReachyMiniLiteCamSpecs()
+        self._resolution: Optional[CameraResolution] = None
+        self.resized_K: Optional[npt.NDArray[np.float64]] = self.camera_specs.K
 
         self._appsink_video = Gst.ElementFactory.make("appsink")
         self._appsink_video.set_property("drop", True)  # avoid overflow

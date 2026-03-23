@@ -30,6 +30,8 @@ import usb.core
 import usb.util
 from libusb_package import get_libusb1_backend
 
+logger = logging.getLogger(__name__)
+
 CONTROL_SUCCESS = 0
 SERVICER_COMMAND_RETRY = 64
 
@@ -220,7 +222,7 @@ class ReSpeaker:
             for i in range(data_cnt):
                 payload += struct.pack(b"i", data_list[i])
 
-        logging.debug(
+        logger.debug(
             "WriteCMD: cmdid: {}, resid: {}, payload: {}".format(
                 wvalue, windex, payload
             )
@@ -290,7 +292,7 @@ class ReSpeaker:
                 raise ValueError("Unknown status code: {}".format(response[0]))
             time.sleep(0.01)
 
-        logging.debug(
+        logger.debug(
             "ReadCMD: cmdid: {}, resid: {}, response: {}".format(
                 wvalue, windex, response
             )
@@ -401,17 +403,17 @@ def init_respeaker_usb() -> Optional[ReSpeaker]:
                 idVendor=0x2886, idProduct=0x001A, backend=get_libusb1_backend()
             )
             if dev is not None:
-                logging.warning("Old firmware detected. Please update the firmware!")
+                logger.warning("Old firmware detected. Please update the firmware!")
 
         # If still not found, raise error
         if dev is None:
-            logging.error("No Reachy Mini Audio USB device found!")
+            logger.error("No Reachy Mini Audio USB device found!")
             return None
 
         return ReSpeaker(dev)
 
     except usb.core.NoBackendError:
-        logging.error(
+        logger.error(
             "No USB backend was found! Make sure libusb_package is correctly installed with `pip install libusb_package`."
         )
         return None
