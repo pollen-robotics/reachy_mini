@@ -259,7 +259,7 @@ class Daemon:
                 check_collision=check_collision,
                 kinematics_engine=kinematics_engine,
                 headless=headless,
-                use_audio=use_audio,
+                use_audio=effective_use_audio,
                 hardware_config_filepath=hardware_config_filepath,
             )
 
