@@ -35,7 +35,7 @@ jobs:
       - name: Install system dependencies
         uses: awalsh128/cache-apt-pkgs-action@latest
         with:
-          packages: libportaudio2 libcairo2-dev libgirepository1.0-dev
+          packages: libcairo2-dev libgirepository1.0-dev python3-gi python3-gi-cairo gstreamer1.0-plugins-base gstreamer1.0-plugins-good gir1.2-gst-plugins-base-1.0
           version: 1.0
       - uses: actions/checkout@v6
       - name: Install uv

@@ -1,11 +1,11 @@
-"""Utility functions for audio handling, specifically for detecting the ReSpeaker sound card.
+"""Utility functions for audio handling.
 
-This module provides helper functions for working with the ReSpeaker microphone array
-and managing audio device configuration on Linux systems. It includes functions for
-detecting sound cards, checking configuration files, and managing ALSA configuration.
+This module provides helper functions for working with the ReSpeaker microphone array,
+managing audio device configuration on Linux systems, and saving audio data to files
+using GStreamer.
 
 Example usage:
-    >>> from reachy_mini.media.audio_utils import get_respeaker_card_number, has_reachymini_asoundrc
+    >>> from reachy_mini.media.audio_utils import get_respeaker_card_number, has_reachymini_asoundrc, save_audio_to_wav
     >>>
     >>> # Get the ReSpeaker card number
     >>> card_num = get_respeaker_card_number()
@@ -16,13 +16,19 @@ Example usage:
     ...     print("Reachy Mini audio configuration is properly set up")
     ... else:
     ...     print("Need to configure audio devices")
+    >>>
+    >>> # Save recorded audio to a WAV file (no soundfile dependency)
+    >>> import numpy as np
+    >>> audio = np.zeros((16000, 2), dtype=np.float32)
+    >>> save_audio_to_wav(audio, samplerate=16000, filepath="output.wav")
 """
 
 import logging
 import subprocess
 from pathlib import Path
 
-logger = logging.getLogger(__name__)
+import numpy as np
+import numpy.typing as npt
 
 
 def _process_card_number_output(output: str) -> int:
@@ -53,16 +59,16 @@ def _process_card_number_output(output: str) -> int:
     for line in lines:
         if "reachy mini audio" in line.lower():
             card_number = line.split(" ")[1].split(":")[0]
-            logger.debug(f"Found Reachy Mini Audio sound card: {card_number}")
+            logging.debug(f"Found Reachy Mini Audio sound card: {card_number}")
             return int(card_number)
         elif "respeaker" in line.lower():
             card_number = line.split(" ")[1].split(":")[0]
-            logger.warning(
+            logging.warning(
                 f"Found ReSpeaker sound card: {card_number}. Please update firmware!"
             )
             return int(card_number)
 
-    logger.warning("Reachy Mini Audio sound card not found. Returning default card")
+    logging.warning("Reachy Mini Audio sound card not found. Returning default card")
     return 0  # default sound card
 
 
@@ -105,7 +111,7 @@ def get_respeaker_card_number() -> int:
         return _process_card_number_output(output)
 
     except subprocess.CalledProcessError as e:
-        logger.error(f"Cannot find sound card: {e}")
+        logging.error(f"Cannot find sound card: {e}")
         return -1
 
 
@@ -225,3 +231,111 @@ pcm.reachymini_audio_src {{
     asoundrc_path = Path.home().joinpath(".asoundrc")
     with open(asoundrc_path, "w") as f:
         f.write(asoundrc_content)
+
+
+def save_audio_to_wav(
+    audio_data: npt.NDArray[np.float32],
+    samplerate: int,
+    filepath: str,
+) -> None:
+    """Write a float32 audio array to a WAV file using GStreamer.
+
+    No external dependencies (e.g. ``soundfile``) are required — the WAV
+    container is encoded by the GStreamer ``wavenc`` element.
+
+    The pipeline used internally::
+
+        appsrc → audioconvert → audioresample → wavenc → filesink
+
+    Args:
+        audio_data: Audio samples as a float32 array.  Shape ``(N,)`` for
+            mono or ``(N, C)`` for interleaved multi-channel audio.
+        samplerate: Sample rate in Hz.
+        filepath: Destination file path (e.g. ``"output.wav"``).
+
+    Raises:
+        ImportError: If the ``gi`` / GStreamer Python bindings are not installed.
+        RuntimeError: If GStreamer pipeline elements cannot be created, or if
+            the pipeline does not complete within the timeout.
+
+    Example::
+
+        import numpy as np
+        from reachy_mini.media.audio_utils import save_audio_to_wav
+
+        audio = np.zeros((16000, 2), dtype=np.float32)
+        save_audio_to_wav(audio, samplerate=16000, filepath="output.wav")
+
+    """
+    try:
+        import gi
+
+        gi.require_version("Gst", "1.0")
+        from gi.repository import Gst
+    except ImportError as e:
+        raise ImportError(
+            "The 'gi' module is required for save_audio_to_wav but could not be "
+            "imported. Please check the GStreamer installation."
+        ) from e
+
+    Gst.init([])
+
+    # Normalise shape and infer channel count
+    data = np.ascontiguousarray(audio_data, dtype=np.float32)
+    if data.ndim == 1:
+        channels = 1
+    elif data.ndim == 2:
+        channels = data.shape[1]
+    else:
+        raise ValueError(f"audio_data must be 1-D or 2-D, got shape {data.shape}")
+
+    caps = Gst.Caps.from_string(
+        f"audio/x-raw,format=F32LE,rate={samplerate},"
+        f"channels={channels},layout=interleaved"
+    )
+
+    appsrc = Gst.ElementFactory.make("appsrc")
+    audioconvert = Gst.ElementFactory.make("audioconvert")
+    audioresample = Gst.ElementFactory.make("audioresample")
+    wavenc = Gst.ElementFactory.make("wavenc")
+    filesink = Gst.ElementFactory.make("filesink")
+
+    if not all([appsrc, audioconvert, audioresample, wavenc, filesink]):
+        raise RuntimeError("Failed to create GStreamer elements for save_audio_to_wav")
+
+    appsrc.set_property("caps", caps)
+    filesink.set_property("location", filepath)
+
+    pipeline = Gst.Pipeline.new("wav-writer")
+    for element in [appsrc, audioconvert, audioresample, wavenc, filesink]:
+        pipeline.add(element)
+
+    appsrc.link(audioconvert)
+    audioconvert.link(audioresample)
+    audioresample.link(wavenc)
+    wavenc.link(filesink)
+
+    pipeline.set_state(Gst.State.PLAYING)
+
+    buf = Gst.Buffer.new_wrapped(data.tobytes())
+    appsrc.emit("push-buffer", buf)
+    appsrc.emit("end-of-stream")
+
+    # Wait for EOS or ERROR (up to 5 seconds)
+    bus = pipeline.get_bus()
+    msg = bus.timed_pop_filtered(
+        5 * Gst.SECOND,
+        Gst.MessageType.EOS | Gst.MessageType.ERROR,
+    )
+
+    pipeline.set_state(Gst.State.NULL)
+
+    if msg is None:
+        raise RuntimeError(
+            "save_audio_to_wav: GStreamer pipeline timed out waiting for EOS"
+        )
+    if msg.type == Gst.MessageType.ERROR:
+        err, debug = msg.parse_error()
+        raise RuntimeError(
+            f"save_audio_to_wav: GStreamer pipeline error: {err} — {debug}"
+        )

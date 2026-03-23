@@ -98,6 +98,8 @@
       title: Sound Playback
     - local: examples/sound_record
       title: Sound Recording
+    - local: examples/custom_media_manager
+      title: Custom Media Manager
   title: Examples
 - isExpanded: false
   sections:

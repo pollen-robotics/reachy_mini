@@ -1,30 +1,50 @@
-"""Tests for MediaBackend enum legacy alias handling."""
+"""Tests for MediaBackend enum and backward compatibility."""
+
+import warnings
 
 import pytest
 
-from reachy_mini.media.media_manager import MediaBackend
+from reachy_mini.media.media_manager import MediaBackend, _resolve_backend
 
 
 class TestMediaBackend:
     """Test MediaBackend enum backward compatibility."""
 
-    def test_default_aliases(self) -> None:
-        """DEFAULT and DEFAULT_NO_VIDEO point to the expected members."""
-        assert MediaBackend.DEFAULT == MediaBackend.GSTREAMER
+    def test_default_alias(self) -> None:
+        """DEFAULT points to LOCAL."""
+        assert MediaBackend.DEFAULT == MediaBackend.LOCAL
+
+    def test_default_no_video_alias(self) -> None:
+        """DEFAULT_NO_VIDEO points to GSTREAMER_NO_VIDEO."""
         assert MediaBackend.DEFAULT_NO_VIDEO == MediaBackend.GSTREAMER_NO_VIDEO
 
-    def test_legacy_default_string_resolves(self) -> None:
-        """'default' string resolves to GSTREAMER via _missing_."""
-        assert MediaBackend("default") == MediaBackend.GSTREAMER
+    @pytest.mark.parametrize(
+        "deprecated, expected",
+        [
+            (MediaBackend.GSTREAMER, MediaBackend.LOCAL),
+            (MediaBackend.GSTREAMER_NO_VIDEO, MediaBackend.LOCAL),
+            (MediaBackend.SOUNDDEVICE_NO_VIDEO, MediaBackend.LOCAL),
+            (MediaBackend.SOUNDDEVICE_OPENCV, MediaBackend.LOCAL),
+        ],
+    )
+    def test_deprecated_backend_resolves_with_warning(
+        self, deprecated: MediaBackend, expected: MediaBackend
+    ) -> None:
+        """Deprecated backends resolve to their replacement and emit FutureWarning."""
+        with pytest.warns(FutureWarning):
+            resolved = _resolve_backend(deprecated)
+        assert resolved == expected
 
-    def test_legacy_default_no_video_string_resolves(self) -> None:
-        """'default_no_video' string resolves to GSTREAMER_NO_VIDEO via _missing_."""
-        assert MediaBackend("default_no_video") == MediaBackend.GSTREAMER_NO_VIDEO
-
-    def test_legacy_alias_case_insensitive(self) -> None:
-        """Legacy aliases are case-insensitive."""
-        assert MediaBackend("DEFAULT") == MediaBackend.GSTREAMER
-        assert MediaBackend("Default_No_Video") == MediaBackend.GSTREAMER_NO_VIDEO
+    @pytest.mark.parametrize(
+        "backend",
+        [MediaBackend.LOCAL, MediaBackend.WEBRTC, MediaBackend.NO_MEDIA],
+    )
+    def test_current_backends_no_warning(self, backend: MediaBackend) -> None:
+        """Current backends pass through _resolve_backend unchanged, no warning."""
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            resolved = _resolve_backend(backend)
+        assert resolved == backend
 
     def test_invalid_backend_raises(self) -> None:
         """Unknown backend string raises ValueError."""

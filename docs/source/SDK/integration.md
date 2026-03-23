@@ -20,3 +20,4 @@ Building a dashboard or a non-Python controller? The Daemon exposes full control
 ## AI Experimentation Tips
 
 * **Conversation Demo:** Check out our reference implementation combining VAD (Voice Activity Detection), LLMs, and TTS: [reachy_mini_conversation_demo](https://github.com/pollen-robotics/reachy_mini_conversation_demo).
+* **Custom vision/audio pipelines:** If your AI pipeline needs direct camera or microphone access (e.g. a custom OpenCV detector, Whisper with sounddevice), you can deactivate the built-in media manager with `media_backend="no_media"`. See [Disabling Media](media-architecture.md#disabling-media--direct-hardware-access) for details.
