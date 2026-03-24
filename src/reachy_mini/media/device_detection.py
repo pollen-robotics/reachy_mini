@@ -15,7 +15,7 @@ import logging
 import platform
 import re
 from dataclasses import dataclass, field
-from typing import Any, List, Optional, Sequence, Tuple, cast
+from typing import Any, List, Optional, Sequence, Tuple
 
 import gi
 
@@ -350,6 +350,13 @@ def find_audio_device(
     return None
 
 
+def _make_camera_specs(cam_name: str) -> CameraSpecs:
+    """Return the appropriate ``CameraSpecs`` instance for a camera name."""
+    if cam_name == "Arducam_12MP":
+        return ArducamSpecs()
+    return ReachyMiniLiteCamSpecs()
+
+
 def find_video_device(
     devices: List[DeviceInfo],
     current_platform: str | None = None,
@@ -392,32 +399,25 @@ def find_video_device(
                 case "Linux":
                     if "api.v4l2.path" in props:
                         device_path = props["api.v4l2.path"]
-                        camera_specs: CameraSpecs = (
-                            cast(CameraSpecs, ArducamSpecs)
-                            if cam_name == "Arducam_12MP"
-                            else cast(CameraSpecs, ReachyMiniLiteCamSpecs)
-                        )
                         _logger.debug("Found %s camera at %s", cam_name, device_path)
-                        return device_path, camera_specs
+                        return device_path, _make_camera_specs(cam_name)
                     elif cam_name == "imx708":
                         _logger.debug("Found %s camera (CSI)", cam_name)
-                        return cam_name, cast(CameraSpecs, ReachyMiniWirelessCamSpecs)
+                        return cam_name, ReachyMiniWirelessCamSpecs()
                 case "Windows":
                     _logger.debug(
                         "Found %s camera on Windows: %s",
                         cam_name,
                         device.display_name,
                     )
-                    return device.display_name, cast(
-                        CameraSpecs, ReachyMiniLiteCamSpecs
-                    )
+                    return device.display_name, _make_camera_specs(cam_name)
                 case "Darwin":
                     _logger.debug(
                         "Found %s camera on macOS at index %d",
                         cam_name,
                         device.index,
                     )
-                    return str(device.index), cast(CameraSpecs, ReachyMiniLiteCamSpecs)
+                    return str(device.index), _make_camera_specs(cam_name)
 
     _logger.warning("No camera found.")
     return "", None

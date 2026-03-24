@@ -282,7 +282,7 @@ class TestFindVideoDevice:
         path, specs = find_video_device(devices, "Linux")
         assert path == "/dev/video2"
         assert specs is not None
-        assert isinstance(specs, type(ReachyMiniLiteCamSpecs))
+        assert isinstance(specs, ReachyMiniLiteCamSpecs)
 
     def test_linux_pipewire_priority_reachy_over_arducam(
         self, pipewire_devices: List[DeviceInfo]
@@ -308,7 +308,7 @@ class TestFindVideoDevice:
         # Reachy Mini Camera is at index 0 in the macOS dump.
         assert path == "0"
         assert specs is not None
-        assert isinstance(specs, type(ReachyMiniLiteCamSpecs))
+        assert isinstance(specs, ReachyMiniLiteCamSpecs)
 
     def test_windows_reachy_camera(self, windows_devices: List[DeviceInfo]) -> None:
         devices = _filter_class(windows_devices, "Video/Source")
@@ -316,7 +316,7 @@ class TestFindVideoDevice:
         # On Windows, the display name is returned.
         assert "Reachy Mini Camera" in path
         assert specs is not None
-        assert isinstance(specs, type(ReachyMiniLiteCamSpecs))
+        assert isinstance(specs, ReachyMiniLiteCamSpecs)
 
     def test_arducam_only(self) -> None:
         """When only an Arducam is present, it should be found with ArducamSpecs."""
@@ -329,7 +329,7 @@ class TestFindVideoDevice:
         ]
         path, specs = find_video_device(devices, "Linux")
         assert path == "/dev/video0"
-        assert isinstance(specs, type(ArducamSpecs))
+        assert isinstance(specs, ArducamSpecs)
 
     def test_empty_device_list(self) -> None:
         path, specs = find_video_device([], "Linux")
