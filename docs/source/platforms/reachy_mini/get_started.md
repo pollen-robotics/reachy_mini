@@ -1,6 +1,6 @@
 # Reachy Mini (Wireless) - Setup Guide
 
-The **Reachy Mini (Wireless)** is the autonomous version powered by a Raspberry Pi 4. It runs independently using its internal battery and Wi-Fi connection.
+The **Reachy Mini (Wireless)** is the autonomous version powered by a Raspberry Pi Compute Module 4 (CM4). It runs independently using its internal battery and Wi-Fi connection.
 
 ## 1. 🔧 Assembly
 

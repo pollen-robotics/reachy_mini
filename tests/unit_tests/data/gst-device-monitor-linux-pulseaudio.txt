@@ -1,0 +1,825 @@
+Probing devices...
+
+
+Device found:
+
+	name  : Integrated Camera
+	class : Video/Source
+	caps  : image/jpeg, width=1280, height=720, framerate=30/1
+	        image/jpeg, width=960, height=540, framerate=30/1
+	        image/jpeg, width=848, height=480, framerate=30/1
+	        image/jpeg, width=640, height=480, framerate=30/1
+	        image/jpeg, width=640, height=360, framerate=30/1
+	        image/jpeg, width=424, height=240, framerate=30/1
+	        image/jpeg, width=352, height=288, framerate=30/1
+	        image/jpeg, width=320, height=240, framerate=30/1
+	        image/jpeg, width=320, height=180, framerate=30/1
+	        video/x-raw, format=YUY2, width=1280, height=720, framerate=10/1
+	        video/x-raw, format=YUY2, width=960, height=540, framerate=15/1
+	        video/x-raw, format=YUY2, width=848, height=480, framerate=20/1
+	        video/x-raw, format=YUY2, width=640, height=480, framerate=30/1
+	        video/x-raw, format=YUY2, width=640, height=360, framerate=30/1
+	        video/x-raw, format=YUY2, width=424, height=240, framerate=30/1
+	        video/x-raw, format=YUY2, width=352, height=288, framerate=30/1
+	        video/x-raw, format=YUY2, width=320, height=240, framerate=30/1
+	        video/x-raw, format=YUY2, width=320, height=180, framerate=30/1
+	properties:
+		object.path = v4l2:/dev/video0
+		device.api = v4l2
+		media.class = Video/Source
+		device.product.id = 37126
+		device.vendor.id = 22918
+		api.v4l2.path = /dev/video0
+		api.v4l2.cap.driver = uvcvideo
+		api.v4l2.cap.card = "Integrated\ Camera:\ Integrated\ C"
+		api.v4l2.cap.bus_info = usb-0000:00:14.0-4
+		api.v4l2.cap.version = 6.8.12
+		api.v4l2.cap.capabilities = 84a00001
+		api.v4l2.cap.device-caps = 04200001
+		device.id = 33
+		node.name = v4l2_input.pci-0000_00_14.0-usb-0_4_1.0
+		node.description = "Integrated\ Camera"
+		factory.name = api.v4l2.source
+		node.pause-on-idle = false
+		factory.id = 10
+		client.id = 32
+		clock.quantum-limit = 8192
+		media.role = Camera
+		node.driver = true
+		object.id = 37
+		object.serial = 37
+	gst-launch-1.0 pipewiresrc path=37 ! ...
+
+
+Device found:
+
+	name  : Integrated Camera
+	class : Video/Source
+	caps  : video/x-raw, format=GRAY8, width=640, height=360, framerate=30/1
+	properties:
+		object.path = v4l2:/dev/video2
+		device.api = v4l2
+		media.class = Video/Source
+		device.product.id = 37126
+		device.vendor.id = 22918
+		api.v4l2.path = /dev/video2
+		api.v4l2.cap.driver = uvcvideo
+		api.v4l2.cap.card = "Integrated\ Camera:\ Integrated\ I"
+		api.v4l2.cap.bus_info = usb-0000:00:14.0-4
+		api.v4l2.cap.version = 6.8.12
+		api.v4l2.cap.capabilities = 84a00001
+		api.v4l2.cap.device-caps = 04200001
+		device.id = 34
+		node.name = v4l2_input.pci-0000_00_14.0-usb-0_4_1.2
+		node.description = "Integrated\ Camera"
+		factory.name = api.v4l2.source
+		node.pause-on-idle = false
+		factory.id = 10
+		client.id = 32
+		clock.quantum-limit = 8192
+		media.role = Camera
+		node.driver = true
+		object.id = 39
+		object.serial = 39
+	gst-launch-1.0 pipewiresrc path=39 ! ...
+
+
+Device found:
+
+	name  : Reachy Mini Camera
+	class : Video/Source
+	caps  : image/jpeg, width=3840, height=2592, framerate=30/1
+	        image/jpeg, width=1920, height=1080, framerate=60/1
+	        image/jpeg, width=3840, height=2160, framerate=30/1
+	        image/jpeg, width=3264, height=2448, framerate=30/1
+	        video/x-raw, format=YUY2, width=3840, height=2592, framerate=1/1
+	        video/x-raw, format=YUY2, width=1920, height=1080, framerate=5/1
+	        video/x-raw, format=YUY2, width=3840, height=2160, framerate=1/1
+	        video/x-raw, format=YUY2, width=3264, height=2448, framerate=1/1
+	properties:
+		object.path = v4l2:/dev/video4
+		device.api = v4l2
+		media.class = Video/Source
+		device.product.id = 10436
+		device.vendor.id = 7119
+		api.v4l2.path = /dev/video4
+		api.v4l2.cap.driver = uvcvideo
+		api.v4l2.cap.card = "Reachy\ Mini\ Camera:\ Reachy\ Mini"
+		api.v4l2.cap.bus_info = usb-0000:00:14.0-5.4
+		api.v4l2.cap.version = 6.8.12
+		api.v4l2.cap.capabilities = 84a00001
+		api.v4l2.cap.device-caps = 04200001
+		device.id = 44
+		node.name = v4l2_input.pci-0000_00_14.0-usb-0_5.4_1.0
+		node.description = "Reachy\ Mini\ Camera"
+		factory.name = api.v4l2.source
+		node.pause-on-idle = false
+		factory.id = 10
+		client.id = 32
+		clock.quantum-limit = 8192
+		media.role = Camera
+		node.driver = true
+		object.id = 45
+		object.serial = 61
+	gst-launch-1.0 pipewiresrc path=45 ! ...
+
+
+Device found:
+
+	name  : Monitor of Tiger Lake-H HD Audio Controller HDMI / DisplayPort 3 Output
+	class : Audio/Source
+	caps  : audio/x-raw, format={ (string)S16LE, (string)S16BE, (string)F32LE, (string)F32BE, (string)S32LE, (string)S32BE, (string)S24LE, (string)S24BE, (string)S24_32LE, (string)S24_32BE, (string)U8 }, layout=interleaved, rate=[ 1, 384000 ], channels=[ 1, 32 ]
+	        audio/x-alaw, rate=[ 1, 384000 ], channels=[ 1, 32 ]
+	        audio/x-mulaw, rate=[ 1, 384000 ], channels=[ 1, 32 ]
+	properties:
+		device.description = "Monitor\ of\ Tiger\ Lake-H\ HD\ Audio\ Controller\ HDMI\ /\ DisplayPort\ 3\ Output"
+		device.class = monitor
+		alsa.card = 0
+		alsa.card_name = sof-hda-dsp
+		alsa.long_card_name = LENOVO-21A9000FFR-ThinkPadP15vGen2i
+		alsa.driver_name = snd_soc_skl_hda_dsp
+		device.bus_path = pci-0000:00:1f.3-platform-skl_hda_dsp_generic
+		sysfs.path = /devices/pci0000:00/0000:00:1f.3/skl_hda_dsp_generic/sound/card0
+		device.bus = pci
+		device.vendor.id = 8086
+		device.vendor.name = "Intel\ Corporation"
+		device.product.id = 43c8
+		device.product.name = "Tiger\ Lake-H\ HD\ Audio\ Controller"
+		device.string = 0
+		module-udev-detect.discovered = 1
+		device.icon_name = audio-card-pci
+		is-default = false
+	gst-launch-1.0 pulsesrc device=alsa_output.pci-0000_00_1f.3-platform-skl_hda_dsp_generic.HiFi__hw_sofhdadsp_5__sink.monitor ! ...
+
+
+Device found:
+
+	name  : Monitor of Tiger Lake-H HD Audio Controller HDMI / DisplayPort 2 Output
+	class : Audio/Source
+	caps  : audio/x-raw, format={ (string)S16LE, (string)S16BE, (string)F32LE, (string)F32BE, (string)S32LE, (string)S32BE, (string)S24LE, (string)S24BE, (string)S24_32LE, (string)S24_32BE, (string)U8 }, layout=interleaved, rate=[ 1, 384000 ], channels=[ 1, 32 ]
+	        audio/x-alaw, rate=[ 1, 384000 ], channels=[ 1, 32 ]
+	        audio/x-mulaw, rate=[ 1, 384000 ], channels=[ 1, 32 ]
+	properties:
+		device.description = "Monitor\ of\ Tiger\ Lake-H\ HD\ Audio\ Controller\ HDMI\ /\ DisplayPort\ 2\ Output"
+		device.class = monitor
+		alsa.card = 0
+		alsa.card_name = sof-hda-dsp
+		alsa.long_card_name = LENOVO-21A9000FFR-ThinkPadP15vGen2i
+		alsa.driver_name = snd_soc_skl_hda_dsp
+		device.bus_path = pci-0000:00:1f.3-platform-skl_hda_dsp_generic
+		sysfs.path = /devices/pci0000:00/0000:00:1f.3/skl_hda_dsp_generic/sound/card0
+		device.bus = pci
+		device.vendor.id = 8086
+		device.vendor.name = "Intel\ Corporation"
+		device.product.id = 43c8
+		device.product.name = "Tiger\ Lake-H\ HD\ Audio\ Controller"
+		device.string = 0
+		module-udev-detect.discovered = 1
+		device.icon_name = audio-card-pci
+		is-default = false
+	gst-launch-1.0 pulsesrc device=alsa_output.pci-0000_00_1f.3-platform-skl_hda_dsp_generic.HiFi__hw_sofhdadsp_4__sink.monitor ! ...
+
+
+Device found:
+
+	name  : Monitor of Tiger Lake-H HD Audio Controller HDMI / DisplayPort 1 Output
+	class : Audio/Source
+	caps  : audio/x-raw, format={ (string)S16LE, (string)S16BE, (string)F32LE, (string)F32BE, (string)S32LE, (string)S32BE, (string)S24LE, (string)S24BE, (string)S24_32LE, (string)S24_32BE, (string)U8 }, layout=interleaved, rate=[ 1, 384000 ], channels=[ 1, 32 ]
+	        audio/x-alaw, rate=[ 1, 384000 ], channels=[ 1, 32 ]
+	        audio/x-mulaw, rate=[ 1, 384000 ], channels=[ 1, 32 ]
+	properties:
+		device.description = "Monitor\ of\ Tiger\ Lake-H\ HD\ Audio\ Controller\ HDMI\ /\ DisplayPort\ 1\ Output"
+		device.class = monitor
+		alsa.card = 0
+		alsa.card_name = sof-hda-dsp
+		alsa.long_card_name = LENOVO-21A9000FFR-ThinkPadP15vGen2i
+		alsa.driver_name = snd_soc_skl_hda_dsp
+		device.bus_path = pci-0000:00:1f.3-platform-skl_hda_dsp_generic
+		sysfs.path = /devices/pci0000:00/0000:00:1f.3/skl_hda_dsp_generic/sound/card0
+		device.bus = pci
+		device.vendor.id = 8086
+		device.vendor.name = "Intel\ Corporation"
+		device.product.id = 43c8
+		device.product.name = "Tiger\ Lake-H\ HD\ Audio\ Controller"
+		device.string = 0
+		module-udev-detect.discovered = 1
+		device.icon_name = audio-card-pci
+		is-default = false
+	gst-launch-1.0 pulsesrc device=alsa_output.pci-0000_00_1f.3-platform-skl_hda_dsp_generic.HiFi__hw_sofhdadsp_3__sink.monitor ! ...
+
+
+Device found:
+
+	name  : Monitor of Tiger Lake-H HD Audio Controller Speaker + Headphones
+	class : Audio/Source
+	caps  : audio/x-raw, format={ (string)S16LE, (string)S16BE, (string)F32LE, (string)F32BE, (string)S32LE, (string)S32BE, (string)S24LE, (string)S24BE, (string)S24_32LE, (string)S24_32BE, (string)U8 }, layout=interleaved, rate=[ 1, 384000 ], channels=[ 1, 32 ]
+	        audio/x-alaw, rate=[ 1, 384000 ], channels=[ 1, 32 ]
+	        audio/x-mulaw, rate=[ 1, 384000 ], channels=[ 1, 32 ]
+	properties:
+		device.description = "Monitor\ of\ Tiger\ Lake-H\ HD\ Audio\ Controller\ Speaker\ +\ Headphones"
+		device.class = monitor
+		alsa.card = 0
+		alsa.card_name = sof-hda-dsp
+		alsa.long_card_name = LENOVO-21A9000FFR-ThinkPadP15vGen2i
+		alsa.driver_name = snd_soc_skl_hda_dsp
+		device.bus_path = pci-0000:00:1f.3-platform-skl_hda_dsp_generic
+		sysfs.path = /devices/pci0000:00/0000:00:1f.3/skl_hda_dsp_generic/sound/card0
+		device.bus = pci
+		device.vendor.id = 8086
+		device.vendor.name = "Intel\ Corporation"
+		device.product.id = 43c8
+		device.product.name = "Tiger\ Lake-H\ HD\ Audio\ Controller"
+		device.string = 0
+		module-udev-detect.discovered = 1
+		device.icon_name = audio-card-pci
+		is-default = false
+	gst-launch-1.0 pulsesrc device=alsa_output.pci-0000_00_1f.3-platform-skl_hda_dsp_generic.HiFi__hw_sofhdadsp__sink.monitor ! ...
+
+
+Device found:
+
+	name  : Tiger Lake-H HD Audio Controller Headphones Stereo Microphone
+	class : Audio/Source
+	caps  : audio/x-raw, format={ (string)S16LE, (string)S16BE, (string)F32LE, (string)F32BE, (string)S32LE, (string)S32BE, (string)S24LE, (string)S24BE, (string)S24_32LE, (string)S24_32BE, (string)U8 }, layout=interleaved, rate=[ 1, 384000 ], channels=[ 1, 32 ]
+	        audio/x-alaw, rate=[ 1, 384000 ], channels=[ 1, 32 ]
+	        audio/x-mulaw, rate=[ 1, 384000 ], channels=[ 1, 32 ]
+	properties:
+		alsa.resolution_bits = 16
+		device.api = alsa
+		device.class = sound
+		alsa.class = generic
+		alsa.subclass = generic-mix
+		alsa.name = ""
+		alsa.id = "HDA\ Analog\ \(\*\)"
+		alsa.subdevice = 0
+		alsa.subdevice_name = "subdevice\ \#0"
+		alsa.device = 0
+		alsa.card = 0
+		alsa.card_name = sof-hda-dsp
+		alsa.long_card_name = LENOVO-21A9000FFR-ThinkPadP15vGen2i
+		alsa.driver_name = snd_soc_skl_hda_dsp
+		device.bus_path = pci-0000:00:1f.3-platform-skl_hda_dsp_generic
+		sysfs.path = /devices/pci0000:00/0000:00:1f.3/skl_hda_dsp_generic/sound/card0
+		device.bus = pci
+		device.vendor.id = 8086
+		device.vendor.name = "Intel\ Corporation"
+		device.product.id = 43c8
+		device.product.name = "Tiger\ Lake-H\ HD\ Audio\ Controller"
+		device.string = _ucm0001.hw:sofhdadsp
+		device.buffering.buffer_size = 65536
+		device.buffering.fragment_size = 16384
+		device.access_mode = mmap+timer
+		device.profile.name = "HiFi:\ hw:sofhdadsp:\ source"
+		device.profile.description = "Headphones\ Stereo\ Microphone"
+		alsa.mixer_device = _ucm0001.hw:sofhdadsp
+		device.description = "Tiger\ Lake-H\ HD\ Audio\ Controller\ Headphones\ Stereo\ Microphone"
+		module-udev-detect.discovered = 1
+		device.icon_name = audio-card-pci
+		is-default = false
+	gst-launch-1.0 pulsesrc device=alsa_input.pci-0000_00_1f.3-platform-skl_hda_dsp_generic.HiFi__hw_sofhdadsp__source ! ...
+
+
+Device found:
+
+	name  : Tiger Lake-H HD Audio Controller Digital Microphone
+	class : Audio/Source
+	caps  : audio/x-raw, format={ (string)S16LE, (string)S16BE, (string)F32LE, (string)F32BE, (string)S32LE, (string)S32BE, (string)S24LE, (string)S24BE, (string)S24_32LE, (string)S24_32BE, (string)U8 }, layout=interleaved, rate=[ 1, 384000 ], channels=[ 1, 32 ]
+	        audio/x-alaw, rate=[ 1, 384000 ], channels=[ 1, 32 ]
+	        audio/x-mulaw, rate=[ 1, 384000 ], channels=[ 1, 32 ]
+	properties:
+		alsa.resolution_bits = 16
+		device.api = alsa
+		device.class = sound
+		alsa.class = generic
+		alsa.subclass = generic-mix
+		alsa.name = ""
+		alsa.id = "DMIC\ \(\*\)"
+		alsa.subdevice = 0
+		alsa.subdevice_name = "subdevice\ \#0"
+		alsa.device = 6
+		alsa.card = 0
+		alsa.card_name = sof-hda-dsp
+		alsa.long_card_name = LENOVO-21A9000FFR-ThinkPadP15vGen2i
+		alsa.driver_name = snd_soc_skl_hda_dsp
+		device.bus_path = pci-0000:00:1f.3-platform-skl_hda_dsp_generic
+		sysfs.path = /devices/pci0000:00/0000:00:1f.3/skl_hda_dsp_generic/sound/card0
+		device.bus = pci
+		device.vendor.id = 8086
+		device.vendor.name = "Intel\ Corporation"
+		device.product.id = 43c8
+		device.product.name = "Tiger\ Lake-H\ HD\ Audio\ Controller"
+		device.string = "_ucm0001.hw:sofhdadsp\,6"
+		device.buffering.buffer_size = 65536
+		device.buffering.fragment_size = 16384
+		device.access_mode = mmap+timer
+		device.profile.name = "HiFi:\ hw:sofhdadsp\,6:\ source"
+		device.profile.description = "Digital\ Microphone"
+		alsa.mixer_device = _ucm0001.hw:sofhdadsp
+		device.description = "Tiger\ Lake-H\ HD\ Audio\ Controller\ Digital\ Microphone"
+		module-udev-detect.discovered = 1
+		device.icon_name = audio-card-pci
+		is-default = false
+	gst-launch-1.0 pulsesrc device=alsa_input.pci-0000_00_1f.3-platform-skl_hda_dsp_generic.HiFi__hw_sofhdadsp_6__source ! ...
+
+
+Device found:
+
+	name  : Reachy Mini Camera Analog Stereo
+	class : Audio/Source
+	caps  : audio/x-raw, format={ (string)S16LE, (string)S16BE, (string)F32LE, (string)F32BE, (string)S32LE, (string)S32BE, (string)S24LE, (string)S24BE, (string)S24_32LE, (string)S24_32BE, (string)U8 }, layout=interleaved, rate=[ 1, 384000 ], channels=[ 1, 32 ]
+	        audio/x-alaw, rate=[ 1, 384000 ], channels=[ 1, 32 ]
+	        audio/x-mulaw, rate=[ 1, 384000 ], channels=[ 1, 32 ]
+	properties:
+		alsa.resolution_bits = 16
+		device.api = alsa
+		device.class = sound
+		alsa.class = generic
+		alsa.subclass = generic-mix
+		alsa.name = "USB\ Audio"
+		alsa.id = "USB\ Audio"
+		alsa.subdevice = 0
+		alsa.subdevice_name = "subdevice\ \#0"
+		alsa.device = 0
+		alsa.card = 1
+		alsa.card_name = "Reachy\ Mini\ Camera"
+		alsa.long_card_name = "SunplusIT\ Inc\ Reachy\ Mini\ Camera\ at\ usb-0000:00:14.0-5.4\,\ high\ speed"
+		alsa.driver_name = snd_usb_audio
+		device.bus_path = pci-0000:00:14.0-usb-0:5.4:1.2
+		sysfs.path = /devices/pci0000:00/0000:00:14.0/usb3/3-5/3-5.4/3-5.4:1.2/sound/card1
+		udev.id = usb-SunplusIT_Inc_Reachy_Mini_Camera_J20251022V0-02
+		device.bus = usb
+		device.vendor.id = 1bcf
+		device.vendor.name = "Sunplus\ Innovation\ Technology\ Inc."
+		device.product.id = 28c4
+		device.product.name = "Reachy\ Mini\ Camera"
+		device.serial = SunplusIT_Inc_Reachy_Mini_Camera_J20251022V0
+		device.form_factor = webcam
+		device.string = front:1
+		device.buffering.buffer_size = 352800
+		device.buffering.fragment_size = 176400
+		device.access_mode = mmap+timer
+		device.profile.name = analog-stereo
+		device.profile.description = "Analog\ Stereo"
+		device.description = "Reachy\ Mini\ Camera\ Analog\ Stereo"
+		module-udev-detect.discovered = 1
+		device.icon_name = camera-web-usb
+		is-default = false
+	gst-launch-1.0 pulsesrc device=alsa_input.usb-SunplusIT_Inc_Reachy_Mini_Camera_J20251022V0-02.analog-stereo ! ...
+
+
+Device found:
+
+	name  : Monitor of Reachy Mini Audio Analog Stereo
+	class : Audio/Source
+	caps  : audio/x-raw, format={ (string)S16LE, (string)S16BE, (string)F32LE, (string)F32BE, (string)S32LE, (string)S32BE, (string)S24LE, (string)S24BE, (string)S24_32LE, (string)S24_32BE, (string)U8 }, layout=interleaved, rate=[ 1, 384000 ], channels=[ 1, 32 ]
+	        audio/x-alaw, rate=[ 1, 384000 ], channels=[ 1, 32 ]
+	        audio/x-mulaw, rate=[ 1, 384000 ], channels=[ 1, 32 ]
+	properties:
+		device.description = "Monitor\ of\ Reachy\ Mini\ Audio\ Analog\ Stereo"
+		device.class = monitor
+		alsa.card = 2
+		alsa.card_name = "Reachy\ Mini\ Audio"
+		alsa.long_card_name = "Pollen\ Robotics\ Reachy\ Mini\ Audio\ at\ usb-0000:00:14.0-5.1\,\ high\ speed"
+		alsa.driver_name = snd_usb_audio
+		device.bus_path = pci-0000:00:14.0-usb-0:5.1:1.0
+		sysfs.path = /devices/pci0000:00/0000:00:14.0/usb3/3-5/3-5.1/3-5.1:1.0/sound/card2
+		udev.id = usb-Pollen_Robotics_Reachy_Mini_Audio___________________-00
+		device.bus = usb
+		device.vendor.id = 38fb
+		device.vendor.name = "Pollen\ Robotics"
+		device.product.id = 1001
+		device.product.name = "Reachy\ Mini\ Audio"
+		device.serial = Pollen_Robotics_Reachy_Mini_Audio___________________
+		device.string = 2
+		module-udev-detect.discovered = 1
+		device.icon_name = audio-card-usb
+		is-default = false
+	gst-launch-1.0 pulsesrc device=alsa_output.usb-Pollen_Robotics_Reachy_Mini_Audio___________________-00.analog-stereo.monitor ! ...
+
+
+Device found:
+
+	name  : Reachy Mini Audio Analog Stereo
+	class : Audio/Source
+	caps  : audio/x-raw, format={ (string)S16LE, (string)S16BE, (string)F32LE, (string)F32BE, (string)S32LE, (string)S32BE, (string)S24LE, (string)S24BE, (string)S24_32LE, (string)S24_32BE, (string)U8 }, layout=interleaved, rate=[ 1, 384000 ], channels=[ 1, 32 ]
+	        audio/x-alaw, rate=[ 1, 384000 ], channels=[ 1, 32 ]
+	        audio/x-mulaw, rate=[ 1, 384000 ], channels=[ 1, 32 ]
+	properties:
+		alsa.resolution_bits = 16
+		device.api = alsa
+		device.class = sound
+		alsa.class = generic
+		alsa.subclass = generic-mix
+		alsa.name = "USB\ Audio"
+		alsa.id = "USB\ Audio"
+		alsa.subdevice = 0
+		alsa.subdevice_name = "subdevice\ \#0"
+		alsa.device = 0
+		alsa.card = 2
+		alsa.card_name = "Reachy\ Mini\ Audio"
+		alsa.long_card_name = "Pollen\ Robotics\ Reachy\ Mini\ Audio\ at\ usb-0000:00:14.0-5.1\,\ high\ speed"
+		alsa.driver_name = snd_usb_audio
+		device.bus_path = pci-0000:00:14.0-usb-0:5.1:1.0
+		sysfs.path = /devices/pci0000:00/0000:00:14.0/usb3/3-5/3-5.1/3-5.1:1.0/sound/card2
+		udev.id = usb-Pollen_Robotics_Reachy_Mini_Audio___________________-00
+		device.bus = usb
+		device.vendor.id = 38fb
+		device.vendor.name = "Pollen\ Robotics"
+		device.product.id = 1001
+		device.product.name = "Reachy\ Mini\ Audio"
+		device.serial = Pollen_Robotics_Reachy_Mini_Audio___________________
+		device.string = front:2
+		device.buffering.buffer_size = 128000
+		device.buffering.fragment_size = 64000
+		device.access_mode = mmap+timer
+		device.profile.name = analog-stereo
+		device.profile.description = "Analog\ Stereo"
+		device.description = "Reachy\ Mini\ Audio\ Analog\ Stereo"
+		module-udev-detect.discovered = 1
+		device.icon_name = audio-card-usb
+		is-default = true
+	gst-launch-1.0 pulsesrc device=alsa_input.usb-Pollen_Robotics_Reachy_Mini_Audio___________________-00.analog-stereo ! ...
+
+
+Device found:
+
+	name  : Tiger Lake-H HD Audio Controller HDMI / DisplayPort 3 Output
+	class : Audio/Sink
+	caps  : audio/x-raw, format={ (string)S16LE, (string)S16BE, (string)F32LE, (string)F32BE, (string)S32LE, (string)S32BE, (string)S24LE, (string)S24BE, (string)S24_32LE, (string)S24_32BE, (string)U8 }, layout=interleaved, rate=[ 1, 384000 ], channels=[ 1, 32 ]
+	        audio/x-alaw, rate=[ 1, 384000 ], channels=[ 1, 32 ]
+	        audio/x-mulaw, rate=[ 1, 384000 ], channels=[ 1, 32 ]
+	properties:
+		alsa.resolution_bits = 16
+		device.api = alsa
+		device.class = sound
+		alsa.class = generic
+		alsa.subclass = generic-mix
+		alsa.name = ""
+		alsa.id = "HDMI3\ \(\*\)"
+		alsa.subdevice = 0
+		alsa.subdevice_name = "subdevice\ \#0"
+		alsa.device = 5
+		alsa.card = 0
+		alsa.card_name = sof-hda-dsp
+		alsa.long_card_name = LENOVO-21A9000FFR-ThinkPadP15vGen2i
+		alsa.driver_name = snd_soc_skl_hda_dsp
+		device.bus_path = pci-0000:00:1f.3-platform-skl_hda_dsp_generic
+		sysfs.path = /devices/pci0000:00/0000:00:1f.3/skl_hda_dsp_generic/sound/card0
+		device.bus = pci
+		device.vendor.id = 8086
+		device.vendor.name = "Intel\ Corporation"
+		device.product.id = 43c8
+		device.product.name = "Tiger\ Lake-H\ HD\ Audio\ Controller"
+		device.string = "_ucm0001.hw:sofhdadsp\,5"
+		device.buffering.buffer_size = 65536
+		device.buffering.fragment_size = 16384
+		device.access_mode = mmap+timer
+		device.profile.name = "HiFi:\ hw:sofhdadsp\,5:\ sink"
+		device.profile.description = "HDMI\ /\ DisplayPort\ 3\ Output"
+		alsa.mixer_device = _ucm0001.hw:sofhdadsp
+		device.description = "Tiger\ Lake-H\ HD\ Audio\ Controller\ HDMI\ /\ DisplayPort\ 3\ Output"
+		module-udev-detect.discovered = 1
+		device.icon_name = audio-card-pci
+		is-default = false
+	gst-launch-1.0 ... ! pulsesink device=alsa_output.pci-0000_00_1f.3-platform-skl_hda_dsp_generic.HiFi__hw_sofhdadsp_5__sink
+
+
+Device found:
+
+	name  : Tiger Lake-H HD Audio Controller HDMI / DisplayPort 2 Output
+	class : Audio/Sink
+	caps  : audio/x-raw, format={ (string)S16LE, (string)S16BE, (string)F32LE, (string)F32BE, (string)S32LE, (string)S32BE, (string)S24LE, (string)S24BE, (string)S24_32LE, (string)S24_32BE, (string)U8 }, layout=interleaved, rate=[ 1, 384000 ], channels=[ 1, 32 ]
+	        audio/x-alaw, rate=[ 1, 384000 ], channels=[ 1, 32 ]
+	        audio/x-mulaw, rate=[ 1, 384000 ], channels=[ 1, 32 ]
+	properties:
+		alsa.resolution_bits = 16
+		device.api = alsa
+		device.class = sound
+		alsa.class = generic
+		alsa.subclass = generic-mix
+		alsa.name = ""
+		alsa.id = "HDMI2\ \(\*\)"
+		alsa.subdevice = 0
+		alsa.subdevice_name = "subdevice\ \#0"
+		alsa.device = 4
+		alsa.card = 0
+		alsa.card_name = sof-hda-dsp
+		alsa.long_card_name = LENOVO-21A9000FFR-ThinkPadP15vGen2i
+		alsa.driver_name = snd_soc_skl_hda_dsp
+		device.bus_path = pci-0000:00:1f.3-platform-skl_hda_dsp_generic
+		sysfs.path = /devices/pci0000:00/0000:00:1f.3/skl_hda_dsp_generic/sound/card0
+		device.bus = pci
+		device.vendor.id = 8086
+		device.vendor.name = "Intel\ Corporation"
+		device.product.id = 43c8
+		device.product.name = "Tiger\ Lake-H\ HD\ Audio\ Controller"
+		device.string = "_ucm0001.hw:sofhdadsp\,4"
+		device.buffering.buffer_size = 65536
+		device.buffering.fragment_size = 16384
+		device.access_mode = mmap+timer
+		device.profile.name = "HiFi:\ hw:sofhdadsp\,4:\ sink"
+		device.profile.description = "HDMI\ /\ DisplayPort\ 2\ Output"
+		alsa.mixer_device = _ucm0001.hw:sofhdadsp
+		device.description = "Tiger\ Lake-H\ HD\ Audio\ Controller\ HDMI\ /\ DisplayPort\ 2\ Output"
+		module-udev-detect.discovered = 1
+		device.icon_name = audio-card-pci
+		is-default = false
+	gst-launch-1.0 ... ! pulsesink device=alsa_output.pci-0000_00_1f.3-platform-skl_hda_dsp_generic.HiFi__hw_sofhdadsp_4__sink
+
+
+Device found:
+
+	name  : Tiger Lake-H HD Audio Controller HDMI / DisplayPort 1 Output
+	class : Audio/Sink
+	caps  : audio/x-raw, format={ (string)S16LE, (string)S16BE, (string)F32LE, (string)F32BE, (string)S32LE, (string)S32BE, (string)S24LE, (string)S24BE, (string)S24_32LE, (string)S24_32BE, (string)U8 }, layout=interleaved, rate=[ 1, 384000 ], channels=[ 1, 32 ]
+	        audio/x-alaw, rate=[ 1, 384000 ], channels=[ 1, 32 ]
+	        audio/x-mulaw, rate=[ 1, 384000 ], channels=[ 1, 32 ]
+	properties:
+		alsa.resolution_bits = 16
+		device.api = alsa
+		device.class = sound
+		alsa.class = generic
+		alsa.subclass = generic-mix
+		alsa.name = ""
+		alsa.id = "HDMI1\ \(\*\)"
+		alsa.subdevice = 0
+		alsa.subdevice_name = "subdevice\ \#0"
+		alsa.device = 3
+		alsa.card = 0
+		alsa.card_name = sof-hda-dsp
+		alsa.long_card_name = LENOVO-21A9000FFR-ThinkPadP15vGen2i
+		alsa.driver_name = snd_soc_skl_hda_dsp
+		device.bus_path = pci-0000:00:1f.3-platform-skl_hda_dsp_generic
+		sysfs.path = /devices/pci0000:00/0000:00:1f.3/skl_hda_dsp_generic/sound/card0
+		device.bus = pci
+		device.vendor.id = 8086
+		device.vendor.name = "Intel\ Corporation"
+		device.product.id = 43c8
+		device.product.name = "Tiger\ Lake-H\ HD\ Audio\ Controller"
+		device.string = "_ucm0001.hw:sofhdadsp\,3"
+		device.buffering.buffer_size = 65536
+		device.buffering.fragment_size = 16384
+		device.access_mode = mmap+timer
+		device.profile.name = "HiFi:\ hw:sofhdadsp\,3:\ sink"
+		device.profile.description = "HDMI\ /\ DisplayPort\ 1\ Output"
+		alsa.mixer_device = _ucm0001.hw:sofhdadsp
+		device.description = "Tiger\ Lake-H\ HD\ Audio\ Controller\ HDMI\ /\ DisplayPort\ 1\ Output"
+		module-udev-detect.discovered = 1
+		device.icon_name = audio-card-pci
+		is-default = false
+	gst-launch-1.0 ... ! pulsesink device=alsa_output.pci-0000_00_1f.3-platform-skl_hda_dsp_generic.HiFi__hw_sofhdadsp_3__sink
+
+
+Device found:
+
+	name  : Tiger Lake-H HD Audio Controller Speaker + Headphones
+	class : Audio/Sink
+	caps  : audio/x-raw, format={ (string)S16LE, (string)S16BE, (string)F32LE, (string)F32BE, (string)S32LE, (string)S32BE, (string)S24LE, (string)S24BE, (string)S24_32LE, (string)S24_32BE, (string)U8 }, layout=interleaved, rate=[ 1, 384000 ], channels=[ 1, 32 ]
+	        audio/x-alaw, rate=[ 1, 384000 ], channels=[ 1, 32 ]
+	        audio/x-mulaw, rate=[ 1, 384000 ], channels=[ 1, 32 ]
+	properties:
+		alsa.resolution_bits = 16
+		device.api = alsa
+		device.class = sound
+		alsa.class = generic
+		alsa.subclass = generic-mix
+		alsa.name = ""
+		alsa.id = "HDA\ Analog\ \(\*\)"
+		alsa.subdevice = 0
+		alsa.subdevice_name = "subdevice\ \#0"
+		alsa.device = 0
+		alsa.card = 0
+		alsa.card_name = sof-hda-dsp
+		alsa.long_card_name = LENOVO-21A9000FFR-ThinkPadP15vGen2i
+		alsa.driver_name = snd_soc_skl_hda_dsp
+		device.bus_path = pci-0000:00:1f.3-platform-skl_hda_dsp_generic
+		sysfs.path = /devices/pci0000:00/0000:00:1f.3/skl_hda_dsp_generic/sound/card0
+		device.bus = pci
+		device.vendor.id = 8086
+		device.vendor.name = "Intel\ Corporation"
+		device.product.id = 43c8
+		device.product.name = "Tiger\ Lake-H\ HD\ Audio\ Controller"
+		device.string = _ucm0001.hw:sofhdadsp
+		device.buffering.buffer_size = 65536
+		device.buffering.fragment_size = 16384
+		device.access_mode = mmap+timer
+		device.profile.name = "HiFi:\ hw:sofhdadsp:\ sink"
+		device.profile.description = "Speaker\ +\ Headphones"
+		alsa.mixer_device = _ucm0001.hw:sofhdadsp
+		device.description = "Tiger\ Lake-H\ HD\ Audio\ Controller\ Speaker\ +\ Headphones"
+		module-udev-detect.discovered = 1
+		device.icon_name = audio-card-pci
+		is-default = false
+	gst-launch-1.0 ... ! pulsesink device=alsa_output.pci-0000_00_1f.3-platform-skl_hda_dsp_generic.HiFi__hw_sofhdadsp__sink
+
+
+Device found:
+
+	name  : Reachy Mini Audio Analog Stereo
+	class : Audio/Sink
+	caps  : audio/x-raw, format={ (string)S16LE, (string)S16BE, (string)F32LE, (string)F32BE, (string)S32LE, (string)S32BE, (string)S24LE, (string)S24BE, (string)S24_32LE, (string)S24_32BE, (string)U8 }, layout=interleaved, rate=[ 1, 384000 ], channels=[ 1, 32 ]
+	        audio/x-alaw, rate=[ 1, 384000 ], channels=[ 1, 32 ]
+	        audio/x-mulaw, rate=[ 1, 384000 ], channels=[ 1, 32 ]
+	properties:
+		alsa.resolution_bits = 16
+		device.api = alsa
+		device.class = sound
+		alsa.class = generic
+		alsa.subclass = generic-mix
+		alsa.name = "USB\ Audio"
+		alsa.id = "USB\ Audio"
+		alsa.subdevice = 0
+		alsa.subdevice_name = "subdevice\ \#0"
+		alsa.device = 0
+		alsa.card = 2
+		alsa.card_name = "Reachy\ Mini\ Audio"
+		alsa.long_card_name = "Pollen\ Robotics\ Reachy\ Mini\ Audio\ at\ usb-0000:00:14.0-5.1\,\ high\ speed"
+		alsa.driver_name = snd_usb_audio
+		device.bus_path = pci-0000:00:14.0-usb-0:5.1:1.0
+		sysfs.path = /devices/pci0000:00/0000:00:14.0/usb3/3-5/3-5.1/3-5.1:1.0/sound/card2
+		udev.id = usb-Pollen_Robotics_Reachy_Mini_Audio___________________-00
+		device.bus = usb
+		device.vendor.id = 38fb
+		device.vendor.name = "Pollen\ Robotics"
+		device.product.id = 1001
+		device.product.name = "Reachy\ Mini\ Audio"
+		device.serial = Pollen_Robotics_Reachy_Mini_Audio___________________
+		device.string = front:2
+		device.buffering.buffer_size = 128000
+		device.buffering.fragment_size = 64000
+		device.access_mode = mmap+timer
+		device.profile.name = analog-stereo
+		device.profile.description = "Analog\ Stereo"
+		device.description = "Reachy\ Mini\ Audio\ Analog\ Stereo"
+		module-udev-detect.discovered = 1
+		device.icon_name = audio-card-usb
+		is-default = true
+	gst-launch-1.0 ... ! pulsesink device=alsa_output.usb-Pollen_Robotics_Reachy_Mini_Audio___________________-00.analog-stereo
+
+
+Device found:
+
+	name  : NVIDIA RTX A2000 Laptop GPU
+	class : Video/Sink
+	caps  : video/x-raw(memory:VulkanImage)
+	properties:
+		vulkan.name = "NVIDIA\ RTX\ A2000\ Laptop\ GPU"
+		vulkan.type = discrete
+		vulkan.api.version = 1.3.277
+		vulkan.api.version.major = 1 (0x00000001)
+		vulkan.api.version.minor = 3 (0x00000003)
+		vulkan.api.version.patch = 277 (0x00000115)
+		vulkan.driver.version = 550.576.192
+		vulkan.driver.version.major = 550 (0x00000226)
+		vulkan.driver.version.minor = 576 (0x00000240)
+		vulkan.driver.version.patch = 192 (0x000000c0)
+		vulkan.vendor.id = 4318 (0x000010de)
+		vulkan.device.id = 9656 (0x000025b8)
+		vulkan.memory.n_heaps = 2 (0x00000002)
+		vulkan.memory.heaps.0.size = 4294967296
+		vulkan.memory.heaps.0.flags = 1 (0x00000001)
+		vulkan.memory.heaps.0.flags.str = device-local
+		vulkan.memory.heaps.1.size = 25007382528
+		vulkan.memory.heaps.1.flags = 0 (0x00000000)
+		vulkan.memory.heaps.1.flags.str = ""
+		vulkan.memory.n_types = 6 (0x00000006)
+		vulkan.memory.types.0.heap = 1 (0x00000001)
+		vulkan.memory.types.0.flags = 0 (0x00000000)
+		vulkan.memory.types.0.flags.str = ""
+		vulkan.memory.types.1.heap = 0 (0x00000000)
+		vulkan.memory.types.1.flags = 1 (0x00000001)
+		vulkan.memory.types.1.flags.str = device-local
+		vulkan.memory.types.2.heap = 0 (0x00000000)
+		vulkan.memory.types.2.flags = 1 (0x00000001)
+		vulkan.memory.types.2.flags.str = device-local
+		vulkan.memory.types.3.heap = 1 (0x00000001)
+		vulkan.memory.types.3.flags = 6 (0x00000006)
+		vulkan.memory.types.3.flags.str = "host-visible\|host-coherent"
+		vulkan.memory.types.4.heap = 1 (0x00000001)
+		vulkan.memory.types.4.flags = 14 (0x0000000e)
+		vulkan.memory.types.4.flags.str = "host-visible\|host-coherent\|host-cached"
+		vulkan.memory.types.5.heap = 0 (0x00000000)
+		vulkan.memory.types.5.flags = 7 (0x00000007)
+		vulkan.memory.types.5.flags.str = "device-local\|host-visible\|host-coherent"
+		vulkan.n_queue_families = 6 (0x00000006)
+		vulkan.queue_family.0.n_queues = 16 (0x00000010)
+		vulkan.queue_family.0.flags = 15 (0x0000000f)
+		vulkan.queue_family.0.flags.str = "graphics\|compute\|transfer\|sparse-binding"
+		vulkan.queue_family.0.timestamp_resolution = 64 (0x00000040)
+		vulkan.queue_family.0.min_image_transfer_granuality.width = 1 (0x00000001)
+		vulkan.queue_family.0.min_image_transfer_granuality.height = 1 (0x00000001)
+		vulkan.queue_family.0.min_image_transfer_granuality.depth = 1 (0x00000001)
+		vulkan.queue_family.1.n_queues = 2 (0x00000002)
+		vulkan.queue_family.1.flags = 12 (0x0000000c)
+		vulkan.queue_family.1.flags.str = "transfer\|sparse-binding"
+		vulkan.queue_family.1.timestamp_resolution = 64 (0x00000040)
+		vulkan.queue_family.1.min_image_transfer_granuality.width = 1 (0x00000001)
+		vulkan.queue_family.1.min_image_transfer_granuality.height = 1 (0x00000001)
+		vulkan.queue_family.1.min_image_transfer_granuality.depth = 1 (0x00000001)
+		vulkan.queue_family.2.n_queues = 8 (0x00000008)
+		vulkan.queue_family.2.flags = 14 (0x0000000e)
+		vulkan.queue_family.2.flags.str = "compute\|transfer\|sparse-binding"
+		vulkan.queue_family.2.timestamp_resolution = 64 (0x00000040)
+		vulkan.queue_family.2.min_image_transfer_granuality.width = 1 (0x00000001)
+		vulkan.queue_family.2.min_image_transfer_granuality.height = 1 (0x00000001)
+		vulkan.queue_family.2.min_image_transfer_granuality.depth = 1 (0x00000001)
+		vulkan.queue_family.3.n_queues = 2 (0x00000002)
+		vulkan.queue_family.3.flags = 44 (0x0000002c)
+		vulkan.queue_family.3.flags.str = "transfer\|sparse-binding"
+		vulkan.queue_family.3.timestamp_resolution = 32 (0x00000020)
+		vulkan.queue_family.3.min_image_transfer_granuality.width = 1 (0x00000001)
+		vulkan.queue_family.3.min_image_transfer_granuality.height = 1 (0x00000001)
+		vulkan.queue_family.3.min_image_transfer_granuality.depth = 1 (0x00000001)
+		vulkan.queue_family.4.n_queues = 1 (0x00000001)
+		vulkan.queue_family.4.flags = 76 (0x0000004c)
+		vulkan.queue_family.4.flags.str = "transfer\|sparse-binding"
+		vulkan.queue_family.4.timestamp_resolution = 32 (0x00000020)
+		vulkan.queue_family.4.min_image_transfer_granuality.width = 1 (0x00000001)
+		vulkan.queue_family.4.min_image_transfer_granuality.height = 1 (0x00000001)
+		vulkan.queue_family.4.min_image_transfer_granuality.depth = 1 (0x00000001)
+		vulkan.queue_family.5.n_queues = 1 (0x00000001)
+		vulkan.queue_family.5.flags = 268 (0x0000010c)
+		vulkan.queue_family.5.flags.str = "transfer\|sparse-binding"
+		vulkan.queue_family.5.timestamp_resolution = 64 (0x00000040)
+		vulkan.queue_family.5.min_image_transfer_granuality.width = 1 (0x00000001)
+		vulkan.queue_family.5.min_image_transfer_granuality.height = 1 (0x00000001)
+		vulkan.queue_family.5.min_image_transfer_granuality.depth = 1 (0x00000001)
+		is-default = false
+	gst-launch-1.0 ... ! vulkansink
+
+
+Device found:
+
+	name  : llvmpipe (LLVM 15.0.7, 256 bits)
+	class : Video/Sink
+	caps  : video/x-raw(memory:VulkanImage)
+	properties:
+		vulkan.name = "llvmpipe\ \(LLVM\ 15.0.7\,\ 256\ bits\)"
+		vulkan.type = CPU
+		vulkan.api.version = 1.3.238
+		vulkan.api.version.major = 1 (0x00000001)
+		vulkan.api.version.minor = 3 (0x00000003)
+		vulkan.api.version.patch = 238 (0x000000ee)
+		vulkan.driver.version = 0.0.1
+		vulkan.driver.version.major = 0 (0x00000000)
+		vulkan.driver.version.minor = 0 (0x00000000)
+		vulkan.driver.version.patch = 1 (0x00000001)
+		vulkan.vendor.id = 65541 (0x00010005)
+		vulkan.device.id = 0 (0x00000000)
+		vulkan.memory.n_heaps = 1 (0x00000001)
+		vulkan.memory.heaps.0.size = 2147483648
+		vulkan.memory.heaps.0.flags = 1 (0x00000001)
+		vulkan.memory.heaps.0.flags.str = device-local
+		vulkan.memory.n_types = 1 (0x00000001)
+		vulkan.memory.types.0.heap = 0 (0x00000000)
+		vulkan.memory.types.0.flags = 15 (0x0000000f)
+		vulkan.memory.types.0.flags.str = "device-local\|host-visible\|host-coherent\|host-cached"
+		vulkan.n_queue_families = 1 (0x00000001)
+		vulkan.queue_family.0.n_queues = 1 (0x00000001)
+		vulkan.queue_family.0.flags = 7 (0x00000007)
+		vulkan.queue_family.0.flags.str = "graphics\|compute\|transfer"
+		vulkan.queue_family.0.timestamp_resolution = 64 (0x00000040)
+		vulkan.queue_family.0.min_image_transfer_granuality.width = 1 (0x00000001)
+		vulkan.queue_family.0.min_image_transfer_granuality.height = 1 (0x00000001)
+		vulkan.queue_family.0.min_image_transfer_granuality.depth = 1 (0x00000001)
+		is-default = false
+	gst-launch-1.0 ... ! vulkansink
+
+
+Device found:
+
+	name  : Intel(R) UHD Graphics (TGL GT1)
+	class : Video/Sink
+	caps  : video/x-raw(memory:VulkanImage)
+	properties:
+		vulkan.name = "Intel\(R\)\ UHD\ Graphics\ \(TGL\ GT1\)"
+		vulkan.type = integrated
+		vulkan.api.version = 1.3.238
+		vulkan.api.version.major = 1 (0x00000001)
+		vulkan.api.version.minor = 3 (0x00000003)
+		vulkan.api.version.patch = 238 (0x000000ee)
+		vulkan.driver.version = 23.0.4
+		vulkan.driver.version.major = 23 (0x00000017)
+		vulkan.driver.version.minor = 0 (0x00000000)
+		vulkan.driver.version.patch = 4 (0x00000004)
+		vulkan.vendor.id = 32902 (0x00008086)
+		vulkan.device.id = 39520 (0x00009a60)
+		vulkan.memory.n_heaps = 1 (0x00000001)
+		vulkan.memory.heaps.0.size = 25007382528
+		vulkan.memory.heaps.0.flags = 1 (0x00000001)
+		vulkan.memory.heaps.0.flags.str = device-local
+		vulkan.memory.n_types = 1 (0x00000001)
+		vulkan.memory.types.0.heap = 0 (0x00000000)
+		vulkan.memory.types.0.flags = 15 (0x0000000f)
+		vulkan.memory.types.0.flags.str = "device-local\|host-visible\|host-coherent\|host-cached"
+		vulkan.n_queue_families = 1 (0x00000001)
+		vulkan.queue_family.0.n_queues = 1 (0x00000001)
+		vulkan.queue_family.0.flags = 7 (0x00000007)
+		vulkan.queue_family.0.flags.str = "graphics\|compute\|transfer"
+		vulkan.queue_family.0.timestamp_resolution = 36 (0x00000024)
+		vulkan.queue_family.0.min_image_transfer_granuality.width = 1 (0x00000001)
+		vulkan.queue_family.0.min_image_transfer_granuality.height = 1 (0x00000001)
+		vulkan.queue_family.0.min_image_transfer_granuality.depth = 1 (0x00000001)
+		is-default = true
+	gst-launch-1.0 ... ! vulkansink
+

@@ -62,6 +62,7 @@ import numpy.typing as npt
 
 from reachy_mini.media.audio_doa import AudioDoA
 from reachy_mini.media.audio_utils import has_reachymini_asoundrc
+from reachy_mini.media.device_detection import get_audio_device
 from reachy_mini.utils.constants import ASSETS_ROOT_PATH
 
 try:
@@ -145,7 +146,7 @@ class GStreamerAudio:
             audiosrc.set_property("device", "reachymini_audio_src")
             self.logger.info("Using .asoundrc audio source: reachymini_audio_src")
         else:
-            id_audio_card = self._get_audio_device("Source")
+            id_audio_card = get_audio_device("Source")
 
             if id_audio_card is None:
                 self.logger.warning(
@@ -201,7 +202,7 @@ class GStreamerAudio:
             audiosink.set_property("device", "reachymini_audio_sink")
             self.logger.info("Using .asoundrc audio sink: reachymini_audio_sink")
         else:
-            id_audio_card = self._get_audio_device("Sink")
+            id_audio_card = get_audio_device("Sink")
 
             if id_audio_card is None:
                 self.logger.warning(
@@ -398,21 +399,21 @@ class GStreamerAudio:
             audiosink.set_property("device", "reachymini_audio_sink")
             self.logger.info("Using audio device reachymini_audio_sink for playback.")
         elif platform.system() == "Windows":
-            id_audio_card = self._get_audio_device("Sink")
+            id_audio_card = get_audio_device("Sink")
             audiosink = Gst.ElementFactory.make("wasapi2sink")
             audiosink.set_property("device", id_audio_card)
             self.logger.info(
                 f"Using audio device {id_audio_card} for playback on Windows."
             )
         elif platform.system() == "Darwin":
-            id_audio_card = self._get_audio_device("Sink")
+            id_audio_card = get_audio_device("Sink")
             audiosink = Gst.ElementFactory.make("osxaudiosink")
             audiosink.set_property("unique-id", id_audio_card)
             self.logger.info(
                 f"Using audio device {id_audio_card} for playback on macOS."
             )
         else:
-            id_audio_card = self._get_audio_device("Sink")
+            id_audio_card = get_audio_device("Sink")
             audiosink = Gst.ElementFactory.make("pulsesink")
             audiosink.set_property("device", f"{id_audio_card}")
             self.logger.info(f"Using audio device {id_audio_card} for playback.")
@@ -489,84 +490,3 @@ class GStreamerAudio:
         self._loop.quit()
         self._bus_record.remove_watch()
         self._bus_playback.remove_watch()
-
-    def _get_audio_device(self, device_type: str = "Source") -> Optional[str]:
-        """Use ``Gst.DeviceMonitor`` to find the Reachy Mini Audio card.
-
-        Returns the platform-specific device identifier, or ``None``.
-        """
-        monitor = Gst.DeviceMonitor()
-        monitor.add_filter(f"Audio/{device_type}")
-        monitor.start()
-
-        snd_card_name = "Reachy Mini Audio"
-        try:
-            devices = monitor.get_devices()
-            for device in devices:
-                name = device.get_display_name()
-                device_props = device.get_properties()
-
-                if snd_card_name in name:
-                    # Skip monitor/loopback sources (e.g. "Monitor of Reachy Mini Audio")
-                    if device_props and device_props.has_field("device.class"):
-                        if device_props.get_string("device.class") == "monitor":
-                            continue
-                    if device_props and device_props.has_field("node.name"):
-                        node_name = device_props.get_string("node.name")
-                        self.logger.debug(
-                            f"Found audio input device with node name {node_name}"
-                        )
-                        return str(node_name)
-                    elif (
-                        platform.system() == "Windows"
-                        and device_props.has_field("device.api")
-                        and device_props.get_string("device.api") == "wasapi2"
-                    ):
-                        if device_type == "Source" and device_props.get_value(
-                            "wasapi2.device.loopback"
-                        ):
-                            continue  # skip loopback devices for source
-                        device_id = device_props.get_string("device.id")
-                        self.logger.debug(
-                            f"Found audio input device {name} for Windows"
-                        )
-                        return str(device_id)
-                    elif platform.system() == "Darwin":
-                        device_id = device_props.get_string("unique-id")
-                        self.logger.debug(f"Found audio input device {name} for macOS")
-                        return str(device_id)
-                    elif platform.system() == "Linux":
-                        # Linux PulseAudio / ALSA fallback
-                        # Construct PulseAudio device name from udev.id
-                        udev_id = (
-                            device_props.get_string("udev.id")
-                            if device_props.has_field("udev.id")
-                            else None
-                        )
-                        profile = (
-                            device_props.get_string("device.profile.name")
-                            if device_props.has_field("device.profile.name")
-                            else None
-                        )
-                        if udev_id and profile:
-                            prefix = (
-                                "alsa_output" if device_type == "Sink" else "alsa_input"
-                            )
-                            pa_device = f"{prefix}.{udev_id}.{profile}"
-                            self.logger.debug(
-                                f"Found audio {device_type} device {name} via PulseAudio: {pa_device}"
-                            )
-                            return pa_device
-                        elif device_props.has_field("device.string"):
-                            device_id = device_props.get_string("device.string")
-                            self.logger.debug(
-                                f"Found audio {device_type} device {name} via ALSA: {device_id}"
-                            )
-                            return str(device_id)
-
-            self.logger.warning(f"No Reachy Mini Audio {device_type} card found.")
-        except Exception as e:
-            self.logger.error(f"Error while getting audio input device: {e}")
-        finally:
-            monitor.stop()
-        return None
