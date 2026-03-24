@@ -172,6 +172,40 @@ def parse_gst_device_monitor_output(text: str) -> list[DeviceInfo]:
     return devices
 
 
+def gst_structure_get_field(structure: Any, field_name: str) -> Any:
+    """Safely extract a single field value from a ``Gst.Structure``.
+
+    Handles ``GstValueArray`` / ``GstValueList`` fields that
+    ``get_value()`` cannot auto-unbox, and falls back to ``None``
+    for any other unsupported GStreamer fundamental type.
+    """
+    field_type = structure.get_field_type(field_name)
+    if field_type == Gst.ValueArray.__gtype__:
+        ok, arr = structure.get_array(field_name)
+        if ok and arr is not None:
+            return [arr.get_nth(j) for j in range(arr.n_values)]
+        return None
+    if field_type == Gst.ValueList.__gtype__:
+        ok, arr = structure.get_list(field_name)
+        if ok and arr is not None:
+            return [arr.get_nth(j) for j in range(arr.n_values)]
+        return None
+    try:
+        return structure.get_value(field_name)
+    except TypeError:
+        return None
+
+
+def gst_props_to_dict(props: Gst.Structure) -> dict[str, str]:
+    """Convert all fields of a ``Gst.Structure`` to a flat string dict."""
+    output_dict: dict[str, str] = {}
+    for i in range(props.n_fields()):
+        field_name: str = props.nth_field_name(i)
+        value = gst_structure_get_field(props, field_name)
+        output_dict[field_name] = str(value) if value is not None else ""
+    return output_dict
+
+
 def gst_device_to_device_info(device: Any, index: int = 0) -> DeviceInfo:
     """Convert a ``Gst.Device`` to a :class:`DeviceInfo`.
 
@@ -189,14 +223,9 @@ def gst_device_to_device_info(device: Any, index: int = 0) -> DeviceInfo:
     """
     name: str = device.get_display_name() or ""
     device_class: str = device.get_device_class() or ""
-    props: dict[str, str] = {}
 
     gst_props = device.get_properties()
-    if gst_props is not None:
-        for i in range(gst_props.n_fields()):
-            field_name: str = gst_props.nth_field_name(i)
-            value = gst_props.get_value(field_name)
-            props[field_name] = str(value) if value is not None else ""
+    props = gst_props_to_dict(gst_props) if gst_props is not None else {}
 
     return DeviceInfo(
         display_name=name,
