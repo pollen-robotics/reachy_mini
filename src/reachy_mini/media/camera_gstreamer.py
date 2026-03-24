@@ -140,10 +140,6 @@ class GStreamerCamera:
         # Build platform-specific IPC source pipeline
         self._build_ipc_source()
 
-    # ------------------------------------------------------------------
-    # Resolution / calibration properties
-    # ------------------------------------------------------------------
-
     @property
     def resolution(self) -> tuple[int, int]:
         """Current resolution as ``(width, height)`` in pixels.
@@ -252,10 +248,6 @@ class GStreamerCamera:
         if should_restart:
             self.open()
 
-    # ------------------------------------------------------------------
-    # Pipeline construction
-    # ------------------------------------------------------------------
-
     def _build_ipc_source(self) -> None:
         """Build the IPC source pipeline for the current platform.
 
@@ -310,10 +302,6 @@ class GStreamerCamera:
         queue.link(convert)
         convert.link(self._appsink_video)
 
-    # ------------------------------------------------------------------
-    # Bus handling
-    # ------------------------------------------------------------------
-
     def _on_bus_message(self, bus: Gst.Bus, msg: Gst.Message, loop) -> bool:  # type: ignore[no-untyped-def]
         t = msg.type
         if t == Gst.MessageType.EOS:
@@ -343,10 +331,6 @@ class GStreamerCamera:
         query = Gst.Query.new_latency()
         self.pipeline.query(query)
         self.logger.info(f"Pipeline latency {query.parse_latency()}")
-
-    # ------------------------------------------------------------------
-    # Lifecycle
-    # ------------------------------------------------------------------
 
     def open(self) -> None:
         """Start the GStreamer pipeline and begin receiving frames."""

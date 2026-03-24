@@ -158,10 +158,6 @@ class GstWebRTCClient:
         self._webrtcsrc.connect("deep-element-added", self._on_deep_element_added)
         self.logger.info("GstWebRTCClient initialized (bidirectional audio support)")
 
-    # ------------------------------------------------------------------
-    # Resolution / calibration properties
-    # ------------------------------------------------------------------
-
     @property
     def resolution(self) -> tuple[int, int]:
         """Current resolution as ``(width, height)``."""
@@ -240,10 +236,6 @@ class GstWebRTCClient:
             f"framerate={self.framerate}/1"
         )
         self._appsink_video.set_property("caps", caps_video)
-
-    # ------------------------------------------------------------------
-    # WebRTC setup
-    # ------------------------------------------------------------------
 
     def _configure_webrtcsrc(
         self, signaling_host: str, signaling_port: int, peer_id: str
@@ -410,10 +402,6 @@ class GstWebRTCClient:
             return False
         return True
 
-    # ------------------------------------------------------------------
-    # Camera (video) methods
-    # ------------------------------------------------------------------
-
     def open(self) -> None:
         """Start the WebRTC pipeline (both video and audio)."""
         self._pipeline_record.set_state(Gst.State.PLAYING)
@@ -449,10 +437,6 @@ class GstWebRTCClient:
     def close(self) -> None:
         """Stop the WebRTC pipeline."""
         self._pipeline_record.set_state(Gst.State.NULL)
-
-    # ------------------------------------------------------------------
-    # Audio methods
-    # ------------------------------------------------------------------
 
     def start_recording(self) -> None:
         """No-op — recording starts automatically with ``open()``."""
@@ -627,10 +611,6 @@ class GstWebRTCClient:
         """Play a sound file (not supported over WebRTC)."""
         self.logger.warning("Audio playback not implemented in WebRTC client.")
 
-    # ------------------------------------------------------------------
-    # Direction of Arrival
-    # ------------------------------------------------------------------
-
     def get_DoA(self) -> tuple[float, bool] | None:
         """Get the Direction of Arrival from the ReSpeaker.
 
@@ -639,10 +619,6 @@ class GstWebRTCClient:
 
         """
         return self._doa.get_DoA()
-
-    # ------------------------------------------------------------------
-    # Lifecycle
-    # ------------------------------------------------------------------
 
     def cleanup(self) -> None:
         """Release all resources."""
