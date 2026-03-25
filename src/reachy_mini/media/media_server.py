@@ -875,6 +875,15 @@ class GstMediaServer:
         self._playbin = playbin
         playbin.set_state(Gst.State.PLAYING)
 
+    def stop_sound(self) -> None:
+        """Stop the currently playing sound file.
+
+        If no sound is currently playing this is a no-op.
+        """
+        if self._playbin is not None:
+            self._playbin.set_state(Gst.State.NULL)
+            self._playbin = None
+
     def _build_audiosink_element(self) -> Optional[Gst.Element]:
         """Build a platform-aware audio sink GStreamer element.
 

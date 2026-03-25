@@ -443,6 +443,33 @@ class GStreamerAudio:
         self._playbin = playbin
         playbin.set_state(Gst.State.PLAYING)
 
+    def upload_sound(self, sound_file: str) -> str:
+        """No-op for the local backend — the file is already accessible.
+
+        Returns:
+            The unchanged *sound_file* path.
+
+        """
+        return sound_file
+
+    def list_sounds(self) -> list[str]:
+        """No-op for the local backend.
+
+        Returns:
+            An empty list.
+
+        """
+        return []
+
+    def delete_sound(self, filename: str) -> bool:
+        """No-op for the local backend.
+
+        Returns:
+            Always ``False``.
+
+        """
+        return False
+
     def get_DoA(self) -> tuple[float, bool] | None:
         """Get the Direction of Arrival (DoA) from the ReSpeaker.
 

@@ -349,6 +349,7 @@ class ReachyMini:
             log_level=log_level,
             signalling_host=daemon_status.wlan_ip or "localhost",
             camera_specs=camera_specs,
+            daemon_url=self._daemon_http_url,
         )
 
     def _normalize_connection_mode(

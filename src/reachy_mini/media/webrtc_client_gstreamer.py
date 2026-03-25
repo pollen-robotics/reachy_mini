@@ -35,8 +35,11 @@ Example usage via MediaManager::
 """
 
 import logging
+import os
 from threading import Thread
 from typing import Iterator, Optional
+
+import requests as _requests
 
 try:
     import gi
@@ -155,6 +158,7 @@ class GstWebRTCClient:
         self._appsrc = None
         self._appsrc_pts = 0  # running PTS in nanoseconds for appsrc buffers
         self._playbin: Optional[Gst.Element] = None  # for play_sound
+        self.daemon_url: str = ""  # set by MediaManager for remote sound ops
         self._webrtcsrc.connect("deep-element-added", self._on_deep_element_added)
         self.logger.info("GstWebRTCClient initialized (bidirectional audio support)")
 
@@ -580,8 +584,17 @@ class GstWebRTCClient:
         pass
 
     def stop_playing(self) -> None:
-        """Reset the PTS counter for the send chain."""
+        """Reset the PTS counter for the send chain and stop daemon-side sound."""
         self._appsrc_pts = 0
+        # Also stop any sound file playing on the daemon's speaker.
+        if self.daemon_url:
+            try:
+                _requests.post(
+                    f"{self.daemon_url}/api/media/stop_sound",
+                    timeout=5,
+                )
+            except Exception as e:
+                self.logger.warning(f"Failed to stop daemon sound: {e}")
 
     def clear_output_buffer(self) -> None:
         """No-op (WebRTC send chain does not buffer significantly)."""
@@ -608,8 +621,120 @@ class GstWebRTCClient:
         self._appsrc.push_buffer(buf)
 
     def play_sound(self, sound_file: str) -> None:
-        """Play a sound file (not supported over WebRTC)."""
-        self.logger.warning("Audio playback not implemented in WebRTC client.")
+        """Play a sound file on the robot's speaker via the daemon REST API.
+
+        If *sound_file* is a local path that exists on this machine the
+        file is automatically uploaded to the daemon's temporary sound
+        directory (skipping the upload when a file with the same name is
+        already present).  Otherwise the filename is sent as-is and the
+        daemon resolves it from its built-in assets or filesystem.
+
+        Args:
+            sound_file: Absolute local path **or** asset filename
+                (e.g. ``"wake_up.wav"``).
+
+        """
+        if not self.daemon_url:
+            self.logger.error("No daemon URL configured — cannot play sound remotely.")
+            return
+
+        # If the file exists on the client, ensure it is uploaded first.
+        remote_file = sound_file
+        if os.path.isfile(sound_file):
+            filename = os.path.basename(sound_file)
+            remote_files = self.list_sounds()
+            if filename not in remote_files:
+                remote_file = self.upload_sound(sound_file)
+            else:
+                # Already uploaded — ask the daemon to resolve by filename.
+                # The daemon's play_sound checks the temp dir, assets, etc.
+                remote_file = filename
+
+        try:
+            resp = _requests.post(
+                f"{self.daemon_url}/api/media/play_sound",
+                json={"file": remote_file},
+                timeout=10,
+            )
+            if not resp.ok:
+                self.logger.error(f"play_sound failed: {resp.status_code} {resp.text}")
+        except Exception as e:
+            self.logger.error(f"play_sound request error: {e}")
+
+    def upload_sound(self, sound_file: str) -> str:
+        """Upload a local sound file to the daemon's temporary directory.
+
+        Args:
+            sound_file: Local path to the sound file.
+
+        Returns:
+            The absolute path of the file on the daemon.
+
+        Raises:
+            FileNotFoundError: If *sound_file* does not exist locally.
+            requests.HTTPError: If the upload request fails.
+
+        """
+        if not os.path.isfile(sound_file):
+            raise FileNotFoundError(f"Local sound file not found: {sound_file}")
+        if not self.daemon_url:
+            self.logger.error("No daemon URL configured — cannot upload sound.")
+            return sound_file
+
+        with open(sound_file, "rb") as f:
+            resp = _requests.post(
+                f"{self.daemon_url}/api/media/sounds/upload",
+                files={"file": (os.path.basename(sound_file), f)},
+                timeout=30,
+            )
+        resp.raise_for_status()
+        path: str = resp.json()["path"]
+        return path
+
+    def list_sounds(self) -> list[str]:
+        """List sound files in the daemon's temporary sound directory.
+
+        Returns:
+            A list of filenames, or an empty list on error.
+
+        """
+        if not self.daemon_url:
+            self.logger.error("No daemon URL configured — cannot list sounds.")
+            return []
+        try:
+            resp = _requests.get(
+                f"{self.daemon_url}/api/media/sounds",
+                timeout=5,
+            )
+            resp.raise_for_status()
+            files: list[str] = resp.json()["files"]
+            return files
+        except Exception as e:
+            self.logger.warning(f"list_sounds request error: {e}")
+            return []
+
+    def delete_sound(self, filename: str) -> bool:
+        """Delete a sound file from the daemon's temporary sound directory.
+
+        Args:
+            filename: Name of the file to delete (not a full path).
+
+        Returns:
+            ``True`` if the file was deleted, ``False`` otherwise.
+
+        """
+        if not self.daemon_url:
+            self.logger.error("No daemon URL configured — cannot delete sound.")
+            return False
+        try:
+            resp = _requests.delete(
+                f"{self.daemon_url}/api/media/sounds/{filename}",
+                timeout=5,
+            )
+            return resp.ok
+        except Exception as e:
+            self.logger.warning(f"delete_sound request error: {e}")
+            return False
 
     def get_DoA(self) -> tuple[float, bool] | None:
         """Get the Direction of Arrival from the ReSpeaker.

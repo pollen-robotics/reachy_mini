@@ -696,6 +696,15 @@ class Backend:
         if self._media_server is not None:
             self._media_server.play_sound(sound_file)
 
+    def stop_sound(self) -> None:
+        """Stop the currently playing sound file.
+
+        Delegates to the media server's stop_sound method.  If the server
+        is not available (no_media mode), this is a no-op.
+        """
+        if self._media_server is not None:
+            self._media_server.stop_sound()
+
     # Basic move definitions
     INIT_HEAD_POSE = np.eye(4)
 
