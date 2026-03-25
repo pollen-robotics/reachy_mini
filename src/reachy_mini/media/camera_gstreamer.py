@@ -58,7 +58,6 @@ from reachy_mini.media.camera_constants import (
     ReachyMiniLiteCamSpecs,
 )
 from reachy_mini.media.gstreamer_utils import get_sample
-from reachy_mini.media.camera_utils import scale_intrinsics
 
 try:
     import gi
