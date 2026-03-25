@@ -67,6 +67,8 @@
       title: Motors Diagnosis
     - local: troubleshooting/change_mic_fpc_cable
       title: Change Mic FPC Cable
+    - local: troubleshooting/spherical_joints_maintenance
+      title: Spherical Joints Maintenance
   title: Help and support
 - isExpanded: false
   sections:
