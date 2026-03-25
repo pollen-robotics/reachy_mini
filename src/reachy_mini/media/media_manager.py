@@ -256,6 +256,10 @@ class MediaManager:
         Args:
             sound_file: Path to the sound file to play.
 
+        Note:
+            If the audio backend is not initialised, a warning is logged
+            and the call is silently ignored.
+
         """
         if self.audio is None:
             self.logger.warning("Audio system is not initialized.")
@@ -327,7 +331,10 @@ class MediaManager:
         """Push audio data to the output device.
 
         Args:
-            data: The audio data to push (mono format).
+            data: Audio samples as a float32 array.  Shape should be
+                ``(num_samples,)`` for mono or ``(num_samples, channels)``
+                for multi-channel.  The manager adapts the data to match
+                the output device's channel count before forwarding it.
 
         """
         if self.audio is None:

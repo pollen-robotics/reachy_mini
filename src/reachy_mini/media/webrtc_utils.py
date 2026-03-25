@@ -21,7 +21,6 @@ def get_producer_list(host: str, port: int) -> Dict[str, Dict[str, str]]:
         Dict[str, Dict[str, str]]: A dictionary mapping producer IDs to their metadata dictionaries.
 
     """
-    """Get the list of gstreamer producers from the signalling server."""
     with connect(f"ws://{host}:{port}") as websocket:
         _ = websocket.recv()  # welcome message is ignored
         message = json.dumps({"type": "list"})
@@ -39,12 +38,17 @@ def get_producer_list(host: str, port: int) -> Dict[str, Dict[str, str]]:
 def find_producer_peer_id_by_name(host: str, port: int, name: str) -> str:
     """Find the peer ID of a producer by its name.
 
-    host (str): Host address of the producer service.
-    port (int): Port number of the producer service.
+    Args:
+        host: Host address of the signalling server.
+        port: Port number of the signalling server.
+        name: Producer name to search for.
 
-    str: Peer ID of the producer (returns the first match if multiple exist).
+    Returns:
+        Peer ID of the first matching producer.
 
-    KeyError: If no producer with the specified name is found.
+    Raises:
+        KeyError: If no producer with the specified name is found.
+
     """
     producers = get_producer_list(host=host, port=port)
 

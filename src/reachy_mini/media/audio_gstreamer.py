@@ -78,7 +78,16 @@ from gi.repository import GLib, Gst  # noqa: E402
 
 
 class GStreamerAudio(AudioBase):
-    """Audio implementation using GStreamer."""
+    """Audio implementation using GStreamer.
+
+    Extends ``AudioBase`` with two GStreamer-specific helpers:
+
+    - ``clear_output_buffer()``: flush queued playback data without stopping
+      the pipeline (no-op by default; useful before refilling the buffer).
+    - ``clear_player()``: flush the playback appsrc immediately via GStreamer
+      flush events, dropping any queued audio.
+
+    """
 
     def __init__(self, log_level: str = "INFO") -> None:
         """Initialize recording and playback pipelines.

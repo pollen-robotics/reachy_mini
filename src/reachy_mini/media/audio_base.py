@@ -1,9 +1,11 @@
 """Abstract base class for audio backends.
 
 Provides shared audio constants, sample-rate / channel accessors,
-``get_audio_sample()``, ``set_max_output_buffers()``, Direction of Arrival,
-and cleanup logic so that ``GStreamerAudio`` and ``GstWebRTCClient``
-don't duplicate them.
+``get_audio_sample()``, ``get_input/output_audio_samplerate()``,
+``get_input/output_channels()``, ``set_max_output_buffers()``,
+Direction of Arrival (``get_DoA()``), and ``cleanup()`` logic so that
+``GStreamerAudio`` and ``GstWebRTCClient`` (which inherits from both
+``AudioBase`` and ``CameraBase``) don't duplicate them.
 
 Subclasses must implement:
 - ``start_recording()``, ``stop_recording()``
