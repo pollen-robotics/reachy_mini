@@ -139,6 +139,7 @@ class ReachyMini:
         self.client, self.connection_mode = self._initialize_client(
             normalized_mode, timeout
         )
+        self._daemon_http_url = f"http://{self.client.host}:{self.client.port}"
         self.set_automatic_body_yaw(automatic_body_yaw)
         self._last_head_pose: Optional[npt.NDArray[np.float64]] = None
         self.is_recording = False
