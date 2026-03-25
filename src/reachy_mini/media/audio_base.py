@@ -9,7 +9,7 @@ Subclasses must implement:
 - ``start_recording()``, ``stop_recording()``
 - ``start_playing()``, ``stop_playing()``
 - ``push_audio_sample()``
-- ``play_sound()``, ``upload_sound()``, ``list_sounds()``, ``delete_sound()``
+- ``play_sound()``
 
 """
 
