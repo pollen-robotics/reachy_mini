@@ -30,12 +30,6 @@ from typing import TYPE_CHECKING, Optional, Union
 import numpy as np
 import numpy.typing as npt
 
-# Imported only for type annotations — avoids eagerly loading GStreamer (via
-# audio_base → gstreamer_utils → gi) when MediaBackend.NO_MEDIA is used.
-if TYPE_CHECKING:
-    from reachy_mini.media.audio_base import AudioBase
-    from reachy_mini.media.camera_base import CameraBase
-
 from reachy_mini.media.camera_constants import CameraSpecs
 
 
@@ -94,21 +88,16 @@ def _resolve_backend(backend: MediaBackend) -> MediaBackend:
     return backend
 
 
-# -- Type aliases for the concrete backends ----------------------------
-# Both GStreamerCamera and GstWebRTCClient expose the same camera API
-# (open, read, close, set_resolution, resolution, K, D, …).
-# Both GStreamerAudio and GstWebRTCClient expose the same audio API
-# (start_recording, get_audio_sample, push_audio_sample, play_sound, …).
-# We import them lazily inside the init helpers, but declare the union
-# here so the type annotations stay narrow.
+# Imported only for type annotations — avoids eagerly loading GStreamer (via
+# audio_gstreamer → audio_base → gstreamer_utils → gi) when MediaBackend.NO_MEDIA
+# is used.  The concrete classes are imported lazily inside the init helpers.
+if TYPE_CHECKING:
+    from reachy_mini.media.audio_gstreamer import GStreamerAudio
+    from reachy_mini.media.camera_gstreamer import GStreamerCamera
+    from reachy_mini.media.webrtc_client_gstreamer import GstWebRTCClient
 
-from reachy_mini.media.audio_gstreamer import GStreamerAudio  # noqa: E402
-from reachy_mini.media.camera_constants import CameraSpecs  # noqa: E402
-from reachy_mini.media.camera_gstreamer import GStreamerCamera  # noqa: E402
-from reachy_mini.media.webrtc_client_gstreamer import GstWebRTCClient  # noqa: E402
-
-CameraLike = Union[GStreamerCamera, GstWebRTCClient]
-AudioLike = Union[GStreamerAudio, GstWebRTCClient]
+    CameraLike = Union[GStreamerCamera, GstWebRTCClient]
+    AudioLike = Union[GStreamerAudio, GstWebRTCClient]
 
 
 class MediaManager:
