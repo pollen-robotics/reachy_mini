@@ -20,16 +20,22 @@ Architecture overview:
     * **NO_MEDIA** – skip all media initialisation (headless operation).
 """
 
+from __future__ import annotations
+
 import logging
 import warnings
 from enum import Enum
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 import numpy as np
 import numpy.typing as npt
 
-from reachy_mini.media.audio_base import AudioBase
-from reachy_mini.media.camera_base import CameraBase
+# Imported only for type annotations — avoids eagerly loading GStreamer (via
+# audio_base → gstreamer_utils → gi) when MediaBackend.NO_MEDIA is used.
+if TYPE_CHECKING:
+    from reachy_mini.media.audio_base import AudioBase
+    from reachy_mini.media.camera_base import CameraBase
+
 from reachy_mini.media.camera_constants import CameraSpecs
 
 
