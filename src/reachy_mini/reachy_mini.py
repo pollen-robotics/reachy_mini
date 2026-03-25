@@ -393,17 +393,13 @@ class ReachyMini:
         if body_yaw is not None and not isinstance(body_yaw, (int, float)):
             raise ValueError("body_yaw must be a float.")
 
-        if head is not None:
-            self.set_target_head_pose(head)
-
-        if antennas is not None:
-            self.set_target_antenna_joint_positions(list(antennas))
-            # self._set_joint_positions(
-            #     antennas_joint_positions=list(antennas),
-            # )
-
-        if body_yaw is not None:
-            self.set_target_body_yaw(body_yaw)
+        self.client.send_command(
+            SetFullTargetCmd(
+                head=head.flatten().tolist() if head is not None else None,
+                antennas=list(antennas) if antennas is not None else None,
+                body_yaw=body_yaw,
+            )
+        )
 
         self._last_head_pose = head
 
@@ -813,68 +809,6 @@ class ReachyMini:
 
         """
         self.client.send_command(SetBodyYawCmd(body_yaw=body_yaw))
-
-    def set_target_full(
-        self,
-        head: Optional[npt.NDArray[np.float64]] = None,  # 4x4 pose matrix
-        antennas: Optional[
-            Union[npt.NDArray[np.float64], List[float]]
-        ] = None,  # [right_angle, left_angle] (in rads)
-        body_yaw: Optional[float] = None,  # Body yaw angle in radians
-    ) -> None:
-        """Set head, antennas, and body_yaw in a single WebSocket message.
-
-        This is functionally equivalent to set_target() but sends one
-        SetFullTargetCmd instead of up to three separate commands,
-        reducing WebSocket overhead in tight control loops.
-
-        Args:
-            head: 4x4 pose matrix representing the head pose.
-            antennas: 1D array with two elements [right, left] in radians.
-            body_yaw: Body yaw angle in radians.
-
-        Raises:
-            ValueError: If none of head, antennas, or body_yaw are provided,
-                or if head shape is not (4, 4), or antennas length is not 2.
-
-        """
-        if head is None and antennas is None and body_yaw is None:
-            raise ValueError(
-                "At least one of head, antennas or body_yaw must be provided."
-            )
-
-        if head is not None and not head.shape == (4, 4):
-            raise ValueError(f"Head pose must be a 4x4 matrix, got shape {head.shape}.")
-
-        if antennas is not None and not len(antennas) == 2:
-            raise ValueError(
-                "Antennas must be a list or 1D np array with two elements."
-            )
-
-        if body_yaw is not None and not isinstance(body_yaw, (int, float)):
-            raise ValueError("body_yaw must be a float.")
-
-        self.client.send_command(
-            SetFullTargetCmd(
-                head=head.flatten().tolist() if head is not None else None,
-                antennas=list(antennas) if antennas is not None else None,
-                body_yaw=body_yaw,
-            )
-        )
-
-        self._last_head_pose = head
-
-        record: Dict[str, float | List[float] | List[List[float]]] = {
-            "time": time.time(),
-            "body_yaw": body_yaw if body_yaw is not None else 0.0,
-        }
-        if head is not None:
-            record["head"] = head.tolist()
-        if antennas is not None:
-            record["antennas"] = list(antennas)
-        if body_yaw is not None:
-            record["body_yaw"] = body_yaw
-        self._set_record_data(record)
 
     def start_recording(self) -> None:
         """Start recording data."""
