@@ -34,8 +34,11 @@ Example usage via MediaManager::
 
 """
 
+import os
 from threading import Thread
 from typing import Iterator, Optional
+
+import requests as _requests
 
 try:
     import gi
@@ -56,7 +59,6 @@ from reachy_mini.media.camera_constants import (
     ReachyMiniLiteCamSpecs,
 )
 from reachy_mini.media.gstreamer_utils import get_sample
-from reachy_mini.media.camera_utils import scale_intrinsics
 
 gi.require_version("Gst", "1.0")
 gi.require_version("GstApp", "1.0")
