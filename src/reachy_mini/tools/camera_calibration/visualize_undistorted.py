@@ -87,7 +87,7 @@ def main() -> None:
 
     # Connect to robot
     print("\nConnecting to Reachy Mini...")
-    reachy_mini = ReachyMini(media_backend="gstreamer")
+    reachy_mini = ReachyMini(media_backend="local")
 
     if (
         reachy_mini.media.camera is None

@@ -4,7 +4,7 @@ This example demonstrates how to capture a single frame from Reachy Mini's camer
 
 Run with:
 ```bash
-python take_picture.py --backend [default|gstreamer|webrtc]
+python take_picture.py --backend [default|local|webrtc]
 ```
 
 The captured image will be saved as `reachy_mini_picture.jpg` in the current directory.

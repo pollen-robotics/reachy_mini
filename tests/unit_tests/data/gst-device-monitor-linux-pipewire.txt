@@ -1,0 +1,740 @@
+Probing devices...
+
+
+Device found:
+
+	name  : Reachy Mini Camera Analog Stereo
+	class : Audio/Source
+	caps  : audio/x-raw, layout=interleaved, format=S16LE, rate=[ 8000, 48000 ], channels=2
+	properties:
+		is-default = false
+		alsa.card = 3
+		alsa.card_name = Reachy Mini Camera
+		alsa.class = generic
+		alsa.components = USB1bcf:28c4
+		alsa.device = 0
+		alsa.driver_name = snd_usb_audio
+		alsa.id = USB Audio
+		alsa.long_card_name = SunplusIT Inc Reachy Mini Camera at usb-0000:00:14.0-3.4, high speed
+		alsa.mixer_name = USB Mixer
+		alsa.name = USB Audio
+		alsa.resolution_bits = 16
+		alsa.subclass = generic-mix
+		alsa.subdevice = 0
+		alsa.subdevice_name = subdevice #0
+		alsa.sync.id = 00000000:00000000:00000000:00000000
+		api.alsa.card.longname = SunplusIT Inc Reachy Mini Camera at usb-0000:00:14.0-3.4, high speed
+		api.alsa.card.name = Reachy Mini Camera
+		api.alsa.path = front:3
+		api.alsa.pcm.card = 3
+		api.alsa.pcm.stream = capture
+		audio.channels = 2
+		audio.position = FL,FR
+		card.profile.device = 0
+		device.api = alsa
+		device.class = sound
+		device.icon-name = audio-card-analog
+		device.id = 82
+		device.profile.description = Analog Stereo
+		device.profile.name = analog-stereo
+		device.routes = 1
+		factory.name = api.alsa.pcm.source
+		media.class = Audio/Source
+		node.description = Reachy Mini Camera Analog Stereo
+		node.name = alsa_input.usb-SunplusIT_Inc_Reachy_Mini_Camera_J20251022V0-02.analog-stereo
+		node.nick = Reachy Mini Camera
+		node.pause-on-idle = false
+		object.path = alsa:acp:Camera:0:capture
+		port.group = capture
+		priority.driver = 2009
+		priority.session = 2009
+		factory.id = 19
+		clock.quantum-limit = 8192
+		client.id = 47
+		node.driver = true
+		node.loop.name = data-loop.0
+		library.name = audioconvert/libspa-audioconvert
+		object.id = 90
+		object.serial = 95
+	gst-launch-1.0 pipewiresrc target-object=95 ! ...
+
+
+Device found:
+
+	name  : Built-in Audio Analog Stereo
+	class : Audio/Source
+	caps  : audio/x-raw, layout=interleaved, format={ (string)S32LE, (string)S16LE }, rate=[ 44100, 192000 ], channels=2
+	properties:
+		is-default = false
+		alsa.card = 0
+		alsa.card_name = HDA Intel PCH
+		alsa.class = generic
+		alsa.components = HDA:10ec0255,145875d3,00100002 HDA:80862812,80860101,00100000
+		alsa.device = 0
+		alsa.driver_name = snd_hda_intel
+		alsa.id = ALC255 Analog
+		alsa.long_card_name = HDA Intel PCH at 0x622d168000 irq 200
+		alsa.mixer_name = Realtek ALC255
+		alsa.name = ALC255 Analog
+		alsa.resolution_bits = 16
+		alsa.subclass = generic-mix
+		alsa.subdevice = 0
+		alsa.subdevice_name = subdevice #0
+		alsa.sync.id = 00000000:00000000:00000000:00000000
+		api.alsa.card.longname = HDA Intel PCH at 0x622d168000 irq 200
+		api.alsa.card.name = HDA Intel PCH
+		api.alsa.path = front:0
+		api.alsa.pcm.card = 0
+		api.alsa.pcm.stream = capture
+		audio.channels = 2
+		audio.position = FL,FR
+		card.profile.device = 0
+		device.api = alsa
+		device.class = sound
+		device.icon-name = audio-card-analog
+		device.id = 51
+		device.profile.description = Analog Stereo
+		device.profile.name = analog-stereo
+		device.routes = 3
+		factory.name = api.alsa.pcm.source
+		media.class = Audio/Source
+		node.description = Built-in Audio Analog Stereo
+		node.name = alsa_input.pci-0000_00_1f.3.analog-stereo
+		node.nick = ALC255 Analog
+		node.pause-on-idle = false
+		object.path = alsa:acp:PCH:0:capture
+		port.group = capture
+		priority.driver = 2009
+		priority.session = 2009
+		factory.id = 19
+		clock.quantum-limit = 8192
+		client.id = 47
+		node.driver = true
+		node.loop.name = data-loop.0
+		library.name = audioconvert/libspa-audioconvert
+		object.id = 63
+		object.serial = 68
+	gst-launch-1.0 pipewiresrc target-object=68 ! ...
+
+
+Device found:
+
+	name  : Arducam_16MP Analog Stereo
+	class : Audio/Source
+	caps  : audio/x-raw, layout=interleaved, format=S16LE, rate=[ 8000, 48000 ], channels=2
+	properties:
+		is-default = true
+		alsa.card = 4
+		alsa.card_name = Arducam_16MP
+		alsa.class = generic
+		alsa.components = USB0c45:636d
+		alsa.device = 0
+		alsa.driver_name = snd_usb_audio
+		alsa.id = USB Audio
+		alsa.long_card_name = Arducam Technology Co., Ltd. Arducam_16MP at usb-0000:00:14.0-4.2.7, high speed
+		alsa.mixer_name = USB Mixer
+		alsa.name = USB Audio
+		alsa.resolution_bits = 16
+		alsa.subclass = generic-mix
+		alsa.subdevice = 0
+		alsa.subdevice_name = subdevice #0
+		alsa.sync.id = 00000000:00000000:00000000:00000000
+		api.alsa.card.longname = Arducam Technology Co., Ltd. Arducam_16MP at usb-0000:00:14.0-4.2.7, high speed
+		api.alsa.card.name = Arducam_16MP
+		api.alsa.path = front:4
+		api.alsa.pcm.card = 4
+		api.alsa.pcm.stream = capture
+		audio.channels = 2
+		audio.position = FL,FR
+		card.profile.device = 0
+		device.api = alsa
+		device.class = sound
+		device.icon-name = audio-card-analog
+		device.id = 50
+		device.profile.description = Analog Stereo
+		device.profile.name = analog-stereo
+		device.routes = 1
+		factory.name = api.alsa.pcm.source
+		media.class = Audio/Source
+		node.description = Arducam_16MP Analog Stereo
+		node.name = alsa_input.usb-Arducam_Technology_Co.__Ltd._Arducam_16MP_SN0001-02.analog-stereo
+		node.nick = Arducam_16MP
+		node.pause-on-idle = false
+		object.path = alsa:acp:Arducam16MP:0:capture
+		port.group = capture
+		priority.driver = 2009
+		priority.session = 2009
+		factory.id = 19
+		clock.quantum-limit = 8192
+		client.id = 47
+		node.driver = true
+		node.loop.name = data-loop.0
+		library.name = audioconvert/libspa-audioconvert
+		object.id = 61
+		object.serial = 66
+	gst-launch-1.0 pipewiresrc target-object=66 ! ...
+
+
+Device found:
+
+	name  : Reachy Mini Audio Analog Stereo
+	class : Audio/Source
+	caps  : audio/x-raw, layout=interleaved, format=S16LE, rate=16000, channels=2
+	properties:
+		is-default = false
+		alsa.card = 2
+		alsa.card_name = Reachy Mini Audio
+		alsa.class = generic
+		alsa.components = USB38fb:1001
+		alsa.device = 0
+		alsa.driver_name = snd_usb_audio
+		alsa.id = USB Audio
+		alsa.long_card_name = Pollen Robotics Reachy Mini Audio at usb-0000:00:14.0-3.1, high speed
+		alsa.mixer_name = USB Mixer
+		alsa.name = USB Audio
+		alsa.resolution_bits = 16
+		alsa.subclass = generic-mix
+		alsa.subdevice = 0
+		alsa.subdevice_name = subdevice #0
+		alsa.sync.id = 00000000:00000000:00000000:00000000
+		api.alsa.card.longname = Pollen Robotics Reachy Mini Audio at usb-0000:00:14.0-3.1, high speed
+		api.alsa.card.name = Reachy Mini Audio
+		api.alsa.path = front:2
+		api.alsa.pcm.card = 2
+		api.alsa.pcm.stream = capture
+		audio.channels = 2
+		audio.position = FL,FR
+		card.profile.device = 0
+		device.api = alsa
+		device.class = sound
+		device.icon-name = audio-card-analog
+		device.id = 49
+		device.profile.description = Analog Stereo
+		device.profile.name = analog-stereo
+		device.routes = 1
+		factory.name = api.alsa.pcm.source
+		media.class = Audio/Source
+		node.description = Reachy Mini Audio Analog Stereo
+		node.name = alsa_input.usb-Pollen_Robotics_Reachy_Mini_Audio___________________-00.analog-stereo
+		node.nick = Reachy Mini Audio
+		node.pause-on-idle = false
+		object.path = alsa:acp:Audio:0:capture
+		port.group = capture
+		priority.driver = 2009
+		priority.session = 2009
+		factory.id = 19
+		clock.quantum-limit = 8192
+		client.id = 47
+		node.driver = true
+		node.loop.name = data-loop.0
+		library.name = audioconvert/libspa-audioconvert
+		object.id = 59
+		object.serial = 59
+	gst-launch-1.0 pipewiresrc target-object=59 ! ...
+
+
+Device found:
+
+	name  : Built-in Audio Analog Stereo
+	class : Audio/Sink
+	caps  : audio/x-raw, layout=interleaved, format={ (string)S32LE, (string)S16LE }, rate=[ 44100, 48000 ], channels=2
+	properties:
+		is-default = false
+		alsa.card = 0
+		alsa.card_name = HDA Intel PCH
+		alsa.class = generic
+		alsa.components = HDA:10ec0255,145875d3,00100002 HDA:80862812,80860101,00100000
+		alsa.device = 0
+		alsa.driver_name = snd_hda_intel
+		alsa.id = ALC255 Analog
+		alsa.long_card_name = HDA Intel PCH at 0x622d168000 irq 200
+		alsa.mixer_name = Realtek ALC255
+		alsa.name = ALC255 Analog
+		alsa.resolution_bits = 16
+		alsa.subclass = generic-mix
+		alsa.subdevice = 0
+		alsa.subdevice_name = subdevice #0
+		alsa.sync.id = 00000000:00000000:00000000:00000000
+		api.alsa.card.longname = HDA Intel PCH at 0x622d168000 irq 200
+		api.alsa.card.name = HDA Intel PCH
+		api.alsa.path = front:0
+		api.alsa.pcm.card = 0
+		api.alsa.pcm.stream = playback
+		audio.channels = 2
+		audio.position = FL,FR
+		card.profile.device = 7
+		device.api = alsa
+		device.class = sound
+		device.icon-name = audio-card-analog
+		device.id = 51
+		device.profile.description = Analog Stereo
+		device.profile.name = analog-stereo
+		device.routes = 2
+		factory.name = api.alsa.pcm.sink
+		media.class = Audio/Sink
+		node.description = Built-in Audio Analog Stereo
+		node.name = alsa_output.pci-0000_00_1f.3.analog-stereo
+		node.nick = ALC255 Analog
+		node.pause-on-idle = false
+		object.path = alsa:acp:PCH:7:playback
+		port.group = playback
+		priority.driver = 1009
+		priority.session = 1009
+		factory.id = 19
+		clock.quantum-limit = 8192
+		client.id = 47
+		node.driver = true
+		node.loop.name = data-loop.0
+		library.name = audioconvert/libspa-audioconvert
+		object.id = 62
+		object.serial = 67
+	gst-launch-1.0 ... ! pipewiresink target-object=67
+
+
+Device found:
+
+	name  : Reachy Mini Audio Analog Stereo
+	class : Audio/Sink
+	caps  : audio/x-raw, layout=interleaved, format=S16LE, rate=16000, channels=2
+	properties:
+		is-default = false
+		alsa.card = 2
+		alsa.card_name = Reachy Mini Audio
+		alsa.class = generic
+		alsa.components = USB38fb:1001
+		alsa.device = 0
+		alsa.driver_name = snd_usb_audio
+		alsa.id = USB Audio
+		alsa.long_card_name = Pollen Robotics Reachy Mini Audio at usb-0000:00:14.0-3.1, high speed
+		alsa.mixer_name = USB Mixer
+		alsa.name = USB Audio
+		alsa.resolution_bits = 16
+		alsa.subclass = generic-mix
+		alsa.subdevice = 0
+		alsa.subdevice_name = subdevice #0
+		alsa.sync.id = 00000000:00000000:00000000:00000000
+		api.alsa.card.longname = Pollen Robotics Reachy Mini Audio at usb-0000:00:14.0-3.1, high speed
+		api.alsa.card.name = Reachy Mini Audio
+		api.alsa.path = front:2
+		api.alsa.pcm.card = 2
+		api.alsa.pcm.stream = playback
+		audio.channels = 2
+		audio.position = FL,FR
+		card.profile.device = 4
+		device.api = alsa
+		device.class = sound
+		device.icon-name = audio-card-analog
+		device.id = 49
+		device.profile.description = Analog Stereo
+		device.profile.name = analog-stereo
+		device.routes = 1
+		factory.name = api.alsa.pcm.sink
+		media.class = Audio/Sink
+		node.description = Reachy Mini Audio Analog Stereo
+		node.name = alsa_output.usb-Pollen_Robotics_Reachy_Mini_Audio___________________-00.analog-stereo
+		node.nick = Reachy Mini Audio
+		node.pause-on-idle = false
+		object.path = alsa:acp:Audio:4:playback
+		port.group = playback
+		priority.driver = 1009
+		priority.session = 1009
+		factory.id = 19
+		clock.quantum-limit = 8192
+		client.id = 47
+		node.driver = true
+		node.loop.name = data-loop.0
+		library.name = audioconvert/libspa-audioconvert
+		object.id = 58
+		object.serial = 58
+	gst-launch-1.0 ... ! pipewiresink target-object=58
+
+
+Device found:
+
+	name  : USB2.0 HD UVC WebCam (V4L2)
+	class : Video/Source
+	caps  : image/jpeg, width=1280, height=720, framerate=30/1
+	        image/jpeg, width=160, height=120, framerate=30/1
+	        image/jpeg, width=176, height=144, framerate=30/1
+	        image/jpeg, width=320, height=240, framerate=30/1
+	        image/jpeg, width=352, height=288, framerate=30/1
+	        image/jpeg, width=640, height=480, framerate=30/1
+	        video/x-raw, format=YUY2, interlace-mode=progressive, width=1280, height=720, framerate=10/1
+	        video/x-raw, format=YUY2, interlace-mode=progressive, width=160, height=120, framerate=30/1
+	        video/x-raw, format=YUY2, interlace-mode=progressive, width=176, height=144, framerate=30/1
+	        video/x-raw, format=YUY2, interlace-mode=progressive, width=320, height=240, framerate=30/1
+	        video/x-raw, format=YUY2, interlace-mode=progressive, width=352, height=288, framerate=30/1
+	        video/x-raw, format=YUY2, interlace-mode=progressive, width=640, height=480, framerate=30/1
+	properties:
+		is-default = true
+		api.v4l2.cap.bus_info = usb-0000:00:14.0-9
+		api.v4l2.cap.capabilities = 84a00001
+		api.v4l2.cap.card = USB2.0 HD UVC WebCam: USB2.0 HD
+		api.v4l2.cap.device-caps = 04200001
+		api.v4l2.cap.driver = uvcvideo
+		api.v4l2.cap.version = 6.12.74
+		api.v4l2.path = /dev/video0
+		device.api = v4l2
+		device.devids = [ 20736 ]
+		device.id = 43
+		device.product.id = 0x56a2
+		device.vendor.id = 0x13d3
+		factory.name = api.v4l2.source
+		media.class = Video/Source
+		node.description = USB2.0 HD UVC WebCam (V4L2)
+		node.name = v4l2_input.pci-0000_00_14.0-usb-0_9_1.0
+		node.nick = USB2.0 HD UVC WebCam
+		node.pause-on-idle = false
+		object.path = v4l2:/dev/video0
+		priority.session = 1000
+		factory.id = 11
+		client.id = 47
+		clock.quantum-limit = 8192
+		node.loop.name = data-loop.0
+		media.role = Camera
+		node.driver = true
+		object.id = 87
+		object.serial = 92
+	gst-launch-1.0 pipewiresrc target-object=92 ! ...
+
+
+Device found:
+
+	name  : Reachy Mini Camera (V4L2)
+	class : Video/Source
+	caps  : image/jpeg, width=3840, height=2592, framerate=30/1
+	        image/jpeg, width=1920, height=1080, framerate=60/1
+	        image/jpeg, width=3840, height=2160, framerate=30/1
+	        image/jpeg, width=3264, height=2448, framerate=30/1
+	        video/x-raw, format=YUY2, interlace-mode=progressive, width=3840, height=2592, framerate=1/1
+	        video/x-raw, format=YUY2, interlace-mode=progressive, width=1920, height=1080, framerate=5/1
+	        video/x-raw, format=YUY2, interlace-mode=progressive, width=3840, height=2160, framerate=1/1
+	        video/x-raw, format=YUY2, interlace-mode=progressive, width=3264, height=2448, framerate=1/1
+	properties:
+		is-default = false
+		api.v4l2.cap.bus_info = usb-0000:00:14.0-3.4
+		api.v4l2.cap.capabilities = 84a00001
+		api.v4l2.cap.card = Reachy Mini Camera: Reachy Mini
+		api.v4l2.cap.device-caps = 04200001
+		api.v4l2.cap.driver = uvcvideo
+		api.v4l2.cap.version = 6.12.74
+		api.v4l2.path = /dev/video2
+		device.api = v4l2
+		device.devids = [ 20738 ]
+		device.id = 35
+		device.product.id = 0x28c4
+		device.vendor.id = 0x1bcf
+		factory.name = api.v4l2.source
+		media.class = Video/Source
+		node.description = Reachy Mini Camera (V4L2)
+		node.name = v4l2_input.pci-0000_00_14.0-usb-0_3.4_1.0
+		node.nick = Reachy Mini Camera
+		node.pause-on-idle = false
+		object.path = v4l2:/dev/video2
+		priority.session = 980
+		factory.id = 11
+		client.id = 47
+		clock.quantum-limit = 8192
+		node.loop.name = data-loop.0
+		media.role = Camera
+		node.driver = true
+		object.id = 83
+		object.serial = 88
+	gst-launch-1.0 pipewiresrc target-object=88 ! ...
+
+
+Device found:
+
+	name  : Arducam_16MP (V4L2)
+	class : Video/Source
+	caps  : image/jpeg, width=1920, height=1080, framerate=30/1
+	        image/jpeg, width=4656, height=3496, framerate=10/1
+	        image/jpeg, width=3840, height=2160, framerate=10/1
+	        image/jpeg, width=2592, height=1944, framerate=10/1
+	        image/jpeg, width=2320, height=1744, framerate=30/1
+	        image/jpeg, width=1600, height=1200, framerate=30/1
+	        image/jpeg, width=1280, height=720, framerate=30/1
+	        image/jpeg, width=800, height=600, framerate=30/1
+	        image/jpeg, width=640, height=480, framerate=30/1
+	        image/jpeg, width=320, height=240, framerate=30/1
+	        video/x-raw, format=YUY2, interlace-mode=progressive, width=1280, height=720, framerate=10/1
+	        video/x-raw, format=YUY2, interlace-mode=progressive, width=1600, height=1200, framerate=5/1
+	        video/x-raw, format=YUY2, interlace-mode=progressive, width=800, height=600, framerate=15/1
+	        video/x-raw, format=YUY2, interlace-mode=progressive, width=640, height=480, framerate=20/1
+	        video/x-raw, format=YUY2, interlace-mode=progressive, width=320, height=240, framerate=20/1
+	properties:
+		is-default = false
+		api.v4l2.cap.bus_info = usb-0000:00:14.0-4.2.7
+		api.v4l2.cap.capabilities = 84a00001
+		api.v4l2.cap.card = Arducam_16MP: Arducam_16MP
+		api.v4l2.cap.device-caps = 04200001
+		api.v4l2.cap.driver = uvcvideo
+		api.v4l2.cap.version = 6.12.74
+		api.v4l2.path = /dev/video4
+		device.api = v4l2
+		device.devids = [ 20740 ]
+		device.id = 44
+		device.product.id = 0x636d
+		device.vendor.id = 0x0c45
+		factory.name = api.v4l2.source
+		media.class = Video/Source
+		node.description = Arducam_16MP (V4L2)
+		node.name = v4l2_input.pci-0000_00_14.0-usb-0_4.2.7_1.0
+		node.nick = Arducam_16MP
+		node.pause-on-idle = false
+		object.path = v4l2:/dev/video4
+		priority.session = 960
+		factory.id = 11
+		client.id = 47
+		clock.quantum-limit = 8192
+		node.loop.name = data-loop.0
+		media.role = Camera
+		node.driver = true
+		object.id = 85
+		object.serial = 90
+	gst-launch-1.0 pipewiresrc target-object=90 ! ...
+
+
+Device found:
+
+	name  : GA106 High Definition Audio Controller Digital Stereo (HDMI)
+	class : Audio/Sink
+	caps  : audio/x-raw, layout=interleaved, format={ (string)S32LE, (string)S16LE }, rate=[ 32000, 96000 ], channels=2
+	properties:
+		is-default = true
+		alsa.card = 1
+		alsa.card_name = HDA NVidia
+		alsa.class = generic
+		alsa.components = HDA:10de009f,145875d3,00100100
+		alsa.device = 3
+		alsa.driver_name = snd_hda_intel
+		alsa.id = HDMI 0
+		alsa.long_card_name = HDA NVidia at 0x60080000 irq 17
+		alsa.mixer_name = Nvidia GPU 9f HDMI/DP
+		alsa.name = G27QC A
+		alsa.resolution_bits = 16
+		alsa.subclass = generic-mix
+		alsa.subdevice = 0
+		alsa.subdevice_name = subdevice #0
+		alsa.sync.id = 00000000:00000000:00000000:00000000
+		api.alsa.card.longname = HDA NVidia at 0x60080000 irq 17
+		api.alsa.card.name = HDA NVidia
+		api.alsa.path = hdmi:1
+		api.alsa.pcm.card = 1
+		api.alsa.pcm.stream = playback
+		audio.channels = 2
+		audio.position = FL,FR
+		card.profile.device = 4
+		device.api = alsa
+		device.class = sound
+		device.icon-name = audio-card-analog
+		device.id = 48
+		device.profile.description = Digital Stereo (HDMI)
+		device.profile.name = hdmi-stereo
+		device.routes = 1
+		factory.name = api.alsa.pcm.sink
+		iec958.codecs = ["PCM"]
+		media.class = Audio/Sink
+		node.description = GA106 High Definition Audio Controller Digital Stereo (HDMI)
+		node.name = alsa_output.pci-0000_01_00.1.hdmi-stereo
+		node.nick = G27QC A
+		node.pause-on-idle = false
+		object.path = alsa:acp:NVidia:4:playback
+		port.group = playback
+		priority.driver = 696
+		priority.session = 696
+		factory.id = 19
+		clock.quantum-limit = 8192
+		client.id = 47
+		node.driver = true
+		node.loop.name = data-loop.0
+		library.name = audioconvert/libspa-audioconvert
+		object.id = 94
+		object.serial = 255
+	gst-launch-1.0 ... ! pipewiresink target-object=255
+
+
+Device found:
+
+	name  : llvmpipe (LLVM 19.1.7, 256 bits)
+	class : Video/Sink
+	caps  : video/x-raw(memory:VulkanImage)
+	properties:
+		vulkan.name = llvmpipe (LLVM 19.1.7, 256 bits)
+		vulkan.type = CPU
+		vulkan.api.version = 1.4.305
+		vulkan.api.version.major = 1 (0x00000001)
+		vulkan.api.version.minor = 4 (0x00000004)
+		vulkan.api.version.patch = 305 (0x00000131)
+		vulkan.driver.version = 0.0.1
+		vulkan.driver.version.major = 0 (0x00000000)
+		vulkan.driver.version.minor = 0 (0x00000000)
+		vulkan.driver.version.patch = 1 (0x00000001)
+		vulkan.vendor.id = 65541 (0x00010005)
+		vulkan.device.id = 0 (0x00000000)
+		vulkan.memory.n_heaps = 1 (0x00000001)
+		vulkan.memory.heaps.0.size = 33390682112
+		vulkan.memory.heaps.0.flags = 1 (0x00000001)
+		vulkan.memory.heaps.0.flags.str = device-local
+		vulkan.memory.n_types = 1 (0x00000001)
+		vulkan.memory.types.0.heap = 0 (0x00000000)
+		vulkan.memory.types.0.flags = 15 (0x0000000f)
+		vulkan.memory.types.0.flags.str = device-local|host-visible|host-coherent|host-cached
+		vulkan.n_queue_families = 1 (0x00000001)
+		vulkan.queue_family.0.n_queues = 1 (0x00000001)
+		vulkan.queue_family.0.flags = 15 (0x0000000f)
+		vulkan.queue_family.0.flags.str = graphics|compute|transfer|sparse-binding
+		vulkan.queue_family.0.timestamp_resolution = 64 (0x00000040)
+		vulkan.queue_family.0.min_image_transfer_granuality.width = 1 (0x00000001)
+		vulkan.queue_family.0.min_image_transfer_granuality.height = 1 (0x00000001)
+		vulkan.queue_family.0.min_image_transfer_granuality.depth = 1 (0x00000001)
+		is-default = false
+	gst-launch-1.0 ... ! vulkansink
+
+
+Device found:
+
+	name  : NVIDIA GeForce RTX 3060 Laptop GPU
+	class : Video/Sink
+	caps  : video/x-raw(memory:VulkanImage)
+	properties:
+		vulkan.name = NVIDIA GeForce RTX 3060 Laptop GPU
+		vulkan.type = discrete
+		vulkan.api.version = 1.3.277
+		vulkan.api.version.major = 1 (0x00000001)
+		vulkan.api.version.minor = 3 (0x00000003)
+		vulkan.api.version.patch = 277 (0x00000115)
+		vulkan.driver.version = 550.652.64
+		vulkan.driver.version.major = 550 (0x00000226)
+		vulkan.driver.version.minor = 652 (0x0000028c)
+		vulkan.driver.version.patch = 64 (0x00000040)
+		vulkan.vendor.id = 4318 (0x000010de)
+		vulkan.device.id = 9504 (0x00002520)
+		vulkan.memory.n_heaps = 2 (0x00000002)
+		vulkan.memory.heaps.0.size = 6442450944
+		vulkan.memory.heaps.0.flags = 1 (0x00000001)
+		vulkan.memory.heaps.0.flags.str = device-local
+		vulkan.memory.heaps.1.size = 25043011584
+		vulkan.memory.heaps.1.flags = 0 (0x00000000)
+		vulkan.memory.heaps.1.flags.str = 
+		vulkan.memory.n_types = 6 (0x00000006)
+		vulkan.memory.types.0.heap = 1 (0x00000001)
+		vulkan.memory.types.0.flags = 0 (0x00000000)
+		vulkan.memory.types.0.flags.str = 
+		vulkan.memory.types.1.heap = 0 (0x00000000)
+		vulkan.memory.types.1.flags = 1 (0x00000001)
+		vulkan.memory.types.1.flags.str = device-local
+		vulkan.memory.types.2.heap = 0 (0x00000000)
+		vulkan.memory.types.2.flags = 1 (0x00000001)
+		vulkan.memory.types.2.flags.str = device-local
+		vulkan.memory.types.3.heap = 1 (0x00000001)
+		vulkan.memory.types.3.flags = 6 (0x00000006)
+		vulkan.memory.types.3.flags.str = host-visible|host-coherent
+		vulkan.memory.types.4.heap = 1 (0x00000001)
+		vulkan.memory.types.4.flags = 14 (0x0000000e)
+		vulkan.memory.types.4.flags.str = host-visible|host-coherent|host-cached
+		vulkan.memory.types.5.heap = 0 (0x00000000)
+		vulkan.memory.types.5.flags = 7 (0x00000007)
+		vulkan.memory.types.5.flags.str = device-local|host-visible|host-coherent
+		vulkan.n_queue_families = 6 (0x00000006)
+		vulkan.queue_family.0.n_queues = 16 (0x00000010)
+		vulkan.queue_family.0.flags = 15 (0x0000000f)
+		vulkan.queue_family.0.flags.str = graphics|compute|transfer|sparse-binding
+		vulkan.queue_family.0.timestamp_resolution = 64 (0x00000040)
+		vulkan.queue_family.0.min_image_transfer_granuality.width = 1 (0x00000001)
+		vulkan.queue_family.0.min_image_transfer_granuality.height = 1 (0x00000001)
+		vulkan.queue_family.0.min_image_transfer_granuality.depth = 1 (0x00000001)
+		vulkan.queue_family.1.n_queues = 2 (0x00000002)
+		vulkan.queue_family.1.flags = 12 (0x0000000c)
+		vulkan.queue_family.1.flags.str = transfer|sparse-binding
+		vulkan.queue_family.1.timestamp_resolution = 64 (0x00000040)
+		vulkan.queue_family.1.min_image_transfer_granuality.width = 1 (0x00000001)
+		vulkan.queue_family.1.min_image_transfer_granuality.height = 1 (0x00000001)
+		vulkan.queue_family.1.min_image_transfer_granuality.depth = 1 (0x00000001)
+		vulkan.queue_family.2.n_queues = 8 (0x00000008)
+		vulkan.queue_family.2.flags = 14 (0x0000000e)
+		vulkan.queue_family.2.flags.str = compute|transfer|sparse-binding
+		vulkan.queue_family.2.timestamp_resolution = 64 (0x00000040)
+		vulkan.queue_family.2.min_image_transfer_granuality.width = 1 (0x00000001)
+		vulkan.queue_family.2.min_image_transfer_granuality.height = 1 (0x00000001)
+		vulkan.queue_family.2.min_image_transfer_granuality.depth = 1 (0x00000001)
+		vulkan.queue_family.3.n_queues = 1 (0x00000001)
+		vulkan.queue_family.3.flags = 44 (0x0000002c)
+		vulkan.queue_family.3.flags.str = transfer|sparse-binding|decode
+		vulkan.queue_family.3.timestamp_resolution = 32 (0x00000020)
+		vulkan.queue_family.3.min_image_transfer_granuality.width = 1 (0x00000001)
+		vulkan.queue_family.3.min_image_transfer_granuality.height = 1 (0x00000001)
+		vulkan.queue_family.3.min_image_transfer_granuality.depth = 1 (0x00000001)
+		vulkan.queue_family.4.n_queues = 1 (0x00000001)
+		vulkan.queue_family.4.flags = 76 (0x0000004c)
+		vulkan.queue_family.4.flags.str = transfer|sparse-binding|encode
+		vulkan.queue_family.4.timestamp_resolution = 32 (0x00000020)
+		vulkan.queue_family.4.min_image_transfer_granuality.width = 1 (0x00000001)
+		vulkan.queue_family.4.min_image_transfer_granuality.height = 1 (0x00000001)
+		vulkan.queue_family.4.min_image_transfer_granuality.depth = 1 (0x00000001)
+		vulkan.queue_family.5.n_queues = 1 (0x00000001)
+		vulkan.queue_family.5.flags = 268 (0x0000010c)
+		vulkan.queue_family.5.flags.str = transfer|sparse-binding
+		vulkan.queue_family.5.timestamp_resolution = 64 (0x00000040)
+		vulkan.queue_family.5.min_image_transfer_granuality.width = 1 (0x00000001)
+		vulkan.queue_family.5.min_image_transfer_granuality.height = 1 (0x00000001)
+		vulkan.queue_family.5.min_image_transfer_granuality.depth = 1 (0x00000001)
+		is-default = false
+	gst-launch-1.0 ... ! vulkansink
+
+
+Device found:
+
+	name  : Intel(R) UHD Graphics (TGL GT1)
+	class : Video/Sink
+	caps  : video/x-raw(memory:VulkanImage)
+	properties:
+		vulkan.name = Intel(R) UHD Graphics (TGL GT1)
+		vulkan.type = integrated
+		vulkan.api.version = 1.4.305
+		vulkan.api.version.major = 1 (0x00000001)
+		vulkan.api.version.minor = 4 (0x00000004)
+		vulkan.api.version.patch = 305 (0x00000131)
+		vulkan.driver.version = 25.0.7
+		vulkan.driver.version.major = 25 (0x00000019)
+		vulkan.driver.version.minor = 0 (0x00000000)
+		vulkan.driver.version.patch = 7 (0x00000007)
+		vulkan.vendor.id = 32902 (0x00008086)
+		vulkan.device.id = 39520 (0x00009a60)
+		vulkan.memory.n_heaps = 1 (0x00000001)
+		vulkan.memory.heaps.0.size = 16695341056
+		vulkan.memory.heaps.0.flags = 1 (0x00000001)
+		vulkan.memory.heaps.0.flags.str = device-local
+		vulkan.memory.n_types = 7 (0x00000007)
+		vulkan.memory.types.0.heap = 0 (0x00000000)
+		vulkan.memory.types.0.flags = 1 (0x00000001)
+		vulkan.memory.types.0.flags.str = device-local
+		vulkan.memory.types.1.heap = 0 (0x00000000)
+		vulkan.memory.types.1.flags = 7 (0x00000007)
+		vulkan.memory.types.1.flags.str = device-local|host-visible|host-coherent
+		vulkan.memory.types.2.heap = 0 (0x00000000)
+		vulkan.memory.types.2.flags = 15 (0x0000000f)
+		vulkan.memory.types.2.flags.str = device-local|host-visible|host-coherent|host-cached
+		vulkan.memory.types.3.heap = 0 (0x00000000)
+		vulkan.memory.types.3.flags = 33 (0x00000021)
+		vulkan.memory.types.3.flags.str = device-local|protected
+		vulkan.memory.types.4.heap = 0 (0x00000000)
+		vulkan.memory.types.4.flags = 1 (0x00000001)
+		vulkan.memory.types.4.flags.str = device-local
+		vulkan.memory.types.5.heap = 0 (0x00000000)
+		vulkan.memory.types.5.flags = 7 (0x00000007)
+		vulkan.memory.types.5.flags.str = device-local|host-visible|host-coherent
+		vulkan.memory.types.6.heap = 0 (0x00000000)
+		vulkan.memory.types.6.flags = 15 (0x0000000f)
+		vulkan.memory.types.6.flags.str = device-local|host-visible|host-coherent|host-cached
+		vulkan.n_queue_families = 1 (0x00000001)
+		vulkan.queue_family.0.n_queues = 1 (0x00000001)
+		vulkan.queue_family.0.flags = 31 (0x0000001f)
+		vulkan.queue_family.0.flags.str = graphics|compute|transfer|sparse-binding|protected
+		vulkan.queue_family.0.timestamp_resolution = 36 (0x00000024)
+		vulkan.queue_family.0.min_image_transfer_granuality.width = 1 (0x00000001)
+		vulkan.queue_family.0.min_image_transfer_granuality.height = 1 (0x00000001)
+		vulkan.queue_family.0.min_image_transfer_granuality.depth = 1 (0x00000001)
+		is-default = true
+	gst-launch-1.0 ... ! vulkansink
+

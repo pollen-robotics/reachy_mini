@@ -11,9 +11,9 @@ import logging
 import time
 from typing import Dict, List, Literal, Optional, Union, cast
 
-import cv2
 import numpy as np
 import numpy.typing as npt
+import requests
 from asgiref.sync import async_to_sync
 from scipy.spatial.transform import Rotation as R
 
@@ -33,6 +33,8 @@ from reachy_mini.io.protocol import (
     StopRecordingCmd,
 )
 from reachy_mini.io.ws_client import WSClient
+from reachy_mini.media.camera_constants import get_camera_specs_by_name
+from reachy_mini.media.camera_utils import undistort_points
 from reachy_mini.media.media_manager import MediaBackend, MediaManager
 from reachy_mini.motion.move import Move
 from reachy_mini.utils.interpolation import InterpolationTechnique, minimum_jerk
@@ -119,9 +121,9 @@ class ReachyMini:
             timeout (float): Timeout for the client connection, defaults to 5.0 seconds.
             automatic_body_yaw (bool): If True, the body yaw will be used to compute the IK and FK. Default is False.
             log_level (str): Logging level, defaults to "INFO".
-            media_backend (str): Use "no_media" to disable media entirely. Any other value
-                triggers auto-detection: Lite uses OpenCV, Wireless uses GStreamer (local)
-                or WebRTC (remote) based on environment.
+            media_backend (str): ``"default"`` for auto-detection (LOCAL if on the
+                same machine as the daemon, otherwise WebRTC), ``"no_media"`` to
+                skip all media, or a specific ``MediaBackend`` value name.
 
         It will try to connect to the daemon, and if it fails, it will raise an exception.
 
@@ -142,6 +144,9 @@ class ReachyMini:
         self._last_head_pose: Optional[npt.NDArray[np.float64]] = None
         self.is_recording = False
         self._move_cancelled = False
+        self._media_released = False
+        self._log_level = log_level
+        self._media_backend = media_backend
 
         self.T_head_cam = np.eye(4)
         self.T_head_cam[:3, 3][:] = [0.0437, 0, 0.0512]
@@ -170,6 +175,8 @@ class ReachyMini:
 
     def __exit__(self, exc_type, exc_value, traceback) -> None:  # type: ignore [no-untyped-def]
         """Context manager exit point for Reachy Mini."""
+        if self._media_released:
+            self.acquire_media()
         self.media_manager.close()
         self.client.disconnect()
 
@@ -177,6 +184,68 @@ class ReachyMini:
     def media(self) -> MediaManager:
         """Expose the MediaManager instance used by ReachyMini."""
         return self.media_manager
+
+    @property
+    def _daemon_http_url(self) -> str:
+        """Base URL for the daemon's HTTP API."""
+        return f"http://{self.client.host}:{self.client.port}"
+
+    @property
+    def media_released(self) -> bool:
+        """Whether the daemon's media hardware has been released for direct access."""
+        return self._media_released
+
+    def release_media(self) -> None:
+        """Tell the daemon to release camera and audio hardware.
+
+        After calling this, the camera and microphone are available for direct
+        access via OpenCV / sounddevice / etc.  The SDK's media_manager is
+        switched to NO_MEDIA.
+
+        Idempotent: safe to call multiple times.
+        """
+        if self._media_released:
+            return
+
+        try:
+            resp = requests.post(
+                f"{self._daemon_http_url}/api/media/release", timeout=10
+            )
+            resp.raise_for_status()
+        except requests.RequestException as e:
+            self.logger.warning(
+                f"Failed to release media on daemon (media may already be released): {e}"
+            )
+
+        if hasattr(self, "media_manager"):
+            self.media_manager.close()
+        self._media_released = True
+        self.logger.info("Media released — camera/mic available for direct access.")
+
+    def acquire_media(self) -> None:
+        """Tell the daemon to re-acquire camera and audio hardware.
+
+        The SDK's media_manager is re-created with the original backend
+        auto-detection logic.
+
+        Idempotent: safe to call multiple times.
+        """
+        if not self._media_released:
+            return
+
+        try:
+            resp = requests.post(
+                f"{self._daemon_http_url}/api/media/acquire", timeout=10
+            )
+            resp.raise_for_status()
+        except requests.RequestException as e:
+            self.logger.error(f"Failed to re-acquire media on daemon: {e}")
+            return
+
+        self.media_manager.close()
+        self.media_manager = self._configure_mediamanager(self._media_backend, self._log_level)
+        self._media_released = False
+        self.logger.info("Media re-acquired by daemon.")
 
     @property
     def imu(self) -> Dict[str, List[float] | float] | None:
@@ -211,56 +280,75 @@ class ReachyMini:
     def _configure_mediamanager(
         self, media_backend: str, log_level: str
     ) -> MediaManager:
-        daemon_status = self.client.get_status()
-        is_wireless = daemon_status.wireless_version
+        """Select the right media backend and return a configured MediaManager.
 
-        # If no_media is requested, skip all media initialization
+        Decision logic (in order of priority):
+        1. User explicitly passed ``"no_media"`` → NO_MEDIA.
+        2. Daemon reports ``no_media=True`` → NO_MEDIA (daemon has no media).
+        3. The daemon's IPC camera endpoint is reachable locally → LOCAL.
+        4. Otherwise → WEBRTC (remote streaming from daemon).
+
+        If the user passes a specific backend string that maps to an enum
+        value it is honoured directly (with deprecation warnings for old
+        names handled by ``_resolve_backend``).
+        """
+        daemon_status = self.client.get_status()
+
+        # Resolve camera specs from the daemon-detected camera name
+        specs_name = getattr(daemon_status, "camera_specs_name", "")
+        camera_specs = get_camera_specs_by_name(specs_name) if specs_name else None
+
+        # Honour explicit no_media from user or daemon
         if media_backend.lower() == "no_media":
-            self.logger.info("No media backend requested.")
+            self.logger.info("No media backend requested by user.")
+            # If the daemon owns media hardware, release it for direct access
+            if (
+                not getattr(daemon_status, "no_media", False)
+                and not self._media_released
+            ):
+                self.release_media()
             mbackend = MediaBackend.NO_MEDIA
-        else:
-            if is_wireless:
-                if is_local_camera_available():
-                    # Local client on CM4: use GStreamer to read from unix socket
-                    # This avoids WebRTC encode/decode overhead
-                    if "no_video" in media_backend.lower():
-                        mbackend = MediaBackend.GSTREAMER_NO_VIDEO
-                        self.logger.info(
-                            "Auto-detected: Wireless + local camera socket. "
-                            "Using GStreamer audio-only backend (no WebRTC overhead)."
-                        )
-                    else:
-                        mbackend = MediaBackend.GSTREAMER
-                        self.logger.info(
-                            "Auto-detected: Wireless + local camera socket. "
-                            "Using GStreamer backend (no WebRTC overhead)."
-                        )
-                else:
-                    # Remote client: use WebRTC for streaming
-                    self.logger.info(
-                        "Auto-detected: Wireless + remote client. "
-                        "Using WebRTC backend for streaming."
-                    )
-                    mbackend = MediaBackend.WEBRTC
+        elif getattr(daemon_status, "no_media", False):
+            self.logger.info(
+                "Daemon reports no_media=True — skipping media initialisation."
+            )
+            mbackend = MediaBackend.NO_MEDIA
+        elif media_backend.lower() in ("default", "auto"):
+            # Auto-detect: local IPC if available, else WebRTC.
+            # IPC only makes sense when the daemon runs on the same machine
+            # (connection_mode == "localhost_only").  For network connections
+            # (wireless robot) we always stream via WebRTC.
+            if self.connection_mode == "localhost_only" and is_local_camera_available():
+                self.logger.info(
+                    "Auto-detected local IPC endpoint. Using LOCAL backend."
+                )
+                mbackend = MediaBackend.LOCAL
             else:
-                # Lite version: use specified backend if compatible
-                try:
-                    mbackend = MediaBackend(media_backend.lower())
-                except ValueError:
-                    self.logger.warning(
-                        f"Invalid media backend on Lite: {media_backend}, using default backend."
-                    )
-                    mbackend = (
-                        MediaBackend.DEFAULT_NO_VIDEO
-                        if "no_video" in media_backend.lower()
-                        else MediaBackend.DEFAULT
-                    )
+                self.logger.info(
+                    "No local IPC endpoint. Using WebRTC backend for streaming."
+                )
+                mbackend = MediaBackend.WEBRTC
+        else:
+            # User specified a particular backend name — try to resolve it
+            try:
+                mbackend = MediaBackend(media_backend.lower())
+            except ValueError:
+                self.logger.warning(
+                    f"Unknown media backend '{media_backend}', falling back to auto-detect."
+                )
+                if (
+                    self.connection_mode == "localhost_only"
+                    and is_local_camera_available()
+                ):
+                    mbackend = MediaBackend.LOCAL
+                else:
+                    mbackend = MediaBackend.WEBRTC
 
         return MediaManager(
-            use_sim=daemon_status.simulation_enabled or False,
             backend=mbackend,
             log_level=log_level,
-            signalling_host=daemon_status.wlan_ip or "",
+            signalling_host=daemon_status.wlan_ip or "localhost",
+            camera_specs=camera_specs,
         )
 
     def _normalize_connection_mode(
@@ -552,12 +640,12 @@ class ReachyMini:
         if self.media.camera is None or self.media.camera.camera_specs is None:
             raise RuntimeError("Camera specs not set.")
 
-        points = np.array([[[u, v]]], dtype=np.float32)
-        x_n, y_n = cv2.undistortPoints(
-            points,
+        x_n, y_n = undistort_points(
+            u,
+            v,
             self.media.camera.K,  # type: ignore
-            self.media.camera.D,
-        )[0, 0]
+            self.media.camera.D,  # type: ignore
+        )
 
         ray_cam = np.array([x_n, y_n, 1.0])
         ray_cam /= np.linalg.norm(ray_cam)
