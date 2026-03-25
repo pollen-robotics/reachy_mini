@@ -119,6 +119,15 @@ If it doesn't help, you can also try to increase D to 10 on the same motors.
 </details>
 
 <details>
+<summary><strong>Head makes squeaking or grinding noises during movement</strong></summary>
+
+If you hear high-pitched squeaking, grinding, or friction noises when the robot's head moves, the spherical joints (ball joints) on the Stewart platform rods likely need maintenance. You may also notice dark dust or residue around the connecting rods.
+
+This is normal wear over time. Follow the [Spherical Joints Maintenance guide](./troubleshooting/spherical_joints_maintenance.md) to clean and re-grease the joints.
+
+</details>
+
+<details>
 <summary><strong>Image is dark on the Lite version</strong></summary>
 
 **➡️ Quick Fix: Adjust Exposure Time in Camera Settings**
