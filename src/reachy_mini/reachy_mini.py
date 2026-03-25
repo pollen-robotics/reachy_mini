@@ -24,6 +24,7 @@ from reachy_mini.io.protocol import (
     SetAntennasCmd,
     SetAutomaticBodyYawCmd,
     SetBodyYawCmd,
+    SetFullTargetCmd,
     SetGravityCompensationCmd,
     SetHeadJointsCmd,
     SetTargetCmd,
@@ -481,17 +482,13 @@ class ReachyMini:
         if body_yaw is not None and not isinstance(body_yaw, (int, float)):
             raise ValueError("body_yaw must be a float.")
 
-        if head is not None:
-            self.set_target_head_pose(head)
-
-        if antennas is not None:
-            self.set_target_antenna_joint_positions(list(antennas))
-            # self._set_joint_positions(
-            #     antennas_joint_positions=list(antennas),
-            # )
-
-        if body_yaw is not None:
-            self.set_target_body_yaw(body_yaw)
+        self.client.send_command(
+            SetFullTargetCmd(
+                head=head.flatten().tolist() if head is not None else None,
+                antennas=list(antennas) if antennas is not None else None,
+                body_yaw=body_yaw,
+            )
+        )
 
         self._last_head_pose = head
 
