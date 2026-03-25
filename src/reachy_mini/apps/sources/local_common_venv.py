@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import os
 import platform
 import re
 import shutil
@@ -495,6 +496,24 @@ async def install_package(
 
             # Download the space
             logger.info("Attempting to download all files from space...")
+
+            # On Windows, there is a chance snapshot_download triggers an uncaught symlink
+            # exception (are_symlinks_supported falsely returns True). This is a workaround to
+            # make sure are_symlinks_supported consistently returns False before snapshot_download.
+            if _is_windows():
+                from huggingface_hub import constants as hf_hub_constants
+                from huggingface_hub.file_download import (
+                    are_symlinks_supported,
+                    repo_folder_name,
+                )
+
+                storage_folder = os.path.join(
+                    hf_hub_constants.HF_HUB_CACHE,
+                    repo_folder_name(repo_id=repo_id, repo_type="space"),
+                )
+                os.makedirs(storage_folder, exist_ok=True)
+                are_symlinks_supported(storage_folder)
+
             # For private spaces, we need to be careful about missing files like .gitattributes
             # snapshot_download can fail on 404 for optional git metadata files
             target = await asyncio.to_thread(
@@ -511,8 +530,6 @@ async def install_package(
             logger.info(f"Downloaded to: {target}")
 
             # Check what files were downloaded to help with debugging
-            import os
-
             downloaded_files = []
             for root, dirs, files in os.walk(target):
                 for file in files:

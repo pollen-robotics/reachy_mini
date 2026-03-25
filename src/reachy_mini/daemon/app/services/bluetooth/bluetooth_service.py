@@ -5,6 +5,7 @@ Includes a fixed NoInputNoOutput agent for automatic Just Works pairing.
 """
 # mypy: ignore-errors
 
+import fcntl
 import logging
 import os
 import subprocess
@@ -274,7 +275,9 @@ class CommandCharacteristic(Characteristic):
         self.service.response_char.value = [
             dbus.Byte(b) for b in response.encode("utf-8")
         ]
-        logger.info(f"Command received: {response}")
+        cmd_str = command_bytes.decode("utf-8", errors="replace").strip()
+        if cmd_str.upper() != "JOURNAL_READ":
+            logger.info(f"Command received: {response}")
 
 
 class ResponseCharacteristic(Characteristic):
@@ -283,6 +286,35 @@ class ResponseCharacteristic(Characteristic):
     def __init__(self, bus, index, service):
         """Initialize the Response Characteristic."""
         super().__init__(bus, index, RESPONSE_CHAR_UUID, ["read", "notify"], service)
+        self.notifying = False
+
+    @dbus.service.method(GATT_CHRC_IFACE, in_signature="", out_signature="")
+    def StartNotify(self):
+        """Handle BlueZ notification subscription from a client."""
+        self.notifying = True
+        logger.info("Response notifications enabled")
+
+    @dbus.service.method(GATT_CHRC_IFACE, in_signature="", out_signature="")
+    def StopNotify(self):
+        """Handle BlueZ notification unsubscription from a client."""
+        self.notifying = False
+        logger.info("Response notifications disabled")
+        # Stop journal streaming if running (client disconnected without JOURNAL_STOP)
+        if hasattr(self.service, '_bt_service') and self.service._bt_service:
+            self.service._bt_service._stop_journal()
+
+    def send_notification(self, text: str):
+        """Send a BLE notification with the given text."""
+        self.value = [dbus.Byte(b) for b in text.encode("utf-8")]
+        if self.notifying:
+            self.PropertiesChanged(
+                GATT_CHRC_IFACE, {"Value": dbus.Array(self.value, signature="y")}, []
+            )
+
+    @dbus.service.signal(DBUS_PROP_IFACE, signature="sa{sv}as")
+    def PropertiesChanged(self, interface, changed, invalidated):
+        """Emit PropertiesChanged signal for BLE notifications."""
+        pass
 
 
 class Service(dbus.service.Object):
@@ -571,10 +603,91 @@ class BluetoothCommandService:
         self.app = None
         self.adv = None
         self.mainloop = None
+        self._journal_proc = None
+        self._journal_watch_id = None
+        self._journal_buffer = ""
+
+    def _start_journal(self) -> str:
+        """Start journalctl -f and buffer output for poll-based reading."""
+        if self._journal_proc is not None:
+            return "OK: Journal already streaming"
+        try:
+            self._journal_buffer = ""
+            self._journal_proc = subprocess.Popen(
+                ["stdbuf", "-oL", "journalctl", "-f", "-n", "20", "--no-pager", "-u", "reachy-mini-daemon"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+            )
+            # Set non-blocking so GLib IO watch doesn't block the main loop
+            fd = self._journal_proc.stdout.fileno()
+            flags = fcntl.fcntl(fd, fcntl.F_GETFL)
+            fcntl.fcntl(fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
+
+            self._journal_watch_id = GLib.io_add_watch(
+                self._journal_proc.stdout,
+                GLib.IO_IN | GLib.IO_HUP,
+                self._on_journal_data,
+            )
+            logger.info("Journal streaming started")
+            return "OK: Journal streaming started"
+        except Exception as e:
+            logger.error(f"Error starting journal: {e}")
+            self._stop_journal()
+            return f"ERROR: {e}"
+
+    def _on_journal_data(self, source, condition):
+        """GLib callback — accumulate journalctl output into the buffer."""
+        if condition & GLib.IO_IN:
+            try:
+                data = source.read(4096)
+                if data:
+                    text = data.decode("utf-8", errors="replace")
+                    self._journal_buffer += text
+                    logger.info(f"Journal buffered: {len(text)} bytes, total: {len(self._journal_buffer)}")
+                    # Cap buffer to ~32KB to avoid unbounded growth
+                    if len(self._journal_buffer) > 32768:
+                        self._journal_buffer = self._journal_buffer[-32768:]
+            except BlockingIOError:
+                pass
+            except Exception as e:
+                logger.error(f"Error reading journal: {e}")
+
+        if condition & GLib.IO_HUP:
+            logger.info("Journal process ended")
+            self._stop_journal()
+            return False
+
+        return True
+
+    def _read_journal(self) -> str:
+        """Return buffered journal data and clear the buffer."""
+        if self._journal_proc is None:
+            return "ERROR: Journal not running"
+        chunk = self._journal_buffer[:480]  # Stay within BLE limits
+        self._journal_buffer = self._journal_buffer[480:]
+        if chunk:
+            logger.info(f"Journal read: {len(chunk)} bytes")
+        return chunk if chunk else ""
+
+    def _stop_journal(self):
+        """Stop the journalctl streaming subprocess."""
+        if self._journal_watch_id is not None:
+            GLib.source_remove(self._journal_watch_id)
+            self._journal_watch_id = None
+        if self._journal_proc is not None:
+            try:
+                self._journal_proc.terminate()
+                self._journal_proc.wait(timeout=2)
+            except Exception:
+                self._journal_proc.kill()
+            self._journal_proc = None
+            self._journal_buffer = ""
+            logger.info("Journal streaming stopped")
 
     def _handle_command(self, value: bytes) -> str:
         command_str = value.decode("utf-8").strip()
-        logger.info(f"Received command: {command_str}")
+        if command_str.upper() != "JOURNAL_READ":
+            logger.info(f"Received command: {command_str}")
         # Custom command handling
         if command_str.upper() == "PING":
             return "PONG"
@@ -586,6 +699,13 @@ class BluetoothCommandService:
             except Exception as e:
                 logger.error(f"Error executing command: {e}")
             return "OK: System running"
+        elif command_str.upper() == "JOURNAL_START":
+            return self._start_journal()
+        elif command_str.upper() == "JOURNAL_READ":
+            return self._read_journal()
+        elif command_str.upper() == "JOURNAL_STOP":
+            self._stop_journal()
+            return "OK: Journal streaming stopped"
         elif command_str.startswith("PIN_"):
             pin = command_str[4:].strip()
             if pin == self.pin_code:
@@ -647,6 +767,8 @@ class BluetoothCommandService:
         # Register GATT application
         service_manager = dbus.Interface(adapter, GATT_MANAGER_IFACE)
         self.app = Application(self.bus, self._handle_command)
+        # Back-reference so ResponseCharacteristic can stop journal on disconnect
+        self.app.services[0]._bt_service = self
         service_manager.RegisterApplication(
             self.app.get_path(),
             {},
@@ -693,6 +815,7 @@ class BluetoothCommandService:
             self.mainloop.run()
         except KeyboardInterrupt:
             logger.info("Shutting down...")
+            self._stop_journal()
             self.mainloop.quit()
 
 

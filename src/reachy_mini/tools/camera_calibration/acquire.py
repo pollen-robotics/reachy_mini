@@ -27,7 +27,7 @@ def main() -> None:
     parser.add_argument(
         "--headless",
         action="store_true",
-        help="Run in headless mode (no display, use terminal input). For Raspberry Pi/wireless version.",
+        help="Run in headless mode (no display, use terminal input). For RPi CM4/wireless version.",
     )
     parser.add_argument(
         "--save-path",
@@ -54,7 +54,7 @@ def main() -> None:
     if not args.headless:
         cv2.namedWindow("Reachy Mini Camera")
 
-    with ReachyMini(media_backend="gstreamer") as reachy_mini:
+    with ReachyMini(media_backend="local") as reachy_mini:
         if (
             reachy_mini.media.camera is None
             or reachy_mini.media.camera.camera_specs is None

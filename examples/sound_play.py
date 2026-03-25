@@ -8,7 +8,6 @@ Two modes:
 # START doc_example
 
 import argparse
-import logging
 import os
 import time
 
@@ -52,10 +51,6 @@ def play_live_tone(mini: "ReachyMini", tone_hz: float) -> None:
 
 def main(backend: str, wav_path: str | None, tone_hz: float) -> None:
     """Run the sound playback example."""
-    logging.basicConfig(
-        level=logging.DEBUG, format="%(asctime)s [%(levelname)s] %(message)s"
-    )
-
     with ReachyMini(log_level="DEBUG", media_backend=backend) as mini:
         if wav_path:
             play_wav(mini, wav_path)
@@ -70,8 +65,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--backend",
         type=str,
-        choices=["default_no_video", "gstreamer_no_video", "webrtc"],
-        default="default_no_video",
+        choices=["default", "local", "webrtc"],
+        default="default",
         help="Media backend to use.",
     )
 

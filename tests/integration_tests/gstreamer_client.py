@@ -1,15 +1,145 @@
-"""Simple gstreamer webrtc consumer example."""
+"""Integration test for GStreamer media clients.
+
+Tests both client paths:
+- **webrtc**: connects via WebRTC (remote or local signalling server)
+- **ipc**: reads raw BGR frames from the daemon's unix-socket IPC endpoint
+
+Can optionally start a local GstMediaServer (--start-server) so the test
+works on a Lite setup without a running daemon.
+
+Usage examples::
+
+    # WebRTC client, daemon already running:
+    python gstreamer_client.py --mode webrtc
+
+    # IPC client, daemon already running:
+    python gstreamer_client.py --mode ipc
+
+    # Start server + WebRTC client (Lite, no daemon):
+    python gstreamer_client.py --mode webrtc --start-server
+
+    # Start server + IPC client (Lite, no daemon):
+    python gstreamer_client.py --mode ipc --start-server
+
+    # Start server with simulated video:
+    python gstreamer_client.py --mode ipc --start-server --sim
+"""
 
 import argparse
+import logging
+import platform
 import time
 from threading import Thread
-
 import gi
 
+from reachy_mini.daemon.utils import CAMERA_PIPE_NAME, CAMERA_SOCKET_PATH
 from reachy_mini.media.webrtc_utils import find_producer_peer_id_by_name
 
 gi.require_version("Gst", "1.0")
 from gi.repository import GLib, Gst  # noqa: E402
+
+
+class IpcConsumer:
+    """GStreamer IPC consumer — reads raw BGR frames from the daemon's unix-socket endpoint."""
+
+    def __init__(self) -> None:
+        """Initialize the IPC consumer pipeline: unixfdsrc → queue → videoconvert → fpsdisplaysink."""
+        Gst.init([])
+        self._loop = GLib.MainLoop()
+        self._thread_bus_calls = Thread(target=lambda: self._loop.run(), daemon=True)
+        self._thread_bus_calls.start()
+
+        self.pipeline = Gst.Pipeline.new("ipc-consumer")
+        if not self.pipeline:
+            print("Pipeline could not be created.")
+            exit(-1)
+
+        # IPC source (platform-specific)
+        if platform.system() == "Windows":
+            src = Gst.ElementFactory.make("win32ipcvideosrc")
+            if not src:
+                print("win32ipcvideosrc could not be created.")
+                exit(-1)
+            src.set_property("pipe-name", CAMERA_PIPE_NAME)
+        else:
+            src = Gst.ElementFactory.make("unixfdsrc")
+            if not src:
+                print(
+                    "unixfdsrc could not be created. "
+                    "Is the unixfd GStreamer plugin installed?"
+                )
+                exit(-1)
+            src.set_property("socket-path", CAMERA_SOCKET_PATH)
+
+        queue = Gst.ElementFactory.make("queue")
+        convert = Gst.ElementFactory.make("videoconvert")
+        sink = Gst.ElementFactory.make("fpsdisplaysink")
+
+        if not all([queue, convert, sink]):
+            print("Failed to create one or more GStreamer elements.")
+            exit(-1)
+
+        self.pipeline.add(src)
+        self.pipeline.add(queue)
+        self.pipeline.add(convert)
+        self.pipeline.add(sink)
+
+        src.link(queue)
+        queue.link(convert)
+        convert.link(sink)
+
+        bus = self.pipeline.get_bus()
+        bus.add_watch(GLib.PRIORITY_DEFAULT, self._on_bus_message, self._loop)
+
+    def _on_bus_message(
+        self, _bus: Gst.Bus, msg: Gst.Message, _loop: GLib.MainLoop
+    ) -> bool:
+        """Handle bus messages."""
+        if msg.type == Gst.MessageType.ERROR:
+            err, debug = msg.parse_error()
+            print(f"Error: {err}, {debug}")
+            self._loop.quit()
+            return False
+        elif msg.type == Gst.MessageType.EOS:
+            print("End-Of-Stream reached.")
+            self._loop.quit()
+            return False
+        elif msg.type == Gst.MessageType.LATENCY:
+            try:
+                self.pipeline.recalculate_latency()
+            except Exception as e:
+                print(f"Failed to recalculate latency: {e}")
+        return True
+
+    def dump_latency(self) -> None:
+        """Dump the current pipeline latency."""
+        query = Gst.Query.new_latency()
+        self.pipeline.query(query)
+        print(f"Pipeline latency {query.parse_latency()}")
+
+    def play(self) -> None:
+        """Start the pipeline."""
+        ret = self.pipeline.set_state(Gst.State.PLAYING)
+        if ret == Gst.StateChangeReturn.FAILURE:
+            print("Error starting IPC playback.")
+            exit(-1)
+        print("IPC consumer playing ... (ctrl+c to quit)")
+        GLib.timeout_add_seconds(5, self.dump_latency)
+
+    def stop(self) -> None:
+        """Stop the pipeline."""
+        print("stopping IPC consumer")
+        self.pipeline.send_event(Gst.Event.new_eos())
+        self.pipeline.set_state(Gst.State.NULL)
+        self._loop.quit()
+
+    def get_bus(self) -> Gst.Bus:
+        """Get the GStreamer bus for the pipeline."""
+        return self.pipeline.get_bus()
+
+    def __del__(self) -> None:
+        """Destructor to clean up GStreamer resources."""
+        self._loop.quit()
 
 
 class GstConsumer:
@@ -153,8 +283,11 @@ class GstConsumer:
 
 
 def process_msg(bus: Gst.Bus, pipeline: Gst.Pipeline) -> bool:
-    """Process messages from the GStreamer bus."""    
-    msg = bus.timed_pop_filtered(10 * Gst.MSECOND, Gst.MessageType.ERROR | Gst.MessageType.EOS | Gst.MessageType.LATENCY)
+    """Process messages from the GStreamer bus."""
+    msg = bus.timed_pop_filtered(
+        10 * Gst.MSECOND,
+        Gst.MessageType.ERROR | Gst.MessageType.EOS | Gst.MessageType.LATENCY,
+    )
     if msg:
         if msg.type == Gst.MessageType.ERROR:
             err, debug = msg.parse_error()
@@ -197,23 +330,27 @@ def command_sender_loop(consumer: GstConsumer) -> None:
         time.sleep(0.01)
 
 
-def main() -> None:
-    """Run the main function."""
-    parser = argparse.ArgumentParser(description="webrtc gstreamer simple consumer")
-    parser.add_argument(
-        "--signaling-host",
-        default="127.0.0.1",
-        help="Gstreamer signaling host - Reachy Mini ip",
-    )
-    parser.add_argument(
-        "--signaling-port", default=8443, help="Gstreamer signaling port"
-    )
+def run_ipc_client() -> None:
+    """Run the IPC consumer — display video from the daemon's unix-socket endpoint."""
+    consumer = IpcConsumer()
+    consumer.play()
 
-    args = parser.parse_args()
+    bus = consumer.get_bus()
+    try:
+        while True:
+            if not process_msg(bus, consumer.pipeline):
+                break
+    except KeyboardInterrupt:
+        print("User exit")
+    finally:
+        consumer.stop()
 
+
+def run_webrtc_client(signaling_host: str, signaling_port: int) -> None:
+    """Connect via WebRTC and display video/audio."""
     consumer = GstConsumer(
-        args.signaling_host,
-        args.signaling_port,
+        signaling_host,
+        signaling_port,
         "reachymini",
     )
     consumer.play()
@@ -227,11 +364,73 @@ def main() -> None:
         while True:
             if not process_msg(bus, consumer.pipeline):
                 break
-
     except KeyboardInterrupt:
         print("User exit")
     finally:
         consumer.stop()
+
+
+def main() -> None:
+    """Run the main function."""
+    parser = argparse.ArgumentParser(
+        description="GStreamer media client — test WebRTC or IPC path"
+    )
+    parser.add_argument(
+        "--mode",
+        choices=["webrtc", "ipc"],
+        default="webrtc",
+        help="Client mode: 'webrtc' for remote streaming, 'ipc' for local unix-socket frames (default: webrtc)",
+    )
+    parser.add_argument(
+        "--signaling-host",
+        default="127.0.0.1",
+        help="Gstreamer signaling host - Reachy Mini ip (webrtc mode only)",
+    )
+    parser.add_argument(
+        "--signaling-port",
+        default=8443,
+        type=int,
+        help="Gstreamer signaling port (webrtc mode only)",
+    )
+    parser.add_argument(
+        "--start-server",
+        action="store_true",
+        help="Start a local GstMediaServer before connecting. "
+        "Useful on Lite without a running daemon.",
+    )
+    parser.add_argument(
+        "--sim",
+        action="store_true",
+        help="Use simulated video source (requires --start-server).",
+    )
+
+    args = parser.parse_args()
+
+    server = None
+    if args.start_server:
+        from reachy_mini.media.media_server import GstMediaServer
+
+        logging.basicConfig(
+            level=logging.DEBUG,
+            format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        )
+        print("Starting local GstMediaServer...")
+        server = GstMediaServer(log_level="DEBUG", use_sim=args.sim)
+        server.start()
+        # Give the server time to set up the IPC socket / register with signalling
+        time.sleep(2)
+        print(f"GstMediaServer started (camera: {server.camera_specs.name}).")
+
+    try:
+        if args.mode == "ipc":
+            run_ipc_client()
+        else:
+            run_webrtc_client(args.signaling_host, args.signaling_port)
+    finally:
+        if server is not None:
+            print("Stopping GstMediaServer...")
+            server.stop()
+            server.__del__()
 
 
 if __name__ == "__main__":

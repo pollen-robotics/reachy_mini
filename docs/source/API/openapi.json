@@ -430,6 +430,25 @@
         }
       }
     },
+    "/api/camera/specs": {
+      "get": {
+        "summary": "Get Camera Specs",
+        "description": "Get the detected camera specifications.\n\nReturns the camera name, available resolutions, default resolution,\nintrinsic matrix (K) and distortion coefficients (D) for the camera\nthat the daemon detected at startup.",
+        "operationId": "get_camera_specs_api_camera_specs_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CameraSpecsResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/daemon/start": {
       "post": {
         "summary": "Start Daemon",
@@ -961,6 +980,75 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/media/release": {
+      "post": {
+        "summary": "Release Media",
+        "description": "Release camera and audio hardware for direct client access.",
+        "operationId": "release_media_api_media_release_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Release Media Api Media Release Post"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/media/acquire": {
+      "post": {
+        "summary": "Acquire Media",
+        "description": "Re-acquire camera and audio hardware.",
+        "operationId": "acquire_media_api_media_acquire_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Acquire Media Api Media Acquire Post"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/media/status": {
+      "get": {
+        "summary": "Media Status",
+        "description": "Get the current media status.",
+        "operationId": "media_status_api_media_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "boolean"
+                  },
+                  "type": "object",
+                  "title": "Response Media Status Api Media Status Get"
                 }
               }
             }
@@ -1891,6 +1979,51 @@
         "title": "AppUpdatesResponse",
         "description": "Response for list of app updates."
       },
+      "CameraSpecsResponse": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "available_resolutions": {
+            "items": {
+              "$ref": "#/components/schemas/ResolutionInfo"
+            },
+            "type": "array",
+            "title": "Available Resolutions"
+          },
+          "default_resolution": {
+            "$ref": "#/components/schemas/ResolutionInfo"
+          },
+          "K": {
+            "items": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "type": "array",
+            "title": "K"
+          },
+          "D": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "D"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "available_resolutions",
+          "default_resolution",
+          "K",
+          "D"
+        ],
+        "title": "CameraSpecsResponse",
+        "description": "Full camera specifications as detected by the daemon."
+      },
       "DaemonState": {
         "type": "string",
         "enum": [
@@ -1948,6 +2081,21 @@
               }
             ],
             "title": "Mockup Sim Enabled"
+          },
+          "no_media": {
+            "type": "boolean",
+            "title": "No Media",
+            "default": false
+          },
+          "media_released": {
+            "type": "boolean",
+            "title": "Media Released",
+            "default": false
+          },
+          "camera_specs_name": {
+            "type": "string",
+            "title": "Camera Specs Name",
+            "default": ""
           },
           "backend_status": {
             "anyOf": [
@@ -2537,6 +2685,40 @@
         ],
         "title": "PrivateSpaceInstallRequest",
         "description": "Request model for installing a private HuggingFace space."
+      },
+      "ResolutionInfo": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "width": {
+            "type": "integer",
+            "title": "Width"
+          },
+          "height": {
+            "type": "integer",
+            "title": "Height"
+          },
+          "fps": {
+            "type": "integer",
+            "title": "Fps"
+          },
+          "crop_factor": {
+            "type": "number",
+            "title": "Crop Factor"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "width",
+          "height",
+          "fps",
+          "crop_factor"
+        ],
+        "title": "ResolutionInfo",
+        "description": "A single camera resolution entry."
       },
       "RobotBackendStatus": {
         "properties": {

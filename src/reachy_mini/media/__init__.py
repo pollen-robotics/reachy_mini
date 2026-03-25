@@ -1,59 +1,51 @@
 """Media module for Reachy Mini robot.
 
-This module provides comprehensive audio and video capabilities for the Reachy Mini robot,
+This module provides audio and video capabilities for the Reachy Mini robot,
 supporting multiple backends and offering a unified interface for media operations.
 
-The media module includes:
-- Camera capture and video streaming
-- Microphone input and audio recording
-- Speaker output and sound playback
-- Direction of Arrival (DoA) estimation with ReSpeaker microphone array
-- Multiple backend support (OpenCV, GStreamer, SoundDevice, WebRTC)
-- Camera calibration and intrinsic parameter access
-- Cross-platform compatibility
+Architecture:
+    The daemon always owns the physical camera and audio hardware via
+    ``media_server.py`` (``GstMediaServer``).  Client-side code selects a backend through
+    ``MediaManager``:
+
+    * **LOCAL** – reads camera frames from the daemon's IPC endpoint and opens
+      the local audio device directly.  Best for on-device apps.
+    * **WEBRTC** – streams camera + audio over WebRTC from the daemon.
+      Best for remote clients.
+    * **NO_MEDIA** – skips all media initialisation (headless operation).
 
 Key Components:
-- MediaManager: Unified interface for managing audio and video devices
-- CameraBase: Abstract base class for camera implementations
-- AudioBase: Abstract base class for audio implementations
-- Multiple backend implementations for different use cases
+    - MediaManager: Unified interface for managing audio and video devices
+    - GStreamerCamera: Local IPC camera reader (LOCAL backend)
+    - GStreamerAudio: GStreamer audio backend (LOCAL backend)
+    - GstWebRTCClient: WebRTC client handling both audio and video (WEBRTC backend)
+    - AudioDoA: Direction of Arrival estimation via the ReSpeaker mic array
 
-Example usage:
-    >>> from reachy_mini.media.media_manager import MediaManager, MediaBackend
-    >>>
-    >>> # Create media manager with default backend
-    >>> media = MediaManager(backend=MediaBackend.DEFAULT)
-    >>>
-    >>> # Capture video frames
-    >>> frame = media.get_frame()
-    >>> if frame is not None:
-    ...     cv2.imshow("Camera", frame)
-    ...     cv2.waitKey(1)
-    >>>
-    >>> # Record audio
-    >>> media.start_recording()
-    >>> samples = media.get_audio_sample()
-    >>>
-    >>> # Play sound
-    >>> media.play_sound("/path/to/sound.wav")
-    >>>
-    >>> # Clean up
-    >>> media.close()
+Example usage::
 
-Available backends:
-- MediaBackend.DEFAULT: OpenCV + SoundDevice (cross-platform default)
-- MediaBackend.GSTREAMER: GStreamer-based media (advanced features)
-- MediaBackend.WEBRTC: WebRTC for real-time communication
-- MediaBackend.NO_MEDIA: No media devices (headless operation)
+    from reachy_mini.media.media_manager import MediaManager, MediaBackend
+
+    # Create media manager with default (LOCAL) backend
+    media = MediaManager(backend=MediaBackend.DEFAULT)
+
+    # Capture video frames
+    frame = media.get_frame()
+
+    # Record audio
+    media.start_recording()
+    samples = media.get_audio_sample()
+
+    # Play sound
+    media.play_sound("/path/to/sound.wav")
+
+    # Clean up
+    media.close()
 
 For more information on specific components, see:
-- media_manager.py: Media management and backend selection
-- camera_base.py: Camera interface definition
-- audio_base.py: Audio interface definition
-- camera_opencv.py: OpenCV camera implementation
-- audio_sounddevice.py: SoundDevice audio implementation
-- audio_gstreamer.py: GStreamer audio implementation
-- camera_gstreamer.py: GStreamer camera implementation
-- webrtc_client_gstreamer.py: WebRTC GStreamer client implementation
-- webrtc_daemon.py: WebRTC GStreamer daemon/server implementation
+    - media_manager.py: Media management and backend selection
+    - camera_gstreamer.py: GStreamer IPC camera reader (LOCAL backend)
+    - audio_gstreamer.py: GStreamer audio implementation (LOCAL backend)
+    - audio_doa.py: Direction of Arrival estimation
+    - webrtc_client_gstreamer.py: WebRTC client (WEBRTC backend)
+    - media_server.py: GstMediaServer (daemon-side media hub: camera, IPC, WebRTC, audio)
 """
