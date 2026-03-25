@@ -58,6 +58,7 @@ from reachy_mini.media.camera_constants import (
     ReachyMiniLiteCamSpecs,
 )
 from reachy_mini.media.gstreamer_utils import get_sample
+from reachy_mini.media.camera_utils import scale_intrinsics
 
 try:
     import gi
@@ -84,6 +85,9 @@ class GStreamerCamera(CameraBase):
     Since the daemon's IPC branch already converts to BGR, the reader
     pipeline is simply ``source → queue → appsink`` with no extra
     conversion.
+
+    Attributes:
+        camera_specs: Camera specifications (resolutions, intrinsics, …).
 
     """
 

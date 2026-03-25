@@ -25,7 +25,7 @@ from __future__ import annotations
 import logging
 import warnings
 from enum import Enum
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Optional, Union
 
 import numpy as np
 import numpy.typing as npt
@@ -63,9 +63,7 @@ class MediaBackend(Enum):
     # Primary alias
     DEFAULT = LOCAL
 
-    # ------------------------------------------------------------------
     # Deprecated aliases — kept so old code keeps working for one release
-    # ------------------------------------------------------------------
     GSTREAMER = "gstreamer"
     GSTREAMER_NO_VIDEO = "gstreamer_no_video"
     SOUNDDEVICE_NO_VIDEO = "sounddevice_no_video"
@@ -96,6 +94,23 @@ def _resolve_backend(backend: MediaBackend) -> MediaBackend:
     return backend
 
 
+# -- Type aliases for the concrete backends ----------------------------
+# Both GStreamerCamera and GstWebRTCClient expose the same camera API
+# (open, read, close, set_resolution, resolution, K, D, …).
+# Both GStreamerAudio and GstWebRTCClient expose the same audio API
+# (start_recording, get_audio_sample, push_audio_sample, play_sound, …).
+# We import them lazily inside the init helpers, but declare the union
+# here so the type annotations stay narrow.
+
+from reachy_mini.media.audio_gstreamer import GStreamerAudio  # noqa: E402
+from reachy_mini.media.camera_constants import CameraSpecs  # noqa: E402
+from reachy_mini.media.camera_gstreamer import GStreamerCamera  # noqa: E402
+from reachy_mini.media.webrtc_client_gstreamer import GstWebRTCClient  # noqa: E402
+
+CameraLike = Union[GStreamerCamera, GstWebRTCClient]
+AudioLike = Union[GStreamerAudio, GstWebRTCClient]
+
+
 class MediaManager:
     """Media Manager for handling camera and audio devices.
 
@@ -117,6 +132,7 @@ class MediaManager:
         log_level: str = "INFO",
         signalling_host: str = "localhost",
         camera_specs: Optional[CameraSpecs] = None,
+        daemon_url: str = "",
     ) -> None:
         """Initialize the media manager.
 
@@ -128,6 +144,10 @@ class MediaManager:
             camera_specs: Camera specifications detected by the daemon.
                 When ``None`` the concrete camera class will fall back to
                 ``ReachyMiniLiteCamSpecs`` with a warning.
+            daemon_url: Base URL of the daemon's HTTP API
+                (e.g. ``"http://reachy-mini.local:8000"``).  Only used
+                with the ``WEBRTC`` backend for remote sound playback
+                and file management.
 
         Example::
 
@@ -141,8 +161,9 @@ class MediaManager:
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(log_level)
         self.backend = _resolve_backend(backend)
-        self.camera: Optional[CameraBase] = None
-        self.audio: Optional[AudioBase] = None
+        self.camera: Optional[CameraLike] = None
+        self.audio: Optional[AudioLike] = None
+        self._daemon_url = daemon_url
 
         match self.backend:
             case MediaBackend.NO_MEDIA:
@@ -155,13 +176,11 @@ class MediaManager:
                 self._init_audio(log_level)
             case MediaBackend.WEBRTC:
                 self.logger.info("Using WebRTC streaming backend.")
-                self._init_webrtc(log_level, signalling_host, 8443, camera_specs)
+                self._init_webrtc(
+                    log_level, signalling_host, 8443, camera_specs, daemon_url
+                )
             case _:
                 raise NotImplementedError(f"Media backend {backend} not implemented.")
-
-    # ------------------------------------------------------------------
-    # Lifecycle
-    # ------------------------------------------------------------------
 
     def close(self) -> None:
         """Close the media manager and release resources."""
@@ -179,10 +198,6 @@ class MediaManager:
     def __del__(self) -> None:
         """Destructor to ensure resources are released."""
         self.close()
-
-    # ------------------------------------------------------------------
-    # Private init helpers
-    # ------------------------------------------------------------------
 
     def _init_camera(
         self, log_level: str, camera_specs: Optional[CameraSpecs] = None
@@ -207,6 +222,7 @@ class MediaManager:
         signalling_host: str,
         signalling_port: int,
         camera_specs: Optional[CameraSpecs] = None,
+        daemon_url: str = "",
     ) -> None:
         """Initialize the WebRTC client (camera + audio)."""
         from reachy_mini.media.webrtc_client_gstreamer import GstWebRTCClient
@@ -223,14 +239,12 @@ class MediaManager:
             signaling_port=signalling_port,
             camera_specs=camera_specs,
         )
+        # Auto-derive daemon URL from signalling host when not provided.
+        webrtc_media.daemon_url = daemon_url or f"http://{signalling_host}:8000"
 
         self.camera = webrtc_media
         self.audio = webrtc_media  # GstWebRTCClient handles both audio and video
         self.camera.open()
-
-    # ------------------------------------------------------------------
-    # Camera helpers
-    # ------------------------------------------------------------------
 
     def get_frame(self) -> Optional[npt.NDArray[np.uint8]]:
         """Get a frame from the camera.
@@ -245,10 +259,6 @@ class MediaManager:
             self.logger.warning("Camera is not initialized.")
             return None
         return self.camera.read()
-
-    # ------------------------------------------------------------------
-    # Audio helpers
-    # ------------------------------------------------------------------
 
     def play_sound(self, sound_file: str) -> None:
         """Play a sound file.
