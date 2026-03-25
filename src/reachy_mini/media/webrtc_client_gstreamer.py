@@ -34,7 +34,6 @@ Example usage via MediaManager::
 
 """
 
-import logging
 import os
 from threading import Thread
 from typing import Iterator, Optional
@@ -52,21 +51,21 @@ except ImportError as e:
 import numpy as np
 import numpy.typing as npt
 
-from reachy_mini.media.audio_doa import AudioDoA
+from reachy_mini.media.audio_base import AudioBase
+from reachy_mini.media.camera_base import CameraBase
 from reachy_mini.media.camera_constants import (
     CameraResolution,
     CameraSpecs,
-    MujocoCameraSpecs,
     ReachyMiniLiteCamSpecs,
 )
-from reachy_mini.media.camera_utils import scale_intrinsics
+from reachy_mini.media.gstreamer_utils import get_sample
 
 gi.require_version("Gst", "1.0")
 gi.require_version("GstApp", "1.0")
 from gi.repository import GLib, GObject, Gst, GstApp  # noqa: E402, F401
 
 
-class GstWebRTCClient:
+class GstWebRTCClient(CameraBase, AudioBase):
     """WebRTC client that provides both camera frames and audio.
 
     Implements the same public API surface as ``GStreamerCamera`` (for
@@ -74,16 +73,7 @@ class GstWebRTCClient:
     can assign the same instance to both its ``camera`` and ``audio``
     slots.
 
-    Attributes:
-        SAMPLE_RATE: Audio sample rate in Hz (16 000).
-        CHANNELS: Audio channel count (2 — stereo).
-        camera_specs: Camera specifications for resolution / intrinsics.
-        resized_K: Intrinsic matrix rescaled to the current resolution.
-
     """
-
-    SAMPLE_RATE = 16000
-    CHANNELS = 2
 
     def __init__(
         self,
@@ -105,15 +95,13 @@ class GstWebRTCClient:
                 with a warning.
 
         """
-        self.logger = logging.getLogger(__name__)
-        self.logger.setLevel(log_level)
+        CameraBase.__init__(self, log_level=log_level)
+        AudioBase.__init__(self, log_level=log_level)
 
         Gst.init([])
         self._loop = GLib.MainLoop()
         self._thread_bus_calls = Thread(target=lambda: self._loop.run(), daemon=True)
         self._thread_bus_calls.start()
-
-        self._doa = AudioDoA()
 
         self._pipeline_record = Gst.Pipeline.new("audio_recorder")
         self._bus_record = self._pipeline_record.get_bus()
@@ -157,75 +145,12 @@ class GstWebRTCClient:
         self._audio_send_ready = False
         self._appsrc = None
         self._appsrc_pts = 0  # running PTS in nanoseconds for appsrc buffers
-        self._playbin: Optional[Gst.Element] = None  # for play_sound
         self.daemon_url: str = ""  # set by MediaManager for remote sound ops
         self._webrtcsrc.connect("deep-element-added", self._on_deep_element_added)
         self.logger.info("GstWebRTCClient initialized (bidirectional audio support)")
 
-    @property
-    def resolution(self) -> tuple[int, int]:
-        """Current resolution as ``(width, height)``."""
-        if self._resolution is None:
-            raise RuntimeError("Camera resolution is not set.")
-        return (self._resolution.value[0], self._resolution.value[1])
-
-    @property
-    def framerate(self) -> int:
-        """Current frame rate in fps."""
-        if self._resolution is None:
-            raise RuntimeError("Camera resolution is not set.")
-        return int(self._resolution.value[2])
-
-    @property
-    def K(self) -> Optional[npt.NDArray[np.float64]]:
-        """Camera intrinsic matrix for the current resolution, or ``None``."""
-        return self.resized_K
-
-    @property
-    def D(self) -> Optional[npt.NDArray[np.float64]]:
-        """Distortion coefficients, or ``None``."""
-        if self.camera_specs is not None:
-            return self.camera_specs.D
-        return None
-
-    def set_resolution(self, resolution: CameraResolution) -> None:
-        """Change the camera resolution.
-
-        Raises:
-            RuntimeError: If the pipeline is already playing, if camera
-                specs are not set, or for MuJoCo cameras.
-            ValueError: If the resolution is not supported.
-
-        """
-        if self.camera_specs is None:
-            raise RuntimeError(
-                "Camera specs not set. Open the camera before setting the resolution."
-            )
-
-        if isinstance(self.camera_specs, MujocoCameraSpecs):
-            raise RuntimeError(
-                "Cannot change resolution of Mujoco simulated camera for now."
-            )
-
-        if resolution not in self.camera_specs.available_resolutions:
-            raise ValueError(
-                f"Resolution not supported. "
-                f"Available: {self.camera_specs.available_resolutions}"
-            )
-
-        # Rescale intrinsic matrix
-        original_K = self.camera_specs.K
-        original_size: tuple[int, int] = (
-            CameraResolution.R3840x2592at30fps.value[0],
-            CameraResolution.R3840x2592at30fps.value[1],
-        )
-        target_size: tuple[int, int] = (resolution.value[0], resolution.value[1])
-        crop_scale = resolution.value[3]
-        self.resized_K = scale_intrinsics(
-            original_K, original_size, target_size, crop_scale
-        )
-
-        # Check pipeline state
+    def _apply_resolution(self, resolution: CameraResolution) -> None:
+        """Raise if pipeline is playing — WebRTC cannot restart mid-stream."""
         if self._pipeline_record.get_state(0).state == Gst.State.PLAYING:
             raise RuntimeError(
                 "Cannot change resolution while the camera is streaming. "
@@ -410,18 +335,6 @@ class GstWebRTCClient:
         """Start the WebRTC pipeline (both video and audio)."""
         self._pipeline_record.set_state(Gst.State.PLAYING)
 
-    def _get_sample(self, appsink: GstApp.AppSink) -> Optional[bytes]:
-        sample = appsink.try_pull_sample(20_000_000)
-        if sample is None:
-            return None
-        data = None
-        if isinstance(sample, Gst.Sample):
-            buf = sample.get_buffer()
-            if buf is None:
-                self.logger.warning("Buffer is None")
-            data = buf.extract_dup(0, buf.get_size())
-        return data
-
     def read(self) -> Optional[npt.NDArray[np.uint8]]:
         """Pull the latest BGR video frame.
 
@@ -429,14 +342,12 @@ class GstWebRTCClient:
             A NumPy array of shape ``(height, width, 3)`` or ``None``.
 
         """
-        data = self._get_sample(self._appsink_video)
+        data = get_sample(self._appsink_video, self.logger)
         if data is None:
             return None
-
-        arr = np.frombuffer(data, dtype=np.uint8).reshape(
+        return np.frombuffer(data, dtype=np.uint8).reshape(
             (self.resolution[1], self.resolution[0], 3)
         )
-        return arr
 
     def close(self) -> None:
         """Stop the WebRTC pipeline."""
@@ -445,34 +356,6 @@ class GstWebRTCClient:
     def start_recording(self) -> None:
         """No-op — recording starts automatically with ``open()``."""
         pass
-
-    def get_audio_sample(self) -> Optional[npt.NDArray[np.float32]]:
-        """Pull the next recorded audio chunk.
-
-        Returns:
-            A float32 array of shape ``(num_samples, 2)`` or ``None``.
-
-        """
-        sample = self._get_sample(self._appsink_audio)
-        if sample is None:
-            return None
-        return np.frombuffer(sample, dtype=np.float32).reshape(-1, 2)
-
-    def get_input_audio_samplerate(self) -> int:
-        """Input sample rate in Hz (16 000)."""
-        return self.SAMPLE_RATE
-
-    def get_output_audio_samplerate(self) -> int:
-        """Output sample rate in Hz (16 000)."""
-        return self.SAMPLE_RATE
-
-    def get_input_channels(self) -> int:
-        """Return the number of input channels (2)."""
-        return self.CHANNELS
-
-    def get_output_channels(self) -> int:
-        """Return the number of output channels (2)."""
-        return self.CHANNELS
 
     def stop_recording(self) -> None:
         """No-op — managed by ``close()``."""
@@ -563,21 +446,6 @@ class GstWebRTCClient:
 
         self._appsrc = appsrc
         self.logger.info("Audio send chain ready (bidirectional audio enabled)")
-
-    def set_max_output_buffers(self, max_buffers: int) -> None:
-        """Limit the number of queued send buffers.
-
-        Args:
-            max_buffers: Maximum buffer count.
-
-        """
-        if self._appsrc is not None:
-            self._appsrc.set_property("max-buffers", max_buffers)
-            self._appsrc.set_property("leaky-type", 2)  # drop old buffers
-        else:
-            self.logger.warning(
-                "AppSrc is not initialized. Call start_playing() first."
-            )
 
     def start_playing(self) -> None:
         """No-op — audio send chain is set up automatically on WebRTC connection."""

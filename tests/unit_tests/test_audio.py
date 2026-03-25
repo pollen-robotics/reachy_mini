@@ -54,7 +54,11 @@ def test_stop_play_sound(backend: MediaBackend) -> None:
     time.sleep(1)
     media.stop_playing()
     print(f"Stopped playing sound with {backend.value} backend.")
-    assert media.audio._playbin is None, "Playbin should be None after stop_playing()"
+    if backend == MediaBackend.LOCAL:
+        # GstWebRTCClient plays sound on the daemon side — no local _playbin
+        assert media.audio._playbin is None, (
+            "Playbin should be None after stop_playing()"
+        )
     # Give a moment to confirm no crash after stopping
     time.sleep(0.5)
     media.close()

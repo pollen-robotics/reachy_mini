@@ -15,7 +15,7 @@ Example usage:
     >>> # Get available resolutions for Reachy Mini Lite Camera
     >>> print("Available resolutions:")
     >>> for res in ReachyMiniLiteCamSpecs.available_resolutions:
-    ...     width, height, fps = res.value
+    ...     width, height, fps, crop_factor = res.value
     ...     print(f"  {width}x{height}@{fps}fps")
     >>>
     >>> # Access camera calibration parameters
@@ -58,7 +58,7 @@ class CameraResolution(Enum):
         R4608x2592at10fps: 4608x2592 resolution at 10 fps
 
     Note:
-        The enum values are tuples containing (width, height, frames_per_second).
+        The enum values are tuples containing (width, height, frames_per_second, crop_factor).
         Not all resolutions are supported by all camera models - check the specific
         camera specifications for available resolutions.
 
@@ -68,7 +68,7 @@ class CameraResolution(Enum):
 
         # Get resolution information
         res = CameraResolution.R1280x720at30fps
-        width, height, fps = res.value
+        width, height, fps, crop_factor = res.value
         print(f"Resolution: {width}x{height}@{fps}fps")
 
         # Check if a resolution is supported by a camera

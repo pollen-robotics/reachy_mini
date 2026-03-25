@@ -20,13 +20,17 @@ Architecture overview:
     * **NO_MEDIA** – skip all media initialisation (headless operation).
 """
 
+from __future__ import annotations
+
 import logging
 import warnings
 from enum import Enum
-from typing import Optional, Union
+from typing import TYPE_CHECKING, Optional, Union
 
 import numpy as np
 import numpy.typing as npt
+
+from reachy_mini.media.camera_constants import CameraSpecs
 
 
 class MediaBackend(Enum):
@@ -84,21 +88,16 @@ def _resolve_backend(backend: MediaBackend) -> MediaBackend:
     return backend
 
 
-# -- Type aliases for the concrete backends ----------------------------
-# Both GStreamerCamera and GstWebRTCClient expose the same camera API
-# (open, read, close, set_resolution, resolution, K, D, …).
-# Both GStreamerAudio and GstWebRTCClient expose the same audio API
-# (start_recording, get_audio_sample, push_audio_sample, play_sound, …).
-# We import them lazily inside the init helpers, but declare the union
-# here so the type annotations stay narrow.
+# Imported only for type annotations — avoids eagerly loading GStreamer (via
+# audio_gstreamer → audio_base → gstreamer_utils → gi) when MediaBackend.NO_MEDIA
+# is used.  The concrete classes are imported lazily inside the init helpers.
+if TYPE_CHECKING:
+    from reachy_mini.media.audio_gstreamer import GStreamerAudio
+    from reachy_mini.media.camera_gstreamer import GStreamerCamera
+    from reachy_mini.media.webrtc_client_gstreamer import GstWebRTCClient
 
-from reachy_mini.media.audio_gstreamer import GStreamerAudio  # noqa: E402
-from reachy_mini.media.camera_constants import CameraSpecs  # noqa: E402
-from reachy_mini.media.camera_gstreamer import GStreamerCamera  # noqa: E402
-from reachy_mini.media.webrtc_client_gstreamer import GstWebRTCClient  # noqa: E402
-
-CameraLike = Union[GStreamerCamera, GstWebRTCClient]
-AudioLike = Union[GStreamerAudio, GstWebRTCClient]
+    CameraLike = Union[GStreamerCamera, GstWebRTCClient]
+    AudioLike = Union[GStreamerAudio, GstWebRTCClient]
 
 
 class MediaManager:
@@ -193,12 +192,16 @@ class MediaManager:
         self, log_level: str, camera_specs: Optional[CameraSpecs] = None
     ) -> None:
         """Initialize the camera via local IPC."""
+        from reachy_mini.media.camera_gstreamer import GStreamerCamera
+
         self.logger.debug("Initializing camera (LOCAL IPC reader)...")
         self.camera = GStreamerCamera(log_level=log_level, camera_specs=camera_specs)
         self.camera.open()
 
     def _init_audio(self, log_level: str) -> None:
         """Initialize the audio system via GStreamer."""
+        from reachy_mini.media.audio_gstreamer import GStreamerAudio
+
         self.logger.debug("Initializing audio (GStreamer)...")
         self.audio = GStreamerAudio(log_level=log_level)
 
@@ -211,6 +214,7 @@ class MediaManager:
         daemon_url: str = "",
     ) -> None:
         """Initialize the WebRTC client (camera + audio)."""
+        from reachy_mini.media.webrtc_client_gstreamer import GstWebRTCClient
         from reachy_mini.media.webrtc_utils import find_producer_peer_id_by_name
 
         peer_id = find_producer_peer_id_by_name(
@@ -251,57 +255,15 @@ class MediaManager:
         Args:
             sound_file: Path to the sound file to play.
 
+        Note:
+            If the audio backend is not initialised, a warning is logged
+            and the call is silently ignored.
+
         """
         if self.audio is None:
             self.logger.warning("Audio system is not initialized.")
             return
         self.audio.play_sound(sound_file)
-
-    def upload_sound(self, sound_file: str) -> str:
-        """Upload a local sound file to the daemon's temporary directory.
-
-        Only meaningful for the ``WEBRTC`` backend — when using the
-        ``LOCAL`` backend the file is already accessible so the path is
-        returned as-is.
-
-        Args:
-            sound_file: Local path to the sound file.
-
-        Returns:
-            The path of the file on the daemon.
-
-        """
-        if self.audio is None:
-            self.logger.warning("Audio system is not initialized.")
-            return sound_file
-        return self.audio.upload_sound(sound_file)
-
-    def list_sounds(self) -> list[str]:
-        """List sound files in the daemon's temporary sound directory.
-
-        Returns:
-            A list of filenames.  Empty for the ``LOCAL`` backend.
-
-        """
-        if self.audio is None:
-            self.logger.warning("Audio system is not initialized.")
-            return []
-        return self.audio.list_sounds()
-
-    def delete_sound(self, filename: str) -> bool:
-        """Delete a sound file from the daemon's temporary sound directory.
-
-        Args:
-            filename: Name of the file to delete (not a path).
-
-        Returns:
-            ``True`` if the file was deleted, ``False`` otherwise.
-
-        """
-        if self.audio is None:
-            self.logger.warning("Audio system is not initialized.")
-            return False
-        return self.audio.delete_sound(filename)
 
     def start_recording(self) -> None:
         """Start recording audio."""
@@ -368,7 +330,10 @@ class MediaManager:
         """Push audio data to the output device.
 
         Args:
-            data: The audio data to push (mono format).
+            data: Audio samples as a float32 array.  Shape should be
+                ``(num_samples,)`` for mono or ``(num_samples, channels)``
+                for multi-channel.  The manager adapts the data to match
+                the output device's channel count before forwarding it.
 
         """
         if self.audio is None:

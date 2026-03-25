@@ -13,7 +13,6 @@ from typing import Dict, List, Literal, Optional, Union, cast
 
 import numpy as np
 import numpy.typing as npt
-import requests
 from asgiref.sync import async_to_sync
 from scipy.spatial.transform import Rotation as R
 
@@ -140,6 +139,7 @@ class ReachyMini:
         self.client, self.connection_mode = self._initialize_client(
             normalized_mode, timeout
         )
+        self._daemon_http_url = f"http://{self.client.host}:{self.client.port}"
         self.set_automatic_body_yaw(automatic_body_yaw)
         self._last_head_pose: Optional[npt.NDArray[np.float64]] = None
         self.is_recording = False
@@ -186,11 +186,6 @@ class ReachyMini:
         return self.media_manager
 
     @property
-    def _daemon_http_url(self) -> str:
-        """Base URL for the daemon's HTTP API."""
-        return f"http://{self.client.host}:{self.client.port}"
-
-    @property
     def media_released(self) -> bool:
         """Whether the daemon's media hardware has been released for direct access."""
         return self._media_released
@@ -207,15 +202,7 @@ class ReachyMini:
         if self._media_released:
             return
 
-        try:
-            resp = requests.post(
-                f"{self._daemon_http_url}/api/media/release", timeout=10
-            )
-            resp.raise_for_status()
-        except requests.RequestException as e:
-            self.logger.warning(
-                f"Failed to release media on daemon (media may already be released): {e}"
-            )
+        self.client.release_media()
 
         if hasattr(self, "media_manager"):
             self.media_manager.close()
@@ -233,13 +220,8 @@ class ReachyMini:
         if not self._media_released:
             return
 
-        try:
-            resp = requests.post(
-                f"{self._daemon_http_url}/api/media/acquire", timeout=10
-            )
-            resp.raise_for_status()
-        except requests.RequestException as e:
-            self.logger.error(f"Failed to re-acquire media on daemon: {e}")
+        if not self.client.acquire_media():
+            self.logger.error("Failed to re-acquire media on daemon.")
             return
 
         self.media_manager.close()

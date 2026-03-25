@@ -103,7 +103,7 @@ class Daemon:
         self.logger.debug("Cleaning up Daemon resources...")
         if self._media_server is not None:
             self._media_server.stop()
-            self._media_server.__del__()
+            self._media_server.close()
             self._media_server = None
 
     @property

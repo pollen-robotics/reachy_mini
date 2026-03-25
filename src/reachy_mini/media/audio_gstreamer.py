@@ -51,7 +51,6 @@ Example usage via MediaManager::
 
 """
 
-import logging
 import os
 import platform
 from threading import Thread
@@ -60,7 +59,7 @@ from typing import Optional
 import numpy as np
 import numpy.typing as npt
 
-from reachy_mini.media.audio_doa import AudioDoA
+from reachy_mini.media.audio_base import AudioBase
 from reachy_mini.media.audio_utils import has_reachymini_asoundrc
 from reachy_mini.media.device_detection import get_audio_device
 from reachy_mini.utils.constants import ASSETS_ROOT_PATH
@@ -76,21 +75,20 @@ except ImportError as e:
 gi.require_version("Gst", "1.0")
 gi.require_version("GstApp", "1.0")
 
-from gi.repository import GLib, Gst, GstApp  # noqa: E402
+from gi.repository import GLib, Gst  # noqa: E402
 
 
-class GStreamerAudio:
+class GStreamerAudio(AudioBase):
     """Audio implementation using GStreamer.
 
-    Attributes:
-        SAMPLE_RATE: Default sample rate for audio operations (16 000 Hz,
-            matching the ReSpeaker hardware).
-        CHANNELS: Number of audio channels (2 — stereo).
+    Extends ``AudioBase`` with two GStreamer-specific helpers:
+
+    - ``clear_output_buffer()``: flush queued playback data without stopping
+      the pipeline (no-op by default; useful before refilling the buffer).
+    - ``clear_player()``: flush the playback appsrc immediately via GStreamer
+      flush events, dropping any queued audio.
 
     """
-
-    SAMPLE_RATE = 16000
-    CHANNELS = 2
 
     def __init__(self, log_level: str = "INFO") -> None:
         """Initialize recording and playback pipelines.
@@ -101,18 +99,14 @@ class GStreamerAudio:
                 ``'CRITICAL'``.
 
         """
-        self.logger = logging.getLogger(__name__)
-        self.logger.setLevel(log_level)
+        super().__init__(log_level=log_level)
 
         Gst.init([])
         self._loop = GLib.MainLoop()
         self._thread_bus_calls = Thread(target=lambda: self._loop.run(), daemon=True)
         self._thread_bus_calls.start()
 
-        self._doa = AudioDoA()
-
         self._pipeline_record = Gst.Pipeline.new("audio_recorder")
-        self._appsink_audio: Optional[GstApp] = None
         self._init_pipeline_record(self._pipeline_record)
         self._bus_record = self._pipeline_record.get_bus()
         self._bus_record.add_watch(
@@ -121,7 +115,6 @@ class GStreamerAudio:
 
         self._playbin: Optional[Gst.Element] = None
         self._pipeline_playback = Gst.Pipeline.new("audio_player")
-        self._appsrc: Optional[GstApp] = None
         self._init_pipeline_playback(self._pipeline_playback)
         self._bus_playback = self._pipeline_playback.get_bus()
         self._bus_playback.add_watch(
@@ -256,48 +249,6 @@ class GStreamerAudio:
         """Start capturing audio from the microphone."""
         self._pipeline_record.set_state(Gst.State.PLAYING)
 
-    def _get_sample(self, appsink: GstApp.AppSink) -> Optional[bytes]:
-        sample = appsink.try_pull_sample(20_000_000)
-        if sample is None:
-            return None
-        data = None
-        if isinstance(sample, Gst.Sample):
-            buf = sample.get_buffer()
-            if buf is None:
-                self.logger.warning("Buffer is None")
-
-            data = buf.extract_dup(0, buf.get_size())
-        return data
-
-    def get_audio_sample(self) -> Optional[npt.NDArray[np.float32]]:
-        """Pull the next recorded audio chunk.
-
-        Returns:
-            A float32 array of shape ``(num_samples, 2)`` (stereo), or
-            ``None`` if no data is available yet.
-
-        """
-        sample = self._get_sample(self._appsink_audio)
-        if sample is None:
-            return None
-        return np.frombuffer(sample, dtype=np.float32).reshape(-1, 2)
-
-    def get_input_audio_samplerate(self) -> int:
-        """Input sample rate in Hz (16 000)."""
-        return self.SAMPLE_RATE
-
-    def get_output_audio_samplerate(self) -> int:
-        """Output sample rate in Hz (16 000)."""
-        return self.SAMPLE_RATE
-
-    def get_input_channels(self) -> int:
-        """Return the number of input channels (2 — stereo)."""
-        return self.CHANNELS
-
-    def get_output_channels(self) -> int:
-        """Return the number of output channels (2 — stereo)."""
-        return self.CHANNELS
-
     def stop_recording(self) -> None:
         """Stop the recording pipeline."""
         self._pipeline_record.set_state(Gst.State.NULL)
@@ -306,21 +257,6 @@ class GStreamerAudio:
         """Start the playback pipeline so ``push_audio_sample`` can feed data."""
         self._pipeline_playback.set_state(Gst.State.PLAYING)
         GLib.timeout_add_seconds(5, self._dump_latency)
-
-    def set_max_output_buffers(self, max_buffers: int) -> None:
-        """Limit the number of queued playback buffers.
-
-        Args:
-            max_buffers: Maximum number of buffers to queue.
-
-        """
-        if self._appsrc is not None:
-            self._appsrc.set_property("max-buffers", max_buffers)
-            self._appsrc.set_property("leaky-type", 2)  # drop old buffers
-        else:
-            self.logger.warning(
-                "AppSrc is not initialized. Call start_playing() first."
-            )
 
     def push_audio_sample(self, data: npt.NDArray[np.float32]) -> None:
         """Push audio data to the speaker.

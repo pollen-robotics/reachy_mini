@@ -430,7 +430,7 @@ def main() -> None:
         if server is not None:
             print("Stopping GstMediaServer...")
             server.stop()
-            server.__del__()
+            server.close()
 
 
 if __name__ == "__main__":
