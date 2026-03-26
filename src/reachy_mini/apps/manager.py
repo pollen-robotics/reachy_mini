@@ -298,7 +298,12 @@ class AppManager:
     # Apps management interface
     async def list_all_available_apps(self) -> list[AppInfo]:
         """List available apps while preserving curated-only entries."""
-        results = await asyncio.gather(
+        (
+            hf_space_apps,
+            dashboard_selection_apps,
+            local_apps,
+            installed_apps,
+        ) = await asyncio.gather(
             self.list_available_apps(SourceKind.HF_SPACE),
             self.list_available_apps(SourceKind.DASHBOARD_SELECTION),
             self.list_available_apps(SourceKind.LOCAL),
@@ -308,14 +313,14 @@ class AppManager:
         catalog_apps: list[AppInfo] = []
         seen_catalog_apps: set[str] = set()
 
-        for app in [*results[0], *results[1]]:
+        for app in [*hf_space_apps, *dashboard_selection_apps]:
             app_key = _get_catalog_app_key(app)
             if app_key in seen_catalog_apps:
                 continue
             seen_catalog_apps.add(app_key)
             catalog_apps.append(app)
 
-        return [*catalog_apps, *results[2], *results[3]]
+        return [*catalog_apps, *local_apps, *installed_apps]
 
     async def list_available_apps(self, source: SourceKind) -> list[AppInfo]:
         """List available apps for given source kind."""
