@@ -48,6 +48,19 @@ class RunningApp:
     status: AppStatus
 
 
+def _get_catalog_app_key(app: AppInfo) -> str:
+    """Build a stable key for deduplicating catalog entries."""
+    for key in ("id", "repo_id", "repoId", "space_id", "spaceId", "app_id", "appId"):
+        value = app.extra.get(key)
+        if isinstance(value, str) and value:
+            return value
+
+    if app.url:
+        return app.url
+
+    return app.name
+
+
 class AppManager:
     """Manager for Reachy Mini apps."""
 
@@ -284,11 +297,25 @@ class AppManager:
 
     # Apps management interface
     async def list_all_available_apps(self) -> list[AppInfo]:
-        """List available apps (parallel async)."""
+        """List available apps while preserving curated-only entries."""
         results = await asyncio.gather(
-            *[self.list_available_apps(kind) for kind in SourceKind]
+            self.list_available_apps(SourceKind.HF_SPACE),
+            self.list_available_apps(SourceKind.DASHBOARD_SELECTION),
+            self.list_available_apps(SourceKind.LOCAL),
+            self.list_available_apps(SourceKind.INSTALLED),
         )
-        return sum(results, [])
+
+        catalog_apps: list[AppInfo] = []
+        seen_catalog_apps: set[str] = set()
+
+        for app in [*results[0], *results[1]]:
+            app_key = _get_catalog_app_key(app)
+            if app_key in seen_catalog_apps:
+                continue
+            seen_catalog_apps.add(app_key)
+            catalog_apps.append(app)
+
+        return [*catalog_apps, *results[2], *results[3]]
 
     async def list_available_apps(self, source: SourceKind) -> list[AppInfo]:
         """List available apps for given source kind."""
