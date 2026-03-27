@@ -45,6 +45,7 @@ from reachy_mini.io.protocol import (
     SetSpeechOffsetsCmd,
     SetTargetCmd,
     SetTorqueCmd,
+    SetWobblingCmd,
     StartRecordingCmd,
     StopRecordingCmd,
     WakeUpCmd,
@@ -974,6 +975,15 @@ class Backend:
                     (offsets[0], offsets[1], offsets[2], offsets[3], offsets[4], offsets[5])
                 )
             send_response({"status": "ok", "command": "set_speech_offsets"})
+
+        elif isinstance(cmd, SetWobblingCmd):
+            if self._media_server is not None:
+                if cmd.enabled:
+                    self._media_server.enable_wobbling(self.set_speech_offsets)
+                else:
+                    self._media_server.disable_wobbling()
+                    self.set_speech_offsets((0.0, 0.0, 0.0, 0.0, 0.0, 0.0))
+            send_response({"status": "ok", "command": "set_wobbling"})
 
         elif isinstance(cmd, SetMotorModeCmd):
             self.set_motor_control_mode(MotorControlMode(cmd.mode))
