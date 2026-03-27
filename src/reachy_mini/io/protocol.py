@@ -208,6 +208,15 @@ class SetAutomaticBodyYawCmd(BaseModel):
     enabled: bool
 
 
+class LookAtImageCmd(BaseModel):
+    """Make the robot look at a pixel position (u, v) in the camera frame."""
+
+    type: Literal["look_at_image"] = "look_at_image"
+    u: float
+    v: float
+    duration: float = 0.0
+
+
 class GetStateCmd(BaseModel):
     """Query the full robot state."""
 
@@ -248,6 +257,7 @@ AnyCommand = Annotated[
     | GetMotorModeCmd
     | SetGravityCompensationCmd
     | SetAutomaticBodyYawCmd
+    | LookAtImageCmd
     | GetStateCmd
     | StartRecordingCmd
     | StopRecordingCmd
