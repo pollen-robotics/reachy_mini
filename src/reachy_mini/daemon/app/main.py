@@ -294,6 +294,7 @@ def run_app(args: Args) -> None:
     handler.setFormatter(
         logging.Formatter("%(name)s - %(levelname)s - %(message)s")
     )
+    root_logger.handlers.clear()
     root_logger.addHandler(handler)
 
     # Explicitly configure the apps.manager logger to ensure propagation
