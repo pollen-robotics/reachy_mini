@@ -299,6 +299,24 @@ class Daemon:
             if self._media_server and not self._media_released:
                 if self.backend is not None:
                     self.backend.setup_media_server(self._media_server)
+                    # Pass camera specs to backend for look_at_image support
+                    if self._media_server.camera_specs is not None:
+                        from reachy_mini.media.camera_utils import scale_intrinsics
+
+                        streaming_res = self._media_server.resolution
+                        calib_res = (3840, 2592)  # calibration resolution
+                        crop_scale = self._media_server.camera_specs.default_resolution.value[3] if len(self._media_server.camera_specs.default_resolution.value) > 3 else 1.0
+                        K_scaled = scale_intrinsics(
+                            self._media_server.camera_specs.K,
+                            calib_res,
+                            streaming_res,
+                            crop_scale,
+                        )
+                        self.backend.set_camera_specs(
+                            K=K_scaled,
+                            D=self._media_server.camera_specs.D,
+                            resolution=streaming_res,
+                        )
                 self._media_server.start()
 
                 # Start central signaling relay for remote WebRTC access
@@ -318,35 +336,6 @@ class Daemon:
                     self.logger.warning("Wake up interrupted by user.")
                     self._status.state = DaemonState.STOPPING
                     return self._status.state
-
-            if self._webrtc:
-                await asyncio.sleep(
-                    0.2
-                )  # Give some time for the backend to release the audio device
-                if self.backend is not None:
-                    self.backend.setup_webrtc_interface(self._webrtc)
-                    # Pass camera specs to backend for look_at_image support
-                    if self._webrtc.camera_specs is not None:
-                        from reachy_mini.media.camera_utils import scale_intrinsics
-
-                        streaming_res = self._webrtc.resolution
-                        calib_res = (3840, 2592)  # calibration resolution
-                        crop_scale = self._webrtc.camera_specs.default_resolution.value[3] if len(self._webrtc.camera_specs.default_resolution.value) > 3 else 1.0
-                        K_scaled = scale_intrinsics(
-                            self._webrtc.camera_specs.K,
-                            calib_res,
-                            streaming_res,
-                            crop_scale,
-                        )
-                        self.backend.set_camera_specs(
-                            K=K_scaled,
-                            D=self._webrtc.camera_specs.D,
-                            resolution=streaming_res,
-                        )
-                self._webrtc.start()
-
-                # Start central signaling relay for remote WebRTC access
-                await self._start_central_signaling_relay()
 
             if self._status.state != DaemonState.ERROR:
                 self.logger.info("Daemon started successfully.")
