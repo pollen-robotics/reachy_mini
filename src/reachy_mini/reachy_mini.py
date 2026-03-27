@@ -623,6 +623,12 @@ class ReachyMini:
         if self.media.camera is None or self.media.camera.camera_specs is None:
             raise RuntimeError("Camera specs not set.")
 
+        if self.media.camera.camera_specs.name == "mujoco_studio_close":
+            raise RuntimeError(
+                "look_at_image() requires a head-mounted camera with modeled "
+                "extrinsics. The active simulated camera is 'studio_close'."
+            )
+
         x_n, y_n = undistort_points(
             u,
             v,

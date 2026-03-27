@@ -43,7 +43,7 @@ from reachy_mini.media.audio_utils import (
     check_reachymini_asoundrc,
     write_asoundrc_to_home,
 )
-from reachy_mini.media.camera_constants import get_available_sim_camera_names
+from reachy_mini.media.camera_constants import get_selectable_sim_camera_names
 from reachy_mini.motion.recorded_move import preload_default_datasets
 from reachy_mini.utils.discovery import MdnsServiceRegistration
 from reachy_mini.utils.wireless_version.startup_check import (
@@ -487,7 +487,7 @@ def main() -> None:
         "--sim-camera",
         type=str,
         default=default_args.sim_camera,
-        choices=get_available_sim_camera_names(),
+        choices=get_selectable_sim_camera_names(),
         help="Active simulated camera to stream when running with --sim.",
     )
     parser.add_argument(

@@ -1,5 +1,6 @@
 import asyncio
 import threading
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -51,13 +52,27 @@ async def test_daemon_reports_active_sim_camera() -> None:
             status = mini.client.get_status()
             assert status.simulation_enabled is True
             assert status.active_camera_name == "studio_close"
-            assert "studio_close" in status.available_camera_names
+            assert status.available_camera_names == ["eye_camera"]
             assert status.camera_specs_name == "mujoco_studio_close"
             assert status.backend_status is not None
             assert status.backend_status.active_camera_name == "studio_close"
     finally:
         await daemon.stop(goto_sleep_on_stop=False)
         await _stop_app_server(server, thread)
+
+
+def test_look_at_image_rejects_observer_sim_camera() -> None:
+    mini = ReachyMini.__new__(ReachyMini)
+    mini.media_manager = SimpleNamespace(
+        camera=SimpleNamespace(
+            resolution=(640, 640),
+            camera_specs=SimpleNamespace(name="mujoco_studio_close"),
+        )
+    )
+
+    with pytest.raises(RuntimeError, match="head-mounted camera"):
+        mini.look_at_image(10, 10, perform_movement=False)
+
 
 async def _stop_app_server(server: uvicorn.Server, thread: threading.Thread) -> None:
     """Gracefully shut down the uvicorn server."""

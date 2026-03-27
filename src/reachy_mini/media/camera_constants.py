@@ -367,7 +367,11 @@ _SPECS_BY_NAME: dict[str, type[CameraSpecs]] = {
     "mujoco_studio_close": MujocoStudioCloseCameraSpecs,
 }
 
-_SIM_CAMERA_SPECS_BY_NAME: dict[str, type[MujocoSimCameraSpecs]] = {
+_GENERIC_SIM_CAMERA_SPECS_BY_NAME: dict[str, type[MujocoSimCameraSpecs]] = {
+    "eye_camera": MujocoCameraSpecs,
+}
+
+_SELECTABLE_SIM_CAMERA_SPECS_BY_NAME: dict[str, type[MujocoSimCameraSpecs]] = {
     "eye_camera": MujocoCameraSpecs,
     "studio_close": MujocoStudioCloseCameraSpecs,
 }
@@ -403,15 +407,21 @@ def get_camera_specs_by_name(name: str) -> CameraSpecs:
 
 
 def get_sim_camera_specs_by_name(name: str) -> MujocoSimCameraSpecs:
-    """Look up MuJoCo simulated camera specs by camera name."""
-    cls = _SIM_CAMERA_SPECS_BY_NAME.get(name)
+    """Look up explicitly selected MuJoCo simulated camera specs by camera name."""
+    cls = _SELECTABLE_SIM_CAMERA_SPECS_BY_NAME.get(name)
     if cls is None:
         raise ValueError(
-            f"Unknown simulated camera {name!r}. Available cameras: {list(_SIM_CAMERA_SPECS_BY_NAME)}"
+            "Unknown simulated camera "
+            f"{name!r}. Available cameras: {list(_SELECTABLE_SIM_CAMERA_SPECS_BY_NAME)}"
         )
     return cls()
 
 
 def get_available_sim_camera_names() -> list[str]:
-    """Return the supported MuJoCo simulated camera names."""
-    return list(_SIM_CAMERA_SPECS_BY_NAME)
+    """Return head-mounted MuJoCo simulated camera names for generic SDK flows."""
+    return list(_GENERIC_SIM_CAMERA_SPECS_BY_NAME)
+
+
+def get_selectable_sim_camera_names() -> list[str]:
+    """Return MuJoCo simulated camera names that can be explicitly selected."""
+    return list(_SELECTABLE_SIM_CAMERA_SPECS_BY_NAME)
