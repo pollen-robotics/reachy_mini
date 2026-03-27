@@ -216,6 +216,9 @@ Choose your installation method:
 ### 📦 Option A: Install from PyPI
 > **Recommended for most users** - Just want to control your robot? This is for you!
 
+<hfoptions id="install-pypi">
+<hfoption id="Linux / macOS / Windows">
+
 In your terminal, run:
 ```bash
 uv pip install "reachy-mini"
@@ -229,26 +232,24 @@ uv pip install "reachy-mini[mujoco]"
 > [!TIP]
 > The post installation of gstreamer is due to an [issue](https://github.com/pypi/support/issues/8847#issuecomment-3899714506) with PyPi and should be solved in the future.
 
-
-### 🔧 Option B: Install from Source  
-> **For developers** - Want to modify the SDK or contribute? Choose this option!
+</hfoption>
+<hfoption id="Linux (additional steps)">
 
 In your terminal, run:
 ```bash
-git clone https://github.com/pollen-robotics/reachy_mini && cd reachy_mini
-uv sync
+uv pip install "reachy-mini"
 ```
 
-If you want to use the simulation mode, you need to add the `mujoco` extra:
-```bash
-uv sync --extra mujoco
-```
-### 🐧 Linux Users
+**🐧 Linux users also need to install GStreamer manually.** Media management is performed by the GStreamer library, which requires a system-level installation on Linux:
 
-> **Linux + USB connection?** You need to grant access to Reachy Mini's serial port.
+<div align="center">
+
+[![GStreamer Installation Guide](https://img.shields.io/badge/📖-GStreamer%20Installation%20Guide-blue?style=for-the-badge)](gstreamer-installation)
+
+</div>
 
 <details>
-<summary>🔧 <strong>Click here to set up USB permissions</strong></summary>
+<summary>🐧 <strong>Linux users also need to set up USB permissions</strong></summary>
 
 Run these commands in your terminal:
 
@@ -260,37 +261,65 @@ SUBSYSTEM=="usb", ATTRS{idVendor}=="38fb", ATTRS{idProduct}=="1001", MODE="0666"
 sudo udevadm control --reload-rules && sudo udevadm trigger
 sudo usermod -aG dialout $USER
 ```
-
-> [!WARNING]
-> Log out and log back in for the changes to take effect!
-
 </details>
 
-<br />
+</hfoption>
+</hfoptions>
 
-> **PortAudio** Make sure that portaudio is installed on your system to enable audio features with the default backend.
+### 🔧 Option B: Install from Source
+> **For developers** - Want to modify the SDK or contribute? Choose this option!
 
-<details>
-<summary>🔧 <strong>Installing PortAudio</strong></summary>
+<hfoptions id="install-source">
+<hfoption id="Linux / macOS / Windows">
 
-Run this command in your terminal:
-
+In your terminal, run:
 ```bash
-sudo apt-get install libportaudio2
+git clone https://github.com/pollen-robotics/reachy_mini && cd reachy_mini
+uv sync
 ```
 
-</details>
+If you want to use the simulation mode, you need to add the `mujoco` extra:
+```bash
+uv sync --extra mujoco
+```
 
-#### Gstreamer
+</hfoption>
+<hfoption id="Linux (additional steps)">
 
-Media management is performed by the GStreamer library. It is installed with all the dependencies for Mac and Windows users.
-Linux users have extra steps to follow:
+In your terminal, run:
+```bash
+git clone https://github.com/pollen-robotics/reachy_mini && cd reachy_mini
+uv sync
+```
+
+**🐧 Linux users also need to install GStreamer manually.** Media management is performed by the GStreamer library, which requires a system-level installation on Linux:
 
 <div align="center">
 
 [![GStreamer Installation Guide](https://img.shields.io/badge/📖-GStreamer%20Installation%20Guide-blue?style=for-the-badge)](gstreamer-installation)
 
 </div>
+
+<details>
+<summary>🐧 <strong>Linux users also need to set up USB permissions</strong></summary>
+
+
+Run these commands in your terminal:
+
+```bash
+echo 'SUBSYSTEM=="usb", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="55d3", MODE="0666", GROUP="dialout"
+SUBSYSTEM=="usb", ATTRS{idVendor}=="38fb", ATTRS{idProduct}=="1001", MODE="0666", GROUP="dialout"' \
+| sudo tee /etc/udev/rules.d/99-reachy-mini.rules
+
+sudo udevadm control --reload-rules && sudo udevadm trigger
+sudo usermod -aG dialout $USER
+```
+</details>
+
+</hfoption>
+</hfoptions>
+
+
 
 ## 🎉 Congratulations!
 
