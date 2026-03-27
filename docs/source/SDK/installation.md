@@ -204,20 +204,10 @@ reachy_mini_env\Scripts\activate
 
 Choose your installation method:
 
-<div align="center">
+<hfoptions id="install-method">
+<hfoption id="📦 Option A: PyPI">
 
-| 📦 **PyPI Installation** | 🔧 **Source Installation** |
-|:---:|:---:|
-| **For Everyone** | **For Developers** |
-| Ready to use | Modify the code |
-
-</div>
-
-### 📦 Option A: Install from PyPI
 > **Recommended for most users** - Just want to control your robot? This is for you!
-
-<hfoptions id="install-pypi">
-<hfoption id="Linux / macOS / Windows">
 
 In your terminal, run:
 ```bash
@@ -232,15 +222,10 @@ uv pip install "reachy-mini[mujoco]"
 > [!TIP]
 > The post installation of gstreamer is due to an [issue](https://github.com/pypi/support/issues/8847#issuecomment-3899714506) with PyPi and should be solved in the future.
 
-</hfoption>
-<hfoption id="Linux (additional steps)">
+<details>
+<summary>🐧 <strong>Linux users: additional steps required</strong></summary>
 
-In your terminal, run:
-```bash
-uv pip install "reachy-mini"
-```
-
-**🐧 Linux users also need to install GStreamer manually.** Media management is performed by the GStreamer library, which requires a system-level installation on Linux:
+**GStreamer** must be installed manually on Linux:
 
 <div align="center">
 
@@ -248,10 +233,7 @@ uv pip install "reachy-mini"
 
 </div>
 
-<details>
-<summary>🐧 <strong>Linux users also need to set up USB permissions</strong></summary>
-
-Run these commands in your terminal:
+**USB permissions** — needed for the USB connection to Reachy Mini:
 
 ```bash
 echo 'SUBSYSTEM=="usb", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="55d3", MODE="0666", GROUP="dialout"
@@ -261,16 +243,16 @@ SUBSYSTEM=="usb", ATTRS{idVendor}=="38fb", ATTRS{idProduct}=="1001", MODE="0666"
 sudo udevadm control --reload-rules && sudo udevadm trigger
 sudo usermod -aG dialout $USER
 ```
+
+> [!WARNING]
+> Log out and log back in for the changes to take effect!
+
 </details>
 
 </hfoption>
-</hfoptions>
+<hfoption id="🔧 Option B: Source">
 
-### 🔧 Option B: Install from Source
 > **For developers** - Want to modify the SDK or contribute? Choose this option!
-
-<hfoptions id="install-source">
-<hfoption id="Linux / macOS / Windows">
 
 In your terminal, run:
 ```bash
@@ -283,16 +265,10 @@ If you want to use the simulation mode, you need to add the `mujoco` extra:
 uv sync --extra mujoco
 ```
 
-</hfoption>
-<hfoption id="Linux (additional steps)">
+<details>
+<summary>🐧 <strong>Linux users: additional steps required</strong></summary>
 
-In your terminal, run:
-```bash
-git clone https://github.com/pollen-robotics/reachy_mini && cd reachy_mini
-uv sync
-```
-
-**🐧 Linux users also need to install GStreamer manually.** Media management is performed by the GStreamer library, which requires a system-level installation on Linux:
+**GStreamer** must be installed manually on Linux:
 
 <div align="center">
 
@@ -300,11 +276,7 @@ uv sync
 
 </div>
 
-<details>
-<summary>🐧 <strong>Linux users also need to set up USB permissions</strong></summary>
-
-
-Run these commands in your terminal:
+**USB permissions** — needed for the USB connection to Reachy Mini:
 
 ```bash
 echo 'SUBSYSTEM=="usb", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="55d3", MODE="0666", GROUP="dialout"
@@ -314,6 +286,10 @@ SUBSYSTEM=="usb", ATTRS{idVendor}=="38fb", ATTRS{idProduct}=="1001", MODE="0666"
 sudo udevadm control --reload-rules && sudo udevadm trigger
 sudo usermod -aG dialout $USER
 ```
+
+> [!WARNING]
+> Log out and log back in for the changes to take effect!
+
 </details>
 
 </hfoption>
