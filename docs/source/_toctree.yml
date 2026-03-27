@@ -1,6 +1,8 @@
 - sections:
     - local: index
       title: Reachy Mini
+    - local: sdk-tutorials
+      title: SDK Tutorials
   title: Get Started
 - sections:
     - local: platforms/reachy_mini/get_started
@@ -65,6 +67,8 @@
       title: Motors Diagnosis
     - local: troubleshooting/change_mic_fpc_cable
       title: Change Mic FPC Cable
+    - local: troubleshooting/spherical_joints_maintenance
+      title: Spherical Joints Maintenance
   title: Help and support
 - isExpanded: false
   sections:
@@ -96,6 +100,8 @@
       title: Sound Playback
     - local: examples/sound_record
       title: Sound Recording
+    - local: examples/custom_media_manager
+      title: Custom Media Manager
   title: Examples
 - isExpanded: false
   sections:

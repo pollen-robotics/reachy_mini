@@ -6,21 +6,9 @@ This page describes advanced settings to fine-tune the camera and sound system o
 
 The Raspberry Pi camera is mounted on a CSI-to-USB adapter and is detected by the system as a UVC camera. It can be accessed directly by any program capable of opening a camera device.
 
-### Windows and macOS
+### Camera Access
 
-Currently, the default backend for these platforms is OpenCV. The parameters can be set in the [code](https://github.com/pollen-robotics/reachy_mini/tree/main/src/reachy_mini/media/camera_opencv.py):
-
-```python
-self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, self._resolution.value[0])
-self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self._resolution.value[1])
-
-# Example camera control settings:
-# self.cap.set(cv2.CAP_PROP_BRIGHTNESS, 0.5)
-# self.cap.set(cv2.CAP_PROP_CONTRAST, 0.5)
-# self.cap.set(cv2.CAP_PROP_SATURATION, 64)
-```
-
-Please refer to the Linux section below for a list of available parameters.
+The daemon manages the camera hardware and exposes frames via a local IPC endpoint or WebRTC streaming. Client-side code reads frames through the `MediaManager` using the `LOCAL` or `WEBRTC` backend.
 
 ### Linux
 
@@ -89,9 +77,7 @@ Using GStreamer allows you to directly visualize the effect of parameter changes
 gst-launch-1.0 v4l2src device=/dev/video2 extra-controls=s,exposure_auto=1,exposure_absolute=100,saturation=0 ! videoconvert ! autovideosink
 ```
 
-At the SDK level, the camera is controlled by GStreamer using the [v4l2src](https://github.com/pollen-robotics/reachy_mini/tree/main/src/reachy_mini/media/camera_gstreamer.py) component. You can view available parameters with the following command:
-
-The parameters can be set in [the code](https://github.com/pollen-robotics/reachy_mini/tree/main/src/reachy_mini/media/camera_gstreamer.py) as follows:
+At the daemon level, the camera is controlled by GStreamer using the [v4l2src](https://github.com/pollen-robotics/reachy_mini/tree/main/src/reachy_mini/media/media_server.py) component. The parameters can be set in the daemon's camera pipeline code:
 
 ```python
 camsrc = Gst.ElementFactory.make("v4l2src")
@@ -101,10 +87,7 @@ camsrc.set_property("device", cam_path)
 # extra_controls_structure.set_value("saturation", 64)
 # extra_controls_structure.set_value("brightness", 50)
 # camsrc.set_property("extra-controls", extra_controls_structure)
-self.pipeline.add(camsrc)
 ```
-
-The default OpenCV backend is also available for Linux.
 
 ## Microphones and Speakers
 

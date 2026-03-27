@@ -3,7 +3,7 @@
 All messages use a {"type": "...", ...payload} envelope.
 
 Client->Server command types:
-    set_target, set_head_joints, set_body_yaw, set_antennas,
+    set_target, set_head_joints, set_body_yaw, set_antennas, set_full_target,
     goto_target, wake_up, goto_sleep, play_sound,
     set_motor_mode, set_torque, get_motor_mode,
     set_gravity_compensation, set_automatic_body_yaw,
@@ -86,12 +86,16 @@ class DaemonStatus(BaseModel):
     desktop_app_daemon: bool
     simulation_enabled: Optional[bool]
     mockup_sim_enabled: Optional[bool]
+    no_media: bool = False
+    media_released: bool = False
+    camera_specs_name: str = ""
     backend_status: Optional[
         RobotBackendStatus | MujocoBackendStatus | MockupSimBackendStatus
     ]
     error: Optional[str] = None
     wlan_ip: Optional[str] = None
     version: Optional[str] = None
+
 
 # ------------------------------------------------------------------
 # Client -> Server commands
@@ -124,6 +128,20 @@ class SetAntennasCmd(BaseModel):
 
     type: Literal["set_antennas"] = "set_antennas"
     antennas: list[float]
+
+
+class SetFullTargetCmd(BaseModel):
+    """Set head, antennas, and body_yaw in a single message.
+
+    All fields are optional so callers can send any subset.
+    This avoids the overhead of three separate WebSocket messages
+    when updating head + antennas + body_yaw together.
+    """
+
+    type: Literal["set_full_target"] = "set_full_target"
+    head: list[float] | None = None
+    antennas: list[float] | None = None
+    body_yaw: float | None = None
 
 
 class GotoTargetCmd(BaseModel):
@@ -229,6 +247,7 @@ AnyCommand = Annotated[
     | SetHeadJointsCmd
     | SetBodyYawCmd
     | SetAntennasCmd
+    | SetFullTargetCmd
     | GotoTargetCmd
     | WakeUpCmd
     | GotoSleepCmd
@@ -334,7 +353,12 @@ class TaskProgress(BaseModel):
 
 
 AnyServerMsg = Annotated[
-    JointPositionsMsg | HeadPoseMsg | ImuDataMsg | RecordedDataMsg | DaemonStatus | TaskProgress,
+    JointPositionsMsg
+    | HeadPoseMsg
+    | ImuDataMsg
+    | RecordedDataMsg
+    | DaemonStatus
+    | TaskProgress,
     Field(discriminator="type"),
 ]
 server_msg_adapter: TypeAdapter[AnyServerMsg] = TypeAdapter(AnyServerMsg)

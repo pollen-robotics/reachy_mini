@@ -17,7 +17,7 @@ python sound_play.py --live --backend webrtc --tone-hz 440
 - `--wav <path>`: Path to a WAV file to play.
 - `--live`: Push a continuous sine tone.
 - `--tone-hz <freq>`: Sine wave frequency in Hz (`--live` mode only, default: 440).
-- `--backend`: Media backend to use (`default_no_video`, `gstreamer_no_video`, or `webrtc`).
+- `--backend`: Media backend to use (`default`, `local`, or `webrtc`).
 
 <literalinclude>
 {"path": "../../../examples/sound_play.py",

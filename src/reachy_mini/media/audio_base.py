@@ -1,14 +1,17 @@
-"""Base classes for audio implementations.
+"""Abstract base class for audio backends.
 
-The audio implementations support various backends and provide a unified
-interface for audio input/output. This module defines the abstract base class
-that all audio implementations should inherit from, ensuring consistent
-API across different audio backends.
+Provides shared audio constants, sample-rate / channel accessors,
+``get_audio_sample()``, ``get_input/output_audio_samplerate()``,
+``get_input/output_channels()``, ``set_max_output_buffers()``,
+Direction of Arrival (``get_DoA()``), and ``cleanup()`` logic so that
+``GStreamerAudio`` and ``GstWebRTCClient`` (which inherits from both
+``AudioBase`` and ``CameraBase``) don't duplicate them.
 
-Available backends include:
-- SoundDevice: Cross-platform audio backend using sounddevice library
-- GStreamer: GStreamer-based audio backend for advanced audio processing
-- WebRTC: WebRTC-based audio for real-time communication
+Subclasses must implement:
+- ``start_recording()``, ``stop_recording()``
+- ``start_playing()``, ``stop_playing()``
+- ``push_audio_sample()``
+- ``play_sound()``
 
 """
 
@@ -19,289 +22,116 @@ from typing import Optional
 import numpy as np
 import numpy.typing as npt
 
-from reachy_mini.media.audio_control_utils import ReSpeaker, init_respeaker_usb
+from reachy_mini.media.audio_doa import AudioDoA
+from reachy_mini.media.gstreamer_utils import get_sample
 
 
 class AudioBase(ABC):
-    """Abstract class for opening and managing audio devices.
-
-    This class defines the interface that all audio implementations must follow.
-    It provides common audio parameters and methods for managing audio devices,
-    including microphone input and speaker output functionality.
+    """Abstract audio backend.
 
     Attributes:
-        SAMPLE_RATE (int): Default sample rate for audio operations (16000 Hz).
-        CHANNELS (int): Default number of audio channels (2 for stereo).
-        logger (logging.Logger): Logger instance for audio-related messages.
-        _respeaker (Optional[ReSpeaker]): ReSpeaker microphone array device handler.
+        SAMPLE_RATE: Default sample rate (16 000 Hz — ReSpeaker hardware).
+        CHANNELS: Number of audio channels (2 — stereo).
 
     """
 
-    SAMPLE_RATE = 16000  # respeaker samplerate
-    CHANNELS = 2  # respeaker channels
+    SAMPLE_RATE = 16000
+    CHANNELS = 2
 
     def __init__(self, log_level: str = "INFO") -> None:
-        """Initialize the audio device.
-
-        Args:
-            log_level (str): Logging level for audio operations.
-                          Options: 'DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'.
-                          Default: 'INFO'.
-
-        Note:
-            This constructor initializes the logging system and attempts to detect
-            and initialize the ReSpeaker microphone array if available.
-
-        """
-        self.logger = logging.getLogger(__name__)
+        """Initialize shared audio attributes (DoA helper)."""
+        self.logger = logging.getLogger(type(self).__module__)
         self.logger.setLevel(log_level)
-        self._respeaker: Optional[ReSpeaker] = init_respeaker_usb()
-        self._playbin = None
+        self._doa = AudioDoA()
 
-    def __del__(self) -> None:
-        """Destructor to ensure resources are released."""
-        self.cleanup()
-
-    def cleanup(self) -> None:
-        """Cleanup resources before destruction.
-
-        This method should be called to release any resources held by the audio
-        implementation before the object is destroyed.
-
-        """
-        if self._respeaker:
-            self._respeaker.close()
-
-    @abstractmethod
-    def start_recording(self) -> None:
-        """Start recording audio.
-
-        This method should initialize the audio recording system and prepare
-        it to capture audio data. After calling this method, get_audio_sample()
-        should be able to retrieve recorded audio data.
-
-        Note:
-            Implementations should handle any necessary resource allocation and
-            error checking. If recording cannot be started, implementations should
-            log appropriate error messages.
-
-        Raises:
-            RuntimeError: If audio recording cannot be started due to hardware
-                        or configuration issues.
-
-        """
-        pass
-
-    @abstractmethod
     def get_audio_sample(self) -> Optional[npt.NDArray[np.float32]]:
-        """Read audio data from the device. Returns the data or None if error.
+        """Pull the next recorded audio chunk.
 
         Returns:
-            Optional[npt.NDArray[np.float32]]: A numpy array containing audio samples
-            in float32 format, or None if no data is available or an error occurred.
-
-            The array shape is typically (num_samples,) for mono or
-            (num_samples, num_channels) for multi-channel audio.
-
-        Note:
-            This method should be called after start_recording() has been called.
-            The sample rate and number of channels can be obtained via
-            get_input_audio_samplerate() and get_input_channels() respectively.
-
-        Example:
-            ```python
-            audio.start_recording()
-            samples = audio.get_audio_sample()
-            if samples is not None:
-                print(f"Got {len(samples)} audio samples")
-            ```
+            A float32 array of shape ``(num_samples, 2)`` (stereo), or
+            ``None`` if no data is available yet.
 
         """
-        pass
+        appsink = getattr(self, "_appsink_audio", None)
+        if appsink is None:
+            return None
+        sample = get_sample(appsink, self.logger)
+        if sample is None:
+            return None
+        return np.frombuffer(sample, dtype=np.float32).reshape(-1, 2)
 
     def get_input_audio_samplerate(self) -> int:
-        """Get the input samplerate of the audio device.
-
-        Returns:
-            int: The sample rate in Hz at which audio is being captured.
-                Default is 16000 Hz.
-
-        Note:
-            This value represents the number of audio samples captured per second
-            for each channel.
-
-        """
+        """Input sample rate in Hz (16 000)."""
         return self.SAMPLE_RATE
 
     def get_output_audio_samplerate(self) -> int:
-        """Get the output samplerate of the audio device.
-
-        Returns:
-            int: The sample rate in Hz at which audio is being played back.
-                Default is 16000 Hz.
-
-        Note:
-            This value represents the number of audio samples played per second
-            for each channel.
-
-        """
+        """Output sample rate in Hz (16 000)."""
         return self.SAMPLE_RATE
 
     def get_input_channels(self) -> int:
-        """Get the number of input channels of the audio device.
-
-        Returns:
-            int: The number of audio input channels (e.g., 1 for mono, 2 for stereo).
-                Default is 2 channels.
-
-        Note:
-            For the ReSpeaker microphone array, this typically returns 2 channels
-            representing the stereo microphone configuration.
-
-        """
+        """Return the number of input channels (2 — stereo)."""
         return self.CHANNELS
 
     def get_output_channels(self) -> int:
-        """Get the number of output channels of the audio device.
+        """Return the number of output channels (2 — stereo)."""
+        return self.CHANNELS
 
-        Returns:
-            int: The number of audio output channels (e.g., 1 for mono, 2 for stereo).
-                Default is 2 channels.
+    def set_max_output_buffers(self, max_buffers: int) -> None:
+        """Limit the number of queued playback buffers.
 
-        Note:
-            This determines how audio data should be formatted when passed to
-            push_audio_sample() method.
+        Args:
+            max_buffers: Maximum number of buffers to queue.
 
         """
-        return self.CHANNELS
+        appsrc = getattr(self, "_appsrc", None)
+        if appsrc is not None:
+            appsrc.set_property("max-buffers", max_buffers)
+            appsrc.set_property("leaky-type", 2)  # drop old buffers
+        else:
+            self.logger.warning(
+                "AppSrc is not initialized. Call start_playing() first."
+            )
+
+    def get_DoA(self) -> tuple[float, bool] | None:
+        """Get the Direction of Arrival (DoA) from the ReSpeaker.
+
+        Returns:
+            A tuple ``(angle_radians, speech_detected)`` or ``None``
+            if the device is unavailable.
+
+        """
+        return self._doa.get_DoA()
+
+    def cleanup(self) -> None:
+        """Release shared resources (DoA USB device)."""
+        self._doa.close()
+
+    @abstractmethod
+    def start_recording(self) -> None:
+        """Start capturing audio from the microphone."""
+        ...
 
     @abstractmethod
     def stop_recording(self) -> None:
-        """Close the audio device and release resources.
-
-        This method should stop any ongoing audio recording and release
-        all associated resources. After calling this method, get_audio_sample()
-        should return None until start_recording() is called again.
-
-        Note:
-            Implementations should ensure proper cleanup to prevent resource leaks.
-
-        """
-        pass
+        """Stop the recording pipeline."""
+        ...
 
     @abstractmethod
     def start_playing(self) -> None:
-        """Start playing audio.
-
-        This method should initialize the audio playback system and prepare
-        it to receive audio data via push_audio_sample().
-
-        Note:
-            Implementations should handle any necessary resource allocation and
-            error checking. If playback cannot be started, implementations should
-            log appropriate error messages.
-
-        Raises:
-            RuntimeError: If audio playback cannot be started due to hardware
-                        or configuration issues.
-
-        """
-        pass
-
-    def clear_output_buffer(self) -> None:
-        """Clear the output buffer.
-
-        This method flushes the output buffer to prevent push samples from being played.
-        Overwrite if necessary. It seems that set_max_output_buffers with a low value
-        may be enough for gstreamer backend.
-
-        """
-        pass
-
-    @abstractmethod
-    def set_max_output_buffers(self, max_buffers: int) -> None:
-        """Set the maximum number of output buffers to queue in the player.
-
-        Args:
-            max_buffers (int): Maximum number of buffers to queue.
-
-        """
-        pass
-
-    @abstractmethod
-    def push_audio_sample(self, data: npt.NDArray[np.float32]) -> None:
-        """Push audio data to the output device.
-
-        Args:
-            data (npt.NDArray[np.float32]): Audio samples to be played.
-                The array should contain float32 values typically in the range [-1.0, 1.0].
-
-                For mono audio: shape should be (num_samples,)
-                For stereo audio: shape should be (num_samples, 2)
-
-        Note:
-            This method should be called after start_playing() has been called.
-            The audio data will be played at the sample rate returned by
-            get_output_audio_samplerate().
-
-        """
-        pass
+        """Start the playback pipeline."""
+        ...
 
     @abstractmethod
     def stop_playing(self) -> None:
-        """Stop playing audio and release resources.
+        """Stop the playback pipeline."""
+        ...
 
-        This method should stop any ongoing audio playback and release
-        all associated resources. After calling this method, push_audio_sample()
-        calls will have no effect until start_playing() is called again.
-
-        Note:
-            Implementations should ensure proper cleanup to prevent resource leaks.
-
-        """
-        pass
+    @abstractmethod
+    def push_audio_sample(self, data: npt.NDArray[np.float32]) -> None:
+        """Push audio data to the output."""
+        ...
 
     @abstractmethod
     def play_sound(self, sound_file: str) -> None:
-        """Play a sound file.
-
-        Args:
-            sound_file (str): Path to the sound file to play.
-                Supported formats depend on the specific implementation.
-
-        Note:
-            This is a convenience method that handles the complete playback
-            of a sound file from start to finish. For more control over
-            audio playback, use start_playing(), push_audio_sample(),
-            and stop_playing() methods.
-
-        Example:
-            ```python
-            audio.play_sound("/path/to/sound.wav")
-            ```
-
-        """
-        pass
-
-    def get_DoA(self) -> tuple[float, bool] | None:
-        """Get the Direction of Arrival (DoA) value from the ReSpeaker device.
-
-        The spatial angle is given in radians:
-        0 radians is left, π/2 radians is front/back, π radians is right.
-
-        Note: The microphone array requires firmware version 2.1.0 or higher to support this feature.
-        The firmware is located in src/reachy_mini/assets/firmware/*.bin.
-        Refer to https://wiki.seeedstudio.com/respeaker_xvf3800_introduction/#update-firmware for the upgrade process.
-
-        Returns:
-            tuple: A tuple containing the DoA value as a float (radians) and the speech detection as a bool, or None if the device is not found.
-
-        """
-        if not self._respeaker:
-            self.logger.warning("ReSpeaker device not found.")
-            return None
-
-        result = self._respeaker.read("DOA_VALUE_RADIANS")
-        if result is None:
-            return None
-        return float(result[0]), bool(result[1])
+        """Play a sound file."""
+        ...

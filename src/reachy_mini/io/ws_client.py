@@ -14,6 +14,7 @@ from uuid import UUID, uuid4
 
 import numpy as np
 import numpy.typing as npt
+import requests
 import websockets.exceptions
 import websockets.sync.client as ws_sync
 from pydantic import ValidationError
@@ -31,6 +32,8 @@ from reachy_mini.io.protocol import (
     TaskRequest,
     server_msg_adapter,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class WSClient(AbstractClient):
@@ -97,7 +100,7 @@ class WSClient(AbstractClient):
                 raise TimeoutError(
                     "Timeout while waiting for connection with the server."
                 )
-            logging.info("Waiting for connection with the server...")
+            logger.info("Waiting for connection with the server...")
 
         self._is_alive = True
         self._check_alive_evt = threading.Event()
@@ -280,6 +283,40 @@ class WSClient(AbstractClient):
 
         with self._tasks_lock:
             del self.tasks[task_uid]
+
+    def release_media(self) -> bool:
+        """Ask the daemon to release camera/audio hardware.
+
+        Returns:
+            True on success, False on failure.
+
+        """
+        return self._media_request("/api/media/release")
+
+    def acquire_media(self) -> bool:
+        """Ask the daemon to re-acquire camera/audio hardware.
+
+        Returns:
+            True on success, False on failure.
+
+        """
+        return self._media_request("/api/media/acquire")
+
+    def _media_request(self, path: str) -> bool:
+        """POST to a daemon media endpoint.
+
+        Returns:
+            True on success, False on failure.
+
+        """
+        url = f"http://{self.host}:{self.port}{path}"
+        try:
+            resp = requests.post(url, timeout=10)
+            resp.raise_for_status()
+            return True
+        except requests.RequestException as e:
+            logging.warning("Media request %s failed: %s", path, e)
+            return False
 
 
 @dataclass

@@ -26,10 +26,12 @@ from fastapi.templating import Jinja2Templates
 from reachy_mini.apps.manager import AppManager
 from reachy_mini.daemon.app.routers import (
     apps,
+    camera,
     daemon,
     hf_auth,
     kinematics,
     logs,
+    media,
     motors,
     move,
     sdk_ws,
@@ -51,6 +53,8 @@ from reachy_mini.utils.wireless_version.startup_check import (
     check_and_update_wireless_launcher,
 )
 
+logger = logging.getLogger(__name__)
+
 
 @dataclass
 class Args:
@@ -69,7 +73,7 @@ class Args:
     mockup_sim: bool = False
     scene: str = "empty"
     headless: bool = False
-    use_audio: bool = True
+    no_media: bool = False
 
     kinematics_engine: str = "AnalyticalKinematics"
     check_collision: bool = False
@@ -110,9 +114,9 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
             """Download datasets with logging."""
             try:
                 preload_default_datasets()
-                logging.info("Recorded move datasets pre-loaded successfully")
+                logger.info("Recorded move datasets pre-loaded successfully")
             except Exception as e:
-                logging.warning(f"Failed to pre-load some datasets: {e}")
+                logger.warning(f"Failed to pre-load some datasets: {e}")
 
         async def dataset_updater(interval_hours: float) -> None:
             """Background task that periodically checks for dataset updates."""
@@ -120,14 +124,14 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
             while True:
                 try:
                     await asyncio.sleep(interval_seconds)
-                    logging.info("Checking for dataset updates...")
+                    logger.info("Checking for dataset updates...")
                     loop = asyncio.get_event_loop()
                     await loop.run_in_executor(None, preload_with_logging)
                 except asyncio.CancelledError:
-                    logging.info("Dataset updater task cancelled")
+                    logger.info("Dataset updater task cancelled")
                     break
                 except Exception as e:
-                    logging.warning(f"Error in dataset updater: {e}")
+                    logger.warning(f"Error in dataset updater: {e}")
 
         # Pre-download recorded move datasets in background to avoid delays on first play
         # This runs in asyncio's default ThreadPoolExecutor (fire and forget)
@@ -140,7 +144,7 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
             dataset_updater_task = asyncio.create_task(
                 dataset_updater(args.dataset_update_interval_hours)
             )
-            logging.info(
+            logger.info(
                 f"Dataset updater started (interval: {args.dataset_update_interval_hours}h)"
             )
 
@@ -152,7 +156,7 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
                     mockup_sim=args.mockup_sim,
                     scene=args.scene,
                     headless=args.headless,
-                    use_audio=args.use_audio,
+                    use_audio=not args.no_media,
                     kinematics_engine=args.kinematics_engine,
                     check_collision=args.check_collision,
                     wake_up_on_start=args.wake_up_on_start,
@@ -178,18 +182,18 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
 
             # Ensure cleanup happens even if there's an exception
             try:
-                logging.info("Shutting down app manager...")
+                logger.info("Shutting down app manager...")
                 await app.state.app_manager.close()
             except Exception as e:
-                logging.exception(f"Error closing app manager: {e}")
+                logger.exception(f"Error closing app manager: {e}")
 
             try:
-                logging.info("Shutting down daemon...")
+                logger.info("Shutting down daemon...")
                 await app.state.daemon.stop(
                     goto_sleep_on_stop=args.goto_sleep_on_stop,
                 )
             except Exception as e:
-                logging.exception(f"Error stopping daemon: {e}")
+                logger.exception(f"Error stopping daemon: {e}")
 
     app = FastAPI(
         lifespan=lifespan,
@@ -201,6 +205,8 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
         wireless_version=args.wireless_version,
         desktop_app_daemon=args.desktop_app_daemon,
         log_level=args.log_level,
+        no_media=args.no_media,
+        use_sim=args.sim,
     )
     app.state.app_manager = AppManager(
         wireless_version=args.wireless_version,
@@ -210,9 +216,11 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
 
     router = APIRouter(prefix="/api")
     router.include_router(apps.router)
+    router.include_router(camera.router)
     router.include_router(daemon.router)
     router.include_router(hf_auth.router)
     router.include_router(kinematics.router)
+    router.include_router(media.router)
     router.include_router(motors.router)
     router.include_router(move.router)
     router.include_router(state.router)
@@ -284,14 +292,28 @@ def run_app(args: Args) -> None:
     handler = logging.StreamHandler(sys.stderr)
     handler.setLevel(args.log_level)
     handler.setFormatter(
-        logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+        logging.Formatter("%(name)s - %(levelname)s - %(message)s")
     )
+    root_logger.handlers.clear()
     root_logger.addHandler(handler)
 
     # Explicitly configure the apps.manager logger to ensure propagation
     apps_logger = logging.getLogger("reachy_mini.apps.manager")
     apps_logger.setLevel(args.log_level)
     apps_logger.propagate = True  # Ensure it propagates to root logger
+
+    # Downgrade noisy polling routes to DEBUG in uvicorn access logs
+    class AccessLogFilter(logging.Filter):
+        _POLLING_PATHS = {"/health-check", "/api/hf-auth/relay-status"}
+
+        def filter(self, record: logging.LogRecord) -> bool:
+            msg = record.getMessage()
+            if any(path in msg for path in self._POLLING_PATHS):
+                record.levelno = logging.DEBUG
+                record.levelname = "DEBUG"
+            return True
+
+    logging.getLogger("uvicorn.access").addFilter(AccessLogFilter())
 
     # Install exception hook to catch uncaught exceptions
     def exception_hook(
@@ -354,11 +376,11 @@ def run_app(args: Args) -> None:
                     )
                     health_check_event.clear()
                 except asyncio.TimeoutError:
-                    logging.warning("Health check timeout reached, stopping app.")
+                    logger.warning("Health check timeout reached, stopping app.")
                     server.should_exit = True
                     break
                 except asyncio.CancelledError:
-                    logging.info("Health check task cancelled.")
+                    logger.info("Health check task cancelled.")
                     break
 
         try:
@@ -368,9 +390,9 @@ def run_app(args: Args) -> None:
                 )
             await server.serve()
         except KeyboardInterrupt:
-            logging.info("Received Ctrl-C, shutting down gracefully.")
+            logger.info("Received Ctrl-C, shutting down gracefully.")
         except Exception as e:
-            logging.exception(f"Error during server operation: {e}")
+            logger.exception(f"Error during server operation: {e}")
             raise
         finally:
             # Cancel health check task if it exists
@@ -384,9 +406,9 @@ def run_app(args: Args) -> None:
     try:
         asyncio.run(run_server())
     except KeyboardInterrupt:
-        logging.info("Shutdown complete.")
+        logger.info("Shutdown complete.")
     except Exception as e:
-        logging.exception(f"Error during shutdown: {e}")
+        logger.exception(f"Error during shutdown: {e}")
         sys.stderr.flush()
         raise
 
@@ -464,11 +486,10 @@ def main() -> None:
         help="Run the daemon in headless mode (default: False).",
     )
     parser.add_argument(
-        "--deactivate-audio",
-        action="store_false",
-        dest="use_audio",
-        default=default_args.use_audio,
-        help="Deactivate audio (default: True).",
+        "--no-media",
+        action="store_true",
+        default=default_args.no_media,
+        help="Disable all media (camera, audio, WebRTC). Use if you handle media yourself.",
     )
     # Daemon options
     parser.add_argument(
@@ -591,7 +612,7 @@ def main() -> None:
     if args.log_file:
         file_handler = logging.FileHandler(args.log_file, mode="a")
         file_handler.setFormatter(
-            logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+            logging.Formatter("%(name)s - %(levelname)s - %(message)s")
         )
         logging.getLogger().addHandler(file_handler)
         logging.getLogger().setLevel(args.log_level)

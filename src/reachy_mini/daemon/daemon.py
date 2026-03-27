@@ -40,6 +40,8 @@ class Daemon:
         robot_name: str = "reachy_mini",
         wireless_version: bool = False,
         desktop_app_daemon: bool = False,
+        no_media: bool = False,
+        use_sim: bool = False,
     ) -> None:
         """Initialize the Reachy Mini daemon."""
         self.log_level = log_level
@@ -50,6 +52,7 @@ class Daemon:
 
         self.wireless_version = wireless_version
         self.desktop_app_daemon = desktop_app_daemon
+        self.no_media = no_media
 
         self.backend: "RobotBackend | MujocoBackend | MockupSimBackend | None" = None
         # Get package version
@@ -67,6 +70,7 @@ class Daemon:
             desktop_app_daemon=desktop_app_daemon,
             simulation_enabled=None,
             mockup_sim_enabled=None,
+            no_media=no_media,
             backend_status=None,
             error=None,
             wlan_ip=None,
@@ -76,31 +80,74 @@ class Daemon:
         self.backend_run_thread: "Thread | None" = None
         self._thread_event_publish_status = Event()
 
-        self._webrtc: Optional[Any] = (
-            None  # type GstWebRTC imported for wireless version only
+        self._media_server: Optional["GstMediaServer"] = (
+            None  # GstMediaServer when media is enabled
         )
-        if wireless_version:
-            from reachy_mini.media.webrtc_daemon import GstWebRTC
+        self._media_released = False
+        if not no_media:
+            from reachy_mini.media.media_server import GstMediaServer
 
             try:
-                self._webrtc = GstWebRTC(log_level)
+                self._media_server = GstMediaServer(log_level, use_sim=use_sim)
+                self._status.camera_specs_name = self._media_server.camera_specs.name
             except Exception as e:
-                self.logger.error(f"Failed to initialize WebRTC: {e}")
-                self._webrtc = None
+                self.logger.error(f"Failed to initialize media server: {e}")
+                self._media_server = None
+        else:
+            self.logger.info(
+                "Media disabled (--no-media). No camera, audio, or media server."
+            )
 
     def __del__(self) -> None:
         """Destructor to ensure proper cleanup."""
         self.logger.debug("Cleaning up Daemon resources...")
-        if self._webrtc is not None:
-            self._webrtc.stop()
-            self._webrtc.__del__()
-            self._webrtc = None
+        if self._media_server is not None:
+            self._media_server.stop()
+            self._media_server.close()
+            self._media_server = None
+
+    @property
+    def media_released(self) -> bool:
+        """Whether media hardware has been released for direct access."""
+        return self._media_released
+
+    async def release_media(self) -> None:
+        """Release camera and audio hardware so clients can access them directly.
+
+        Stops the GstMediaServer pipeline and central signalling relay.
+        Idempotent: no-op if already released or no media server.
+        """
+        if self._media_released or self._media_server is None:
+            return
+
+        self.logger.info("Releasing media hardware for direct access...")
+        self._media_server.stop()
+        await self._stop_central_signaling_relay()
+        self._media_released = True
+        self._status.media_released = True
+        self.logger.info("Media hardware released.")
+
+    async def acquire_media(self) -> None:
+        """Re-acquire camera and audio hardware after a release.
+
+        Restarts the GstMediaServer pipeline and central signalling relay.
+        Idempotent: no-op if not currently released or no media server.
+        """
+        if not self._media_released or self._media_server is None:
+            return
+
+        self.logger.info("Re-acquiring media hardware...")
+        self._media_server.start()
+        await self._start_central_signaling_relay()
+        self._media_released = False
+        self._status.media_released = False
+        self.logger.info("Media hardware re-acquired.")
 
     async def _start_central_signaling_relay(self) -> None:
         """Start the central signaling relay for remote WebRTC access."""
         global _central_relay_task
 
-        if not self._webrtc:
+        if not self._media_server:
             return
 
         try:
@@ -148,7 +195,7 @@ class Daemon:
         check_collision: bool = False,
         kinematics_engine: str = "AnalyticalKinematics",
         headless: bool = False,
-        use_audio: bool = True,
+        use_audio: bool = True,  # kept for backward compat, overridden by no_media
         hardware_config_filepath: str | None = None,
     ) -> "DaemonState":
         """Start the Reachy Mini daemon.
@@ -186,12 +233,15 @@ class Daemon:
         if not localhost_only:
             self._status.wlan_ip = get_ip_address()
 
+        # When no_media is set, override use_audio to False
+        effective_use_audio = use_audio and not self.no_media
+
         self._start_params = {
             "sim": sim,
             "mockup_sim": mockup_sim,
             "serialport": serialport,
             "headless": headless,
-            "use_audio": use_audio,
+            "use_audio": effective_use_audio,
             "scene": scene,
             "localhost_only": localhost_only,
         }
@@ -209,13 +259,15 @@ class Daemon:
                 check_collision=check_collision,
                 kinematics_engine=kinematics_engine,
                 headless=headless,
-                use_audio=use_audio,
+                use_audio=effective_use_audio,
                 hardware_config_filepath=hardware_config_filepath,
             )
 
             self.ws_server = WSServer(backend=self.backend)
             self.ws_server.start()
-            self._thread_publish_status = Thread(target=self._publish_status, daemon=True)
+            self._thread_publish_status = Thread(
+                target=self._publish_status, daemon=True
+            )
             self._thread_publish_status.start()
 
             def backend_wrapped_run() -> None:
@@ -243,6 +295,14 @@ class Daemon:
                 self._status.state = DaemonState.ERROR
                 self._status.error = self.backend.error
                 return self._status.state
+
+            if self._media_server and not self._media_released:
+                if self.backend is not None:
+                    self.backend.setup_media_server(self._media_server)
+                self._media_server.start()
+
+                # Start central signaling relay for remote WebRTC access
+                await self._start_central_signaling_relay()
 
             if wake_up_on_start:
                 try:
@@ -331,9 +391,11 @@ class Daemon:
             self.backend.is_shutting_down = True
             self._thread_event_publish_status.set()
 
-            if self._webrtc:
-                # We use pause() instead of stop() to keep the signalling server running and the producer registered, allowing proper restart.
-                self._webrtc.pause()
+            if self._media_server and not self._media_released:
+                # Stop pipeline (NULL) to release camera/audio hardware so
+                # external tools (rpicam-still, etc.) can access them.
+                # start() will rebuild the pipeline from scratch.
+                self._media_server.stop()
                 # Stop the central signaling relay
                 await self._stop_central_signaling_relay()
 
@@ -355,7 +417,9 @@ class Daemon:
             if self.backend_run_thread is not None:
                 self.backend_run_thread.join(timeout=5.0)
                 if self.backend_run_thread.is_alive():
-                    self.logger.warning("Backend did not stop in time, forcing shutdown.")
+                    self.logger.warning(
+                        "Backend did not stop in time, forcing shutdown."
+                    )
                     self._status.state = DaemonState.ERROR
 
             self.backend.close()
@@ -546,5 +610,3 @@ class Daemon:
                 wireless_version=wireless_version,
                 hardware_config_filepath=hardware_config_filepath,
             )
-
-
