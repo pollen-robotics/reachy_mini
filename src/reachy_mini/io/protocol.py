@@ -233,6 +233,13 @@ class AppendRecordCmd(BaseModel):
     record: dict[str, Any]
 
 
+class SetSpeechOffsetsCmd(BaseModel):
+    """Set head-wobbler speech offsets (composed with target pose before IK)."""
+
+    type: Literal["set_speech_offsets"] = "set_speech_offsets"
+    offsets: list[float]  # [x_m, y_m, z_m, roll_rad, pitch_rad, yaw_rad]
+
+
 AnyCommand = Annotated[
     SetTargetCmd
     | SetHeadJointsCmd
@@ -251,7 +258,8 @@ AnyCommand = Annotated[
     | GetStateCmd
     | StartRecordingCmd
     | StopRecordingCmd
-    | AppendRecordCmd,
+    | AppendRecordCmd
+    | SetSpeechOffsetsCmd,
     Field(discriminator="type"),
 ]
 

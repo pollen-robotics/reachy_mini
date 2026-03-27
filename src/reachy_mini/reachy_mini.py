@@ -26,6 +26,7 @@ from reachy_mini.io.protocol import (
     SetFullTargetCmd,
     SetGravityCompensationCmd,
     SetHeadJointsCmd,
+    SetSpeechOffsetsCmd,
     SetTargetCmd,
     SetTorqueCmd,
     StartRecordingCmd,
@@ -228,6 +229,28 @@ class ReachyMini:
         self.media_manager = self._configure_mediamanager(self._media_backend, self._log_level)
         self._media_released = False
         self.logger.info("Media re-acquired by daemon.")
+
+    def enable_wobbling(self) -> None:
+        """Enable audio-reactive head wobbling.
+
+        When enabled, audio played through ``media.play_sound()`` or
+        ``media.push_audio_sample()`` is analysed and converted into
+        subtle head movements that are composed with the current target
+        pose on the daemon side.
+
+        """
+        def _send_offsets(offsets: tuple[float, float, float, float, float, float]) -> None:
+            self.client.send_command(SetSpeechOffsetsCmd(offsets=list(offsets)))
+
+        self.media_manager.enable_wobbling(_send_offsets)
+        self.logger.info("Head wobbling enabled")
+
+    def disable_wobbling(self) -> None:
+        """Disable audio-reactive head wobbling and reset offsets to zero."""
+        self.media_manager.disable_wobbling()
+        # Zero out daemon-side offsets
+        self.client.send_command(SetSpeechOffsetsCmd(offsets=[0.0, 0.0, 0.0, 0.0, 0.0, 0.0]))
+        self.logger.info("Head wobbling disabled")
 
     @property
     def imu(self) -> Dict[str, List[float] | float] | None:
