@@ -11,7 +11,7 @@ from reachy_mini.reachy_mini import ReachyMini
 
 
 async def _start_app_server(
-    **daemon_kwargs: object,
+    **args_kwargs: object,
 ) -> tuple[Daemon, uvicorn.Server, threading.Thread, int]:
     """Start a full FastAPI + daemon server in a background thread.
 
@@ -24,8 +24,8 @@ async def _start_app_server(
         no_media=True,
         autostart=True,
         fastapi_port=0,  # let OS pick a free port
+        **args_kwargs,
     )
-
     app = create_app(args)
     config = uvicorn.Config(app, host="127.0.0.1", port=0, log_level="warning")
     server = uvicorn.Server(config)
@@ -42,6 +42,22 @@ async def _start_app_server(
 
     return app.state.daemon, server, thread, port
 
+
+@pytest.mark.asyncio
+async def test_daemon_reports_active_sim_camera() -> None:
+    daemon, server, thread, port = await _start_app_server(sim_camera="studio_close")
+    try:
+        with ReachyMini(host="localhost", port=port, media_backend="no_media") as mini:
+            status = mini.client.get_status()
+            assert status.simulation_enabled is True
+            assert status.active_camera_name == "studio_close"
+            assert "studio_close" in status.available_camera_names
+            assert status.camera_specs_name == "mujoco_studio_close"
+            assert status.backend_status is not None
+            assert status.backend_status.active_camera_name == "studio_close"
+    finally:
+        await daemon.stop(goto_sleep_on_stop=False)
+        await _stop_app_server(server, thread)
 
 async def _stop_app_server(server: uvicorn.Server, thread: threading.Thread) -> None:
     """Gracefully shut down the uvicorn server."""

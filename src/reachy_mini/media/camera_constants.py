@@ -44,6 +44,8 @@ class CameraResolution(Enum):
         R1536x864at40fps: 1536x864 resolution at 40 fps
         R1280x720at60fps: 1280x720 resolution at 60 fps (HD)
         R1280x720at30fps: 1280x720 resolution at 30 fps (HD)
+        R1280x720at25fps: 1280x720 resolution at 25 fps (HD)
+        R640x640at25fps: 640x640 resolution at 25 fps
         R1920x1080at30fps: 1920x1080 resolution at 30 fps (Full HD)
         R1920x1080at60fps: 1920x1080 resolution at 60 fps (Full HD)
         R2304x1296at30fps: 2304x1296 resolution at 30 fps
@@ -86,6 +88,9 @@ class CameraResolution(Enum):
 
     R1280x720at60fps = (1280, 720, 60, 1.0)
     R1280x720at30fps = (1280, 720, 30, 1.0)
+    R1280x720at25fps = (1280, 720, 25, 1.0)
+    R640x640at25fps = (640, 640, 25, 1.0)
+    R640x640at30fps = (640, 640, 30, 1.0)
 
     R1920x1080at30fps = (1920, 1080, 30, 1.115)
     R1920x1080at60fps = (1920, 1080, 60, 1.115)
@@ -270,26 +275,58 @@ class OlderRPiCamSpecs(ReachyMiniLiteCamSpecs):
 
 
 @dataclass
-class MujocoCameraSpecs(CameraSpecs):
-    """Mujoco simulated camera specifications."""
+class MujocoSimCameraSpecs(CameraSpecs):
+    """Base class for MuJoCo simulated camera specifications."""
+
+
+@dataclass
+class MujocoCameraSpecs(MujocoSimCameraSpecs):
+    """MuJoCo simulated robot-eye camera specifications."""
 
     name = "mujoco"
     available_resolutions = [
-        CameraResolution.R1280x720at60fps,
+        CameraResolution.R1280x720at25fps,
     ]
-    default_resolution = CameraResolution.R1280x720at60fps
+    default_resolution = CameraResolution.R1280x720at25fps
     # ideal camera matrix
     K = np.array(
         [
             [
-                CameraResolution.R1280x720at60fps.value[0],
+                CameraResolution.R1280x720at25fps.value[0],
                 0.0,
-                CameraResolution.R1280x720at60fps.value[0] / 2,
+                CameraResolution.R1280x720at25fps.value[0] / 2,
             ],
             [
                 0.0,
-                CameraResolution.R1280x720at60fps.value[1],
-                CameraResolution.R1280x720at60fps.value[1] / 2,
+                CameraResolution.R1280x720at25fps.value[1],
+                CameraResolution.R1280x720at25fps.value[1] / 2,
+            ],
+            [0.0, 0.0, 1.0],
+        ]
+    )
+    D = np.zeros((5,))  # no distortion
+
+
+@dataclass
+class MujocoStudioCloseCameraSpecs(MujocoSimCameraSpecs):
+    """MuJoCo simulated observer camera specifications."""
+
+    name = "mujoco_studio_close"
+    available_resolutions = [
+        CameraResolution.R640x640at25fps,
+    ]
+    default_resolution = CameraResolution.R640x640at25fps
+    K = np.array(
+        [
+            [
+                CameraResolution.R640x640at25fps.value[0],
+                0.0,
+                CameraResolution.R640x640at25fps.value[0] / 2,
+            ],
+            [
+                0.0,
+                CameraResolution.R640x640at25fps.value[1],
+                CameraResolution.R640x640at25fps.value[1] / 2,
             ],
             [0.0, 0.0, 1.0],
         ]
@@ -327,6 +364,12 @@ _SPECS_BY_NAME: dict[str, type[CameraSpecs]] = {
     "older_rpi": OlderRPiCamSpecs,
     "generic": GenericWebcamSpecs,
     "mujoco": MujocoCameraSpecs,
+    "mujoco_studio_close": MujocoStudioCloseCameraSpecs,
+}
+
+_SIM_CAMERA_SPECS_BY_NAME: dict[str, type[MujocoSimCameraSpecs]] = {
+    "eye_camera": MujocoCameraSpecs,
+    "studio_close": MujocoStudioCloseCameraSpecs,
 }
 
 
@@ -357,3 +400,18 @@ def get_camera_specs_by_name(name: str) -> CameraSpecs:
         )
         return ReachyMiniLiteCamSpecs()
     return cls()
+
+
+def get_sim_camera_specs_by_name(name: str) -> MujocoSimCameraSpecs:
+    """Look up MuJoCo simulated camera specs by camera name."""
+    cls = _SIM_CAMERA_SPECS_BY_NAME.get(name)
+    if cls is None:
+        raise ValueError(
+            f"Unknown simulated camera {name!r}. Available cameras: {list(_SIM_CAMERA_SPECS_BY_NAME)}"
+        )
+    return cls()
+
+
+def get_available_sim_camera_names() -> list[str]:
+    """Return the supported MuJoCo simulated camera names."""
+    return list(_SIM_CAMERA_SPECS_BY_NAME)

@@ -18,6 +18,10 @@ from reachy_mini.daemon.utils import (
 )
 from reachy_mini.io.protocol import DaemonState, DaemonStatus, MotorControlMode
 from reachy_mini.io.ws_server import WSServer
+from reachy_mini.media.camera_constants import (
+    get_available_sim_camera_names,
+    get_sim_camera_specs_by_name,
+)
 from reachy_mini.tools.reflash_motors import reflash_motors_if_needed
 
 from .backend.mockup_sim import MockupSimBackend
@@ -42,6 +46,7 @@ class Daemon:
         desktop_app_daemon: bool = False,
         no_media: bool = False,
         use_sim: bool = False,
+        sim_camera_name: str = "eye_camera",
     ) -> None:
         """Initialize the Reachy Mini daemon."""
         self.log_level = log_level
@@ -53,6 +58,7 @@ class Daemon:
         self.wireless_version = wireless_version
         self.desktop_app_daemon = desktop_app_daemon
         self.no_media = no_media
+        self.sim_camera_name = sim_camera_name
 
         self.backend: "RobotBackend | MujocoBackend | MockupSimBackend | None" = None
         # Get package version
@@ -71,6 +77,8 @@ class Daemon:
             simulation_enabled=None,
             mockup_sim_enabled=None,
             no_media=no_media,
+            active_camera_name=sim_camera_name if use_sim else "",
+            available_camera_names=get_available_sim_camera_names() if use_sim else [],
             backend_status=None,
             error=None,
             wlan_ip=None,
@@ -84,19 +92,7 @@ class Daemon:
             None  # GstMediaServer when media is enabled
         )
         self._media_released = False
-        if not no_media:
-            from reachy_mini.media.media_server import GstMediaServer
-
-            try:
-                self._media_server = GstMediaServer(log_level, use_sim=use_sim)
-                self._status.camera_specs_name = self._media_server.camera_specs.name
-            except Exception as e:
-                self.logger.error(f"Failed to initialize media server: {e}")
-                self._media_server = None
-        else:
-            self.logger.info(
-                "Media disabled (--no-media). No camera, audio, or media server."
-            )
+        self._configure_media_server(use_sim=use_sim, sim_camera_name=sim_camera_name)
 
     def __del__(self) -> None:
         """Destructor to ensure proper cleanup."""
@@ -104,6 +100,45 @@ class Daemon:
         if self._media_server is not None:
             self._media_server.stop()
             self._media_server.close()
+            self._media_server = None
+
+    def _configure_media_server(self, *, use_sim: bool, sim_camera_name: str) -> None:
+        """Create or recreate the media server for the current camera mode."""
+        self._status.active_camera_name = sim_camera_name if use_sim else ""
+        self._status.available_camera_names = (
+            get_available_sim_camera_names() if use_sim else []
+        )
+        self._status.camera_specs_name = ""
+        if use_sim:
+            try:
+                self._status.camera_specs_name = get_sim_camera_specs_by_name(
+                    sim_camera_name
+                ).name
+            except ValueError as e:
+                self.logger.error(f"Invalid simulated camera selection: {e}")
+
+        if self._media_server is not None:
+            self._media_server.stop()
+            self._media_server.close()
+            self._media_server = None
+
+        if self.no_media:
+            self.logger.info(
+                "Media disabled (--no-media). No camera, audio, or media server."
+            )
+            return
+
+        from reachy_mini.media.media_server import GstMediaServer
+
+        try:
+            self._media_server = GstMediaServer(
+                self.log_level,
+                use_sim=use_sim,
+                sim_camera_name=sim_camera_name,
+            )
+            self._status.camera_specs_name = self._media_server.camera_specs.name
+        except Exception as e:
+            self.logger.error(f"Failed to initialize media server: {e}")
             self._media_server = None
 
     @property
@@ -190,6 +225,7 @@ class Daemon:
         mockup_sim: bool = False,
         serialport: str = "auto",
         scene: str = "empty",
+        sim_camera_name: str | None = None,
         localhost_only: bool = True,
         wake_up_on_start: bool = True,
         check_collision: bool = False,
@@ -205,6 +241,7 @@ class Daemon:
             mockup_sim (bool): If True, run in lightweight simulation mode (no MuJoCo). Defaults to False.
             serialport (str): Serial port for real motors. Defaults to "auto", which will try to find the port automatically.
             scene (str): Name of the scene to load in simulation mode ("empty" or "minimal"). Defaults to "empty".
+            sim_camera_name (str | None): Active simulated camera when ``sim=True``.
             localhost_only (bool): If True, restrict the server to localhost only clients. Defaults to True.
             wake_up_on_start (bool): If True, wake up Reachy Mini on start. Defaults to True.
             check_collision (bool): If True, enable collision checking. Defaults to False.
@@ -221,14 +258,21 @@ class Daemon:
             self.logger.warning("Daemon is already running.")
             return self._status.state
 
+        resolved_sim_camera_name = sim_camera_name or self.sim_camera_name
+        self.sim_camera_name = resolved_sim_camera_name
+
         self.logger.info(
-            f"Daemon start parameters: sim={sim}, mockup_sim={mockup_sim}, serialport={serialport}, scene={scene}, localhost_only={localhost_only}, wake_up_on_start={wake_up_on_start}, check_collision={check_collision}, kinematics_engine={kinematics_engine}, headless={headless}, hardware_config_filepath={hardware_config_filepath}"
+            f"Daemon start parameters: sim={sim}, mockup_sim={mockup_sim}, serialport={serialport}, scene={scene}, sim_camera_name={resolved_sim_camera_name}, localhost_only={localhost_only}, wake_up_on_start={wake_up_on_start}, check_collision={check_collision}, kinematics_engine={kinematics_engine}, headless={headless}, hardware_config_filepath={hardware_config_filepath}"
         )
 
         # mockup-sim behaves exactly like a real robot for apps (they open webcam directly)
         # Only MuJoCo (--sim) sets simulation_enabled=True (streams video via UDP)
         self._status.simulation_enabled = sim
         self._status.mockup_sim_enabled = mockup_sim
+        self._status.active_camera_name = resolved_sim_camera_name if sim else ""
+        self._status.available_camera_names = (
+            get_available_sim_camera_names() if sim else []
+        )
 
         if not localhost_only:
             self._status.wlan_ip = get_ip_address()
@@ -243,6 +287,7 @@ class Daemon:
             "headless": headless,
             "use_audio": effective_use_audio,
             "scene": scene,
+            "sim_camera_name": resolved_sim_camera_name,
             "localhost_only": localhost_only,
         }
 
@@ -250,12 +295,17 @@ class Daemon:
         self._status.state = DaemonState.STARTING
 
         try:
+            self._configure_media_server(
+                use_sim=sim,
+                sim_camera_name=resolved_sim_camera_name,
+            )
             self.backend = self._setup_backend(
                 wireless_version=self.wireless_version,
                 sim=sim,
                 mockup_sim=mockup_sim,
                 serialport=serialport,
                 scene=scene,
+                sim_camera_name=resolved_sim_camera_name,
                 check_collision=check_collision,
                 kinematics_engine=kinematics_engine,
                 headless=headless,
@@ -425,6 +475,7 @@ class Daemon:
         mockup_sim: Optional[bool] = None,
         serialport: Optional[str] = None,
         scene: Optional[str] = None,
+        sim_camera_name: Optional[str] = None,
         headless: Optional[bool] = None,
         use_audio: Optional[bool] = None,
         localhost_only: Optional[bool] = None,
@@ -438,6 +489,7 @@ class Daemon:
             mockup_sim (bool): If True, run in lightweight simulation mode (no MuJoCo). Defaults to None (uses the previous value).
             serialport (str): Serial port for real motors. Defaults to None (uses the previous value).
             scene (str): Name of the scene to load in simulation mode ("empty" or "minimal"). Defaults to None (uses the previous value).
+            sim_camera_name (str): Active simulated camera. Defaults to None (uses the previous value).
             headless (bool): If True, run Mujoco in headless mode (no GUI). Defaults to None (uses the previous value).
             use_audio (bool): If True, enable audio. Defaults to None (uses the previous value).
             localhost_only (bool): If True, restrict the server to localhost only clients. Defaults to None (uses the previous value).
@@ -469,6 +521,9 @@ class Daemon:
                 if serialport is not None
                 else self._start_params["serialport"],
                 "scene": scene if scene is not None else self._start_params["scene"],
+                "sim_camera_name": sim_camera_name
+                if sim_camera_name is not None
+                else self._start_params["sim_camera_name"],
                 "headless": headless
                 if headless is not None
                 else self._start_params["headless"],
@@ -501,6 +556,11 @@ class Daemon:
             if self._status.backend_status.error:
                 self._status.state = DaemonState.ERROR
             self._status.error = self._status.backend_status.error
+            backend_camera_name = getattr(
+                self._status.backend_status, "active_camera_name", None
+            )
+            if backend_camera_name:
+                self._status.active_camera_name = backend_camera_name
         else:
             self._status.backend_status = None
 
@@ -525,6 +585,7 @@ class Daemon:
         mockup_sim: bool,
         serialport: str,
         scene: str,
+        sim_camera_name: str,
         check_collision: bool,
         kinematics_engine: str,
         headless: bool,
@@ -545,6 +606,8 @@ class Daemon:
                 kinematics_engine=kinematics_engine,
                 headless=headless,
                 use_audio=use_audio,
+                sim_camera_name=sim_camera_name,
+                stream_video=not self.no_media,
             )
         else:
             if serialport == "auto":

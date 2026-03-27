@@ -33,6 +33,7 @@ async def start_daemon(
                 sim=request.app.state.args.sim,
                 serialport=request.app.state.args.serialport,
                 scene=request.app.state.args.scene,
+                sim_camera_name=request.app.state.args.sim_camera,
                 localhost_only=request.app.state.args.localhost_only,
                 wake_up_on_start=wake_up,
                 check_collision=request.app.state.args.check_collision,

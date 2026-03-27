@@ -37,6 +37,7 @@ from .utils import (
 CAMERA_REACHY = "eye_camera"
 CAMERA_STUDIO_CLOSE = "studio_close"
 CAMERA_SIZES = {CAMERA_REACHY: (1280, 720), CAMERA_STUDIO_CLOSE: (640, 640)}
+SUPPORTED_SIM_CAMERAS = tuple(CAMERA_SIZES)
 
 
 class MujocoBackend(Backend):
@@ -49,6 +50,8 @@ class MujocoBackend(Backend):
         kinematics_engine: str = "AnalyticalKinematics",
         headless: bool = False,
         use_audio: bool = False,
+        sim_camera_name: str = CAMERA_REACHY,
+        stream_video: bool = True,
     ) -> None:
         """Initialize the MujocoBackend with a specified scene.
 
@@ -58,6 +61,8 @@ class MujocoBackend(Backend):
             kinematics_engine (str): Kinematics engine to use. Defaults to "AnalyticalKinematics".
             headless (bool): If True, run Mujoco in headless mode (no GUI). Default is False.
             use_audio (bool): If True, use audio. Default is False.
+            sim_camera_name (str): Simulated camera to stream. Defaults to ``eye_camera``.
+            stream_video (bool): If True, run the offscreen video streaming loop. Default is True.
 
         """
         super().__init__(
@@ -67,6 +72,13 @@ class MujocoBackend(Backend):
         )
 
         self.headless = headless
+        if sim_camera_name not in CAMERA_SIZES:
+            raise ValueError(
+                f"Unknown simulated camera {sim_camera_name!r}. "
+                f"Available cameras: {list(SUPPORTED_SIM_CAMERAS)}"
+            )
+        self.sim_camera_name = sim_camera_name
+        self.stream_video = stream_video
 
         from reachy_mini.reachy_mini import (
             SLEEP_ANTENNAS_JOINT_POSITIONS,
@@ -166,6 +178,7 @@ class MujocoBackend(Backend):
         It updates the joint positions at a rate and publishes the joint positions.
         """
         step = 1
+        rendering_thread: Thread | None = None
 
         if not self.headless:
             viewer = mujoco.viewer.launch_passive(
@@ -210,9 +223,11 @@ class MujocoBackend(Backend):
         mujoco.mj_step(self.model, self.data)
         if not self.headless:
             viewer.sync()
-
+        if self.stream_video:
             rendering_thread = Thread(
-                target=self.rendering_loop, args=(CAMERA_REACHY, 5005), daemon=True
+                target=self.rendering_loop,
+                args=(self.sim_camera_name, 5005),
+                daemon=True,
             )
             rendering_thread.start()
 
@@ -289,6 +304,7 @@ class MujocoBackend(Backend):
 
         if not self.headless:
             viewer.close()
+        if rendering_thread is not None:
             rendering_thread.join()
 
     def get_mj_present_head_pose(self) -> Annotated[npt.NDArray[np.float64], (4, 4)]:
@@ -314,7 +330,10 @@ class MujocoBackend(Backend):
             dict: An empty dictionary as the Mujoco backend does not have a specific status to report.
 
         """
-        return MujocoBackendStatus(motor_control_mode=self.get_motor_control_mode())
+        return MujocoBackendStatus(
+            motor_control_mode=self.get_motor_control_mode(),
+            active_camera_name=self.sim_camera_name,
+        )
 
     def get_present_head_joint_positions(
         self,

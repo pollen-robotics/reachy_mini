@@ -21,7 +21,7 @@ import numpy.typing as npt
 from reachy_mini.media.camera_constants import (
     CameraResolution,
     CameraSpecs,
-    MujocoCameraSpecs,
+    MujocoSimCameraSpecs,
 )
 from reachy_mini.media.camera_utils import scale_intrinsics
 
@@ -104,10 +104,14 @@ class CameraBase(ABC):
                 "Camera specs not set. Open the camera before setting the resolution."
             )
 
-        if isinstance(self.camera_specs, MujocoCameraSpecs):
-            raise RuntimeError(
-                "Cannot change resolution of Mujoco simulated camera for now."
-            )
+        if isinstance(self.camera_specs, MujocoSimCameraSpecs):
+            if resolution != self.camera_specs.default_resolution:
+                raise RuntimeError(
+                    "Cannot change resolution of Mujoco simulated camera for now."
+                )
+            self.resized_K = self.camera_specs.K
+            self._apply_resolution(resolution)
+            return
 
         if resolution not in self.camera_specs.available_resolutions:
             raise ValueError(

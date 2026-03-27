@@ -9,6 +9,7 @@ from reachy_mini.media.camera_constants import (
     CameraResolution,
     CameraSpecs,
     MujocoCameraSpecs,
+    MujocoStudioCloseCameraSpecs,
     ReachyMiniLiteCamSpecs,
 )
 from reachy_mini.media.media_manager import MediaBackend, MediaManager
@@ -125,6 +126,9 @@ def test_change_resolution_errors(backend: MediaBackend) -> None:
         media.camera.set_resolution(CameraResolution.R1280x720at30fps)
 
     media.camera.camera_specs = MujocoCameraSpecs()
+    with pytest.raises(RuntimeError):
+        media.camera.set_resolution(CameraResolution.R1280x720at30fps)
+    media.camera.camera_specs = MujocoStudioCloseCameraSpecs()
     with pytest.raises(RuntimeError):
         media.camera.set_resolution(CameraResolution.R1280x720at30fps)
     media.camera.camera_specs = ReachyMiniLiteCamSpecs()

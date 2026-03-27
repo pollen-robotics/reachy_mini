@@ -43,6 +43,7 @@ from reachy_mini.media.audio_utils import (
     check_reachymini_asoundrc,
     write_asoundrc_to_home,
 )
+from reachy_mini.media.camera_constants import get_available_sim_camera_names
 from reachy_mini.motion.recorded_move import preload_default_datasets
 from reachy_mini.utils.discovery import MdnsServiceRegistration
 from reachy_mini.utils.wireless_version.startup_check import (
@@ -72,6 +73,7 @@ class Args:
     sim: bool = False
     mockup_sim: bool = False
     scene: str = "empty"
+    sim_camera: str = "eye_camera"
     headless: bool = False
     no_media: bool = False
 
@@ -155,6 +157,7 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
                     sim=args.sim,
                     mockup_sim=args.mockup_sim,
                     scene=args.scene,
+                    sim_camera_name=args.sim_camera,
                     headless=args.headless,
                     use_audio=not args.no_media,
                     kinematics_engine=args.kinematics_engine,
@@ -207,6 +210,7 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
         log_level=args.log_level,
         no_media=args.no_media,
         use_sim=args.sim,
+        sim_camera_name=args.sim_camera,
     )
     app.state.app_manager = AppManager(
         wireless_version=args.wireless_version,
@@ -478,6 +482,13 @@ def main() -> None:
         type=str,
         default=default_args.scene,
         help="Name of the scene to load (default: empty)",
+    )
+    parser.add_argument(
+        "--sim-camera",
+        type=str,
+        default=default_args.sim_camera,
+        choices=get_available_sim_camera_names(),
+        help="Active simulated camera to stream when running with --sim.",
     )
     parser.add_argument(
         "--headless",

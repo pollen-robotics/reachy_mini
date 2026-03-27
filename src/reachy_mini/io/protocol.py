@@ -66,6 +66,7 @@ class MujocoBackendStatus(BaseModel):
     """Status of the Mujoco backend."""
 
     motor_control_mode: MotorControlMode
+    active_camera_name: str | None = None
     error: str | None = None
 
 
@@ -89,6 +90,8 @@ class DaemonStatus(BaseModel):
     no_media: bool = False
     media_released: bool = False
     camera_specs_name: str = ""
+    active_camera_name: str = ""
+    available_camera_names: list[str] = Field(default_factory=list)
     backend_status: Optional[
         RobotBackendStatus | MujocoBackendStatus | MockupSimBackendStatus
     ]

@@ -38,8 +38,8 @@ from reachy_mini.daemon.utils import (
 from reachy_mini.media.audio_utils import has_reachymini_asoundrc
 from reachy_mini.media.camera_constants import (
     CameraSpecs,
-    MujocoCameraSpecs,
     ReachyMiniLiteCamSpecs,
+    get_sim_camera_specs_by_name,
 )
 from reachy_mini.media.device_detection import get_audio_device, get_video_device
 from reachy_mini.utils.constants import ASSETS_ROOT_PATH
@@ -71,6 +71,7 @@ class GstMediaServer:
         self,
         log_level: str = "INFO",
         use_sim: bool = False,
+        sim_camera_name: str = "eye_camera",
     ) -> None:
         """Initialize the GStreamer WebRTC pipeline.
 
@@ -88,6 +89,7 @@ class GstMediaServer:
         self._logger.setLevel(log_level)
         self._log_level = log_level
         self._use_sim = use_sim
+        self._sim_camera_name = sim_camera_name if use_sim else ""
 
         Gst.init([])
         self._loop = GLib.MainLoop()
@@ -96,7 +98,7 @@ class GstMediaServer:
 
         if use_sim:
             cam_path = "use_sim"
-            self.camera_specs: CameraSpecs = MujocoCameraSpecs()
+            self.camera_specs = get_sim_camera_specs_by_name(sim_camera_name)
         else:
             cam_path, detected_specs = get_video_device()
             if detected_specs is None:
@@ -119,6 +121,11 @@ class GstMediaServer:
         self._playbin: Optional[Gst.Element] = None
 
         self._build_pipeline()
+
+    @property
+    def sim_camera_name(self) -> str:
+        """Active MuJoCo simulated camera name, or an empty string for hardware."""
+        return self._sim_camera_name
 
     def _build_pipeline(self) -> None:
         """Build (or rebuild) the GStreamer pipeline from scratch."""
