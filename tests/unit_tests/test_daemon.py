@@ -1,6 +1,8 @@
 import asyncio
+import json
 import threading
 from types import SimpleNamespace
+from urllib.request import urlopen
 
 import numpy as np
 import pytest
@@ -52,10 +54,17 @@ async def test_daemon_reports_active_sim_camera() -> None:
             status = mini.client.get_status()
             assert status.simulation_enabled is True
             assert status.active_camera_name == "studio_close"
-            assert status.available_camera_names == ["eye_camera"]
+            assert status.available_camera_names == ["eye_camera", "studio_close"]
             assert status.camera_specs_name == "mujoco_studio_close"
             assert status.backend_status is not None
             assert status.backend_status.active_camera_name == "studio_close"
+
+        active_camera = json.loads(
+            urlopen(f"http://localhost:{port}/api/camera/active").read().decode("utf-8")
+        )
+        assert active_camera["active_camera_name"] == "studio_close"
+        assert active_camera["available_camera_names"] == ["eye_camera", "studio_close"]
+        assert active_camera["camera_specs_name"] == "mujoco_studio_close"
     finally:
         await daemon.stop(goto_sleep_on_stop=False)
         await _stop_app_server(server, thread)

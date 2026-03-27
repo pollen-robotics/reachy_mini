@@ -19,8 +19,8 @@ from reachy_mini.daemon.utils import (
 from reachy_mini.io.protocol import DaemonState, DaemonStatus, MotorControlMode
 from reachy_mini.io.ws_server import WSServer
 from reachy_mini.media.camera_constants import (
-    get_available_sim_camera_names,
     get_sim_camera_specs_by_name,
+    get_selectable_sim_camera_names,
 )
 from reachy_mini.tools.reflash_motors import reflash_motors_if_needed
 
@@ -78,7 +78,7 @@ class Daemon:
             mockup_sim_enabled=None,
             no_media=no_media,
             active_camera_name=sim_camera_name if use_sim else "",
-            available_camera_names=get_available_sim_camera_names() if use_sim else [],
+            available_camera_names=get_selectable_sim_camera_names() if use_sim else [],
             backend_status=None,
             error=None,
             wlan_ip=None,
@@ -106,7 +106,7 @@ class Daemon:
         """Create or recreate the media server for the current camera mode."""
         self._status.active_camera_name = sim_camera_name if use_sim else ""
         self._status.available_camera_names = (
-            get_available_sim_camera_names() if use_sim else []
+            get_selectable_sim_camera_names() if use_sim else []
         )
         self._status.camera_specs_name = ""
         if use_sim:
@@ -271,7 +271,7 @@ class Daemon:
         self._status.mockup_sim_enabled = mockup_sim
         self._status.active_camera_name = resolved_sim_camera_name if sim else ""
         self._status.available_camera_names = (
-            get_available_sim_camera_names() if sim else []
+            get_selectable_sim_camera_names() if sim else []
         )
 
         if not localhost_only:
