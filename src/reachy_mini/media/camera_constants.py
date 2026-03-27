@@ -90,7 +90,6 @@ class CameraResolution(Enum):
     R1280x720at30fps = (1280, 720, 30, 1.0)
     R1280x720at25fps = (1280, 720, 25, 1.0)
     R640x640at25fps = (640, 640, 25, 1.0)
-    R640x640at30fps = (640, 640, 30, 1.0)
 
     R1920x1080at30fps = (1920, 1080, 30, 1.115)
     R1920x1080at60fps = (1920, 1080, 60, 1.115)
@@ -367,11 +366,7 @@ _SPECS_BY_NAME: dict[str, type[CameraSpecs]] = {
     "mujoco_studio_close": MujocoStudioCloseCameraSpecs,
 }
 
-_GENERIC_SIM_CAMERA_SPECS_BY_NAME: dict[str, type[MujocoSimCameraSpecs]] = {
-    "eye_camera": MujocoCameraSpecs,
-}
-
-_SELECTABLE_SIM_CAMERA_SPECS_BY_NAME: dict[str, type[MujocoSimCameraSpecs]] = {
+_SIM_CAMERA_SPECS_BY_NAME: dict[str, type[MujocoSimCameraSpecs]] = {
     "eye_camera": MujocoCameraSpecs,
     "studio_close": MujocoStudioCloseCameraSpecs,
 }
@@ -407,21 +402,16 @@ def get_camera_specs_by_name(name: str) -> CameraSpecs:
 
 
 def get_sim_camera_specs_by_name(name: str) -> MujocoSimCameraSpecs:
-    """Look up explicitly selected MuJoCo simulated camera specs by camera name."""
-    cls = _SELECTABLE_SIM_CAMERA_SPECS_BY_NAME.get(name)
+    """Look up MuJoCo simulated camera specs by camera name."""
+    cls = _SIM_CAMERA_SPECS_BY_NAME.get(name)
     if cls is None:
         raise ValueError(
             "Unknown simulated camera "
-            f"{name!r}. Available cameras: {list(_SELECTABLE_SIM_CAMERA_SPECS_BY_NAME)}"
+            f"{name!r}. Available cameras: {list(_SIM_CAMERA_SPECS_BY_NAME)}"
         )
     return cls()
 
 
 def get_available_sim_camera_names() -> list[str]:
-    """Return head-mounted MuJoCo simulated camera names for generic SDK flows."""
-    return list(_GENERIC_SIM_CAMERA_SPECS_BY_NAME)
-
-
-def get_selectable_sim_camera_names() -> list[str]:
     """Return MuJoCo simulated camera names that can be explicitly selected."""
-    return list(_SELECTABLE_SIM_CAMERA_SPECS_BY_NAME)
+    return list(_SIM_CAMERA_SPECS_BY_NAME)

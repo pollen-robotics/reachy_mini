@@ -122,11 +122,6 @@ class GstMediaServer:
 
         self._build_pipeline()
 
-    @property
-    def sim_camera_name(self) -> str:
-        """Active MuJoCo simulated camera name, or an empty string for hardware."""
-        return self._sim_camera_name
-
     def _build_pipeline(self) -> None:
         """Build (or rebuild) the GStreamer pipeline from scratch."""
         self._pipeline_sender = Gst.Pipeline.new("reachymini_webrtc_sender")

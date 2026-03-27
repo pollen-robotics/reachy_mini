@@ -57,14 +57,13 @@ async def test_daemon_reports_active_sim_camera() -> None:
             assert status.available_camera_names == ["eye_camera", "studio_close"]
             assert status.camera_specs_name == "mujoco_studio_close"
             assert status.backend_status is not None
-            assert status.backend_status.active_camera_name == "studio_close"
 
-        active_camera = json.loads(
-            urlopen(f"http://localhost:{port}/api/camera/active").read().decode("utf-8")
+        daemon_status = json.loads(
+            urlopen(f"http://localhost:{port}/api/daemon/status").read().decode("utf-8")
         )
-        assert active_camera["active_camera_name"] == "studio_close"
-        assert active_camera["available_camera_names"] == ["eye_camera", "studio_close"]
-        assert active_camera["camera_specs_name"] == "mujoco_studio_close"
+        assert daemon_status["active_camera_name"] == "studio_close"
+        assert daemon_status["available_camera_names"] == ["eye_camera", "studio_close"]
+        assert daemon_status["camera_specs_name"] == "mujoco_studio_close"
     finally:
         await daemon.stop(goto_sleep_on_stop=False)
         await _stop_app_server(server, thread)

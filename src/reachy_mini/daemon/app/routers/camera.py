@@ -36,15 +36,6 @@ class CameraSpecsResponse(BaseModel):
     D: list[float]
 
 
-class ActiveCameraResponse(BaseModel):
-    """Current active camera metadata."""
-
-    simulation_enabled: bool | None
-    active_camera_name: str
-    available_camera_names: list[str]
-    camera_specs_name: str
-
-
 def _resolution_info(res) -> ResolutionInfo:  # type: ignore[no-untyped-def]
     """Convert a ``CameraResolution`` enum member to a ``ResolutionInfo``."""
     w, h, fps, crop = res.value
@@ -79,15 +70,3 @@ async def get_camera_specs(
     )
 
 
-@router.get("/active")
-async def get_active_camera(
-    daemon: Daemon = Depends(get_daemon),
-) -> ActiveCameraResponse:
-    """Get the currently active camera name and available simulated views."""
-    status = daemon.status()
-    return ActiveCameraResponse(
-        simulation_enabled=status.simulation_enabled,
-        active_camera_name=status.active_camera_name,
-        available_camera_names=status.available_camera_names,
-        camera_specs_name=status.camera_specs_name,
-    )

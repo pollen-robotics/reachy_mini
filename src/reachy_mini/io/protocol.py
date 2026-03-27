@@ -66,7 +66,6 @@ class MujocoBackendStatus(BaseModel):
     """Status of the Mujoco backend."""
 
     motor_control_mode: MotorControlMode
-    active_camera_name: str | None = None
     error: str | None = None
 
 

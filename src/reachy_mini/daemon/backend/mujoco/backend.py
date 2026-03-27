@@ -330,10 +330,7 @@ class MujocoBackend(Backend):
             dict: An empty dictionary as the Mujoco backend does not have a specific status to report.
 
         """
-        return MujocoBackendStatus(
-            motor_control_mode=self.get_motor_control_mode(),
-            active_camera_name=self.sim_camera_name,
-        )
+        return MujocoBackendStatus(motor_control_mode=self.get_motor_control_mode())
 
     def get_present_head_joint_positions(
         self,
