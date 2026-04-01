@@ -1,0 +1,104 @@
+<div class="app-section">
+    <div class="app-section-title">User Personalities</div>
+
+    <p class="text-sm text-gray-500 mt-1 mb-3">Sync conversation personalities to a public HuggingFace dataset.</p>
+
+    <!-- Personality list -->
+    <div id="personalities-list" class="mb-3">
+        <p class="text-sm text-gray-400">Loading...</p>
+    </div>
+
+    <!-- Sync button -->
+    <div class="flex items-center gap-3 mt-3">
+        <button id="sync-personalities-btn"
+                onclick="syncPersonalities()"
+                class="px-4 py-2 rounded-lg shadow text-white"
+                style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);">
+            Sync to HuggingFace
+        </button>
+        <span id="sync-status" class="text-sm"></span>
+    </div>
+
+    <!-- Result link -->
+    <div id="sync-result" class="hidden mt-3">
+        <a id="sync-result-link" href="#" target="_blank"
+           class="text-sm font-medium text-amber-700 hover:underline">
+            View dataset on HuggingFace
+        </a>
+    </div>
+</div>
+
+<script>
+async function loadPersonalities() {
+    const container = document.getElementById('personalities-list');
+    try {
+        const response = await fetch('/personalities/list');
+        const data = await response.json();
+
+        if (!data.exists) {
+            container.innerHTML = '<p class="text-sm text-red-500">Personalities directory not found.</p>';
+            return;
+        }
+
+        if (data.personalities.length === 0) {
+            container.innerHTML = '<p class="text-sm text-gray-400">No personalities found.</p>';
+            return;
+        }
+
+        const wrapper = document.createElement('div');
+        wrapper.className = 'flex flex-wrap gap-2';
+        for (const p of data.personalities) {
+            const chip = document.createElement('div');
+            chip.className = 'px-3 py-1.5 rounded-lg text-sm';
+            chip.style.cssText = 'background-color: #fef3c7; color: #92400e; border: 1px solid #fcd34d;';
+            chip.title = p.files.join(', ');
+            chip.textContent = p.name;
+            wrapper.appendChild(chip);
+        }
+        container.innerHTML = '';
+        container.appendChild(wrapper);
+    } catch (error) {
+        container.innerHTML = '<p class="text-sm text-red-500">Error loading personalities.</p>';
+    }
+}
+
+async function syncPersonalities() {
+    const btn = document.getElementById('sync-personalities-btn');
+    const status = document.getElementById('sync-status');
+    const result = document.getElementById('sync-result');
+    const link = document.getElementById('sync-result-link');
+
+    if (!confirm('This will upload all personalities to a PUBLIC HuggingFace dataset. Continue?')) return;
+
+    btn.disabled = true;
+    btn.textContent = 'Syncing...';
+    status.textContent = '';
+    result.classList.add('hidden');
+
+    try {
+        const response = await fetch('/personalities/sync', { method: 'POST' });
+        const data = await response.json();
+
+        if (response.ok) {
+            const label = data.created ? 'Dataset created & synced!' : 'Synced!';
+            status.textContent = label;
+            status.className = 'text-sm text-green-600';
+            link.href = data.url;
+            link.textContent = data.repo_id;
+            result.classList.remove('hidden');
+        } else {
+            status.textContent = data.detail || 'Sync failed';
+            status.className = 'text-sm text-red-600';
+        }
+    } catch (error) {
+        status.textContent = 'Error: ' + error.message;
+        status.className = 'text-sm text-red-600';
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Sync to HuggingFace';
+    }
+}
+
+// Load on page ready
+document.addEventListener('DOMContentLoaded', loadPersonalities);
+</script>

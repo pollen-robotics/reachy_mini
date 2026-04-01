@@ -227,10 +227,11 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
     router.include_router(volume.router)
 
     if args.wireless_version:
-        from .routers import cache, update, wifi_config
+        from .routers import cache, personalities, update, wifi_config
 
         app.include_router(cache.router)
         app.include_router(logs.router)
+        app.include_router(personalities.router)
         app.include_router(update.router)
         app.include_router(wifi_config.router)
 
