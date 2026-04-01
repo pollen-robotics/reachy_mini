@@ -42,8 +42,10 @@ from reachy_mini.io.protocol import (
     SetGravityCompensationCmd,
     SetHeadJointsCmd,
     SetMotorModeCmd,
+    SetSpeechOffsetsCmd,
     SetTargetCmd,
     SetTorqueCmd,
+    SetWobblingCmd,
     StartRecordingCmd,
     StopRecordingCmd,
     WakeUpCmd,
@@ -57,9 +59,11 @@ if typing.TYPE_CHECKING:
 from reachy_mini.media.audio_doa import AudioDoA
 from reachy_mini.motion.goto import GotoMove
 from reachy_mini.motion.move import Move
+from reachy_mini.utils import create_head_pose
 from reachy_mini.utils.constants import MODELS_ROOT_PATH, URDF_ROOT_PATH
 from reachy_mini.utils.interpolation import (
     InterpolationTechnique,
+    compose_world_offset,
     distance_between_poses,
     time_trajectory,
 )
@@ -194,6 +198,11 @@ class Backend:
             0  # Tracks nested acquisitions within the owning thread
         )
 
+        # Head wobbler speech offsets (x_m, y_m, z_m, roll_rad, pitch_rad, yaw_rad)
+        self._speech_offsets: tuple[float, float, float, float, float, float] = (
+            0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+        )
+
         # WebRTC support
         self._send_message_to_webrtc: Optional[Callable[[Optional[str], str], None]] = (
             None
@@ -307,6 +316,16 @@ class Backend:
         if body_yaw is None:
             body_yaw = self.target_body_yaw if self.target_body_yaw is not None else 0.0
 
+        # Compose speech wobbler offsets (if any) before IK
+        if any(o != 0.0 for o in self._speech_offsets):
+            x_m, y_m, z_m, roll_r, pitch_r, yaw_r = self._speech_offsets
+            offset_pose = create_head_pose(
+                x=x_m, y=y_m, z=z_m,
+                roll=roll_r, pitch=pitch_r, yaw=yaw_r,
+                degrees=False,
+            )
+            pose = compose_world_offset(pose, offset_pose)
+
         # Compute the inverse kinematics to get the head joint positions
         joints = self.head_kinematics.ik(pose, body_yaw=body_yaw)
         if joints is None or np.any(np.isnan(joints)):
@@ -383,6 +402,20 @@ class Backend:
 
         """
         self.target_antenna_joint_positions = positions
+
+    def set_speech_offsets(
+        self,
+        offsets: tuple[float, float, float, float, float, float],
+    ) -> None:
+        """Set head wobbler speech offsets, composed with target pose before IK.
+
+        Args:
+            offsets: ``(x_m, y_m, z_m, roll_rad, pitch_rad, yaw_rad)`` in
+                world frame.  Zero tuple disables the offset.
+
+        """
+        self._speech_offsets = offsets
+        self.ik_required = True
 
     def set_target_head_joint_current(
         self,
@@ -934,6 +967,23 @@ class Backend:
         elif isinstance(cmd, PlaySoundCmd):
             self.play_sound(cmd.file)
             send_response({"status": "ok", "command": "play_sound"})
+
+        elif isinstance(cmd, SetSpeechOffsetsCmd):
+            offsets = cmd.offsets
+            if len(offsets) == 6:
+                self.set_speech_offsets(
+                    (offsets[0], offsets[1], offsets[2], offsets[3], offsets[4], offsets[5])
+                )
+            send_response({"status": "ok", "command": "set_speech_offsets"})
+
+        elif isinstance(cmd, SetWobblingCmd):
+            if self._media_server is not None:
+                if cmd.enabled:
+                    self._media_server.enable_wobbling(self.set_speech_offsets)
+                else:
+                    self._media_server.disable_wobbling()
+                    self.set_speech_offsets((0.0, 0.0, 0.0, 0.0, 0.0, 0.0))
+            send_response({"status": "ok", "command": "set_wobbling"})
 
         elif isinstance(cmd, SetMotorModeCmd):
             self.set_motor_control_mode(MotorControlMode(cmd.mode))

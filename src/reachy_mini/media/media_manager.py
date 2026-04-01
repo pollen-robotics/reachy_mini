@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import logging
 import warnings
+from collections.abc import Callable
 from enum import Enum
 from typing import TYPE_CHECKING, Optional, Union
 
@@ -31,6 +32,7 @@ import numpy as np
 import numpy.typing as npt
 
 from reachy_mini.media.camera_constants import CameraSpecs
+from reachy_mini.motion.head_wobbler import SpeechOffsets
 
 
 class MediaBackend(Enum):
@@ -371,6 +373,37 @@ class MediaManager:
             self.logger.warning("Audio system is not initialized.")
             return
         self.audio.stop_playing()
+
+    def enable_wobbling(self, callback: Callable[[SpeechOffsets], None]) -> None:
+        """Enable head wobbling driven by audio playback.
+
+        Only supported with the LOCAL backend (GStreamerAudio).
+
+        Args:
+            callback: Called with ``(x_m, y_m, z_m, roll_rad, pitch_rad,
+                yaw_rad)`` for each movement hop.
+
+        """
+        if self.audio is None:
+            self.logger.warning("Audio system is not initialized.")
+            return
+
+        from reachy_mini.media.audio_gstreamer import GStreamerAudio
+
+        if not isinstance(self.audio, GStreamerAudio):
+            self.logger.warning("Head wobbling is only supported with the LOCAL audio backend.")
+            return
+        self.audio.enable_wobbling(callback)
+
+    def disable_wobbling(self) -> None:
+        """Disable head wobbling."""
+        if self.audio is None:
+            return
+
+        from reachy_mini.media.audio_gstreamer import GStreamerAudio
+
+        if isinstance(self.audio, GStreamerAudio):
+            self.audio.disable_wobbling()
 
     def get_DoA(self) -> tuple[float, bool] | None:
         """Get the Direction of Arrival (DoA) from the microphone array.

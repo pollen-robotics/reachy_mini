@@ -49,9 +49,11 @@ def play_live_tone(mini: "ReachyMini", tone_hz: float) -> None:
         mini.media.stop_playing()
 
 
-def main(backend: str, wav_path: str | None, tone_hz: float) -> None:
+def main(backend: str, wav_path: str | None, tone_hz: float, wobbling: bool = False) -> None:
     """Run the sound playback example."""
     with ReachyMini(log_level="DEBUG", media_backend=backend) as mini:
+        if wobbling:
+            mini.enable_wobbling()
         if wav_path:
             play_wav(mini, wav_path)
         else:
@@ -88,8 +90,13 @@ if __name__ == "__main__":
         type=float,
         help="Sine wave frequency in Hz (--live mode only).",
     )
+    parser.add_argument(
+        "--wobbling",
+        action="store_true",
+        help="Enable audio-reactive head wobbling.",
+    )
 
     args = parser.parse_args()
-    main(backend=args.backend, wav_path=args.wav, tone_hz=args.tone_hz)
+    main(backend=args.backend, wav_path=args.wav, tone_hz=args.tone_hz, wobbling=args.wobbling)
 
 # END doc_example
