@@ -28,6 +28,7 @@ from reachy_mini.io.protocol import (
     AppendRecordCmd,
     GetMotorModeCmd,
     GetStateCmd,
+    GetVersionCmd,
     GotoSleepCmd,
     GotoTargetCmd,
     LookAtImageCmd,
@@ -1097,6 +1098,15 @@ class Backend:
                 "is_move_running": self.is_move_running,
             }
             send_response({"state": state})
+
+        elif isinstance(cmd, GetVersionCmd):
+            from importlib.metadata import PackageNotFoundError, version
+
+            try:
+                v = version("reachy_mini")
+            except PackageNotFoundError:
+                v = None
+            send_response({"version": v})
 
         elif isinstance(cmd, StartRecordingCmd):
             self.start_recording()

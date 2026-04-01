@@ -7,7 +7,7 @@ Client->Server command types:
     goto_target, wake_up, goto_sleep, play_sound,
     set_motor_mode, set_torque, get_motor_mode,
     set_gravity_compensation, set_automatic_body_yaw,
-    get_state, start_recording, stop_recording, append_record
+    get_state, get_version, start_recording, stop_recording, append_record
 
 Server->Client message types:
     joint_positions, head_pose, imu_data, recorded_data,
@@ -223,6 +223,12 @@ class GetStateCmd(BaseModel):
     type: Literal["get_state"] = "get_state"
 
 
+class GetVersionCmd(BaseModel):
+    """Query the version."""
+
+    type: Literal["get_version"] = "get_version"
+
+
 class StartRecordingCmd(BaseModel):
     """Start recording joint data."""
 
@@ -259,6 +265,7 @@ AnyCommand = Annotated[
     | SetAutomaticBodyYawCmd
     | LookAtImageCmd
     | GetStateCmd
+    | GetVersionCmd
     | StartRecordingCmd
     | StopRecordingCmd
     | AppendRecordCmd,

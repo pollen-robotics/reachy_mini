@@ -26,6 +26,7 @@
  *   robot.setHeadPose(0, 10, -5);    // roll, pitch, yaw in degrees
  *   robot.setAntennas(30, -30);       // right, left in degrees
  *   robot.playSound("wake_up.wav");   // filename on robot
+ *   const ver = await robot.getVersion(); // e.g. "1.5.1"
  *
  *   // 6. Receive live state (emitted every ~500 ms while streaming)
  *   robot.addEventListener("state", (e) => {
@@ -190,6 +191,9 @@ export class ReachyMini extends EventTarget {
         // Timers
         this._latencyMonitorId = null;
         this._stateRefreshInterval = null;
+
+        // getVersion() promise plumbing
+        this._versionResolve = null;
 
         // startSession() promise plumbing
         this._sessionResolve = null;
@@ -456,6 +460,7 @@ export class ReachyMini extends EventTarget {
      * @returns {Promise<void>}
      */
     async stopSession() {
+        if (this._versionResolve) { this._versionResolve(null); this._versionResolve = null; }
         if (this._sessionReject) {
             this._sessionReject(new Error('Session stopped'));
             this._sessionResolve = null;
@@ -494,6 +499,7 @@ export class ReachyMini extends EventTarget {
     disconnect() {
         if (this._sseAbortController) { this._sseAbortController.abort(); this._sseAbortController = null; }
 
+        if (this._versionResolve) { this._versionResolve(null); this._versionResolve = null; }
         if (this._sessionReject) {
             this._sessionReject(new Error('Disconnected'));
             this._sessionResolve = null;
@@ -561,6 +567,25 @@ export class ReachyMini extends EventTarget {
      */
     playSound(file) {
         return this._sendCommand({ type: "play_sound", file });
+    }
+
+    /**
+     * Request the daemon version.
+     * Resolves with the version string (or null if unavailable).
+     * @returns {Promise<string|null>}
+     */
+    getVersion() {
+        return new Promise((resolve, reject) => {
+            if (!this._dc || this._dc.readyState !== 'open') {
+                reject(new Error('Data channel not open'));
+                return;
+            }
+            if (this._versionResolve) {
+                this._versionResolve(null);
+            }
+            this._versionResolve = resolve;
+            this._sendCommand({ type: "get_version" });
+        });
     }
 
     /**
@@ -744,8 +769,13 @@ export class ReachyMini extends EventTarget {
         }
     }
 
-    /** Parse robot state (rotation matrix + radians) into degrees and emit. */
+    /** Parse robot messages and dispatch. */
     _handleRobotMessage(data) {
+        if ('version' in data && this._versionResolve) {
+            this._versionResolve(data.version);
+            this._versionResolve = null;
+            return;
+        }
         if (data.state) {
             const s = data.state;
             if (s.head_pose) this._robotState.head = matrixToRpy(s.head_pose);
