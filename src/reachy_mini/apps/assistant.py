@@ -785,88 +785,105 @@ def publish(
             exit()
 
         console.print("App already exists on Hugging Face Spaces.", style="bold blue")
-        pull_result = subprocess.run(
-            ["git", "pull", repo_url, "main"],
-            cwd=app_path,
-            capture_output=True,
-            text=True,
-            env=_git_env(),
-        )
-        if pull_result.returncode != 0:
-            console.print(
-                f"[yellow]Could not pull latest changes (git credentials may be missing).[/yellow]"
-            )
 
-        status_output = (
-            subprocess.check_output(["git", "status", "--porcelain"], cwd=app_path)
-            .decode("utf-8")
-            .strip()
-        )
+        has_git = (Path(app_path) / ".git").exists()
 
-        if status_output == "":
-            console.print(
-                "✅ No changes to commit.",
-                style="bold green",
-            )
-            push_anyway = questionary.confirm(
-                "Do you want to try to push anyway?"
-            ).ask()
-            if not push_anyway:
-                console.print("[red]Aborted.[/red]")
-                exit()
+        if not has_git:
+            # No local git repo — skip git flow, upload directly via API.
+            if no_check:
+                console.print("⚠️ Skipping checks as per --nocheck flag.", style="bold yellow")
             else:
-                console.print("Trying to push anyway...")
-                pushed = try_to_push(console, Path(app_path))
-                if not pushed:
-                    pushed = _upload_via_api(console, Path(app_path), repo_path, "Update app")
-                if not pushed:
-                    sys.exit(1)
-            exit()
+                console.print(f"\n🔎 Running checks on the app at {app_path}/...")
+                check(console, str(app_path))
 
-        if no_check:
-            console.print(
-                "⚠️ Skipping checks as per --nocheck flag.",
-                style="bold yellow",
-            )
-        else:
-            console.print(f"\n🔎 Running checks on the app at {app_path}/...")
-            check(console, str(app_path))
-
-        if commit_message is None:
-            commit_message = questionary.text(
-                "\n$ Enter a commit message for the update:",
-                default="Update app",
-            ).ask()
             if commit_message is None:
-                console.print("[red]Aborted.[/red]")
+                commit_message = questionary.text(
+                    "\n$ Enter a commit message for the update:",
+                    default="Update app",
+                ).ask()
+                if commit_message is None:
+                    console.print("[red]Aborted.[/red]")
+                    exit()
+
+            if not _upload_via_api(console, Path(app_path), repo_path, commit_message):
+                sys.exit(1)
+            console.print("✅ App updated successfully.")
+        else:
+            # Git repo exists — try the git-based flow with API fallback.
+            pull_result = subprocess.run(
+                ["git", "pull", repo_url, "main"],
+                cwd=app_path,
+                capture_output=True,
+                text=True,
+                env=_git_env(),
+            )
+            if pull_result.returncode != 0:
+                console.print(
+                    "[yellow]Could not pull latest changes (git credentials may be missing).[/yellow]"
+                )
+
+            status_output = (
+                subprocess.check_output(["git", "status", "--porcelain"], cwd=app_path)
+                .decode("utf-8")
+                .strip()
+            )
+
+            if status_output == "":
+                console.print("✅ No changes to commit.", style="bold green")
+                push_anyway = questionary.confirm(
+                    "Do you want to try to push anyway?"
+                ).ask()
+                if not push_anyway:
+                    console.print("[red]Aborted.[/red]")
+                    exit()
+                else:
+                    console.print("Trying to push anyway...")
+                    pushed = try_to_push(console, Path(app_path))
+                    if not pushed:
+                        pushed = _upload_via_api(console, Path(app_path), repo_path, "Update app")
+                    if not pushed:
+                        sys.exit(1)
                 exit()
 
-        # commit local changes
-        console.print("Committing changes locally ...", style="bold blue")
-        add_result = subprocess.run(
-            ["git", "add", "."], cwd=app_path, capture_output=True, text=True
-        )
-        if add_result.returncode != 0:
-            console.print(f"[red]git add failed: {add_result.stderr}[/red]")
-            sys.exit(1)
+            if no_check:
+                console.print("⚠️ Skipping checks as per --nocheck flag.", style="bold yellow")
+            else:
+                console.print(f"\n🔎 Running checks on the app at {app_path}/...")
+                check(console, str(app_path))
 
-        commit_result = subprocess.run(
-            ["git", "commit", "-m", commit_message],
-            cwd=app_path,
-            capture_output=True,
-            text=True,
-        )
-        if commit_result.returncode != 0:
-            console.print(f"[red]git commit failed: {commit_result.stderr}[/red]")
-            sys.exit(1)
+            if commit_message is None:
+                commit_message = questionary.text(
+                    "\n$ Enter a commit message for the update:",
+                    default="Update app",
+                ).ask()
+                if commit_message is None:
+                    console.print("[red]Aborted.[/red]")
+                    exit()
 
-        pushed = try_to_push(console, Path(app_path))
-        if not pushed:
-            pushed = _upload_via_api(console, Path(app_path), repo_path, commit_message)
-        if not pushed:
-            sys.exit(1)
+            console.print("Committing changes locally ...", style="bold blue")
+            add_result = subprocess.run(
+                ["git", "add", "."], cwd=app_path, capture_output=True, text=True
+            )
+            if add_result.returncode != 0:
+                console.print(f"[red]git add failed: {add_result.stderr}[/red]")
+                sys.exit(1)
 
-        console.print("✅ App updated successfully.")
+            commit_result = subprocess.run(
+                ["git", "commit", "-m", commit_message],
+                cwd=app_path,
+                capture_output=True,
+                text=True,
+            )
+            if commit_result.returncode != 0:
+                console.print(f"[red]git commit failed: {commit_result.stderr}[/red]")
+                sys.exit(1)
+
+            pushed = try_to_push(console, Path(app_path))
+            if not pushed:
+                pushed = _upload_via_api(console, Path(app_path), repo_path, commit_message)
+            if not pushed:
+                sys.exit(1)
+            console.print("✅ App updated successfully.")
     else:
         if no_check:
             console.print(
