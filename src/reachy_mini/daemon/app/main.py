@@ -27,6 +27,7 @@ from reachy_mini.apps.manager import AppManager
 from reachy_mini.daemon.app.routers import (
     apps,
     daemon,
+    first_wake_up,
     hf_auth,
     kinematics,
     logs,
@@ -204,6 +205,7 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
     router.include_router(hf_auth.router)
     router.include_router(kinematics.router)
     router.include_router(motors.router)
+    router.include_router(first_wake_up.router)
     router.include_router(move.router)
     router.include_router(state.router)
     router.include_router(volume.router)
