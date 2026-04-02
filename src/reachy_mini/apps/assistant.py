@@ -650,6 +650,13 @@ def request_app_addition(new_app_repo_id: str) -> bool:
     return True
 
 
+def _git_env() -> dict[str, str]:
+    """Return env vars that prevent git from prompting for credentials."""
+    env = os.environ.copy()
+    env["GIT_TERMINAL_PROMPT"] = "0"
+    return env
+
+
 def try_to_push(console: Console, _app_path: Path) -> bool:
     """Try to push changes to the remote repository."""
     console.print("Pushing changes to the remote repository ...", style="bold blue")
@@ -658,6 +665,7 @@ def try_to_push(console: Console, _app_path: Path) -> bool:
         cwd=_app_path,
         capture_output=True,
         text=True,
+        env=_git_env(),
     )
     if push_result.returncode != 0:
         console.print(
@@ -782,6 +790,7 @@ def publish(
             cwd=app_path,
             capture_output=True,
             text=True,
+            env=_git_env(),
         )
         if pull_result.returncode != 0:
             console.print(
@@ -947,6 +956,7 @@ def publish(
             cwd=app_path,
             capture_output=True,
             text=True,
+            env=_git_env(),
         )
         if push_result.returncode != 0:
             console.print(f"[red]git push failed: {push_result.stderr}[/red]")
