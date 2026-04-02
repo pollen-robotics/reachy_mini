@@ -667,6 +667,38 @@ def try_to_push(console: Console, _app_path: Path) -> bool:
     return True
 
 
+def _upload_via_api(
+    console: Console, app_path: Path, repo_id: str, commit_message: str
+) -> bool:
+    """Upload app folder to HuggingFace Space via HTTP API.
+
+    Used as a fallback when git push fails (e.g. no git credentials,
+    only an OAuth token from the desktop app).
+    """
+    import huggingface_hub as hf
+
+    token = hf.get_token()
+    if not token:
+        console.print("[red]No HuggingFace token found.[/red]")
+        return False
+    console.print(
+        "Trying upload via HuggingFace API instead ...", style="bold yellow"
+    )
+    try:
+        api = HfApi(token=token)
+        api.upload_folder(
+            folder_path=str(app_path),
+            repo_id=repo_id,
+            repo_type="space",
+            commit_message=commit_message,
+            delete_patterns=["*"],
+        )
+        return True
+    except Exception as e:
+        console.print(f"[red]API upload failed: {e}[/red]")
+        return False
+
+
 def publish(
     console: Console,
     app_path: str,
@@ -753,9 +785,8 @@ def publish(
         )
         if pull_result.returncode != 0:
             console.print(
-                f"[red]Failed to pull latest changes: {pull_result.stderr}[/red]"
+                f"[yellow]Could not pull latest changes (git credentials may be missing).[/yellow]"
             )
-            sys.exit(1)
 
         status_output = (
             subprocess.check_output(["git", "status", "--porcelain"], cwd=app_path)
@@ -777,6 +808,10 @@ def publish(
             else:
                 console.print("Trying to push anyway...")
                 pushed = try_to_push(console, Path(app_path))
+                if not pushed:
+                    pushed = _upload_via_api(console, Path(app_path), repo_path, "Update app")
+                if not pushed:
+                    sys.exit(1)
             exit()
 
         if no_check:
@@ -816,11 +851,11 @@ def publish(
             console.print(f"[red]git commit failed: {commit_result.stderr}[/red]")
             sys.exit(1)
 
-        # && git push HEAD:main"
-
         pushed = try_to_push(console, Path(app_path))
         if not pushed:
-            exit()
+            pushed = _upload_via_api(console, Path(app_path), repo_path, commit_message)
+        if not pushed:
+            sys.exit(1)
 
         console.print("✅ App updated successfully.")
     else:
@@ -915,7 +950,8 @@ def publish(
         )
         if push_result.returncode != 0:
             console.print(f"[red]git push failed: {push_result.stderr}[/red]")
-            sys.exit(1)
+            if not _upload_via_api(console, Path(app_path), repo_path, "Initial commit"):
+                sys.exit(1)
 
         console.print("✅ App published successfully.", style="bold green")
 
