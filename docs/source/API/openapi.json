@@ -1030,6 +1030,73 @@
         }
       }
     },
+    "/api/first-wake-up/status": {
+      "get": {
+        "summary": "Get First Wake Up Status",
+        "description": "Check whether the robot has completed its first wake-up.",
+        "operationId": "get_first_wake_up_status_api_first_wake_up_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "boolean"
+                  },
+                  "type": "object",
+                  "title": "Response Get First Wake Up Status Api First Wake Up Status Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/first-wake-up/set": {
+      "post": {
+        "summary": "Set First Wake Up Status",
+        "description": "Mark (or unmark) the first wake-up as completed.",
+        "operationId": "set_first_wake_up_status_api_first_wake_up_set_post",
+        "parameters": [
+          {
+            "name": "is_completed",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "boolean",
+              "title": "Is Completed"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "boolean"
+                  },
+                  "title": "Response Set First Wake Up Status Api First Wake Up Set Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/move/running": {
       "get": {
         "summary": "Get Running Moves",
