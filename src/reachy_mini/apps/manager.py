@@ -107,6 +107,21 @@ class AppManager:
             app_name, self.wireless_version, self.desktop_app_daemon
         )
 
+        # Build clean environment for app subprocess.
+        # The daemon's own gstreamer_bundle.pth sets GST_* env vars at startup.
+        # Passing them to the subprocess causes double-init conflicts with the
+        # app venv's own .pth file.  Clearing them lets the subprocess set up
+        # GStreamer from scratch (if the app even needs it).
+        # GST_REGISTRY_FORK_DISABLE prevents the plugin scanner from forking:
+        # the forked scanner loads libgstpython.dylib which is compiled against
+        # the system Python framework, not the standalone CPython used here,
+        # causing a segfault.
+        env = os.environ.copy()
+        for key in list(env.keys()):
+            if key.startswith("GST_"):
+                del env[key]
+        env["GST_REGISTRY_FORK_DISABLE"] = "yes"
+
         # Launch app as subprocess with unbuffered output
         self.logger.getChild("runner").info(f"Starting app {app_name}")
         process = await asyncio.create_subprocess_exec(
@@ -116,6 +131,7 @@ class AppManager:
             module_name,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
+            env=env,
         )
 
         # Create status and monitor task
