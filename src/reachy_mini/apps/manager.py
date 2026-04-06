@@ -107,7 +107,31 @@ class AppManager:
             app_name, self.wireless_version, self.desktop_app_daemon
         )
 
-        # Launch app as subprocess with unbuffered output
+        # Launch app as subprocess with unbuffered output.
+        #
+        # Scrub GStreamer env vars that the daemon's own `.venv/.../gstreamer_bundle.pth`
+        # set pointing at paths inside the daemon's .venv. The app runs in apps_venv and
+        # its own gstreamer_bundle.pth will set fresh values at Python startup. Leaving
+        # the parent's values in place is actively harmful:
+        #   * Single-value vars like GST_REGISTRY_1_0 and GST_PLUGIN_SCANNER_1_0 get
+        #     prepended to (via gstreamer_libs.setup_python_environment) producing a
+        #     malformed `apps_venv_path:.venv_path` string that GStreamer can't parse.
+        #   * The app ends up using .venv's plugin scanner binary and registry cache,
+        #     which can mask issues specific to apps_venv's own gstreamer install.
+        # See pollen-robotics/reachy-mini-desktop-app#185.
+        app_env = os.environ.copy()
+        for key in (
+            "GST_PLUGIN_PATH_1_0",
+            "GST_PLUGIN_SYSTEM_PATH_1_0",
+            "GST_REGISTRY_1_0",
+            "GST_PLUGIN_SCANNER_1_0",
+            "GI_TYPELIB_PATH",
+            "PYGI_DLL_DIRS",
+            "XDG_DATA_DIRS",
+            "XDG_CONFIG_DIRS",
+        ):
+            app_env.pop(key, None)
+
         self.logger.getChild("runner").info(f"Starting app {app_name}")
         process = await asyncio.create_subprocess_exec(
             str(python_path),
@@ -116,6 +140,7 @@ class AppManager:
             module_name,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
+            env=app_env,
         )
 
         # Create status and monitor task
