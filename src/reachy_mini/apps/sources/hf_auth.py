@@ -121,23 +121,38 @@ def _cleanup_expired_sessions() -> None:
         del _oauth_sessions[sid]
 
 
-def get_oauth_redirect_uri(wireless_version: bool) -> str:
+def get_oauth_redirect_uri(
+    wireless_version: bool, override_host: str | None = None
+) -> str:
     """Get the appropriate OAuth redirect URI based on robot type.
 
     Args:
         wireless_version: True for wireless robots, False for Lite.
+        override_host: Optional IP/hostname override for the callback URL.
+            Used when connecting via manual IP where reachy-mini.local
+            doesn't resolve.
 
     Returns:
         The redirect URI to use for OAuth.
 
     """
+    if override_host:
+        # Use the provided host (e.g. "192.168.10.132") for the callback
+        clean_host = override_host.strip().rstrip("/")
+        if not clean_host.startswith("http"):
+            clean_host = f"http://{clean_host}"
+        if ":8000" not in clean_host:
+            clean_host = f"{clean_host}:8000"
+        return f"{clean_host}/api/hf-auth/oauth/callback"
     if wireless_version:
         return OAUTH_REDIRECT_URI_WIRELESS
     else:
         return OAUTH_REDIRECT_URI_LITE
 
 
-def create_oauth_session(wireless_version: bool) -> dict[str, Any]:
+def create_oauth_session(
+    wireless_version: bool, override_host: str | None = None
+) -> dict[str, Any]:
     """Create a new OAuth authorization session.
 
     Args:
@@ -155,7 +170,7 @@ def create_oauth_session(wireless_version: bool) -> dict[str, Any]:
             "message": "OAuth not configured. Set HF_OAUTH_CLIENT_ID environment variable.",
         }
 
-    redirect_uri = get_oauth_redirect_uri(wireless_version)
+    redirect_uri = get_oauth_redirect_uri(wireless_version, override_host)
     state = secrets.token_urlsafe(32)
 
     # Generate PKCE pair for secure public client auth
