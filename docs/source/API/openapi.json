@@ -707,17 +707,39 @@
     "/api/hf-auth/oauth/start": {
       "get": {
         "summary": "Start Oauth",
-        "description": "Start a new OAuth authorization session.\n\nReturns the auth_url to redirect the user to HuggingFace.",
+        "description": "Start a new OAuth authorization session.\n\nReturns the auth_url to redirect the user to HuggingFace.\n\nArgs:\n    request: The incoming HTTP request.\n    use_localhost: When True, use localhost:8000 as the OAuth callback URL.\n        Passed by the desktop app which proxies localhost:8000 to the robot.",
         "operationId": "start_oauth_api_hf_auth_oauth_start_get",
+        "parameters": [
+          {
+            "name": "use_localhost",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Use Localhost"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
                   "type": "object",
+                  "additionalProperties": true,
                   "title": "Response Start Oauth Api Hf Auth Oauth Start Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
