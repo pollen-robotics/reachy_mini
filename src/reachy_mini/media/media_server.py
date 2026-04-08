@@ -759,14 +759,10 @@ class GstMediaServer:
             queue = Gst.ElementFactory.make("queue", "audio_queue")
             audiorate = Gst.ElementFactory.make("audiorate", "audio_rate")
             pipeline.add(queue)
-            if audiorate:
-                pipeline.add(audiorate)
-                audiosrc.link(queue)
-                queue.link(audiorate)
-                audiorate.link(webrtcsink)
-            else:
-                audiosrc.link(queue)
-                queue.link(webrtcsink)
+            pipeline.add(audiorate)
+            audiosrc.link(queue)
+            queue.link(audiorate)
+            audiorate.link(webrtcsink)
         else:
             audiosrc.link(webrtcsink)
 
