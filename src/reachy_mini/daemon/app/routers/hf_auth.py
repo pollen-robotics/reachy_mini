@@ -116,8 +116,10 @@ async def start_oauth(
     Returns the auth_url to redirect the user to HuggingFace.
 
     Args:
+        request: The incoming HTTP request.
         use_localhost: When True, use localhost:8000 as the OAuth callback URL.
             Passed by the desktop app which proxies localhost:8000 to the robot.
+
     """
     # Get wireless_version from app state
     wireless_version = getattr(request.app.state, "daemon", None)

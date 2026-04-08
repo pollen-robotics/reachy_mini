@@ -151,6 +151,7 @@ def create_oauth_session(
 
     Args:
         wireless_version: True for wireless robots, False for Lite.
+        use_localhost: When True, force localhost callback (desktop app proxy).
 
     Returns:
         Session info including auth_url to redirect the user to.
