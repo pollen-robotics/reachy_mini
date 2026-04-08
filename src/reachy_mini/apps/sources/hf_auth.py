@@ -57,7 +57,7 @@ class OAuthSession:
     state: str  # CSRF protection
     code_verifier: str  # PKCE code verifier
     wireless_version: bool  # To know which redirect URI to use
-    override_host: Optional[str] = None  # IP override for callback URL
+    use_localhost: bool = False  # Force localhost callback (desktop app proxy)
     status: str = "pending"  # pending, authorized, expired, error
     access_token: Optional[str] = None
     username: Optional[str] = None
@@ -123,28 +123,21 @@ def _cleanup_expired_sessions() -> None:
 
 
 def get_oauth_redirect_uri(
-    wireless_version: bool, override_host: str | None = None
+    wireless_version: bool, use_localhost: bool = False
 ) -> str:
     """Get the appropriate OAuth redirect URI based on robot type.
 
     Args:
         wireless_version: True for wireless robots, False for Lite.
-        override_host: Optional IP/hostname override for the callback URL.
-            Used when connecting via manual IP where reachy-mini.local
-            doesn't resolve.
+        use_localhost: When True, force localhost callback (for desktop app
+            proxy — the app forwards localhost:8000 to the robot).
 
     Returns:
         The redirect URI to use for OAuth.
 
     """
-    if override_host:
-        # Use the provided host (e.g. "192.168.10.132") for the callback
-        clean_host = override_host.strip().rstrip("/")
-        if not clean_host.startswith("http"):
-            clean_host = f"http://{clean_host}"
-        if ":8000" not in clean_host:
-            clean_host = f"{clean_host}:8000"
-        return f"{clean_host}/api/hf-auth/oauth/callback"
+    if use_localhost:
+        return OAUTH_REDIRECT_URI_LITE
     if wireless_version:
         return OAUTH_REDIRECT_URI_WIRELESS
     else:
@@ -152,7 +145,7 @@ def get_oauth_redirect_uri(
 
 
 def create_oauth_session(
-    wireless_version: bool, override_host: str | None = None
+    wireless_version: bool, use_localhost: bool = False
 ) -> dict[str, Any]:
     """Create a new OAuth authorization session.
 
@@ -171,7 +164,7 @@ def create_oauth_session(
             "message": "OAuth not configured. Set HF_OAUTH_CLIENT_ID environment variable.",
         }
 
-    redirect_uri = get_oauth_redirect_uri(wireless_version, override_host)
+    redirect_uri = get_oauth_redirect_uri(wireless_version, use_localhost)
     state = secrets.token_urlsafe(32)
 
     # Generate PKCE pair for secure public client auth
@@ -183,7 +176,7 @@ def create_oauth_session(
         state=state,
         code_verifier=code_verifier,
         wireless_version=wireless_version,
-        override_host=override_host,
+        use_localhost=use_localhost,
     )
     _oauth_sessions[state] = session
 
@@ -253,7 +246,7 @@ async def exchange_code_for_token(
         session.error_message = "OAuth not configured"
         return {"status": "error", "message": "OAuth not configured"}
 
-    redirect_uri = get_oauth_redirect_uri(session.wireless_version, session.override_host)
+    redirect_uri = get_oauth_redirect_uri(session.wireless_version, session.use_localhost)
 
     # Exchange code for token using PKCE
     token_url = "https://huggingface.co/oauth/token"

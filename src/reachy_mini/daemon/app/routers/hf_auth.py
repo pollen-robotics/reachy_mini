@@ -108,15 +108,16 @@ async def is_oauth_configured() -> dict[str, Any]:
 
 
 @router.get("/oauth/start")
-async def start_oauth(request: Request, host: str | None = None) -> dict[str, Any]:
+async def start_oauth(
+    request: Request, use_localhost: bool = False
+) -> dict[str, Any]:
     """Start a new OAuth authorization session.
 
     Returns the auth_url to redirect the user to HuggingFace.
 
     Args:
-        host: Optional override for the OAuth callback host (e.g. an IP address
-              when reachy-mini.local doesn't resolve). Passed by the desktop app
-              when connecting via manual IP.
+        use_localhost: When True, use localhost:8000 as the OAuth callback URL.
+            Passed by the desktop app which proxies localhost:8000 to the robot.
     """
     # Get wireless_version from app state
     wireless_version = getattr(request.app.state, "daemon", None)
@@ -124,12 +125,12 @@ async def start_oauth(request: Request, host: str | None = None) -> dict[str, An
         wireless_version = wireless_version.wireless_version
     else:
         # Fallback: check if accessed via reachy-mini.local
-        req_host = request.headers.get("host", "")
-        wireless_version = "reachy-mini.local" in req_host
+        host = request.headers.get("host", "")
+        wireless_version = "reachy-mini.local" in host
 
     result = hf_auth.create_oauth_session(
         wireless_version=wireless_version,
-        override_host=host,
+        use_localhost=use_localhost,
     )
 
     if result["status"] == "error":
