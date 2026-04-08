@@ -2,7 +2,7 @@
 
 > This guide will help you install [GStreamer](https://gstreamer.freedesktop.org) for receiving video and audio streams from your Reachy Mini. See the [media architecture](/docs/SDK/media-architecture.md) to understand how streams are accessed locally or remotely depending on the configuration.
 
-Python wheels are available for the Windows and macOS platforms and are included in the project dependencies. Everything should work out of the box. For Linux users, a manual installation is required.
+Python wheels are available for the Windows and macOS platforms and are included in the project dependencies. Everything should work out of the box. Only for Linux users, a manual installation is required.
 
 <div align="center">
 
@@ -97,43 +97,6 @@ source ~/.bashrc
 
 > **💡 Note:** For ARM64 systems (like Raspberry Pi), replace `x86_64-linux-gnu` with `aarch64-linux-gnu` in the export command.
 
-
-</hfoption>
-<hfoption id="macOS">
-
-It is not necessary to install GStreamer manually since the wheels are provided. However, it is still possible to avoid using the wheels and rely on the system installation.
-
-### Using Homebrew
-
-```bash
-brew install gstreamer libnice-gstreamer
-```
-
-The WebRTC plugin is enabled by default in the Homebrew package.
-
-
-</hfoption>
-<hfoption id="Windows">
-
-It is not necessary to install GStreamer manually since the wheels are provided. However, it is still possible to avoid using the wheels and rely on the system installation.
-
-### Step 1: Install GStreamer using the official installer
-
-<div align="center">
-
-[![Download GStreamer for Windows](https://img.shields.io/badge/Download-GStreamer%20for%20Windows-blue?style=for-the-badge&logo=windows&logoColor=white)](https://gstreamer.freedesktop.org/download/)
-
-</div>
-
-1. Download the **runtime** installer (MSVC version)
-2. Install with the **Complete** installation option
-3. Edit the environment variables and add to system PATH: `C:\Program Files\gstreamer\1.0\msvc_x86_64\bin`
-4. Add to PYTHONPATH: `C:\Program Files\gstreamer\1.0\msvc_x86_64\lib\site-packages`
-
-> **💡 Important:** Replace `C:\Program Files\gstreamer` with your actual GStreamer installation folder if you installed it in a different location.
-
-</hfoption>
-</hfoptions>
 
 ## ✅ Verify Installation
 
