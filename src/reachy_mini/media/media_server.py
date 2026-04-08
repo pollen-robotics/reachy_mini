@@ -748,13 +748,14 @@ class GstMediaServer:
                 f"{factory_name} — keeping default provide-clock behaviour."
             )
 
-        # Add a queue between the audio source and webrtcsink to decouple
-        # clocking.  On macOS (osxaudiosrc with provide-clock=False) the
-        # audio timestamps can drift relative to the pipeline clock, causing
-        # the downstream Opus encoder to reject buffers with "going too far
-        # back in time".  The queue absorbs this jitter.
         pipeline.add(audiosrc)
+
         if platform.system() == "Darwin":
+            # Add a queue between the audio source and webrtcsink to decouple
+            # clocking.  On macOS (osxaudiosrc with provide-clock=False) the
+            # audio timestamps can drift relative to the pipeline clock, causing
+            # the downstream Opus encoder to reject buffers with "going too far
+            # back in time".  The queue absorbs this jitter.
             queue = Gst.ElementFactory.make("queue", "audio_queue")
             audiorate = Gst.ElementFactory.make("audiorate", "audio_rate")
             pipeline.add(queue)
