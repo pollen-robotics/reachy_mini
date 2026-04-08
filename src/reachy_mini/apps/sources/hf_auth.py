@@ -57,6 +57,7 @@ class OAuthSession:
     state: str  # CSRF protection
     code_verifier: str  # PKCE code verifier
     wireless_version: bool  # To know which redirect URI to use
+    override_host: Optional[str] = None  # IP override for callback URL
     status: str = "pending"  # pending, authorized, expired, error
     access_token: Optional[str] = None
     username: Optional[str] = None
@@ -182,6 +183,7 @@ def create_oauth_session(
         state=state,
         code_verifier=code_verifier,
         wireless_version=wireless_version,
+        override_host=override_host,
     )
     _oauth_sessions[state] = session
 
@@ -251,7 +253,7 @@ async def exchange_code_for_token(
         session.error_message = "OAuth not configured"
         return {"status": "error", "message": "OAuth not configured"}
 
-    redirect_uri = get_oauth_redirect_uri(session.wireless_version)
+    redirect_uri = get_oauth_redirect_uri(session.wireless_version, session.override_host)
 
     # Exchange code for token using PKCE
     token_url = "https://huggingface.co/oauth/token"
