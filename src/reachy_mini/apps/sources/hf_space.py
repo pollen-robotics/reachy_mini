@@ -15,7 +15,6 @@ AUTHORIZED_APP_LIST_URL = "https://huggingface.co/datasets/pollen-robotics/reach
 HF_SPACES_API_URL = "https://huggingface.co/api/spaces"
 # TODO look for js apps too (reachy_mini_js_app)
 HF_SPACES_FILTER = "reachy_mini_python_app"
-HF_SPACES_FILTER_URL = f"https://huggingface.co/api/spaces?filter={HF_SPACES_FILTER}&sort=likes&direction=-1&limit=500&full=true"
 HF_SPACES_LIMIT = 500
 REQUEST_TIMEOUT = aiohttp.ClientTimeout(total=30)
 logger = logging.getLogger("reachy_mini.apps.sources.hf_space")
@@ -58,16 +57,16 @@ def _normalize_space_data(space_data: SpaceData) -> SpaceData:
     """Normalize HF API responses to the shape used by the app store."""
     normalized = dict(space_data)
 
-    created_at = normalized.get("createdAt") or normalized.get("created_at")
-    if created_at is not None:
+    created_at = normalized.pop("created_at", None)
+    if not normalized.get("createdAt") and created_at is not None:
         normalized["createdAt"] = created_at
 
-    last_modified = normalized.get("lastModified") or normalized.get("last_modified")
-    if last_modified is not None:
+    last_modified = normalized.pop("last_modified", None)
+    if not normalized.get("lastModified") and last_modified is not None:
         normalized["lastModified"] = last_modified
 
-    card_data = normalized.get("cardData") or normalized.get("card_data")
-    if card_data is not None:
+    card_data = normalized.pop("card_data", None)
+    if not normalized.get("cardData") and card_data is not None:
         normalized["cardData"] = card_data
 
     return normalized
@@ -94,9 +93,9 @@ def _build_app_info(item: SpaceData | None) -> AppInfo | None:
     )
 
 
-def _list_all_spaces_with_hf_api(token: str) -> list[SpaceData]:
-    """List spaces with Hugging Face Hub API using the stored token."""
-    api = HfApi(token=token)
+def _list_all_spaces_with_hf_api(token: str | None) -> list[SpaceData]:
+    """List spaces with Hugging Face Hub API using an optional token."""
+    api = HfApi()
     spaces = api.list_spaces(
         filter=HF_SPACES_FILTER,
         sort="likes",
@@ -165,30 +164,16 @@ async def list_available_apps() -> list[AppInfo]:
 async def list_all_apps() -> list[AppInfo]:
     """List all apps available on Hugging Face Spaces (including private ones when authenticated)."""
     token = hf_auth.get_hf_token()
-    if token:
-        try:
-            data = await asyncio.to_thread(_list_all_spaces_with_hf_api, token)
-            apps = []
-            for item in data:
-                app_info = _build_app_info(item)
-                if app_info is not None:
-                    apps.append(app_info)
-            return apps
-        except Exception as exc:
-            logger.warning("Falling back to the public HF catalog: %s", exc)
+    try:
+        data = await asyncio.to_thread(_list_all_spaces_with_hf_api, token)
+    except Exception as exc:
+        logger.warning("Could not list HF Spaces: %s", exc)
+        return []
 
-    async with aiohttp.ClientSession(timeout=REQUEST_TIMEOUT) as session:
-        try:
-            async with session.get(HF_SPACES_FILTER_URL) as response:
-                response.raise_for_status()
-                public_data = _coerce_space_list(await response.json())
-        except (aiohttp.ClientError, json.JSONDecodeError, asyncio.TimeoutError):
-            return []
+    apps = []
+    for item in data:
+        app_info = _build_app_info(item)
+        if app_info is not None:
+            apps.append(app_info)
 
-        apps = []
-        for item in public_data:
-            app_info = _build_app_info(item)
-            if app_info is not None:
-                apps.append(app_info)
-
-        return apps
+    return apps

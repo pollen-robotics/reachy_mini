@@ -49,16 +49,9 @@ class RunningApp:
 
 
 def _get_catalog_app_key(app: AppInfo) -> str:
-    """Build a stable key for deduplicating catalog entries."""
-    for key in ("id", "repo_id", "repoId", "space_id", "spaceId", "app_id", "appId"):
-        value = app.extra.get(key)
-        if isinstance(value, str) and value:
-            return value
-
-    if app.url:
-        return app.url
-
-    return app.name
+    """Return the Hugging Face space id used to deduplicate catalog entries."""
+    value = app.extra.get("id")
+    return value if isinstance(value, str) else ""
 
 
 class AppManager:
@@ -338,8 +331,11 @@ class AppManager:
         catalog_apps: list[AppInfo] = []
         seen_catalog_apps: set[str] = set()
 
-        for app in [*hf_space_apps, *dashboard_selection_apps]:
+        for app in [*dashboard_selection_apps, *hf_space_apps]:
             app_key = _get_catalog_app_key(app)
+            if not app_key:
+                catalog_apps.append(app)
+                continue
             if app_key in seen_catalog_apps:
                 continue
             seen_catalog_apps.add(app_key)
