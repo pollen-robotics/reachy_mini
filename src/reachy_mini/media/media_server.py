@@ -152,20 +152,6 @@ class GstMediaServer:
 
     def _configure_webrtc(self, pipeline: Gst.Pipeline) -> Gst.Element:
         self._logger.debug("Configuring WebRTC")
-
-        # macOS: demote VideoToolbox encoders so webrtcsink's codec
-        # discovery pipeline uses software encoders (x264enc, etc.)
-        # instead.  vtenc_h264 discovery fails at 1080p/Level 4.2
-        # (caps rejected by the internal codec-parser), and the error
-        # can cascade to other pads in the discovery pipeline.
-        if platform.system() == "Darwin":
-            for name in ("vtenc_h264", "vtenc_h264_hw",
-                         "vtenc_h265", "vtenc_h265_hw"):
-                factory = Gst.ElementFactory.find(name)
-                if factory:
-                    factory.set_rank(Gst.Rank.MARGINAL)
-                    self._logger.info(f"Demoted {name} rank to MARGINAL")
-
         webrtcsink = Gst.ElementFactory.make("webrtcsink")
         if not webrtcsink:
             raise RuntimeError(
