@@ -334,7 +334,6 @@ class AppManager:
         for app in [*dashboard_selection_apps, *hf_space_apps]:
             app_key = _get_catalog_app_key(app)
             if not app_key:
-                catalog_apps.append(app)
                 continue
             if app_key in seen_catalog_apps:
                 continue
