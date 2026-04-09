@@ -152,6 +152,20 @@ class GstMediaServer:
 
     def _configure_webrtc(self, pipeline: Gst.Pipeline) -> Gst.Element:
         self._logger.debug("Configuring WebRTC")
+
+        # macOS: demote VideoToolbox encoders so webrtcsink's codec
+        # discovery pipeline uses software encoders (x264enc, etc.)
+        # instead.  vtenc_h264 discovery fails at 1080p/Level 4.2
+        # (caps rejected by the internal codec-parser), and the error
+        # can cascade to other pads in the discovery pipeline.
+        if platform.system() == "Darwin":
+            for name in ("vtenc_h264", "vtenc_h264_hw",
+                         "vtenc_h265", "vtenc_h265_hw"):
+                factory = Gst.ElementFactory.find(name)
+                if factory:
+                    factory.set_rank(Gst.Rank.MARGINAL)
+                    self._logger.info(f"Demoted {name} rank to MARGINAL")
+
         webrtcsink = Gst.ElementFactory.make("webrtcsink")
         if not webrtcsink:
             raise RuntimeError(
@@ -739,6 +753,7 @@ class GstMediaServer:
         factory_name = factory.get_name() if factory else ""
         if (
             factory_name != "alsasrc"
+            and factory_name != "osxaudiosrc"
             and audiosrc.find_property("provide-clock") is not None
         ):
             audiosrc.set_property("provide-clock", False)
@@ -749,22 +764,7 @@ class GstMediaServer:
             )
 
         pipeline.add(audiosrc)
-
-        if platform.system() == "Darwin":
-            # Add a queue between the audio source and webrtcsink to decouple
-            # clocking.  On macOS (osxaudiosrc with provide-clock=False) the
-            # audio timestamps can drift relative to the pipeline clock, causing
-            # the downstream Opus encoder to reject buffers with "going too far
-            # back in time".  The queue absorbs this jitter.
-            queue = Gst.ElementFactory.make("queue", "audio_queue")
-            audiorate = Gst.ElementFactory.make("audiorate", "audio_rate")
-            pipeline.add(queue)
-            pipeline.add(audiorate)
-            audiosrc.link(queue)
-            queue.link(audiorate)
-            audiorate.link(webrtcsink)
-        else:
-            audiosrc.link(webrtcsink)
+        audiosrc.link(webrtcsink)
 
     def _build_audio_source(self) -> Optional[Gst.Element]:
         """Build a platform-aware audio source element.
