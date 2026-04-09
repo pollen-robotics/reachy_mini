@@ -739,6 +739,7 @@ class GstMediaServer:
         factory_name = factory.get_name() if factory else ""
         if (
             factory_name != "alsasrc"
+            and factory_name != "osxaudiosrc"
             and audiosrc.find_property("provide-clock") is not None
         ):
             audiosrc.set_property("provide-clock", False)
@@ -749,22 +750,7 @@ class GstMediaServer:
             )
 
         pipeline.add(audiosrc)
-
-        if platform.system() == "Darwin":
-            # Add a queue between the audio source and webrtcsink to decouple
-            # clocking.  On macOS (osxaudiosrc with provide-clock=False) the
-            # audio timestamps can drift relative to the pipeline clock, causing
-            # the downstream Opus encoder to reject buffers with "going too far
-            # back in time".  The queue absorbs this jitter.
-            queue = Gst.ElementFactory.make("queue", "audio_queue")
-            audiorate = Gst.ElementFactory.make("audiorate", "audio_rate")
-            pipeline.add(queue)
-            pipeline.add(audiorate)
-            audiosrc.link(queue)
-            queue.link(audiorate)
-            audiorate.link(webrtcsink)
-        else:
-            audiosrc.link(webrtcsink)
+        audiosrc.link(webrtcsink)
 
     def _build_audio_source(self) -> Optional[Gst.Element]:
         """Build a platform-aware audio source element.
