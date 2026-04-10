@@ -28,6 +28,7 @@ with ReachyMini() as mini:
 * **[Quickstart Guide](quickstart.md)**: Run your first behavior on Reachy Mini
 * **[Python SDK](python-sdk.md)**: Learn to move, see, speak, and hear.
 * **[AI Integrations](integration.md)**: Connect LLMs, build Apps, and publish to Hugging Face.
+* **[Building & Publishing Apps](apps.md)**: Create, test, publish, and debug Reachy Mini apps.
 * **[Core Concepts](core-concept.md)**: Architecture, coordinate systems, and safety limits.
 
 ## 📂 Code Examples
