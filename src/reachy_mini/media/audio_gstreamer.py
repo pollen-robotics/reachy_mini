@@ -177,7 +177,6 @@ class GStreamerAudio(AudioBase):
     def _init_pipeline_playback(self, pipeline: Gst.Pipeline) -> None:
         self._appsrc = Gst.ElementFactory.make("appsrc")
         self._appsrc.set_property("format", Gst.Format.TIME)
-        self._appsrc.set_property("is-live", True)
         caps = Gst.Caps.from_string(
             f"audio/x-raw,format=F32LE,channels={self.CHANNELS},rate={self.SAMPLE_RATE},layout=interleaved"
         )
