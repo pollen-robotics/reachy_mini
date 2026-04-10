@@ -14,6 +14,25 @@ Reachy Mini has an app ecosystem powered by Hugging Face Spaces. You can build P
 
 ---
 
+## Using AI Agents
+
+If you use an AI coding agent (Claude Code, Cursor, Copilot, etc.), it can build apps for you. Point it to the project's [AGENTS.md](https://github.com/pollen-robotics/reachy_mini/blob/main/AGENTS.md):
+
+> *I'd like to create a Reachy Mini app. Start by reading https://github.com/pollen-robotics/reachy_mini/blob/main/AGENTS.md*
+
+The repository includes a `skills/` directory with detailed guides that AI agents use to build apps correctly:
+
+| Skill | What it covers |
+|-------|---------------|
+| `create-app.md` | App creation workflow and templates |
+| `ai-integration.md` | Building LLM-powered apps |
+| `control-loops.md` | Real-time reactive apps (tracking, games) |
+| `motion-philosophy.md` | Choosing between `goto_target` and `set_target` |
+| `interaction-patterns.md` | Antennas as buttons, head as controller |
+| `symbolic-motion.md` | Defining motion mathematically (dances, rhythms) |
+
+---
+
 ## How Apps Work
 
 The Reachy Mini daemon manages your app's entire lifecycle:
@@ -53,7 +72,7 @@ reachy-mini-app-assistant create my_app_name /path/to/destination
 | Template | Command | Use when |
 |----------|---------|----------|
 | **Default** | `reachy-mini-app-assistant create my_app .` | Most apps. Minimal working structure. |
-| **Conversation** | `reachy-mini-app-assistant create --template conversation my_app .` | LLM integration, speech, making the robot talk. Includes audio pipeline, LLM tools, and all the plumbing. |
+| **Conversation** | `reachy-mini-app-assistant create --template conversation my_app .` | LLM integration, speech, making the robot talk. Includes audio pipeline, LLM tools, movement fusion and all the plumbing. |
 
 ### Generated Structure
 
@@ -133,6 +152,8 @@ my_app = "my_app.main:MyApp"
 
 The group name is `reachy_mini_apps` (with underscores). The value points to your class (`module.main:ClassName`).
 
+Any additional dependency for your project should be added in this file.
+
 ---
 
 ## Optional: Web UI for Your App
@@ -152,7 +173,7 @@ class MyApp(ReachyMiniApp):
         # Your main loop...
 ```
 
-When `custom_app_url` is set, the app automatically starts a FastAPI web server that serves files from the `static/` directory inside your package. The dashboard shows a settings icon to open this UI.
+When `custom_app_url` is set, the app automatically starts a FastAPI web server that serves files from the `static/` directory inside your package. The dashboard shows a settings icon to open this UI. The page can be accessed from `http://localhost:8042` with a lite or `http://reachy-mini.local:8042` with a wireless.
 
 Set `custom_app_url = None` if your app doesn't need a web UI.
 
@@ -261,7 +282,7 @@ curl http://localhost:8000/api/apps/list
 
 Replace `localhost` with `reachy-mini.local` or the robot's IP address for the Wireless version.
 
-### Offline / manual deployment
+### Offline / manual deployment for a Wireless unit
 
 If you don't have internet access on the robot (e.g., at a conference), you can install your app directly:
 
@@ -308,20 +329,6 @@ sudo journalctl -u reachy-mini-daemon --since '5 min ago' | grep -v "uvicorn\|GE
 </hfoption>
 </hfoptions>
 
-### Silent import crashes
-
-If your app depends on a package not installed in the robot's environment, it will crash on import with no visible error. Test imports manually:
-
-```bash
-# On the Wireless robot
-ssh pollen@reachy-mini.local "/venvs/apps_venv/bin/python3 -c 'from my_app.main import MyApp'"
-```
-
-If this prints an error, install the missing package:
-
-```bash
-ssh pollen@reachy-mini.local "/venvs/apps_venv/bin/pip install <package>"
-```
 
 ### Common issues
 
@@ -333,7 +340,7 @@ ssh pollen@reachy-mini.local "/venvs/apps_venv/bin/pip install <package>"
 
 ### Tip: log everything at startup
 
-The single most useful debugging practice is logging your configuration when the app starts:
+A useful debugging practice is logging your configuration when the app starts:
 
 ```python
 import logging
@@ -359,7 +366,7 @@ If your app needs runtime configuration (API keys, server URLs, etc.), the recom
 
 Other approaches:
 
-- **Config file**: Read from a known path (e.g., `~/.config/my_app/config.json`).
+- **Config file**: Read from a known path (e.g., `.env` see [example here](https://github.com/pollen-robotics/reachy_mini_conversation_app/blob/main/.env.example)).
 - **Hardcoded defaults**: Simple and debuggable for development.
 
 ---
@@ -375,25 +382,6 @@ Refer to the official examples for working code:
 - **[Sound Direction of Arrival](../examples/sound_doa)**: Detect who is speaking and make the robot look at them.
 
 For details on how audio streams differ between Wireless and Lite, see [Media Architecture](media-architecture.md).
-
----
-
-## Using AI Agents
-
-If you use an AI coding agent (Claude Code, Cursor, Copilot, etc.), it can build apps for you. Point it to the project's [AGENTS.md](https://github.com/pollen-robotics/reachy_mini/blob/develop/AGENTS.md):
-
-> *I'd like to create a Reachy Mini app. Start by reading https://github.com/pollen-robotics/reachy_mini/blob/develop/AGENTS.md*
-
-The repository includes a `skills/` directory with detailed guides that AI agents use to build apps correctly:
-
-| Skill | What it covers |
-|-------|---------------|
-| `create-app.md` | App creation workflow and templates |
-| `ai-integration.md` | Building LLM-powered apps |
-| `control-loops.md` | Real-time reactive apps (tracking, games) |
-| `motion-philosophy.md` | Choosing between `goto_target` and `set_target` |
-| `interaction-patterns.md` | Antennas as buttons, head as controller |
-| `symbolic-motion.md` | Defining motion mathematically (dances, rhythms) |
 
 ---
 

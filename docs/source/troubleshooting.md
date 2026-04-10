@@ -301,7 +301,7 @@ Helps prevent package conflicts during SDK installation.
 <details>
 <summary><strong>reachy-mini.local doesn't resolve</strong></summary>
 
-The robot advertises itself as `reachy-mini.local` via mDNS. This works on most home and office networks, but may fail on some enterprise, conference, or hotel networks.
+A wireless unit advertises itself as `reachy-mini.local` via mDNS. This works on most home and office networks, but may fail on some enterprise, conference, or hotel networks.
 
 If `reachy-mini.local` doesn't resolve:
 - Check your router's DHCP client list for the robot's IP address.
