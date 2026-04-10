@@ -48,6 +48,12 @@ class RunningApp:
     status: AppStatus
 
 
+def _get_catalog_app_key(app: AppInfo) -> str:
+    """Return the Hugging Face space id used to deduplicate catalog entries."""
+    value = app.extra.get("id")
+    return value if isinstance(value, str) else ""
+
+
 class AppManager:
     """Manager for Reachy Mini apps."""
 
@@ -309,11 +315,32 @@ class AppManager:
 
     # Apps management interface
     async def list_all_available_apps(self) -> list[AppInfo]:
-        """List available apps (parallel async)."""
-        results = await asyncio.gather(
-            *[self.list_available_apps(kind) for kind in SourceKind]
+        """List available apps while preserving curated-only entries."""
+        (
+            hf_space_apps,
+            dashboard_selection_apps,
+            local_apps,
+            installed_apps,
+        ) = await asyncio.gather(
+            self.list_available_apps(SourceKind.HF_SPACE),
+            self.list_available_apps(SourceKind.DASHBOARD_SELECTION),
+            self.list_available_apps(SourceKind.LOCAL),
+            self.list_available_apps(SourceKind.INSTALLED),
         )
-        return sum(results, [])
+
+        catalog_apps: list[AppInfo] = []
+        seen_catalog_apps: set[str] = set()
+
+        for app in [*dashboard_selection_apps, *hf_space_apps]:
+            app_key = _get_catalog_app_key(app)
+            if not app_key:
+                continue
+            if app_key in seen_catalog_apps:
+                continue
+            seen_catalog_apps.add(app_key)
+            catalog_apps.append(app)
+
+        return [*catalog_apps, *local_apps, *installed_apps]
 
     async def list_available_apps(self, source: SourceKind) -> list[AppInfo]:
         """List available apps for given source kind."""
