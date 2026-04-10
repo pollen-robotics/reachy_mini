@@ -154,11 +154,12 @@ function sdpHasAudioSendRecv(sdp) {
 
 export class ReachyMini extends EventTarget {
 
-    /** @param {{ signalingUrl?: string, enableMicrophone?: boolean }} [options] */
+    /** @param {{ signalingUrl?: string, enableMicrophone?: boolean, clientId?: string }} [options] */
     constructor(options = {}) {
         super();
         this._signalingUrl = options.signalingUrl || 'https://cduss-reachy-mini-central.hf.space';
         this._enableMicrophone = options.enableMicrophone !== false;
+        this._clientId = options.clientId || null;
 
         this._state = 'disconnected';                 // 'disconnected' | 'connected' | 'streaming'
         this._robots = [];                             // latest robot list from signaling
@@ -268,7 +269,9 @@ export class ReachyMini extends EventTarget {
 
     /** Redirect the browser to the HuggingFace OAuth login page. */
     async login() {
-        window.location.href = await oauthLoginUrl();
+        const opts = {};
+        if (this._clientId) opts.clientId = this._clientId;
+        window.location.href = await oauthLoginUrl(opts);
     }
 
     /** Clear stored HF credentials and disconnect everything. */
