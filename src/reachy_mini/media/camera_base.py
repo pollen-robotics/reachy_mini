@@ -105,9 +105,10 @@ class CameraBase(ABC):
             )
 
         if isinstance(self.camera_specs, MujocoCameraSpecs):
-            raise RuntimeError(
+            self.logger.warning(
                 "Cannot change resolution of Mujoco simulated camera for now."
             )
+            return
 
         if resolution not in self.camera_specs.available_resolutions:
             raise ValueError(
