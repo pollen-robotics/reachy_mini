@@ -12,10 +12,7 @@ Python wheels are available for the Windows and macOS platforms and are included
 
 </div>
 
-## 🔧 Install GStreamer
-
-<hfoptions id="gstreamer-install">
-<hfoption id="Linux">
+## 🔧 Install GStreamer and webrtc plugins
 
 ### Step 1: Install GStreamer
 
@@ -25,7 +22,7 @@ In your terminal, run:
 
 ```bash
 sudo apt-get update
-sudo apt-get install -y \
+sudo apt-get install \
     libgstreamer-plugins-bad1.0-dev \
     libgstreamer-plugins-base1.0-dev \
     libgstreamer1.0-dev \
@@ -40,7 +37,7 @@ sudo apt-get install -y \
     gstreamer1.0-plugins-bad \
     gstreamer1.0-nice \
     python3-gi \
-    python3-gi-cairo
+    python3-gi-cairo    
 ```
 
 **For Ubuntu 22.04 only:** The default GStreamer version is too old. Gstreamer >=1.22 is required. You need to add a PPA to get GStreamer 1.24.x:
@@ -98,50 +95,16 @@ source ~/.bashrc
 > **💡 Note:** For ARM64 systems (like Raspberry Pi), replace `x86_64-linux-gnu` with `aarch64-linux-gnu` in the export command.
 
 
-</hfoption>
-<hfoption id="macOS">
-
-It is not necessary to install GStreamer manually since the wheels are provided. However, it is still possible to avoid using the wheels and rely on the system installation.
-
-### Using Homebrew
-
-```bash
-brew install gstreamer libnice-gstreamer
-```
-
-The WebRTC plugin is enabled by default in the Homebrew package.
-
-
-</hfoption>
-<hfoption id="Windows">
-
-It is not necessary to install GStreamer manually since the wheels are provided. However, it is still possible to avoid using the wheels and rely on the system installation.
-
-### Step 1: Install GStreamer using the official installer
-
-<div align="center">
-
-[![Download GStreamer for Windows](https://img.shields.io/badge/Download-GStreamer%20for%20Windows-blue?style=for-the-badge&logo=windows&logoColor=white)](https://gstreamer.freedesktop.org/download/)
-
-</div>
-
-1. Download the **runtime** installer (MSVC version)
-2. Install with the **Complete** installation option
-3. Edit the environment variables and add to system PATH: `C:\Program Files\gstreamer\1.0\msvc_x86_64\bin`
-4. Add to PYTHONPATH: `C:\Program Files\gstreamer\1.0\msvc_x86_64\lib\site-packages`
-
-> **💡 Important:** Replace `C:\Program Files\gstreamer` with your actual GStreamer installation folder if you installed it in a different location.
-
-</hfoption>
-</hfoptions>
-
 ## ✅ Verify Installation
 
 Finally, you can test your GStreamer installation as follows:
 
 ```bash
+# install the optional tools
+sudo apt install gstreamer1.0-tools
+
 # Check version
-gst-launch-1.0(.exe) --version
+gst-launch-1.0 --version
 
 # Test basic functionalities
 gst-launch-1.0 videotestsrc ! autovideosink
