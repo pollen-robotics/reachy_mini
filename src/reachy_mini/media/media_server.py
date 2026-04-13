@@ -33,11 +33,13 @@ import gi
 from reachy_mini.daemon.utils import (
     CAMERA_PIPE_NAME,
     CAMERA_SOCKET_PATH,
+    SimulationMode,
     is_local_camera_available,
 )
 from reachy_mini.media.audio_utils import has_reachymini_asoundrc
 from reachy_mini.media.camera_constants import (
     CameraSpecs,
+    GenericWebcamSpecs,
     MujocoCameraSpecs,
     ReachyMiniLiteCamSpecs,
 )
@@ -70,40 +72,46 @@ class GstMediaServer:
     def __init__(
         self,
         log_level: str = "INFO",
-        use_sim: bool = False,
+        sim_mode: SimulationMode = SimulationMode.NONE,
     ) -> None:
         """Initialize the GStreamer WebRTC pipeline.
 
         Args:
             log_level: Logging level for WebRTC daemon operations.
-            use_sim: If True, receive video from MuJoCo simulation via UDP
-                instead of a physical camera.
+            sim_mode: Simulation mode. MUJOCO receives video via UDP,
+                MOCKUP uses autovideosrc, NONE detects a physical camera.
 
         Raises:
-            RuntimeError: If no camera is detected (unless use_sim is True)
+            RuntimeError: If no camera is detected (unless in simulation mode)
                 or camera specifications cannot be determined.
 
         """
         self._logger = logging.getLogger(__name__)
         self._logger.setLevel(log_level)
         self._log_level = log_level
-        self._use_sim = use_sim
+        self._sim_mode = sim_mode
 
         Gst.init([])
         self._loop = GLib.MainLoop()
         self._thread_bus_calls = Thread(target=lambda: self._loop.run(), daemon=True)
         self._thread_bus_calls.start()
 
-        if use_sim:
-            cam_path = "use_sim"
-            self.camera_specs: CameraSpecs = MujocoCameraSpecs()
-        else:
-            cam_path, detected_specs = get_video_device()
-            if detected_specs is None:
-                self._logger.warning("No camera found. Video will not be available.")
-                self.camera_specs = ReachyMiniLiteCamSpecs()
-            else:
-                self.camera_specs = detected_specs
+        match sim_mode:
+            case SimulationMode.MUJOCO:
+                cam_path = "use_sim"
+                self.camera_specs: CameraSpecs = MujocoCameraSpecs()
+            case SimulationMode.MOCKUP:
+                cam_path = "use_mockup_sim"
+                self.camera_specs = GenericWebcamSpecs()
+            case SimulationMode.NONE:
+                cam_path, detected_specs = get_video_device()
+                if detected_specs is None:
+                    self._logger.warning(
+                        "No camera found. Video will not be available."
+                    )
+                    self.camera_specs = ReachyMiniLiteCamSpecs()
+                else:
+                    self.camera_specs = detected_specs
 
         self._resolution = self.camera_specs.default_resolution
         self.resized_K = self.camera_specs.K
@@ -397,6 +405,9 @@ class GstMediaServer:
             # instead of UDP loopback.
             source_elements = self._build_sim_source()
 
+        elif cam_path == "use_mockup_sim":
+            source_elements = self._build_autovideo_source()
+
         elif cam_path == "imx708":
             # Raspberry Pi CSI camera (libcamerasrc)
             source_elements = self._build_libcamera_source()
@@ -483,6 +494,29 @@ class GstMediaServer:
         elements = [udpsrc, queue, rtpvrawdepay, videoconvert, videorate]
         if not all(elements):
             raise RuntimeError("Failed to create simulation video source elements")
+        return elements
+
+    def _build_autovideo_source(self) -> list[Gst.Element]:
+        """Build source chain using autovideosrc (auto-detect system camera).
+
+        Used by mockup simulation to grab video from whatever camera is
+        available on the host system.
+        """
+        camsrc = Gst.ElementFactory.make("autovideosrc")
+        videoconvert = Gst.ElementFactory.make("videoconvert")
+        videorate = Gst.ElementFactory.make("videorate")
+
+        caps_raw = Gst.Caps.from_string(
+            f"video/x-raw,width={self.resolution[0]},"
+            f"height={self.resolution[1]},"
+            f"framerate={self.framerate}/1"
+        )
+        capsfilter = Gst.ElementFactory.make("capsfilter")
+        capsfilter.set_property("caps", caps_raw)
+
+        elements = [camsrc, videoconvert, videorate, capsfilter]
+        if not all(elements):
+            raise RuntimeError("Failed to create autovideo source elements")
         return elements
 
     def _build_libcamera_source(self) -> list[Gst.Element]:
@@ -749,8 +783,11 @@ class GstMediaServer:
                 f"{factory_name} — keeping default provide-clock behaviour."
             )
 
+        queue = Gst.ElementFactory.make("queue", "queue_audiosrc")
         pipeline.add(audiosrc)
-        audiosrc.link(webrtcsink)
+        pipeline.add(queue)
+        audiosrc.link(queue)
+        queue.link(webrtcsink)
 
     def _build_audio_source(self) -> Optional[Gst.Element]:
         """Build a platform-aware audio source element.
