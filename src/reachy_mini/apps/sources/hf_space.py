@@ -2,11 +2,14 @@
 
 import asyncio
 import json
-from typing import Any, Dict
+import logging
+from typing import Any, Dict, Optional
 
 import aiohttp
 
 from .. import AppInfo, SourceKind
+
+logger = logging.getLogger(__name__)
 
 # Constants
 AUTHORIZED_APP_LIST_URL = "https://huggingface.co/datasets/pollen-robotics/reachy-mini-official-app-store/raw/main/app-list.json"
@@ -16,13 +19,27 @@ HF_SPACES_FILTER_URL = "https://huggingface.co/api/spaces?filter=reachy_mini_pyt
 REQUEST_TIMEOUT = aiohttp.ClientTimeout(total=30)
 
 
+def _get_auth_headers() -> dict[str, str]:
+    """Return Authorization header if an HF token is available."""
+    from . import hf_auth
+
+    token = hf_auth.get_hf_token()
+    if token:
+        return {"Authorization": f"Bearer {token}"}
+    return {}
+
+
 async def _fetch_space_data(
-    session: aiohttp.ClientSession, space_id: str
+    session: aiohttp.ClientSession,
+    space_id: str,
+    headers: Optional[dict[str, str]] = None,
 ) -> Dict[str, Any] | None:
     """Fetch data for a single space from Hugging Face API."""
     url = f"{HF_SPACES_API_URL}/{space_id}"
     try:
-        async with session.get(url, timeout=REQUEST_TIMEOUT) as response:
+        async with session.get(
+            url, timeout=REQUEST_TIMEOUT, headers=headers
+        ) as response:
             if response.status == 200:
                 data: Dict[str, Any] = await response.json()
                 return data
@@ -34,6 +51,8 @@ async def _fetch_space_data(
 
 async def list_available_apps() -> list[AppInfo]:
     """List apps available on Hugging Face Spaces."""
+    auth_headers = _get_auth_headers()
+
     async with aiohttp.ClientSession(timeout=REQUEST_TIMEOUT) as session:
         # Fetch the list of authorized app IDs
         try:
@@ -52,8 +71,11 @@ async def list_available_apps() -> list[AppInfo]:
             space_id for space_id in authorized_ids if isinstance(space_id, str)
         ]
 
-        # Fetch data for each space in parallel
-        tasks = [_fetch_space_data(session, space_id) for space_id in authorized_ids]
+        # Fetch data for each space in parallel (authenticated to include private spaces)
+        tasks = [
+            _fetch_space_data(session, space_id, auth_headers)
+            for space_id in authorized_ids
+        ]
         spaces_data = await asyncio.gather(*tasks)
 
         # Build AppInfo list from fetched data
@@ -76,10 +98,18 @@ async def list_available_apps() -> list[AppInfo]:
 
 
 async def list_all_apps() -> list[AppInfo]:
-    """List all apps available on Hugging Face Spaces (including unofficial ones)."""
+    """List all apps available on Hugging Face Spaces (including unofficial ones).
+
+    When an HF token is available, the request is authenticated so the
+    API also returns private spaces the user has access to.
+    """
+    auth_headers = _get_auth_headers()
+
     async with aiohttp.ClientSession(timeout=REQUEST_TIMEOUT) as session:
         try:
-            async with session.get(HF_SPACES_FILTER_URL) as response:
+            async with session.get(
+                HF_SPACES_FILTER_URL, headers=auth_headers
+            ) as response:
                 response.raise_for_status()
                 data: list[Dict[str, Any]] = await response.json()
         except (aiohttp.ClientError, json.JSONDecodeError, asyncio.TimeoutError):
