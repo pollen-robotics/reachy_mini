@@ -39,6 +39,7 @@ from reachy_mini.daemon.app.routers import (
     volume,
 )
 from reachy_mini.daemon.daemon import Daemon
+from reachy_mini.daemon.utils import SimulationMode
 from reachy_mini.media.audio_utils import (
     check_reachymini_asoundrc,
     write_asoundrc_to_home,
@@ -200,13 +201,20 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
     )
 
     app.state.args = args
+    sim_mode = (
+        SimulationMode.MUJOCO
+        if args.sim
+        else SimulationMode.MOCKUP
+        if args.mockup_sim
+        else SimulationMode.NONE
+    )
     app.state.daemon = Daemon(
         robot_name=args.robot_name,
         wireless_version=args.wireless_version,
         desktop_app_daemon=args.desktop_app_daemon,
         log_level=args.log_level,
         no_media=args.no_media,
-        use_sim=args.sim,
+        sim_mode=sim_mode,
     )
     app.state.app_manager = AppManager(
         wireless_version=args.wireless_version,
@@ -291,9 +299,7 @@ def run_app(args: Args) -> None:
     # Create handler that writes to stderr with immediate flush
     handler = logging.StreamHandler(sys.stderr)
     handler.setLevel(args.log_level)
-    handler.setFormatter(
-        logging.Formatter("%(name)s - %(levelname)s - %(message)s")
-    )
+    handler.setFormatter(logging.Formatter("%(name)s - %(levelname)s - %(message)s"))
     root_logger.handlers.clear()
     root_logger.addHandler(handler)
 
