@@ -1,3 +1,4 @@
+# ruff: noqa: E402
 """Daemon for Reachy Mini robot.
 
 This module provides a daemon that runs a backend for either a simulated Reachy Mini using Mujoco or a real Reachy Mini robot using a serial connection.
@@ -11,6 +12,11 @@ import time
 from importlib.metadata import PackageNotFoundError, version
 from threading import Event, Thread
 from typing import Any, Optional
+
+from reachy_mini.media.gstreamer_env import configure_gstreamer_environment
+
+# Apply macOS GStreamer env fixes before importing daemon media code.
+configure_gstreamer_environment()
 
 from reachy_mini.daemon.utils import (
     SimulationMode,

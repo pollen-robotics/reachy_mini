@@ -1,3 +1,4 @@
+# ruff: noqa: E402
 """Daemon entry point for the Reachy Mini robot.
 
 This script serves as the command-line interface (CLI) entry point for the Reachy Mini daemon.
@@ -22,6 +23,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+
+from reachy_mini.media.gstreamer_env import configure_gstreamer_environment
+
+# Apply GStreamer env fixes before importing daemon/media code.
+configure_gstreamer_environment()
 
 from reachy_mini.apps.manager import AppManager
 from reachy_mini.daemon.app.routers import (

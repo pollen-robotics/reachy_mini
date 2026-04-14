@@ -57,7 +57,7 @@ from reachy_mini.media.camera_constants import (
     CameraSpecs,
     ReachyMiniLiteCamSpecs,
 )
-from reachy_mini.media.gstreamer_utils import get_sample
+from reachy_mini.media.gstreamer_utils import get_sample, init_gst
 
 try:
     import gi
@@ -109,7 +109,7 @@ class GStreamerCamera(CameraBase):
         """
         super().__init__(log_level=log_level)
 
-        Gst.init([])
+        init_gst()
         self._loop = GLib.MainLoop()
         self._thread_bus_calls: Optional[Thread] = None
 

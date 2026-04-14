@@ -94,9 +94,10 @@ def _resolve_backend(backend: MediaBackend) -> MediaBackend:
 if TYPE_CHECKING:
     from reachy_mini.media.audio_gstreamer import GStreamerAudio
     from reachy_mini.media.camera_gstreamer import GStreamerCamera
+    from reachy_mini.media.camera_opencv import OpenCVCamera
     from reachy_mini.media.webrtc_client_gstreamer import GstWebRTCClient
 
-    CameraLike = Union[GStreamerCamera, GstWebRTCClient]
+    CameraLike = Union[GStreamerCamera, GstWebRTCClient, OpenCVCamera]
     AudioLike = Union[GStreamerAudio, GstWebRTCClient]
 
 
@@ -122,6 +123,7 @@ class MediaManager:
         signalling_host: str = "localhost",
         camera_specs: Optional[CameraSpecs] = None,
         daemon_url: str = "",
+        direct_camera_index: Optional[int] = None,
     ) -> None:
         """Initialize the media manager.
 
@@ -137,6 +139,8 @@ class MediaManager:
                 (e.g. ``"http://reachy-mini.local:8000"``).  Only used
                 with the ``WEBRTC`` backend for remote sound playback
                 and file management.
+            direct_camera_index: Optional macOS AVFoundation camera index
+                for direct OpenCV capture while keeping WebRTC audio.
 
         Example::
 
@@ -164,22 +168,37 @@ class MediaManager:
                 self._init_camera(log_level, camera_specs)
                 self._init_audio(log_level)
             case MediaBackend.WEBRTC:
-                self.logger.info("Using WebRTC streaming backend.")
+                if direct_camera_index is None:
+                    self.logger.info("Using WebRTC streaming backend.")
+                else:
+                    self.logger.info(
+                        "Using WebRTC audio with direct OpenCV camera fallback."
+                    )
                 self._init_webrtc(
-                    log_level, signalling_host, 8443, camera_specs, daemon_url
+                    log_level,
+                    signalling_host,
+                    8443,
+                    camera_specs,
+                    daemon_url,
+                    direct_camera_index,
                 )
             case _:
                 raise NotImplementedError(f"Media backend {backend} not implemented.")
 
     def close(self) -> None:
         """Close the media manager and release resources."""
+        closed_ids: set[int] = set()
+
         if self.camera is not None:
             self.camera.close()
+            closed_ids.add(id(self.camera))
             del self.camera
             self.camera = None
         if self.audio is not None:
             self.audio.stop_recording()
             self.audio.stop_playing()
+            if id(self.audio) not in closed_ids and hasattr(self.audio, "close"):
+                self.audio.close()
             self.audio.cleanup()
             del self.audio
             self.audio = None
@@ -212,8 +231,32 @@ class MediaManager:
         signalling_port: int,
         camera_specs: Optional[CameraSpecs] = None,
         daemon_url: str = "",
+        direct_camera_index: Optional[int] = None,
     ) -> None:
         """Initialize the WebRTC client (camera + audio)."""
+        direct_camera = None
+
+        if direct_camera_index is not None:
+            try:
+                from reachy_mini.media.camera_opencv import OpenCVCamera
+
+                self.logger.debug(
+                    "Initializing direct OpenCV camera at index %s...",
+                    direct_camera_index,
+                )
+                direct_camera = OpenCVCamera(
+                    device_index=direct_camera_index,
+                    log_level=log_level,
+                    camera_specs=camera_specs,
+                )
+                direct_camera.open()
+            except Exception:
+                self.logger.exception(
+                    "Failed to initialize direct OpenCV camera fallback. "
+                    "Falling back to WebRTC video."
+                )
+                direct_camera = None
+
         from reachy_mini.media.webrtc_client_gstreamer import GstWebRTCClient
         from reachy_mini.media.webrtc_utils import find_producer_peer_id_by_name
 
@@ -231,9 +274,9 @@ class MediaManager:
         # Auto-derive daemon URL from signalling host when not provided.
         webrtc_media.daemon_url = daemon_url or f"http://{signalling_host}:8000"
 
-        self.camera = webrtc_media
+        webrtc_media.open()
+        self.camera = direct_camera or webrtc_media
         self.audio = webrtc_media  # GstWebRTCClient handles both audio and video
-        self.camera.open()
 
     def get_frame(self) -> Optional[npt.NDArray[np.uint8]]:
         """Get a frame from the camera.

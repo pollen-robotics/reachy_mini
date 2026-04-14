@@ -30,6 +30,8 @@ from pathlib import Path
 import numpy as np
 import numpy.typing as npt
 
+from reachy_mini.media.gstreamer_utils import init_gst
+
 
 def _process_card_number_output(output: str) -> int:
     """Process the output of 'arecord -l' to find the ReSpeaker or Reachy Mini Audio card number.
@@ -278,7 +280,7 @@ def save_audio_to_wav(
             "imported. Please check the GStreamer installation."
         ) from e
 
-    Gst.init([])
+    init_gst()
 
     # Normalise shape and infer channel count
     data = np.ascontiguousarray(audio_data, dtype=np.float32)

@@ -62,6 +62,7 @@ import numpy.typing as npt
 from reachy_mini.media.audio_base import AudioBase
 from reachy_mini.media.audio_utils import has_reachymini_asoundrc
 from reachy_mini.media.device_detection import get_audio_device
+from reachy_mini.media.gstreamer_utils import init_gst
 from reachy_mini.utils.constants import ASSETS_ROOT_PATH
 
 try:
@@ -105,7 +106,7 @@ class GStreamerAudio(AudioBase):
         """
         super().__init__(log_level=log_level)
 
-        Gst.init([])
+        init_gst()
         self._loop = GLib.MainLoop()
         self._thread_bus_calls = Thread(target=lambda: self._loop.run(), daemon=True)
         self._thread_bus_calls.start()

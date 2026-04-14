@@ -22,6 +22,7 @@ from reachy_mini.media.device_detection import (
     DeviceInfo,
     find_audio_device,
     find_video_device,
+    parse_ffmpeg_avfoundation_video_devices,
     parse_gst_device_monitor_output,
 )
 
@@ -130,6 +131,23 @@ class TestParser:
         names = [d.display_name for d in windows_devices]
         assert any("Reachy Mini Audio" in n for n in names)
         assert any("Reachy Mini Camera" in n for n in names)
+
+    def test_ffmpeg_avfoundation_video_parsing(self) -> None:
+        text = """
+[AVFoundation indev @ 0xa2ec18140] AVFoundation video devices:
+[AVFoundation indev @ 0xa2ec18140] [0] Logitech Webcam C925e
+[AVFoundation indev @ 0xa2ec18140] [1] Reachy Mini Camera
+[AVFoundation indev @ 0xa2ec18140] [2] FaceTime HD Camera
+[AVFoundation indev @ 0xa2ec18140] AVFoundation audio devices:
+[AVFoundation indev @ 0xa2ec18140] [0] Reachy Mini Audio
+"""
+        devices = parse_ffmpeg_avfoundation_video_devices(text)
+        assert [device.display_name for device in devices] == [
+            "Logitech Webcam C925e",
+            "Reachy Mini Camera",
+            "FaceTime HD Camera",
+        ]
+        assert [device.index for device in devices] == [0, 1, 2]
 
 
 class TestFindAudioDevice:

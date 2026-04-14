@@ -44,6 +44,7 @@ from reachy_mini.media.camera_constants import (
     ReachyMiniLiteCamSpecs,
 )
 from reachy_mini.media.device_detection import get_audio_device, get_video_device
+from reachy_mini.media.gstreamer_utils import init_gst
 from reachy_mini.utils.constants import ASSETS_ROOT_PATH
 
 gi.require_version("Gst", "1.0")
@@ -91,10 +92,10 @@ class GstMediaServer:
         self._log_level = log_level
         self._sim_mode = sim_mode
 
-        Gst.init([])
+        init_gst()
         self._loop = GLib.MainLoop()
-        self._thread_bus_calls = Thread(target=lambda: self._loop.run(), daemon=True)
-        self._thread_bus_calls.start()
+        self._thread_bus_calls: Thread | None = None
+        self._bus_sender: Gst.Bus | None = None
 
         match sim_mode:
             case SimulationMode.MUJOCO:
@@ -127,6 +128,20 @@ class GstMediaServer:
         self._playbin: Optional[Gst.Element] = None
 
         self._build_pipeline()
+        self._start_bus_loop()
+
+    def _start_bus_loop(self) -> None:
+        """Start the GLib main loop after synchronous device discovery is done.
+
+        Starting the loop thread before ``Gst.DeviceMonitor`` runs can trigger a
+        native GStreamer crash on macOS. Keep discovery single-threaded, then
+        start the background loop once the pipeline and bus watch are configured.
+        """
+        if self._thread_bus_calls is not None and self._thread_bus_calls.is_alive():
+            return
+
+        self._thread_bus_calls = Thread(target=self._loop.run, daemon=True)
+        self._thread_bus_calls.start()
 
     def _build_pipeline(self) -> None:
         """Build (or rebuild) the GStreamer pipeline from scratch."""
@@ -147,11 +162,17 @@ class GstMediaServer:
         """Release GStreamer resources (MainLoop, bus watch)."""
         self._logger.debug("Cleaning up GstMediaServer")
         self._loop.quit()
-        self._bus_sender.remove_watch()
+        if self._bus_sender is not None:
+            self._bus_sender.remove_watch()
+            self._bus_sender = None
 
     def __del__(self) -> None:
         """Destructor to ensure gstreamer resources are released."""
-        self.close()
+        try:
+            self.close()
+        except Exception:
+            # Interpreter shutdown can invalidate GI modules before __del__ runs.
+            pass
 
     def _dump_latency(self) -> None:
         query = Gst.Query.new_latency()

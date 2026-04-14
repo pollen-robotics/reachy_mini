@@ -58,7 +58,7 @@ from reachy_mini.media.camera_constants import (
     CameraSpecs,
     ReachyMiniLiteCamSpecs,
 )
-from reachy_mini.media.gstreamer_utils import get_sample
+from reachy_mini.media.gstreamer_utils import get_sample, init_gst
 
 gi.require_version("Gst", "1.0")
 gi.require_version("GstApp", "1.0")
@@ -98,7 +98,7 @@ class GstWebRTCClient(CameraBase, AudioBase):
         CameraBase.__init__(self, log_level=log_level)
         AudioBase.__init__(self, log_level=log_level)
 
-        Gst.init([])
+        init_gst()
         self._loop = GLib.MainLoop()
         self._thread_bus_calls = Thread(target=lambda: self._loop.run(), daemon=True)
         self._thread_bus_calls.start()

@@ -14,6 +14,8 @@ from __future__ import annotations
 import logging
 import platform
 import re
+import shutil
+import subprocess
 from dataclasses import dataclass, field
 from typing import Any, List, Optional, Sequence, Tuple
 
@@ -25,6 +27,7 @@ from reachy_mini.media.camera_constants import (
     ReachyMiniLiteCamSpecs,
     ReachyMiniWirelessCamSpecs,
 )
+from reachy_mini.media.gstreamer_env import configure_gstreamer_environment
 
 gi.require_version("Gst", "1.0")
 
@@ -70,6 +73,9 @@ _NAME_RE = re.compile(r"^\s+name\s+:\s+(.+)$")
 _CLASS_RE = re.compile(r"^\s+class\s+:\s+(.+)$")
 # Matches a "key = value" property line (one leading tab + two-tab indent).
 _PROP_RE = re.compile(r"^\s+(\S+)\s+=\s+(.*)$")
+_FFMPEG_AVF_DEVICE_RE = re.compile(
+    r"^\[AVFoundation indev @ [^\]]+\] \[(\d+)\] (.+)$"
+)
 
 
 def parse_gst_device_monitor_output(text: str) -> list[DeviceInfo]:
@@ -172,6 +178,41 @@ def parse_gst_device_monitor_output(text: str) -> list[DeviceInfo]:
     return devices
 
 
+def parse_ffmpeg_avfoundation_video_devices(text: str) -> list[DeviceInfo]:
+    """Parse ``ffmpeg -f avfoundation -list_devices true`` output on macOS.
+
+    FFmpeg prints AVFoundation device listings to stderr and exits with a
+    non-zero status because no actual input stream is opened. We only care about
+    the video-device section, which contains stable ``[index] name`` entries.
+    """
+    devices: list[DeviceInfo] = []
+    in_video_section = False
+
+    for line in text.splitlines():
+        stripped = line.strip()
+        if "AVFoundation video devices:" in stripped:
+            in_video_section = True
+            continue
+        if in_video_section and "AVFoundation audio devices:" in stripped:
+            break
+        if not in_video_section:
+            continue
+
+        match = _FFMPEG_AVF_DEVICE_RE.match(stripped)
+        if match is None:
+            continue
+
+        devices.append(
+            DeviceInfo(
+                display_name=match.group(2).strip(),
+                device_class="Video/Source",
+                index=int(match.group(1)),
+            )
+        )
+
+    return devices
+
+
 def gst_structure_get_field(structure: Any, field_name: str) -> Any:
     """Safely extract a single field value from a ``Gst.Structure``.
 
@@ -266,6 +307,9 @@ def gst_monitor_devices(filter_class: str) -> list[DeviceInfo]:
         Exception: Propagates any GStreamer error.
 
     """
+    if platform.system() == "Darwin":
+        return _gst_monitor_devices_subprocess(filter_class)
+
     monitor = Gst.DeviceMonitor()
     monitor.add_filter(filter_class)
     monitor.start()
@@ -273,6 +317,34 @@ def gst_monitor_devices(filter_class: str) -> list[DeviceInfo]:
         return gst_devices_to_device_infos(monitor.get_devices())
     finally:
         monitor.stop()
+
+
+def _gst_monitor_devices_subprocess(filter_class: str) -> list[DeviceInfo]:
+    """Probe devices via ``gst-device-monitor-1.0`` in a subprocess.
+
+    On macOS, in-process ``Gst.DeviceMonitor`` can segfault in some
+    python-build-standalone / gstreamer-bundle setups. Running the probe in a
+    subprocess keeps the daemon process safe and reuses the existing text parser.
+    """
+    configure_gstreamer_environment()
+
+    binary = shutil.which("gst-device-monitor-1.0")
+    if binary is None:
+        raise RuntimeError("gst-device-monitor-1.0 not found in PATH")
+
+    result = subprocess.run(
+        [binary, filter_class],
+        capture_output=True,
+        text=True,
+        timeout=20,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(
+            "gst-device-monitor-1.0 failed with "
+            f"exit code {result.returncode}: {result.stderr.strip()}"
+        )
+    return parse_gst_device_monitor_output(result.stdout)
 
 
 def find_audio_device(
@@ -492,3 +564,34 @@ def get_video_device() -> Tuple[str, Optional[CameraSpecs]]:
     except Exception:
         _logger.exception("Error detecting video device")
         return "", None
+
+
+def get_macos_ffmpeg_video_device() -> Tuple[str, Optional[CameraSpecs]]:
+    """Detect a macOS camera index via FFmpeg's AVFoundation device list.
+
+    This is a client-side fallback for local apps when the daemon cannot use the
+    GStreamer macOS video source stack but direct AVFoundation capture is still
+    available.
+    """
+    if platform.system() != "Darwin":
+        return "", None
+
+    binary = shutil.which("ffmpeg")
+    if binary is None:
+        _logger.warning("ffmpeg not found in PATH; macOS direct camera fallback unavailable.")
+        return "", None
+
+    result = subprocess.run(
+        [binary, "-f", "avfoundation", "-list_devices", "true", "-i", ""],
+        capture_output=True,
+        text=True,
+        timeout=20,
+        check=False,
+    )
+    output = "\n".join(part for part in (result.stderr, result.stdout) if part)
+    devices = parse_ffmpeg_avfoundation_video_devices(output)
+    if not devices:
+        _logger.warning("FFmpeg AVFoundation probe found no video devices.")
+        return "", None
+
+    return find_video_device(devices, current_platform="Darwin")

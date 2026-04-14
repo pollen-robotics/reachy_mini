@@ -10,6 +10,8 @@ from typing import Optional
 import numpy as np
 import numpy.typing as npt
 
+from reachy_mini.media.gstreamer_utils import init_gst
+
 try:
     import gi
 except ImportError as e:
@@ -48,7 +50,7 @@ class GStreamerUDPCamera:
         self._logger = logging.getLogger(__name__)
         self._logger.setLevel(log_level)
 
-        Gst.init([])
+        init_gst()
 
         self.width = width
         self.height = height

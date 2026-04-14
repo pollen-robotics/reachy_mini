@@ -34,6 +34,7 @@ from reachy_mini.io.protocol import (
 from reachy_mini.io.ws_client import WSClient
 from reachy_mini.media.camera_constants import get_camera_specs_by_name
 from reachy_mini.media.camera_utils import undistort_points
+from reachy_mini.media.device_detection import get_macos_ffmpeg_video_device
 from reachy_mini.media.media_manager import MediaBackend, MediaManager
 from reachy_mini.motion.move import Move
 from reachy_mini.utils.interpolation import InterpolationTechnique, minimum_jerk
@@ -275,6 +276,7 @@ class ReachyMini:
         names handled by ``_resolve_backend``).
         """
         daemon_status = self.client.get_status()
+        direct_camera_index = None
 
         # Resolve camera specs from the daemon-detected camera name
         specs_name = getattr(daemon_status, "camera_specs_name", "")
@@ -306,6 +308,15 @@ class ReachyMini:
                 )
                 mbackend = MediaBackend.LOCAL
             else:
+                if self.connection_mode == "localhost_only":
+                    device_index, direct_specs = get_macos_ffmpeg_video_device()
+                    if device_index != "" and direct_specs is not None:
+                        direct_camera_index = int(device_index)
+                        camera_specs = camera_specs or direct_specs
+                        self.logger.info(
+                            "No local IPC endpoint. "
+                            "Using direct OpenCV camera fallback on macOS."
+                        )
                 self.logger.info(
                     "No local IPC endpoint. Using WebRTC backend for streaming."
                 )
@@ -332,6 +343,7 @@ class ReachyMini:
             signalling_host=daemon_status.wlan_ip or "localhost",
             camera_specs=camera_specs,
             daemon_url=self._daemon_http_url,
+            direct_camera_index=direct_camera_index,
         )
 
     def _normalize_connection_mode(

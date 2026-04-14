@@ -1,7 +1,12 @@
+# ruff: noqa: E402
 """Shared GStreamer helpers used by camera and audio backends."""
 
 import logging
 from typing import Optional
+
+from reachy_mini.media.gstreamer_env import configure_gstreamer_environment
+
+configure_gstreamer_environment()
 
 try:
     import gi
@@ -15,6 +20,12 @@ gi.require_version("Gst", "1.0")
 gi.require_version("GstApp", "1.0")
 
 from gi.repository import Gst, GstApp  # noqa: E402
+
+
+def init_gst() -> None:
+    """Initialise GStreamer with the Reachy Mini runtime safeguards applied."""
+    configure_gstreamer_environment()
+    Gst.init([])
 
 
 def get_sample(appsink: GstApp.AppSink, logger: logging.Logger) -> Optional[bytes]:
