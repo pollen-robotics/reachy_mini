@@ -12,10 +12,7 @@ Python wheels are available for the Windows and macOS platforms and are included
 
 </div>
 
-## 🔧 Install GStreamer
-
-<hfoptions id="gstreamer-install">
-<hfoption id="Linux">
+## 🔧 Install GStreamer and webrtc plugins
 
 ### Step 1: Install GStreamer
 
@@ -25,7 +22,7 @@ In your terminal, run:
 
 ```bash
 sudo apt-get update
-sudo apt-get install -y \
+sudo apt-get install \
     libgstreamer-plugins-bad1.0-dev \
     libgstreamer-plugins-base1.0-dev \
     libgstreamer1.0-dev \
@@ -40,7 +37,7 @@ sudo apt-get install -y \
     gstreamer1.0-plugins-bad \
     gstreamer1.0-nice \
     python3-gi \
-    python3-gi-cairo
+    python3-gi-cairo    
 ```
 
 **For Ubuntu 22.04 only:** The default GStreamer version is too old. Gstreamer >=1.22 is required. You need to add a PPA to get GStreamer 1.24.x:
@@ -103,8 +100,11 @@ source ~/.bashrc
 Finally, you can test your GStreamer installation as follows:
 
 ```bash
+# install the optional tools
+sudo apt install gstreamer1.0-tools
+
 # Check version
-gst-launch-1.0(.exe) --version
+gst-launch-1.0 --version
 
 # Test basic functionalities
 gst-launch-1.0 videotestsrc ! autovideosink
