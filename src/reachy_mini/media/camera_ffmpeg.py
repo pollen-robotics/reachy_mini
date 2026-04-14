@@ -35,6 +35,7 @@ class FFmpegCamera(CameraBase):
         log_level: str = "INFO",
         camera_specs: Optional[CameraSpecs] = None,
     ) -> None:
+        """Initialize the FFmpeg camera backend for a named AVFoundation device."""
         super().__init__(log_level=log_level)
         self._device_name = device_name
         self._process: subprocess.Popen[bytes] | None = None
