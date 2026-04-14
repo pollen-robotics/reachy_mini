@@ -12,13 +12,12 @@ import os
 import tempfile
 import time
 from threading import Event, Thread
-from typing import Dict, List, Optional
+from typing import Dict, Optional
 
 import numpy as np
 import requests
 import rerun as rr
 from scipy.spatial.transform import Rotation as R
-from urdf_parser_py import urdf
 
 from reachy_mini.kinematics.placo_kinematics import PlacoKinematics
 from reachy_mini.media.media_manager import MediaBackend
@@ -69,11 +68,11 @@ class Rerun:
 
         self.head_kinematics = PlacoKinematics(fixed_urdf)
 
-        self.urdf_model = urdf.URDF.from_xml_file(fixed_urdf)
-        self._joints_by_name: Dict[str, urdf.Joint] = {
-            joint.name: joint for joint in self.urdf_model.joints
+        # Load URDF tree for joint metadata (frame names, origins, axes)
+        self._urdf_tree = rr.urdf.UrdfTree.from_file_path(fixed_urdf)
+        self._joints_by_name: Dict[str, rr.urdf.UrdfJoint] = {
+            joint.name: joint for joint in self._urdf_tree.joints()
         }
-        self._entity_paths = UrdfEntityPaths(self.urdf_model, "ReachyMini")
 
         rr.set_time("reachymini", timestamp=time.time(), recording=self.recording)
 
@@ -82,7 +81,7 @@ class Rerun:
         rr.log_file_from_path(
             fixed_urdf,
             static=False,
-            entity_path_prefix=self._entity_paths.prefix,
+            entity_path_prefix="ReachyMini",
             recording=self.recording,
         )
 
@@ -115,14 +114,46 @@ class Rerun:
         """Stop the Rerun logging thread."""
         self.running.set()
 
-    def _get_joint(self, joint_name: str) -> urdf.Joint:
-        try:
-            return self._joints_by_name[joint_name]
-        except KeyError as exc:
-            raise RuntimeError(f"Invalid joint name: {joint_name}") from exc
+    def _log_joint_transform(
+        self,
+        joint_name: str,
+        angle: float,
+        axis: list[float] | None = None,
+    ) -> None:
+        """Log a joint transform to Rerun using frame-based transforms.
 
-    def _joint_entity_path(self, joint: urdf.Joint) -> str:
-        return self._entity_paths.joint_paths[joint.name]
+        Args:
+            joint_name: Name of the joint in the URDF.
+            angle: Joint angle in radians.
+            axis: Optional axis override. If None, uses the URDF joint axis
+                  via compute_transform.
+
+        """
+        joint = self._joints_by_name[joint_name]
+
+        if axis is None:
+            # Use compute_transform for joints with correct URDF axes
+            transform = joint.compute_transform(angle)
+            rr.log(f"transforms/{joint_name}", transform, recording=self.recording)
+        else:
+            # Manual transform for joints with axis overrides.
+            # The URDF axis definitions don't match the real axis of rotation
+            # for some joints (e.g. stewart platform, body yaw), so we override.
+            base_rpy = list(joint.origin_rpy or [0.0, 0.0, 0.0])
+            effective_axis = np.array(axis)
+            target_euler = np.array(base_rpy) + (effective_axis * angle)
+            target_translation = list(joint.origin_xyz or [0.0, 0.0, 0.0])
+
+            rr.log(
+                f"transforms/{joint_name}",
+                rr.Transform3D(
+                    translation=target_translation,
+                    quaternion=R.from_euler("xyz", target_euler).as_quat(),
+                    parent_frame=joint.parent_link,
+                    child_frame=joint.child_link,
+                ),
+                recording=self.recording,
+            )
 
     def log_camera(self) -> None:
         """Log the camera image to Rerun."""
@@ -131,6 +162,15 @@ class Rerun:
             return
 
         self.logger.info("Starting camera logging to Rerun.")
+
+        # Connect the camera entity to the camera frame from the URDF
+        cam_joint = self._joints_by_name.get("camera_optical_frame")
+        cam_frame = cam_joint.child_link if cam_joint else "camera_optical_frame"
+        rr.log(
+            "camera",
+            rr.Transform3D(parent_frame=cam_frame),
+            recording=self.recording,
+        )
 
         while not self.running.is_set():
             rr.set_time("reachymini", timestamp=time.time(), recording=self.recording)
@@ -153,10 +193,8 @@ class Rerun:
                 ]
             )
 
-            cam_joint = self._get_joint("camera_optical_frame")
-            cam_path = self._joint_entity_path(cam_joint)
             rr.log(
-                f"{cam_path}/image",
+                "camera/image",
                 rr.Pinhole(
                     image_from_camera=rr.datatypes.Mat3x3(K),
                     width=frame.shape[1],
@@ -169,37 +207,6 @@ class Rerun:
             )
 
             time.sleep(0.03)  # ~30fps
-
-    def _log_joint_angle(
-        self,
-        joint_name: str,
-        angle: float,
-        axis: list[float] | None = None,
-    ) -> None:
-        """Log the joint angle to Rerun."""
-        joint = self._get_joint(joint_name)
-        joint_path = self._joint_entity_path(joint)
-
-        base_euler = joint.origin.rotation or [0.0, 0.0, 0.0]
-
-        # if we specify an axis override, use it; otherwise, use the joint's defined axis
-        effective_axis = (
-            np.array(axis)
-            if axis is not None
-            else np.array(joint.axis or [1.0, 0.0, 0.0])
-        )
-
-        target_euler = np.array(base_euler) + (effective_axis * angle)
-        target_translation = joint.origin.xyz or [0.0, 0.0, 0.0]
-
-        rr.log(
-            joint_path,
-            rr.Transform3D(
-                translation=target_translation,
-                quaternion=R.from_euler("xyz", target_euler).as_quat(),
-            ),
-            recording=self.recording,
-        )
 
     def log_movements(self) -> None:
         """Log the movement data to Rerun."""
@@ -239,21 +246,21 @@ class Rerun:
             if "antennas_position" in data and data["antennas_position"] is not None:
                 antennas = data["antennas_position"]
                 if antennas is not None:
-                    self._log_joint_angle("left_antenna", antennas[0])
-                    self._log_joint_angle("right_antenna", antennas[1])
+                    self._log_joint_transform("left_antenna", antennas[0])
+                    self._log_joint_transform("right_antenna", antennas[1])
 
             if "head_joints" in data and data["head_joints"] is not None:
                 head_joints = data["head_joints"]
 
                 # The joint axis definitions in the URDF do not match the real axis of rotation
                 # due to URDF not supporting ball joints properly.
-                self._log_joint_angle("yaw_body", -head_joints[0], axis=[0, 0, 1])
-                self._log_joint_angle("stewart_1", -head_joints[1], axis=[0, 1, 0])
-                self._log_joint_angle("stewart_2", head_joints[2], axis=[0, 1, 0])
-                self._log_joint_angle("stewart_3", -head_joints[3], axis=[0, 1, 0])
-                self._log_joint_angle("stewart_4", head_joints[4], axis=[0, 1, 0])
-                self._log_joint_angle("stewart_5", -head_joints[5], axis=[0, 1, 0])
-                self._log_joint_angle("stewart_6", head_joints[6], axis=[0, 1, 0])
+                self._log_joint_transform("yaw_body", -head_joints[0], axis=[0, 0, 1])
+                self._log_joint_transform("stewart_1", -head_joints[1], axis=[0, 1, 0])
+                self._log_joint_transform("stewart_2", head_joints[2], axis=[0, 1, 0])
+                self._log_joint_transform("stewart_3", -head_joints[3], axis=[0, 1, 0])
+                self._log_joint_transform("stewart_4", head_joints[4], axis=[0, 1, 0])
+                self._log_joint_transform("stewart_5", -head_joints[5], axis=[0, 1, 0])
+                self._log_joint_transform("stewart_6", head_joints[6], axis=[0, 1, 0])
 
             if "passive_joints" in data and data["passive_joints"] is not None:
                 passive_joints = data["passive_joints"]
@@ -265,57 +272,10 @@ class Rerun:
 
                         override_axis = [0.0, 0.0, 0.0]
                         override_axis[axis_idx] = 1.0
-                        self._log_joint_angle(
+                        self._log_joint_transform(
                             joint_name,
                             passive_joints[value_index],
                             axis=override_axis,
                         )
 
             time.sleep(0.1)
-
-
-class UrdfEntityPaths:
-    """Helper for constructing link/joint entity paths that match the native URDF logger."""
-
-    def __init__(self, model: urdf.URDF, entity_path_prefix: Optional[str]) -> None:
-        """Construct a new `UrdfEntityPaths` instance.
-
-        Args:
-            model (urdf.URDF): The URDF model.
-            entity_path_prefix (Optional[str]): The prefix for entity paths.
-
-        """
-        self._model = model
-        self.prefix = entity_path_prefix
-        self.link_paths: Dict[str, str] = {}
-        self.joint_paths: Dict[str, str] = {}
-
-        base_parts = [part for part in (self.prefix, model.name) if part]
-        self._base_path = "/".join(base_parts)
-
-        children_map: Dict[str, List[urdf.Joint]] = {}
-        for joint in model.joints:
-            children_map.setdefault(joint.parent, []).append(joint)
-
-        root_link = model.get_root()
-        self._build_paths(root_link, self._base_path, children_map)
-
-    def _build_paths(
-        self,
-        link_name: str,
-        parent_path: str,
-        children_map: Dict[str, List[urdf.Joint]],
-    ) -> None:
-        link_path = self._join(parent_path, link_name)
-        self.link_paths[link_name] = link_path
-
-        for joint in children_map.get(link_name, []):
-            joint_path = self._join(link_path, joint.name)
-            self.joint_paths[joint.name] = joint_path
-            self._build_paths(joint.child, joint_path, children_map)
-
-    @staticmethod
-    def _join(parent: str, child: str) -> str:
-        if parent:
-            return f"{parent}/{child}"
-        return child
