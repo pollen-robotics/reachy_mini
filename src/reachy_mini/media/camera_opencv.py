@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import time
-from typing import Optional
+from typing import Any, Optional, cast
 
+import numpy as np
 import numpy.typing as npt
 
 from reachy_mini.media.camera_base import CameraBase
@@ -14,10 +15,13 @@ from reachy_mini.media.camera_constants import (
     ReachyMiniLiteCamSpecs,
 )
 
+cv2: Any | None
 try:
-    import cv2
+    import cv2 as _cv2
 except ImportError:
     cv2 = None
+else:
+    cv2 = _cv2
 
 
 class OpenCVCamera(CameraBase):
@@ -37,7 +41,7 @@ class OpenCVCamera(CameraBase):
             )
 
         self._device_index = device_index
-        self._capture = None
+        self._capture: Any | None = None
 
         if camera_specs is not None:
             self.camera_specs = camera_specs
@@ -54,27 +58,40 @@ class OpenCVCamera(CameraBase):
         if self._capture is None:
             return
 
-        self._capture.set(cv2.CAP_PROP_FRAME_WIDTH, self.resolution[0])
-        self._capture.set(cv2.CAP_PROP_FRAME_HEIGHT, self.resolution[1])
-        self._capture.set(cv2.CAP_PROP_FPS, self.framerate)
+        cv2_module = self._get_cv2()
+        self._capture.set(cv2_module.CAP_PROP_FRAME_WIDTH, self.resolution[0])
+        self._capture.set(cv2_module.CAP_PROP_FRAME_HEIGHT, self.resolution[1])
+        self._capture.set(cv2_module.CAP_PROP_FPS, self.framerate)
+
+    @staticmethod
+    def _get_cv2() -> Any:
+        if cv2 is None:
+            raise RuntimeError("OpenCV is not available.")
+        return cv2
 
     def open(self) -> None:
         """Open the AVFoundation camera and warm it up."""
         if self._capture is not None and self._capture.isOpened():
             return
 
-        capture = cv2.VideoCapture(self._device_index, cv2.CAP_AVFOUNDATION)
+        cv2_module = self._get_cv2()
+        capture = cv2_module.VideoCapture(
+            self._device_index, cv2_module.CAP_AVFOUNDATION
+        )
         if not capture.isOpened():
             raise RuntimeError(
                 f"Failed to open AVFoundation camera at index {self._device_index}"
             )
 
         self._capture = capture
-        self._apply_resolution(self._resolution)
+        resolution = self._resolution
+        if resolution is None:
+            raise RuntimeError("Camera resolution is not set.")
+        self._apply_resolution(resolution)
 
         deadline = time.monotonic() + 2.0
         while time.monotonic() < deadline:
-            ok, frame = self._capture.read()
+            ok, frame = capture.read()
             if ok and frame is not None:
                 return
             time.sleep(0.05)
@@ -83,15 +100,16 @@ class OpenCVCamera(CameraBase):
             "OpenCV camera opened but did not deliver a frame within the warm-up window."
         )
 
-    def read(self) -> Optional[npt.NDArray]:
+    def read(self) -> Optional[npt.NDArray[np.uint8]]:
         """Read a frame directly from the camera."""
-        if self._capture is None or not self._capture.isOpened():
+        capture = self._capture
+        if capture is None or not capture.isOpened():
             return None
 
-        ok, frame = self._capture.read()
+        ok, frame = capture.read()
         if not ok or frame is None:
             return None
-        return frame
+        return cast(npt.NDArray[np.uint8], frame)
 
     def close(self) -> None:
         """Release the OpenCV capture handle."""

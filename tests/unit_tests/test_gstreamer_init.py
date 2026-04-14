@@ -72,30 +72,23 @@ def test_gst_init_does_not_crash_host_python() -> None:
     )
 
 
-def test_gst_device_monitor_does_not_crash_host_python() -> None:
-    """`Gst.DeviceMonitor` must not segfault while probing devices.
+def test_safe_video_probe_does_not_crash_host_python() -> None:
+    """The daemon's high-level video probe must stay process-safe.
 
-    The daemon uses ``Gst.DeviceMonitor`` during startup to find camera and audio
-    hardware. On macOS this can crash inside the external registry scanner unless
-    ``GST_REGISTRY_FORK=no`` is applied before ``Gst.init([])``.
+    On macOS the production path deliberately avoids in-process
+    ``Gst.DeviceMonitor`` and shells out instead. This regression test should
+    follow that supported path, while still proving the host interpreter stays
+    alive through video-device detection.
     """
     script = (
         "import sys\n"
         "try:\n"
-        "    import gi\n"
-        "    gi.require_version('Gst', '1.0')\n"
-        "    from gi.repository import Gst\n"
-        "    from reachy_mini.media.gstreamer_utils import init_gst\n"
+        "    from reachy_mini.media.device_detection import get_video_device\n"
         "except ImportError as e:\n"
         "    print(f'SKIP: {e}')\n"
         "    sys.exit(77)\n"
-        "init_gst()\n"
-        "monitor = Gst.DeviceMonitor()\n"
-        "monitor.add_filter('Video/Source')\n"
-        "monitor.start()\n"
-        "devices = monitor.get_devices()\n"
-        "print(f'DEV_MON_OK {len(devices)}')\n"
-        "monitor.stop()\n"
+        "device_path, camera_specs = get_video_device()\n"
+        "print(f'SAFE_VIDEO_PROBE_OK {device_path!r} {camera_specs is not None}')\n"
     )
 
     result = subprocess.run(
@@ -111,14 +104,14 @@ def test_gst_device_monitor_does_not_crash_host_python() -> None:
         pytest.skip(f"GStreamer Python bindings not installed: {result.stdout.strip()}")
 
     assert result.returncode == 0, (
-        f"Gst.DeviceMonitor subprocess exited with {result.returncode}.\n"
+        f"safe video probe subprocess exited with {result.returncode}.\n"
         f"stdout: {result.stdout!r}\n"
         f"stderr: {result.stderr!r}\n"
-        "The daemon's media device probing is not safe in this Python/GStreamer "
+        "The daemon's video detection path is not safe in this Python/GStreamer "
         "runtime."
     )
-    assert "DEV_MON_OK" in result.stdout, (
-        f"Expected 'DEV_MON_OK' marker in stdout, got: {result.stdout!r}"
+    assert "SAFE_VIDEO_PROBE_OK" in result.stdout, (
+        f"Expected 'SAFE_VIDEO_PROBE_OK' marker in stdout, got: {result.stdout!r}"
     )
 
 
