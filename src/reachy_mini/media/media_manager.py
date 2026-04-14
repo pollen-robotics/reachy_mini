@@ -163,7 +163,10 @@ class MediaManager:
                 self.logger.info(
                     "Using LOCAL backend (GStreamer IPC camera + GStreamer audio)."
                 )
-                self._init_camera(log_level, camera_specs)
+                try:
+                    self._init_camera(log_level, camera_specs)
+                except Exception as e:
+                    self.logger.warning(f"Camera init failed, continuing without camera: {e}")
                 self._init_audio(log_level)
             case MediaBackend.WEBRTC:
                 self.logger.info("Using WebRTC streaming backend.")
