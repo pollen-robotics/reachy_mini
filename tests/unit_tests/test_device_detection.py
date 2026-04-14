@@ -15,13 +15,13 @@ import pytest
 
 from reachy_mini.media.camera_constants import (
     ArducamSpecs,
-    CameraSpecs,
     ReachyMiniLiteCamSpecs,
 )
 from reachy_mini.media.device_detection import (
     DeviceInfo,
     find_audio_device,
     find_video_device,
+    get_macos_ffmpeg_video_device,
     parse_ffmpeg_avfoundation_video_devices,
     parse_gst_device_monitor_output,
 )
@@ -230,6 +230,7 @@ class TestFindAudioDevice:
         # has a different device.id.
         assert result != "{0.0.0.00000000}.{e79e8ab7-4b13-4542-bb4b-edad0943c8ee}"
 
+
     def test_windows_skips_loopback_source_uppercase_bool(self) -> None:
         """Loopback must be skipped even when the value is 'True' (uppercase).
 
@@ -288,6 +289,37 @@ class TestFindAudioDevice:
             devices, "Source", "Linux", target_name="My Custom Card"
         )
         assert result == "custom_node"
+
+
+class TestMacOSDirectVideoDevice:
+    """Test the macOS direct-camera detection helper."""
+
+    def test_prefers_native_avfoundation_order_for_direct_capture(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Direct capture must use AVFoundation ordering when available.
+        FFmpeg and AVFoundation can list the same cameras in different orders on
+        macOS. The direct OpenCV fallback needs the AVFoundation ordering because
+        OpenCV also captures through AVFoundation.
+        """
+        monkeypatch.setattr(
+            "reachy_mini.media.device_detection.platform.system", lambda: "Darwin"
+        )
+        monkeypatch.setattr(
+            "reachy_mini.media.device_detection.get_macos_avfoundation_video_devices",
+            lambda: [
+                DeviceInfo("Reachy Mini Camera", "Video/Source", index=0),
+                DeviceInfo("Logitech Webcam C925e", "Video/Source", index=1),
+            ],
+        )
+        monkeypatch.setattr(
+            "reachy_mini.media.device_detection.shutil.which", lambda _: None
+        )
+
+        device_path, camera_specs = get_macos_ffmpeg_video_device()
+
+        assert device_path == "0"
+        assert isinstance(camera_specs, ReachyMiniLiteCamSpecs)
 
 
 class TestFindVideoDevice:

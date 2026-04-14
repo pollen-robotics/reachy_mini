@@ -213,6 +213,53 @@ def parse_ffmpeg_avfoundation_video_devices(text: str) -> list[DeviceInfo]:
     return devices
 
 
+def get_macos_avfoundation_video_devices() -> list[DeviceInfo]:
+    """Enumerate macOS video devices using native AVFoundation ordering.
+
+    This ordering is the safest match for OpenCV's ``CAP_AVFOUNDATION`` backend,
+    which also talks directly to AVFoundation. FFmpeg's ``-list_devices`` output
+    can expose the same cameras in a different order, so its indices must not be
+    reused blindly for direct OpenCV capture.
+    """
+    if platform.system() != "Darwin":
+        return []
+
+    try:
+        from AVFoundation import AVCaptureDevice, AVMediaTypeVideo
+    except ImportError:
+        _logger.debug(
+            "AVFoundation Python bindings are unavailable; cannot use native macOS "
+            "camera ordering for direct capture."
+        )
+        return []
+
+    try:
+        devices = AVCaptureDevice.devicesWithMediaType_(AVMediaTypeVideo)
+    except Exception:
+        _logger.exception("Failed to enumerate AVFoundation video devices.")
+        return []
+
+    detected_devices: list[DeviceInfo] = []
+    for index, device in enumerate(devices):
+        display_name = str(device.localizedName() or "")
+        properties: dict[str, str] = {}
+
+        unique_id = device.uniqueID()
+        if unique_id is not None:
+            properties["unique-id"] = str(unique_id)
+
+        detected_devices.append(
+            DeviceInfo(
+                display_name=display_name,
+                device_class="Video/Source",
+                properties=properties,
+                index=index,
+            )
+        )
+
+    return detected_devices
+
+
 def gst_structure_get_field(structure: Any, field_name: str) -> Any:
     """Safely extract a single field value from a ``Gst.Structure``.
 
@@ -567,14 +614,22 @@ def get_video_device() -> Tuple[str, Optional[CameraSpecs]]:
 
 
 def get_macos_ffmpeg_video_device() -> Tuple[str, Optional[CameraSpecs]]:
-    """Detect a macOS camera index via FFmpeg's AVFoundation device list.
+    """Detect a macOS camera index compatible with direct OpenCV capture.
 
     This is a client-side fallback for local apps when the daemon cannot use the
     GStreamer macOS video source stack but direct AVFoundation capture is still
     available.
+
+    Native AVFoundation enumeration is preferred because its ordering is the best
+    available match for OpenCV's ``CAP_AVFOUNDATION`` backend. FFmpeg remains as a
+    fallback when AVFoundation Python bindings are unavailable.
     """
     if platform.system() != "Darwin":
         return "", None
+
+    avfoundation_devices = get_macos_avfoundation_video_devices()
+    if avfoundation_devices:
+        return find_video_device(avfoundation_devices, current_platform="Darwin")
 
     binary = shutil.which("ffmpeg")
     if binary is None:
