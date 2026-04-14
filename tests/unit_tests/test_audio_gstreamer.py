@@ -13,6 +13,7 @@ def test_compute_playback_buffer_timing_starts_at_running_time() -> None:
         16000,
         2_000_000_000,
         None,
+        GStreamerAudio.PLAYBACK_GAP_RESET_NS,
     )
 
     assert pts_ns == 2_000_000_000
@@ -28,6 +29,7 @@ def test_compute_playback_buffer_timing_continues_without_gap() -> None:
         16000,
         1_050_000_000,
         1_100_000_000,
+        GStreamerAudio.PLAYBACK_GAP_RESET_NS,
     )
 
     assert pts_ns == 1_100_000_000
@@ -43,6 +45,7 @@ def test_compute_playback_buffer_timing_resets_after_large_gap() -> None:
         16000,
         1_400_000_000,
         1_100_000_000,
+        GStreamerAudio.PLAYBACK_GAP_RESET_NS,
     )
 
     assert pts_ns == 1_400_000_000

@@ -77,10 +77,6 @@ gi.require_version("GstApp", "1.0")
 
 from gi.repository import GLib, Gst  # noqa: E402
 
-_PLAYBACK_GAP_RESET_NS = 200 * Gst.MSECOND
-_PLAYBACK_SINK_BUFFER_TIME_US = 50_000
-_PLAYBACK_SINK_LATENCY_TIME_US = 5_000
-
 
 class GStreamerAudio(AudioBase):
     """Audio implementation using GStreamer.
@@ -93,6 +89,10 @@ class GStreamerAudio(AudioBase):
       flush events, dropping any queued audio.
 
     """
+
+    PLAYBACK_GAP_RESET_NS = 200 * Gst.MSECOND
+    PLAYBACK_SINK_BUFFER_TIME_US = 50_000
+    PLAYBACK_SINK_LATENCY_TIME_US = 5_000
 
     def __init__(self, log_level: str = "INFO") -> None:
         """Initialize recording and playback pipelines.
@@ -132,9 +132,11 @@ class GStreamerAudio(AudioBase):
         sample_rate: int,
         running_time_ns: int,
         next_pts_ns: int | None,
-        gap_reset_ns: int = _PLAYBACK_GAP_RESET_NS,
+        gap_reset_ns: int | None = None,
     ) -> tuple[int, int, int]:
         """Return ``(pts_ns, duration_ns, next_pts_ns)`` for a playback buffer."""
+        if gap_reset_ns is None:
+            gap_reset_ns = self.PLAYBACK_GAP_RESET_NS
         duration_ns = (num_samples * Gst.SECOND) // sample_rate
         if next_pts_ns is None or running_time_ns > next_pts_ns + gap_reset_ns:
             pts_ns = running_time_ns
@@ -238,9 +240,9 @@ class GStreamerAudio(AudioBase):
 
         if audiosink is not None:
             if audiosink.find_property("buffer-time") is not None:
-                audiosink.set_property("buffer-time", _PLAYBACK_SINK_BUFFER_TIME_US)
+                audiosink.set_property("buffer-time", self.PLAYBACK_SINK_BUFFER_TIME_US)
             if audiosink.find_property("latency-time") is not None:
-                audiosink.set_property("latency-time", _PLAYBACK_SINK_LATENCY_TIME_US)
+                audiosink.set_property("latency-time", self.PLAYBACK_SINK_LATENCY_TIME_US)
 
         queue = Gst.ElementFactory.make("queue")
 
