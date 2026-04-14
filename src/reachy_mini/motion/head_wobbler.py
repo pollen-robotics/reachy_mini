@@ -13,6 +13,7 @@ Adapted from *reachy_mini_conversation_app*.
 """
 
 import logging
+import os
 import queue
 import threading
 import time
@@ -21,7 +22,19 @@ from typing import Any
 
 from numpy.typing import NDArray
 
-from reachy_mini.motion.speech_tapper import HOP_MS, SwayRollRT
+
+def _load_sway_class() -> tuple[int, type]:
+    """Return (HOP_MS, SwayRollRT class) based on WOBBLER_VERSION env var."""
+    version = os.environ.get("WOBBLER_VERSION", "")
+    if version == "v1":
+        from reachy_mini.motion.speech_tapper_v1 import HOP_MS as hop, SwayRollRT as cls
+    elif version == "v2":
+        from reachy_mini.motion.speech_tapper_v2 import HOP_MS as hop, SwayRollRT as cls
+    elif version == "v3":
+        from reachy_mini.motion.speech_tapper_v3 import HOP_MS as hop, SwayRollRT as cls
+    else:
+        from reachy_mini.motion.speech_tapper import HOP_MS as hop, SwayRollRT as cls
+    return hop, cls
 
 logger = logging.getLogger(__name__)
 
@@ -40,8 +53,12 @@ class HeadWobbler:
         self._base_ts: float | None = None
         self._hops_done: int = 0
 
+        self._hop_ms, sway_cls = _load_sway_class()
+        version = os.environ.get("WOBBLER_VERSION", "v0")
+        logger.info("Using wobbler version: %s (%s)", version, sway_cls.__module__)
+
         self.audio_queue: queue.Queue[tuple[int, int, NDArray[Any]]] = queue.Queue()
-        self.sway = SwayRollRT()
+        self.sway = sway_cls()
 
         self._state_lock = threading.Lock()
         self._sway_lock = threading.Lock()
@@ -109,7 +126,7 @@ class HeadWobbler:
     # ------------------------------------------------------------------
 
     def _working_loop(self) -> None:
-        hop_dt = HOP_MS / 1000.0
+        hop_dt = self._hop_ms / 1000.0
 
         while not self._stop_event.is_set():
             try:
