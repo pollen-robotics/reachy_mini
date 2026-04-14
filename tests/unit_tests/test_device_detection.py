@@ -20,7 +20,9 @@ from reachy_mini.media.camera_constants import (
 from reachy_mini.media.device_detection import (
     DeviceInfo,
     find_audio_device,
+    find_named_video_device,
     find_video_device,
+    get_macos_direct_video_device,
     get_macos_ffmpeg_video_device,
     parse_ffmpeg_avfoundation_video_devices,
     parse_gst_device_monitor_output,
@@ -294,6 +296,18 @@ class TestFindAudioDevice:
 class TestMacOSDirectVideoDevice:
     """Test the macOS direct-camera detection helper."""
 
+    def test_find_named_video_device_returns_display_name(self) -> None:
+        """Name-based direct capture should return the matched display name."""
+        device_name, camera_specs = find_named_video_device(
+            [
+                DeviceInfo("Logitech Webcam C925e", "Video/Source", index=0),
+                DeviceInfo("Reachy Mini Camera", "Video/Source", index=1),
+            ]
+        )
+
+        assert device_name == "Reachy Mini Camera"
+        assert isinstance(camera_specs, ReachyMiniLiteCamSpecs)
+
     def test_prefers_native_avfoundation_order_for_direct_capture(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -319,6 +333,26 @@ class TestMacOSDirectVideoDevice:
         device_path, camera_specs = get_macos_ffmpeg_video_device()
 
         assert device_path == "0"
+        assert isinstance(camera_specs, ReachyMiniLiteCamSpecs)
+
+    def test_get_macos_direct_video_device_prefers_device_name(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Name-based direct capture should prefer AVFoundation names."""
+        monkeypatch.setattr(
+            "reachy_mini.media.device_detection.platform.system", lambda: "Darwin"
+        )
+        monkeypatch.setattr(
+            "reachy_mini.media.device_detection.get_macos_avfoundation_video_devices",
+            lambda: [
+                DeviceInfo("Reachy Mini Camera", "Video/Source", index=0),
+                DeviceInfo("Logitech Webcam C925e", "Video/Source", index=1),
+            ],
+        )
+
+        device_name, camera_specs = get_macos_direct_video_device()
+
+        assert device_name == "Reachy Mini Camera"
         assert isinstance(camera_specs, ReachyMiniLiteCamSpecs)
 
 

@@ -213,6 +213,24 @@ def parse_ffmpeg_avfoundation_video_devices(text: str) -> list[DeviceInfo]:
     return devices
 
 
+def find_named_video_device(
+    devices: List[DeviceInfo],
+    cam_names: Sequence[str] = DEFAULT_CAM_NAMES,
+) -> Tuple[str, Optional[CameraSpecs]]:
+    """Find the preferred camera and return its display name.
+
+    This helper is intended for backends that can open a camera by its user-visible
+    AVFoundation/FFmpeg name instead of by an integer index.
+    """
+    for cam_name in cam_names:
+        for device in devices:
+            if cam_name in device.display_name:
+                return device.display_name, _make_camera_specs(cam_name)
+
+    _logger.warning("No camera found.")
+    return "", None
+
+
 def get_macos_avfoundation_video_devices() -> list[DeviceInfo]:
     """Enumerate macOS video devices using native AVFoundation ordering.
 
@@ -650,3 +668,35 @@ def get_macos_ffmpeg_video_device() -> Tuple[str, Optional[CameraSpecs]]:
         return "", None
 
     return find_video_device(devices, current_platform="Darwin")
+
+
+def get_macos_direct_video_device() -> Tuple[str, Optional[CameraSpecs]]:
+    """Detect a macOS camera name compatible with direct FFmpeg capture."""
+    if platform.system() != "Darwin":
+        return "", None
+
+    avfoundation_devices = get_macos_avfoundation_video_devices()
+    if avfoundation_devices:
+        return find_named_video_device(avfoundation_devices)
+
+    binary = shutil.which("ffmpeg")
+    if binary is None:
+        _logger.warning(
+            "ffmpeg not found in PATH; macOS direct camera fallback unavailable."
+        )
+        return "", None
+
+    result = subprocess.run(
+        [binary, "-f", "avfoundation", "-list_devices", "true", "-i", ""],
+        capture_output=True,
+        text=True,
+        timeout=20,
+        check=False,
+    )
+    output = "\n".join(part for part in (result.stderr, result.stdout) if part)
+    devices = parse_ffmpeg_avfoundation_video_devices(output)
+    if not devices:
+        _logger.warning("FFmpeg AVFoundation probe found no video devices.")
+        return "", None
+
+    return find_named_video_device(devices)
