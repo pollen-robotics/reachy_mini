@@ -348,6 +348,13 @@ class Daemon:
         Returns:
             DaemonState: The current state of the daemon after attempting to stop it.
 
+        Note:
+            The relay releases its remote hold on ``self.robot_lock`` via
+            ``relay.stop()``. A local-app hold is *not* force-released here
+            because the daemon is going down; the lock object dies with the
+            process. If restart-in-place is ever added, force-release the
+            ``LOCAL_APP`` state here before restart.
+
         """
         if self._status.state == DaemonState.STOPPED:
             self.logger.warning("Daemon is already stopped.")

@@ -31,9 +31,10 @@ from __future__ import annotations
 
 import logging
 import threading
-from dataclasses import dataclass
 from enum import Enum
 from typing import Awaitable, Callable, Optional
+
+from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
@@ -46,12 +47,15 @@ class RobotLockState(str, Enum):
     REMOTE_SESSION = "remote_session"
 
 
-@dataclass(frozen=True)
-class RobotLockStatus:
-    """Snapshot of the lock state for status queries."""
+class RobotLockStatus(BaseModel):
+    """Snapshot of the lock state, suitable for JSON serialization.
+
+    Returned by :meth:`RobotLock.status` and by the
+    ``GET /api/daemon/robot-lock-status`` endpoint.
+    """
 
     state: RobotLockState
-    holder_name: Optional[str]
+    holder_name: Optional[str] = None
 
 
 class RobotLock:
@@ -67,6 +71,14 @@ class RobotLock:
         # session. Registered by the relay via ``set_remote_eviction_handler``.
         # Called *outside* the mutex to avoid blocking other acquirers while
         # the relay tears down its sessions.
+        #
+        # Thread-safety note: this attribute is written only by start()/stop()
+        # on the relay (which run on the main asyncio loop) and read by
+        # acquire_local_evicting_remote (also main asyncio loop, invoked from
+        # AppManager). Because both writer and reader share one thread,
+        # Python's GIL makes the bare reference assignment safe without a
+        # mutex. If you ever invoke set_remote_eviction_handler from a
+        # different thread, add a mutex here.
         self._on_remote_evicted: Optional[Callable[[], Awaitable[None]]] = None
 
     # ------------------------------------------------------------------
