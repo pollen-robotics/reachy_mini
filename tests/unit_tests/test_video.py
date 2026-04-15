@@ -124,9 +124,12 @@ def test_change_resolution_errors(backend: MediaBackend) -> None:
     with pytest.raises(RuntimeError):
         media.camera.set_resolution(CameraResolution.R1280x720at30fps)
 
-    media.camera.camera_specs = MujocoCameraSpecs()
-    with pytest.raises(RuntimeError):
-        media.camera.set_resolution(CameraResolution.R1280x720at30fps)
+    # TODO: uncomment this when we actually support resolution change for Mujoco cameras. 
+    # We currently only log a warning to avoid raising an error when the camera is initialized in `init_camera()`
+    # media.camera.camera_specs = MujocoCameraSpecs()
+    # with pytest.raises(RuntimeError):
+    #     media.camera.set_resolution(CameraResolution.R1280x720at30fps)
+
     media.camera.camera_specs = ReachyMiniLiteCamSpecs()
     with pytest.raises(ValueError):
         media.camera.set_resolution(CameraResolution.R1280x720at30fps)

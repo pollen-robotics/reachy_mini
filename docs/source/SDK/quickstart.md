@@ -74,6 +74,8 @@ The **Daemon** is a background service that handles the low-level communication 
       mjpython -m reachy_mini.daemon.app.main --sim
       ```
       > **⚠️ macOS Users:** `uv` may have compatibility issues with MuJoCo on macOS. If you encounter installation or runtime problems, it's recommended to use `pip` directly instead of `uv` for MuJoCo-related packages.
+      >
+      > If you get a segmentation fault from `libgstpython`, see the [simulation troubleshooting](../platforms/simulation/get_started.md#-troubleshooting) section.
 
 ✅ **Verification:** Open [http://localhost:8000/docs](http://localhost:8000/docs) in your browser. If you see the Reachy SDK API documentation, you are ready!
 

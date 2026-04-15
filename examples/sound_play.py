@@ -10,6 +10,7 @@ Two modes:
 import argparse
 import os
 import time
+import wave
 
 import numpy as np
 
@@ -22,7 +23,8 @@ def play_wav(mini: "ReachyMini", wav_path: str) -> None:
     print(f"Playing {wav_path}...")
     mini.media.play_sound(wav_path)
 
-    wav_duration = os.path.getsize(wav_path) / mini.media.get_output_audio_samplerate()
+    with wave.open(wav_path, "rb") as wf:
+        wav_duration = wf.getnframes() / mini.media.get_output_audio_samplerate()
     time.sleep(wav_duration)
     print("Playback finished.")
 

@@ -48,6 +48,12 @@ class RunningApp:
     status: AppStatus
 
 
+def _get_catalog_app_key(app: AppInfo) -> str:
+    """Return the Hugging Face space id used to deduplicate catalog entries."""
+    value = app.extra.get("id")
+    return value if isinstance(value, str) else ""
+
+
 class AppManager:
     """Manager for Reachy Mini apps."""
 
@@ -116,7 +122,31 @@ class AppManager:
             app_name, self.wireless_version, self.desktop_app_daemon
         )
 
-        # Launch app as subprocess with unbuffered output
+        # Launch app as subprocess with unbuffered output.
+        #
+        # Scrub GStreamer env vars that the daemon's own `.venv/.../gstreamer_bundle.pth`
+        # set pointing at paths inside the daemon's .venv. The app runs in apps_venv and
+        # its own gstreamer_bundle.pth will set fresh values at Python startup. Leaving
+        # the parent's values in place is actively harmful:
+        #   * Single-value vars like GST_REGISTRY_1_0 and GST_PLUGIN_SCANNER_1_0 get
+        #     prepended to (via gstreamer_libs.setup_python_environment) producing a
+        #     malformed `apps_venv_path:.venv_path` string that GStreamer can't parse.
+        #   * The app ends up using .venv's plugin scanner binary and registry cache,
+        #     which can mask issues specific to apps_venv's own gstreamer install.
+        # See pollen-robotics/reachy-mini-desktop-app#185.
+        app_env = os.environ.copy()
+        for key in (
+            "GST_PLUGIN_PATH_1_0",
+            "GST_PLUGIN_SYSTEM_PATH_1_0",
+            "GST_REGISTRY_1_0",
+            "GST_PLUGIN_SCANNER_1_0",
+            "GI_TYPELIB_PATH",
+            "PYGI_DLL_DIRS",
+            "XDG_DATA_DIRS",
+            "XDG_CONFIG_DIRS",
+        ):
+            app_env.pop(key, None)
+
         self.logger.getChild("runner").info(f"Starting app {app_name}")
         try:
             process = await asyncio.create_subprocess_exec(
@@ -126,6 +156,7 @@ class AppManager:
                 module_name,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
+                env=app_env,
             )
         except Exception:
             # Release the lock if we failed before the subprocess was created —
@@ -134,6 +165,7 @@ class AppManager:
             if self.daemon is not None:
                 self.daemon.robot_lock.release_local(app_name)
             raise
+
 
         # Create status and monitor task
         status = AppStatus(
@@ -311,11 +343,32 @@ class AppManager:
 
     # Apps management interface
     async def list_all_available_apps(self) -> list[AppInfo]:
-        """List available apps (parallel async)."""
-        results = await asyncio.gather(
-            *[self.list_available_apps(kind) for kind in SourceKind]
+        """List available apps while preserving curated-only entries."""
+        (
+            hf_space_apps,
+            dashboard_selection_apps,
+            local_apps,
+            installed_apps,
+        ) = await asyncio.gather(
+            self.list_available_apps(SourceKind.HF_SPACE),
+            self.list_available_apps(SourceKind.DASHBOARD_SELECTION),
+            self.list_available_apps(SourceKind.LOCAL),
+            self.list_available_apps(SourceKind.INSTALLED),
         )
-        return sum(results, [])
+
+        catalog_apps: list[AppInfo] = []
+        seen_catalog_apps: set[str] = set()
+
+        for app in [*dashboard_selection_apps, *hf_space_apps]:
+            app_key = _get_catalog_app_key(app)
+            if not app_key:
+                continue
+            if app_key in seen_catalog_apps:
+                continue
+            seen_catalog_apps.add(app_key)
+            catalog_apps.append(app)
+
+        return [*catalog_apps, *local_apps, *installed_apps]
 
     async def list_available_apps(self, source: SourceKind) -> list[AppInfo]:
         """List available apps for given source kind."""

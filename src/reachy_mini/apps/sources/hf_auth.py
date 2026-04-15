@@ -57,6 +57,7 @@ class OAuthSession:
     state: str  # CSRF protection
     code_verifier: str  # PKCE code verifier
     wireless_version: bool  # To know which redirect URI to use
+    use_localhost: bool = False  # Force localhost callback (desktop app proxy)
     status: str = "pending"  # pending, authorized, expired, error
     access_token: Optional[str] = None
     username: Optional[str] = None
@@ -121,27 +122,36 @@ def _cleanup_expired_sessions() -> None:
         del _oauth_sessions[sid]
 
 
-def get_oauth_redirect_uri(wireless_version: bool) -> str:
+def get_oauth_redirect_uri(
+    wireless_version: bool, use_localhost: bool = False
+) -> str:
     """Get the appropriate OAuth redirect URI based on robot type.
 
     Args:
         wireless_version: True for wireless robots, False for Lite.
+        use_localhost: When True, force localhost callback (for desktop app
+            proxy — the app forwards localhost:8000 to the robot).
 
     Returns:
         The redirect URI to use for OAuth.
 
     """
+    if use_localhost:
+        return OAUTH_REDIRECT_URI_LITE
     if wireless_version:
         return OAUTH_REDIRECT_URI_WIRELESS
     else:
         return OAUTH_REDIRECT_URI_LITE
 
 
-def create_oauth_session(wireless_version: bool) -> dict[str, Any]:
+def create_oauth_session(
+    wireless_version: bool, use_localhost: bool = False
+) -> dict[str, Any]:
     """Create a new OAuth authorization session.
 
     Args:
         wireless_version: True for wireless robots, False for Lite.
+        use_localhost: When True, force localhost callback (desktop app proxy).
 
     Returns:
         Session info including auth_url to redirect the user to.
@@ -155,7 +165,7 @@ def create_oauth_session(wireless_version: bool) -> dict[str, Any]:
             "message": "OAuth not configured. Set HF_OAUTH_CLIENT_ID environment variable.",
         }
 
-    redirect_uri = get_oauth_redirect_uri(wireless_version)
+    redirect_uri = get_oauth_redirect_uri(wireless_version, use_localhost)
     state = secrets.token_urlsafe(32)
 
     # Generate PKCE pair for secure public client auth
@@ -167,6 +177,7 @@ def create_oauth_session(wireless_version: bool) -> dict[str, Any]:
         state=state,
         code_verifier=code_verifier,
         wireless_version=wireless_version,
+        use_localhost=use_localhost,
     )
     _oauth_sessions[state] = session
 
@@ -236,7 +247,7 @@ async def exchange_code_for_token(
         session.error_message = "OAuth not configured"
         return {"status": "error", "message": "OAuth not configured"}
 
-    redirect_uri = get_oauth_redirect_uri(session.wireless_version)
+    redirect_uri = get_oauth_redirect_uri(session.wireless_version, session.use_localhost)
 
     # Exchange code for token using PKCE
     token_url = "https://huggingface.co/oauth/token"

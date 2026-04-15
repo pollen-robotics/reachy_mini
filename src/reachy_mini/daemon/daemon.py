@@ -14,6 +14,7 @@ from typing import Any, Optional
 
 from reachy_mini.daemon.robot_lock import RobotLock
 from reachy_mini.daemon.utils import (
+    SimulationMode,
     find_serial_port,
     get_ip_address,
 )
@@ -42,7 +43,7 @@ class Daemon:
         wireless_version: bool = False,
         desktop_app_daemon: bool = False,
         no_media: bool = False,
-        use_sim: bool = False,
+        sim_mode: SimulationMode = SimulationMode.NONE,
     ) -> None:
         """Initialize the Reachy Mini daemon."""
         self.log_level = log_level
@@ -94,7 +95,7 @@ class Daemon:
             from reachy_mini.media.media_server import GstMediaServer
 
             try:
-                self._media_server = GstMediaServer(log_level, use_sim=use_sim)
+                self._media_server = GstMediaServer(log_level, sim_mode=sim_mode)
                 self._status.camera_specs_name = self._media_server.camera_specs.name
             except Exception as e:
                 self.logger.error(f"Failed to initialize media server: {e}")
