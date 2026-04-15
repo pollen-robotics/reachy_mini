@@ -1,14 +1,27 @@
 """HuggingFace authentication API routes."""
 
+import asyncio
+import logging
 from typing import Any
 
+import aiohttp
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
 from reachy_mini.apps.sources import hf_auth
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/hf-auth")
+
+# Central signaling server that tracks which robot is currently in use by
+# which remote JS app. We proxy its /api/robot-status endpoint so the
+# desktop frontend never needs to see the raw HF token.
+CENTRAL_ROBOT_STATUS_URL = (
+    "https://cduss-reachy-mini-central.hf.space/api/robot-status"
+)
+CENTRAL_ROBOT_STATUS_TIMEOUT = aiohttp.ClientTimeout(total=5)
 
 
 class TokenRequest(BaseModel):
@@ -85,6 +98,53 @@ async def delete_token() -> dict[str, str]:
         raise HTTPException(status_code=500, detail="Failed to delete token")
 
     return {"status": "success"}
+
+
+@router.get("/central-robot-status")
+async def get_central_robot_status() -> dict[str, Any]:
+    """Proxy to the central signaling server's /api/robot-status endpoint.
+
+    Uses the stored HF token server-side so the desktop frontend never
+    sees the raw token. The frontend polls this to know whether any of
+    the user's robots is currently held by a remote JS app, and if so
+    which one (so it can show "In use by Hand Tracker" in the UI).
+
+    Response shape:
+        { "available": bool, "robots": [...], "reason": str? }
+
+    `available` is false when:
+      - no HF token stored (user not logged in)
+      - central server is unreachable / returned an error
+    Callers should treat `available: false` as "unknown, don't block".
+    """
+    token = hf_auth.get_hf_token()
+    if not token:
+        return {"available": False, "robots": [], "reason": "not_authenticated"}
+
+    try:
+        async with aiohttp.ClientSession(timeout=CENTRAL_ROBOT_STATUS_TIMEOUT) as session:
+            async with session.get(
+                CENTRAL_ROBOT_STATUS_URL, params={"token": token}
+            ) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    return {
+                        "available": True,
+                        "robots": data.get("robots", []),
+                    }
+                if response.status == 401:
+                    return {"available": False, "robots": [], "reason": "token_invalid"}
+                logger.warning(
+                    "[central-robot-status] unexpected status %s", response.status
+                )
+                return {
+                    "available": False,
+                    "robots": [],
+                    "reason": f"http_{response.status}",
+                }
+    except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+        logger.debug("[central-robot-status] central unreachable: %s", e)
+        return {"available": False, "robots": [], "reason": "unreachable"}
 
 
 # =============================================================================
