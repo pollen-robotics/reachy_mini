@@ -579,6 +579,25 @@
         }
       }
     },
+    "/api/daemon/robot-lock-status": {
+      "get": {
+        "summary": "Get Robot Lock Status",
+        "description": "Return the current robot lock state.\n\nExposes the daemon's single source of truth for \"is the robot in use?\":\n\n- ``free``: nobody holds the robot.\n- ``local_app``: a Python app launched via AppManager is running.\n  ``holder_name`` is the app name.\n- ``remote_session``: a remote WebRTC client is connected via the\n  central signaling relay. ``holder_name`` is a generic ``\"remote\"``\n  placeholder (the real consumer app name lives on the central\n  server and is surfaced via its own ``/api/robot-status``).\n\nIntended for UI layers (desktop app, dashboard) that want to render\na busy/free indicator without trying to open a session.",
+        "operationId": "get_robot_lock_status_api_daemon_robot_lock_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RobotLockStatus"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/hf-auth/save-token": {
       "post": {
         "summary": "Save Token",
@@ -676,6 +695,27 @@
                   },
                   "type": "object",
                   "title": "Response Delete Token Api Hf Auth Token Delete"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/hf-auth/central-robot-status": {
+      "get": {
+        "summary": "Get Central Robot Status",
+        "description": "Proxy to the central signaling server's /api/robot-status endpoint.\n\nUses the stored HF token server-side so the desktop frontend never\nsees the raw token. The frontend polls this to know whether any of\nthe user's robots is currently held by a remote JS app, and if so\nwhich one (so it can show \"In use by Hand Tracker\" in the UI).\n\nResponse shape:\n    { \"available\": bool, \"robots\": [...], \"reason\": str? }\n\n`available` is false when:\n  - no HF token stored (user not logged in)\n  - central server is unreachable / returned an error\nCallers should treat `available: false` as \"unknown, don't block\".",
+        "operationId": "get_central_robot_status_api_hf_auth_central_robot_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Get Central Robot Status Api Hf Auth Central Robot Status Get"
                 }
               }
             }
@@ -2995,6 +3035,40 @@
         ],
         "title": "RobotBackendStatus",
         "description": "Status of the Robot Backend."
+      },
+      "RobotLockState": {
+        "type": "string",
+        "enum": [
+          "free",
+          "local_app",
+          "remote_session"
+        ],
+        "title": "RobotLockState",
+        "description": "Lock state enum. Values are stable strings suitable for serialization."
+      },
+      "RobotLockStatus": {
+        "properties": {
+          "state": {
+            "$ref": "#/components/schemas/RobotLockState"
+          },
+          "holder_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Holder Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "state"
+        ],
+        "title": "RobotLockStatus",
+        "description": "Snapshot of the lock state, suitable for JSON serialization.\n\nReturned by :meth:`RobotLock.status` and by the\n``GET /api/daemon/robot-lock-status`` endpoint."
       },
       "SourceKind": {
         "type": "string",
