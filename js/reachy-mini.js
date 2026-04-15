@@ -545,17 +545,6 @@ export class ReachyMini extends EventTarget {
     }
 
     /**
-     * Make the robot look at a pixel position in the camera frame.
-     * @param {number} u — horizontal pixel coordinate
-     * @param {number} v — vertical pixel coordinate
-     * @param {number} [duration=0] — movement duration in seconds (0 = immediate)
-     * @returns {boolean}
-     */
-    lookAtImage(u, v, duration = 0) {
-        return this._sendCommand({ type: "look_at_image", u, v, duration });
-    }
-
-    /**
      * Set antenna positions.
      * @param {number} rightDeg  @param {number} leftDeg
      * @returns {boolean}
