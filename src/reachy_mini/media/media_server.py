@@ -99,7 +99,6 @@ class GstMediaServer:
 
         init_gst()
         self._loop = GLib.MainLoop()
-        self._thread_bus_calls: Thread | None = None
         self._bus_sender: Gst.Bus | None = None
 
         match sim_mode:
@@ -133,18 +132,9 @@ class GstMediaServer:
         self._playbin: Optional[Gst.Element] = None
 
         self._build_pipeline()
-        self._start_bus_loop()
-
-    def _start_bus_loop(self) -> None:
-        """Start the GLib main loop after synchronous device discovery is done.
-
-        Starting the loop thread before ``Gst.DeviceMonitor`` runs can trigger a
-        native GStreamer crash on macOS. Keep discovery single-threaded, then
-        start the background loop once the pipeline and bus watch are configured.
-        """
-        if self._thread_bus_calls is not None and self._thread_bus_calls.is_alive():
-            return
-
+        # macOS can crash if Gst.DeviceMonitor runs while the background GLib
+        # loop is already active, so start the loop only after device discovery
+        # and pipeline construction are done.
         self._thread_bus_calls = Thread(target=self._loop.run, daemon=True)
         self._thread_bus_calls.start()
 
