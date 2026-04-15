@@ -454,27 +454,49 @@ export class ReachyMini extends EventTarget {
 
             this._sendToServer({ type: 'startSession', peerId: robotId }).then((r) => {
                 if (r?.type === 'sessionRejected') {
-                    // Central refused the session (e.g. robot busy with another app).
-                    // Fail the pending startSession() promise so callers can react.
-                    const err = new Error(
-                        r.reason === 'robot_busy'
-                            ? `Robot is busy: "${r.activeApp || 'another app'}" is already connected`
-                            : `Session rejected: ${r.reason || 'unknown reason'}`
-                    );
-                    err.reason = r.reason;
-                    err.activeApp = r.activeApp;
-                    this._emit('sessionRejected', { reason: r.reason, activeApp: r.activeApp });
-                    if (this._sessionReject) {
-                        const reject = this._sessionReject;
-                        this._sessionResolve = null;
-                        this._sessionReject = null;
-                        reject(err);
-                    }
+                    this._failSessionRejected(r);
                     return;
                 }
                 if (r?.sessionId) this._sessionId = r.sessionId;
             });
         });
+    }
+
+    /**
+     * Internal: handle a sessionRejected response from central.
+     * Releases resources allocated by startSession() (RTCPeerConnection,
+     * microphone stream) and rejects the pending startSession() promise
+     * with an Error carrying `.reason` and `.activeApp`.
+     *
+     * Called from both the POST-response path (primary) and the SSE
+     * handler (defensive, in case the server changes).
+     */
+    _failSessionRejected(msg) {
+        const err = new Error(
+            msg.reason === 'robot_busy'
+                ? `Robot is busy: "${msg.activeApp || 'another app'}" is already connected`
+                : `Session rejected: ${msg.reason || 'unknown reason'}`
+        );
+        err.reason = msg.reason;
+        err.activeApp = msg.activeApp;
+
+        // Release resources allocated optimistically in startSession()
+        // before we knew the server would refuse.
+        if (this._pc) { this._pc.close(); this._pc = null; }
+        if (this._micStream) { this._micStream.getTracks().forEach(t => t.stop()); this._micStream = null; }
+        this._iceConnected = false;
+        this._dcOpen = false;
+        this._micMuted = true;
+        this._micSupported = false;
+
+        this._emit('sessionRejected', { reason: msg.reason, activeApp: msg.activeApp });
+
+        if (this._sessionReject) {
+            const reject = this._sessionReject;
+            this._sessionResolve = null;
+            this._sessionReject = null;
+            reject(err);
+        }
     }
 
     /**
@@ -736,26 +758,13 @@ export class ReachyMini extends EventTarget {
             case 'sessionStarted':
                 this._sessionId = msg.sessionId;
                 break;
-            case 'sessionRejected': {
-                // Central server rejected our session request (e.g. robot is busy
-                // with another app). Fail the pending startSession() promise with
-                // a meaningful error so callers can surface it to the user.
-                const err = new Error(
-                    msg.reason === 'robot_busy'
-                        ? `Robot is busy: "${msg.activeApp || 'another app'}" is already connected`
-                        : `Session rejected: ${msg.reason || 'unknown reason'}`
-                );
-                err.reason = msg.reason;
-                err.activeApp = msg.activeApp;
-                this._emit('sessionRejected', { reason: msg.reason, activeApp: msg.activeApp });
-                if (this._sessionReject) {
-                    const reject = this._sessionReject;
-                    this._sessionResolve = null;
-                    this._sessionReject = null;
-                    reject(err);
-                }
+            case 'sessionRejected':
+                // Defensive: the current central server returns sessionRejected
+                // as the direct POST response (handled at the startSession() call
+                // site). This branch is a safety net in case the server ever
+                // pushes the rejection over SSE instead.
+                this._failSessionRejected(msg);
                 break;
-            }
             case 'peer':
                 this._handlePeerMessage(msg);
                 break;
