@@ -8,6 +8,7 @@ Includes a fixed NoInputNoOutput agent for automatic Just Works pairing.
 import fcntl
 import logging
 import os
+import socket
 import subprocess
 from typing import Callable
 
@@ -118,6 +119,7 @@ class Advertisement(dbus.service.Object):
         self.ad_type = advertising_type
         self.local_name = local_name
         self.service_uuids = None
+        self.manufacturer_data = None
         self.include_tx_power = False
         dbus.service.Object.__init__(self, bus, self.path)
 
@@ -128,6 +130,10 @@ class Advertisement(dbus.service.Object):
             props["LocalName"] = dbus.String(self.local_name)
         if self.service_uuids:
             props["ServiceUUIDs"] = dbus.Array(self.service_uuids, signature="s")
+        if self.manufacturer_data:
+            props["ManufacturerData"] = dbus.Dictionary(
+                self.manufacturer_data, signature="qv"
+            )
         props["Appearance"] = dbus.UInt16(0x0000)
         props["Duration"] = dbus.UInt16(0)
         props["Timeout"] = dbus.UInt16(0)
@@ -300,7 +306,7 @@ class ResponseCharacteristic(Characteristic):
         self.notifying = False
         logger.info("Response notifications disabled")
         # Stop journal streaming if running (client disconnected without JOURNAL_STOP)
-        if hasattr(self.service, '_bt_service') and self.service._bt_service:
+        if hasattr(self.service, "_bt_service") and self.service._bt_service:
             self.service._bt_service._stop_journal()
 
     def send_notification(self, text: str):
@@ -614,7 +620,17 @@ class BluetoothCommandService:
         try:
             self._journal_buffer = ""
             self._journal_proc = subprocess.Popen(
-                ["stdbuf", "-oL", "journalctl", "-f", "-n", "20", "--no-pager", "-u", "reachy-mini-daemon"],
+                [
+                    "stdbuf",
+                    "-oL",
+                    "journalctl",
+                    "-f",
+                    "-n",
+                    "20",
+                    "--no-pager",
+                    "-u",
+                    "reachy-mini-daemon",
+                ],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.DEVNULL,
             )
@@ -643,7 +659,9 @@ class BluetoothCommandService:
                 if data:
                     text = data.decode("utf-8", errors="replace")
                     self._journal_buffer += text
-                    logger.info(f"Journal buffered: {len(text)} bytes, total: {len(self._journal_buffer)}")
+                    logger.info(
+                        f"Journal buffered: {len(text)} bytes, total: {len(self._journal_buffer)}"
+                    )
                     # Cap buffer to ~32KB to avoid unbounded growth
                     if len(self._journal_buffer) > 32768:
                         self._journal_buffer = self._journal_buffer[-32768:]
@@ -779,9 +797,9 @@ class BluetoothCommandService:
         # Register advertisement
         ad_manager = dbus.Interface(adapter, LE_ADVERTISING_MANAGER_IFACE)
         self.adv = Advertisement(self.bus, 0, "peripheral", self.device_name)
-        # Only advertise main service UUID to avoid advertisement size limits
-        # All services are still available when connected
         self.adv.service_uuids = [REACHY_STATUS_SERVICE_UUID]
+        self.adv.manufacturer_data = encode_network_ips()
+        self._ad_manager = ad_manager
         ad_manager.RegisterAdvertisement(
             self.adv.get_path(),
             {},
@@ -791,10 +809,34 @@ class BluetoothCommandService:
             ),
         )
 
-        # Setup periodic network status updates (every 10 seconds)
-        GLib.timeout_add_seconds(10, self.app.reachy_status.update_network_status)
+        # Refresh both GATT network characteristic and advertisement payload
+        GLib.timeout_add_seconds(10, self._refresh_network_info)
 
         logger.info(f"✓ Bluetooth service started as '{self.device_name}'")
+
+    def _refresh_network_info(self):
+        """Periodic callback: update GATT characteristic and advertisement."""
+        self.app.reachy_status.update_network_status()
+
+        new_data = encode_network_ips()
+        if new_data != self.adv.manufacturer_data:
+            self.adv.manufacturer_data = new_data
+            try:
+                self._ad_manager.UnregisterAdvertisement(self.adv.get_path())
+                self._ad_manager.RegisterAdvertisement(
+                    self.adv.get_path(),
+                    {},
+                    reply_handler=lambda: logger.info(
+                        "Advertisement re-registered with updated IPs"
+                    ),
+                    error_handler=lambda e: logger.error(
+                        f"Failed to re-register advertisement: {e}"
+                    ),
+                )
+            except dbus.exceptions.DBusException as e:
+                logger.warning(f"Could not refresh advertisement: {e}")
+
+        return True
 
     def _find_adapter(self):
         remote_om = dbus.Interface(
@@ -817,6 +859,49 @@ class BluetoothCommandService:
             logger.info("Shutting down...")
             self._stop_journal()
             self.mainloop.quit()
+
+
+POLLEN_MANUFACTURER_ID = 0xFFFF  # Reserved ID for development/testing
+
+
+def encode_network_ips() -> dict:
+    """Build ManufacturerData payload with all non-loopback IPv4 addresses.
+
+    Format per IP: 1 byte flags | 4 bytes IPv4
+      flags: 0x01 = hotspot, 0x00 = normal
+
+    Returns a dict {manufacturer_id: dbus.Array(bytes)} suitable for
+    BlueZ ManufacturerData property.  Returns empty dict when offline.
+    """
+    status = get_network_status()
+    if status == "OFFLINE" or status == "ERROR":
+        return {}
+
+    payload = bytearray()
+    is_hotspot = status.startswith("HOTSPOT")
+
+    parts = status.split("[")
+    for part in parts[1:]:
+        if "]" not in part:
+            continue
+        iface, rest = part.split("]", 1)
+        ip_str = rest.split(";")[0].strip()
+        try:
+            ip_bytes = socket.inet_aton(ip_str)
+            flag = 0x01 if (is_hotspot and iface.strip() == "wlan0") else 0x00
+            payload.append(flag)
+            payload.extend(ip_bytes)
+        except OSError:
+            continue
+
+    if not payload:
+        return {}
+
+    return {
+        dbus.UInt16(POLLEN_MANUFACTURER_ID): dbus.Array(
+            [dbus.Byte(b) for b in payload], signature="y"
+        )
+    }
 
 
 def get_pin() -> str:
