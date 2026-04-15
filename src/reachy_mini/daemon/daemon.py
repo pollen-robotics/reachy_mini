@@ -12,6 +12,7 @@ from importlib.metadata import PackageNotFoundError, version
 from threading import Event, Thread
 from typing import Any, Optional
 
+from reachy_mini.daemon.robot_lock import RobotLock
 from reachy_mini.daemon.utils import (
     find_serial_port,
     get_ip_address,
@@ -79,6 +80,11 @@ class Daemon:
         self.ws_server: "WSServer | None" = None
         self.backend_run_thread: "Thread | None" = None
         self._thread_event_publish_status = Event()
+
+        # Single source of truth for "is the robot in use?". Shared between
+        # AppManager (local Python apps) and the central signaling relay
+        # (remote WebRTC clients). See reachy_mini/daemon/robot_lock.py.
+        self.robot_lock = RobotLock()
 
         self._media_server: Optional["GstMediaServer"] = (
             None  # GstMediaServer when media is enabled
@@ -169,6 +175,7 @@ class Daemon:
             await start_central_relay(
                 hf_token=hf_token,
                 robot_name=self.robot_name,
+                robot_lock=self.robot_lock,
             )
             self.logger.info("Central signaling relay started")
         except Exception as e:
