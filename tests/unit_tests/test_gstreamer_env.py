@@ -25,7 +25,7 @@ def test_configure_gstreamer_environment_enables_disabled_applemedia_plugin(
         "_find_disabled_applemedia_plugin",
         lambda: disabled_plugin,
     )
-    monkeypatch.setattr(gstreamer_env, "_get_cache_root", lambda: cache_root)
+    monkeypatch.setenv("REACHY_MINI_GSTREAMER_CACHE_DIR", str(cache_root))
     monkeypatch.setenv(
         "GST_PLUGIN_PATH_1_0",
         os.pathsep.join(
