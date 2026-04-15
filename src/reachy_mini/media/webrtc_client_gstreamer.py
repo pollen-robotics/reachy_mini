@@ -1,3 +1,4 @@
+# ruff: noqa: E402, I001
 """GStreamer WebRTC client — camera + audio over WebRTC.
 
 Connects to the WebRTC server hosted by the Reachy Mini daemon and provides
@@ -39,6 +40,9 @@ from threading import Thread
 from typing import Iterator, Optional
 
 import requests as _requests
+from reachy_mini.media.gstreamer_env import configure_gstreamer_environment
+
+configure_gstreamer_environment()
 
 try:
     import gi

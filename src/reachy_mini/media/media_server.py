@@ -1,3 +1,4 @@
+# ruff: noqa: E402
 """GStreamer media server for the Reachy Mini daemon.
 
 Owns the physical camera and audio hardware and distributes media to
@@ -27,6 +28,10 @@ import os
 import platform
 from threading import Thread
 from typing import Any, Callable, Dict, Optional
+
+from reachy_mini.media.gstreamer_env import configure_gstreamer_environment
+
+configure_gstreamer_environment()
 
 import gi
 

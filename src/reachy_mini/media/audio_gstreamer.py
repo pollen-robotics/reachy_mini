@@ -62,8 +62,11 @@ import numpy.typing as npt
 from reachy_mini.media.audio_base import AudioBase
 from reachy_mini.media.audio_utils import has_reachymini_asoundrc
 from reachy_mini.media.device_detection import get_audio_device
+from reachy_mini.media.gstreamer_env import configure_gstreamer_environment
 from reachy_mini.media.gstreamer_utils import init_gst
 from reachy_mini.utils.constants import ASSETS_ROOT_PATH
+
+configure_gstreamer_environment()
 
 try:
     import gi

@@ -10,7 +10,10 @@ from typing import Optional
 import numpy as np
 import numpy.typing as npt
 
+from reachy_mini.media.gstreamer_env import configure_gstreamer_environment
 from reachy_mini.media.gstreamer_utils import init_gst
+
+configure_gstreamer_environment()
 
 try:
     import gi

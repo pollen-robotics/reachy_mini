@@ -57,7 +57,10 @@ from reachy_mini.media.camera_constants import (
     CameraSpecs,
     ReachyMiniLiteCamSpecs,
 )
+from reachy_mini.media.gstreamer_env import configure_gstreamer_environment
 from reachy_mini.media.gstreamer_utils import get_sample, init_gst
+
+configure_gstreamer_environment()
 
 try:
     import gi

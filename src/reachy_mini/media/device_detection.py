@@ -1,3 +1,4 @@
+# ruff: noqa: E402
 """GStreamer device detection utilities.
 
 Provides pure-logic functions for finding Reachy Mini audio and video
@@ -19,8 +20,6 @@ import subprocess
 from dataclasses import dataclass, field
 from typing import Any, List, Optional, Sequence, Tuple
 
-import gi
-
 from reachy_mini.media.camera_constants import (
     ArducamSpecs,
     CameraSpecs,
@@ -28,6 +27,10 @@ from reachy_mini.media.camera_constants import (
     ReachyMiniWirelessCamSpecs,
 )
 from reachy_mini.media.gstreamer_env import configure_gstreamer_environment
+
+configure_gstreamer_environment()
+
+import gi
 
 gi.require_version("Gst", "1.0")
 
@@ -73,9 +76,6 @@ _NAME_RE = re.compile(r"^\s+name\s+:\s+(.+)$")
 _CLASS_RE = re.compile(r"^\s+class\s+:\s+(.+)$")
 # Matches a "key = value" property line (one leading tab + two-tab indent).
 _PROP_RE = re.compile(r"^\s+(\S+)\s+=\s+(.*)$")
-_FFMPEG_AVF_DEVICE_RE = re.compile(
-    r"^\[AVFoundation indev @ [^\]]+\] \[(\d+)\] (.+)$"
-)
 
 
 def parse_gst_device_monitor_output(text: str) -> list[DeviceInfo]:
@@ -176,106 +176,6 @@ def parse_gst_device_monitor_output(text: str) -> list[DeviceInfo]:
             device_counter += 1
 
     return devices
-
-
-def parse_ffmpeg_avfoundation_video_devices(text: str) -> list[DeviceInfo]:
-    """Parse ``ffmpeg -f avfoundation -list_devices true`` output on macOS.
-
-    FFmpeg prints AVFoundation device listings to stderr and exits with a
-    non-zero status because no actual input stream is opened. We only care about
-    the video-device section, which contains stable ``[index] name`` entries.
-    """
-    devices: list[DeviceInfo] = []
-    in_video_section = False
-
-    for line in text.splitlines():
-        stripped = line.strip()
-        if "AVFoundation video devices:" in stripped:
-            in_video_section = True
-            continue
-        if in_video_section and "AVFoundation audio devices:" in stripped:
-            break
-        if not in_video_section:
-            continue
-
-        match = _FFMPEG_AVF_DEVICE_RE.match(stripped)
-        if match is None:
-            continue
-
-        devices.append(
-            DeviceInfo(
-                display_name=match.group(2).strip(),
-                device_class="Video/Source",
-                index=int(match.group(1)),
-            )
-        )
-
-    return devices
-
-
-def find_named_video_device(
-    devices: List[DeviceInfo],
-    cam_names: Sequence[str] = DEFAULT_CAM_NAMES,
-) -> Tuple[str, Optional[CameraSpecs]]:
-    """Find the preferred camera and return its display name.
-
-    This helper is intended for backends that can open a camera by its user-visible
-    AVFoundation/FFmpeg name instead of by an integer index.
-    """
-    for cam_name in cam_names:
-        for device in devices:
-            if cam_name in device.display_name:
-                return device.display_name, _make_camera_specs(cam_name)
-
-    _logger.warning("No camera found.")
-    return "", None
-
-
-def get_macos_avfoundation_video_devices() -> list[DeviceInfo]:
-    """Enumerate macOS video devices using native AVFoundation ordering.
-
-    This ordering is the safest match for OpenCV's ``CAP_AVFOUNDATION`` backend,
-    which also talks directly to AVFoundation. FFmpeg's ``-list_devices`` output
-    can expose the same cameras in a different order, so its indices must not be
-    reused blindly for direct OpenCV capture.
-    """
-    if platform.system() != "Darwin":
-        return []
-
-    try:
-        from AVFoundation import AVCaptureDevice, AVMediaTypeVideo
-    except ImportError:
-        _logger.debug(
-            "AVFoundation Python bindings are unavailable; cannot use native macOS "
-            "camera ordering for direct capture."
-        )
-        return []
-
-    try:
-        devices = AVCaptureDevice.devicesWithMediaType_(AVMediaTypeVideo)
-    except Exception:
-        _logger.exception("Failed to enumerate AVFoundation video devices.")
-        return []
-
-    detected_devices: list[DeviceInfo] = []
-    for index, device in enumerate(devices):
-        display_name = str(device.localizedName() or "")
-        properties: dict[str, str] = {}
-
-        unique_id = device.uniqueID()
-        if unique_id is not None:
-            properties["unique-id"] = str(unique_id)
-
-        detected_devices.append(
-            DeviceInfo(
-                display_name=display_name,
-                device_class="Video/Source",
-                properties=properties,
-                index=index,
-            )
-        )
-
-    return detected_devices
 
 
 def gst_structure_get_field(structure: Any, field_name: str) -> Any:
@@ -629,74 +529,3 @@ def get_video_device() -> Tuple[str, Optional[CameraSpecs]]:
     except Exception:
         _logger.exception("Error detecting video device")
         return "", None
-
-
-def get_macos_ffmpeg_video_device() -> Tuple[str, Optional[CameraSpecs]]:
-    """Detect a macOS camera index compatible with direct OpenCV capture.
-
-    This is a client-side fallback for local apps when the daemon cannot use the
-    GStreamer macOS video source stack but direct AVFoundation capture is still
-    available.
-
-    Native AVFoundation enumeration is preferred because its ordering is the best
-    available match for OpenCV's ``CAP_AVFOUNDATION`` backend. FFmpeg remains as a
-    fallback when AVFoundation Python bindings are unavailable.
-    """
-    if platform.system() != "Darwin":
-        return "", None
-
-    avfoundation_devices = get_macos_avfoundation_video_devices()
-    if avfoundation_devices:
-        return find_video_device(avfoundation_devices, current_platform="Darwin")
-
-    binary = shutil.which("ffmpeg")
-    if binary is None:
-        _logger.warning("ffmpeg not found in PATH; macOS direct camera fallback unavailable.")
-        return "", None
-
-    result = subprocess.run(
-        [binary, "-f", "avfoundation", "-list_devices", "true", "-i", ""],
-        capture_output=True,
-        text=True,
-        timeout=20,
-        check=False,
-    )
-    output = "\n".join(part for part in (result.stderr, result.stdout) if part)
-    devices = parse_ffmpeg_avfoundation_video_devices(output)
-    if not devices:
-        _logger.warning("FFmpeg AVFoundation probe found no video devices.")
-        return "", None
-
-    return find_video_device(devices, current_platform="Darwin")
-
-
-def get_macos_direct_video_device() -> Tuple[str, Optional[CameraSpecs]]:
-    """Detect a macOS camera name compatible with direct FFmpeg capture."""
-    if platform.system() != "Darwin":
-        return "", None
-
-    avfoundation_devices = get_macos_avfoundation_video_devices()
-    if avfoundation_devices:
-        return find_named_video_device(avfoundation_devices)
-
-    binary = shutil.which("ffmpeg")
-    if binary is None:
-        _logger.warning(
-            "ffmpeg not found in PATH; macOS direct camera fallback unavailable."
-        )
-        return "", None
-
-    result = subprocess.run(
-        [binary, "-f", "avfoundation", "-list_devices", "true", "-i", ""],
-        capture_output=True,
-        text=True,
-        timeout=20,
-        check=False,
-    )
-    output = "\n".join(part for part in (result.stderr, result.stdout) if part)
-    devices = parse_ffmpeg_avfoundation_video_devices(output)
-    if not devices:
-        _logger.warning("FFmpeg AVFoundation probe found no video devices.")
-        return "", None
-
-    return find_named_video_device(devices)
