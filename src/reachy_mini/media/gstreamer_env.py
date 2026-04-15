@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import logging
 import os
 import platform
 import shutil
@@ -14,6 +15,7 @@ _SINGLE_PATH_KEYS = (
     "GST_PLUGIN_SCANNER_1_0",
     "GST_PYTHONPATH_1_0",
 )
+_logger = logging.getLogger(__name__)
 
 
 def _dedupe_path_list(value: str) -> list[str]:
@@ -55,6 +57,8 @@ def configure_gstreamer_environment() -> None:
 
     disabled_plugin = _find_disabled_applemedia_plugin()
     if disabled_plugin is not None:
+        plugin_changes: list[str] = []
+
         # The plugin depends on sibling dylibs via relative loader paths, so the
         # enabled filename must live in the original plugin directory.
         enabled_plugin = disabled_plugin.with_suffix("")
@@ -65,16 +69,23 @@ def configure_gstreamer_environment() -> None:
             or enabled_plugin.stat().st_mtime_ns < disabled_stat.st_mtime_ns
         ):
             shutil.copy2(disabled_plugin, enabled_plugin)
+            plugin_changes.append(f"enabled {enabled_plugin.name}")
 
         plugin_dir = str(disabled_plugin.parent)
         for key in _PLUGIN_PATH_KEYS:
+            previous = os.environ.get(key)
             parts = _dedupe_path_list(
                 os.pathsep.join([plugin_dir, os.environ.get(key, "")])
             )
             if parts:
-                os.environ[key] = os.pathsep.join(parts)
+                updated = os.pathsep.join(parts)
+                os.environ[key] = updated
+                if updated != previous:
+                    plugin_changes.append(f"updated {key}")
             else:
                 os.environ.pop(key, None)
+                if previous is not None:
+                    plugin_changes.append(f"cleared {key}")
 
         # Use a dedicated registry so GStreamer rescans the newly exposed
         # plugin instead of reusing a cache created before `applemedia`
@@ -87,8 +98,18 @@ def configure_gstreamer_environment() -> None:
         )
         registry_dir.mkdir(parents=True, exist_ok=True)
         registry_path = registry_dir / "registry.bin"
+        registry_existed = registry_path.exists()
         registry_path.unlink(missing_ok=True)
+        previous_registry = os.environ.get("GST_REGISTRY_1_0")
         os.environ["GST_REGISTRY_1_0"] = str(registry_path)
+        if registry_existed or previous_registry != str(registry_path):
+            plugin_changes.append("reset GST_REGISTRY_1_0")
+
+        if plugin_changes:
+            _logger.info(
+                "Applied macOS GStreamer applemedia workaround: %s",
+                ", ".join(plugin_changes),
+            )
 
     # ``gstreamer_python`` exposes ``libgstpython.dylib`` in the plugin search
     # path. On some uv/venv setups that library links against python.org's

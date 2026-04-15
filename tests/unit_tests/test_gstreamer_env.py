@@ -48,3 +48,35 @@ def test_configure_gstreamer_environment_enables_disabled_applemedia_plugin(
     ]
     assert os.environ["GST_PLUGIN_SYSTEM_PATH_1_0"] == str(disabled_plugin.parent)
     assert os.environ["GST_REGISTRY_1_0"] == str(cache_root / "registry.bin")
+
+
+def test_configure_gstreamer_environment_logs_when_plugin_state_changes(
+    monkeypatch, tmp_path: Path, caplog
+) -> None:
+    """Log the workaround only when it actually mutates plugin-related state."""
+
+    disabled_plugin = tmp_path / "bundle" / "libgstapplemedia.dylib.disabled"
+    disabled_plugin.parent.mkdir(parents=True)
+    disabled_plugin.write_bytes(b"applemedia")
+
+    monkeypatch.setattr(gstreamer_env.platform, "system", lambda: "Darwin")
+    monkeypatch.setattr(
+        gstreamer_env,
+        "_find_disabled_applemedia_plugin",
+        lambda: disabled_plugin,
+    )
+    monkeypatch.setenv(
+        "REACHY_MINI_GSTREAMER_CACHE_DIR", str(tmp_path / "cache")
+    )
+    monkeypatch.delenv("GST_PLUGIN_PATH_1_0", raising=False)
+    monkeypatch.delenv("GST_PLUGIN_SYSTEM_PATH_1_0", raising=False)
+    monkeypatch.delenv("GST_REGISTRY_1_0", raising=False)
+
+    caplog.set_level("INFO")
+    gstreamer_env.configure_gstreamer_environment()
+
+    assert "Applied macOS GStreamer applemedia workaround:" in caplog.text
+    assert "enabled libgstapplemedia.dylib" in caplog.text
+    assert "updated GST_PLUGIN_PATH_1_0" in caplog.text
+    assert "updated GST_PLUGIN_SYSTEM_PATH_1_0" in caplog.text
+    assert "reset GST_REGISTRY_1_0" in caplog.text
