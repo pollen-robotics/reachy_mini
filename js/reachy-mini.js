@@ -453,6 +453,25 @@ export class ReachyMini extends EventTarget {
             };
 
             this._sendToServer({ type: 'startSession', peerId: robotId }).then((r) => {
+                if (r?.type === 'sessionRejected') {
+                    // Central refused the session (e.g. robot busy with another app).
+                    // Fail the pending startSession() promise so callers can react.
+                    const err = new Error(
+                        r.reason === 'robot_busy'
+                            ? `Robot is busy: "${r.activeApp || 'another app'}" is already connected`
+                            : `Session rejected: ${r.reason || 'unknown reason'}`
+                    );
+                    err.reason = r.reason;
+                    err.activeApp = r.activeApp;
+                    this._emit('sessionRejected', { reason: r.reason, activeApp: r.activeApp });
+                    if (this._sessionReject) {
+                        const reject = this._sessionReject;
+                        this._sessionResolve = null;
+                        this._sessionReject = null;
+                        reject(err);
+                    }
+                    return;
+                }
                 if (r?.sessionId) this._sessionId = r.sessionId;
             });
         });
