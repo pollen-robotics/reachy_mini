@@ -681,6 +681,23 @@ class CentralSignalingRelay:
                 f"[Central Relay] Received session request from remote client peer_id={client_peer_id} session_id={session_id}"
             )
 
+            # Safety net: the central server is supposed to gate concurrent sessions,
+            # but if one slips through (e.g. older central without the gate), enforce
+            # single-session-at-a-time here so we never run two clients against one robot.
+            if self._central_to_local_session or self._pending_central_sessions:
+                logger.warning(
+                    f"[Central Relay] Rejecting session {session_id}: a session is already active/pending"
+                )
+                if session_id:
+                    await self._send_to_central(
+                        {
+                            "type": "endSession",
+                            "sessionId": session_id,
+                            "reason": "robot_busy_local",
+                        }
+                    )
+                return
+
             # Store session mapping
             if session_id:
                 # Check if we already have this session (duplicate request)

@@ -154,12 +154,13 @@ function sdpHasAudioSendRecv(sdp) {
 
 export class ReachyMini extends EventTarget {
 
-    /** @param {{ signalingUrl?: string, enableMicrophone?: boolean, clientId?: string }} [options] */
+    /** @param {{ signalingUrl?: string, enableMicrophone?: boolean, clientId?: string, appName?: string }} [options] */
     constructor(options = {}) {
         super();
         this._signalingUrl = options.signalingUrl || 'https://cduss-reachy-mini-central.hf.space';
         this._enableMicrophone = options.enableMicrophone !== false;
         this._clientId = options.clientId || null;
+        this._appName = options.appName || 'unknown';
 
         this._state = 'disconnected';                 // 'disconnected' | 'connected' | 'streaming'
         this._robots = [];                             // latest robot list from signaling
@@ -338,7 +339,7 @@ export class ReachyMini extends EventTarget {
                                     await this._sendToServer({
                                         type: 'setPeerStatus',
                                         roles: ['listener'],
-                                        meta: { name: 'Telepresence' },
+                                        meta: { name: this._appName },
                                     });
                                     this._emit('connected', { peerId: msg.peerId });
                                     resolve();
@@ -727,6 +728,26 @@ export class ReachyMini extends EventTarget {
             case 'sessionStarted':
                 this._sessionId = msg.sessionId;
                 break;
+            case 'sessionRejected': {
+                // Central server rejected our session request (e.g. robot is busy
+                // with another app). Fail the pending startSession() promise with
+                // a meaningful error so callers can surface it to the user.
+                const err = new Error(
+                    msg.reason === 'robot_busy'
+                        ? `Robot is busy: "${msg.activeApp || 'another app'}" is already connected`
+                        : `Session rejected: ${msg.reason || 'unknown reason'}`
+                );
+                err.reason = msg.reason;
+                err.activeApp = msg.activeApp;
+                this._emit('sessionRejected', { reason: msg.reason, activeApp: msg.activeApp });
+                if (this._sessionReject) {
+                    const reject = this._sessionReject;
+                    this._sessionResolve = null;
+                    this._sessionReject = null;
+                    reject(err);
+                }
+                break;
+            }
             case 'peer':
                 this._handlePeerMessage(msg);
                 break;
