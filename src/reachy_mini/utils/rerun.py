@@ -11,13 +11,13 @@ import logging
 import os
 import tempfile
 import time
+from datetime import datetime
 from threading import Event, Thread
 from typing import Dict, Optional
 
 import numpy as np
 import requests
 import rerun as rr
-from scipy.spatial.transform import Rotation as R
 
 from reachy_mini.kinematics.placo_kinematics import PlacoKinematics
 from reachy_mini.media.media_manager import MediaBackend
@@ -77,10 +77,8 @@ class Rerun:
         rr.set_time("reachymini", timestamp=time.time(), recording=self.recording)
 
         # Use the native URDF loader in Rerun to visualize Reachy Mini's model
-        # Logging as non-static to allow updating joint positions
         rr.log_file_from_path(
             fixed_urdf,
-            static=False,
             entity_path_prefix="ReachyMini",
             recording=self.recording,
         )
@@ -105,55 +103,29 @@ class Rerun:
             return tmp_file.name
 
     def start(self) -> None:
-        """Start the Rerun logging thread."""
+        """Start the Rerun logging threads."""
         if self.thread_log_camera is not None:
             self.thread_log_camera.start()
         self.thread_log_movements.start()
 
     def stop(self) -> None:
-        """Stop the Rerun logging thread."""
+        """Stop the Rerun logging threads."""
         self.running.set()
 
-    def _log_joint_transform(
-        self,
-        joint_name: str,
-        angle: float,
-        axis: list[float] | None = None,
-    ) -> None:
-        """Log a joint transform to Rerun using frame-based transforms.
+    def _log_all_joint_transforms(self) -> None:
+        """Log all joint transforms from the placo FK robot state to Rerun.
 
-        Args:
-            joint_name: Name of the joint in the URDF.
-            angle: Joint angle in radians.
-            axis: Optional axis override. If None, uses the URDF joint axis
-                  via compute_transform.
-
+        The Stewart platform is a parallel mechanism that URDF represents as a
+        tree. Only one branch connects to the head, so all passive joint values
+        must be solved via constrained FK before logging. After placo FK solves,
+        we read each joint's angle and use compute_transform to log it.
         """
-        joint = self._joints_by_name[joint_name]
-
-        if axis is None:
-            # Use compute_transform for joints with correct URDF axes
+        for joint in self._urdf_tree.joints():
+            if joint.joint_type != "revolute":
+                continue
+            angle = self.head_kinematics.robot.get_joint(joint.name)
             transform = joint.compute_transform(angle)
-            rr.log(f"transforms/{joint_name}", transform, recording=self.recording)
-        else:
-            # Manual transform for joints with axis overrides.
-            # The URDF axis definitions don't match the real axis of rotation
-            # for some joints (e.g. stewart platform, body yaw), so we override.
-            base_rpy = list(joint.origin_rpy or [0.0, 0.0, 0.0])
-            effective_axis = np.array(axis)
-            target_euler = np.array(base_rpy) + (effective_axis * angle)
-            target_translation = list(joint.origin_xyz or [0.0, 0.0, 0.0])
-
-            rr.log(
-                f"transforms/{joint_name}",
-                rr.Transform3D(
-                    translation=target_translation,
-                    quaternion=R.from_euler("xyz", target_euler).as_quat(),
-                    parent_frame=joint.parent_link,
-                    child_frame=joint.child_link,
-                ),
-                recording=self.recording,
-            )
+            rr.log(f"transforms/{joint.name}", transform, recording=self.recording)
 
     def log_camera(self) -> None:
         """Log the camera image to Rerun."""
@@ -163,17 +135,24 @@ class Rerun:
 
         self.logger.info("Starting camera logging to Rerun.")
 
-        # Connect the camera entity to the camera frame from the URDF
-        cam_joint = self._joints_by_name.get("camera_optical_frame")
-        cam_frame = cam_joint.child_link if cam_joint else "camera_optical_frame"
+        # Connect the camera entity to the camera_optical frame from the URDF.
+        # Logged as static since this is a fixed joint that doesn't change.
         rr.log(
             "camera",
-            rr.Transform3D(parent_frame=cam_frame),
+            rr.Transform3D(parent_frame="camera_optical"),
+            static=True,
             recording=self.recording,
         )
 
+        cam_K = np.array(
+            [
+                [550.3564, 0.0, 638.0112],
+                [0.0, 549.1653, 364.589],
+                [0.0, 0.0, 1.0],
+            ]
+        )
+
         while not self.running.is_set():
-            rr.set_time("reachymini", timestamp=time.time(), recording=self.recording)
             frame = self._reachymini.media.get_frame()
             if frame is not None:
                 if isinstance(frame, bytes):
@@ -181,22 +160,19 @@ class Rerun:
                         "Received frame is jpeg. Please use default backend."
                     )
                     return
-
             else:
                 return
 
-            K = np.array(
-                [
-                    [550.3564, 0.0, 638.0112],
-                    [0.0, 549.1653, 364.589],
-                    [0.0, 0.0, 1.0],
-                ]
-            )
+            # TODO: Real timestamps exist in the pipeline (GStreamer buf.pts,
+            # MuJoCo self.data.time) but camera.read() only returns raw pixels.
+            # Using wall-clock time as a proxy. To fix properly, extend
+            # camera read() to return (frame, timestamp) tuples.
+            rr.set_time("reachymini", timestamp=time.time(), recording=self.recording)
 
             rr.log(
                 "camera/image",
                 rr.Pinhole(
-                    image_from_camera=rr.datatypes.Mat3x3(K),
+                    image_from_camera=rr.datatypes.Mat3x3(cam_K),
                     width=frame.shape[1],
                     height=frame.shape[0],
                     image_plane_distance=0.8,
@@ -205,8 +181,7 @@ class Rerun:
                 rr.Image(frame, color_model="bgr").compress(),
                 recording=self.recording,
             )
-
-            time.sleep(0.03)  # ~30fps
+            # cap.read() blocks until next frame, no sleep needed
 
     def log_movements(self) -> None:
         """Log the movement data to Rerun."""
@@ -223,59 +198,81 @@ class Rerun:
             "with_antenna_positions": "true",
             "with_target_antenna_positions": "false",
             "use_pose_matrix": "false",
-            "with_passive_joints": "true",
+            "with_passive_joints": "false",  # computed via placo FK
         }
 
+        # Names of the actuated joints (with servos)
+        actuated_joint_names = [
+            "yaw_body",
+            "stewart_1", "stewart_2", "stewart_3",
+            "stewart_4", "stewart_5", "stewart_6",
+        ]
+
+        target_period = 0.02  # 50Hz — matches daemon control loop rate
+        session = requests.Session()
+
         while not self.running.is_set():
-            msg = requests.get(url, params=params)
+            loop_start = time.time()
+
+            try:
+                msg = session.get(url, params=params, timeout=0.5)
+            except requests.RequestException:
+                time.sleep(target_period)
+                continue
 
             if msg.status_code != 200:
                 self.logger.error(
                     f"Request failed with status {msg.status_code}: {msg.text}"
                 )
-                time.sleep(0.1)
+                time.sleep(target_period)
                 continue
             try:
                 data = json.loads(msg.text)
-                self.logger.debug(f"Data: {data}")
             except Exception:
                 continue
 
-            rr.set_time("reachymini", timestamp=time.time(), recording=self.recording)
-
-            if "antennas_position" in data and data["antennas_position"] is not None:
-                antennas = data["antennas_position"]
-                if antennas is not None:
-                    self._log_joint_transform("left_antenna", antennas[0])
-                    self._log_joint_transform("right_antenna", antennas[1])
+            # Use the API's own timestamp for accurate timing
+            if "timestamp" in data and data["timestamp"] is not None:
+                api_ts = datetime.fromisoformat(
+                    data["timestamp"].replace("Z", "+00:00")
+                ).timestamp()
+            else:
+                api_ts = time.time()
+            rr.set_time("reachymini", timestamp=api_ts, recording=self.recording)
 
             if "head_joints" in data and data["head_joints"] is not None:
                 head_joints = data["head_joints"]
 
-                # The joint axis definitions in the URDF do not match the real axis of rotation
-                # due to URDF not supporting ball joints properly.
-                self._log_joint_transform("yaw_body", -head_joints[0], axis=[0, 0, 1])
-                self._log_joint_transform("stewart_1", -head_joints[1], axis=[0, 1, 0])
-                self._log_joint_transform("stewart_2", head_joints[2], axis=[0, 1, 0])
-                self._log_joint_transform("stewart_3", -head_joints[3], axis=[0, 1, 0])
-                self._log_joint_transform("stewart_4", head_joints[4], axis=[0, 1, 0])
-                self._log_joint_transform("stewart_5", -head_joints[5], axis=[0, 1, 0])
-                self._log_joint_transform("stewart_6", head_joints[6], axis=[0, 1, 0])
+                # Use placo FK to solve the full Stewart platform kinematic chain
+                # (including all passive joints and closing constraints)
+                joint_angles = np.array(head_joints)
+                self.head_kinematics.fk(joint_angles, no_iterations=1)
+                self._log_all_joint_transforms()
 
-            if "passive_joints" in data and data["passive_joints"] is not None:
-                passive_joints = data["passive_joints"]
+                # Log actuated joint positions as time-series
+                for name, value in zip(actuated_joint_names, head_joints):
+                    rr.log(f"joints/{name}", rr.Scalars(value), recording=self.recording)
 
-                for axis_idx, axis in enumerate(["x", "y", "z"]):
-                    for i in range(1, 8):
-                        joint_name = f"passive_{i}_{axis}"
-                        value_index = (i - 1) * 3 + axis_idx
+            if "antennas_position" in data and data["antennas_position"] is not None:
+                antennas = data["antennas_position"]
+                if antennas is not None:
+                    left = self._joints_by_name["left_antenna"]
+                    right = self._joints_by_name["right_antenna"]
+                    rr.log(
+                        "transforms/left_antenna",
+                        left.compute_transform(antennas[0]),
+                        recording=self.recording,
+                    )
+                    rr.log(
+                        "transforms/right_antenna",
+                        right.compute_transform(antennas[1]),
+                        recording=self.recording,
+                    )
+                    rr.log("joints/left_antenna", rr.Scalars(antennas[0]), recording=self.recording)
+                    rr.log("joints/right_antenna", rr.Scalars(antennas[1]), recording=self.recording)
 
-                        override_axis = [0.0, 0.0, 0.0]
-                        override_axis[axis_idx] = 1.0
-                        self._log_joint_transform(
-                            joint_name,
-                            passive_joints[value_index],
-                            axis=override_axis,
-                        )
-
-            time.sleep(0.1)
+            # Sleep only the remainder to hit 50Hz target
+            elapsed = time.time() - loop_start
+            remaining = target_period - elapsed
+            if remaining > 0:
+                time.sleep(remaining)
