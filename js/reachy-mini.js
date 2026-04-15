@@ -765,9 +765,82 @@ export class ReachyMini extends EventTarget {
                 // pushes the rejection over SSE instead.
                 this._failSessionRejected(msg);
                 break;
+            case 'endSession':
+                this._handleEndSession(msg);
+                break;
             case 'peer':
                 this._handlePeerMessage(msg);
                 break;
+        }
+    }
+
+    /**
+     * Internal: handle an endSession pushed from central.
+     *
+     * Two user-visible scenarios converge here:
+     *
+     * 1. Pending startSession — central accepted our request but the
+     *    robot-side relay then refused (e.g. a local Python app holds
+     *    the daemon's robot lock). Without this handler, the client's
+     *    startSession() promise would hang forever because ICE/datachannel
+     *    never come up.
+     * 2. Streaming was evicted — a local Python app started on the robot
+     *    while we were connected, so the relay tore down our session.
+     *
+     * The ``reason`` is forwarded verbatim from the relay through central:
+     * - "robot_busy_local_app": daemon lock held by a local Python app
+     *   (refused before any media negotiation).
+     * - "local_app_started": a local Python app started mid-session and
+     *   evicted us.
+     * - "robot_busy_local": relay's safety-net for stale/concurrent
+     *   sessions (should be rare).
+     */
+    _handleEndSession(msg) {
+        const reason = msg.reason;
+        const friendly = reason === 'robot_busy_local_app'
+            ? 'Robot is busy: a local Python app is running'
+            : reason === 'local_app_started'
+                ? 'Disconnected: a local Python app started on the robot'
+                : reason === 'robot_busy_local'
+                    ? 'Robot is busy: another session is already active'
+                    : null;
+
+        // Case 1: a startSession() is still pending — reject its promise
+        // with the same error shape as sessionRejected so app code can
+        // treat both paths identically.
+        if (this._sessionReject) {
+            const err = new Error(
+                friendly || `Session ended before it could start: ${reason || 'unknown reason'}`
+            );
+            err.reason = reason;
+            this._emit('sessionRejected', { reason, activeApp: null });
+            // Release resources allocated optimistically by startSession().
+            if (this._pc) { this._pc.close(); this._pc = null; }
+            if (this._micStream) { this._micStream.getTracks().forEach(t => t.stop()); this._micStream = null; }
+            this._iceConnected = false;
+            this._dcOpen = false;
+            this._micMuted = true;
+            this._micSupported = false;
+            const reject = this._sessionReject;
+            this._sessionResolve = null;
+            this._sessionReject = null;
+            reject(err);
+            return;
+        }
+
+        // Case 2: we were streaming and got kicked. Leave cleanup of _pc,
+        // _dc, mic and timers to stopSession() so the event listener path
+        // matches the user-initiated stop path exactly.
+        if (this._state === 'streaming') {
+            this._emit('sessionStopped', {
+                reason: reason || 'remote_end',
+                message: friendly,
+            });
+            // Fire-and-forget: we just react to what the server already
+            // decided. stopSession() sends its own endSession back but
+            // central has already dropped the session, so the echo is
+            // harmless.
+            this.stopSession().catch(() => {});
         }
     }
 
