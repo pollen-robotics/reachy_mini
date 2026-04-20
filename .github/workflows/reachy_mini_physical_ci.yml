@@ -8,7 +8,7 @@ jobs:
     runs-on: ci-runner-linux
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
 
       - name: Create virtual environment
         run: python3 -m venv .venv
@@ -54,7 +54,7 @@ jobs:
     runs-on: ci-runner-linux
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
 
       - name: Create virtual environment
         run: python3 -m venv .venv
@@ -108,7 +108,7 @@ jobs:
     runs-on: ci-runner-linux
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
 
       - name: Create virtual environment
         run: python3 -m venv .venv
@@ -161,7 +161,7 @@ jobs:
     runs-on: ci-runner-windows
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
 
       - name: Cleanup any existing daemon process
         shell: powershell
@@ -254,7 +254,7 @@ jobs:
     runs-on: ci-runner-windows
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
 
       - name: Create virtual environment
         shell: powershell
@@ -317,7 +317,7 @@ jobs:
     runs-on: ci-runner-windows
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
 
       - name: Cleanup any existing daemon process
         shell: powershell
@@ -412,7 +412,7 @@ jobs:
     runs-on: ci-runner-mac
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
 
       - name: Create virtual environment
         run: python3.12 -m venv .venv
@@ -466,7 +466,7 @@ jobs:
     runs-on: ci-runner-mac
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
 
       - name: Create virtual environment
         run: python3.12 -m venv .venv
@@ -520,7 +520,7 @@ jobs:
     runs-on: ci-runner-mac
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
 
       - name: Create virtual environment
         run: python3.12 -m venv .venv

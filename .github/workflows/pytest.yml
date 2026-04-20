@@ -15,17 +15,17 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest]
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         with:
           lfs: true
       - name: Install system dependencies (Ubuntu)
         if: matrix.os == 'ubuntu-latest'
-        uses: awalsh128/cache-apt-pkgs-action@latest
+        uses: awalsh128/cache-apt-pkgs-action@acb598e5ddbc6f68a970c5da0688d2f3a9f04d05  # v1.6.0
         with:
           packages: libcairo2-dev libgirepository1.0-dev python3-gi python3-gi-cairo gstreamer1.0-plugins-base gstreamer1.0-plugins-good gir1.2-gst-plugins-base-1.0
           version: 1.0
       - name: Install uv
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b  # v8.1.0
         with:
           python-version: 3.12
           enable-cache: true
