@@ -60,7 +60,7 @@ pkg-config --modversion gstreamer-1.0
 
 ### Step 2: Install Rust
 
-On Linux, the WebRTC plugin is not enabled by default and needs to be compiled manually from the Rust source code. Install Rust from the command line using `rustup`:
+On Linux, the [WebRTC plugin](https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs) is not enabled by default and needs to be compiled manually from the Rust source code. Install Rust from the command line using `rustup`:
 
 ```bash
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
