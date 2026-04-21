@@ -1,6 +1,7 @@
 """WiFi Configuration Routers."""
 
 import logging
+import subprocess
 from enum import Enum
 from threading import Lock, Thread
 
@@ -10,6 +11,7 @@ from pydantic import BaseModel
 
 HOTSPOT_SSID = "reachy-mini-ap"
 HOTSPOT_PASSWORD = "reachy-mini"
+HOTSPOT_CONNECTION_NAME = "Hotspot"
 
 
 router = APIRouter(
@@ -38,18 +40,27 @@ class WifiStatus(BaseModel):
     connected_network: str | None
 
 
-def get_current_wifi_mode() -> WifiMode:
-    """Get the current WiFi mode."""
-    if busy_lock.locked():
-        return WifiMode.BUSY
+def compute_wifi_mode() -> WifiMode:
+    """Compute the real WiFi mode, ignoring busy state.
 
+    Unlike ``get_current_wifi_mode``, this never returns ``BUSY`` and can be
+    safely called from code that already holds ``busy_lock`` (e.g. worker
+    threads inside ``with busy_lock:``).
+    """
     conn = get_wifi_connections()
-    if check_if_connection_active("Hotspot"):
+    if check_if_connection_active(HOTSPOT_CONNECTION_NAME):
         return WifiMode.HOTSPOT
     elif any(c.device != "--" for c in conn):
         return WifiMode.WLAN
     else:
         return WifiMode.DISCONNECTED
+
+
+def get_current_wifi_mode() -> WifiMode:
+    """Get the current WiFi mode."""
+    if busy_lock.locked():
+        return WifiMode.BUSY
+    return compute_wifi_mode()
 
 
 @router.get("/status")
@@ -58,7 +69,7 @@ def get_wifi_status() -> WifiStatus:
     mode = get_current_wifi_mode()
 
     connections = get_wifi_connections()
-    known_networks = [c.name for c in connections if c.name != "Hotspot"]
+    known_networks = [c.name for c in connections if c.name != HOTSPOT_CONNECTION_NAME]
 
     connected_network = next((c.name for c in connections if c.device != "--"), None)
 
@@ -97,9 +108,17 @@ def setup_hotspot(
 
     def hotspot() -> None:
         with busy_lock:
-            setup_wifi_connection(
-                name="Hotspot", ssid=ssid, password=password, is_hotspot=True
-            )
+            # Use the default hotspot helper when the caller didn't override
+            # credentials so we benefit from the auto-heal behavior.
+            if ssid == HOTSPOT_SSID and password == HOTSPOT_PASSWORD:
+                ensure_hotspot_active()
+            else:
+                setup_wifi_connection(
+                    name=HOTSPOT_CONNECTION_NAME,
+                    ssid=ssid,
+                    password=password,
+                    is_hotspot=True,
+                )
 
     Thread(target=hotspot).start()
     # TODO: wait for it to be really started
@@ -127,12 +146,7 @@ def connect_to_wifi_network(
                 logger.error(f"Failed to connect to WiFi network '{ssid}': {e}")
                 logger.info("Reverting to hotspot...")
                 remove_connection(name=ssid)
-                setup_wifi_connection(
-                    name="Hotspot",
-                    ssid=HOTSPOT_SSID,
-                    password=HOTSPOT_PASSWORD,
-                    is_hotspot=True,
-                )
+                ensure_hotspot_active()
 
     Thread(target=connect).start()
     # TODO: wait for it to be really connected
@@ -152,7 +166,7 @@ def scan_wifi() -> list[str]:
 @router.post("/forget")
 def forget_wifi_network(ssid: str) -> None:
     """Forget a saved WiFi network. Falls back to Hotspot if forgetting the active network."""
-    if ssid == "Hotspot":
+    if ssid == HOTSPOT_CONNECTION_NAME:
         raise HTTPException(status_code=400, detail="Cannot forget Hotspot connection.")
 
     if not check_if_connection_exists(ssid):
@@ -174,12 +188,7 @@ def forget_wifi_network(ssid: str) -> None:
 
                 if was_active:
                     logger.info("Was connected, falling back to hotspot...")
-                    setup_wifi_connection(
-                        name="Hotspot",
-                        ssid=HOTSPOT_SSID,
-                        password=HOTSPOT_PASSWORD,
-                        is_hotspot=True,
-                    )
+                    ensure_hotspot_active()
             except Exception as e:
                 error = e
                 logger.error(f"Failed to forget network '{ssid}': {e}")
@@ -201,22 +210,29 @@ def forget_all_wifi_networks() -> None:
                 connections = get_wifi_connections()
                 forgotten = []
 
+                # Check BEFORE deletion if we were actively connected to a
+                # non-Hotspot network. We cannot rely on the post-delete mode
+                # because deleting the active profile can leave wlan0 in a
+                # transient state where no wifi is "active" yet no error is
+                # raised.
+                was_connected_to_wifi = any(
+                    c.name != HOTSPOT_CONNECTION_NAME and c.device != "--"
+                    for c in connections
+                )
+
                 for conn in connections:
-                    if conn.name != "Hotspot":
+                    if conn.name != HOTSPOT_CONNECTION_NAME:
                         remove_connection(conn.name)
                         forgotten.append(conn.name)
 
                 logger.info(f"Forgotten {len(forgotten)} networks: {forgotten}")
 
-                # Always ensure we have connectivity after forgetting all
-                if get_current_wifi_mode() == WifiMode.DISCONNECTED:
-                    logger.info("No connection left, setting up hotspot...")
-                    setup_wifi_connection(
-                        name="Hotspot",
-                        ssid=HOTSPOT_SSID,
-                        password=HOTSPOT_PASSWORD,
-                        is_hotspot=True,
-                    )
+                # NOTE: ``get_current_wifi_mode()`` would return ``BUSY`` here
+                # because we hold ``busy_lock``. We use ``compute_wifi_mode``
+                # directly so the fallback actually triggers.
+                if was_connected_to_wifi or compute_wifi_mode() != WifiMode.HOTSPOT:
+                    logger.info("Falling back to hotspot after clearing networks...")
+                    ensure_hotspot_active()
             except Exception as e:
                 error = e
                 logger.error(f"Failed to forget networks: {e}")
@@ -277,6 +293,54 @@ def remove_connection(name: str) -> None:
         nmcli.connection.delete(name)
 
 
+def _prepare_wlan0_for_hotspot() -> None:
+    """Best-effort hygiene before (re)starting the hotspot on wlan0.
+
+    Mirrors the behavior of ``bluetooth/commands/HOTSPOT.sh`` so the on-device
+    recovery paths (WiFi API + BLE command) behave identically. Any failure is
+    logged but never raised: we want to keep trying to bring the AP up even if
+    one of these preparation steps is unavailable on the host.
+    """
+    for cmd in (
+        ["nmcli", "device", "disconnect", "wlan0"],
+        ["rfkill", "unblock", "wifi"],
+    ):
+        try:
+            subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+        except Exception as exc:  # noqa: BLE001 - best effort
+            logger.debug(f"Preparation step {cmd!r} failed: {exc}")
+
+
+def ensure_hotspot_active() -> None:
+    """Make sure the Hotspot AP is up, auto-healing a broken profile if needed.
+
+    ``nmcli.connection.up("Hotspot")`` can silently fail when the stored
+    profile is stale (e.g. wrong mode, missing ``ipv4.method=shared``) or when
+    wlan0 is in a weird state after a connection was deleted. In that case we
+    drop the profile and re-create it from scratch via ``wifi_hotspot`` so the
+    robot always ends up reachable on ``10.42.0.1``.
+    """
+    _prepare_wlan0_for_hotspot()
+
+    try:
+        setup_wifi_connection(
+            name=HOTSPOT_CONNECTION_NAME,
+            ssid=HOTSPOT_SSID,
+            password=HOTSPOT_PASSWORD,
+            is_hotspot=True,
+        )
+    except Exception as exc:  # noqa: BLE001 - we want to attempt recovery
+        logger.warning(
+            f"Failed to activate existing Hotspot profile ({exc}). "
+            "Recreating it from scratch..."
+        )
+        try:
+            remove_connection(HOTSPOT_CONNECTION_NAME)
+        except Exception as remove_exc:  # noqa: BLE001
+            logger.warning(f"Failed to remove stale Hotspot profile: {remove_exc}")
+        nmcli.device.wifi_hotspot(ssid=HOTSPOT_SSID, password=HOTSPOT_PASSWORD)
+
+
 WIFI_INIT_MAX_RETRIES = 5
 WIFI_INIT_RETRY_DELAY = 3  # seconds
 WIFI_INIT_TIMEOUT = 30  # seconds
@@ -296,15 +360,13 @@ def ensure_wifi_on_startup() -> None:
             # Make sure wlan0 is up and running
             scan_available_wifi()
 
-            # If no WiFi connection is active, set up the default hotspot
-            if get_current_wifi_mode() == WifiMode.DISCONNECTED:
+            # If no WiFi connection is active, set up the default hotspot.
+            # ``compute_wifi_mode`` is used instead of ``get_current_wifi_mode``
+            # for symmetry with ``forget_all`` and to avoid any surprise if a
+            # future refactor schedules this on a thread that holds the lock.
+            if compute_wifi_mode() == WifiMode.DISCONNECTED:
                 logger.info("No WiFi connection active. Setting up hotspot...")
-                setup_wifi_connection(
-                    name="Hotspot",
-                    ssid=HOTSPOT_SSID,
-                    password=HOTSPOT_PASSWORD,
-                    is_hotspot=True,
-                )
+                ensure_hotspot_active()
             return
         except Exception as e:
             logger.warning(
