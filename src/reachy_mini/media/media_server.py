@@ -43,7 +43,12 @@ from reachy_mini.media.camera_constants import (
     MujocoCameraSpecs,
     ReachyMiniLiteCamSpecs,
 )
-from reachy_mini.media.device_detection import get_audio_device, get_video_device
+from reachy_mini.media.device_detection import (
+    DEFAULT_CAM_NAMES,
+    get_audio_device,
+    get_video_device,
+    gst_monitor_devices,
+)
 from reachy_mini.utils.constants import ASSETS_ROOT_PATH
 
 gi.require_version("Gst", "1.0")
@@ -501,8 +506,23 @@ class GstMediaServer:
 
         Used by mockup simulation to grab video from whatever camera is
         available on the host system.
+
+        When a Reachy Mini USB camera is plugged in, the platform's device
+        enumeration may rank it ahead of the built-in camera (varies per
+        OS and connection order).  In simulation we explicitly want the
+        *host* camera (laptop/desktop webcam), never the robot's camera —
+        so we enumerate the system's video devices, filter out anything
+        matching the known Reachy camera names, and pin the source to the
+        first remaining device.  If no non-Reachy camera is available we
+        fall back to ``autovideosrc`` (which may still pick the Reachy,
+        but there is nothing else to stream from).
         """
-        camsrc = Gst.ElementFactory.make("autovideosrc")
+        camsrc = self._build_non_reachy_video_source()
+        if camsrc is None:
+            self._logger.info(
+                "No non-Reachy camera detected; falling back to autovideosrc."
+            )
+            camsrc = Gst.ElementFactory.make("autovideosrc")
         videoconvert = Gst.ElementFactory.make("videoconvert")
         videorate = Gst.ElementFactory.make("videorate")
 
@@ -518,6 +538,63 @@ class GstMediaServer:
         if not all(elements):
             raise RuntimeError("Failed to create autovideo source elements")
         return elements
+
+    def _build_non_reachy_video_source(self) -> Optional[Gst.Element]:
+        """Return a platform-native video source that is NOT a Reachy camera.
+
+        Enumerates ``Video/Source`` devices via ``Gst.DeviceMonitor`` and
+        picks the first one whose display name does not contain any of
+        the Reachy camera name substrings (``DEFAULT_CAM_NAMES``).  On
+        macOS we use ``avfvideosrc`` pinned to the device's enumeration
+        index; on Windows we use ``mfvideosrc`` pinned to the display
+        name; on Linux (mockup sim on desktop) we fall back to
+        ``autovideosrc`` because v4l2 enumeration isn't consistent enough
+        to hand-pick.
+
+        Returns:
+            A configured GStreamer source element, or ``None`` when no
+            suitable camera is found (caller should fall back to
+            ``autovideosrc``).
+
+        """
+        try:
+            devices = gst_monitor_devices("Video/Source")
+        except Exception:
+            self._logger.exception("Video device enumeration failed")
+            return None
+
+        current_platform = platform.system()
+        for device in devices:
+            name = device.display_name or ""
+            if any(reachy_name in name for reachy_name in DEFAULT_CAM_NAMES):
+                continue
+
+            match current_platform:
+                case "Darwin":
+                    camsrc = Gst.ElementFactory.make("avfvideosrc")
+                    if camsrc is None:
+                        return None
+                    camsrc.set_property("device-index", device.index)
+                    self._logger.info(
+                        "Sim mode: using non-Reachy camera '%s' at index %d",
+                        name,
+                        device.index,
+                    )
+                    return camsrc
+                case "Windows":
+                    camsrc = Gst.ElementFactory.make("mfvideosrc")
+                    if camsrc is None:
+                        return None
+                    camsrc.set_property("device-name", name)
+                    self._logger.info(
+                        "Sim mode: using non-Reachy camera '%s' (Windows)", name
+                    )
+                    return camsrc
+                case _:
+                    # Linux desktop mockup sim: keep autovideosrc fallback.
+                    return None
+
+        return None
 
     def _build_libcamera_source(self) -> list[Gst.Element]:
         """Build source chain for RPi CSI camera (libcamerasrc)."""
@@ -793,19 +870,34 @@ class GstMediaServer:
         """Build a platform-aware audio source element.
 
         Detection order:
-        1. .asoundrc — on the wireless CM4 the ``.asoundrc`` file defines
+        1. Simulation mode short-circuit — when running in MUJOCO or
+           MOCKUP sim we must *never* grab the Reachy Mini microphone
+           (even if a USB robot happens to be plugged in).  We return
+           the host's default audio source (``autoaudiosrc``) so the
+           WebRTC stream carries the laptop/desktop mic instead.
+        2. .asoundrc — on the wireless CM4 the ``.asoundrc`` file defines
            ALSA aliases (``reachymini_audio_src``).  When present we use
            ``alsasrc`` directly, matching the behaviour of the original
            daemon and avoiding PipeWire clock issues.
-        2. GstDeviceMonitor — finds the Reachy Mini Audio card by name and
+        3. GstDeviceMonitor — finds the Reachy Mini Audio card by name and
            returns a platform-native element (pulsesrc, wasapi2src,
            osxaudiosrc).  Used on Lite and desktop platforms.
-        3. autoaudiosrc — last resort when no Reachy Mini card is found.
+        4. autoaudiosrc — last resort when no Reachy Mini card is found.
 
         Returns:
             A GStreamer audio source element, or None if no audio is available.
 
         """
+        # Simulation mode: always use the host's default mic, even if a
+        # Reachy USB robot is plugged in (otherwise the sim pipeline would
+        # capture the robot's microphone instead of the laptop's).
+        if self._sim_mode is not SimulationMode.NONE:
+            self._logger.info(
+                "Simulation mode (%s): using host default audio source (autoaudiosrc).",
+                self._sim_mode.value,
+            )
+            return Gst.ElementFactory.make("autoaudiosrc")
+
         # Wireless CM4: .asoundrc defines reachymini_audio_src alias
         if has_reachymini_asoundrc():
             audiosrc = Gst.ElementFactory.make("alsasrc")
@@ -929,13 +1021,23 @@ class GstMediaServer:
     def _build_audiosink_element(self) -> Optional[Gst.Element]:
         """Build a platform-aware audio sink GStreamer element.
 
-        Same detection order as ``_build_audio_source()``: .asoundrc first
-        (wireless CM4), then DeviceMonitor, then autoaudiosink.
+        Same detection order as ``_build_audio_source()``: sim-mode
+        short-circuit, then .asoundrc (wireless CM4), then DeviceMonitor,
+        then autoaudiosink.
 
         Returns:
             A GStreamer audio sink element, or None to use the default.
 
         """
+        # Simulation mode: always play back through the host's default
+        # speaker, never the Reachy Mini card (even if plugged via USB).
+        if self._sim_mode is not SimulationMode.NONE:
+            self._logger.info(
+                "Simulation mode (%s): using host default audio sink (autoaudiosink).",
+                self._sim_mode.value,
+            )
+            return Gst.ElementFactory.make("autoaudiosink")
+
         # Wireless CM4: .asoundrc defines reachymini_audio_sink alias
         if has_reachymini_asoundrc():
             audiosink = Gst.ElementFactory.make("alsasink")
