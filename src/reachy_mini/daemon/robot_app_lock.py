@@ -1,18 +1,21 @@
-"""Cross-thread concurrency lock for the robot.
+"""Cross-thread concurrency lock for the robot's **managed app slot**.
 
-The daemon is the single source of truth for "is this robot in use?".
-Two independent code paths can try to drive the robot:
+Despite its position in the daemon, this lock does **not** block every
+code path that can drive the robot — SDK clients talking to the daemon
+directly over LAN/WebSocket bypass it entirely. What it serializes are
+the two *managed* entry points where "an app has the robot":
 
-- Local Python apps launched by AppManager (in the main asyncio loop).
+- Local Python apps launched by :class:`AppManager` (main asyncio loop).
 - Remote WebRTC clients handled by the central signaling relay (in the
   relay's dedicated thread + event loop).
 
-Without coordination, both paths could run simultaneously and fight over
-motors/media. This lock serializes them.
+Without coordination these two paths can run simultaneously and fight
+over motors/media. This lock is the single source of truth for which
+managed app currently owns the slot.
 
 States are mutually exclusive:
 
-- ``free``: nobody holds the robot.
+- ``free``: no managed app holds the slot.
 - ``local_app(name)``: a Python app is running.
 - ``remote_session(name)``: a remote client is connected via central.
 
@@ -39,7 +42,7 @@ from pydantic import BaseModel
 logger = logging.getLogger(__name__)
 
 
-class RobotLockState(str, Enum):
+class RobotAppLockState(str, Enum):
     """Lock state enum. Values are stable strings suitable for serialization."""
 
     FREE = "free"
@@ -47,24 +50,24 @@ class RobotLockState(str, Enum):
     REMOTE_SESSION = "remote_session"
 
 
-class RobotLockStatus(BaseModel):
+class RobotAppLockStatus(BaseModel):
     """Snapshot of the lock state, suitable for JSON serialization.
 
-    Returned by :meth:`RobotLock.status` and by the
-    ``GET /api/daemon/robot-lock-status`` endpoint.
+    Returned by :meth:`RobotAppLock.status` and by the
+    ``GET /api/daemon/robot-app-lock-status`` endpoint.
     """
 
-    state: RobotLockState
+    state: RobotAppLockState
     holder_name: Optional[str] = None
 
 
-class RobotLock:
+class RobotAppLock:
     """Thread-safe lock coordinating local app and remote session access to the robot."""
 
     def __init__(self) -> None:
         """Initialize the lock in the free state."""
         self._mutex = threading.Lock()
-        self._state: RobotLockState = RobotLockState.FREE
+        self._state: RobotAppLockState = RobotAppLockState.FREE
         self._holder_name: Optional[str] = None
 
         # Async callback invoked when a local-app acquire evicts a remote
@@ -100,10 +103,10 @@ class RobotLock:
     # Introspection
     # ------------------------------------------------------------------
 
-    def status(self) -> RobotLockStatus:
+    def status(self) -> RobotAppLockStatus:
         """Return a snapshot of the current lock state."""
         with self._mutex:
-            return RobotLockStatus(state=self._state, holder_name=self._holder_name)
+            return RobotAppLockStatus(state=self._state, holder_name=self._holder_name)
 
     # ------------------------------------------------------------------
     # Local acquire / release
@@ -123,20 +126,20 @@ class RobotLock:
         """
         evict_remote = False
         with self._mutex:
-            if self._state == RobotLockState.LOCAL_APP:
+            if self._state == RobotAppLockState.LOCAL_APP:
                 raise RuntimeError(
                     f"A local app is already running: {self._holder_name!r}"
                 )
-            if self._state == RobotLockState.REMOTE_SESSION:
+            if self._state == RobotAppLockState.REMOTE_SESSION:
                 evict_remote = True
                 logger.info(
-                    "RobotLock: evicting remote session %r for local app %r",
+                    "RobotAppLock: evicting remote session %r for local app %r",
                     self._holder_name,
                     app_name,
                 )
-            self._state = RobotLockState.LOCAL_APP
+            self._state = RobotAppLockState.LOCAL_APP
             self._holder_name = app_name
-            logger.info("RobotLock: acquired by local app %r", app_name)
+            logger.info("RobotAppLock: acquired by local app %r", app_name)
 
         if evict_remote and self._on_remote_evicted is not None:
             # Invoke outside the mutex. The handler schedules tear-down on
@@ -149,7 +152,7 @@ class RobotLock:
                 # moved to local_app, so new remote sessions will be
                 # rejected regardless. We log and continue.
                 logger.warning(
-                    "RobotLock: remote eviction handler raised", exc_info=True
+                    "RobotAppLock: remote eviction handler raised", exc_info=True
                 )
 
     def release_local(self, app_name: Optional[str] = None) -> None:
@@ -167,22 +170,22 @@ class RobotLock:
 
         """
         with self._mutex:
-            if self._state != RobotLockState.LOCAL_APP:
+            if self._state != RobotAppLockState.LOCAL_APP:
                 logger.debug(
-                    "RobotLock.release_local: not holding local_app (state=%s)",
+                    "RobotAppLock.release_local: not holding local_app (state=%s)",
                     self._state.value,
                 )
                 return
             if app_name is not None and self._holder_name != app_name:
                 logger.warning(
-                    "RobotLock.release_local: holder mismatch (expected=%r holder=%r); releasing anyway",
+                    "RobotAppLock.release_local: holder mismatch (expected=%r holder=%r); releasing anyway",
                     app_name,
                     self._holder_name,
                 )
             released_name = self._holder_name
-            self._state = RobotLockState.FREE
+            self._state = RobotAppLockState.FREE
             self._holder_name = None
-            logger.info("RobotLock: released by local app %r", released_name)
+            logger.info("RobotAppLock: released by local app %r", released_name)
 
     # ------------------------------------------------------------------
     # Remote acquire / release
@@ -199,29 +202,29 @@ class RobotLock:
 
         """
         with self._mutex:
-            if self._state != RobotLockState.FREE:
+            if self._state != RobotAppLockState.FREE:
                 logger.info(
-                    "RobotLock: remote acquire refused (state=%s holder=%r requester=%r)",
+                    "RobotAppLock: remote acquire refused (state=%s holder=%r requester=%r)",
                     self._state.value,
                     self._holder_name,
                     app_name,
                 )
                 return False
-            self._state = RobotLockState.REMOTE_SESSION
+            self._state = RobotAppLockState.REMOTE_SESSION
             self._holder_name = app_name
-            logger.info("RobotLock: acquired by remote session %r", app_name)
+            logger.info("RobotAppLock: acquired by remote session %r", app_name)
             return True
 
     def release_remote(self) -> None:
         """Release a remote-session hold. Idempotent."""
         with self._mutex:
-            if self._state != RobotLockState.REMOTE_SESSION:
+            if self._state != RobotAppLockState.REMOTE_SESSION:
                 logger.debug(
-                    "RobotLock.release_remote: not holding remote_session (state=%s)",
+                    "RobotAppLock.release_remote: not holding remote_session (state=%s)",
                     self._state.value,
                 )
                 return
             released_name = self._holder_name
-            self._state = RobotLockState.FREE
+            self._state = RobotAppLockState.FREE
             self._holder_name = None
-            logger.info("RobotLock: released by remote session %r", released_name)
+            logger.info("RobotAppLock: released by remote session %r", released_name)

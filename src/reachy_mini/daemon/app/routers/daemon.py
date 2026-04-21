@@ -6,7 +6,7 @@ import threading
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from reachy_mini.daemon.app import bg_job_register
-from reachy_mini.daemon.robot_lock import RobotLockStatus
+from reachy_mini.daemon.robot_app_lock import RobotAppLockStatus
 from reachy_mini.io.protocol import DaemonStatus
 
 from ...daemon import Daemon
@@ -85,15 +85,16 @@ async def get_daemon_status(daemon: Daemon = Depends(get_daemon)) -> DaemonStatu
     return daemon.status()
 
 
-@router.get("/robot-lock-status")
-async def get_robot_lock_status(
+@router.get("/robot-app-lock-status")
+async def get_robot_app_lock_status(
     daemon: Daemon = Depends(get_daemon),
-) -> RobotLockStatus:
-    """Return the current robot lock state.
+) -> RobotAppLockStatus:
+    """Return the current state of the robot's managed-app lock.
 
-    Exposes the daemon's single source of truth for "is the robot in use?":
+    The daemon's single source of truth for which managed app (if any)
+    currently holds the robot:
 
-    - ``free``: nobody holds the robot.
+    - ``free``: no managed app holds the slot.
     - ``local_app``: a Python app launched via AppManager is running.
       ``holder_name`` is the app name.
     - ``remote_session``: a remote WebRTC client is connected via the
@@ -101,7 +102,10 @@ async def get_robot_lock_status(
       placeholder (the real consumer app name lives on the central
       server and is surfaced via its own ``/api/robot-status``).
 
+    Note that SDK clients talking to the daemon directly bypass this
+    lock; it only reflects the two *managed* app entry points.
+
     Intended for UI layers (desktop app, dashboard) that want to render
     a busy/free indicator without trying to open a session.
     """
-    return daemon.robot_lock.status()
+    return daemon.robot_app_lock.status()
