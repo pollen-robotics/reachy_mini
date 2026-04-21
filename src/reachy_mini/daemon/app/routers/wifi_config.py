@@ -294,25 +294,54 @@ def remove_connection(name: str) -> None:
 
 
 def _prepare_wlan0_for_hotspot() -> None:
-    """Best-effort hygiene before (re)starting the hotspot on wlan0.
+    """Best-effort hygiene before transitioning wlan0 into hotspot mode.
 
-    Mirrors the behavior of ``bluetooth/commands/HOTSPOT.sh`` so the on-device
-    recovery paths (WiFi API + BLE command) behave identically. Any failure is
-    logged but never raised: we want to keep trying to bring the AP up even if
-    one of these preparation steps is unavailable on the host.
+    Only called from ``ensure_hotspot_active`` when we actually need to
+    *switch* the interface into AP mode - the caller must have already
+    verified we are NOT currently on the hotspot, otherwise the
+    ``nmcli.device.disconnect`` below would tear down an active AP and kick
+    every associated client (phone during first-time WiFi setup, BLE recovery
+    session, etc.).
+
+    Behavior mirrors ``bluetooth/commands/HOTSPOT.sh`` so the WiFi API and BLE
+    command paths converge to the same state. Both steps are best-effort:
+    failures are logged at debug level and never raised, we still want to try
+    bringing the AP up afterwards.
     """
-    for cmd in (
-        ["nmcli", "device", "disconnect", "wlan0"],
-        ["rfkill", "unblock", "wifi"],
-    ):
-        try:
-            subprocess.run(cmd, capture_output=True, text=True, timeout=10)
-        except Exception as exc:  # noqa: BLE001 - best effort
-            logger.debug(f"Preparation step {cmd!r} failed: {exc}")
+    # 1) Drop any lingering client association on wlan0. Uses the nmcli python
+    # binding to stay consistent with the rest of this module (no subprocess
+    # fork, unified error handling).
+    try:
+        nmcli.device.disconnect("wlan0")
+    except Exception as exc:  # noqa: BLE001 - best effort
+        logger.debug(f"nmcli.device.disconnect('wlan0') failed: {exc}")
+
+    # 2) Clear any kernel-level soft-block on the WiFi radio. There is no
+    # Python equivalent in the nmcli lib (``nmcli radio wifi on`` is the
+    # NetworkManager logical switch, not the RF/rfkill one). We still need
+    # this because the CM5's combo WiFi/BT chip can end up soft-blocked after
+    # a firmware hiccup, which is exactly the class of situations leading
+    # users to trigger our recovery paths. Timeout is intentionally short -
+    # rfkill is a near-instant ioctl, anything longer than a couple of
+    # seconds means something is very wrong and we should fail fast.
+    try:
+        subprocess.run(
+            ["rfkill", "unblock", "wifi"],
+            capture_output=True,
+            text=True,
+            timeout=3,
+        )
+    except Exception as exc:  # noqa: BLE001 - best effort
+        logger.debug(f"rfkill unblock wifi failed: {exc}")
 
 
 def ensure_hotspot_active() -> None:
     """Make sure the Hotspot AP is up, auto-healing a broken profile if needed.
+
+    Fast-paths the common case where the hotspot is already live (no wlan0
+    disconnect/reconnect churn, no client kicks) and only runs the wlan0
+    hygiene + profile activation/recreation when we actually need to
+    transition into AP mode.
 
     ``nmcli.connection.up("Hotspot")`` can silently fail when the stored
     profile is stale (e.g. wrong mode, missing ``ipv4.method=shared``) or when
@@ -320,6 +349,14 @@ def ensure_hotspot_active() -> None:
     drop the profile and re-create it from scratch via ``wifi_hotspot`` so the
     robot always ends up reachable on ``10.42.0.1``.
     """
+    # Skip all hygiene / (re)activation work when the AP is already broadcasting.
+    # Addresses review feedback on PR #1039: calling ``_prepare_wlan0_for_hotspot``
+    # unconditionally would ``disconnect wlan0`` and boot any already-associated
+    # client just to bring back the exact same connection.
+    if compute_wifi_mode() == WifiMode.HOTSPOT:
+        logger.debug("Hotspot already active, skipping recovery.")
+        return
+
     _prepare_wlan0_for_hotspot()
 
     try:
