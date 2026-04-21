@@ -46,6 +46,8 @@ reachy-mini-app-assistant create --template conversation <app_name> <path> --pub
 
 See `skills/create-app.md` for details. JS-only apps are not yet supported for discovery/sharing.
 
+> **Building a browser/JS app instead?** (live WebRTC control, video stream, no local install) — see [`js/AGENTS.md`](js/AGENTS.md). Runs as a static Hugging Face Space, imports the SDK directly from jsDelivr.
+
 ### Always Create plan.md Before Coding
 
 Before implementing any app:
