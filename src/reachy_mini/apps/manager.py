@@ -112,7 +112,7 @@ class AppManager:
         # the normal case, but the lock is the single source of truth
         # shared with the relay thread).
         if self.daemon is not None:
-            await self.daemon.robot_lock.acquire_local_evicting_remote(app_name)
+            await self.daemon.robot_app_lock.acquire_local_evicting_remote(app_name)
 
         # Get module name and Python path for subprocess execution
         module_name = local_common_venv.get_app_module(
@@ -163,7 +163,7 @@ class AppManager:
             # monitor_process is the normal release path but it depends on
             # the subprocess existing.
             if self.daemon is not None:
-                self.daemon.robot_lock.release_local(app_name)
+                self.daemon.robot_app_lock.release_local(app_name)
             raise
 
 
@@ -238,7 +238,7 @@ class AppManager:
                 # of this monitor task. Idempotent — stop_current_app's own
                 # release is fine too.
                 if self.daemon is not None:
-                    self.daemon.robot_lock.release_local(app_name)
+                    self.daemon.robot_app_lock.release_local(app_name)
 
         monitor_task = asyncio.create_task(monitor_process())
 

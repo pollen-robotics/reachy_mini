@@ -12,7 +12,7 @@ from importlib.metadata import PackageNotFoundError, version
 from threading import Event, Thread
 from typing import Any, Optional
 
-from reachy_mini.daemon.robot_lock import RobotLock
+from reachy_mini.daemon.robot_app_lock import RobotAppLock
 from reachy_mini.daemon.utils import (
     SimulationMode,
     find_serial_port,
@@ -82,10 +82,13 @@ class Daemon:
         self.backend_run_thread: "Thread | None" = None
         self._thread_event_publish_status = Event()
 
-        # Single source of truth for "is the robot in use?". Shared between
-        # AppManager (local Python apps) and the central signaling relay
-        # (remote WebRTC clients). See reachy_mini/daemon/robot_lock.py.
-        self.robot_lock = RobotLock()
+        # Single source of truth for which managed app (local Python app or
+        # remote WebRTC client) currently holds the robot's app slot. Shared
+        # with AppManager and the central signaling relay. SDK clients that
+        # talk to the daemon directly bypass this lock — it only coordinates
+        # the two managed app entry points.
+        # See reachy_mini/daemon/robot_app_lock.py.
+        self.robot_app_lock = RobotAppLock()
 
         self._media_server: Optional["GstMediaServer"] = (
             None  # GstMediaServer when media is enabled
@@ -176,7 +179,7 @@ class Daemon:
             await start_central_relay(
                 hf_token=hf_token,
                 robot_name=self.robot_name,
-                robot_lock=self.robot_lock,
+                robot_app_lock=self.robot_app_lock,
             )
             self.logger.info("Central signaling relay started")
         except Exception as e:
@@ -350,7 +353,7 @@ class Daemon:
             DaemonState: The current state of the daemon after attempting to stop it.
 
         Note:
-            The relay releases its remote hold on ``self.robot_lock`` via
+            The relay releases its remote hold on ``self.robot_app_lock`` via
             ``relay.stop()``. A local-app hold is *not* force-released here
             because the daemon is going down; the lock object dies with the
             process. If restart-in-place is ever added, force-release the

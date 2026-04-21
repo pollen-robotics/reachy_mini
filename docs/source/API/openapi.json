@@ -579,18 +579,18 @@
         }
       }
     },
-    "/api/daemon/robot-lock-status": {
+    "/api/daemon/robot-app-lock-status": {
       "get": {
-        "summary": "Get Robot Lock Status",
-        "description": "Return the current robot lock state.\n\nExposes the daemon's single source of truth for \"is the robot in use?\":\n\n- ``free``: nobody holds the robot.\n- ``local_app``: a Python app launched via AppManager is running.\n  ``holder_name`` is the app name.\n- ``remote_session``: a remote WebRTC client is connected via the\n  central signaling relay. ``holder_name`` is a generic ``\"remote\"``\n  placeholder (the real consumer app name lives on the central\n  server and is surfaced via its own ``/api/robot-status``).\n\nIntended for UI layers (desktop app, dashboard) that want to render\na busy/free indicator without trying to open a session.",
-        "operationId": "get_robot_lock_status_api_daemon_robot_lock_status_get",
+        "summary": "Get Robot App Lock Status",
+        "description": "Return the current state of the robot's managed-app lock.\n\nThe daemon's single source of truth for which managed app (if any)\ncurrently holds the robot:\n\n- ``free``: no managed app holds the slot.\n- ``local_app``: a Python app launched via AppManager is running.\n  ``holder_name`` is the app name.\n- ``remote_session``: a remote WebRTC client is connected via the\n  central signaling relay. ``holder_name`` is a generic ``\"remote\"``\n  placeholder (the real consumer app name lives on the central\n  server and is surfaced via its own ``/api/robot-status``).\n\nNote that SDK clients talking to the daemon directly bypass this\nlock; it only reflects the two *managed* app entry points.\n\nIntended for UI layers (desktop app, dashboard) that want to render\na busy/free indicator without trying to open a session.",
+        "operationId": "get_robot_app_lock_status_api_daemon_robot_app_lock_status_get",
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/RobotLockStatus"
+                  "$ref": "#/components/schemas/RobotAppLockStatus"
                 }
               }
             }
@@ -2989,6 +2989,40 @@
         "title": "ResolutionInfo",
         "description": "A single camera resolution entry."
       },
+      "RobotAppLockState": {
+        "type": "string",
+        "enum": [
+          "free",
+          "local_app",
+          "remote_session"
+        ],
+        "title": "RobotAppLockState",
+        "description": "Lock state enum. Values are stable strings suitable for serialization."
+      },
+      "RobotAppLockStatus": {
+        "properties": {
+          "state": {
+            "$ref": "#/components/schemas/RobotAppLockState"
+          },
+          "holder_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Holder Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "state"
+        ],
+        "title": "RobotAppLockStatus",
+        "description": "Snapshot of the lock state, suitable for JSON serialization.\n\nReturned by :meth:`RobotAppLock.status` and by the\n``GET /api/daemon/robot-app-lock-status`` endpoint."
+      },
       "RobotBackendStatus": {
         "properties": {
           "ready": {
@@ -3035,40 +3069,6 @@
         ],
         "title": "RobotBackendStatus",
         "description": "Status of the Robot Backend."
-      },
-      "RobotLockState": {
-        "type": "string",
-        "enum": [
-          "free",
-          "local_app",
-          "remote_session"
-        ],
-        "title": "RobotLockState",
-        "description": "Lock state enum. Values are stable strings suitable for serialization."
-      },
-      "RobotLockStatus": {
-        "properties": {
-          "state": {
-            "$ref": "#/components/schemas/RobotLockState"
-          },
-          "holder_name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Holder Name"
-          }
-        },
-        "type": "object",
-        "required": [
-          "state"
-        ],
-        "title": "RobotLockStatus",
-        "description": "Snapshot of the lock state, suitable for JSON serialization.\n\nReturned by :meth:`RobotLock.status` and by the\n``GET /api/daemon/robot-lock-status`` endpoint."
       },
       "SourceKind": {
         "type": "string",

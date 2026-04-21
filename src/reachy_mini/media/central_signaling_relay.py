@@ -21,7 +21,7 @@ import aiohttp
 import websockets
 from websockets.asyncio.client import ClientConnection
 
-from reachy_mini.daemon.robot_lock import RobotLock
+from reachy_mini.daemon.robot_app_lock import RobotAppLock
 
 logger = logging.getLogger(__name__)
 
@@ -74,7 +74,7 @@ class CentralSignalingRelay:
         hf_token: Optional[str] = None,
         robot_name: str = "reachymini",
         on_state_change: Optional[Callable[["RelayState", Optional[str]], None]] = None,
-        robot_lock: Optional[RobotLock] = None,
+        robot_app_lock: Optional[RobotAppLock] = None,
     ):
         """Initialize the relay.
 
@@ -84,7 +84,7 @@ class CentralSignalingRelay:
             hf_token: HuggingFace token for authentication (will be refreshed)
             robot_name: Name to register as producer
             on_state_change: Callback when state changes (state, message)
-            robot_lock: Shared lock coordinating local vs remote access to
+            robot_app_lock: Shared lock coordinating local vs remote access to
                 the robot. When provided, incoming remote sessions are
                 gated on this lock and a local-app acquire evicts any
                 active remote session.
@@ -95,7 +95,7 @@ class CentralSignalingRelay:
         self.hf_token = hf_token
         self.robot_name = robot_name
         self._on_state_change = on_state_change
-        self._robot_lock = robot_lock
+        self._robot_app_lock = robot_app_lock
 
         self._running = False
         self._state = RelayState.STOPPED
@@ -193,8 +193,8 @@ class CentralSignalingRelay:
         # When AppManager acquires the lock for a local Python app, this
         # coroutine is invoked on the main asyncio loop and schedules the
         # actual tear-down on the relay's own thread loop.
-        if self._robot_lock is not None:
-            self._robot_lock.set_remote_eviction_handler(self._handle_remote_eviction)
+        if self._robot_app_lock is not None:
+            self._robot_app_lock.set_remote_eviction_handler(self._handle_remote_eviction)
 
         # Run the relay in its own thread with a dedicated event loop.
         # This is necessary because the caller (daemon.start) may run in a temporary
@@ -305,9 +305,9 @@ class CentralSignalingRelay:
         self._thread = None
 
         # Unregister from the lock and release any hold we may still have.
-        if self._robot_lock is not None:
-            self._robot_lock.set_remote_eviction_handler(None)
-            self._robot_lock.release_remote()
+        if self._robot_app_lock is not None:
+            self._robot_app_lock.set_remote_eviction_handler(None)
+            self._robot_app_lock.release_remote()
 
         self._set_state(RelayState.STOPPED, "Relay stopped")
 
@@ -398,8 +398,8 @@ class CentralSignalingRelay:
 
         # Release any remote hold on the robot lock. Idempotent: no-op if
         # we weren't holding it (e.g. local app currently has the robot).
-        if self._robot_lock is not None:
-            self._robot_lock.release_remote()
+        if self._robot_app_lock is not None:
+            self._robot_app_lock.release_remote()
 
     async def _run_loop(self) -> None:
         """Maintain connections and relay messages."""
@@ -798,12 +798,12 @@ class CentralSignalingRelay:
             # lock will refuse our acquire. We also acquire proactively here
             # so a concurrent local-app start can't sneak in between the
             # check and the session handoff to local GStreamer.
-            if self._robot_lock is not None:
+            if self._robot_app_lock is not None:
                 # holder_name is generic because central already tracks the
                 # real consumer app name (via setPeerStatus meta) for its
                 # own rejection messages; the daemon-side lock just needs
                 # to know that *something* remote holds it.
-                if not self._robot_lock.try_acquire_remote("remote"):
+                if not self._robot_app_lock.try_acquire_remote("remote"):
                     logger.warning(
                         f"[Central Relay] Rejecting session {session_id}: robot lock is held locally"
                     )
@@ -890,11 +890,11 @@ class CentralSignalingRelay:
                 )
                 # If no sessions remain, release the robot lock.
                 if (
-                    self._robot_lock is not None
+                    self._robot_app_lock is not None
                     and not self._central_to_local_session
                     and not self._pending_central_sessions
                 ):
-                    self._robot_lock.release_remote()
+                    self._robot_app_lock.release_remote()
 
         elif msg_type == "peerStatusChanged":
             # Another peer changed status - ignore for producers
@@ -1023,11 +1023,11 @@ class CentralSignalingRelay:
                 )
                 # If no sessions remain, release the robot lock.
                 if (
-                    self._robot_lock is not None
+                    self._robot_app_lock is not None
                     and not self._central_to_local_session
                     and not self._pending_central_sessions
                 ):
-                    self._robot_lock.release_remote()
+                    self._robot_app_lock.release_remote()
 
 
 # Singleton instance for integration
@@ -1070,7 +1070,7 @@ async def start_central_relay(
     robot_name: str = "reachymini",
     central_uri: str = CENTRAL_SIGNALING_SERVER,
     on_state_change: Optional[Callable[[RelayState, Optional[str]], None]] = None,
-    robot_lock: Optional[RobotLock] = None,
+    robot_app_lock: Optional[RobotAppLock] = None,
 ) -> CentralSignalingRelay:
     """Start the central signaling relay.
 
@@ -1079,7 +1079,7 @@ async def start_central_relay(
         robot_name: Name to register as producer
         central_uri: Central server URI
         on_state_change: Callback when connection state changes
-        robot_lock: Shared lock coordinating local vs remote robot access.
+        robot_app_lock: Shared lock coordinating local vs remote robot access.
 
     Returns:
         The relay instance
@@ -1104,7 +1104,7 @@ async def start_central_relay(
         hf_token=hf_token,
         robot_name=robot_name,
         on_state_change=on_state_change,
-        robot_lock=robot_lock,
+        robot_app_lock=robot_app_lock,
     )
     await _relay_instance.start()
     return _relay_instance
