@@ -174,6 +174,7 @@ export class ReachyMini extends EventTarget {
         this._robotState = {                           // updated every ~500 ms while streaming
             head: { roll: 0, pitch: 0, yaw: 0 },
             antennas: { right: 0, left: 0 },
+            motorMode: null,                           // "enabled" | "disabled" | "gravity_compensation" | null
         };
 
         // Auth
@@ -629,22 +630,53 @@ export class ReachyMini extends EventTarget {
     }
 
     /**
+     * Set the motor control mode.
+     *
+     * @param {"enabled"|"disabled"|"gravity_compensation"} mode
+     *   - "enabled"              torque on, position-controlled.
+     *   - "disabled"             torque off; the robot is backdrivable
+     *                            and will not hold any pose.
+     *   - "gravity_compensation" torque on in current-control mode;
+     *                            motors actively cancel gravity so the
+     *                            robot is easy to move by hand.
+     * @returns {boolean} false if the data channel is not open.
+     */
+    setMotorMode(mode) {
+        return this._sendCommand({ type: "set_motor_mode", mode });
+    }
+
+    /**
      * Play the wake-up animation (full head/antennas trajectory on the
      * robot, ~2 s). Fire-and-forget — poll ``requestState()`` and watch
      * ``is_move_running`` if you need to know when it finishes.
      *
+     * This helper sends a ``set_motor_mode: "enabled"`` command *before*
+     * the ``wake_up`` command so the animation actually moves the motors.
+     * The robot's ``wake_up`` handler does not touch motor mode itself;
+     * if torque is off when the trajectory runs, the commanded positions
+     * are silently ignored and the robot stays limp. Both commands
+     * travel over the same data channel so ordering at the backend is
+     * preserved.
+     *
      * Semantics match the REST endpoint ``POST /api/move/play/wake_up``
-     * and the ``"wake_up"`` WebRTC data-channel command.
+     * plus the LAN convention of enabling motors before playing motion
+     * trajectories.
      *
      * @returns {boolean} false if the data channel is not open.
      */
     wakeUp() {
+        this._sendCommand({ type: "set_motor_mode", mode: "enabled" });
         return this._sendCommand({ type: "wake_up" });
     }
 
     /**
      * Play the goto-sleep animation. Fire-and-forget; see ``wakeUp`` for
      * progress-polling notes.
+     *
+     * Does NOT touch motor mode: the daemon's ``goto_sleep`` handler
+     * manages the transition out of torque on its own (motors must stay
+     * powered during the trajectory to move into the sleep pose, then
+     * are typically disabled by the daemon once the pose is reached).
      *
      * Semantics match ``POST /api/move/play/goto_sleep`` and the
      * ``"goto_sleep"`` WebRTC command.
@@ -1047,6 +1079,11 @@ export class ReachyMini extends EventTarget {
                     left:  radToDeg(s.antennas[1]),
                 };
             }
+            // Surface motor_mode so apps can reflect torque state in the UI
+            // without an extra getMotorMode roundtrip. Values match the
+            // MotorControlMode enum on the server:
+            // "enabled" / "disabled" / "gravity_compensation".
+            if (s.motor_mode) this._robotState.motorMode = s.motor_mode;
             this._emit('state', { ...this._robotState });
         }
         if (data.error) {
