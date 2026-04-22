@@ -1184,6 +1184,52 @@
         }
       }
     },
+    "/api/media/wobbling/enable": {
+      "post": {
+        "summary": "Enable Wobbling",
+        "description": "Enable audio-reactive head wobbling.\n\nWhen enabled, audio played on the daemon (sounds, incoming WebRTC\naudio) is analysed and converted into subtle head movements.",
+        "operationId": "enable_wobbling_api_media_wobbling_enable_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Enable Wobbling Api Media Wobbling Enable Post"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/media/wobbling/disable": {
+      "post": {
+        "summary": "Disable Wobbling",
+        "description": "Disable audio-reactive head wobbling and reset offsets.",
+        "operationId": "disable_wobbling_api_media_wobbling_disable_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Disable Wobbling Api Media Wobbling Disable Post"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/media/sounds/upload": {
       "post": {
         "summary": "Upload Sound",
