@@ -12,7 +12,9 @@ from importlib.metadata import PackageNotFoundError, version
 from threading import Event, Thread
 from typing import Any, Optional
 
+from reachy_mini.daemon.robot_app_lock import RobotAppLock
 from reachy_mini.daemon.utils import (
+    SimulationMode,
     find_serial_port,
     get_ip_address,
 )
@@ -41,7 +43,7 @@ class Daemon:
         wireless_version: bool = False,
         desktop_app_daemon: bool = False,
         no_media: bool = False,
-        use_sim: bool = False,
+        sim_mode: SimulationMode = SimulationMode.NONE,
     ) -> None:
         """Initialize the Reachy Mini daemon."""
         self.log_level = log_level
@@ -80,6 +82,14 @@ class Daemon:
         self.backend_run_thread: "Thread | None" = None
         self._thread_event_publish_status = Event()
 
+        # Single source of truth for which managed app (local Python app or
+        # remote WebRTC client) currently holds the robot's app slot. Shared
+        # with AppManager and the central signaling relay. SDK clients that
+        # talk to the daemon directly bypass this lock — it only coordinates
+        # the two managed app entry points.
+        # See reachy_mini/daemon/robot_app_lock.py.
+        self.robot_app_lock = RobotAppLock()
+
         self._media_server: Optional["GstMediaServer"] = (
             None  # GstMediaServer when media is enabled
         )
@@ -88,7 +98,7 @@ class Daemon:
             from reachy_mini.media.media_server import GstMediaServer
 
             try:
-                self._media_server = GstMediaServer(log_level, use_sim=use_sim)
+                self._media_server = GstMediaServer(log_level, sim_mode=sim_mode)
                 self._status.camera_specs_name = self._media_server.camera_specs.name
             except Exception as e:
                 self.logger.error(f"Failed to initialize media server: {e}")
@@ -169,6 +179,7 @@ class Daemon:
             await start_central_relay(
                 hf_token=hf_token,
                 robot_name=self.robot_name,
+                robot_app_lock=self.robot_app_lock,
             )
             self.logger.info("Central signaling relay started")
         except Exception as e:
@@ -340,6 +351,13 @@ class Daemon:
 
         Returns:
             DaemonState: The current state of the daemon after attempting to stop it.
+
+        Note:
+            The relay releases its remote hold on ``self.robot_app_lock`` via
+            ``relay.stop()``. A local-app hold is *not* force-released here
+            because the daemon is going down; the lock object dies with the
+            process. If restart-in-place is ever added, force-release the
+            ``LOCAL_APP`` state here before restart.
 
         """
         if self._status.state == DaemonState.STOPPED:

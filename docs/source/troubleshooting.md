@@ -26,6 +26,25 @@ To restart your robot, press OFF, wait 5 seconds, then press ON. This simple pro
 </details>
 
 
+<details><summary><strong>Bootstrap or update fails / Python environment issues (Lite & Simulation)</strong></summary>
+
+If Reachy Mini Control fails during the initial bootstrap, gets stuck while creating the virtual environment, or an update leaves the Python environment in a broken state, you can reset the virtual environments directly from the desktop app.
+
+Two reset options are available:
+
+- **Reset apps environment** — recreates only the `apps_venv` (the environment used by installed apps). Installed apps will need to be reinstalled. Use this first if only apps fail to start or install.
+- **Full Environment Reset** — deletes all Python files and re-downloads everything (interpreter + both venvs). Use this if the bootstrap itself fails or if "Reset apps environment" didn't help. This may take a few minutes.
+
+**Where to find these buttons:**
+
+- **Before connecting** (Finding Robot screen): click the ⚙️ icon in the top-right corner. A menu appears under "Local environment (USB & Sim)" with "Reset apps environment" and the full reset option.
+- **Once connected** (USB / Simulation mode): open the Settings overlay and go to the "Environment" section, which contains the "Reset Apps Environment" and "Full Environment Reset" buttons.
+
+After a full reset, the desktop app will re-run the bootstrap on next launch.
+
+</details>
+
+
 <details><summary><strong>Motors related issues</strong></summary>
 
 This concerns issues like:  
@@ -308,6 +327,35 @@ Helps prevent package conflicts during SDK installation.
 </details>
 
 <details>
+<summary><strong>reachy-mini.local doesn't resolve</strong></summary>
+
+A wireless unit advertises itself as `reachy-mini.local` via mDNS. This works on most home and office networks, but may fail on some enterprise, conference, or hotel networks.
+
+If `reachy-mini.local` doesn't resolve:
+- Check your router's DHCP client list for the robot's IP address.
+- Use the Reachy Mini Control app — it can discover the robot on the local network.
+- As a last resort, scan the subnet:
+```bash
+for i in $(seq 1 254); do
+  curl -sf --connect-timeout 0.3 "http://192.168.1.${i}:8000/api/daemon/status" > /dev/null 2>&1 && echo "Found: 192.168.1.${i}"
+done
+```
+Adjust the `192.168.1.` prefix to match your network.
+
+</details>
+
+<details>
+<summary><strong>Robot and computer can't communicate on conference/hotel WiFi</strong></summary>
+
+Many conference and hotel WiFi networks enable **client isolation**, which prevents devices on the same network from communicating with each other. Symptoms: both devices are connected to WiFi, both have IP addresses on the same subnet, but they cannot reach each other's HTTP endpoints.
+
+**Workaround:** Use a mobile phone hotspot. Connect both the robot and your computer to the hotspot. This provides a simple network where devices can see each other.
+
+Alternatively, use a USB-C-to-Ethernet adapter and an Ethernet cable to connect directly to the robot (Wireless version).
+
+</details>
+
+<details>
 <summary><strong>How to access to HuggingFace services from China?</strong></summary>
 
 You can use this mirror : https://hf-mirror.com/
@@ -518,11 +566,30 @@ with ReachyMini() as mini:
 <details>
 <summary><strong>How do I create a new App?</strong></summary>
 
-1.  Use the generator: `reachy-mini-make-app my_app_name`.
-2.  Edit `main.py` in the generated folder.
-3.  Run it: `python my_app_name/main.py`.
+Use the app assistant CLI:
 
-Check the [Hugging Face Tutorial](https://huggingface.co/blog/pollen-robotics/make-and-publish-your-reachy-mini-apps) for details.
+```bash
+reachy-mini-app-assistant create my_app_name /path/to/destination --publish
+```
+
+See the full guide: [Building & Publishing Apps](./SDK/apps.md) — covers app structure, testing, publishing, debugging, and deployment.
+
+</details>
+
+<details>
+<summary><strong>My app crashes silently or doesn't start</strong></summary>
+
+If your app depends on a package not installed in the environment, it will crash on import with no visible error. Test imports manually:
+
+```bash
+# On Wireless
+ssh pollen@reachy-mini.local "/venvs/apps_venv/bin/python3 -c 'from my_app.main import MyApp'"
+
+# On Lite / local
+python -c "from my_app.main import MyApp"
+```
+
+For more debugging tips (viewing logs, common pitfalls), see [Debugging Apps](./SDK/apps.md#debugging-apps).
 
 </details>
 

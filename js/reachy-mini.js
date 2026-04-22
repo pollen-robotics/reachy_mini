@@ -26,6 +26,7 @@
  *   robot.setHeadPose(0, 10, -5);    // roll, pitch, yaw in degrees
  *   robot.setAntennas(30, -30);       // right, left in degrees
  *   robot.playSound("wake_up.wav");   // filename on robot
+ *   const ver = await robot.getVersion(); // e.g. "1.5.1"
  *
  *   // 6. Receive live state (emitted every ~500 ms while streaming)
  *   robot.addEventListener("state", (e) => {
@@ -137,6 +138,13 @@ export function matrixToRpy(m) {
 
 // ─── Internal helpers ────────────────────────────────────────────────────────
 
+/** Clamp a volume to [0, 100] and round to integer — mirrors the server-side
+ *  Field(..., ge=0, le=100) validator so calling setVolume(150) doesn't 400. */
+function clampVolume(v) {
+    const n = Math.round(Number(v) || 0);
+    return Math.max(0, Math.min(100, n));
+}
+
 /** Check if the audio m= section of an SDP has a=sendrecv (bidirectional audio). */
 function sdpHasAudioSendRecv(sdp) {
     const lines = sdp.split('\r\n');
@@ -153,17 +161,20 @@ function sdpHasAudioSendRecv(sdp) {
 
 export class ReachyMini extends EventTarget {
 
-    /** @param {{ signalingUrl?: string, enableMicrophone?: boolean }} [options] */
+    /** @param {{ signalingUrl?: string, enableMicrophone?: boolean, clientId?: string, appName?: string }} [options] */
     constructor(options = {}) {
         super();
         this._signalingUrl = options.signalingUrl || 'https://cduss-reachy-mini-central.hf.space';
         this._enableMicrophone = options.enableMicrophone !== false;
+        this._clientId = options.clientId || null;
+        this._appName = options.appName || 'unknown';
 
         this._state = 'disconnected';                 // 'disconnected' | 'connected' | 'streaming'
         this._robots = [];                             // latest robot list from signaling
         this._robotState = {                           // updated every ~500 ms while streaming
             head: { roll: 0, pitch: 0, yaw: 0 },
             antennas: { right: 0, left: 0 },
+            motorMode: null,                           // "enabled" | "disabled" | "gravity_compensation" | null
         };
 
         // Auth
@@ -190,6 +201,15 @@ export class ReachyMini extends EventTarget {
         // Timers
         this._latencyMonitorId = null;
         this._stateRefreshInterval = null;
+
+        // getVersion() promise plumbing
+        this._versionResolve = null;
+
+        // Volume getter/setter promise plumbing (get_volume / set_volume).
+        // Speaker and microphone are tracked separately so two in-flight
+        // requests can't collide on the same slot.
+        this._volumeResolve = null;
+        this._micVolumeResolve = null;
 
         // startSession() promise plumbing
         this._sessionResolve = null;
@@ -264,7 +284,9 @@ export class ReachyMini extends EventTarget {
 
     /** Redirect the browser to the HuggingFace OAuth login page. */
     async login() {
-        window.location.href = await oauthLoginUrl();
+        const opts = {};
+        if (this._clientId) opts.clientId = this._clientId;
+        window.location.href = await oauthLoginUrl(opts);
     }
 
     /** Clear stored HF credentials and disconnect everything. */
@@ -293,9 +315,17 @@ export class ReachyMini extends EventTarget {
 
         let res;
         try {
+            // Token goes in the Authorization header, not the URL —
+            // keeps it out of DevTools Network tab, browser history,
+            // Referer, and any server/proxy access log. We use fetch
+            // + manual stream reader (below) rather than EventSource
+            // specifically to allow custom headers.
             res = await fetch(
-                `${this._signalingUrl}/events?token=${encodeURIComponent(this._token)}`,
-                { signal: this._sseAbortController.signal },
+                `${this._signalingUrl}/events`,
+                {
+                    signal: this._sseAbortController.signal,
+                    headers: { 'Authorization': `Bearer ${this._token}` },
+                },
             );
         } catch (e) {
             this._sseAbortController = null;
@@ -331,7 +361,7 @@ export class ReachyMini extends EventTarget {
                                     await this._sendToServer({
                                         type: 'setPeerStatus',
                                         roles: ['listener'],
-                                        meta: { name: 'Telepresence' },
+                                        meta: { name: this._appName },
                                     });
                                     this._emit('connected', { peerId: msg.peerId });
                                     resolve();
@@ -445,9 +475,50 @@ export class ReachyMini extends EventTarget {
             };
 
             this._sendToServer({ type: 'startSession', peerId: robotId }).then((r) => {
+                if (r?.type === 'sessionRejected') {
+                    this._failSessionRejected(r);
+                    return;
+                }
                 if (r?.sessionId) this._sessionId = r.sessionId;
             });
         });
+    }
+
+    /**
+     * Internal: handle a sessionRejected response from central.
+     * Releases resources allocated by startSession() (RTCPeerConnection,
+     * microphone stream) and rejects the pending startSession() promise
+     * with an Error carrying `.reason` and `.activeApp`.
+     *
+     * Called from both the POST-response path (primary) and the SSE
+     * handler (defensive, in case the server changes).
+     */
+    _failSessionRejected(msg) {
+        const err = new Error(
+            msg.reason === 'robot_busy'
+                ? `Robot is busy: "${msg.activeApp || 'another app'}" is already connected`
+                : `Session rejected: ${msg.reason || 'unknown reason'}`
+        );
+        err.reason = msg.reason;
+        err.activeApp = msg.activeApp;
+
+        // Release resources allocated optimistically in startSession()
+        // before we knew the server would refuse.
+        if (this._pc) { this._pc.close(); this._pc = null; }
+        if (this._micStream) { this._micStream.getTracks().forEach(t => t.stop()); this._micStream = null; }
+        this._iceConnected = false;
+        this._dcOpen = false;
+        this._micMuted = true;
+        this._micSupported = false;
+
+        this._emit('sessionRejected', { reason: msg.reason, activeApp: msg.activeApp });
+
+        if (this._sessionReject) {
+            const reject = this._sessionReject;
+            this._sessionResolve = null;
+            this._sessionReject = null;
+            reject(err);
+        }
     }
 
     /**
@@ -456,6 +527,9 @@ export class ReachyMini extends EventTarget {
      * @returns {Promise<void>}
      */
     async stopSession() {
+        if (this._versionResolve) { this._versionResolve(null); this._versionResolve = null; }
+        if (this._volumeResolve) { this._volumeResolve(null); this._volumeResolve = null; }
+        if (this._micVolumeResolve) { this._micVolumeResolve(null); this._micVolumeResolve = null; }
         if (this._sessionReject) {
             this._sessionReject(new Error('Session stopped'));
             this._sessionResolve = null;
@@ -494,6 +568,9 @@ export class ReachyMini extends EventTarget {
     disconnect() {
         if (this._sseAbortController) { this._sseAbortController.abort(); this._sseAbortController = null; }
 
+        if (this._versionResolve) { this._versionResolve(null); this._versionResolve = null; }
+        if (this._volumeResolve) { this._volumeResolve(null); this._volumeResolve = null; }
+        if (this._micVolumeResolve) { this._micVolumeResolve(null); this._micVolumeResolve = null; }
         if (this._sessionReject) {
             this._sessionReject(new Error('Disconnected'));
             this._sessionResolve = null;
@@ -550,6 +627,150 @@ export class ReachyMini extends EventTarget {
      */
     playSound(file) {
         return this._sendCommand({ type: "play_sound", file });
+    }
+
+    /**
+     * Set the motor control mode.
+     *
+     * @param {"enabled"|"disabled"|"gravity_compensation"} mode
+     *   - "enabled"              torque on, position-controlled.
+     *   - "disabled"             torque off; the robot is backdrivable
+     *                            and will not hold any pose.
+     *   - "gravity_compensation" torque on in current-control mode;
+     *                            motors actively cancel gravity so the
+     *                            robot is easy to move by hand.
+     * @returns {boolean} false if the data channel is not open.
+     */
+    setMotorMode(mode) {
+        return this._sendCommand({ type: "set_motor_mode", mode });
+    }
+
+    /**
+     * Play the wake-up animation (full head/antennas trajectory on the
+     * robot, ~2 s). Fire-and-forget — poll ``requestState()`` and watch
+     * ``is_move_running`` if you need to know when it finishes.
+     *
+     * This helper sends a ``set_motor_mode: "enabled"`` command *before*
+     * the ``wake_up`` command so the animation actually moves the motors.
+     * The robot's ``wake_up`` handler does not touch motor mode itself;
+     * if torque is off when the trajectory runs, the commanded positions
+     * are silently ignored and the robot stays limp. Both commands
+     * travel over the same data channel so ordering at the backend is
+     * preserved.
+     *
+     * Semantics match the REST endpoint ``POST /api/move/play/wake_up``
+     * plus the LAN convention of enabling motors before playing motion
+     * trajectories.
+     *
+     * @returns {boolean} false if the data channel is not open.
+     */
+    wakeUp() {
+        this._sendCommand({ type: "set_motor_mode", mode: "enabled" });
+        return this._sendCommand({ type: "wake_up" });
+    }
+
+    /**
+     * Play the goto-sleep animation. Fire-and-forget; see ``wakeUp`` for
+     * progress-polling notes.
+     *
+     * Does NOT touch motor mode: the daemon's ``goto_sleep`` handler
+     * manages the transition out of torque on its own (motors must stay
+     * powered during the trajectory to move into the sleep pose, then
+     * are typically disabled by the daemon once the pose is reached).
+     *
+     * Semantics match ``POST /api/move/play/goto_sleep`` and the
+     * ``"goto_sleep"`` WebRTC command.
+     *
+     * @returns {boolean} false if the data channel is not open.
+     */
+    gotoSleep() {
+        return this._sendCommand({ type: "goto_sleep" });
+    }
+
+    /**
+     * Request the daemon version.
+     * Resolves with the version string (or null if unavailable).
+     * @returns {Promise<string|null>}
+     */
+    getVersion() {
+        return new Promise((resolve, reject) => {
+            if (!this._dc || this._dc.readyState !== 'open') {
+                reject(new Error('Data channel not open'));
+                return;
+            }
+            if (this._versionResolve) {
+                this._versionResolve(null);
+            }
+            this._versionResolve = resolve;
+            this._sendCommand({ type: "get_version" });
+        });
+    }
+
+    /**
+     * Query the current speaker volume (0-100).
+     * Resolves with null if volume control is unavailable (platform unsupported
+     * or audio stack down).
+     * @returns {Promise<number|null>}
+     */
+    getVolume() {
+        return this._volumeRoundtrip({ type: "get_volume" }, "_volumeResolve");
+    }
+
+    /**
+     * Set the speaker volume (0-100). Persists for the next connection
+     * (same semantics as the REST /api/volume/set endpoint).
+     * Resolves with the applied volume, or null on failure.
+     * @param {number} volume 0-100
+     * @returns {Promise<number|null>}
+     */
+    setVolume(volume) {
+        return this._volumeRoundtrip(
+            { type: "set_volume", volume: clampVolume(volume) },
+            "_volumeResolve",
+        );
+    }
+
+    /**
+     * Query the current microphone input volume (0-100).
+     * @returns {Promise<number|null>}
+     */
+    getMicrophoneVolume() {
+        return this._volumeRoundtrip(
+            { type: "get_microphone_volume" },
+            "_micVolumeResolve",
+        );
+    }
+
+    /**
+     * Set the microphone input volume (0-100). Persists across sessions.
+     * @param {number} volume 0-100
+     * @returns {Promise<number|null>}
+     */
+    setMicrophoneVolume(volume) {
+        return this._volumeRoundtrip(
+            { type: "set_microphone_volume", volume: clampVolume(volume) },
+            "_micVolumeResolve",
+        );
+    }
+
+    /**
+     * Internal: send a volume command and await the single-slot response.
+     * The slot name selects which resolver (speaker vs mic) owns the
+     * pending request so the two can be in-flight concurrently without
+     * collision.
+     */
+    _volumeRoundtrip(command, slot) {
+        return new Promise((resolve, reject) => {
+            if (!this._dc || this._dc.readyState !== 'open') {
+                reject(new Error('Data channel not open'));
+                return;
+            }
+            // If a previous request on the same slot is still pending,
+            // resolve it to null so its caller doesn't hang forever.
+            if (this[slot]) this[slot](null);
+            this[slot] = resolve;
+            this._sendCommand(command);
+        });
     }
 
     /**
@@ -637,10 +858,20 @@ export class ReachyMini extends EventTarget {
     }
 
     async _sendToServer(message) {
+        // Mirrors connect()'s guard — a missing token between connect and
+        // send (e.g. logout mid-session) would otherwise produce
+        // "Authorization: Bearer undefined", which central correctly 401s
+        // but silently returns null to the caller, hiding the real cause.
+        if (!this._token) throw new Error('No token — authenticate() first');
         try {
-            const res = await fetch(`${this._signalingUrl}/send?token=${encodeURIComponent(this._token)}`, {
+            // Token in Authorization header, not URL — same reasoning as
+            // connect()'s SSE fetch: never put secrets in URLs.
+            const res = await fetch(`${this._signalingUrl}/send`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${this._token}`,
+                },
                 body: JSON.stringify(message),
             });
             return await res.json();
@@ -688,9 +919,89 @@ export class ReachyMini extends EventTarget {
             case 'sessionStarted':
                 this._sessionId = msg.sessionId;
                 break;
+            case 'sessionRejected':
+                // Defensive: the current central server returns sessionRejected
+                // as the direct POST response (handled at the startSession() call
+                // site). This branch is a safety net in case the server ever
+                // pushes the rejection over SSE instead.
+                this._failSessionRejected(msg);
+                break;
+            case 'endSession':
+                this._handleEndSession(msg);
+                break;
             case 'peer':
                 this._handlePeerMessage(msg);
                 break;
+        }
+    }
+
+    /**
+     * Internal: handle an endSession pushed from central.
+     *
+     * Two user-visible scenarios converge here:
+     *
+     * 1. Pending startSession — central accepted our request but the
+     *    robot-side relay then refused (e.g. a local Python app holds
+     *    the daemon's robot lock). Without this handler, the client's
+     *    startSession() promise would hang forever because ICE/datachannel
+     *    never come up.
+     * 2. Streaming was evicted — a local Python app started on the robot
+     *    while we were connected, so the relay tore down our session.
+     *
+     * The ``reason`` is forwarded verbatim from the relay through central:
+     * - "robot_busy_local_app": daemon lock held by a local Python app
+     *   (refused before any media negotiation).
+     * - "local_app_started": a local Python app started mid-session and
+     *   evicted us.
+     * - "robot_busy_local": relay's safety-net for stale/concurrent
+     *   sessions (should be rare).
+     */
+    _handleEndSession(msg) {
+        const reason = msg.reason;
+        const friendly = reason === 'robot_busy_local_app'
+            ? 'Robot is busy: a local Python app is running'
+            : reason === 'local_app_started'
+                ? 'Disconnected: a local Python app started on the robot'
+                : reason === 'robot_busy_local'
+                    ? 'Robot is busy: another session is already active'
+                    : null;
+
+        // Case 1: a startSession() is still pending — reject its promise
+        // with the same error shape as sessionRejected so app code can
+        // treat both paths identically.
+        if (this._sessionReject) {
+            const err = new Error(
+                friendly || `Session ended before it could start: ${reason || 'unknown reason'}`
+            );
+            err.reason = reason;
+            this._emit('sessionRejected', { reason, activeApp: null });
+            // Release resources allocated optimistically by startSession().
+            if (this._pc) { this._pc.close(); this._pc = null; }
+            if (this._micStream) { this._micStream.getTracks().forEach(t => t.stop()); this._micStream = null; }
+            this._iceConnected = false;
+            this._dcOpen = false;
+            this._micMuted = true;
+            this._micSupported = false;
+            const reject = this._sessionReject;
+            this._sessionResolve = null;
+            this._sessionReject = null;
+            reject(err);
+            return;
+        }
+
+        // Case 2: we were streaming and got kicked. Leave cleanup of _pc,
+        // _dc, mic and timers to stopSession() so the event listener path
+        // matches the user-initiated stop path exactly.
+        if (this._state === 'streaming') {
+            this._emit('sessionStopped', {
+                reason: reason || 'remote_end',
+                message: friendly,
+            });
+            // Fire-and-forget: we just react to what the server already
+            // decided. stopSession() sends its own endSession back but
+            // central has already dropped the session, so the echo is
+            // harmless.
+            this.stopSession().catch(() => {});
         }
     }
 
@@ -733,8 +1044,32 @@ export class ReachyMini extends EventTarget {
         }
     }
 
-    /** Parse robot state (rotation matrix + radians) into degrees and emit. */
+    /** Parse robot messages and dispatch. */
     _handleRobotMessage(data) {
+        if ('version' in data && this._versionResolve) {
+            this._versionResolve(data.version);
+            this._versionResolve = null;
+            return;
+        }
+        // Volume responses. Backend tags each response with `command` so we
+        // know which pending resolver (speaker vs mic) to fulfil. If a
+        // response arrives with no matching pending request (e.g. stale
+        // after reconnect), just ignore it — the data channel protocol
+        // has no multiplexing, so unmatched replies are expected.
+        if (data.command === 'get_volume' || data.command === 'set_volume') {
+            if (this._volumeResolve) {
+                this._volumeResolve(data.status === 'error' ? null : data.volume);
+                this._volumeResolve = null;
+            }
+            return;
+        }
+        if (data.command === 'get_microphone_volume' || data.command === 'set_microphone_volume') {
+            if (this._micVolumeResolve) {
+                this._micVolumeResolve(data.status === 'error' ? null : data.volume);
+                this._micVolumeResolve = null;
+            }
+            return;
+        }
         if (data.state) {
             const s = data.state;
             if (s.head_pose) this._robotState.head = matrixToRpy(s.head_pose);
@@ -744,6 +1079,11 @@ export class ReachyMini extends EventTarget {
                     left:  radToDeg(s.antennas[1]),
                 };
             }
+            // Surface motor_mode so apps can reflect torque state in the UI
+            // without an extra getMotorMode roundtrip. Values match the
+            // MotorControlMode enum on the server:
+            // "enabled" / "disabled" / "gravity_compensation".
+            if (s.motor_mode) this._robotState.motorMode = s.motor_mode;
             this._emit('state', { ...this._robotState });
         }
         if (data.error) {

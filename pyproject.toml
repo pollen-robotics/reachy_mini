@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "reachy_mini"
-version = "1.5.1"
+version = "1.7.0"
 authors = [{ name = "Pollen Robotics", email = "contact@pollen-robotics.com" }]
 description = ""
 readme = "README.md"
@@ -38,6 +38,9 @@ dependencies = [
     "zeroconf>=0.131,<1",
     "pycaw>=20240210; sys_platform == 'win32'",
     "pulsectl>=24.1.0; sys_platform == 'linux'",
+
+    "tornado>=6.5.5", # fix security issue of this subdependency
+    "requests>=2.33.0", # fix security issue of this subdependency
 
     "gstreamer-bundle==1.28.1; sys_platform != 'linux'",
     # OS-specific: use PyGObject for Linux

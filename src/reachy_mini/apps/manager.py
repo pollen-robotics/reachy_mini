@@ -48,6 +48,12 @@ class RunningApp:
     status: AppStatus
 
 
+def _get_catalog_app_key(app: AppInfo) -> str:
+    """Return the Hugging Face space id used to deduplicate catalog entries."""
+    value = app.extra.get("id")
+    return value if isinstance(value, str) else ""
+
+
 class AppManager:
     """Manager for Reachy Mini apps."""
 
@@ -99,6 +105,15 @@ class AppManager:
         if self.is_app_running():
             raise RuntimeError("An app is already running")
 
+        # Acquire the robot lock before spawning. If a remote WebRTC session
+        # currently holds the robot, this notifies the relay so the remote
+        # peer gets a clean endSession. Raises if another local app somehow
+        # already holds it (belt-and-braces; is_app_running() above covers
+        # the normal case, but the lock is the single source of truth
+        # shared with the relay thread).
+        if self.daemon is not None:
+            await self.daemon.robot_app_lock.acquire_local_evicting_remote(app_name)
+
         # Get module name and Python path for subprocess execution
         module_name = local_common_venv.get_app_module(
             app_name, self.wireless_version, self.desktop_app_daemon
@@ -107,16 +122,50 @@ class AppManager:
             app_name, self.wireless_version, self.desktop_app_daemon
         )
 
-        # Launch app as subprocess with unbuffered output
+        # Launch app as subprocess with unbuffered output.
+        #
+        # Scrub GStreamer env vars that the daemon's own `.venv/.../gstreamer_bundle.pth`
+        # set pointing at paths inside the daemon's .venv. The app runs in apps_venv and
+        # its own gstreamer_bundle.pth will set fresh values at Python startup. Leaving
+        # the parent's values in place is actively harmful:
+        #   * Single-value vars like GST_REGISTRY_1_0 and GST_PLUGIN_SCANNER_1_0 get
+        #     prepended to (via gstreamer_libs.setup_python_environment) producing a
+        #     malformed `apps_venv_path:.venv_path` string that GStreamer can't parse.
+        #   * The app ends up using .venv's plugin scanner binary and registry cache,
+        #     which can mask issues specific to apps_venv's own gstreamer install.
+        # See pollen-robotics/reachy-mini-desktop-app#185.
+        app_env = os.environ.copy()
+        for key in (
+            "GST_PLUGIN_PATH_1_0",
+            "GST_PLUGIN_SYSTEM_PATH_1_0",
+            "GST_REGISTRY_1_0",
+            "GST_PLUGIN_SCANNER_1_0",
+            "GI_TYPELIB_PATH",
+            "PYGI_DLL_DIRS",
+            "XDG_DATA_DIRS",
+            "XDG_CONFIG_DIRS",
+        ):
+            app_env.pop(key, None)
+
         self.logger.getChild("runner").info(f"Starting app {app_name}")
-        process = await asyncio.create_subprocess_exec(
-            str(python_path),
-            "-u",  # Unbuffered stdout/stderr for real-time logging
-            "-m",
-            module_name,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
+        try:
+            process = await asyncio.create_subprocess_exec(
+                str(python_path),
+                "-u",  # Unbuffered stdout/stderr for real-time logging
+                "-m",
+                module_name,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                env=app_env,
+            )
+        except Exception:
+            # Release the lock if we failed before the subprocess was created —
+            # monitor_process is the normal release path but it depends on
+            # the subprocess existing.
+            if self.daemon is not None:
+                self.daemon.robot_app_lock.release_local(app_name)
+            raise
+
 
         # Create status and monitor task
         status = AppStatus(
@@ -159,27 +208,37 @@ class AppManager:
                         # Many libraries write INFO/WARNING to stderr
                         self.logger.getChild("runner").warning(decoded)
 
-            # Run both streams concurrently
-            await asyncio.gather(log_stdout(), log_stderr())
+            try:
+                # Run both streams concurrently
+                await asyncio.gather(log_stdout(), log_stderr())
 
-            # Wait for process to complete
-            returncode = await process.wait()
+                # Wait for process to complete
+                returncode = await process.wait()
 
-            # Update status based on exit code
-            if self.current_app is not None:
-                if returncode == 0:
-                    self.current_app.status.state = AppState.DONE
-                    self.logger.getChild("runner").info(f"App {app_name} finished")
-                else:
-                    self.current_app.status.state = AppState.ERROR
-                    error_msg = "\n".join(stderr_lines[-10:])  # Last 10 lines
-                    self.current_app.status.error = (
-                        f"Process exited with code {returncode}\n{error_msg}"
-                    )
-                    self.logger.getChild("runner").error(
-                        f"App {app_name} exited with code {returncode}. "
-                        f"Last stderr output:\n{error_msg}"
-                    )
+                # Update status based on exit code
+                if self.current_app is not None:
+                    if returncode == 0:
+                        self.current_app.status.state = AppState.DONE
+                        self.logger.getChild("runner").info(
+                            f"App {app_name} finished"
+                        )
+                    else:
+                        self.current_app.status.state = AppState.ERROR
+                        error_msg = "\n".join(stderr_lines[-10:])  # Last 10 lines
+                        self.current_app.status.error = (
+                            f"Process exited with code {returncode}\n{error_msg}"
+                        )
+                        self.logger.getChild("runner").error(
+                            f"App {app_name} exited with code {returncode}. "
+                            f"Last stderr output:\n{error_msg}"
+                        )
+            finally:
+                # Always release the robot lock when the subprocess exits, no
+                # matter how: clean exit, crash, SIGKILL, OOM, or cancellation
+                # of this monitor task. Idempotent — stop_current_app's own
+                # release is fine too.
+                if self.daemon is not None:
+                    self.daemon.robot_app_lock.release_local(app_name)
 
         monitor_task = asyncio.create_task(monitor_process())
 
@@ -284,11 +343,32 @@ class AppManager:
 
     # Apps management interface
     async def list_all_available_apps(self) -> list[AppInfo]:
-        """List available apps (parallel async)."""
-        results = await asyncio.gather(
-            *[self.list_available_apps(kind) for kind in SourceKind]
+        """List available apps while preserving curated-only entries."""
+        (
+            hf_space_apps,
+            dashboard_selection_apps,
+            local_apps,
+            installed_apps,
+        ) = await asyncio.gather(
+            self.list_available_apps(SourceKind.HF_SPACE),
+            self.list_available_apps(SourceKind.DASHBOARD_SELECTION),
+            self.list_available_apps(SourceKind.LOCAL),
+            self.list_available_apps(SourceKind.INSTALLED),
         )
-        return sum(results, [])
+
+        catalog_apps: list[AppInfo] = []
+        seen_catalog_apps: set[str] = set()
+
+        for app in [*dashboard_selection_apps, *hf_space_apps]:
+            app_key = _get_catalog_app_key(app)
+            if not app_key:
+                continue
+            if app_key in seen_catalog_apps:
+                continue
+            seen_catalog_apps.add(app_key)
+            catalog_apps.append(app)
+
+        return [*catalog_apps, *local_apps, *installed_apps]
 
     async def list_available_apps(self, source: SourceKind) -> list[AppInfo]:
         """List available apps for given source kind."""

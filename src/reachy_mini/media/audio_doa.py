@@ -54,7 +54,6 @@ class AudioDoA:
 
         """
         if not self._respeaker:
-            logger.warning("ReSpeaker device not found.")
             return None
 
         result = self._respeaker.read("DOA_VALUE_RADIANS")

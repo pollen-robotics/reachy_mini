@@ -4,9 +4,19 @@ import os
 import struct
 import subprocess
 import time
+from enum import Enum
 
 import psutil
 import serial.tools.list_ports
+
+
+class SimulationMode(Enum):
+    """Simulation mode for the Reachy Mini daemon."""
+
+    NONE = "none"
+    MUJOCO = "mujoco"
+    MOCKUP = "mockup"
+
 
 # Path to the unix socket created by WebRTC daemon for local camera access (Linux/macOS)
 CAMERA_SOCKET_PATH = "/tmp/reachymini_camera_socket"
