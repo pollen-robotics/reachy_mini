@@ -12,18 +12,13 @@ from __future__ import annotations
 import math
 from collections import deque
 from itertools import islice
-from typing import Any
 
 import numpy as np
 from numpy.typing import NDArray
 
 from reachy_mini.motion.speech_tapper import (
-    FRAME,
-    HOP,
+    FRAME_MS,
     HOP_MS,
-    SR,
-    _resample_linear,
-    _to_float32_mono,
 )
 
 # ---------------------------------------------------------------------------
@@ -69,11 +64,13 @@ def _loudness_gain(db: float) -> float:
     return float(t ** LOUDNESS_GAMMA)
 
 
-def _bandpass_energy(frame: NDArray[np.float32], lo_hz: float, hi_hz: float) -> float:
+def _bandpass_energy(
+    frame: NDArray[np.float32], lo_hz: float, hi_hz: float, sample_rate: int
+) -> float:
     """RMS energy of a frequency band via FFT."""
     n = len(frame)
     fft = np.fft.rfft(frame * np.hanning(n))
-    freqs = np.fft.rfftfreq(n, 1.0 / SR)
+    freqs = np.fft.rfftfreq(n, 1.0 / sample_rate)
     mask = (freqs >= lo_hz) & (freqs < hi_hz)
     band_power = np.sum(np.abs(fft[mask]) ** 2)
     rms = np.sqrt(band_power / n + 1e-12)
@@ -83,10 +80,13 @@ def _bandpass_energy(frame: NDArray[np.float32], lo_hz: float, hi_hz: float) -> 
 class SwayRollRT:
     """V2: Multi-band wobbler — different frequency bands drive different DOFs."""
 
-    def __init__(self, rng_seed: int = 7) -> None:
+    def __init__(self, rng_seed: int = 7, sample_rate: int = 16_000) -> None:
         """Initialize state with random oscillator phases."""
         self._seed = int(rng_seed)
-        self.samples: deque[float] = deque(maxlen=10 * SR)
+        self.sample_rate = int(sample_rate)
+        self.frame = int(self.sample_rate * FRAME_MS / 1000)
+        self.hop = int(self.sample_rate * HOP_MS / 1000)
+        self.samples: deque[float] = deque(maxlen=10 * self.sample_rate)
         self.carry: NDArray[np.float32] = np.zeros(0, dtype=np.float32)
 
         self.env_low = 0.0
@@ -116,43 +116,37 @@ class SwayRollRT:
             return current + ATTACK_COEFF * (target - current)
         return current + RELEASE_COEFF * (target - current)
 
-    def feed(self, pcm: NDArray[Any], sr: int | None) -> list[dict[str, float]]:
-        """Stream in a PCM chunk and return one sway dict per HOP_MS."""
-        sr_in = SR if sr is None else int(sr)
-        x = _to_float32_mono(pcm)
-        if x.size == 0:
+    def feed(self, pcm: NDArray[np.float32]) -> list[dict[str, float]]:
+        """Stream in a float32 mono PCM chunk; returns one sway dict per HOP_MS."""
+        if pcm.size == 0:
             return []
-        if sr_in != SR:
-            x = _resample_linear(x, sr_in, SR)
-            if x.size == 0:
-                return []
 
         if self.carry.size:
-            self.carry = np.concatenate([self.carry, x])
+            self.carry = np.concatenate([self.carry, pcm])
         else:
-            self.carry = x
+            self.carry = pcm
 
         out: list[dict[str, float]] = []
 
-        while self.carry.size >= HOP:
-            hop = self.carry[:HOP]
-            self.carry = self.carry[HOP:]
+        while self.carry.size >= self.hop:
+            hop = self.carry[:self.hop]
+            self.carry = self.carry[self.hop:]
 
             self.samples.extend(hop.tolist())
-            if len(self.samples) < FRAME:
+            if len(self.samples) < self.frame:
                 self.t += HOP_MS / 1000.0
                 continue
 
             frame = np.fromiter(
-                islice(self.samples, len(self.samples) - FRAME, len(self.samples)),
+                islice(self.samples, len(self.samples) - self.frame, len(self.samples)),
                 dtype=np.float32,
-                count=FRAME,
+                count=self.frame,
             )
 
             # Per-band energy
-            db_low = _bandpass_energy(frame, 50, BAND_LOW_HIGH)
-            db_mid = _bandpass_energy(frame, BAND_LOW_HIGH, BAND_MID_HIGH)
-            db_high = _bandpass_energy(frame, BAND_MID_HIGH, SR / 2)
+            db_low = _bandpass_energy(frame, 50, BAND_LOW_HIGH, self.sample_rate)
+            db_mid = _bandpass_energy(frame, BAND_LOW_HIGH, BAND_MID_HIGH, self.sample_rate)
+            db_high = _bandpass_energy(frame, BAND_MID_HIGH, self.sample_rate / 2, self.sample_rate)
 
             gain_low = _loudness_gain(db_low)
             gain_mid = _loudness_gain(db_mid)

@@ -51,15 +51,27 @@ _ZERO_OFFSETS: SpeechOffsets = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
 class HeadWobbler:
     """PTS-driven scheduler that turns audio into timed head offsets."""
 
-    def __init__(self, set_speech_offsets: Callable[[SpeechOffsets], None]) -> None:
-        """Initialize the wobbler with the offset-application callback."""
+    def __init__(
+        self,
+        set_speech_offsets: Callable[[SpeechOffsets], None],
+        sample_rate: int,
+    ) -> None:
+        """Initialize the wobbler with the offset callback and audio rate.
+
+        Args:
+            set_speech_offsets: Called with a 6-tuple of head offsets per hop.
+            sample_rate: Sample rate of the PCM that will be fed via
+                :meth:`feed` — must match the wobbler appsink's caps.
+
+        """
         self._apply_offsets = set_speech_offsets
 
         self._hop_ms, sway_cls = _load_sway_class()
         version = os.environ.get("WOBBLER_VERSION", "v0")
         logger.info("Using wobbler version: %s (%s)", version, sway_cls.__module__)
         self._sway_cls = sway_cls
-        self.sway = sway_cls()
+        self._sample_rate = int(sample_rate)
+        self.sway = sway_cls(sample_rate=self._sample_rate)
 
         self._lock = threading.Lock()
         self._sway_lock = threading.Lock()
@@ -86,20 +98,18 @@ class HeadWobbler:
         with self._lock:
             self._generation += 1
         with self._sway_lock:
-            self.sway = self._sway_cls()
+            self.sway = self._sway_cls(sample_rate=self._sample_rate)
         self._apply_offsets(_ZERO_OFFSETS)
 
     def feed(
         self,
         pcm: NDArray[Any],
-        sample_rate: int,
         play_at_monotonic_ns: int,
     ) -> None:
         """Schedule per-hop offsets for *pcm* against its playback time.
 
         Args:
-            pcm: Audio samples (any layout/dtype accepted by SwayRollRT).
-            sample_rate: Sample rate of *pcm*.
+            pcm: Float32 mono samples at this wobbler's ``sample_rate``.
             play_at_monotonic_ns: ``time.monotonic_ns()``-comparable
                 instant at which the *first* sample of *pcm* will be
                 heard from the speaker. Subsequent hops are scheduled at
@@ -107,7 +117,7 @@ class HeadWobbler:
 
         """
         with self._sway_lock:
-            results = self.sway.feed(pcm, sample_rate)
+            results = self.sway.feed(pcm)
         if not results:
             return
 

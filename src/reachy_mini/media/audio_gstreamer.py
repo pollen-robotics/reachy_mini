@@ -249,8 +249,11 @@ class GStreamerAudio(AudioBase):
     def _make_wobbler_appsink(self) -> Gst.Element:
         """Create an appsink that feeds audio to the head wobbler."""
         appsink = Gst.ElementFactory.make("appsink")
+        # Force mono so the speech tapper receives a 1-D float32 array.
+        # The per-branch audioconvert in _build_audiosink_tee_bin /
+        # _init_pipeline_playback handles the downmix.
         caps = Gst.Caps.from_string(
-            f"audio/x-raw,format=F32LE,channels={self.CHANNELS},"
+            f"audio/x-raw,format=F32LE,channels=1,"
             f"rate={self.SAMPLE_RATE},layout=interleaved"
         )
         appsink.set_property("caps", caps)
@@ -275,7 +278,7 @@ class GStreamerAudio(AudioBase):
         data = buf.extract_dup(0, buf.get_size())
         pcm = np.frombuffer(data, dtype=np.float32)
         play_at_ns = self._compute_play_at_monotonic_ns(appsink, buf.pts)
-        self._head_wobbler.feed(pcm, self.SAMPLE_RATE, play_at_ns)
+        self._head_wobbler.feed(pcm, play_at_ns)
         return Gst.FlowReturn.OK
 
     def _compute_play_at_monotonic_ns(
@@ -321,33 +324,48 @@ class GStreamerAudio(AudioBase):
     def _build_audiosink_tee_bin(self) -> Gst.Bin:
         """Build a Gst.Bin with a tee splitting audio to speaker and wobbler.
 
-        The bin exposes a single ghost sink pad for use as a playbin audio-sink.
+        Per-branch audioconvert+audioresample isolate each leaf's caps
+        from the other (the wobbler appsink demands F32LE/2/16000; the
+        audiosink wants whatever the device prefers — e.g. on the
+        wireless XMOS PCM, anything but its native rate triggers an
+        IEC958 fallback that fails to open).
 
-        ::
+        The bin exposes a single ghost sink pad for use as a playbin audio-sink::
 
-            ghost_sink → audioconvert → tee ─┬→ queue → audiosink
-                                              └→ queue → appsink (wobbler)
+            ghost_sink → tee ─┬→ queue → audioconvert → audioresample → audiosink
+                               └→ queue → audioconvert → audioresample → appsink
 
         """
         audio_bin = Gst.Bin.new("audio_tee_bin")
 
-        audioconvert = Gst.ElementFactory.make("audioconvert")
         tee = Gst.ElementFactory.make("tee")
         queue_speaker = Gst.ElementFactory.make("queue")
+        ac_speaker = Gst.ElementFactory.make("audioconvert")
+        ar_speaker = Gst.ElementFactory.make("audioresample")
         audiosink = self._build_audiosink_element()
         queue_wobbler = Gst.ElementFactory.make("queue")
+        ac_wobbler = Gst.ElementFactory.make("audioconvert")
+        ar_wobbler = Gst.ElementFactory.make("audioresample")
         appsink_wobbler = self._make_wobbler_appsink()
 
-        for el in (audioconvert, tee, queue_speaker, audiosink, queue_wobbler, appsink_wobbler):
+        for el in (
+            tee,
+            queue_speaker, ac_speaker, ar_speaker, audiosink,
+            queue_wobbler, ac_wobbler, ar_wobbler, appsink_wobbler,
+        ):
             audio_bin.add(el)
 
-        audioconvert.link(tee)
         tee.link(queue_speaker)
-        queue_speaker.link(audiosink)
-        tee.link(queue_wobbler)
-        queue_wobbler.link(appsink_wobbler)
+        queue_speaker.link(ac_speaker)
+        ac_speaker.link(ar_speaker)
+        ar_speaker.link(audiosink)
 
-        ghost_pad = Gst.GhostPad.new("sink", audioconvert.get_static_pad("sink"))
+        tee.link(queue_wobbler)
+        queue_wobbler.link(ac_wobbler)
+        ac_wobbler.link(ar_wobbler)
+        ar_wobbler.link(appsink_wobbler)
+
+        ghost_pad = Gst.GhostPad.new("sink", tee.get_static_pad("sink"))
         audio_bin.add_pad(ghost_pad)
 
         return audio_bin
@@ -619,7 +637,7 @@ class GStreamerAudio(AudioBase):
         """
         if self._head_wobbler is not None:
             self._head_wobbler.stop()
-        self._head_wobbler = HeadWobbler(callback)
+        self._head_wobbler = HeadWobbler(callback, sample_rate=self.SAMPLE_RATE)
         self.logger.info("Head wobbler enabled")
 
     def disable_wobbling(self) -> None:

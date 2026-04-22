@@ -11,7 +11,6 @@ from __future__ import annotations
 import math
 from collections import deque
 from itertools import islice
-from typing import Any
 
 import numpy as np
 from numpy.typing import NDArray
@@ -19,7 +18,6 @@ from numpy.typing import NDArray
 # ---------------------------------------------------------------------------
 # Tunables
 # ---------------------------------------------------------------------------
-SR = 16_000
 FRAME_MS = 20
 HOP_MS = 50
 
@@ -51,10 +49,8 @@ SWAY_ATTACK_MS = 50
 SWAY_RELEASE_MS = 250
 
 # ---------------------------------------------------------------------------
-# Derived constants
+# Derived constants (rate-independent — FRAME/HOP are per-instance)
 # ---------------------------------------------------------------------------
-FRAME = int(SR * FRAME_MS / 1000)
-HOP = int(SR * HOP_MS / 1000)
 ATTACK_FR = max(1, int(VAD_ATTACK_MS / HOP_MS))
 RELEASE_FR = max(1, int(VAD_RELEASE_MS / HOP_MS))
 SWAY_ATTACK_FR = max(1, int(SWAY_ATTACK_MS / HOP_MS))
@@ -78,57 +74,24 @@ def _loudness_gain(db: float, offset: float = SENS_DB_OFFSET) -> float:
     return t**LOUDNESS_GAMMA if LOUDNESS_GAMMA != 1.0 else t
 
 
-def _to_float32_mono(x: NDArray[Any]) -> NDArray[np.float32]:
-    """Convert arbitrary PCM array to float32 mono in [-1,1].
-
-    Accepts shapes: (N,), (1,N), (N,1), (C,N), (N,C).
-    """
-    a = np.asarray(x)
-    if a.ndim == 0:
-        return np.zeros(0, dtype=np.float32)
-
-    if a.ndim == 2:
-        if a.shape[0] <= 8 and a.shape[0] <= a.shape[1]:
-            a = np.mean(a, axis=0)
-        else:
-            a = np.mean(a, axis=1)
-    elif a.ndim > 2:
-        a = np.mean(a.reshape(a.shape[0], -1), axis=0)
-
-    if np.issubdtype(a.dtype, np.floating):
-        return a.astype(np.float32, copy=False)
-    info = np.iinfo(a.dtype)
-    scale = float(max(-info.min, info.max))
-    return a.astype(np.float32) / (scale if scale != 0.0 else 1.0)
-
-
-def _resample_linear(x: NDArray[np.float32], sr_in: int, sr_out: int) -> NDArray[np.float32]:
-    """Lightweight linear resampler for short buffers."""
-    if sr_in == sr_out or x.size == 0:
-        return x
-    n_out = int(round(x.size * sr_out / sr_in))
-    if n_out <= 1:
-        return np.zeros(0, dtype=np.float32)
-    t_in = np.linspace(0.0, 1.0, num=x.size, dtype=np.float32, endpoint=True)
-    t_out = np.linspace(0.0, 1.0, num=n_out, dtype=np.float32, endpoint=True)
-    return np.interp(t_out, t_in, x).astype(np.float32, copy=False)
-
-
 class SwayRollRT:
     """Feed audio chunks and get per-hop sway outputs.
 
     Usage::
 
-        rt = SwayRollRT()
-        results = rt.feed(pcm_int16_or_float, sr)
+        rt = SwayRollRT(sample_rate=16_000)
+        results = rt.feed(pcm_float32_mono)
         # results is a list of dicts, one per HOP_MS
 
     """
 
-    def __init__(self, rng_seed: int = 7) -> None:
+    def __init__(self, rng_seed: int = 7, sample_rate: int = 16_000) -> None:
         """Initialize state with random oscillator phases."""
         self._seed = int(rng_seed)
-        self.samples: deque[float] = deque(maxlen=10 * SR)
+        self.sample_rate = int(sample_rate)
+        self.frame = int(self.sample_rate * FRAME_MS / 1000)
+        self.hop = int(self.sample_rate * HOP_MS / 1000)
+        self.samples: deque[float] = deque(maxlen=10 * self.sample_rate)
         self.carry: NDArray[np.float32] = np.zeros(0, dtype=np.float32)
 
         self.vad_on = False
@@ -160,43 +123,39 @@ class SwayRollRT:
         self.sway_down = 0
         self.t = 0.0
 
-    def feed(self, pcm: NDArray[Any], sr: int | None) -> list[dict[str, float]]:
-        """Stream in a PCM chunk and return sway dicts (one per hop).
+    def feed(self, pcm: NDArray[np.float32]) -> list[dict[str, float]]:
+        """Stream in a float32 mono PCM chunk; returns sway dicts (one per hop).
+
+        *pcm* must already match this instance's ``sample_rate`` — the
+        upstream GStreamer audioresample handles rate conversion.
 
         Args:
-            pcm: Audio samples as ``(N,)``, ``(C,N)`` or ``(N,C)``; int or float.
-            sr: Sample rate of *pcm* (``None`` assumes internal SR).
+            pcm: Float32 mono samples ``(N,)`` in ``[-1, 1]``.
 
         """
-        sr_in = SR if sr is None else int(sr)
-        x = _to_float32_mono(pcm)
-        if x.size == 0:
+        if pcm.size == 0:
             return []
-        if sr_in != SR:
-            x = _resample_linear(x, sr_in, SR)
-            if x.size == 0:
-                return []
 
         if self.carry.size:
-            self.carry = np.concatenate([self.carry, x])
+            self.carry = np.concatenate([self.carry, pcm])
         else:
-            self.carry = x
+            self.carry = pcm
 
         out: list[dict[str, float]] = []
 
-        while self.carry.size >= HOP:
-            hop = self.carry[:HOP]
-            self.carry = self.carry[HOP:]
+        while self.carry.size >= self.hop:
+            hop = self.carry[:self.hop]
+            self.carry = self.carry[self.hop:]
 
             self.samples.extend(hop.tolist())
-            if len(self.samples) < FRAME:
+            if len(self.samples) < self.frame:
                 self.t += HOP_MS / 1000.0
                 continue
 
             frame = np.fromiter(
-                islice(self.samples, len(self.samples) - FRAME, len(self.samples)),
+                islice(self.samples, len(self.samples) - self.frame, len(self.samples)),
                 dtype=np.float32,
-                count=FRAME,
+                count=self.frame,
             )
             db = _rms_dbfs(frame)
 
