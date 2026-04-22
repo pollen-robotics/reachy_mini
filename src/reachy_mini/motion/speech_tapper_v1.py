@@ -18,14 +18,13 @@ import numpy as np
 from numpy.typing import NDArray
 
 from reachy_mini.motion.speech_tapper import (
-    SR,
-    FRAME_MS,
-    HOP_MS,
     FRAME,
     HOP,
+    HOP_MS,
+    SR,
+    _resample_linear,
     _rms_dbfs,
     _to_float32_mono,
-    _resample_linear,
 )
 
 # ---------------------------------------------------------------------------
@@ -62,13 +61,14 @@ def _loudness_gain(db: float) -> float:
     """Map dB to [0,1] with gamma compression over the wide range."""
     t = (db - DB_LOW) / (DB_HIGH - DB_LOW)
     t = max(0.0, min(1.0, t))
-    return t ** LOUDNESS_GAMMA
+    return float(t ** LOUDNESS_GAMMA)
 
 
 class SwayRollRT:
     """V1: Direct envelope wobbler — no VAD, energy = amplitude."""
 
     def __init__(self, rng_seed: int = 7) -> None:
+        """Initialize state with random oscillator phases."""
         self._seed = int(rng_seed)
         self.samples: deque[float] = deque(maxlen=10 * SR)
         self.carry: NDArray[np.float32] = np.zeros(0, dtype=np.float32)
@@ -85,12 +85,14 @@ class SwayRollRT:
         self.t = 0.0
 
     def reset(self) -> None:
+        """Reset DSP state (envelope/buffers/time); keep initial phases."""
         self.samples.clear()
         self.carry = np.zeros(0, dtype=np.float32)
         self.envelope = 0.0
         self.t = 0.0
 
     def feed(self, pcm: NDArray[Any], sr: int | None) -> list[dict[str, float]]:
+        """Stream in a PCM chunk and return one sway dict per HOP_MS."""
         sr_in = SR if sr is None else int(sr)
         x = _to_float32_mono(pcm)
         if x.size == 0:

@@ -16,24 +16,30 @@ import os
 import threading
 import time
 from collections.abc import Callable
+from types import ModuleType
 from typing import Any
 
 from gi.repository import GLib
 from numpy.typing import NDArray
 
+from reachy_mini.motion import (
+    speech_tapper,
+    speech_tapper_v1,
+    speech_tapper_v2,
+    speech_tapper_v3,
+)
+
+_TAPPER_VERSIONS: dict[str, ModuleType] = {
+    "v1": speech_tapper_v1,
+    "v2": speech_tapper_v2,
+    "v3": speech_tapper_v3,
+}
+
 
 def _load_sway_class() -> tuple[int, type]:
     """Return (HOP_MS, SwayRollRT class) based on WOBBLER_VERSION env var."""
-    version = os.environ.get("WOBBLER_VERSION", "")
-    if version == "v1":
-        from reachy_mini.motion.speech_tapper_v1 import HOP_MS as hop, SwayRollRT as cls
-    elif version == "v2":
-        from reachy_mini.motion.speech_tapper_v2 import HOP_MS as hop, SwayRollRT as cls
-    elif version == "v3":
-        from reachy_mini.motion.speech_tapper_v3 import HOP_MS as hop, SwayRollRT as cls
-    else:
-        from reachy_mini.motion.speech_tapper import HOP_MS as hop, SwayRollRT as cls
-    return hop, cls
+    mod = _TAPPER_VERSIONS.get(os.environ.get("WOBBLER_VERSION", ""), speech_tapper)
+    return mod.HOP_MS, mod.SwayRollRT
 
 
 logger = logging.getLogger(__name__)
