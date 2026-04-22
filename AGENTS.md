@@ -209,7 +209,11 @@ State: `disconnected` → `connect()` → `connected` → `startSession(robotId)
 
 Commands: `setHeadPose(r,p,y°)`, `setAntennas(right°, left°)`, `playSound(file)`, `setAudioMuted(bool)`, `setMicMuted(bool)`, `sendRaw(obj)`, `getVersion()`.
 
+Torque / wake: `setMotorMode("enabled"|"disabled"|"gravity_compensation")`, `wakeUp()`, `gotoSleep()`, `isAwake()`, `ensureAwake()`. `robot.robotState.motorMode` reflects the live state.
+
 Lifecycle: `authenticate()` / `login()` / `connect()` / `startSession()` / `stopSession()` / `disconnect()` / `logout()`. Video: `attachVideo(<video>)` returns a detach fn.
+
+**Always call `await robot.ensureAwake()` right after `startSession()`** — otherwise if the robot is in the sleep pose (torque off, head on the base) every `setHeadPose` / `setAntennas` is silently ignored and the app looks broken. `ensureAwake()` is a no-op when the robot is already awake (including gravity-compensation mode), so it's safe to call unconditionally at startup.
 
 Events: `connected`, `disconnected`, `robotsChanged`, `streaming`, `sessionStopped`, `sessionRejected` (robot busy — inspect `e.detail.activeApp`), `state` (every ~500 ms), `videoTrack`, `micSupported`, `error`.
 
@@ -238,6 +242,7 @@ Always start from this when scaffolding anything non-trivial. Integration patter
 |---|---|
 | `robot.login()` fails / redirects to `about:blank` | Running via `file://` or localhost — OAuth only works on the live Space domain. |
 | Head doesn't move | `setHeadPose` called before `startSession()` resolved. Check the return value. |
+| Head doesn't move, session *is* streaming | Robot is asleep (torque off). Call `await robot.ensureAwake()` after `startSession()`. |
 | Audio stays silent after `setAudioMuted(false)` | Browser requires unmute inside a user-gesture handler. |
 | `sessionRejected` | Robot is locked by another app. Surface `e.detail.activeApp` in the UI. |
 | Stream laggy | See buffer-lag overlay in `webrtc_example/index.html`; > 500 ms jitter = network issue. |
