@@ -26,6 +26,25 @@ To restart your robot, press OFF, wait 5 seconds, then press ON. This simple pro
 </details>
 
 
+<details><summary><strong>Bootstrap or update fails / Python environment issues (Lite & Simulation)</strong></summary>
+
+If Reachy Mini Control fails during the initial bootstrap, gets stuck while creating the virtual environment, or an update leaves the Python environment in a broken state, you can reset the virtual environments directly from the desktop app.
+
+Two reset options are available:
+
+- **Reset apps environment** — recreates only the `apps_venv` (the environment used by installed apps). Installed apps will need to be reinstalled. Use this first if only apps fail to start or install.
+- **Full Environment Reset** — deletes all Python files and re-downloads everything (interpreter + both venvs). Use this if the bootstrap itself fails or if "Reset apps environment" didn't help. This may take a few minutes.
+
+**Where to find these buttons:**
+
+- **Before connecting** (Finding Robot screen): click the ⚙️ icon in the top-right corner. A menu appears under "Local environment (USB & Sim)" with "Reset apps environment" and the full reset option.
+- **Once connected** (USB / Simulation mode): open the Settings overlay and go to the "Environment" section, which contains the "Reset Apps Environment" and "Full Environment Reset" buttons.
+
+After a full reset, the desktop app will re-run the bootstrap on next launch.
+
+</details>
+
+
 <details><summary><strong>Motors related issues</strong></summary>
 
 This concerns issues like:  
