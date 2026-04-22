@@ -36,6 +36,7 @@ from reachy_mini.daemon.utils import (
     SimulationMode,
     is_local_camera_available,
 )
+from reachy_mini.media.audio_control_utils import init_respeaker_usb
 from reachy_mini.media.audio_utils import has_reachymini_asoundrc
 from reachy_mini.media.camera_constants import (
     CameraSpecs,
@@ -753,13 +754,19 @@ class GstMediaServer:
         """Configure the audio capture pipeline.
 
         Detects the audio device based on the platform and feeds it into
-        webrtcsink for WebRTC streaming.
+        webrtcsink for WebRTC streaming.  When no audio source is available
+        (e.g. missing Reachy Mini Audio USB card on the wireless CM4), the
+        audio branch is skipped entirely so that the failure does not tear
+        down the shared webrtcsink pipeline — and with it, the video branch.
         """
         self._logger.debug("Configuring audio")
 
         audiosrc = self._build_audio_source()
         if audiosrc is None:
-            self._logger.warning("No audio source available. Audio not configured.")
+            self._logger.warning(
+                "No audio source available. "
+                "Streaming video only; audio will be unavailable."
+            )
             return
 
         # Prevent PulseAudio/PipeWire audio sources from becoming the
@@ -796,7 +803,11 @@ class GstMediaServer:
         1. .asoundrc — on the wireless CM4 the ``.asoundrc`` file defines
            ALSA aliases (``reachymini_audio_src``).  When present we use
            ``alsasrc`` directly, matching the behaviour of the original
-           daemon and avoiding PipeWire clock issues.
+           daemon and avoiding PipeWire clock issues.  The Reachy Mini
+           Audio USB card is checked first: if it is absent, the ALSA
+           aliases in ``.asoundrc`` resolve to a missing ``hw:`` card and
+           ``alsasrc`` would fail to open at pipeline start, tearing
+           down the shared webrtcsink pipeline (video included).
         2. GstDeviceMonitor — finds the Reachy Mini Audio card by name and
            returns a platform-native element (pulsesrc, wasapi2src,
            osxaudiosrc).  Used on Lite and desktop platforms.
@@ -808,6 +819,15 @@ class GstMediaServer:
         """
         # Wireless CM4: .asoundrc defines reachymini_audio_src alias
         if has_reachymini_asoundrc():
+            respeaker = init_respeaker_usb()
+            if respeaker is None:
+                self._logger.warning(
+                    "Reachy Mini Audio USB device not found — "
+                    "skipping audio capture to keep the video pipeline alive."
+                )
+                return None
+            respeaker.close()
+
             audiosrc = Gst.ElementFactory.make("alsasrc")
             audiosrc.set_property("device", "reachymini_audio_src")
             self._logger.info("Using ALSA device reachymini_audio_src for capture.")
