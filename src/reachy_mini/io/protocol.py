@@ -239,6 +239,35 @@ class AppendRecordCmd(BaseModel):
     record: dict[str, Any]
 
 
+# Volume / microphone commands. Volume is a global robot setting (not
+# per-session), so a remote client's change persists after they
+# disconnect — same semantics as the local REST /api/volume endpoints.
+class SetVolumeCmd(BaseModel):
+    """Set the output (speaker) volume, 0-100."""
+
+    type: Literal["set_volume"] = "set_volume"
+    volume: int = Field(..., ge=0, le=100)
+
+
+class GetVolumeCmd(BaseModel):
+    """Query the current output (speaker) volume."""
+
+    type: Literal["get_volume"] = "get_volume"
+
+
+class SetMicrophoneVolumeCmd(BaseModel):
+    """Set the input (microphone) volume, 0-100."""
+
+    type: Literal["set_microphone_volume"] = "set_microphone_volume"
+    volume: int = Field(..., ge=0, le=100)
+
+
+class GetMicrophoneVolumeCmd(BaseModel):
+    """Query the current input (microphone) volume."""
+
+    type: Literal["get_microphone_volume"] = "get_microphone_volume"
+
+
 AnyCommand = Annotated[
     SetTargetCmd
     | SetHeadJointsCmd
@@ -258,7 +287,11 @@ AnyCommand = Annotated[
     | GetVersionCmd
     | StartRecordingCmd
     | StopRecordingCmd
-    | AppendRecordCmd,
+    | AppendRecordCmd
+    | SetVolumeCmd
+    | GetVolumeCmd
+    | SetMicrophoneVolumeCmd
+    | GetMicrophoneVolumeCmd,
     Field(discriminator="type"),
 ]
 

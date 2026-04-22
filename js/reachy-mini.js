@@ -138,6 +138,13 @@ export function matrixToRpy(m) {
 
 // ─── Internal helpers ────────────────────────────────────────────────────────
 
+/** Clamp a volume to [0, 100] and round to integer — mirrors the server-side
+ *  Field(..., ge=0, le=100) validator so calling setVolume(150) doesn't 400. */
+function clampVolume(v) {
+    const n = Math.round(Number(v) || 0);
+    return Math.max(0, Math.min(100, n));
+}
+
 /** Check if the audio m= section of an SDP has a=sendrecv (bidirectional audio). */
 function sdpHasAudioSendRecv(sdp) {
     const lines = sdp.split('\r\n');
@@ -196,6 +203,12 @@ export class ReachyMini extends EventTarget {
 
         // getVersion() promise plumbing
         this._versionResolve = null;
+
+        // Volume getter/setter promise plumbing (get_volume / set_volume).
+        // Speaker and microphone are tracked separately so two in-flight
+        // requests can't collide on the same slot.
+        this._volumeResolve = null;
+        this._micVolumeResolve = null;
 
         // startSession() promise plumbing
         this._sessionResolve = null;
@@ -514,6 +527,8 @@ export class ReachyMini extends EventTarget {
      */
     async stopSession() {
         if (this._versionResolve) { this._versionResolve(null); this._versionResolve = null; }
+        if (this._volumeResolve) { this._volumeResolve(null); this._volumeResolve = null; }
+        if (this._micVolumeResolve) { this._micVolumeResolve(null); this._micVolumeResolve = null; }
         if (this._sessionReject) {
             this._sessionReject(new Error('Session stopped'));
             this._sessionResolve = null;
@@ -553,6 +568,8 @@ export class ReachyMini extends EventTarget {
         if (this._sseAbortController) { this._sseAbortController.abort(); this._sseAbortController = null; }
 
         if (this._versionResolve) { this._versionResolve(null); this._versionResolve = null; }
+        if (this._volumeResolve) { this._volumeResolve(null); this._volumeResolve = null; }
+        if (this._micVolumeResolve) { this._micVolumeResolve(null); this._micVolumeResolve = null; }
         if (this._sessionReject) {
             this._sessionReject(new Error('Disconnected'));
             this._sessionResolve = null;
@@ -627,6 +644,73 @@ export class ReachyMini extends EventTarget {
             }
             this._versionResolve = resolve;
             this._sendCommand({ type: "get_version" });
+        });
+    }
+
+    /**
+     * Query the current speaker volume (0-100).
+     * Resolves with null if volume control is unavailable (platform unsupported
+     * or audio stack down).
+     * @returns {Promise<number|null>}
+     */
+    getVolume() {
+        return this._volumeRoundtrip({ type: "get_volume" }, "_volumeResolve");
+    }
+
+    /**
+     * Set the speaker volume (0-100). Persists for the next connection
+     * (same semantics as the REST /api/volume/set endpoint).
+     * Resolves with the applied volume, or null on failure.
+     * @param {number} volume 0-100
+     * @returns {Promise<number|null>}
+     */
+    setVolume(volume) {
+        return this._volumeRoundtrip(
+            { type: "set_volume", volume: clampVolume(volume) },
+            "_volumeResolve",
+        );
+    }
+
+    /**
+     * Query the current microphone input volume (0-100).
+     * @returns {Promise<number|null>}
+     */
+    getMicrophoneVolume() {
+        return this._volumeRoundtrip(
+            { type: "get_microphone_volume" },
+            "_micVolumeResolve",
+        );
+    }
+
+    /**
+     * Set the microphone input volume (0-100). Persists across sessions.
+     * @param {number} volume 0-100
+     * @returns {Promise<number|null>}
+     */
+    setMicrophoneVolume(volume) {
+        return this._volumeRoundtrip(
+            { type: "set_microphone_volume", volume: clampVolume(volume) },
+            "_micVolumeResolve",
+        );
+    }
+
+    /**
+     * Internal: send a volume command and await the single-slot response.
+     * The slot name selects which resolver (speaker vs mic) owns the
+     * pending request so the two can be in-flight concurrently without
+     * collision.
+     */
+    _volumeRoundtrip(command, slot) {
+        return new Promise((resolve, reject) => {
+            if (!this._dc || this._dc.readyState !== 'open') {
+                reject(new Error('Data channel not open'));
+                return;
+            }
+            // If a previous request on the same slot is still pending,
+            // resolve it to null so its caller doesn't hang forever.
+            if (this[slot]) this[slot](null);
+            this[slot] = resolve;
+            this._sendCommand(command);
         });
     }
 
@@ -906,6 +990,25 @@ export class ReachyMini extends EventTarget {
         if ('version' in data && this._versionResolve) {
             this._versionResolve(data.version);
             this._versionResolve = null;
+            return;
+        }
+        // Volume responses. Backend tags each response with `command` so we
+        // know which pending resolver (speaker vs mic) to fulfil. If a
+        // response arrives with no matching pending request (e.g. stale
+        // after reconnect), just ignore it — the data channel protocol
+        // has no multiplexing, so unmatched replies are expected.
+        if (data.command === 'get_volume' || data.command === 'set_volume') {
+            if (this._volumeResolve) {
+                this._volumeResolve(data.status === 'error' ? null : data.volume);
+                this._volumeResolve = null;
+            }
+            return;
+        }
+        if (data.command === 'get_microphone_volume' || data.command === 'set_microphone_volume') {
+            if (this._micVolumeResolve) {
+                this._micVolumeResolve(data.status === 'error' ? null : data.volume);
+                this._micVolumeResolve = null;
+            }
             return;
         }
         if (data.state) {
