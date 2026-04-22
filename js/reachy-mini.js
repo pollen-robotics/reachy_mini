@@ -715,6 +715,11 @@ export class ReachyMini extends EventTarget {
     }
 
     async _sendToServer(message) {
+        // Mirrors connect()'s guard — a missing token between connect and
+        // send (e.g. logout mid-session) would otherwise produce
+        // "Authorization: Bearer undefined", which central correctly 401s
+        // but silently returns null to the caller, hiding the real cause.
+        if (!this._token) throw new Error('No token — authenticate() first');
         try {
             // Token in Authorization header, not URL — same reasoning as
             // connect()'s SSE fetch: never put secrets in URLs.
