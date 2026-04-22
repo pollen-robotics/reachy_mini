@@ -15,6 +15,24 @@ from reachy_mini.motion.speech_tapper import (
     _to_float32_mono,
 )
 
+
+def _patch_glib_timeout(monkeypatch):
+    """Replace ``GLib.timeout_add`` with a recorder; return the schedule list.
+
+    Each entry is ``(delay_ms, fn, args)``. Tests can call
+    ``fn(*args)`` to simulate the GLib main loop firing the timeout.
+    """
+    schedule: list[tuple[int, object, tuple]] = []
+
+    def fake_timeout_add(delay_ms, fn, *args):
+        schedule.append((delay_ms, fn, args))
+        return len(schedule)  # source id
+
+    monkeypatch.setattr(
+        "reachy_mini.motion.head_wobbler.GLib.timeout_add", fake_timeout_add
+    )
+    return schedule
+
 # ---------------------------------------------------------------------------
 # speech_tapper: helper functions
 # ---------------------------------------------------------------------------
@@ -216,42 +234,44 @@ def test_sway_incremental_feeding():  # noqa: D103
 
 
 # ---------------------------------------------------------------------------
-# head_wobbler: HeadWobbler
+# head_wobbler: HeadWobbler (PTS-driven scheduler, no thread)
 # ---------------------------------------------------------------------------
 
 
-def test_wobbler_callback_receives_offsets():  # noqa: D103
+def test_wobbler_schedules_offsets_for_a_tone(monkeypatch):  # noqa: D103
     from reachy_mini.motion.head_wobbler import HeadWobbler
 
-    received: list[tuple[float, ...]] = []
-    wobbler = HeadWobbler(lambda o: received.append(o))
-    wobbler.start()
-
-    t = np.linspace(0, 2, SR * 2, dtype=np.float32)
-    tone = (np.sin(2 * np.pi * 440 * t) * 0.5).astype(np.float32)
-    chunk_size = 1600
-    for i in range(0, len(tone), chunk_size):
-        wobbler.feed_pcm(tone[i : i + chunk_size], SR)
-
-    time.sleep(3)
-    wobbler.stop()
-
-    assert len(received) > 0
-
-
-def test_wobbler_offsets_are_6_tuples():  # noqa: D103
-    from reachy_mini.motion.head_wobbler import HeadWobbler
-
+    schedule = _patch_glib_timeout(monkeypatch)
     received: list[tuple[float, ...]] = []
     wobbler = HeadWobbler(lambda o: received.append(o))
     wobbler.start()
 
     t = np.linspace(0, 1, SR, dtype=np.float32)
     tone = (np.sin(2 * np.pi * 440 * t) * 0.5).astype(np.float32)
-    wobbler.feed_pcm(tone, SR)
+    play_at = time.monotonic_ns() + 5_000_000_000  # 5 s ahead → all deadlines positive
+    wobbler.feed(tone, SR, play_at)
 
-    time.sleep(2)
-    wobbler.stop()
+    assert len(schedule) > 0
+    # Fire each scheduled timeout.
+    for _delay, fn, args in schedule:
+        fn(*args)
+    assert len(received) == len(schedule)
+
+
+def test_wobbler_offsets_are_6_tuples(monkeypatch):  # noqa: D103
+    from reachy_mini.motion.head_wobbler import HeadWobbler
+
+    schedule = _patch_glib_timeout(monkeypatch)
+    received: list[tuple[float, ...]] = []
+    wobbler = HeadWobbler(lambda o: received.append(o))
+    wobbler.start()
+
+    t = np.linspace(0, 1, SR, dtype=np.float32)
+    tone = (np.sin(2 * np.pi * 440 * t) * 0.5).astype(np.float32)
+    play_at = time.monotonic_ns() + 5_000_000_000
+    wobbler.feed(tone, SR, play_at)
+    for _delay, fn, args in schedule:
+        fn(*args)
 
     assert len(received) > 0
     for offsets in received:
@@ -259,39 +279,91 @@ def test_wobbler_offsets_are_6_tuples():  # noqa: D103
         assert all(isinstance(v, float) for v in offsets)
 
 
-def test_wobbler_stop_resets_to_zero():  # noqa: D103
+def test_wobbler_stop_zeros_offsets(monkeypatch):  # noqa: D103
     from reachy_mini.motion.head_wobbler import HeadWobbler
 
+    _patch_glib_timeout(monkeypatch)
     received: list[tuple[float, ...]] = []
     wobbler = HeadWobbler(lambda o: received.append(o))
-    wobbler.start()
     wobbler.stop()
 
     assert received[-1] == (0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
 
 
-def test_wobbler_reset_drains_queue():  # noqa: D103
+def test_wobbler_reset_zeros_offsets(monkeypatch):  # noqa: D103
     from reachy_mini.motion.head_wobbler import HeadWobbler
 
+    _patch_glib_timeout(monkeypatch)
     received: list[tuple[float, ...]] = []
     wobbler = HeadWobbler(lambda o: received.append(o))
-    wobbler.start()
-
-    tone = (np.sin(np.linspace(0, 1, SR, dtype=np.float32) * 2 * np.pi * 440) * 0.5).astype(np.float32)
-    wobbler.feed_pcm(tone, SR)
-
     wobbler.reset()
 
-    assert wobbler.audio_queue.empty()
     assert received[-1] == (0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
 
-    wobbler.stop()
 
-
-def test_wobbler_start_is_idempotent():  # noqa: D103
+def test_wobbler_stop_cancels_pending(monkeypatch):  # noqa: D103
+    """After stop(), pending GLib timeouts no-op when fired."""
     from reachy_mini.motion.head_wobbler import HeadWobbler
 
+    schedule = _patch_glib_timeout(monkeypatch)
+    received: list[tuple[float, ...]] = []
+    wobbler = HeadWobbler(lambda o: received.append(o))
+    wobbler.start()
+
+    t = np.linspace(0, 1, SR, dtype=np.float32)
+    tone = (np.sin(2 * np.pi * 440 * t) * 0.5).astype(np.float32)
+    play_at = time.monotonic_ns() + 5_000_000_000
+    wobbler.feed(tone, SR, play_at)
+    pending = list(schedule)
+    assert pending  # sanity: we did schedule something
+
+    wobbler.stop()
+    received.clear()  # discard the zero-offsets call from stop()
+
+    for _delay, fn, args in pending:
+        fn(*args)
+    assert received == []  # all canceled
+
+
+def test_wobbler_start_is_idempotent(monkeypatch):  # noqa: D103
+    from reachy_mini.motion.head_wobbler import HeadWobbler
+
+    _patch_glib_timeout(monkeypatch)
     wobbler = HeadWobbler(lambda o: None)
     wobbler.start()
-    wobbler.start()  # should not crash or create duplicate threads
-    wobbler.stop()
+    wobbler.start()  # should not crash
+
+
+def test_wobbler_schedules_hops_at_hop_intervals(monkeypatch):  # noqa: D103
+    """Consecutive scheduled delays are spaced by HOP_MS."""
+    from reachy_mini.motion.head_wobbler import HeadWobbler
+
+    schedule = _patch_glib_timeout(monkeypatch)
+    wobbler = HeadWobbler(lambda o: None)
+    wobbler.start()
+
+    t = np.linspace(0, 1, SR, dtype=np.float32)
+    tone = (np.sin(2 * np.pi * 440 * t) * 0.5).astype(np.float32)
+    play_at = time.monotonic_ns() + 5_000_000_000
+    wobbler.feed(tone, SR, play_at)
+
+    delays = [d for d, _, _ in schedule]
+    assert len(delays) >= 2
+    diffs = [delays[i + 1] - delays[i] for i in range(len(delays) - 1)]
+    assert all(abs(d - HOP_MS) <= 1 for d in diffs)
+
+
+def test_wobbler_drops_past_deadlines(monkeypatch):  # noqa: D103
+    """Hops whose deadline has already passed are not scheduled."""
+    from reachy_mini.motion.head_wobbler import HeadWobbler
+
+    schedule = _patch_glib_timeout(monkeypatch)
+    wobbler = HeadWobbler(lambda o: None)
+    wobbler.start()
+
+    t = np.linspace(0, 1, SR, dtype=np.float32)
+    tone = (np.sin(2 * np.pi * 440 * t) * 0.5).astype(np.float32)
+    play_at = time.monotonic_ns() - 10_000_000_000  # 10 s in the past
+    wobbler.feed(tone, SR, play_at)
+
+    assert schedule == []

@@ -25,6 +25,7 @@ Example usage::
 import logging
 import os
 import platform
+import time
 from collections.abc import Callable
 from threading import Thread
 from typing import Any, Dict, Optional
@@ -54,6 +55,19 @@ gi.require_version("Gst", "1.0")
 gi.require_version("GstApp", "1.0")
 
 from gi.repository import GLib, Gst  # noqa: E402
+
+
+def _find_pipeline(elem: Gst.Element) -> Optional[Gst.Pipeline]:
+    """Walk up an element's parents until a Gst.Pipeline is found."""
+    parent = elem.get_parent()
+    while parent is not None and not isinstance(parent, Gst.Pipeline):
+        parent = parent.get_parent()
+    return parent
+
+
+# Fallback when the audiosink latency query fails (e.g. before PLAYING).
+# Matches the local audio backend's PLAYBACK_SINK_BUFFER_TIME_US.
+_DEFAULT_SINK_LATENCY_NS = 50_000_000  # 50 ms
 
 
 class GstMediaServer:
@@ -1023,15 +1037,57 @@ class GstMediaServer:
         return appsink
 
     def _on_wobbler_sample(self, appsink: Gst.Element) -> Gst.FlowReturn:
-        """GStreamer callback: forward audio buffer to the head wobbler."""
+        """GStreamer callback: forward audio buffer to the head wobbler.
+
+        Reads the buffer's PTS, converts it to a ``time.monotonic_ns()``
+        instant accounting for audiosink latency, and asks the wobbler to
+        schedule per-hop offsets to fire when the audio actually plays.
+        """
         sample = appsink.pull_sample()
         if sample is None or self._head_wobbler is None:
             return Gst.FlowReturn.OK
         buf = sample.get_buffer()
         data = buf.extract_dup(0, buf.get_size())
         pcm = np.frombuffer(data, dtype=np.float32)
-        self._head_wobbler.feed_pcm(pcm, 16000)
+        play_at_ns = self._compute_play_at_monotonic_ns(appsink, buf.pts)
+        self._head_wobbler.feed(pcm, 16000, play_at_ns)
         return Gst.FlowReturn.OK
+
+    def _compute_play_at_monotonic_ns(
+        self, appsink: Gst.Element, buf_pts: int
+    ) -> int:
+        """Translate a buffer PTS into a ``time.monotonic_ns()`` instant.
+
+        The returned value is when the buffer's first sample is expected
+        to be heard at the speaker (PTS + base time + audiosink latency),
+        rebased onto the monotonic clock so the wobbler can schedule
+        ``GLib.timeout_add`` against it.
+        """
+        sink_latency_ns = self._get_sink_latency_ns(appsink)
+        if buf_pts == Gst.CLOCK_TIME_NONE:
+            return time.monotonic_ns() + sink_latency_ns
+
+        pipeline = _find_pipeline(appsink)
+        if pipeline is None:
+            return time.monotonic_ns() + sink_latency_ns
+        clock = pipeline.get_clock()
+        if clock is None:
+            return time.monotonic_ns() + sink_latency_ns
+
+        base_time_ns = pipeline.get_base_time()
+        play_at_clock_ns = buf_pts + base_time_ns + sink_latency_ns
+        return time.monotonic_ns() + int(play_at_clock_ns - clock.get_time())
+
+    def _get_sink_latency_ns(self, elem: Gst.Element) -> int:
+        """Query the pipeline latency for *elem*, fall back to default."""
+        pipeline = _find_pipeline(elem)
+        if pipeline is not None:
+            query = Gst.Query.new_latency()
+            if pipeline.query(query):
+                _live, min_lat, _max_lat = query.parse_latency()
+                if min_lat != Gst.CLOCK_TIME_NONE:
+                    return int(min_lat)
+        return _DEFAULT_SINK_LATENCY_NS
 
     def _build_audiosink_tee_bin(self) -> Gst.Bin:
         """Build a Gst.Bin splitting audio to speaker and wobbler appsink.
