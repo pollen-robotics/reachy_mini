@@ -65,7 +65,7 @@
  * ────────────────────
  *   .state            "disconnected" | "connected" | "streaming"
  *   .robots           Array<{ id: string, meta: { name: string } }>
- *   .robotState       { head: { roll, pitch, yaw }, antennas: { right, left } }  (degrees)
+ *   .robotState       { head: { roll, pitch, yaw }, antennas: { right, left }, motorMode } (degrees; motorMode: "enabled"|"disabled"|"gravity_compensation")
  *   .username         string | null     — HF username after authenticate()
  *   .isAuthenticated  boolean           — true if a valid HF token is available
  *   .micSupported     boolean           — true if robot offers bidirectional audio
@@ -685,6 +685,62 @@ export class ReachyMini extends EventTarget {
      */
     gotoSleep() {
         return this._sendCommand({ type: "goto_sleep" });
+    }
+
+    /**
+     * Whether the robot's motors are currently powered (the "awake" state).
+     *
+     * Reads ``motorMode`` from the last state event. Both ``"enabled"``
+     * and ``"gravity_compensation"`` count as awake: in gravity-comp the
+     * motors are actively holding the arm against gravity, so the robot
+     * is *not* limp and playing wake_up on top would fight the user.
+     * Only ``"disabled"`` (true sleep) is considered not-awake.
+     *
+     * Returns ``false`` before the first state event arrives (typical
+     * right after ``startSession()``). Use ``ensureAwake()`` if you want
+     * to wait for the first state before deciding.
+     *
+     * @returns {boolean}
+     */
+    isAwake() {
+        const mode = this._robotState?.motorMode;
+        return mode === "enabled" || mode === "gravity_compensation";
+    }
+
+    /**
+     * Wake the robot up if it is currently asleep, otherwise no-op.
+     *
+     * Intended as the first line of any app after ``startSession()``
+     * resolves — robots are often left in the sleep pose (torque off,
+     * head resting on the base) and commanded positions are silently
+     * ignored in that state.
+     *
+     * If no state event has arrived yet, waits up to ``timeoutMs`` for
+     * one before deciding. If still no state, falls back to sending
+     * ``wakeUp()`` (safe: the daemon's wake_up handler is idempotent
+     * at the motion level — it moves to the awake pose from wherever
+     * the head currently is).
+     *
+     * @param {number} [timeoutMs=1000] how long to wait for the first
+     *   state event before falling through to wakeUp().
+     * @returns {Promise<boolean>} true if the robot is awake afterwards.
+     */
+    async ensureAwake(timeoutMs = 1000) {
+        if (this._robotState?.motorMode === undefined) {
+            await new Promise((resolve) => {
+                const done = () => {
+                    this.removeEventListener('state', done);
+                    clearTimeout(timer);
+                    resolve();
+                };
+                const timer = setTimeout(done, timeoutMs);
+                this.addEventListener('state', done);
+                this.requestState();
+            });
+        }
+        if (this.isAwake()) return true;
+        this.wakeUp();
+        return true;
     }
 
     /**
