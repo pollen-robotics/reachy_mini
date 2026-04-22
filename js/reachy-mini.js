@@ -301,9 +301,17 @@ export class ReachyMini extends EventTarget {
 
         let res;
         try {
+            // Token goes in the Authorization header, not the URL —
+            // keeps it out of DevTools Network tab, browser history,
+            // Referer, and any server/proxy access log. We use fetch
+            // + manual stream reader (below) rather than EventSource
+            // specifically to allow custom headers.
             res = await fetch(
-                `${this._signalingUrl}/events?token=${encodeURIComponent(this._token)}`,
-                { signal: this._sseAbortController.signal },
+                `${this._signalingUrl}/events`,
+                {
+                    signal: this._sseAbortController.signal,
+                    headers: { 'Authorization': `Bearer ${this._token}` },
+                },
             );
         } catch (e) {
             this._sseAbortController = null;
@@ -708,9 +716,14 @@ export class ReachyMini extends EventTarget {
 
     async _sendToServer(message) {
         try {
-            const res = await fetch(`${this._signalingUrl}/send?token=${encodeURIComponent(this._token)}`, {
+            // Token in Authorization header, not URL — same reasoning as
+            // connect()'s SSE fetch: never put secrets in URLs.
+            const res = await fetch(`${this._signalingUrl}/send`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${this._token}`,
+                },
                 body: JSON.stringify(message),
             });
             return await res.json();

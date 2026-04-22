@@ -123,8 +123,15 @@ async def get_central_robot_status() -> dict[str, Any]:
 
     try:
         async with aiohttp.ClientSession(timeout=CENTRAL_ROBOT_STATUS_TIMEOUT) as session:
+            # Token goes in the Authorization header, not the URL —
+            # otherwise it leaks into central's access logs and any
+            # intermediate proxy's logs. The desktop frontend already
+            # never sees the raw token (we read it server-side via
+            # hf_auth.get_hf_token); header use keeps it off the
+            # wire-visible URL as well.
             async with session.get(
-                CENTRAL_ROBOT_STATUS_URL, params={"token": token}
+                CENTRAL_ROBOT_STATUS_URL,
+                headers={"Authorization": f"Bearer {token}"},
             ) as response:
                 if response.status == 200:
                     data = await response.json()

@@ -611,7 +611,9 @@ class CentralSignalingRelay:
         if not self._http_session:
             return
 
-        events_url = f"{self.central_uri}/events?token={self.hf_token}"
+        # Token goes in the Authorization header, never in the URL —
+        # keeps it out of HF Space access logs and intermediate proxies.
+        events_url = f"{self.central_uri}/events"
         headers = {"Authorization": f"Bearer {self.hf_token}"}
 
         try:
@@ -719,7 +721,8 @@ class CentralSignalingRelay:
         if not self._http_session or not self.hf_token:
             return
 
-        send_url = f"{self.central_uri}/send?token={self.hf_token}"
+        # Token goes in the Authorization header only, not the URL.
+        send_url = f"{self.central_uri}/send"
         headers = {"Authorization": f"Bearer {self.hf_token}"}
         try:
             async with self._http_session.post(
