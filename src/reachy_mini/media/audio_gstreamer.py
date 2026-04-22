@@ -229,6 +229,12 @@ class GStreamerAudio(AudioBase):
 
         if audiosink is None:
             raise RuntimeError("Failed to create audio sink element")
+
+        if audiosink.find_property("buffer-time") is not None:
+            audiosink.set_property("buffer-time", self.PLAYBACK_SINK_BUFFER_TIME_US)
+        if audiosink.find_property("latency-time") is not None:
+            audiosink.set_property("latency-time", self.PLAYBACK_SINK_LATENCY_TIME_US)
+
         return audiosink
 
     def _make_wobbler_appsink(self) -> Gst.Element:
@@ -294,108 +300,6 @@ class GStreamerAudio(AudioBase):
     def _init_pipeline_playback(self, pipeline: Gst.Pipeline) -> None:
         self._appsrc = Gst.ElementFactory.make("appsrc")
         self._appsrc.set_property("do-timestamp", False)
-        self._appsrc.set_property("format", Gst.Format.TIME)
-        self._appsrc.set_property("is-live", True)
-        caps = Gst.Caps.from_string(
-            f"audio/x-raw,format=F32LE,channels={self.CHANNELS},rate={self.SAMPLE_RATE},layout=interleaved"
-        )
-        self._appsrc.set_property("caps", caps)
-
-        audioconvert = Gst.ElementFactory.make("audioconvert")
-        audioresample = Gst.ElementFactory.make("audioresample")
-
-        audiosink: Optional[Gst.Element] = None
-
-        if has_reachymini_asoundrc():
-            # Wireless CM4: use the preconfigured .asoundrc ALSA devices
-            # which route through the XMOS AEC loopback properly.
-            audiosink = Gst.ElementFactory.make("alsasink")
-            audiosink.set_property("device", "reachymini_audio_sink")
-            self.logger.info("Using .asoundrc audio sink: reachymini_audio_sink")
-        else:
-            id_audio_card = get_audio_device("Sink")
-
-            if id_audio_card is None:
-                self.logger.warning(
-                    "No specific audio card found, using default audio sink."
-                )
-                audiosink = Gst.ElementFactory.make("autoaudiosink")
-            elif platform.system() == "Windows":
-                audiosink = Gst.ElementFactory.make("wasapi2sink")
-                audiosink.set_property("device", id_audio_card)
-            elif platform.system() == "Darwin":
-                audiosink = Gst.ElementFactory.make("osxaudiosink")
-                audiosink.set_property("unique-id", id_audio_card)
-            else:
-                audiosink = Gst.ElementFactory.make("pulsesink")
-                audiosink.set_property("device", f"{id_audio_card}")
-
-        if audiosink is None:
-            raise RuntimeError("Failed to create audio sink element")
-        return audiosink
-
-    def _make_wobbler_appsink(self) -> Gst.Element:
-        """Create an appsink that feeds audio to the head wobbler."""
-        appsink = Gst.ElementFactory.make("appsink")
-        caps = Gst.Caps.from_string(
-            f"audio/x-raw,format=F32LE,channels={self.CHANNELS},"
-            f"rate={self.SAMPLE_RATE},layout=interleaved"
-        )
-        appsink.set_property("caps", caps)
-        appsink.set_property("drop", True)
-        appsink.set_property("max-buffers", 5)
-        appsink.set_property("sync", False)
-        appsink.set_property("emit-signals", True)
-        appsink.connect("new-sample", self._on_wobbler_sample)
-        return appsink
-
-    def _on_wobbler_sample(self, appsink: Gst.Element) -> Gst.FlowReturn:
-        """GStreamer callback: forward audio buffer to the head wobbler."""
-        sample = appsink.pull_sample()
-        if sample is None or self._head_wobbler is None:
-            return Gst.FlowReturn.OK
-        buf = sample.get_buffer()
-        data = buf.extract_dup(0, buf.get_size())
-        pcm = np.frombuffer(data, dtype=np.float32)
-        self._head_wobbler.feed_pcm(pcm, self.SAMPLE_RATE)
-        return Gst.FlowReturn.OK
-
-    def _build_audiosink_tee_bin(self) -> Gst.Bin:
-        """Build a Gst.Bin with a tee splitting audio to speaker and wobbler.
-
-        The bin exposes a single ghost sink pad for use as a playbin audio-sink.
-
-        ::
-
-            ghost_sink → audioconvert → tee ─┬→ queue → audiosink
-                                              └→ queue → appsink (wobbler)
-
-        """
-        audio_bin = Gst.Bin.new("audio_tee_bin")
-
-        audioconvert = Gst.ElementFactory.make("audioconvert")
-        tee = Gst.ElementFactory.make("tee")
-        queue_speaker = Gst.ElementFactory.make("queue")
-        audiosink = self._build_audiosink_element()
-        queue_wobbler = Gst.ElementFactory.make("queue")
-        appsink_wobbler = self._make_wobbler_appsink()
-
-        for el in (audioconvert, tee, queue_speaker, audiosink, queue_wobbler, appsink_wobbler):
-            audio_bin.add(el)
-
-        audioconvert.link(tee)
-        tee.link(queue_speaker)
-        queue_speaker.link(audiosink)
-        tee.link(queue_wobbler)
-        queue_wobbler.link(appsink_wobbler)
-
-        ghost_pad = Gst.GhostPad.new("sink", audioconvert.get_static_pad("sink"))
-        audio_bin.add_pad(ghost_pad)
-
-        return audio_bin
-
-    def _init_pipeline_playback(self, pipeline: Gst.Pipeline) -> None:
-        self._appsrc = Gst.ElementFactory.make("appsrc")
         self._appsrc.set_property("format", Gst.Format.TIME)
         self._appsrc.set_property("is-live", True)
         caps = Gst.Caps.from_string(

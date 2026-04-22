@@ -299,9 +299,9 @@ AnyCommand = Annotated[
     | GetVersionCmd
     | StartRecordingCmd
     | StopRecordingCmd
-    | AppendRecordCmd,
+    | AppendRecordCmd
     | SetSpeechOffsetsCmd
-    | SetWobblingCmd,
+    | SetWobblingCmd
     | SetVolumeCmd
     | GetVolumeCmd
     | SetMicrophoneVolumeCmd
