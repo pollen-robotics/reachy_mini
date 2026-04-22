@@ -629,6 +629,33 @@ export class ReachyMini extends EventTarget {
     }
 
     /**
+     * Play the wake-up animation (full head/antennas trajectory on the
+     * robot, ~2 s). Fire-and-forget — poll ``requestState()`` and watch
+     * ``is_move_running`` if you need to know when it finishes.
+     *
+     * Semantics match the REST endpoint ``POST /api/move/play/wake_up``
+     * and the ``"wake_up"`` WebRTC data-channel command.
+     *
+     * @returns {boolean} false if the data channel is not open.
+     */
+    wakeUp() {
+        return this._sendCommand({ type: "wake_up" });
+    }
+
+    /**
+     * Play the goto-sleep animation. Fire-and-forget; see ``wakeUp`` for
+     * progress-polling notes.
+     *
+     * Semantics match ``POST /api/move/play/goto_sleep`` and the
+     * ``"goto_sleep"`` WebRTC command.
+     *
+     * @returns {boolean} false if the data channel is not open.
+     */
+    gotoSleep() {
+        return this._sendCommand({ type: "goto_sleep" });
+    }
+
+    /**
      * Request the daemon version.
      * Resolves with the version string (or null if unavailable).
      * @returns {Promise<string|null>}
