@@ -34,13 +34,12 @@ Reachy Mini supports two complementary app types. Confirm with the user which on
 
 | Flavour | Use when | Where it runs |
 |---|---|---|
-| **Python app** (default) | On-robot control loops, heavy motion sequences, offline/LAN, rich hardware access | Robot owner's machine (laptop / CM4), optionally with a bundled web UI |
+| **Python app** | On-robot control loops, heavy motion sequences, offline/LAN, rich hardware access | Robot owner's machine (laptop / CM4), optionally with a bundled web UI |
 | **Live/Web/JS app** | Remote launch from any browser, zero-install end-users, shareable by URL, streaming A/V UIs | Entirely as a static HF Space; reaches the robot over WebRTC via the central signaling server |
 
-Both coexist — a Python app can bundle a browser UI, and a JS app can call the Python daemon's REST API. Neither deprecates the other.
+Both coexist — a Python app can bundle a browser UI, and a JS app can call the Python daemon's REST API.
 
-**Common rules (both flavours):**
-- **NEVER create app folders manually** — use `reachy-mini-app-assistant` (Python) or the scaffolding playbook in [Live/Web/JS Apps](#livewebjs-apps) (JS).
+- **(python apps) NEVER create app folders manually** — use `reachy-mini-app-assistant` (Python)
 - **If a command fails**, ask the user to run it in their terminal — don't attempt complex workarounds.
 
 **Python scaffold:**
@@ -124,6 +123,8 @@ See and run `examples/minimal_demo.py` - demonstrates connection, head motion, a
 
 Browser apps that control a Reachy Mini remotely over WebRTC. **The app IS a static Hugging Face Space**, not something installed on the robot. Any HF-authenticated user can open the Space URL from anywhere and reach any robot they have access to, through the central signaling server.
 
+Create app with simple hf space creation, use standard hf tools, if need be, have a look here https://huggingface.co/spaces/cduss/webrtc_example
+
 **What this flavour unlocks:**
 - **Remote launch** — no LAN, no USB, no local daemon on the end-user side.
 - **Zero-install sharing** — the Space URL *is* the product.
@@ -131,7 +132,7 @@ Browser apps that control a Reachy Mini remotely over WebRTC. **The app IS a sta
 - **Bidirectional media** — robot camera/mic → browser; optionally user's mic → robot speaker.
 - **Clean version pinning** — each app imports the SDK from a specific GitHub tag; stable even as the SDK advances.
 
-### SDK import — pin to a tag, never `@main`
+### SDK import — pin to a tag, pinning to `@main` is considered bad practice and does not benefit from the stability guarantees of a tagged release. Always pin to a specific `v*` tag.
 
 ```html
 <script type="module">
