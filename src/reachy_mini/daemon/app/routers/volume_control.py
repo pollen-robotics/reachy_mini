@@ -89,3 +89,20 @@ def create_volume_control() -> VolumeControl:
         return VolumeControlWindows()
     else:
         raise RuntimeError(f"Unsupported platform for volume control: {system}")
+
+
+# Lazily-initialised process-wide singleton shared between the REST
+# volume router and the backend's WebRTC command handler. Both paths
+# must observe the same VolumeControl instance so that a remote volume
+# change is immediately reflected on the next REST query and vice
+# versa. See reachy_mini/daemon/backend/abstract.py and
+# reachy_mini/daemon/app/routers/volume.py for the two callers.
+_volume_control: VolumeControl | None = None
+
+
+def get_volume_control() -> VolumeControl:
+    """Return the shared VolumeControl, creating it on first call."""
+    global _volume_control  # noqa: PLW0603
+    if _volume_control is None:
+        _volume_control = create_volume_control()
+    return _volume_control

@@ -25,8 +25,11 @@ from scipy.spatial.transform import Rotation as R
 from reachy_mini.io.protocol import (
     AnyCommand,
     AppendRecordCmd,
+    GetMicrophoneVolumeCmd,
     GetMotorModeCmd,
     GetStateCmd,
+    GetVersionCmd,
+    GetVolumeCmd,
     GotoSleepCmd,
     GotoTargetCmd,
     MockupSimBackendStatus,
@@ -41,9 +44,11 @@ from reachy_mini.io.protocol import (
     SetFullTargetCmd,
     SetGravityCompensationCmd,
     SetHeadJointsCmd,
+    SetMicrophoneVolumeCmd,
     SetMotorModeCmd,
     SetTargetCmd,
     SetTorqueCmd,
+    SetVolumeCmd,
     StartRecordingCmd,
     StopRecordingCmd,
     WakeUpCmd,
@@ -980,6 +985,63 @@ class Backend:
                 "is_move_running": self.is_move_running,
             }
             send_response({"state": state})
+
+        elif isinstance(cmd, GetVersionCmd):
+            from importlib.metadata import version
+
+            send_response({"version": version("reachy_mini")})
+
+        elif isinstance(
+            cmd,
+            (SetVolumeCmd, GetVolumeCmd, SetMicrophoneVolumeCmd, GetMicrophoneVolumeCmd),
+        ):
+            # Volume is a global robot setting, not per-session: a remote
+            # change persists for the next connection. This matches the
+            # semantics of the local REST /api/volume endpoints, which
+            # share the same VolumeControl singleton.
+            from reachy_mini.daemon.app.routers.volume_control import (
+                get_volume_control,
+            )
+
+            try:
+                vc = get_volume_control()
+            except Exception as e:
+                # Unsupported platform or audio stack down — don't crash
+                # the command loop, just report failure to the caller.
+                self.logger.warning("Volume command failed (no control): %s", e)
+                send_response(
+                    {"error": f"Volume control unavailable: {e}", "command": cmd.type}
+                )
+            else:
+                if isinstance(cmd, SetVolumeCmd):
+                    ok = vc.set_output_volume(cmd.volume)
+                    send_response(
+                        {
+                            "status": "ok" if ok else "error",
+                            "command": "set_volume",
+                            "volume": cmd.volume if ok else vc.get_output_volume(),
+                        }
+                    )
+                elif isinstance(cmd, GetVolumeCmd):
+                    send_response(
+                        {"command": "get_volume", "volume": vc.get_output_volume()}
+                    )
+                elif isinstance(cmd, SetMicrophoneVolumeCmd):
+                    ok = vc.set_input_volume(cmd.volume)
+                    send_response(
+                        {
+                            "status": "ok" if ok else "error",
+                            "command": "set_microphone_volume",
+                            "volume": cmd.volume if ok else vc.get_input_volume(),
+                        }
+                    )
+                else:  # GetMicrophoneVolumeCmd
+                    send_response(
+                        {
+                            "command": "get_microphone_volume",
+                            "volume": vc.get_input_volume(),
+                        }
+                    )
 
         elif isinstance(cmd, StartRecordingCmd):
             self.start_recording()

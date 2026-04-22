@@ -7,7 +7,7 @@ Client->Server command types:
     goto_target, wake_up, goto_sleep, play_sound,
     set_motor_mode, set_torque, get_motor_mode,
     set_gravity_compensation, set_automatic_body_yaw,
-    get_state, start_recording, stop_recording, append_record
+    get_state, get_version, start_recording, stop_recording, append_record
 
 Server->Client message types:
     joint_positions, head_pose, imu_data, recorded_data,
@@ -214,6 +214,12 @@ class GetStateCmd(BaseModel):
     type: Literal["get_state"] = "get_state"
 
 
+class GetVersionCmd(BaseModel):
+    """Query the version."""
+
+    type: Literal["get_version"] = "get_version"
+
+
 class StartRecordingCmd(BaseModel):
     """Start recording joint data."""
 
@@ -233,6 +239,35 @@ class AppendRecordCmd(BaseModel):
     record: dict[str, Any]
 
 
+# Volume / microphone commands. Volume is a global robot setting (not
+# per-session), so a remote client's change persists after they
+# disconnect — same semantics as the local REST /api/volume endpoints.
+class SetVolumeCmd(BaseModel):
+    """Set the output (speaker) volume, 0-100."""
+
+    type: Literal["set_volume"] = "set_volume"
+    volume: int = Field(..., ge=0, le=100)
+
+
+class GetVolumeCmd(BaseModel):
+    """Query the current output (speaker) volume."""
+
+    type: Literal["get_volume"] = "get_volume"
+
+
+class SetMicrophoneVolumeCmd(BaseModel):
+    """Set the input (microphone) volume, 0-100."""
+
+    type: Literal["set_microphone_volume"] = "set_microphone_volume"
+    volume: int = Field(..., ge=0, le=100)
+
+
+class GetMicrophoneVolumeCmd(BaseModel):
+    """Query the current input (microphone) volume."""
+
+    type: Literal["get_microphone_volume"] = "get_microphone_volume"
+
+
 AnyCommand = Annotated[
     SetTargetCmd
     | SetHeadJointsCmd
@@ -249,9 +284,14 @@ AnyCommand = Annotated[
     | SetGravityCompensationCmd
     | SetAutomaticBodyYawCmd
     | GetStateCmd
+    | GetVersionCmd
     | StartRecordingCmd
     | StopRecordingCmd
-    | AppendRecordCmd,
+    | AppendRecordCmd
+    | SetVolumeCmd
+    | GetVolumeCmd
+    | SetMicrophoneVolumeCmd
+    | GetMicrophoneVolumeCmd,
     Field(discriminator="type"),
 ]
 

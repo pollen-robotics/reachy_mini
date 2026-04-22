@@ -21,6 +21,8 @@ import aiohttp
 import websockets
 from websockets.asyncio.client import ClientConnection
 
+from reachy_mini.daemon.robot_app_lock import RobotAppLock
+
 logger = logging.getLogger(__name__)
 
 
@@ -72,6 +74,7 @@ class CentralSignalingRelay:
         hf_token: Optional[str] = None,
         robot_name: str = "reachymini",
         on_state_change: Optional[Callable[["RelayState", Optional[str]], None]] = None,
+        robot_app_lock: Optional[RobotAppLock] = None,
     ):
         """Initialize the relay.
 
@@ -81,6 +84,10 @@ class CentralSignalingRelay:
             hf_token: HuggingFace token for authentication (will be refreshed)
             robot_name: Name to register as producer
             on_state_change: Callback when state changes (state, message)
+            robot_app_lock: Shared lock coordinating local vs remote access to
+                the robot. When provided, incoming remote sessions are
+                gated on this lock and a local-app acquire evicts any
+                active remote session.
 
         """
         self.central_uri = central_uri
@@ -88,6 +95,7 @@ class CentralSignalingRelay:
         self.hf_token = hf_token
         self.robot_name = robot_name
         self._on_state_change = on_state_change
+        self._robot_app_lock = robot_app_lock
 
         self._running = False
         self._state = RelayState.STOPPED
@@ -181,12 +189,89 @@ class CentralSignalingRelay:
         self._token_updated.clear()
         self._set_state(RelayState.CONNECTING, "Starting relay service...")
 
+        # Register ourselves as the remote-eviction handler for the lock.
+        # When AppManager acquires the lock for a local Python app, this
+        # coroutine is invoked on the main asyncio loop and schedules the
+        # actual tear-down on the relay's own thread loop.
+        if self._robot_app_lock is not None:
+            self._robot_app_lock.set_remote_eviction_handler(self._handle_remote_eviction)
+
         # Run the relay in its own thread with a dedicated event loop.
         # This is necessary because the caller (daemon.start) may run in a temporary
         # event loop that gets destroyed when the HTTP request handler completes.
         self._thread = threading.Thread(target=self._run_in_thread, daemon=True)
         self._thread.start()
         logger.info(f"[Central Relay] Relay thread started: {self._thread.name}")
+
+    async def _handle_remote_eviction(self) -> None:
+        """Cross-thread entry point for the lock's remote-eviction callback.
+
+        Runs on the main asyncio loop (caller of ``acquire_local_evicting_remote``)
+        but dispatches the actual work onto the relay's thread loop.
+        """
+        if self._thread_loop is None or not self._thread_loop.is_running():
+            logger.debug(
+                "[Central Relay] Eviction requested but relay loop not running; nothing to do"
+            )
+            return
+
+        fut = asyncio.run_coroutine_threadsafe(
+            self._tear_down_active_sessions(reason="local_app_started"),
+            self._thread_loop,
+        )
+        # Wait for the tear-down to complete so AppManager knows the remote
+        # peer has been notified before the local app starts up.
+        try:
+            await asyncio.wrap_future(fut)
+        except Exception:
+            logger.warning(
+                "[Central Relay] Remote eviction tear-down raised", exc_info=True
+            )
+
+    async def _tear_down_active_sessions(self, reason: str) -> None:
+        """End every active/pending remote session and notify both sides.
+
+        Runs on the relay's thread event loop.
+        """
+        # Notify central so it clears its own session_id on the producer
+        # and sends endSession to the remote consumer.
+        for central_session_id in list(self._central_to_local_session.keys()):
+            logger.info(
+                "[Central Relay] Tearing down central session %s (reason=%s)",
+                central_session_id,
+                reason,
+            )
+            try:
+                await self._send_to_central(
+                    {
+                        "type": "endSession",
+                        "sessionId": central_session_id,
+                        "reason": reason,
+                    }
+                )
+            except Exception:
+                logger.warning(
+                    "[Central Relay] Failed to notify central of session teardown",
+                    exc_info=True,
+                )
+
+        # Notify local GStreamer so it closes its RTCPeerConnection.
+        for local_session_id in list(self._local_to_central_session.keys()):
+            try:
+                await self._send_to_local(
+                    {"type": "endSession", "sessionId": local_session_id}
+                )
+            except Exception:
+                logger.warning(
+                    "[Central Relay] Failed to notify local of session teardown",
+                    exc_info=True,
+                )
+
+        # Clear all session bookkeeping.
+        self._pending_central_sessions.clear()
+        self._local_to_central_session.clear()
+        self._central_to_local_session.clear()
+        self._session_to_local_peer.clear()
 
     def _run_in_thread(self) -> None:
         """Run the relay loop in a dedicated thread with its own event loop."""
@@ -218,6 +303,12 @@ class CentralSignalingRelay:
                 logger.warning("[Central Relay] Thread did not stop within timeout")
 
         self._thread = None
+
+        # Unregister from the lock and release any hold we may still have.
+        if self._robot_app_lock is not None:
+            self._robot_app_lock.set_remote_eviction_handler(None)
+            self._robot_app_lock.release_remote()
+
         self._set_state(RelayState.STOPPED, "Relay stopped")
 
     async def update_token(self, new_token: Optional[str]) -> None:
@@ -304,6 +395,11 @@ class CentralSignalingRelay:
         self._pending_central_sessions.clear()
         self._local_to_central_session.clear()
         self._central_to_local_session.clear()
+
+        # Release any remote hold on the robot lock. Idempotent: no-op if
+        # we weren't holding it (e.g. local app currently has the robot).
+        if self._robot_app_lock is not None:
+            self._robot_app_lock.release_remote()
 
     async def _run_loop(self) -> None:
         """Maintain connections and relay messages."""
@@ -515,7 +611,9 @@ class CentralSignalingRelay:
         if not self._http_session:
             return
 
-        events_url = f"{self.central_uri}/events?token={self.hf_token}"
+        # Token goes in the Authorization header, never in the URL —
+        # keeps it out of HF Space access logs and intermediate proxies.
+        events_url = f"{self.central_uri}/events"
         headers = {"Authorization": f"Bearer {self.hf_token}"}
 
         try:
@@ -623,7 +721,8 @@ class CentralSignalingRelay:
         if not self._http_session or not self.hf_token:
             return
 
-        send_url = f"{self.central_uri}/send?token={self.hf_token}"
+        # Token goes in the Authorization header only, not the URL.
+        send_url = f"{self.central_uri}/send"
         headers = {"Authorization": f"Bearer {self.hf_token}"}
         try:
             async with self._http_session.post(
@@ -680,6 +779,46 @@ class CentralSignalingRelay:
             logger.info(
                 f"[Central Relay] Received session request from remote client peer_id={client_peer_id} session_id={session_id}"
             )
+
+            # Safety net: the central server is supposed to gate concurrent sessions,
+            # but if one slips through (e.g. older central without the gate), enforce
+            # single-session-at-a-time here so we never run two clients against one robot.
+            if self._central_to_local_session or self._pending_central_sessions:
+                logger.warning(
+                    f"[Central Relay] Rejecting session {session_id}: a session is already active/pending"
+                )
+                if session_id:
+                    await self._send_to_central(
+                        {
+                            "type": "endSession",
+                            "sessionId": session_id,
+                            "reason": "robot_busy_local",
+                        }
+                    )
+                return
+
+            # Gate on the robot lock: if a local Python app is running, the
+            # lock will refuse our acquire. We also acquire proactively here
+            # so a concurrent local-app start can't sneak in between the
+            # check and the session handoff to local GStreamer.
+            if self._robot_app_lock is not None:
+                # holder_name is generic because central already tracks the
+                # real consumer app name (via setPeerStatus meta) for its
+                # own rejection messages; the daemon-side lock just needs
+                # to know that *something* remote holds it.
+                if not self._robot_app_lock.try_acquire_remote("remote"):
+                    logger.warning(
+                        f"[Central Relay] Rejecting session {session_id}: robot lock is held locally"
+                    )
+                    if session_id:
+                        await self._send_to_central(
+                            {
+                                "type": "endSession",
+                                "sessionId": session_id,
+                                "reason": "robot_busy_local_app",
+                            }
+                        )
+                    return
 
             # Store session mapping
             if session_id:
@@ -752,6 +891,13 @@ class CentralSignalingRelay:
                 logger.info(
                     f"[Central Relay] After cleanup - pending: {len(self._pending_central_sessions)}, active: {len(self._central_to_local_session)}"
                 )
+                # If no sessions remain, release the robot lock.
+                if (
+                    self._robot_app_lock is not None
+                    and not self._central_to_local_session
+                    and not self._pending_central_sessions
+                ):
+                    self._robot_app_lock.release_remote()
 
         elif msg_type == "peerStatusChanged":
             # Another peer changed status - ignore for producers
@@ -878,6 +1024,13 @@ class CentralSignalingRelay:
                 logger.info(
                     f"[Central Relay] After cleanup - pending: {len(self._pending_central_sessions)}, active: {len(self._central_to_local_session)}"
                 )
+                # If no sessions remain, release the robot lock.
+                if (
+                    self._robot_app_lock is not None
+                    and not self._central_to_local_session
+                    and not self._pending_central_sessions
+                ):
+                    self._robot_app_lock.release_remote()
 
 
 # Singleton instance for integration
@@ -920,6 +1073,7 @@ async def start_central_relay(
     robot_name: str = "reachymini",
     central_uri: str = CENTRAL_SIGNALING_SERVER,
     on_state_change: Optional[Callable[[RelayState, Optional[str]], None]] = None,
+    robot_app_lock: Optional[RobotAppLock] = None,
 ) -> CentralSignalingRelay:
     """Start the central signaling relay.
 
@@ -928,6 +1082,7 @@ async def start_central_relay(
         robot_name: Name to register as producer
         central_uri: Central server URI
         on_state_change: Callback when connection state changes
+        robot_app_lock: Shared lock coordinating local vs remote robot access.
 
     Returns:
         The relay instance
@@ -952,6 +1107,7 @@ async def start_central_relay(
         hf_token=hf_token,
         robot_name=robot_name,
         on_state_change=on_state_change,
+        robot_app_lock=robot_app_lock,
     )
     await _relay_instance.start()
     return _relay_instance

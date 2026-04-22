@@ -105,6 +105,15 @@ class AppManager:
         if self.is_app_running():
             raise RuntimeError("An app is already running")
 
+        # Acquire the robot lock before spawning. If a remote WebRTC session
+        # currently holds the robot, this notifies the relay so the remote
+        # peer gets a clean endSession. Raises if another local app somehow
+        # already holds it (belt-and-braces; is_app_running() above covers
+        # the normal case, but the lock is the single source of truth
+        # shared with the relay thread).
+        if self.daemon is not None:
+            await self.daemon.robot_app_lock.acquire_local_evicting_remote(app_name)
+
         # Get module name and Python path for subprocess execution
         module_name = local_common_venv.get_app_module(
             app_name, self.wireless_version, self.desktop_app_daemon
@@ -139,15 +148,24 @@ class AppManager:
             app_env.pop(key, None)
 
         self.logger.getChild("runner").info(f"Starting app {app_name}")
-        process = await asyncio.create_subprocess_exec(
-            str(python_path),
-            "-u",  # Unbuffered stdout/stderr for real-time logging
-            "-m",
-            module_name,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            env=app_env,
-        )
+        try:
+            process = await asyncio.create_subprocess_exec(
+                str(python_path),
+                "-u",  # Unbuffered stdout/stderr for real-time logging
+                "-m",
+                module_name,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                env=app_env,
+            )
+        except Exception:
+            # Release the lock if we failed before the subprocess was created —
+            # monitor_process is the normal release path but it depends on
+            # the subprocess existing.
+            if self.daemon is not None:
+                self.daemon.robot_app_lock.release_local(app_name)
+            raise
+
 
         # Create status and monitor task
         status = AppStatus(
@@ -190,27 +208,37 @@ class AppManager:
                         # Many libraries write INFO/WARNING to stderr
                         self.logger.getChild("runner").warning(decoded)
 
-            # Run both streams concurrently
-            await asyncio.gather(log_stdout(), log_stderr())
+            try:
+                # Run both streams concurrently
+                await asyncio.gather(log_stdout(), log_stderr())
 
-            # Wait for process to complete
-            returncode = await process.wait()
+                # Wait for process to complete
+                returncode = await process.wait()
 
-            # Update status based on exit code
-            if self.current_app is not None:
-                if returncode == 0:
-                    self.current_app.status.state = AppState.DONE
-                    self.logger.getChild("runner").info(f"App {app_name} finished")
-                else:
-                    self.current_app.status.state = AppState.ERROR
-                    error_msg = "\n".join(stderr_lines[-10:])  # Last 10 lines
-                    self.current_app.status.error = (
-                        f"Process exited with code {returncode}\n{error_msg}"
-                    )
-                    self.logger.getChild("runner").error(
-                        f"App {app_name} exited with code {returncode}. "
-                        f"Last stderr output:\n{error_msg}"
-                    )
+                # Update status based on exit code
+                if self.current_app is not None:
+                    if returncode == 0:
+                        self.current_app.status.state = AppState.DONE
+                        self.logger.getChild("runner").info(
+                            f"App {app_name} finished"
+                        )
+                    else:
+                        self.current_app.status.state = AppState.ERROR
+                        error_msg = "\n".join(stderr_lines[-10:])  # Last 10 lines
+                        self.current_app.status.error = (
+                            f"Process exited with code {returncode}\n{error_msg}"
+                        )
+                        self.logger.getChild("runner").error(
+                            f"App {app_name} exited with code {returncode}. "
+                            f"Last stderr output:\n{error_msg}"
+                        )
+            finally:
+                # Always release the robot lock when the subprocess exits, no
+                # matter how: clean exit, crash, SIGKILL, OOM, or cancellation
+                # of this monitor task. Idempotent — stop_current_app's own
+                # release is fine too.
+                if self.daemon is not None:
+                    self.daemon.robot_app_lock.release_local(app_name)
 
         monitor_task = asyncio.create_task(monitor_process())
 
