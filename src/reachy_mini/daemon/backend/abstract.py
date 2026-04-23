@@ -801,6 +801,12 @@ class Backend:
             - If we are far from the initial position, we move there first.
             - If we are close to the initial position, we move directly to the sleep position.
         """
+        # Stop head wobbling so leftover speech offsets don't fight the
+        # sleep pose during the goto.
+        if self._media_server is not None:
+            self._media_server.disable_wobbling()
+        self.set_speech_offsets((0.0, 0.0, 0.0, 0.0, 0.0, 0.0))
+
         # Magic units
         _, _, dist_to_sleep_pose = distance_between_poses(
             self.get_current_head_pose(), self.SLEEP_HEAD_POSE
