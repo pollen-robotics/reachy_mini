@@ -81,14 +81,6 @@ gi.require_version("GstApp", "1.0")
 from gi.repository import GLib, Gst  # noqa: E402
 
 
-def _find_pipeline(elem: Gst.Element) -> Optional[Gst.Pipeline]:
-    """Walk up an element's parents until a Gst.Pipeline is found."""
-    parent = elem.get_parent()
-    while parent is not None and not isinstance(parent, Gst.Pipeline):
-        parent = parent.get_parent()
-    return parent
-
-
 class GStreamerAudio(AudioBase):
     """Audio implementation using GStreamer.
 
@@ -117,6 +109,10 @@ class GStreamerAudio(AudioBase):
         super().__init__(log_level=log_level)
 
         self._head_wobbler: Optional[HeadWobbler] = None
+        # Pipeline currently owning the wobbler appsink (set when the
+        # appsink is attached). Used by _on_wobbler_sample to convert the
+        # buffer PTS into wall-clock without walking parents per sample.
+        self._pipeline_for_wobbler: Optional[Gst.Pipeline] = None
 
         Gst.init([])
         self._loop = GLib.MainLoop()
@@ -277,13 +273,11 @@ class GStreamerAudio(AudioBase):
         buf = sample.get_buffer()
         data = buf.extract_dup(0, buf.get_size())
         pcm = np.frombuffer(data, dtype=np.float32)
-        play_at_ns = self._compute_play_at_monotonic_ns(appsink, buf.pts)
+        play_at_ns = self._compute_play_at_monotonic_ns(buf.pts)
         self._head_wobbler.feed(pcm, play_at_ns)
         return Gst.FlowReturn.OK
 
-    def _compute_play_at_monotonic_ns(
-        self, appsink: Gst.Element, buf_pts: int
-    ) -> int:
+    def _compute_play_at_monotonic_ns(self, buf_pts: int) -> int:
         """Translate a buffer PTS into a ``time.monotonic_ns()`` instant.
 
         The returned value is when the buffer's first sample is expected
@@ -291,12 +285,9 @@ class GStreamerAudio(AudioBase):
         rebased onto the monotonic clock so the wobbler can schedule
         ``GLib.timeout_add`` against it.
         """
-        sink_latency_ns = self._get_sink_latency_ns(appsink)
-        if buf_pts == Gst.CLOCK_TIME_NONE:
-            return time.monotonic_ns() + sink_latency_ns
-
-        pipeline = _find_pipeline(appsink)
-        if pipeline is None:
+        sink_latency_ns = self._get_sink_latency_ns()
+        pipeline = self._pipeline_for_wobbler
+        if buf_pts == Gst.CLOCK_TIME_NONE or pipeline is None:
             return time.monotonic_ns() + sink_latency_ns
         clock = pipeline.get_clock()
         if clock is None:
@@ -306,13 +297,13 @@ class GStreamerAudio(AudioBase):
         play_at_clock_ns = buf_pts + base_time_ns + sink_latency_ns
         return time.monotonic_ns() + int(play_at_clock_ns - clock.get_time())
 
-    def _get_sink_latency_ns(self, elem: Gst.Element) -> int:
-        """Query the pipeline latency for *elem*, fall back to buffer-time.
+    def _get_sink_latency_ns(self) -> int:
+        """Query the wobbler pipeline's latency, fall back to buffer-time.
 
         Returns nanoseconds. Falls back to ``PLAYBACK_SINK_BUFFER_TIME_US``
         (in ns) when the latency query fails (e.g. before PLAYING).
         """
-        pipeline = _find_pipeline(elem)
+        pipeline = self._pipeline_for_wobbler
         if pipeline is not None:
             query = Gst.Query.new_latency()
             if pipeline.query(query):
@@ -371,6 +362,7 @@ class GStreamerAudio(AudioBase):
         return audio_bin
 
     def _init_pipeline_playback(self, pipeline: Gst.Pipeline) -> None:
+        self._pipeline_for_wobbler = pipeline
         self._appsrc = Gst.ElementFactory.make("appsrc")
         self._appsrc.set_property("do-timestamp", False)
         self._appsrc.set_property("format", Gst.Format.TIME)
@@ -535,33 +527,6 @@ class GStreamerAudio(AudioBase):
         else:
             file_path = sound_file
 
-        audiosink: Optional[Gst.Element] = None
-
-        if has_reachymini_asoundrc():
-            # reachy mini wireless has a preconfigured asoundrc
-            audiosink = Gst.ElementFactory.make("alsasink")
-            audiosink.set_property("device", "reachymini_audio_sink")
-            self.logger.info("Using audio device reachymini_audio_sink for playback.")
-        elif platform.system() == "Windows":
-            id_audio_card = get_audio_device("Sink")
-            audiosink = Gst.ElementFactory.make("wasapi2sink")
-            audiosink.set_property("device", id_audio_card)
-            self.logger.info(
-                f"Using audio device {id_audio_card} for playback on Windows."
-            )
-        elif platform.system() == "Darwin":
-            id_audio_card = get_audio_device("Sink")
-            audiosink = Gst.ElementFactory.make("osxaudiosink")
-            audiosink.set_property("unique-id", id_audio_card)
-            self.logger.info(
-                f"Using audio device {id_audio_card} for playback on macOS."
-            )
-        else:
-            id_audio_card = get_audio_device("Sink")
-            audiosink = Gst.ElementFactory.make("pulsesink")
-            audiosink.set_property("device", f"{id_audio_card}")
-            self.logger.info(f"Using audio device {id_audio_card} for playback.")
-
         if self._playbin is not None:
             self._playbin.set_state(Gst.State.NULL)
 
@@ -583,6 +548,7 @@ class GStreamerAudio(AudioBase):
         playbin.set_property("uri", uri)
 
         playbin.set_property("audio-sink", self._build_audiosink_tee_bin())
+        self._pipeline_for_wobbler = playbin
         if self._head_wobbler is not None:
             self._head_wobbler.reset()
             self._head_wobbler.start()
