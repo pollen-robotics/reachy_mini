@@ -29,27 +29,30 @@ from reachy_mini.motion import (
     speech_tapper_v3,
 )
 
-_TAPPER_VERSIONS: dict[str, ModuleType] = {
-    "v1": speech_tapper_v1,
-    "v2": speech_tapper_v2,
-    "v3": speech_tapper_v3,
-}
-
-
-def _load_sway_class() -> tuple[int, type]:
-    """Return (HOP_MS, SwayRollRT class) based on WOBBLER_VERSION env var."""
-    mod = _TAPPER_VERSIONS.get(os.environ.get("WOBBLER_VERSION", ""), speech_tapper)
-    return mod.HOP_MS, mod.SwayRollRT
-
-
 logger = logging.getLogger(__name__)
 
+# Public type alias; re-exported by ``media/*`` modules.
 SpeechOffsets = tuple[float, float, float, float, float, float]
-_ZERO_OFFSETS: SpeechOffsets = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
 
 
 class HeadWobbler:
     """PTS-driven scheduler that turns audio into timed head offsets."""
+
+    _TAPPER_VERSIONS: dict[str, ModuleType] = {
+        "v1": speech_tapper_v1,
+        "v2": speech_tapper_v2,
+        "v3": speech_tapper_v3,
+    }
+
+    _ZERO_OFFSETS: SpeechOffsets = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+
+    @classmethod
+    def _load_sway_class(cls) -> tuple[int, type]:
+        """Return (HOP_MS, SwayRollRT class) based on WOBBLER_VERSION env var."""
+        mod = cls._TAPPER_VERSIONS.get(
+            os.environ.get("WOBBLER_VERSION", ""), speech_tapper
+        )
+        return mod.HOP_MS, mod.SwayRollRT
 
     def __init__(
         self,
@@ -66,7 +69,7 @@ class HeadWobbler:
         """
         self._apply_offsets = set_speech_offsets
 
-        self._hop_ms, sway_cls = _load_sway_class()
+        self._hop_ms, sway_cls = self._load_sway_class()
         version = os.environ.get("WOBBLER_VERSION", "v0")
         logger.info("Using wobbler version: %s (%s)", version, sway_cls.__module__)
         self._sway_cls = sway_cls
@@ -90,7 +93,7 @@ class HeadWobbler:
         """Cancel pending offsets and zero the head."""
         with self._lock:
             self._generation += 1
-        self._apply_offsets(_ZERO_OFFSETS)
+        self._apply_offsets(self._ZERO_OFFSETS)
         logger.debug("Head wobbler stopped")
 
     def reset(self) -> None:
@@ -99,7 +102,7 @@ class HeadWobbler:
             self._generation += 1
         with self._sway_lock:
             self.sway = self._sway_cls(sample_rate=self._sample_rate)
-        self._apply_offsets(_ZERO_OFFSETS)
+        self._apply_offsets(self._ZERO_OFFSETS)
 
     def feed(
         self,
@@ -127,11 +130,14 @@ class HeadWobbler:
         hop_ns = self._hop_ms * 1_000_000
         now_ns = time.monotonic_ns()
 
+        # Skip hops more than one hop's worth in the past (genuinely
+        # stale); clamp small sub-hop negatives to 0 so they fire on
+        # the next main-loop iteration.
+        stale_threshold_ms = -self._hop_ms
         for i, hop in enumerate(results):
             target_ns = play_at_monotonic_ns + i * hop_ns
             delay_ms = (target_ns - now_ns) // 1_000_000
-            if delay_ms <= 0:
-                # Past deadline — skip rather than fire stale movement.
+            if delay_ms < stale_threshold_ms:
                 continue
             offsets: SpeechOffsets = (
                 hop["x_mm"] / 1000.0,
@@ -141,7 +147,7 @@ class HeadWobbler:
                 hop["pitch_rad"],
                 hop["yaw_rad"],
             )
-            GLib.timeout_add(int(delay_ms), self._fire, offsets, generation)
+            GLib.timeout_add(max(0, int(delay_ms)), self._fire, offsets, generation)
 
     def _fire(self, offsets: SpeechOffsets, generation: int) -> bool:
         """GLib timeout callback. Returns False so the source is removed."""

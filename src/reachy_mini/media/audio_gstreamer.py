@@ -109,10 +109,6 @@ class GStreamerAudio(AudioBase):
         super().__init__(log_level=log_level)
 
         self._head_wobbler: Optional[HeadWobbler] = None
-        # Pipeline currently owning the wobbler appsink (set when the
-        # appsink is attached). Used by _on_wobbler_sample to convert the
-        # buffer PTS into wall-clock without walking parents per sample.
-        self._pipeline_for_wobbler: Optional[Gst.Pipeline] = None
 
         Gst.init([])
         self._loop = GLib.MainLoop()
@@ -242,8 +238,17 @@ class GStreamerAudio(AudioBase):
 
         return audiosink
 
-    def _make_wobbler_appsink(self) -> Gst.Element:
-        """Create an appsink that feeds audio to the head wobbler."""
+    def _make_wobbler_appsink(self, sync: bool = True) -> Gst.Element:
+        """Create an appsink that feeds audio to the head wobbler.
+
+        Args:
+            sync: ``True`` for playbin-based paths so new-sample fires at
+                the buffer's PTS on the pipeline clock (A/V sync for
+                free). ``False`` for push-based live streams where
+                back-pressure + max-buffers drops would stall delivery;
+                the callback then schedules against ``now + sink_latency``.
+
+        """
         appsink = Gst.ElementFactory.make("appsink")
         # Force mono so the speech tapper receives a 1-D float32 array.
         # The per-branch audioconvert in _build_audiosink_tee_bin /
@@ -255,7 +260,7 @@ class GStreamerAudio(AudioBase):
         appsink.set_property("caps", caps)
         appsink.set_property("drop", True)
         appsink.set_property("max-buffers", 5)
-        appsink.set_property("sync", False)
+        appsink.set_property("sync", sync)
         appsink.set_property("emit-signals", True)
         appsink.connect("new-sample", self._on_wobbler_sample)
         return appsink
@@ -263,9 +268,10 @@ class GStreamerAudio(AudioBase):
     def _on_wobbler_sample(self, appsink: Gst.Element) -> Gst.FlowReturn:
         """GStreamer callback: forward audio buffer to the head wobbler.
 
-        Reads the buffer's PTS, converts it to a ``time.monotonic_ns()``
-        instant accounting for audiosink latency, and asks the wobbler to
-        schedule per-hop offsets to fire when the audio actually plays.
+        For ``sync=True`` appsinks the callback fires at the buffer's PTS
+        on the pipeline clock — audio is playing NOW. For ``sync=False``
+        (push-based live path) the callback fires ASAP and we schedule
+        ``now + buffer-time`` of the audiosink as the play instant.
         """
         sample = appsink.pull_sample()
         if sample is None or self._head_wobbler is None:
@@ -273,44 +279,12 @@ class GStreamerAudio(AudioBase):
         buf = sample.get_buffer()
         data = buf.extract_dup(0, buf.get_size())
         pcm = np.frombuffer(data, dtype=np.float32)
-        play_at_ns = self._compute_play_at_monotonic_ns(buf.pts)
+        if appsink.get_property("sync"):
+            play_at_ns = time.monotonic_ns()
+        else:
+            play_at_ns = time.monotonic_ns() + self.PLAYBACK_SINK_BUFFER_TIME_US * 1000
         self._head_wobbler.feed(pcm, play_at_ns)
         return Gst.FlowReturn.OK
-
-    def _compute_play_at_monotonic_ns(self, buf_pts: int) -> int:
-        """Translate a buffer PTS into a ``time.monotonic_ns()`` instant.
-
-        The returned value is when the buffer's first sample is expected
-        to be heard at the speaker (PTS + base time + audiosink latency),
-        rebased onto the monotonic clock so the wobbler can schedule
-        ``GLib.timeout_add`` against it.
-        """
-        sink_latency_ns = self._get_sink_latency_ns()
-        pipeline = self._pipeline_for_wobbler
-        if buf_pts == Gst.CLOCK_TIME_NONE or pipeline is None:
-            return time.monotonic_ns() + sink_latency_ns
-        clock = pipeline.get_clock()
-        if clock is None:
-            return time.monotonic_ns() + sink_latency_ns
-
-        base_time_ns = pipeline.get_base_time()
-        play_at_clock_ns = buf_pts + base_time_ns + sink_latency_ns
-        return time.monotonic_ns() + int(play_at_clock_ns - clock.get_time())
-
-    def _get_sink_latency_ns(self) -> int:
-        """Query the wobbler pipeline's latency, fall back to buffer-time.
-
-        Returns nanoseconds. Falls back to ``PLAYBACK_SINK_BUFFER_TIME_US``
-        (in ns) when the latency query fails (e.g. before PLAYING).
-        """
-        pipeline = self._pipeline_for_wobbler
-        if pipeline is not None:
-            query = Gst.Query.new_latency()
-            if pipeline.query(query):
-                _live, min_lat, _max_lat = query.parse_latency()
-                if min_lat != Gst.CLOCK_TIME_NONE:
-                    return int(min_lat)
-        return self.PLAYBACK_SINK_BUFFER_TIME_US * 1000
 
     def _build_audiosink_tee_bin(self) -> Gst.Bin:
         """Build a Gst.Bin with a tee splitting audio to speaker and wobbler.
@@ -362,7 +336,6 @@ class GStreamerAudio(AudioBase):
         return audio_bin
 
     def _init_pipeline_playback(self, pipeline: Gst.Pipeline) -> None:
-        self._pipeline_for_wobbler = pipeline
         self._appsrc = Gst.ElementFactory.make("appsrc")
         self._appsrc.set_property("do-timestamp", False)
         self._appsrc.set_property("format", Gst.Format.TIME)
@@ -372,31 +345,40 @@ class GStreamerAudio(AudioBase):
         )
         self._appsrc.set_property("caps", caps)
 
-        audioconvert = Gst.ElementFactory.make("audioconvert")
-        audioresample = Gst.ElementFactory.make("audioresample")
-
         # Always build tee so wobbling can be enabled/disabled at runtime.
-        # The appsink with drop=True has negligible overhead when no wobbler
-        # is connected.
+        # Per-branch audioconvert+audioresample so the wobbler appsink's
+        # F32LE/1/16000 caps don't drag the audiosink branch into a rate
+        # the device can't accept (e.g. wireless XMOS PCM falls back to
+        # IEC958 at non-native rates). The appsink with drop=True has
+        # negligible overhead when no wobbler is connected.
         tee = Gst.ElementFactory.make("tee")
         queue_speaker = Gst.ElementFactory.make("queue")
+        ac_speaker = Gst.ElementFactory.make("audioconvert")
+        ar_speaker = Gst.ElementFactory.make("audioresample")
         audiosink = self._build_audiosink_element()
         queue_wobbler = Gst.ElementFactory.make("queue")
-        appsink_wobbler = self._make_wobbler_appsink()
+        ac_wobbler = Gst.ElementFactory.make("audioconvert")
+        ar_wobbler = Gst.ElementFactory.make("audioresample")
+        # Push-based live path: sync=False (is-live appsrc + PTS-sync
+        # appsink don't play well together — buffers drop at max-buffers).
+        appsink_wobbler = self._make_wobbler_appsink(sync=False)
 
         for el in (
-            self._appsrc, audioconvert, audioresample,
-            tee, queue_speaker, audiosink, queue_wobbler, appsink_wobbler,
+            self._appsrc, tee,
+            queue_speaker, ac_speaker, ar_speaker, audiosink,
+            queue_wobbler, ac_wobbler, ar_wobbler, appsink_wobbler,
         ):
             pipeline.add(el)
 
-        self._appsrc.link(audioconvert)
-        audioconvert.link(audioresample)
-        audioresample.link(tee)
+        self._appsrc.link(tee)
         tee.link(queue_speaker)
-        queue_speaker.link(audiosink)
+        queue_speaker.link(ac_speaker)
+        ac_speaker.link(ar_speaker)
+        ar_speaker.link(audiosink)
         tee.link(queue_wobbler)
-        queue_wobbler.link(appsink_wobbler)
+        queue_wobbler.link(ac_wobbler)
+        ac_wobbler.link(ar_wobbler)
+        ar_wobbler.link(appsink_wobbler)
 
     def _on_bus_message(self, bus: Gst.Bus, msg: Gst.Message, loop) -> bool:  # type: ignore[no-untyped-def]
         t = msg.type
@@ -548,7 +530,6 @@ class GStreamerAudio(AudioBase):
         playbin.set_property("uri", uri)
 
         playbin.set_property("audio-sink", self._build_audiosink_tee_bin())
-        self._pipeline_for_wobbler = playbin
         if self._head_wobbler is not None:
             self._head_wobbler.reset()
             self._head_wobbler.start()
