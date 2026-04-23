@@ -45,7 +45,7 @@ def synthesize(text: str, language: str, voice_description: str) -> str:
         voice_description=voice_description,
         api_name="/generate_voice_design",
     )
-    return audio_path
+    return str(audio_path)
 
 
 def probe_duration_s(path: str) -> float:
@@ -53,7 +53,7 @@ def probe_duration_s(path: str) -> float:
     Gst.init([])
     disc = GstPbutils.Discoverer.new(10 * Gst.SECOND)
     info = disc.discover_uri(f"file://{path}")
-    return info.get_duration() / Gst.SECOND
+    return float(info.get_duration() / Gst.SECOND)
 
 
 def main(text: str, language: str, voice_description: str, wobbler_version: str) -> None:
