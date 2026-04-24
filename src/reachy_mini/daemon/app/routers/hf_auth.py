@@ -18,9 +18,7 @@ router = APIRouter(prefix="/hf-auth")
 # Central signaling server that tracks which robot is currently in use by
 # which remote JS app. We proxy its /api/robot-status endpoint so the
 # desktop frontend never needs to see the raw HF token.
-CENTRAL_ROBOT_STATUS_URL = (
-    "https://cduss-reachy-mini-central.hf.space/api/robot-status"
-)
+CENTRAL_ROBOT_STATUS_URL = "https://cduss-reachy-mini-central.hf.space/api/robot-status"
 CENTRAL_ROBOT_STATUS_TIMEOUT = aiohttp.ClientTimeout(total=5)
 
 
@@ -63,6 +61,27 @@ async def save_token(request: TokenRequest) -> TokenResponse:
 async def get_auth_status() -> dict[str, Any]:
     """Check if user is authenticated with HuggingFace."""
     return hf_auth.check_token_status()
+
+
+@router.get("/token")
+async def get_token() -> dict[str, Any]:
+    """Return the stored HuggingFace token in plaintext.
+
+    This exists so remote clients (e.g. the mobile app) can bridge the
+    token into a sandboxed iframe that itself cannot go through the HF
+    OAuth flow (hit by ``X-Frame-Options: SAMEORIGIN`` on ``/login``).
+
+    Security note: the daemon's HTTP API is already unauthenticated on
+    the local network, so any client that can reach this endpoint can
+    also start/stop apps at will. Exposing the token here does not
+    meaningfully widen the attack surface, but we deliberately keep the
+    endpoint separate from ``/status`` so the desktop frontend - which
+    never needs the raw token - is not tempted to consume it.
+    """
+    token = hf_auth.get_hf_token()
+    if not token:
+        raise HTTPException(status_code=404, detail="No HF token stored")
+    return {"token": token}
 
 
 @router.get("/relay-status")
@@ -122,7 +141,9 @@ async def get_central_robot_status() -> dict[str, Any]:
         return {"available": False, "robots": [], "reason": "not_authenticated"}
 
     try:
-        async with aiohttp.ClientSession(timeout=CENTRAL_ROBOT_STATUS_TIMEOUT) as session:
+        async with aiohttp.ClientSession(
+            timeout=CENTRAL_ROBOT_STATUS_TIMEOUT
+        ) as session:
             # Token goes in the Authorization header, not the URL —
             # otherwise it leaks into central's access logs and any
             # intermediate proxy's logs. The desktop frontend already
@@ -175,9 +196,7 @@ async def is_oauth_configured() -> dict[str, Any]:
 
 
 @router.get("/oauth/start")
-async def start_oauth(
-    request: Request, use_localhost: bool = False
-) -> dict[str, Any]:
+async def start_oauth(request: Request, use_localhost: bool = False) -> dict[str, Any]:
     """Start a new OAuth authorization session.
 
     Returns the auth_url to redirect the user to HuggingFace.
