@@ -156,9 +156,15 @@ async def refresh_relay() -> dict[str, Any]:
     token = hf_auth.get_hf_token()
 
     try:
-        from reachy_mini.media.central_signaling_relay import notify_token_change
+        from reachy_mini.media.central_signaling_relay import notify_force_reconnect
 
-        await notify_token_change(token)
+        # Unconditionally drop & reconnect. We used to call
+        # `notify_token_change(token)` here, but that path is guarded
+        # by an `old_token == new_token` early-return in the relay,
+        # which turned this endpoint into a no-op whenever the token
+        # had not changed - exactly the case we ship this endpoint
+        # for. `notify_force_reconnect` skips that guard.
+        await notify_force_reconnect()
     except ImportError:
         return {
             "status": "skipped",
@@ -166,7 +172,7 @@ async def refresh_relay() -> dict[str, Any]:
             "reason": "relay_unavailable",
         }
     except Exception as e:
-        logger.warning("[refresh-relay] notify_token_change failed: %s", e)
+        logger.warning("[refresh-relay] notify_force_reconnect failed: %s", e)
         raise HTTPException(
             status_code=500, detail=f"Failed to refresh relay: {e}"
         ) from e
