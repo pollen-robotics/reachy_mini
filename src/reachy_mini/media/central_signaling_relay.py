@@ -194,7 +194,9 @@ class CentralSignalingRelay:
         # coroutine is invoked on the main asyncio loop and schedules the
         # actual tear-down on the relay's own thread loop.
         if self._robot_app_lock is not None:
-            self._robot_app_lock.set_remote_eviction_handler(self._handle_remote_eviction)
+            self._robot_app_lock.set_remote_eviction_handler(
+                self._handle_remote_eviction
+            )
 
         # Run the relay in its own thread with a dedicated event loop.
         # This is necessary because the caller (daemon.start) may run in a temporary
@@ -331,17 +333,38 @@ class CentralSignalingRelay:
             logger.debug("[Central Relay] Token unchanged, no action needed")
             return
 
-        if new_token:
-            self._set_state(
-                RelayState.RECONNECTING, "HF token updated, reconnecting..."
-            )
-            self._connection_attempts = 0  # Reset retry counter on new token
+        await self._reconnect_now(new_token, reason="HF token updated, reconnecting...")
+
+    async def force_reconnect(self) -> None:
+        """Drop the current connection and reconnect with the stored token.
+
+        Unlike ``update_token``, this path is NOT guarded by a token
+        equality check - it always tears down the SSE and reconnects.
+
+        Intended as a recovery handle for split-brain states where the
+        relay thinks it is connected but central no longer lists this
+        robot as a producer (see ``POST /api/hf-auth/refresh-relay``).
+        """
+        await self._reconnect_now(self.hf_token, reason="Forced relay reconnect")
+
+    async def _reconnect_now(self, token: Optional[str], reason: str) -> None:
+        """Shared core of token-change and force-reconnect paths.
+
+        Transitions the relay into the right state and signals the run
+        loop to tear down the current connection and try connecting
+        again. Safe to call from any thread - if we have a running
+        thread loop we schedule the close/set there, otherwise we set
+        the event directly (covers the case where the relay has not
+        started its background thread yet).
+        """
+        if token:
+            self._set_state(RelayState.RECONNECTING, reason)
+            self._connection_attempts = 0
         else:
             self._set_state(RelayState.WAITING_FOR_TOKEN, "Logged out from HuggingFace")
 
-        # Signal the run loop to wake up and try connecting (thread-safe)
         if self._thread_loop and self._thread_loop.is_running():
-            # Schedule _close_connections and token_updated.set in the thread's event loop
+
             async def _reconnect() -> None:
                 await self._close_connections()
                 self._token_updated.set()
@@ -1146,3 +1169,19 @@ async def notify_token_change(new_token: Optional[str] = None) -> None:
             pass
 
     await _relay_instance.update_token(new_token)
+
+
+async def notify_force_reconnect() -> None:
+    """Ask the relay to drop its SSE channel and reconnect right now.
+
+    Unlike ``notify_token_change``, this always triggers a reconnect
+    even when the stored token is unchanged. Used by the
+    ``POST /api/hf-auth/refresh-relay`` endpoint to recover from
+    zombie-relay states where central no longer lists the robot as a
+    producer but the relay still thinks it is connected.
+    """
+    if _relay_instance is None:
+        logger.debug("[Central Relay] No relay instance, ignoring force reconnect")
+        return
+
+    await _relay_instance.force_reconnect()
