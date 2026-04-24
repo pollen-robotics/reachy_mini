@@ -119,6 +119,61 @@ async def delete_token() -> dict[str, str]:
     return {"status": "success"}
 
 
+@router.post("/refresh-relay")
+async def refresh_relay() -> dict[str, Any]:
+    """Force the central signaling relay to reconnect with the stored token.
+
+    Drops the relay's current connection and re-registers with the
+    currently stored HF token.
+
+    Intended as a recovery handle for clients (e.g. the mobile app) that
+    detect a desync between ``/relay-status`` (claims ``connected``) and
+    ``/central-robot-status`` (returns ``robots: []``). That combination
+    means the relay still holds an SSE channel open with central but is
+    no longer registered as a producer for the authenticated user, most
+    commonly because the relay attached with a token that has since been
+    rotated or because a transient error during ``setPeerStatus`` went
+    unnoticed. From the outside this manifests as "the robot is online
+    but no one can call it" until someone restarts the daemon.
+
+    Rather than asking users to SSH in and run ``systemctl restart``,
+    this endpoint triggers the relay's existing ``_token_updated`` event
+    path (the same one ``save-token`` uses on login), which cleanly
+    tears down the SSE connection, refreshes the HF token from
+    ``huggingface_hub.get_token`` and reconnects. Works with any token
+    currently stored (raw user tokens or OAuth access tokens) because
+    we go through the relay's reconnect logic rather than re-validating
+    the token.
+
+    Response shape:
+        { "status": "requested", "token_available": bool, "reason"?: str }
+
+    ``token_available`` is false if the daemon has no HF token stored
+    at all (user not logged in). In that case the relay will just
+    transition to ``WAITING_FOR_TOKEN`` after the reconnect, which is
+    the correct behaviour.
+    """
+    token = hf_auth.get_hf_token()
+
+    try:
+        from reachy_mini.media.central_signaling_relay import notify_token_change
+
+        await notify_token_change(token)
+    except ImportError:
+        return {
+            "status": "skipped",
+            "token_available": bool(token),
+            "reason": "relay_unavailable",
+        }
+    except Exception as e:
+        logger.warning("[refresh-relay] notify_token_change failed: %s", e)
+        raise HTTPException(
+            status_code=500, detail=f"Failed to refresh relay: {e}"
+        ) from e
+
+    return {"status": "requested", "token_available": bool(token)}
+
+
 @router.get("/central-robot-status")
 async def get_central_robot_status() -> dict[str, Any]:
     """Proxy to the central signaling server's /api/robot-status endpoint.
