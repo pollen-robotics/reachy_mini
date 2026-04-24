@@ -438,8 +438,39 @@ class CentralSignalingRelay:
                 try:
                     await self._connect_and_relay()
                 except asyncio.CancelledError:
-                    logger.info("[Central Relay] _run_loop cancelled during connect")
-                    raise  # Re-raise to exit the outer try
+                    # CancelledError at this layer has two possible sources:
+                    #
+                    # 1. `stop()` flipped `self._running` to False. This is the
+                    #    shutdown path and we must re-raise so the thread exits.
+                    # 2. An in-flight `_close_connections()` (triggered by
+                    #    `force_reconnect` / `update_token`) cancelled a task
+                    #    that aiohttp was holding the cancellation for - e.g.
+                    #    a `session.get(...)` wedged inside `_resolve_host` on
+                    #    a flaky network. aiohttp propagates that cancellation
+                    #    up through `_handle_central_sse`, which lands here.
+                    #    In that case we very much want to stay in the loop and
+                    #    reconnect - killing the thread here means every
+                    #    subsequent `/refresh-relay` POST is a no-op because
+                    #    there's no loop left to service the token_updated
+                    #    event.
+                    #
+                    # `self._running` is our authoritative signal for (1). If
+                    # it's still True, treat the cancellation as a reconnect
+                    # request and loop around.
+                    if not self._running:
+                        logger.info(
+                            "[Central Relay] _run_loop cancelled (stop requested)"
+                        )
+                        raise
+                    logger.info(
+                        "[Central Relay] Connect attempt cancelled mid-flight "
+                        "(likely from force_reconnect / token update); restarting loop"
+                    )
+                    had_exception = True
+                    self._set_state(
+                        RelayState.RECONNECTING,
+                        "Restarting after cancelled connect",
+                    )
                 except Exception as e:
                     logger.warning(
                         f"[Central Relay] Connection attempt failed with exception: {type(e).__name__}: {e}"
