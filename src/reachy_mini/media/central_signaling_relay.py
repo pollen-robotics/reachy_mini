@@ -772,7 +772,14 @@ class CentralSignalingRelay:
 
     async def _send_to_central(self, msg: dict[str, Any]) -> None:
         """Send a message to the central server via HTTP POST."""
+        msg_type = msg.get("type", "?")
         if not self._http_session or not self.hf_token:
+            logger.warning(
+                "[Central Relay] _send_to_central skipped (type=%s, http_session=%s, hf_token=%s)",
+                msg_type,
+                bool(self._http_session),
+                bool(self.hf_token),
+            )
             return
 
         # Token goes in the Authorization header only, not the URL.
@@ -783,12 +790,24 @@ class CentralSignalingRelay:
                 send_url, json=msg, headers=headers
             ) as response:
                 if response.status != 200:
+                    body = ""
+                    try:
+                        body = (await response.text())[:300]
+                    except Exception:
+                        pass
                     logger.warning(
-                        f"[Central Relay] Failed to send message to central server: HTTP {response.status}"
+                        "[Central Relay] _send_to_central FAILED type=%s HTTP %s body=%r",
+                        msg_type,
+                        response.status,
+                        body,
                     )
+                else:
+                    logger.info("[Central Relay] _send_to_central OK type=%s", msg_type)
         except Exception as e:
             logger.error(
-                f"[Central Relay] Error sending message to central server: {e}"
+                "[Central Relay] _send_to_central exception type=%s err=%s",
+                msg_type,
+                e,
             )
 
     async def _send_to_local(self, msg: dict[str, Any]) -> None:
@@ -809,17 +828,28 @@ class CentralSignalingRelay:
         if msg_type == "welcome":
             # Received our peer ID from central server
             self._central_peer_id = msg.get("peerId")
-            self._set_state(
-                RelayState.CONNECTED, f"Remote access enabled as '{self.robot_name}'"
+            logger.info(
+                "[Central Relay] central welcome received peer_id=%s; registering as producer name=%r",
+                self._central_peer_id,
+                self.robot_name,
             )
 
-            # Register as producer
+            # Register as producer FIRST, then flip to CONNECTED. If we
+            # set CONNECTED before producer registration, observers (UI,
+            # mobile app, /relay-status pollers) can see "connected" while
+            # central does not yet know we are a producer for this user,
+            # which produces the desync described in /refresh-relay's
+            # docstring.
             await self._send_to_central(
                 {
                     "type": "setPeerStatus",
                     "roles": ["producer"],
                     "meta": {"name": self.robot_name},
                 }
+            )
+
+            self._set_state(
+                RelayState.CONNECTED, f"Remote access enabled as '{self.robot_name}'"
             )
 
         elif msg_type == "list":
