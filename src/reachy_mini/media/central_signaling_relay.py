@@ -170,6 +170,20 @@ class CentralSignalingRelay:
         else:
             logger.debug(log_msg)
 
+        # Structured kv form: easy to grep, easy to dashboard. The
+        # human-readable line above stays for compatibility with anyone
+        # reading the systemd journal directly.
+        from reachy_mini.daemon.app.logging_ctx import kv_log
+
+        kv_log(
+            logger,
+            logging.INFO if state != RelayState.ERROR else logging.WARNING,
+            "central.relay.state",
+            from_=old_state.value,
+            to=state.value,
+            message=message,
+        )
+
         # Notify callback if set
         if self._on_state_change:
             try:
@@ -194,7 +208,9 @@ class CentralSignalingRelay:
         # coroutine is invoked on the main asyncio loop and schedules the
         # actual tear-down on the relay's own thread loop.
         if self._robot_app_lock is not None:
-            self._robot_app_lock.set_remote_eviction_handler(self._handle_remote_eviction)
+            self._robot_app_lock.set_remote_eviction_handler(
+                self._handle_remote_eviction
+            )
 
         # Run the relay in its own thread with a dedicated event loop.
         # This is necessary because the caller (daemon.start) may run in a temporary

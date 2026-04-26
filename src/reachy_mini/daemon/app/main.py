@@ -24,6 +24,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from reachy_mini.apps.manager import AppManager
+from reachy_mini.daemon.app.logging_ctx import TraceIdFilter
 from reachy_mini.daemon.app.routers import (
     apps,
     camera,
@@ -38,6 +39,7 @@ from reachy_mini.daemon.app.routers import (
     state,
     volume,
 )
+from reachy_mini.daemon.app.trace_middleware import TraceIdMiddleware
 from reachy_mini.daemon.daemon import Daemon
 from reachy_mini.daemon.utils import SimulationMode
 from reachy_mini.media.audio_utils import (
@@ -253,12 +255,17 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
             health_check_event.set()
             return {"status": "ok"}
 
+    # Order matters: TraceId runs first so every downstream middleware
+    # (CORS, routing) sees the ContextVar set when they emit logs.
+    # Starlette runs middlewares in REVERSE registration order on the
+    # request side, so adding TraceId LAST puts it on top of the stack.
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],  # or restrict to your HF domain
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    app.add_middleware(TraceIdMiddleware)
 
     STATIC_DIR = Path(__file__).parent / "dashboard" / "static"
     TEMPLATES_DIR = Path(__file__).parent / "dashboard" / "templates"
@@ -296,10 +303,19 @@ def run_app(args: Args) -> None:
     root_logger = logging.getLogger()
     root_logger.setLevel(args.log_level)
 
-    # Create handler that writes to stderr with immediate flush
+    # Create handler that writes to stderr with immediate flush.
+    #
+    # The format includes %(trace_id)s so any request-scoped log line
+    # carries the same id the mobile app emits, making cross-boundary
+    # debugging a grep away. The TraceIdFilter guarantees the field is
+    # always set (sentinel "----" outside requests), so the format
+    # string is unconditional.
     handler = logging.StreamHandler(sys.stderr)
     handler.setLevel(args.log_level)
-    handler.setFormatter(logging.Formatter("%(name)s - %(levelname)s - %(message)s"))
+    handler.addFilter(TraceIdFilter())
+    handler.setFormatter(
+        logging.Formatter("[%(trace_id)s] %(name)s - %(levelname)s - %(message)s")
+    )
     root_logger.handlers.clear()
     root_logger.addHandler(handler)
 
