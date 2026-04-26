@@ -124,17 +124,25 @@ class Advertisement(dbus.service.Object):
         dbus.service.Object.__init__(self, bus, self.path)
 
     def get_properties(self):
-        """Return the properties of the advertisement."""
+        """Return the properties of the advertisement.
+
+        Note on payload size: legacy BLE advertisements are capped at
+        31 bytes total. We deliberately omit ``ServiceUUIDs`` from the
+        primary advertisement and rely on ``LocalName`` matching on
+        the client side: a 128-bit UUID alone eats 18 bytes, which
+        leaves no room for the ManufacturerData IPv4 payload (5 bytes
+        per address). The full GATT service tree is still discoverable
+        once the client connects, so this is purely an advertising-time
+        size optimisation. ``Appearance=0x0000`` ("Unknown") is also
+        skipped because it is uninformative and adds 4 bytes.
+        """
         props = {"Type": self.ad_type}
         if self.local_name:
             props["LocalName"] = dbus.String(self.local_name)
-        if self.service_uuids:
-            props["ServiceUUIDs"] = dbus.Array(self.service_uuids, signature="s")
         if self.manufacturer_data:
             props["ManufacturerData"] = dbus.Dictionary(
                 self.manufacturer_data, signature="qv"
             )
-        props["Appearance"] = dbus.UInt16(0x0000)
         props["Duration"] = dbus.UInt16(0)
         props["Timeout"] = dbus.UInt16(0)
         return {LE_ADVERTISEMENT_IFACE: props}
@@ -864,14 +872,26 @@ class BluetoothCommandService:
 POLLEN_MANUFACTURER_ID = 0xFFFF  # Reserved ID for development/testing
 
 
+# Hard cap on the number of IP addresses we cram into the BLE advert.
+# Each address eats 5 bytes (1 flag + 4 IPv4), and the legacy adv slot
+# is limited to 31 bytes total (~16 already used by flags + LocalName),
+# so 2 addresses is the safe maximum before HCI rejects the payload.
+_MAX_ADVERTISED_IPS = 2
+
+
 def encode_network_ips() -> dict:
-    """Build ManufacturerData payload with all non-loopback IPv4 addresses.
+    """Build a ManufacturerData payload with at most two IPv4 addresses.
 
     Format per IP: 1 byte flags | 4 bytes IPv4
       flags: 0x01 = hotspot, 0x00 = normal
 
     Returns a dict {manufacturer_id: dbus.Array(bytes)} suitable for
-    BlueZ ManufacturerData property.  Returns empty dict when offline.
+    BlueZ ManufacturerData property. Returns empty dict when offline.
+
+    The cap exists because the overall advert has to fit in 31 bytes
+    (see :class:`Advertisement.get_properties`). Mobile clients that
+    need more than two interfaces can still query the GATT
+    NETWORK_STATUS characteristic once connected.
     """
     status = get_network_status()
     if status == "OFFLINE" or status == "ERROR":
@@ -881,7 +901,10 @@ def encode_network_ips() -> dict:
     is_hotspot = status.startswith("HOTSPOT")
 
     parts = status.split("[")
+    encoded = 0
     for part in parts[1:]:
+        if encoded >= _MAX_ADVERTISED_IPS:
+            break
         if "]" not in part:
             continue
         iface, rest = part.split("]", 1)
@@ -891,6 +914,7 @@ def encode_network_ips() -> dict:
             flag = 0x01 if (is_hotspot and iface.strip() == "wlan0") else 0x00
             payload.append(flag)
             payload.extend(ip_bytes)
+            encoded += 1
         except OSError:
             continue
 
