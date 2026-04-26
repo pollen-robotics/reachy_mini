@@ -242,7 +242,12 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
         app.include_router(cache.router)
         app.include_router(logs.router)
         app.include_router(update.router)
+        # Legacy mount at `/wifi/...` (used by the Bluetooth provisioning service
+        # and older first-boot tooling). Kept for backward compatibility.
         app.include_router(wifi_config.router)
+        # New mount under `/api/wifi/...` so the mobile app can reach it via
+        # the unified `RobotClient` (which prefixes everything with `/api`).
+        router.include_router(wifi_config.router)
 
     app.include_router(router)
     app.include_router(sdk_ws.router)
