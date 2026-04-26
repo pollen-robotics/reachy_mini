@@ -85,6 +85,31 @@ async def get_daemon_status(daemon: Daemon = Depends(get_daemon)) -> DaemonStatu
     return daemon.status()
 
 
+@router.get("/version")
+async def get_daemon_version() -> dict[str, str]:
+    """Return the daemon's package version and a compatibility marker.
+
+    Mobile and remote clients call this early during the connection
+    handshake to detect a feature mismatch (e.g. an older daemon that
+    doesn't ship a new endpoint yet) and surface a soft warning rather
+    than failing later with a cryptic 404.
+
+    The endpoint is deliberately additive: it returns a dict so we can
+    grow it (build sha, kinematics engine, ...) without breaking older
+    clients that only look up ``version``.
+    """
+    from reachy_mini import __version__
+
+    return {
+        "version": __version__,
+        # Bumped whenever the HTTP surface gains/loses an endpoint or
+        # a route's response shape changes in a non-additive way.
+        # Mobile clients can rely on `api_revision >= N` to know a
+        # feature is reachable, regardless of the package version.
+        "api_revision": "1",
+    }
+
+
 @router.get("/robot-app-lock-status")
 async def get_robot_app_lock_status(
     daemon: Daemon = Depends(get_daemon),
