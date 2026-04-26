@@ -76,6 +76,27 @@ async def get_auth_status() -> dict[str, Any]:
     return hf_auth.check_token_status()
 
 
+@router.get("/token")
+async def get_token() -> dict[str, Any]:
+    """Return the stored HuggingFace token in plaintext.
+
+    This exists so remote clients (e.g. the mobile app) can bridge the
+    token into a sandboxed iframe that itself cannot go through the HF
+    OAuth flow (hit by ``X-Frame-Options: SAMEORIGIN`` on ``/login``).
+
+    Security note: the daemon's HTTP API is already unauthenticated on
+    the local network, so any client that can reach this endpoint can
+    also start/stop apps at will. Exposing the token here does not
+    meaningfully widen the attack surface, but we deliberately keep the
+    endpoint separate from ``/status`` so the desktop frontend - which
+    never needs the raw token - is not tempted to consume it.
+    """
+    token = hf_auth.get_hf_token()
+    if not token:
+        raise HTTPException(status_code=404, detail="No HF token stored")
+    return {"token": token}
+
+
 @router.get("/relay-status")
 async def get_relay_status(request: Request) -> dict[str, Any]:
     """Get the central signaling relay connection status."""
@@ -111,6 +132,67 @@ async def delete_token() -> dict[str, str]:
 
     kv_log(logger, logging.INFO, "auth.delete_token.success")
     return {"status": "success"}
+
+
+@router.post("/refresh-relay")
+async def refresh_relay() -> dict[str, Any]:
+    """Force the central signaling relay to reconnect with the stored token.
+
+    Drops the relay's current connection and re-registers with the
+    currently stored HF token.
+
+    Intended as a recovery handle for clients (e.g. the mobile app) that
+    detect a desync between ``/relay-status`` (claims ``connected``) and
+    ``/central-robot-status`` (returns ``robots: []``). That combination
+    means the relay still holds an SSE channel open with central but is
+    no longer registered as a producer for the authenticated user, most
+    commonly because the relay attached with a token that has since been
+    rotated or because a transient error during ``setPeerStatus`` went
+    unnoticed. From the outside this manifests as "the robot is online
+    but no one can call it" until someone restarts the daemon.
+
+    Rather than asking users to SSH in and run ``systemctl restart``,
+    this endpoint triggers the relay's existing ``_token_updated`` event
+    path (the same one ``save-token`` uses on login), which cleanly
+    tears down the SSE connection, refreshes the HF token from
+    ``huggingface_hub.get_token`` and reconnects. Works with any token
+    currently stored (raw user tokens or OAuth access tokens) because
+    we go through the relay's reconnect logic rather than re-validating
+    the token.
+
+    Response shape:
+        { "status": "requested", "token_available": bool, "reason"?: str }
+
+    ``token_available`` is false if the daemon has no HF token stored
+    at all (user not logged in). In that case the relay will just
+    transition to ``WAITING_FOR_TOKEN`` after the reconnect, which is
+    the correct behaviour.
+    """
+    token = hf_auth.get_hf_token()
+
+    try:
+        from reachy_mini.media.central_signaling_relay import notify_force_reconnect
+
+        # Unconditionally drop & reconnect. We used to call
+        # `notify_token_change(token)` here, but that path is guarded
+        # by an `old_token == new_token` early-return in the relay,
+        # which turned this endpoint into a no-op whenever the token
+        # had not changed - exactly the case we ship this endpoint
+        # for. `notify_force_reconnect` skips that guard.
+        await notify_force_reconnect()
+    except ImportError:
+        return {
+            "status": "skipped",
+            "token_available": bool(token),
+            "reason": "relay_unavailable",
+        }
+    except Exception as e:
+        logger.warning("[refresh-relay] notify_force_reconnect failed: %s", e)
+        raise HTTPException(
+            status_code=500, detail=f"Failed to refresh relay: {e}"
+        ) from e
+
+    return {"status": "requested", "token_available": bool(token)}
 
 
 @router.get("/central-robot-status")
