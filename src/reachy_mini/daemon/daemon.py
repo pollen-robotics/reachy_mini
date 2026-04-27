@@ -634,6 +634,20 @@ class Daemon:
         else:
             self._status.backend_status = None
 
+        # Refresh the volatile relay-assigned peer id on every call: the
+        # relay rotates this on each reconnect and we don't have a hook
+        # that wakes ``Daemon`` up on welcome frames. Cheap (single
+        # attribute load) so doing it on every status read is fine.
+        try:
+            from reachy_mini.media.central_signaling_relay import (
+                get_central_peer_id,
+            )
+
+            self._status.central_peer_id = get_central_peer_id()
+        except Exception:
+            # The relay module is optional in some test harnesses.
+            self._status.central_peer_id = None
+
         return self._status
 
     def _publish_status(self) -> None:

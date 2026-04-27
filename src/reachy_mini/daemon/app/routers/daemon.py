@@ -203,6 +203,13 @@ class DaemonIdentityResponse(BaseModel):
 
     install_id: str
     robot_name: str
+    # Producer peer id assigned by HF central on the latest ``welcome``
+    # frame. Optional because the relay may not be running (no token,
+    # offline, ...) and because it rotates on every reconnect. Mobile
+    # clients use this as a fallback dedup key against the central
+    # listing while the central server does not yet propagate
+    # ``meta.install_id``.
+    central_peer_id: str | None = None
 
 
 @router.get("/identity", response_model=DaemonIdentityResponse)
@@ -216,10 +223,20 @@ async def get_daemon_identity(
     user renames the robot, swaps HF tokens, or reinstalls the tray:
     it is the only field of this daemon that the mobile app can rely
     on as a long-lived reconciliation key.
+
+    ``central_peer_id`` is volatile: it is the id central just handed
+    us back on the WebSocket ``welcome`` frame and rotates on every
+    reconnect. Returned as a best-effort dedup key for mobile clients
+    that want to merge a "this Mac" loopback row against the same
+    physical robot's central listing without waiting for central to
+    propagate ``meta.install_id``.
     """
+    from reachy_mini.media.central_signaling_relay import get_central_peer_id
+
     return DaemonIdentityResponse(
         install_id=daemon.install_id,
         robot_name=daemon.robot_name,
+        central_peer_id=get_central_peer_id(),
     )
 
 

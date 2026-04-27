@@ -147,6 +147,20 @@ class CentralSignalingRelay:
         """Get additional info about the current state."""
         return self._state_message
 
+    @property
+    def central_peer_id(self) -> Optional[str]:
+        """The producer peer id central assigned to this relay.
+
+        Set on the ``welcome`` frame the first time we connect, cleared
+        on disconnect/teardown. Read by callers outside the relay thread
+        (HTTP handlers, daemon status snapshots): a single attribute load
+        on a `str | None` is atomic in CPython, so we do not need a lock
+        here. Callers MUST treat this as advisory - a freshly reconnected
+        relay can return a new id, and consumers (mobile dedupe, status
+        endpoints) should re-read on every refresh.
+        """
+        return self._central_peer_id
+
     def _set_state(self, state: RelayState, message: Optional[str] = None) -> None:
         """Update the connection state with logging."""
         old_state = self._state
@@ -1227,6 +1241,19 @@ def get_relay_status() -> dict[str, Any]:
         "message": _relay_instance.state_message,
         "is_connected": _relay_instance.state == RelayState.CONNECTED,
     }
+
+
+def get_central_peer_id() -> Optional[str]:
+    """Best-effort lookup of the producer peer id central assigned us.
+
+    Returns ``None`` when the relay is not running or has not yet
+    received the ``welcome`` frame. Used by callers (HTTP handlers,
+    daemon identity endpoint) that want to expose this value to clients
+    without taking a hard dependency on the relay singleton.
+    """
+    if _relay_instance is None:
+        return None
+    return _relay_instance.central_peer_id
 
 
 async def start_central_relay(
