@@ -43,6 +43,28 @@ def test_respeaker_apply_audio_config_writes_current_board_values() -> None:
 
 
 @pytest.mark.audio
+def test_respeaker_apply_audio_config_changes_value_and_restores_it() -> None:
+    """Custom config writes should change a real value and restore it."""
+    parameter_name = "PP_NLATTENONOFF"
+    respeaker = init_respeaker_usb()
+    assert respeaker is not None, "Reachy Mini Audio board is required."
+    original_values = None
+    try:
+        original_values = respeaker.read_values(parameter_name)
+        assert original_values is not None
+        original_value = int(original_values[0])
+        changed_value = 0 if original_value else 1
+
+        assert respeaker.apply_audio_config(((parameter_name, (changed_value,)),))
+        assert respeaker.read_values(parameter_name) == (changed_value,)
+    finally:
+        if original_values is not None:
+            assert respeaker.apply_audio_config(((parameter_name, original_values),))
+            assert respeaker.read_values(parameter_name) == original_values
+        respeaker.close()
+
+
+@pytest.mark.audio
 def test_media_audio_apply_audio_config_uses_real_board() -> None:
     """Media audio should apply caller-provided config through the real board."""
     respeaker = init_respeaker_usb()
