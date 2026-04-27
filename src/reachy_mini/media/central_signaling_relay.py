@@ -73,6 +73,7 @@ class CentralSignalingRelay:
         local_uri: str = LOCAL_GSTREAMER_SIGNALING,
         hf_token: Optional[str] = None,
         robot_name: str = "reachymini",
+        install_id: Optional[str] = None,
         on_state_change: Optional[Callable[["RelayState", Optional[str]], None]] = None,
         robot_app_lock: Optional[RobotAppLock] = None,
     ):
@@ -83,6 +84,12 @@ class CentralSignalingRelay:
             local_uri: WebSocket URI of local GStreamer signaling server
             hf_token: HuggingFace token for authentication (will be refreshed)
             robot_name: Name to register as producer
+            install_id: Stable per-install opaque identifier (UUID4
+                hex). Forwarded as ``meta.install_id`` on every
+                ``setPeerStatus`` so the central listing carries the
+                same reconciliation key the BLE / mDNS / loopback
+                surfaces report. Omitted when no install id is known
+                yet (very early boot, tests).
             on_state_change: Callback when state changes (state, message)
             robot_app_lock: Shared lock coordinating local vs remote access to
                 the robot. When provided, incoming remote sessions are
@@ -94,6 +101,7 @@ class CentralSignalingRelay:
         self.local_uri = local_uri
         self.hf_token = hf_token
         self.robot_name = robot_name
+        self.install_id = install_id
         self._on_state_change = on_state_change
         self._robot_app_lock = robot_app_lock
 
@@ -858,7 +866,7 @@ class CentralSignalingRelay:
                 {
                     "type": "setPeerStatus",
                     "roles": ["producer"],
-                    "meta": {"name": self.robot_name},
+                    "meta": self._build_producer_meta(),
                 }
             )
 
@@ -1165,9 +1173,25 @@ class CentralSignalingRelay:
                 {
                     "type": "setPeerStatus",
                     "roles": ["producer"],
-                    "meta": {"name": self.robot_name},
+                    "meta": self._build_producer_meta(),
                 }
             )
+
+    def _build_producer_meta(self) -> dict[str, Any]:
+        """Assemble the ``meta`` payload sent on every ``setPeerStatus``.
+
+        Always includes ``name`` (human-readable robot label). Adds
+        ``install_id`` when one is known: this is the stable
+        reconciliation key that lets the mobile app's robot registry
+        merge a central row with the same robot's BLE / mDNS / loopback
+        sightings. We deliberately keep the payload additive so older
+        central versions that don't know about ``install_id`` ignore
+        it without complaining.
+        """
+        meta: dict[str, Any] = {"name": self.robot_name}
+        if self.install_id:
+            meta["install_id"] = self.install_id
+        return meta
 
 
 # Singleton instance for integration
@@ -1208,6 +1232,7 @@ def get_relay_status() -> dict[str, Any]:
 async def start_central_relay(
     hf_token: Optional[str] = None,
     robot_name: str = "reachymini",
+    install_id: Optional[str] = None,
     central_uri: str = CENTRAL_SIGNALING_SERVER,
     on_state_change: Optional[Callable[[RelayState, Optional[str]], None]] = None,
     robot_app_lock: Optional[RobotAppLock] = None,
@@ -1217,6 +1242,8 @@ async def start_central_relay(
     Args:
         hf_token: HuggingFace token for authentication (will auto-refresh)
         robot_name: Name to register as producer
+        install_id: Stable per-install reconciliation key (forwarded to
+            the producer ``meta``). See ``CentralSignalingRelay``.
         central_uri: Central server URI
         on_state_change: Callback when connection state changes
         robot_app_lock: Shared lock coordinating local vs remote robot access.
@@ -1243,6 +1270,7 @@ async def start_central_relay(
         central_uri=central_uri,
         hf_token=hf_token,
         robot_name=robot_name,
+        install_id=install_id,
         on_state_change=on_state_change,
         robot_app_lock=robot_app_lock,
     )

@@ -40,6 +40,12 @@ REACHY_STATUS_SERVICE_UUID = "12345678-1234-5678-1234-56789abcdef3"
 NETWORK_STATUS_UUID = "12345678-1234-5678-1234-56789abcdef4"
 SYSTEM_STATUS_UUID = "12345678-1234-5678-1234-56789abcdef5"
 AVAILABLE_COMMANDS_UUID = "12345678-1234-5678-1234-56789abcdef6"
+# install_id (UUID4 hex, generated once on first daemon boot). Same value
+# also surfaces via mDNS TXT, the central listing's ``meta``, and
+# ``GET /api/daemon/identity`` - so the mobile robot registry can merge
+# this BLE row with the same robot's other sightings on this stable key.
+INSTALL_ID_UUID = "12345678-1234-5678-1234-56789abcdef7"
+ROBOT_NAME_UUID = "12345678-1234-5678-1234-56789abcdef8"
 
 BLUEZ_SERVICE_NAME = "org.bluez"
 GATT_MANAGER_IFACE = "org.bluez.GattManager1"
@@ -538,6 +544,23 @@ class ReachyStatusService(dbus.service.Object):
             )
         )
 
+        # Identity characteristics (install_id + current robot name).
+        # Resolved lazily through the daemon's local HTTP endpoint so
+        # they keep up with rename + first-boot persistence without us
+        # having to wire a second IPC channel into this DBus-only
+        # service. ``Dynamic`` is fine here: the read frequency is
+        # tiny (once at scan time on the mobile side).
+        self.add_characteristic(
+            DynamicCharacteristic(
+                bus, 3, INSTALL_ID_UUID, self, _get_install_id, "Install ID"
+            )
+        )
+        self.add_characteristic(
+            DynamicCharacteristic(
+                bus, 4, ROBOT_NAME_UUID, self, _get_robot_name, "Robot Name"
+            )
+        )
+
     def update_network_status(self):
         """Update the network status characteristic value."""
         if hasattr(self, "network_char"):
@@ -923,6 +946,62 @@ DAEMON_LOCAL_URL = "http://127.0.0.1:8000"
 WIFI_HTTP_TIMEOUT_S = 4.0
 WIFI_SCAN_HTTP_TIMEOUT_S = 15.0  # nmcli rescan is slow
 WIFI_SCAN_MAX_RESULTS = 12  # keep payload inside a single BLE MTU
+IDENTITY_HTTP_TIMEOUT_S = 1.5  # called from a GATT read; must not block
+
+# Cache so a burst of GATT reads (mobile clients tend to pre-warm
+# every characteristic on connect) doesn't hammer the local daemon.
+# Values are immutable across the daemon's lifetime (install_id
+# definitionally so; robot_name is mutable but a 5s lag during a
+# rename is harmless because the mobile re-fetches via HTTP anyway).
+_identity_cache: dict[str, str | float] = {
+    "install_id": "",
+    "robot_name": "",
+    "ts": 0.0,
+}
+_IDENTITY_CACHE_TTL_S = 5.0
+
+
+def _fetch_identity() -> dict[str, str]:
+    """Return a fresh ``{install_id, robot_name}`` dict from the daemon.
+
+    Falls back to empty strings on any error (daemon down, route 404
+    on a pre-revision-3 daemon, ...). GATT reads must never raise.
+    """
+    import time
+
+    now = time.monotonic()
+    if now - float(_identity_cache.get("ts", 0.0)) < _IDENTITY_CACHE_TTL_S:
+        return {
+            "install_id": str(_identity_cache.get("install_id", "")),
+            "robot_name": str(_identity_cache.get("robot_name", "")),
+        }
+
+    install_id = ""
+    robot_name = ""
+    try:
+        payload = _daemon_request(
+            "GET", "/api/daemon/identity", timeout=IDENTITY_HTTP_TIMEOUT_S
+        )
+        if isinstance(payload, dict):
+            install_id = str(payload.get("install_id") or "")
+            robot_name = str(payload.get("robot_name") or "")
+    except Exception as e:
+        logger.debug(f"identity fetch failed (returning blanks): {e}")
+
+    _identity_cache["install_id"] = install_id
+    _identity_cache["robot_name"] = robot_name
+    _identity_cache["ts"] = now
+    return {"install_id": install_id, "robot_name": robot_name}
+
+
+def _get_install_id() -> str:
+    """GATT getter: return the install_id as a UTF-8 string (or "")."""
+    return _fetch_identity()["install_id"]
+
+
+def _get_robot_name() -> str:
+    """GATT getter: return the human-readable robot_name as UTF-8 (or "")."""
+    return _fetch_identity()["robot_name"]
 
 
 def _daemon_request(

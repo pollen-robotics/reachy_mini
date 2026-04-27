@@ -22,7 +22,7 @@ from reachy_mini.io.protocol import DaemonState, DaemonStatus, MotorControlMode
 from reachy_mini.io.ws_server import WSServer
 from reachy_mini.tools.reflash_motors import reflash_motors_if_needed
 
-from .app.config import DEFAULT_ROBOT_NAME as _DEFAULT_ROBOT_NAME
+from .app.config import get_or_create_install_id
 from .backend.mockup_sim import MockupSimBackend
 from .backend.mujoco import MujocoBackend
 from .backend.robot import RobotBackend
@@ -53,6 +53,14 @@ class Daemon:
 
         self.robot_name = robot_name
 
+        # Stable per-install id, created on first boot and persisted
+        # alongside ``robot_name`` in ``daemon.json``. Read once at init
+        # and held as ``self.install_id`` so it can be passed verbatim
+        # to every layer that needs to advertise the robot (central
+        # relay meta, mDNS TXT, BLE GATT char, HTTP /identity).
+        self.install_id: str = get_or_create_install_id()
+        self.logger.info("Daemon install_id: %s", self.install_id)
+
         self.wireless_version = wireless_version
         self.desktop_app_daemon = desktop_app_daemon
         self.no_media = no_media
@@ -68,6 +76,7 @@ class Daemon:
 
         self._status = DaemonStatus(
             robot_name=robot_name,
+            install_id=self.install_id,
             state=DaemonState.NOT_INITIALIZED,
             wireless_version=wireless_version,
             desktop_app_daemon=desktop_app_daemon,
@@ -174,6 +183,12 @@ class Daemon:
         rename has already taken effect and central has already been
         notified, so the user-visible behaviour is correct - it just
         won't survive a daemon restart.
+
+        Note: as of the install_id rollout there is no longer a "first
+        rename triggers central registration" path - the relay always
+        runs as soon as a token is available and reconciliation is
+        done by ``install_id``. So this method is purely an advertise
+        update on a relay that's already (or will soon be) up.
         """
         from reachy_mini.daemon.app.config import set_persisted_robot_name
         from reachy_mini.media.central_signaling_relay import notify_robot_name_change
@@ -181,7 +196,6 @@ class Daemon:
         if robot_name == self.robot_name:
             return self._status
 
-        was_default = self.robot_name == _DEFAULT_ROBOT_NAME
         self.logger.info("Renaming robot: %r -> %r", self.robot_name, robot_name)
         self.robot_name = robot_name
         self._status.robot_name = robot_name
@@ -191,28 +205,12 @@ class Daemon:
                 "Persisted config write failed; rename will not survive restart"
             )
 
-        if was_default and robot_name != _DEFAULT_ROBOT_NAME:
-            # Crossing the "default -> custom" boundary: the relay was
-            # gated off at boot in ``_start_central_signaling_relay`` to
-            # keep the HF fleet free of anonymous duplicates. Now that
-            # the user picked a real name, kick off the relay so this
-            # robot becomes visible on central within seconds.
-            try:
-                relay_result = await self.ensure_central_signaling_relay()
-                self.logger.info("Post-rename central relay state: %s", relay_result)
-            except Exception as exc:
-                self.logger.warning(
-                    "Failed to ensure central relay after rename: %s", exc
-                )
-        else:
-            try:
-                await notify_robot_name_change(robot_name)
-            except Exception as exc:
-                # ``notify_robot_name_change`` already logs at warning level;
-                # downgrade further failures to debug so we don't double-log.
-                self.logger.debug(
-                    "notify_robot_name_change raised after handling: %s", exc
-                )
+        try:
+            await notify_robot_name_change(robot_name)
+        except Exception as exc:
+            # ``notify_robot_name_change`` already logs at warning level;
+            # downgrade further failures to debug so we don't double-log.
+            self.logger.debug("notify_robot_name_change raised after handling: %s", exc)
 
         return self._status
 
@@ -249,33 +247,24 @@ class Daemon:
     async def _start_central_signaling_relay(self) -> None:
         """Start the central signaling relay for remote WebRTC access.
 
-        Three preconditions must hold for the relay to actually start:
+        Two preconditions must hold for the relay to actually start:
 
         - the media server is up (no point relaying audio/video that
           doesn't exist);
-        - an HF token is available (central rejects anonymous producers);
-        - the robot has a user-chosen name (we refuse to register on the
-          fleet under the default ``reachy_mini`` label, otherwise every
-          new robot would clutter the user's HF dashboard with anonymous
-          duplicates that are impossible to tell apart). The relay starts
-          automatically the moment the user picks a name through
-          ``POST /api/daemon/robot-name``, so this is a soft gate.
+        - an HF token is available (central rejects anonymous producers).
 
-        Each gate logs at INFO level so a Wireless robot stuck without a
-        name surfaces clearly in the journal.
+        We deliberately do NOT gate on the robot name. Every robot with
+        a token registers on central, and the mobile app reconciles
+        sightings across BLE, mDNS, loopback HTTP, and central by
+        ``install_id`` - so two unnamed ``reachy_mini`` instances end
+        up as two distinguishable rows in the listing rather than two
+        indistinguishable duplicates. The user-facing label is still
+        the human-readable ``robot_name``; ``install_id`` is the
+        technical key.
         """
         global _central_relay_task
 
         if not self._media_server:
-            return
-
-        if self.robot_name == _DEFAULT_ROBOT_NAME:
-            self.logger.info(
-                "Central signaling relay deferred: robot still has the default "
-                "name %r. Set a custom name via POST /api/daemon/robot-name "
-                "(or the mobile app onboarding) to register on the HF fleet.",
-                self.robot_name,
-            )
             return
 
         try:
@@ -293,10 +282,15 @@ class Daemon:
         try:
             from reachy_mini.media.central_signaling_relay import start_central_relay
 
-            self.logger.info("Starting central signaling relay...")
+            self.logger.info(
+                "Starting central signaling relay (name=%r, install_id=%s)...",
+                self.robot_name,
+                self.install_id,
+            )
             await start_central_relay(
                 hf_token=hf_token,
                 robot_name=self.robot_name,
+                install_id=self.install_id,
                 robot_app_lock=self.robot_app_lock,
             )
             self.logger.info("Central signaling relay started")

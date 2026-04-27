@@ -81,6 +81,14 @@ class DaemonStatus(BaseModel):
 
     type: Literal["daemon_status"] = "daemon_status"
     robot_name: str
+    # Stable, opaque per-install identifier (UUID4 hex). Generated on
+    # first boot and persisted alongside ``robot_name`` in
+    # ``daemon.json``. Used by the mobile app to merge sightings of the
+    # same physical robot across BLE, mDNS, loopback HTTP, and the HF
+    # central listing into a single row even before the user picks a
+    # human-readable name. Optional only for backward compatibility
+    # with older daemons / tests that build a status by hand.
+    install_id: Optional[str] = None
     state: DaemonState
     wireless_version: bool
     desktop_app_daemon: bool

@@ -4,11 +4,21 @@ Holds a tiny JSON document under ``$XDG_CONFIG_HOME/reachy_mini/daemon.json``
 (default ``~/.config/reachy_mini/daemon.json``) for daemon-level state that
 must survive restarts and re-installs of the upstream tray app.
 
-Currently the only persisted field is ``robot_name`` - the human-readable
-label the user picked for this Reachy. We deliberately keep this file
-separate from any tray ``data_dir`` so that:
+Two fields live here today:
 
-- the same physical Reachy keeps its name across a tray ``reset_bootstrap``,
+- ``robot_name`` - the human-readable label the user picked for this
+  Reachy.
+- ``install_id`` - a stable opaque identifier (UUID4 hex) generated on
+  first boot and never rotated. Acts as the canonical reconciliation
+  key across discovery transports (BLE / mDNS / HF central): the same
+  physical robot reports the same ``install_id`` on every channel, so
+  the mobile app can merge "this is the robot I see on BLE *and* on
+  central" into a single row even before the user picks a name.
+
+We deliberately keep this file separate from any tray ``data_dir`` so that:
+
+- the same physical Reachy keeps its name + install_id across a tray
+  ``reset_bootstrap``,
 - the same daemon code path applies on the Wireless robot (where there is
   no tray at all) and on the Lite/desktop tray on macOS or Linux,
 - destroying the HF token cache does not nuke the user's robot label.
@@ -16,6 +26,9 @@ separate from any tray ``data_dir`` so that:
 Reads and writes are tolerant: a missing or corrupt file is treated as
 "no persisted config", and a write failure is logged but never raises.
 The naming flow always has a mandatory in-memory fallback (``reachy_mini``).
+The install_id has a per-process in-memory fallback too so two daemons
+that fail to write disk still report stable values within their own
+lifetime.
 
 Concurrency: writes are ``fsync`` + atomic rename, so a crash mid-write
 cannot leave the config in a half-written state. There is no in-process
@@ -30,6 +43,7 @@ import json
 import logging
 import os
 import tempfile
+import uuid
 from pathlib import Path
 from typing import Any, Optional
 
@@ -149,3 +163,68 @@ def set_persisted_robot_name(name: str) -> bool:
     config = load_config()
     config["robot_name"] = name
     return save_config(config)
+
+
+# Process-local fallback for ``install_id`` when disk persistence
+# fails. Keeps the value stable across a single daemon process even on
+# read-only filesystems; it does NOT survive restarts in that case.
+_install_id_memo: Optional[str] = None
+
+
+def get_or_create_install_id() -> str:
+    """Return this install's stable opaque identifier, creating it on first call.
+
+    The id is a 32-char lowercase hex (UUID4 without dashes). It is
+    generated exactly once per install, persisted to ``daemon.json``,
+    and then read back on every subsequent boot. Never rotates: a
+    rename of the robot, a new HF token, or a tray ``reset_bootstrap``
+    all leave it untouched.
+
+    Why not a hardware serial: we don't have a stable hardware-anchored
+    id we can read from every supported platform (Wireless Pi, macOS
+    tray, Linux tray). A persisted UUID gives us "stable across all
+    channels for one user's lifetime of this robot install" which is
+    exactly what fleet reconciliation needs.
+
+    Failure mode: if disk writes fail (permissions, full disk, ...),
+    we fall back to a process-local memo so reads from this daemon
+    are at least internally consistent. The next daemon restart will
+    generate a fresh id and try to persist again.
+    """
+    global _install_id_memo
+
+    config = load_config()
+    raw = config.get("install_id")
+    if isinstance(raw, str) and raw.strip():
+        return raw.strip()
+
+    if _install_id_memo is not None:
+        return _install_id_memo
+
+    new_id = uuid.uuid4().hex
+    config["install_id"] = new_id
+    if save_config(config):
+        logger.info("[config] generated new install_id=%s", new_id)
+    else:
+        logger.warning(
+            "[config] generated install_id=%s but persistence failed; "
+            "value will not survive a restart",
+            new_id,
+        )
+
+    _install_id_memo = new_id
+    return new_id
+
+
+def get_install_id() -> Optional[str]:
+    """Return the persisted install_id without creating one.
+
+    Used by callers that want to read but not initialise (e.g. the BLE
+    service when probing). Daemon startup always goes through
+    ``get_or_create_install_id`` so a missing file there is fixed
+    immediately.
+    """
+    raw = load_config().get("install_id")
+    if isinstance(raw, str) and raw.strip():
+        return raw.strip()
+    return _install_id_memo

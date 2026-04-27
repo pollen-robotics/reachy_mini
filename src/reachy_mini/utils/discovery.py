@@ -56,10 +56,22 @@ def _get_local_ip() -> str:
 class MdnsServiceRegistration:
     """Register a Reachy Mini daemon as an mDNS service."""
 
-    def __init__(self, robot_name: str, port: int) -> None:
-        """Initialize with robot name and port to advertise."""
+    def __init__(
+        self,
+        robot_name: str,
+        port: int,
+        install_id: str | None = None,
+    ) -> None:
+        """Initialize with robot name, port and (optional) install_id to advertise.
+
+        ``install_id`` is published as a TXT property so LAN clients can
+        reconcile this advertisement with the same robot's central
+        listing entry. Always emitted when known; absent on legacy
+        callers / tests.
+        """
         self._robot_name = robot_name
         self._port = port
+        self._install_id = install_id
         self._zeroconf: Zeroconf | None = None
         self._info: ServiceInfo | None = None
         self._register_thread: threading.Thread | None = None
@@ -150,6 +162,12 @@ class MdnsServiceRegistration:
             "ws_path": "/ws/sdk",
             "address": _get_local_ip(),
         }
+        if self._install_id:
+            # Stable per-install reconciliation key; same value also
+            # appears in the central listing's ``meta`` and at
+            # ``GET /api/daemon/identity``. Mobile clients merge mDNS
+            # rows with central rows on this key.
+            properties["install_id"] = self._install_id
 
         try:
             self._zeroconf = Zeroconf()

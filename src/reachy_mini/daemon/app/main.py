@@ -148,7 +148,11 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
         args = app.state.args  # type: Args
         dataset_updater_task: asyncio.Task[None] | None = None
 
-        mdns = MdnsServiceRegistration(args.robot_name, args.fastapi_port)
+        mdns = MdnsServiceRegistration(
+            args.robot_name,
+            args.fastapi_port,
+            install_id=app.state.daemon.install_id,
+        )
         # Expose the registration so the rename route can rebroadcast the
         # mDNS record under the new name without restarting the daemon.
         app.state.mdns = mdns

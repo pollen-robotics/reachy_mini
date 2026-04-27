@@ -185,8 +185,42 @@ async def get_daemon_version() -> dict[str, str]:
         # Revision history:
         #   "1" - initial mobile-app-facing surface (http_proxy, ws_proxy)
         #   "2" - GET / POST /api/daemon/robot-name + persisted daemon.json
-        "api_revision": "2",
+        #   "3" - GET /api/daemon/identity (install_id) + central
+        #         relay always-on (no robot-name gate)
+        "api_revision": "3",
     }
+
+
+class DaemonIdentityResponse(BaseModel):
+    """Stable identifying information for this daemon install.
+
+    Used by the mobile app's robot registry to merge sightings of the
+    same physical robot across BLE / mDNS / loopback HTTP / HF central
+    into a single entry. ``install_id`` is the canonical key; the
+    other fields are convenience metadata so a single round-trip is
+    enough to render a row.
+    """
+
+    install_id: str
+    robot_name: str
+
+
+@router.get("/identity", response_model=DaemonIdentityResponse)
+async def get_daemon_identity(
+    daemon: Daemon = Depends(get_daemon),
+) -> DaemonIdentityResponse:
+    """Return the stable per-install identifier and current robot name.
+
+    ``install_id`` is generated on first daemon boot and persisted to
+    ``~/.config/reachy_mini/daemon.json``. It does NOT change when the
+    user renames the robot, swaps HF tokens, or reinstalls the tray:
+    it is the only field of this daemon that the mobile app can rely
+    on as a long-lived reconciliation key.
+    """
+    return DaemonIdentityResponse(
+        install_id=daemon.install_id,
+        robot_name=daemon.robot_name,
+    )
 
 
 @router.get("/robot-name", response_model=RobotNameResponse)
