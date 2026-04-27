@@ -32,7 +32,9 @@ class DiscoveredRobot:
 
     def __repr__(self) -> str:
         """Return a human-readable representation."""
-        return f"DiscoveredRobot(name={self.name!r}, host={self.host!r}, port={self.port})"
+        return (
+            f"DiscoveredRobot(name={self.name!r}, host={self.host!r}, port={self.port})"
+        )
 
 
 def _get_local_ip() -> str:
@@ -61,6 +63,9 @@ class MdnsServiceRegistration:
         self._zeroconf: Zeroconf | None = None
         self._info: ServiceInfo | None = None
         self._register_thread: threading.Thread | None = None
+        # Serialise register/update/unregister: zeroconf is thread-safe at the
+        # protocol level but we mutate ``_info`` and ``_zeroconf`` ourselves.
+        self._lock = threading.Lock()
 
     def register(self) -> None:
         """Register the mDNS service in a background thread.
@@ -88,6 +93,50 @@ class MdnsServiceRegistration:
         thread = threading.Thread(target=self._do_unregister, daemon=True)
         thread.start()
         thread.join(timeout=5.0)
+
+    def update_robot_name(self, robot_name: str) -> None:
+        """Re-publish the mDNS service under a new robot name.
+
+        Idempotent: a no-op when the new name matches the current one.
+        Safe to call before the initial ``register()`` (the new name will
+        simply be picked up at register time).
+
+        We unregister and re-register because zeroconf does not let us
+        mutate ``ServiceInfo.name`` in place: the service name encodes the
+        identity advertised on the network and clients caching the old
+        name need to see the goodbye to drop it.
+        """
+        with self._lock:
+            if robot_name == self._robot_name:
+                return
+            self._robot_name = robot_name
+
+            # If we never registered yet (or a previous attempt failed),
+            # there is nothing to tear down. The next ``register()`` call
+            # will use the updated name.
+            if self._register_thread is None and self._zeroconf is None:
+                return
+
+        # Wait for any in-flight register thread to finish before tearing
+        # down: registering with the old name and immediately unregistering
+        # would race the zeroconf cache.
+        if self._register_thread is not None:
+            self._register_thread.join(timeout=10.0)
+            self._register_thread = None
+
+        if self._zeroconf is not None and self._info is not None:
+            try:
+                t = threading.Thread(target=self._do_unregister, daemon=True)
+                t.start()
+                t.join(timeout=5.0)
+            except Exception:
+                logger.warning(
+                    "Failed to unregister mDNS service before rename", exc_info=True
+                )
+
+        # Re-register under the new name. ``register`` itself spawns a
+        # background thread so it's safe to call from any context.
+        self.register()
 
     def _do_register(self) -> None:
         try:
@@ -157,7 +206,9 @@ class _RobotCollector(ServiceListener):
 
         addresses = [socket.inet_ntoa(addr) for addr in info.addresses]
         props = {
-            k.decode() if isinstance(k, bytes) else k: v.decode() if isinstance(v, bytes) else str(v)
+            k.decode() if isinstance(k, bytes) else k: v.decode()
+            if isinstance(v, bytes)
+            else str(v)
             for k, v in info.properties.items()
         }
 
@@ -361,8 +412,15 @@ def _filter_alive(robots: List[DiscoveredRobot]) -> List[DiscoveredRobot]:
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description="Discover Reachy Mini robots on the local network.")
-    parser.add_argument("--timeout", type=float, default=5.0, help="Discovery timeout in seconds (default: 5.0)")
+    parser = argparse.ArgumentParser(
+        description="Discover Reachy Mini robots on the local network."
+    )
+    parser.add_argument(
+        "--timeout",
+        type=float,
+        default=5.0,
+        help="Discovery timeout in seconds (default: 5.0)",
+    )
     args = parser.parse_args()
 
     robots = find_robots(timeout=args.timeout)

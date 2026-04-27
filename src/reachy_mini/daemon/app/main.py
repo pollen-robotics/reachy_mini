@@ -14,7 +14,7 @@ import types
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, AsyncGenerator
+from typing import Any, AsyncGenerator, Optional
 
 import uvicorn
 from fastapi import APIRouter, FastAPI, Request
@@ -24,6 +24,12 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from reachy_mini.apps.manager import AppManager
+from reachy_mini.daemon.app.config import (
+    DEFAULT_ROBOT_NAME as _DEFAULT_ROBOT_NAME,
+)
+from reachy_mini.daemon.app.config import (
+    get_persisted_robot_name,
+)
 from reachy_mini.daemon.app.logging_ctx import TraceIdFilter
 from reachy_mini.daemon.app.routers import (
     apps,
@@ -89,7 +95,12 @@ class Args:
     preload_datasets: bool = False
     dataset_update_interval_hours: float = 24.0  # 0 to disable periodic updates
 
-    robot_name: str = "reachy_mini"
+    # ``None`` means "no explicit value passed on the CLI": resolution
+    # falls back first to the persisted ``daemon.json`` (set by the
+    # mobile app's rename flow), then to the default ``"reachy_mini"``.
+    # An explicit CLI flag always wins so factory provisioning and
+    # tests stay deterministic.
+    robot_name: Optional[str] = None
 
     fastapi_host: str = "0.0.0.0"
     fastapi_port: int = 8000
@@ -97,8 +108,34 @@ class Args:
     localhost_only: bool | None = None
 
 
+def _resolve_robot_name(args_value: Optional[str]) -> str:
+    """Pick the runtime robot name from CLI / persisted config / default.
+
+    Order of precedence:
+        1. explicit ``--robot-name`` CLI flag (``args_value`` is not None);
+        2. previously persisted name from ``daemon.json``;
+        3. hard-coded fallback ``reachy_mini``.
+    """
+    if args_value is not None:
+        return args_value
+    persisted = get_persisted_robot_name()
+    if persisted:
+        return persisted
+    return _DEFAULT_ROBOT_NAME
+
+
 def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> FastAPI:
     """Create and configure the FastAPI application."""
+    # Resolve the canonical robot name once for the lifetime of the app.
+    # Subsequent live renames go through ``Daemon.set_robot_name`` and
+    # update both ``args.robot_name`` and the daemon attribute, so the
+    # rest of the create_app body keeps reading from ``args.robot_name``.
+    # Capture whether the CLI passed an explicit value before we mutate
+    # ``args``; the rename route uses this to label the source as ``"cli"``
+    # so the mobile app knows the persisted name is being overridden.
+    args._robot_name_cli_explicit = args.robot_name is not None  # type: ignore[attr-defined]
+    args.robot_name = _resolve_robot_name(args.robot_name)
+
     localhost_only = (
         args.localhost_only
         if args.localhost_only is not None
@@ -112,6 +149,9 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
         dataset_updater_task: asyncio.Task[None] | None = None
 
         mdns = MdnsServiceRegistration(args.robot_name, args.fastapi_port)
+        # Expose the registration so the rename route can rebroadcast the
+        # mDNS record under the new name without restarting the daemon.
+        app.state.mdns = mdns
 
         def preload_with_logging() -> None:
             """Download datasets with logging."""
@@ -473,7 +513,11 @@ def main() -> None:
         "--robot-name",
         type=str,
         default=default_args.robot_name,
-        help="Name of the robot (default: reachy_mini).",
+        help=(
+            "Override the robot name. When omitted, the daemon reads the "
+            "persisted name from ``~/.config/reachy_mini/daemon.json`` (set "
+            "by the mobile app) and falls back to ``reachy_mini``."
+        ),
     )
 
     # Real robot mode

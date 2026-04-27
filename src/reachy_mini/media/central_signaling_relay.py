@@ -1130,6 +1130,45 @@ class CentralSignalingRelay:
                 ):
                     self._robot_app_lock.release_remote()
 
+    async def update_producer_name(self, robot_name: str) -> None:
+        """Update the producer name advertised to central, live.
+
+        Used by the daemon when the user renames the robot from the mobile
+        app: we need central's view of the fleet to reflect the new label
+        immediately, without forcing a full relay reconnect (which would
+        churn the WebSocket and momentarily evict any active remote
+        session).
+
+        Idempotent: a no-op when the name has not changed. Safe to call
+        before the relay is connected; the new value will be picked up by
+        the next ``setPeerStatus`` emitted on ``welcome``.
+
+        Must be invoked from the relay's own thread loop (or via
+        ``asyncio.run_coroutine_threadsafe`` for cross-thread callers) so
+        that the ``_send_to_central`` HTTP call uses the right session.
+        """
+        if robot_name == self.robot_name:
+            return
+
+        self.robot_name = robot_name
+        logger.info(
+            "[Central Relay] producer name updated to %r (state=%s)",
+            robot_name,
+            self._state.value,
+        )
+
+        # Only emit setPeerStatus when we're actually registered with
+        # central. In any other state the next ``welcome`` will use the
+        # already-updated ``self.robot_name``.
+        if self._state == RelayState.CONNECTED and self._central_peer_id is not None:
+            await self._send_to_central(
+                {
+                    "type": "setPeerStatus",
+                    "roles": ["producer"],
+                    "meta": {"name": self.robot_name},
+                }
+            )
+
 
 # Singleton instance for integration
 _relay_instance: Optional[CentralSignalingRelay] = None
@@ -1260,3 +1299,44 @@ async def notify_force_reconnect() -> None:
         return
 
     await _relay_instance.force_reconnect()
+
+
+async def notify_robot_name_change(new_name: str) -> None:
+    """Push a renamed robot to central without reconnecting.
+
+    Called by ``Daemon.set_robot_name`` after the in-memory and on-disk
+    state has been updated. No-op when there is no relay (Lite, no token,
+    relay not started yet); the relay will pick up the new name on its
+    next ``start()`` because the daemon also passes the fresh name to
+    ``start_central_relay``.
+
+    The actual ``setPeerStatus`` send happens on the relay's own thread
+    loop via ``run_coroutine_threadsafe``: ``_send_to_central`` uses the
+    relay-local ``aiohttp.ClientSession``, which is bound to that loop.
+    """
+    if _relay_instance is None:
+        logger.debug(
+            "[Central Relay] No relay instance, robot name change is in-memory only"
+        )
+        return
+
+    loop = _relay_instance._thread_loop
+    if loop is None or not loop.is_running():
+        # Relay thread not up yet; just update the attribute so the next
+        # ``welcome`` advertises the right name.
+        _relay_instance.robot_name = new_name
+        return
+
+    fut = asyncio.run_coroutine_threadsafe(
+        _relay_instance.update_producer_name(new_name), loop
+    )
+    try:
+        # Bound the wait so a stuck relay thread cannot freeze the HTTP
+        # request that triggered the rename. Failure here is non-fatal:
+        # the on-disk + in-memory state is already updated, central will
+        # catch up on its next reconnect / welcome.
+        await asyncio.get_event_loop().run_in_executor(None, fut.result, 5.0)
+    except Exception as exc:
+        logger.warning(
+            "[Central Relay] update_producer_name(%r) failed: %s", new_name, exc
+        )

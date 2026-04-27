@@ -22,6 +22,7 @@ from reachy_mini.io.protocol import DaemonState, DaemonStatus, MotorControlMode
 from reachy_mini.io.ws_server import WSServer
 from reachy_mini.tools.reflash_motors import reflash_motors_if_needed
 
+from .app.config import DEFAULT_ROBOT_NAME as _DEFAULT_ROBOT_NAME
 from .backend.mockup_sim import MockupSimBackend
 from .backend.mujoco import MujocoBackend
 from .backend.robot import RobotBackend
@@ -153,6 +154,68 @@ class Daemon:
         self._status.media_released = False
         self.logger.info("Media hardware re-acquired.")
 
+    async def set_robot_name(self, robot_name: str) -> "DaemonStatus":
+        """Rename the robot live, without restarting the daemon.
+
+        Updates the in-memory canonical ``robot_name`` (mirrored on
+        ``self._status.robot_name``), persists the new value to
+        ``daemon.json`` so it survives a restart, and pushes the change
+        downstream to the components that advertise the name:
+
+        - the central signaling relay (``setPeerStatus`` re-emit, no
+          reconnect required);
+        - the mDNS service registration, when one exists. The mDNS
+          handle is held by the FastAPI lifespan so the route layer is
+          responsible for forwarding it (kept out of ``Daemon`` to avoid
+          a circular import with the FastAPI app).
+
+        Idempotent: a no-op when ``robot_name`` already matches.
+        Persistence failure is logged but does not raise: the in-memory
+        rename has already taken effect and central has already been
+        notified, so the user-visible behaviour is correct - it just
+        won't survive a daemon restart.
+        """
+        from reachy_mini.daemon.app.config import set_persisted_robot_name
+        from reachy_mini.media.central_signaling_relay import notify_robot_name_change
+
+        if robot_name == self.robot_name:
+            return self._status
+
+        was_default = self.robot_name == _DEFAULT_ROBOT_NAME
+        self.logger.info("Renaming robot: %r -> %r", self.robot_name, robot_name)
+        self.robot_name = robot_name
+        self._status.robot_name = robot_name
+
+        if not set_persisted_robot_name(robot_name):
+            self.logger.warning(
+                "Persisted config write failed; rename will not survive restart"
+            )
+
+        if was_default and robot_name != _DEFAULT_ROBOT_NAME:
+            # Crossing the "default -> custom" boundary: the relay was
+            # gated off at boot in ``_start_central_signaling_relay`` to
+            # keep the HF fleet free of anonymous duplicates. Now that
+            # the user picked a real name, kick off the relay so this
+            # robot becomes visible on central within seconds.
+            try:
+                relay_result = await self.ensure_central_signaling_relay()
+                self.logger.info("Post-rename central relay state: %s", relay_result)
+            except Exception as exc:
+                self.logger.warning(
+                    "Failed to ensure central relay after rename: %s", exc
+                )
+        else:
+            try:
+                await notify_robot_name_change(robot_name)
+            except Exception as exc:
+                # ``notify_robot_name_change`` already logs at warning level;
+                # downgrade further failures to debug so we don't double-log.
+                self.logger.debug(
+                    "notify_robot_name_change raised after handling: %s", exc
+                )
+
+        return self._status
+
     async def ensure_central_signaling_relay(self) -> dict[str, Any]:
         """Ensure the central signaling relay is running.
 
@@ -184,10 +247,35 @@ class Daemon:
         return {"started": True}
 
     async def _start_central_signaling_relay(self) -> None:
-        """Start the central signaling relay for remote WebRTC access."""
+        """Start the central signaling relay for remote WebRTC access.
+
+        Three preconditions must hold for the relay to actually start:
+
+        - the media server is up (no point relaying audio/video that
+          doesn't exist);
+        - an HF token is available (central rejects anonymous producers);
+        - the robot has a user-chosen name (we refuse to register on the
+          fleet under the default ``reachy_mini`` label, otherwise every
+          new robot would clutter the user's HF dashboard with anonymous
+          duplicates that are impossible to tell apart). The relay starts
+          automatically the moment the user picks a name through
+          ``POST /api/daemon/robot-name``, so this is a soft gate.
+
+        Each gate logs at INFO level so a Wireless robot stuck without a
+        name surfaces clearly in the journal.
+        """
         global _central_relay_task
 
         if not self._media_server:
+            return
+
+        if self.robot_name == _DEFAULT_ROBOT_NAME:
+            self.logger.info(
+                "Central signaling relay deferred: robot still has the default "
+                "name %r. Set a custom name via POST /api/daemon/robot-name "
+                "(or the mobile app onboarding) to register on the HF fleet.",
+                self.robot_name,
+            )
             return
 
         try:
