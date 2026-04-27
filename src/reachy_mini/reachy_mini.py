@@ -9,6 +9,8 @@ It also includes methods for multimedia interactions like playing sounds and loo
 import asyncio
 import logging
 import time
+import warnings
+from importlib.metadata import PackageNotFoundError, version
 from typing import Dict, List, Literal, Optional, Union, cast
 
 import numpy as np
@@ -19,6 +21,7 @@ from scipy.spatial.transform import Rotation as R
 from reachy_mini.daemon.utils import daemon_check, is_local_camera_available
 from reachy_mini.io.protocol import (
     AppendRecordCmd,
+    DaemonStatus,
     GotoTaskRequest,
     SetAntennasCmd,
     SetAutomaticBodyYawCmd,
@@ -52,7 +55,10 @@ SLEEP_HEAD_JOINT_POSITIONS = [
 ]
 
 
-INIT_ANTENNAS_JOINT_POSITIONS = [-0.1745, 0.1745]  # ~10° offset to reduce shaking at vertical
+INIT_ANTENNAS_JOINT_POSITIONS = [
+    -0.1745,
+    0.1745,
+]  # ~10° offset to reduce shaking at vertical
 SLEEP_ANTENNAS_JOINT_POSITIONS = [-3.05, 3.05]
 SLEEP_HEAD_POSE = np.array(
     [
@@ -140,13 +146,17 @@ class ReachyMini:
             normalized_mode, timeout
         )
         self._daemon_http_url = f"http://{self.client.host}:{self.client.port}"
-        self.set_automatic_body_yaw(automatic_body_yaw)
         self._last_head_pose: Optional[npt.NDArray[np.float64]] = None
         self.is_recording = False
         self._move_cancelled = False
         self._media_released = False
         self._log_level = log_level
         self._media_backend = media_backend
+        self._version_warning_emitted = False
+
+        daemon_status = self.client.get_status()
+        self._warn_if_daemon_version_mismatch(daemon_status)
+        self.set_automatic_body_yaw(automatic_body_yaw)
 
         self.T_head_cam = np.eye(4)
         self.T_head_cam[:3, 3][:] = [0.0437, 0, 0.0512]
@@ -158,7 +168,9 @@ class ReachyMini:
             ]
         )
 
-        self.media_manager = self._configure_mediamanager(media_backend, log_level)
+        self.media_manager = self._configure_mediamanager(
+            media_backend, log_level, daemon_status
+        )
 
     def __del__(self) -> None:
         """Destroy the Reachy Mini instance.
@@ -225,7 +237,9 @@ class ReachyMini:
             return
 
         self.media_manager.close()
-        self.media_manager = self._configure_mediamanager(self._media_backend, self._log_level)
+        self.media_manager = self._configure_mediamanager(
+            self._media_backend, self._log_level
+        )
         self._media_released = False
         self.logger.info("Media re-acquired by daemon.")
 
@@ -260,7 +274,10 @@ class ReachyMini:
         return imu_msg.model_dump(exclude={"type"})
 
     def _configure_mediamanager(
-        self, media_backend: str, log_level: str
+        self,
+        media_backend: str,
+        log_level: str,
+        daemon_status: DaemonStatus | None = None,
     ) -> MediaManager:
         """Select the right media backend and return a configured MediaManager.
 
@@ -274,7 +291,9 @@ class ReachyMini:
         value it is honoured directly (with deprecation warnings for old
         names handled by ``_resolve_backend``).
         """
-        daemon_status = self.client.get_status()
+        if daemon_status is None:
+            daemon_status = self.client.get_status()
+            self._warn_if_daemon_version_mismatch(daemon_status)
 
         # Resolve camera specs from the daemon-detected camera name
         specs_name = getattr(daemon_status, "camera_specs_name", "")
@@ -333,6 +352,40 @@ class ReachyMini:
             camera_specs=camera_specs,
             daemon_url=self._daemon_http_url,
         )
+
+    @staticmethod
+    def _get_sdk_version() -> str | None:
+        try:
+            return version("reachy_mini")
+        except PackageNotFoundError:
+            return None
+
+    def _warn_if_daemon_version_mismatch(self, daemon_status: DaemonStatus) -> None:
+        """Warn users when the SDK and daemon package versions differ."""
+        if self._version_warning_emitted:
+            return
+
+        sdk_version = self._get_sdk_version()
+        daemon_version = daemon_status.version
+
+        if sdk_version is None or daemon_version is None:
+            return
+
+        sdk_version = sdk_version.strip()
+        daemon_version = daemon_version.strip()
+
+        if sdk_version == daemon_version:
+            return
+
+        warnings.warn(
+            "Reachy Mini SDK and daemon versions do not match: "
+            f"SDK={sdk_version}, daemon={daemon_version}. "
+            "Running different versions can create issues. "
+            "Install matching reachy_mini versions for the SDK and daemon.",
+            RuntimeWarning,
+            stacklevel=3,
+        )
+        self._version_warning_emitted = True
 
     def _normalize_connection_mode(
         self,
@@ -540,7 +593,9 @@ class ReachyMini:
 
     def wake_up(self) -> None:
         """Wake up the robot - go to the initial head position and play the wake up emote and sound."""
-        self.goto_target(INIT_HEAD_POSE, antennas=INIT_ANTENNAS_JOINT_POSITIONS, duration=2)
+        self.goto_target(
+            INIT_HEAD_POSE, antennas=INIT_ANTENNAS_JOINT_POSITIONS, duration=2
+        )
         time.sleep(0.1)
 
         # Toudoum
@@ -572,7 +627,9 @@ class ReachyMini:
         ]
         dist = np.linalg.norm(np.array(current_positions) - np.array(init_positions))
         if dist > 0.2:
-            self.goto_target(INIT_HEAD_POSE, antennas=INIT_ANTENNAS_JOINT_POSITIONS, duration=1)
+            self.goto_target(
+                INIT_HEAD_POSE, antennas=INIT_ANTENNAS_JOINT_POSITIONS, duration=1
+            )
             time.sleep(0.2)
 
         # Pfiou
