@@ -43,8 +43,16 @@ class TokenResponse(BaseModel):
 
 
 @router.post("/save-token")
-async def save_token(request: TokenRequest) -> TokenResponse:
-    """Save HuggingFace token after validation."""
+async def save_token(req: Request, request: TokenRequest) -> TokenResponse:
+    """Save HuggingFace token after validation.
+
+    On success this also makes sure the central signaling relay is
+    running. The relay is normally started at media-server-acquire
+    time, but the daemon may have booted without a token (so the relay
+    never came up). Without this ensure-step the robot would remain
+    invisible on central until the next daemon restart, even though
+    the token is now stored on disk.
+    """
     result = hf_auth.save_hf_token(request.token)
 
     if result["status"] == "error":
@@ -64,6 +72,20 @@ async def save_token(request: TokenRequest) -> TokenResponse:
         "auth.save_token.success",
         username=result.get("username"),
     )
+
+    daemon = getattr(req.app.state, "daemon", None)
+    if daemon is not None and getattr(daemon, "wireless_version", False):
+        try:
+            relay_result = await daemon.ensure_central_signaling_relay()
+            kv_log(
+                logger,
+                logging.INFO,
+                "auth.save_token.relay_ensured",
+                **relay_result,
+            )
+        except Exception as e:
+            logger.warning("[save-token] ensure_central_signaling_relay failed: %s", e)
+
     return TokenResponse(
         status="success",
         username=result.get("username"),
@@ -135,7 +157,7 @@ async def delete_token() -> dict[str, str]:
 
 
 @router.post("/refresh-relay")
-async def refresh_relay() -> dict[str, Any]:
+async def refresh_relay(request: Request) -> dict[str, Any]:
     """Force the central signaling relay to reconnect with the stored token.
 
     Drops the relay's current connection and re-registers with the
@@ -171,7 +193,23 @@ async def refresh_relay() -> dict[str, Any]:
     token = hf_auth.get_hf_token()
 
     try:
+        from reachy_mini.media import central_signaling_relay as _csr
         from reachy_mini.media.central_signaling_relay import notify_force_reconnect
+
+        # If the daemon booted without a token, the relay never came
+        # up. In that case `notify_force_reconnect` is a no-op. Try to
+        # bring the relay up first so this endpoint actually does
+        # something useful for the cold-boot recovery case.
+        if _csr._relay_instance is None:
+            daemon = getattr(request.app.state, "daemon", None)
+            if daemon is not None and getattr(daemon, "wireless_version", False):
+                try:
+                    await daemon.ensure_central_signaling_relay()
+                except Exception as e:
+                    logger.warning(
+                        "[refresh-relay] ensure_central_signaling_relay failed: %s",
+                        e,
+                    )
 
         # Unconditionally drop & reconnect. We used to call
         # `notify_token_change(token)` here, but that path is guarded

@@ -167,6 +167,17 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
                     hardware_config_filepath=args.hardware_config_filepath,
                 )
 
+            # Tell the backend where to forward `http_proxy` requests
+            # received over the WebRTC data channel: same FastAPI server,
+            # via the loopback interface. Done after `start()` so the
+            # backend instance is guaranteed to exist.
+            try:
+                backend = getattr(app.state.daemon, "backend", None)
+                if backend is not None and hasattr(backend, "set_loopback_http_port"):
+                    backend.set_loopback_http_port(args.fastapi_port)
+            except Exception as e:
+                logger.warning(f"Could not configure http_proxy loopback port: {e}")
+
             # Register mDNS service only after the daemon is ready
             mdns.register()
 
