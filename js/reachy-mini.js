@@ -56,8 +56,11 @@
  * CONSTRUCTOR OPTIONS
  * ───────────────────
  *   new ReachyMini({
- *     signalingUrl:     string,   // default: "https://cduss-reachy-mini-central.hf.space"
- *     enableMicrophone: boolean,  // default: true — acquire mic for bidirectional audio
+ *     signalingUrl:              string,   // default: "https://cduss-reachy-mini-central.hf.space"
+ *     enableMicrophone:          boolean,  // default: true  — acquire mic for bidirectional audio
+ *     videoJitterBufferTargetMs: number,   // default: 0     — receiver-side jitter buffer hint, ms
+ *                                          //                  0 = "render ASAP" (teleop). Spec range [0, 4000].
+ *                                          //                  Raise (100–400) on flaky links to trade latency for resilience.
  *   })
  *
  *
@@ -161,13 +164,18 @@ function sdpHasAudioSendRecv(sdp) {
 
 export class ReachyMini extends EventTarget {
 
-    /** @param {{ signalingUrl?: string, enableMicrophone?: boolean, clientId?: string, appName?: string }} [options] */
+    /** @param {{ signalingUrl?: string, enableMicrophone?: boolean, clientId?: string, appName?: string, videoJitterBufferTargetMs?: number }} [options] */
     constructor(options = {}) {
         super();
         this._signalingUrl = options.signalingUrl || 'https://cduss-reachy-mini-central.hf.space';
         this._enableMicrophone = options.enableMicrophone !== false;
         this._clientId = options.clientId || null;
         this._appName = options.appName || 'unknown';
+        // Hint to the receiver's WebRTC jitter buffer (ms). 0 = "render ASAP",
+        // appropriate for teleop. Spec range [0, 4000]. Browsers that don't
+        // implement RTCRtpReceiver.jitterBufferTarget fall back to default
+        // buffering (~150-200 ms).
+        this._videoJitterBufferTargetMs = options.videoJitterBufferTargetMs ?? 0;
 
         this._state = 'disconnected';                 // 'disconnected' | 'connected' | 'streaming'
         this._robots = [];                             // latest robot list from signaling
@@ -428,6 +436,12 @@ export class ReachyMini extends EventTarget {
 
             this._pc.ontrack = (e) => {
                 if (e.track.kind === 'video') {
+                    // Tell the receiver's jitter buffer to minimise its hold
+                    // time. Both properties target the same internal buffer;
+                    // browsers ignore whichever they don't implement.
+                    const ms = this._videoJitterBufferTargetMs;
+                    try { e.receiver.jitterBufferTarget = ms; } catch (_) {}
+                    try { e.receiver.playoutDelayHint = ms / 1000; } catch (_) {}
                     this._emit('videoTrack', { track: e.track, stream: e.streams[0] });
                 }
             };
