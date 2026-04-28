@@ -7,6 +7,8 @@
 
 ## Audio
 
+[[autodoc]] reachy_mini.media.audio_base.AudioBase
+
 [[autodoc]] reachy_mini.media.audio_gstreamer.GStreamerAudio
 
 ### Audio Utils Functions
@@ -26,31 +28,6 @@
 [[autodoc]] reachy_mini.media.audio_control_utils.find
 
 [[autodoc]] reachy_mini.media.audio_control_utils.init_respeaker_usb
-
-### Audio Board Configuration
-
-Advanced apps can tune XVF3800 audio parameters by passing caller-defined
-parameter values to the media audio backend:
-
-```python
-from reachy_mini import ReachyMini
-
-# Replace the parameter names and values with the config for your app.
-custom_audio_config = (
-    ("PARAMETER_NAME", (value_1, value_2)),
-)
-
-with ReachyMini(media_backend="local") as mini:
-    applied = mini.media.audio.apply_audio_config(custom_audio_config)
-```
-
-`apply_audio_config()` returns `True` when all parameters were written and
-verified successfully. It returns `False` if the ReSpeaker audio board cannot
-be found or if verification fails.
-
-The SDK does not provide default values for these parameters. Use values tuned
-for your app and refer to the advanced media controls documentation for the
-available XVF3800 parameter names.
 
 ## Camera
 

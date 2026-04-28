@@ -114,7 +114,24 @@ class AudioBase(ABC):
         verify: bool = True,
         write_settle_seconds: float = WRITE_SETTLE_SECONDS,
     ) -> bool:
-        """Apply audio control parameters to the ReSpeaker."""
+        """Apply caller-provided audio control parameters to the ReSpeaker.
+
+        This opens a short-lived ReSpeaker USB handle, writes each parameter in
+        ``config``, and optionally verifies the written values. The SDK does
+        not provide default values for these parameters; callers should pass the
+        values tuned for their own app.
+
+        Args:
+            config: Sequence of ``(parameter_name, values)`` pairs to write.
+            verify: When true, read each parameter back after writing it.
+            write_settle_seconds: Delay after each write before readback.
+
+        Returns:
+            True when all parameters were written and verified successfully.
+            False when the ReSpeaker audio board is unavailable or a parameter
+            write/readback fails.
+
+        """
         respeaker = init_respeaker_usb()
         if respeaker is None:
             self.logger.warning("ReSpeaker device not found.")
