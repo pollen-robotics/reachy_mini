@@ -16,9 +16,9 @@ Reachy Mini has an app ecosystem powered by Hugging Face Spaces. You can build P
 
 ## Using AI Agents
 
-If you use an AI coding agent (Claude Code, Cursor, Copilot, etc.), it can build apps for you. Point it to the project's [AGENTS.md](https://github.com/pollen-robotics/reachy_mini/blob/main/AGENTS.md):
+If you use an AI coding agent (Claude Code, Cursor, Copilot, etc.), it can build apps for you. Point it to the project's [app development guide](https://github.com/pollen-robotics/reachy_mini/blob/main/docs/contributing/building_apps.md):
 
-> *I'd like to create a Reachy Mini app. Start by reading https://github.com/pollen-robotics/reachy_mini/blob/main/AGENTS.md*
+> *I'd like to create a Reachy Mini app. Start by reading https://github.com/pollen-robotics/reachy_mini/blob/main/docs/contributing/building_apps.md*
 
 The repository includes a `skills/` directory with detailed guides that AI agents use to build apps correctly:
 
