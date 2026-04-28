@@ -74,6 +74,25 @@ python src/reachy_mini/media/audio_control_utils.py PP_MIN_NS --values 0
 # Write operation completed successfully
 ```
 
+Apps can also apply a group of custom audio parameters through the SDK when
+they run on the same machine as the audio board:
+
+```python
+from reachy_mini import ReachyMini
+
+# Replace the parameter names and values with the config for your app.
+custom_audio_config = (
+    ("PARAMETER_NAME", (value_1, value_2)),
+)
+
+with ReachyMini(media_backend="local") as mini:
+    applied = mini.media.audio.apply_audio_config(custom_audio_config)
+```
+
+For Reachy Mini Wireless, run this from the robot itself so the process can
+access the USB audio board. Remote REST/WebRTC audio-board configuration is
+not exposed yet.
+
 The microphone array outputs a stereo channel, so it is not possible to get the raw output of all 4 mics at once. However, you can output two raw microphones at a time:
 
 ```bash

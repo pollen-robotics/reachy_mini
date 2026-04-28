@@ -809,6 +809,9 @@ You can play back a sound while recording simultaneously to test the echo cancel
 - Ensure the `.asoundrc` file exists in the home directory
 - Check that the microphone is detected: `arecord -l`
 - Check that the speaker is detected: `aplay -l`
+- If audio-board configuration fails with `No Reachy Mini Audio USB device found!`,
+  run the SDK code on the machine that has the ReSpeaker audio board connected.
+  For Lite this is your computer; for Wireless this is the robot itself.
 
 </details>
 
