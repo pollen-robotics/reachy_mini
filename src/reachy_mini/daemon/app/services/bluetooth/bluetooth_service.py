@@ -6,9 +6,14 @@ Includes a fixed NoInputNoOutput agent for automatic Just Works pairing.
 # mypy: ignore-errors
 
 import fcntl
+import json
 import logging
 import os
+import socket
 import subprocess
+import urllib.error
+import urllib.parse
+import urllib.request
 from typing import Callable
 
 import dbus
@@ -118,17 +123,30 @@ class Advertisement(dbus.service.Object):
         self.ad_type = advertising_type
         self.local_name = local_name
         self.service_uuids = None
+        self.manufacturer_data = None
         self.include_tx_power = False
         dbus.service.Object.__init__(self, bus, self.path)
 
     def get_properties(self):
-        """Return the properties of the advertisement."""
+        """Return the properties of the advertisement.
+
+        Note on payload size: legacy BLE advertisements are capped at
+        31 bytes total. We deliberately omit ``ServiceUUIDs`` from the
+        primary advertisement and rely on ``LocalName`` matching on
+        the client side: a 128-bit UUID alone eats 18 bytes, which
+        leaves no room for the ManufacturerData IPv4 payload (5 bytes
+        per address). The full GATT service tree is still discoverable
+        once the client connects, so this is purely an advertising-time
+        size optimisation. ``Appearance=0x0000`` ("Unknown") is also
+        skipped because it is uninformative and adds 4 bytes.
+        """
         props = {"Type": self.ad_type}
         if self.local_name:
             props["LocalName"] = dbus.String(self.local_name)
-        if self.service_uuids:
-            props["ServiceUUIDs"] = dbus.Array(self.service_uuids, signature="s")
-        props["Appearance"] = dbus.UInt16(0x0000)
+        if self.manufacturer_data:
+            props["ManufacturerData"] = dbus.Dictionary(
+                self.manufacturer_data, signature="qv"
+            )
         props["Duration"] = dbus.UInt16(0)
         props["Timeout"] = dbus.UInt16(0)
         return {LE_ADVERTISEMENT_IFACE: props}
@@ -276,7 +294,7 @@ class CommandCharacteristic(Characteristic):
             dbus.Byte(b) for b in response.encode("utf-8")
         ]
         cmd_str = command_bytes.decode("utf-8", errors="replace").strip()
-        if cmd_str.upper() != "JOURNAL_READ":
+        if cmd_str.upper() not in ("JOURNAL_READ", "WIFI_STATUS"):
             logger.info(f"Command received: {response}")
 
 
@@ -300,7 +318,7 @@ class ResponseCharacteristic(Characteristic):
         self.notifying = False
         logger.info("Response notifications disabled")
         # Stop journal streaming if running (client disconnected without JOURNAL_STOP)
-        if hasattr(self.service, '_bt_service') and self.service._bt_service:
+        if hasattr(self.service, "_bt_service") and self.service._bt_service:
             self.service._bt_service._stop_journal()
 
     def send_notification(self, text: str):
@@ -614,7 +632,17 @@ class BluetoothCommandService:
         try:
             self._journal_buffer = ""
             self._journal_proc = subprocess.Popen(
-                ["stdbuf", "-oL", "journalctl", "-f", "-n", "20", "--no-pager", "-u", "reachy-mini-daemon"],
+                [
+                    "stdbuf",
+                    "-oL",
+                    "journalctl",
+                    "-f",
+                    "-n",
+                    "20",
+                    "--no-pager",
+                    "-u",
+                    "reachy-mini-daemon",
+                ],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.DEVNULL,
             )
@@ -643,7 +671,9 @@ class BluetoothCommandService:
                 if data:
                     text = data.decode("utf-8", errors="replace")
                     self._journal_buffer += text
-                    logger.info(f"Journal buffered: {len(text)} bytes, total: {len(self._journal_buffer)}")
+                    logger.info(
+                        f"Journal buffered: {len(text)} bytes, total: {len(self._journal_buffer)}"
+                    )
                     # Cap buffer to ~32KB to avoid unbounded growth
                     if len(self._journal_buffer) > 32768:
                         self._journal_buffer = self._journal_buffer[-32768:]
@@ -686,12 +716,14 @@ class BluetoothCommandService:
 
     def _handle_command(self, value: bytes) -> str:
         command_str = value.decode("utf-8").strip()
-        if command_str.upper() != "JOURNAL_READ":
+        upper = command_str.upper()
+        # WIFI_STATUS and JOURNAL_READ are polled by clients; don't spam logs.
+        if upper not in ("JOURNAL_READ", "WIFI_STATUS"):
             logger.info(f"Received command: {command_str}")
         # Custom command handling
-        if command_str.upper() == "PING":
+        if upper == "PING":
             return "PONG"
-        elif command_str.upper() == "STATUS":
+        elif upper == "STATUS":
             # exec a "sudo ls" command and print the result
             try:
                 result = subprocess.run(["sudo", "ls"], capture_output=True, text=True)
@@ -699,11 +731,11 @@ class BluetoothCommandService:
             except Exception as e:
                 logger.error(f"Error executing command: {e}")
             return "OK: System running"
-        elif command_str.upper() == "JOURNAL_START":
+        elif upper == "JOURNAL_START":
             return self._start_journal()
-        elif command_str.upper() == "JOURNAL_READ":
+        elif upper == "JOURNAL_READ":
             return self._read_journal()
-        elif command_str.upper() == "JOURNAL_STOP":
+        elif upper == "JOURNAL_STOP":
             self._stop_journal()
             return "OK: Journal streaming stopped"
         elif command_str.startswith("PIN_"):
@@ -713,6 +745,27 @@ class BluetoothCommandService:
                 return "OK: Connected"
             else:
                 return "ERROR: Incorrect PIN"
+
+        # WiFi provisioning commands. WIFI_STATUS is public (read-only snapshot);
+        # mutating commands require prior PIN authentication. Unlike CMD_*, we do
+        # NOT reset `self.connected` afterwards so a client can chain
+        # scan -> connect -> poll status in a single provisioning session.
+        elif upper == "WIFI_STATUS":
+            return _wifi_status()
+        elif upper == "WIFI_SCAN":
+            if not self.connected:
+                return "ERROR: Not connected. Please authenticate first."
+            return _wifi_scan()
+        elif upper.startswith("WIFI_CONNECT "):
+            if not self.connected:
+                return "ERROR: Not connected. Please authenticate first."
+            payload = command_str[len("WIFI_CONNECT ") :]
+            return _wifi_connect(payload)
+        elif upper.startswith("WIFI_FORGET "):
+            if not self.connected:
+                return "ERROR: Not connected. Please authenticate first."
+            ssid = command_str[len("WIFI_FORGET ") :]
+            return _wifi_forget(ssid)
 
         # else if command starts with "CMD_xxxxx" check if  commands directory contains the said named script command xxxx.sh and run its, show output or/and send to read
         elif command_str.startswith("CMD_"):
@@ -779,9 +832,9 @@ class BluetoothCommandService:
         # Register advertisement
         ad_manager = dbus.Interface(adapter, LE_ADVERTISING_MANAGER_IFACE)
         self.adv = Advertisement(self.bus, 0, "peripheral", self.device_name)
-        # Only advertise main service UUID to avoid advertisement size limits
-        # All services are still available when connected
         self.adv.service_uuids = [REACHY_STATUS_SERVICE_UUID]
+        self.adv.manufacturer_data = encode_network_ips()
+        self._ad_manager = ad_manager
         ad_manager.RegisterAdvertisement(
             self.adv.get_path(),
             {},
@@ -791,10 +844,34 @@ class BluetoothCommandService:
             ),
         )
 
-        # Setup periodic network status updates (every 10 seconds)
-        GLib.timeout_add_seconds(10, self.app.reachy_status.update_network_status)
+        # Refresh both GATT network characteristic and advertisement payload
+        GLib.timeout_add_seconds(10, self._refresh_network_info)
 
         logger.info(f"✓ Bluetooth service started as '{self.device_name}'")
+
+    def _refresh_network_info(self):
+        """Periodic callback: update GATT characteristic and advertisement."""
+        self.app.reachy_status.update_network_status()
+
+        new_data = encode_network_ips()
+        if new_data != self.adv.manufacturer_data:
+            self.adv.manufacturer_data = new_data
+            try:
+                self._ad_manager.UnregisterAdvertisement(self.adv.get_path())
+                self._ad_manager.RegisterAdvertisement(
+                    self.adv.get_path(),
+                    {},
+                    reply_handler=lambda: logger.info(
+                        "Advertisement re-registered with updated IPs"
+                    ),
+                    error_handler=lambda e: logger.error(
+                        f"Failed to re-register advertisement: {e}"
+                    ),
+                )
+            except dbus.exceptions.DBusException as e:
+                logger.warning(f"Could not refresh advertisement: {e}")
+
+        return True
 
     def _find_adapter(self):
         remote_om = dbus.Interface(
@@ -817,6 +894,233 @@ class BluetoothCommandService:
             logger.info("Shutting down...")
             self._stop_journal()
             self.mainloop.quit()
+
+
+POLLEN_MANUFACTURER_ID = 0xFFFF  # Reserved ID for development/testing
+
+
+# Hard cap on the number of IP addresses we cram into the BLE advert.
+# Each address eats 5 bytes (1 flag + 4 IPv4), and the legacy adv slot
+# is limited to 31 bytes total (~16 already used by flags + LocalName),
+# so 2 addresses is the safe maximum before HCI rejects the payload.
+_MAX_ADVERTISED_IPS = 2
+
+
+# =======================
+# WiFi provisioning over BLE
+# =======================
+# The Bluetooth service runs as its own systemd unit, separate from the FastAPI
+# daemon. For WiFi provisioning we simply proxy BLE commands over localhost HTTP
+# to the daemon's existing `/wifi/*` routes. This keeps the logic DRY (no
+# duplicated `nmcli` plumbing) and reuses the daemon's `busy_lock`, threading
+# and hotspot-fallback behavior.
+#
+# We stick to the Python stdlib (`urllib`) on purpose: the BT service uses the
+# system Python, not the daemon's venv, so we can't assume `requests` is
+# installed.
+
+DAEMON_LOCAL_URL = "http://127.0.0.1:8000"
+WIFI_HTTP_TIMEOUT_S = 4.0
+WIFI_SCAN_HTTP_TIMEOUT_S = 15.0  # nmcli rescan is slow
+WIFI_SCAN_MAX_RESULTS = 12  # keep payload inside a single BLE MTU
+
+
+def _daemon_request(
+    method: str,
+    path: str,
+    params: dict[str, str] | None = None,
+    timeout: float = WIFI_HTTP_TIMEOUT_S,
+):
+    """Perform a local HTTP request against the daemon and return parsed JSON (or None)."""
+    url = DAEMON_LOCAL_URL + path
+    if params:
+        url = url + "?" + urllib.parse.urlencode(params)
+    req = urllib.request.Request(url, method=method)
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        body = resp.read()
+        if not body:
+            return None
+        try:
+            return json.loads(body.decode("utf-8"))
+        except json.JSONDecodeError:
+            return body.decode("utf-8", errors="replace")
+
+
+def _wifi_status() -> str:
+    """Return the current WiFi state as compact JSON suitable for a BLE read.
+
+    Shape: {"mode": str, "connected": str|null, "known": [str], "error": str|null}
+    """
+    try:
+        status = _daemon_request("GET", "/wifi/status") or {}
+        error_payload = _daemon_request("GET", "/wifi/error") or {}
+        compact = {
+            "mode": status.get("mode"),
+            "connected": status.get("connected_network"),
+            "known": status.get("known_networks", []),
+            "error": error_payload.get("error"),
+        }
+        return json.dumps(compact, separators=(",", ":"), ensure_ascii=False)
+    except urllib.error.URLError as e:
+        logger.warning(f"wifi_status: daemon unreachable: {e}")
+        return json.dumps(
+            {
+                "mode": None,
+                "connected": None,
+                "known": [],
+                "error": "daemon_unreachable",
+            },
+            separators=(",", ":"),
+        )
+    except Exception as e:
+        logger.exception("wifi_status failed")
+        return json.dumps(
+            {"mode": None, "connected": None, "known": [], "error": str(e)},
+            separators=(",", ":"),
+        )
+
+
+def _wifi_scan() -> str:
+    """Scan for nearby SSIDs. Returns a JSON array (top N) or an `ERROR:` string."""
+    try:
+        ssids = _daemon_request(
+            "POST", "/wifi/scan_and_list", timeout=WIFI_SCAN_HTTP_TIMEOUT_S
+        )
+        if not isinstance(ssids, list):
+            return json.dumps([])
+        cleaned: list[str] = []
+        seen: set[str] = set()
+        for s in ssids:
+            if isinstance(s, str) and s and s not in seen:
+                seen.add(s)
+                cleaned.append(s)
+                if len(cleaned) >= WIFI_SCAN_MAX_RESULTS:
+                    break
+        return json.dumps(cleaned, separators=(",", ":"), ensure_ascii=False)
+    except urllib.error.HTTPError as e:
+        if e.code == 409:
+            return "ERROR: Busy"
+        logger.warning(f"wifi_scan HTTP error: {e}")
+        return "ERROR: Scan failed"
+    except urllib.error.URLError as e:
+        logger.warning(f"wifi_scan: daemon unreachable: {e}")
+        return "ERROR: Daemon unreachable"
+    except Exception as e:
+        logger.exception("wifi_scan failed")
+        return f"ERROR: {e}"
+
+
+def _wifi_connect(payload: str) -> str:
+    """Kick off a connect attempt. `payload` is a JSON string: {"ssid": "...", "psk": "..."}.
+
+    Returns immediately (the daemon runs the actual `nmcli` work on a thread).
+    Clients should poll `WIFI_STATUS` to observe the outcome.
+    """
+    try:
+        data = json.loads(payload)
+    except json.JSONDecodeError:
+        return "ERROR: Invalid payload (expected JSON)"
+
+    ssid = data.get("ssid")
+    psk = data.get("psk") or data.get("password") or ""
+    if not isinstance(ssid, str) or not ssid:
+        return "ERROR: Missing ssid"
+    if not isinstance(psk, str):
+        return "ERROR: Invalid psk"
+
+    try:
+        # Clear any stale error so the client can observe THIS attempt via /wifi/error.
+        try:
+            _daemon_request("POST", "/wifi/reset_error")
+        except Exception:
+            pass  # non-fatal
+        _daemon_request("POST", "/wifi/connect", params={"ssid": ssid, "password": psk})
+        return f"OK: Connecting to {ssid}"
+    except urllib.error.HTTPError as e:
+        if e.code == 409:
+            return "ERROR: Busy"
+        logger.warning(f"wifi_connect HTTP error: {e}")
+        return "ERROR: Connect request failed"
+    except urllib.error.URLError as e:
+        logger.warning(f"wifi_connect: daemon unreachable: {e}")
+        return "ERROR: Daemon unreachable"
+    except Exception as e:
+        logger.exception("wifi_connect failed")
+        return f"ERROR: {e}"
+
+
+def _wifi_forget(ssid: str) -> str:
+    """Forget a saved WiFi network. Falls back to hotspot server-side if needed."""
+    ssid = ssid.strip()
+    if not ssid:
+        return "ERROR: Missing ssid"
+    try:
+        _daemon_request("POST", "/wifi/forget", params={"ssid": ssid})
+        return f"OK: Forgotten {ssid}"
+    except urllib.error.HTTPError as e:
+        if e.code == 400:
+            return "ERROR: Cannot forget hotspot"
+        if e.code == 404:
+            return "ERROR: Unknown ssid"
+        if e.code == 409:
+            return "ERROR: Busy"
+        logger.warning(f"wifi_forget HTTP error: {e}")
+        return "ERROR: Forget failed"
+    except urllib.error.URLError as e:
+        logger.warning(f"wifi_forget: daemon unreachable: {e}")
+        return "ERROR: Daemon unreachable"
+    except Exception as e:
+        logger.exception("wifi_forget failed")
+        return f"ERROR: {e}"
+
+
+def encode_network_ips() -> dict:
+    """Build a ManufacturerData payload with at most two IPv4 addresses.
+
+    Format per IP: 1 byte flags | 4 bytes IPv4
+      flags: 0x01 = hotspot, 0x00 = normal
+
+    Returns a dict {manufacturer_id: dbus.Array(bytes)} suitable for
+    BlueZ ManufacturerData property. Returns empty dict when offline.
+
+    The cap exists because the overall advert has to fit in 31 bytes
+    (see :class:`Advertisement.get_properties`). Mobile clients that
+    need more than two interfaces can still query the GATT
+    NETWORK_STATUS characteristic once connected.
+    """
+    status = get_network_status()
+    if status == "OFFLINE" or status == "ERROR":
+        return {}
+
+    payload = bytearray()
+    is_hotspot = status.startswith("HOTSPOT")
+
+    parts = status.split("[")
+    encoded = 0
+    for part in parts[1:]:
+        if encoded >= _MAX_ADVERTISED_IPS:
+            break
+        if "]" not in part:
+            continue
+        iface, rest = part.split("]", 1)
+        ip_str = rest.split(";")[0].strip()
+        try:
+            ip_bytes = socket.inet_aton(ip_str)
+            flag = 0x01 if (is_hotspot and iface.strip() == "wlan0") else 0x00
+            payload.append(flag)
+            payload.extend(ip_bytes)
+            encoded += 1
+        except OSError:
+            continue
+
+    if not payload:
+        return {}
+
+    return {
+        dbus.UInt16(POLLEN_MANUFACTURER_ID): dbus.Array(
+            [dbus.Byte(b) for b in payload], signature="y"
+        )
+    }
 
 
 def get_pin() -> str:

@@ -170,6 +170,20 @@ class CentralSignalingRelay:
         else:
             logger.debug(log_msg)
 
+        # Structured kv form: easy to grep, easy to dashboard. The
+        # human-readable line above stays for compatibility with anyone
+        # reading the systemd journal directly.
+        from reachy_mini.daemon.app.logging_ctx import kv_log
+
+        kv_log(
+            logger,
+            logging.INFO if state != RelayState.ERROR else logging.WARNING,
+            "central.relay.state",
+            from_=old_state.value,
+            to=state.value,
+            message=message,
+        )
+
         # Notify callback if set
         if self._on_state_change:
             try:
@@ -194,7 +208,9 @@ class CentralSignalingRelay:
         # coroutine is invoked on the main asyncio loop and schedules the
         # actual tear-down on the relay's own thread loop.
         if self._robot_app_lock is not None:
-            self._robot_app_lock.set_remote_eviction_handler(self._handle_remote_eviction)
+            self._robot_app_lock.set_remote_eviction_handler(
+                self._handle_remote_eviction
+            )
 
         # Run the relay in its own thread with a dedicated event loop.
         # This is necessary because the caller (daemon.start) may run in a temporary
@@ -331,17 +347,38 @@ class CentralSignalingRelay:
             logger.debug("[Central Relay] Token unchanged, no action needed")
             return
 
-        if new_token:
-            self._set_state(
-                RelayState.RECONNECTING, "HF token updated, reconnecting..."
-            )
-            self._connection_attempts = 0  # Reset retry counter on new token
+        await self._reconnect_now(new_token, reason="HF token updated, reconnecting...")
+
+    async def force_reconnect(self) -> None:
+        """Drop the current connection and reconnect with the stored token.
+
+        Unlike ``update_token``, this path is NOT guarded by a token
+        equality check - it always tears down the SSE and reconnects.
+
+        Intended as a recovery handle for split-brain states where the
+        relay thinks it is connected but central no longer lists this
+        robot as a producer (see ``POST /api/hf-auth/refresh-relay``).
+        """
+        await self._reconnect_now(self.hf_token, reason="Forced relay reconnect")
+
+    async def _reconnect_now(self, token: Optional[str], reason: str) -> None:
+        """Shared core of token-change and force-reconnect paths.
+
+        Transitions the relay into the right state and signals the run
+        loop to tear down the current connection and try connecting
+        again. Safe to call from any thread - if we have a running
+        thread loop we schedule the close/set there, otherwise we set
+        the event directly (covers the case where the relay has not
+        started its background thread yet).
+        """
+        if token:
+            self._set_state(RelayState.RECONNECTING, reason)
+            self._connection_attempts = 0
         else:
             self._set_state(RelayState.WAITING_FOR_TOKEN, "Logged out from HuggingFace")
 
-        # Signal the run loop to wake up and try connecting (thread-safe)
         if self._thread_loop and self._thread_loop.is_running():
-            # Schedule _close_connections and token_updated.set in the thread's event loop
+
             async def _reconnect() -> None:
                 await self._close_connections()
                 self._token_updated.set()
@@ -415,8 +452,39 @@ class CentralSignalingRelay:
                 try:
                     await self._connect_and_relay()
                 except asyncio.CancelledError:
-                    logger.info("[Central Relay] _run_loop cancelled during connect")
-                    raise  # Re-raise to exit the outer try
+                    # CancelledError at this layer has two possible sources:
+                    #
+                    # 1. `stop()` flipped `self._running` to False. This is the
+                    #    shutdown path and we must re-raise so the thread exits.
+                    # 2. An in-flight `_close_connections()` (triggered by
+                    #    `force_reconnect` / `update_token`) cancelled a task
+                    #    that aiohttp was holding the cancellation for - e.g.
+                    #    a `session.get(...)` wedged inside `_resolve_host` on
+                    #    a flaky network. aiohttp propagates that cancellation
+                    #    up through `_handle_central_sse`, which lands here.
+                    #    In that case we very much want to stay in the loop and
+                    #    reconnect - killing the thread here means every
+                    #    subsequent `/refresh-relay` POST is a no-op because
+                    #    there's no loop left to service the token_updated
+                    #    event.
+                    #
+                    # `self._running` is our authoritative signal for (1). If
+                    # it's still True, treat the cancellation as a reconnect
+                    # request and loop around.
+                    if not self._running:
+                        logger.info(
+                            "[Central Relay] _run_loop cancelled (stop requested)"
+                        )
+                        raise
+                    logger.info(
+                        "[Central Relay] Connect attempt cancelled mid-flight "
+                        "(likely from force_reconnect / token update); restarting loop"
+                    )
+                    had_exception = True
+                    self._set_state(
+                        RelayState.RECONNECTING,
+                        "Restarting after cancelled connect",
+                    )
                 except Exception as e:
                     logger.warning(
                         f"[Central Relay] Connection attempt failed with exception: {type(e).__name__}: {e}"
@@ -718,7 +786,14 @@ class CentralSignalingRelay:
 
     async def _send_to_central(self, msg: dict[str, Any]) -> None:
         """Send a message to the central server via HTTP POST."""
+        msg_type = msg.get("type", "?")
         if not self._http_session or not self.hf_token:
+            logger.warning(
+                "[Central Relay] _send_to_central skipped (type=%s, http_session=%s, hf_token=%s)",
+                msg_type,
+                bool(self._http_session),
+                bool(self.hf_token),
+            )
             return
 
         # Token goes in the Authorization header only, not the URL.
@@ -729,12 +804,24 @@ class CentralSignalingRelay:
                 send_url, json=msg, headers=headers
             ) as response:
                 if response.status != 200:
+                    body = ""
+                    try:
+                        body = (await response.text())[:300]
+                    except Exception:
+                        pass
                     logger.warning(
-                        f"[Central Relay] Failed to send message to central server: HTTP {response.status}"
+                        "[Central Relay] _send_to_central FAILED type=%s HTTP %s body=%r",
+                        msg_type,
+                        response.status,
+                        body,
                     )
+                else:
+                    logger.info("[Central Relay] _send_to_central OK type=%s", msg_type)
         except Exception as e:
             logger.error(
-                f"[Central Relay] Error sending message to central server: {e}"
+                "[Central Relay] _send_to_central exception type=%s err=%s",
+                msg_type,
+                e,
             )
 
     async def _send_to_local(self, msg: dict[str, Any]) -> None:
@@ -755,17 +842,28 @@ class CentralSignalingRelay:
         if msg_type == "welcome":
             # Received our peer ID from central server
             self._central_peer_id = msg.get("peerId")
-            self._set_state(
-                RelayState.CONNECTED, f"Remote access enabled as '{self.robot_name}'"
+            logger.info(
+                "[Central Relay] central welcome received peer_id=%s; registering as producer name=%r",
+                self._central_peer_id,
+                self.robot_name,
             )
 
-            # Register as producer
+            # Register as producer FIRST, then flip to CONNECTED. If we
+            # set CONNECTED before producer registration, observers (UI,
+            # mobile app, /relay-status pollers) can see "connected" while
+            # central does not yet know we are a producer for this user,
+            # which produces the desync described in /refresh-relay's
+            # docstring.
             await self._send_to_central(
                 {
                     "type": "setPeerStatus",
                     "roles": ["producer"],
                     "meta": {"name": self.robot_name},
                 }
+            )
+
+            self._set_state(
+                RelayState.CONNECTED, f"Remote access enabled as '{self.robot_name}'"
             )
 
         elif msg_type == "list":
@@ -1146,3 +1244,19 @@ async def notify_token_change(new_token: Optional[str] = None) -> None:
             pass
 
     await _relay_instance.update_token(new_token)
+
+
+async def notify_force_reconnect() -> None:
+    """Ask the relay to drop its SSE channel and reconnect right now.
+
+    Unlike ``notify_token_change``, this always triggers a reconnect
+    even when the stored token is unchanged. Used by the
+    ``POST /api/hf-auth/refresh-relay`` endpoint to recover from
+    zombie-relay states where central no longer lists the robot as a
+    producer but the relay still thinks it is connected.
+    """
+    if _relay_instance is None:
+        logger.debug("[Central Relay] No relay instance, ignoring force reconnect")
+        return
+
+    await _relay_instance.force_reconnect()

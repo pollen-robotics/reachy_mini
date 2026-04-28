@@ -8,6 +8,8 @@ import nmcli
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+from reachy_mini.daemon.app.logging_ctx import kv_log
+
 HOTSPOT_SSID = "reachy-mini-ap"
 HOTSPOT_PASSWORD = "reachy-mini"
 
@@ -112,8 +114,10 @@ def connect_to_wifi_network(
 ) -> None:
     """Connect to a WiFi network. It will create a new connection using nmcli if the specified SSID is not already configured."""
     logger.warning(f"Request to connect to WiFi network '{ssid}' received.")
+    kv_log(logger, logging.INFO, "wifi.connect.request", ssid=ssid)
 
     if busy_lock.locked():
+        kv_log(logger, logging.WARNING, "wifi.connect.busy", ssid=ssid)
         raise HTTPException(status_code=409, detail="Another operation is in progress.")
 
     def connect() -> None:
@@ -122,9 +126,17 @@ def connect_to_wifi_network(
             try:
                 error = None
                 setup_wifi_connection(name=ssid, ssid=ssid, password=password)
+                kv_log(logger, logging.INFO, "wifi.connect.success", ssid=ssid)
             except Exception as e:
                 error = e
                 logger.error(f"Failed to connect to WiFi network '{ssid}': {e}")
+                kv_log(
+                    logger,
+                    logging.WARNING,
+                    "wifi.connect.failure",
+                    ssid=ssid,
+                    error=str(e),
+                )
                 logger.info("Reverting to hotspot...")
                 remove_connection(name=ssid)
                 setup_wifi_connection(
@@ -171,6 +183,13 @@ def forget_wifi_network(ssid: str) -> None:
                 was_active = check_if_connection_active(ssid)
                 logger.info(f"Forgetting WiFi network '{ssid}'...")
                 remove_connection(ssid)
+                kv_log(
+                    logger,
+                    logging.INFO,
+                    "wifi.forget.success",
+                    ssid=ssid,
+                    was_active=was_active,
+                )
 
                 if was_active:
                     logger.info("Was connected, falling back to hotspot...")
@@ -183,6 +202,13 @@ def forget_wifi_network(ssid: str) -> None:
             except Exception as e:
                 error = e
                 logger.error(f"Failed to forget network '{ssid}': {e}")
+                kv_log(
+                    logger,
+                    logging.ERROR,
+                    "wifi.forget.failure",
+                    ssid=ssid,
+                    error=str(e),
+                )
 
     Thread(target=forget).start()
 

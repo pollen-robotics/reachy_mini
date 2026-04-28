@@ -203,6 +203,24 @@ class Backend:
         self._send_message_to_webrtc: Optional[Callable[[Optional[str], str], None]] = (
             None
         )
+        # Loopback HTTP proxy support (for the mobile app's `http_proxy`
+        # WebRTC DC tunnel). The daemon's FastAPI server binds locally on
+        # this port; we issue a localhost HTTP call against ourselves to
+        # forward proxied requests to the same router stack used by LAN
+        # clients. The event loop is captured at the same time as the
+        # WebRTC handler so we can `run_coroutine_threadsafe` from the
+        # GStreamer DC callback (which runs on its own thread).
+        self._loopback_http_port: int = 8000
+        self._loopback_http_host: str = "127.0.0.1"
+        self._http_proxy_loop: Optional[asyncio.AbstractEventLoop] = None
+
+        # WebSocket proxy support (`ws_proxy` over the same WebRTC DC
+        # tunnel as `http_proxy`). Multiplex by stream_id so callers
+        # can hold several long-lived subscriptions concurrently
+        # (e.g. /api/move/ws/updates + /api/state/ws/full from the
+        # mobile app at the same time). The dict is mutated only from
+        # `_http_proxy_loop`'s thread, so no extra lock is needed.
+        self._ws_proxy_streams: Dict[str, Dict[str, Any]] = {}
 
     # Life cycle methods
     def wrapped_run(self) -> None:
@@ -723,7 +741,9 @@ class Backend:
         1.0032234352772091,
     ]
 
-    INIT_ANTENNAS_JOINT_POSITIONS = np.array((-0.1745, 0.1745))  # ~10° offset to reduce shaking at vertical
+    INIT_ANTENNAS_JOINT_POSITIONS = np.array(
+        (-0.1745, 0.1745)
+    )  # ~10° offset to reduce shaking at vertical
     SLEEP_ANTENNAS_JOINT_POSITIONS = np.array((-3.05, 3.05))
     SLEEP_HEAD_POSE = np.array(
         [
@@ -782,7 +802,9 @@ class Backend:
             if dist_to_init_pose > 30:
                 # Move to the initial position
                 await self.goto_target(
-                    self.INIT_HEAD_POSE, antennas=self.INIT_ANTENNAS_JOINT_POSITIONS, duration=1
+                    self.INIT_HEAD_POSE,
+                    antennas=self.INIT_ANTENNAS_JOINT_POSITIONS,
+                    duration=1,
                 )
                 await asyncio.sleep(0.2)
 
@@ -993,7 +1015,12 @@ class Backend:
 
         elif isinstance(
             cmd,
-            (SetVolumeCmd, GetVolumeCmd, SetMicrophoneVolumeCmd, GetMicrophoneVolumeCmd),
+            (
+                SetVolumeCmd,
+                GetVolumeCmd,
+                SetMicrophoneVolumeCmd,
+                GetMicrophoneVolumeCmd,
+            ),
         ):
             # Volume is a global robot setting, not per-session: a remote
             # change persists for the next connection. This matches the
@@ -1104,6 +1131,7 @@ class Backend:
         Stores a reference to the ``GstMediaServer`` for:
         - WebRTC data channel message handling (robot control)
         - Sound playback delegation (play_sound)
+        - HTTP proxy tunnel (`http_proxy` over DC for the mobile app)
 
         Args:
             media_server: The ``GstMediaServer`` instance.
@@ -1113,6 +1141,7 @@ class Backend:
 
         _loop = asyncio.new_event_loop()
         threading.Thread(target=_loop.run_forever, daemon=True).start()
+        self._http_proxy_loop = _loop
 
         def _threadsafe_handler(peer_id: str, message: str) -> None:
             _loop.call_soon_threadsafe(self._handle_webrtc_message, peer_id, message)
@@ -1120,9 +1149,58 @@ class Backend:
         media_server.set_message_handler(_threadsafe_handler)
         self._send_message_to_webrtc = media_server.send_data_message
 
+    def set_loopback_http_port(self, port: int, host: str = "127.0.0.1") -> None:
+        """Tell the backend where the daemon's own FastAPI server is listening.
+
+        Used by the WebRTC ``http_proxy`` handler to forward proxied
+        requests to the same router stack that LAN clients hit
+        directly. Called from the FastAPI lifespan once we know the
+        port the user passed via ``--fastapi-port``.
+        """
+        self._loopback_http_port = port
+        self._loopback_http_host = host
+
     def _handle_webrtc_message(self, peer_id: str, message: str) -> None:
         def send(resp: dict[str, Any]) -> None:
             self._send_webrtc_response(peer_id, resp)
+
+        # Peek the message type before running it through the strict
+        # `command_adapter` discriminated union: the `http_proxy`
+        # tunnel lives outside the SDK's typed command set on purpose
+        # so we don't have to widen the protocol every time a new HTTP
+        # endpoint is added on the daemon. Invalid JSON or anything
+        # that's neither `http_proxy` nor a valid SDK command falls
+        # through to the existing error path.
+        try:
+            parsed = json.loads(message)
+        except Exception as e:
+            self.logger.error(f"WebRTC invalid JSON: {e}")
+            send({"error": f"Invalid JSON: {e}"})
+            return
+
+        if isinstance(parsed, dict):
+            msg_type = parsed.get("type")
+            if msg_type == "http_proxy":
+                # Run the proxied HTTP call on this backend's event loop.
+                # `_handle_webrtc_message` itself runs on that loop already
+                # (see `setup_media_server`), so we can fire a task
+                # directly. Callers don't wait for completion; the response
+                # is sent back through the data channel when ready.
+                asyncio.create_task(self._async_http_proxy(peer_id, parsed))
+                return
+            if msg_type == "ws_open":
+                # New WebSocket subscription request from the mobile
+                # app. The pump task handles the full lifecycle and
+                # sends `ws_opened` / `ws_message` / `ws_closed` /
+                # `ws_error` frames back over the DC.
+                asyncio.create_task(self._async_ws_proxy_open(peer_id, parsed))
+                return
+            if msg_type == "ws_send":
+                self._ws_proxy_handle_send(parsed)
+                return
+            if msg_type == "ws_close":
+                self._ws_proxy_handle_close(parsed)
+                return
 
         try:
             cmd = command_adapter.validate_json(message)
@@ -1135,6 +1213,358 @@ class Backend:
         except Exception as e:
             self.logger.error(f"WebRTC command error: {e}")
             send({"error": str(e)})
+
+    async def _async_http_proxy(self, peer_id: str, req: dict[str, Any]) -> None:
+        """Tunnel an HTTP request received over the WebRTC DC.
+
+        Wire format (mirrors `reachy_mini_mobile_app/src/robot-client/
+        webrtcClient.ts`):
+
+            request:  {"type":"http_proxy", "request_id":"...",
+                       "method":"GET"|"POST"|..., "path":"/api/...",
+                       "body": <json|null>, "headers":{...}|null,
+                       "timeout_s": <float>}
+            response: {"type":"http_proxy_response", "request_id":"...",
+                       "status": <int>, "body": <json|str|null>,
+                       "headers": {<name>: <value>, ...},
+                       "error": <str|null>}
+
+        On any error (timeout, connection refused, daemon 5xx) we still
+        send back a structured response with a non-2xx status and a
+        non-null `error`, so the mobile-side `webrtcClient` always
+        resolves the pending entry instead of timing out.
+        """
+        request_id = str(req.get("request_id") or "")
+        method = str(req.get("method") or "GET").upper()
+        path = str(req.get("path") or "/")
+        body = req.get("body")
+        headers_in = req.get("headers") or {}
+        try:
+            timeout_s = float(req.get("timeout_s") or 10.0)
+        except Exception:
+            timeout_s = 10.0
+        timeout_s = max(0.5, min(300.0, timeout_s))
+
+        if not request_id:
+            self.logger.warning("http_proxy: missing request_id, dropping")
+            return
+
+        url = f"http://{self._loopback_http_host}:{self._loopback_http_port}{path}"
+
+        # Normalise headers to plain str:str. Drop hop-by-hop headers
+        # that don't survive a loopback hop; we never want a remote
+        # client to forge `Host` for example.
+        clean_headers: dict[str, str] = {}
+        if isinstance(headers_in, dict):
+            for k, v in headers_in.items():
+                if not isinstance(k, str):
+                    continue
+                if k.lower() in {"host", "content-length"}:
+                    continue
+                clean_headers[k] = str(v)
+
+        # Body encoding: dicts/lists go as JSON, str goes verbatim,
+        # None means no body. Anything else is JSON-encoded as a best
+        # effort so the daemon-side router sees a syntactically valid
+        # payload.
+        send_kwargs: dict[str, Any] = {}
+        if body is None:
+            pass
+        elif isinstance(body, (bytes, bytearray)):
+            send_kwargs["data"] = bytes(body)
+        elif isinstance(body, str):
+            send_kwargs["data"] = body
+        else:
+            send_kwargs["json"] = body
+            clean_headers.setdefault("Content-Type", "application/json")
+
+        status: int = 0
+        resp_body: Any = None
+        resp_headers: dict[str, str] = {}
+        error: Optional[str] = None
+
+        try:
+            import aiohttp
+
+            timeout = aiohttp.ClientTimeout(total=timeout_s)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.request(
+                    method, url, headers=clean_headers, **send_kwargs
+                ) as resp:
+                    status = resp.status
+                    resp_headers = {k: v for k, v in resp.headers.items()}
+                    raw = await resp.read()
+                    text = raw.decode("utf-8", errors="replace") if raw else ""
+                    ctype = resp.headers.get("Content-Type", "")
+                    if "application/json" in ctype.lower() and text:
+                        try:
+                            resp_body = json.loads(text)
+                        except Exception:
+                            resp_body = text
+                    else:
+                        resp_body = text
+        except asyncio.TimeoutError:
+            error = f"daemon loopback timeout after {timeout_s:.1f}s"
+            self.logger.warning(
+                "http_proxy timeout", extra={"path": path, "timeout_s": timeout_s}
+            )
+        except Exception as e:
+            error = f"{type(e).__name__}: {e}"
+            self.logger.warning(
+                "http_proxy error", extra={"path": path, "error": error}
+            )
+
+        response = {
+            "type": "http_proxy_response",
+            "request_id": request_id,
+            "status": status,
+            "body": resp_body,
+            "headers": resp_headers,
+            "error": error,
+        }
+        try:
+            self._send_webrtc_response(peer_id, response)
+        except Exception as e:
+            self.logger.error(f"http_proxy: failed to send response: {e}")
+
+    # ------------------------------------------------------------------
+    # WebSocket proxy (parallel to `_async_http_proxy`)
+    #
+    # Wire format (mirrors `reachy_mini_mobile_app/src/robot-client/
+    # wsProxyClient.ts`):
+    #
+    #   client → daemon
+    #   ───────────────
+    #     {"type":"ws_open",  "stream_id":"...", "path":"/api/.../ws/...",
+    #      "headers": {...}|null}
+    #     {"type":"ws_send",  "stream_id":"...", "data": "<text>"}
+    #     {"type":"ws_close", "stream_id":"...",
+    #      "code": <int>|null, "reason": <str>|null}
+    #
+    #   daemon → client
+    #   ───────────────
+    #     {"type":"ws_opened",  "stream_id":"..."}
+    #     {"type":"ws_message", "stream_id":"...", "data": "<text>"}
+    #     {"type":"ws_closed",  "stream_id":"...",
+    #      "code": <int>, "reason": <str>}
+    #     {"type":"ws_error",   "stream_id":"...", "error": "..."}
+    #
+    # Only TEXT frames are tunnelled today: every Reachy daemon WS
+    # endpoint sends JSON-as-text and a base64-encoded BINARY carve-out
+    # would just bloat the wire format with no caller. The daemon-side
+    # handshake is best-effort: any failure (handshake refused, server
+    # disconnects mid-stream, JSON-encoding error) is reported with a
+    # single `ws_error` frame and the stream entry is dropped, so the
+    # mobile-side dispatcher always sees a terminal event per stream.
+    # ------------------------------------------------------------------
+
+    async def _async_ws_proxy_open(self, peer_id: str, req: dict[str, Any]) -> None:
+        """Tunnel a WebSocket connection received over the WebRTC DC."""
+        stream_id = str(req.get("stream_id") or "")
+        path = str(req.get("path") or "/")
+        headers_in = req.get("headers") or {}
+
+        if not stream_id:
+            self.logger.warning("ws_proxy: missing stream_id, dropping")
+            return
+        if stream_id in self._ws_proxy_streams:
+            # Re-using an in-flight stream_id is a client-side bug. We
+            # answer with a single error frame instead of silently
+            # dropping so the mobile side surfaces it in logs.
+            self._send_webrtc_response(
+                peer_id,
+                {
+                    "type": "ws_error",
+                    "stream_id": stream_id,
+                    "error": "stream_id already in use",
+                },
+            )
+            return
+
+        # Drop hop-by-hop and handshake-owned headers; aiohttp picks
+        # the right `Sec-WebSocket-*` values itself and a remote client
+        # forging `Host` would let a malicious peer impersonate the
+        # loopback origin.
+        clean_headers: dict[str, str] = {}
+        if isinstance(headers_in, dict):
+            for k, v in headers_in.items():
+                if not isinstance(k, str):
+                    continue
+                lk = k.lower()
+                if lk in {
+                    "host",
+                    "content-length",
+                    "upgrade",
+                    "connection",
+                    "sec-websocket-key",
+                    "sec-websocket-version",
+                    "sec-websocket-extensions",
+                    "sec-websocket-protocol",
+                }:
+                    continue
+                clean_headers[k] = str(v)
+
+        url = f"ws://{self._loopback_http_host}:{self._loopback_http_port}{path}"
+
+        # Allocate the stream record up-front so a fast `ws_close`
+        # arriving while the handshake is in flight has somewhere to
+        # land. The pump task wires `task` and we own the queue here.
+        incoming: "asyncio.Queue[Optional[str]]" = asyncio.Queue()
+        self._ws_proxy_streams[stream_id] = {
+            "incoming": incoming,
+            "task": None,
+            "peer_id": peer_id,
+            "closing": False,
+        }
+
+        async def pump() -> None:
+            import aiohttp
+
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.ws_connect(
+                        url,
+                        headers=clean_headers or None,
+                        heartbeat=30.0,
+                    ) as ws:
+                        self._send_webrtc_response(
+                            peer_id,
+                            {"type": "ws_opened", "stream_id": stream_id},
+                        )
+                        self.logger.info(
+                            "ws_proxy opened",
+                            extra={"stream_id": stream_id, "path": path},
+                        )
+
+                        async def writer() -> None:
+                            while True:
+                                data = await incoming.get()
+                                if data is None:
+                                    if not ws.closed:
+                                        try:
+                                            await ws.close()
+                                        except Exception:
+                                            pass
+                                    return
+                                try:
+                                    await ws.send_str(data)
+                                except Exception as e:
+                                    self.logger.warning(
+                                        "ws_proxy writer error",
+                                        extra={
+                                            "stream_id": stream_id,
+                                            "error": str(e),
+                                        },
+                                    )
+                                    return
+
+                        writer_task = asyncio.create_task(writer())
+                        try:
+                            async for msg in ws:
+                                if msg.type == aiohttp.WSMsgType.TEXT:
+                                    self._send_webrtc_response(
+                                        peer_id,
+                                        {
+                                            "type": "ws_message",
+                                            "stream_id": stream_id,
+                                            "data": msg.data,
+                                        },
+                                    )
+                                elif msg.type == aiohttp.WSMsgType.ERROR:
+                                    err_obj = ws.exception()
+                                    self._send_webrtc_response(
+                                        peer_id,
+                                        {
+                                            "type": "ws_error",
+                                            "stream_id": stream_id,
+                                            "error": str(err_obj or "ws error"),
+                                        },
+                                    )
+                                    break
+                                elif msg.type in (
+                                    aiohttp.WSMsgType.CLOSE,
+                                    aiohttp.WSMsgType.CLOSED,
+                                    aiohttp.WSMsgType.CLOSING,
+                                ):
+                                    break
+                                # Binary frames are dropped on purpose.
+                        finally:
+                            writer_task.cancel()
+                            try:
+                                await writer_task
+                            except (asyncio.CancelledError, Exception):
+                                pass
+
+                        code = ws.close_code if ws.close_code is not None else 1000
+                        self._send_webrtc_response(
+                            peer_id,
+                            {
+                                "type": "ws_closed",
+                                "stream_id": stream_id,
+                                "code": code,
+                                "reason": "",
+                            },
+                        )
+                        self.logger.info(
+                            "ws_proxy closed",
+                            extra={
+                                "stream_id": stream_id,
+                                "code": code,
+                                "path": path,
+                            },
+                        )
+            except asyncio.CancelledError:
+                # Backend shutting down: don't try to send anything.
+                raise
+            except Exception as e:
+                self.logger.warning(
+                    "ws_proxy connect error",
+                    extra={
+                        "stream_id": stream_id,
+                        "path": path,
+                        "error": f"{type(e).__name__}: {e}",
+                    },
+                )
+                self._send_webrtc_response(
+                    peer_id,
+                    {
+                        "type": "ws_error",
+                        "stream_id": stream_id,
+                        "error": f"{type(e).__name__}: {e}",
+                    },
+                )
+            finally:
+                self._ws_proxy_streams.pop(stream_id, None)
+
+        task = asyncio.create_task(pump())
+        # Re-fetch the slot in case `ws_close` already removed it
+        # before we got here (extremely tight race, but free to guard).
+        slot = self._ws_proxy_streams.get(stream_id)
+        if slot is not None:
+            slot["task"] = task
+
+    def _ws_proxy_handle_send(self, req: dict[str, Any]) -> None:
+        """Forward a `ws_send` payload to the matching pump's writer queue."""
+        stream_id = str(req.get("stream_id") or "")
+        if not stream_id:
+            return
+        stream = self._ws_proxy_streams.get(stream_id)
+        if not stream or stream.get("closing"):
+            return
+        data = req.get("data")
+        if isinstance(data, str):
+            stream["incoming"].put_nowait(data)
+
+    def _ws_proxy_handle_close(self, req: dict[str, Any]) -> None:
+        """Mark a stream as closing and signal the writer to drain."""
+        stream_id = str(req.get("stream_id") or "")
+        if not stream_id:
+            return
+        stream = self._ws_proxy_streams.get(stream_id)
+        if not stream or stream.get("closing"):
+            return
+        stream["closing"] = True
+        stream["incoming"].put_nowait(None)
 
     def _send_webrtc_response(self, peer_id: str, response: dict[str, Any]) -> None:
         if self._send_message_to_webrtc:

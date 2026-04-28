@@ -153,6 +153,36 @@ class Daemon:
         self._status.media_released = False
         self.logger.info("Media hardware re-acquired.")
 
+    async def ensure_central_signaling_relay(self) -> dict[str, Any]:
+        """Ensure the central signaling relay is running.
+
+        Idempotent helper used by HTTP routes (e.g. ``save-token``,
+        ``refresh-relay``) to recover from the cold-boot case where the
+        daemon started without an HF token. In that case
+        ``_start_central_signaling_relay`` ran once at media-acquire
+        time, found no token, and returned without setting
+        ``_relay_instance``. After the user pushes a token via
+        ``save-token``, ``notify_token_change`` is a no-op (because
+        ``_relay_instance is None``), so the robot stays invisible on
+        central until the next daemon restart. This method closes that
+        gap by re-running the start path.
+
+        Returns a small dict describing what happened, suitable for
+        bubbling up to API responses.
+        """
+        from reachy_mini.media import central_signaling_relay as _csr
+
+        if _csr._relay_instance is not None:
+            return {"started": False, "reason": "already_running"}
+        if not self._media_server or self._media_released:
+            return {"started": False, "reason": "media_unavailable"}
+
+        await self._start_central_signaling_relay()
+
+        if _csr._relay_instance is None:
+            return {"started": False, "reason": "no_token_or_failed"}
+        return {"started": True}
+
     async def _start_central_signaling_relay(self) -> None:
         """Start the central signaling relay for remote WebRTC access."""
         global _central_relay_task

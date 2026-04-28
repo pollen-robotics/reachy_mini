@@ -24,6 +24,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from reachy_mini.apps.manager import AppManager
+from reachy_mini.daemon.app.logging_ctx import TraceIdFilter
 from reachy_mini.daemon.app.routers import (
     apps,
     camera,
@@ -38,6 +39,7 @@ from reachy_mini.daemon.app.routers import (
     state,
     volume,
 )
+from reachy_mini.daemon.app.trace_middleware import TraceIdMiddleware
 from reachy_mini.daemon.daemon import Daemon
 from reachy_mini.daemon.utils import SimulationMode
 from reachy_mini.media.audio_utils import (
@@ -165,6 +167,17 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
                     hardware_config_filepath=args.hardware_config_filepath,
                 )
 
+            # Tell the backend where to forward `http_proxy` requests
+            # received over the WebRTC data channel: same FastAPI server,
+            # via the loopback interface. Done after `start()` so the
+            # backend instance is guaranteed to exist.
+            try:
+                backend = getattr(app.state.daemon, "backend", None)
+                if backend is not None and hasattr(backend, "set_loopback_http_port"):
+                    backend.set_loopback_http_port(args.fastapi_port)
+            except Exception as e:
+                logger.warning(f"Could not configure http_proxy loopback port: {e}")
+
             # Register mDNS service only after the daemon is ready
             mdns.register()
 
@@ -240,7 +253,12 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
         app.include_router(cache.router)
         app.include_router(logs.router)
         app.include_router(update.router)
+        # Legacy mount at `/wifi/...` (used by the Bluetooth provisioning service
+        # and older first-boot tooling). Kept for backward compatibility.
         app.include_router(wifi_config.router)
+        # New mount under `/api/wifi/...` so the mobile app can reach it via
+        # the unified `RobotClient` (which prefixes everything with `/api`).
+        router.include_router(wifi_config.router)
 
     app.include_router(router)
     app.include_router(sdk_ws.router)
@@ -253,12 +271,17 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
             health_check_event.set()
             return {"status": "ok"}
 
+    # Order matters: TraceId runs first so every downstream middleware
+    # (CORS, routing) sees the ContextVar set when they emit logs.
+    # Starlette runs middlewares in REVERSE registration order on the
+    # request side, so adding TraceId LAST puts it on top of the stack.
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],  # or restrict to your HF domain
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    app.add_middleware(TraceIdMiddleware)
 
     STATIC_DIR = Path(__file__).parent / "dashboard" / "static"
     TEMPLATES_DIR = Path(__file__).parent / "dashboard" / "templates"
@@ -296,10 +319,19 @@ def run_app(args: Args) -> None:
     root_logger = logging.getLogger()
     root_logger.setLevel(args.log_level)
 
-    # Create handler that writes to stderr with immediate flush
+    # Create handler that writes to stderr with immediate flush.
+    #
+    # The format includes %(trace_id)s so any request-scoped log line
+    # carries the same id the mobile app emits, making cross-boundary
+    # debugging a grep away. The TraceIdFilter guarantees the field is
+    # always set (sentinel "----" outside requests), so the format
+    # string is unconditional.
     handler = logging.StreamHandler(sys.stderr)
     handler.setLevel(args.log_level)
-    handler.setFormatter(logging.Formatter("%(name)s - %(levelname)s - %(message)s"))
+    handler.addFilter(TraceIdFilter())
+    handler.setFormatter(
+        logging.Formatter("[%(trace_id)s] %(name)s - %(levelname)s - %(message)s")
+    )
     root_logger.handlers.clear()
     root_logger.addHandler(handler)
 
