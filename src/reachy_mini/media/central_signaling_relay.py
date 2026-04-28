@@ -12,6 +12,7 @@ The relay automatically:
 import asyncio
 import json
 import logging
+import os
 import threading
 import time
 from enum import Enum
@@ -37,8 +38,11 @@ class RelayState(Enum):
     ERROR = "error"
 
 
-# Central signaling server URL
-CENTRAL_SIGNALING_SERVER = "https://cduss-reachy-mini-central.hf.space"
+# Central signaling server URL. Override via the REACHY_CENTRAL_URL env
+# var at startup to point at a fork (test Space, staging, etc.).
+CENTRAL_SIGNALING_SERVER = os.getenv(
+    "REACHY_CENTRAL_URL", "https://cduss-reachy-mini-central.hf.space"
+)
 LOCAL_GSTREAMER_SIGNALING = "ws://127.0.0.1:8443"
 
 # Reconnection settings
