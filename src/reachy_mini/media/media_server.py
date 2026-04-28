@@ -25,10 +25,13 @@ Example usage::
 import logging
 import os
 import platform
+import time
+from collections.abc import Callable
 from threading import Thread
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Dict, Optional
 
 import gi
+import numpy as np
 
 from reachy_mini.daemon.utils import (
     CAMERA_PIPE_NAME,
@@ -45,12 +48,13 @@ from reachy_mini.media.camera_constants import (
     ReachyMiniLiteCamSpecs,
 )
 from reachy_mini.media.device_detection import get_audio_device, get_video_device
+from reachy_mini.motion.head_wobbler import HeadWobbler, SpeechOffsets
 from reachy_mini.utils.constants import ASSETS_ROOT_PATH
 
 gi.require_version("Gst", "1.0")
 gi.require_version("GstApp", "1.0")
 
-from gi.repository import GLib, Gst  # noqa: E402
+from gi.repository import GLib, Gst, GstApp  # noqa: E402, F401
 
 
 class GstMediaServer:
@@ -69,6 +73,10 @@ class GstMediaServer:
         resized_K (npt.NDArray[np.float64]): Camera intrinsic matrix for current resolution.
 
     """
+
+    # Sample rate the wobbler appsink demands; the per-branch audioresample
+    # converts whatever the source produces down to this rate before delivery.
+    WOBBLER_SAMPLE_RATE = 16_000
 
     def __init__(
         self,
@@ -126,6 +134,7 @@ class GstMediaServer:
         self._on_data_message: Optional[Callable[[str, str], None]] = None
         self._incoming_audio: Dict[str, Dict[str, Any]] = {}
         self._playbin: Optional[Gst.Element] = None
+        self._head_wobbler: Optional[HeadWobbler] = None
 
         self._build_pipeline()
 
@@ -283,8 +292,6 @@ class GstMediaServer:
 
         rtpopusdepay = Gst.ElementFactory.make("rtpopusdepay")
         opusdec = Gst.ElementFactory.make("opusdec")
-        audioconvert = Gst.ElementFactory.make("audioconvert")
-        audioresample = Gst.ElementFactory.make("audioresample")
 
         audiosink = self._build_audiosink_element()
         if audiosink is None:
@@ -292,20 +299,38 @@ class GstMediaServer:
             return
         audiosink.set_property("sync", False)
 
+        # Per-branch audioconvert+audioresample so the wobbler appsink's
+        # F32LE/2/16000 caps don't drag the audiosink branch into a rate
+        # the device can't accept (e.g. wireless XMOS PCM falls back to
+        # IEC958 at non-native rates).
+        tee = Gst.ElementFactory.make("tee")
+        queue_speaker = Gst.ElementFactory.make("queue")
+        ac_speaker = Gst.ElementFactory.make("audioconvert")
+        ar_speaker = Gst.ElementFactory.make("audioresample")
+        queue_wobbler = Gst.ElementFactory.make("queue")
+        ac_wobbler = Gst.ElementFactory.make("audioconvert")
+        ar_wobbler = Gst.ElementFactory.make("audioresample")
+        # Live WebRTC path: sync=False (appsrc is-live + PTS-sync appsink
+        # would stall delivery under back-pressure).
+        appsink_wobbler = self._make_wobbler_appsink(sync=False)
+
         for elem in [
-            appsrc,
-            rtpopusdepay,
-            opusdec,
-            audioconvert,
-            audioresample,
-            audiosink,
+            appsrc, rtpopusdepay, opusdec, tee,
+            queue_speaker, ac_speaker, ar_speaker, audiosink,
+            queue_wobbler, ac_wobbler, ar_wobbler, appsink_wobbler,
         ]:
             playback_pipe.add(elem)
         appsrc.link(rtpopusdepay)
         rtpopusdepay.link(opusdec)
-        opusdec.link(audioconvert)
-        audioconvert.link(audioresample)
-        audioresample.link(audiosink)
+        opusdec.link(tee)
+        tee.link(queue_speaker)
+        queue_speaker.link(ac_speaker)
+        ac_speaker.link(ar_speaker)
+        ar_speaker.link(audiosink)
+        tee.link(queue_wobbler)
+        queue_wobbler.link(ac_wobbler)
+        ac_wobbler.link(ar_wobbler)
+        ar_wobbler.link(appsink_wobbler)
 
         play_bus = playback_pipe.get_bus()
         play_bus.add_watch(
@@ -323,6 +348,10 @@ class GstMediaServer:
             return int(Gst.PadProbeReturn.DROP)
 
         probe_id = pad.add_probe(Gst.PadProbeType.BUFFER, _buffer_probe, None)
+
+        if self._head_wobbler is not None:
+            self._head_wobbler.reset()
+            self._head_wobbler.start()
 
         self._incoming_audio[peer_id] = {
             "playback_pipeline": playback_pipe,
@@ -909,9 +938,6 @@ class GstMediaServer:
         else:
             file_path = sound_file
 
-        # Build platform-aware audio sink element
-        audiosink = self._build_audiosink_element()
-
         if self._playbin is not None:
             self._playbin.set_state(Gst.State.NULL)
 
@@ -931,8 +957,11 @@ class GstMediaServer:
             uri = f"file://{file_path}"
 
         playbin.set_property("uri", uri)
-        if audiosink is not None:
-            playbin.set_property("audio-sink", audiosink)
+        playbin.set_property("audio-sink", self._build_audiosink_tee_bin())
+
+        if self._head_wobbler is not None:
+            self._head_wobbler.reset()
+            self._head_wobbler.start()
 
         self._playbin = playbin
         playbin.set_state(Gst.State.PLAYING)
@@ -985,6 +1014,124 @@ class GstMediaServer:
             return audiosink
 
         return Gst.ElementFactory.make("autoaudiosink")
+
+    # Fallback play-at offset used by sync=False wobbler appsinks (live
+    # push paths, WebRTC ingress). Matches PLAYBACK_SINK_BUFFER_TIME_US
+    # in audio_gstreamer.py.
+    _WOBBLER_LIVE_PLAY_OFFSET_NS = 50_000_000  # 50 ms
+
+    def _make_wobbler_appsink(self, sync: bool = True) -> Gst.Element:
+        """Create an appsink that feeds audio to the head wobbler.
+
+        Args:
+            sync: ``True`` for playbin paths (new-sample fires at PTS on
+                pipeline clock = when audiosink outputs). ``False`` for
+                live streams (push-based appsrc, WebRTC ingress) where
+                back-pressure + max-buffers drops would stall delivery.
+
+        """
+        appsink = Gst.ElementFactory.make("appsink")
+        # Force mono so the speech tapper receives a 1-D float32 array.
+        # The per-branch audioconvert handles the downmix.
+        caps = Gst.Caps.from_string(
+            f"audio/x-raw,format=F32LE,channels=1,rate={self.WOBBLER_SAMPLE_RATE},layout=interleaved"
+        )
+        appsink.set_property("caps", caps)
+        appsink.set_property("drop", True)
+        appsink.set_property("max-buffers", 5)
+        appsink.set_property("sync", sync)
+        appsink.set_property("emit-signals", True)
+        appsink.connect("new-sample", self._on_wobbler_sample)
+        return appsink
+
+    def _on_wobbler_sample(self, appsink: Gst.Element) -> Gst.FlowReturn:
+        """GStreamer callback: forward audio buffer to the head wobbler.
+
+        For ``sync=True`` appsinks the callback fires at the buffer's PTS
+        on the pipeline clock — audio is playing NOW. For ``sync=False``
+        (live/WebRTC path) we schedule slightly ahead to match the
+        audiosink's internal buffer.
+        """
+        sample = appsink.pull_sample()
+        if sample is None or self._head_wobbler is None:
+            return Gst.FlowReturn.OK
+        buf = sample.get_buffer()
+        data = buf.extract_dup(0, buf.get_size())
+        pcm = np.frombuffer(data, dtype=np.float32)
+        if appsink.get_property("sync"):
+            play_at_ns = time.monotonic_ns()
+        else:
+            play_at_ns = time.monotonic_ns() + self._WOBBLER_LIVE_PLAY_OFFSET_NS
+        self._head_wobbler.feed(pcm, play_at_ns)
+        return Gst.FlowReturn.OK
+
+    def _build_audiosink_tee_bin(self) -> Gst.Bin:
+        """Build a Gst.Bin splitting audio to speaker and wobbler appsink.
+
+        Per-branch audioconvert+audioresample isolate each leaf's caps
+        from the other (the wobbler appsink demands F32LE/2/16000; the
+        audiosink wants whatever the device prefers — e.g. on the
+        wireless XMOS PCM, anything but its native rate triggers an
+        IEC958 fallback that fails to open).
+
+        The bin exposes a single ghost sink pad for use as a playbin audio-sink::
+
+            ghost_sink → tee ─┬→ queue → audioconvert → audioresample → audiosink
+                               └→ queue → audioconvert → audioresample → appsink
+        """
+        audio_bin = Gst.Bin.new("audio_tee_bin")
+
+        tee = Gst.ElementFactory.make("tee")
+        queue_speaker = Gst.ElementFactory.make("queue")
+        ac_speaker = Gst.ElementFactory.make("audioconvert")
+        ar_speaker = Gst.ElementFactory.make("audioresample")
+        audiosink = self._build_audiosink_element()
+        queue_wobbler = Gst.ElementFactory.make("queue")
+        ac_wobbler = Gst.ElementFactory.make("audioconvert")
+        ar_wobbler = Gst.ElementFactory.make("audioresample")
+        appsink_wobbler = self._make_wobbler_appsink()
+
+        for el in (
+            tee,
+            queue_speaker, ac_speaker, ar_speaker, audiosink,
+            queue_wobbler, ac_wobbler, ar_wobbler, appsink_wobbler,
+        ):
+            audio_bin.add(el)
+
+        tee.link(queue_speaker)
+        queue_speaker.link(ac_speaker)
+        ac_speaker.link(ar_speaker)
+        ar_speaker.link(audiosink)
+
+        tee.link(queue_wobbler)
+        queue_wobbler.link(ac_wobbler)
+        ac_wobbler.link(ar_wobbler)
+        ar_wobbler.link(appsink_wobbler)
+
+        ghost_pad = Gst.GhostPad.new("sink", tee.get_static_pad("sink"))
+        audio_bin.add_pad(ghost_pad)
+
+        return audio_bin
+
+    def enable_wobbling(self, callback: Callable[[SpeechOffsets], None]) -> None:
+        """Enable head wobbling driven by audio playback.
+
+        Args:
+            callback: Called with ``(x_m, y_m, z_m, roll_rad, pitch_rad,
+                yaw_rad)`` for each movement hop.
+
+        """
+        if self._head_wobbler is not None:
+            self._head_wobbler.stop()
+        self._head_wobbler = HeadWobbler(callback, sample_rate=self.WOBBLER_SAMPLE_RATE)
+        self._logger.info("Head wobbler enabled (daemon-side)")
+
+    def disable_wobbling(self) -> None:
+        """Disable head wobbling."""
+        if self._head_wobbler is not None:
+            self._head_wobbler.stop()
+            self._head_wobbler = None
+            self._logger.info("Head wobbler disabled (daemon-side)")
 
     def set_message_handler(
         self,

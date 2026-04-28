@@ -267,6 +267,18 @@ class GetMicrophoneVolumeCmd(BaseModel):
 
     type: Literal["get_microphone_volume"] = "get_microphone_volume"
 
+class SetSpeechOffsetsCmd(BaseModel):
+    """Set head-wobbler speech offsets (composed with target pose before IK)."""
+
+    type: Literal["set_speech_offsets"] = "set_speech_offsets"
+    offsets: list[float]  # [x_m, y_m, z_m, roll_rad, pitch_rad, yaw_rad]
+
+
+class SetWobblingCmd(BaseModel):
+    """Enable or disable daemon-side audio-reactive head wobbling."""
+
+    type: Literal["set_wobbling"] = "set_wobbling"
+    enabled: bool
 
 AnyCommand = Annotated[
     SetTargetCmd
@@ -288,6 +300,8 @@ AnyCommand = Annotated[
     | StartRecordingCmd
     | StopRecordingCmd
     | AppendRecordCmd
+    | SetSpeechOffsetsCmd
+    | SetWobblingCmd
     | SetVolumeCmd
     | GetVolumeCmd
     | SetMicrophoneVolumeCmd

@@ -1,0 +1,318 @@
+"""Unit tests for speech_tapper and head_wobbler modules."""  # noqa: D100
+
+import time
+
+import numpy as np
+import pytest
+
+from reachy_mini.motion.speech_tapper import (
+    HOP_MS,
+    SwayRollRT,
+    _loudness_gain,
+    _rms_dbfs,
+)
+
+SR = 16_000  # sample rate used for tone generation in tests
+
+
+def _patch_glib_timeout(monkeypatch):
+    """Replace ``GLib.timeout_add`` with a recorder; return the schedule list.
+
+    Each entry is ``(delay_ms, fn, args)``. Tests can call
+    ``fn(*args)`` to simulate the GLib main loop firing the timeout.
+    """
+    schedule: list[tuple[int, object, tuple]] = []
+
+    def fake_timeout_add(delay_ms, fn, *args):
+        schedule.append((delay_ms, fn, args))
+        return len(schedule)  # source id
+
+    monkeypatch.setattr(
+        "reachy_mini.motion.head_wobbler.GLib.timeout_add", fake_timeout_add
+    )
+    return schedule
+
+# ---------------------------------------------------------------------------
+# speech_tapper: helper functions
+# ---------------------------------------------------------------------------
+
+
+def test_rms_silence_is_very_negative():  # noqa: D103
+    silence = np.zeros(320, dtype=np.float32)
+    assert _rms_dbfs(silence) < -100
+
+
+def test_rms_full_scale_sine_near_zero():  # noqa: D103
+    t = np.linspace(0, 1, SR, dtype=np.float32)
+    sine = np.sin(2 * np.pi * 440 * t).astype(np.float32)
+    db = _rms_dbfs(sine)
+    assert -5 < db < 0  # RMS of sine ≈ -3 dBFS
+
+
+def test_rms_quiet_signal_is_negative():  # noqa: D103
+    t = np.linspace(0, 1, SR, dtype=np.float32)
+    quiet = (np.sin(2 * np.pi * 440 * t) * 0.01).astype(np.float32)
+    assert _rms_dbfs(quiet) < -35
+
+
+def test_loudness_below_low_threshold_is_zero():  # noqa: D103
+    assert _loudness_gain(-100.0) == 0.0
+
+
+def test_loudness_above_high_threshold_clamped():  # noqa: D103
+    gain = _loudness_gain(0.0)
+    assert gain <= 1.0
+    assert gain > 0.9
+
+
+def test_loudness_monotonically_increasing():  # noqa: D103
+    dbs = [-50, -40, -30, -20, -10]
+    gains = [_loudness_gain(db) for db in dbs]
+    for i in range(len(gains) - 1):
+        assert gains[i] <= gains[i + 1]
+
+
+# ---------------------------------------------------------------------------
+# speech_tapper: SwayRollRT
+# ---------------------------------------------------------------------------
+
+
+def test_sway_empty_input():  # noqa: D103
+    rt = SwayRollRT()
+    assert rt.feed(np.zeros(0, dtype=np.float32)) == []
+
+
+def test_sway_short_input_no_output():  # noqa: D103
+    """Input shorter than one hop produces no output."""
+    rt = SwayRollRT()
+    short = np.zeros(100, dtype=np.float32)
+    assert rt.feed(short) == []
+
+
+def test_sway_one_second_produces_hops():  # noqa: D103
+    rt = SwayRollRT()
+    t = np.linspace(0, 1, SR, dtype=np.float32)
+    tone = (np.sin(2 * np.pi * 440 * t) * 0.5).astype(np.float32)
+    results = rt.feed(tone)
+    expected_hops = 1000 // HOP_MS
+    assert len(results) == expected_hops
+
+
+def test_sway_output_keys():  # noqa: D103
+    rt = SwayRollRT()
+    t = np.linspace(0, 0.1, int(SR * 0.1), dtype=np.float32)
+    tone = (np.sin(2 * np.pi * 440 * t) * 0.5).astype(np.float32)
+    results = rt.feed(tone)
+    assert len(results) >= 1
+    expected_keys = {"pitch_rad", "yaw_rad", "roll_rad", "x_mm", "y_mm", "z_mm"}
+    assert expected_keys <= set(results[0].keys())
+
+
+def test_sway_silence_produces_near_zero():  # noqa: D103
+    rt = SwayRollRT()
+    silence = np.zeros(SR, dtype=np.float32)
+    results = rt.feed(silence)
+    for r in results:
+        assert abs(r["pitch_rad"]) < 0.01
+        assert abs(r["yaw_rad"]) < 0.01
+        assert abs(r["x_mm"]) < 0.1
+
+
+def test_sway_loud_signal_produces_nonzero():  # noqa: D103
+    rt = SwayRollRT()
+    t = np.linspace(0, 3, SR * 3, dtype=np.float32)
+    tone = (np.sin(2 * np.pi * 300 * t) * 0.8).astype(np.float32)
+    results = rt.feed(tone)
+    max_yaw = max(abs(r["yaw_rad"]) for r in results)
+    assert max_yaw > 0.01
+
+
+def test_sway_custom_sample_rate():  # noqa: D103
+    """Frame/hop derive from the per-instance sample_rate."""
+    rt = SwayRollRT(sample_rate=48_000)
+    assert rt.sample_rate == 48_000
+    assert rt.frame == int(48_000 * 20 / 1000)
+    assert rt.hop == int(48_000 * 50 / 1000)
+    # 1s of 48kHz audio still yields ~20 hops (1000ms / HOP_MS).
+    t = np.linspace(0, 1, 48_000, dtype=np.float32)
+    tone = (np.sin(2 * np.pi * 440 * t) * 0.5).astype(np.float32)
+    results = rt.feed(tone)
+    assert len(results) == 1000 // HOP_MS
+
+
+def test_sway_reset_clears_state():  # noqa: D103
+    rt = SwayRollRT()
+    t = np.linspace(0, 1, SR, dtype=np.float32)
+    tone = (np.sin(2 * np.pi * 440 * t) * 0.5).astype(np.float32)
+    rt.feed(tone)
+    rt.reset()
+    assert rt.t == 0.0
+    assert rt.vad_on is False
+    assert rt.carry.size == 0
+
+
+def test_sway_deterministic_with_same_seed():  # noqa: D103
+    t = np.linspace(0, 1, SR, dtype=np.float32)
+    tone = (np.sin(2 * np.pi * 440 * t) * 0.5).astype(np.float32)
+
+    rt1 = SwayRollRT(rng_seed=42)
+    r1 = rt1.feed(tone.copy())
+
+    rt2 = SwayRollRT(rng_seed=42)
+    r2 = rt2.feed(tone.copy())
+
+    assert len(r1) == len(r2)
+    for a, b in zip(r1, r2):
+        assert a == pytest.approx(b)
+
+
+def test_sway_incremental_feeding():  # noqa: D103
+    """Feeding small chunks should produce same total hops as one big chunk."""
+    rt_batch = SwayRollRT(rng_seed=7)
+    t = np.linspace(0, 1, SR, dtype=np.float32)
+    tone = (np.sin(2 * np.pi * 440 * t) * 0.5).astype(np.float32)
+    results_batch = rt_batch.feed(tone)
+
+    rt_inc = SwayRollRT(rng_seed=7)
+    results_inc = []
+    chunk_size = 1600  # 100ms chunks
+    for i in range(0, len(tone), chunk_size):
+        results_inc.extend(rt_inc.feed(tone[i : i + chunk_size]))
+
+    assert len(results_inc) == len(results_batch)
+
+
+# ---------------------------------------------------------------------------
+# head_wobbler: HeadWobbler (PTS-driven scheduler, no thread)
+# ---------------------------------------------------------------------------
+
+
+def test_wobbler_schedules_offsets_for_a_tone(monkeypatch):  # noqa: D103
+    from reachy_mini.motion.head_wobbler import HeadWobbler
+
+    schedule = _patch_glib_timeout(monkeypatch)
+    received: list[tuple[float, ...]] = []
+    wobbler = HeadWobbler(lambda o: received.append(o), sample_rate=SR)
+    wobbler.start()
+
+    t = np.linspace(0, 1, SR, dtype=np.float32)
+    tone = (np.sin(2 * np.pi * 440 * t) * 0.5).astype(np.float32)
+    play_at = time.monotonic_ns() + 5_000_000_000  # 5 s ahead → all deadlines positive
+    wobbler.feed(tone, play_at)
+
+    assert len(schedule) > 0
+    # Fire each scheduled timeout.
+    for _delay, fn, args in schedule:
+        fn(*args)
+    assert len(received) == len(schedule)
+
+
+def test_wobbler_offsets_are_6_tuples(monkeypatch):  # noqa: D103
+    from reachy_mini.motion.head_wobbler import HeadWobbler
+
+    schedule = _patch_glib_timeout(monkeypatch)
+    received: list[tuple[float, ...]] = []
+    wobbler = HeadWobbler(lambda o: received.append(o), sample_rate=SR)
+    wobbler.start()
+
+    t = np.linspace(0, 1, SR, dtype=np.float32)
+    tone = (np.sin(2 * np.pi * 440 * t) * 0.5).astype(np.float32)
+    play_at = time.monotonic_ns() + 5_000_000_000
+    wobbler.feed(tone, play_at)
+    for _delay, fn, args in schedule:
+        fn(*args)
+
+    assert len(received) > 0
+    for offsets in received:
+        assert len(offsets) == 6
+        assert all(isinstance(v, float) for v in offsets)
+
+
+def test_wobbler_stop_zeros_offsets(monkeypatch):  # noqa: D103
+    from reachy_mini.motion.head_wobbler import HeadWobbler
+
+    _patch_glib_timeout(monkeypatch)
+    received: list[tuple[float, ...]] = []
+    wobbler = HeadWobbler(lambda o: received.append(o), sample_rate=SR)
+    wobbler.stop()
+
+    assert received[-1] == (0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+
+
+def test_wobbler_reset_zeros_offsets(monkeypatch):  # noqa: D103
+    from reachy_mini.motion.head_wobbler import HeadWobbler
+
+    _patch_glib_timeout(monkeypatch)
+    received: list[tuple[float, ...]] = []
+    wobbler = HeadWobbler(lambda o: received.append(o), sample_rate=SR)
+    wobbler.reset()
+
+    assert received[-1] == (0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+
+
+def test_wobbler_stop_cancels_pending(monkeypatch):  # noqa: D103
+    """After stop(), pending GLib timeouts no-op when fired."""
+    from reachy_mini.motion.head_wobbler import HeadWobbler
+
+    schedule = _patch_glib_timeout(monkeypatch)
+    received: list[tuple[float, ...]] = []
+    wobbler = HeadWobbler(lambda o: received.append(o), sample_rate=SR)
+    wobbler.start()
+
+    t = np.linspace(0, 1, SR, dtype=np.float32)
+    tone = (np.sin(2 * np.pi * 440 * t) * 0.5).astype(np.float32)
+    play_at = time.monotonic_ns() + 5_000_000_000
+    wobbler.feed(tone, play_at)
+    pending = list(schedule)
+    assert pending  # sanity: we did schedule something
+
+    wobbler.stop()
+    received.clear()  # discard the zero-offsets call from stop()
+
+    for _delay, fn, args in pending:
+        fn(*args)
+    assert received == []  # all canceled
+
+
+def test_wobbler_start_is_idempotent(monkeypatch):  # noqa: D103
+    from reachy_mini.motion.head_wobbler import HeadWobbler
+
+    _patch_glib_timeout(monkeypatch)
+    wobbler = HeadWobbler(lambda o: None, sample_rate=SR)
+    wobbler.start()
+    wobbler.start()  # should not crash
+
+
+def test_wobbler_schedules_hops_at_hop_intervals(monkeypatch):  # noqa: D103
+    """Consecutive scheduled delays are spaced by HOP_MS."""
+    from reachy_mini.motion.head_wobbler import HeadWobbler
+
+    schedule = _patch_glib_timeout(monkeypatch)
+    wobbler = HeadWobbler(lambda o: None, sample_rate=SR)
+    wobbler.start()
+
+    t = np.linspace(0, 1, SR, dtype=np.float32)
+    tone = (np.sin(2 * np.pi * 440 * t) * 0.5).astype(np.float32)
+    play_at = time.monotonic_ns() + 5_000_000_000
+    wobbler.feed(tone, play_at)
+
+    delays = [d for d, _, _ in schedule]
+    assert len(delays) >= 2
+    diffs = [delays[i + 1] - delays[i] for i in range(len(delays) - 1)]
+    assert all(abs(d - HOP_MS) <= 1 for d in diffs)
+
+
+def test_wobbler_drops_past_deadlines(monkeypatch):  # noqa: D103
+    """Hops whose deadline has already passed are not scheduled."""
+    from reachy_mini.motion.head_wobbler import HeadWobbler
+
+    schedule = _patch_glib_timeout(monkeypatch)
+    wobbler = HeadWobbler(lambda o: None, sample_rate=SR)
+    wobbler.start()
+
+    t = np.linspace(0, 1, SR, dtype=np.float32)
+    tone = (np.sin(2 * np.pi * 440 * t) * 0.5).astype(np.float32)
+    play_at = time.monotonic_ns() - 10_000_000_000  # 10 s in the past
+    wobbler.feed(tone, play_at)
+
+    assert schedule == []

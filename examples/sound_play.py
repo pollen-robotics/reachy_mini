@@ -51,9 +51,12 @@ def play_live_tone(mini: "ReachyMini", tone_hz: float) -> None:
         mini.media.stop_playing()
 
 
-def main(backend: str, wav_path: str | None, tone_hz: float) -> None:
+def main(backend: str, wav_path: str | None, tone_hz: float, wobbling: bool = False, wobbler_version: str = "v0") -> None:
     """Run the sound playback example."""
+    os.environ["WOBBLER_VERSION"] = wobbler_version
     with ReachyMini(log_level="DEBUG", media_backend=backend) as mini:
+        if wobbling:
+            mini.enable_wobbling()
         if wav_path:
             play_wav(mini, wav_path)
         else:
@@ -90,8 +93,19 @@ if __name__ == "__main__":
         type=float,
         help="Sine wave frequency in Hz (--live mode only).",
     )
+    parser.add_argument(
+        "--wobbling",
+        action="store_true",
+        help="Enable audio-reactive head wobbling.",
+    )
+    parser.add_argument(
+        "--wobbler-version",
+        default="v0",
+        choices=["v0", "v1", "v2", "v3"],
+        help="Speech tapper version: v0=original, v1=direct envelope, v2=multi-band, v3=onset impulse.",
+    )
 
     args = parser.parse_args()
-    main(backend=args.backend, wav_path=args.wav, tone_hz=args.tone_hz)
+    main(backend=args.backend, wav_path=args.wav, tone_hz=args.tone_hz, wobbling=args.wobbling, wobbler_version=args.wobbler_version)
 
 # END doc_example
