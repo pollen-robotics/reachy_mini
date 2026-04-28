@@ -10,6 +10,7 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
 from reachy_mini.apps.sources import hf_auth
+from reachy_mini.daemon.app.logging_ctx import kv_log
 
 logger = logging.getLogger(__name__)
 
@@ -18,9 +19,7 @@ router = APIRouter(prefix="/hf-auth")
 # Central signaling server that tracks which robot is currently in use by
 # which remote JS app. We proxy its /api/robot-status endpoint so the
 # desktop frontend never needs to see the raw HF token.
-CENTRAL_ROBOT_STATUS_URL = (
-    "https://cduss-reachy-mini-central.hf.space/api/robot-status"
-)
+CENTRAL_ROBOT_STATUS_URL = "https://cduss-reachy-mini-central.hf.space/api/robot-status"
 CENTRAL_ROBOT_STATUS_TIMEOUT = aiohttp.ClientTimeout(total=5)
 
 
@@ -49,10 +48,22 @@ async def save_token(request: TokenRequest) -> TokenResponse:
     result = hf_auth.save_hf_token(request.token)
 
     if result["status"] == "error":
+        kv_log(
+            logger,
+            logging.WARNING,
+            "auth.save_token.failure",
+            reason=result.get("message", "invalid_token"),
+        )
         raise HTTPException(
             status_code=400, detail=result.get("message", "Invalid token")
         )
 
+    kv_log(
+        logger,
+        logging.INFO,
+        "auth.save_token.success",
+        username=result.get("username"),
+    )
     return TokenResponse(
         status="success",
         username=result.get("username"),
@@ -95,8 +106,10 @@ async def delete_token() -> dict[str, str]:
     success = hf_auth.delete_hf_token()
 
     if not success:
+        kv_log(logger, logging.ERROR, "auth.delete_token.failure")
         raise HTTPException(status_code=500, detail="Failed to delete token")
 
+    kv_log(logger, logging.INFO, "auth.delete_token.success")
     return {"status": "success"}
 
 
@@ -122,7 +135,9 @@ async def get_central_robot_status() -> dict[str, Any]:
         return {"available": False, "robots": [], "reason": "not_authenticated"}
 
     try:
-        async with aiohttp.ClientSession(timeout=CENTRAL_ROBOT_STATUS_TIMEOUT) as session:
+        async with aiohttp.ClientSession(
+            timeout=CENTRAL_ROBOT_STATUS_TIMEOUT
+        ) as session:
             # Token goes in the Authorization header, not the URL —
             # otherwise it leaks into central's access logs and any
             # intermediate proxy's logs. The desktop frontend already
@@ -175,9 +190,7 @@ async def is_oauth_configured() -> dict[str, Any]:
 
 
 @router.get("/oauth/start")
-async def start_oauth(
-    request: Request, use_localhost: bool = False
-) -> dict[str, Any]:
+async def start_oauth(request: Request, use_localhost: bool = False) -> dict[str, Any]:
     """Start a new OAuth authorization session.
 
     Returns the auth_url to redirect the user to HuggingFace.
