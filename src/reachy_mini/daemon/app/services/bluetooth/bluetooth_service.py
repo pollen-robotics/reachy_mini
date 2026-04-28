@@ -9,7 +9,6 @@ import fcntl
 import json
 import logging
 import os
-import socket
 import subprocess
 import urllib.error
 import urllib.parse
@@ -856,7 +855,17 @@ class BluetoothCommandService:
         ad_manager = dbus.Interface(adapter, LE_ADVERTISING_MANAGER_IFACE)
         self.adv = Advertisement(self.bus, 0, "peripheral", self.device_name)
         self.adv.service_uuids = [REACHY_STATUS_SERVICE_UUID]
-        self.adv.manufacturer_data = encode_network_ips()
+        # Pull install_id + central_peer_id once at boot through the
+        # identity endpoint that the GATT install_id characteristic
+        # also reads. The advertis re-published on every refresh tick (see
+        # :meth:`_refresh_network_info`) so a daemon that boots before
+        # ``/api/daemon/identity`` is reachable still ends up with the
+        # correct payload.
+        identity = _fetch_identity()
+        self.adv.manufacturer_data = encode_advert_manufacturer_data(
+            identity.get("install_id", ""),
+            identity.get("central_peer_id", ""),
+        )
         self._ad_manager = ad_manager
         ad_manager.RegisterAdvertisement(
             self.adv.get_path(),
@@ -873,10 +882,23 @@ class BluetoothCommandService:
         logger.info(f"✓ Bluetooth service started as '{self.device_name}'")
 
     def _refresh_network_info(self):
-        """Periodic callback: update GATT characteristic and advertisement."""
+        """Periodic callback: update GATT characteristic and advertisement.
+
+        Re-publishes the BLE advert when either of the install_id /
+        central_peer_id TLV payloads changes. install_id is stable
+        for the daemon's lifetime (the very first ticks may run before
+        ``/api/daemon/identity`` is reachable, hence the upgrade),
+        whereas central_peer_id is volatile - it rotates on every
+        relay reconnect, so this tick is also the cadence at which
+        mobile scanners will see the new peerId.
+        """
         self.app.reachy_status.update_network_status()
 
-        new_data = encode_network_ips()
+        identity = _fetch_identity()
+        new_data = encode_advert_manufacturer_data(
+            identity.get("install_id", ""),
+            identity.get("central_peer_id", ""),
+        )
         if new_data != self.adv.manufacturer_data:
             self.adv.manufacturer_data = new_data
             try:
@@ -885,7 +907,7 @@ class BluetoothCommandService:
                     self.adv.get_path(),
                     {},
                     reply_handler=lambda: logger.info(
-                        "Advertisement re-registered with updated IPs"
+                        "Advertisement re-registered with updated install_id payload"
                     ),
                     error_handler=lambda e: logger.error(
                         f"Failed to re-register advertisement: {e}"
@@ -921,12 +943,36 @@ class BluetoothCommandService:
 
 POLLEN_MANUFACTURER_ID = 0xFFFF  # Reserved ID for development/testing
 
-
-# Hard cap on the number of IP addresses we cram into the BLE advert.
-# Each address eats 5 bytes (1 flag + 4 IPv4), and the legacy adv slot
-# is limited to 31 bytes total (~16 already used by flags + LocalName),
-# so 2 addresses is the safe maximum before HCI rejects the payload.
-_MAX_ADVERTISED_IPS = 2
+# Versioned ManufacturerData layout we publish in the advertisement:
+#
+#   byte 0      : format version (currently 0x02)
+#   bytes 1..N  : TLV blocks  -  [tag][len][value]
+#
+# Tag values:
+#   0x01  install_id_prefix : len=8 bytes, the first 8 bytes of the
+#         daemon's install_id (UUID4 hex). Used by mobile clients to
+#         dedupe a BLE row against the same physical robot's localhost
+#         loopback row + (eventually) its central listing without
+#         having to GATT connect first (a connect breaks the scan +
+#         needs pairing).
+#   0x02  central_peer_id_prefix : len=8 bytes, the first 8 bytes of
+#         the relay-assigned central peerId we got back on the
+#         welcome frame. Volatile (rotates on every relay reconnect)
+#         but used by mobile clients as a fallback dedup key for the
+#         BLE row vs the central listing while the central server
+#         does not yet propagate ``meta.install_id``. Absent when the
+#         relay is offline / the daemon has no token.
+#
+# We deliberately drop the legacy IPv4 list from the advert: the
+# 31-byte legacy advertising payload is essentially full once
+# Flags + LocalName ("reachy-mini" = 13B) are accounted for, and
+# every existing client reads IPs via the GATT NETWORK_STATUS
+# characteristic anyway.
+ADVERT_FORMAT_VERSION = 0x02
+ADVERT_TLV_INSTALL_ID = 0x01
+ADVERT_TLV_CENTRAL_PEER_ID = 0x02
+ADVERT_INSTALL_ID_PREFIX_BYTES = 8
+ADVERT_CENTRAL_PEER_ID_PREFIX_BYTES = 8
 
 
 # =======================
@@ -956,13 +1002,16 @@ IDENTITY_HTTP_TIMEOUT_S = 1.5  # called from a GATT read; must not block
 _identity_cache: dict[str, str | float] = {
     "install_id": "",
     "robot_name": "",
+    "central_peer_id": "",
     "ts": 0.0,
 }
+# central_peer_id rotates on every relay reconnect, so don't cache it
+# longer than the BLE refresh tick can react to it.
 _IDENTITY_CACHE_TTL_S = 5.0
 
 
 def _fetch_identity() -> dict[str, str]:
-    """Return a fresh ``{install_id, robot_name}`` dict from the daemon.
+    """Return a fresh ``{install_id, robot_name, central_peer_id}`` dict.
 
     Falls back to empty strings on any error (daemon down, route 404
     on a pre-revision-3 daemon, ...). GATT reads must never raise.
@@ -974,10 +1023,12 @@ def _fetch_identity() -> dict[str, str]:
         return {
             "install_id": str(_identity_cache.get("install_id", "")),
             "robot_name": str(_identity_cache.get("robot_name", "")),
+            "central_peer_id": str(_identity_cache.get("central_peer_id", "")),
         }
 
     install_id = ""
     robot_name = ""
+    central_peer_id = ""
     try:
         payload = _daemon_request(
             "GET", "/api/daemon/identity", timeout=IDENTITY_HTTP_TIMEOUT_S
@@ -985,13 +1036,19 @@ def _fetch_identity() -> dict[str, str]:
         if isinstance(payload, dict):
             install_id = str(payload.get("install_id") or "")
             robot_name = str(payload.get("robot_name") or "")
+            central_peer_id = str(payload.get("central_peer_id") or "")
     except Exception as e:
         logger.debug(f"identity fetch failed (returning blanks): {e}")
 
     _identity_cache["install_id"] = install_id
     _identity_cache["robot_name"] = robot_name
+    _identity_cache["central_peer_id"] = central_peer_id
     _identity_cache["ts"] = now
-    return {"install_id": install_id, "robot_name": robot_name}
+    return {
+        "install_id": install_id,
+        "robot_name": robot_name,
+        "central_peer_id": central_peer_id,
+    }
 
 
 def _get_install_id() -> str:
@@ -1153,47 +1210,75 @@ def _wifi_forget(ssid: str) -> str:
         return f"ERROR: {e}"
 
 
-def encode_network_ips() -> dict:
-    """Build a ManufacturerData payload with at most two IPv4 addresses.
+def _hex_id_prefix_bytes(value: str, prefix_bytes: int) -> bytes:
+    """Decode the first ``prefix_bytes`` of a hex string ``value``.
 
-    Format per IP: 1 byte flags | 4 bytes IPv4
-      flags: 0x01 = hotspot, 0x00 = normal
-
-    Returns a dict {manufacturer_id: dbus.Array(bytes)} suitable for
-    BlueZ ManufacturerData property. Returns empty dict when offline.
-
-    The cap exists because the overall advert has to fit in 31 bytes
-    (see :class:`Advertisement.get_properties`). Mobile clients that
-    need more than two interfaces can still query the GATT
-    NETWORK_STATUS characteristic once connected.
+    Tolerant by design: dashes (eg from a UUID like
+    ``204c2579-28c9-4d22-...``) are stripped, the input is lowercased,
+    and any decoding failure yields ``b""`` so callers can simply skip
+    the corresponding TLV instead of crashing the daemon.
     """
-    status = get_network_status()
-    if status == "OFFLINE" or status == "ERROR":
+    if not value:
+        return b""
+    candidate = value.strip().lower().replace("-", "")
+    needed_hex_chars = prefix_bytes * 2
+    if len(candidate) < needed_hex_chars:
+        return b""
+    try:
+        return bytes.fromhex(candidate[:needed_hex_chars])
+    except ValueError:
+        return b""
+
+
+def _install_id_prefix_bytes(install_id: str) -> bytes:
+    """Return the first ``ADVERT_INSTALL_ID_PREFIX_BYTES`` bytes of ``install_id``.
+
+    ``install_id`` is the daemon's UUID4 hex (32 chars). We take its
+    first 16 hex chars and decode them to 8 raw bytes (= 64 bits of
+    uniqueness, collision-safe for any realistic fleet size).
+    """
+    return _hex_id_prefix_bytes(install_id, ADVERT_INSTALL_ID_PREFIX_BYTES)
+
+
+def _central_peer_id_prefix_bytes(central_peer_id: str) -> bytes:
+    """Return the first ``ADVERT_CENTRAL_PEER_ID_PREFIX_BYTES`` of the central peerId.
+
+    Central hands us back a UUID-shaped peerId (with dashes) on the
+    welcome frame. We compress it the same way as install_id so the
+    mobile parser can match it against the central listing's peerId
+    truncated to its first 16 hex chars.
+    """
+    return _hex_id_prefix_bytes(central_peer_id, ADVERT_CENTRAL_PEER_ID_PREFIX_BYTES)
+
+
+def encode_advert_manufacturer_data(install_id: str, central_peer_id: str = "") -> dict:
+    """Build the BLE advertisement ``ManufacturerData`` payload.
+
+    Returns a ``{manufacturer_id: dbus.Array[byte]}`` dict suitable
+    for the BlueZ ``ManufacturerData`` advertisement property, with a
+    versioned TLV stream carrying the daemon's install_id prefix and
+    (when available) its central peerId prefix. See the ``ADVERT_*``
+    constants at the top of this module for the on-wire layout.
+
+    Returns an empty dict when neither id is available yet so the
+    advert just goes out without a ManufacturerData section (rather
+    than a malformed one).
+    """
+    install_prefix = _install_id_prefix_bytes(install_id)
+    cp_prefix = _central_peer_id_prefix_bytes(central_peer_id)
+    if not install_prefix and not cp_prefix:
         return {}
 
     payload = bytearray()
-    is_hotspot = status.startswith("HOTSPOT")
-
-    parts = status.split("[")
-    encoded = 0
-    for part in parts[1:]:
-        if encoded >= _MAX_ADVERTISED_IPS:
-            break
-        if "]" not in part:
-            continue
-        iface, rest = part.split("]", 1)
-        ip_str = rest.split(";")[0].strip()
-        try:
-            ip_bytes = socket.inet_aton(ip_str)
-            flag = 0x01 if (is_hotspot and iface.strip() == "wlan0") else 0x00
-            payload.append(flag)
-            payload.extend(ip_bytes)
-            encoded += 1
-        except OSError:
-            continue
-
-    if not payload:
-        return {}
+    payload.append(ADVERT_FORMAT_VERSION)
+    if install_prefix:
+        payload.append(ADVERT_TLV_INSTALL_ID)
+        payload.append(len(install_prefix))
+        payload.extend(install_prefix)
+    if cp_prefix:
+        payload.append(ADVERT_TLV_CENTRAL_PEER_ID)
+        payload.append(len(cp_prefix))
+        payload.extend(cp_prefix)
 
     return {
         dbus.UInt16(POLLEN_MANUFACTURER_ID): dbus.Array(
