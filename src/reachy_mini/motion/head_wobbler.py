@@ -27,6 +27,7 @@ from reachy_mini.motion import (
     speech_tapper_v1,
     speech_tapper_v2,
     speech_tapper_v3,
+    speech_tapper_v4,
 )
 
 logger = logging.getLogger(__name__)
@@ -42,6 +43,7 @@ class HeadWobbler:
         "v1": speech_tapper_v1,
         "v2": speech_tapper_v2,
         "v3": speech_tapper_v3,
+        "v4": speech_tapper_v4,
     }
 
     _ZERO_OFFSETS: SpeechOffsets = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0)

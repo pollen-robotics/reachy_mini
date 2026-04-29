@@ -136,8 +136,8 @@ if __name__ == "__main__":
         "--wobbler-version",
         type=str,
         default="v0",
-        choices=["v0", "v1", "v2", "v3"],
-        help="Speech tapper version: v0=original, v1=direct envelope, v2=multi-band, v3=onset impulse.",
+        choices=["v0", "v1", "v2", "v3", "v4"],
+        help="Speech tapper version: v0=original, v1=direct envelope, v2=multi-band, v3=onset impulse, v4=strict gate + nucleus tracking.",
     )
     parser.add_argument(
         "--regenerate",
