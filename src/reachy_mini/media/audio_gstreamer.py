@@ -238,16 +238,14 @@ class GStreamerAudio(AudioBase):
 
         return audiosink
 
-    def _make_wobbler_appsink(self, sync: bool = True) -> Gst.Element:
+    def _make_wobbler_appsink(self) -> Gst.Element:
         """Create an appsink that feeds audio to the head wobbler.
 
-        Args:
-            sync: ``True`` for playbin-based paths so new-sample fires at
-                the buffer's PTS on the pipeline clock (A/V sync for
-                free). ``False`` for push-based live streams where
-                back-pressure + max-buffers drops would stall delivery;
-                the callback then schedules against ``now + sink_latency``.
-
+        ``sync=True`` so new-sample fires at the buffer's PTS on the
+        pipeline clock — i.e. when the audiosink outputs it. The local
+        pipeline has a deterministic clock and no network jitter, so
+        PTS-based sync gives correct A/V timing for both playbin
+        (``play_sound``) and push (``push_audio_sample``) paths.
         """
         appsink = Gst.ElementFactory.make("appsink")
         # Force mono so the speech tapper receives a 1-D float32 array.
@@ -260,7 +258,7 @@ class GStreamerAudio(AudioBase):
         appsink.set_property("caps", caps)
         appsink.set_property("drop", True)
         appsink.set_property("max-buffers", 5)
-        appsink.set_property("sync", sync)
+        appsink.set_property("sync", True)
         appsink.set_property("emit-signals", True)
         appsink.connect("new-sample", self._on_wobbler_sample)
         return appsink
@@ -268,10 +266,8 @@ class GStreamerAudio(AudioBase):
     def _on_wobbler_sample(self, appsink: Gst.Element) -> Gst.FlowReturn:
         """GStreamer callback: forward audio buffer to the head wobbler.
 
-        For ``sync=True`` appsinks the callback fires at the buffer's PTS
-        on the pipeline clock — audio is playing NOW. For ``sync=False``
-        (push-based live path) the callback fires ASAP and we schedule
-        ``now + buffer-time`` of the audiosink as the play instant.
+        The appsink is ``sync=True``, so this callback fires at the
+        buffer's PTS on the pipeline clock — audio is playing NOW.
         """
         sample = appsink.pull_sample()
         if sample is None or self._head_wobbler is None:
@@ -279,11 +275,7 @@ class GStreamerAudio(AudioBase):
         buf = sample.get_buffer()
         data = buf.extract_dup(0, buf.get_size())
         pcm = np.frombuffer(data, dtype=np.float32)
-        if appsink.get_property("sync"):
-            play_at_ns = time.monotonic_ns()
-        else:
-            play_at_ns = time.monotonic_ns() + self.PLAYBACK_SINK_BUFFER_TIME_US * 1000
-        self._head_wobbler.feed(pcm, play_at_ns)
+        self._head_wobbler.feed(pcm, time.monotonic_ns())
         return Gst.FlowReturn.OK
 
     def _build_audiosink_tee_bin(self) -> Gst.Bin:
@@ -315,8 +307,14 @@ class GStreamerAudio(AudioBase):
 
         for el in (
             tee,
-            queue_speaker, ac_speaker, ar_speaker, audiosink,
-            queue_wobbler, ac_wobbler, ar_wobbler, appsink_wobbler,
+            queue_speaker,
+            ac_speaker,
+            ar_speaker,
+            audiosink,
+            queue_wobbler,
+            ac_wobbler,
+            ar_wobbler,
+            appsink_wobbler,
         ):
             audio_bin.add(el)
 
@@ -359,14 +357,19 @@ class GStreamerAudio(AudioBase):
         queue_wobbler = Gst.ElementFactory.make("queue")
         ac_wobbler = Gst.ElementFactory.make("audioconvert")
         ar_wobbler = Gst.ElementFactory.make("audioresample")
-        # Push-based live path: sync=False (is-live appsrc + PTS-sync
-        # appsink don't play well together — buffers drop at max-buffers).
-        appsink_wobbler = self._make_wobbler_appsink(sync=False)
+        appsink_wobbler = self._make_wobbler_appsink()
 
         for el in (
-            self._appsrc, tee,
-            queue_speaker, ac_speaker, ar_speaker, audiosink,
-            queue_wobbler, ac_wobbler, ar_wobbler, appsink_wobbler,
+            self._appsrc,
+            tee,
+            queue_speaker,
+            ac_speaker,
+            ar_speaker,
+            audiosink,
+            queue_wobbler,
+            ac_wobbler,
+            ar_wobbler,
+            appsink_wobbler,
         ):
             pipeline.add(el)
 
