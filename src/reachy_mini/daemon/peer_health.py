@@ -60,7 +60,11 @@ ERR_DAEMON_FATAL = "daemon_fatal"  # daemon state == ERROR with no more specific
 ERR_MEDIA = "media"  # camera/audio missing - degraded only, not error
 
 
-def compute(status: DaemonStatus) -> PeerHealth:
+def compute(
+    status: DaemonStatus,
+    *,
+    backend_ready_override: Optional[bool] = None,
+) -> PeerHealth:
     """Derive the published ``health`` from a daemon status snapshot.
 
     The caller is expected to pass the ``DaemonStatus`` it just produced
@@ -72,8 +76,16 @@ def compute(status: DaemonStatus) -> PeerHealth:
     - ``no_media`` to avoid flagging "media missing" when it was disabled
       on purpose (``--no-media``)
 
+    ``backend_ready_override`` is provided because the canonical
+    "backend is up" signal lives on the runtime ``backend.ready``
+    Event, and ``RobotBackendStatus.ready`` (the static field on the
+    pydantic model) is never refreshed after init. The Daemon hands us
+    the live Event value here so we don't trip on that asymmetry. When
+    ``None`` we fall back to the model field, which keeps tests and
+    third-party callers without a live Event still functional.
+
     No I/O, no mutation, no logging. This function must remain a pure
-    transformation of its argument so the truth-table tests in
+    transformation of its arguments so the truth-table tests in
     ``tests/test_peer_health.py`` stay reliable.
     """
     # Hard fatal states first - they short-circuit every other check.
@@ -101,7 +113,12 @@ def compute(status: DaemonStatus) -> PeerHealth:
         # error: nothing on this peer can serve a session.
         return PeerHealth(health="error", error_code=ERR_NO_BACKEND)
 
-    if not getattr(backend, "ready", False):
+    backend_ready = (
+        backend_ready_override
+        if backend_ready_override is not None
+        else bool(getattr(backend, "ready", False))
+    )
+    if not backend_ready:
         # Backend object exists but its readiness Event is not set.
         # During NOT_INITIALIZED / STARTING this can happen briefly;
         # we still report ``error`` so the client doesn't auto-connect

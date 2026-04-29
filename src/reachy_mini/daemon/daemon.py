@@ -337,10 +337,20 @@ class Daemon:
         ``PeerHealth``. We rebuild a fresh ``DaemonStatus`` snapshot on
         every call so transient transitions show up promptly; ``status()``
         is cheap (single attribute read + backend.get_status() if any).
+
+        We pass the live ``backend.ready`` Event value as
+        ``backend_ready_override`` because ``RobotBackendStatus.ready``
+        (the static pydantic field) is never refreshed after backend
+        init - the runtime authority is the Event. Without the override
+        ``compute()`` would always see ``ready=False`` and report
+        ``error/backend_not_ready`` even on a perfectly healthy robot.
         """
         from reachy_mini.daemon.peer_health import compute
 
-        return compute(self.status())
+        backend_ready = (
+            self.backend.ready.is_set() if self.backend is not None else None
+        )
+        return compute(self.status(), backend_ready_override=backend_ready)
 
     async def _stop_central_signaling_relay(self) -> None:
         """Tear down the relay, with an explicit withdraw beforehand.
