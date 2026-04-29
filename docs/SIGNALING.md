@@ -106,21 +106,55 @@ Two distinct primitives:
 
 ## Lifecycle - uncooperative path (daemon dies without warning)
 
-`SIGKILL`, panic, kernel oops, WiFi cable yanked, Pi power loss. The daemon
-gets no chance to send `roles=[]`. Coverage falls to **central-side TTL**:
+`SIGKILL`, panic, kernel oops, WiFi yanked, Pi power loss. The daemon gets
+no chance to send `roles=[]`. Coverage falls to **central-side TTL**, driven
+by an explicit application-level heartbeat.
 
-- Central tracks `last_seen: float` per peer, refreshed by:
-  - any incoming `POST /send` from that peer, or
-  - SSE heartbeat round-trip (server `ping` -> client TCP ack reaches OS).
-- A background sweeper task scans every 10 s. Any peer with
+### Why server-pushed keepalives are NOT a liveness signal
+
+A naive design refreshes `last_seen` whenever the central yields a keepalive
+ping on the SSE channel. **That doesn't work** behind HTTP/2 reverse proxies
+(HF Spaces, Cloudflare, etc.): the local TCP send buffer absorbs writes
+silently on a half-open socket, so `yield` returns without raising for
+several minutes after the peer's network has died. With a touch on every
+yield, the sweeper would never evict the zombie.
+
+### Heartbeat protocol
+
+- The daemon re-emits `setPeerStatus(roles=["producer"], meta=…)` every
+  `HEARTBEAT_INTERVAL_SECONDS` (default 20 s) **even if the meta payload is
+  identical**. This arrives at central as a real `POST /send`, which is the
+  only authoritative liveness signal we accept.
+- Meta deltas (health flips from `ok` to `degraded`, name change, …) are
+  emitted immediately on the daemon's 1 Hz status tick, not gated on the
+  heartbeat. So health transitions still propagate within 1 s.
+- Central's `signaling.touch(peer_id)` is called **only** on:
+  - `POST /send` arriving from the peer (covers heartbeat + applicative),
+  - a session message successfully delivered through its message queue.
+- The SSE keepalive yield (`{"event": "ping"}`) is purely a proxy
+  heartbeat to keep the HTTP/2 connection from being culled by the
+  reverse proxy. It does **not** touch `last_seen`.
+
+### Eviction guarantees
+
+- Background sweeper scans every 10 s. Any peer with
   `now - last_seen > LEASE_SECONDS` (default 45 s) is `disconnect_peer()`'d
   (= removed from `peers`, `producers`, `token_to_peer`, sessions ended).
 - `request.is_disconnected()` inside the SSE generator stays as a
-  fast-path: if the OS already noticed the dead socket, we evict in <30 s
-  without waiting for the lease.
+  fast-path: if the OS already noticed the dead socket (FIN/RST), we evict
+  in <30 s without waiting for the lease.
+- Worst case for an uncooperative death: `LEASE_SECONDS + sweeper_interval`
+  ≈ 55 s. With heartbeat=20 s and lease=45 s we tolerate two consecutive
+  missed heartbeats before eviction kicks in.
 
-Result: under any failure mode, a peer disappears from `/api/robot-status`
-within `LEASE_SECONDS`.
+### Cooperative withdraw on graceful network loss
+
+Some user-initiated actions (`POST /wifi/forget`, `POST /wifi/forget_all`)
+are about to take the daemon offline by wiping its only network. The daemon
+calls `notify_withdraw(timeout=1s)` **while still on WiFi** so central
+removes the producer instantly, instead of leaving the user staring at a
+ghost row for ~55 s. Best-effort: if the withdraw POST fails for any
+reason we still proceed with the WiFi reset and rely on TTL eviction.
 
 ## install_id - the anchor across channels
 
@@ -179,6 +213,12 @@ expect to see this code?" If no, it's in the wrong layer.
 - Central: install_id collision evicts older, ends its session.
 - Central: TTL sweeper purges a peer that stops sending after
   `LEASE_SECONDS`.
+- Central: SSE keepalive ping does NOT refresh `last_seen` (regression
+  guard for the half-open zombie bug).
+- Central: `POST /send` (carrying e.g. a heartbeat-shaped
+  `setPeerStatus`) DOES refresh `last_seen`.
+- Daemon relay: `update_producer_meta()` re-emits with identical meta
+  once the heartbeat interval elapses.
 - Mobile: hides any row whose only present channel is central + `health=error`.
 - Mobile: keeps a row visible if BLE or mDNS sees it locally even when
   central marks it `error`.

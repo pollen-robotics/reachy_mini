@@ -9,6 +9,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from reachy_mini.daemon.app.logging_ctx import kv_log
+from reachy_mini.media.central_signaling_relay import notify_withdraw
 
 HOTSPOT_SSID = "reachy-mini-ap"
 HOTSPOT_PASSWORD = "reachy-mini"
@@ -181,6 +182,37 @@ def forget_wifi_network(ssid: str) -> None:
             try:
                 error = None
                 was_active = check_if_connection_active(ssid)
+
+                # Cooperative central withdraw BEFORE wiping the active
+                # connection. While we're still on the WiFi we have
+                # internet and can tell central "drop me from the
+                # producers list" instantly. Without this, central
+                # would hold the now-unreachable producer for up to
+                # ``LEASE_SECONDS + sweeper_interval`` (~55 s) before
+                # the TTL sweeper evicts the zombie. Bounded best-
+                # effort: short timeout so a slow central never
+                # blocks the forget operation.
+                if was_active:
+                    try:
+                        notify_withdraw(timeout=1.0)
+                        kv_log(
+                            logger,
+                            logging.INFO,
+                            "wifi.forget.central_withdraw.ok",
+                            ssid=ssid,
+                        )
+                    except Exception as e:
+                        # Withdraw is opportunistic: if it fails
+                        # (network already wonky, central down) we
+                        # still proceed and rely on TTL eviction.
+                        kv_log(
+                            logger,
+                            logging.WARNING,
+                            "wifi.forget.central_withdraw.failed",
+                            ssid=ssid,
+                            error=str(e),
+                        )
+
                 logger.info(f"Forgetting WiFi network '{ssid}'...")
                 remove_connection(ssid)
                 kv_log(
@@ -226,6 +258,29 @@ def forget_all_wifi_networks() -> None:
                 error = None
                 connections = get_wifi_connections()
                 forgotten = []
+
+                # If any active non-Hotspot connection is about to be
+                # wiped we'll lose internet, so cooperatively withdraw
+                # from central while we still have it. Same rationale
+                # as the single-network ``forget`` path.
+                will_lose_internet = any(
+                    c.name != "Hotspot" and c.device != "--" for c in connections
+                )
+                if will_lose_internet:
+                    try:
+                        notify_withdraw(timeout=1.0)
+                        kv_log(
+                            logger,
+                            logging.INFO,
+                            "wifi.forget_all.central_withdraw.ok",
+                        )
+                    except Exception as e:
+                        kv_log(
+                            logger,
+                            logging.WARNING,
+                            "wifi.forget_all.central_withdraw.failed",
+                            error=str(e),
+                        )
 
                 for conn in connections:
                     if conn.name != "Hotspot":

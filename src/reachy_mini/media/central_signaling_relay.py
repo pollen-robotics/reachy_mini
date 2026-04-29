@@ -59,6 +59,20 @@ SSE_READ_TIMEOUT = (
 CONNECTION_WATCHDOG_INTERVAL = 30.0  # seconds - how often to check connection health
 CONNECTION_STALE_THRESHOLD = 90.0  # seconds - consider connection stale if no activity
 
+# How often the daemon re-emits its ``setPeerStatus`` payload even when
+# nothing actually changed. The central server uses ``last_seen`` (only
+# refreshed on inbound application traffic, NOT on its own SSE
+# keepalive) to evict zombie producers. A daemon at steady state would
+# otherwise post nothing for minutes and get falsely evicted by the
+# TTL sweeper.
+#
+# 20 s pairs with the central's 45 s lease: tolerates two consecutive
+# missed heartbeats (network blip, transient relay restart) before
+# eviction kicks in. Tunable via env for failure-mode testing.
+HEARTBEAT_INTERVAL_SECONDS = float(
+    os.getenv("REACHY_CENTRAL_HEARTBEAT_INTERVAL", "20.0")
+)
+
 
 class CentralSignalingRelay:
     """Relay signaling messages between central server (HTTP/SSE) and local GStreamer (WebSocket).
@@ -150,6 +164,13 @@ class CentralSignalingRelay:
         # circuit identical re-emissions and avoid flooding central
         # with non-events when the daemon's status loop ticks at 1 Hz.
         self._last_published_meta: Optional[dict[str, Any]] = None
+        # Monotonic timestamp of the last ``setPeerStatus`` actually
+        # sent (initial registration counts). Drives the heartbeat:
+        # ``update_producer_meta`` re-emits an identical meta when the
+        # gap exceeds ``HEARTBEAT_INTERVAL_SECONDS`` so central can
+        # refresh ``last_seen`` without our own SSE keepalive (which is
+        # not a valid liveness proof - see ``docs/SIGNALING.md``).
+        self._last_published_at: Optional[float] = None
 
         self._running = False
         self._state = RelayState.STOPPED
@@ -931,8 +952,11 @@ class CentralSignalingRelay:
                 }
             )
             # Cache so ``update_producer_meta`` can short-circuit
-            # identical re-emissions on subsequent status ticks.
+            # identical re-emissions on subsequent status ticks. The
+            # ``_last_published_at`` stamp seeds the heartbeat timer
+            # so we don't immediately re-emit on the very next tick.
             self._last_published_meta = initial_meta
+            self._last_published_at = time.monotonic()
 
             self._set_state(
                 RelayState.CONNECTED, f"Remote access enabled as '{self.robot_name}'"
@@ -1242,6 +1266,7 @@ class CentralSignalingRelay:
                 }
             )
             self._last_published_meta = new_meta
+            self._last_published_at = time.monotonic()
 
     # Bumped only when field semantics break - additive changes (new
     # keys) keep schema_version=1. See ``docs/SIGNALING.md``.
@@ -1306,14 +1331,24 @@ class CentralSignalingRelay:
         return meta
 
     async def update_producer_meta(self) -> bool:
-        """Re-emit ``setPeerStatus`` if the meta payload has changed.
+        """Re-emit ``setPeerStatus`` if the meta changed or heartbeat is due.
 
         The daemon's status loop calls this on every tick (typically
-        1 Hz). We rebuild the meta from the current
-        ``health_provider``, compare to ``_last_published_meta``, and
-        send only if something actually changed - so a robot sitting at
-        ``health=ok`` with stable name and version produces zero
-        central traffic between explicit transitions.
+        1 Hz). Two trigger paths:
+
+        1. **Meta delta**: rebuild the meta from the current
+           ``health_provider``, compare to ``_last_published_meta``,
+           send if anything changed. So a robot transitioning to
+           ``health=degraded`` propagates to listeners on the next
+           tick, no waiting for a heartbeat.
+
+        2. **Heartbeat**: even when the meta is identical, force a
+           re-emit if more than ``HEARTBEAT_INTERVAL_SECONDS`` have
+           elapsed since the last send. This is the ONLY way central
+           can refresh ``last_seen`` for an idle-but-online producer:
+           server-pushed SSE keepalives don't prove the peer is alive
+           (a half-open TCP socket happily absorbs writes), so central
+           ignores them and relies on inbound application traffic.
 
         Same threading rules as ``update_producer_name``: must run on
         the relay's own loop. Cross-thread callers go through
@@ -1330,7 +1365,13 @@ class CentralSignalingRelay:
             return False
 
         new_meta = self._build_producer_meta()
-        if new_meta == self._last_published_meta:
+        meta_changed = new_meta != self._last_published_meta
+        now = time.monotonic()
+        heartbeat_due = (
+            self._last_published_at is None
+            or (now - self._last_published_at) >= HEARTBEAT_INTERVAL_SECONDS
+        )
+        if not meta_changed and not heartbeat_due:
             return False
 
         await self._send_to_central(
@@ -1341,6 +1382,12 @@ class CentralSignalingRelay:
             }
         )
         self._last_published_meta = new_meta
+        self._last_published_at = now
+        if not meta_changed:
+            logger.debug(
+                "[Central Relay] heartbeat re-emit (gap=%.1fs)",
+                now - (self._last_published_at or now),
+            )
         return True
 
     async def withdraw(self, *, timeout: float = 0.5) -> None:
@@ -1386,8 +1433,11 @@ class CentralSignalingRelay:
             # We are no longer claiming the producer slot, regardless
             # of whether central acked. Clear the cached meta so a
             # subsequent ``update_producer_meta`` re-sends the full
-            # payload when we reannounce.
+            # payload when we reannounce, and clear the heartbeat
+            # timestamp so the first re-announce isn't gated on the
+            # heartbeat interval.
             self._last_published_meta = None
+            self._last_published_at = None
 
 
 # Singleton instance for integration
