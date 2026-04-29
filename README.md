@@ -50,11 +50,19 @@ Reachy Mini comes with an app store powered by Hugging Face Spaces. You can inst
 
 ### 🤖 AI-Assisted Development
 
-Using an AI coding agent (Claude Code, Codex, Copilot, etc.)? You can start building apps right away. Paste this prompt to your agent:
+Using an AI coding agent (Claude Code, Codex, Copilot, etc.)? Pick the prompt that matches what you want to do:
 
-> *I'd like to create a Reachy Mini app. Start by reading https://github.com/pollen-robotics/reachy_mini/blob/main/AGENTS.md*
+**To build an app on top of Reachy Mini:**
 
-This [**AGENTS.md**](AGENTS.md) guide gives AI agents everything they need: SDK patterns, best practices, example apps, and step-by-step skills.
+> *I'd like to create a Reachy Mini app. Start by reading https://github.com/pollen-robotics/reachy_mini/blob/main/docs/contributing/building_apps.md*
+
+The [**app development guide**](docs/contributing/building_apps.md) gives the agent SDK patterns, best practices, example apps, and step-by-step skills.
+
+**To contribute to the SDK itself (this repo):**
+
+> *I'd like to contribute to the Reachy Mini SDK. Start by reading https://github.com/pollen-robotics/reachy_mini/blob/main/AGENTS.md*
+
+The [**SDK contributor guide**](AGENTS.md) (with [`docs/contributing/architecture.md`](docs/contributing/architecture.md)) gives the agent the codebase map, working conventions, lint/test gates, and the AI-assisted commit policy.
 
 ### Quick Look
 After [installing the SDK](https://huggingface.co/docs/reachy_mini/SDK/installation), once your robot is awake, you can control it in just **a few lines of code**:
@@ -92,7 +100,7 @@ Encountering an issue? 👉 **[Check the Troubleshooting & FAQ Guide](https://hu
 
 * **Join the Community:** Join [Discord](https://discord.gg/2bAhWfXme9) to share your moments with Reachy, build apps together, and get help.
 * **Found a bug?** Open an issue on this repository.
-* **Guidelines:** Review our [contributing guidelines](docs/contributing.md) to learn how to contribute code, report issues, or suggest features.
+* **Guidelines:** Review our [contributing guidelines](docs/contributing/contributing.md) to learn how to contribute code, report issues, or suggest features.
 
 
 ## License

@@ -1,7 +1,8 @@
 # Generating the documentation
 
-To generate the documentation, you first have to build it. Several packages are necessary to build the doc,
-you can install them with the following command, at the root of the code repository:
+> Setting up your dev environment first? See [`contributing.md`](contributing.md).
+
+To generate the documentation, you first have to build it. Several packages are necessary to build the doc, you can install them with the following command, at the root of the code repository:
 
 ```bash
 pip install -e ".[all]"
@@ -9,7 +10,7 @@ pip install "hf-doc-builder @ git+https://github.com/huggingface/doc-builder.git
 ```
 
 You will also need:
-- **GStreamer** — See the [installation guide](source/SDK/gstreamer-installation.md)
+- **GStreamer** — See the [installation guide](../source/SDK/gstreamer-installation.md)
 - **Node.js** — See the [installation page](https://nodejs.org/en/download)
 
 > [!WARNING]
@@ -19,23 +20,19 @@ You will also need:
 
 **NOTE**
 
-You only need to generate the documentation to inspect it locally (if you're planning changes and want to
-check how they look before committing for instance). You don't have to `git commit` the built documentation.
+You only need to generate the documentation to inspect it locally (if you're planning changes and want to check how they look before committing for instance). You don't have to `git commit` the built documentation.
 
 ---
 
 ## Building the documentation
 
-Once you have setup the `doc-builder` and additional packages, you can generate the documentation by
-typing the following command:
+Once you have setup the `doc-builder` and additional packages, you can generate the documentation by typing the following command:
 
 ```bash
 doc-builder build reachy_mini docs/source/ --build_dir ~/tmp/test-build --html
 ```
 
-You can adapt the `--build_dir` to set any temporary folder that you prefer. This command will create it and generate
-the MDX files that will be rendered as the documentation on the main website. You can inspect them in your favorite
-Markdown editor.
+You can adapt the `--build_dir` to set any temporary folder that you prefer. This command will create it and generate the MDX files that will be rendered as the documentation on the main website. You can inspect them in your favorite Markdown editor.
 
 ## Previewing the documentation
 
@@ -57,22 +54,19 @@ The `preview` command only works with existing doc files. When you add a complet
 
 ## Regenerating the REST API reference
 
-The file `docs/source/API/openapi.json` is generated from the FastAPI app. After
-changing any route, model, or docstring in the daemon, regenerate it with:
+The file `docs/source/API/openapi.json` is generated from the FastAPI app. **Regenerate it any time you change anything under `src/reachy_mini/daemon/app/routers/` or the Pydantic models the routes use** — CI will fail if the spec drifts from the code:
 
 ```bash
 uv run python scripts/generate_openapi.py
 ```
 
-Commit the updated JSON alongside your code changes. CI will fail if the
-committed spec drifts from the code.
+Commit the updated JSON alongside your code changes.
 
 ## Adding a new element to the navigation bar
 
 Accepted files are Markdown (.md).
 
-Create a file with its extension and put it in the source directory. You can then link it to the toc-tree by putting
-the filename without the extension in the [`_toctree.yml`](https://github.com/huggingface/lerobot/blob/main/docs/source/_toctree.yml) file.
+Create a file with its extension and put it in the source directory. You can then link it to the toc-tree by putting the filename without the extension in the [`_toctree.yml`](../source/_toctree.yml) file.
 
 ## Renaming section headers and moving sections
 
@@ -111,8 +105,7 @@ Make sure to put your new file under the proper section. If you have a doubt, fe
 
 ### Writing source documentation
 
-Values that should be put in `code` should either be surrounded by backticks: \`like so\`. Note that argument names
-and objects like True, None or any strings should usually be put in `code`.
+Values that should be put in `code` should either be surrounded by backticks: \`like so\`. Note that argument names and objects like True, None or any strings should usually be put in `code`.
 
 #### Writing a multi-line code block
 
@@ -128,8 +121,5 @@ Multi-line code blocks can be useful for displaying examples. They are done betw
 
 #### Adding an image
 
-Due to the rapidly growing repository, it is important to make sure that no files that would significantly weigh down the repository are added. This includes images, videos, and other non-text files. We prefer to leverage a hf.co hosted `dataset` like
-the ones hosted on [`hf-internal-testing`](https://huggingface.co/hf-internal-testing) in which to place these files and reference
-them by URL. We recommend putting them in the following dataset: [huggingface/documentation-images](https://huggingface.co/datasets/huggingface/documentation-images).
-If an external contribution, feel free to add the images to your PR and ask a Hugging Face member to migrate your images
-to this dataset.
+Due to the rapidly growing repository, it is important to make sure that no files that would significantly weigh down the repository are added. This includes images, videos, and other non-text files. We prefer to leverage a hf.co hosted `dataset` like the ones hosted on [`hf-internal-testing`](https://huggingface.co/hf-internal-testing) in which to place these files and reference them by URL. We recommend putting them in the following dataset: [huggingface/documentation-images](https://huggingface.co/datasets/huggingface/documentation-images).
+If an external contribution, feel free to add the images to your PR and ask a Hugging Face member to migrate your images to this dataset.
