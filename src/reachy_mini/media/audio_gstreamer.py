@@ -64,7 +64,7 @@ import numpy.typing as npt
 from reachy_mini.media.audio_base import AudioBase
 from reachy_mini.media.audio_utils import has_reachymini_asoundrc
 from reachy_mini.media.device_detection import get_audio_device
-from reachy_mini.motion.head_wobbler import HeadWobbler, SpeechOffsets
+from reachy_mini.motion.head_wobbler import HeadWobbler, LATENCY_COMPENSATION_NS, SpeechOffsets
 from reachy_mini.utils.constants import ASSETS_ROOT_PATH
 
 try:
@@ -236,6 +236,14 @@ class GStreamerAudio(AudioBase):
         if audiosink.find_property("latency-time") is not None:
             audiosink.set_property("latency-time", self.PLAYBACK_SINK_LATENCY_TIME_US)
 
+        # Delay actual audio output by LATENCY_COMPENSATION_NS so the head
+        # wobbler can schedule motion that much earlier than the audio is
+        # heard. The wobbler subtracts the same constant from its target
+        # times. Both numbers are read from the WOBBLER_LATENCY_COMPENSATION_MS
+        # environment variable (default 50 ms).
+        if audiosink.find_property("ts-offset") is not None and LATENCY_COMPENSATION_NS > 0:
+            audiosink.set_property("ts-offset", LATENCY_COMPENSATION_NS)
+
         return audiosink
 
     def _make_wobbler_appsink(self, sync: bool = True) -> Gst.Element:
@@ -280,9 +288,13 @@ class GStreamerAudio(AudioBase):
         data = buf.extract_dup(0, buf.get_size())
         pcm = np.frombuffer(data, dtype=np.float32)
         if appsink.get_property("sync"):
-            play_at_ns = time.monotonic_ns()
+            # Audio plays now (sync=True fires at PTS) plus the audiosink's
+            # ts-offset shift, so motion can be scheduled that much earlier.
+            play_at_ns = time.monotonic_ns() + LATENCY_COMPENSATION_NS
         else:
-            play_at_ns = time.monotonic_ns() + self.PLAYBACK_SINK_BUFFER_TIME_US * 1000
+            # Live path: appsink fires before audio reaches the speaker; the
+            # audiosink also adds ts-offset on top of its buffer-time.
+            play_at_ns = time.monotonic_ns() + self.PLAYBACK_SINK_BUFFER_TIME_US * 1000 + LATENCY_COMPENSATION_NS
         self._head_wobbler.feed(pcm, play_at_ns)
         return Gst.FlowReturn.OK
 

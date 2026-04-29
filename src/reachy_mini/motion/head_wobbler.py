@@ -36,6 +36,18 @@ logger = logging.getLogger(__name__)
 # Public type alias; re-exported by ``media/*`` modules.
 SpeechOffsets = tuple[float, float, float, float, float, float]
 
+# How many milliseconds earlier than its corresponding audio sample each motion
+# offset should be scheduled. The smoothing inside the speech tapper takes
+# ~125 ms to reach 63% of a new gesture target, so without compensation the
+# visible motion peak lags the audio peak. Compensation must be at most the
+# wobbler's lookahead, which is the audiosink's buffer-time
+# (PLAYBACK_SINK_BUFFER_TIME_US in audio_gstreamer.py, currently 50 ms). A
+# larger value here would push the motion before audio that has already been
+# committed to the sink and the head wobbler would skip those hops.
+# Override at runtime with WOBBLER_LATENCY_COMPENSATION_MS.
+LATENCY_COMPENSATION_MS = int(os.environ.get("WOBBLER_LATENCY_COMPENSATION_MS", "50"))
+LATENCY_COMPENSATION_NS = LATENCY_COMPENSATION_MS * 1_000_000
+
 
 class HeadWobbler:
     """PTS-driven scheduler that turns audio into timed head offsets."""
@@ -139,7 +151,7 @@ class HeadWobbler:
         # the next main-loop iteration.
         stale_threshold_ms = -self._hop_ms
         for i, hop in enumerate(results):
-            target_ns = play_at_monotonic_ns + i * hop_ns
+            target_ns = play_at_monotonic_ns + i * hop_ns - LATENCY_COMPENSATION_NS
             delay_ms = (target_ns - now_ns) // 1_000_000
             if delay_ms < stale_threshold_ms:
                 continue
