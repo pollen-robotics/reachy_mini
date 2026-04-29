@@ -22,6 +22,7 @@ import aiohttp
 import websockets
 from websockets.asyncio.client import ClientConnection
 
+from reachy_mini.daemon.peer_health import PeerHealth
 from reachy_mini.daemon.robot_app_lock import RobotAppLock
 
 logger = logging.getLogger(__name__)
@@ -80,6 +81,11 @@ class CentralSignalingRelay:
         install_id: Optional[str] = None,
         on_state_change: Optional[Callable[["RelayState", Optional[str]], None]] = None,
         robot_app_lock: Optional[RobotAppLock] = None,
+        kind: str = "robot",
+        wireless_version: Optional[bool] = None,
+        version: Optional[str] = None,
+        capabilities: Optional[list[str]] = None,
+        health_provider: Optional[Callable[[], "PeerHealth"]] = None,
     ):
         """Initialize the relay.
 
@@ -99,6 +105,32 @@ class CentralSignalingRelay:
                 the robot. When provided, incoming remote sessions are
                 gated on this lock and a local-app acquire evicts any
                 active remote session.
+            kind: ``"robot"`` for a Pi-side daemon backing real hardware,
+                ``"tray"`` for the desktop-app daemon spawned by the Mac
+                tray. Forwarded verbatim in ``meta.kind`` so the mobile
+                app can hide tray rows that lost their hardware
+                without the user having to figure out which row is the
+                "real" robot. See ``docs/SIGNALING.md``.
+            wireless_version: True for the Pi wireless image, False for
+                the wired image, None when unknown. Surfaced in
+                ``meta.wireless_version`` for the listing UI.
+            version: Daemon package version string ("1.7.0" etc.) for
+                the listing UI / debug overlays. ``None`` when the
+                package metadata cannot be read.
+            capabilities: Optional list of capability tokens advertised
+                in ``meta.capabilities`` (``"motion"``, ``"audio"``,
+                ``"camera"``). The mobile app uses this to disable the
+                conversation button when no audio backend is available,
+                etc. Ordering is informational, do not depend on it.
+            health_provider: Zero-arg callable returning a
+                ``PeerHealth`` snapshot. Called on every ``setPeerStatus``
+                emission and on every ``update_producer_meta`` tick to
+                decide what ``meta.health`` and ``meta.error_code`` are
+                advertised. Wired to ``Daemon._publish_status`` so the
+                relay reflects backend transitions without owning any
+                of the daemon's state. ``None`` keeps the legacy
+                "always look healthy" behaviour for tests / harnesses
+                that don't have a daemon.
 
         """
         self.central_uri = central_uri
@@ -108,6 +140,16 @@ class CentralSignalingRelay:
         self.install_id = install_id
         self._on_state_change = on_state_change
         self._robot_app_lock = robot_app_lock
+        self.kind = kind
+        self.wireless_version = wireless_version
+        self.version = version
+        self.capabilities = list(capabilities) if capabilities else None
+        self._health_provider = health_provider
+        # Last meta dict emitted via ``setPeerStatus`` (initialised after
+        # the first send). Used by ``update_producer_meta`` to short-
+        # circuit identical re-emissions and avoid flooding central
+        # with non-events when the daemon's status loop ticks at 1 Hz.
+        self._last_published_meta: Optional[dict[str, Any]] = None
 
         self._running = False
         self._state = RelayState.STOPPED
@@ -880,13 +922,17 @@ class CentralSignalingRelay:
             # central does not yet know we are a producer for this user,
             # which produces the desync described in /refresh-relay's
             # docstring.
+            initial_meta = self._build_producer_meta()
             await self._send_to_central(
                 {
                     "type": "setPeerStatus",
                     "roles": ["producer"],
-                    "meta": self._build_producer_meta(),
+                    "meta": initial_meta,
                 }
             )
+            # Cache so ``update_producer_meta`` can short-circuit
+            # identical re-emissions on subsequent status ticks.
+            self._last_published_meta = initial_meta
 
             self._set_state(
                 RelayState.CONNECTED, f"Remote access enabled as '{self.robot_name}'"
@@ -1187,29 +1233,161 @@ class CentralSignalingRelay:
         # central. In any other state the next ``welcome`` will use the
         # already-updated ``self.robot_name``.
         if self._state == RelayState.CONNECTED and self._central_peer_id is not None:
+            new_meta = self._build_producer_meta()
             await self._send_to_central(
                 {
                     "type": "setPeerStatus",
                     "roles": ["producer"],
-                    "meta": self._build_producer_meta(),
+                    "meta": new_meta,
                 }
             )
+            self._last_published_meta = new_meta
+
+    # Bumped only when field semantics break - additive changes (new
+    # keys) keep schema_version=1. See ``docs/SIGNALING.md``.
+    META_SCHEMA_VERSION = 1
 
     def _build_producer_meta(self) -> dict[str, Any]:
         """Assemble the ``meta`` payload sent on every ``setPeerStatus``.
 
-        Always includes ``name`` (human-readable robot label). Adds
-        ``install_id`` when one is known: this is the stable
-        reconciliation key that lets the mobile app's robot registry
-        merge a central row with the same robot's BLE / mDNS / loopback
-        sightings. We deliberately keep the payload additive so older
-        central versions that don't know about ``install_id`` ignore
-        it without complaining.
+        Strict contract (see ``docs/SIGNALING.md``): keys are additive,
+        values come from explicit constructor arguments and the
+        ``health_provider`` callback. The relay never invents fields
+        and never re-derives values it was already given.
+
+        Always includes:
+            - ``schema_version`` so future clients can branch safely;
+            - ``name`` (human-readable robot label, mutable via rename);
+            - ``kind`` so the client distinguishes a desktop tray
+              daemon from a robot Pi daemon without parsing other
+              fields.
+
+        Conditionally includes:
+            - ``install_id`` when one is known (stable per-install
+              dedup key across BLE / mDNS / loopback / central);
+            - ``health`` + ``error_code`` from ``health_provider``;
+            - ``capabilities``, ``wireless_version``, ``version`` when
+              the daemon passed them at construction time.
         """
-        meta: dict[str, Any] = {"name": self.robot_name}
+        meta: dict[str, Any] = {
+            "schema_version": self.META_SCHEMA_VERSION,
+            "name": self.robot_name,
+            "kind": self.kind,
+        }
         if self.install_id:
             meta["install_id"] = self.install_id
+
+        # Health snapshot. We catch broadly here because anything thrown
+        # by the provider (a malformed status, a torn-down daemon)
+        # should not stop us from registering as a producer at all.
+        # In that case we publish "error/unknown" rather than nothing,
+        # which keeps the meta shape stable for the mobile app.
+        if self._health_provider is not None:
+            try:
+                health: PeerHealth = self._health_provider()
+                meta["health"] = health.health
+                if health.error_code is not None:
+                    meta["error_code"] = health.error_code
+            except Exception as e:
+                logger.debug(
+                    "[Central Relay] health_provider raised %r, falling back to error",
+                    e,
+                )
+                meta["health"] = "error"
+                meta["error_code"] = "health_provider_error"
+
+        if self.capabilities is not None:
+            meta["capabilities"] = self.capabilities
+        if self.wireless_version is not None:
+            meta["wireless_version"] = self.wireless_version
+        if self.version is not None:
+            meta["version"] = self.version
+
         return meta
+
+    async def update_producer_meta(self) -> bool:
+        """Re-emit ``setPeerStatus`` if the meta payload has changed.
+
+        The daemon's status loop calls this on every tick (typically
+        1 Hz). We rebuild the meta from the current
+        ``health_provider``, compare to ``_last_published_meta``, and
+        send only if something actually changed - so a robot sitting at
+        ``health=ok`` with stable name and version produces zero
+        central traffic between explicit transitions.
+
+        Same threading rules as ``update_producer_name``: must run on
+        the relay's own loop. Cross-thread callers go through
+        ``notify_meta_change`` (below) which schedules the coroutine
+        with ``run_coroutine_threadsafe``.
+
+        Returns:
+            True iff a ``setPeerStatus`` frame was sent.
+
+        """
+        if self._state != RelayState.CONNECTED or self._central_peer_id is None:
+            # Not registered yet. The next ``welcome`` will pick the
+            # latest values up via ``_build_producer_meta``.
+            return False
+
+        new_meta = self._build_producer_meta()
+        if new_meta == self._last_published_meta:
+            return False
+
+        await self._send_to_central(
+            {
+                "type": "setPeerStatus",
+                "roles": ["producer"],
+                "meta": new_meta,
+            }
+        )
+        self._last_published_meta = new_meta
+        return True
+
+    async def withdraw(self, *, timeout: float = 0.5) -> None:
+        """Send ``setPeerStatus(roles=[])`` and keep the WebSocket open.
+
+        Distinct from ``stop()``: we want central to remove us from
+        the public producers listing (so the mobile app stops showing a
+        broken robot) but keep our SSE channel alive so the daemon can
+        re-register when the underlying problem clears (USB replugged,
+        backend recovered, network blip resolved).
+
+        Best-effort with a short timeout because this is typically
+        called from a tight transition window (e.g. shutdown lifespan
+        finally) where blocking forever on a stuck central would hang
+        the rest of the teardown.
+        """
+        if self._state != RelayState.CONNECTED or self._central_peer_id is None:
+            logger.debug(
+                "[Central Relay] withdraw() no-op (state=%s)", self._state.value
+            )
+            return
+
+        try:
+            await asyncio.wait_for(
+                self._send_to_central(
+                    {
+                        "type": "setPeerStatus",
+                        "roles": [],
+                        "meta": self._build_producer_meta(),
+                    }
+                ),
+                timeout=timeout,
+            )
+            logger.info("[Central Relay] withdrew producer registration")
+        except asyncio.TimeoutError:
+            logger.warning(
+                "[Central Relay] withdraw() timed out after %.1fs - central will fall back on TTL",
+                timeout,
+            )
+        except Exception as e:
+            logger.warning("[Central Relay] withdraw() failed: %r", e)
+        finally:
+            # We are no longer claiming the producer slot, regardless
+            # of whether central acked. Clear the cached meta so a
+            # subsequent ``update_producer_meta`` re-sends the full
+            # payload when we reannounce.
+            self._last_published_meta = None
 
 
 # Singleton instance for integration
@@ -1267,6 +1445,11 @@ async def start_central_relay(
     central_uri: str = CENTRAL_SIGNALING_SERVER,
     on_state_change: Optional[Callable[[RelayState, Optional[str]], None]] = None,
     robot_app_lock: Optional[RobotAppLock] = None,
+    kind: str = "robot",
+    wireless_version: Optional[bool] = None,
+    version: Optional[str] = None,
+    capabilities: Optional[list[str]] = None,
+    health_provider: Optional[Callable[[], PeerHealth]] = None,
 ) -> CentralSignalingRelay:
     """Start the central signaling relay.
 
@@ -1278,6 +1461,14 @@ async def start_central_relay(
         central_uri: Central server URI
         on_state_change: Callback when connection state changes
         robot_app_lock: Shared lock coordinating local vs remote robot access.
+        kind: Producer ``meta.kind`` (``"robot"`` | ``"tray"``).
+        wireless_version: Surfaced in ``meta.wireless_version``.
+        version: Daemon package version surfaced in ``meta.version``.
+        capabilities: List of capability tokens (``"motion"``, ``"audio"``,
+            ``"camera"``) surfaced in ``meta.capabilities``.
+        health_provider: Zero-arg callable returning a ``PeerHealth``
+            snapshot, used to populate ``meta.health`` and
+            ``meta.error_code``. See ``CentralSignalingRelay``.
 
     Returns:
         The relay instance
@@ -1304,6 +1495,11 @@ async def start_central_relay(
         install_id=install_id,
         on_state_change=on_state_change,
         robot_app_lock=robot_app_lock,
+        kind=kind,
+        wireless_version=wireless_version,
+        version=version,
+        capabilities=capabilities,
+        health_provider=health_provider,
     )
     await _relay_instance.start()
     return _relay_instance
@@ -1399,3 +1595,50 @@ async def notify_robot_name_change(new_name: str) -> None:
         logger.warning(
             "[Central Relay] update_producer_name(%r) failed: %s", new_name, exc
         )
+
+
+def notify_meta_change() -> bool:
+    """Re-emit producer ``setPeerStatus`` if the meta payload changed.
+
+    Synchronous wrapper around ``CentralSignalingRelay.update_producer_meta``
+    designed to be called from the daemon's status thread. Returns
+    ``True`` when an update was actually scheduled (the meta differed
+    from the cached one), ``False`` for any "nothing to do" case
+    (no relay instance, relay loop not running, meta unchanged).
+
+    Fire-and-forget: we schedule the coroutine on the relay's loop and
+    return immediately. The relay does the diff itself and short-circuits
+    when nothing changed, so calling this on every status tick is cheap.
+    """
+    if _relay_instance is None:
+        return False
+
+    loop = _relay_instance._thread_loop
+    if loop is None or not loop.is_running():
+        return False
+
+    asyncio.run_coroutine_threadsafe(_relay_instance.update_producer_meta(), loop)
+    return True
+
+
+def notify_withdraw(*, timeout: float = 0.5) -> None:
+    """Schedule a ``CentralSignalingRelay.withdraw()`` from any thread.
+
+    Used by the daemon's "tray with no hardware after grace period"
+    watchdog and by any non-async cleanup hook (atexit, signal handler)
+    that needs to tell central "stop listing me" without going through
+    the full ``stop()`` path. Best-effort: silent no-op when the relay
+    is not running, bounded wait so we never block teardown.
+    """
+    if _relay_instance is None:
+        return
+    loop = _relay_instance._thread_loop
+    if loop is None or not loop.is_running():
+        return
+    fut = asyncio.run_coroutine_threadsafe(
+        _relay_instance.withdraw(timeout=timeout), loop
+    )
+    try:
+        fut.result(timeout=timeout + 0.5)
+    except Exception as exc:
+        logger.debug("[Central Relay] notify_withdraw() failed: %s", exc)

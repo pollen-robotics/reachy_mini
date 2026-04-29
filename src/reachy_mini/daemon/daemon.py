@@ -10,7 +10,10 @@ import logging
 import time
 from importlib.metadata import PackageNotFoundError, version
 from threading import Event, Thread
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
+
+if TYPE_CHECKING:
+    from reachy_mini.daemon.peer_health import PeerHealth
 
 from reachy_mini.daemon.robot_app_lock import RobotAppLock
 from reachy_mini.daemon.utils import (
@@ -292,15 +295,86 @@ class Daemon:
                 robot_name=self.robot_name,
                 install_id=self.install_id,
                 robot_app_lock=self.robot_app_lock,
+                # Layer A of docs/SIGNALING.md - the relay forwards
+                # the daemon-derived health verdict to central without
+                # reinterpreting it. Capabilities are static here
+                # because the only way to lose them today is a daemon
+                # restart; if that ever changes (hot-plug audio, etc.)
+                # we should swap this for a callable provider too.
+                kind=("tray" if self.desktop_app_daemon else "robot"),
+                wireless_version=self.wireless_version,
+                version=self._status.version,
+                capabilities=self._compute_capabilities(),
+                health_provider=self._compute_peer_health,
             )
             self.logger.info("Central signaling relay started")
         except Exception as e:
             self.logger.warning(f"Failed to start central signaling relay: {e}")
 
+    def _compute_capabilities(self) -> list[str]:
+        """Build the static list of capability tokens advertised on the relay.
+
+        Listed in ``meta.capabilities`` so clients can light up / grey
+        out features per row without probing the robot. Recomputed only
+        at relay-start time: capabilities are decided by daemon flags
+        (``no_media``, ``simulation_enabled``, …) that don't move at
+        runtime today.
+
+        See ``docs/SIGNALING.md`` for the canonical token list.
+        """
+        caps: list[str] = ["motion"]  # always available
+        if not self.no_media and self._media_server is not None:
+            caps.append("audio")
+            caps.append("camera")
+        return caps
+
+    def _compute_peer_health(self) -> "PeerHealth":
+        """Compute the health snapshot the relay forwards as ``meta.health``.
+
+        Indirection through this method (vs. exposing ``peer_health.compute``
+        directly) lets the relay stay decoupled from the daemon's
+        internals: it only knows it has a zero-arg callable returning a
+        ``PeerHealth``. We rebuild a fresh ``DaemonStatus`` snapshot on
+        every call so transient transitions show up promptly; ``status()``
+        is cheap (single attribute read + backend.get_status() if any).
+        """
+        from reachy_mini.daemon.peer_health import compute
+
+        return compute(self.status())
+
     async def _stop_central_signaling_relay(self) -> None:
-        """Stop the central signaling relay."""
+        """Tear down the relay, with an explicit withdraw beforehand.
+
+        Order matters:
+
+        1. ``withdraw()``: tells central "stop listing me" via
+           ``setPeerStatus(roles=[])`` while the WebSocket is still
+           open. Central removes the peer from ``producers`` and
+           broadcasts ``peerStatusChanged(roles=[])`` to listeners,
+           so any mobile/desktop client looking at the listing gets
+           an immediate "this robot just left" event.
+        2. ``stop_central_relay()``: closes the SSE/WebSocket
+           channel. Central's SSE loop sees ``is_disconnected()``
+           and runs ``disconnect_peer`` for any residual cleanup.
+
+        Without step 1 the user sees the robot "linger" in the
+        listing for the time it takes the SSE close to propagate +
+        any TTL in the central. With step 1 the disappearance is
+        instant. The withdraw is best-effort with a tight timeout
+        so a stuck central never blocks daemon shutdown.
+        """
         try:
-            from reachy_mini.media.central_signaling_relay import stop_central_relay
+            from reachy_mini.media.central_signaling_relay import (
+                get_relay,
+                stop_central_relay,
+            )
+
+            relay = get_relay()
+            if relay is not None:
+                try:
+                    await relay.withdraw(timeout=0.5)
+                except Exception as e:
+                    self.logger.debug(f"Error withdrawing from central: {e}")
 
             await stop_central_relay()
             self.logger.info("Central signaling relay stopped")
@@ -650,16 +724,89 @@ class Daemon:
 
         return self._status
 
+    # Grace period before a desktop-tray daemon with no backend
+    # voluntarily withdraws from the central listing (cf. layer B of
+    # docs/SIGNALING.md). 30s is long enough to ride out a USB
+    # re-enumeration after a sleep/wake without flapping, short enough
+    # that an unplugged tray disappears from the mobile picker before
+    # the user has time to scroll.
+    _NO_HARDWARE_GRACE_SECONDS = 30.0
+
     def _publish_status(self) -> None:
+        """Publish status over WS at 1 Hz and keep central in sync.
+
+        This loop is the daemon's single broadcast tick: every iteration
+        we (1) push the current snapshot to the local WebSocket clients,
+        (2) call ``notify_meta_change`` so the central relay re-emits a
+        ``setPeerStatus`` IFF the producer ``meta`` actually moved
+        (debounce lives inside the relay), and (3) for desktop-tray
+        daemons, run the "no backend for too long → withdraw"
+        watchdog. All three are cheap and self-contained, so doing
+        them on the same 1 s tick keeps the threading story simple.
+        """
+        from reachy_mini.media.central_signaling_relay import (
+            notify_meta_change,
+            notify_withdraw,
+        )
+
         self._thread_event_publish_status.clear()
+        no_backend_since: Optional[float] = None
+        withdrawn_for_no_hardware = False
+
         while self._thread_event_publish_status.is_set() is False:
-            json_str = self.status().model_dump_json()
+            current = self.status()
+            json_str = current.model_dump_json()
             if self.ws_server is None:
                 self.logger.warning(
                     f"WS server not initialized, cannot publish status: {json_str}"
                 )
             else:
                 self.ws_server.publish_status(json_str)
+
+            # Forward any meta change to central (no-op when nothing
+            # moved). Wrapped in try/except so a transient relay error
+            # never breaks the local-WS publishing path.
+            try:
+                notify_meta_change()
+            except Exception as exc:
+                self.logger.debug("notify_meta_change failed: %s", exc)
+
+            # Layer-B watchdog: tray daemon with no hardware. Plain
+            # robots (Pi) never trigger this branch because
+            # ``desktop_app_daemon`` is False, so the watchdog stays
+            # off. We re-publish (`update_producer_meta` is cheap)
+            # rather than withdraw on the first tick to absorb USB
+            # re-enumerations that take a few hundred ms.
+            if self.desktop_app_daemon:
+                if current.backend_status is None:
+                    if no_backend_since is None:
+                        no_backend_since = time.monotonic()
+                    elif (
+                        not withdrawn_for_no_hardware
+                        and time.monotonic() - no_backend_since
+                        >= self._NO_HARDWARE_GRACE_SECONDS
+                    ):
+                        self.logger.info(
+                            "Tray daemon has no hardware after %.0fs; withdrawing from central",
+                            self._NO_HARDWARE_GRACE_SECONDS,
+                        )
+                        try:
+                            notify_withdraw()
+                        except Exception as exc:
+                            self.logger.debug("notify_withdraw failed: %s", exc)
+                        withdrawn_for_no_hardware = True
+                else:
+                    if withdrawn_for_no_hardware:
+                        # Hardware came back: ``notify_meta_change``
+                        # above will already have re-registered us as
+                        # producer because the cached meta was cleared
+                        # on withdraw(). Just clear the local flag.
+                        self.logger.info(
+                            "Tray daemon recovered hardware; re-registering on central"
+                        )
+                        withdrawn_for_no_hardware = False
+                    no_backend_since = None
+
             time.sleep(1)
 
     def _setup_backend(
