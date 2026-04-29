@@ -12,22 +12,15 @@ loop the caller's pipeline already uses for its bus watch.
 """
 
 import logging
-import os
 import threading
 import time
 from collections.abc import Callable
-from types import ModuleType
 from typing import Any
 
 from gi.repository import GLib
 from numpy.typing import NDArray
 
-from reachy_mini.motion import (
-    speech_tapper,
-    speech_tapper_v1,
-    speech_tapper_v2,
-    speech_tapper_v3,
-)
+from reachy_mini.motion import speech_tapper
 
 logger = logging.getLogger(__name__)
 
@@ -38,21 +31,7 @@ SpeechOffsets = tuple[float, float, float, float, float, float]
 class HeadWobbler:
     """PTS-driven scheduler that turns audio into timed head offsets."""
 
-    _TAPPER_VERSIONS: dict[str, ModuleType] = {
-        "v1": speech_tapper_v1,
-        "v2": speech_tapper_v2,
-        "v3": speech_tapper_v3,
-    }
-
     _ZERO_OFFSETS: SpeechOffsets = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
-
-    @classmethod
-    def _load_sway_class(cls) -> tuple[int, type]:
-        """Return (HOP_MS, SwayRollRT class) based on WOBBLER_VERSION env var."""
-        mod = cls._TAPPER_VERSIONS.get(
-            os.environ.get("WOBBLER_VERSION", ""), speech_tapper
-        )
-        return mod.HOP_MS, mod.SwayRollRT
 
     def __init__(
         self,
@@ -69,12 +48,9 @@ class HeadWobbler:
         """
         self._apply_offsets = set_speech_offsets
 
-        self._hop_ms, sway_cls = self._load_sway_class()
-        version = os.environ.get("WOBBLER_VERSION", "v0")
-        logger.info("Using wobbler version: %s (%s)", version, sway_cls.__module__)
-        self._sway_cls = sway_cls
+        self._hop_ms = speech_tapper.HOP_MS
         self._sample_rate = int(sample_rate)
-        self.sway = sway_cls(sample_rate=self._sample_rate)
+        self.sway = speech_tapper.SwayRollRT(sample_rate=self._sample_rate)
 
         self._lock = threading.Lock()
         self._sway_lock = threading.Lock()
@@ -101,7 +77,7 @@ class HeadWobbler:
         with self._lock:
             self._generation += 1
         with self._sway_lock:
-            self.sway = self._sway_cls(sample_rate=self._sample_rate)
+            self.sway = speech_tapper.SwayRollRT(sample_rate=self._sample_rate)
         self._apply_offsets(self._ZERO_OFFSETS)
 
     def feed(

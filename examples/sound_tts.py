@@ -8,7 +8,7 @@ head in sync.
 Usage::
 
     uv run python examples/sound_tts.py --text "Hello world"
-    uv run python examples/sound_tts.py --text "..." --voice-description "Speak with panic creeping in." --wobbler-version v2
+    uv run python examples/sound_tts.py --text "..." --voice-description "Speak with panic creeping in."
 
 Browse the Space: https://huggingface.co/spaces/Qwen/Qwen3-TTS
 """
@@ -16,7 +16,6 @@ Browse the Space: https://huggingface.co/spaces/Qwen/Qwen3-TTS
 # START doc_example
 
 import argparse
-import os
 import time
 
 import gi
@@ -56,10 +55,8 @@ def probe_duration_s(path: str) -> float:
     return float(info.get_duration() / Gst.SECOND)
 
 
-def main(text: str, language: str, voice_description: str, wobbler_version: str) -> None:
+def main(text: str, language: str, voice_description: str) -> None:
     """Synthesize *text*, play it on Reachy Mini with wobbling enabled."""
-    os.environ["WOBBLER_VERSION"] = wobbler_version
-
     print(f"Synthesizing {len(text)} chars ({language}) with Qwen3-TTS...")
     audio_path = synthesize(text, language, voice_description)
     duration = probe_duration_s(audio_path)
@@ -96,19 +93,11 @@ if __name__ == "__main__":
         default="Speak in a warm, friendly tone.",
         help="Natural-language description shaping the voice style.",
     )
-    parser.add_argument(
-        "--wobbler-version",
-        type=str,
-        default="v0",
-        choices=["v0", "v1", "v2", "v3"],
-        help="Speech tapper version: v0=original, v1=direct envelope, v2=multi-band, v3=onset impulse.",
-    )
     args = parser.parse_args()
     main(
         text=args.text,
         language=args.lang,
         voice_description=args.voice_description,
-        wobbler_version=args.wobbler_version,
     )
 
 # END doc_example

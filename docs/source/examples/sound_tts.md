@@ -11,14 +11,13 @@ prompt, so you can style the voice by just describing it.
 **Usage:**
 
 ```bash
-# Default English prompt, wobbler v0
+# Default English prompt
 uv run python examples/sound_tts.py --text "Hello, I can wobble my head!"
 
-# Describe a voice style and pick a wobbler variant
+# Describe a voice style
 uv run python examples/sound_tts.py \
     --text "No way, that's impossible!" \
-    --voice-description "Speak with panic creeping into your voice." \
-    --wobbler-version v2
+    --voice-description "Speak with panic creeping into your voice."
 ```
 
 **Options:**
@@ -29,8 +28,6 @@ uv run python examples/sound_tts.py \
   `Auto` lets the model detect it.
 - `--voice-description <str>`: Natural-language description of the
   voice style (tone, pace, emotion).
-- `--wobbler-version {v0,v1,v2,v3}`: Speech-tapper variant —
-  `v0`=original, `v1`=direct envelope, `v2`=multi-band, `v3`=onset impulse.
 
 <literalinclude>
 {"path": "../../../examples/sound_tts.py",
