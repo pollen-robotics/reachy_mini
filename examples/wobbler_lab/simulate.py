@@ -16,6 +16,7 @@ VERSIONS = {
     "v2": "reachy_mini.motion.speech_tapper_v2",
     "v3": "reachy_mini.motion.speech_tapper_v3",
     "v4": "reachy_mini.motion.speech_tapper_v4",
+    "v5": "reachy_mini.motion.speech_tapper_v5",
 }
 
 
