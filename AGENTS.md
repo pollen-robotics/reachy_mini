@@ -25,7 +25,7 @@ Before any non-trivial change, skim these in order:
 | `src/reachy_mini/io/` | Protocol + WebSocket transport between SDK and daemon. |
 | `src/reachy_mini/apps/` | `ReachyMiniApp` scaffold + the `reachy-mini-app-assistant` CLI. |
 | `src/reachy_mini/{kinematics,descriptions,tools,utils}/` | Kinematics / URDFs / motor reflash tool / helpers. |
-| `js/reachy-mini.js` | Browser ES-module SDK (WebRTC client for HF Spaces). |
+| `js/reachy-mini.js` | Browser ES-module SDK (WebRTC client; usable from any static page, tool, or service that can authenticate — HF Spaces is the most common host). |
 | `tests/{unit_tests,integration_tests}/` | Pytest suites. Hardware-bound tests use markers (`audio`, `video`, `wireless`, `ipc_resolution`). |
 | `examples/` | Runnable demo scripts. |
 | `docs/source/` | Hugging Face doc-builder source. `_toctree.yml` is the navigation. |
@@ -49,6 +49,7 @@ Grepping `docs/source/API/` first avoids reinventing helpers that are already ex
 - **OpenAPI regeneration.** After touching anything under `src/reachy_mini/daemon/app/routers/` or related Pydantic models, run `uv run python scripts/generate_openapi.py` and commit the updated `docs/source/API/openapi.json`. CI fails if the spec drifts.
 - **Tests.** `pytest -m "not audio and not video and not wireless and not ipc_resolution"` is the no-hardware run that mirrors CI. Mark new hardware-dependent tests with the matching pytest marker so CI skips them.
 - **Abstractions.** When adding to `media/` or `daemon/backend/`, extend the existing `AudioBase` / `CameraBase` / `Backend` interfaces rather than duplicating logic per backend.
+- **Transport parity.** Keep REST, WebSocket, and WebRTC compatible. When you expose new data or a new command, make sure it's available on all transports (REST router + `command_adapter` branch in `daemon/backend/abstract.py`), all delegating to the same backend method. See `docs/contributing/architecture.md` for the connection model.
 - **Docs.** When adding a new `docs/source/*.md` page, register it in `docs/source/_toctree.yml` (otherwise `doc-builder preview` won't see it). Files outside `docs/source/` (like these contributor docs) are not in the toctree.
 
 ## AI-assisted commits
@@ -86,6 +87,7 @@ The remaining skills (`ai-integration.md`, `create-app.md`, `interaction-pattern
 - Add tests next to the code: a unit test under `tests/unit_tests/` for pure-Python logic, an integration test (with the right marker) for hardware paths.
 - Update `docs/source/_toctree.yml` only when adding a brand-new doc page.
 - If you change daemon routes/models, regenerate `openapi.json` in the same PR.
+- Before requesting review, rebase on the latest `main` so the branch has no conflicts, and confirm CI is green.
 
 ## When in doubt
 

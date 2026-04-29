@@ -109,6 +109,8 @@ The daemon is a single process, but it exposes **two parallel transports** that 
 - **REST / WebSocket on `:8000`** — handled by FastAPI in `src/reachy_mini/daemon/app/`. The local Python SDK uses this (`io/protocol.py`).
 - **WebRTC on `:8443`** — handled by GStreamer's `webrtcsink` inside `GstMediaServer` (`src/reachy_mini/media/media_server.py`). The browser JS SDK uses this. Media tracks (camera, audio) and a data channel are negotiated automatically when a peer connects.
 
+**Keep them in sync.** REST/WebSocket and the WebRTC data channel are independent surfaces, but they should expose the *same* feature set. When you add a command or a piece of data, wire it on **both** sides (a REST router *and* a `command_adapter` branch handled in `process_command`), each delegating to the same backend method. Don't try to forward REST through WebRTC or vice versa.
+
 **Signaling is out-of-band.** The browser doesn't talk to FastAPI to negotiate SDP. Instead:
 
 1. Browser → SSE to the central signaling Space on Hugging Face (`js/reachy-mini.js` — `connect()`).
@@ -118,8 +120,6 @@ The daemon is a single process, but it exposes **two parallel transports** that 
 Once WebRTC is up, the data channel becomes the command pipe. `media_server.py` handles the raw messages and forwards them to a callback registered by the backend via `setup_media_server()` (`src/reachy_mini/daemon/backend/abstract.py`). That callback parses each message with `command_adapter` and dispatches to `Backend.process_command()` — the same method the REST routers ultimately rely on.
 
 **REST routers** live under `src/reachy_mini/daemon/app/routers/` (one file per concern: `media.py`, `volume.py`, `motion.py`, …). The OpenAPI spec at `docs/source/API/openapi.json` is generated from those routers via `scripts/generate_openapi.py` — keep it in sync (CI fails if it drifts).
-
-**To expose a new feature on both transports:** add a REST endpoint *and* a command type in `command_adapter` + a branch in `process_command`. Both call the same backend method. Don't try to forward REST through WebRTC or vice versa.
 
 ### Discovering existing API surface
 
