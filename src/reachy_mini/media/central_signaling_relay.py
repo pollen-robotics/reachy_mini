@@ -41,7 +41,7 @@ class RelayState(Enum):
 # Central signaling server URL. Override via the REACHY_CENTRAL_URL env
 # var at startup to point at a fork (test Space, staging, etc.).
 CENTRAL_SIGNALING_SERVER = os.getenv(
-    "REACHY_CENTRAL_URL", "https://cduss-reachy-mini-central.hf.space"
+    "REACHY_CENTRAL_URL", "https://tfrere-reachy-mini-central.hf.space"
 )
 LOCAL_GSTREAMER_SIGNALING = "ws://127.0.0.1:8443"
 
