@@ -56,7 +56,7 @@
  * CONSTRUCTOR OPTIONS
  * ───────────────────
  *   new ReachyMini({
- *     signalingUrl:     string,   // default: "https://cduss-reachy-mini-central.hf.space"
+ *     signalingUrl:     string,   // default: "https://tfrere-reachy-mini-central.hf.space"
  *     enableMicrophone: boolean,  // default: true — acquire mic for bidirectional audio
  *   })
  *
@@ -164,7 +164,7 @@ export class ReachyMini extends EventTarget {
     /** @param {{ signalingUrl?: string, enableMicrophone?: boolean, clientId?: string, appName?: string }} [options] */
     constructor(options = {}) {
         super();
-        this._signalingUrl = options.signalingUrl || 'https://cduss-reachy-mini-central.hf.space';
+        this._signalingUrl = options.signalingUrl || 'https://tfrere-reachy-mini-central.hf.space';
         this._enableMicrophone = options.enableMicrophone !== false;
         this._clientId = options.clientId || null;
         this._appName = options.appName || 'unknown';
