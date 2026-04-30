@@ -122,7 +122,7 @@ yield, the sweeper would never evict the zombie.
 ### Heartbeat protocol
 
 - The daemon re-emits `setPeerStatus(roles=["producer"], meta=…)` every
-  `HEARTBEAT_INTERVAL_SECONDS` (default 20 s) **even if the meta payload is
+  `self._heartbeat_interval_seconds` **even if the meta payload is
   identical**. This arrives at central as a real `POST /send`, which is the
   only authoritative liveness signal we accept.
 - Meta deltas (health flips from `ok` to `degraded`, name change, …) are
@@ -135,17 +135,56 @@ yield, the sweeper would never evict the zombie.
   heartbeat to keep the HTTP/2 connection from being culled by the
   reverse proxy. It does **not** touch `last_seen`.
 
+### Heartbeat negotiation (server-driven)
+
+The heartbeat interval is **negotiated at handshake** so server operators
+can tune the liveness contract from one place (`LEASE_SECONDS` env var on
+the central Space) and every connected daemon auto-aligns on its next
+reconnect, with **zero coordinated daemon redeploy**.
+
+- Central's `welcome` SSE frame carries:
+  ```json
+  {
+    "type": "welcome",
+    "peerId": "...",
+    "username": "...",
+    "lease_seconds": 15,
+    "recommended_heartbeat_interval_seconds": 5
+  }
+  ```
+- The daemon stores the recommended value into
+  `self._heartbeat_interval_seconds`, clamped to
+  `[MIN_HEARTBEAT_INTERVAL_SECONDS, MAX_HEARTBEAT_INTERVAL_SECONDS]`
+  (`[1.0, 60.0]`) as a defence against a malformed welcome.
+- If the field is missing (older central, partial deploy), the daemon
+  keeps the module-level default
+  (`HEARTBEAT_INTERVAL_SECONDS`, currently `5.0`). Full backwards
+  compatibility.
+- `recommended_heartbeat_interval_seconds = LEASE_SECONDS / 3` by
+  convention so a daemon tolerates two consecutive missed POSTs before
+  hitting the lease.
+
 ### Eviction guarantees
 
-- Background sweeper scans every 10 s. Any peer with
-  `now - last_seen > LEASE_SECONDS` (default 45 s) is `disconnect_peer()`'d
-  (= removed from `peers`, `producers`, `token_to_peer`, sessions ended).
+- Background sweeper scans every `SWEEPER_INTERVAL_SECONDS` (default
+  3 s). Any peer with `now - last_seen > LEASE_SECONDS` (default 15 s)
+  is `disconnect_peer()`'d (= removed from `peers`, `producers`,
+  `token_to_peer`, sessions ended).
 - `request.is_disconnected()` inside the SSE generator stays as a
   fast-path: if the OS already noticed the dead socket (FIN/RST), we evict
   in <30 s without waiting for the lease.
 - Worst case for an uncooperative death: `LEASE_SECONDS + sweeper_interval`
-  ≈ 55 s. With heartbeat=20 s and lease=45 s we tolerate two consecutive
+  ≈ 18 s. With heartbeat=5 s and lease=15 s we tolerate two consecutive
   missed heartbeats before eviction kicks in.
+
+### Tuning the contract
+
+To shrink the staleness window further (or open it to absorb more
+network instability), change **only** `LEASE_SECONDS` on the central
+Space, then redeploy the central. Daemons re-derive their heartbeat
+interval on the next reconnect; nothing else needs to change. Keep the
+ratio `lease : heartbeat ≥ 3 : 1` so a single missed POST never causes
+eviction.
 
 ### Cooperative withdraw on graceful network loss
 
@@ -195,6 +234,33 @@ session of the old producer is ended with `reason="install_id_takeover"`.
 
 When in doubt, ask: "if a different team owned this layer, would they
 expect to see this code?" If no, it's in the wrong layer.
+
+## Observability (debugging the staleness window)
+
+Operators can introspect the running contract without redeploying:
+
+| Endpoint | Auth | What it tells you |
+|----------|------|-------------------|
+| `GET /health` | none | Active `lease_seconds`, `sweeper_interval_seconds`, `recommended_heartbeat_interval_seconds`, raw counts. Cheap, public. |
+| `GET /api/robot-status` | HF Bearer | Per producer: `last_seen_age_seconds` (seconds since the last inbound POST). Plus `lease_seconds` mirrored at the top level. Caller-filtered. |
+| `GET /api/debug/peers` | HF Bearer | Owner-filtered dump of *every* peer (producers AND consumers): role, connected, session, full meta, `last_seen`, `last_seen_age_seconds`. Use this when a robot does not show up where expected. |
+
+On the daemon side:
+
+| Surface | What it tells you |
+|---------|-------------------|
+| `get_relay_status()` (Python) / `/api/daemon/status` | `state`, `is_connected`, plus the negotiated `heartbeat_interval_seconds` and `central_lease_seconds` so you can confirm the contract the daemon is currently honouring. |
+| Central relay startup log | `[Central Relay] central welcome received peer_id=… heartbeat=5.0s lease=15.0s; …` — pin the active interval to a wall-clock at handshake time. |
+
+Recommended client guard for "is this row really fresh?":
+
+```ts
+const STALE_GRACE = 0.6; // tighter than the server-side sweeper
+const isFresh = robot.last_seen_age_seconds < lease_seconds * STALE_GRACE;
+```
+
+This lets the mobile/desktop UI hide a row 40% earlier than the
+server-side eviction would, without depending on the sweeper interval.
 
 ## Versioning & migration
 

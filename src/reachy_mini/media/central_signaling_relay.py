@@ -66,12 +66,32 @@ CONNECTION_STALE_THRESHOLD = 90.0  # seconds - consider connection stale if no a
 # otherwise post nothing for minutes and get falsely evicted by the
 # TTL sweeper.
 #
-# 20 s pairs with the central's 45 s lease: tolerates two consecutive
-# missed heartbeats (network blip, transient relay restart) before
-# eviction kicks in. Tunable via env for failure-mode testing.
+# This module-level constant is the *fallback* default. The relay also
+# negotiates the actual heartbeat interval from the ``welcome`` SSE
+# frame (``recommended_heartbeat_interval_seconds`` field), so the
+# central server is the single source of truth: bumping ``LEASE_SECONDS``
+# on the server propagates to all daemons on their next reconnect with
+# zero daemon redeploy. The default below is used only:
+#   1. before the first welcome arrives (initial connect window),
+#   2. when talking to an older central that does not advertise the
+#      recommended interval (full backwards-compatibility),
+#   3. for unit tests that exercise the heartbeat loop without a real
+#      central.
+#
+# 5 s pairs with the central's default 15 s lease (tolerates two
+# consecutive missed heartbeats: 5+5+5=15 → just at the edge, sweeper
+# gives ~3 s of margin). Tunable via env for failure-mode testing.
 HEARTBEAT_INTERVAL_SECONDS = float(
-    os.getenv("REACHY_CENTRAL_HEARTBEAT_INTERVAL", "20.0")
+    os.getenv("REACHY_CENTRAL_HEARTBEAT_INTERVAL", "5.0")
 )
+
+# Bounds applied to a server-recommended heartbeat to defend against a
+# malformed welcome (typo, type confusion, partial deploy). 1 s lower
+# bound avoids spamming central with sub-second posts; 60 s upper bound
+# is roughly 3x the largest reasonable lease (180 s) so we never under-
+# heartbeat a legitimately-conservative server config.
+MIN_HEARTBEAT_INTERVAL_SECONDS = 1.0
+MAX_HEARTBEAT_INTERVAL_SECONDS = 60.0
 
 
 class CentralSignalingRelay:
@@ -167,10 +187,22 @@ class CentralSignalingRelay:
         # Monotonic timestamp of the last ``setPeerStatus`` actually
         # sent (initial registration counts). Drives the heartbeat:
         # ``update_producer_meta`` re-emits an identical meta when the
-        # gap exceeds ``HEARTBEAT_INTERVAL_SECONDS`` so central can
-        # refresh ``last_seen`` without our own SSE keepalive (which is
-        # not a valid liveness proof - see ``docs/SIGNALING.md``).
+        # gap exceeds ``self._heartbeat_interval_seconds`` so central
+        # can refresh ``last_seen`` without our own SSE keepalive
+        # (which is not a valid liveness proof - see
+        # ``docs/SIGNALING.md``).
         self._last_published_at: Optional[float] = None
+        # Active heartbeat interval. Initialised from the module-level
+        # default and overridden when the central server advertises
+        # ``recommended_heartbeat_interval_seconds`` in its ``welcome``
+        # frame. This makes ``LEASE_SECONDS`` (server-side) the single
+        # source of truth for the liveness contract, with daemons
+        # auto-aligning on every reconnect. See ``docs/SIGNALING.md``.
+        self._heartbeat_interval_seconds: float = HEARTBEAT_INTERVAL_SECONDS
+        # Last lease advertised by central (informational only, used in
+        # logs and in ``DaemonStatus`` snapshots so operators can see
+        # the contract the daemon is currently honouring).
+        self._central_lease_seconds: Optional[float] = None
 
         self._running = False
         self._state = RelayState.STOPPED
@@ -923,6 +955,50 @@ class CentralSignalingRelay:
                     f"[Central Relay] Failed to send message to local GStreamer: {e}"
                 )
 
+    def _apply_welcome_negotiation(self, msg: dict[str, Any]) -> None:
+        """Honour the heartbeat / lease parameters sent by central.
+
+        Best-effort: malformed or absent fields fall back to the
+        module-level default so a partial-deploy or older central
+        keeps working. The result is clamped to
+        ``[MIN_HEARTBEAT_INTERVAL_SECONDS, MAX_HEARTBEAT_INTERVAL_SECONDS]``
+        as a defence against typos / type confusion (a welcome saying
+        ``"recommended_heartbeat_interval_seconds": "5"`` is legal JSON
+        but must not coerce us into busy-looping).
+        """
+        recommended = msg.get("recommended_heartbeat_interval_seconds")
+        try:
+            recommended_f = float(recommended) if recommended is not None else None
+        except (TypeError, ValueError):
+            logger.warning(
+                "[Central Relay] welcome had non-numeric heartbeat hint %r; ignoring",
+                recommended,
+            )
+            recommended_f = None
+
+        if recommended_f is not None:
+            clamped = max(
+                MIN_HEARTBEAT_INTERVAL_SECONDS,
+                min(MAX_HEARTBEAT_INTERVAL_SECONDS, recommended_f),
+            )
+            if clamped != recommended_f:
+                logger.warning(
+                    "[Central Relay] welcome heartbeat hint %.2fs out of bounds, clamped to %.2fs",
+                    recommended_f,
+                    clamped,
+                )
+            self._heartbeat_interval_seconds = clamped
+        else:
+            # No hint: keep the module-level default so a daemon talking
+            # to a pre-negotiation central still heartbeats.
+            self._heartbeat_interval_seconds = HEARTBEAT_INTERVAL_SECONDS
+
+        lease = msg.get("lease_seconds")
+        try:
+            self._central_lease_seconds = float(lease) if lease is not None else None
+        except (TypeError, ValueError):
+            self._central_lease_seconds = None
+
     async def _process_central_message(self, msg: dict[str, Any]) -> None:
         """Process a message from the central server."""
         msg_type = msg.get("type", "")
@@ -931,9 +1007,25 @@ class CentralSignalingRelay:
         if msg_type == "welcome":
             # Received our peer ID from central server
             self._central_peer_id = msg.get("peerId")
+
+            # Negotiate the heartbeat interval from central's welcome.
+            # The server picks the value (LEASE / 3 by convention) so
+            # operators only ever tune ``LEASE_SECONDS`` server-side
+            # and every daemon auto-aligns on the next reconnect with
+            # zero coordinated redeploy. Older central versions omit
+            # these fields; we keep the module-level fallback intact so
+            # the daemon still works against pre-negotiation servers.
+            self._apply_welcome_negotiation(msg)
+
             logger.info(
-                "[Central Relay] central welcome received peer_id=%s; registering as producer name=%r",
+                "[Central Relay] central welcome received peer_id=%s heartbeat=%.1fs lease=%s; registering as producer name=%r",
                 self._central_peer_id,
+                self._heartbeat_interval_seconds,
+                (
+                    f"{self._central_lease_seconds:.1f}s"
+                    if self._central_lease_seconds is not None
+                    else "n/a"
+                ),
                 self.robot_name,
             )
 
@@ -1343,12 +1435,14 @@ class CentralSignalingRelay:
            tick, no waiting for a heartbeat.
 
         2. **Heartbeat**: even when the meta is identical, force a
-           re-emit if more than ``HEARTBEAT_INTERVAL_SECONDS`` have
-           elapsed since the last send. This is the ONLY way central
-           can refresh ``last_seen`` for an idle-but-online producer:
-           server-pushed SSE keepalives don't prove the peer is alive
-           (a half-open TCP socket happily absorbs writes), so central
-           ignores them and relies on inbound application traffic.
+           re-emit if more than ``self._heartbeat_interval_seconds``
+           have elapsed since the last send. This is the ONLY way
+           central can refresh ``last_seen`` for an idle-but-online
+           producer: server-pushed SSE keepalives don't prove the peer
+           is alive (a half-open TCP socket happily absorbs writes),
+           so central ignores them and relies on inbound application
+           traffic. The interval itself is negotiated from the
+           ``welcome`` SSE frame (see ``_apply_welcome_negotiation``).
 
         Same threading rules as ``update_producer_name``: must run on
         the relay's own loop. Cross-thread callers go through
@@ -1369,7 +1463,7 @@ class CentralSignalingRelay:
         now = time.monotonic()
         heartbeat_due = (
             self._last_published_at is None
-            or (now - self._last_published_at) >= HEARTBEAT_INTERVAL_SECONDS
+            or (now - self._last_published_at) >= self._heartbeat_interval_seconds
         )
         if not meta_changed and not heartbeat_due:
             return False
@@ -1458,7 +1552,12 @@ def get_relay_status() -> dict[str, Any]:
     """Get the current status of the central relay.
 
     Returns:
-        A dict with state, message, and is_connected fields
+        A dict with state, message, is_connected fields, plus the
+        liveness contract negotiated with central
+        (``heartbeat_interval_seconds``, ``central_lease_seconds``).
+        The liveness fields are present even when the relay is
+        connecting/error so operators can correlate the active config
+        with eviction logs without restarting the daemon.
 
     """
     if _relay_instance is None:
@@ -1466,12 +1565,16 @@ def get_relay_status() -> dict[str, Any]:
             "state": RelayState.STOPPED.value,
             "message": "Relay not initialized",
             "is_connected": False,
+            "heartbeat_interval_seconds": HEARTBEAT_INTERVAL_SECONDS,
+            "central_lease_seconds": None,
         }
 
     return {
         "state": _relay_instance.state.value,
         "message": _relay_instance.state_message,
         "is_connected": _relay_instance.state == RelayState.CONNECTED,
+        "heartbeat_interval_seconds": _relay_instance._heartbeat_interval_seconds,
+        "central_lease_seconds": _relay_instance._central_lease_seconds,
     }
 
 

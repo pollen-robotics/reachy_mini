@@ -22,6 +22,8 @@ import pytest
 from reachy_mini.daemon.peer_health import PeerHealth
 from reachy_mini.media.central_signaling_relay import (
     HEARTBEAT_INTERVAL_SECONDS,
+    MAX_HEARTBEAT_INTERVAL_SECONDS,
+    MIN_HEARTBEAT_INTERVAL_SECONDS,
     CentralSignalingRelay,
     RelayState,
 )
@@ -222,6 +224,93 @@ async def test_heartbeat_resets_after_send():
 # ----------------------------------------------------------------------
 # withdraw() resets heartbeat bookkeeping
 # ----------------------------------------------------------------------
+
+
+# ----------------------------------------------------------------------
+# Welcome-driven heartbeat negotiation
+# ----------------------------------------------------------------------
+#
+# The relay reads ``recommended_heartbeat_interval_seconds`` from each
+# ``welcome`` SSE frame so server operators can re-tune the liveness
+# contract by changing one env var on the central, without redeploying
+# the fleet. These tests pin the contract so a future refactor that
+# accidentally drops the override (or fails to clamp it) breaks loud.
+
+
+def test_apply_welcome_overrides_heartbeat_interval():
+    relay = _make_connected_relay()
+    relay._apply_welcome_negotiation(
+        {
+            "type": "welcome",
+            "peerId": "p",
+            "lease_seconds": 30.0,
+            "recommended_heartbeat_interval_seconds": 10.0,
+        }
+    )
+    assert relay._heartbeat_interval_seconds == 10.0
+    assert relay._central_lease_seconds == 30.0
+
+
+def test_apply_welcome_without_hint_keeps_default():
+    relay = _make_connected_relay()
+    relay._heartbeat_interval_seconds = 999.0  # poison so we'd notice
+    relay._apply_welcome_negotiation(
+        {"type": "welcome", "peerId": "p", "username": "alice"}
+    )
+    assert relay._heartbeat_interval_seconds == HEARTBEAT_INTERVAL_SECONDS
+    assert relay._central_lease_seconds is None
+
+
+def test_apply_welcome_clamps_below_minimum():
+    relay = _make_connected_relay()
+    relay._apply_welcome_negotiation(
+        {"recommended_heartbeat_interval_seconds": 0.1}
+    )
+    assert relay._heartbeat_interval_seconds == MIN_HEARTBEAT_INTERVAL_SECONDS
+
+
+def test_apply_welcome_clamps_above_maximum():
+    relay = _make_connected_relay()
+    relay._apply_welcome_negotiation(
+        {"recommended_heartbeat_interval_seconds": 9999.0}
+    )
+    assert relay._heartbeat_interval_seconds == MAX_HEARTBEAT_INTERVAL_SECONDS
+
+
+def test_apply_welcome_ignores_non_numeric_hint():
+    relay = _make_connected_relay()
+    relay._apply_welcome_negotiation(
+        {"recommended_heartbeat_interval_seconds": "five"}
+    )
+    assert relay._heartbeat_interval_seconds == HEARTBEAT_INTERVAL_SECONDS
+
+
+@pytest.mark.asyncio
+async def test_negotiated_heartbeat_drives_re_emit_window():
+    """End-to-end: a welcome with a smaller interval must shorten the
+    re-emit window seen by ``update_producer_meta``.
+    """
+    relay = _make_connected_relay()
+    relay._apply_welcome_negotiation(
+        {"recommended_heartbeat_interval_seconds": 2.0}
+    )
+
+    sent: list[dict] = []
+
+    async def _capture(msg):
+        sent.append(msg)
+
+    with patch.object(relay, "_send_to_central", side_effect=_capture):
+        await relay.update_producer_meta()
+        # At t=1.5s (under the 2s negotiated interval), no re-emit.
+        relay._last_published_at = time.monotonic() - 1.5
+        emitted = await relay.update_producer_meta()
+        assert emitted is False
+        # At t=2.1s (over), re-emit.
+        relay._last_published_at = time.monotonic() - 2.1
+        emitted = await relay.update_producer_meta()
+        assert emitted is True
+    assert len(sent) == 2
 
 
 @pytest.mark.asyncio
