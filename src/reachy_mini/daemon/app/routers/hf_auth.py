@@ -75,8 +75,16 @@ async def save_token(req: Request, request: TokenRequest) -> TokenResponse:
         username=result.get("username"),
     )
 
+    # Bring the central signaling relay up after a successful token push,
+    # regardless of wireless / lite. The relay itself gates on
+    # `_media_server` and HF token presence (see
+    # `_start_central_signaling_relay`); a tray daemon piloting a Reachy
+    # over USB has both, so it should be reachable from anywhere via
+    # central WebRTC just like the wireless image. The producer meta
+    # carries `kind="tray"` (vs `"robot"`) so the mobile listing knows
+    # how to render it.
     daemon = getattr(req.app.state, "daemon", None)
-    if daemon is not None and getattr(daemon, "wireless_version", False):
+    if daemon is not None:
         try:
             relay_result = await daemon.ensure_central_signaling_relay()
             kv_log(
@@ -123,16 +131,15 @@ async def get_token() -> dict[str, Any]:
 
 @router.get("/relay-status")
 async def get_relay_status(request: Request) -> dict[str, Any]:
-    """Get the central signaling relay connection status."""
-    # Check if this is a Lite version (no WebRTC support)
-    daemon = getattr(request.app.state, "daemon", None)
-    if daemon and not daemon.wireless_version:
-        return {
-            "state": "unavailable",
-            "message": "Coming soon to Lite version",
-            "is_connected": False,
-        }
+    """Get the central signaling relay connection status.
 
+    The relay runs on both wireless and lite (tray) daemons - the
+    wireless gate that used to live here predated the central WebRTC
+    consolidation and is no longer accurate. The relay's own state
+    machine is the source of truth (``WAITING_FOR_TOKEN`` if no
+    HF token is stored, ``CONNECTED`` once registered, etc.), so we
+    just delegate.
+    """
     try:
         from reachy_mini.media.central_signaling_relay import get_relay_status
 
@@ -204,7 +211,7 @@ async def refresh_relay(request: Request) -> dict[str, Any]:
         # something useful for the cold-boot recovery case.
         if _csr._relay_instance is None:
             daemon = getattr(request.app.state, "daemon", None)
-            if daemon is not None and getattr(daemon, "wireless_version", False):
+            if daemon is not None:
                 try:
                     await daemon.ensure_central_signaling_relay()
                 except Exception as e:
