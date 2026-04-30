@@ -1,7 +1,13 @@
 #!/usr/bin/env python3
 """Bluetooth service for Reachy Mini using direct DBus API.
 
-Includes a fixed NoInputNoOutput agent for automatic Just Works pairing.
+Pairing/bonding is intentionally DISABLED at the adapter level: every
+GATT characteristic exposed by this service is unencrypted on purpose
+(commands, responses, install_id, network status are all public-by-
+design). Without pairing the iOS / Android stacks no longer prompt
+the user with a "Pair this accessory?" dialog when the mobile app
+opens a BLE connection. A NoInputNoOutput Just Works agent class is
+kept in this file for reference but is not registered with BlueZ.
 """
 # mypy: ignore-errors
 
@@ -824,14 +830,17 @@ class BluetoothCommandService:
         dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
         self.bus = dbus.SystemBus()
 
-        # BLE Agent registration
-        agent_manager = dbus.Interface(
-            self.bus.get_object("org.bluez", "/org/bluez"), "org.bluez.AgentManager1"
-        )
-        self.agent = NoInputAgent(self.bus, AGENT_PATH)
-        agent_manager.RegisterAgent(AGENT_PATH, "NoInputNoOutput")
-        agent_manager.RequestDefaultAgent(AGENT_PATH)
-        logger.info("BLE Agent registered for Just Works pairing")
+        # No BLE Agent / no pairing. All GATT characteristics are
+        # unencrypted (see the SERVICE_UUID definitions above and the
+        # ["read"|"write"|"notify"] flags on each Characteristic), so
+        # there is no security benefit in bonding. Skipping the agent
+        # registration prevents BlueZ from advertising itself as
+        # pairable, which in turn stops iOS / Android from prompting
+        # the user with a "Pair this accessory?" dialog the first time
+        # the mobile app connects. The NoInputAgent class above is
+        # kept for reference in case we ever want to re-enable Just
+        # Works bonding (e.g. for a future encrypted-write characteristic).
+        self.agent = None
 
         # Find adapter
         adapter = self._find_adapter()
@@ -842,7 +851,10 @@ class BluetoothCommandService:
         adapter_props.Set("org.bluez.Adapter1", "Powered", dbus.Boolean(True))
         adapter_props.Set("org.bluez.Adapter1", "Discoverable", dbus.Boolean(True))
         adapter_props.Set("org.bluez.Adapter1", "DiscoverableTimeout", dbus.UInt32(0))
-        adapter_props.Set("org.bluez.Adapter1", "Pairable", dbus.Boolean(True))
+        # Pairable=False so any incoming SMP pairing request is
+        # rejected by BlueZ before it ever reaches the mobile OS UI.
+        # See the module docstring for the rationale.
+        adapter_props.Set("org.bluez.Adapter1", "Pairable", dbus.Boolean(False))
 
         # Register GATT application
         service_manager = dbus.Interface(adapter, GATT_MANAGER_IFACE)
