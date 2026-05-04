@@ -10,15 +10,17 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
 from reachy_mini.apps.sources import hf_auth
+from reachy_mini.media.central_signaling_relay import CENTRAL_SIGNALING_SERVER
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/hf-auth")
 
-# Central signaling server that tracks which robot is currently in use by
-# which remote JS app. We proxy its /api/robot-status endpoint so the
-# desktop frontend never needs to see the raw HF token.
-CENTRAL_ROBOT_STATUS_URL = "https://cduss-reachy-mini-central.hf.space/api/robot-status"
+# We proxy the central /api/robot-status endpoint so the desktop frontend
+# never needs to see the raw HF token. Single source of truth for the
+# central base URL (and its REACHY_CENTRAL_URL override) is the relay
+# module — importing it here keeps the default in lock-step.
+CENTRAL_ROBOT_STATUS_URL = f"{CENTRAL_SIGNALING_SERVER}/api/robot-status"
 CENTRAL_ROBOT_STATUS_TIMEOUT = aiohttp.ClientTimeout(total=5)
 
 
