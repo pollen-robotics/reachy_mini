@@ -14,7 +14,6 @@ import json
 import logging
 import os
 import threading
-import time
 from enum import Enum
 from typing import Any, Callable, Optional
 
@@ -55,8 +54,19 @@ LOCAL_WS_WELCOME_TIMEOUT = (
 SSE_READ_TIMEOUT = (
     60.0  # seconds - timeout for reading from SSE stream (should receive keepalive)
 )
-CONNECTION_WATCHDOG_INTERVAL = 30.0  # seconds - how often to check connection health
-CONNECTION_STALE_THRESHOLD = 90.0  # seconds - consider connection stale if no activity
+
+# Producer-listed health check (self-heal split-brain states where the
+# relay's SSE is alive but central no longer lists this robot as a
+# producer for the authenticated user, e.g. because a setPeerStatus
+# round-trip was cancelled mid-flight).
+PRODUCER_HEALTH_CHECK_INTERVAL = 30.0  # seconds - poll cadence
+PRODUCER_HEALTH_CHECK_INITIAL_DELAY = (
+    10.0  # seconds - wait after welcome before the first poll
+)
+PRODUCER_HEALTH_CHECK_TIMEOUT = 10.0  # seconds - per-poll HTTP timeout
+PRODUCER_HEALTH_CHECK_MAX_MISSES = (
+    2  # consecutive missing-from-list polls before we self-trigger a force_reconnect
+)
 
 
 class CentralSignalingRelay:
@@ -129,9 +139,6 @@ class CentralSignalingRelay:
         self._central_to_local_session: dict[
             str, str
         ] = {}  # central_session_id -> local_session_id
-
-        # Connection health tracking
-        self._last_central_activity: float = 0.0
 
     @property
     def state(self) -> RelayState:
@@ -609,7 +616,8 @@ class CentralSignalingRelay:
             self._set_state(RelayState.CONNECTING, "Connecting to central server...")
             central_task = asyncio.create_task(self._handle_central_sse())
             token_task = asyncio.create_task(self._watch_for_token_update())
-            tasks = {central_task, local_task, token_task}
+            health_task = asyncio.create_task(self._producer_health_loop())
+            tasks = {central_task, local_task, token_task, health_task}
 
             try:
                 done, pending = await asyncio.wait(
@@ -628,6 +636,10 @@ class CentralSignalingRelay:
                         )
                     elif task == token_task:
                         logger.info("[Central Relay] Token update triggered reconnect")
+                    elif task == health_task:
+                        logger.info(
+                            "[Central Relay] Producer health check triggered reconnect"
+                        )
 
                     # Check for exceptions
                     if task.exception():
@@ -664,6 +676,125 @@ class CentralSignalingRelay:
         )
         await self._close_connections()
 
+    async def _is_listed_as_producer(self) -> Optional[bool]:
+        """Ask central whether we are still a registered producer.
+
+        Returns:
+            ``True`` if our ``_central_peer_id`` is in central's robot list
+            for the authenticated user (healthy state).
+            ``False`` if central acknowledged the request but we are not in
+            the list (split-brain - the relay believes it is connected
+            but the producer registration was lost on central's side).
+            ``None`` if the check could not run (no token, no peer id, no
+            HTTP session, or transient HTTP/network failure). Callers
+            treat ``None`` as "don't update health counters" so a brief
+            central hiccup never triggers a needless reconnect storm.
+
+        """
+        if not self._http_session or not self.hf_token or not self._central_peer_id:
+            return None
+        url = f"{self.central_uri}/api/robot-status"
+        headers = {"Authorization": f"Bearer {self.hf_token}"}
+        timeout = aiohttp.ClientTimeout(total=PRODUCER_HEALTH_CHECK_TIMEOUT)
+        try:
+            async with self._http_session.get(
+                url, headers=headers, timeout=timeout
+            ) as response:
+                if response.status != 200:
+                    logger.debug(
+                        "[Central Relay] producer health check returned HTTP %s",
+                        response.status,
+                    )
+                    return None
+                data = await response.json()
+        except asyncio.CancelledError:
+            raise
+        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+            logger.debug("[Central Relay] producer health check transient error: %s", e)
+            return None
+        except Exception as e:
+            logger.warning(
+                "[Central Relay] producer health check unexpected error: %s", e
+            )
+            return None
+
+        robots = data.get("robots") if isinstance(data, dict) else None
+        if not isinstance(robots, list):
+            return None
+        peer_ids = {robot.get("peerId") for robot in robots if isinstance(robot, dict)}
+        return self._central_peer_id in peer_ids
+
+    async def _producer_health_loop(self) -> None:
+        """Self-heal split-brain states by polling /api/robot-status.
+
+        Without this, a relay whose ``setPeerStatus`` was cancelled
+        mid-flight (token rotation, DNS hiccup, transient HTTP error)
+        keeps an SSE channel open and reports state=CONNECTED even
+        though central has no record of it as a producer. From the
+        outside the robot looks online but no client can call it - the
+        only recovery used to be SSH+systemctl or a manual POST to
+        /api/hf-auth/refresh-relay.
+
+        Loop semantics:
+          * Wait ``PRODUCER_HEALTH_CHECK_INITIAL_DELAY`` after start so
+            the post-welcome ``setPeerStatus`` round-trip has time to
+            land in central's index.
+          * Every ``PRODUCER_HEALTH_CHECK_INTERVAL`` seconds, ask
+            central whether we are still listed.
+          * Tolerate up to ``PRODUCER_HEALTH_CHECK_MAX_MISSES`` consecutive
+            "not listed" answers before self-triggering a
+            ``force_reconnect()``. This avoids reconnect storms on
+            harmless central blips.
+          * Exit on cancellation (``_connect_and_relay``'s
+            FIRST_COMPLETED race tears us down on every reconnect).
+        """
+        try:
+            await asyncio.sleep(PRODUCER_HEALTH_CHECK_INITIAL_DELAY)
+        except asyncio.CancelledError:
+            raise
+
+        consecutive_misses = 0
+        while self._running:
+            try:
+                await asyncio.sleep(PRODUCER_HEALTH_CHECK_INTERVAL)
+            except asyncio.CancelledError:
+                raise
+
+            if self._state != RelayState.CONNECTED:
+                # Don't probe while we're already reconnecting / in error -
+                # there's nothing useful we can do about the listing state
+                # until the SSE handshake settles again.
+                consecutive_misses = 0
+                continue
+
+            listed = await self._is_listed_as_producer()
+            if listed is True:
+                consecutive_misses = 0
+                continue
+            if listed is None:
+                # Transient error - keep our streak intact rather than
+                # padding it with noise.
+                continue
+
+            consecutive_misses += 1
+            logger.warning(
+                "[Central Relay] producer not listed on central "
+                "(miss %s/%s, peer_id=%s)",
+                consecutive_misses,
+                PRODUCER_HEALTH_CHECK_MAX_MISSES,
+                self._central_peer_id,
+            )
+            if consecutive_misses >= PRODUCER_HEALTH_CHECK_MAX_MISSES:
+                logger.warning(
+                    "[Central Relay] split-brain detected, forcing reconnect"
+                )
+                # `force_reconnect` schedules a teardown via the thread
+                # loop; this task gets cancelled by the FIRST_COMPLETED
+                # race in `_connect_and_relay` and the next iteration
+                # of `_run_loop` re-spawns us with a fresh peer_id.
+                await self.force_reconnect()
+                return
+
     async def _handle_central_sse(self) -> None:
         """Handle SSE events from central server."""
         if not self._http_session:
@@ -696,7 +827,6 @@ class CentralSignalingRelay:
 
                 # Connection successful - will set CONNECTED after welcome message
                 self._connection_attempts = 0
-                self._last_central_activity = time.time()
 
                 # Read lines with timeout to detect dead connections
                 while self._running:
@@ -719,7 +849,6 @@ class CentralSignalingRelay:
                         logger.info("[Central Relay] SSE connection closed by server")
                         return
 
-                    self._last_central_activity = time.time()
                     line_str = line.decode("utf-8").strip()
 
                     if line_str.startswith("data:"):
