@@ -369,8 +369,9 @@ export class ReachyMini extends EventTarget {
         this._latencyMonitorId = null;
         this._stateRefreshInterval = null;
 
-        // getVersion() promise plumbing
+        // getVersion() / getHardwareId() promise plumbing
         this._versionResolve = null;
+        this._hardwareIdResolve = null;
 
         // Volume getter/setter promise plumbing (get_volume / set_volume).
         // Speaker and microphone are tracked separately so two in-flight
@@ -781,6 +782,7 @@ export class ReachyMini extends EventTarget {
      */
     async stopSession() {
         if (this._versionResolve) { this._versionResolve(null); this._versionResolve = null; }
+        if (this._hardwareIdResolve) { this._hardwareIdResolve(null); this._hardwareIdResolve = null; }
         if (this._volumeResolve) { this._volumeResolve(null); this._volumeResolve = null; }
         if (this._micVolumeResolve) { this._micVolumeResolve(null); this._micVolumeResolve = null; }
         if (this._sessionReject) {
@@ -822,6 +824,7 @@ export class ReachyMini extends EventTarget {
         if (this._sseAbortController) { this._sseAbortController.abort(); this._sseAbortController = null; }
 
         if (this._versionResolve) { this._versionResolve(null); this._versionResolve = null; }
+        if (this._hardwareIdResolve) { this._hardwareIdResolve(null); this._hardwareIdResolve = null; }
         if (this._volumeResolve) { this._volumeResolve(null); this._volumeResolve = null; }
         if (this._micVolumeResolve) { this._micVolumeResolve(null); this._micVolumeResolve = null; }
         if (this._sessionReject) {
@@ -1135,6 +1138,30 @@ export class ReachyMini extends EventTarget {
             }
             this._versionResolve = resolve;
             this._sendCommand({ type: "get_version" });
+        });
+    }
+
+    /**
+     * Request the robot's unique hardware ID — the Pollen audio device's
+     * USB serial. Same value across Lite and Wireless variants, stable
+     * across reboots and OS reinstalls. Useful for fleet management,
+     * per-robot calibration cache keys, or identifying which physical
+     * robot a session is bound to.
+     * Resolves with the hardware ID string (or null if no robot is
+     * attached, e.g. the daemon is running on a developer machine).
+     * @returns {Promise<string|null>}
+     */
+    getHardwareId() {
+        return new Promise((resolve, reject) => {
+            if (!this._dc || this._dc.readyState !== 'open') {
+                reject(new Error('Data channel not open'));
+                return;
+            }
+            if (this._hardwareIdResolve) {
+                this._hardwareIdResolve(null);
+            }
+            this._hardwareIdResolve = resolve;
+            this._sendCommand({ type: "get_hardware_id" });
         });
     }
 
@@ -1530,6 +1557,11 @@ export class ReachyMini extends EventTarget {
         if ('version' in data && this._versionResolve) {
             this._versionResolve(data.version);
             this._versionResolve = null;
+            return;
+        }
+        if ('hardware_id' in data && this._hardwareIdResolve) {
+            this._hardwareIdResolve(data.hardware_id);
+            this._hardwareIdResolve = null;
             return;
         }
         // Volume responses. Backend tags each response with `command` so we
