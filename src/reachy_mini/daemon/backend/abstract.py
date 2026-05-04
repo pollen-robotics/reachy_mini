@@ -28,6 +28,7 @@ from reachy_mini.io.protocol import (
     GetMicrophoneVolumeCmd,
     GetMotorModeCmd,
     GetStateCmd,
+    GetHardwareIdCmd,
     GetVersionCmd,
     GetVolumeCmd,
     GotoSleepCmd,
@@ -995,6 +996,11 @@ class Backend:
             from importlib.metadata import version
 
             send_response({"version": version("reachy_mini")})
+
+        elif isinstance(cmd, GetHardwareIdCmd):
+            from reachy_mini.utils.hardware_id import get_hardware_id
+
+            send_response({"hardware_id": get_hardware_id()})
 
         elif isinstance(
             cmd,

@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from reachy_mini.daemon.app import bg_job_register
 from reachy_mini.daemon.robot_app_lock import RobotAppLockStatus
 from reachy_mini.io.protocol import DaemonStatus
+from reachy_mini.utils.hardware_id import get_hardware_id
 
 from ...daemon import Daemon
 from ..dependencies import get_daemon
@@ -83,6 +84,17 @@ async def restart_daemon(
 async def get_daemon_status(daemon: Daemon = Depends(get_daemon)) -> DaemonStatus:
     """Get the current status of the daemon."""
     return daemon.status()
+
+
+@router.get("/hardware-id")
+async def get_robot_hardware_id() -> dict[str, str | None]:
+    """Robot-unique hardware ID — the Pollen audio device's USB serial.
+
+    Returns ``{"hardware_id": "<serial>"}`` (or ``null`` when no robot
+    is attached, e.g. on a developer machine). Same value across Lite
+    and Wireless variants; same value across reboots and OS reinstalls.
+    """
+    return {"hardware_id": get_hardware_id()}
 
 
 @router.get("/robot-app-lock-status")

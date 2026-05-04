@@ -95,6 +95,7 @@ class DaemonStatus(BaseModel):
     error: Optional[str] = None
     wlan_ip: Optional[str] = None
     version: Optional[str] = None
+    hardware_id: Optional[str] = None
 
 
 # ------------------------------------------------------------------
@@ -220,6 +221,12 @@ class GetVersionCmd(BaseModel):
     type: Literal["get_version"] = "get_version"
 
 
+class GetHardwareIdCmd(BaseModel):
+    """Query the robot's unique hardware ID (Pollen audio device serial)."""
+
+    type: Literal["get_hardware_id"] = "get_hardware_id"
+
+
 class StartRecordingCmd(BaseModel):
     """Start recording joint data."""
 
@@ -331,6 +338,7 @@ AnyCommand = Annotated[
     | SetAutomaticBodyYawCmd
     | GetStateCmd
     | GetVersionCmd
+    | GetHardwareIdCmd
     | StartRecordingCmd
     | StopRecordingCmd
     | AppendRecordCmd

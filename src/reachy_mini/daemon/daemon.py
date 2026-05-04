@@ -65,6 +65,8 @@ class Daemon:
             package_version = None
             self.logger.warning("Could not determine daemon version")
 
+        from reachy_mini.utils.hardware_id import get_hardware_id
+
         self._status = DaemonStatus(
             robot_name=robot_name,
             state=DaemonState.NOT_INITIALIZED,
@@ -77,6 +79,7 @@ class Daemon:
             error=None,
             wlan_ip=None,
             version=package_version,
+            hardware_id=get_hardware_id(),
         )
         self.ws_server: "WSServer | None" = None
         self.backend_run_thread: "Thread | None" = None
