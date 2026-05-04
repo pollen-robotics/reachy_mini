@@ -95,6 +95,23 @@ async def test_daemon_client_disconnection() -> None:
 
 
 @pytest.mark.asyncio
+async def test_sdk_warns_on_daemon_version_mismatch() -> None:
+    daemon, server, thread, port = await _start_app_server()
+    daemon._status.version = "0.0.0"
+
+    try:
+        with pytest.warns(
+            RuntimeWarning,
+            match="Reachy Mini SDK and daemon versions do not match",
+        ):
+            with ReachyMini(host="localhost", port=port, media_backend="no_media"):
+                pass
+    finally:
+        await daemon.stop(goto_sleep_on_stop=False)
+        await _stop_app_server(server, thread)
+
+
+@pytest.mark.asyncio
 async def test_daemon_early_stop() -> None:
     daemon, server, thread, port = await _start_app_server()
 

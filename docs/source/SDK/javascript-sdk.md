@@ -111,10 +111,20 @@ await robot.startSession(robotId);
 
 ```js
 // Move the head (roll, pitch, yaw in degrees)
-robot.setHeadPose(0, 10, -5);
+robot.setHeadRpyDeg(0, 10, -5);
 
 // Move the antennas (right, left in degrees)
-robot.setAntennas(30, -30);
+robot.setAntennasDeg(30, -30);
+
+// Rotate the body (yaw in degrees)
+robot.setBodyYawDeg(15);
+
+// Atomic raw-units update (single datachannel message; no XYZ loss)
+robot.setTarget({
+    head: rpyToMatrix(0, 10, -5).flat(),    // number[16] flat 4×4
+    antennas: [degToRad(30), degToRad(-30)],
+    body_yaw: degToRad(15),
+});
 
 // Play a sound file on the robot
 robot.playSound("wake_up.wav");
@@ -126,11 +136,16 @@ robot.sendRaw({ my_custom_command: "hello" });
 ### 5. Receive robot state
 
 ```js
-// Emitted every ~500ms while streaming
+// Emitted every ~500ms while streaming. Wire-shape, raw units —
+// use the exported math utilities for human conversions.
 robot.addEventListener("state", (e) => {
-    const { head, antennas } = e.detail;
-    // head:     { roll, pitch, yaw }  — degrees
-    // antennas: { right, left }       — degrees
+    const { head, antennas, body_yaw, motor_mode, is_move_running } = e.detail;
+    // head:            number[16]            — flat row-major 4×4
+    // antennas:        [rightRad, leftRad]
+    // body_yaw:        number                — radians
+    // motor_mode:      "enabled" | "disabled" | "gravity_compensation"
+    // is_move_running: boolean
+    const rpy = matrixToRpy(head);   // { roll, pitch, yaw } in degrees
 });
 ```
 
@@ -183,7 +198,7 @@ new ReachyMini({
 | :--- | :--- | :--- |
 | `state` | `string` | `"disconnected"`, `"connected"`, or `"streaming"` |
 | `robots` | `Array` | Available robots: `[{ id, meta: { name } }]` |
-| `robotState` | `Object` | `{ head: { roll, pitch, yaw }, antennas: { right, left } }` (degrees) |
+| `robotState` | `Object` | Latest `state` event detail — `{ head: number[16], antennas: [rRad, lRad], body_yaw, motor_mode, is_move_running }` (wire shape) |
 | `username` | `string\|null` | HF username after `authenticate()` |
 | `isAuthenticated` | `boolean` | True if a valid HF token is available |
 | `micSupported` | `boolean` | True if robot offers bidirectional audio |
@@ -202,8 +217,10 @@ new ReachyMini({
 | `disconnect()` | — | Close signaling (keeps auth) |
 | `logout()` | — | Clear HF credentials |
 | `attachVideo(videoEl)` | `() => void` | Bind video stream to element; returns cleanup function |
-| `setHeadPose(roll, pitch, yaw)` | `boolean` | Set head orientation in degrees |
-| `setAntennas(right, left)` | `boolean` | Set antenna positions in degrees |
+| `setTarget({ head?, antennas?, body_yaw? })` | `boolean` | Atomic raw-units update — `head` is `number[16]` (flat 4×4), `antennas` is `[rRad, lRad]`, `body_yaw` is radians |
+| `setHeadRpyDeg(roll, pitch, yaw)` | `boolean` | Set head orientation in degrees (wraps `setTarget`) |
+| `setAntennasDeg(right, left)` | `boolean` | Set antenna positions in degrees (wraps `setTarget`) |
+| `setBodyYawDeg(yaw)` | `boolean` | Set body yaw in degrees (wraps `setTarget`) |
 | `playSound(filename)` | `boolean` | Play a sound file on the robot |
 | `sendRaw(data)` | `boolean` | Send arbitrary JSON via data channel |
 | `requestState()` | `boolean` | Request a state snapshot |
@@ -221,7 +238,7 @@ Use `robot.addEventListener(name, handler)` — the SDK extends `EventTarget`.
 | `robotsChanged` | `{ robots }` | Robot list updated |
 | `streaming` | `{ sessionId, robotId }` | WebRTC session active |
 | `sessionStopped` | `{ reason }` | Session ended |
-| `state` | `{ head, antennas }` | Robot state update (~500ms) |
+| `state` | `{ head, antennas, body_yaw, motor_mode, is_move_running }` | Robot state update (~500ms; wire shape — see "Receive robot state" above) |
 | `videoTrack` | `{ track, stream }` | Video track available |
 | `micSupported` | `{ supported }` | Bidirectional audio availability |
 | `error` | `{ source, error }` | Error from `signaling`, `webrtc`, or `robot` |
