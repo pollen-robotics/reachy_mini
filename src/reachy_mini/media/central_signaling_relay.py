@@ -68,6 +68,19 @@ PRODUCER_HEALTH_CHECK_MAX_MISSES = (
     2  # consecutive missing-from-list polls before we self-trigger a force_reconnect
 )
 
+# Heartbeat: re-emit setPeerStatus periodically so central refreshes our
+# peer lease (it runs a TTL sweeper that evicts producers without recent
+# inbound traffic). Cadence is negotiated through the SSE welcome; these
+# fall back when central does not advertise one. Details in `_heartbeat_loop`.
+HEARTBEAT_DEFAULT_INTERVAL = 5.0  # fallback when central does not advertise
+HEARTBEAT_MIN_INTERVAL = 1.0  # sanity floor (prevents request storms)
+HEARTBEAT_MAX_INTERVAL = 60.0  # sanity ceiling
+
+
+def _clamp_heartbeat_interval(value: float) -> float:
+    """Clamp a candidate heartbeat interval to the [MIN, MAX] safety envelope."""
+    return max(HEARTBEAT_MIN_INTERVAL, min(HEARTBEAT_MAX_INTERVAL, value))
+
 
 class CentralSignalingRelay:
     """Relay signaling messages between central server (HTTP/SSE) and local GStreamer (WebSocket).
@@ -139,6 +152,13 @@ class CentralSignalingRelay:
         self._central_to_local_session: dict[
             str, str
         ] = {}  # central_session_id -> local_session_id
+
+        # Cadence at which `_heartbeat_loop` re-emits setPeerStatus
+        # to refresh central's peer lease. Negotiated from the SSE
+        # `welcome` message every reconnect; falls back to
+        # HEARTBEAT_DEFAULT_INTERVAL if central does not advertise
+        # one (pre-lifecycle-robustness deployments).
+        self._heartbeat_interval_seconds: float = HEARTBEAT_DEFAULT_INTERVAL
 
     @property
     def state(self) -> RelayState:
@@ -611,40 +631,40 @@ class CentralSignalingRelay:
                 )
                 raise
 
-            # Now connect to central server and run all handlers
-            # Use wait with FIRST_COMPLETED so we can reconnect if any handler exits
+            # Now connect to central server and run all handlers.
+            # Use wait with FIRST_COMPLETED so we can reconnect if any
+            # handler exits. The mapping documents one-to-one why each
+            # task is part of the race; adding a new reconnect trigger
+            # is a one-line change.
             self._set_state(RelayState.CONNECTING, "Connecting to central server...")
-            central_task = asyncio.create_task(self._handle_central_sse())
-            token_task = asyncio.create_task(self._watch_for_token_update())
-            health_task = asyncio.create_task(self._producer_health_loop())
-            tasks = {central_task, local_task, token_task, health_task}
+            relay_tasks: dict[asyncio.Task, str] = {
+                asyncio.create_task(
+                    self._handle_central_sse()
+                ): "Central SSE handler exited, will reconnect",
+                local_task: "Local WebSocket handler exited, will reconnect",
+                asyncio.create_task(
+                    self._watch_for_token_update()
+                ): "Token update triggered reconnect",
+                asyncio.create_task(
+                    self._producer_health_loop()
+                ): "Producer health check triggered reconnect",
+                asyncio.create_task(
+                    self._heartbeat_loop()
+                ): "Heartbeat loop exited unexpectedly, will reconnect",
+            }
 
             try:
                 done, pending = await asyncio.wait(
-                    tasks, return_when=asyncio.FIRST_COMPLETED
+                    relay_tasks.keys(), return_when=asyncio.FIRST_COMPLETED
                 )
 
-                # Log which task finished first
                 for task in done:
-                    if task == central_task:
-                        logger.info(
-                            "[Central Relay] Central SSE handler exited, will reconnect"
-                        )
-                    elif task == local_task:
-                        logger.info(
-                            "[Central Relay] Local WebSocket handler exited, will reconnect"
-                        )
-                    elif task == token_task:
-                        logger.info("[Central Relay] Token update triggered reconnect")
-                    elif task == health_task:
-                        logger.info(
-                            "[Central Relay] Producer health check triggered reconnect"
-                        )
-
-                    # Check for exceptions
+                    logger.info("[Central Relay] %s", relay_tasks[task])
                     if task.exception():
                         logger.warning(
-                            f"[Central Relay] Task {task.get_name()} raised: {task.exception()}"
+                            "[Central Relay] Task %s raised: %s",
+                            task.get_name(),
+                            task.exception(),
                         )
 
                 # Cancel remaining tasks
@@ -662,7 +682,7 @@ class CentralSignalingRelay:
                     )
             except asyncio.CancelledError:
                 # Cancel all tasks if we're cancelled
-                for task in tasks:
+                for task in relay_tasks:
                     task.cancel()
                 raise
         finally:
@@ -675,6 +695,105 @@ class CentralSignalingRelay:
             "[Central Relay] Token update signal received, closing connections"
         )
         await self._close_connections()
+
+    def _producer_status_payload(self) -> dict[str, Any]:
+        """Single source of truth for our ``setPeerStatus`` payload.
+
+        Used both by the post-welcome registration round-trip and by
+        the periodic heartbeat re-emission. Keeping them DRY ensures
+        a future field (e.g. ``install_id`` for the central's
+        last-writer-wins dedup, ``capabilities`` for app gating, ...)
+        can never go out of sync between the two paths.
+        """
+        return {
+            "type": "setPeerStatus",
+            "roles": ["producer"],
+            "meta": {"name": self.robot_name},
+        }
+
+    @staticmethod
+    def _negotiate_heartbeat_interval(welcome_msg: dict[str, Any]) -> float:
+        """Pick the cadence at which we re-emit setPeerStatus.
+
+        Priority order:
+          1. ``recommended_heartbeat_interval_seconds`` field from the
+             welcome (canonical signal: central advertises whatever
+             cadence its server-side ``LEASE_SECONDS`` env tunes to,
+             typically ``LEASE / 3``).
+          2. ``lease_seconds`` field from the welcome divided by 3
+             (older centrals that expose lease but not the recommended
+             cadence directly).
+          3. ``HEARTBEAT_DEFAULT_INTERVAL`` for pre-negotiation
+             centrals that expose neither.
+
+        Rungs 1 and 2 are passed through ``_clamp_heartbeat_interval``
+        so a misconfigured central can neither ask us to spam (say,
+        0.1 s) nor lull us into a cadence so slow we'd be evicted
+        before the next heartbeat fires (say, 600 s).
+        """
+        raw = welcome_msg.get("recommended_heartbeat_interval_seconds")
+        if isinstance(raw, (int, float)) and raw > 0:
+            return _clamp_heartbeat_interval(float(raw))
+        lease = welcome_msg.get("lease_seconds")
+        if isinstance(lease, (int, float)) and lease > 0:
+            return _clamp_heartbeat_interval(float(lease) / 3.0)
+        return HEARTBEAT_DEFAULT_INTERVAL
+
+    async def _heartbeat_loop(self) -> None:
+        """Re-emit setPeerStatus periodically to keep the central lease alive.
+
+        Central runs a TTL sweeper: a producer that does not generate
+        inbound traffic (POST /send) for more than ``LEASE_SECONDS`` is
+        evicted from its in-memory tables, even if the SSE channel is
+        perfectly healthy. Half-open sockets (Wi-Fi yanked, NAT
+        rebinding, captive portal sleep) are the prime offenders -
+        the local TCP stack absorbs server-pushed keepalives silently
+        for minutes and the daemon never realises it's already a ghost.
+
+        This loop is the daemon-side half of the contract:
+          * Cadence is set by ``_negotiate_heartbeat_interval`` from
+            the SSE welcome and stored on ``_heartbeat_interval_seconds``.
+            We snapshot it once on entry; the loop is restarted on
+            every reconnect, so a renegotiated lease is picked up at
+            that point.
+          * The ``await sleep(interval)`` happens BEFORE each re-emit,
+            so the first heartbeat fires one interval after the loop
+            starts (the post-welcome registration just refreshed
+            ``last_seen``; firing again immediately would be wasteful).
+          * Each re-emit reuses ``_producer_status_payload`` so we
+            stay byte-identical to the registration payload. Central
+            is idempotent under repeated setPeerStatus from the same peer.
+          * A failed heartbeat is logged at DEBUG, not ERROR: the
+            split-brain detector (``_producer_health_loop``) is the
+            authoritative recovery path. If central truly dropped us,
+            the next robot-status poll will notice and trigger a
+            ``force_reconnect()``; redundant teardown from this loop
+            would only fight that mechanism.
+          * Exits on cancellation when ``_connect_and_relay``'s
+            FIRST_COMPLETED race tears all sibling tasks down.
+        """
+        interval = self._heartbeat_interval_seconds
+        logger.info("[Central Relay] heartbeat loop running, interval=%.1fs", interval)
+
+        while self._running:
+            try:
+                await asyncio.sleep(interval)
+            except asyncio.CancelledError:
+                raise
+
+            if self._state != RelayState.CONNECTED:
+                # Reconnecting / errored: nothing to refresh. Once we
+                # land back in CONNECTED, this loop has already been
+                # cancelled and respawned with a freshly negotiated
+                # interval.
+                continue
+
+            try:
+                await self._send_to_central(self._producer_status_payload())
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                logger.debug("[Central Relay] heartbeat re-emit failed: %s", e)
 
     async def _is_listed_as_producer(self) -> Optional[bool]:
         """Ask central whether we are still a registered producer.
@@ -961,10 +1080,13 @@ class CentralSignalingRelay:
         if msg_type == "welcome":
             # Received our peer ID from central server
             self._central_peer_id = msg.get("peerId")
+            self._heartbeat_interval_seconds = self._negotiate_heartbeat_interval(msg)
             logger.info(
-                "[Central Relay] central welcome received peer_id=%s; registering as producer name=%r",
+                "[Central Relay] central welcome received peer_id=%s; "
+                "registering as producer name=%r, heartbeat=%.1fs",
                 self._central_peer_id,
                 self.robot_name,
+                self._heartbeat_interval_seconds,
             )
 
             # Register as producer FIRST, then flip to CONNECTED. If we
@@ -973,13 +1095,7 @@ class CentralSignalingRelay:
             # central does not yet know we are a producer for this user,
             # which produces the desync described in /refresh-relay's
             # docstring.
-            await self._send_to_central(
-                {
-                    "type": "setPeerStatus",
-                    "roles": ["producer"],
-                    "meta": {"name": self.robot_name},
-                }
-            )
+            await self._send_to_central(self._producer_status_payload())
 
             self._set_state(
                 RelayState.CONNECTED, f"Remote access enabled as '{self.robot_name}'"
