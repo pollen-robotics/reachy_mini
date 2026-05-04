@@ -22,6 +22,7 @@ from reachy_mini.io.protocol import DaemonState, DaemonStatus, MotorControlMode
 from reachy_mini.io.ws_server import WSServer
 from reachy_mini.tools.reflash_motors import reflash_motors_if_needed
 
+from .app.config import get_or_create_install_id
 from .backend.mockup_sim import MockupSimBackend
 from .backend.mujoco import MujocoBackend
 from .backend.robot import RobotBackend
@@ -52,6 +53,14 @@ class Daemon:
 
         self.robot_name = robot_name
 
+        # Stable per-install id, created on first boot and persisted
+        # alongside ``robot_name`` in ``daemon.json``. Read once at init
+        # and held as ``self.install_id`` so it can be passed verbatim
+        # to every layer that needs to advertise the robot (central
+        # relay meta, mDNS TXT, BLE GATT char, HTTP /identity).
+        self.install_id: str = get_or_create_install_id()
+        self.logger.info("Daemon install_id: %s", self.install_id)
+
         self.wireless_version = wireless_version
         self.desktop_app_daemon = desktop_app_daemon
         self.no_media = no_media
@@ -67,6 +76,7 @@ class Daemon:
 
         self._status = DaemonStatus(
             robot_name=robot_name,
+            install_id=self.install_id,
             state=DaemonState.NOT_INITIALIZED,
             wireless_version=wireless_version,
             desktop_app_daemon=desktop_app_daemon,
@@ -153,8 +163,105 @@ class Daemon:
         self._status.media_released = False
         self.logger.info("Media hardware re-acquired.")
 
+    async def set_robot_name(self, robot_name: str) -> "DaemonStatus":
+        """Rename the robot live, without restarting the daemon.
+
+        Updates the in-memory canonical ``robot_name`` (mirrored on
+        ``self._status.robot_name``), persists the new value to
+        ``daemon.json`` so it survives a restart, and pushes the change
+        downstream to the components that advertise the name:
+
+        - the central signaling relay (``setPeerStatus`` re-emit, no
+          reconnect required);
+        - the mDNS service registration, when one exists. The mDNS
+          handle is held by the FastAPI lifespan so the route layer is
+          responsible for forwarding it (kept out of ``Daemon`` to avoid
+          a circular import with the FastAPI app).
+
+        Idempotent: a no-op when ``robot_name`` already matches.
+        Persistence failure is logged but does not raise: the in-memory
+        rename has already taken effect and central has already been
+        notified, so the user-visible behaviour is correct - it just
+        won't survive a daemon restart.
+
+        Note: as of the install_id rollout there is no longer a "first
+        rename triggers central registration" path - the relay always
+        runs as soon as a token is available and reconciliation is
+        done by ``install_id``. So this method is purely an advertise
+        update on a relay that's already (or will soon be) up.
+        """
+        from reachy_mini.daemon.app.config import set_persisted_robot_name
+        from reachy_mini.media.central_signaling_relay import notify_robot_name_change
+
+        if robot_name == self.robot_name:
+            return self._status
+
+        self.logger.info("Renaming robot: %r -> %r", self.robot_name, robot_name)
+        self.robot_name = robot_name
+        self._status.robot_name = robot_name
+
+        if not set_persisted_robot_name(robot_name):
+            self.logger.warning(
+                "Persisted config write failed; rename will not survive restart"
+            )
+
+        try:
+            await notify_robot_name_change(robot_name)
+        except Exception as exc:
+            # ``notify_robot_name_change`` already logs at warning level;
+            # downgrade further failures to debug so we don't double-log.
+            self.logger.debug("notify_robot_name_change raised after handling: %s", exc)
+
+        return self._status
+
+    async def ensure_central_signaling_relay(self) -> dict[str, Any]:
+        """Ensure the central signaling relay is running.
+
+        Idempotent helper used by HTTP routes (e.g. ``save-token``,
+        ``refresh-relay``) to recover from the cold-boot case where the
+        daemon started without an HF token. In that case
+        ``_start_central_signaling_relay`` ran once at media-acquire
+        time, found no token, and returned without setting
+        ``_relay_instance``. After the user pushes a token via
+        ``save-token``, ``notify_token_change`` is a no-op (because
+        ``_relay_instance is None``), so the robot stays invisible on
+        central until the next daemon restart. This method closes that
+        gap by re-running the start path.
+
+        Returns a small dict describing what happened, suitable for
+        bubbling up to API responses.
+        """
+        from reachy_mini.media import central_signaling_relay as _csr
+
+        if _csr._relay_instance is not None:
+            return {"started": False, "reason": "already_running"}
+        if not self._media_server or self._media_released:
+            return {"started": False, "reason": "media_unavailable"}
+
+        await self._start_central_signaling_relay()
+
+        if _csr._relay_instance is None:
+            return {"started": False, "reason": "no_token_or_failed"}
+        return {"started": True}
+
     async def _start_central_signaling_relay(self) -> None:
-        """Start the central signaling relay for remote WebRTC access."""
+        """Start the central signaling relay for remote WebRTC access.
+
+        Two preconditions must hold for the relay to actually start:
+
+        - the media server is up (no point relaying audio/video that
+          doesn't exist);
+        - an HF token is available (central rejects anonymous producers).
+
+        We deliberately do NOT gate on the robot name. Every robot with
+        a token registers on central, and the mobile app reconciles
+        sightings across BLE, mDNS, loopback HTTP, and central by
+        ``install_id`` - so two unnamed ``reachy_mini`` instances end
+        up as two distinguishable rows in the listing rather than two
+        indistinguishable duplicates. The user-facing label is still
+        the human-readable ``robot_name``; ``install_id`` is the
+        technical key.
+        """
         global _central_relay_task
 
         if not self._media_server:
@@ -175,10 +282,15 @@ class Daemon:
         try:
             from reachy_mini.media.central_signaling_relay import start_central_relay
 
-            self.logger.info("Starting central signaling relay...")
+            self.logger.info(
+                "Starting central signaling relay (name=%r, install_id=%s)...",
+                self.robot_name,
+                self.install_id,
+            )
             await start_central_relay(
                 hf_token=hf_token,
                 robot_name=self.robot_name,
+                install_id=self.install_id,
                 robot_app_lock=self.robot_app_lock,
             )
             self.logger.info("Central signaling relay started")
@@ -521,6 +633,20 @@ class Daemon:
             self._status.error = self._status.backend_status.error
         else:
             self._status.backend_status = None
+
+        # Refresh the volatile relay-assigned peer id on every call: the
+        # relay rotates this on each reconnect and we don't have a hook
+        # that wakes ``Daemon`` up on welcome frames. Cheap (single
+        # attribute load) so doing it on every status read is fine.
+        try:
+            from reachy_mini.media.central_signaling_relay import (
+                get_central_peer_id,
+            )
+
+            self._status.central_peer_id = get_central_peer_id()
+        except Exception:
+            # The relay module is optional in some test harnesses.
+            self._status.central_peer_id = None
 
         return self._status
 

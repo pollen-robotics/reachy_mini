@@ -81,6 +81,21 @@ class DaemonStatus(BaseModel):
 
     type: Literal["daemon_status"] = "daemon_status"
     robot_name: str
+    # Stable, opaque per-install identifier (UUID4 hex). Generated on
+    # first boot and persisted alongside ``robot_name`` in
+    # ``daemon.json``. Used by the mobile app to merge sightings of the
+    # same physical robot across BLE, mDNS, loopback HTTP, and the HF
+    # central listing into a single row even before the user picks a
+    # human-readable name. Optional only for backward compatibility
+    # with older daemons / tests that build a status by hand.
+    install_id: Optional[str] = None
+    # Producer peer id assigned by the HF central signaling server on the
+    # ``welcome`` frame. Volatile (rotates on every relay reconnect),
+    # forwarded to mobile clients so they can dedupe a "this Mac" loopback
+    # row against the same physical robot's central listing while the HF
+    # central server does not yet propagate ``meta.install_id``. Always
+    # ``None`` when the relay is offline (no token, no network, etc.).
+    central_peer_id: Optional[str] = None
     state: DaemonState
     wireless_version: bool
     desktop_app_daemon: bool
