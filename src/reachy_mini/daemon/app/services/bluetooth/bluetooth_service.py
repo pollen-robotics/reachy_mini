@@ -1082,7 +1082,6 @@ def _wifi_forget(ssid: str) -> str:
         logger.exception("wifi_forget failed")
         return f"ERROR: {e}"
 
-
       
 POLLEN_MANUFACTURER_ID = 0xFFFF  # Reserved ID for development/testing
 
