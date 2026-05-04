@@ -40,6 +40,7 @@ REACHY_STATUS_SERVICE_UUID = "12345678-1234-5678-1234-56789abcdef3"
 NETWORK_STATUS_UUID = "12345678-1234-5678-1234-56789abcdef4"
 SYSTEM_STATUS_UUID = "12345678-1234-5678-1234-56789abcdef5"
 AVAILABLE_COMMANDS_UUID = "12345678-1234-5678-1234-56789abcdef6"
+HARDWARE_ID_UUID = "12345678-1234-5678-1234-56789abcdef7"
 
 BLUEZ_SERVICE_NAME = "org.bluez"
 GATT_MANAGER_IFACE = "org.bluez.GattManager1"
@@ -535,6 +536,24 @@ class ReachyStatusService(dbus.service.Object):
                 self,
                 commands_value,
                 "Available Commands",
+            )
+        )
+
+        # Hardware ID — robot-unique Pollen audio device serial. Read-only,
+        # populated once at service init (the audio device is hot-pluggable in
+        # principle but in practice present for the daemon's lifetime). Lives
+        # here rather than the advertisement because the legacy 31-byte advert
+        # is already at capacity. ``get_hardware_id`` is the inlined helper
+        # below — the BLE service runs on the system Python and can't import
+        # from the ``reachy_mini`` package.
+        self.add_characteristic(
+            StaticCharacteristic(
+                bus,
+                3,
+                HARDWARE_ID_UUID,
+                self,
+                get_hardware_id() or "unknown",
+                "Hardware ID",
             )
         )
 
@@ -1124,22 +1143,63 @@ def encode_network_ips() -> dict:
     }
 
 
+def _read_raw_audio_serial() -> str | None:
+    """Raw Pollen audio device USB serial from sysfs.
+
+    Inlined here (not imported from ``reachy_mini.utils.hardware_id``) because
+    the BLE service is launched as a standalone systemd unit running on the
+    system Python, outside the daemon's package install. Keep this in sync
+    with ``src/reachy_mini/utils/hardware_id.py``.
+    """
+    import os
+
+    usb_root = "/sys/bus/usb/devices"
+    if not os.path.isdir(usb_root):
+        return None
+    for name in os.listdir(usb_root):
+        dev = os.path.join(usb_root, name)
+        try:
+            with open(os.path.join(dev, "idVendor")) as f:
+                if f.read().strip() != "38fb":
+                    continue
+            with open(os.path.join(dev, "idProduct")) as f:
+                if f.read().strip() != "1001":
+                    continue
+            with open(os.path.join(dev, "serial")) as f:
+                serial = f.read().strip()
+            return serial or None
+        except (OSError, FileNotFoundError):
+            continue
+    return None
+
+
+def get_hardware_id() -> str | None:
+    """Public hardware ID — SHA-256 of the raw serial, truncated to 16 hex chars.
+
+    Hashing hides manufacturing-batch info and prevents cross-reference
+    against Pollen's production records, while keeping a stable opaque
+    per-robot identifier suitable for the externally-readable GATT
+    characteristic.
+    """
+    import hashlib
+
+    raw = _read_raw_audio_serial()
+    if raw is None:
+        return None
+    return hashlib.sha256(raw.encode("ascii")).hexdigest()[:16]
+
+
 def get_pin() -> str:
-    """Extract the last 5 digits of the serial number from dfu-util -l output."""
-    default_pin = "46879"
-    try:
-        result = subprocess.run(["dfu-util", "-l"], capture_output=True, text=True)
-        lines = result.stdout.splitlines()
-        for line in lines:
-            if "serial=" in line:
-                # Extract serial number
-                serial_part = line.split("serial=")[-1].strip().strip('"')
-                if len(serial_part) >= 5:
-                    return serial_part[-5:]
-        return default_pin  # fallback if not found
-    except Exception as e:
-        logger.error(f"Error getting pin from serial: {e}")
-        return default_pin
+    """5-char BLE pairing PIN — last 5 of the raw audio serial.
+
+    The PIN is a proximity-only short-lived secret; deriving it from the
+    raw serial is acceptable. Public surfaces use ``get_hardware_id()``
+    (hashed) instead.
+    """
+    raw = _read_raw_audio_serial()
+    if raw and len(raw) >= 5:
+        return raw[-5:]
+    return "46879"
 
 
 def get_network_status() -> str:
