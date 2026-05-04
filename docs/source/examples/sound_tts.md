@@ -1,33 +1,41 @@
 # Sound TTS (with head wobbling)
 
-This example synthesises speech from text via Alibaba's
-[Qwen3-TTS](https://huggingface.co/spaces/Qwen/Qwen3-TTS) Hugging Face
-Space, plays the returned audio on Reachy Mini, and wobbles the head in
-sync with the speech.
+This example synthesises speech from text via ResembleAI's
+[Chatterbox Multilingual TTS](https://huggingface.co/spaces/ResembleAI/Chatterbox-Multilingual-TTS)
+Hugging Face Space, plays the returned audio on Reachy Mini, and
+wobbles the head in sync with the speech.
 
-The "voice design" endpoint accepts a free-form `voice_description`
-prompt, so you can style the voice by just describing it.
+Chatterbox supports zero-shot voice cloning: pass a short reference
+audio file and the synthesis matches that voice. 23 languages are
+supported.
 
 **Usage:**
 
 ```bash
-# Default English prompt
+# Default English voice
 uv run python examples/sound_tts.py --text "Hello, I can wobble my head!"
 
-# Describe a voice style
+# Different language
+uv run python examples/sound_tts.py --text "Bonjour, je suis Reachy Mini" --lang fr
+
+# Clone a voice from a local sample
 uv run python examples/sound_tts.py \
-    --text "No way, that's impossible!" \
-    --voice-description "Speak with panic creeping into your voice."
+    --text "Hello world" \
+    --ref-audio ~/Downloads/my_voice.wav
 ```
 
 **Options:**
 
-- `--text <str>`: Text to synthesize.
-- `--lang <code>`: Language (`Auto`, `English`, `French`, `Chinese`,
-  `Japanese`, `Korean`, `German`, `Spanish`, `Portuguese`, `Russian`).
-  `Auto` lets the model detect it.
-- `--voice-description <str>`: Natural-language description of the
-  voice style (tone, pace, emotion).
+- `--text <str>`: Text to synthesize (max 300 chars per request).
+- `--lang <code>`: ISO 639-1 language code. Supported: `ar`, `da`,
+  `de`, `el`, `en`, `es`, `fi`, `fr`, `he`, `hi`, `it`, `ja`, `ko`,
+  `ms`, `nl`, `no`, `pl`, `pt`, `ru`, `sv`, `sw`, `tr`, `zh`.
+- `--ref-audio <path|url>`: Reference audio for zero-shot voice
+  cloning. Local paths and URLs both work; defaults to a Gradio
+  sample voice.
+
+Synthesis runs on the Space's shared GPU and typically takes
+60–90 s per sentence.
 
 <literalinclude>
 {"path": "../../../examples/sound_tts.py",
