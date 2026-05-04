@@ -753,9 +753,11 @@ class CentralSignalingRelay:
         This loop is the daemon-side half of the contract:
           * Cadence is set by ``_negotiate_heartbeat_interval`` from
             the SSE welcome and stored on ``_heartbeat_interval_seconds``.
-            We snapshot it once on entry; the loop is restarted on
-            every reconnect, so a renegotiated lease is picked up at
-            that point.
+            We re-read it on every iteration so the negotiated value
+            propagates as soon as the welcome lands, even though this
+            loop is spawned in parallel with the SSE handler that
+            processes welcome (the first iteration uses the default,
+            every subsequent one uses the negotiated value).
           * The ``await sleep(interval)`` happens BEFORE each re-emit,
             so the first heartbeat fires one interval after the loop
             starts (the post-welcome registration just refreshed
@@ -772,10 +774,14 @@ class CentralSignalingRelay:
           * Exits on cancellation when ``_connect_and_relay``'s
             FIRST_COMPLETED race tears all sibling tasks down.
         """
-        interval = self._heartbeat_interval_seconds
-        logger.info("[Central Relay] heartbeat loop running, interval=%.1fs", interval)
+        last_logged_interval: Optional[float] = None
 
         while self._running:
+            interval = self._heartbeat_interval_seconds
+            if interval != last_logged_interval:
+                logger.info("[Central Relay] heartbeat loop interval=%.1fs", interval)
+                last_logged_interval = interval
+
             try:
                 await asyncio.sleep(interval)
             except asyncio.CancelledError:
