@@ -492,10 +492,10 @@ class GstWebRTCClient(CameraBase, AudioBase):
         """Play a sound file on the robot's speaker via the daemon REST API.
 
         If *sound_file* is a local path that exists on this machine the
-        file is automatically uploaded to the daemon's temporary sound
-        directory (skipping the upload when a file with the same name is
-        already present).  Otherwise the filename is sent as-is and the
-        daemon resolves it from its built-in assets or filesystem.
+        file is uploaded to the daemon's temporary sound directory
+        (overwriting any previous upload with the same basename).
+        Otherwise the filename is sent as-is and the daemon resolves it
+        from its built-in assets or filesystem.
 
         Args:
             sound_file: Absolute local path **or** asset filename
@@ -506,17 +506,9 @@ class GstWebRTCClient(CameraBase, AudioBase):
             self.logger.error("No daemon URL configured — cannot play sound remotely.")
             return
 
-        # If the file exists on the client, ensure it is uploaded first.
         remote_file = sound_file
         if os.path.isfile(sound_file):
-            filename = os.path.basename(sound_file)
-            remote_files = self.list_sounds()
-            if filename not in remote_files:
-                remote_file = self.upload_sound(sound_file)
-            else:
-                # Already uploaded — ask the daemon to resolve by filename.
-                # The daemon's play_sound checks the temp dir, assets, etc.
-                remote_file = filename
+            remote_file = self.upload_sound(sound_file)
 
         try:
             resp = _requests.post(
