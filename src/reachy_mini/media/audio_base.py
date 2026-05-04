@@ -22,6 +22,11 @@ from typing import Optional
 import numpy as np
 import numpy.typing as npt
 
+from reachy_mini.media.audio_control_utils import (
+    WRITE_SETTLE_SECONDS,
+    AudioConfig,
+    init_respeaker_usb,
+)
 from reachy_mini.media.audio_doa import AudioDoA
 from reachy_mini.media.gstreamer_utils import get_sample
 
@@ -101,6 +106,44 @@ class AudioBase(ABC):
 
         """
         return self._doa.get_DoA()
+
+    def apply_audio_config(
+        self,
+        config: AudioConfig,
+        *,
+        verify: bool = True,
+        write_settle_seconds: float = WRITE_SETTLE_SECONDS,
+    ) -> bool:
+        """Apply caller-provided audio control parameters to the ReSpeaker.
+
+        This opens a short-lived ReSpeaker USB handle, writes each parameter in
+        ``config``, and optionally verifies the written values. The SDK does
+        not provide default values for these parameters; callers should pass the
+        values tuned for their own app.
+
+        Args:
+            config: Sequence of ``(parameter_name, values)`` pairs to write.
+            verify: When true, read each parameter back after writing it.
+            write_settle_seconds: Delay after each write before readback.
+
+        Returns:
+            True when all parameters were written and verified successfully.
+            False when the ReSpeaker audio board is unavailable or a parameter
+            write/readback fails.
+
+        """
+        respeaker = init_respeaker_usb()
+        if respeaker is None:
+            self.logger.warning("ReSpeaker device not found.")
+            return False
+        try:
+            return respeaker.apply_audio_config(
+                config,
+                verify=verify,
+                write_settle_seconds=write_settle_seconds,
+            )
+        finally:
+            respeaker.close()
 
     def cleanup(self) -> None:
         """Release shared resources (DoA USB device)."""

@@ -92,3 +92,8 @@ camsrc.set_property("device", cam_path)
 ## Microphones and Speakers
 
 Refer to the [Reachy Mini documentation](../reachy_mini/media_advanced_controls.md#microphones-and-speakers). The hardware is exactly the same for the Lite version.
+
+On Reachy Mini Lite, the ReSpeaker audio board is connected to your computer
+over USB. SDK audio-board configuration helpers such as
+`mini.media.audio.apply_audio_config(...)` are available when using the local
+media backend from that computer.

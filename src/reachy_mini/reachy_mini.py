@@ -9,6 +9,8 @@ It also includes methods for multimedia interactions like playing sounds and loo
 import asyncio
 import logging
 import time
+import warnings
+from importlib.metadata import PackageNotFoundError, version
 from typing import Dict, List, Literal, Optional, Union, cast
 
 import numpy as np
@@ -19,6 +21,7 @@ from scipy.spatial.transform import Rotation as R
 from reachy_mini.daemon.utils import daemon_check, is_local_camera_available
 from reachy_mini.io.protocol import (
     AppendRecordCmd,
+    DaemonStatus,
     GotoTaskRequest,
     SetAntennasCmd,
     SetAutomaticBodyYawCmd,
@@ -275,6 +278,7 @@ class ReachyMini:
         names handled by ``_resolve_backend``).
         """
         daemon_status = self.client.get_status()
+        self._warn_if_daemon_version_mismatch(daemon_status)
 
         # Resolve camera specs from the daemon-detected camera name
         specs_name = getattr(daemon_status, "camera_specs_name", "")
@@ -332,6 +336,36 @@ class ReachyMini:
             signalling_host=daemon_status.wlan_ip or "localhost",
             camera_specs=camera_specs,
             daemon_url=self._daemon_http_url,
+        )
+
+    @staticmethod
+    def _get_sdk_version() -> str | None:
+        try:
+            return version("reachy_mini")
+        except PackageNotFoundError:
+            return None
+
+    def _warn_if_daemon_version_mismatch(self, daemon_status: DaemonStatus) -> None:
+        """Warn users when the SDK and daemon package versions differ."""
+        sdk_version = self._get_sdk_version()
+        daemon_version = daemon_status.version
+
+        if sdk_version is None or daemon_version is None:
+            return
+
+        sdk_version = sdk_version.strip()
+        daemon_version = daemon_version.strip()
+
+        if sdk_version == daemon_version:
+            return
+
+        warnings.warn(
+            "Reachy Mini SDK and daemon versions do not match: "
+            f"SDK={sdk_version}, daemon={daemon_version}. "
+            "Running different versions can create issues. "
+            "Install matching reachy_mini versions for the SDK and daemon.",
+            RuntimeWarning,
+            stacklevel=3,
         )
 
     def _normalize_connection_mode(

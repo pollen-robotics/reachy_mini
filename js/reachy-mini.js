@@ -22,17 +22,33 @@
  *   const detach = robot.attachVideo(document.querySelector("video"));
  *   await robot.startSession(robotId);
  *
- *   // 5. Send commands
- *   robot.setHeadPose(0, 10, -5);    // roll, pitch, yaw in degrees
- *   robot.setAntennas(30, -30);       // right, left in degrees
+ *   // 5. Send commands — degree-friendly helpers, all built on setTarget()
+ *   robot.setHeadRpyDeg(0, 10, -5);   // roll, pitch, yaw in degrees
+ *   robot.setAntennasDeg(30, -30);    // right, left in degrees
+ *   robot.setBodyYawDeg(15);          // body yaw in degrees
+ *
+ *   // …or compose an atomic update in raw wire units (full SE(3); no XYZ loss):
+ *   robot.setTarget({
+ *       head: rpyToMatrix(0, 10, -5).flat(),  // number[16] flat row-major 4×4
+ *       antennas: [degToRad(30), degToRad(-30)],
+ *       body_yaw: degToRad(15),
+ *   });
  *   robot.playSound("wake_up.wav");   // filename on robot
  *   const ver = await robot.getVersion(); // e.g. "1.5.1"
  *
- *   // 6. Receive live state (emitted every ~500 ms while streaming)
+ *   // 6. Receive live state (emitted every ~500 ms while streaming; call
+ *   //    robot.requestState() yourself for higher rates — see its JSDoc).
+ *   //    State payload is the daemon's raw wire shape — use the math
+ *   //    utilities exported from this module for degree conversions.
  *   robot.addEventListener("state", (e) => {
- *       const { head, antennas } = e.detail;
- *       // head:     { roll, pitch, yaw }   — degrees
- *       // antennas: { right, left }        — degrees
+ *       const { head, antennas, body_yaw, motor_mode, is_move_running } = e.detail;
+ *       // head:            number[16]   — flat row-major 4×4 (full SE(3))
+ *       // antennas:        [rightRad, leftRad]
+ *       // body_yaw:        number       — radians
+ *       // motor_mode:      "enabled" | "disabled" | "gravity_compensation"
+ *       // is_move_running: boolean
+ *       // For human-friendly head RPY:
+ *       //   const rpy = matrixToRpy(head);   // { roll, pitch, yaw } in degrees
  *   });
  *
  *   // 7. Audio controls
@@ -56,8 +72,11 @@
  * CONSTRUCTOR OPTIONS
  * ───────────────────
  *   new ReachyMini({
- *     signalingUrl:     string,   // default: "https://cduss-reachy-mini-central.hf.space"
- *     enableMicrophone: boolean,  // default: true — acquire mic for bidirectional audio
+ *     signalingUrl:              string,   // default: "https://cduss-reachy-mini-central.hf.space"
+ *     enableMicrophone:          boolean,  // default: true  — acquire mic for bidirectional audio
+ *     videoJitterBufferTargetMs: number,   // default: 0     — receiver-side jitter buffer hint, ms
+ *                                          //                  0 = "render ASAP" (teleop). Spec range [0, 4000].
+ *                                          //                  Raise (100–400) on flaky links to trade latency for resilience.
  *   })
  *
  *
@@ -65,7 +84,11 @@
  * ────────────────────
  *   .state            "disconnected" | "connected" | "streaming"
  *   .robots           Array<{ id: string, meta: { name: string } }>
- *   .robotState       { head: { roll, pitch, yaw }, antennas: { right, left }, motorMode } (degrees; motorMode: "enabled"|"disabled"|"gravity_compensation")
+ *   .robotState       Mirror of the latest "state" event detail —
+ *                     { head: number[16], antennas: [rightRad, leftRad],
+ *                       body_yaw, motor_mode, is_move_running }
+ *                     (fields only present once the daemon sends them;
+ *                      see EVENTS below)
  *   .username         string | null     — HF username after authenticate()
  *   .isAuthenticated  boolean           — true if a valid HF token is available
  *   .micSupported     boolean           — true if robot offers bidirectional audio
@@ -80,7 +103,11 @@
  *   "robotsChanged"   { robots: Array<{ id, meta }> }
  *   "streaming"       { sessionId: string, robotId: string }
  *   "sessionStopped"  { reason: string }
- *   "state"           { head: { roll, pitch, yaw }, antennas: { right, left } }
+ *   "state"           { head: number[16],                    // flat row-major 4×4, when daemon sends head_pose
+ *                       antennas: [rightRad, leftRad],       // when daemon sends antennas
+ *                       body_yaw: number,                    // radians, when daemon sends body_yaw
+ *                       motor_mode: string,                  // when daemon sends motor_mode
+ *                       is_move_running: boolean }           // when daemon sends is_move_running
  *   "videoTrack"      { track: MediaStreamTrack, stream: MediaStream }
  *   "micSupported"    { supported: boolean }
  *   "error"           { source: "signaling"|"webrtc"|"robot", error: Error|string }
@@ -93,8 +120,8 @@
  */
 
 import {
-    oauthLoginUrl,
     oauthHandleRedirectIfPresent,
+    oauthLoginUrl,
 } from "https://cdn.jsdelivr.net/npm/@huggingface/hub@0.15.2/+esm";
 
 // ─── Math utilities ──────────────────────────────────────────────────────────
@@ -119,8 +146,8 @@ export function rpyToMatrix(rollDeg, pitchDeg, yawDeg) {
     return [
         [cy * cp, cy * sp * sr - sy * cr, cy * sp * cr + sy * sr, 0],
         [sy * cp, sy * sp * sr + cy * cr, sy * sp * cr - cy * sr, 0],
-        [-sp,     cp * sr,                cp * cr,                0],
-        [0,       0,                      0,                      1],
+        [-sp, cp * sr, cp * cr, 0],
+        [0, 0, 0, 1],
     ];
 }
 
@@ -130,9 +157,9 @@ export function rpyToMatrix(rollDeg, pitchDeg, yawDeg) {
  */
 export function matrixToRpy(m) {
     return {
-        roll:  radToDeg(Math.atan2(m[2][1], m[2][2])),
+        roll: radToDeg(Math.atan2(m[2][1], m[2][2])),
         pitch: radToDeg(Math.asin(-m[2][0])),
-        yaw:   radToDeg(Math.atan2(m[1][0], m[0][0])),
+        yaw: radToDeg(Math.atan2(m[1][0], m[0][0])),
     };
 }
 
@@ -161,21 +188,22 @@ function sdpHasAudioSendRecv(sdp) {
 
 export class ReachyMini extends EventTarget {
 
-    /** @param {{ signalingUrl?: string, enableMicrophone?: boolean, clientId?: string, appName?: string }} [options] */
+    /** @param {{ signalingUrl?: string, enableMicrophone?: boolean, clientId?: string, appName?: string, videoJitterBufferTargetMs?: number }} [options] */
     constructor(options = {}) {
         super();
         this._signalingUrl = options.signalingUrl || 'https://cduss-reachy-mini-central.hf.space';
         this._enableMicrophone = options.enableMicrophone !== false;
         this._clientId = options.clientId || null;
         this._appName = options.appName || 'unknown';
+        // Hint to the receiver's WebRTC jitter buffer (ms). 0 = "render ASAP",
+        // appropriate for teleop. Spec range [0, 4000]. Browsers that don't
+        // implement RTCRtpReceiver.jitterBufferTarget fall back to default
+        // buffering (~150-200 ms).
+        this._videoJitterBufferTargetMs = options.videoJitterBufferTargetMs ?? 0;
 
         this._state = 'disconnected';                 // 'disconnected' | 'connected' | 'streaming'
         this._robots = [];                             // latest robot list from signaling
-        this._robotState = {                           // updated every ~500 ms while streaming
-            head: { roll: 0, pitch: 0, yaw: 0 },
-            antennas: { right: 0, left: 0 },
-            motorMode: null,                           // "enabled" | "disabled" | "gravity_compensation" | null
-        };
+        this._robotState = {};                         // populated from daemon state events (wire shape)
 
         // Auth
         this._token = null;
@@ -229,7 +257,19 @@ export class ReachyMini extends EventTarget {
     /** @returns {Array<{id: string, meta: {name: string}}>} */
     get robots() { return this._robots; }
 
-    /** @returns {{head: {roll:number,pitch:number,yaw:number}, antennas: {right:number,left:number}}} */
+    /**
+     * Latest robot state (same shape as the "state" event detail).
+     * Mirrors the daemon's wire format — fields appear only once the
+     * daemon has sent the corresponding source field. Use the exported
+     * math utilities (``matrixToRpy``, ``radToDeg``) for human units.
+     * @returns {{
+     *   head?: number[],
+     *   antennas?: number[],
+     *   body_yaw?: number,
+     *   motor_mode?: "enabled"|"disabled"|"gravity_compensation",
+     *   is_move_running?: boolean,
+     * }}
+     */
     get robotState() { return this._robotState; }
 
     /** @returns {string|null} HuggingFace username, set after authenticate(). */
@@ -428,6 +468,12 @@ export class ReachyMini extends EventTarget {
 
             this._pc.ontrack = (e) => {
                 if (e.track.kind === 'video') {
+                    // Tell the receiver's jitter buffer to minimise its hold
+                    // time. Both properties target the same internal buffer;
+                    // browsers ignore whichever they don't implement.
+                    const ms = this._videoJitterBufferTargetMs;
+                    try { e.receiver.jitterBufferTarget = ms; } catch (_) {}
+                    try { e.receiver.playoutDelayHint = ms / 1000; } catch (_) {}
                     this._emit('videoTrack', { track: e.track, stream: e.streams[0] });
                 }
             };
@@ -603,21 +649,86 @@ export class ReachyMini extends EventTarget {
     // All return false if the data channel is not open, true if sent.
 
     /**
-     * Set the head orientation.
-     * @param {number} roll  — degrees  @param {number} pitch — degrees  @param {number} yaw — degrees
-     * @returns {boolean}
+     * Send a target pose to the robot. Wire-shape, raw units only —
+     * single source of truth for motion commands. Every field is
+     * optional; omitted fields leave the daemon's previous target
+     * unchanged, so partial updates compose naturally.
+     *
+     * For human units (degrees), use the ``setHeadRpyDeg`` /
+     * ``setAntennasDeg`` / ``setBodyYawDeg`` thin wrappers below.
+     *
+     * @param {object} [target]
+     * @param {number[]} [target.head] 16-element flat row-major 4×4
+     *   matrix (full SE(3); preserves translation, no XYZ loss).
+     * @param {number[]} [target.antennas] ``[rightRad, leftRad]``.
+     * @param {number} [target.body_yaw] Body yaw in radians.
+     * @returns {boolean} false if the data channel is not open.
+     * @throws {TypeError} if any provided field has the wrong shape or
+     *   contains a non-finite value (NaN, Infinity). Validation runs at
+     *   the JS boundary so caller mistakes surface with a stack trace
+     *   pointing to the call site, not as a confusing daemon-side error.
      */
-    setHeadPose(roll, pitch, yaw) {
-        return this._sendCommand({ type: "set_target", head: rpyToMatrix(roll, pitch, yaw).flat() });
+    setTarget({ head, antennas, body_yaw } = {}) {
+        const cmd = { type: "set_full_target" };
+        if (head !== undefined) {
+            if (!Array.isArray(head) || head.length !== 16
+                || !head.every((n) => Number.isFinite(n))) {
+                throw new TypeError(
+                    'setTarget: head must be a 16-element flat row-major 4×4 matrix '
+                    + `of finite numbers; got ${Array.isArray(head) ? `Array(${head.length})` : typeof head}`
+                );
+            }
+            cmd.head = head;
+        }
+        if (antennas !== undefined) {
+            if (!Array.isArray(antennas) || antennas.length !== 2
+                || !antennas.every((n) => Number.isFinite(n))) {
+                throw new TypeError(
+                    'setTarget: antennas must be [rightRad, leftRad] (2 finite numbers); '
+                    + `got ${Array.isArray(antennas) ? `Array(${antennas.length})` : typeof antennas}`
+                );
+            }
+            cmd.antennas = antennas;
+        }
+        if (body_yaw !== undefined) {
+            if (!Number.isFinite(body_yaw)) {
+                throw new TypeError(
+                    `setTarget: body_yaw must be a finite number (radians); got ${body_yaw}`
+                );
+            }
+            cmd.body_yaw = body_yaw;
+        }
+        return this._sendCommand(cmd);
     }
 
     /**
-     * Set antenna positions.
-     * @param {number} rightDeg  @param {number} leftDeg
+     * Set head orientation from roll/pitch/yaw in degrees.
+     * Convenience wrapper over ``setTarget``.
+     * @param {number} rollDeg @param {number} pitchDeg @param {number} yawDeg
      * @returns {boolean}
      */
-    setAntennas(rightDeg, leftDeg) {
-        return this._sendCommand({ type: "set_antennas", antennas: [degToRad(rightDeg), degToRad(leftDeg)] });
+    setHeadRpyDeg(rollDeg, pitchDeg, yawDeg) {
+        return this.setTarget({ head: rpyToMatrix(rollDeg, pitchDeg, yawDeg).flat() });
+    }
+
+    /**
+     * Set antenna positions from degrees.
+     * Convenience wrapper over ``setTarget``.
+     * @param {number} rightDeg @param {number} leftDeg
+     * @returns {boolean}
+     */
+    setAntennasDeg(rightDeg, leftDeg) {
+        return this.setTarget({ antennas: [degToRad(rightDeg), degToRad(leftDeg)] });
+    }
+
+    /**
+     * Set body yaw from degrees.
+     * Convenience wrapper over ``setTarget``.
+     * @param {number} yawDeg
+     * @returns {boolean}
+     */
+    setBodyYawDeg(yawDeg) {
+        return this.setTarget({ body_yaw: degToRad(yawDeg) });
     }
 
     /**
@@ -690,7 +801,7 @@ export class ReachyMini extends EventTarget {
     /**
      * Whether the robot's motors are currently powered (the "awake" state).
      *
-     * Reads ``motorMode`` from the last state event. Both ``"enabled"``
+     * Reads ``motor_mode`` from the last state event. Both ``"enabled"``
      * and ``"gravity_compensation"`` count as awake: in gravity-comp the
      * motors are actively holding the arm against gravity, so the robot
      * is *not* limp and playing wake_up on top would fight the user.
@@ -703,7 +814,7 @@ export class ReachyMini extends EventTarget {
      * @returns {boolean}
      */
     isAwake() {
-        const mode = this._robotState?.motorMode;
+        const mode = this._robotState?.motor_mode;
         return mode === "enabled" || mode === "gravity_compensation";
     }
 
@@ -726,7 +837,7 @@ export class ReachyMini extends EventTarget {
      * @returns {Promise<boolean>} true if the robot is awake afterwards.
      */
     async ensureAwake(timeoutMs = 1000) {
-        if (this._robotState?.motorMode === undefined) {
+        if (this._robotState?.motor_mode === undefined) {
             await new Promise((resolve) => {
                 const done = () => {
                     this.removeEventListener('state', done);
@@ -840,6 +951,15 @@ export class ReachyMini extends EventTarget {
     /**
      * Request a state snapshot.  The response arrives as a "state" event.
      * Called automatically every 500 ms while streaming.
+     *
+     * Safe to call at a higher rate if you need faster telemetry: e.g.
+     * ``setInterval(() => robot.requestState(), 20)`` for ~50 Hz, or drive
+     * it from a ``requestAnimationFrame`` loop for display-rate updates.
+     * On LAN the daemon can sustain ~90-100 Hz round-trips over the
+     * datachannel; over the internet expect the WebRTC path's RTT to
+     * dominate. The built-in 500 ms poll keeps running in parallel — it
+     * is harmless, as state responses are idempotent.
+     *
      * @returns {boolean}
      */
     requestState() {
@@ -1057,7 +1177,7 @@ export class ReachyMini extends EventTarget {
             // decided. stopSession() sends its own endSession back but
             // central has already dropped the session, so the echo is
             // harmless.
-            this.stopSession().catch(() => {});
+            this.stopSession().catch(() => { });
         }
     }
 
@@ -1128,18 +1248,15 @@ export class ReachyMini extends EventTarget {
         }
         if (data.state) {
             const s = data.state;
-            if (s.head_pose) this._robotState.head = matrixToRpy(s.head_pose);
-            if (s.antennas) {
-                this._robotState.antennas = {
-                    right: radToDeg(s.antennas[0]),
-                    left:  radToDeg(s.antennas[1]),
-                };
-            }
-            // Surface motor_mode so apps can reflect torque state in the UI
-            // without an extra getMotorMode roundtrip. Values match the
-            // MotorControlMode enum on the server:
-            // "enabled" / "disabled" / "gravity_compensation".
-            if (s.motor_mode) this._robotState.motorMode = s.motor_mode;
+            // Wire-shape pass-through. The daemon ships the head pose as a
+            // nested 4×4 (numpy tolist()); we flatten to 16 numbers so
+            // consumers can hand it straight to WebGL / Three.js / trajectory
+            // logs. Everything else is forwarded as-is.
+            if (s.head_pose) this._robotState.head = s.head_pose.flat();
+            if (s.antennas) this._robotState.antennas = [s.antennas[0], s.antennas[1]];
+            if (typeof s.body_yaw === 'number') this._robotState.body_yaw = s.body_yaw;
+            if (s.motor_mode) this._robotState.motor_mode = s.motor_mode;
+            if (typeof s.is_move_running === 'boolean') this._robotState.is_move_running = s.is_move_running;
             this._emit('state', { ...this._robotState });
         }
         if (data.error) {
