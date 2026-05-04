@@ -268,6 +268,52 @@ class GetMicrophoneVolumeCmd(BaseModel):
     type: Literal["get_microphone_volume"] = "get_microphone_volume"
 
 
+# ------------------------------------------------------------------
+# Generic HTTP proxy command.
+#
+# Lets a remote WebRTC peer call any /api/... route on the daemon
+# that does not yet have a typed DataChannel command (e.g.
+# /api/hf-auth/*, /api/apps/*, /api/daemon/status, ...). The daemon
+# forwards (method, path, body, headers) to its own
+# http://127.0.0.1:8000 server and returns the response carrying
+# the same `request_id` so the client can correlate.
+#
+# This is a transitional, generic transport while we migrate hot
+# paths to typed *Cmd schemas. Existing typed commands (head pose,
+# audio, motors, ...) should be preferred when they exist - the
+# proxy is not type-checked and bypasses pydantic validation of
+# the inner payloads.
+#
+# Trust boundary: enforced upstream by whoever can establish a
+# WebRTC session with this daemon (HF central producer auth in
+# remote, GStreamer signaling on LAN). The proxy does not add
+# attack surface beyond what the existing typed commands already
+# expose to the same caller. Endpoints that mutate the daemon's
+# auth state (e.g. /api/hf-auth/save-token) are still callable
+# - by design, since this is the whole point of the unified
+# transport.
+# ------------------------------------------------------------------
+
+
+class HttpProxyCmd(BaseModel):
+    """Proxy an HTTP request to the daemon's own /api/... route.
+
+    The daemon forwards `method path body headers` to
+    http://127.0.0.1:8000 and returns a `http_proxy_response`
+    message echoing `request_id`.
+    """
+
+    type: Literal["http_proxy"] = "http_proxy"
+    request_id: str
+    method: Literal["GET", "POST", "PUT", "DELETE", "PATCH"]
+    path: str = Field(
+        ..., description="Path starting with '/', e.g. '/api/daemon/status'."
+    )
+    body: Any | None = None
+    headers: dict[str, str] | None = None
+    timeout_s: float = Field(30.0, ge=0.1, le=300.0)
+
+
 AnyCommand = Annotated[
     SetTargetCmd
     | SetHeadJointsCmd
@@ -291,7 +337,8 @@ AnyCommand = Annotated[
     | SetVolumeCmd
     | GetVolumeCmd
     | SetMicrophoneVolumeCmd
-    | GetMicrophoneVolumeCmd,
+    | GetMicrophoneVolumeCmd
+    | HttpProxyCmd,
     Field(discriminator="type"),
 ]
 

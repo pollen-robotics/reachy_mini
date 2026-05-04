@@ -63,6 +63,27 @@ async def get_auth_status() -> dict[str, Any]:
     return hf_auth.check_token_status()
 
 
+@router.get("/token")
+async def get_token() -> dict[str, Any]:
+    """Return the stored HuggingFace token in plaintext.
+
+    This exists so remote clients (e.g. the mobile app) can bridge the
+    token into a sandboxed iframe that itself cannot go through the HF
+    OAuth flow (hit by ``X-Frame-Options: SAMEORIGIN`` on ``/login``).
+
+    Security note: the daemon's HTTP API is already unauthenticated on
+    the local network, so any client that can reach this endpoint can
+    also start/stop apps at will. Exposing the token here does not
+    meaningfully widen the attack surface, but we deliberately keep the
+    endpoint separate from ``/status`` so the desktop frontend - which
+    never needs the raw token - is not tempted to consume it.
+    """
+    token = hf_auth.get_hf_token()
+    if not token:
+        raise HTTPException(status_code=404, detail="No HF token stored")
+    return {"token": token}
+
+
 @router.get("/relay-status")
 async def get_relay_status(request: Request) -> dict[str, Any]:
     """Get the central signaling relay connection status."""
