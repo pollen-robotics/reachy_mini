@@ -315,9 +315,18 @@ class GstMediaServer:
         appsink_wobbler = self._make_wobbler_appsink(sync=False)
 
         for elem in [
-            appsrc, rtpopusdepay, opusdec, tee,
-            queue_speaker, ac_speaker, ar_speaker, audiosink,
-            queue_wobbler, ac_wobbler, ar_wobbler, appsink_wobbler,
+            appsrc,
+            rtpopusdepay,
+            opusdec,
+            tee,
+            queue_speaker,
+            ac_speaker,
+            ar_speaker,
+            audiosink,
+            queue_wobbler,
+            ac_wobbler,
+            ar_wobbler,
+            appsink_wobbler,
         ]:
             playback_pipe.add(elem)
         appsrc.link(rtpopusdepay)
@@ -343,8 +352,7 @@ class GstMediaServer:
         # playback pipeline, then DROP so webrtcsink's pipeline is unaffected.
         def _buffer_probe(pad: Gst.Pad, info: Gst.PadProbeInfo, _: None) -> int:
             buf = info.get_buffer()
-            if buf is not None:
-                appsrc.emit("push-buffer", buf.copy())
+            appsrc.push_buffer(buf)
             return int(Gst.PadProbeReturn.DROP)
 
         probe_id = pad.add_probe(Gst.PadProbeType.BUFFER, _buffer_probe, None)
@@ -1093,8 +1101,14 @@ class GstMediaServer:
 
         for el in (
             tee,
-            queue_speaker, ac_speaker, ar_speaker, audiosink,
-            queue_wobbler, ac_wobbler, ar_wobbler, appsink_wobbler,
+            queue_speaker,
+            ac_speaker,
+            ar_speaker,
+            audiosink,
+            queue_wobbler,
+            ac_wobbler,
+            ar_wobbler,
+            appsink_wobbler,
         ):
             audio_bin.add(el)
 
