@@ -22,6 +22,7 @@ import websockets
 from websockets.asyncio.client import ClientConnection
 
 from reachy_mini.daemon.robot_app_lock import RobotAppLock
+from reachy_mini.utils.hardware_id import get_hardware_id
 
 logger = logging.getLogger(__name__)
 
@@ -724,11 +725,26 @@ class CentralSignalingRelay:
           * ``transport``: ``"usb"`` | ``"wifi"`` so the mobile picker
             can badge a listing without introspecting via a separate
             channel.
+          * ``hardware_id`` (when available): SHA-256 prefix of the
+            Pollen audio device's USB serial - stable per physical
+            robot across OS reinstalls and renames. Lets the mobile
+            picker dedupe a central listing against the same robot's
+            BLE / loopback row, and serves as a short visible "robot
+            tag" the user can recognise across sessions (the bare
+            ``peerId`` rotates on every relay reconnect, so it is a
+            poor display key). Omitted when the daemon runs without a
+            Reachy attached (``get_hardware_id()`` returns ``None``);
+            consumers must treat ``undefined`` as "no stable id" and
+            fall back to whatever they already had.
         """
-        return {
+        meta: dict[str, Any] = {
             "name": self.robot_name,
             "transport": self.transport,
         }
+        hw = get_hardware_id()
+        if hw is not None:
+            meta["hardware_id"] = hw
+        return meta
 
     def _producer_status_payload(self) -> dict[str, Any]:
         """Single source of truth for our ``setPeerStatus`` payload.
