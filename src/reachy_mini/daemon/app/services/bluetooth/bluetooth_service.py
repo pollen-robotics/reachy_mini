@@ -852,7 +852,7 @@ class BluetoothCommandService:
         ad_manager = dbus.Interface(adapter, LE_ADVERTISING_MANAGER_IFACE)
         self.adv = Advertisement(self.bus, 0, "peripheral", self.device_name)
         self.adv.service_uuids = [REACHY_STATUS_SERVICE_UUID]
-        self.adv.manufacturer_data = encode_network_ips()
+        self.adv.manufacturer_data = encode_advert_payload(get_hardware_id())
         self._ad_manager = ad_manager
         ad_manager.RegisterAdvertisement(
             self.adv.get_path(),
@@ -863,7 +863,11 @@ class BluetoothCommandService:
             ),
         )
 
-        # Refresh both GATT network characteristic and advertisement payload
+        # Refresh both GATT network characteristic and advertisement payload.
+        # The advert payload only changes if the audio device is hot-(un)plugged,
+        # which is rare; the periodic re-emit is mostly for the GATT
+        # network char update + a re-register safety net in case BlueZ
+        # ever loses our advertisement.
         GLib.timeout_add_seconds(10, self._refresh_network_info)
 
         logger.info(f"✓ Bluetooth service started as '{self.device_name}'")
@@ -872,7 +876,7 @@ class BluetoothCommandService:
         """Periodic callback: update GATT characteristic and advertisement."""
         self.app.reachy_status.update_network_status()
 
-        new_data = encode_network_ips()
+        new_data = encode_advert_payload(get_hardware_id())
         if new_data != self.adv.manufacturer_data:
             self.adv.manufacturer_data = new_data
             try:
@@ -881,7 +885,7 @@ class BluetoothCommandService:
                     self.adv.get_path(),
                     {},
                     reply_handler=lambda: logger.info(
-                        "Advertisement re-registered with updated IPs"
+                        "Advertisement re-registered with updated payload"
                     ),
                     error_handler=lambda e: logger.error(
                         f"Failed to re-register advertisement: {e}"
@@ -1083,57 +1087,86 @@ def _wifi_forget(ssid: str) -> str:
         return f"ERROR: {e}"
 
 
-      
 POLLEN_MANUFACTURER_ID = 0xFFFF  # Reserved ID for development/testing
 
 
-# Hard cap on the number of IP addresses we cram into the BLE advert.
-# Each address eats 5 bytes (1 flag + 4 IPv4), and the legacy adv slot
-# is limited to 31 bytes total (~16 already used by flags + LocalName),
-# so 2 addresses is the safe maximum before HCI rejects the payload.
-_MAX_ADVERTISED_IPS = 2
+# =====================================================================
+# BLE advertisement payload (TLV v0x02)
+# =====================================================================
+#
+# We publish a single ManufacturerData entry under POLLEN_MANUFACTURER_ID,
+# encoded as a TLV stream so the mobile picker can dedupe a BLE row
+# against the same robot's central / loopback listing **without** having
+# to GATT-connect (a connect breaks the scan + needs pairing on iOS).
+#
+# Wire layout::
+#
+#     byte 0      : format version (0x02)
+#     bytes 1..N  : TLV blocks  -  [tag][len][value]
+#
+#     tag 0x01 (8 bytes)  hardware_id_prefix
+#                          - first 8 bytes of the SHA-256 prefix that
+#                            ``get_hardware_id()`` exposes elsewhere
+#                            (16 hex chars = 8 binary bytes)
+#                          - omitted when no Reachy is attached
+#                            (``get_hardware_id()`` returns ``None``)
+#
+# Why TLV instead of the previous IPv4-list:
+#
+# - Mobile clients already have NETWORK_STATUS via a GATT char read
+#   (no scan-time benefit from advertising IPs).
+# - A stable per-robot identity is the actual scan-time win: it lets
+#   the picker UI render a single card per physical robot from the
+#   moment a beacon arrives, without forcing a GATT-connect.
+# - TLV leaves room to add fields (network_mode, capabilities, ...)
+#   without another wire-shape break.
+#
+# Budget. Legacy advert = 31 bytes. AD struct overhead per entry is
+# 2 bytes (length + type), Flags eats 3 bytes, LocalName "ReachyMini"
+# eats 12 bytes. ManufacturerData = 2 (id) + 1 (version) + 10 (one TLV
+# of 1 + 1 + 8) = 13 bytes payload, +2 AD overhead = 15 bytes. Total
+# advert = 30 bytes. Margin: 1 byte. A future tag MUST keep the AD
+# under 31 bytes total or BlueZ rejects the registration.
+
+_BLE_ADVERT_FORMAT_VERSION = 0x02
+_TLV_TAG_HARDWARE_ID_PREFIX = 0x01
+_TLV_HARDWARE_ID_PREFIX_LEN = 8
 
 
-def encode_network_ips() -> dict:
-    """Build a ManufacturerData payload with at most two IPv4 addresses.
+def encode_advert_payload(hardware_id_hex: str | None) -> dict:
+    """Build the ManufacturerData payload for the BLE advertisement.
 
-    Format per IP: 1 byte flags | 4 bytes IPv4
-      flags: 0x01 = hotspot, 0x00 = normal
+    Args:
+        hardware_id_hex: 16-hex-char SHA-256 prefix as returned by
+            ``get_hardware_id()``, or ``None`` when no Reachy is
+            attached. ``None`` and any malformed input both produce an
+            empty payload (no ManufacturerData), letting the
+            advertisement still register with just Flags + LocalName.
 
-    Returns a dict {manufacturer_id: dbus.Array(bytes)} suitable for
-    BlueZ ManufacturerData property. Returns empty dict when offline.
+    Returns:
+        ``{manufacturer_id: dbus.Array(bytes)}`` suitable for the
+        BlueZ ``ManufacturerData`` property, or ``{}`` when there is
+        nothing useful to advertise.
 
-    The cap exists because the overall advert has to fit in 31 bytes
-    (see :class:`Advertisement.get_properties`). Mobile clients that
-    need more than two interfaces can still query the GATT
-    NETWORK_STATUS characteristic once connected.
     """
-    status = get_network_status()
-    if status == "OFFLINE" or status == "ERROR":
-        return {}
+    payload = bytearray([_BLE_ADVERT_FORMAT_VERSION])
 
-    payload = bytearray()
-    is_hotspot = status.startswith("HOTSPOT")
-
-    parts = status.split("[")
-    encoded = 0
-    for part in parts[1:]:
-        if encoded >= _MAX_ADVERTISED_IPS:
-            break
-        if "]" not in part:
-            continue
-        iface, rest = part.split("]", 1)
-        ip_str = rest.split(";")[0].strip()
+    if hardware_id_hex and len(hardware_id_hex) >= _TLV_HARDWARE_ID_PREFIX_LEN * 2:
         try:
-            ip_bytes = socket.inet_aton(ip_str)
-            flag = 0x01 if (is_hotspot and iface.strip() == "wlan0") else 0x00
-            payload.append(flag)
-            payload.extend(ip_bytes)
-            encoded += 1
-        except OSError:
-            continue
+            hwid_bytes = bytes.fromhex(
+                hardware_id_hex[: _TLV_HARDWARE_ID_PREFIX_LEN * 2]
+            )
+        except ValueError:
+            hwid_bytes = b""
+        if len(hwid_bytes) == _TLV_HARDWARE_ID_PREFIX_LEN:
+            payload.append(_TLV_TAG_HARDWARE_ID_PREFIX)
+            payload.append(_TLV_HARDWARE_ID_PREFIX_LEN)
+            payload.extend(hwid_bytes)
 
-    if not payload:
+    # Only the bare format version byte left and nothing else? Skip
+    # publishing a header-only payload - it carries no information and
+    # eats AD bytes for free.
+    if len(payload) == 1:
         return {}
 
     return {
