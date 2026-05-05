@@ -203,15 +203,6 @@ def test_meta_forwards_unknown_transport_value_verbatim() -> None:
     assert relay._build_producer_meta()["transport"] == "ethernet"
 
 
-def test_meta_shape_is_minimal() -> None:
-    """Lock the wire shape so a listener written today is not broken by
-    an accidental field rename. Add new keys, never remove or rename.
-    """
-    relay = _make_relay()
-    meta = relay._build_producer_meta()
-    assert set(meta.keys()) == {"name", "transport"}
-
-
 def test_meta_used_by_producer_status_payload() -> None:
     """``_producer_status_payload`` MUST embed the meta verbatim: the
     payload is the canonical envelope, ``_build_producer_meta`` is the
@@ -223,3 +214,67 @@ def test_meta_used_by_producer_status_payload() -> None:
     assert payload["type"] == "setPeerStatus"
     assert payload["roles"] == ["producer"]
     assert payload["meta"] == relay._build_producer_meta()
+
+
+# ---------------------------------------------------------------------------
+# meta.hardware_id (stable per-robot identity)
+# ---------------------------------------------------------------------------
+#
+# ``hardware_id`` is sourced via ``get_hardware_id()`` which reads the
+# Pollen audio device's USB serial from sysfs. We monkeypatch that
+# function so the tests exercise the relay's ``meta`` plumbing, not
+# the underlying serial-reading helper (which has its own coverage).
+
+
+def test_meta_includes_hardware_id_when_available(monkeypatch: pytest.MonkeyPatch) -> None:
+    """When ``get_hardware_id()`` returns a string, the meta MUST
+    carry it under the ``hardware_id`` key. Listeners use this as the
+    stable cross-source identity (BLE GATT / central / loopback HTTP
+    all expose the same value)."""
+    import reachy_mini.media.central_signaling_relay as relay_module
+
+    monkeypatch.setattr(relay_module, "get_hardware_id", lambda: "abc123def456")
+    relay = _make_relay()
+    meta = relay._build_producer_meta()
+    assert meta["hardware_id"] == "abc123def456"
+
+
+def test_meta_omits_hardware_id_when_absent(monkeypatch: pytest.MonkeyPatch) -> None:
+    """When no Reachy is attached (``get_hardware_id() is None``) the
+    field MUST be absent from the meta - never serialised as ``null``
+    or as the literal ``"unknown"``. Consumers branch on
+    ``"hardware_id" in meta`` to decide whether to use the stable id
+    or fall back to ``peerId`` / BLE address.
+    """
+    import reachy_mini.media.central_signaling_relay as relay_module
+
+    monkeypatch.setattr(relay_module, "get_hardware_id", lambda: None)
+    relay = _make_relay()
+    meta = relay._build_producer_meta()
+    assert "hardware_id" not in meta
+
+
+def test_meta_shape_with_hardware_id(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Lock the full set of keys when ``hardware_id`` is available so a
+    listener written today is not broken by an accidental field rename.
+    Add new keys, never remove or rename.
+    """
+    import reachy_mini.media.central_signaling_relay as relay_module
+
+    monkeypatch.setattr(relay_module, "get_hardware_id", lambda: "deadbeef00112233")
+    relay = _make_relay()
+    meta = relay._build_producer_meta()
+    assert set(meta.keys()) == {"name", "transport", "hardware_id"}
+
+
+def test_meta_shape_without_hardware_id(monkeypatch: pytest.MonkeyPatch) -> None:
+    """And the minimal key set when no Reachy is attached. Same lock
+    intent: a future PR adding a new field MUST extend both shape tests
+    rather than relax them.
+    """
+    import reachy_mini.media.central_signaling_relay as relay_module
+
+    monkeypatch.setattr(relay_module, "get_hardware_id", lambda: None)
+    relay = _make_relay()
+    meta = relay._build_producer_meta()
+    assert set(meta.keys()) == {"name", "transport"}
