@@ -151,3 +151,75 @@ def test_negotiate_accepts_int_recommended() -> None:
     )
     assert result == 5.0
     assert isinstance(result, float)
+
+
+# ---------------------------------------------------------------------------
+# _build_producer_meta
+# ---------------------------------------------------------------------------
+#
+# These tests are the contract guard for the meta dict the daemon
+# advertises to central listeners. They lock down the exact wire shape
+# the mobile app reads. A future change extending the meta (install_id,
+# capabilities, ...) MUST add new tests here, not edit the existing
+# ones - listening clients at older versions rely on these fields not
+# disappearing.
+
+
+def _make_relay(robot_name: str = "reachymini", transport: str = "wifi") -> CentralSignalingRelay:
+    """Construct a relay without starting the asyncio plumbing.
+
+    The constructor only stores fields; ``start()`` is what binds to the
+    websocket and HTTP client. Calling ``__init__`` directly is therefore
+    safe for pure-function tests.
+    """
+    return CentralSignalingRelay(robot_name=robot_name, transport=transport)
+
+
+def test_meta_carries_robot_name() -> None:
+    relay = _make_relay(robot_name="Sparky")
+    assert relay._build_producer_meta()["name"] == "Sparky"
+
+
+def test_meta_carries_transport_wifi_by_default() -> None:
+    """The relay defaults to ``transport='wifi'`` when no override is
+    passed: this matches the Pi-side autonomous daemon, which is the
+    common case (the desktop tray is the one that has to opt in)."""
+    relay = _make_relay()
+    assert relay._build_producer_meta()["transport"] == "wifi"
+
+
+def test_meta_carries_transport_usb_when_set() -> None:
+    relay = _make_relay(transport="usb")
+    assert relay._build_producer_meta()["transport"] == "usb"
+
+
+def test_meta_forwards_unknown_transport_value_verbatim() -> None:
+    """``transport`` is intentionally a free-form string: future fronts
+    (``"ethernet"``, ``"sim"``, ``"mockup"``, ...) must propagate to
+    listeners without a relay change. Listeners that don't recognise
+    the value fall back to "Wi-Fi" by convention.
+    """
+    relay = _make_relay(transport="ethernet")
+    assert relay._build_producer_meta()["transport"] == "ethernet"
+
+
+def test_meta_shape_is_minimal() -> None:
+    """Lock the wire shape so a listener written today is not broken by
+    an accidental field rename. Add new keys, never remove or rename.
+    """
+    relay = _make_relay()
+    meta = relay._build_producer_meta()
+    assert set(meta.keys()) == {"name", "transport"}
+
+
+def test_meta_used_by_producer_status_payload() -> None:
+    """``_producer_status_payload`` MUST embed the meta verbatim: the
+    payload is the canonical envelope, ``_build_producer_meta`` is the
+    source of truth for the dict's content. Any divergence would cause
+    the heartbeat re-emission to drift from the initial registration.
+    """
+    relay = _make_relay(robot_name="r1", transport="usb")
+    payload = relay._producer_status_payload()
+    assert payload["type"] == "setPeerStatus"
+    assert payload["roles"] == ["producer"]
+    assert payload["meta"] == relay._build_producer_meta()
