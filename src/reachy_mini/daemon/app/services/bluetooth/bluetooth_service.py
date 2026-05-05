@@ -857,7 +857,9 @@ class BluetoothCommandService:
         ad_manager = dbus.Interface(adapter, LE_ADVERTISING_MANAGER_IFACE)
         self.adv = Advertisement(self.bus, 0, "peripheral", self.device_name)
         self.adv.service_uuids = [REACHY_STATUS_SERVICE_UUID]
-        self.adv.manufacturer_data = encode_advert_payload(get_hardware_id())
+        self.adv.manufacturer_data = encode_advert_payload(
+            get_hardware_id(), get_network_status()
+        )
         self._ad_manager = ad_manager
         ad_manager.RegisterAdvertisement(
             self.adv.get_path(),
@@ -881,7 +883,7 @@ class BluetoothCommandService:
         """Periodic callback: update GATT characteristic and advertisement."""
         self.app.reachy_status.update_network_status()
 
-        new_data = encode_advert_payload(get_hardware_id())
+        new_data = encode_advert_payload(get_hardware_id(), get_network_status())
         if new_data != self.adv.manufacturer_data:
             self.adv.manufacturer_data = new_data
             try:
@@ -1296,82 +1298,115 @@ POLLEN_MANUFACTURER_ID = 0xFFFF  # Reserved ID for development/testing
 
 
 # =====================================================================
-# BLE advertisement payload (TLV v0x02)
+# BLE advertisement payload
 # =====================================================================
 #
-# We publish a single ManufacturerData entry under POLLEN_MANUFACTURER_ID,
-# encoded as a TLV stream so the mobile picker can dedupe a BLE row
-# against the same robot's central / loopback listing **without** having
-# to GATT-connect (a connect breaks the scan + needs pairing on iOS).
+# Single ManufacturerData entry under POLLEN_MANUFACTURER_ID, fixed-
+# offset layout designed to:
+#
+#   1. Keep wire compatibility with the legacy IPv4-list advert: any
+#      old client that parses ``[flag][IPv4][...]`` still reads the
+#      first IP correctly (a hypothetical ghost "second IP" decoded
+#      from the trailing hwid bytes would never crash, just look bogus
+#      to a UI that displays it - no consumer in this codebase reads
+#      IPs from the advert anyway).
+#
+#   2. Carry the SHA-256 hardware-id prefix at scan time so the mobile
+#      picker can dedupe a BLE row against the same robot's
+#      central / loopback rows without GATT-connecting (a connect
+#      breaks the scan and needs pairing on iOS).
 #
 # Wire layout::
 #
-#     byte 0      : format version (0x02)
-#     bytes 1..N  : TLV blocks  -  [tag][len][value]
+#   byte 0      : flag  (0x00 = LAN, 0x01 = hotspot AP)
+#   bytes 1-4   : IPv4 (network byte order)
+#   bytes 5-11  : hardware_id prefix (first 7 bytes = 14 hex chars)
 #
-#     tag 0x01 (8 bytes)  hardware_id_prefix
-#                          - first 8 bytes of the SHA-256 prefix that
-#                            ``get_hardware_id()`` exposes elsewhere
-#                            (16 hex chars = 8 binary bytes)
-#                          - omitted when no Reachy is attached
-#                            (``get_hardware_id()`` returns ``None``)
+# Total payload = 12 bytes, exactly the budget left after Flags (3)
+# + Complete Local Name "ReachyMini" (12) + ManufacturerData
+# envelope (4) = 19 bytes used inside the 31-byte legacy advert
+# limit. **No spare bytes.** Any future field requires either
+# growing room (shorter LocalName, drop ManufacturerData envelope)
+# or a wire-shape bump.
 #
-# Why TLV instead of the previous IPv4-list:
-#
-# - Mobile clients already have NETWORK_STATUS via a GATT char read
-#   (no scan-time benefit from advertising IPs).
-# - A stable per-robot identity is the actual scan-time win: it lets
-#   the picker UI render a single card per physical robot from the
-#   moment a beacon arrives, without forcing a GATT-connect.
-# - TLV leaves room to add fields (network_mode, capabilities, ...)
-#   without another wire-shape break.
-#
-# Budget. Legacy advert = 31 bytes. AD struct overhead per entry is
-# 2 bytes (length + type), Flags eats 3 bytes, LocalName "ReachyMini"
-# eats 12 bytes. ManufacturerData = 2 (id) + 1 (version) + 10 (one TLV
-# of 1 + 1 + 8) = 13 bytes payload, +2 AD overhead = 15 bytes. Total
-# advert = 30 bytes. Margin: 1 byte. A future tag MUST keep the AD
-# under 31 bytes total or BlueZ rejects the registration.
+# Why prefix bytes (not suffix). The mobile picker shows the FIRST 5
+# hex chars of hardware_id as a robot tag (``id:6171b``). Carrying
+# the *prefix* in the advert means the user-visible tag matches
+# regardless of whether the source is BLE / Local USB / central.
 
-_BLE_ADVERT_FORMAT_VERSION = 0x02
-_TLV_TAG_HARDWARE_ID_PREFIX = 0x01
-_TLV_HARDWARE_ID_PREFIX_LEN = 8
+_HARDWARE_ID_PREFIX_LEN = 7  # bytes (= 14 hex chars)
+_FLAG_LAN = 0x00
+_FLAG_HOTSPOT = 0x01
 
 
-def encode_advert_payload(hardware_id_hex: str | None) -> dict:
+def _decode_first_network_ip(network_status: str) -> tuple[int, bytes] | None:
+    """Pick the first IPv4 from the daemon's network status string.
+
+    Format produced by ``get_network_status()`` is e.g.::
+
+        "CONNECTED [wlan0] 192.168.1.19 ; [eth0] 10.0.0.5"
+        "HOTSPOT [wlan0] 10.42.0.1"
+        "OFFLINE"
+
+    We pick the first parseable IP and return ``(flag, 4 bytes)``.
+    Returns ``None`` when offline / unparseable.
+    """
+    if not network_status or network_status in ("OFFLINE", "ERROR"):
+        return None
+    is_hotspot = network_status.startswith("HOTSPOT")
+    parts = network_status.split("[")
+    for part in parts[1:]:
+        if "]" not in part:
+            continue
+        iface, rest = part.split("]", 1)
+        ip_str = rest.split(";")[0].strip()
+        try:
+            ip_bytes = socket.inet_aton(ip_str)
+        except OSError:
+            continue
+        flag = _FLAG_HOTSPOT if (is_hotspot and iface.strip() == "wlan0") else _FLAG_LAN
+        return flag, ip_bytes
+    return None
+
+
+def encode_advert_payload(
+    hardware_id_hex: str | None, network_status: str | None
+) -> dict:
     """Build the ManufacturerData payload for the BLE advertisement.
 
     Args:
         hardware_id_hex: 16-hex-char SHA-256 prefix as returned by
             ``get_hardware_id()``, or ``None`` when no Reachy is
-            attached. ``None`` and any malformed input both produce an
-            empty payload (no ManufacturerData), letting the
-            advertisement still register with just Flags + LocalName.
+            attached.
+        network_status: plain-text status string as returned by
+            ``get_network_status()`` (``"CONNECTED [wlan0] 192.168.1.19"``,
+            ``"HOTSPOT [wlan0] 10.42.0.1"``, ``"OFFLINE"``...). Used
+            to fill the leading ``[flag][IPv4]`` so old IP-list
+            parsers keep working.
 
     Returns:
         ``{manufacturer_id: dbus.Array(bytes)}`` suitable for the
         BlueZ ``ManufacturerData`` property, or ``{}`` when there is
-        nothing useful to advertise.
+        nothing useful to advertise (no IP and no hardware id).
 
     """
-    payload = bytearray([_BLE_ADVERT_FORMAT_VERSION])
+    ip_part = _decode_first_network_ip(network_status or "")
 
-    if hardware_id_hex and len(hardware_id_hex) >= _TLV_HARDWARE_ID_PREFIX_LEN * 2:
+    payload = bytearray()
+    if ip_part is not None:
+        flag, ip_bytes = ip_part
+        payload.append(flag)
+        payload.extend(ip_bytes)
+
+    if hardware_id_hex and len(hardware_id_hex) >= _HARDWARE_ID_PREFIX_LEN * 2:
         try:
-            hwid_bytes = bytes.fromhex(
-                hardware_id_hex[: _TLV_HARDWARE_ID_PREFIX_LEN * 2]
-            )
+            hwid_bytes = bytes.fromhex(hardware_id_hex[: _HARDWARE_ID_PREFIX_LEN * 2])
         except ValueError:
             hwid_bytes = b""
-        if len(hwid_bytes) == _TLV_HARDWARE_ID_PREFIX_LEN:
-            payload.append(_TLV_TAG_HARDWARE_ID_PREFIX)
-            payload.append(_TLV_HARDWARE_ID_PREFIX_LEN)
+        if len(hwid_bytes) == _HARDWARE_ID_PREFIX_LEN:
             payload.extend(hwid_bytes)
 
-    # Only the bare format version byte left and nothing else? Skip
-    # publishing a header-only payload - it carries no information and
-    # eats AD bytes for free.
-    if len(payload) == 1:
+    if not payload:
         return {}
 
     return {

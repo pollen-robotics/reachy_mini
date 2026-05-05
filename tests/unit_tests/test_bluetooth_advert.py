@@ -1,15 +1,16 @@
-"""Unit tests for the BLE advertisement TLV encoder.
+"""Unit tests for the BLE advertisement encoder.
 
 Targets the pure-Python ``encode_advert_payload`` helper. The full BLE
-service is not exercised here (its dbus / glib bindings are
-integration-test territory); we only lock the wire shape so a future
-refactor cannot accidentally break the mobile picker's parser.
+service is not exercised here (its dbus / glib bindings are integration
+territory); we only lock the wire shape so a future refactor cannot
+silently break the mobile picker's parser or the legacy IP-list parsers
+that hypothetical older clients may still run.
 
 The encoder lives in the system-Python ``bluetooth_service.py`` module
 that runs outside the daemon's venv. We import it directly with
 ``importlib`` after stubbing the dbus / gi modules: their attributes
-on the helper paths we exercise here are reduced to ``UInt16``, ``Byte``
-and ``Array`` plumbing.
+on the helper paths we exercise here are reduced to ``UInt16`` /
+``Byte`` / ``Array`` plumbing.
 """
 
 from __future__ import annotations
@@ -20,7 +21,6 @@ import types
 from pathlib import Path
 
 import pytest
-
 
 _MODULE_PATH = (
     Path(__file__).resolve().parents[2]
@@ -62,11 +62,9 @@ def _stub_bus_modules() -> None:
                 setattr(mod, attr, child)
                 sys.modules[full] = child
 
-    # Plumbing the encoder actually exercises.
     sys.modules["dbus"].UInt16 = lambda x: int(x)
     sys.modules["dbus"].Byte = lambda x: int(x) & 0xFF
     sys.modules["dbus"].Array = lambda items, signature=None: list(items)
-    # Filler so other module-top-level statements don't crash.
     sys.modules["dbus"].SystemBus = type("SystemBus", (), {})
     sys.modules["dbus"].Interface = type("Interface", (), {})
     sys.modules["dbus"].Dictionary = dict
@@ -101,12 +99,7 @@ def bt():  # type: ignore[no-untyped-def]
     return _import_bt_service()
 
 
-# ---------------------------------------------------------------------------
-# encode_advert_payload
-# ---------------------------------------------------------------------------
-
-
-def _decode_payload(bt, mfg_data: dict) -> list[int]:
+def _decode(bt, mfg_data: dict) -> list[int]:
     """Pull the raw byte list out of the dbus-style ManufacturerData dict."""
     if not mfg_data:
         return []
@@ -114,69 +107,187 @@ def _decode_payload(bt, mfg_data: dict) -> list[int]:
     return list(mfg_data[bt.POLLEN_MANUFACTURER_ID])
 
 
-def test_encode_emits_version_byte_then_hwid_tlv(bt) -> None:
-    """A canonical 16-hex-char hwid produces a 11-byte payload:
-    1 version byte + 1 tag + 1 len + 8 hwid bytes."""
-    payload = _decode_payload(bt, bt.encode_advert_payload("0123456789abcdef"))
+# ---------------------------------------------------------------------------
+# Wire-shape locks (the contract any reader must rely on)
+# ---------------------------------------------------------------------------
+
+
+def test_constants_match_the_documented_wire_shape(bt) -> None:
+    """The wire is documented as flag(1) + IPv4(4) + hwid_prefix(7).
+    These three constants are what the parser keys off; if any of them
+    drifts, every BLE-aware client must re-release. A test failing here
+    is a wire-shape break, not just a refactor.
+    """
+    assert bt._HARDWARE_ID_PREFIX_LEN == 7
+    assert bt._FLAG_LAN == 0x00
+    assert bt._FLAG_HOTSPOT == 0x01
+
+
+def test_total_payload_size_at_or_below_budget(bt) -> None:
+    """Hard cap: 12 bytes for the ManufacturerData payload (after AD
+    overhead is taken). 1 (flag) + 4 (IPv4) + 7 (hwid prefix) = 12.
+    A regression that pushes past 12 will cause BlueZ to silently drop
+    the advert or truncate it, both invisible until the mobile picker
+    breaks in the field.
+    """
+    payload = _decode(
+        bt,
+        bt.encode_advert_payload(
+            "0123456789abcdef" + "00" * 16,  # canonical 16-hex hwid
+            "CONNECTED [wlan0] 192.168.1.19",
+        ),
+    )
+    assert len(payload) == 12
+
+
+# ---------------------------------------------------------------------------
+# IP slot
+# ---------------------------------------------------------------------------
+
+
+def test_lan_ip_emitted_with_flag_zero(bt) -> None:
+    payload = _decode(
+        bt,
+        bt.encode_advert_payload(None, "CONNECTED [wlan0] 192.168.1.19"),
+    )
+    # No hwid -> just flag + IP
+    assert payload == [bt._FLAG_LAN, 192, 168, 1, 19]
+
+
+def test_hotspot_ip_emitted_with_flag_one(bt) -> None:
+    """Hotspot is the one case where the daemon's wlan0 hosts an AP at
+    10.42.0.1. The flag MUST be 0x01 so older parsers can branch on
+    "this robot is in setup mode, not on the LAN"."""
+    payload = _decode(bt, bt.encode_advert_payload(None, "HOTSPOT [wlan0] 10.42.0.1"))
+    assert payload == [bt._FLAG_HOTSPOT, 10, 42, 0, 1]
+
+
+def test_offline_with_no_hwid_yields_empty_payload(bt) -> None:
+    """Nothing to publish at all -> drop the manufacturer data entry.
+    The advertisement still registers with just Flags + LocalName."""
+    assert bt.encode_advert_payload(None, "OFFLINE") == {}
+    assert bt.encode_advert_payload(None, "ERROR") == {}
+    assert bt.encode_advert_payload(None, "") == {}
+    assert bt.encode_advert_payload(None, None) == {}
+
+
+def test_offline_but_hwid_present_emits_hwid_only(bt) -> None:
+    """A daemon that boots before the network is up should still
+    advertise its hardware id - the mobile picker can't dedupe by IP
+    here but can still match the BLE row to the same robot's central
+    listing once it gets online."""
+    payload = _decode(
+        bt, bt.encode_advert_payload("a" * 16, "OFFLINE")
+    )
+    assert payload == [0xAA] * bt._HARDWARE_ID_PREFIX_LEN
+
+
+def test_unparseable_network_status_falls_through_to_hwid_only(bt) -> None:
+    """A garbled NETWORK_STATUS payload (e.g. daemon crashed mid-write)
+    must not break the advertisement: emit hwid only, skip the IP."""
+    payload = _decode(
+        bt, bt.encode_advert_payload("0123456789abcdef" + "00" * 16, "totally garbled")
+    )
+    assert len(payload) == bt._HARDWARE_ID_PREFIX_LEN
+
+
+# ---------------------------------------------------------------------------
+# Hardware id slot
+# ---------------------------------------------------------------------------
+
+
+def test_hwid_emitted_at_offset_5(bt) -> None:
+    """The mobile parser slices ``payload[5:12]`` to extract hwid. The
+    encoder MUST place hwid at offset 5 (right after flag + IPv4)."""
+    payload = _decode(
+        bt,
+        bt.encode_advert_payload(
+            "0123456789abcdef" + "00" * 16,
+            "CONNECTED [wlan0] 192.168.1.19",
+        ),
+    )
+    # bytes 5..11 = first 7 bytes of hwid hex = 0x01,0x23,0x45,0x67,0x89,0xab,0xcd
+    assert payload[5:12] == [0x01, 0x23, 0x45, 0x67, 0x89, 0xAB, 0xCD]
+
+
+def test_hwid_uses_only_first_7_bytes(bt) -> None:
+    """``hardware_id`` is 16 hex chars (= 8 bytes) by spec; we only
+    publish the first 7 (= 14 hex chars). The truncation MUST be
+    deterministic so the prefix the UI displays (``id:6171b``) is the
+    same prefix the parser extracts from the advert."""
+    payload = _decode(
+        bt,
+        bt.encode_advert_payload("0123456789abcdef", "CONNECTED [wlan0] 1.2.3.4"),
+    )
+    assert payload[5:12] == [0x01, 0x23, 0x45, 0x67, 0x89, 0xAB, 0xCD]
+    # The 8th byte of hwid (0xef) is intentionally NOT in the advert.
+    assert 0xEF not in payload[5:12]
+
+
+def test_hwid_none_emits_payload_with_only_ip(bt) -> None:
+    payload = _decode(
+        bt, bt.encode_advert_payload(None, "CONNECTED [wlan0] 1.2.3.4")
+    )
+    assert payload == [bt._FLAG_LAN, 1, 2, 3, 4]
+
+
+def test_hwid_short_or_invalid_silently_falls_back(bt) -> None:
+    """A truncated or non-hex hwid is treated as missing rather than
+    advertising padding bytes. Same path as ``hwid is None``."""
+    short = bt.encode_advert_payload("dead", "CONNECTED [wlan0] 1.2.3.4")
+    not_hex = bt.encode_advert_payload(
+        "not-a-hex-string-z", "CONNECTED [wlan0] 1.2.3.4"
+    )
+    assert _decode(bt, short) == [bt._FLAG_LAN, 1, 2, 3, 4]
+    assert _decode(bt, not_hex) == [bt._FLAG_LAN, 1, 2, 3, 4]
+
+
+# ---------------------------------------------------------------------------
+# Combined cases (the canonical happy path)
+# ---------------------------------------------------------------------------
+
+
+def test_canonical_lan_and_hwid_payload(bt) -> None:
+    payload = _decode(
+        bt,
+        bt.encode_advert_payload(
+            "6171bd4b0e35ee9b", "CONNECTED [wlan0] 192.168.1.19"
+        ),
+    )
     assert payload == [
-        bt._BLE_ADVERT_FORMAT_VERSION,
-        bt._TLV_TAG_HARDWARE_ID_PREFIX,
-        bt._TLV_HARDWARE_ID_PREFIX_LEN,
-        0x01,
-        0x23,
-        0x45,
-        0x67,
-        0x89,
-        0xAB,
-        0xCD,
-        0xEF,
+        bt._FLAG_LAN,
+        192,
+        168,
+        1,
+        19,
+        0x61,
+        0x71,
+        0xBD,
+        0x4B,
+        0x0E,
+        0x35,
+        0xEE,
     ]
 
 
-def test_encode_returns_empty_when_hwid_is_none(bt) -> None:
-    """No ``hardware_id`` -> no advertisement payload at all (the
-    advert still registers with just Flags + LocalName)."""
-    assert bt.encode_advert_payload(None) == {}
-
-
-def test_encode_returns_empty_on_short_hwid(bt) -> None:
-    """A truncated hex string is treated as missing rather than
-    silently advertising padding bytes."""
-    assert bt.encode_advert_payload("dead") == {}
-
-
-def test_encode_returns_empty_on_non_hex(bt) -> None:
-    """A non-hex string never reaches the wire as garbage bytes."""
-    assert bt.encode_advert_payload("not-a-hex-string-zzzzzzz") == {}
-
-
-def test_encode_uses_only_first_8_bytes_of_hwid(bt) -> None:
-    """``hardware_id`` is 16 hex chars by spec, but if a longer string
-    arrives we MUST take exactly the first 8 bytes (16 hex chars) and
-    drop the rest. This guards the budget: any extra byte would push
-    the advert past 31 bytes total once Flags + LocalName is counted."""
-    long_hwid = "0123456789abcdef" + "ff" * 16
-    payload = _decode_payload(bt, bt.encode_advert_payload(long_hwid))
-    assert payload[3:] == [0x01, 0x23, 0x45, 0x67, 0x89, 0xAB, 0xCD, 0xEF]
-
-
-def test_encode_payload_total_size_under_budget(bt) -> None:
-    """Sanity bound: the manufacturer-specific bytes must fit inside
-    the 16-byte slot we reserved when sizing the advert (31 bytes -
-    Flags 3 - LocalName 12 = 16). A regression that pushes the payload
-    over this size will cause BlueZ to silently drop the advert."""
-    payload = _decode_payload(bt, bt.encode_advert_payload("a" * 16))
-    assert len(payload) <= 16
-
-
-def test_format_version_is_v0x02(bt) -> None:
-    """Wire-shape lock: any change here breaks every parser in the
-    fleet at once. Bump only with a coordinated client release."""
-    assert bt._BLE_ADVERT_FORMAT_VERSION == 0x02
-
-
-def test_hwid_tlv_tag_and_len_are_stable(bt) -> None:
-    """Same lock as the format version: the parser keys off these
-    constants byte-for-byte."""
-    assert bt._TLV_TAG_HARDWARE_ID_PREFIX == 0x01
-    assert bt._TLV_HARDWARE_ID_PREFIX_LEN == 8
+def test_canonical_hotspot_and_hwid_payload(bt) -> None:
+    payload = _decode(
+        bt,
+        bt.encode_advert_payload(
+            "6171bd4b0e35ee9b", "HOTSPOT [wlan0] 10.42.0.1"
+        ),
+    )
+    assert payload == [
+        bt._FLAG_HOTSPOT,
+        10,
+        42,
+        0,
+        1,
+        0x61,
+        0x71,
+        0xBD,
+        0x4B,
+        0x0E,
+        0x35,
+        0xEE,
+    ]
