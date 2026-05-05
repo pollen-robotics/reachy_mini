@@ -5,10 +5,12 @@ Includes a fixed NoInputNoOutput agent for automatic Just Works pairing.
 """
 # mypy: ignore-errors
 
+import concurrent.futures
 import fcntl
 import json
 import logging
 import os
+import re
 import socket
 import subprocess
 import urllib.error
@@ -765,12 +767,15 @@ class BluetoothCommandService:
             else:
                 return "ERROR: Incorrect PIN"
 
-        # WiFi provisioning commands. WIFI_STATUS is public (read-only snapshot);
-        # mutating commands require prior PIN authentication. Unlike CMD_*, we do
-        # NOT reset `self.connected` afterwards so a client can chain
-        # scan -> connect -> poll status in a single provisioning session.
+        # WiFi provisioning commands. WIFI_STATUS and WIFI_PROBE are public
+        # (read-only snapshots); mutating commands require prior PIN
+        # authentication. Unlike CMD_*, we do NOT reset `self.connected`
+        # afterwards so a client can chain scan -> connect -> poll status
+        # in a single provisioning session.
         elif upper == "WIFI_STATUS":
             return _wifi_status()
+        elif upper == "WIFI_PROBE":
+            return _wifi_probe()
         elif upper == "WIFI_SCAN":
             if not self.connected:
                 return "ERROR: Not connected. Please authenticate first."
@@ -1082,7 +1087,207 @@ def _wifi_forget(ssid: str) -> str:
         logger.exception("wifi_forget failed")
         return f"ERROR: {e}"
 
-      
+
+# =====================================================================
+# WIFI_PROBE - parallel network connectivity diagnostic
+# =====================================================================
+#
+# Returns a JSON snapshot of the connectivity stack, one tag per probe:
+#
+#   {"wlan", "gateway", "dns", "internet", "daemon"}
+#
+# Mobile clients run this on a failed first-time setup to pinpoint
+# which layer broke ("Wi-Fi up but DNS fails") instead of surfacing a
+# generic "robot couldn't connect". The five probes run in parallel
+# under a strict total budget so a stuck DNS resolver cannot block the
+# BLE response (Bluez treats >5 s as a write-failure on the response
+# characteristic, and a stuck probe would propagate that error to the
+# whole call).
+#
+# Public read-only command - no auth required, like ``WIFI_STATUS``.
+
+# Per-probe wall-clock cap. Each probe MUST honour this internally
+# (subprocess timeouts, socket timeouts) so the executor can collect
+# results before the total budget elapses.
+WIFI_PROBE_INDIVIDUAL_TIMEOUT_S = 1.5
+
+# Total budget across all probes. Must be < BlueZ's response-write
+# timeout (5 s). Probes that have not produced a result within this
+# window are reported as ``timeout``.
+WIFI_PROBE_TOTAL_BUDGET_S = 2.5
+
+# Endpoints used by the DNS / internet probes. Hugging Face is the
+# canonical "always-on" service for this fleet (mobile clients depend
+# on it anyway), so a failure here is genuinely actionable.
+WIFI_PROBE_DNS_HOST = "huggingface.co"
+WIFI_PROBE_INTERNET_URL = "https://huggingface.co/"
+
+
+def _probe_wlan() -> str:
+    """Return the wlan0 interface health.
+
+    ``ok``    : interface up AND has at least one IPv4 address.
+    ``down``  : interface present but down or no IPv4 (link-only).
+    ``error`` : interface missing or read failure (no /sys node).
+    """
+    try:
+        with open("/sys/class/net/wlan0/operstate") as fh:
+            state = fh.read().strip()
+    except FileNotFoundError:
+        return "error"
+    except Exception:
+        return "error"
+    if state != "up":
+        return "down"
+    try:
+        result = subprocess.run(
+            ["ip", "-4", "-o", "addr", "show", "wlan0"],
+            capture_output=True,
+            text=True,
+            timeout=WIFI_PROBE_INDIVIDUAL_TIMEOUT_S,
+        )
+    except (subprocess.TimeoutExpired, Exception):
+        return "error"
+    return "ok" if "inet " in result.stdout else "down"
+
+
+def _probe_gateway() -> str:
+    """Ping the default IPv4 gateway with a single packet.
+
+    ``ok``           : gateway reachable.
+    ``unreachable``  : no default route or ping returned non-zero.
+    """
+    try:
+        route = subprocess.run(
+            ["ip", "route", "show", "default"],
+            capture_output=True,
+            text=True,
+            timeout=WIFI_PROBE_INDIVIDUAL_TIMEOUT_S,
+        )
+    except Exception:
+        return "unreachable"
+    match = re.search(r"default via (\S+)", route.stdout)
+    if not match:
+        return "unreachable"
+    gateway = match.group(1)
+    try:
+        # ``-c 1`` one packet, ``-W 1`` wait at most 1 s for a reply.
+        # The subprocess timeout is the safety net for ping itself
+        # hanging on a half-initialised network namespace.
+        ping = subprocess.run(
+            ["ping", "-c", "1", "-W", "1", gateway],
+            capture_output=True,
+            text=True,
+            timeout=WIFI_PROBE_INDIVIDUAL_TIMEOUT_S,
+        )
+    except Exception:
+        return "unreachable"
+    return "ok" if ping.returncode == 0 else "unreachable"
+
+
+def _probe_dns() -> str:
+    """Resolve a known hostname to an A/AAAA record.
+
+    ``ok`` if the resolver returned an address, ``fail`` otherwise.
+    Uses ``socket.getaddrinfo`` rather than ``gethostbyname`` so IPv6-only
+    networks aren't mis-reported as broken.
+    """
+    try:
+        socket.setdefaulttimeout(WIFI_PROBE_INDIVIDUAL_TIMEOUT_S)
+        socket.getaddrinfo(WIFI_PROBE_DNS_HOST, None)
+        return "ok"
+    except Exception:
+        return "fail"
+    finally:
+        socket.setdefaulttimeout(None)
+
+
+def _probe_internet() -> str:
+    """HEAD a known HTTPS endpoint and report whether the request lands.
+
+    A 2xx-4xx response counts as ``ok``: it means TLS, routing and the
+    transport layer are healthy. Only 5xx or transport failures count
+    as ``fail`` (5xx implies the upstream is reachable but degraded,
+    which is still an "internet works" signal from the daemon's POV).
+    """
+    try:
+        req = urllib.request.Request(WIFI_PROBE_INTERNET_URL, method="HEAD")
+        with urllib.request.urlopen(
+            req, timeout=WIFI_PROBE_INDIVIDUAL_TIMEOUT_S
+        ) as resp:
+            return "ok" if resp.status < 500 else "fail"
+    except urllib.error.HTTPError as e:
+        # 4xx from HF means the request reached the server. Internet is up.
+        return "ok" if e.code < 500 else "fail"
+    except Exception:
+        return "fail"
+
+
+def _probe_daemon() -> str:
+    """Verify the local FastAPI daemon is responsive on loopback.
+
+    The BLE service runs in its own systemd unit, so ``WIFI_PROBE``
+    being able to talk to itself is non-trivial information: a stuck
+    daemon would still let the BLE service answer ``WIFI_STATUS`` (it
+    would just return ``mode: null, error: daemon_unreachable``), and
+    the user has no way to tell that apart from a Wi-Fi outage without
+    this probe.
+    """
+    try:
+        with urllib.request.urlopen(
+            DAEMON_LOCAL_URL + "/", timeout=WIFI_PROBE_INDIVIDUAL_TIMEOUT_S
+        ) as resp:
+            return "ok" if 200 <= resp.status < 500 else "fail"
+    except urllib.error.HTTPError as e:
+        return "ok" if 200 <= e.code < 500 else "fail"
+    except Exception:
+        return "fail"
+
+
+def _wifi_probe() -> str:
+    """Run the five connectivity probes in parallel and return JSON.
+
+    Probes that don't complete within ``WIFI_PROBE_TOTAL_BUDGET_S`` are
+    reported as ``timeout``. Each probe also enforces its own
+    ``WIFI_PROBE_INDIVIDUAL_TIMEOUT_S`` wall-clock so the budget
+    cannot be exceeded by more than ~1 s in the pathological case of
+    a probe that ignores its individual timeout.
+    """
+    probes: dict[str, Callable[[], str]] = {
+        "wlan": _probe_wlan,
+        "gateway": _probe_gateway,
+        "dns": _probe_dns,
+        "internet": _probe_internet,
+        "daemon": _probe_daemon,
+    }
+    results: dict[str, str] = {}
+    with concurrent.futures.ThreadPoolExecutor(
+        max_workers=len(probes), thread_name_prefix="wifi-probe"
+    ) as pool:
+        futures = {pool.submit(fn): name for name, fn in probes.items()}
+        try:
+            for future in concurrent.futures.as_completed(
+                futures, timeout=WIFI_PROBE_TOTAL_BUDGET_S
+            ):
+                name = futures[future]
+                try:
+                    results[name] = future.result()
+                except Exception as e:
+                    logger.warning("wifi_probe %s raised: %s", name, e)
+                    results[name] = "error"
+        except concurrent.futures.TimeoutError:
+            pass
+    # Mark every probe that didn't complete within the budget as
+    # ``timeout``. We deliberately do NOT cancel the lingering futures
+    # here: ``ThreadPoolExecutor`` cannot interrupt a running thread,
+    # and the executor's ``__exit__`` will join them. Setting
+    # ``cancel_futures=True`` (Python 3.9+) only affects work that has
+    # not started yet, which is rarely the case at this scale.
+    for name in probes:
+        results.setdefault(name, "timeout")
+    return json.dumps(results, separators=(",", ":"))
+
+
 POLLEN_MANUFACTURER_ID = 0xFFFF  # Reserved ID for development/testing
 
 
