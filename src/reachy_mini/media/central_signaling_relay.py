@@ -100,6 +100,7 @@ class CentralSignalingRelay:
         local_uri: str = LOCAL_GSTREAMER_SIGNALING,
         hf_token: Optional[str] = None,
         robot_name: str = "reachymini",
+        transport: str = "wifi",
         on_state_change: Optional[Callable[["RelayState", Optional[str]], None]] = None,
         robot_app_lock: Optional[RobotAppLock] = None,
     ):
@@ -110,6 +111,16 @@ class CentralSignalingRelay:
             local_uri: WebSocket URI of local GStreamer signaling server
             hf_token: HuggingFace token for authentication (will be refreshed)
             robot_name: Name to register as producer
+            transport: How a client physically reaches this daemon,
+                advertised as ``meta.transport`` and forwarded verbatim
+                by central to listeners. ``"wifi"`` for an autonomous
+                Pi-side daemon (Wireless variant or any Lite with its
+                own network), ``"usb"`` for the desktop-tray daemon
+                spawned next to the user's machine and tethered to the
+                robot over USB. The mobile picker uses this to badge
+                cards "USB" vs "Wi-Fi" without round-tripping the daemon.
+                Free-form string so future fronts (``"ethernet"``,
+                ``"sim"``, ...) need no relay change.
             on_state_change: Callback when state changes (state, message)
             robot_app_lock: Shared lock coordinating local vs remote access to
                 the robot. When provided, incoming remote sessions are
@@ -121,6 +132,7 @@ class CentralSignalingRelay:
         self.local_uri = local_uri
         self.hf_token = hf_token
         self.robot_name = robot_name
+        self.transport = transport
         self._on_state_change = on_state_change
         self._robot_app_lock = robot_app_lock
 
@@ -696,6 +708,28 @@ class CentralSignalingRelay:
         )
         await self._close_connections()
 
+    def _build_producer_meta(self) -> dict[str, Any]:
+        """Assemble the ``meta`` dict advertised to central listeners.
+
+        Single source of truth for **what** we tell the world about
+        ourselves. Kept separate from ``_producer_status_payload`` so
+        future fields (``install_id``, ``capabilities``, ``health``,
+        ``version``, ...) extend this method without disturbing the
+        envelope shape; tests target this function directly.
+
+        Today's surface is intentionally minimal:
+
+          * ``name``: user-facing label (matches the central's
+            ``robotName`` field on ``/api/robot-status``).
+          * ``transport``: ``"usb"`` | ``"wifi"`` so the mobile picker
+            can badge a listing without introspecting via a separate
+            channel.
+        """
+        return {
+            "name": self.robot_name,
+            "transport": self.transport,
+        }
+
     def _producer_status_payload(self) -> dict[str, Any]:
         """Single source of truth for our ``setPeerStatus`` payload.
 
@@ -708,7 +742,7 @@ class CentralSignalingRelay:
         return {
             "type": "setPeerStatus",
             "roles": ["producer"],
-            "meta": {"name": self.robot_name},
+            "meta": self._build_producer_meta(),
         }
 
     @staticmethod
@@ -1410,6 +1444,7 @@ def get_relay_status() -> dict[str, Any]:
 async def start_central_relay(
     hf_token: Optional[str] = None,
     robot_name: str = "reachymini",
+    transport: str = "wifi",
     central_uri: str = CENTRAL_SIGNALING_SERVER,
     on_state_change: Optional[Callable[[RelayState, Optional[str]], None]] = None,
     robot_app_lock: Optional[RobotAppLock] = None,
@@ -1419,6 +1454,8 @@ async def start_central_relay(
     Args:
         hf_token: HuggingFace token for authentication (will auto-refresh)
         robot_name: Name to register as producer
+        transport: Producer ``meta.transport`` (``"usb"`` | ``"wifi"``).
+            See ``CentralSignalingRelay.__init__`` for semantics.
         central_uri: Central server URI
         on_state_change: Callback when connection state changes
         robot_app_lock: Shared lock coordinating local vs remote robot access.
@@ -1445,6 +1482,7 @@ async def start_central_relay(
         central_uri=central_uri,
         hf_token=hf_token,
         robot_name=robot_name,
+        transport=transport,
         on_state_change=on_state_change,
         robot_app_lock=robot_app_lock,
     )
