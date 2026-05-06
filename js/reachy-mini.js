@@ -172,6 +172,81 @@ function clampVolume(v) {
     return Math.max(0, Math.min(100, n));
 }
 
+/**
+ * Pick up HuggingFace credentials passed via the URL fragment and move them
+ * into `sessionStorage`, where `authenticate()` looks them up.
+ *
+ * This is the bridge that lets a host page (e.g. the Reachy Mini mobile
+ * app, or the vibe-coder preview iframe) embed a Space hosting a SDK
+ * consumer despite `X-Frame-Options: SAMEORIGIN` on `huggingface.co/login`:
+ * the host already holds a valid token (through its own OAuth flow) and
+ * appends it to the iframe URL as
+ *
+ *     #hf_token=<jwt>&hf_username=<handle>&hf_token_expires=<iso>
+ *
+ * Fragments are NOT sent over HTTP, so the credentials never leak to
+ * the HF Space backend or to intermediate proxies.
+ *
+ * Why all three keys: `authenticate()`'s cache check requires the token,
+ * the username AND a future expiry to ALL be present in `sessionStorage`,
+ * otherwise it returns `false` and the app falls through to a full OAuth
+ * round-trip — which can't complete inside an iframe.
+ *
+ * Called once from the top of `authenticate()` so SDK consumers don't
+ * need any boilerplate of their own. We clear the fragment right after
+ * reading it so a page reload does not keep the credentials visible in
+ * the address bar.
+ *
+ * No-op when:
+ *   - there is no `window` (SSR / Worker contexts),
+ *   - the URL has no fragment,
+ *   - the fragment carries no `hf_token` (other apps may use the
+ *     fragment for theme / route / etc.; we leave those alone).
+ */
+function consumeFragmentCredentials() {
+    if (typeof window === 'undefined' || !window.location.hash) return;
+    const raw = window.location.hash.startsWith('#')
+        ? window.location.hash.slice(1)
+        : window.location.hash;
+    let params;
+    try { params = new URLSearchParams(raw); } catch (_e) { return; }
+    const token = params.get('hf_token');
+    if (!token) return;
+    // `hf_username` is required by the cache check. Hosts that haven't
+    // resolved the user's HF handle yet may pass a literal "user"
+    // placeholder; the SDK only uses the value for display and never
+    // round-trips it server-side, so the placeholder is harmless.
+    const username = params.get('hf_username') || 'user';
+    // `hf_token_expires` is a far-future ISO date for personal access
+    // tokens (no real expiry). Hosts typically synthesise ~1 year out;
+    // we accept whatever was sent and fall back to "1 year from now"
+    // if the parameter is missing or unparseable, so a partial fragment
+    // still gets the user logged in.
+    const expiresParam = params.get('hf_token_expires');
+    const expires =
+        expiresParam && !Number.isNaN(new Date(expiresParam).getTime())
+            ? expiresParam
+            : new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString();
+    try {
+        sessionStorage.setItem('hf_token', token);
+        sessionStorage.setItem('hf_username', username);
+        sessionStorage.setItem('hf_token_expires', expires);
+    } catch (err) {
+        console.warn('[reachy-mini] could not persist pre-seeded HF credentials:', err);
+    }
+    // Strip the auth keys from the address bar but keep any other hash
+    // params the app or SDK might care about (theme, embedded, …).
+    params.delete('hf_token');
+    params.delete('hf_username');
+    params.delete('hf_token_expires');
+    const remaining = params.toString();
+    const cleanUrl =
+        window.location.pathname +
+        window.location.search +
+        (remaining ? '#' + remaining : '');
+    try { window.history.replaceState(null, '', cleanUrl); } catch (_e) {}
+}
+
 /** Check if the audio m= section of an SDP has a=sendrecv (bidirectional audio). */
 function sdpHasAudioSendRecv(sdp) {
     const lines = sdp.split('\r\n');
@@ -291,11 +366,28 @@ export class ReachyMini extends EventTarget {
 
     /**
      * Check for a valid HuggingFace token.
-     * Tries the OAuth redirect callback first, then falls back to sessionStorage.
+     *
+     * Resolution order:
+     *   1. URL fragment hand-off (`#hf_token=…&hf_username=…&hf_token_expires=…`).
+     *      A host iframe — typically the Reachy Mini mobile app or a
+     *      vibe-coder preview — can pass credentials through the URL
+     *      fragment to bypass HF's `X-Frame-Options: SAMEORIGIN` block
+     *      on `huggingface.co/login`. Seeded into `sessionStorage` and
+     *      then stripped from the address bar so a page reload does not
+     *      keep the credentials visible.
+     *   2. OAuth redirect callback (standalone Space, first sign-in).
+     *   3. `sessionStorage` cache (subsequent loads in any context).
+     *
      * @returns {Promise<boolean>} true → token ready, false → call login()
      */
     async authenticate() {
         try {
+            // 1. Iframe hand-off. No-op when the URL has no fragment or
+            //    the fragment carries no `hf_token`, so this is free on
+            //    standalone Space loads.
+            consumeFragmentCredentials();
+
+            // 2. OAuth redirect callback.
             const result = await oauthHandleRedirectIfPresent();
             if (result) {
                 this._username = result.userInfo.name || result.userInfo.preferred_username;
@@ -306,6 +398,9 @@ export class ReachyMini extends EventTarget {
                 sessionStorage.setItem('hf_token_expires', this._tokenExpires);
                 return true;
             }
+
+            // 3. sessionStorage cache. Both paths above also write here,
+            //    so this is the canonical lookup for any subsequent call.
             const t = sessionStorage.getItem('hf_token');
             const u = sessionStorage.getItem('hf_username');
             const e = sessionStorage.getItem('hf_token_expires');
