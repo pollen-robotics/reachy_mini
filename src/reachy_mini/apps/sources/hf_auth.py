@@ -122,9 +122,7 @@ def _cleanup_expired_sessions() -> None:
         del _oauth_sessions[sid]
 
 
-def get_oauth_redirect_uri(
-    wireless_version: bool, use_localhost: bool = False
-) -> str:
+def get_oauth_redirect_uri(wireless_version: bool, use_localhost: bool = False) -> str:
     """Get the appropriate OAuth redirect URI based on robot type.
 
     Args:
@@ -181,7 +179,17 @@ def create_oauth_session(
     )
     _oauth_sessions[state] = session
 
-    # Build HuggingFace OAuth authorization URL with PKCE
+    # Build HuggingFace OAuth authorization URL with PKCE.
+    #
+    # `prompt=consent` forces HuggingFace to re-display the consent screen on
+    # every login, even when the app has already been authorized. This matters
+    # for organization access: HF lets the user pick which orgs to grant the
+    # `read-repos` scope to during consent, and a user who skipped that step
+    # the first time has no in-app way to fix it without going to
+    # https://huggingface.co/settings/connected-applications and revoking the
+    # app manually. Forcing consent makes "Logout + Login" enough to (re-)opt
+    # an org in or out, which is what we want for users who joined an org
+    # after their first login (e.g. private apps from `pollen-robotics`).
     from urllib.parse import urlencode
 
     params = {
@@ -192,6 +200,7 @@ def create_oauth_session(
         "state": state,
         "code_challenge": code_challenge,
         "code_challenge_method": "S256",
+        "prompt": "consent",
     }
     auth_url = f"https://huggingface.co/oauth/authorize?{urlencode(params)}"
 
@@ -247,7 +256,9 @@ async def exchange_code_for_token(
         session.error_message = "OAuth not configured"
         return {"status": "error", "message": "OAuth not configured"}
 
-    redirect_uri = get_oauth_redirect_uri(session.wireless_version, session.use_localhost)
+    redirect_uri = get_oauth_redirect_uri(
+        session.wireless_version, session.use_localhost
+    )
 
     # Exchange code for token using PKCE
     token_url = "https://huggingface.co/oauth/token"
