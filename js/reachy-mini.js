@@ -909,6 +909,64 @@ export class ReachyMini extends EventTarget {
     }
 
     /**
+     * Smooth daemon-side interpolation to a target pose over
+     * ``duration`` seconds. Mirrors ``setTarget``'s wire shape (head
+     * is a 16-element flat row-major 4×4, antennas are
+     * ``[rightRad, leftRad]``, body_yaw is radians) and adds a
+     * required ``duration`` field. The daemon dispatches the command
+     * to its lerp planner instead of jumping to the target.
+     *
+     * Use this for one-shot smooth approaches to an arbitrary pose
+     * (e.g. soft-return-to-base after recording, or pre-positioning
+     * before a streamed playback). For continuous streamed motion,
+     * use ``setTarget`` and lerp client-side.
+     *
+     * @param {{head?: number[], antennas?: number[], body_yaw?: number, duration: number}} args
+     * @returns {boolean} false if the data channel is not open.
+     * @throws {TypeError} if any provided field has the wrong shape
+     *   or contains a non-finite value (NaN, Infinity), or if
+     *   ``duration`` is missing or non-positive.
+     */
+    gotoTarget({ head, antennas, body_yaw, duration } = {}) {
+        const cmd = { type: "goto_target" };
+        if (head !== undefined) {
+            if (!Array.isArray(head) || head.length !== 16
+                || !head.every((n) => Number.isFinite(n))) {
+                throw new TypeError(
+                    'gotoTarget: head must be a 16-element flat row-major 4×4 matrix '
+                    + `of finite numbers; got ${Array.isArray(head) ? `Array(${head.length})` : typeof head}`
+                );
+            }
+            cmd.head = head;
+        }
+        if (antennas !== undefined) {
+            if (!Array.isArray(antennas) || antennas.length !== 2
+                || !antennas.every((n) => Number.isFinite(n))) {
+                throw new TypeError(
+                    'gotoTarget: antennas must be [rightRad, leftRad] (2 finite numbers); '
+                    + `got ${Array.isArray(antennas) ? `Array(${antennas.length})` : typeof antennas}`
+                );
+            }
+            cmd.antennas = antennas;
+        }
+        if (body_yaw !== undefined) {
+            if (!Number.isFinite(body_yaw)) {
+                throw new TypeError(
+                    `gotoTarget: body_yaw must be a finite number (radians); got ${body_yaw}`
+                );
+            }
+            cmd.body_yaw = body_yaw;
+        }
+        if (!Number.isFinite(duration) || duration <= 0) {
+            throw new TypeError(
+                `gotoTarget: duration must be a positive finite number (seconds); got ${duration}`
+            );
+        }
+        cmd.duration = duration;
+        return this._sendCommand(cmd);
+    }
+
+    /**
      * Set head orientation from roll/pitch/yaw in degrees.
      * Convenience wrapper over ``setTarget``.
      * @param {number} rollDeg @param {number} pitchDeg @param {number} yawDeg
