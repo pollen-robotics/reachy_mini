@@ -495,20 +495,12 @@ export class ReachyMini extends EventTarget {
      * normal `startSession` rejection / `sessionRejected` event
      * still fires for app-level handling.
      *
-     * Defers the actual `startSession()` call by 500 ms so it runs
-     * OUTSIDE the `_handleSignalingMessage` callstack that just
-     * processed the `'list'` message AND gives the daemon's
-     * producer subscription enough wall-clock time to settle.
-     * Reproduced on Android WebView: firing `startSession`
-     * immediately after `connect()` resolves leads to a
-     * connected-but-no-keyframe state — the WebRTC pipe comes up,
-     * P-frames arrive, but no usable IDR/SPS pair lands so the
-     * receiver eternally NACKs and the iframe shows a black
-     * <video>. Manual flows always work at this same SDK pin
-     * (human reaction time = multi-second delay before clicking
-     * Start). 500 ms is the conservative minimum for the
-     * reproduction; under perceptual budget for "tap → action".
-     * `setTimeout(..., 0)` was tried first and was insufficient.
+     * Defers the actual `startSession()` call by one macrotask
+     * (`setTimeout(..., 0)`) so it runs OUTSIDE the
+     * `_handleSignalingMessage` callstack that just processed the
+     * `'list'` message. Defensive only: lets any other event
+     * handlers waiting on `robotsChanged` (e.g. an app's UI update)
+     * run before the session establishment kicks off.
      */
     _maybeAutoStart() {
         if (!this._autoStartFromUrl) return;
@@ -526,7 +518,7 @@ export class ReachyMini extends EventTarget {
             this.startSession(peerId).catch((err) => {
                 console.warn('[reachy-mini] autoStartFromUrl: startSession rejected:', err);
             });
-        }, 500);
+        }, 0);
     }
 
     // ─── Auth ────────────────────────────────────────────────────────────
