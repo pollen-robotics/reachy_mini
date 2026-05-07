@@ -262,6 +262,49 @@ Events: `connected`, `disconnected`, `robotsChanged`, `streaming`, `sessionStopp
 
 **Full API:** read the top ~90 lines of [`js/reachy-mini.js`](js/reachy-mini.js) — the file header is a complete reference.
 
+### Iframe-embedded apps (mobile shell, vibe-coder preview)
+
+Browser apps may run **standalone** (the user opens the Space URL directly) or **embedded** in a host iframe (the Reachy Mini mobile shell, the vibe-coder preview, future shells). HF blocks `huggingface.co/oauth/authorize` from being framed (`X-Frame-Options: SAMEORIGIN`), so OAuth-in-iframe is impossible. The host shell instead pre-authenticates and pre-picks a robot, then forwards both pieces of state to the embed via the iframe URL.
+
+**The SDK handles the plumbing.** App authors don't parse URLs, don't manage `sessionStorage` keys, and don't wire `robotsChanged` listeners for preselect. The relevant SDK surface:
+
+- `robot.authenticate()` consumes `#hf_token=…&hf_username=…&hf_token_expires=…` from the URL fragment automatically (`consumeFragmentCredentials`). Standalone visits with no fragment fall through to the existing OAuth path.
+- `new ReachyMini({ autoStartFromUrl: true, ... })` opts the SDK into auto-calling `startSession(preselectedRobotId)` once that robot appears in the central's listing after the consumer's `connect()` resolves. One-shot per page load.
+- `robot.preselectedRobotId` (string | null) and `robot.isEmbedded` (boolean shorthand for `preselectedRobotId !== null`) — read these to branch your UX.
+
+**Receiver recipe** (the only app-side code you need):
+
+```js
+const robot = new ReachyMini({ appName: "...", autoStartFromUrl: true });
+
+document.addEventListener("DOMContentLoaded", async () => {
+    if (await robot.authenticate()) {
+        showMainApp();
+        if (robot.isEmbedded) {
+            // Skip the picker; the SDK will startSession on its own
+            // when the preselected robot appears in robotsChanged.
+            hidePickerUI();
+            await robot.connect();
+        }
+        // Standalone path: keep your usual picker + manual Connect.
+    } else {
+        showLogin();
+    }
+});
+
+robot.addEventListener("streaming", () => {
+    // Same handler for both embedded and standalone paths.
+});
+```
+
+That's it. No URL parsing, no postMessage listener, no `consumeTokenFromHash` boilerplate.
+
+**For host-shell authors** (writing a NEW iframe parent), the URL contract is:
+- Credentials in the **fragment**: `#hf_token=<jwt>&hf_username=<handle>&hf_token_expires=<ISO>`. Fragment because it doesn't travel over HTTP (no referrer, no server logs).
+- Robot pre-select in the **query** (or fragment if you prefer symmetry): `?robot_peer_id=<peerId>`. Not a secret; query is fine.
+
+The mobile-shell reference implementation lives in [`reachy_mini_mobile_app/src/screens/apps/AppIframeOverlay.tsx`](https://github.com/pollen-robotics/reachy-mini-mobile-app); read its file-level docstring for the host-side authoritative contract. The receiver-side reference is the dev `webrtc_example` Space using the recipe above.
+
 ### Media flow — use WebRTC, not `getUserMedia`, for robot media
 
 The `<video>` element you pass to `attachVideo()` receives the **robot's** camera and microphone over WebRTC. Do **not** call `navigator.mediaDevices.getUserMedia()` to read robot media — that grabs the user's *own* laptop camera.
