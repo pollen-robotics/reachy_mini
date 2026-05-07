@@ -1390,7 +1390,17 @@ export class ReachyMini extends EventTarget {
                 }
             }
             if (msg.ice) {
-                await this._pc.addIceCandidate(new RTCIceCandidate(msg.ice));
+                // Safari (and the iOS WKWebView Tauri ships on) rejects
+                // empty candidate strings with `OperationError: Expect
+                // line: candidate:<candidate-str>`. The signaling
+                // server uses an empty string as the end-of-candidates
+                // marker (legal per the WebRTC spec but optional).
+                // Chrome / Firefox swallow it silently; we mirror that
+                // here so the iOS WebView stops surfacing the noise as
+                // a robot-side WebRTC error event.
+                if (msg.ice.candidate) {
+                    await this._pc.addIceCandidate(new RTCIceCandidate(msg.ice));
+                }
             }
         } catch (e) {
             console.error('WebRTC error:', e);
