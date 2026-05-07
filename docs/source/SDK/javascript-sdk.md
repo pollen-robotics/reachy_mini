@@ -179,7 +179,7 @@ robot.logout();              // clear HF credentials
 
 ```js
 new ReachyMini({
-    signalingUrl: "https://cduss-reachy-mini-central.hf.space",  // default
+    signalingUrl: "https://pollen-robotics-reachy-mini-central.hf.space",  // default
     enableMicrophone: true,  // default — request mic on startSession()
 })
 ```
