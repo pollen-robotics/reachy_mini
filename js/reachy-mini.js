@@ -473,7 +473,7 @@ export class ReachyMini extends EventTarget {
             // 2. OAuth redirect callback.
             const result = await oauthHandleRedirectIfPresent();
             if (result) {
-                this._username = result.userInfo.name || result.userInfo.preferred_username;
+                this._username = result.userInfo.preferred_username || result.userInfo.name;
                 this._token = result.accessToken;
                 this._tokenExpires = result.accessTokenExpiresAt;
                 sessionStorage.setItem('hf_token', this._token);
