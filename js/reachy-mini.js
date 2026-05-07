@@ -494,6 +494,18 @@ export class ReachyMini extends EventTarget {
      * page load. Errors are swallowed to a `console.warn` — the
      * normal `startSession` rejection / `sessionRejected` event
      * still fires for app-level handling.
+     *
+     * Defers the actual `startSession()` call by one macrotask
+     * (`setTimeout(..., 0)`) so it runs OUTSIDE the
+     * `_handleSignalingMessage` callstack that just processed the
+     * `'list'` message. Reproduced on Android WebView: firing
+     * `startSession` synchronously inside the SSE handler races the
+     * daemon's setup, leading to a connected-but-no-keyframe state
+     * where the receiver eternally NACKs and the iframe shows a
+     * black <video>. The macrotask-deferral is the minimum nudge
+     * that consistently resolves the race in our reproduction; if
+     * it ever proves insufficient on slower hardware, bump to
+     * a small explicit delay (e.g. 250 ms).
      */
     _maybeAutoStart() {
         if (!this._autoStartFromUrl) return;
@@ -503,9 +515,15 @@ export class ReachyMini extends EventTarget {
         const match = this._robots.find((r) => r.id === this._preselectedRobotId);
         if (!match) return;
         this._autoStartAttempted = true;
-        this.startSession(this._preselectedRobotId).catch((err) => {
-            console.warn('[reachy-mini] autoStartFromUrl: startSession rejected:', err);
-        });
+        const peerId = this._preselectedRobotId;
+        setTimeout(() => {
+            // Re-check state in case a manual stopSession / disconnect
+            // landed between the schedule and the fire.
+            if (this._state !== 'connected') return;
+            this.startSession(peerId).catch((err) => {
+                console.warn('[reachy-mini] autoStartFromUrl: startSession rejected:', err);
+            });
+        }, 0);
     }
 
     // ─── Auth ────────────────────────────────────────────────────────────
