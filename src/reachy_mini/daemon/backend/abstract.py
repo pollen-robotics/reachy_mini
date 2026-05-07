@@ -928,7 +928,7 @@ class Backend:
             send_response({"status": "ok", "command": "set_full_target"})
 
         elif isinstance(cmd, GotoTargetCmd):
-            head = np.array(cmd.head) if cmd.head else None
+            head = np.array(cmd.head).reshape(4, 4) if cmd.head else None
             antennas = np.array(cmd.antennas) if cmd.antennas else None
             asyncio.create_task(
                 self._async_goto(

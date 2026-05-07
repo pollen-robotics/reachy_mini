@@ -94,6 +94,12 @@
  *   .micSupported     boolean           — true if robot offers bidirectional audio
  *   .micMuted         boolean           — your microphone mute state
  *   .audioMuted       boolean           — robot speaker mute state (local)
+ *   .preselectedRobotId string | null   — peer id from `?robot_peer_id=` /
+ *                                          `#robot_peer_id=`; null if absent.
+ *                                          Use it to skip your robot picker
+ *                                          when a host iframe (e.g. the
+ *                                          Reachy Mini mobile shell) embeds
+ *                                          this app.
  *
  *
  * EVENTS  (EventTarget — use addEventListener)
@@ -172,6 +178,127 @@ function clampVolume(v) {
     return Math.max(0, Math.min(100, n));
 }
 
+/**
+ * Pick up HuggingFace credentials passed via the URL fragment and move them
+ * into `sessionStorage`, where `authenticate()` looks them up.
+ *
+ * This is the bridge that lets a host page (e.g. the Reachy Mini mobile
+ * app, or the vibe-coder preview iframe) embed a Space hosting a SDK
+ * consumer despite `X-Frame-Options: SAMEORIGIN` on `huggingface.co/login`:
+ * the host already holds a valid token (through its own OAuth flow) and
+ * appends it to the iframe URL as
+ *
+ *     #hf_token=<jwt>&hf_username=<handle>&hf_token_expires=<iso>
+ *
+ * Fragments are NOT sent over HTTP, so the credentials never leak to
+ * the HF Space backend or to intermediate proxies.
+ *
+ * Why all three keys: `authenticate()`'s cache check requires the token,
+ * the username AND a future expiry to ALL be present in `sessionStorage`,
+ * otherwise it returns `false` and the app falls through to a full OAuth
+ * round-trip — which can't complete inside an iframe.
+ *
+ * Called once from the top of `authenticate()` so SDK consumers don't
+ * need any boilerplate of their own. We clear the fragment right after
+ * reading it so a page reload does not keep the credentials visible in
+ * the address bar.
+ *
+ * No-op when:
+ *   - there is no `window` (SSR / Worker contexts),
+ *   - the URL has no fragment,
+ *   - the fragment carries no `hf_token` (other apps may use the
+ *     fragment for theme / route / etc.; we leave those alone).
+ */
+function consumeFragmentCredentials() {
+    if (typeof window === 'undefined' || !window.location.hash) return;
+    const raw = window.location.hash.startsWith('#')
+        ? window.location.hash.slice(1)
+        : window.location.hash;
+    let params;
+    try { params = new URLSearchParams(raw); } catch (_e) { return; }
+    const token = params.get('hf_token');
+    if (!token) return;
+    // `hf_username` is required by the cache check. Hosts that haven't
+    // resolved the user's HF handle yet may pass a literal "user"
+    // placeholder; the SDK only uses the value for display and never
+    // round-trips it server-side, so the placeholder is harmless.
+    const username = params.get('hf_username') || 'user';
+    // `hf_token_expires` is a far-future ISO date for personal access
+    // tokens (no real expiry). Hosts typically synthesise ~1 year out;
+    // we accept whatever was sent and fall back to "1 year from now"
+    // if the parameter is missing or unparseable, so a partial fragment
+    // still gets the user logged in.
+    const expiresParam = params.get('hf_token_expires');
+    const expires =
+        expiresParam && !Number.isNaN(new Date(expiresParam).getTime())
+            ? expiresParam
+            : new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString();
+    try {
+        sessionStorage.setItem('hf_token', token);
+        sessionStorage.setItem('hf_username', username);
+        sessionStorage.setItem('hf_token_expires', expires);
+    } catch (err) {
+        console.warn('[reachy-mini] could not persist pre-seeded HF credentials:', err);
+    }
+    // Strip the auth keys from the address bar but keep any other hash
+    // params the app or SDK might care about (theme, embedded, …).
+    params.delete('hf_token');
+    params.delete('hf_username');
+    params.delete('hf_token_expires');
+    const remaining = params.toString();
+    const cleanUrl =
+        window.location.pathname +
+        window.location.search +
+        (remaining ? '#' + remaining : '');
+    try { window.history.replaceState(null, '', cleanUrl); } catch (_e) {}
+}
+
+/**
+ * Pick up a preselected robot peer id from the URL.
+ *
+ * Looked up in this order:
+ *   1. URL fragment   (`#robot_peer_id=<peerId>`)
+ *   2. URL query      (`?robot_peer_id=<peerId>`)
+ *
+ * Both spellings are accepted because:
+ *   - the Reachy Mini mobile shell sends it in the query today,
+ *   - the vibe-coder preview / future hosts may prefer the fragment for
+ *     symmetry with `consumeFragmentCredentials`,
+ *   - the value is NOT a secret (peer ids are public on the central
+ *     signaling server's robot listing) so query is fine.
+ *
+ * Returns `null` when no peer id is found in either location, when there
+ * is no `window` (SSR / Worker context), or on parse error. Unlike
+ * credentials, we do NOT strip the param from the URL: the value is
+ * harmless to keep visible and removing it would break tools that read
+ * the URL for context.
+ *
+ * @returns {string|null}
+ */
+function readPreselectedRobotIdFromUrl() {
+    if (typeof window === 'undefined') return null;
+    // 1. Fragment (`#robot_peer_id=…`).
+    if (window.location.hash) {
+        const raw = window.location.hash.startsWith('#')
+            ? window.location.hash.slice(1)
+            : window.location.hash;
+        try {
+            const params = new URLSearchParams(raw);
+            const fromHash = params.get('robot_peer_id');
+            if (fromHash) return fromHash;
+        } catch (_e) { /* malformed fragment — fall through */ }
+    }
+    // 2. Query (`?robot_peer_id=…`).
+    if (window.location.search) {
+        try {
+            const params = new URLSearchParams(window.location.search);
+            const fromQuery = params.get('robot_peer_id');
+            if (fromQuery) return fromQuery;
+        } catch (_e) { /* malformed query — fall through */ }
+    }
+    return null;
+}
+
 /** Check if the audio m= section of an SDP has a=sendrecv (bidirectional audio). */
 function sdpHasAudioSendRecv(sdp) {
     const lines = sdp.split('\r\n');
@@ -204,6 +331,18 @@ export class ReachyMini extends EventTarget {
         this._state = 'disconnected';                 // 'disconnected' | 'connected' | 'streaming'
         this._robots = [];                             // latest robot list from signaling
         this._robotState = {};                         // populated from daemon state events (wire shape)
+
+        // Preselected robot peer id read from the URL at construction
+        // time. When a host iframe (typically the Reachy Mini mobile
+        // shell) embeds an SDK consumer, it appends the peer id of the
+        // robot it's already connected to via
+        // `?robot_peer_id=…` (or `#robot_peer_id=…`). Apps can read
+        // `robot.preselectedRobotId` and call `startSession(id)`
+        // directly to skip their robot picker. Captured ONCE at
+        // construction so subsequent URL changes (history navigation,
+        // hash mutations from `consumeFragmentCredentials`) don't move
+        // the target out from under the consumer.
+        this._preselectedRobotId = readPreselectedRobotIdFromUrl();
 
         // Auth
         this._token = null;
@@ -288,15 +427,51 @@ export class ReachyMini extends EventTarget {
     /** @returns {boolean} */
     get audioMuted() { return this._audioMuted; }
 
+    /**
+     * Peer id of the robot the embedding host wants this session to
+     * target, captured from the URL at construction time. Apps that
+     * want to support iframe-embedding without forcing the user to
+     * re-pick a robot read this and pass it straight to
+     * `startSession()` once `connect()` resolves:
+     *
+     *     await robot.connect();
+     *     await robot.startSession(robot.preselectedRobotId ?? pickedId);
+     *
+     * Returns `null` when the URL carries no `robot_peer_id` (typical
+     * standalone Space load). The value is also exposed on the
+     * "robotsChanged" payload via the `meta` sidecar for
+     * convenience, but the most direct read is right here.
+     *
+     * @returns {string|null}
+     */
+    get preselectedRobotId() { return this._preselectedRobotId; }
+
     // ─── Auth ────────────────────────────────────────────────────────────
 
     /**
      * Check for a valid HuggingFace token.
-     * Tries the OAuth redirect callback first, then falls back to sessionStorage.
+     *
+     * Resolution order:
+     *   1. URL fragment hand-off (`#hf_token=…&hf_username=…&hf_token_expires=…`).
+     *      A host iframe — typically the Reachy Mini mobile app or a
+     *      vibe-coder preview — can pass credentials through the URL
+     *      fragment to bypass HF's `X-Frame-Options: SAMEORIGIN` block
+     *      on `huggingface.co/login`. Seeded into `sessionStorage` and
+     *      then stripped from the address bar so a page reload does not
+     *      keep the credentials visible.
+     *   2. OAuth redirect callback (standalone Space, first sign-in).
+     *   3. `sessionStorage` cache (subsequent loads in any context).
+     *
      * @returns {Promise<boolean>} true → token ready, false → call login()
      */
     async authenticate() {
         try {
+            // 1. Iframe hand-off. No-op when the URL has no fragment or
+            //    the fragment carries no `hf_token`, so this is free on
+            //    standalone Space loads.
+            consumeFragmentCredentials();
+
+            // 2. OAuth redirect callback.
             const result = await oauthHandleRedirectIfPresent();
             if (result) {
                 this._username = result.userInfo.name || result.userInfo.preferred_username;
@@ -307,6 +482,9 @@ export class ReachyMini extends EventTarget {
                 sessionStorage.setItem('hf_token_expires', this._tokenExpires);
                 return true;
             }
+
+            // 3. sessionStorage cache. Both paths above also write here,
+            //    so this is the canonical lookup for any subsequent call.
             const t = sessionStorage.getItem('hf_token');
             const u = sessionStorage.getItem('hf_username');
             const e = sessionStorage.getItem('hf_token_expires');
@@ -445,6 +623,11 @@ export class ReachyMini extends EventTarget {
         this._iceConnected = false;
         this._dcOpen = false;
         this._micSupported = false;
+        // Buffer for ICE candidates that arrive before the SDP
+        // exchange completes (see _handlePeerMessage). Reset on every
+        // fresh session so stale candidates from a previous attempt
+        // don't get applied to a new RTCPeerConnection.
+        this._pendingRemoteIce = [];
 
         // Acquire mic eagerly so the browser permission prompt appears now,
         // but tracks stay disabled (muted) until the user explicitly unmutes.
@@ -455,7 +638,31 @@ export class ReachyMini extends EventTarget {
                 this._micMuted = true;
             } catch (e) {
                 console.warn('Microphone not available:', e);
-                this._micStream = null;
+                // Fall back to a silent placeholder track. We MUST add an
+                // audio track before createAnswer or the answer SDP comes
+                // back as recvonly for audio - which negotiates the audio
+                // SENDER side off the wire entirely. A host that wants to
+                // later inject a different audio source (e.g. a synthesised
+                // AI voice via replaceTrack on the sender) needs a live
+                // sendrecv slot, even if the initial track is silent.
+                try {
+                    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                    const dst = ctx.createMediaStreamDestination();
+                    // A muted oscillator keeps the track "alive" without
+                    // emitting any audible signal.
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    gain.gain.value = 0;
+                    osc.connect(gain).connect(dst);
+                    osc.start();
+                    this._micStream = dst.stream;
+                    this._micStream.getAudioTracks().forEach(t => { t.enabled = false; });
+                    this._micMuted = true;
+                    this._silentMicFallback = { ctx, osc };
+                } catch (fallbackErr) {
+                    console.warn('Silent mic fallback failed:', fallbackErr);
+                    this._micStream = null;
+                }
             }
         }
 
@@ -1237,9 +1444,49 @@ export class ReachyMini extends EventTarget {
                 } else {
                     await this._pc.setRemoteDescription(new RTCSessionDescription(sdp));
                 }
+                // Replay any ICE candidates that arrived before the
+                // SDP exchange completed (see the buffering branch
+                // below for context).
+                const pending = this._pendingRemoteIce;
+                if (pending && pending.length) {
+                    this._pendingRemoteIce = [];
+                    for (const ice of pending) {
+                        try {
+                            await this._pc.addIceCandidate(new RTCIceCandidate(ice));
+                        } catch (err) {
+                            console.warn('[reachy-mini] buffered ICE candidate rejected:', err);
+                        }
+                    }
+                }
             }
             if (msg.ice) {
-                await this._pc.addIceCandidate(new RTCIceCandidate(msg.ice));
+                // Safari (and the iOS WKWebView Tauri ships on) rejects
+                // empty candidate strings with `OperationError: Expect
+                // line: candidate:<candidate-str>`. The signaling
+                // server uses an empty string as the end-of-candidates
+                // marker (legal per the WebRTC spec but optional).
+                // Chrome / Firefox swallow it silently; we mirror that
+                // here so the iOS WebView stops surfacing the noise as
+                // a robot-side WebRTC error event.
+                if (!msg.ice.candidate) return;
+                if (this._pc.remoteDescription) {
+                    await this._pc.addIceCandidate(new RTCIceCandidate(msg.ice));
+                } else {
+                    // The signaling transport (SSE through central) is
+                    // not strictly ordered across the offer / ICE
+                    // streams when the SDK runs inside a cross-origin
+                    // iframe or in Safari / iOS WKWebView: the first
+                    // ICE candidates can land before the offer SDP
+                    // does. Calling addIceCandidate before
+                    // setRemoteDescription throws
+                    // `InvalidStateError: The remote description was
+                    // null` and the candidate is silently lost,
+                    // sometimes wedging ICE altogether. Buffer here
+                    // and replay above as soon as the offer has been
+                    // applied.
+                    if (!this._pendingRemoteIce) this._pendingRemoteIce = [];
+                    this._pendingRemoteIce.push(msg.ice);
+                }
             }
         } catch (e) {
             console.error('WebRTC error:', e);
