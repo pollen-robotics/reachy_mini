@@ -847,6 +847,28 @@ This appears if you connect to the robot but don't consume the video frames, cau
 </details>
 
 <details>
+<summary><strong>Conversation app crashes on launch after update (custom profile)</strong></summary>
+
+If you created a custom profile for the Conversation app on an older version and the app now exits immediately after updating, the app is looking for the profile at a path that no longer exists — the default profile location changed in a recent release.
+
+**Symptoms** — the logs end with a `SystemExit: 1` raised from `prompts.py`, e.g.:
+```
+File ".../reachy_mini_conversation_app/prompts.py", line 88, in get_session_instructions
+    sys.exit(1)
+SystemExit: 1
+```
+
+**Fix (recommended):** From the Reachy Mini Control desktop app, click **Reset apps environment** (see "Bootstrap or update fails / Python environment issues" above). Apps will need to be reinstalled afterwards.
+
+**Alternative (advanced):** SSH into the robot (Wireless: `ssh pollen@reachy-mini.local`) and delete the apps venv directly, then reinstall the Conversation app:
+```bash
+rm -rf /venvs/apps_venv
+```
+
+</details>
+
+
+<details>
 <summary><strong>No Microphone Input / Direction of Arrival (Beta Units)</strong></summary>
 
 * **No Input:** Requires firmware 2.1.3. Run the [update script](https://github.com/pollen-robotics/reachy_mini/tree/main/src/reachy_mini/assets/firmware/update.sh).
