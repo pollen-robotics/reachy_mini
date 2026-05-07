@@ -495,17 +495,20 @@ export class ReachyMini extends EventTarget {
      * normal `startSession` rejection / `sessionRejected` event
      * still fires for app-level handling.
      *
-     * Defers the actual `startSession()` call by one macrotask
-     * (`setTimeout(..., 0)`) so it runs OUTSIDE the
-     * `_handleSignalingMessage` callstack that just processed the
-     * `'list'` message. Reproduced on Android WebView: firing
-     * `startSession` synchronously inside the SSE handler races the
-     * daemon's setup, leading to a connected-but-no-keyframe state
-     * where the receiver eternally NACKs and the iframe shows a
-     * black <video>. The macrotask-deferral is the minimum nudge
-     * that consistently resolves the race in our reproduction; if
-     * it ever proves insufficient on slower hardware, bump to
-     * a small explicit delay (e.g. 250 ms).
+     * Defers the actual `startSession()` call by 500 ms so it runs
+     * OUTSIDE the `_handleSignalingMessage` callstack that just
+     * processed the `'list'` message AND gives the daemon's
+     * producer subscription enough wall-clock time to settle.
+     * Reproduced on Android WebView: firing `startSession`
+     * immediately after `connect()` resolves leads to a
+     * connected-but-no-keyframe state — the WebRTC pipe comes up,
+     * P-frames arrive, but no usable IDR/SPS pair lands so the
+     * receiver eternally NACKs and the iframe shows a black
+     * <video>. Manual flows always work at this same SDK pin
+     * (human reaction time = multi-second delay before clicking
+     * Start). 500 ms is the conservative minimum for the
+     * reproduction; under perceptual budget for "tap → action".
+     * `setTimeout(..., 0)` was tried first and was insufficient.
      */
     _maybeAutoStart() {
         if (!this._autoStartFromUrl) return;
@@ -523,7 +526,7 @@ export class ReachyMini extends EventTarget {
             this.startSession(peerId).catch((err) => {
                 console.warn('[reachy-mini] autoStartFromUrl: startSession rejected:', err);
             });
-        }, 0);
+        }, 500);
     }
 
     // ─── Auth ────────────────────────────────────────────────────────────
