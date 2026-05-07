@@ -77,6 +77,11 @@
  *     videoJitterBufferTargetMs: number,   // default: 0     — receiver-side jitter buffer hint, ms
  *                                          //                  0 = "render ASAP" (teleop). Spec range [0, 4000].
  *                                          //                  Raise (100–400) on flaky links to trade latency for resilience.
+ *     autoStartFromUrl:          boolean,  // default: false — when true AND the URL carries a `robot_peer_id` hint,
+ *                                          //                  auto-call `startSession(preselectedRobotId)` after
+ *                                          //                  `connect()` resolves and that robot appears online.
+ *                                          //                  One-shot per page load; suits iframe-embedded apps
+ *                                          //                  that want zero-tap entry from the host shell.
  *   })
  *
  *
@@ -100,6 +105,11 @@
  *                                          when a host iframe (e.g. the
  *                                          Reachy Mini mobile shell) embeds
  *                                          this app.
+ *   .isEmbedded       boolean           — true iff `preselectedRobotId !==
+ *                                          null`. Branch your UX on this:
+ *                                          when true, hide the robot picker
+ *                                          and your sign-in screen (the
+ *                                          host has already handled both).
  *
  *
  * EVENTS  (EventTarget — use addEventListener)
@@ -315,7 +325,7 @@ function sdpHasAudioSendRecv(sdp) {
 
 export class ReachyMini extends EventTarget {
 
-    /** @param {{ signalingUrl?: string, enableMicrophone?: boolean, clientId?: string, appName?: string, videoJitterBufferTargetMs?: number }} [options] */
+    /** @param {{ signalingUrl?: string, enableMicrophone?: boolean, clientId?: string, appName?: string, videoJitterBufferTargetMs?: number, autoStartFromUrl?: boolean }} [options] */
     constructor(options = {}) {
         super();
         this._signalingUrl = options.signalingUrl || 'https://cduss-reachy-mini-central.hf.space';
@@ -327,6 +337,20 @@ export class ReachyMini extends EventTarget {
         // implement RTCRtpReceiver.jitterBufferTarget fall back to default
         // buffering (~150-200 ms).
         this._videoJitterBufferTargetMs = options.videoJitterBufferTargetMs ?? 0;
+        // When true AND the URL carried a `robot_peer_id` hint at
+        // construction (so `preselectedRobotId !== null`), the SDK
+        // auto-calls `startSession(preselectedRobotId)` as soon as
+        // that robot appears in the central's robot list after the
+        // app's own `connect()` resolves. Lets host-iframe-embedded
+        // consumers (mobile shell, vibe-coder preview) skip their
+        // robot picker AND skip the manual `startSession` call —
+        // they just `await robot.connect()` and receive a `streaming`
+        // event when the SDK has dialed in. One-shot: a manual
+        // `stopSession()` followed by another `startSession()` is
+        // not auto-replayed. Default `false` keeps the standalone
+        // Space behavior unchanged.
+        this._autoStartFromUrl = options.autoStartFromUrl === true;
+        this._autoStartAttempted = false;
 
         this._state = 'disconnected';                 // 'disconnected' | 'connected' | 'streaming'
         this._robots = [];                             // latest robot list from signaling
@@ -445,6 +469,44 @@ export class ReachyMini extends EventTarget {
      * @returns {string|null}
      */
     get preselectedRobotId() { return this._preselectedRobotId; }
+
+    /**
+     * Convenience flag for apps that want to branch their UX on
+     * "am I embedded in a host shell?". True iff the URL carried a
+     * `robot_peer_id` hint at construction time (which only happens
+     * when a host iframe — mobile shell, vibe-coder preview, etc. —
+     * is the parent). Apps typically use it to skip their robot
+     * picker and their sign-in screen, since both are duplicated
+     * work the host has already done.
+     *
+     * @returns {boolean}
+     */
+    get isEmbedded() { return this._preselectedRobotId !== null; }
+
+    /**
+     * Internal: try to honour the `autoStartFromUrl` constructor
+     * option. Called from the signaling-message handler after every
+     * `robotsChanged` emit, so a robot that comes online after the
+     * SDK is already `connected` still triggers the auto-start.
+     * No-op unless `autoStartFromUrl` is set, the URL carries a
+     * preselect, the SDK is `connected`, the preselected robot is
+     * in the latest list, and we haven't already attempted in this
+     * page load. Errors are swallowed to a `console.warn` — the
+     * normal `startSession` rejection / `sessionRejected` event
+     * still fires for app-level handling.
+     */
+    _maybeAutoStart() {
+        if (!this._autoStartFromUrl) return;
+        if (this._autoStartAttempted) return;
+        if (!this._preselectedRobotId) return;
+        if (this._state !== 'connected') return;
+        const match = this._robots.find((r) => r.id === this._preselectedRobotId);
+        if (!match) return;
+        this._autoStartAttempted = true;
+        this.startSession(this._preselectedRobotId).catch((err) => {
+            console.warn('[reachy-mini] autoStartFromUrl: startSession rejected:', err);
+        });
+    }
 
     // ─── Auth ────────────────────────────────────────────────────────────
 
@@ -1375,12 +1437,14 @@ export class ReachyMini extends EventTarget {
             case 'list':
                 this._robots = msg.producers || [];
                 this._emit('robotsChanged', { robots: this._robots });
+                this._maybeAutoStart();
                 break;
             case 'peerStatusChanged': {
                 const list = await this._sendToServer({ type: 'list' });
                 if (list?.producers) {
                     this._robots = list.producers;
                     this._emit('robotsChanged', { robots: this._robots });
+                    this._maybeAutoStart();
                 }
                 break;
             }
