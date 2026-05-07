@@ -622,6 +622,11 @@ export class ReachyMini extends EventTarget {
         this._iceConnected = false;
         this._dcOpen = false;
         this._micSupported = false;
+        // Buffer for ICE candidates that arrive before the SDP
+        // exchange completes (see _handlePeerMessage). Reset on every
+        // fresh session so stale candidates from a previous attempt
+        // don't get applied to a new RTCPeerConnection.
+        this._pendingRemoteIce = [];
 
         // Acquire mic eagerly so the browser permission prompt appears now,
         // but tracks stay disabled (muted) until the user explicitly unmutes.
@@ -1388,6 +1393,20 @@ export class ReachyMini extends EventTarget {
                 } else {
                     await this._pc.setRemoteDescription(new RTCSessionDescription(sdp));
                 }
+                // Replay any ICE candidates that arrived before the
+                // SDP exchange completed (see the buffering branch
+                // below for context).
+                const pending = this._pendingRemoteIce;
+                if (pending && pending.length) {
+                    this._pendingRemoteIce = [];
+                    for (const ice of pending) {
+                        try {
+                            await this._pc.addIceCandidate(new RTCIceCandidate(ice));
+                        } catch (err) {
+                            console.warn('[reachy-mini] buffered ICE candidate rejected:', err);
+                        }
+                    }
+                }
             }
             if (msg.ice) {
                 // Safari (and the iOS WKWebView Tauri ships on) rejects
@@ -1398,8 +1417,24 @@ export class ReachyMini extends EventTarget {
                 // Chrome / Firefox swallow it silently; we mirror that
                 // here so the iOS WebView stops surfacing the noise as
                 // a robot-side WebRTC error event.
-                if (msg.ice.candidate) {
+                if (!msg.ice.candidate) return;
+                if (this._pc.remoteDescription) {
                     await this._pc.addIceCandidate(new RTCIceCandidate(msg.ice));
+                } else {
+                    // The signaling transport (SSE through central) is
+                    // not strictly ordered across the offer / ICE
+                    // streams when the SDK runs inside a cross-origin
+                    // iframe or in Safari / iOS WKWebView: the first
+                    // ICE candidates can land before the offer SDP
+                    // does. Calling addIceCandidate before
+                    // setRemoteDescription throws
+                    // `InvalidStateError: The remote description was
+                    // null` and the candidate is silently lost,
+                    // sometimes wedging ICE altogether. Buffer here
+                    // and replay above as soon as the offer has been
+                    // applied.
+                    if (!this._pendingRemoteIce) this._pendingRemoteIce = [];
+                    this._pendingRemoteIce.push(msg.ice);
                 }
             }
         } catch (e) {
