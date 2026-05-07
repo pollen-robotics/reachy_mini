@@ -637,7 +637,31 @@ export class ReachyMini extends EventTarget {
                 this._micMuted = true;
             } catch (e) {
                 console.warn('Microphone not available:', e);
-                this._micStream = null;
+                // Fall back to a silent placeholder track. We MUST add an
+                // audio track before createAnswer or the answer SDP comes
+                // back as recvonly for audio - which negotiates the audio
+                // SENDER side off the wire entirely. A host that wants to
+                // later inject a different audio source (e.g. a synthesised
+                // AI voice via replaceTrack on the sender) needs a live
+                // sendrecv slot, even if the initial track is silent.
+                try {
+                    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                    const dst = ctx.createMediaStreamDestination();
+                    // A muted oscillator keeps the track "alive" without
+                    // emitting any audible signal.
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    gain.gain.value = 0;
+                    osc.connect(gain).connect(dst);
+                    osc.start();
+                    this._micStream = dst.stream;
+                    this._micStream.getAudioTracks().forEach(t => { t.enabled = false; });
+                    this._micMuted = true;
+                    this._silentMicFallback = { ctx, osc };
+                } catch (fallbackErr) {
+                    console.warn('Silent mic fallback failed:', fallbackErr);
+                    this._micStream = null;
+                }
             }
         }
 
