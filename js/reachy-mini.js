@@ -72,7 +72,7 @@
  * CONSTRUCTOR OPTIONS
  * ───────────────────
  *   new ReachyMini({
- *     signalingUrl:              string,   // default: "https://cduss-reachy-mini-central.hf.space"
+ *     signalingUrl:              string,   // default: "https://tfrere-reachy-mini-central.hf.space"
  *     enableMicrophone:          boolean,  // default: true  — acquire mic for bidirectional audio
  *     videoJitterBufferTargetMs: number,   // default: 0     — receiver-side jitter buffer hint, ms
  *                                          //                  0 = "render ASAP" (teleop). Spec range [0, 4000].
@@ -266,7 +266,15 @@ export class ReachyMini extends EventTarget {
     /** @param {{ signalingUrl?: string, enableMicrophone?: boolean, clientId?: string, appName?: string, videoJitterBufferTargetMs?: number }} [options] */
     constructor(options = {}) {
         super();
-        this._signalingUrl = options.signalingUrl || 'https://cduss-reachy-mini-central.hf.space';
+        // Production central. The legacy `cduss-reachy-mini-central`
+        // host predates the proper deployment and is no longer where
+        // any Reachy Mini daemon registers; pointing the SDK at it
+        // produces a successful `connect()` but an empty
+        // `robot.robots` list and a `startSession()` that hangs
+        // forever (the central can't route a peer id it doesn't know).
+        // Override via the `signalingUrl` option for staging /
+        // self-hosted setups.
+        this._signalingUrl = options.signalingUrl || 'https://tfrere-reachy-mini-central.hf.space';
         this._enableMicrophone = options.enableMicrophone !== false;
         this._clientId = options.clientId || null;
         this._appName = options.appName || 'unknown';
