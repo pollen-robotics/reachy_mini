@@ -33,6 +33,13 @@ gpiozero = pytest.importorskip("gpiozero")
 from gpiozero import Device  # noqa: E402
 from gpiozero.pins.mock import MockFactory  # noqa: E402
 
+# Bind a MockFactory for the test session BEFORE any test imports the
+# ``shutdown_monitor`` module. The module constructs ``Button(23,
+# pull_up=False)`` at import time; without a pin_factory pre-set, gpiozero
+# attempts to auto-detect one and raises ``BadPinFactory`` on hosts without
+# Linux GPIO (CI runners, dev macOS / Windows).
+Device.pin_factory = MockFactory()
+
 
 @pytest.fixture
 def shutdown_module(monkeypatch):
