@@ -33,12 +33,29 @@ gpiozero = pytest.importorskip("gpiozero")
 from gpiozero import Device  # noqa: E402
 from gpiozero.pins.mock import MockFactory  # noqa: E402
 
-# Bind a MockFactory for the test session BEFORE any test imports the
-# ``shutdown_monitor`` module. The module constructs ``Button(23,
-# pull_up=False)`` at import time; without a pin_factory pre-set, gpiozero
-# attempts to auto-detect one and raises ``BadPinFactory`` on hosts without
-# Linux GPIO (CI runners, dev macOS / Windows).
-Device.pin_factory = MockFactory()
+
+@pytest.fixture(autouse=True, scope="session")
+def _bind_mock_pin_factory_for_session():
+    """Bind a session-scoped ``MockFactory`` and restore the previous value.
+
+    The ``shutdown_monitor`` module constructs ``Button(23, pull_up=False)``
+    at import time; without a pin_factory pre-set, gpiozero attempts to
+    auto-detect one and raises ``BadPinFactory`` on hosts without Linux
+    GPIO (CI runners, dev macOS / Windows). Setting the factory at session
+    start ensures the per-test ``shutdown_module`` fixture always finds a
+    valid factory when it reloads the module.
+
+    Capturing+restoring (rather than mutating ``Device.pin_factory`` at
+    module-import time) means importing this test file does NOT leak a
+    MockFactory into other test modules that may rely on the default
+    pin-factory auto-detect behaviour.
+    """
+    previous = Device.pin_factory
+    Device.pin_factory = MockFactory()
+    try:
+        yield
+    finally:
+        Device.pin_factory = previous
 
 
 @pytest.fixture
@@ -73,6 +90,22 @@ def shutdown_module(monkeypatch):
 def _settle() -> None:
     """Yield briefly so gpiozero's edge-dispatch thread runs handlers."""
     time.sleep(0.02)
+
+
+def _wait_until(predicate, timeout: float = 2.0, poll: float = 0.01) -> bool:
+    """Poll ``predicate`` until True or ``timeout`` elapses.
+
+    Returns the final ``predicate()`` value (True if it became true within
+    the window, False if it never did). Used to make Timer-fire assertions
+    robust against scheduling delay on slow / loaded CI runners — see
+    Copilot review feedback on PR #1110.
+    """
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if predicate():
+            return True
+        time.sleep(poll)
+    return predicate()
 
 
 def test_module_constants_match_design():
@@ -120,12 +153,11 @@ def test_sustained_release_fires_shutdown_once(shutdown_module):
     _settle()
 
     with patch(monkey_target, side_effect=lambda: fired.append(True)):
-        pin.drive_low()   # release at t=0.
-        time.sleep(0.5)   # 0.5 > 0.3 — Timer fires at t=0.3.
-
-    assert fired == [True], (
-        f"sustained release did not fire shutdown_now exactly once: fired={fired}"
-    )
+        pin.drive_low()   # release at t=0; Timer scheduled to fire at t=HOLD_TIME.
+        # Poll for fire instead of fixed sleep — robust to slow / loaded CI runners.
+        assert _wait_until(lambda: fired == [True], timeout=2.0), (
+            f"sustained release did not fire shutdown_now within 2s: fired={fired}"
+        )
 
 
 def test_emi_burst_during_release_cancels_pending_timer(shutdown_module):
@@ -159,11 +191,10 @@ def test_emi_burst_during_release_cancels_pending_timer(shutdown_module):
             f"fired={fired}"
         )
 
-        # At t≈0.50 — past Timer #2's deadline (t≈0.4).
-        time.sleep(0.15)
-        assert fired == [True], (
-            f"Timer #2 did not fire after the EMI burst (or fired more than once): "
-            f"fired={fired}"
+        # Timer #2's deadline is t≈0.4; poll for fire instead of fixed sleep
+        # so the test is robust to scheduling delay on slow / loaded CI runners.
+        assert _wait_until(lambda: fired == [True], timeout=2.0), (
+            f"Timer #2 did not fire after the EMI burst within 2s: fired={fired}"
         )
 
 
@@ -177,3 +208,26 @@ def test_shutdown_now_invokes_shutdown_command():
     with patch(target) as mock_call:
         shutdown_now()
     mock_call.assert_called_once_with(["sudo", "shutdown", "-h", "now"])
+
+
+def test_scheduled_timer_is_daemon_thread(shutdown_module):
+    """Pending Timer must be ``daemon=True`` so process exit isn't blocked.
+
+    Critical safety property: if the Python process exits while a Timer is
+    pending, the Timer thread must not keep the process alive (which would
+    hang the SDK shutdown sequence). The fix is the explicit
+    ``timer.daemon = True`` in :func:`shutdown_monitor._schedule_shutdown`;
+    this regression test pins that behaviour.
+    """
+    pin = Device.pin_factory.pin(23)
+    pin.drive_high()  # latch IN.
+    _settle()
+    pin.drive_low()  # release schedules a pending Timer.
+    _settle()
+
+    assert shutdown_module._pending_timer is not None, (
+        "release must schedule a pending Timer"
+    )
+    assert shutdown_module._pending_timer.daemon is True, (
+        "scheduled Timer must be daemon=True to prevent process hang on exit"
+    )
