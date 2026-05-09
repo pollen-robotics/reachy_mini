@@ -275,6 +275,36 @@ class GetMicrophoneVolumeCmd(BaseModel):
     type: Literal["get_microphone_volume"] = "get_microphone_volume"
 
 
+# ------------------------------------------------------------------
+# Daemon log streaming over the DataChannel.
+#
+# Push-based stream of `journalctl -u reachy-mini-daemon` lines. Same
+# unit and same flags as the existing /logs/ws/daemon WebSocket
+# (`routers/logs.py`); exposed over the typed transport so remote
+# (Central-routed) peers can consume daemon logs without an LAN HTTP
+# path. The unit is hard-coded — this is not a generic
+# system-introspection primitive.
+#
+# Idempotent: re-subscribing while a stream is already running on
+# the same peer cancels the previous subprocess and restarts. Stream
+# auto-terminates on peer disconnect (cleanup wired in
+# `daemon/backend/abstract.py`).
+# ------------------------------------------------------------------
+
+
+class SubscribeLogsCmd(BaseModel):
+    """Subscribe the calling peer to the daemon's journalctl stream."""
+
+    type: Literal["subscribe_logs"] = "subscribe_logs"
+
+
+class UnsubscribeLogsCmd(BaseModel):
+    """Stop the calling peer's log subscription. No-op if no stream."""
+
+    type: Literal["unsubscribe_logs"] = "unsubscribe_logs"
+
+
+
 AnyCommand = Annotated[
     SetTargetCmd
     | SetHeadJointsCmd
@@ -299,7 +329,9 @@ AnyCommand = Annotated[
     | SetVolumeCmd
     | GetVolumeCmd
     | SetMicrophoneVolumeCmd
-    | GetMicrophoneVolumeCmd,
+    | GetMicrophoneVolumeCmd
+    | SubscribeLogsCmd
+    | UnsubscribeLogsCmd,
     Field(discriminator="type"),
 ]
 
@@ -341,6 +373,35 @@ class RecordedDataMsg(BaseModel):
 
     type: Literal["recorded_data"] = "recorded_data"
     data: list[dict[str, Any]]
+
+
+class LogLineMsg(BaseModel):
+    """A single journalctl line for the active log subscriber.
+
+    `timestamp` is the ISO-formatted prefix from
+    `journalctl --output short-iso`; `line` is the rest of the
+    record (everything after the timestamp). Consumers that want a
+    severity tag should parse it from the line text — the daemon
+    deliberately does not classify, since clients already have a
+    parser (e.g. desktop app's `parseDaemonLogLevel`).
+    """
+
+    type: Literal["log_line"] = "log_line"
+    timestamp: str
+    line: str
+
+
+class LogStreamErrorMsg(BaseModel):
+    """The log subscription failed and is now terminated.
+
+    Most common cause: `journalctl` is unavailable on the host
+    (development macOS, non-systemd Linux). The subscription is
+    over after this message; the consumer must re-`subscribe_logs`
+    to retry.
+    """
+
+    type: Literal["log_stream_error"] = "log_stream_error"
+    error: str
 
 
 # ------------------------------------------------------------------
@@ -396,7 +457,9 @@ AnyServerMsg = Annotated[
     | ImuDataMsg
     | RecordedDataMsg
     | DaemonStatus
-    | TaskProgress,
+    | TaskProgress
+    | LogLineMsg
+    | LogStreamErrorMsg,
     Field(discriminator="type"),
 ]
 server_msg_adapter: TypeAdapter[AnyServerMsg] = TypeAdapter(AnyServerMsg)

@@ -33,6 +33,8 @@ from reachy_mini.io.protocol import (
     GetVolumeCmd,
     GotoSleepCmd,
     GotoTargetCmd,
+    LogLineMsg,
+    LogStreamErrorMsg,
     MockupSimBackendStatus,
     MotorControlMode,
     MujocoBackendStatus,
@@ -52,6 +54,8 @@ from reachy_mini.io.protocol import (
     SetVolumeCmd,
     StartRecordingCmd,
     StopRecordingCmd,
+    SubscribeLogsCmd,
+    UnsubscribeLogsCmd,
     WakeUpCmd,
     command_adapter,
 )
@@ -204,6 +208,16 @@ class Backend:
         self._send_message_to_webrtc: Optional[Callable[[Optional[str], str], None]] = (
             None
         )
+
+        # Per-peer journalctl streaming tasks. Populated when a peer
+        # sends `subscribe_logs`, cancelled on `unsubscribe_logs` or
+        # peer disconnect (the latter is wired in setup_media_server).
+        self._log_tasks: dict[str, "asyncio.Task[None]"] = {}
+        # Asyncio loop on which the log-streaming tasks run. Captured
+        # in setup_media_server alongside the WebRTC handler loop, so
+        # cross-thread cleanup (peer disconnect fires from gstreamer's
+        # GLib thread) can schedule cancellation correctly.
+        self._log_loop: Optional["asyncio.AbstractEventLoop"] = None
 
     # Life cycle methods
     def wrapped_run(self) -> None:
@@ -874,12 +888,20 @@ class Backend:
         self,
         cmd: AnyCommand,
         send_response: Callable[[dict[str, Any]], None],
+        peer_id: Optional[str] = None,
     ) -> None:
         """Process a command from any transport (WebRTC data channel, WebSocket, ...).
 
         Args:
             cmd: A validated command model (parsed via command_adapter).
             send_response: Callback to send a response dict back to the caller.
+            peer_id: Optional caller identity for transports that multiplex
+                multiple peers on a single backend (WebRTC). Used to scope
+                per-peer state such as the journalctl log subscription so
+                two peers can each have their own active stream.
+                Non-multiplexed transports (HTTP/WebSocket) leave it as
+                ``None`` — log subscription requires a peer id and quietly
+                no-ops without one.
 
         """
         block_targets = self.is_move_running
@@ -1063,6 +1085,129 @@ class Backend:
             self.append_record(cmd.record)
             send_response({"status": "ok", "command": "append_record"})
 
+        elif isinstance(cmd, SubscribeLogsCmd):
+            self._start_log_subscription(peer_id, send_response)
+        elif isinstance(cmd, UnsubscribeLogsCmd):
+            self._cancel_log_subscription(peer_id)
+
+    # ------------------------------------------------------------------
+    # journalctl log streaming over the typed transport (subscribe_logs)
+    # ------------------------------------------------------------------
+
+    def _start_log_subscription(
+        self,
+        peer_id: Optional[str],
+        send_response: Callable[[dict[str, Any]], None],
+    ) -> None:
+        if peer_id is None:
+            send_response(
+                LogStreamErrorMsg(
+                    error="subscribe_logs requires a peer-aware transport"
+                ).model_dump()
+            )
+            return
+        # Cancel any pre-existing task for this peer; subscribing twice
+        # is a no-op error rather than an exception so the consumer can
+        # blindly call `subscribeLogs` on every reconnect.
+        self._cancel_log_subscription(peer_id)
+        task = asyncio.create_task(
+            self._async_subscribe_logs(peer_id, send_response)
+        )
+        self._log_tasks[peer_id] = task
+
+    def _cancel_log_subscription(self, peer_id: Optional[str]) -> None:
+        if peer_id is None:
+            return
+        task = self._log_tasks.pop(peer_id, None)
+        if task is not None and not task.done():
+            task.cancel()
+
+    def _on_peer_disconnect(self, peer_id: str) -> None:
+        """Cancel any per-peer state when the WebRTC peer goes away.
+
+        Called from the media server's GStreamer/GLib thread, so we hop
+        back onto the asyncio loop before touching task state.
+        """
+        loop = self._log_loop
+        if loop is None or peer_id not in self._log_tasks:
+            return
+        loop.call_soon_threadsafe(self._cancel_log_subscription, peer_id)
+
+    async def _async_subscribe_logs(
+        self,
+        peer_id: str,
+        send_response: Callable[[dict[str, Any]], None],
+    ) -> None:
+        """Stream `journalctl -u reachy-mini-daemon` lines until cancelled.
+
+        Mirrors the flags used by the WS route at
+        ``daemon/app/routers/logs.py`` (and, modulo ``-n``, the BT
+        pull-model path) so all three transports surface the same lines.
+        """
+        process: Optional[asyncio.subprocess.Process] = None
+        try:
+            try:
+                process = await asyncio.create_subprocess_exec(
+                    "journalctl",
+                    "-u",
+                    "reachy-mini-daemon",
+                    "-b",
+                    "-f",
+                    "-n",
+                    "100",
+                    "--output",
+                    "short-iso",
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.STDOUT,
+                )
+            except FileNotFoundError:
+                send_response(
+                    LogStreamErrorMsg(error="journalctl not found").model_dump()
+                )
+                return
+
+            assert process.stdout is not None
+            while True:
+                raw = await process.stdout.readline()
+                if not raw:
+                    # journalctl -f shouldn't EOF except on shutdown;
+                    # surface it so the consumer can decide to retry.
+                    send_response(
+                        LogStreamErrorMsg(
+                            error="journalctl stream ended"
+                        ).model_dump()
+                    )
+                    return
+                line = raw.decode("utf-8", errors="replace").rstrip("\n")
+                # short-iso prefixes each line with an ISO-8601 timestamp
+                # followed by a single space: split once so consumers
+                # can render them separately without re-parsing.
+                ts, sep, rest = line.partition(" ")
+                if not sep:
+                    ts, rest = "", line
+                send_response(
+                    LogLineMsg(timestamp=ts, line=rest).model_dump()
+                )
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            self.logger.warning("[subscribe_logs] %s: %s", peer_id, e)
+            try:
+                send_response(LogStreamErrorMsg(error=str(e)).model_dump())
+            except Exception:
+                pass
+        finally:
+            if process is not None and process.returncode is None:
+                try:
+                    process.terminate()
+                except ProcessLookupError:
+                    pass
+                try:
+                    await asyncio.wait_for(process.wait(), timeout=2.0)
+                except asyncio.TimeoutError:
+                    process.kill()
+                    await process.wait()
+
     async def _async_goto(
         self,
         send_response: Callable[[dict[str, Any]], None],
@@ -1119,11 +1264,22 @@ class Backend:
 
         _loop = asyncio.new_event_loop()
         threading.Thread(target=_loop.run_forever, daemon=True).start()
+        # Capture the loop so peer-disconnect cleanup (which fires on
+        # gstreamer's GLib thread) can schedule task cancellation
+        # threadsafely. Same loop used by `_handle_webrtc_message`.
+        self._log_loop = _loop
 
         def _threadsafe_handler(peer_id: str, message: str) -> None:
             _loop.call_soon_threadsafe(self._handle_webrtc_message, peer_id, message)
 
         media_server.set_message_handler(_threadsafe_handler)
+        # Ask the media server to notify us when a peer goes away so we
+        # can cancel any pending journalctl subprocess for it. No-op
+        # if the running media server doesn't support the hook (older
+        # builds): log subscription cleanup just falls back to manual
+        # `unsubscribe_logs` from the consumer side.
+        if hasattr(media_server, "set_peer_disconnect_handler"):
+            media_server.set_peer_disconnect_handler(self._on_peer_disconnect)
         self._send_message_to_webrtc = media_server.send_data_message
 
     def _handle_webrtc_message(self, peer_id: str, message: str) -> None:
@@ -1137,7 +1293,7 @@ class Backend:
             send({"error": f"Invalid command: {e}"})
             return
         try:
-            self.process_command(cmd, send_response=send)
+            self.process_command(cmd, send_response=send, peer_id=peer_id)
         except Exception as e:
             self.logger.error(f"WebRTC command error: {e}")
             send({"error": str(e)})
