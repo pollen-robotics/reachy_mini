@@ -26,6 +26,7 @@ from fastapi.templating import Jinja2Templates
 from reachy_mini.apps.manager import AppManager
 from reachy_mini.daemon.app.routers import (
     apps,
+    autostart,
     camera,
     daemon,
     hf_auth,
@@ -224,6 +225,7 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
 
     router = APIRouter(prefix="/api")
     router.include_router(apps.router)
+    #router.include_router(autostart.router)
     router.include_router(camera.router)
     router.include_router(daemon.router)
     router.include_router(hf_auth.router)
@@ -235,8 +237,9 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
     router.include_router(volume.router)
 
     if args.wireless_version:
-        from .routers import cache, update, wifi_config
+        from .routers import cache, update, wifi_config, autostart
 
+        app.include_router(autostart.router)
         app.include_router(cache.router)
         app.include_router(logs.router)
         app.include_router(update.router)
