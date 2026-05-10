@@ -86,6 +86,17 @@ Reachy Mini robots are sold as kits and generally take **2 to 3 hours** to assem
 
 Encountering an issue? 👉 **[Check the Troubleshooting & FAQ Guide](https://huggingface.co/docs/reachy_mini/troubleshooting)**
 
+### Daemon instrumentation
+
+The daemon supports feature-flagged structured logs through `REACHY_DAEMON_INSTRUMENT`:
+
+```bash
+REACHY_DAEMON_INSTRUMENT=basic reachy-mini-daemon --log-file /tmp/reachy-daemon.jsonl
+REACHY_DAEMON_INSTRUMENT=trace reachy-mini-daemon --log-level DEBUG --log-file /tmp/reachy-daemon.jsonl
+```
+
+Modes are `off`, `basic` (default), `trace`, and `remote` (reserved for exporter work). Structured modes write one JSON object per line, which is friendly to tools like `jq`.
+
 <br>
 
 ## 🤝 Community & Contributing

@@ -10,6 +10,7 @@ managing the robot's state.
 import argparse
 import asyncio
 import logging
+import sys
 import types
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
@@ -26,7 +27,6 @@ from fastapi.templating import Jinja2Templates
 from reachy_mini.apps.manager import AppManager
 from reachy_mini.daemon.app.routers import (
     apps,
-    autostart,
     camera,
     daemon,
     hf_auth,
@@ -40,6 +40,7 @@ from reachy_mini.daemon.app.routers import (
     volume,
 )
 from reachy_mini.daemon.daemon import Daemon
+from reachy_mini.daemon.instrumentation import configure_daemon_logging, timing_event
 from reachy_mini.daemon.utils import SimulationMode
 from reachy_mini.media.audio_utils import (
     check_reachymini_asoundrc,
@@ -151,23 +152,31 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
             )
 
         try:
-            if args.autostart:
-                await app.state.daemon.start(
-                    serialport=args.serialport,
-                    sim=args.sim,
-                    mockup_sim=args.mockup_sim,
-                    scene=args.scene,
-                    headless=args.headless,
-                    use_audio=not args.no_media,
-                    kinematics_engine=args.kinematics_engine,
-                    check_collision=args.check_collision,
-                    wake_up_on_start=args.wake_up_on_start,
-                    localhost_only=localhost_only,
-                    hardware_config_filepath=args.hardware_config_filepath,
-                )
+            with timing_event(
+                "fastapi.lifespan.startup",
+                autostart=args.autostart,
+                wireless_version=args.wireless_version,
+                no_media=args.no_media,
+            ):
+                if args.autostart:
+                    with timing_event("daemon.autostart"):
+                        await app.state.daemon.start(
+                            serialport=args.serialport,
+                            sim=args.sim,
+                            mockup_sim=args.mockup_sim,
+                            scene=args.scene,
+                            headless=args.headless,
+                            use_audio=not args.no_media,
+                            kinematics_engine=args.kinematics_engine,
+                            check_collision=args.check_collision,
+                            wake_up_on_start=args.wake_up_on_start,
+                            localhost_only=localhost_only,
+                            hardware_config_filepath=args.hardware_config_filepath,
+                        )
 
-            # Register mDNS service only after the daemon is ready
-            mdns.register()
+                # Register mDNS service only after the daemon is ready
+                with timing_event("daemon.mdns.register", robot_name=args.robot_name):
+                    mdns.register()
 
             yield
         finally:
@@ -237,7 +246,7 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
     router.include_router(volume.router)
 
     if args.wireless_version:
-        from .routers import cache, update, wifi_config, autostart
+        from .routers import autostart, cache, update, wifi_config
 
         app.include_router(autostart.router)
         app.include_router(cache.router)
@@ -293,18 +302,9 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
 
 def run_app(args: Args) -> None:
     """Run the FastAPI app with Uvicorn."""
-    # Configure logging to ensure all logs go to stderr (captured by systemd)
-    import sys
-
+    # Configure logging to ensure all logs go to stderr (captured by systemd).
+    configure_daemon_logging(args.log_level, args.log_file)
     root_logger = logging.getLogger()
-    root_logger.setLevel(args.log_level)
-
-    # Create handler that writes to stderr with immediate flush
-    handler = logging.StreamHandler(sys.stderr)
-    handler.setLevel(args.log_level)
-    handler.setFormatter(logging.Formatter("%(name)s - %(levelname)s - %(message)s"))
-    root_logger.handlers.clear()
-    root_logger.addHandler(handler)
 
     # Explicitly configure the apps.manager logger to ensure propagation
     apps_logger = logging.getLogger("reachy_mini.apps.manager")
@@ -617,14 +617,6 @@ def main() -> None:
     )
 
     args = parser.parse_args()
-
-    if args.log_file:
-        file_handler = logging.FileHandler(args.log_file, mode="a")
-        file_handler.setFormatter(
-            logging.Formatter("%(name)s - %(levelname)s - %(message)s")
-        )
-        logging.getLogger().addHandler(file_handler)
-        logging.getLogger().setLevel(args.log_level)
 
     if args.wireless_version:
         # Check and fix ownership of /venvs directory

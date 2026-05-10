@@ -12,6 +12,7 @@ from importlib.metadata import PackageNotFoundError, version
 from threading import Event, Thread
 from typing import Any, Optional
 
+from reachy_mini.daemon.instrumentation import timing_event
 from reachy_mini.daemon.robot_app_lock import RobotAppLock
 from reachy_mini.daemon.utils import (
     SimulationMode,
@@ -261,80 +262,98 @@ class Daemon:
         self._status.state = DaemonState.STARTING
 
         try:
-            self.backend = self._setup_backend(
+            backend_mode = "mockup" if mockup_sim else "mujoco" if sim else "robot"
+            with timing_event(
+                "daemon.start",
+                backend_mode=backend_mode,
                 wireless_version=self.wireless_version,
-                sim=sim,
-                mockup_sim=mockup_sim,
-                serialport=serialport,
-                scene=scene,
-                check_collision=check_collision,
-                kinematics_engine=kinematics_engine,
-                headless=headless,
-                use_audio=effective_use_audio,
-                hardware_config_filepath=hardware_config_filepath,
-            )
-
-            self.ws_server = WSServer(backend=self.backend)
-            self.ws_server.start()
-            self._thread_publish_status = Thread(
-                target=self._publish_status, daemon=True
-            )
-            self._thread_publish_status.start()
-
-            def backend_wrapped_run() -> None:
-                assert self.backend is not None, (
-                    "Backend should be initialized before running."
+                no_media=self.no_media,
+                wake_up_on_start=wake_up_on_start,
+            ):
+                self.backend = self._setup_backend(
+                    wireless_version=self.wireless_version,
+                    sim=sim,
+                    mockup_sim=mockup_sim,
+                    serialport=serialport,
+                    scene=scene,
+                    check_collision=check_collision,
+                    kinematics_engine=kinematics_engine,
+                    headless=headless,
+                    use_audio=effective_use_audio,
+                    hardware_config_filepath=hardware_config_filepath,
                 )
 
-                try:
-                    self.backend.wrapped_run()
-                except Exception as e:
-                    self.logger.error(f"Backend encountered an error: {e}")
+                with timing_event("daemon.websocket.start", backend_mode=backend_mode):
+                    self.ws_server = WSServer(backend=self.backend)
+                    self.ws_server.start()
+                with timing_event("daemon.status_publisher.start"):
+                    self._thread_publish_status = Thread(
+                        target=self._publish_status, daemon=True
+                    )
+                    self._thread_publish_status.start()
+
+                def backend_wrapped_run() -> None:
+                    assert self.backend is not None, (
+                        "Backend should be initialized before running."
+                    )
+
+                    try:
+                        self.backend.wrapped_run()
+                    except Exception as e:
+                        self.logger.error(f"Backend encountered an error: {e}")
+                        self._status.state = DaemonState.ERROR
+                        self._status.error = str(e)
+                        if self.ws_server is not None:
+                            self.ws_server.stop()
+                        self.backend = None
+
+                with timing_event("daemon.backend.thread.start", backend_mode=backend_mode):
+                    self.backend_run_thread = Thread(target=backend_wrapped_run)
+                    self.backend_run_thread.start()
+
+                with timing_event("daemon.backend.ready.wait", backend_mode=backend_mode, timeout_s=2.0):
+                    backend_ready = self.backend.ready.wait(timeout=2.0)
+                if not backend_ready:
+                    self.logger.error(
+                        "Backend is not ready after 2 seconds. Some error occurred."
+                    )
                     self._status.state = DaemonState.ERROR
-                    self._status.error = str(e)
-                    if self.ws_server is not None:
-                        self.ws_server.stop()
-                    self.backend = None
-
-            self.backend_run_thread = Thread(target=backend_wrapped_run)
-            self.backend_run_thread.start()
-
-            if not self.backend.ready.wait(timeout=2.0):
-                self.logger.error(
-                    "Backend is not ready after 2 seconds. Some error occurred."
-                )
-                self._status.state = DaemonState.ERROR
-                self._status.error = self.backend.error
-                return self._status.state
-
-            if self._media_server and not self._media_released:
-                if self.backend is not None:
-                    self.backend.setup_media_server(self._media_server)
-                self._media_server.start()
-
-                # Start central signaling relay for remote WebRTC access
-                await self._start_central_signaling_relay()
-
-            if wake_up_on_start:
-                try:
-                    self.logger.info("Waking up Reachy Mini...")
-                    self.backend.set_motor_control_mode(MotorControlMode.Enabled)
-                    await self.backend.wake_up()
-                except Exception as e:
-                    self.logger.error(f"Error while waking up Reachy Mini: {e}")
-                    self._status.state = DaemonState.ERROR
-                    self._status.error = str(e)
-                    return self._status.state
-                except KeyboardInterrupt:
-                    self.logger.warning("Wake up interrupted by user.")
-                    self._status.state = DaemonState.STOPPING
+                    self._status.error = self.backend.error
                     return self._status.state
 
-            if self._status.state != DaemonState.ERROR:
-                self.logger.info("Daemon started successfully.")
-                self._status.state = DaemonState.RUNNING
-            else:
-                self.logger.error("Daemon started with errors.")
+                if self._media_server and not self._media_released:
+                    if self.backend is not None:
+                        with timing_event("daemon.media.attach", backend_mode=backend_mode):
+                            self.backend.setup_media_server(self._media_server)
+                    with timing_event("daemon.media.start", backend_mode=backend_mode):
+                        self._media_server.start()
+
+                    # Start central signaling relay for remote WebRTC access
+                    with timing_event("daemon.central_relay.start"):
+                        await self._start_central_signaling_relay()
+
+                if wake_up_on_start:
+                    try:
+                        self.logger.info("Waking up Reachy Mini...")
+                        with timing_event("daemon.motor.enable", reason="wake_up_on_start"):
+                            self.backend.set_motor_control_mode(MotorControlMode.Enabled)
+                        with timing_event("daemon.wake_up"):
+                            await self.backend.wake_up()
+                    except Exception as e:
+                        self.logger.error(f"Error while waking up Reachy Mini: {e}")
+                        self._status.state = DaemonState.ERROR
+                        self._status.error = str(e)
+                        return self._status.state
+                    except KeyboardInterrupt:
+                        self.logger.warning("Wake up interrupted by user.")
+                        self._status.state = DaemonState.STOPPING
+                        return self._status.state
+
+                if self._status.state != DaemonState.ERROR:
+                    self.logger.info("Daemon started successfully.")
+                    self._status.state = DaemonState.RUNNING
+                else:
+                    self.logger.error("Daemon started with errors.")
 
         except Exception as e:
             self._status.state = DaemonState.ERROR
@@ -551,22 +570,25 @@ class Daemon:
         reflash_motors_on_start: bool = True,
     ) -> "RobotBackend | MujocoBackend | MockupSimBackend":
         if mockup_sim:
-            return MockupSimBackend(
-                check_collision=check_collision,
-                kinematics_engine=kinematics_engine,
-                use_audio=use_audio,
-            )
+            with timing_event("daemon.backend.construct", backend_mode="mockup"):
+                return MockupSimBackend(
+                    check_collision=check_collision,
+                    kinematics_engine=kinematics_engine,
+                    use_audio=use_audio,
+                )
         elif sim:
-            return MujocoBackend(
-                scene=scene,
-                check_collision=check_collision,
-                kinematics_engine=kinematics_engine,
-                headless=headless,
-                use_audio=use_audio,
-            )
+            with timing_event("daemon.backend.construct", backend_mode="mujoco"):
+                return MujocoBackend(
+                    scene=scene,
+                    check_collision=check_collision,
+                    kinematics_engine=kinematics_engine,
+                    headless=headless,
+                    use_audio=use_audio,
+                )
         else:
             if serialport == "auto":
-                ports = find_serial_port(wireless_version=wireless_version)
+                with timing_event("daemon.serial_port.discover", wireless_version=wireless_version):
+                    ports = find_serial_port(wireless_version=wireless_version)
 
                 if len(ports) == 0:
                     raise RuntimeError(
@@ -588,14 +610,16 @@ class Daemon:
             )
 
             if reflash_motors_on_start:
-                reflash_motors_if_needed(serialport, dont_light_up=True)
+                with timing_event("daemon.motors.reflash_check"):
+                    reflash_motors_if_needed(serialport, dont_light_up=True)
 
-            return RobotBackend(
-                serialport=serialport,
-                log_level=self.log_level,
-                check_collision=check_collision,
-                kinematics_engine=kinematics_engine,
-                use_audio=use_audio,
-                wireless_version=wireless_version,
-                hardware_config_filepath=hardware_config_filepath,
-            )
+            with timing_event("daemon.backend.construct", backend_mode="robot"):
+                return RobotBackend(
+                    serialport=serialport,
+                    log_level=self.log_level,
+                    check_collision=check_collision,
+                    kinematics_engine=kinematics_engine,
+                    use_audio=use_audio,
+                    wireless_version=wireless_version,
+                    hardware_config_filepath=hardware_config_filepath,
+                )
