@@ -403,6 +403,12 @@ export class ReachyMini extends EventTarget {
         this._volumeResolve = null;
         this._micVolumeResolve = null;
 
+        // subscribeLogs(): a Set of {onLine, onError} subscribers. The
+        // first add sends `subscribe_logs`; removing the last sends
+        // `unsubscribe_logs`. We keep a single daemon-side stream and
+        // fan out to local subscribers in `_handleRobotMessage`.
+        this._logSubscribers = new Set();
+
         // startSession() promise plumbing
         this._sessionResolve = null;
         this._sessionReject = null;
@@ -860,6 +866,11 @@ export class ReachyMini extends EventTarget {
         if (this._hardwareIdResolve) { this._hardwareIdResolve(null); this._hardwareIdResolve = null; }
         if (this._volumeResolve) { this._volumeResolve(null); this._volumeResolve = null; }
         if (this._micVolumeResolve) { this._micVolumeResolve(null); this._micVolumeResolve = null; }
+        // Drop any active log subscribers — the daemon-side subprocess
+        // is torn down on peer-disconnect, so resubscribing across a
+        // reconnect requires a fresh subscribeLogs() call from the
+        // consumer.
+        this._logSubscribers.clear();
         if (this._sessionReject) {
             this._sessionReject(new Error('Session stopped'));
             this._sessionResolve = null;
@@ -902,6 +913,7 @@ export class ReachyMini extends EventTarget {
         if (this._hardwareIdResolve) { this._hardwareIdResolve(null); this._hardwareIdResolve = null; }
         if (this._volumeResolve) { this._volumeResolve(null); this._volumeResolve = null; }
         if (this._micVolumeResolve) { this._micVolumeResolve(null); this._micVolumeResolve = null; }
+        this._logSubscribers.clear();
         if (this._sessionReject) {
             this._sessionReject(new Error('Disconnected'));
             this._sessionResolve = null;
@@ -1258,6 +1270,41 @@ export class ReachyMini extends EventTarget {
     }
 
     /**
+     * Subscribe to the daemon's `journalctl -u reachy-mini-daemon`
+     * stream over the WebRTC data channel.
+     *
+     * One daemon-side subprocess is shared across all local subscribers:
+     * the first call sends `subscribe_logs`, removing the last subscriber
+     * sends `unsubscribe_logs`. Calling the returned `unsubscribe()`
+     * twice is a no-op.
+     *
+     * @param {{
+     *   onLine: (entry: { timestamp: string, line: string }) => void,
+     *   onError?: (error: string) => void,
+     * }} options
+     * @returns {() => void} unsubscribe
+     */
+    subscribeLogs({ onLine, onError } = {}) {
+        if (typeof onLine !== 'function') {
+            throw new TypeError('subscribeLogs: onLine callback is required');
+        }
+        const sub = { onLine, onError };
+        const wasEmpty = this._logSubscribers.size === 0;
+        this._logSubscribers.add(sub);
+        if (wasEmpty) this._sendCommand({ type: 'subscribe_logs' });
+
+        let detached = false;
+        return () => {
+            if (detached) return;
+            detached = true;
+            this._logSubscribers.delete(sub);
+            if (this._logSubscribers.size === 0) {
+                this._sendCommand({ type: 'unsubscribe_logs' });
+            }
+        };
+    }
+
+    /**
      * Request a state snapshot.  The response arrives as a "state" event.
      * Called automatically every 500 ms while streaming.
      *
@@ -1599,6 +1646,25 @@ export class ReachyMini extends EventTarget {
             if (this._micVolumeResolve) {
                 this._micVolumeResolve(data.status === 'error' ? null : data.volume);
                 this._micVolumeResolve = null;
+            }
+            return;
+        }
+        if (data.type === 'log_line') {
+            for (const sub of this._logSubscribers) {
+                try {
+                    sub.onLine({ timestamp: data.timestamp, line: data.line });
+                } catch (e) {
+                    console.error('subscribeLogs onLine threw:', e);
+                }
+            }
+            return;
+        }
+        if (data.type === 'log_stream_error') {
+            for (const sub of this._logSubscribers) {
+                if (typeof sub.onError === 'function') {
+                    try { sub.onError(data.error); }
+                    catch (e) { console.error('subscribeLogs onError threw:', e); }
+                }
             }
             return;
         }
