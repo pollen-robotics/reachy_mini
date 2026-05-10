@@ -22,6 +22,7 @@ import numpy as np
 from numpy.typing import NDArray
 from scipy.spatial.transform import Rotation as R
 
+from reachy_mini.daemon.instrumentation import log_event, timing_event
 from reachy_mini.io.protocol import (
     AnyCommand,
     AppendRecordCmd,
@@ -941,16 +942,46 @@ class Backend:
             send_response({"status": "ok", "command": "play_sound"})
 
         elif isinstance(cmd, SetMotorModeCmd):
-            self.set_motor_control_mode(MotorControlMode(cmd.mode))
+            mode = MotorControlMode(cmd.mode)
+            log_event(
+                "daemon.motor.mode.set.start",
+                source="command",
+                command="set_motor_mode",
+                mode=mode.value,
+            )
+            with timing_event(
+                "daemon.motor.mode.set",
+                source="command",
+                command="set_motor_mode",
+                mode=mode.value,
+            ):
+                self.set_motor_control_mode(mode)
+            log_event(
+                "daemon.motor.mode.set.complete",
+                source="command",
+                command="set_motor_mode",
+                mode=mode.value,
+            )
             send_response({"motor_mode": cmd.mode, "status": "ok"})
 
         elif isinstance(cmd, SetTorqueCmd):
+            requested_mode = None
             if cmd.ids is not None:
                 self.set_motor_torque_ids(cmd.ids, cmd.on)
             elif cmd.on:
+                requested_mode = MotorControlMode.Enabled
                 self.set_motor_control_mode(MotorControlMode.Enabled)
             else:
+                requested_mode = MotorControlMode.Disabled
                 self.set_motor_control_mode(MotorControlMode.Disabled)
+            log_event(
+                "daemon.motor.torque.set",
+                source="command",
+                command="set_torque",
+                ids=cmd.ids,
+                on=cmd.on,
+                mode=requested_mode.value if requested_mode else None,
+            )
             send_response({"status": "ok", "command": "set_torque"})
 
         elif isinstance(cmd, GetMotorModeCmd):
@@ -959,9 +990,28 @@ class Backend:
         elif isinstance(cmd, SetGravityCompensationCmd):
             try:
                 if cmd.enabled:
-                    self.set_motor_control_mode(MotorControlMode.GravityCompensation)
+                    mode = MotorControlMode.GravityCompensation
                 else:
-                    self.set_motor_control_mode(MotorControlMode.Enabled)
+                    mode = MotorControlMode.Enabled
+                log_event(
+                    "daemon.motor.mode.set.start",
+                    source="command",
+                    command="set_gravity_compensation",
+                    mode=mode.value,
+                )
+                with timing_event(
+                    "daemon.motor.mode.set",
+                    source="command",
+                    command="set_gravity_compensation",
+                    mode=mode.value,
+                ):
+                    self.set_motor_control_mode(mode)
+                log_event(
+                    "daemon.motor.mode.set.complete",
+                    source="command",
+                    command="set_gravity_compensation",
+                    mode=mode.value,
+                )
             except ValueError as e:
                 send_response({"error": str(e), "command": "set_gravity_compensation"})
                 return
@@ -1079,9 +1129,13 @@ class Backend:
     ) -> None:
         """Execute wake_up and send response when done."""
         try:
-            await self.wake_up()
+            log_event("daemon.wake_up.start", source="command")
+            with timing_event("daemon.wake_up", source="command"):
+                await self.wake_up()
+            log_event("daemon.wake_up.complete", source="command")
             send_response({"status": "ok", "command": "wake_up", "completed": True})
         except Exception as e:
+            log_event("daemon.wake_up.error", source="command", error=str(e))
             send_response({"error": str(e), "command": "wake_up"})
 
     async def _async_goto_sleep(
@@ -1089,9 +1143,13 @@ class Backend:
     ) -> None:
         """Execute goto_sleep and send response when done."""
         try:
-            await self.goto_sleep()
+            log_event("daemon.goto_sleep.start", source="command")
+            with timing_event("daemon.goto_sleep", source="command"):
+                await self.goto_sleep()
+            log_event("daemon.goto_sleep.complete", source="command")
             send_response({"status": "ok", "command": "goto_sleep", "completed": True})
         except Exception as e:
+            log_event("daemon.goto_sleep.error", source="command", error=str(e))
             send_response({"error": str(e), "command": "goto_sleep"})
 
     # ------------------------------------------------------------------

@@ -17,6 +17,7 @@ from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisco
 from huggingface_hub.errors import RepositoryNotFoundError
 from pydantic import BaseModel
 
+from reachy_mini.daemon.instrumentation import log_event, timing_event
 from reachy_mini.motion.recorded_move import RecordedMoves
 from reachy_mini.utils.interpolation import InterpolationTechnique
 
@@ -152,13 +153,35 @@ async def goto(
 @router.post("/play/wake_up")
 async def play_wake_up(backend: Backend = Depends(get_backend)) -> MoveUUID:
     """Request the robot to wake up."""
-    return create_move_task(backend.wake_up())
+
+    async def instrumented_wake_up() -> None:
+        log_event("daemon.wake_up.start", source="rest")
+        try:
+            with timing_event("daemon.wake_up", source="rest"):
+                await backend.wake_up()
+        except Exception as e:
+            log_event("daemon.wake_up.error", source="rest", error=str(e))
+            raise
+        log_event("daemon.wake_up.complete", source="rest")
+
+    return create_move_task(instrumented_wake_up())
 
 
 @router.post("/play/goto_sleep")
 async def play_goto_sleep(backend: Backend = Depends(get_backend)) -> MoveUUID:
     """Request the robot to go to sleep."""
-    return create_move_task(backend.goto_sleep())
+
+    async def instrumented_goto_sleep() -> None:
+        log_event("daemon.goto_sleep.start", source="rest")
+        try:
+            with timing_event("daemon.goto_sleep", source="rest"):
+                await backend.goto_sleep()
+        except Exception as e:
+            log_event("daemon.goto_sleep.error", source="rest", error=str(e))
+            raise
+        log_event("daemon.goto_sleep.complete", source="rest")
+
+    return create_move_task(instrumented_goto_sleep())
 
 
 @router.get("/recorded-move-datasets/list/{dataset_name:path}")

@@ -6,6 +6,7 @@ Provides endpoints to get and set the motor control mode.
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
+from reachy_mini.daemon.instrumentation import log_event, timing_event
 from reachy_mini.io.protocol import MotorControlMode
 
 from ....daemon.backend.abstract import Backend
@@ -38,6 +39,24 @@ async def set_motor_mode(
     backend: Backend = Depends(get_backend),
 ) -> dict[str, str]:
     """Set the motor control mode."""
-    backend.set_motor_control_mode(mode)
+    log_event(
+        "daemon.motor.mode.set.start",
+        source="rest",
+        endpoint="/api/motors/set_mode/{mode}",
+        mode=mode.value,
+    )
+    with timing_event(
+        "daemon.motor.mode.set",
+        source="rest",
+        endpoint="/api/motors/set_mode/{mode}",
+        mode=mode.value,
+    ):
+        backend.set_motor_control_mode(mode)
+    log_event(
+        "daemon.motor.mode.set.complete",
+        source="rest",
+        endpoint="/api/motors/set_mode/{mode}",
+        mode=mode.value,
+    )
 
     return {"status": f"motors changed to {mode} mode"}

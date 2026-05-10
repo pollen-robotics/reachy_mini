@@ -12,7 +12,7 @@ from importlib.metadata import PackageNotFoundError, version
 from threading import Event, Thread
 from typing import Any, Optional
 
-from reachy_mini.daemon.instrumentation import timing_event
+from reachy_mini.daemon.instrumentation import log_event, timing_event
 from reachy_mini.daemon.robot_app_lock import RobotAppLock
 from reachy_mini.daemon.utils import (
     SimulationMode,
@@ -313,6 +313,13 @@ class Daemon:
 
                 with timing_event("daemon.backend.ready.wait", backend_mode=backend_mode, timeout_s=2.0):
                     backend_ready = self.backend.ready.wait(timeout=2.0)
+                log_event(
+                    "daemon.backend.ready",
+                    backend_mode=backend_mode,
+                    ready=backend_ready,
+                    timeout_s=2.0,
+                    error=self.backend.error,
+                )
                 if not backend_ready:
                     self.logger.error(
                         "Backend is not ready after 2 seconds. Some error occurred."
@@ -335,11 +342,37 @@ class Daemon:
                 if wake_up_on_start:
                     try:
                         self.logger.info("Waking up Reachy Mini...")
+                        log_event(
+                            "daemon.motor.enable.start",
+                            source="daemon.start",
+                            reason="wake_up_on_start",
+                        )
                         with timing_event("daemon.motor.enable", reason="wake_up_on_start"):
                             self.backend.set_motor_control_mode(MotorControlMode.Enabled)
+                        log_event(
+                            "daemon.motor.enable.complete",
+                            source="daemon.start",
+                            reason="wake_up_on_start",
+                        )
+                        log_event(
+                            "daemon.wake_up.start",
+                            source="daemon.start",
+                            reason="wake_up_on_start",
+                        )
                         with timing_event("daemon.wake_up"):
                             await self.backend.wake_up()
+                        log_event(
+                            "daemon.wake_up.complete",
+                            source="daemon.start",
+                            reason="wake_up_on_start",
+                        )
                     except Exception as e:
+                        log_event(
+                            "daemon.wake_up.error",
+                            source="daemon.start",
+                            reason="wake_up_on_start",
+                            error=str(e),
+                        )
                         self.logger.error(f"Error while waking up Reachy Mini: {e}")
                         self._status.state = DaemonState.ERROR
                         self._status.error = str(e)
@@ -410,10 +443,49 @@ class Daemon:
             if goto_sleep_on_stop:
                 try:
                     self.logger.info("Putting Reachy Mini to sleep...")
-                    self.backend.set_motor_control_mode(MotorControlMode.Enabled)
-                    await self.backend.goto_sleep()
-                    self.backend.set_motor_control_mode(MotorControlMode.Disabled)
+                    log_event(
+                        "daemon.motor.enable.start",
+                        source="daemon.stop",
+                        reason="goto_sleep_on_stop",
+                    )
+                    with timing_event("daemon.motor.enable", reason="goto_sleep_on_stop"):
+                        self.backend.set_motor_control_mode(MotorControlMode.Enabled)
+                    log_event(
+                        "daemon.motor.enable.complete",
+                        source="daemon.stop",
+                        reason="goto_sleep_on_stop",
+                    )
+                    log_event(
+                        "daemon.goto_sleep.start",
+                        source="daemon.stop",
+                        reason="goto_sleep_on_stop",
+                    )
+                    with timing_event("daemon.goto_sleep", reason="goto_sleep_on_stop"):
+                        await self.backend.goto_sleep()
+                    log_event(
+                        "daemon.goto_sleep.complete",
+                        source="daemon.stop",
+                        reason="goto_sleep_on_stop",
+                    )
+                    log_event(
+                        "daemon.motor.disable.start",
+                        source="daemon.stop",
+                        reason="goto_sleep_on_stop",
+                    )
+                    with timing_event("daemon.motor.disable", reason="goto_sleep_on_stop"):
+                        self.backend.set_motor_control_mode(MotorControlMode.Disabled)
+                    log_event(
+                        "daemon.motor.disable.complete",
+                        source="daemon.stop",
+                        reason="goto_sleep_on_stop",
+                    )
                 except Exception as e:
+                    log_event(
+                        "daemon.goto_sleep.error",
+                        source="daemon.stop",
+                        reason="goto_sleep_on_stop",
+                        error=str(e),
+                    )
                     self.logger.error(f"Error while putting Reachy Mini to sleep: {e}")
                     self._status.state = DaemonState.ERROR
                     self._status.error = str(e)

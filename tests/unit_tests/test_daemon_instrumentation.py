@@ -10,13 +10,16 @@ from pathlib import Path
 import pytest
 
 from reachy_mini.daemon.daemon import Daemon
+from reachy_mini.daemon.backend.mockup_sim.backend import MockupSimBackend
 from reachy_mini.daemon.instrumentation import (
     INSTRUMENT_ENV_VAR,
     InstrumentMode,
     configure_daemon_logging,
     get_instrument_mode,
+    log_event,
     timing_event,
 )
+from reachy_mini.io.protocol import MotorControlMode, SetMotorModeCmd
 
 
 @pytest.fixture()
@@ -129,6 +132,51 @@ def test_trace_mode_writes_timing_event(
     assert payload["attrs"]["outcome"] == "ok"
 
 
+def test_log_event_writes_basic_structured_event(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    restore_root_logging: None,
+) -> None:
+    """Basic mode writes explicit lifecycle events."""
+    monkeypatch.setenv(INSTRUMENT_ENV_VAR, "basic")
+    log_file = tmp_path / "daemon.jsonl"
+
+    configure_daemon_logging("INFO", str(log_file))
+    log_event("daemon.test.event", phase="unit-test")
+
+    payload = json.loads(log_file.read_text().splitlines()[-1])
+    assert payload["event"] == "daemon.test.event"
+    assert payload["attrs"] == {"phase": "unit-test"}
+
+
+def test_process_command_motor_mode_writes_event(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    restore_root_logging: None,
+) -> None:
+    """WebRTC/WS motor-mode commands emit instrumentation events."""
+    monkeypatch.setenv(INSTRUMENT_ENV_VAR, "basic")
+    log_file = tmp_path / "daemon.jsonl"
+
+    configure_daemon_logging("INFO", str(log_file))
+    backend = MockupSimBackend(use_audio=False)
+    responses: list[dict[str, str]] = []
+
+    backend.process_command(
+        SetMotorModeCmd(mode=MotorControlMode.Disabled.value),
+        send_response=responses.append,
+    )
+
+    events = [json.loads(line) for line in log_file.read_text().splitlines()]
+    assert responses == [{"motor_mode": "disabled", "status": "ok"}]
+    assert any(
+        event["event"] == "daemon.motor.mode.set.complete"
+        and event["attrs"]["source"] == "command"
+        and event["attrs"]["mode"] == "disabled"
+        for event in events
+    )
+
+
 def test_mockup_backend_setup_writes_trace_span(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -162,4 +210,34 @@ def test_mockup_backend_setup_writes_trace_span(
         span["attrs"]["name"] == "daemon.backend.construct"
         and span["attrs"]["backend_mode"] == "mockup"
         for span in spans
+    )
+
+
+@pytest.mark.asyncio
+async def test_mockup_daemon_start_writes_backend_ready_event(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    restore_root_logging: None,
+) -> None:
+    """Daemon start records whether the backend became ready."""
+    monkeypatch.setenv(INSTRUMENT_ENV_VAR, "basic")
+    log_file = tmp_path / "daemon.jsonl"
+
+    configure_daemon_logging("INFO", str(log_file))
+    daemon = Daemon(no_media=True)
+    try:
+        await daemon.start(
+            mockup_sim=True,
+            wake_up_on_start=False,
+            use_audio=False,
+        )
+    finally:
+        await daemon.stop(goto_sleep_on_stop=False)
+
+    events = [json.loads(line) for line in log_file.read_text().splitlines()]
+    assert any(
+        event["event"] == "daemon.backend.ready"
+        and event["attrs"]["backend_mode"] == "mockup"
+        and event["attrs"]["ready"] is True
+        for event in events
     )

@@ -105,6 +105,20 @@ def configure_daemon_logging(log_level: str, log_file: str | None = None) -> Ins
     return mode
 
 
+def log_event(name: str, message: str | None = None, **attrs: Any) -> None:
+    """Emit a structured instrumentation event unless instrumentation is off."""
+    if get_instrument_mode() is InstrumentMode.OFF:
+        return
+
+    logging.getLogger(__name__).info(
+        message or name,
+        extra={
+            "event": name,
+            "attrs": attrs,
+        },
+    )
+
+
 class timing_event:
     """Context manager that emits a trace timing event when trace mode is enabled."""
 
