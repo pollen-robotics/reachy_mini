@@ -335,8 +335,33 @@ sudo journalctl -u reachy-mini-daemon --since '5 min ago' | grep -v "uvicorn\|GE
 | Problem | Solution |
 |---------|----------|
 | "An app is already running" | Stop the current app first: `curl -X POST http://localhost:8000/api/apps/stop-current-app` |
-| Daemon in a bad state | Restart it: `sudo systemctl restart reachy-mini-daemon` (wait ~30s before starting an app) |
+| Daemon in a bad state | Restart it: `sudo systemctl restart reachy-mini-daemon` |
 | App not picking up code changes | Restart the app. If you deployed manually, also clear bytecode: `rm -rf __pycache__` |
+
+### Waiting for daemon readiness on Wireless
+
+On Wireless units, `reachy-mini-daemon.service` uses systemd readiness
+notifications. `systemctl start reachy-mini-daemon.service` and units ordered
+after it do not proceed until FastAPI is serving and daemon autostart has
+completed.
+
+For Robot Comic or another systemd-launched companion service, depend on the
+daemon instead of adding fixed sleeps:
+
+```ini
+[Unit]
+Requires=reachy-mini-daemon.service
+After=reachy-mini-daemon.service
+```
+
+For scripts that are not launched by systemd, poll the daemon API and wait for
+`state` to be `running`:
+
+```bash
+until curl -sf http://reachy-mini.local:8000/api/daemon/status | grep -q '"state":"running"'; do
+  sleep 1
+done
+```
 
 ### Tip: log everything at startup
 
