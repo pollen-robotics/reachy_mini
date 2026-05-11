@@ -1544,13 +1544,31 @@ async def notify_token_change(new_token: Optional[str] = None) -> None:
 
 
 async def notify_force_reconnect() -> None:
-    """Ask the relay to drop its SSE channel and reconnect right now.
+    """Force the central signaling relay to drop and reconnect right now.
 
-    Unlike ``notify_token_change``, this always triggers a reconnect
-    even when the stored token is unchanged. Used by the
-    ``POST /api/hf-auth/refresh-relay`` endpoint to recover from
-    zombie-relay states where central no longer lists the robot as a
-    producer but the relay still thinks it is connected.
+    Drops the relay's current connection and re-registers with the
+    currently stored HF token. Recovery handle for the "zombie relay"
+    state where ``/relay-status`` reports ``connected`` but
+    ``/central-robot-status`` returns ``robots: []`` — central no
+    longer lists this robot as a producer for the authenticated user
+    while the relay still holds its SSE channel open. From the outside
+    this manifests as "the robot is online but no one can call it"
+    until someone restarts the daemon.
+
+    Common triggers:
+      - the relay attached with a token that has since been rotated;
+      - a transient error during ``setPeerStatus`` went unnoticed.
+
+    Unlike ``notify_token_change``, this skips the
+    ``old_token == new_token`` early-return and always reconnects,
+    which is exactly what callers of ``POST /api/hf-auth/refresh-relay``
+    need (their whole reason for invoking is the token did not change
+    but the producer registration was lost). Goes through the relay's
+    own reconnect path — works with any token shape currently stored
+    (raw user tokens, OAuth access tokens) without re-validation.
+
+    If no relay instance is running (e.g. Lite-only build, daemon not
+    yet up), this is a no-op.
     """
     if _relay_instance is None:
         logger.debug("[Central Relay] No relay instance, ignoring force reconnect")
