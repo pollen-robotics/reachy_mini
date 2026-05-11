@@ -303,7 +303,7 @@ That's it. No URL parsing, no postMessage listener, no `consumeTokenFromHash` bo
 - Credentials in the **fragment**: `#hf_token=<jwt>&hf_username=<handle>&hf_token_expires=<ISO>`. Fragment because it doesn't travel over HTTP (no referrer, no server logs).
 - Robot pre-select in the **query** (or fragment if you prefer symmetry): `?robot_peer_id=<peerId>`. Not a secret; query is fine.
 
-The mobile-shell reference implementation lives in [`reachy_mini_mobile_app/src/screens/apps/AppIframeOverlay.tsx`](https://github.com/pollen-robotics/reachy-mini-mobile-app); read its file-level docstring for the host-side authoritative contract. The receiver-side reference is the dev `webrtc_example` Space using the recipe above.
+The mobile-shell reference implementation lives in [`reachy_mini_mobile_app/src/screens/apps/AppIframeOverlay.tsx`](https://github.com/pollen-robotics/reachy_mini_mobile_app); read its file-level docstring for the host-side authoritative contract. The receiver-side reference is the dev `webrtc_example` Space using the recipe above.
 
 ### Media flow — use WebRTC, not `getUserMedia`, for robot media
 
