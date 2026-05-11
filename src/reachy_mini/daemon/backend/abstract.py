@@ -33,7 +33,6 @@ from reachy_mini.io.protocol import (
     GetVolumeCmd,
     GotoSleepCmd,
     GotoTargetCmd,
-    HttpProxyCmd,
     LogLineMsg,
     LogStreamErrorMsg,
     MockupSimBackendStatus,
@@ -1095,121 +1094,10 @@ class Backend:
             self.append_record(cmd.record)
             send_response({"status": "ok", "command": "append_record"})
 
-        elif isinstance(cmd, HttpProxyCmd):
-            asyncio.create_task(self._async_http_proxy(cmd, send_response))
-
         elif isinstance(cmd, SubscribeLogsCmd):
             self._start_log_subscription(peer_id, send_response)
         elif isinstance(cmd, UnsubscribeLogsCmd):
             self._cancel_log_subscription(peer_id)
-
-    async def _async_http_proxy(
-        self,
-        cmd: HttpProxyCmd,
-        send_response: Callable[[dict[str, Any]], None],
-    ) -> None:
-        """Forward an HTTP request to the daemon's own /api/... server.
-
-        Used by remote WebRTC peers to call REST endpoints that do not
-        yet have a typed DataChannel command. The reply echoes
-        ``request_id`` so the caller can correlate responses with their
-        in-flight requests.
-
-        Response shape::
-
-            {
-              "type": "http_proxy_response",
-              "request_id": str,
-              "status": int,            # HTTP status, 0 if request failed
-              "body": Any | None,       # parsed JSON if Content-Type is JSON,
-                                        # else the raw text
-              "headers": dict[str, str],
-              "error": str | None,
-            }
-        """
-        # Local import: aiohttp is already a transitive dep (used by
-        # central_signaling_relay) but we keep the symbol out of the
-        # module top level to avoid pulling it on platforms that
-        # disable the WebRTC stack.
-        import aiohttp
-
-        if not cmd.path.startswith("/"):
-            send_response(
-                {
-                    "type": "http_proxy_response",
-                    "request_id": cmd.request_id,
-                    "status": 0,
-                    "body": None,
-                    "headers": {},
-                    "error": "path must start with '/'",
-                }
-            )
-            return
-
-        url = f"http://127.0.0.1:8000{cmd.path}"
-        # Strip hop-by-hop / loopback-irrelevant headers that callers
-        # may have set client-side.
-        forbidden = {"host", "content-length", "connection", "transfer-encoding"}
-        headers: dict[str, str] = {
-            k: v for k, v in (cmd.headers or {}).items() if k.lower() not in forbidden
-        }
-
-        try:
-            timeout = aiohttp.ClientTimeout(total=cmd.timeout_s)
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                kwargs: dict[str, Any] = {"headers": headers}
-                if cmd.body is not None:
-                    # If the caller already encoded body as a string
-                    # we forward it raw, otherwise treat it as JSON.
-                    if isinstance(cmd.body, (str, bytes)):
-                        kwargs["data"] = cmd.body
-                    else:
-                        kwargs["json"] = cmd.body
-
-                async with session.request(cmd.method, url, **kwargs) as resp:
-                    content_type = resp.headers.get("content-type", "")
-                    if "application/json" in content_type.lower():
-                        try:
-                            body: Any = await resp.json()
-                        except Exception:
-                            body = await resp.text()
-                    else:
-                        body = await resp.text()
-                    resp_headers = {k: v for k, v in resp.headers.items()}
-                    send_response(
-                        {
-                            "type": "http_proxy_response",
-                            "request_id": cmd.request_id,
-                            "status": resp.status,
-                            "body": body,
-                            "headers": resp_headers,
-                        }
-                    )
-        except asyncio.TimeoutError:
-            send_response(
-                {
-                    "type": "http_proxy_response",
-                    "request_id": cmd.request_id,
-                    "status": 0,
-                    "body": None,
-                    "headers": {},
-                    "error": f"timeout after {cmd.timeout_s}s",
-                }
-            )
-        except Exception as e:
-            self.logger.warning(
-                "[http_proxy] %s %s failed: %s", cmd.method, cmd.path, e
-            )
-            send_response(
-                {
-                    "type": "http_proxy_response",
-                    "request_id": cmd.request_id,
-                    "status": 0,
-                    "body": None,
-                    "headers": {},
-                    "error": str(e),
-                }
-            )
 
     # ------------------------------------------------------------------
     # journalctl log streaming over the typed transport (subscribe_logs)
