@@ -25,10 +25,10 @@ from scipy.spatial.transform import Rotation as R
 from reachy_mini.io.protocol import (
     AnyCommand,
     AppendRecordCmd,
+    GetHardwareIdCmd,
     GetMicrophoneVolumeCmd,
     GetMotorModeCmd,
     GetStateCmd,
-    GetHardwareIdCmd,
     GetVersionCmd,
     GetVolumeCmd,
     GotoSleepCmd,
