@@ -72,7 +72,7 @@
  * CONSTRUCTOR OPTIONS
  * ───────────────────
  *   new ReachyMini({
- *     signalingUrl:              string,   // default: "https://cduss-reachy-mini-central.hf.space"
+ *     signalingUrl:              string,   // default: "https://pollen-robotics-reachy-mini-central.hf.space"
  *     enableMicrophone:          boolean,  // default: true  — acquire mic for bidirectional audio
  *     videoJitterBufferTargetMs: number,   // default: 0     — receiver-side jitter buffer hint, ms
  *                                          //                  0 = "render ASAP" (teleop). Spec range [0, 4000].
@@ -328,7 +328,7 @@ export class ReachyMini extends EventTarget {
     /** @param {{ signalingUrl?: string, enableMicrophone?: boolean, clientId?: string, appName?: string, videoJitterBufferTargetMs?: number, autoStartFromUrl?: boolean }} [options] */
     constructor(options = {}) {
         super();
-        this._signalingUrl = options.signalingUrl || 'https://cduss-reachy-mini-central.hf.space';
+        this._signalingUrl = options.signalingUrl || 'https://pollen-robotics-reachy-mini-central.hf.space';
         this._enableMicrophone = options.enableMicrophone !== false;
         this._clientId = options.clientId || null;
         this._appName = options.appName || 'unknown';
