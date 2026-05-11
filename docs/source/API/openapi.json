@@ -579,6 +579,36 @@
         }
       }
     },
+    "/api/daemon/hardware-id": {
+      "get": {
+        "summary": "Get Robot Hardware Id",
+        "description": "Robot-unique hardware ID \u2014 the Pollen audio device's USB serial.\n\nReturns ``{\"hardware_id\": \"<serial>\"}`` (or ``null`` when no robot\nis attached, e.g. on a developer machine). Same value across Lite\nand Wireless variants; same value across reboots and OS reinstalls.",
+        "operationId": "get_robot_hardware_id_api_daemon_hardware_id_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "type": "object",
+                  "title": "Response Get Robot Hardware Id Api Daemon Hardware Id Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/daemon/robot-app-lock-status": {
       "get": {
         "summary": "Get Robot App Lock Status",
@@ -695,6 +725,27 @@
                   },
                   "type": "object",
                   "title": "Response Delete Token Api Hf Auth Token Delete"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/hf-auth/refresh-relay": {
+      "post": {
+        "summary": "Refresh Relay",
+        "description": "Force the central signaling relay to reconnect \u2014 see ``notify_force_reconnect``.\n\nResponse: ``{\"status\": \"requested\", \"token_available\": bool, \"reason\"?: str}``.",
+        "operationId": "refresh_relay_api_hf_auth_refresh_relay_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Refresh Relay Api Hf Auth Refresh Relay Post"
                 }
               }
             }
@@ -2401,6 +2452,17 @@
               }
             ],
             "title": "Version"
+          },
+          "hardware_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hardware Id"
           }
         },
         "type": "object",
