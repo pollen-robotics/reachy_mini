@@ -179,14 +179,12 @@ class Daemon:
             from reachy_mini.media.central_signaling_relay import start_central_relay
 
             # ``transport`` reflects how a remote client physically
-            # reaches this daemon: a tray-spawned daemon means the robot
-            # is plugged into the user's desktop over USB; an autonomous
-            # Pi-side daemon (Wireless variant or Lite hosted on its own
-            # Pi) is reached over Wi-Fi (or LAN). We use ``desktop_app_daemon``
-            # as the discriminator since it is the single authoritative
-            # signal we already have on the daemon and it cannot lie:
-            # only the tray launches the daemon with that flag.
-            transport = "usb" if self.desktop_app_daemon else "wifi"
+            # reaches this daemon: the Wireless variant runs autonomously
+            # on its onboard CM4 and is reached over Wi-Fi (or LAN); the
+            # Lite variant is plugged into the user's desktop and the
+            # daemon runs there, reached over USB. Keyed off
+            # ``wireless_version`` so the badging follows the robot SKU.
+            transport = "wifi" if self.wireless_version else "usb"
 
             self.logger.info("Starting central signaling relay...")
             await start_central_relay(
