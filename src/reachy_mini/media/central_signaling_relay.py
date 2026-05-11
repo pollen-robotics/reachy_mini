@@ -652,7 +652,7 @@ class CentralSignalingRelay:
             # task is part of the race; adding a new reconnect trigger
             # is a one-line change.
             self._set_state(RelayState.CONNECTING, "Connecting to central server...")
-            relay_tasks: dict[asyncio.Task, str] = {
+            relay_tasks: dict[asyncio.Task[None], str] = {
                 asyncio.create_task(
                     self._handle_central_sse()
                 ): "Central SSE handler exited, will reconnect",
