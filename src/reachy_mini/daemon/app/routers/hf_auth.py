@@ -104,14 +104,24 @@ async def delete_token() -> dict[str, str]:
 async def refresh_relay() -> dict[str, Any]:
     """Force the central signaling relay to reconnect — see ``notify_force_reconnect``.
 
-    Response: ``{"status": "requested", "token_available": bool, "reason"?: str}``.
+    Response shapes:
+      - ``{"status": "requested", "token_available": bool}`` — a
+        reconnect was kicked off.
+      - ``{"status": "skipped", "token_available": bool,
+            "reason": "relay_not_running" | "relay_unavailable"}`` — no
+        reconnect happened. The mobile app's auto-heal loop must NOT
+        wait for a state change in this case (it would hang forever).
+        ``relay_unavailable`` covers the import failure (Lite-only
+        build that ships no relay module); ``relay_not_running`` covers
+        the module-present-but-no-instance case (daemon started
+        without a token / pre-init / shutdown).
     """
     token = hf_auth.get_hf_token()
 
     try:
         from reachy_mini.media.central_signaling_relay import notify_force_reconnect
 
-        await notify_force_reconnect()
+        kicked_off = await notify_force_reconnect()
     except ImportError:
         return {
             "status": "skipped",
@@ -123,6 +133,13 @@ async def refresh_relay() -> dict[str, Any]:
         raise HTTPException(
             status_code=500, detail=f"Failed to refresh relay: {e}"
         ) from e
+
+    if not kicked_off:
+        return {
+            "status": "skipped",
+            "token_available": bool(token),
+            "reason": "relay_not_running",
+        }
 
     return {"status": "requested", "token_available": bool(token)}
 
