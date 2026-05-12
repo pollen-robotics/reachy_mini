@@ -1602,6 +1602,7 @@ async def notify_force_reconnect() -> bool:
         daemon not yet up). HTTP callers (mobile auto-heal flow) must
         surface this distinction so they can stop waiting on a
         reconnect that will never happen.
+
     """
     if _relay_instance is None:
         logger.debug("[Central Relay] No relay instance, ignoring force reconnect")
