@@ -65,6 +65,8 @@ class Daemon:
             package_version = None
             self.logger.warning("Could not determine daemon version")
 
+        from reachy_mini.utils.hardware_id import get_hardware_id
+
         self._status = DaemonStatus(
             robot_name=robot_name,
             state=DaemonState.NOT_INITIALIZED,
@@ -77,6 +79,7 @@ class Daemon:
             error=None,
             wlan_ip=None,
             version=package_version,
+            hardware_id=get_hardware_id(),
         )
         self.ws_server: "WSServer | None" = None
         self.backend_run_thread: "Thread | None" = None
@@ -175,10 +178,19 @@ class Daemon:
         try:
             from reachy_mini.media.central_signaling_relay import start_central_relay
 
+            # ``transport`` reflects how a remote client physically
+            # reaches this daemon: the Wireless variant runs autonomously
+            # on its onboard CM4 and is reached over Wi-Fi (or LAN); the
+            # Lite variant is plugged into the user's desktop and the
+            # daemon runs there, reached over USB. Keyed off
+            # ``wireless_version`` so the badging follows the robot SKU.
+            transport = "wifi" if self.wireless_version else "usb"
+
             self.logger.info("Starting central signaling relay...")
             await start_central_relay(
                 hf_token=hf_token,
                 robot_name=self.robot_name,
+                transport=transport,
                 robot_app_lock=self.robot_app_lock,
             )
             self.logger.info("Central signaling relay started")

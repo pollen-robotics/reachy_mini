@@ -72,11 +72,16 @@
  * CONSTRUCTOR OPTIONS
  * ───────────────────
  *   new ReachyMini({
- *     signalingUrl:              string,   // default: "https://cduss-reachy-mini-central.hf.space"
+ *     signalingUrl:              string,   // default: "https://pollen-robotics-reachy-mini-central.hf.space"
  *     enableMicrophone:          boolean,  // default: true  — acquire mic for bidirectional audio
  *     videoJitterBufferTargetMs: number,   // default: 0     — receiver-side jitter buffer hint, ms
  *                                          //                  0 = "render ASAP" (teleop). Spec range [0, 4000].
  *                                          //                  Raise (100–400) on flaky links to trade latency for resilience.
+ *     autoStartFromUrl:          boolean,  // default: false — when true AND the URL carries a `robot_peer_id` hint,
+ *                                          //                  auto-call `startSession(preselectedRobotId)` after
+ *                                          //                  `connect()` resolves and that robot appears online.
+ *                                          //                  One-shot per page load; suits iframe-embedded apps
+ *                                          //                  that want zero-tap entry from the host shell.
  *   })
  *
  *
@@ -100,6 +105,11 @@
  *                                          when a host iframe (e.g. the
  *                                          Reachy Mini mobile shell) embeds
  *                                          this app.
+ *   .isEmbedded       boolean           — true iff `preselectedRobotId !==
+ *                                          null`. Branch your UX on this:
+ *                                          when true, hide the robot picker
+ *                                          and your sign-in screen (the
+ *                                          host has already handled both).
  *
  *
  * EVENTS  (EventTarget — use addEventListener)
@@ -315,10 +325,10 @@ function sdpHasAudioSendRecv(sdp) {
 
 export class ReachyMini extends EventTarget {
 
-    /** @param {{ signalingUrl?: string, enableMicrophone?: boolean, clientId?: string, appName?: string, videoJitterBufferTargetMs?: number }} [options] */
+    /** @param {{ signalingUrl?: string, enableMicrophone?: boolean, clientId?: string, appName?: string, videoJitterBufferTargetMs?: number, autoStartFromUrl?: boolean }} [options] */
     constructor(options = {}) {
         super();
-        this._signalingUrl = options.signalingUrl || 'https://cduss-reachy-mini-central.hf.space';
+        this._signalingUrl = options.signalingUrl || 'https://pollen-robotics-reachy-mini-central.hf.space';
         this._enableMicrophone = options.enableMicrophone !== false;
         this._clientId = options.clientId || null;
         this._appName = options.appName || 'unknown';
@@ -327,6 +337,20 @@ export class ReachyMini extends EventTarget {
         // implement RTCRtpReceiver.jitterBufferTarget fall back to default
         // buffering (~150-200 ms).
         this._videoJitterBufferTargetMs = options.videoJitterBufferTargetMs ?? 0;
+        // When true AND the URL carried a `robot_peer_id` hint at
+        // construction (so `preselectedRobotId !== null`), the SDK
+        // auto-calls `startSession(preselectedRobotId)` as soon as
+        // that robot appears in the central's robot list after the
+        // app's own `connect()` resolves. Lets host-iframe-embedded
+        // consumers (mobile shell, vibe-coder preview) skip their
+        // robot picker AND skip the manual `startSession` call —
+        // they just `await robot.connect()` and receive a `streaming`
+        // event when the SDK has dialed in. One-shot: a manual
+        // `stopSession()` followed by another `startSession()` is
+        // not auto-replayed. Default `false` keeps the standalone
+        // Space behavior unchanged.
+        this._autoStartFromUrl = options.autoStartFromUrl === true;
+        this._autoStartAttempted = false;
 
         this._state = 'disconnected';                 // 'disconnected' | 'connected' | 'streaming'
         this._robots = [];                             // latest robot list from signaling
@@ -369,14 +393,21 @@ export class ReachyMini extends EventTarget {
         this._latencyMonitorId = null;
         this._stateRefreshInterval = null;
 
-        // getVersion() promise plumbing
+        // getVersion() / getHardwareId() promise plumbing
         this._versionResolve = null;
+        this._hardwareIdResolve = null;
 
         // Volume getter/setter promise plumbing (get_volume / set_volume).
         // Speaker and microphone are tracked separately so two in-flight
         // requests can't collide on the same slot.
         this._volumeResolve = null;
         this._micVolumeResolve = null;
+
+        // subscribeLogs(): a Set of {onLine, onError} subscribers. The
+        // first add sends `subscribe_logs`; removing the last sends
+        // `unsubscribe_logs`. We keep a single daemon-side stream and
+        // fan out to local subscribers in `_handleRobotMessage`.
+        this._logSubscribers = new Set();
 
         // startSession() promise plumbing
         this._sessionResolve = null;
@@ -444,6 +475,62 @@ export class ReachyMini extends EventTarget {
      * @returns {string|null}
      */
     get preselectedRobotId() { return this._preselectedRobotId; }
+
+    /**
+     * Convenience flag for apps that want to branch their UX on
+     * "am I embedded in a host shell?". True iff the URL carried a
+     * `robot_peer_id` hint at construction time (which only happens
+     * when a host iframe — mobile shell, vibe-coder preview, etc. —
+     * is the parent). Apps typically use it to skip their robot
+     * picker and their sign-in screen, since both are duplicated
+     * work the host has already done.
+     *
+     * @returns {boolean}
+     */
+    get isEmbedded() { return this._preselectedRobotId !== null; }
+
+    /**
+     * Internal: try to honour the `autoStartFromUrl` constructor
+     * option. Called from the signaling-message handler after every
+     * `robotsChanged` emit, so a robot that comes online after the
+     * SDK is already `connected` still triggers the auto-start.
+     * No-op unless `autoStartFromUrl` is set, the URL carries a
+     * preselect, the SDK is `connected`, the preselected robot is
+     * in the latest list, and we haven't already attempted in this
+     * page load. Errors are swallowed to a `console.warn` — the
+     * normal `startSession` rejection / `sessionRejected` event
+     * still fires for app-level handling.
+     *
+     * Defers the actual `startSession()` call by one macrotask
+     * (`setTimeout(..., 0)`) so it runs OUTSIDE the
+     * `_handleSignalingMessage` callstack that just processed the
+     * `'list'` message. Reproduced on Android WebView: firing
+     * `startSession` synchronously inside the SSE handler races the
+     * daemon's setup, leading to a connected-but-no-keyframe state
+     * where the receiver eternally NACKs and the iframe shows a
+     * black <video>. The macrotask-deferral is the minimum nudge
+     * that consistently resolves the race in our reproduction; if
+     * it ever proves insufficient on slower hardware, bump to
+     * a small explicit delay (e.g. 250 ms).
+     */
+    _maybeAutoStart() {
+        if (!this._autoStartFromUrl) return;
+        if (this._autoStartAttempted) return;
+        if (!this._preselectedRobotId) return;
+        if (this._state !== 'connected') return;
+        const match = this._robots.find((r) => r.id === this._preselectedRobotId);
+        if (!match) return;
+        this._autoStartAttempted = true;
+        const peerId = this._preselectedRobotId;
+        setTimeout(() => {
+            // Re-check state in case a manual stopSession / disconnect
+            // landed between the schedule and the fire.
+            if (this._state !== 'connected') return;
+            this.startSession(peerId).catch((err) => {
+                console.warn('[reachy-mini] autoStartFromUrl: startSession rejected:', err);
+            });
+        }, 0);
+    }
 
     // ─── Auth ────────────────────────────────────────────────────────────
 
@@ -603,6 +690,236 @@ export class ReachyMini extends EventTarget {
             };
 
             readLoop();
+        });
+    }
+
+    /**
+     * One-shot bring-up: auth → SSE connect → robot selection → session →
+     * wake up. The all-in-one entry point that captures the common
+     * "embed *or* standalone, just get me streaming" flow so each
+     * consumer does not have to re-implement it.
+     *
+     * What it does, in order:
+     *   1. **Auth.** If `this._token` is not set, calls `authenticate()`
+     *      (which honours the iframe URL-fragment hand-off, the OAuth
+     *      redirect callback, and the `sessionStorage` cache). Throws if
+     *      none yield a token — the consumer should call `login()` and
+     *      retry after the redirect. Pass an explicit `token` to skip
+     *      `authenticate()` entirely.
+     *   2. **Connect.** If `state === 'disconnected'`, opens the SSE
+     *      signaling channel.
+     *   3. **Pick a robot.**
+     *      - **Embed mode** (`this.isEmbedded`): uses
+     *        `this._preselectedRobotId` from the URL. No picker callback
+     *        invoked; we briefly wait for that robot to appear in the
+     *        SSE list, then proceed.
+     *      - **Standalone**: GETs `/api/robot-status` for the owner's
+     *        robots with busy state, dedupes by `install_id`, sorts by
+     *        freshness. If `autoPickIfSingle` and exactly one free, picks
+     *        it. Else calls the consumer-supplied `pickRobot(robots)`
+     *        callback. Throws if neither yields an id.
+     *   4. **Start session.** Awaits `startSession(robotId)` (ICE + DC).
+     *   5. **Wake up.** Awaits `ensureAwake()` so sliders don't silently
+     *      no-op against a torque-off robot.
+     *
+     * @param {{
+     *   token?: string,                           // skip authenticate(); use this raw HF token
+     *   pickRobot?: (robots: Array<{
+     *     id: string,
+     *     name: string|null,
+     *     busy: boolean,
+     *     activeApp: string|null,
+     *     meta: object,
+     *     lastSeenAgeSeconds: number|null,
+     *   }>) => Promise<string|null>,              // called only in standalone, multi-robot case
+     *   autoPickIfSingle?: boolean,               // default true — skip the callback when 1 free robot
+     *   filterBusy?: boolean,                     // default true — hide busy robots from the picker
+     *   wakeOnConnect?: boolean,                  // default true — call ensureAwake() after startSession
+     * }} [options]
+     * @returns {Promise<{
+     *   robotId: string,
+     *   robotName: string|null,
+     *   isEmbedded: boolean,
+     *   alreadyStreaming?: boolean,
+     * }>}
+     */
+    async autoConnect(options = {}) {
+        const {
+            token = null,
+            pickRobot = null,
+            autoPickIfSingle = true,
+            filterBusy = true,
+            wakeOnConnect = true,
+        } = options;
+
+        // Idempotent fast-path: caller invoked autoConnect() on an
+        // already-streaming session (e.g. on a route change inside an
+        // SPA). Return the current selection rather than tearing down.
+        if (this._state === 'streaming') {
+            const cur = this._robots?.find((r) => r.id === this._selectedRobotId);
+            return {
+                robotId: this._selectedRobotId,
+                robotName: cur?.meta?.name ?? null,
+                isEmbedded: this.isEmbedded,
+                alreadyStreaming: true,
+            };
+        }
+
+        // autoConnect takes over the bring-up — disable the SDK's
+        // own `autoStartFromUrl` so the two paths don't race and
+        // both call `startSession()` against the same preselected
+        // robot. The race used to manifest as central rejecting the
+        // second attempt with "Robot is busy: <appName>" — the
+        // appName being our own first attempt. Restored on the way
+        // out so a later `stopSession()` followed by a fresh
+        // listener attach still benefits from auto-start.
+        const _prevAutoStartFromUrl = this._autoStartFromUrl;
+        this._autoStartFromUrl = false;
+
+        try {
+        // 1. Auth.
+        if (token) {
+            this._token = token;
+        } else if (!this._token) {
+            const ok = await this.authenticate();
+            if (!ok) {
+                // login() does a full page redirect; we don't trigger
+                // it here so the consumer can decide (a desktop tray
+                // wants different recovery than a standalone Space).
+                throw new Error('Not authenticated — call login() or pass a token');
+            }
+        }
+
+        // 2. SSE connect.
+        if (this._state === 'disconnected') {
+            await this.connect();
+        }
+
+        // 3. Resolve the target robot.
+        let robotId;
+        let robotName = null;
+        if (this.isEmbedded) {
+            robotId = this._preselectedRobotId;
+            // Wait briefly for the preselected robot to surface in the
+            // SSE list. Best-effort: if it never shows we still try
+            // startSession() — central may know about a robot the SSE
+            // list pushes only a moment later.
+            try {
+                await this._waitForRobotInList(robotId, 5000);
+            } catch (_) { /* fall through */ }
+            const found = this._robots?.find((r) => r.id === robotId);
+            robotName = found?.meta?.name ?? null;
+        } else {
+            const robots = await this._fetchOwnedRobots({ filterBusy });
+            if (robots.length === 0) {
+                throw new Error('No reachable robots');
+            }
+            if (autoPickIfSingle && robots.length === 1 && !robots[0].busy) {
+                robotId = robots[0].id;
+                robotName = robots[0].name;
+            } else if (pickRobot) {
+                const picked = await pickRobot(robots);
+                if (!picked) throw new Error('Robot selection cancelled');
+                robotId = picked;
+                robotName = robots.find((r) => r.id === picked)?.name ?? null;
+            } else {
+                throw new Error(
+                    'Multiple robots available — pass a pickRobot callback to autoConnect()',
+                );
+            }
+        }
+
+        // 4. Session.
+        await this.startSession(robotId);
+
+        // 5. Wake.
+        if (wakeOnConnect && typeof this.ensureAwake === 'function') {
+            try { await this.ensureAwake(); }
+            catch (e) { console.warn('[reachy-mini] autoConnect: ensureAwake failed:', e); }
+        }
+
+        return { robotId, robotName, isEmbedded: this.isEmbedded };
+        } finally {
+            this._autoStartFromUrl = _prevAutoStartFromUrl;
+        }
+    }
+
+    /**
+     * Fetch the caller's robots with busy state, deduped + sorted.
+     * One-shot snapshot — no live subscription. Falls back to the SSE
+     * `_robots` cache if `/api/robot-status` is unavailable (older
+     * central deployments don't expose it).
+     *
+     * Dedup: same physical robot can appear twice transiently after a
+     * daemon reinstall (new peerId, same install_id). Last-writer-wins
+     * on `install_id`, then `hardware_id`, then `peerId` (= no dedup).
+     *
+     * @returns {Promise<Array<{
+     *   id: string,
+     *   name: string|null,
+     *   busy: boolean,
+     *   activeApp: string|null,
+     *   meta: object,
+     *   lastSeenAgeSeconds: number|null,
+     * }>>}
+     */
+    async _fetchOwnedRobots({ filterBusy = true } = {}) {
+        try {
+            const res = await fetch(`${this._signalingUrl}/api/robot-status`, {
+                headers: { 'Authorization': `Bearer ${this._token}` },
+            });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const json = await res.json();
+            const seen = new Map();  // dedup key → projected robot
+            for (const r of (json.robots || [])) {
+                if (filterBusy && r.busy) continue;
+                const key = r.meta?.install_id ?? r.meta?.hardware_id ?? r.peerId;
+                seen.set(key, {
+                    id: r.peerId,
+                    name: r.robotName ?? r.meta?.name ?? null,
+                    busy: !!r.busy,
+                    activeApp: r.activeApp ?? null,
+                    meta: r.meta ?? {},
+                    lastSeenAgeSeconds: r.last_seen_age_seconds ?? null,
+                });
+            }
+            return Array.from(seen.values()).sort(
+                (a, b) => (a.lastSeenAgeSeconds ?? Infinity) - (b.lastSeenAgeSeconds ?? Infinity),
+            );
+        } catch (e) {
+            console.warn('[reachy-mini] /api/robot-status unavailable, using SSE list:', e);
+            return (this._robots || []).map((r) => ({
+                id: r.id,
+                name: r.meta?.name ?? null,
+                busy: false,             // unknown — SSE list does not carry busy state
+                activeApp: null,
+                meta: r.meta ?? {},
+                lastSeenAgeSeconds: null,
+            }));
+        }
+    }
+
+    /**
+     * Resolve once `robotId` appears in `_robots`, or reject after
+     * `timeoutMs`. Used by `autoConnect()`'s embed branch so the preselected
+     * robot has a chance to surface from the first SSE `list` push before
+     * `startSession()` is fired.
+     */
+    _waitForRobotInList(robotId, timeoutMs) {
+        if (this._robots?.find((r) => r.id === robotId)) return Promise.resolve();
+        return new Promise((resolve, reject) => {
+            const onChange = () => {
+                if (this._robots?.find((r) => r.id === robotId)) {
+                    this.removeEventListener('robotsChanged', onChange);
+                    clearTimeout(timeoutId);
+                    resolve();
+                }
+            };
+            const timeoutId = setTimeout(() => {
+                this.removeEventListener('robotsChanged', onChange);
+                reject(new Error(`Timeout waiting for robot ${robotId} in list`));
+            }, timeoutMs);
+            this.addEventListener('robotsChanged', onChange);
         });
     }
 
@@ -781,8 +1098,14 @@ export class ReachyMini extends EventTarget {
      */
     async stopSession() {
         if (this._versionResolve) { this._versionResolve(null); this._versionResolve = null; }
+        if (this._hardwareIdResolve) { this._hardwareIdResolve(null); this._hardwareIdResolve = null; }
         if (this._volumeResolve) { this._volumeResolve(null); this._volumeResolve = null; }
         if (this._micVolumeResolve) { this._micVolumeResolve(null); this._micVolumeResolve = null; }
+        // Drop any active log subscribers — the daemon-side subprocess
+        // is torn down on peer-disconnect, so resubscribing across a
+        // reconnect requires a fresh subscribeLogs() call from the
+        // consumer.
+        this._logSubscribers.clear();
         if (this._sessionReject) {
             this._sessionReject(new Error('Session stopped'));
             this._sessionResolve = null;
@@ -822,8 +1145,10 @@ export class ReachyMini extends EventTarget {
         if (this._sseAbortController) { this._sseAbortController.abort(); this._sseAbortController = null; }
 
         if (this._versionResolve) { this._versionResolve(null); this._versionResolve = null; }
+        if (this._hardwareIdResolve) { this._hardwareIdResolve(null); this._hardwareIdResolve = null; }
         if (this._volumeResolve) { this._volumeResolve(null); this._volumeResolve = null; }
         if (this._micVolumeResolve) { this._micVolumeResolve(null); this._micVolumeResolve = null; }
+        this._logSubscribers.clear();
         if (this._sessionReject) {
             this._sessionReject(new Error('Disconnected'));
             this._sessionResolve = null;
@@ -1139,6 +1464,30 @@ export class ReachyMini extends EventTarget {
     }
 
     /**
+     * Request the robot's unique hardware ID — the Pollen audio device's
+     * USB serial. Same value across Lite and Wireless variants, stable
+     * across reboots and OS reinstalls. Useful for fleet management,
+     * per-robot calibration cache keys, or identifying which physical
+     * robot a session is bound to.
+     * Resolves with the hardware ID string (or null if no robot is
+     * attached, e.g. the daemon is running on a developer machine).
+     * @returns {Promise<string|null>}
+     */
+    getHardwareId() {
+        return new Promise((resolve, reject) => {
+            if (!this._dc || this._dc.readyState !== 'open') {
+                reject(new Error('Data channel not open'));
+                return;
+            }
+            if (this._hardwareIdResolve) {
+                this._hardwareIdResolve(null);
+            }
+            this._hardwareIdResolve = resolve;
+            this._sendCommand({ type: "get_hardware_id" });
+        });
+    }
+
+    /**
      * Query the current speaker volume (0-100).
      * Resolves with null if volume control is unavailable (platform unsupported
      * or audio stack down).
@@ -1211,6 +1560,41 @@ export class ReachyMini extends EventTarget {
      */
     sendRaw(data) {
         return this._sendCommand(data);
+    }
+
+    /**
+     * Subscribe to the daemon's `journalctl -u reachy-mini-daemon`
+     * stream over the WebRTC data channel.
+     *
+     * One daemon-side subprocess is shared across all local subscribers:
+     * the first call sends `subscribe_logs`, removing the last subscriber
+     * sends `unsubscribe_logs`. Calling the returned `unsubscribe()`
+     * twice is a no-op.
+     *
+     * @param {{
+     *   onLine: (entry: { timestamp: string, line: string }) => void,
+     *   onError?: (error: string) => void,
+     * }} options
+     * @returns {() => void} unsubscribe
+     */
+    subscribeLogs({ onLine, onError } = {}) {
+        if (typeof onLine !== 'function') {
+            throw new TypeError('subscribeLogs: onLine callback is required');
+        }
+        const sub = { onLine, onError };
+        const wasEmpty = this._logSubscribers.size === 0;
+        this._logSubscribers.add(sub);
+        if (wasEmpty) this._sendCommand({ type: 'subscribe_logs' });
+
+        let detached = false;
+        return () => {
+            if (detached) return;
+            detached = true;
+            this._logSubscribers.delete(sub);
+            if (this._logSubscribers.size === 0) {
+                this._sendCommand({ type: 'unsubscribe_logs' });
+            }
+        };
     }
 
     /**
@@ -1348,12 +1732,14 @@ export class ReachyMini extends EventTarget {
             case 'list':
                 this._robots = msg.producers || [];
                 this._emit('robotsChanged', { robots: this._robots });
+                this._maybeAutoStart();
                 break;
             case 'peerStatusChanged': {
                 const list = await this._sendToServer({ type: 'list' });
                 if (list?.producers) {
                     this._robots = list.producers;
                     this._emit('robotsChanged', { robots: this._robots });
+                    this._maybeAutoStart();
                 }
                 break;
             }
@@ -1532,6 +1918,11 @@ export class ReachyMini extends EventTarget {
             this._versionResolve = null;
             return;
         }
+        if ('hardware_id' in data && this._hardwareIdResolve) {
+            this._hardwareIdResolve(data.hardware_id);
+            this._hardwareIdResolve = null;
+            return;
+        }
         // Volume responses. Backend tags each response with `command` so we
         // know which pending resolver (speaker vs mic) to fulfil. If a
         // response arrives with no matching pending request (e.g. stale
@@ -1548,6 +1939,25 @@ export class ReachyMini extends EventTarget {
             if (this._micVolumeResolve) {
                 this._micVolumeResolve(data.status === 'error' ? null : data.volume);
                 this._micVolumeResolve = null;
+            }
+            return;
+        }
+        if (data.type === 'log_line') {
+            for (const sub of this._logSubscribers) {
+                try {
+                    sub.onLine({ timestamp: data.timestamp, line: data.line });
+                } catch (e) {
+                    console.error('subscribeLogs onLine threw:', e);
+                }
+            }
+            return;
+        }
+        if (data.type === 'log_stream_error') {
+            for (const sub of this._logSubscribers) {
+                if (typeof sub.onError === 'function') {
+                    try { sub.onError(data.error); }
+                    catch (e) { console.error('subscribeLogs onError threw:', e); }
+                }
             }
             return;
         }

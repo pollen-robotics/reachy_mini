@@ -35,6 +35,7 @@ REACHY_STATUS_SERVICE_UUID = "12345678-1234-5678-1234-56789abcdef3"
 NETWORK_STATUS_UUID = "12345678-1234-5678-1234-56789abcdef4"
 SYSTEM_STATUS_UUID = "12345678-1234-5678-1234-56789abcdef5"
 AVAILABLE_COMMANDS_UUID = "12345678-1234-5678-1234-56789abcdef6"
+HARDWARE_ID_UUID = "12345678-1234-5678-1234-56789abcdef7"
 
 BLUEZ_SERVICE_NAME = "org.bluez"
 GATT_MANAGER_IFACE = "org.bluez.GattManager1"
@@ -520,6 +521,24 @@ class ReachyStatusService(dbus.service.Object):
             )
         )
 
+        # Hardware ID — robot-unique Pollen audio device serial. Read-only,
+        # populated once at service init (the audio device is hot-pluggable in
+        # principle but in practice present for the daemon's lifetime). Lives
+        # here rather than the advertisement because the legacy 31-byte advert
+        # is already at capacity.
+        from reachy_mini.utils.hardware_id import get_hardware_id
+
+        self.add_characteristic(
+            StaticCharacteristic(
+                bus,
+                3,
+                HARDWARE_ID_UUID,
+                self,
+                get_hardware_id() or "unknown",
+                "Hardware ID",
+            )
+        )
+
     def update_network_status(self):
         """Update the network status characteristic value."""
         if hasattr(self, "network_char"):
@@ -820,21 +839,10 @@ class BluetoothCommandService:
 
 
 def get_pin() -> str:
-    """Extract the last 5 digits of the serial number from dfu-util -l output."""
-    default_pin = "46879"
-    try:
-        result = subprocess.run(["dfu-util", "-l"], capture_output=True, text=True)
-        lines = result.stdout.splitlines()
-        for line in lines:
-            if "serial=" in line:
-                # Extract serial number
-                serial_part = line.split("serial=")[-1].strip().strip('"')
-                if len(serial_part) >= 5:
-                    return serial_part[-5:]
-        return default_pin  # fallback if not found
-    except Exception as e:
-        logger.error(f"Error getting pin from serial: {e}")
-        return default_pin
+    """Last 5 chars of the robot's hardware ID (Pollen audio device serial)."""
+    from reachy_mini.utils.hardware_id import get_pin as _get_pin
+
+    return _get_pin()
 
 
 def get_network_status() -> str:
