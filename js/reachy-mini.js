@@ -694,6 +694,221 @@ export class ReachyMini extends EventTarget {
     }
 
     /**
+     * One-shot bring-up: auth → SSE connect → robot selection → session →
+     * wake up. The all-in-one entry point that captures the common
+     * "embed *or* standalone, just get me streaming" flow so each
+     * consumer does not have to re-implement it.
+     *
+     * What it does, in order:
+     *   1. **Auth.** If `this._token` is not set, calls `authenticate()`
+     *      (which honours the iframe URL-fragment hand-off, the OAuth
+     *      redirect callback, and the `sessionStorage` cache). Throws if
+     *      none yield a token — the consumer should call `login()` and
+     *      retry after the redirect. Pass an explicit `token` to skip
+     *      `authenticate()` entirely.
+     *   2. **Connect.** If `state === 'disconnected'`, opens the SSE
+     *      signaling channel.
+     *   3. **Pick a robot.**
+     *      - **Embed mode** (`this.isEmbedded`): uses
+     *        `this._preselectedRobotId` from the URL. No picker callback
+     *        invoked; we briefly wait for that robot to appear in the
+     *        SSE list, then proceed.
+     *      - **Standalone**: GETs `/api/robot-status` for the owner's
+     *        robots with busy state, dedupes by `install_id`, sorts by
+     *        freshness. If `autoPickIfSingle` and exactly one free, picks
+     *        it. Else calls the consumer-supplied `pickRobot(robots)`
+     *        callback. Throws if neither yields an id.
+     *   4. **Start session.** Awaits `startSession(robotId)` (ICE + DC).
+     *   5. **Wake up.** Awaits `ensureAwake()` so sliders don't silently
+     *      no-op against a torque-off robot.
+     *
+     * @param {{
+     *   token?: string,                           // skip authenticate(); use this raw HF token
+     *   pickRobot?: (robots: Array<{
+     *     id: string,
+     *     name: string|null,
+     *     busy: boolean,
+     *     activeApp: string|null,
+     *     meta: object,
+     *     lastSeenAgeSeconds: number|null,
+     *   }>) => Promise<string|null>,              // called only in standalone, multi-robot case
+     *   autoPickIfSingle?: boolean,               // default true — skip the callback when 1 free robot
+     *   filterBusy?: boolean,                     // default true — hide busy robots from the picker
+     *   wakeOnConnect?: boolean,                  // default true — call ensureAwake() after startSession
+     * }} [options]
+     * @returns {Promise<{
+     *   robotId: string,
+     *   robotName: string|null,
+     *   isEmbedded: boolean,
+     *   alreadyStreaming?: boolean,
+     * }>}
+     */
+    async autoConnect(options = {}) {
+        const {
+            token = null,
+            pickRobot = null,
+            autoPickIfSingle = true,
+            filterBusy = true,
+            wakeOnConnect = true,
+        } = options;
+
+        // Idempotent fast-path: caller invoked autoConnect() on an
+        // already-streaming session (e.g. on a route change inside an
+        // SPA). Return the current selection rather than tearing down.
+        if (this._state === 'streaming') {
+            const cur = this._robots?.find((r) => r.id === this._selectedRobotId);
+            return {
+                robotId: this._selectedRobotId,
+                robotName: cur?.meta?.name ?? null,
+                isEmbedded: this.isEmbedded,
+                alreadyStreaming: true,
+            };
+        }
+
+        // 1. Auth.
+        if (token) {
+            this._token = token;
+        } else if (!this._token) {
+            const ok = await this.authenticate();
+            if (!ok) {
+                // login() does a full page redirect; we don't trigger
+                // it here so the consumer can decide (a desktop tray
+                // wants different recovery than a standalone Space).
+                throw new Error('Not authenticated — call login() or pass a token');
+            }
+        }
+
+        // 2. SSE connect.
+        if (this._state === 'disconnected') {
+            await this.connect();
+        }
+
+        // 3. Resolve the target robot.
+        let robotId;
+        let robotName = null;
+        if (this.isEmbedded) {
+            robotId = this._preselectedRobotId;
+            // Wait briefly for the preselected robot to surface in the
+            // SSE list. Best-effort: if it never shows we still try
+            // startSession() — central may know about a robot the SSE
+            // list pushes only a moment later.
+            try {
+                await this._waitForRobotInList(robotId, 5000);
+            } catch (_) { /* fall through */ }
+            const found = this._robots?.find((r) => r.id === robotId);
+            robotName = found?.meta?.name ?? null;
+        } else {
+            const robots = await this._fetchOwnedRobots({ filterBusy });
+            if (robots.length === 0) {
+                throw new Error('No reachable robots');
+            }
+            if (autoPickIfSingle && robots.length === 1 && !robots[0].busy) {
+                robotId = robots[0].id;
+                robotName = robots[0].name;
+            } else if (pickRobot) {
+                const picked = await pickRobot(robots);
+                if (!picked) throw new Error('Robot selection cancelled');
+                robotId = picked;
+                robotName = robots.find((r) => r.id === picked)?.name ?? null;
+            } else {
+                throw new Error(
+                    'Multiple robots available — pass a pickRobot callback to autoConnect()',
+                );
+            }
+        }
+
+        // 4. Session.
+        await this.startSession(robotId);
+
+        // 5. Wake.
+        if (wakeOnConnect && typeof this.ensureAwake === 'function') {
+            try { await this.ensureAwake(); }
+            catch (e) { console.warn('[reachy-mini] autoConnect: ensureAwake failed:', e); }
+        }
+
+        return { robotId, robotName, isEmbedded: this.isEmbedded };
+    }
+
+    /**
+     * Fetch the caller's robots with busy state, deduped + sorted.
+     * One-shot snapshot — no live subscription. Falls back to the SSE
+     * `_robots` cache if `/api/robot-status` is unavailable (older
+     * central deployments don't expose it).
+     *
+     * Dedup: same physical robot can appear twice transiently after a
+     * daemon reinstall (new peerId, same install_id). Last-writer-wins
+     * on `install_id`, then `hardware_id`, then `peerId` (= no dedup).
+     *
+     * @returns {Promise<Array<{
+     *   id: string,
+     *   name: string|null,
+     *   busy: boolean,
+     *   activeApp: string|null,
+     *   meta: object,
+     *   lastSeenAgeSeconds: number|null,
+     * }>>}
+     */
+    async _fetchOwnedRobots({ filterBusy = true } = {}) {
+        try {
+            const res = await fetch(`${this._signalingUrl}/api/robot-status`, {
+                headers: { 'Authorization': `Bearer ${this._token}` },
+            });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const json = await res.json();
+            const seen = new Map();  // dedup key → projected robot
+            for (const r of (json.robots || [])) {
+                if (filterBusy && r.busy) continue;
+                const key = r.meta?.install_id ?? r.meta?.hardware_id ?? r.peerId;
+                seen.set(key, {
+                    id: r.peerId,
+                    name: r.robotName ?? r.meta?.name ?? null,
+                    busy: !!r.busy,
+                    activeApp: r.activeApp ?? null,
+                    meta: r.meta ?? {},
+                    lastSeenAgeSeconds: r.last_seen_age_seconds ?? null,
+                });
+            }
+            return Array.from(seen.values()).sort(
+                (a, b) => (a.lastSeenAgeSeconds ?? Infinity) - (b.lastSeenAgeSeconds ?? Infinity),
+            );
+        } catch (e) {
+            console.warn('[reachy-mini] /api/robot-status unavailable, using SSE list:', e);
+            return (this._robots || []).map((r) => ({
+                id: r.id,
+                name: r.meta?.name ?? null,
+                busy: false,             // unknown — SSE list does not carry busy state
+                activeApp: null,
+                meta: r.meta ?? {},
+                lastSeenAgeSeconds: null,
+            }));
+        }
+    }
+
+    /**
+     * Resolve once `robotId` appears in `_robots`, or reject after
+     * `timeoutMs`. Used by `autoConnect()`'s embed branch so the preselected
+     * robot has a chance to surface from the first SSE `list` push before
+     * `startSession()` is fired.
+     */
+    _waitForRobotInList(robotId, timeoutMs) {
+        if (this._robots?.find((r) => r.id === robotId)) return Promise.resolve();
+        return new Promise((resolve, reject) => {
+            const onChange = () => {
+                if (this._robots?.find((r) => r.id === robotId)) {
+                    this.removeEventListener('robotsChanged', onChange);
+                    clearTimeout(timeoutId);
+                    resolve();
+                }
+            };
+            const timeoutId = setTimeout(() => {
+                this.removeEventListener('robotsChanged', onChange);
+                reject(new Error(`Timeout waiting for robot ${robotId} in list`));
+            }, timeoutMs);
+            this.addEventListener('robotsChanged', onChange);
+        });
+    }
+
+    /**
      * Start a WebRTC session with the given robot.
      * Acquires the microphone (if enabled), negotiates SDP, and waits for
      * both ICE connection and data channel to be ready before resolving.
