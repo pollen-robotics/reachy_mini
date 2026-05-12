@@ -133,12 +133,20 @@
  *                       `error`. Subscribe here for finer-grained UX (e.g.
  *                       a transient "Reconnecting…" badge) without having
  *                       to attach your own listener to `_pc`.
- *   "networkOnline"   {}    // forwarded from `window.online` and
- *                              `navigator.connection.change`. Scoped to a
- *                              live session (listeners are installed in
- *                              `startSession()` and removed in
+ *   "networkOnline"   {}    // forwarded from `window.online`. Scoped to
+ *                              a live session (listeners are installed
+ *                              in `startSession()` and removed in
  *                              `stopSession()`/`disconnect()`).
  *   "networkOffline"  {}    // forwarded from `window.offline`.
+ *   "networkChange"   { effectiveType?: string, downlink?: number,
+ *                       rtt?: number, saveData?: boolean }
+ *                       Forwarded from `navigator.connection.change`
+ *                       on browsers that ship the NetworkInformation
+ *                       API (Chrome, Android WebView; absent on
+ *                       Safari/iOS). Fires on transport swaps
+ *                       (Wi-Fi → 4G, AP roam) without going through
+ *                       `offline`, so consumers can probe their data
+ *                       channel even when `online` never flipped.
  *   "error"           { source: "signaling"|"webrtc"|"robot", error: Error|string }
  *
  *
@@ -195,27 +203,21 @@ export function matrixToRpy(m) {
 // ─── Internal constants ──────────────────────────────────────────────────────
 
 /**
- * Grace window before treating `iceConnectionState === 'disconnected'`
- * as a real connectivity issue. The spec defines this state as transient
- * (no STUN keep-alive ack for ~5 s) and browsers almost always recover
- * back to `connected` on their own — most often within 1-2 s on WiFi
- * blips, AP roams, or brief 4G dropouts. Surfacing it as an error
- * immediately caused consumers (mobile shell, dev Spaces) to flash
- * "connection lost" popups during routine network noise.
- *
- * If you bump this, also bump it on the consumer side that watches
- * `iceStateChange` directly — they should outlive at least this window
- * before showing a fatal screen.
+ * How long we tolerate `iceConnectionState === 'disconnected'` before
+ * surfacing it as an error. The spec defines this state as transient
+ * (browsers keep STUN keep-alives running and usually heal in 1-2 s
+ * on WiFi blips, AP roams, brief 4G dropouts). Consumers watching
+ * `iceStateChange` directly should outlive this window before
+ * showing any fatal UI.
  */
 const ICE_DISCONNECT_GRACE_MS = 3000;
 
 /**
- * Grace window before treating `iceConnectionState === 'failed'` as
- * terminal. The spec says `failed` is terminal, but in practice we've
- * observed `failed → connected` transitions on rapid network swaps
- * (Wi-Fi → Wi-Fi on a different AP, headphones BT route change on iOS).
- * One second of debounce is enough to absorb those without delaying
- * a real failure noticeably.
+ * Grace before treating `iceConnectionState === 'failed'` as terminal.
+ * The spec says `failed` IS terminal, but we've observed real
+ * `failed → connected` flips on rapid AP roams and iOS BT route
+ * changes — 1 s of debounce absorbs those without noticeably
+ * delaying a real failure.
  */
 const ICE_FAILED_GRACE_MS = 1000;
 
@@ -455,30 +457,41 @@ export class ReachyMini extends EventTarget {
         this._iceConnected = false;
         this._dcOpen = false;
 
-        // ICE-blip debouncer: `iceConnectionState === 'disconnected'` is
-        // a TRANSIENT state per the WebRTC spec — the browser keeps
-        // STUN keep-alives going and almost always self-heals back to
-        // `connected` within a few seconds. We delay any error emission
-        // by `ICE_DISCONNECT_GRACE_MS` (deferred to `visibilitychange`
-        // if the tab is hidden, since background timers are throttled)
-        // so routine WiFi blips don't tear down the session. Same idea
-        // for `failed` with a shorter `ICE_FAILED_GRACE_MS` window.
-        // See `_scheduleIceGrace` / `_armIceGraceOnVisibility`.
+        // ICE-blip debounce + network-event forwarding state. Grouped
+        // in its own initializer to keep the constructor compact;
+        // see the method JSDoc for the rationale of each field.
+        this._initResilienceState();
+
+        // Set by attachVideo()
+        this._videoElement = null;
+    }
+
+    /**
+     * Initialise all resilience-related instance fields to their idle
+     * defaults. Called once from the constructor; the values are then
+     * mutated by `_scheduleIceGrace`, `_armIceGraceOnVisibility`, and
+     * `_installNetworkListeners` (and reset by their counterparts).
+     *
+     * - `_iceGraceTimer` / `_iceGraceReason` / `_pendingVisibilityHandler`
+     *   back the transient-state debouncer: `disconnected` is a spec-
+     *   transient state that the browser usually heals on its own,
+     *   `failed` can also flip back to `connected` on rapid network
+     *   swaps. Both are debounced (with foreground-aware timers)
+     *   before being surfaced as `error` events.
+     * - `_onlineHandler` / `_offlineHandler` / `_connectionChangeHandler`
+     *   back the `networkOnline` / `networkOffline` / `networkChange`
+     *   event forwarders, scoped to a live session.
+     *
+     * @private
+     */
+    _initResilienceState() {
         this._iceGraceTimer = null;
         this._iceGraceReason = null;             // 'disconnected' | 'failed'
         this._pendingVisibilityHandler = null;
 
-        // Network-awareness: forward `window.online` / `window.offline`
-        // and (where available) `navigator.connection.change` as public
-        // `networkOnline` / `networkOffline` events, scoped to the
-        // active session. Listeners are installed in `startSession()`
-        // and removed in `stopSession()` / `disconnect()`.
         this._onlineHandler = null;
         this._offlineHandler = null;
         this._connectionChangeHandler = null;
-
-        // Set by attachVideo()
-        this._videoElement = null;
     }
 
     // ─── Read-only properties ────────────────────────────────────────────
@@ -1048,11 +1061,8 @@ export class ReachyMini extends EventTarget {
             iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
         });
 
-        // Wire up network awareness for the lifetime of this session.
-        // Consumers see `networkOnline`/`networkOffline` events on the
-        // robot instance and can react in their own UI (freeze motion,
-        // show a badge, probe the data channel on return…) without
-        // having to wire their own browser listeners.
+        // Scope `networkOnline` / `networkOffline` / `networkChange`
+        // event forwarding to the lifetime of this session.
         this._installNetworkListeners();
 
         return new Promise((resolve, reject) => {
@@ -1194,9 +1204,8 @@ export class ReachyMini extends EventTarget {
         // reconnect requires a fresh subscribeLogs() call from the
         // consumer.
         this._logSubscribers.clear();
-        // Cancel any in-flight ICE-grace timer / visibility handler
-        // BEFORE we close `_pc`, otherwise a queued callback could
-        // dereference a dead handle a couple of ticks later.
+        // Tear down resilience plumbing BEFORE closing `_pc` so a
+        // queued grace callback can't dereference a dead handle.
         this._clearIceGrace();
         this._uninstallNetworkListeners();
         if (this._sessionReject) {
@@ -1242,7 +1251,7 @@ export class ReachyMini extends EventTarget {
         if (this._volumeResolve) { this._volumeResolve(null); this._volumeResolve = null; }
         if (this._micVolumeResolve) { this._micVolumeResolve(null); this._micVolumeResolve = null; }
         this._logSubscribers.clear();
-        // Symmetric cleanup with `stopSession()` — see comment there.
+        // Mirrors the resilience teardown in `stopSession()`.
         this._clearIceGrace();
         this._uninstallNetworkListeners();
         if (this._sessionReject) {
@@ -1311,9 +1320,12 @@ export class ReachyMini extends EventTarget {
      * @private
      */
     _scheduleIceGrace(ms, reason) {
-        // Coalesce: if a grace is already pending for a less-severe
-        // reason (e.g. `disconnected`) and we now see `failed`, replace
-        // it so we surface the failure on the shorter `failed` window.
+        // Coalesce: if a grace is already pending and the reason hasn't
+        // changed, keep the original timer so a flurry of identical
+        // transitions doesn't reset the clock. If the reason changed
+        // (typically `disconnected` → `failed`, but also the reverse on
+        // some Android WebViews), replace the timer with the new
+        // (reason, ms) pair — the latest signal wins.
         if (this._iceGraceTimer !== null) {
             if (this._iceGraceReason === reason) return;
             clearTimeout(this._iceGraceTimer);
@@ -1375,9 +1387,24 @@ export class ReachyMini extends EventTarget {
 
     /**
      * Install browser-level network listeners and forward them as
-     * public `networkOnline` / `networkOffline` events on this
-     * instance. Idempotent: called from `startSession()`, removed
-     * by `_uninstallNetworkListeners` on teardown.
+     * public `networkOnline` / `networkOffline` / `networkChange`
+     * events on this instance. Idempotent: called from
+     * `startSession()`, removed by `_uninstallNetworkListeners` on
+     * teardown. Reachable only when there's a live `window`
+     * (defensive guard for SSR / test environments).
+     *
+     * `online` / `offline` are semantically about CONNECTIVITY:
+     * "does the OS think we can reach the internet". They flip
+     * symmetrically.
+     *
+     * `connection.change` (NetworkInformation API, Chrome / Android
+     * WebView only) is semantically about the TRANSPORT: it fires
+     * on Wi-Fi → 4G swaps, AP roams, etc. without necessarily going
+     * through `offline`. We forward it as its own `networkChange`
+     * event rather than aliasing it onto `networkOnline`, so
+     * consumers don't have to guess whether they're seeing a real
+     * connectivity recovery or a silent transport swap.
+     *
      * @private
      */
     _installNetworkListeners() {
@@ -1388,15 +1415,15 @@ export class ReachyMini extends EventTarget {
         window.addEventListener('offline', onOffline);
         this._onlineHandler = onOnline;
         this._offlineHandler = onOffline;
-        // `navigator.connection.change` fires on transport swaps
-        // (WiFi → 4G, AP roam) BEFORE the offline event would, on
-        // browsers that ship the NetworkInformation API (Chrome,
-        // Android WebView; absent on Safari/iOS). When present, we
-        // forward it as `networkOnline` to give consumers an early
-        // hint that something just changed.
+
         const conn = /** @type {any} */ (navigator).connection;
         if (conn && typeof conn.addEventListener === 'function') {
-            const onChange = () => this._emit('networkOnline', {});
+            const onChange = () => this._emit('networkChange', {
+                effectiveType: conn.effectiveType,
+                downlink: conn.downlink,
+                rtt: conn.rtt,
+                saveData: conn.saveData,
+            });
             conn.addEventListener('change', onChange);
             this._connectionChangeHandler = onChange;
         }
