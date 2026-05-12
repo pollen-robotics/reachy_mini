@@ -8,11 +8,11 @@ Use the **Reachy Mini Control** desktop app ([download](https://hf.co/reachy-min
 
 1. Open **Reachy Mini Control**. On the **Connect to Reachy** screen (before you start a session), scroll to the footer and click **First time WiFi setup**.
 
-[![control-app-first-time-wifi-setup.png](https://github.com/pollen-robotics/reachy_mini/raw/develop/docs/assets/control-app-first-time-wifi-setup.png)]()
+[![control-app-first-time-wifi-setup.png](https://github.com/pollen-robotics/reachy_mini/raw/main/docs/assets/control-app-first-time-wifi-setup.png)]()
 
 2. In the **First Time WiFi Setup** wizard, use the footer link **Try the Bluetooth Console** (for example if the hotspot is not detected, or whenever you want the console directly).
 
-[![control-app-wifi-wizard-bluetooth-console.png](https://github.com/pollen-robotics/reachy_mini/raw/develop/docs/assets/control-app-wifi-wizard-bluetooth-console.png)]()
+[![control-app-wifi-wizard-bluetooth-console.png](https://github.com/pollen-robotics/reachy_mini/raw/main/docs/assets/control-app-wifi-wizard-bluetooth-console.png)]()
 
 From the Bluetooth console you can reset the hotspot, check network status, and run the same kind of commands as in the other methods below.
 
@@ -38,7 +38,7 @@ Reachy Mini wireless exposes a Bluetooth GATT interface so you can reset the Wi-
 1. Open nRF Connect.
 2. Scan for devices and select **ReachyMini**.
 
-[![bluetooth_1.jpg](https://github.com/pollen-robotics/reachy_mini/raw/develop/docs/assets/bluetooth_1.jpg)]()
+[![bluetooth_1.jpg](https://github.com/pollen-robotics/reachy_mini/raw/main/docs/assets/bluetooth_1.jpg)]()
 
 3. Connect to the device.
 
@@ -48,7 +48,7 @@ Reachy Mini wireless exposes a Bluetooth GATT interface so you can reset the Wi-
 - Use the **WRITE** section to send commands.
 - You can use the **READ** section above to inspect the robot's responses.
 
-[![bluetooth_2.jpg](https://github.com/pollen-robotics/reachy_mini/raw/develop/docs/assets/bluetooth_2.jpg)]()
+[![bluetooth_2.jpg](https://github.com/pollen-robotics/reachy_mini/raw/main/docs/assets/bluetooth_2.jpg)]()
 
 ### 3.4 Sending commands
 
@@ -76,5 +76,5 @@ If you use **CMD_SOFTWARE_RESET**, the robot reboots and may take **about 5 minu
 
 It is convenient to save frequently used commands for reuse.
 
-[![bluetooth_3.jpg](https://github.com/pollen-robotics/reachy_mini/raw/develop/docs/assets/bluetooth_3.jpg)]()
-[![bluetooth_4.jpg](https://github.com/pollen-robotics/reachy_mini/raw/develop/docs/assets/bluetooth_4.jpg)]()
+[![bluetooth_3.jpg](https://github.com/pollen-robotics/reachy_mini/raw/main/docs/assets/bluetooth_3.jpg)]()
+[![bluetooth_4.jpg](https://github.com/pollen-robotics/reachy_mini/raw/main/docs/assets/bluetooth_4.jpg)]()
