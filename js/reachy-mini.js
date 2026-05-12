@@ -765,6 +765,18 @@ export class ReachyMini extends EventTarget {
             };
         }
 
+        // autoConnect takes over the bring-up — disable the SDK's
+        // own `autoStartFromUrl` so the two paths don't race and
+        // both call `startSession()` against the same preselected
+        // robot. The race used to manifest as central rejecting the
+        // second attempt with "Robot is busy: <appName>" — the
+        // appName being our own first attempt. Restored on the way
+        // out so a later `stopSession()` followed by a fresh
+        // listener attach still benefits from auto-start.
+        const _prevAutoStartFromUrl = this._autoStartFromUrl;
+        this._autoStartFromUrl = false;
+
+        try {
         // 1. Auth.
         if (token) {
             this._token = token;
@@ -827,6 +839,9 @@ export class ReachyMini extends EventTarget {
         }
 
         return { robotId, robotName, isEmbedded: this.isEmbedded };
+        } finally {
+            this._autoStartFromUrl = _prevAutoStartFromUrl;
+        }
     }
 
     /**
