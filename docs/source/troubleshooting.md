@@ -80,7 +80,7 @@ If you have one of the following symptoms:
 You may have plugged the microphone cable upside down.
 - If your cable is white and blue, please check again the assembly instruction to be sure the blue side is up.
 - If your cable is black, check that the side with the writing "Main Board" is up (see picture below).
-![mic_cable](https://github.com/pollen-robotics/reachy_mini/raw/develop/docs/assets/black_fpc_cable.png)
+![mic_cable](https://github.com/pollen-robotics/reachy_mini/raw/main/docs/assets/black_fpc_cable.png)
 
 
 If your cable is plugged properly and you still have issues, it is likely that the FPC cable of the microphone is damaged. Please refer to the tutorial [How to change the FPC cable of the microphone of Reachy Mini?](./troubleshooting/change_mic_fpc_cable.md) to fix this issue.
@@ -188,7 +188,7 @@ To fix the darkness issue specifically, set `auto-exposure-priority=1` using the
 
 Be sure to unpack everything first. Some parts are pre-assembled (e.g the bottom head part is already placed in the back head part).
 
-![head_parts](https://github.com/pollen-robotics/reachy_mini/raw/develop/docs/assets/head_parts.jpg)
+![head_parts](https://github.com/pollen-robotics/reachy_mini/raw/main/docs/assets/head_parts.jpg)
 
 Then, check the assembly guide's parts list to see if you really miss a part:
 If you are 100% sure you miss a part, please contact sales@pollen-robotics.com with a picture of all the parts you have and order number or invoice number.  
@@ -213,7 +213,7 @@ Instead:
 There is a switch on the board in the head that needs to be in a given position. And if it's not, the AP doesn't show. It's possible that this switch was moved during assembly or maybe even a factory mistake.
 Please check that the switch is on the "debug" and not on "download" position. See the picture below:
 
-![switch_position](https://github.com/pollen-robotics/reachy_mini/raw/develop/docs/assets/wireless_switch.png)
+![switch_position](https://github.com/pollen-robotics/reachy_mini/raw/main/docs/assets/wireless_switch.png)
 
 If this switch is in the right position and you still can't see the AP, you may need to re-flash the Raspberry Pi's iso, following the [reflash the RPI Iso tutorial](/docs/source/platforms/reachy_mini/reflash_the_rpi_ISO.md).
 
@@ -507,9 +507,9 @@ We only have the led indication for "low battery" when it's time to charge it. (
 
 - Check that the green led is not on first.
 - Remove the 3x screws at the bottom and take out the foot a little bit.
-![remove_foot](https://github.com/pollen-robotics/reachy_mini/raw/develop/docs/assets/remove_foot.png)
+![remove_foot](https://github.com/pollen-robotics/reachy_mini/raw/main/docs/assets/remove_foot.png)
 - Unplug the indicated connector (red arrow) to be able to remove the battery. There should be some double-sided tape that maintain the battery in place, so it can be a bit hard to remove.
-![battery_location](https://github.com/pollen-robotics/reachy_mini/raw/develop/docs/assets/battery_connector.png)
+![battery_location](https://github.com/pollen-robotics/reachy_mini/raw/main/docs/assets/battery_connector.png)
 - When you'll re-assemble it, do these step again in reverse order. Just be careful not to pinch any cable.
 
 </details>

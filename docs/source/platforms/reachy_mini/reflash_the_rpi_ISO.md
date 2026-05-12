@@ -95,7 +95,7 @@ https://www.raspberrypi.com/software/
    
 3. Set the switch to **DOWNLOAD (SW1)** on the head PCB:
 
-   [![pcb_usb_and_switch](https://github.com/pollen-robotics/reachy_mini/raw/develop/docs/assets/pcb_usb_and_switch.png)]()
+   [![pcb_usb_and_switch](https://github.com/pollen-robotics/reachy_mini/raw/main/docs/assets/pcb_usb_and_switch.png)]()
 
 4. Plug the USB cable (the one shown in the image above, named **USB2**).
 
