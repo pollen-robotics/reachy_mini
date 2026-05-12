@@ -149,6 +149,20 @@ class CentralSignalingRelay:
         self._local_peer_id: Optional[str] = None
         self._http_session: Optional[aiohttp.ClientSession] = None
         self._connection_attempts = 0
+        # Reentrancy guard for `_close_connections`. A teardown can be
+        # triggered from three converging paths on the same event loop:
+        #   1. `_reconnect()` scheduled by `force_reconnect()` /
+        #      `update_token()` (via run_coroutine_threadsafe);
+        #   2. `_watch_for_token_update` woken by `_token_updated.set()`
+        #      (which the same `_reconnect()` set);
+        #   3. `_connect_and_relay`'s `finally:` block, fired when
+        #      `_producer_health_loop` ends after its self-triggered
+        #      `force_reconnect()` and wins the FIRST_COMPLETED race.
+        # All three call `_close_connections()`. The function used to
+        # be idempotent only by accident (each `await close()` happens
+        # to swallow the "already closed" error); making the invariant
+        # explicit so future state cleanup additions can't regress it.
+        self._closing = False
 
         # Event to signal token update (triggers immediate reconnection)
         self._token_updated = asyncio.Event()
@@ -442,33 +456,48 @@ class CentralSignalingRelay:
             return self.hf_token
 
     async def _close_connections(self) -> None:
-        """Close all connections."""
-        if self._http_session:
-            try:
-                await self._http_session.close()
-            except Exception:
-                pass
-            self._http_session = None
+        """Close all connections.
 
-        if self._local_ws:
-            try:
-                await self._local_ws.close()
-            except Exception:
-                pass
-            self._local_ws = None
+        Reentrant-safe: three converging paths can call this on the
+        same event loop in quick succession (see ``self._closing`` in
+        ``__init__`` for the full triad). The guard short-circuits the
+        second and third calls so a single teardown can't double-close
+        an already-closing aiohttp session or interleave halfway
+        through the dict clears.
+        """
+        if self._closing:
+            return
+        self._closing = True
+        try:
+            if self._http_session:
+                try:
+                    await self._http_session.close()
+                except Exception:
+                    pass
+                self._http_session = None
 
-        # Clear session state
-        self._central_peer_id = None
-        self._local_peer_id = None
-        self._session_to_local_peer.clear()
-        self._pending_central_sessions.clear()
-        self._local_to_central_session.clear()
-        self._central_to_local_session.clear()
+            if self._local_ws:
+                try:
+                    await self._local_ws.close()
+                except Exception:
+                    pass
+                self._local_ws = None
 
-        # Release any remote hold on the robot lock. Idempotent: no-op if
-        # we weren't holding it (e.g. local app currently has the robot).
-        if self._robot_app_lock is not None:
-            self._robot_app_lock.release_remote()
+            # Clear session state
+            self._central_peer_id = None
+            self._local_peer_id = None
+            self._session_to_local_peer.clear()
+            self._pending_central_sessions.clear()
+            self._local_to_central_session.clear()
+            self._central_to_local_session.clear()
+
+            # Release any remote hold on the robot lock. Idempotent: no-op
+            # if we weren't holding it (e.g. local app currently has the
+            # robot).
+            if self._robot_app_lock is not None:
+                self._robot_app_lock.release_remote()
+        finally:
+            self._closing = False
 
     async def _run_loop(self) -> None:
         """Maintain connections and relay messages."""
@@ -1543,7 +1572,7 @@ async def notify_token_change(new_token: Optional[str] = None) -> None:
     await _relay_instance.update_token(new_token)
 
 
-async def notify_force_reconnect() -> None:
+async def notify_force_reconnect() -> bool:
     """Force the central signaling relay to drop and reconnect right now.
 
     Drops the relay's current connection and re-registers with the
@@ -1567,11 +1596,16 @@ async def notify_force_reconnect() -> None:
     own reconnect path — works with any token shape currently stored
     (raw user tokens, OAuth access tokens) without re-validation.
 
-    If no relay instance is running (e.g. Lite-only build, daemon not
-    yet up), this is a no-op.
+    Returns:
+        ``True`` if a reconnect was actually kicked off, ``False`` if
+        there was no relay instance to reconnect (e.g. Lite-only build,
+        daemon not yet up). HTTP callers (mobile auto-heal flow) must
+        surface this distinction so they can stop waiting on a
+        reconnect that will never happen.
     """
     if _relay_instance is None:
         logger.debug("[Central Relay] No relay instance, ignoring force reconnect")
-        return
+        return False
 
     await _relay_instance.force_reconnect()
+    return True
