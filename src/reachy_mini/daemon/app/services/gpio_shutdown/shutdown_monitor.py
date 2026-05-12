@@ -40,6 +40,18 @@ Tradeoffs:
   behaviour (no regression versus current main), but heavy motor
   activity can theoretically delay or suppress an intentional shutdown
   gesture. Not observed empirically.
+
+HOLD_TIME sizing:
+
+EMI bursts are filtered by the cancel-on-press edge, not by HOLD_TIME --
+any rising edge during the hold window cancels the pending Timer
+independent of HOLD_TIME's value. HOLD_TIME is therefore a UX /
+gesture-recognition parameter, not an EMI filter parameter. Its only
+hard upper bound is that ``shutdown_now()`` plus the systemd shutdown
+dispatch must complete before the Wireless's latch-OUT-cuts-power-rail
+deadline (~2 s, per review on PR #1110); the lower bound is "long
+enough to distinguish a deliberate latch pull from an incidental
+brush". 0.5 s sits comfortably inside that window.
 """
 
 from __future__ import annotations
@@ -51,8 +63,11 @@ from subprocess import call
 from gpiozero import Button
 
 #: Sustained-release duration (seconds) before the shutdown handler fires.
-#: Longer than any motor-EMI burst observed in #1109; still a natural gesture.
-HOLD_TIME: float = 2.0
+#: UX / gesture-recognition parameter; not an EMI filter (the cancel-on-press
+#: edge handles EMI orthogonally). Must complete shutdown_now() before the
+#: Wireless's ~2 s latch-OUT power-rail cut; long enough to distinguish a
+#: deliberate latch pull from an incidental brush.
+HOLD_TIME: float = 0.5
 
 shutdown_button = Button(23, pull_up=False)
 

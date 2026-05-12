@@ -9,7 +9,7 @@ test).
 Drives ``gpiozero`` via its ``MockFactory`` so the tests run on any host
 — no real GPIO required. Each test reloads the module under the mock
 factory and patches :data:`HOLD_TIME` to 0.3 s so the suite stays fast;
-the production constant ``HOLD_TIME = 2.0`` is verified separately by
+the production constant ``HOLD_TIME = 0.5`` is verified separately by
 ``test_module_constants_match_design``.
 
 Pin-state setup pattern: ``Button(pull_up=False)`` resets the
@@ -66,9 +66,11 @@ def shutdown_module(monkeypatch):
     at import time, capturing whatever ``Device.pin_factory`` is then. Tests
     must swap to ``MockFactory`` first.
 
-    Why monkeypatch ``HOLD_TIME``: the production constant is 2.0 s, which
-    would make the suite painfully slow. ``_schedule_shutdown`` reads
-    ``HOLD_TIME`` at fire-time, so patching after import works.
+    Why monkeypatch ``HOLD_TIME``: 0.3 s is faster than the production
+    value and is short enough that the "brief release < HOLD_TIME"
+    gestures the suite simulates run inside CI's wall-clock budget.
+    ``_schedule_shutdown`` reads ``HOLD_TIME`` at fire-time, so patching
+    after import works.
     """
     previous = Device.pin_factory
     Device.pin_factory = MockFactory()
@@ -109,12 +111,20 @@ def _wait_until(predicate, timeout: float = 2.0, poll: float = 0.01) -> bool:
 
 
 def test_module_constants_match_design():
-    """Production HOLD_TIME stays at 2.0 s (#1109 acceptance criterion)."""
+    """Production HOLD_TIME = 0.5 s.
+
+    Bounded above by the Wireless's ~2 s latch-OUT-to-power-rail-cut
+    deadline (per review on PR #1110: ``shutdown_now()`` must dispatch
+    inside that window); bounded below by gesture-recognition UX (long
+    enough to distinguish a deliberate latch pull from an incidental
+    brush). EMI bursts are filtered by the cancel-on-press edge,
+    independent of HOLD_TIME.
+    """
     from reachy_mini.daemon.app.services.gpio_shutdown.shutdown_monitor import (
         HOLD_TIME,
     )
 
-    assert HOLD_TIME == 2.0
+    assert HOLD_TIME == 0.5
 
 
 def test_brief_release_then_press_does_not_fire_shutdown(shutdown_module):
