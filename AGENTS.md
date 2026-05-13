@@ -168,10 +168,14 @@ The `webrtc_example` is already responsive; cloning it gets you the mobile basel
 
 For anything you'd want to be stable, pin to either a `v*` **tag** (preferred for releases) or a 40-char **commit SHA** (when you need an unreleased SDK feature, like the live `webrtc_example` does). Both are immutable on jsDelivr. Pinning to a branch like `@main` works, but means the app can break on any SDK change — fine for early prototyping, risky for anything you share.
 
+> ⚠️ **Pin `v1.7.2` or newer.** Earlier versions default `signalingUrl` to a decommissioned HF Space (`cduss-reachy-mini-central` / `tfrere-reachy-mini-central`). The canonical signaling server moved to `pollen-robotics-reachy-mini-central.hf.space` in v1.7.2. Apps on `@v1.7.1` or older that don't pass an explicit `signalingUrl` constructor option **cannot reach any robot** — central returns 404/CORS and `connect()` hangs.
+>
+> v1.7.2 also adds `robot.autoConnect()` (see [SDK cheatsheet](#sdk-cheatsheet) below) which is the single supported way to bring a session up going forward. Apps stuck on `v1.7.1` and older miss it and have to re-implement the auth + connect + pick + startSession + ensureAwake chain by hand.
+
 ```html
 <script type="module">
-  // Tagged release — preferred
-  import { ReachyMini } from "https://cdn.jsdelivr.net/gh/pollen-robotics/reachy_mini@v1.6.4/js/reachy-mini.js";
+  // Tagged release — preferred. v1.7.2 is the minimum supported pin.
+  import { ReachyMini } from "https://cdn.jsdelivr.net/gh/pollen-robotics/reachy_mini@v1.7.2/js/reachy-mini.js";
 
   // Or a specific commit SHA — for unreleased SDK changes
   // import { ReachyMini } from "https://cdn.jsdelivr.net/gh/pollen-robotics/reachy_mini@e8ba0b3dfcd48af528a8223eb2f2d58986204c94/js/reachy-mini.js";
@@ -190,7 +194,7 @@ git ls-remote --tags --refs --sort=-v:refname \
   | head -1 | awk -F/ '{print $NF}'
 ```
 
-**When extending an existing app**, re-check for a newer tag and bump only if the app needs it. Stale pins are fine. Branch pins (`@main`, etc.) work but trade stability for freshness — use them deliberately, not by default.
+**When extending an existing app**, re-check for a newer tag and bump only if the app needs it. Stale pins are fine *as long as they're `v1.7.2` or newer* — anything older needs to be bumped before the app can connect at all (signaling URL is hard-coded into the SDK default). Branch pins (`@main`, etc.) work but trade stability for freshness — use them deliberately, not by default.
 
 ### Create the Space from scratch
 
@@ -246,7 +250,22 @@ Static Spaces go live in ~10 s. **The live URL is `https://<username>-<app-name>
 
 ### SDK cheatsheet
 
-State: `disconnected` → `connect()` → `connected` → `startSession(robotId)` → `streaming`.
+**Bring-up — use `robot.autoConnect()` (v1.7.2+).** One call does auth + SSE connect + robot selection (auto-pick if exactly one free, otherwise the consumer-supplied `pickRobot` callback) + `startSession()` + `ensureAwake()`. Replaces the legacy `connect()` → `robotsChanged` → `startSession()` → `ensureAwake()` chain. Works for both standalone Spaces and iframe-embedded apps (the SDK auto-detects embed mode from the URL — see [Iframe-embedded apps](#iframe-embedded-apps-mobile-shell-vibe-coder-preview) below).
+
+```js
+const robot = new ReachyMini({ appName: "my-app" });
+await robot.autoConnect({
+    pickRobot: async (robots) =>
+        // robots: [{ id, name, busy, activeApp, meta, lastSeenAgeSeconds }]
+        // Already busy-filtered + deduped by install_id.
+        await showMyPickerUI(robots),       // your UI; returns the chosen id
+});
+// Now streaming — robot is awake, motors enabled, ready to drive.
+```
+
+Options: `token?` (skip `authenticate()` and use this raw HF token), `autoPickIfSingle?` (default `true`), `filterBusy?` (default `true`), `wakeOnConnect?` (default `true`).
+
+Underlying state: `disconnected` → `connect()` → `connected` → `startSession(robotId)` → `streaming`. `autoConnect()` wraps the whole chain; the primitives stay exposed for advanced consumers (mobile shell, app preview tools).
 
 Commands: `setHeadRpyDeg(r°,p°,y°)`, `setAntennasDeg(right°, left°)`, `setBodyYawDeg(yaw°)`, `setTarget({ head?: number[16], antennas?: [rRad, lRad], body_yaw?: rad })` (atomic raw-units update), `playSound(file)`, `setAudioMuted(bool)`, `setMicMuted(bool)`, `sendRaw(obj)`, `getVersion()`. Math utilities exported from the module: `rpyToMatrix`, `matrixToRpy`, `degToRad`, `radToDeg`.
 
@@ -254,9 +273,9 @@ Speaker / mic volume: `getVolume()` → 0-100, `setVolume(0-100)`, `getMicrophon
 
 Torque / wake: `setMotorMode("enabled"|"disabled"|"gravity_compensation")`, `wakeUp()`, `gotoSleep()`, `isAwake()`, `ensureAwake()`. `robot.robotState.motor_mode` reflects the live state.
 
-Lifecycle: `authenticate()` / `login()` / `connect()` / `startSession()` / `stopSession()` / `disconnect()` / `logout()`. Video: `attachVideo(<video>)` returns a detach fn.
+Lifecycle (advanced — most consumers should just use `autoConnect()`): `authenticate()` / `login()` / `connect()` / `startSession()` / `stopSession()` / `disconnect()` / `logout()`. Video: `attachVideo(<video>)` returns a detach fn.
 
-**Always call `await robot.ensureAwake()` right after `startSession()`** — otherwise if the robot is in the sleep pose (torque off, head on the base) every `setHeadRpyDeg` / `setAntennasDeg` is silently ignored and the app looks broken. `ensureAwake()` is a no-op when the robot is already awake (including gravity-compensation mode), so it's safe to call unconditionally at startup.
+**If you opt out of `autoConnect()` and drive the lifecycle manually, always call `await robot.ensureAwake()` right after `startSession()`** — otherwise if the robot is in the sleep pose (torque off, head on the base) every `setHeadRpyDeg` / `setAntennasDeg` is silently ignored and the app looks broken. `ensureAwake()` is a no-op when the robot is already awake (including gravity-compensation mode), so it's safe to call unconditionally at startup. `autoConnect()` calls it for you.
 
 Events: `connected`, `disconnected`, `robotsChanged`, `streaming`, `sessionStopped`, `sessionRejected` (robot busy — inspect `e.detail.activeApp`), `state` (every ~500 ms), `videoTrack`, `micSupported`, `error`.
 
@@ -266,29 +285,34 @@ Events: `connected`, `disconnected`, `robotsChanged`, `streaming`, `sessionStopp
 
 Browser apps may run **standalone** (the user opens the Space URL directly) or **embedded** in a host iframe (the Reachy Mini mobile shell, the vibe-coder preview, future shells). HF blocks `huggingface.co/oauth/authorize` from being framed (`X-Frame-Options: SAMEORIGIN`), so OAuth-in-iframe is impossible. The host shell instead pre-authenticates and pre-picks a robot, then forwards both pieces of state to the embed via the iframe URL.
 
-**The SDK handles the plumbing.** App authors don't parse URLs, don't manage `sessionStorage` keys, and don't wire `robotsChanged` listeners for preselect. The relevant SDK surface:
+**The SDK handles the plumbing.** App authors don't parse URLs, don't manage `sessionStorage` keys, and don't wire `robotsChanged` listeners for preselect. With `robot.autoConnect()` (v1.7.2+), the embed-vs-standalone branch is hidden entirely inside the SDK.
 
-- `robot.authenticate()` consumes `#hf_token=…&hf_username=…&hf_token_expires=…` from the URL fragment automatically (`consumeFragmentCredentials`). Standalone visits with no fragment fall through to the existing OAuth path.
-- `new ReachyMini({ autoStartFromUrl: true, ... })` opts the SDK into auto-calling `startSession(preselectedRobotId)` once that robot appears in the central's listing after the consumer's `connect()` resolves. One-shot per page load.
-- `robot.preselectedRobotId` (string | null) and `robot.isEmbedded` (boolean shorthand for `preselectedRobotId !== null`) — read these to branch your UX.
+The relevant SDK surface:
+
+- `robot.autoConnect({ pickRobot })` — single entry point. Detects embed mode from the URL, skips the picker in that case (uses `preselectedRobotId`), invokes your `pickRobot` callback in standalone mode. Does auth + connect + startSession + ensureAwake.
+- `robot.authenticate()` (called internally by `autoConnect`) consumes `#hf_token=…&hf_username=…&hf_token_expires=…` from the URL fragment automatically. Standalone visits with no fragment fall through to the existing OAuth path.
+- `robot.preselectedRobotId` (string | null) and `robot.isEmbedded` (boolean) — exposed for UX branching (e.g. hide the picker UI in embed mode), not for orchestration.
 
 **Receiver recipe** (the only app-side code you need):
 
 ```js
-const robot = new ReachyMini({ appName: "...", autoStartFromUrl: true });
+const robot = new ReachyMini({ appName: "..." });
 
 document.addEventListener("DOMContentLoaded", async () => {
-    if (await robot.authenticate()) {
-        showMainApp();
-        if (robot.isEmbedded) {
-            // Skip the picker; the SDK will startSession on its own
-            // when the preselected robot appears in robotsChanged.
-            hidePickerUI();
-            await robot.connect();
-        }
-        // Standalone path: keep your usual picker + manual Connect.
-    } else {
-        showLogin();
+    // Hide your picker UI in embed mode — the SDK won't call pickRobot
+    // there. This is the only embed-vs-standalone branch you need.
+    if (robot.isEmbedded) hidePickerUI();
+
+    try {
+        await robot.autoConnect({
+            pickRobot: async (robots) => showPickerAndAwaitChoice(robots),
+        });
+    } catch (e) {
+        // 'Not authenticated' → user needs to log in (await robot.login()).
+        // 'No reachable robots' → no candidates on central.
+        // 'Robot selection cancelled' → user closed the picker.
+        // Any other → check e.reason for 'robot_busy' / 'local_app_started' etc.
+        showError(e);
     }
 });
 
@@ -297,7 +321,9 @@ robot.addEventListener("streaming", () => {
 });
 ```
 
-That's it. No URL parsing, no postMessage listener, no `consumeTokenFromHash` boilerplate.
+That's it. No URL parsing, no `connect()`/`startSession()`/`ensureAwake()` chaining, no `autoStartFromUrl` flag, no postMessage listener, no `consumeTokenFromHash` boilerplate.
+
+> **Deprecation note.** The old `autoStartFromUrl: true` constructor option still exists in v1.7.2+ for backward compat, but **do not use it alongside `autoConnect()`** — they race two `startSession()` calls against the same preselected robot, with central rejecting the second one as *"Robot is busy: <our own appName>"*. `autoConnect()` defensively suppresses `autoStartFromUrl` while it runs, but the cleanest path is to drop the constructor option entirely.
 
 **For host-shell authors** (writing a NEW iframe parent), the URL contract is:
 - Credentials in the **fragment**: `#hf_token=<jwt>&hf_username=<handle>&hf_token_expires=<ISO>`. Fragment because it doesn't travel over HTTP (no referrer, no server logs).
