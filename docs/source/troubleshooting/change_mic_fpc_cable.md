@@ -15,7 +15,7 @@ The specifications of the microphone's cable are as follows:
 - 12 pins
 - 0.5mm spacing
 - Type A (connectors on the same side)
-- 15mm length
+- 150mm length
 
 Here are a few references if you are looking for a replacement for your microphone cable:  
 - [Amazon](https://www.amazon.fr/dp/B09TR4X1BP?ref=cm_sw_r_cso_cp_apan_dp_1NV8C5T7V97Z78X6J80Z&ref_=cm_sw_r_cso_cp_apan_dp_1NV8C5T7V97Z78X6J80Z&social_share=cm_sw_r_cso_cp_apan_dp_1NV8C5T7V97Z78X6J80Z)
