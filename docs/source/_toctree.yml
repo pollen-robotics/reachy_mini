@@ -73,6 +73,8 @@
       title: Change Mic FPC Cable
     - local: troubleshooting/spherical_joints_maintenance
       title: Spherical Joints Maintenance
+    - local: troubleshooting/roadmap
+      title: Roadmap
   title: Help and support
 - isExpanded: false
   sections:
