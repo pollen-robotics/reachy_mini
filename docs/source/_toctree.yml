@@ -1,6 +1,8 @@
 - sections:
     - local: index
       title: Reachy Mini
+    - local: vibe-code-with-your-agent
+      title: Vibe code with your agent
     - local: sdk-tutorials
       title: SDK Tutorials
   title: Get Started
