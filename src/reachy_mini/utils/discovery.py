@@ -15,9 +15,18 @@ from typing import Dict, List
 
 from zeroconf import ServiceBrowser, ServiceInfo, ServiceListener, Zeroconf
 
+from reachy_mini.utils.hardware_id import get_hardware_id
+
 logger = logging.getLogger(__name__)
 
 SERVICE_TYPE = "_reachy-mini._tcp.local."
+
+# Capabilities advertised in TXT records. Comma-separated so a future
+# HACS companion integration (or any third-party client) can do a single
+# substring check without parsing JSON. Kept in sync with the SDK surface.
+_DEFAULT_CAPS = "camera,mic,speaker,motion,apps"
+_MANUFACTURER = "Pollen Robotics"
+_MODEL = "ReachyMini"
 
 
 @dataclass
@@ -100,7 +109,18 @@ class MdnsServiceRegistration:
             "robot_name": self._robot_name,
             "ws_path": "/ws/sdk",
             "address": _get_local_ip(),
+            # Phase 0 of the Home Assistant integration plan: enrich TXT so
+            # HA's zeroconf manifest matcher (and a future HACS integration)
+            # can identify Reachy Mini reliably. unit_id is a stable, opaque
+            # SHA-256 hash of the audio device serial — see utils.hardware_id.
+            "model": _MODEL,
+            "manufacturer": _MANUFACTURER,
+            "caps": _DEFAULT_CAPS,
+            "api": "rest+ws",
         }
+        unit_id = get_hardware_id()
+        if unit_id is not None:
+            properties["unit_id"] = unit_id
 
         try:
             self._zeroconf = Zeroconf()
