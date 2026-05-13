@@ -14,6 +14,7 @@ from __future__ import annotations
 import logging
 import platform
 import re
+import sys
 from dataclasses import dataclass, field
 from typing import Any, List, Optional, Sequence, Tuple
 
@@ -272,7 +273,23 @@ def gst_monitor_devices(filter_class: str) -> list[DeviceInfo]:
     try:
         return gst_devices_to_device_infos(monitor.get_devices())
     finally:
-        monitor.stop()
+        # Workaround: on macOS (observed on macOS 26 "Tahoe") calling
+        # Gst.DeviceMonitor.stop() can segfault inside
+        # gst_device_provider_stop -> avfdeviceprovider, killing the whole
+        # Python daemon with SIGSEGV before any traceback can be emitted.
+        # The monitor is short-lived (one enumeration at boot) so skipping
+        # the explicit stop is acceptable: the underlying providers are
+        # reclaimed when the Python object is garbage collected and when
+        # the process exits.
+        if sys.platform == "darwin":
+            _logger.debug(
+                "Skipping Gst.DeviceMonitor.stop() on macOS (known crash)",
+            )
+        else:
+            try:
+                monitor.stop()
+            except Exception:  # pragma: no cover - defensive
+                _logger.exception("Gst.DeviceMonitor.stop() failed")
 
 
 def find_audio_device(
