@@ -150,6 +150,41 @@
  *   "error"           { source: "signaling"|"webrtc"|"robot", error: Error|string }
  *
  *
+ * RESILIENCE - SCOPE LIMITS
+ * ─────────────────────────
+ * This SDK is the WebRTC *answerer*: the daemon's `webrtcsink`
+ * builds the SDP offer and creates the m-sections, and the
+ * browser-side `RTCPeerConnection` only sets the remote description
+ * and replies with an answer. Consequently the grace + network
+ * awareness pass above is necessarily client-side only:
+ *
+ *   - Spec-compliant **ICE restart** (re-using the existing
+ *     `RTCPeerConnection` and `RTCDtlsTransport` to renegotiate
+ *     candidates) cannot be initiated by the SDK on its own.
+ *     `pc.restartIce()` only flags the local agent; an *ICE-restart
+ *     SDP offer* must originate from the offerer side (the daemon)
+ *     and reach us via the central signaling relay before we can
+ *     `setRemoteDescription()` and answer with the matching restart.
+ *
+ *   - **Full peer-connection recreation** (LiveKit-style "full
+ *     reconnect" - drop the PC, build a new one, reuse the same
+ *     session/peer id on the central) is also out of scope for
+ *     this pass. It needs daemon-side coordination too: when
+ *     `webrtcsink` sees the local PC drop, it has to be told
+ *     "the peer wants a *new* session under the same id, please
+ *     build a fresh offer" rather than treating the disconnect as
+ *     terminal.
+ *
+ * Both items are planned as separate passes (P2 / P3 in our
+ * project tracking). What this SDK ships today is the foundation
+ * they'll build on: stable transient classification, scoped
+ * network listeners, and a clean teardown order so an external
+ * "restart the session" orchestrator can rely on idempotent
+ * cleanup. Consumers should design their reconnect UX (badges,
+ * counters, motion freeze) against this surface so it stays
+ * source-compatible when the offerer-side restart lands.
+ *
+ *
  * EXPORTS
  * ───────
  *   export default ReachyMini;
