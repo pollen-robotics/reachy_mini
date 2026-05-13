@@ -221,6 +221,22 @@ const ICE_DISCONNECT_GRACE_MS = 3000;
  */
 const ICE_FAILED_GRACE_MS = 1000;
 
+/**
+ * Ceiling on how long we'll keep `_armIceGraceOnVisibility` waiting
+ * for the tab to come back. The daemon's `webrtcsink` runs a STUN
+ * consent-freshness check (RFC 7675, ~30 s default) and unilaterally
+ * tears its side of the session down past that window, releasing the
+ * producer slot on central. If the user backgrounded the tab for
+ * longer than this, running another 3 s foreground grace is a lie —
+ * the underlying transport is gone, nothing can recover. Give up
+ * straight away so the host shows the real "session expired" UX
+ * instead of a fake "Reconnecting…" badge that's never going to
+ * heal. 60 s gives a 2× margin over the daemon-side timeout — long
+ * enough to absorb a "phone in pocket for 45 s" case, short enough
+ * to be honest with the user.
+ */
+const MAX_VISIBILITY_DEFER_MS = 60_000;
+
 // ─── Internal helpers ────────────────────────────────────────────────────────
 
 /** Clamp a volume to [0, 100] and round to integer — mirrors the server-side
@@ -1366,6 +1382,7 @@ export class ReachyMini extends EventTarget {
      */
     _armIceGraceOnVisibility() {
         if (this._pendingVisibilityHandler) return;
+        const deferredAt = Date.now();
         const handler = () => {
             if (typeof document !== 'undefined' && document.hidden) return;
             document.removeEventListener('visibilitychange', handler);
@@ -1373,6 +1390,27 @@ export class ReachyMini extends EventTarget {
             if (!this._pc) return;
             const s = this._pc.iceConnectionState;
             if (s === 'connected' || s === 'completed') return; // healed in bg
+
+            // Ceiling: if the user backgrounded past the daemon's
+            // ICE-consent freshness window the session is gone from
+            // the daemon's side regardless of what `_pc` reports
+            // locally. Running another foreground grace would tell
+            // the user "Reconnecting…" for a recovery that can never
+            // happen. Escalate immediately so the host renders the
+            // real "session expired" UX. See MAX_VISIBILITY_DEFER_MS.
+            if (Date.now() - deferredAt > MAX_VISIBILITY_DEFER_MS) {
+                const err = new Error(
+                    'Session expired while tab was backgrounded',
+                );
+                if (this._sessionReject) {
+                    this._sessionReject(err);
+                    this._sessionResolve = null;
+                    this._sessionReject = null;
+                }
+                this._emit('error', { source: 'webrtc', error: err });
+                return;
+            }
+
             if (s === 'failed') {
                 this._scheduleIceGrace(ICE_FAILED_GRACE_MS, 'failed');
                 return;
