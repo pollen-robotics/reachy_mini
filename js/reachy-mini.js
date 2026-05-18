@@ -1347,6 +1347,19 @@ export class ReachyMini extends EventTarget {
     }
 
     /**
+     * Toggle torque on/off, optionally per-motor.
+     *
+     * @param {boolean} on
+     * @param {string[]} [ids]  motor names (e.g. ["left_antenna"]). When
+     *   omitted, applies globally — equivalent to setMotorMode("enabled"
+     *   | "disabled").
+     * @returns {boolean} false if the data channel is not open.
+     */
+    setMotorTorque(on, ids = null) {
+        return this._sendCommand({ type: "set_torque", on, ids });
+    }
+
+    /**
      * Play the wake-up animation (full head/antennas trajectory on the
      * robot, ~2 s). Fire-and-forget — poll ``requestState()`` and watch
      * ``is_move_running`` if you need to know when it finishes.
