@@ -144,7 +144,6 @@ class GstWebRTCClient(CameraBase, AudioBase):
         self._webrtcbin = None
         self._audio_send_ready = False
         self._appsrc = None
-        self._appsrc_pts = 0  # running PTS in nanoseconds for appsrc buffers
         self.daemon_url: str = ""  # set by MediaManager for remote sound ops
         self._webrtcsrc.connect("deep-element-added", self._on_deep_element_added)
         self.logger.info("GstWebRTCClient initialized (bidirectional audio support)")
@@ -329,6 +328,8 @@ class GstWebRTCClient(CameraBase, AudioBase):
 
             self.logger.error(f"Error: {err} {debug}")
             return False
+        elif t == Gst.MessageType.LATENCY:
+            self._pipeline_record.recalculate_latency()
         return True
 
     def open(self) -> None:
@@ -404,6 +405,7 @@ class GstWebRTCClient(CameraBase, AudioBase):
         appsrc = Gst.ElementFactory.make("appsrc")
         appsrc.set_property("format", Gst.Format.TIME)
         appsrc.set_property("is-live", True)
+
         caps = Gst.Caps.from_string(
             f"audio/x-raw,format=F32LE,channels={self.CHANNELS},rate={self.SAMPLE_RATE},layout=interleaved"
         )
@@ -417,7 +419,13 @@ class GstWebRTCClient(CameraBase, AudioBase):
         rtpopuspay = Gst.ElementFactory.make("rtpopuspay")
         rtpopuspay.set_property("pt", pt)
 
-        elems = (appsrc, audioconvert, audioresample, opusenc, rtpopuspay)
+        elems = (
+            appsrc,
+            audioconvert,
+            audioresample,
+            opusenc,
+            rtpopuspay,
+        )
 
         target_bin = self._pipeline_record
         for elem in elems:
@@ -453,7 +461,7 @@ class GstWebRTCClient(CameraBase, AudioBase):
 
     def stop_playing(self) -> None:
         """Reset the PTS counter for the send chain and stop daemon-side sound."""
-        self._appsrc_pts = 0
+        self._appsrc_pts = -1
         # Also stop any sound file playing on the daemon's speaker.
         if self.daemon_url:
             try:
@@ -478,15 +486,18 @@ class GstWebRTCClient(CameraBase, AudioBase):
         if self._appsrc is None:
             return  # send chain not ready yet, silently drop
 
-        num_samples = data.shape[0]
-        duration_ns = (num_samples * Gst.SECOND) // self.SAMPLE_RATE
-
+        pts_ns, duration_ns, self._appsrc_pts = self._compute_pts(
+            int(data.shape[0]),
+            self._appsrc.get_current_running_time(),
+            self._appsrc_pts,
+        )
         buf = Gst.Buffer.new_wrapped(data.tobytes())
-        buf.pts = self._appsrc_pts
+        buf.pts = pts_ns
+        buf.dts = pts_ns
         buf.duration = duration_ns
-        self._appsrc_pts += duration_ns
-
-        self._appsrc.push_buffer(buf)
+        ret = self._appsrc.push_buffer(buf)
+        if ret != Gst.FlowReturn.OK:
+            self.logger.warning(f"push_buffer dropped: {ret}")
 
     def play_sound(self, sound_file: str) -> None:
         """Play a sound file on the robot's speaker via the daemon REST API.

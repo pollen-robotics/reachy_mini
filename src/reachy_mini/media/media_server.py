@@ -135,6 +135,7 @@ class GstMediaServer:
         self._incoming_audio: Dict[str, Dict[str, Any]] = {}
         self._playbin: Optional[Gst.Element] = None
         self._head_wobbler: Optional[HeadWobbler] = None
+        self._pipeline_playback: Optional[Gst.Pipeline] = None
 
         self._build_pipeline()
 
@@ -197,9 +198,9 @@ class GstMediaServer:
     ) -> None:
         self._logger.info(f"consumer added with peer id: {peer_id}")
 
-        Gst.debug_bin_to_dot_file(
-            self._pipeline_sender, Gst.DebugGraphDetails.ALL, "pipeline_full"
-        )
+        # Gst.debug_bin_to_dot_file(
+        #     self._pipeline_sender, Gst.DebugGraphDetails.ALL, "pipeline_full"
+        # )
 
         GLib.timeout_add_seconds(5, self._dump_latency)
 
@@ -283,7 +284,14 @@ class GstMediaServer:
         self._logger.info(f"Setting up incoming audio playback for peer {peer_id}")
 
         # Build playback pipeline element-by-element
-        playback_pipe = Gst.Pipeline.new(f"audio_playback_{peer_id}")
+        self._pipeline_playback = Gst.Pipeline.new(f"audio_playback_{peer_id}")
+
+        sender_clock = self._pipeline_sender.get_pipeline_clock()
+        self._pipeline_playback.use_clock(sender_clock)
+
+        # 2. Share the sender's base_time. Tell GStreamer NOT to auto-pick
+        #    one when we transition states.
+        self._pipeline_playback.set_start_time(Gst.CLOCK_TIME_NONE)
 
         appsrc = Gst.ElementFactory.make("appsrc", "audio_in")
         appsrc.set_property("format", Gst.Format.TIME)
@@ -297,7 +305,7 @@ class GstMediaServer:
         if audiosink is None:
             self._logger.error("Failed to create audio sink element")
             return
-        audiosink.set_property("sync", False)
+        audiosink.set_property("sync", True)
 
         # Per-branch audioconvert+audioresample so the wobbler appsink's
         # F32LE/2/16000 caps don't drag the audiosink branch into a rate
@@ -312,7 +320,7 @@ class GstMediaServer:
         ar_wobbler = Gst.ElementFactory.make("audioresample")
         # Live WebRTC path: sync=False (appsrc is-live + PTS-sync appsink
         # would stall delivery under back-pressure).
-        appsink_wobbler = self._make_wobbler_appsink(sync=False)
+        appsink_wobbler = self._make_wobbler_appsink()
 
         for elem in [
             appsrc,
@@ -328,7 +336,7 @@ class GstMediaServer:
             ar_wobbler,
             appsink_wobbler,
         ]:
-            playback_pipe.add(elem)
+            self._pipeline_playback.add(elem)
         appsrc.link(rtpopusdepay)
         rtpopusdepay.link(opusdec)
         opusdec.link(tee)
@@ -341,12 +349,14 @@ class GstMediaServer:
         ac_wobbler.link(ar_wobbler)
         ar_wobbler.link(appsink_wobbler)
 
-        play_bus = playback_pipe.get_bus()
+        play_bus = self._pipeline_playback.get_bus()
         play_bus.add_watch(
             GLib.PRIORITY_DEFAULT, self._on_playback_bus_message, peer_id
         )
 
-        playback_pipe.set_state(Gst.State.PLAYING)
+        self._pipeline_playback.set_state(Gst.State.PAUSED)
+        self._pipeline_playback.set_base_time(self._pipeline_sender.get_base_time())
+        self._pipeline_playback.set_state(Gst.State.PLAYING)
 
         # Pad probe: intercept every RTP buffer, forward to the separate
         # playback pipeline, then DROP so webrtcsink's pipeline is unaffected.
@@ -362,7 +372,7 @@ class GstMediaServer:
             self._head_wobbler.start()
 
         self._incoming_audio[peer_id] = {
-            "playback_pipeline": playback_pipe,
+            "playback_pipeline": self._pipeline_playback,
             "probe_id": probe_id,
             "pad": pad,
         }
@@ -379,6 +389,9 @@ class GstMediaServer:
         if msg.type == Gst.MessageType.EOS:
             self._logger.info(f"Audio playback EOS for {peer_id}")
             return False
+        if msg.type == Gst.MessageType.LATENCY:
+            self._logger.info("Recalculate latency playback pipeline")
+            self._pipeline_playback.recalculate_latency()
         return True
 
     def _cleanup_incoming_audio(self, peer_id: str) -> None:
@@ -907,6 +920,10 @@ class GstMediaServer:
             self._logger.error(f"Error: {err} {debug}")
             return False
 
+        elif t == Gst.MessageType.LATENCY:
+            self._pipeline_sender.recalculate_latency()
+            self.logger.info("Recalculate Latency Pipeline Sender")
+
         return True
 
     def start(self) -> None:
@@ -1023,20 +1040,11 @@ class GstMediaServer:
 
         return Gst.ElementFactory.make("autoaudiosink")
 
-    # Fallback play-at offset used by sync=False wobbler appsinks (live
-    # push paths, WebRTC ingress). Matches PLAYBACK_SINK_BUFFER_TIME_US
-    # in audio_gstreamer.py.
-    _WOBBLER_LIVE_PLAY_OFFSET_NS = 50_000_000  # 50 ms
+    def _make_wobbler_appsink(self) -> Gst.Element:
+        """Create a sync=True appsink that feeds audio to the head wobbler.
 
-    def _make_wobbler_appsink(self, sync: bool = True) -> Gst.Element:
-        """Create an appsink that feeds audio to the head wobbler.
-
-        Args:
-            sync: ``True`` for playbin paths (new-sample fires at PTS on
-                pipeline clock = when audiosink outputs). ``False`` for
-                live streams (push-based appsrc, WebRTC ingress) where
-                back-pressure + max-buffers drops would stall delivery.
-
+        new-sample fires at the buffer's PTS on the pipeline clock —
+        the same instant the audiosink renders that audio.
         """
         appsink = Gst.ElementFactory.make("appsink")
         # Force mono so the speech tapper receives a 1-D float32 array.
@@ -1047,7 +1055,7 @@ class GstMediaServer:
         appsink.set_property("caps", caps)
         appsink.set_property("drop", True)
         appsink.set_property("max-buffers", 5)
-        appsink.set_property("sync", sync)
+        appsink.set_property("sync", True)
         appsink.set_property("emit-signals", True)
         appsink.connect("new-sample", self._on_wobbler_sample)
         return appsink
@@ -1055,10 +1063,8 @@ class GstMediaServer:
     def _on_wobbler_sample(self, appsink: Gst.Element) -> Gst.FlowReturn:
         """GStreamer callback: forward audio buffer to the head wobbler.
 
-        For ``sync=True`` appsinks the callback fires at the buffer's PTS
-        on the pipeline clock — audio is playing NOW. For ``sync=False``
-        (live/WebRTC path) we schedule slightly ahead to match the
-        audiosink's internal buffer.
+        The appsink is sync=True so the callback fires at the buffer's
+        PTS on the pipeline clock — audio is playing NOW.
         """
         sample = appsink.pull_sample()
         if sample is None or self._head_wobbler is None:
@@ -1066,11 +1072,7 @@ class GstMediaServer:
         buf = sample.get_buffer()
         data = buf.extract_dup(0, buf.get_size())
         pcm = np.frombuffer(data, dtype=np.float32)
-        if appsink.get_property("sync"):
-            play_at_ns = time.monotonic_ns()
-        else:
-            play_at_ns = time.monotonic_ns() + self._WOBBLER_LIVE_PLAY_OFFSET_NS
-        self._head_wobbler.feed(pcm, play_at_ns)
+        self._head_wobbler.feed(pcm, time.monotonic_ns())
         return Gst.FlowReturn.OK
 
     def _build_audiosink_tee_bin(self) -> Gst.Bin:

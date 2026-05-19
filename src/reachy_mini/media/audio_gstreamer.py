@@ -93,7 +93,6 @@ class GStreamerAudio(AudioBase):
 
     """
 
-    PLAYBACK_GAP_RESET_NS = 200 * Gst.MSECOND
     PLAYBACK_SINK_BUFFER_TIME_US = 50_000
     PLAYBACK_SINK_LATENCY_TIME_US = 5_000
 
@@ -124,30 +123,11 @@ class GStreamerAudio(AudioBase):
 
         self._playbin: Optional[Gst.Element] = None
         self._pipeline_playback = Gst.Pipeline.new("audio_player")
-        self._playback_next_pts_ns: int | None = None
         self._init_pipeline_playback(self._pipeline_playback)
         self._bus_playback = self._pipeline_playback.get_bus()
         self._bus_playback.add_watch(
             GLib.PRIORITY_DEFAULT, self._on_bus_message, self._loop
         )
-
-    def _compute_playback_buffer_timing(
-        self,
-        num_samples: int,
-        sample_rate: int,
-        running_time_ns: int,
-        next_pts_ns: int | None,
-        gap_reset_ns: int | None = None,
-    ) -> tuple[int, int, int]:
-        """Return ``(pts_ns, duration_ns, next_pts_ns)`` for a playback buffer."""
-        if gap_reset_ns is None:
-            gap_reset_ns = self.PLAYBACK_GAP_RESET_NS
-        duration_ns = (num_samples * Gst.SECOND) // sample_rate
-        if next_pts_ns is None or running_time_ns > next_pts_ns + gap_reset_ns:
-            pts_ns = running_time_ns
-        else:
-            pts_ns = next_pts_ns
-        return pts_ns, duration_ns, pts_ns + duration_ns
 
     def _init_pipeline_record(self, pipeline: Gst.Pipeline) -> None:
         self._appsink_audio = Gst.ElementFactory.make("appsink")
@@ -403,13 +383,6 @@ class GStreamerAudio(AudioBase):
         self._pipeline_playback.query(query)
         self.logger.info(f"Audio pipeline latency {query.parse_latency()}")
 
-    def _get_playback_running_time_ns(self) -> int:
-        """Return the current playback running time in nanoseconds."""
-        clock = self._pipeline_playback.get_clock()
-        if clock is None:
-            return 0
-        return int(max(0, clock.get_time() - self._pipeline_playback.get_base_time()))
-
     def start_recording(self) -> None:
         """Start capturing audio from the microphone."""
         self._pipeline_record.set_state(Gst.State.PLAYING)
@@ -422,7 +395,7 @@ class GStreamerAudio(AudioBase):
         """Start the playback pipeline so ``push_audio_sample`` can feed data."""
         if self._head_wobbler is not None:
             self._head_wobbler.start()
-        self._playback_next_pts_ns = None
+        self._appsrc_pts = -1
         self._pipeline_playback.set_state(Gst.State.PLAYING)
         GLib.timeout_add_seconds(5, self._dump_latency)
 
@@ -435,29 +408,30 @@ class GStreamerAudio(AudioBase):
                 mono (the caller is responsible for channel adaptation).
 
         """
-        if self._appsrc is not None:
-            pts_ns, duration_ns, self._playback_next_pts_ns = (
-                self._compute_playback_buffer_timing(
-                    int(data.shape[0]),
-                    self.SAMPLE_RATE,
-                    self._get_playback_running_time_ns(),
-                    self._playback_next_pts_ns,
-                )
-            )
-            buf = Gst.Buffer.new_wrapped(data.tobytes())
-            buf.pts = pts_ns
-            buf.duration = duration_ns
-            self._appsrc.push_buffer(buf)
-        else:
+        if self._appsrc is None:
             self.logger.warning(
                 "AppSrc is not initialized. Call start_playing() first."
             )
+            return
+
+        pts_ns, duration_ns, self._appsrc_pts = self._compute_pts(
+            int(data.shape[0]),
+            self._appsrc.get_current_running_time(),
+            self._appsrc_pts,
+        )
+        buf = Gst.Buffer.new_wrapped(data.tobytes())
+        buf.pts = pts_ns
+        buf.dts = pts_ns
+        buf.duration = duration_ns
+        ret = self._appsrc.push_buffer(buf)
+        if ret != Gst.FlowReturn.OK:
+            self.logger.warning(f"push_buffer dropped: {ret}")
 
     def stop_playing(self) -> None:
         """Stop the playback pipeline."""
         if self._head_wobbler is not None:
             self._head_wobbler.stop()
-        self._playback_next_pts_ns = None
+        self._appsrc_pts = -1
         self._pipeline_playback.set_state(Gst.State.NULL)
         if self._playbin is not None:
             self._playbin.set_state(Gst.State.NULL)
@@ -477,7 +451,7 @@ class GStreamerAudio(AudioBase):
         if self._head_wobbler is not None:
             self._head_wobbler.reset()
         if self._appsrc is not None:
-            self._playback_next_pts_ns = None
+            self._appsrc_pts = -1
             self._pipeline_playback.set_state(Gst.State.PAUSED)
             self._appsrc.send_event(Gst.Event.new_flush_start())
             self._appsrc.send_event(Gst.Event.new_flush_stop(reset_time=True))
