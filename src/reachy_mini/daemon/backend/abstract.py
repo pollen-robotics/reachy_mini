@@ -475,6 +475,10 @@ class Backend:
             self.logger.warning("Ignoring play_move request: another move is running.")
             return
 
+        # Reset the cancel flag whenever a new move starts.  Any
+        # stale `cancel_move` from before this point is dropped.
+        self._move_cancelled = False
+
         try:
             if initial_goto_duration > 0.0:
                 start_head_pose, start_antennas_positions, start_body_yaw = (
@@ -493,6 +497,9 @@ class Backend:
 
             t0 = time.time()
             while time.time() - t0 < move.duration:
+                if self._move_cancelled:
+                    self.logger.info("play_move cancelled, exiting playback loop")
+                    break
                 t = time.time() - t0
 
                 head, antennas, body_yaw = move.evaluate(t)
@@ -1164,6 +1171,16 @@ class Backend:
             self._handle_upload_chunk(cmd, send_response)
         elif isinstance(cmd, UploadMoveFinishCmd):
             self._handle_upload_finish(cmd, send_response)
+        elif isinstance(cmd, PlayUploadedMoveCmd):
+            asyncio.create_task(
+                self._async_play_uploaded_move(cmd, send_response)
+            )
+        elif isinstance(cmd, CancelMoveCmd):
+            # Idempotent: sets the flag regardless of whether anything
+            # is actually running. play_move resets it on entry, so no
+            # stale-flag risk.
+            self._move_cancelled = True
+            send_response({"status": "ok", "command": "cancel_move"})
 
     # ------------------------------------------------------------------
     # Inline-move upload + daemon-side playback
@@ -1456,9 +1473,67 @@ class Backend:
         """Execute goto_sleep and send response when done."""
         try:
             await self.goto_sleep()
-            send_response({"status": "ok", "command": "goto_sleep", "completed": True})
+            send_response({"status": "ok", "command": "goto_sleep", "completed": True })
         except Exception as e:
             send_response({"error": str(e), "command": "goto_sleep"})
+
+    async def _async_play_uploaded_move(
+        self,
+        cmd: PlayUploadedMoveCmd,
+        send_response: Callable[[dict[str, Any]], None],
+    ) -> None:
+        """Run Backend.play_move on a previously-uploaded move slot.
+
+        Sends two messages back: an immediate ack at ``started`` time
+        and a single completion message when the play_move coroutine
+        returns (``finished``, ``cancelled``, or ``error``).  The
+        upload slot is evicted on exit regardless of outcome.
+        """
+        move = self._uploaded_moves.get(cmd.upload_id)
+        if move is None:
+            send_response({
+                "error": "no such uploaded move (start + finish first)",
+                "command": "play_uploaded_move",
+                "upload_id": cmd.upload_id,
+            })
+            return
+        send_response({
+            "status": "ok",
+            "command": "play_uploaded_move",
+            "upload_id": cmd.upload_id,
+            "started": True,
+            "duration_s": move.duration,
+        })
+        result: dict[str, Any] = {
+            "command": "play_uploaded_move",
+            "upload_id": cmd.upload_id,
+        }
+        try:
+            await self.play_move(
+                move,
+                play_frequency=cmd.play_frequency,
+                initial_goto_duration=cmd.initial_goto_duration,
+            )
+            # play_move exits its loop in two cases: natural end or
+            # cancel.  Inspect the flag to distinguish them.
+            if self._move_cancelled:
+                result["cancelled"] = True
+            else:
+                result["finished"] = True
+        except Exception as e:
+            self.logger.exception(f"play_uploaded_move failed: {e}")
+            result["error"] = str(e)
+        finally:
+            # Evict the slot — the spec says one play per upload.
+            # Lets the client overwrite the slot by re-uploading
+            # with the same id without leaking memory.
+            self._uploaded_moves.pop(cmd.upload_id, None)
+            try:
+                send_response(result)
+            except Exception:
+                # Peer may have disconnected during a long playback;
+                # nothing we can do, just don't crash the task.
+                pass
 
     # ------------------------------------------------------------------
     # WebRTC data channel interface (delegates to process_command)
