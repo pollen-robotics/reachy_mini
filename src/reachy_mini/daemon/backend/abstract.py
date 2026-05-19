@@ -40,6 +40,7 @@ from reachy_mini.io.protocol import (
     MujocoBackendStatus,
     PlaySoundCmd,
     RecordedDataMsg,
+    RestartDaemonCmd,
     RobotBackendStatus,
     SetAntennasCmd,
     SetAutomaticBodyYawCmd,
@@ -218,6 +219,16 @@ class Backend:
         # cross-thread cleanup (peer disconnect fires from gstreamer's
         # GLib thread) can schedule cancellation correctly.
         self._log_loop: Optional["asyncio.AbstractEventLoop"] = None
+
+        # Synchronous callback that triggers a full daemon restart
+        # (motor controller, kinematics, media server, ...). Wired in
+        # by `Daemon` after `setup_media_server` so that the typed
+        # `restart_daemon` DataChannel command can recover from a
+        # broken backend (e.g. dead motor controller) without forcing
+        # an out-of-band `systemctl restart` or REST round-trip.
+        # Returns immediately - the actual restart runs on a fresh
+        # thread so the data channel can flush its ack first.
+        self._restart_daemon_callback: Optional[Callable[[], None]] = None
 
     # Life cycle methods
     def wrapped_run(self) -> None:
@@ -738,7 +749,9 @@ class Backend:
         1.0032234352772091,
     ]
 
-    INIT_ANTENNAS_JOINT_POSITIONS = np.array((-0.1745, 0.1745))  # ~10° offset to reduce shaking at vertical
+    INIT_ANTENNAS_JOINT_POSITIONS = np.array(
+        (-0.1745, 0.1745)
+    )  # ~10° offset to reduce shaking at vertical
     SLEEP_ANTENNAS_JOINT_POSITIONS = np.array((-3.05, 3.05))
     SLEEP_HEAD_POSE = np.array(
         [
@@ -797,7 +810,9 @@ class Backend:
             if dist_to_init_pose > 30:
                 # Move to the initial position
                 await self.goto_target(
-                    self.INIT_HEAD_POSE, antennas=self.INIT_ANTENNAS_JOINT_POSITIONS, duration=1
+                    self.INIT_HEAD_POSE,
+                    antennas=self.INIT_ANTENNAS_JOINT_POSITIONS,
+                    duration=1,
                 )
                 await asyncio.sleep(0.2)
 
@@ -1021,7 +1036,12 @@ class Backend:
 
         elif isinstance(
             cmd,
-            (SetVolumeCmd, GetVolumeCmd, SetMicrophoneVolumeCmd, GetMicrophoneVolumeCmd),
+            (
+                SetVolumeCmd,
+                GetVolumeCmd,
+                SetMicrophoneVolumeCmd,
+                GetMicrophoneVolumeCmd,
+            ),
         ):
             # Volume is a global robot setting, not per-session: a remote
             # change persists for the next connection. This matches the
@@ -1090,6 +1110,25 @@ class Backend:
         elif isinstance(cmd, UnsubscribeLogsCmd):
             self._cancel_log_subscription(peer_id)
 
+        elif isinstance(cmd, RestartDaemonCmd):
+            # Ack BEFORE triggering the restart: the WebRTC transport
+            # is torn down by `daemon.stop()` so any later send on
+            # this peer's channel would silently drop. The callback
+            # spawns its own thread and returns immediately.
+            if self._restart_daemon_callback is None:
+                send_response(
+                    {
+                        "error": "restart_daemon not supported by this backend host",
+                        "command": "restart_daemon",
+                    }
+                )
+                return
+            send_response({"status": "ok", "command": "restart_daemon"})
+            try:
+                self._restart_daemon_callback()
+            except Exception as e:
+                self.logger.error(f"restart_daemon callback failed: {e}")
+
     # ------------------------------------------------------------------
     # journalctl log streaming over the typed transport (subscribe_logs)
     # ------------------------------------------------------------------
@@ -1110,9 +1149,7 @@ class Backend:
         # is a no-op error rather than an exception so the consumer can
         # blindly call `subscribeLogs` on every reconnect.
         self._cancel_log_subscription(peer_id)
-        task = asyncio.create_task(
-            self._async_subscribe_logs(peer_id, send_response)
-        )
+        task = asyncio.create_task(self._async_subscribe_logs(peer_id, send_response))
         self._log_tasks[peer_id] = task
 
     def _cancel_log_subscription(self, peer_id: Optional[str]) -> None:
@@ -1173,9 +1210,7 @@ class Backend:
                     # journalctl -f shouldn't EOF except on shutdown;
                     # surface it so the consumer can decide to retry.
                     send_response(
-                        LogStreamErrorMsg(
-                            error="journalctl stream ended"
-                        ).model_dump()
+                        LogStreamErrorMsg(error="journalctl stream ended").model_dump()
                     )
                     return
                 line = raw.decode("utf-8", errors="replace").rstrip("\n")
@@ -1185,9 +1220,7 @@ class Backend:
                 ts, sep, rest = line.partition(" ")
                 if not sep:
                     ts, rest = "", line
-                send_response(
-                    LogLineMsg(timestamp=ts, line=rest).model_dump()
-                )
+                send_response(LogLineMsg(timestamp=ts, line=rest).model_dump())
         except asyncio.CancelledError:
             raise
         except Exception as e:
@@ -1248,6 +1281,17 @@ class Backend:
     # ------------------------------------------------------------------
     # WebRTC data channel interface (delegates to process_command)
     # ------------------------------------------------------------------
+
+    def set_restart_daemon_callback(self, callback: Callable[[], None]) -> None:
+        """Wire the synchronous trigger used by the ``restart_daemon`` cmd.
+
+        ``Daemon`` injects a callback that schedules ``daemon.restart()``
+        on a fresh background thread (mirroring what
+        ``bg_job_register.run_command`` does for the REST endpoint).
+        The callback MUST return promptly so ``process_command`` can
+        flush its ack on the about-to-be-torn-down DataChannel.
+        """
+        self._restart_daemon_callback = callback
 
     def setup_media_server(self, media_server: Any) -> None:
         """Connect the backend to the media server.
