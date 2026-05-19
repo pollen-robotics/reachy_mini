@@ -22,17 +22,33 @@
  *   const detach = robot.attachVideo(document.querySelector("video"));
  *   await robot.startSession(robotId);
  *
- *   // 5. Send commands
- *   robot.setHeadPose(0, 10, -5);    // roll, pitch, yaw in degrees
- *   robot.setAntennas(30, -30);       // right, left in degrees
+ *   // 5. Send commands — degree-friendly helpers, all built on setTarget()
+ *   robot.setHeadRpyDeg(0, 10, -5);   // roll, pitch, yaw in degrees
+ *   robot.setAntennasDeg(30, -30);    // right, left in degrees
+ *   robot.setBodyYawDeg(15);          // body yaw in degrees
+ *
+ *   // …or compose an atomic update in raw wire units (full SE(3); no XYZ loss):
+ *   robot.setTarget({
+ *       head: rpyToMatrix(0, 10, -5).flat(),  // number[16] flat row-major 4×4
+ *       antennas: [degToRad(30), degToRad(-30)],
+ *       body_yaw: degToRad(15),
+ *   });
  *   robot.playSound("wake_up.wav");   // filename on robot
  *   const ver = await robot.getVersion(); // e.g. "1.5.1"
  *
- *   // 6. Receive live state (emitted every ~500 ms while streaming)
+ *   // 6. Receive live state (emitted every ~500 ms while streaming; call
+ *   //    robot.requestState() yourself for higher rates — see its JSDoc).
+ *   //    State payload is the daemon's raw wire shape — use the math
+ *   //    utilities exported from this module for degree conversions.
  *   robot.addEventListener("state", (e) => {
- *       const { head, antennas } = e.detail;
- *       // head:     { roll, pitch, yaw }   — degrees
- *       // antennas: { right, left }        — degrees
+ *       const { head, antennas, body_yaw, motor_mode, is_move_running } = e.detail;
+ *       // head:            number[16]   — flat row-major 4×4 (full SE(3))
+ *       // antennas:        [rightRad, leftRad]
+ *       // body_yaw:        number       — radians
+ *       // motor_mode:      "enabled" | "disabled" | "gravity_compensation"
+ *       // is_move_running: boolean
+ *       // For human-friendly head RPY:
+ *       //   const rpy = matrixToRpy(head);   // { roll, pitch, yaw } in degrees
  *   });
  *
  *   // 7. Audio controls
@@ -56,8 +72,16 @@
  * CONSTRUCTOR OPTIONS
  * ───────────────────
  *   new ReachyMini({
- *     signalingUrl:     string,   // default: "https://cduss-reachy-mini-central.hf.space"
- *     enableMicrophone: boolean,  // default: true — acquire mic for bidirectional audio
+ *     signalingUrl:              string,   // default: "https://pollen-robotics-reachy-mini-central.hf.space"
+ *     enableMicrophone:          boolean,  // default: true  — acquire mic for bidirectional audio
+ *     videoJitterBufferTargetMs: number,   // default: 0     — receiver-side jitter buffer hint, ms
+ *                                          //                  0 = "render ASAP" (teleop). Spec range [0, 4000].
+ *                                          //                  Raise (100–400) on flaky links to trade latency for resilience.
+ *     autoStartFromUrl:          boolean,  // default: false — when true AND the URL carries a `robot_peer_id` hint,
+ *                                          //                  auto-call `startSession(preselectedRobotId)` after
+ *                                          //                  `connect()` resolves and that robot appears online.
+ *                                          //                  One-shot per page load; suits iframe-embedded apps
+ *                                          //                  that want zero-tap entry from the host shell.
  *   })
  *
  *
@@ -65,12 +89,27 @@
  * ────────────────────
  *   .state            "disconnected" | "connected" | "streaming"
  *   .robots           Array<{ id: string, meta: { name: string } }>
- *   .robotState       { head: { roll, pitch, yaw }, antennas: { right, left } }  (degrees)
+ *   .robotState       Mirror of the latest "state" event detail —
+ *                     { head: number[16], antennas: [rightRad, leftRad],
+ *                       body_yaw, motor_mode, is_move_running }
+ *                     (fields only present once the daemon sends them;
+ *                      see EVENTS below)
  *   .username         string | null     — HF username after authenticate()
  *   .isAuthenticated  boolean           — true if a valid HF token is available
  *   .micSupported     boolean           — true if robot offers bidirectional audio
  *   .micMuted         boolean           — your microphone mute state
  *   .audioMuted       boolean           — robot speaker mute state (local)
+ *   .preselectedRobotId string | null   — peer id from `?robot_peer_id=` /
+ *                                          `#robot_peer_id=`; null if absent.
+ *                                          Use it to skip your robot picker
+ *                                          when a host iframe (e.g. the
+ *                                          Reachy Mini mobile shell) embeds
+ *                                          this app.
+ *   .isEmbedded       boolean           — true iff `preselectedRobotId !==
+ *                                          null`. Branch your UX on this:
+ *                                          when true, hide the robot picker
+ *                                          and your sign-in screen (the
+ *                                          host has already handled both).
  *
  *
  * EVENTS  (EventTarget — use addEventListener)
@@ -80,7 +119,11 @@
  *   "robotsChanged"   { robots: Array<{ id, meta }> }
  *   "streaming"       { sessionId: string, robotId: string }
  *   "sessionStopped"  { reason: string }
- *   "state"           { head: { roll, pitch, yaw }, antennas: { right, left } }
+ *   "state"           { head: number[16],                    // flat row-major 4×4, when daemon sends head_pose
+ *                       antennas: [rightRad, leftRad],       // when daemon sends antennas
+ *                       body_yaw: number,                    // radians, when daemon sends body_yaw
+ *                       motor_mode: string,                  // when daemon sends motor_mode
+ *                       is_move_running: boolean }           // when daemon sends is_move_running
  *   "videoTrack"      { track: MediaStreamTrack, stream: MediaStream }
  *   "micSupported"    { supported: boolean }
  *   "error"           { source: "signaling"|"webrtc"|"robot", error: Error|string }
@@ -93,8 +136,8 @@
  */
 
 import {
-    oauthLoginUrl,
     oauthHandleRedirectIfPresent,
+    oauthLoginUrl,
 } from "https://cdn.jsdelivr.net/npm/@huggingface/hub@0.15.2/+esm";
 
 // ─── Math utilities ──────────────────────────────────────────────────────────
@@ -119,8 +162,8 @@ export function rpyToMatrix(rollDeg, pitchDeg, yawDeg) {
     return [
         [cy * cp, cy * sp * sr - sy * cr, cy * sp * cr + sy * sr, 0],
         [sy * cp, sy * sp * sr + cy * cr, sy * sp * cr - cy * sr, 0],
-        [-sp,     cp * sr,                cp * cr,                0],
-        [0,       0,                      0,                      1],
+        [-sp, cp * sr, cp * cr, 0],
+        [0, 0, 0, 1],
     ];
 }
 
@@ -130,9 +173,9 @@ export function rpyToMatrix(rollDeg, pitchDeg, yawDeg) {
  */
 export function matrixToRpy(m) {
     return {
-        roll:  radToDeg(Math.atan2(m[2][1], m[2][2])),
+        roll: radToDeg(Math.atan2(m[2][1], m[2][2])),
         pitch: radToDeg(Math.asin(-m[2][0])),
-        yaw:   radToDeg(Math.atan2(m[1][0], m[0][0])),
+        yaw: radToDeg(Math.atan2(m[1][0], m[0][0])),
     };
 }
 
@@ -143,6 +186,127 @@ export function matrixToRpy(m) {
 function clampVolume(v) {
     const n = Math.round(Number(v) || 0);
     return Math.max(0, Math.min(100, n));
+}
+
+/**
+ * Pick up HuggingFace credentials passed via the URL fragment and move them
+ * into `sessionStorage`, where `authenticate()` looks them up.
+ *
+ * This is the bridge that lets a host page (e.g. the Reachy Mini mobile
+ * app, or the vibe-coder preview iframe) embed a Space hosting a SDK
+ * consumer despite `X-Frame-Options: SAMEORIGIN` on `huggingface.co/login`:
+ * the host already holds a valid token (through its own OAuth flow) and
+ * appends it to the iframe URL as
+ *
+ *     #hf_token=<jwt>&hf_username=<handle>&hf_token_expires=<iso>
+ *
+ * Fragments are NOT sent over HTTP, so the credentials never leak to
+ * the HF Space backend or to intermediate proxies.
+ *
+ * Why all three keys: `authenticate()`'s cache check requires the token,
+ * the username AND a future expiry to ALL be present in `sessionStorage`,
+ * otherwise it returns `false` and the app falls through to a full OAuth
+ * round-trip — which can't complete inside an iframe.
+ *
+ * Called once from the top of `authenticate()` so SDK consumers don't
+ * need any boilerplate of their own. We clear the fragment right after
+ * reading it so a page reload does not keep the credentials visible in
+ * the address bar.
+ *
+ * No-op when:
+ *   - there is no `window` (SSR / Worker contexts),
+ *   - the URL has no fragment,
+ *   - the fragment carries no `hf_token` (other apps may use the
+ *     fragment for theme / route / etc.; we leave those alone).
+ */
+function consumeFragmentCredentials() {
+    if (typeof window === 'undefined' || !window.location.hash) return;
+    const raw = window.location.hash.startsWith('#')
+        ? window.location.hash.slice(1)
+        : window.location.hash;
+    let params;
+    try { params = new URLSearchParams(raw); } catch (_e) { return; }
+    const token = params.get('hf_token');
+    if (!token) return;
+    // `hf_username` is required by the cache check. Hosts that haven't
+    // resolved the user's HF handle yet may pass a literal "user"
+    // placeholder; the SDK only uses the value for display and never
+    // round-trips it server-side, so the placeholder is harmless.
+    const username = params.get('hf_username') || 'user';
+    // `hf_token_expires` is a far-future ISO date for personal access
+    // tokens (no real expiry). Hosts typically synthesise ~1 year out;
+    // we accept whatever was sent and fall back to "1 year from now"
+    // if the parameter is missing or unparseable, so a partial fragment
+    // still gets the user logged in.
+    const expiresParam = params.get('hf_token_expires');
+    const expires =
+        expiresParam && !Number.isNaN(new Date(expiresParam).getTime())
+            ? expiresParam
+            : new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString();
+    try {
+        sessionStorage.setItem('hf_token', token);
+        sessionStorage.setItem('hf_username', username);
+        sessionStorage.setItem('hf_token_expires', expires);
+    } catch (err) {
+        console.warn('[reachy-mini] could not persist pre-seeded HF credentials:', err);
+    }
+    // Strip the auth keys from the address bar but keep any other hash
+    // params the app or SDK might care about (theme, embedded, …).
+    params.delete('hf_token');
+    params.delete('hf_username');
+    params.delete('hf_token_expires');
+    const remaining = params.toString();
+    const cleanUrl =
+        window.location.pathname +
+        window.location.search +
+        (remaining ? '#' + remaining : '');
+    try { window.history.replaceState(null, '', cleanUrl); } catch (_e) {}
+}
+
+/**
+ * Pick up a preselected robot peer id from the URL.
+ *
+ * Looked up in this order:
+ *   1. URL fragment   (`#robot_peer_id=<peerId>`)
+ *   2. URL query      (`?robot_peer_id=<peerId>`)
+ *
+ * Both spellings are accepted because:
+ *   - the Reachy Mini mobile shell sends it in the query today,
+ *   - the vibe-coder preview / future hosts may prefer the fragment for
+ *     symmetry with `consumeFragmentCredentials`,
+ *   - the value is NOT a secret (peer ids are public on the central
+ *     signaling server's robot listing) so query is fine.
+ *
+ * Returns `null` when no peer id is found in either location, when there
+ * is no `window` (SSR / Worker context), or on parse error. Unlike
+ * credentials, we do NOT strip the param from the URL: the value is
+ * harmless to keep visible and removing it would break tools that read
+ * the URL for context.
+ *
+ * @returns {string|null}
+ */
+function readPreselectedRobotIdFromUrl() {
+    if (typeof window === 'undefined') return null;
+    // 1. Fragment (`#robot_peer_id=…`).
+    if (window.location.hash) {
+        const raw = window.location.hash.startsWith('#')
+            ? window.location.hash.slice(1)
+            : window.location.hash;
+        try {
+            const params = new URLSearchParams(raw);
+            const fromHash = params.get('robot_peer_id');
+            if (fromHash) return fromHash;
+        } catch (_e) { /* malformed fragment — fall through */ }
+    }
+    // 2. Query (`?robot_peer_id=…`).
+    if (window.location.search) {
+        try {
+            const params = new URLSearchParams(window.location.search);
+            const fromQuery = params.get('robot_peer_id');
+            if (fromQuery) return fromQuery;
+        } catch (_e) { /* malformed query — fall through */ }
+    }
+    return null;
 }
 
 /** Check if the audio m= section of an SDP has a=sendrecv (bidirectional audio). */
@@ -161,21 +325,48 @@ function sdpHasAudioSendRecv(sdp) {
 
 export class ReachyMini extends EventTarget {
 
-    /** @param {{ signalingUrl?: string, enableMicrophone?: boolean, clientId?: string, appName?: string }} [options] */
+    /** @param {{ signalingUrl?: string, enableMicrophone?: boolean, clientId?: string, appName?: string, videoJitterBufferTargetMs?: number, autoStartFromUrl?: boolean }} [options] */
     constructor(options = {}) {
         super();
-        this._signalingUrl = options.signalingUrl || 'https://cduss-reachy-mini-central.hf.space';
+        this._signalingUrl = options.signalingUrl || 'https://pollen-robotics-reachy-mini-central.hf.space';
         this._enableMicrophone = options.enableMicrophone !== false;
         this._clientId = options.clientId || null;
         this._appName = options.appName || 'unknown';
+        // Hint to the receiver's WebRTC jitter buffer (ms). 0 = "render ASAP",
+        // appropriate for teleop. Spec range [0, 4000]. Browsers that don't
+        // implement RTCRtpReceiver.jitterBufferTarget fall back to default
+        // buffering (~150-200 ms).
+        this._videoJitterBufferTargetMs = options.videoJitterBufferTargetMs ?? 0;
+        // When true AND the URL carried a `robot_peer_id` hint at
+        // construction (so `preselectedRobotId !== null`), the SDK
+        // auto-calls `startSession(preselectedRobotId)` as soon as
+        // that robot appears in the central's robot list after the
+        // app's own `connect()` resolves. Lets host-iframe-embedded
+        // consumers (mobile shell, vibe-coder preview) skip their
+        // robot picker AND skip the manual `startSession` call —
+        // they just `await robot.connect()` and receive a `streaming`
+        // event when the SDK has dialed in. One-shot: a manual
+        // `stopSession()` followed by another `startSession()` is
+        // not auto-replayed. Default `false` keeps the standalone
+        // Space behavior unchanged.
+        this._autoStartFromUrl = options.autoStartFromUrl === true;
+        this._autoStartAttempted = false;
 
         this._state = 'disconnected';                 // 'disconnected' | 'connected' | 'streaming'
         this._robots = [];                             // latest robot list from signaling
-        this._robotState = {                           // updated every ~500 ms while streaming
-            head: { roll: 0, pitch: 0, yaw: 0 },
-            antennas: { right: 0, left: 0 },
-            motorMode: null,                           // "enabled" | "disabled" | "gravity_compensation" | null
-        };
+        this._robotState = {};                         // populated from daemon state events (wire shape)
+
+        // Preselected robot peer id read from the URL at construction
+        // time. When a host iframe (typically the Reachy Mini mobile
+        // shell) embeds an SDK consumer, it appends the peer id of the
+        // robot it's already connected to via
+        // `?robot_peer_id=…` (or `#robot_peer_id=…`). Apps can read
+        // `robot.preselectedRobotId` and call `startSession(id)`
+        // directly to skip their robot picker. Captured ONCE at
+        // construction so subsequent URL changes (history navigation,
+        // hash mutations from `consumeFragmentCredentials`) don't move
+        // the target out from under the consumer.
+        this._preselectedRobotId = readPreselectedRobotIdFromUrl();
 
         // Auth
         this._token = null;
@@ -202,14 +393,21 @@ export class ReachyMini extends EventTarget {
         this._latencyMonitorId = null;
         this._stateRefreshInterval = null;
 
-        // getVersion() promise plumbing
+        // getVersion() / getHardwareId() promise plumbing
         this._versionResolve = null;
+        this._hardwareIdResolve = null;
 
         // Volume getter/setter promise plumbing (get_volume / set_volume).
         // Speaker and microphone are tracked separately so two in-flight
         // requests can't collide on the same slot.
         this._volumeResolve = null;
         this._micVolumeResolve = null;
+
+        // subscribeLogs(): a Set of {onLine, onError} subscribers. The
+        // first add sends `subscribe_logs`; removing the last sends
+        // `unsubscribe_logs`. We keep a single daemon-side stream and
+        // fan out to local subscribers in `_handleRobotMessage`.
+        this._logSubscribers = new Set();
 
         // startSession() promise plumbing
         this._sessionResolve = null;
@@ -229,7 +427,19 @@ export class ReachyMini extends EventTarget {
     /** @returns {Array<{id: string, meta: {name: string}}>} */
     get robots() { return this._robots; }
 
-    /** @returns {{head: {roll:number,pitch:number,yaw:number}, antennas: {right:number,left:number}}} */
+    /**
+     * Latest robot state (same shape as the "state" event detail).
+     * Mirrors the daemon's wire format — fields appear only once the
+     * daemon has sent the corresponding source field. Use the exported
+     * math utilities (``matrixToRpy``, ``radToDeg``) for human units.
+     * @returns {{
+     *   head?: number[],
+     *   antennas?: number[],
+     *   body_yaw?: number,
+     *   motor_mode?: "enabled"|"disabled"|"gravity_compensation",
+     *   is_move_running?: boolean,
+     * }}
+     */
     get robotState() { return this._robotState; }
 
     /** @returns {string|null} HuggingFace username, set after authenticate(). */
@@ -247,18 +457,110 @@ export class ReachyMini extends EventTarget {
     /** @returns {boolean} */
     get audioMuted() { return this._audioMuted; }
 
+    /**
+     * Peer id of the robot the embedding host wants this session to
+     * target, captured from the URL at construction time. Apps that
+     * want to support iframe-embedding without forcing the user to
+     * re-pick a robot read this and pass it straight to
+     * `startSession()` once `connect()` resolves:
+     *
+     *     await robot.connect();
+     *     await robot.startSession(robot.preselectedRobotId ?? pickedId);
+     *
+     * Returns `null` when the URL carries no `robot_peer_id` (typical
+     * standalone Space load). The value is also exposed on the
+     * "robotsChanged" payload via the `meta` sidecar for
+     * convenience, but the most direct read is right here.
+     *
+     * @returns {string|null}
+     */
+    get preselectedRobotId() { return this._preselectedRobotId; }
+
+    /**
+     * Convenience flag for apps that want to branch their UX on
+     * "am I embedded in a host shell?". True iff the URL carried a
+     * `robot_peer_id` hint at construction time (which only happens
+     * when a host iframe — mobile shell, vibe-coder preview, etc. —
+     * is the parent). Apps typically use it to skip their robot
+     * picker and their sign-in screen, since both are duplicated
+     * work the host has already done.
+     *
+     * @returns {boolean}
+     */
+    get isEmbedded() { return this._preselectedRobotId !== null; }
+
+    /**
+     * Internal: try to honour the `autoStartFromUrl` constructor
+     * option. Called from the signaling-message handler after every
+     * `robotsChanged` emit, so a robot that comes online after the
+     * SDK is already `connected` still triggers the auto-start.
+     * No-op unless `autoStartFromUrl` is set, the URL carries a
+     * preselect, the SDK is `connected`, the preselected robot is
+     * in the latest list, and we haven't already attempted in this
+     * page load. Errors are swallowed to a `console.warn` — the
+     * normal `startSession` rejection / `sessionRejected` event
+     * still fires for app-level handling.
+     *
+     * Defers the actual `startSession()` call by one macrotask
+     * (`setTimeout(..., 0)`) so it runs OUTSIDE the
+     * `_handleSignalingMessage` callstack that just processed the
+     * `'list'` message. Reproduced on Android WebView: firing
+     * `startSession` synchronously inside the SSE handler races the
+     * daemon's setup, leading to a connected-but-no-keyframe state
+     * where the receiver eternally NACKs and the iframe shows a
+     * black <video>. The macrotask-deferral is the minimum nudge
+     * that consistently resolves the race in our reproduction; if
+     * it ever proves insufficient on slower hardware, bump to
+     * a small explicit delay (e.g. 250 ms).
+     */
+    _maybeAutoStart() {
+        if (!this._autoStartFromUrl) return;
+        if (this._autoStartAttempted) return;
+        if (!this._preselectedRobotId) return;
+        if (this._state !== 'connected') return;
+        const match = this._robots.find((r) => r.id === this._preselectedRobotId);
+        if (!match) return;
+        this._autoStartAttempted = true;
+        const peerId = this._preselectedRobotId;
+        setTimeout(() => {
+            // Re-check state in case a manual stopSession / disconnect
+            // landed between the schedule and the fire.
+            if (this._state !== 'connected') return;
+            this.startSession(peerId).catch((err) => {
+                console.warn('[reachy-mini] autoStartFromUrl: startSession rejected:', err);
+            });
+        }, 0);
+    }
+
     // ─── Auth ────────────────────────────────────────────────────────────
 
     /**
      * Check for a valid HuggingFace token.
-     * Tries the OAuth redirect callback first, then falls back to sessionStorage.
+     *
+     * Resolution order:
+     *   1. URL fragment hand-off (`#hf_token=…&hf_username=…&hf_token_expires=…`).
+     *      A host iframe — typically the Reachy Mini mobile app or a
+     *      vibe-coder preview — can pass credentials through the URL
+     *      fragment to bypass HF's `X-Frame-Options: SAMEORIGIN` block
+     *      on `huggingface.co/login`. Seeded into `sessionStorage` and
+     *      then stripped from the address bar so a page reload does not
+     *      keep the credentials visible.
+     *   2. OAuth redirect callback (standalone Space, first sign-in).
+     *   3. `sessionStorage` cache (subsequent loads in any context).
+     *
      * @returns {Promise<boolean>} true → token ready, false → call login()
      */
     async authenticate() {
         try {
+            // 1. Iframe hand-off. No-op when the URL has no fragment or
+            //    the fragment carries no `hf_token`, so this is free on
+            //    standalone Space loads.
+            consumeFragmentCredentials();
+
+            // 2. OAuth redirect callback.
             const result = await oauthHandleRedirectIfPresent();
             if (result) {
-                this._username = result.userInfo.name || result.userInfo.preferred_username;
+                this._username = result.userInfo.preferred_username || result.userInfo.name;
                 this._token = result.accessToken;
                 this._tokenExpires = result.accessTokenExpiresAt;
                 sessionStorage.setItem('hf_token', this._token);
@@ -266,6 +568,9 @@ export class ReachyMini extends EventTarget {
                 sessionStorage.setItem('hf_token_expires', this._tokenExpires);
                 return true;
             }
+
+            // 3. sessionStorage cache. Both paths above also write here,
+            //    so this is the canonical lookup for any subsequent call.
             const t = sessionStorage.getItem('hf_token');
             const u = sessionStorage.getItem('hf_username');
             const e = sessionStorage.getItem('hf_token_expires');
@@ -389,6 +694,236 @@ export class ReachyMini extends EventTarget {
     }
 
     /**
+     * One-shot bring-up: auth → SSE connect → robot selection → session →
+     * wake up. The all-in-one entry point that captures the common
+     * "embed *or* standalone, just get me streaming" flow so each
+     * consumer does not have to re-implement it.
+     *
+     * What it does, in order:
+     *   1. **Auth.** If `this._token` is not set, calls `authenticate()`
+     *      (which honours the iframe URL-fragment hand-off, the OAuth
+     *      redirect callback, and the `sessionStorage` cache). Throws if
+     *      none yield a token — the consumer should call `login()` and
+     *      retry after the redirect. Pass an explicit `token` to skip
+     *      `authenticate()` entirely.
+     *   2. **Connect.** If `state === 'disconnected'`, opens the SSE
+     *      signaling channel.
+     *   3. **Pick a robot.**
+     *      - **Embed mode** (`this.isEmbedded`): uses
+     *        `this._preselectedRobotId` from the URL. No picker callback
+     *        invoked; we briefly wait for that robot to appear in the
+     *        SSE list, then proceed.
+     *      - **Standalone**: GETs `/api/robot-status` for the owner's
+     *        robots with busy state, dedupes by `install_id`, sorts by
+     *        freshness. If `autoPickIfSingle` and exactly one free, picks
+     *        it. Else calls the consumer-supplied `pickRobot(robots)`
+     *        callback. Throws if neither yields an id.
+     *   4. **Start session.** Awaits `startSession(robotId)` (ICE + DC).
+     *   5. **Wake up.** Awaits `ensureAwake()` so sliders don't silently
+     *      no-op against a torque-off robot.
+     *
+     * @param {{
+     *   token?: string,                           // skip authenticate(); use this raw HF token
+     *   pickRobot?: (robots: Array<{
+     *     id: string,
+     *     name: string|null,
+     *     busy: boolean,
+     *     activeApp: string|null,
+     *     meta: object,
+     *     lastSeenAgeSeconds: number|null,
+     *   }>) => Promise<string|null>,              // called only in standalone, multi-robot case
+     *   autoPickIfSingle?: boolean,               // default true — skip the callback when 1 free robot
+     *   filterBusy?: boolean,                     // default true — hide busy robots from the picker
+     *   wakeOnConnect?: boolean,                  // default true — call ensureAwake() after startSession
+     * }} [options]
+     * @returns {Promise<{
+     *   robotId: string,
+     *   robotName: string|null,
+     *   isEmbedded: boolean,
+     *   alreadyStreaming?: boolean,
+     * }>}
+     */
+    async autoConnect(options = {}) {
+        const {
+            token = null,
+            pickRobot = null,
+            autoPickIfSingle = true,
+            filterBusy = true,
+            wakeOnConnect = true,
+        } = options;
+
+        // Idempotent fast-path: caller invoked autoConnect() on an
+        // already-streaming session (e.g. on a route change inside an
+        // SPA). Return the current selection rather than tearing down.
+        if (this._state === 'streaming') {
+            const cur = this._robots?.find((r) => r.id === this._selectedRobotId);
+            return {
+                robotId: this._selectedRobotId,
+                robotName: cur?.meta?.name ?? null,
+                isEmbedded: this.isEmbedded,
+                alreadyStreaming: true,
+            };
+        }
+
+        // autoConnect takes over the bring-up — disable the SDK's
+        // own `autoStartFromUrl` so the two paths don't race and
+        // both call `startSession()` against the same preselected
+        // robot. The race used to manifest as central rejecting the
+        // second attempt with "Robot is busy: <appName>" — the
+        // appName being our own first attempt. Restored on the way
+        // out so a later `stopSession()` followed by a fresh
+        // listener attach still benefits from auto-start.
+        const _prevAutoStartFromUrl = this._autoStartFromUrl;
+        this._autoStartFromUrl = false;
+
+        try {
+        // 1. Auth.
+        if (token) {
+            this._token = token;
+        } else if (!this._token) {
+            const ok = await this.authenticate();
+            if (!ok) {
+                // login() does a full page redirect; we don't trigger
+                // it here so the consumer can decide (a desktop tray
+                // wants different recovery than a standalone Space).
+                throw new Error('Not authenticated — call login() or pass a token');
+            }
+        }
+
+        // 2. SSE connect.
+        if (this._state === 'disconnected') {
+            await this.connect();
+        }
+
+        // 3. Resolve the target robot.
+        let robotId;
+        let robotName = null;
+        if (this.isEmbedded) {
+            robotId = this._preselectedRobotId;
+            // Wait briefly for the preselected robot to surface in the
+            // SSE list. Best-effort: if it never shows we still try
+            // startSession() — central may know about a robot the SSE
+            // list pushes only a moment later.
+            try {
+                await this._waitForRobotInList(robotId, 5000);
+            } catch (_) { /* fall through */ }
+            const found = this._robots?.find((r) => r.id === robotId);
+            robotName = found?.meta?.name ?? null;
+        } else {
+            const robots = await this._fetchOwnedRobots({ filterBusy });
+            if (robots.length === 0) {
+                throw new Error('No reachable robots');
+            }
+            if (autoPickIfSingle && robots.length === 1 && !robots[0].busy) {
+                robotId = robots[0].id;
+                robotName = robots[0].name;
+            } else if (pickRobot) {
+                const picked = await pickRobot(robots);
+                if (!picked) throw new Error('Robot selection cancelled');
+                robotId = picked;
+                robotName = robots.find((r) => r.id === picked)?.name ?? null;
+            } else {
+                throw new Error(
+                    'Multiple robots available — pass a pickRobot callback to autoConnect()',
+                );
+            }
+        }
+
+        // 4. Session.
+        await this.startSession(robotId);
+
+        // 5. Wake.
+        if (wakeOnConnect && typeof this.ensureAwake === 'function') {
+            try { await this.ensureAwake(); }
+            catch (e) { console.warn('[reachy-mini] autoConnect: ensureAwake failed:', e); }
+        }
+
+        return { robotId, robotName, isEmbedded: this.isEmbedded };
+        } finally {
+            this._autoStartFromUrl = _prevAutoStartFromUrl;
+        }
+    }
+
+    /**
+     * Fetch the caller's robots with busy state, deduped + sorted.
+     * One-shot snapshot — no live subscription. Falls back to the SSE
+     * `_robots` cache if `/api/robot-status` is unavailable (older
+     * central deployments don't expose it).
+     *
+     * Dedup: same physical robot can appear twice transiently after a
+     * daemon reinstall (new peerId, same install_id). Last-writer-wins
+     * on `install_id`, then `hardware_id`, then `peerId` (= no dedup).
+     *
+     * @returns {Promise<Array<{
+     *   id: string,
+     *   name: string|null,
+     *   busy: boolean,
+     *   activeApp: string|null,
+     *   meta: object,
+     *   lastSeenAgeSeconds: number|null,
+     * }>>}
+     */
+    async _fetchOwnedRobots({ filterBusy = true } = {}) {
+        try {
+            const res = await fetch(`${this._signalingUrl}/api/robot-status`, {
+                headers: { 'Authorization': `Bearer ${this._token}` },
+            });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const json = await res.json();
+            const seen = new Map();  // dedup key → projected robot
+            for (const r of (json.robots || [])) {
+                if (filterBusy && r.busy) continue;
+                const key = r.meta?.install_id ?? r.meta?.hardware_id ?? r.peerId;
+                seen.set(key, {
+                    id: r.peerId,
+                    name: r.robotName ?? r.meta?.name ?? null,
+                    busy: !!r.busy,
+                    activeApp: r.activeApp ?? null,
+                    meta: r.meta ?? {},
+                    lastSeenAgeSeconds: r.last_seen_age_seconds ?? null,
+                });
+            }
+            return Array.from(seen.values()).sort(
+                (a, b) => (a.lastSeenAgeSeconds ?? Infinity) - (b.lastSeenAgeSeconds ?? Infinity),
+            );
+        } catch (e) {
+            console.warn('[reachy-mini] /api/robot-status unavailable, using SSE list:', e);
+            return (this._robots || []).map((r) => ({
+                id: r.id,
+                name: r.meta?.name ?? null,
+                busy: false,             // unknown — SSE list does not carry busy state
+                activeApp: null,
+                meta: r.meta ?? {},
+                lastSeenAgeSeconds: null,
+            }));
+        }
+    }
+
+    /**
+     * Resolve once `robotId` appears in `_robots`, or reject after
+     * `timeoutMs`. Used by `autoConnect()`'s embed branch so the preselected
+     * robot has a chance to surface from the first SSE `list` push before
+     * `startSession()` is fired.
+     */
+    _waitForRobotInList(robotId, timeoutMs) {
+        if (this._robots?.find((r) => r.id === robotId)) return Promise.resolve();
+        return new Promise((resolve, reject) => {
+            const onChange = () => {
+                if (this._robots?.find((r) => r.id === robotId)) {
+                    this.removeEventListener('robotsChanged', onChange);
+                    clearTimeout(timeoutId);
+                    resolve();
+                }
+            };
+            const timeoutId = setTimeout(() => {
+                this.removeEventListener('robotsChanged', onChange);
+                reject(new Error(`Timeout waiting for robot ${robotId} in list`));
+            }, timeoutMs);
+            this.addEventListener('robotsChanged', onChange);
+        });
+    }
+
+    /**
      * Start a WebRTC session with the given robot.
      * Acquires the microphone (if enabled), negotiates SDP, and waits for
      * both ICE connection and data channel to be ready before resolving.
@@ -404,6 +939,11 @@ export class ReachyMini extends EventTarget {
         this._iceConnected = false;
         this._dcOpen = false;
         this._micSupported = false;
+        // Buffer for ICE candidates that arrive before the SDP
+        // exchange completes (see _handlePeerMessage). Reset on every
+        // fresh session so stale candidates from a previous attempt
+        // don't get applied to a new RTCPeerConnection.
+        this._pendingRemoteIce = [];
 
         // Acquire mic eagerly so the browser permission prompt appears now,
         // but tracks stay disabled (muted) until the user explicitly unmutes.
@@ -414,7 +954,31 @@ export class ReachyMini extends EventTarget {
                 this._micMuted = true;
             } catch (e) {
                 console.warn('Microphone not available:', e);
-                this._micStream = null;
+                // Fall back to a silent placeholder track. We MUST add an
+                // audio track before createAnswer or the answer SDP comes
+                // back as recvonly for audio - which negotiates the audio
+                // SENDER side off the wire entirely. A host that wants to
+                // later inject a different audio source (e.g. a synthesised
+                // AI voice via replaceTrack on the sender) needs a live
+                // sendrecv slot, even if the initial track is silent.
+                try {
+                    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                    const dst = ctx.createMediaStreamDestination();
+                    // A muted oscillator keeps the track "alive" without
+                    // emitting any audible signal.
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    gain.gain.value = 0;
+                    osc.connect(gain).connect(dst);
+                    osc.start();
+                    this._micStream = dst.stream;
+                    this._micStream.getAudioTracks().forEach(t => { t.enabled = false; });
+                    this._micMuted = true;
+                    this._silentMicFallback = { ctx, osc };
+                } catch (fallbackErr) {
+                    console.warn('Silent mic fallback failed:', fallbackErr);
+                    this._micStream = null;
+                }
             }
         }
 
@@ -428,6 +992,12 @@ export class ReachyMini extends EventTarget {
 
             this._pc.ontrack = (e) => {
                 if (e.track.kind === 'video') {
+                    // Tell the receiver's jitter buffer to minimise its hold
+                    // time. Both properties target the same internal buffer;
+                    // browsers ignore whichever they don't implement.
+                    const ms = this._videoJitterBufferTargetMs;
+                    try { e.receiver.jitterBufferTarget = ms; } catch (_) {}
+                    try { e.receiver.playoutDelayHint = ms / 1000; } catch (_) {}
                     this._emit('videoTrack', { track: e.track, stream: e.streams[0] });
                 }
             };
@@ -528,8 +1098,14 @@ export class ReachyMini extends EventTarget {
      */
     async stopSession() {
         if (this._versionResolve) { this._versionResolve(null); this._versionResolve = null; }
+        if (this._hardwareIdResolve) { this._hardwareIdResolve(null); this._hardwareIdResolve = null; }
         if (this._volumeResolve) { this._volumeResolve(null); this._volumeResolve = null; }
         if (this._micVolumeResolve) { this._micVolumeResolve(null); this._micVolumeResolve = null; }
+        // Drop any active log subscribers — the daemon-side subprocess
+        // is torn down on peer-disconnect, so resubscribing across a
+        // reconnect requires a fresh subscribeLogs() call from the
+        // consumer.
+        this._logSubscribers.clear();
         if (this._sessionReject) {
             this._sessionReject(new Error('Session stopped'));
             this._sessionResolve = null;
@@ -569,8 +1145,10 @@ export class ReachyMini extends EventTarget {
         if (this._sseAbortController) { this._sseAbortController.abort(); this._sseAbortController = null; }
 
         if (this._versionResolve) { this._versionResolve(null); this._versionResolve = null; }
+        if (this._hardwareIdResolve) { this._hardwareIdResolve(null); this._hardwareIdResolve = null; }
         if (this._volumeResolve) { this._volumeResolve(null); this._volumeResolve = null; }
         if (this._micVolumeResolve) { this._micVolumeResolve(null); this._micVolumeResolve = null; }
+        this._logSubscribers.clear();
         if (this._sessionReject) {
             this._sessionReject(new Error('Disconnected'));
             this._sessionResolve = null;
@@ -603,21 +1181,144 @@ export class ReachyMini extends EventTarget {
     // All return false if the data channel is not open, true if sent.
 
     /**
-     * Set the head orientation.
-     * @param {number} roll  — degrees  @param {number} pitch — degrees  @param {number} yaw — degrees
-     * @returns {boolean}
+     * Send a target pose to the robot. Wire-shape, raw units only —
+     * single source of truth for motion commands. Every field is
+     * optional; omitted fields leave the daemon's previous target
+     * unchanged, so partial updates compose naturally.
+     *
+     * For human units (degrees), use the ``setHeadRpyDeg`` /
+     * ``setAntennasDeg`` / ``setBodyYawDeg`` thin wrappers below.
+     *
+     * @param {object} [target]
+     * @param {number[]} [target.head] 16-element flat row-major 4×4
+     *   matrix (full SE(3); preserves translation, no XYZ loss).
+     * @param {number[]} [target.antennas] ``[rightRad, leftRad]``.
+     * @param {number} [target.body_yaw] Body yaw in radians.
+     * @returns {boolean} false if the data channel is not open.
+     * @throws {TypeError} if any provided field has the wrong shape or
+     *   contains a non-finite value (NaN, Infinity). Validation runs at
+     *   the JS boundary so caller mistakes surface with a stack trace
+     *   pointing to the call site, not as a confusing daemon-side error.
      */
-    setHeadPose(roll, pitch, yaw) {
-        return this._sendCommand({ type: "set_target", head: rpyToMatrix(roll, pitch, yaw).flat() });
+    setTarget({ head, antennas, body_yaw } = {}) {
+        const cmd = { type: "set_full_target" };
+        if (head !== undefined) {
+            if (!Array.isArray(head) || head.length !== 16
+                || !head.every((n) => Number.isFinite(n))) {
+                throw new TypeError(
+                    'setTarget: head must be a 16-element flat row-major 4×4 matrix '
+                    + `of finite numbers; got ${Array.isArray(head) ? `Array(${head.length})` : typeof head}`
+                );
+            }
+            cmd.head = head;
+        }
+        if (antennas !== undefined) {
+            if (!Array.isArray(antennas) || antennas.length !== 2
+                || !antennas.every((n) => Number.isFinite(n))) {
+                throw new TypeError(
+                    'setTarget: antennas must be [rightRad, leftRad] (2 finite numbers); '
+                    + `got ${Array.isArray(antennas) ? `Array(${antennas.length})` : typeof antennas}`
+                );
+            }
+            cmd.antennas = antennas;
+        }
+        if (body_yaw !== undefined) {
+            if (!Number.isFinite(body_yaw)) {
+                throw new TypeError(
+                    `setTarget: body_yaw must be a finite number (radians); got ${body_yaw}`
+                );
+            }
+            cmd.body_yaw = body_yaw;
+        }
+        return this._sendCommand(cmd);
     }
 
     /**
-     * Set antenna positions.
-     * @param {number} rightDeg  @param {number} leftDeg
+     * Smooth daemon-side interpolation to a target pose over
+     * ``duration`` seconds. Mirrors ``setTarget``'s wire shape (head
+     * is a 16-element flat row-major 4×4, antennas are
+     * ``[rightRad, leftRad]``, body_yaw is radians) and adds a
+     * required ``duration`` field. The daemon dispatches the command
+     * to its lerp planner instead of jumping to the target.
+     *
+     * Use this for one-shot smooth approaches to an arbitrary pose
+     * (e.g. soft-return-to-base after recording, or pre-positioning
+     * before a streamed playback). For continuous streamed motion,
+     * use ``setTarget`` and lerp client-side.
+     *
+     * @param {{head?: number[], antennas?: number[], body_yaw?: number, duration: number}} args
+     * @returns {boolean} false if the data channel is not open.
+     * @throws {TypeError} if any provided field has the wrong shape
+     *   or contains a non-finite value (NaN, Infinity), or if
+     *   ``duration`` is missing or non-positive.
+     */
+    gotoTarget({ head, antennas, body_yaw, duration } = {}) {
+        const cmd = { type: "goto_target" };
+        if (head !== undefined) {
+            if (!Array.isArray(head) || head.length !== 16
+                || !head.every((n) => Number.isFinite(n))) {
+                throw new TypeError(
+                    'gotoTarget: head must be a 16-element flat row-major 4×4 matrix '
+                    + `of finite numbers; got ${Array.isArray(head) ? `Array(${head.length})` : typeof head}`
+                );
+            }
+            cmd.head = head;
+        }
+        if (antennas !== undefined) {
+            if (!Array.isArray(antennas) || antennas.length !== 2
+                || !antennas.every((n) => Number.isFinite(n))) {
+                throw new TypeError(
+                    'gotoTarget: antennas must be [rightRad, leftRad] (2 finite numbers); '
+                    + `got ${Array.isArray(antennas) ? `Array(${antennas.length})` : typeof antennas}`
+                );
+            }
+            cmd.antennas = antennas;
+        }
+        if (body_yaw !== undefined) {
+            if (!Number.isFinite(body_yaw)) {
+                throw new TypeError(
+                    `gotoTarget: body_yaw must be a finite number (radians); got ${body_yaw}`
+                );
+            }
+            cmd.body_yaw = body_yaw;
+        }
+        if (!Number.isFinite(duration) || duration <= 0) {
+            throw new TypeError(
+                `gotoTarget: duration must be a positive finite number (seconds); got ${duration}`
+            );
+        }
+        cmd.duration = duration;
+        return this._sendCommand(cmd);
+    }
+
+    /**
+     * Set head orientation from roll/pitch/yaw in degrees.
+     * Convenience wrapper over ``setTarget``.
+     * @param {number} rollDeg @param {number} pitchDeg @param {number} yawDeg
      * @returns {boolean}
      */
-    setAntennas(rightDeg, leftDeg) {
-        return this._sendCommand({ type: "set_antennas", antennas: [degToRad(rightDeg), degToRad(leftDeg)] });
+    setHeadRpyDeg(rollDeg, pitchDeg, yawDeg) {
+        return this.setTarget({ head: rpyToMatrix(rollDeg, pitchDeg, yawDeg).flat() });
+    }
+
+    /**
+     * Set antenna positions from degrees.
+     * Convenience wrapper over ``setTarget``.
+     * @param {number} rightDeg @param {number} leftDeg
+     * @returns {boolean}
+     */
+    setAntennasDeg(rightDeg, leftDeg) {
+        return this.setTarget({ antennas: [degToRad(rightDeg), degToRad(leftDeg)] });
+    }
+
+    /**
+     * Set body yaw from degrees.
+     * Convenience wrapper over ``setTarget``.
+     * @param {number} yawDeg
+     * @returns {boolean}
+     */
+    setBodyYawDeg(yawDeg) {
+        return this.setTarget({ body_yaw: degToRad(yawDeg) });
     }
 
     /**
@@ -643,6 +1344,19 @@ export class ReachyMini extends EventTarget {
      */
     setMotorMode(mode) {
         return this._sendCommand({ type: "set_motor_mode", mode });
+    }
+
+    /**
+     * Toggle torque on/off, optionally per-motor.
+     *
+     * @param {boolean} on
+     * @param {string[]} [ids]  motor names (e.g. ["left_antenna"]). When
+     *   omitted, applies globally — equivalent to setMotorMode("enabled"
+     *   | "disabled").
+     * @returns {boolean} false if the data channel is not open.
+     */
+    setMotorTorque(on, ids = null) {
+        return this._sendCommand({ type: "set_torque", on, ids });
     }
 
     /**
@@ -688,6 +1402,62 @@ export class ReachyMini extends EventTarget {
     }
 
     /**
+     * Whether the robot's motors are currently powered (the "awake" state).
+     *
+     * Reads ``motor_mode`` from the last state event. Both ``"enabled"``
+     * and ``"gravity_compensation"`` count as awake: in gravity-comp the
+     * motors are actively holding the arm against gravity, so the robot
+     * is *not* limp and playing wake_up on top would fight the user.
+     * Only ``"disabled"`` (true sleep) is considered not-awake.
+     *
+     * Returns ``false`` before the first state event arrives (typical
+     * right after ``startSession()``). Use ``ensureAwake()`` if you want
+     * to wait for the first state before deciding.
+     *
+     * @returns {boolean}
+     */
+    isAwake() {
+        const mode = this._robotState?.motor_mode;
+        return mode === "enabled" || mode === "gravity_compensation";
+    }
+
+    /**
+     * Wake the robot up if it is currently asleep, otherwise no-op.
+     *
+     * Intended as the first line of any app after ``startSession()``
+     * resolves — robots are often left in the sleep pose (torque off,
+     * head resting on the base) and commanded positions are silently
+     * ignored in that state.
+     *
+     * If no state event has arrived yet, waits up to ``timeoutMs`` for
+     * one before deciding. If still no state, falls back to sending
+     * ``wakeUp()`` (safe: the daemon's wake_up handler is idempotent
+     * at the motion level — it moves to the awake pose from wherever
+     * the head currently is).
+     *
+     * @param {number} [timeoutMs=1000] how long to wait for the first
+     *   state event before falling through to wakeUp().
+     * @returns {Promise<boolean>} true if the robot is awake afterwards.
+     */
+    async ensureAwake(timeoutMs = 1000) {
+        if (this._robotState?.motor_mode === undefined) {
+            await new Promise((resolve) => {
+                const done = () => {
+                    this.removeEventListener('state', done);
+                    clearTimeout(timer);
+                    resolve();
+                };
+                const timer = setTimeout(done, timeoutMs);
+                this.addEventListener('state', done);
+                this.requestState();
+            });
+        }
+        if (this.isAwake()) return true;
+        this.wakeUp();
+        return true;
+    }
+
+    /**
      * Request the daemon version.
      * Resolves with the version string (or null if unavailable).
      * @returns {Promise<string|null>}
@@ -703,6 +1473,30 @@ export class ReachyMini extends EventTarget {
             }
             this._versionResolve = resolve;
             this._sendCommand({ type: "get_version" });
+        });
+    }
+
+    /**
+     * Request the robot's unique hardware ID — the Pollen audio device's
+     * USB serial. Same value across Lite and Wireless variants, stable
+     * across reboots and OS reinstalls. Useful for fleet management,
+     * per-robot calibration cache keys, or identifying which physical
+     * robot a session is bound to.
+     * Resolves with the hardware ID string (or null if no robot is
+     * attached, e.g. the daemon is running on a developer machine).
+     * @returns {Promise<string|null>}
+     */
+    getHardwareId() {
+        return new Promise((resolve, reject) => {
+            if (!this._dc || this._dc.readyState !== 'open') {
+                reject(new Error('Data channel not open'));
+                return;
+            }
+            if (this._hardwareIdResolve) {
+                this._hardwareIdResolve(null);
+            }
+            this._hardwareIdResolve = resolve;
+            this._sendCommand({ type: "get_hardware_id" });
         });
     }
 
@@ -782,8 +1576,52 @@ export class ReachyMini extends EventTarget {
     }
 
     /**
+     * Subscribe to the daemon's `journalctl -u reachy-mini-daemon`
+     * stream over the WebRTC data channel.
+     *
+     * One daemon-side subprocess is shared across all local subscribers:
+     * the first call sends `subscribe_logs`, removing the last subscriber
+     * sends `unsubscribe_logs`. Calling the returned `unsubscribe()`
+     * twice is a no-op.
+     *
+     * @param {{
+     *   onLine: (entry: { timestamp: string, line: string }) => void,
+     *   onError?: (error: string) => void,
+     * }} options
+     * @returns {() => void} unsubscribe
+     */
+    subscribeLogs({ onLine, onError } = {}) {
+        if (typeof onLine !== 'function') {
+            throw new TypeError('subscribeLogs: onLine callback is required');
+        }
+        const sub = { onLine, onError };
+        const wasEmpty = this._logSubscribers.size === 0;
+        this._logSubscribers.add(sub);
+        if (wasEmpty) this._sendCommand({ type: 'subscribe_logs' });
+
+        let detached = false;
+        return () => {
+            if (detached) return;
+            detached = true;
+            this._logSubscribers.delete(sub);
+            if (this._logSubscribers.size === 0) {
+                this._sendCommand({ type: 'unsubscribe_logs' });
+            }
+        };
+    }
+
+    /**
      * Request a state snapshot.  The response arrives as a "state" event.
      * Called automatically every 500 ms while streaming.
+     *
+     * Safe to call at a higher rate if you need faster telemetry: e.g.
+     * ``setInterval(() => robot.requestState(), 20)`` for ~50 Hz, or drive
+     * it from a ``requestAnimationFrame`` loop for display-rate updates.
+     * On LAN the daemon can sustain ~90-100 Hz round-trips over the
+     * datachannel; over the internet expect the WebRTC path's RTT to
+     * dominate. The built-in 500 ms poll keeps running in parallel — it
+     * is harmless, as state responses are idempotent.
+     *
      * @returns {boolean}
      */
     requestState() {
@@ -907,12 +1745,14 @@ export class ReachyMini extends EventTarget {
             case 'list':
                 this._robots = msg.producers || [];
                 this._emit('robotsChanged', { robots: this._robots });
+                this._maybeAutoStart();
                 break;
             case 'peerStatusChanged': {
                 const list = await this._sendToServer({ type: 'list' });
                 if (list?.producers) {
                     this._robots = list.producers;
                     this._emit('robotsChanged', { robots: this._robots });
+                    this._maybeAutoStart();
                 }
                 break;
             }
@@ -1001,7 +1841,7 @@ export class ReachyMini extends EventTarget {
             // decided. stopSession() sends its own endSession back but
             // central has already dropped the session, so the echo is
             // harmless.
-            this.stopSession().catch(() => {});
+            this.stopSession().catch(() => { });
         }
     }
 
@@ -1034,9 +1874,49 @@ export class ReachyMini extends EventTarget {
                 } else {
                     await this._pc.setRemoteDescription(new RTCSessionDescription(sdp));
                 }
+                // Replay any ICE candidates that arrived before the
+                // SDP exchange completed (see the buffering branch
+                // below for context).
+                const pending = this._pendingRemoteIce;
+                if (pending && pending.length) {
+                    this._pendingRemoteIce = [];
+                    for (const ice of pending) {
+                        try {
+                            await this._pc.addIceCandidate(new RTCIceCandidate(ice));
+                        } catch (err) {
+                            console.warn('[reachy-mini] buffered ICE candidate rejected:', err);
+                        }
+                    }
+                }
             }
             if (msg.ice) {
-                await this._pc.addIceCandidate(new RTCIceCandidate(msg.ice));
+                // Safari (and the iOS WKWebView Tauri ships on) rejects
+                // empty candidate strings with `OperationError: Expect
+                // line: candidate:<candidate-str>`. The signaling
+                // server uses an empty string as the end-of-candidates
+                // marker (legal per the WebRTC spec but optional).
+                // Chrome / Firefox swallow it silently; we mirror that
+                // here so the iOS WebView stops surfacing the noise as
+                // a robot-side WebRTC error event.
+                if (!msg.ice.candidate) return;
+                if (this._pc.remoteDescription) {
+                    await this._pc.addIceCandidate(new RTCIceCandidate(msg.ice));
+                } else {
+                    // The signaling transport (SSE through central) is
+                    // not strictly ordered across the offer / ICE
+                    // streams when the SDK runs inside a cross-origin
+                    // iframe or in Safari / iOS WKWebView: the first
+                    // ICE candidates can land before the offer SDP
+                    // does. Calling addIceCandidate before
+                    // setRemoteDescription throws
+                    // `InvalidStateError: The remote description was
+                    // null` and the candidate is silently lost,
+                    // sometimes wedging ICE altogether. Buffer here
+                    // and replay above as soon as the offer has been
+                    // applied.
+                    if (!this._pendingRemoteIce) this._pendingRemoteIce = [];
+                    this._pendingRemoteIce.push(msg.ice);
+                }
             }
         } catch (e) {
             console.error('WebRTC error:', e);
@@ -1049,6 +1929,11 @@ export class ReachyMini extends EventTarget {
         if ('version' in data && this._versionResolve) {
             this._versionResolve(data.version);
             this._versionResolve = null;
+            return;
+        }
+        if ('hardware_id' in data && this._hardwareIdResolve) {
+            this._hardwareIdResolve(data.hardware_id);
+            this._hardwareIdResolve = null;
             return;
         }
         // Volume responses. Backend tags each response with `command` so we
@@ -1070,20 +1955,36 @@ export class ReachyMini extends EventTarget {
             }
             return;
         }
+        if (data.type === 'log_line') {
+            for (const sub of this._logSubscribers) {
+                try {
+                    sub.onLine({ timestamp: data.timestamp, line: data.line });
+                } catch (e) {
+                    console.error('subscribeLogs onLine threw:', e);
+                }
+            }
+            return;
+        }
+        if (data.type === 'log_stream_error') {
+            for (const sub of this._logSubscribers) {
+                if (typeof sub.onError === 'function') {
+                    try { sub.onError(data.error); }
+                    catch (e) { console.error('subscribeLogs onError threw:', e); }
+                }
+            }
+            return;
+        }
         if (data.state) {
             const s = data.state;
-            if (s.head_pose) this._robotState.head = matrixToRpy(s.head_pose);
-            if (s.antennas) {
-                this._robotState.antennas = {
-                    right: radToDeg(s.antennas[0]),
-                    left:  radToDeg(s.antennas[1]),
-                };
-            }
-            // Surface motor_mode so apps can reflect torque state in the UI
-            // without an extra getMotorMode roundtrip. Values match the
-            // MotorControlMode enum on the server:
-            // "enabled" / "disabled" / "gravity_compensation".
-            if (s.motor_mode) this._robotState.motorMode = s.motor_mode;
+            // Wire-shape pass-through. The daemon ships the head pose as a
+            // nested 4×4 (numpy tolist()); we flatten to 16 numbers so
+            // consumers can hand it straight to WebGL / Three.js / trajectory
+            // logs. Everything else is forwarded as-is.
+            if (s.head_pose) this._robotState.head = s.head_pose.flat();
+            if (s.antennas) this._robotState.antennas = [s.antennas[0], s.antennas[1]];
+            if (typeof s.body_yaw === 'number') this._robotState.body_yaw = s.body_yaw;
+            if (s.motor_mode) this._robotState.motor_mode = s.motor_mode;
+            if (typeof s.is_move_running === 'boolean') this._robotState.is_move_running = s.is_move_running;
             this._emit('state', { ...this._robotState });
         }
         if (data.error) {

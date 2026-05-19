@@ -19,7 +19,7 @@ The daemon starts its media pipeline automatically unless the `--no-media` flag 
 3. Feeds both into a WebRTC server (`webrtcsink`) for remote streaming.
 4. Exposes raw camera frames via a local IPC endpoint (`unixfdsink` on Linux/macOS, `win32ipcvideosink` on Windows).
 
-[![Reachy Mini Media Daemon](https://github.com/pollen-robotics/reachy_mini/raw/develop/docs/assets/reachymini_media_daemon.png)]()
+[![Reachy Mini Media Daemon](https://github.com/pollen-robotics/reachy_mini/raw/main/docs/assets/reachymini_media_daemon.png)]()
 
 ### Client Side
 
@@ -29,13 +29,13 @@ The SDK `MediaManager` selects the backend automatically:
 - **WEBRTC**: Used when the client is remote. Streams camera + audio over WebRTC.
 - **NO_MEDIA**: Skips all media initialisation (headless operation).
 
-[![Reachy Mini Media Client](https://github.com/pollen-robotics/reachy_mini/raw/develop/docs/assets/reachymini_media_client.png)]()
+[![Reachy Mini Media Client](https://github.com/pollen-robotics/reachy_mini/raw/main/docs/assets/reachymini_media_client.png)]()
 
 ### Web Access
 
 Thanks to WebRTC, the audio and video streams can also be accessed directly from a web browser. For instance the [desktop application](../platforms/reachy_mini_lite/get_started.md#3--download-reachy-mini-control) uses this feature.
 
-[![Reachy Mini Media Web](https://github.com/pollen-robotics/reachy_mini/raw/develop/docs/assets/reachymini_media_web.png)]()
+[![Reachy Mini Media Web](https://github.com/pollen-robotics/reachy_mini/raw/main/docs/assets/reachymini_media_web.png)]()
 
 ## Disabling Media / Direct Hardware Access
 

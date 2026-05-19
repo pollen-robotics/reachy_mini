@@ -74,4 +74,4 @@ Make Reachy see and hear! Learn to capture images, record audio, and play sounds
 
 ### ❓ Troubleshooting
 
-If you encounter any issues during your exploration of the notebooks, check the **[Troubleshooting & FAQ Guide](https://github.com/pollen-robotics/reachy_mini/blob/develop/docs/troubleshooting.md)**
+If you encounter any issues during your exploration of the notebooks, check the **[Troubleshooting & FAQ Guide](https://github.com/pollen-robotics/reachy_mini/blob/main/docs/troubleshooting.md)**

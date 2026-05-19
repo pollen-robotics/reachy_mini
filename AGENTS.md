@@ -28,21 +28,29 @@ Unless the user explicitly requests otherwise:
 - Guide non-technical users through each step
 - Don't assume prior knowledge
 
-### Two App Flavours — Pick One Up Front
+### Two App Flavours — Default to JS, Python for developers
 
-Reachy Mini supports two complementary app types. Confirm with the user which one they want before scaffolding anything:
+Reachy Mini supports two app types. **Default to a JS (Live/Web) app** unless the user explicitly wants on-robot Python, or has a need that only Python can cover (heavy on-robot compute, rich hardware access, deterministic real-time control loops, or bundled offline LAN tooling).
 
-| Flavour | Use when | Where it runs |
+| Flavour | Default for | Where it runs |
 |---|---|---|
-| **Python app** | On-robot control loops, heavy motion sequences, offline/LAN, rich hardware access | Robot owner's machine (laptop / CM4), optionally with a bundled web UI |
-| **Live/Web/JS app** | Remote launch from any browser, zero-install end-users, shareable by URL, streaming A/V UIs | Entirely as a static HF Space; reaches the robot over WebRTC via the central signaling server |
+| **JS app (recommended)** | End-users, shareable-by-URL experiences, anyone who wants "open a link, use the robot". Remote launch, zero-install, streaming A/V UIs. | Static HF Space; reaches the robot over WebRTC via the central signaling server. |
+| **Python app** | Developer tools, on-robot control loops, heavy motion sequencing, offline/LAN. | Robot owner's machine (laptop / CM4), optionally with a bundled web UI. |
 
 Both coexist — a Python app can bundle a browser UI, and a JS app can call the Python daemon's REST API.
 
-- **(python apps) NEVER create app folders manually** — use `reachy-mini-app-assistant` (Python)
-- **If a command fails**, ask the user to run it in their terminal — don't attempt complex workarounds.
+**When unsure, start JS.** If the user later discovers they need on-robot compute they can graduate to a Python app; the reverse migration is rarely needed.
 
-**Python scaffold:**
+Confirm the choice with the user up front, then jump to the corresponding section:
+- JS path → [Live/Web/JS Apps](#livewebjs-apps)
+- Python path → instructions below
+
+---
+
+**Python path (for developers):**
+
+- **NEVER create app folders manually** — use `reachy-mini-app-assistant`.
+- **If a command fails**, ask the user to run it in their terminal — don't attempt complex workarounds.
 
 ```bash
 # Default template (minimal app - good for most cases):
@@ -52,7 +60,7 @@ reachy-mini-app-assistant create <app_name> <path> --publish
 reachy-mini-app-assistant create --template conversation <app_name> <path> --publish
 ```
 
-Python apps put web UIs in `static/`. See `skills/create-app.md` for details. For the JS path, jump to [Live/Web/JS Apps](#livewebjs-apps) below.
+Python apps put web UIs in `static/`. See `skills/create-app.md` for details.
 
 ### Always Create plan.md Before Coding
 
@@ -121,9 +129,19 @@ See and run `examples/minimal_demo.py` - demonstrates connection, head motion, a
 
 ## Live/Web/JS Apps
 
+> ## START HERE: clone `webrtc_example` and modify it.
+>
+> **Live Space (run it, read the source):** https://huggingface.co/spaces/cduss/webrtc_example
+>
+> This is the **canonical reference implementation** 
+>
+ **Mimicking what is done in this example is the fastest path to a working app.**
+
+Don't necessarily clone it verbatim — feel free to trim panels, remove features, and tweak the UI as needed. But the core patterns (SDK wiring, event handling, session management, media flow, responsive mobile layout) are already solved there; start by understanding how it works before scaffolding something new. **Default to a mobile-friendly responsive design** (most users open Spaces on phones) — see the section below.
+
 Browser apps that control a Reachy Mini remotely over WebRTC. **The app IS a static Hugging Face Space**, not something installed on the robot. Any HF-authenticated user can open the Space URL from anywhere and reach any robot they have access to, through the central signaling server.
 
-Create app with simple hf space creation, use standard hf tools, if need be, have a look here https://huggingface.co/spaces/cduss/webrtc_example
+> **Full walkthrough**: [`docs/source/SDK/javascript-sdk.md`](docs/source/SDK/javascript-sdk.md) — architecture diagram, end-to-end deployment, complete SDK reference. The section below is a quick-start; read the full doc when scaffolding something non-trivial.
 
 **What this flavour unlocks:**
 - **Remote launch** — no LAN, no USB, no local daemon on the end-user side.
@@ -132,11 +150,36 @@ Create app with simple hf space creation, use standard hf tools, if need be, hav
 - **Bidirectional media** — robot camera/mic → browser; optionally user's mic → robot speaker.
 - **Clean version pinning** — each app imports the SDK from a specific GitHub tag; stable even as the SDK advances.
 
-### SDK import — pin to a tag, pinning to `@main` is considered bad practice and does not benefit from the stability guarantees of a tagged release. Always pin to a specific `v*` tag.
+### Design for mobile first — most users will open the Space on a phone
+
+Unless the user explicitly asks for a desktop-only / kiosk / dev-tool UI, **assume the app will be opened on a smartphone** and design accordingly. The Space URL is shareable, and "open this link on your phone and play with the robot" is the most common end-user flow.
+
+Practical rules:
+- Include `<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />` in `<head>` (the `webrtc_example` already does).
+- Use fluid widths and `rem`/`vh`/`vw` units, not fixed pixel layouts. Stack panels vertically by default; reserve side-by-side layouts for `@media (min-width: 768px)`.
+- Touch-friendly hit targets: ≥ 44×44 px buttons, sliders with comfortable thumbs.
+- No hover-only affordances. Anything reachable by mouse-hover must also be reachable by tap.
+- Test in Chrome devtools' phone emulation before declaring the app done.
+- Bidirectional audio + camera permissions on iOS Safari are the most fragile path — verify on a real iPhone if the app uses them.
+
+The `webrtc_example` is already responsive; cloning it gets you the mobile baseline for free. Don't undo it by hardcoding desktop widths in your edits.
+
+### SDK import — strongly prefer an immutable ref (tag or commit SHA)
+
+For anything you'd want to be stable, pin to either a `v*` **tag** (preferred for releases) or a 40-char **commit SHA** (when you need an unreleased SDK feature, like the live `webrtc_example` does). Both are immutable on jsDelivr. Pinning to a branch like `@main` works, but means the app can break on any SDK change — fine for early prototyping, risky for anything you share.
+
+> ⚠️ **Pin `v1.7.2` or newer.** Earlier versions default `signalingUrl` to a decommissioned HF Space (`cduss-reachy-mini-central` / `tfrere-reachy-mini-central`). The canonical signaling server moved to `pollen-robotics-reachy-mini-central.hf.space` in v1.7.2. Apps on `@v1.7.1` or older that don't pass an explicit `signalingUrl` constructor option **cannot reach any robot** — central returns 404/CORS and `connect()` hangs.
+>
+> v1.7.2 also adds `robot.autoConnect()` (see [SDK cheatsheet](#sdk-cheatsheet) below) which is the single supported way to bring a session up going forward. Apps stuck on `v1.7.1` and older miss it and have to re-implement the auth + connect + pick + startSession + ensureAwake chain by hand.
 
 ```html
 <script type="module">
-  import { ReachyMini } from "https://cdn.jsdelivr.net/gh/pollen-robotics/reachy_mini@v1.6.4/js/reachy-mini.js";
+  // Tagged release — preferred. v1.7.2 is the minimum supported pin.
+  import { ReachyMini } from "https://cdn.jsdelivr.net/gh/pollen-robotics/reachy_mini@v1.7.2/js/reachy-mini.js";
+
+  // Or a specific commit SHA — for unreleased SDK changes
+  // import { ReachyMini } from "https://cdn.jsdelivr.net/gh/pollen-robotics/reachy_mini@e8ba0b3dfcd48af528a8223eb2f2d58986204c94/js/reachy-mini.js";
+
   const robot = new ReachyMini({ appName: "my-app" });
 </script>
 ```
@@ -151,9 +194,11 @@ git ls-remote --tags --refs --sort=-v:refname \
   | head -1 | awk -F/ '{print $NF}'
 ```
 
-**When extending an existing app**, re-check for a newer tag and bump only if the app needs it. Stale pins are fine; `@main` is not — apps would break on any SDK change.
+**When extending an existing app**, re-check for a newer tag and bump only if the app needs it. Stale pins are fine *as long as they're `v1.7.2` or newer* — anything older needs to be bumped before the app can connect at all (signaling URL is hard-coded into the SDK default). Branch pins (`@main`, etc.) work but trade stability for freshness — use them deliberately, not by default.
 
 ### Create the Space from scratch
+
+> **Reminder**: don't actually scaffold "from scratch." Start by **copying [`../hfspace/webrtc_example/`](https://huggingface.co/spaces/cduss/webrtc_example)** (or the live Space) and trimming. The steps below are for the rare case where the example doesn't apply.
 
 The app *is* the Space repo. Workflow:
 
@@ -189,8 +234,8 @@ tags:
 ---
 ```
 
-- **`index.html`** — copy from the reference example (see below) and trim.
-- **`style.css`** — copy or write from scratch.
+- **`index.html`** — **copy from [`../hfspace/webrtc_example/index.html`](https://huggingface.co/spaces/cduss/webrtc_example)** and trim panels you don't need. Do not write from scratch.
+- **`style.css`** — copy from the same example, then tweak.
 
 **4. Create + push:**
 
@@ -201,19 +246,90 @@ cp <scaffold-dir>/{README.md,index.html,style.css} <app-name>/
 cd <app-name> && git add . && git commit -m "Initial app scaffold" && git push
 ```
 
-Static Spaces go live in ~10s. Return the Space URL to the user.
+Static Spaces go live in ~10 s. **The live URL is `https://<username>-<app-name>.static.hf.space/`** — not `huggingface.co/spaces/<username>/<app-name>/`. The latter is the file browser; only the `.static.hf.space/` origin actually serves the app (and only that origin can complete the HF OAuth redirect). Return the `.static.hf.space/` URL to the user.
 
 ### SDK cheatsheet
 
-State: `disconnected` → `connect()` → `connected` → `startSession(robotId)` → `streaming`.
+**Bring-up — use `robot.autoConnect()` (v1.7.2+).** One call does auth + SSE connect + robot selection (auto-pick if exactly one free, otherwise the consumer-supplied `pickRobot` callback) + `startSession()` + `ensureAwake()`. Replaces the legacy `connect()` → `robotsChanged` → `startSession()` → `ensureAwake()` chain. Works for both standalone Spaces and iframe-embedded apps (the SDK auto-detects embed mode from the URL — see [Iframe-embedded apps](#iframe-embedded-apps-mobile-shell-vibe-coder-preview) below).
 
-Commands: `setHeadPose(r,p,y°)`, `setAntennas(right°, left°)`, `playSound(file)`, `setAudioMuted(bool)`, `setMicMuted(bool)`, `sendRaw(obj)`, `getVersion()`.
+```js
+const robot = new ReachyMini({ appName: "my-app" });
+await robot.autoConnect({
+    pickRobot: async (robots) =>
+        // robots: [{ id, name, busy, activeApp, meta, lastSeenAgeSeconds }]
+        // Already busy-filtered + deduped by install_id.
+        await showMyPickerUI(robots),       // your UI; returns the chosen id
+});
+// Now streaming — robot is awake, motors enabled, ready to drive.
+```
 
-Lifecycle: `authenticate()` / `login()` / `connect()` / `startSession()` / `stopSession()` / `disconnect()` / `logout()`. Video: `attachVideo(<video>)` returns a detach fn.
+Options: `token?` (skip `authenticate()` and use this raw HF token), `autoPickIfSingle?` (default `true`), `filterBusy?` (default `true`), `wakeOnConnect?` (default `true`).
+
+Underlying state: `disconnected` → `connect()` → `connected` → `startSession(robotId)` → `streaming`. `autoConnect()` wraps the whole chain; the primitives stay exposed for advanced consumers (mobile shell, app preview tools).
+
+Commands: `setHeadRpyDeg(r°,p°,y°)`, `setAntennasDeg(right°, left°)`, `setBodyYawDeg(yaw°)`, `setTarget({ head?: number[16], antennas?: [rRad, lRad], body_yaw?: rad })` (atomic raw-units update), `playSound(file)`, `setAudioMuted(bool)`, `setMicMuted(bool)`, `sendRaw(obj)`, `getVersion()`. Math utilities exported from the module: `rpyToMatrix`, `matrixToRpy`, `degToRad`, `radToDeg`.
+
+Speaker / mic volume: `getVolume()` → 0-100, `setVolume(0-100)`, `getMicrophoneVolume()`, `setMicrophoneVolume(0-100)`. All return a `Promise`; `setVolume` resolves with the value the server actually applied (may be clamped/rounded).
+
+Torque / wake: `setMotorMode("enabled"|"disabled"|"gravity_compensation")`, `wakeUp()`, `gotoSleep()`, `isAwake()`, `ensureAwake()`. `robot.robotState.motor_mode` reflects the live state.
+
+Lifecycle (advanced — most consumers should just use `autoConnect()`): `authenticate()` / `login()` / `connect()` / `startSession()` / `stopSession()` / `disconnect()` / `logout()`. Video: `attachVideo(<video>)` returns a detach fn.
+
+**If you opt out of `autoConnect()` and drive the lifecycle manually, always call `await robot.ensureAwake()` right after `startSession()`** — otherwise if the robot is in the sleep pose (torque off, head on the base) every `setHeadRpyDeg` / `setAntennasDeg` is silently ignored and the app looks broken. `ensureAwake()` is a no-op when the robot is already awake (including gravity-compensation mode), so it's safe to call unconditionally at startup. `autoConnect()` calls it for you.
 
 Events: `connected`, `disconnected`, `robotsChanged`, `streaming`, `sessionStopped`, `sessionRejected` (robot busy — inspect `e.detail.activeApp`), `state` (every ~500 ms), `videoTrack`, `micSupported`, `error`.
 
 **Full API:** read the top ~90 lines of [`js/reachy-mini.js`](js/reachy-mini.js) — the file header is a complete reference.
+
+### Iframe-embedded apps (mobile shell, vibe-coder preview)
+
+Browser apps may run **standalone** (the user opens the Space URL directly) or **embedded** in a host iframe (the Reachy Mini mobile shell, the vibe-coder preview, future shells). HF blocks `huggingface.co/oauth/authorize` from being framed (`X-Frame-Options: SAMEORIGIN`), so OAuth-in-iframe is impossible. The host shell instead pre-authenticates and pre-picks a robot, then forwards both pieces of state to the embed via the iframe URL.
+
+**The SDK handles the plumbing.** App authors don't parse URLs, don't manage `sessionStorage` keys, and don't wire `robotsChanged` listeners for preselect. With `robot.autoConnect()` (v1.7.2+), the embed-vs-standalone branch is hidden entirely inside the SDK.
+
+The relevant SDK surface:
+
+- `robot.autoConnect({ pickRobot })` — single entry point. Detects embed mode from the URL, skips the picker in that case (uses `preselectedRobotId`), invokes your `pickRobot` callback in standalone mode. Does auth + connect + startSession + ensureAwake.
+- `robot.authenticate()` (called internally by `autoConnect`) consumes `#hf_token=…&hf_username=…&hf_token_expires=…` from the URL fragment automatically. Standalone visits with no fragment fall through to the existing OAuth path.
+- `robot.preselectedRobotId` (string | null) and `robot.isEmbedded` (boolean) — exposed for UX branching (e.g. hide the picker UI in embed mode), not for orchestration.
+
+**Receiver recipe** (the only app-side code you need):
+
+```js
+const robot = new ReachyMini({ appName: "..." });
+
+document.addEventListener("DOMContentLoaded", async () => {
+    // Hide your picker UI in embed mode — the SDK won't call pickRobot
+    // there. This is the only embed-vs-standalone branch you need.
+    if (robot.isEmbedded) hidePickerUI();
+
+    try {
+        await robot.autoConnect({
+            pickRobot: async (robots) => showPickerAndAwaitChoice(robots),
+        });
+    } catch (e) {
+        // 'Not authenticated' → user needs to log in (await robot.login()).
+        // 'No reachable robots' → no candidates on central.
+        // 'Robot selection cancelled' → user closed the picker.
+        // Any other → check e.reason for 'robot_busy' / 'local_app_started' etc.
+        showError(e);
+    }
+});
+
+robot.addEventListener("streaming", () => {
+    // Same handler for both embedded and standalone paths.
+});
+```
+
+That's it. No URL parsing, no `connect()`/`startSession()`/`ensureAwake()` chaining, no `autoStartFromUrl` flag, no postMessage listener, no `consumeTokenFromHash` boilerplate.
+
+> **Deprecation note.** The old `autoStartFromUrl: true` constructor option still exists in v1.7.2+ for backward compat, but **do not use it alongside `autoConnect()`** — they race two `startSession()` calls against the same preselected robot, with central rejecting the second one as *"Robot is busy: <our own appName>"*. `autoConnect()` defensively suppresses `autoStartFromUrl` while it runs, but the cleanest path is to drop the constructor option entirely.
+
+**For host-shell authors** (writing a NEW iframe parent), the URL contract is:
+- Credentials in the **fragment**: `#hf_token=<jwt>&hf_username=<handle>&hf_token_expires=<ISO>`. Fragment because it doesn't travel over HTTP (no referrer, no server logs).
+- Robot pre-select in the **query** (or fragment if you prefer symmetry): `?robot_peer_id=<peerId>`. Not a secret; query is fine.
+
+The mobile-shell reference implementation lives in [`reachy_mini_mobile_app/src/screens/apps/AppIframeOverlay.tsx`](https://github.com/pollen-robotics/reachy_mini_mobile_app); read its file-level docstring for the host-side authoritative contract. The receiver-side reference is the dev `webrtc_example` Space using the recipe above.
 
 ### Media flow — use WebRTC, not `getUserMedia`, for robot media
 
@@ -232,21 +348,42 @@ Rule of thumb: robot IO flows through WebRTC; the user's own laptop IO flows thr
 
 Always start from this when scaffolding anything non-trivial. Integration patterns (event wiring, slider debouncing, state sync, session-rejection handling) are already solved there.
 
+### Local development (without pushing to HF every iteration) (advanced user)
+
+OAuth only works from the deployed `*.static.hf.space` origin — clicking "Sign in with HF" on `localhost` or `file://` silently fails because HF auto-provisions the OAuth client against your Space's origin. HF Spaces **Dev Mode is not available for static Spaces**, so the manual-token loop below is the only low-latency option:
+
+1. Create a read-only token at https://huggingface.co/settings/tokens.
+2. In dev, skip `authenticate()` / `login()` and pass the token directly to `connect()`:
+   ```js
+   const token = new URLSearchParams(location.search).get("hf")
+                 || localStorage.getItem("hf_dev_token");
+   await robot.connect(token);    // SDK accepts a manually-pasted HF token
+   ```
+3. Serve with `python3 -m http.server 8765` (not `file://` — the SDK is an ES module from jsDelivr and needs a real HTTP origin). Open `http://localhost:8765/?hf=hf_…` once, then rely on `localStorage`.
+4. Before pushing to the Space, restore the OAuth path and **never commit the token**.
+
+Rule of thumb: for UI-heavy iteration (CSS, slider behaviour, state machine wiring), local reload ≪ push-to-HF (~10-30 s). For a one-off tweak, just push.
+
 ### Common gotchas
 
 | Symptom | Cause |
 |---|---|
 | `robot.login()` fails / redirects to `about:blank` | Running via `file://` or localhost — OAuth only works on the live Space domain. |
-| Head doesn't move | `setHeadPose` called before `startSession()` resolved. Check the return value. |
+| Head doesn't move | `setHeadRpyDeg` called before `startSession()` resolved. Check the return value. |
+| Head doesn't move, session *is* streaming | Robot is asleep (torque off). Call `await robot.ensureAwake()` after `startSession()`. |
 | Audio stays silent after `setAudioMuted(false)` | Browser requires unmute inside a user-gesture handler. |
 | `sessionRejected` | Robot is locked by another app. Surface `e.detail.activeApp` in the UI. |
 | Stream laggy | See buffer-lag overlay in `webrtc_example/index.html`; > 500 ms jitter = network issue. |
+| UI broken on phone | Hardcoded pixel widths or desktop-only layout. Use the `webrtc_example` viewport meta + fluid units; test in Chrome devtools phone emulation. |
+| Volume slider floods the data channel | Wire `setVolume` on the slider's `'change'` event (release) — not `'input'` (per-pixel). Sync once on streaming-start with `await robot.getVolume()` to reflect the robot's real level, then reflect the value that `setVolume` resolves with back into the slider. |
 
 ---
 
 ## REST API
 
 The daemon exposes an HTTP/WebSocket API at `http://{daemon-ip}:8000/api`.
+
+> REST and the JS SDK's WebRTC data channel are **sibling transports** into the same `process_command()` backend on the daemon — WebRTC is a JSON subset (motion, audio, state). Commands you send from JS (`setHeadRpyDeg`, `setAntennasDeg`, …) reach the same handler as the corresponding REST endpoints; picking one transport or the other is a deployment choice, not a functional one.
 
 - **Lite**: `localhost:8000` (daemon runs on your machine)
 - **Wireless**: `reachy-mini.local:8000` or the robot's IP address
@@ -308,7 +445,9 @@ Full SDK documentation is in `docs/source/`:
 |-------|------|
 | Quickstart | `docs/source/SDK/quickstart.md` |
 | Python SDK | `docs/source/SDK/python-sdk.md` |
+| **JavaScript SDK & Web Apps** | `docs/source/SDK/javascript-sdk.md` |
 | Core concepts | `docs/source/SDK/core-concept.md` |
+| Media architecture (WebRTC / GStreamer) | `docs/source/SDK/media-architecture.md` |
 | AI integration | `docs/source/SDK/integration.md` |
 | Troubleshooting | `docs/source/troubleshooting.md` |
 

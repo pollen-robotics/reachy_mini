@@ -6,15 +6,59 @@ Includes a fixed NoInputNoOutput agent for automatic Just Works pairing.
 # mypy: ignore-errors
 
 import fcntl
+import hashlib
 import logging
 import os
 import subprocess
+from pathlib import Path
 from typing import Callable
 
 import dbus
 import dbus.mainloop.glib
 import dbus.service
 from gi.repository import GLib
+
+# ─── Hardware identity (inlined) ──────────────────────────────────────────
+#
+# IMPORTANT: this file runs on `/usr/bin/python3` (see the systemd unit in
+# install_service_bluetooth.sh), NOT inside the daemon's venv. That means
+# we CANNOT `from reachy_mini.utils.hardware_id import …` — the package
+# is not installed in the system Python, and its own __init__ chains into
+# numpy/scipy which also aren't there.
+#
+# The canonical implementation lives in `reachy_mini.utils.hardware_id`.
+# Keep the constants and logic below in lock-step with it. The drift-check
+# test at `tests/unit_tests/test_hardware_id_inline_consistency.py` parses
+# both files as plain text and asserts the literals match — restore /
+# update it whenever this block changes.
+POLLEN_AUDIO_VID = "38fb"
+POLLEN_AUDIO_PID = "1001"
+
+
+def _read_raw_audio_serial() -> str | None:
+    """Read the raw Pollen audio device USB serial from sysfs."""
+    usb_root = Path("/sys/bus/usb/devices")
+    if not usb_root.exists():
+        return None
+    for dev in usb_root.iterdir():
+        try:
+            if (dev / "idVendor").read_text().strip() != POLLEN_AUDIO_VID:
+                continue
+            if (dev / "idProduct").read_text().strip() != POLLEN_AUDIO_PID:
+                continue
+            serial = (dev / "serial").read_text().strip()
+            return serial or None
+        except (OSError, FileNotFoundError):
+            continue
+    return None
+
+
+def get_hardware_id() -> str | None:
+    """Public hardware ID — SHA-256 of the raw serial, truncated to 16 hex."""
+    raw = _read_raw_audio_serial()
+    if raw is None:
+        return None
+    return hashlib.sha256(raw.encode("ascii")).hexdigest()[:16]
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -35,6 +79,7 @@ REACHY_STATUS_SERVICE_UUID = "12345678-1234-5678-1234-56789abcdef3"
 NETWORK_STATUS_UUID = "12345678-1234-5678-1234-56789abcdef4"
 SYSTEM_STATUS_UUID = "12345678-1234-5678-1234-56789abcdef5"
 AVAILABLE_COMMANDS_UUID = "12345678-1234-5678-1234-56789abcdef6"
+HARDWARE_ID_UUID = "12345678-1234-5678-1234-56789abcdef7"
 
 BLUEZ_SERVICE_NAME = "org.bluez"
 GATT_MANAGER_IFACE = "org.bluez.GattManager1"
@@ -520,6 +565,26 @@ class ReachyStatusService(dbus.service.Object):
             )
         )
 
+        # Hardware ID — robot-unique Pollen audio device serial. Read-only,
+        # populated once at service init (the audio device is hot-pluggable in
+        # principle but in practice present for the daemon's lifetime). Lives
+        # here rather than the advertisement because the legacy 31-byte advert
+        # is already at capacity.
+        #
+        # `get_hardware_id` is the locally-inlined version at the top of this
+        # module — see the comment block there for why we can't import from
+        # the venv-hosted `reachy_mini.utils.hardware_id`.
+        self.add_characteristic(
+            StaticCharacteristic(
+                bus,
+                3,
+                HARDWARE_ID_UUID,
+                self,
+                get_hardware_id() or "unknown",
+                "Hardware ID",
+            )
+        )
+
     def update_network_status(self):
         """Update the network status characteristic value."""
         if hasattr(self, "network_char"):
@@ -820,21 +885,22 @@ class BluetoothCommandService:
 
 
 def get_pin() -> str:
-    """Extract the last 5 digits of the serial number from dfu-util -l output."""
+    """Last 5 chars of the Pollen audio device serial — used as BLE pairing PIN.
+
+    The PIN is a proximity-only short-lived secret, so leaking 5 chars of
+    the raw serial is acceptable; the public hardware ID surfaced over the
+    GATT characteristic is hashed (see `get_hardware_id` above). Falls back
+    to a fixed default when no Reachy is attached so pairing still works
+    on a dev workstation.
+
+    Mirrors `reachy_mini.utils.hardware_id.get_pin`; see the inline-import
+    note at the top of this file for why we don't share the implementation.
+    """
     default_pin = "46879"
-    try:
-        result = subprocess.run(["dfu-util", "-l"], capture_output=True, text=True)
-        lines = result.stdout.splitlines()
-        for line in lines:
-            if "serial=" in line:
-                # Extract serial number
-                serial_part = line.split("serial=")[-1].strip().strip('"')
-                if len(serial_part) >= 5:
-                    return serial_part[-5:]
-        return default_pin  # fallback if not found
-    except Exception as e:
-        logger.error(f"Error getting pin from serial: {e}")
-        return default_pin
+    raw = _read_raw_audio_serial()
+    if raw and len(raw) >= 5:
+        return raw[-5:]
+    return default_pin
 
 
 def get_network_status() -> str:

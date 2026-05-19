@@ -10,17 +10,17 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
 from reachy_mini.apps.sources import hf_auth
+from reachy_mini.media.central_signaling_relay import CENTRAL_SIGNALING_SERVER
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/hf-auth")
 
-# Central signaling server that tracks which robot is currently in use by
-# which remote JS app. We proxy its /api/robot-status endpoint so the
-# desktop frontend never needs to see the raw HF token.
-CENTRAL_ROBOT_STATUS_URL = (
-    "https://cduss-reachy-mini-central.hf.space/api/robot-status"
-)
+# We proxy the central /api/robot-status endpoint so the desktop frontend
+# never needs to see the raw HF token. Single source of truth for the
+# central base URL (and its REACHY_CENTRAL_URL override) is the relay
+# module — importing it here keeps the default in lock-step.
+CENTRAL_ROBOT_STATUS_URL = f"{CENTRAL_SIGNALING_SERVER}/api/robot-status"
 CENTRAL_ROBOT_STATUS_TIMEOUT = aiohttp.ClientTimeout(total=5)
 
 
@@ -100,6 +100,50 @@ async def delete_token() -> dict[str, str]:
     return {"status": "success"}
 
 
+@router.post("/refresh-relay")
+async def refresh_relay() -> dict[str, Any]:
+    """Force the central signaling relay to reconnect — see ``notify_force_reconnect``.
+
+    Response shapes:
+      - ``{"status": "requested", "token_available": bool}`` — a
+        reconnect was kicked off.
+      - ``{"status": "skipped", "token_available": bool,
+            "reason": "relay_not_running" | "relay_unavailable"}`` — no
+        reconnect happened. The mobile app's auto-heal loop must NOT
+        wait for a state change in this case (it would hang forever).
+        ``relay_unavailable`` covers the import failure (Lite-only
+        build that ships no relay module); ``relay_not_running`` covers
+        the module-present-but-no-instance case (daemon started
+        without a token / pre-init / shutdown).
+    """
+    token = hf_auth.get_hf_token()
+
+    try:
+        from reachy_mini.media.central_signaling_relay import notify_force_reconnect
+
+        kicked_off = await notify_force_reconnect()
+    except ImportError:
+        return {
+            "status": "skipped",
+            "token_available": bool(token),
+            "reason": "relay_unavailable",
+        }
+    except Exception as e:
+        logger.warning("[refresh-relay] notify_force_reconnect failed: %s", e)
+        raise HTTPException(
+            status_code=500, detail=f"Failed to refresh relay: {e}"
+        ) from e
+
+    if not kicked_off:
+        return {
+            "status": "skipped",
+            "token_available": bool(token),
+            "reason": "relay_not_running",
+        }
+
+    return {"status": "requested", "token_available": bool(token)}
+
+
 @router.get("/central-robot-status")
 async def get_central_robot_status() -> dict[str, Any]:
     """Proxy to the central signaling server's /api/robot-status endpoint.
@@ -122,7 +166,9 @@ async def get_central_robot_status() -> dict[str, Any]:
         return {"available": False, "robots": [], "reason": "not_authenticated"}
 
     try:
-        async with aiohttp.ClientSession(timeout=CENTRAL_ROBOT_STATUS_TIMEOUT) as session:
+        async with aiohttp.ClientSession(
+            timeout=CENTRAL_ROBOT_STATUS_TIMEOUT
+        ) as session:
             # Token goes in the Authorization header, not the URL —
             # otherwise it leaks into central's access logs and any
             # intermediate proxy's logs. The desktop frontend already
@@ -175,9 +221,7 @@ async def is_oauth_configured() -> dict[str, Any]:
 
 
 @router.get("/oauth/start")
-async def start_oauth(
-    request: Request, use_localhost: bool = False
-) -> dict[str, Any]:
+async def start_oauth(request: Request, use_localhost: bool = False) -> dict[str, Any]:
     """Start a new OAuth authorization session.
 
     Returns the auth_url to redirect the user to HuggingFace.

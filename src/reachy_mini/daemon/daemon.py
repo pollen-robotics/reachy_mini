@@ -65,6 +65,8 @@ class Daemon:
             package_version = None
             self.logger.warning("Could not determine daemon version")
 
+        from reachy_mini.utils.hardware_id import get_hardware_id
+
         self._status = DaemonStatus(
             robot_name=robot_name,
             state=DaemonState.NOT_INITIALIZED,
@@ -77,6 +79,7 @@ class Daemon:
             error=None,
             wlan_ip=None,
             version=package_version,
+            hardware_id=get_hardware_id(),
         )
         self.ws_server: "WSServer | None" = None
         self.backend_run_thread: "Thread | None" = None
@@ -175,10 +178,19 @@ class Daemon:
         try:
             from reachy_mini.media.central_signaling_relay import start_central_relay
 
+            # ``transport`` reflects how a remote client physically
+            # reaches this daemon: the Wireless variant runs autonomously
+            # on its onboard CM4 and is reached over Wi-Fi (or LAN); the
+            # Lite variant is plugged into the user's desktop and the
+            # daemon runs there, reached over USB. Keyed off
+            # ``wireless_version`` so the badging follows the robot SKU.
+            transport = "wifi" if self.wireless_version else "usb"
+
             self.logger.info("Starting central signaling relay...")
             await start_central_relay(
                 hf_token=hf_token,
                 robot_name=self.robot_name,
+                transport=transport,
                 robot_app_lock=self.robot_app_lock,
             )
             self.logger.info("Central signaling relay started")
@@ -310,6 +322,7 @@ class Daemon:
             if self._media_server and not self._media_released:
                 if self.backend is not None:
                     self.backend.setup_media_server(self._media_server)
+                    self.backend.set_restart_daemon_callback(self._spawn_webrtc_restart)
                 self._media_server.start()
 
                 # Start central signaling relay for remote WebRTC access
@@ -506,6 +519,34 @@ class Daemon:
         raise NotImplementedError(
             "Restarting is only supported when the daemon is in RUNNING or ERROR state."
         )
+
+    def _spawn_webrtc_restart(self) -> None:
+        """Run ``self.restart()`` on a fresh thread.
+
+        Called from the backend's WebRTC ``restart_daemon`` handler to
+        recover from a broken backend state (e.g. a dead motor
+        controller) without forcing a ``systemctl restart`` or a REST
+        round-trip. Mirrors ``bg_job_register.run_command``: a daemon
+        thread starts its own asyncio loop, runs ``restart()``, then
+        exits. We can't reuse the FastAPI background-job registry from
+        here because the backend has no FastAPI ``Request`` context.
+
+        Returns immediately so the caller can flush its DataChannel
+        ack before the WebRTC stack is torn down.
+        """
+        if self._status.state == DaemonState.STOPPED:
+            self.logger.warning(
+                "Ignoring WebRTC restart_daemon: daemon already stopped."
+            )
+            return
+
+        def _run() -> None:
+            try:
+                asyncio.run(self.restart())
+            except Exception as e:
+                self.logger.error(f"WebRTC restart_daemon failed: {e}")
+
+        Thread(target=_run, daemon=True, name="webrtc-restart-daemon").start()
 
     def status(self) -> "DaemonStatus":
         """Get the current status of the Reachy Mini daemon."""

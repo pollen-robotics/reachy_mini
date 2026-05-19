@@ -133,6 +133,10 @@ class GstMediaServer:
 
         self._data_channels: dict[str, Gst.Element] = {}  # peer_id -> channel
         self._on_data_message: Optional[Callable[[str, str], None]] = None
+        # Optional callback fired on the GStreamer thread when a peer
+        # leaves; used by the backend to free per-peer resources such
+        # as the journalctl subprocess for a `subscribe_logs` stream.
+        self._on_peer_disconnect: Optional[Callable[[str], None]] = None
         self._incoming_audio: Dict[str, Dict[str, Any]] = {}
         self._playbin: Optional[Gst.Element] = None
         self._head_wobbler: Optional[HeadWobbler] = None
@@ -248,6 +252,13 @@ class GstMediaServer:
     ) -> None:
         self._logger.info(f"consumer removed: {peer_id}")
         self._cleanup_incoming_audio(peer_id)
+        if self._on_peer_disconnect is not None:
+            try:
+                self._on_peer_disconnect(peer_id)
+            except Exception as e:
+                self._logger.warning(
+                    f"peer-disconnect handler raised for {peer_id}: {e}"
+                )
 
     def _on_consumer_pad_added(
         self,
@@ -1129,6 +1140,18 @@ class GstMediaServer:
 
         """
         self._on_data_message = handler
+
+    def set_peer_disconnect_handler(
+        self,
+        handler: Callable[[str], None],  # cb(peer_id)
+    ) -> None:
+        """Set a callback fired when a WebRTC peer disconnects.
+
+        The callback runs on the GStreamer/GLib thread (same context as
+        ``_consumer_removed``) so consumers must hop back to their own
+        loop before touching shared state.
+        """
+        self._on_peer_disconnect = handler
 
     def send_data_message(self, peer_id: Optional[str], message: str) -> None:
         """Send a message to connected peers via data channel.

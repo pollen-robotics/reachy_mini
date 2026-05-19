@@ -1,6 +1,8 @@
 - sections:
     - local: index
       title: Reachy Mini
+    - local: vibe-code-with-your-agent
+      title: Vibe code with your agent
     - local: sdk-tutorials
       title: SDK Tutorials
   title: Get Started
@@ -71,6 +73,8 @@
       title: Change Mic FPC Cable
     - local: troubleshooting/spherical_joints_maintenance
       title: Spherical Joints Maintenance
+    - local: troubleshooting/roadmap
+      title: Roadmap
   title: Help and support
 - isExpanded: false
   sections:
