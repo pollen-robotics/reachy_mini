@@ -23,6 +23,8 @@ gi.require_version("GstApp", "1.0")
 
 from gi.repository import GLib, Gst, GstApp  # noqa: E402
 
+from reachy_mini.media.gstreamer_utils import handle_default_bus_message  # noqa: E402
+
 
 class GStreamerUDPCamera:
     """A class to send frames over UDP using GStreamer."""
@@ -62,7 +64,7 @@ class GStreamerUDPCamera:
         # Create pipeline
         self.pipeline = Gst.Pipeline.new("udp_sender")
         self._bus = self.pipeline.get_bus()
-        self._bus.add_watch(GLib.PRIORITY_DEFAULT, self._on_bus_message, self._loop)
+        self._bus.add_watch(GLib.PRIORITY_DEFAULT, self._on_bus_message, self.pipeline)
 
         # Configure pipeline elements
         self._configure_pipeline()
@@ -138,32 +140,10 @@ class GStreamerUDPCamera:
         self._logger.debug("UDP sender pipeline configured successfully")
 
     def _on_bus_message(
-        self, bus: Gst.Bus, msg: Gst.Message, loop: GLib.MainLoop
+        self, bus: Gst.Bus, msg: Gst.Message, pipeline: Gst.Pipeline
     ) -> bool:
-        """Handle GStreamer bus messages.
-
-        Args:
-            bus: GStreamer bus.
-            msg: GStreamer message.
-            loop: GLib main loop.
-
-        Returns:
-            bool: True to continue receiving messages, False to stop.
-
-        """
-        t = msg.type
-        if t == Gst.MessageType.EOS:
-            self._logger.warning("End-of-stream")
-            return False
-        elif t == Gst.MessageType.ERROR:
-            err, debug = msg.parse_error()
-            self._logger.error(f"Error: {err} {debug}")
-            return False
-        elif t == Gst.MessageType.WARNING:
-            err, debug = msg.parse_warning()
-            self._logger.warning(f"Warning: {err} {debug}")
-
-        return True
+        """Handle GStreamer bus messages via the shared helper."""
+        return handle_default_bus_message(self._logger, msg, pipeline)
 
     def _handle_bus_calls(self) -> None:
         """Run the GLib main loop for handling bus messages."""

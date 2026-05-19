@@ -19,11 +19,15 @@ import logging
 from abc import ABC, abstractmethod
 from typing import Optional
 
+import gi
 import numpy as np
 import numpy.typing as npt
 
 from reachy_mini.media.audio_doa import AudioDoA
-from reachy_mini.media.gstreamer_utils import get_sample
+from reachy_mini.media.gstreamer_utils import get_sample, handle_default_bus_message
+
+gi.require_version("Gst", "1.0")
+from gi.repository import Gst  # noqa: E402
 
 
 class AudioBase(ABC):
@@ -72,6 +76,17 @@ class AudioBase(ABC):
         else:
             pts_ns = next_pts_ns
         return pts_ns, duration_ns, pts_ns + duration_ns
+
+    def _on_bus_message(
+        self, bus: Gst.Bus, msg: Gst.Message, pipeline: Gst.Pipeline
+    ) -> bool:
+        """Delegate to the shared default-bus-message helper.
+
+        Subclasses can override to add custom behaviour, then return
+        ``super()._on_bus_message(bus, msg, pipeline)`` to keep the
+        default handling.
+        """
+        return handle_default_bus_message(self.logger, msg, pipeline)
 
     def get_audio_sample(self) -> Optional[npt.NDArray[np.float32]]:
         """Pull the next recorded audio chunk.

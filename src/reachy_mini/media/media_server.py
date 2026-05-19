@@ -48,6 +48,7 @@ from reachy_mini.media.camera_constants import (
     ReachyMiniLiteCamSpecs,
 )
 from reachy_mini.media.device_detection import get_audio_device, get_video_device
+from reachy_mini.media.gstreamer_utils import handle_default_bus_message
 from reachy_mini.motion.head_wobbler import HeadWobbler, SpeechOffsets
 from reachy_mini.utils.constants import ASSETS_ROOT_PATH
 
@@ -144,7 +145,7 @@ class GstMediaServer:
         self._pipeline_sender = Gst.Pipeline.new("reachymini_webrtc_sender")
         self._bus_sender = self._pipeline_sender.get_bus()
         self._bus_sender.add_watch(
-            GLib.PRIORITY_DEFAULT, self._on_bus_message, self._loop
+            GLib.PRIORITY_DEFAULT, self._on_bus_message, self._pipeline_sender
         )
 
         webrtcsink = self._configure_webrtc(self._pipeline_sender)
@@ -351,7 +352,7 @@ class GstMediaServer:
 
         play_bus = self._pipeline_playback.get_bus()
         play_bus.add_watch(
-            GLib.PRIORITY_DEFAULT, self._on_playback_bus_message, peer_id
+            GLib.PRIORITY_DEFAULT, self._on_bus_message, self._pipeline_playback
         )
 
         self._pipeline_playback.set_state(Gst.State.PAUSED)
@@ -377,22 +378,6 @@ class GstMediaServer:
             "pad": pad,
         }
         self._logger.info(f"Audio playback pipeline started for peer {peer_id}")
-
-    def _on_playback_bus_message(
-        self, bus: Gst.Bus, msg: Gst.Message, peer_id: str
-    ) -> bool:
-        """Handle messages from a per-peer audio playback pipeline."""
-        if msg.type == Gst.MessageType.ERROR:
-            err, debug = msg.parse_error()
-            self._logger.error(f"Audio playback error for {peer_id}: {err} {debug}")
-            return False
-        if msg.type == Gst.MessageType.EOS:
-            self._logger.info(f"Audio playback EOS for {peer_id}")
-            return False
-        if msg.type == Gst.MessageType.LATENCY:
-            self._logger.info("Recalculate latency playback pipeline")
-            self._pipeline_playback.recalculate_latency()
-        return True
 
     def _cleanup_incoming_audio(self, peer_id: str) -> None:
         """Remove the incoming-audio pad probe and playback pipeline for a peer."""
@@ -909,22 +894,10 @@ class GstMediaServer:
         )
         return Gst.ElementFactory.make("autoaudiosrc")
 
-    def _on_bus_message(self, bus: Gst.Bus, msg: Gst.Message, loop) -> bool:  # type: ignore[no-untyped-def]
-        t = msg.type
-        if t == Gst.MessageType.EOS:
-            self._logger.warning("End-of-stream")
-            return False
-
-        elif t == Gst.MessageType.ERROR:
-            err, debug = msg.parse_error()
-            self._logger.error(f"Error: {err} {debug}")
-            return False
-
-        elif t == Gst.MessageType.LATENCY:
-            self._pipeline_sender.recalculate_latency()
-            self.logger.info("Recalculate Latency Pipeline Sender")
-
-        return True
+    def _on_bus_message(
+        self, bus: Gst.Bus, msg: Gst.Message, pipeline: Gst.Pipeline
+    ) -> bool:
+        return handle_default_bus_message(self._logger, msg, pipeline)
 
     def start(self) -> None:
         """Rebuild the pipeline from scratch and start it.

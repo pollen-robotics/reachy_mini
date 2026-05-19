@@ -118,7 +118,7 @@ class GStreamerAudio(AudioBase):
         self._init_pipeline_record(self._pipeline_record)
         self._bus_record = self._pipeline_record.get_bus()
         self._bus_record.add_watch(
-            GLib.PRIORITY_DEFAULT, self._on_bus_message, self._loop
+            GLib.PRIORITY_DEFAULT, self._on_bus_message, self._pipeline_record
         )
 
         self._playbin: Optional[Gst.Element] = None
@@ -126,7 +126,7 @@ class GStreamerAudio(AudioBase):
         self._init_pipeline_playback(self._pipeline_playback)
         self._bus_playback = self._pipeline_playback.get_bus()
         self._bus_playback.add_watch(
-            GLib.PRIORITY_DEFAULT, self._on_bus_message, self._loop
+            GLib.PRIORITY_DEFAULT, self._on_bus_message, self._pipeline_playback
         )
 
     def _init_pipeline_record(self, pipeline: Gst.Pipeline) -> None:
@@ -363,20 +363,12 @@ class GStreamerAudio(AudioBase):
         ac_wobbler.link(ar_wobbler)
         ar_wobbler.link(appsink_wobbler)
 
-    def _on_bus_message(self, bus: Gst.Bus, msg: Gst.Message, loop) -> bool:  # type: ignore[no-untyped-def]
-        t = msg.type
-        if t == Gst.MessageType.EOS:
-            if self._head_wobbler is not None:
-                self._head_wobbler.stop()
-            self.logger.warning("End-of-stream")
-            return False
-
-        elif t == Gst.MessageType.ERROR:
-            err, debug = msg.parse_error()
-            self.logger.error(f"Error: {err} {debug}")
-            return False
-
-        return True
+    def _on_bus_message(
+        self, bus: Gst.Bus, msg: Gst.Message, pipeline: Gst.Pipeline
+    ) -> bool:
+        if msg.type == Gst.MessageType.EOS and self._head_wobbler is not None:
+            self._head_wobbler.stop()
+        return super()._on_bus_message(bus, msg, pipeline)
 
     def _dump_latency(self) -> None:
         query = Gst.Query.new_latency()

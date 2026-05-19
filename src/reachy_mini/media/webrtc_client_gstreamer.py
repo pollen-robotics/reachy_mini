@@ -106,7 +106,7 @@ class GstWebRTCClient(CameraBase, AudioBase):
         self._pipeline_record = Gst.Pipeline.new("audio_recorder")
         self._bus_record = self._pipeline_record.get_bus()
         self._bus_record.add_watch(
-            GLib.PRIORITY_DEFAULT, self._on_bus_message, self._loop
+            GLib.PRIORITY_DEFAULT, self._on_bus_message, self._pipeline_record
         )
 
         self._appsink_audio = Gst.ElementFactory.make("appsink")
@@ -299,21 +299,18 @@ class GstWebRTCClient(CameraBase, AudioBase):
 
         GLib.timeout_add_seconds(5, self._dump_latency)
 
-    def _on_bus_message(self, bus: Gst.Bus, msg: Gst.Message, loop) -> bool:  # type: ignore[no-untyped-def]
-        t = msg.type
-        if t == Gst.MessageType.EOS:
-            self.logger.warning("End-of-stream")
-            return False
-        elif t == Gst.MessageType.ERROR:
-            err, debug = msg.parse_error()
+    def _on_bus_message(
+        self, bus: Gst.Bus, msg: Gst.Message, pipeline: Gst.Pipeline
+    ) -> bool:
+        # webrtcsrc may emit non-fatal errors from its internal
+        # elements (e.g. appsrc not-negotiated when a sendrecv
+        # transceiver has no data to send).  GStreamer wraps the
+        # actual reason as "Internal data stream error." in the
+        # GError, with "not-negotiated" only in the debug string.
+        # These should not tear down the whole pipeline.
+        if msg.type == Gst.MessageType.ERROR:
+            err, _ = msg.parse_error()
             src = msg.src
-
-            # webrtcsrc may emit non-fatal errors from its internal
-            # elements (e.g. appsrc not-negotiated when a sendrecv
-            # transceiver has no data to send).  GStreamer wraps the
-            # actual reason as "Internal data stream error." in the
-            # GError, with "not-negotiated" only in the debug string.
-            # These should not tear down the whole pipeline.
             if (
                 src is not None
                 and src.get_factory() is not None
@@ -325,12 +322,7 @@ class GstWebRTCClient(CameraBase, AudioBase):
             ):
                 self.logger.debug(f"Ignoring non-fatal webrtcsrc internal error: {err}")
                 return True
-
-            self.logger.error(f"Error: {err} {debug}")
-            return False
-        elif t == Gst.MessageType.LATENCY:
-            self._pipeline_record.recalculate_latency()
-        return True
+        return super()._on_bus_message(bus, msg, pipeline)
 
     def open(self) -> None:
         """Start the WebRTC pipeline (both video and audio)."""
