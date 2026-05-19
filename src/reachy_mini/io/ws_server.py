@@ -13,6 +13,7 @@ Server->Client messages are Pydantic models serialized to JSON, e.g.:
 """
 
 import asyncio
+import json
 import logging
 import threading
 from datetime import datetime
@@ -121,7 +122,7 @@ class WSServer(AbstractServer):
 
         send_task = asyncio.create_task(self._send_loop(websocket, queue))
         try:
-            await self._recv_loop(websocket)
+            await self._recv_loop(websocket, queue)
         except WebSocketDisconnect:
             pass
         except Exception as e:
@@ -136,7 +137,9 @@ class WSServer(AbstractServer):
             msg = await queue.get()
             await websocket.send_text(msg)
 
-    async def _recv_loop(self, websocket: WebSocket) -> None:
+    async def _recv_loop(
+        self, websocket: WebSocket, queue: asyncio.Queue[str]
+    ) -> None:
         """Receive and dispatch client messages."""
         while True:
             raw = await websocket.receive_text()
@@ -150,16 +153,49 @@ class WSServer(AbstractServer):
             if isinstance(msg, TaskRequest):
                 await self._handle_task_request(msg)
             else:
-                self._handle_command(msg)
+                self._handle_command(msg, queue)
 
     # ------------------------------------------------------------------
     # Command handling (delegates to Backend.process_command)
     # ------------------------------------------------------------------
 
-    def _handle_command(self, cmd: AnyCommand) -> None:
-        """Dispatch a validated command through Backend.process_command."""
+    def _handle_command(
+        self, cmd: AnyCommand, client_queue: asyncio.Queue[str]
+    ) -> None:
+        """Dispatch a validated command through Backend.process_command.
+
+        Responses go to the originating client only (not broadcast),
+        so a client awaiting an ack for its own upload_move_chunk
+        doesn't have to filter through every other peer's traffic.
+
+        Set commands whose handlers happen to call ``send_response``
+        (e.g. SetTargetCmd → "status: ok") still post into the queue
+        — older SDK builds will see an extra unrecognized message
+        and ignore it (validate_json on AnyServerMsg rejects it).
+        Newer builds that consume the response type-route past it.
+        """
+        loop = self._loop
+
         def send(resp: dict[str, Any]) -> None:
-            pass  # SDK commands are fire-and-forget
+            if loop is None:
+                return
+            payload = json.dumps(resp)
+
+            def _put() -> None:
+                try:
+                    client_queue.put_nowait(payload)
+                except asyncio.QueueFull:
+                    # Drop oldest to make room — same eviction
+                    # policy as the broadcast publishers.
+                    try:
+                        client_queue.get_nowait()
+                        client_queue.put_nowait(payload)
+                    except (asyncio.QueueEmpty, asyncio.QueueFull):
+                        pass
+
+            # process_command may be called from gst's GLib thread
+            # for some commands, so always hop onto the event loop.
+            loop.call_soon_threadsafe(_put)
 
         self.backend.process_command(cmd, send_response=send)
         self._cmd_event.set()
