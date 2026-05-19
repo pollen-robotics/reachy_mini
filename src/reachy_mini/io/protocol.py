@@ -7,7 +7,8 @@ Client->Server command types:
     goto_target, wake_up, goto_sleep, play_sound,
     set_motor_mode, set_torque, get_motor_mode,
     set_gravity_compensation, set_automatic_body_yaw,
-    get_state, get_version, start_recording, stop_recording, append_record
+    get_state, get_version, start_recording, stop_recording, append_record,
+    subscribe_logs, unsubscribe_logs, restart_daemon
 
 Server->Client message types:
     joint_positions, head_pose, imu_data, recorded_data,
@@ -304,6 +305,30 @@ class UnsubscribeLogsCmd(BaseModel):
     type: Literal["unsubscribe_logs"] = "unsubscribe_logs"
 
 
+# ------------------------------------------------------------------
+# Daemon restart over the DataChannel.
+#
+# Mirrors `POST /api/daemon/restart`: rebuilds the backend (motor
+# controller, kinematics, media server, ...). The DataChannel itself
+# is torn down by the restart, so the daemon sends an ack BEFORE
+# kicking off the actual restart and the client is expected to
+# reconnect afterwards. Idempotent at the daemon level (the restart
+# coroutine already no-ops if the daemon is STOPPED).
+# ------------------------------------------------------------------
+
+
+class RestartDaemonCmd(BaseModel):
+    """Restart the daemon (rebuilds backend, motor controller, media server).
+
+    The WebRTC transport is torn down by the restart, so the daemon
+    sends a single ack response immediately (``{"status": "ok",
+    "command": "restart_daemon"}``) and the consumer is expected to
+    reconnect once the daemon is back up. There is no completion
+    message - the data channel is gone before the restart finishes.
+    """
+
+    type: Literal["restart_daemon"] = "restart_daemon"
+
 
 AnyCommand = Annotated[
     SetTargetCmd
@@ -331,7 +356,8 @@ AnyCommand = Annotated[
     | SetMicrophoneVolumeCmd
     | GetMicrophoneVolumeCmd
     | SubscribeLogsCmd
-    | UnsubscribeLogsCmd,
+    | UnsubscribeLogsCmd
+    | RestartDaemonCmd,
     Field(discriminator="type"),
 ]
 
