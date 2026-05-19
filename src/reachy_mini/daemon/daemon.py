@@ -286,6 +286,13 @@ class Daemon:
                 hardware_config_filepath=hardware_config_filepath,
             )
 
+            # Wire the typed-transport restart hook so peers can recover
+            # a degraded daemon (e.g. closed motor controller) over the
+            # WebRTC data channel without SSH or LAN HTTP access.
+            # Re-wired on every start() because each start builds a new
+            # backend instance.
+            self.backend.set_daemon_restart_handler(self.restart)
+
             self.ws_server = WSServer(backend=self.backend)
             self.ws_server.start()
             self._thread_publish_status = Thread(

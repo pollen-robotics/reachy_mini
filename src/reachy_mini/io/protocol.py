@@ -7,7 +7,8 @@ Client->Server command types:
     goto_target, wake_up, goto_sleep, play_sound,
     set_motor_mode, set_torque, get_motor_mode,
     set_gravity_compensation, set_automatic_body_yaw,
-    get_state, get_version, start_recording, stop_recording, append_record
+    get_state, get_version, start_recording, stop_recording, append_record,
+    subscribe_logs, unsubscribe_logs, restart_daemon
 
 Server->Client message types:
     joint_positions, head_pose, imu_data, recorded_data,
@@ -304,6 +305,44 @@ class UnsubscribeLogsCmd(BaseModel):
     type: Literal["unsubscribe_logs"] = "unsubscribe_logs"
 
 
+# ------------------------------------------------------------------
+# Daemon lifecycle commands
+#
+# `restart_daemon` lets a peer recover a degraded daemon (e.g. a
+# closed motor controller asserting on every command) over the same
+# typed transport already used for control, without needing SSH or
+# LAN-only HTTP access. Same effect as `POST /api/daemon/restart`,
+# but reachable from a remote (Central-routed) WebRTC peer.
+#
+# Side-effects, by design:
+#   - The active WebRTC session is dropped: stopping the daemon tears
+#     down the media pipeline, which closes the data channel. The
+#     daemon sends an ack on the channel BEFORE kicking the restart
+#     off so well-behaved clients can distinguish "request accepted"
+#     from a transport failure.
+#   - The robot does NOT go to sleep before the restart unless
+#     `goto_sleep_on_stop=True`, and the wake-up trajectory is NOT
+#     replayed afterwards unless `wake_up_on_start=True`. Defaults
+#     match `Daemon.restart()` so the call is conservative.
+#   - Daemon parameters (sim mode, serial port, kinematics, audio,
+#     localhost_only, ...) are preserved from the previous `start()`.
+# ------------------------------------------------------------------
+
+
+class RestartDaemonCmd(BaseModel):
+    """Restart the daemon process.
+
+    Recovery hatch over the WebRTC DataChannel: tears the backend
+    down (motor controller, control loop, media pipeline) and
+    re-runs ``Daemon.start()`` with the same parameters as the
+    previous start. The data channel is dropped as part of the
+    restart and the client must reconnect.
+    """
+
+    type: Literal["restart_daemon"] = "restart_daemon"
+    goto_sleep_on_stop: bool = False
+    wake_up_on_start: bool = False
+
 
 AnyCommand = Annotated[
     SetTargetCmd
@@ -331,7 +370,8 @@ AnyCommand = Annotated[
     | SetMicrophoneVolumeCmd
     | GetMicrophoneVolumeCmd
     | SubscribeLogsCmd
-    | UnsubscribeLogsCmd,
+    | UnsubscribeLogsCmd
+    | RestartDaemonCmd,
     Field(discriminator="type"),
 ]
 
