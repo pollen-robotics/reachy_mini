@@ -289,9 +289,6 @@ class GstMediaServer:
 
         sender_clock = self._pipeline_sender.get_pipeline_clock()
         self._pipeline_playback.use_clock(sender_clock)
-
-        # 2. Share the sender's base_time. Tell GStreamer NOT to auto-pick
-        #    one when we transition states.
         self._pipeline_playback.set_start_time(Gst.CLOCK_TIME_NONE)
 
         appsrc = Gst.ElementFactory.make("appsrc", "audio_in")
@@ -319,8 +316,7 @@ class GstMediaServer:
         queue_wobbler = Gst.ElementFactory.make("queue")
         ac_wobbler = Gst.ElementFactory.make("audioconvert")
         ar_wobbler = Gst.ElementFactory.make("audioresample")
-        # Live WebRTC path: sync=False (appsrc is-live + PTS-sync appsink
-        # would stall delivery under back-pressure).
+
         appsink_wobbler = self._make_wobbler_appsink()
 
         for elem in [

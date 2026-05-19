@@ -48,7 +48,7 @@ def handle_default_bus_message(
         logger.warning(f"Warning: {err} {debug}")
     elif msg.type == Gst.MessageType.LATENCY:
         pipeline.recalculate_latency()
-        logger.info("Recalculate latency")
+        logger.debug("Recalculate latency")
     return True
 
 
