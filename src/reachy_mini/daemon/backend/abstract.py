@@ -25,6 +25,7 @@ from scipy.spatial.transform import Rotation as R
 from reachy_mini.io.protocol import (
     AnyCommand,
     AppendRecordCmd,
+    CancelMoveCmd,
     GetHardwareIdCmd,
     GetMicrophoneVolumeCmd,
     GetMotorModeCmd,
@@ -39,6 +40,7 @@ from reachy_mini.io.protocol import (
     MotorControlMode,
     MujocoBackendStatus,
     PlaySoundCmd,
+    PlayUploadedMoveCmd,
     RecordedDataMsg,
     RestartDaemonCmd,
     RobotBackendStatus,
@@ -57,6 +59,9 @@ from reachy_mini.io.protocol import (
     StopRecordingCmd,
     SubscribeLogsCmd,
     UnsubscribeLogsCmd,
+    UploadMoveChunkCmd,
+    UploadMoveFinishCmd,
+    UploadMoveStartCmd,
     WakeUpCmd,
     command_adapter,
 )
@@ -204,6 +209,30 @@ class Backend:
         self._active_move_depth = (
             0  # Tracks nested acquisitions within the owning thread
         )
+
+        # Flag flipped by CancelMoveCmd; checked by Backend.play_move
+        # at every tick.  Reset back to False by play_move on entry.
+        self._move_cancelled: bool = False
+
+        # In-progress uploads keyed by client-supplied upload_id.
+        # ``_chunks`` is a list of received fragments (string parts of
+        # the JSON-serialized move) appended in chunk_index order;
+        # any out-of-order delivery discards the slot.  ``_meta``
+        # holds the declared total_chunks + description so we can
+        # validate completeness.
+        self._upload_chunks: Dict[str, list[str]] = {}
+        self._upload_meta: Dict[str, dict[str, Any]] = {}
+        self._upload_ts: Dict[str, float] = {}
+        # Parsed RecordedMove instances, keyed by upload_id.  Filled
+        # by upload_move_finish, consumed by play_uploaded_move, and
+        # evicted whenever the slot is no longer needed (play
+        # finished/cancelled, or TTL expiry).
+        self._uploaded_moves: Dict[str, Any] = {}
+        # Soft caps to keep memory bounded.  At 100 Hz a 10-minute
+        # move is ~60 000 frames; one slot at a time is the expected
+        # use; the limits exist to fail fast on misuse.
+        self._upload_ttl_s: float = 300.0  # evict half-finished slots
+        self._upload_max_active_slots: int = 4
 
         # WebRTC support
         self._send_message_to_webrtc: Optional[Callable[[Optional[str], str], None]] = (
@@ -1128,6 +1157,159 @@ class Backend:
                 self._restart_daemon_callback()
             except Exception as e:
                 self.logger.error(f"restart_daemon callback failed: {e}")
+
+        elif isinstance(cmd, UploadMoveStartCmd):
+            self._handle_upload_start(cmd, send_response)
+        elif isinstance(cmd, UploadMoveChunkCmd):
+            self._handle_upload_chunk(cmd, send_response)
+        elif isinstance(cmd, UploadMoveFinishCmd):
+            self._handle_upload_finish(cmd, send_response)
+
+    # ------------------------------------------------------------------
+    # Inline-move upload + daemon-side playback
+    # ------------------------------------------------------------------
+
+    def _evict_stale_uploads(self) -> None:
+        """Drop in-progress upload slots older than ``_upload_ttl_s``.
+
+        Called opportunistically on every new upload_move_start so we
+        never accumulate orphans (client crashed mid-upload, dropped
+        the data channel, etc.).
+        """
+        now = time.time()
+        stale = [
+            uid for uid, ts in self._upload_ts.items()
+            if now - ts > self._upload_ttl_s
+        ]
+        for uid in stale:
+            self._upload_chunks.pop(uid, None)
+            self._upload_meta.pop(uid, None)
+            self._upload_ts.pop(uid, None)
+            self.logger.warning(
+                f"upload_move: evicted stale slot {uid} (TTL exceeded)"
+            )
+
+    def _handle_upload_start(
+        self,
+        cmd: UploadMoveStartCmd,
+        send_response: Callable[[dict[str, Any]], None],
+    ) -> None:
+        self._evict_stale_uploads()
+        if len(self._upload_chunks) >= self._upload_max_active_slots:
+            send_response({
+                "error": "too many active uploads",
+                "command": "upload_move_start",
+                "upload_id": cmd.upload_id,
+            })
+            return
+        # Sending start twice for the same id resets the slot — keeps
+        # the protocol forgiving for a client that retries after a
+        # transient send failure mid-upload.
+        self._upload_chunks[cmd.upload_id] = []
+        self._upload_meta[cmd.upload_id] = {
+            "total_chunks": cmd.total_chunks,
+            "description": cmd.description,
+            "estimated_duration_s": cmd.estimated_duration_s,
+        }
+        self._upload_ts[cmd.upload_id] = time.time()
+        send_response({
+            "status": "ok",
+            "command": "upload_move_start",
+            "upload_id": cmd.upload_id,
+        })
+
+    def _handle_upload_chunk(
+        self,
+        cmd: UploadMoveChunkCmd,
+        send_response: Callable[[dict[str, Any]], None],
+    ) -> None:
+        slot = self._upload_chunks.get(cmd.upload_id)
+        meta = self._upload_meta.get(cmd.upload_id)
+        if slot is None or meta is None:
+            send_response({
+                "error": "no such upload slot (start first)",
+                "command": "upload_move_chunk",
+                "upload_id": cmd.upload_id,
+            })
+            return
+        expected_index = len(slot)
+        if cmd.chunk_index != expected_index:
+            # Out-of-order delivery; data-channel SCTP is ordered by
+            # default so this means the client logic is broken.
+            # Drop the slot so the next start can recover cleanly.
+            self._upload_chunks.pop(cmd.upload_id, None)
+            self._upload_meta.pop(cmd.upload_id, None)
+            self._upload_ts.pop(cmd.upload_id, None)
+            send_response({
+                "error": f"chunk out of order (expected {expected_index}, got {cmd.chunk_index})",
+                "command": "upload_move_chunk",
+                "upload_id": cmd.upload_id,
+            })
+            return
+        if cmd.chunk_index >= meta["total_chunks"]:
+            send_response({
+                "error": f"chunk index {cmd.chunk_index} exceeds declared total {meta['total_chunks']}",
+                "command": "upload_move_chunk",
+                "upload_id": cmd.upload_id,
+            })
+            return
+        slot.append(cmd.chunk)
+        self._upload_ts[cmd.upload_id] = time.time()
+        send_response({
+            "status": "ok",
+            "command": "upload_move_chunk",
+            "upload_id": cmd.upload_id,
+            "received_chunks": len(slot),
+            "total_chunks": meta["total_chunks"],
+        })
+
+    def _handle_upload_finish(
+        self,
+        cmd: UploadMoveFinishCmd,
+        send_response: Callable[[dict[str, Any]], None],
+    ) -> None:
+        slot = self._upload_chunks.pop(cmd.upload_id, None)
+        meta = self._upload_meta.pop(cmd.upload_id, None)
+        self._upload_ts.pop(cmd.upload_id, None)
+        if slot is None or meta is None:
+            send_response({
+                "error": "no such upload slot",
+                "command": "upload_move_finish",
+                "upload_id": cmd.upload_id,
+            })
+            return
+        if len(slot) != meta["total_chunks"]:
+            send_response({
+                "error": f"chunk count mismatch (declared {meta['total_chunks']}, received {len(slot)})",
+                "command": "upload_move_finish",
+                "upload_id": cmd.upload_id,
+            })
+            return
+        payload = "".join(slot)
+        try:
+            move_dict = json.loads(payload)
+            # Reuse the RecordedMove parser — same shape as the JSON
+            # files in the HF dance/emotion datasets, no sound path.
+            from reachy_mini.motion.recorded_move import RecordedMove
+            parsed = RecordedMove(move_dict, sound_path=None)
+        except Exception as e:
+            self.logger.warning(
+                f"upload_move_finish: parse failed for slot {cmd.upload_id}: {e}"
+            )
+            send_response({
+                "error": f"move parse failed: {e}",
+                "command": "upload_move_finish",
+                "upload_id": cmd.upload_id,
+            })
+            return
+        self._uploaded_moves[cmd.upload_id] = parsed
+        send_response({
+            "status": "ok",
+            "command": "upload_move_finish",
+            "upload_id": cmd.upload_id,
+            "frames": len(parsed.timestamps),
+            "duration_s": parsed.duration,
+        })
 
     # ------------------------------------------------------------------
     # journalctl log streaming over the typed transport (subscribe_logs)
