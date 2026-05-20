@@ -26,6 +26,7 @@ from scipy.spatial.transform import Rotation as R
 from reachy_mini.io.protocol import (
     AnyCommand,
     AppendRecordCmd,
+    CancelAudioCmd,
     CancelMoveCmd,
     GetHardwareIdCmd,
     GetMicrophoneVolumeCmd,
@@ -41,6 +42,7 @@ from reachy_mini.io.protocol import (
     MotorControlMode,
     MujocoBackendStatus,
     PlaySoundCmd,
+    PlayUploadedAudioCmd,
     PlayUploadedMoveCmd,
     RecordedDataMsg,
     RestartDaemonCmd,
@@ -1225,6 +1227,10 @@ class Backend:
             # is actually running. play_move resets it on entry, so no
             # stale-flag risk.
             self._move_cancelled = True
+        elif isinstance(cmd, PlayUploadedAudioCmd):
+            self._handle_play_uploaded_audio(cmd)
+        elif isinstance(cmd, CancelAudioCmd):
+            self._handle_cancel_audio()
 
     # ------------------------------------------------------------------
     # Inline-move upload + daemon-side playback
@@ -1431,6 +1437,53 @@ class Backend:
         self.logger.info(
             f"upload_audio_finish: stored {len(raw)} bytes at {path}"
         )
+
+    def _handle_play_uploaded_audio(self, cmd: PlayUploadedAudioCmd) -> None:
+        """Play an uploaded audio standalone (no motion).
+
+        Used during recording so the audio pipeline is identical to
+        the eventual play_uploaded_move that will replay this audio.
+        Broadcasts a started event the moment the playbin transition
+        is requested; consumers anchor their motion-capture t=0 to
+        this event so the recording-time and playback-time pipelines
+        share the same latency profile (and thus cancel out on
+        playback).
+        """
+        upload_id = cmd.upload_id
+        audio_path = self._uploaded_audios.get(upload_id)
+        if not audio_path:
+            self.broadcast_to_all_clients(json.dumps({
+                "type": "play_uploaded_audio",
+                "upload_id": upload_id,
+                "error": "no such uploaded audio",
+            }))
+            return
+        try:
+            self.play_sound(audio_path)
+        except Exception as e:
+            self.logger.warning(f"play_uploaded_audio: play_sound failed: {e}")
+            self.broadcast_to_all_clients(json.dumps({
+                "type": "play_uploaded_audio",
+                "upload_id": upload_id,
+                "error": str(e),
+            }))
+            return
+        # Broadcast immediately. The GStreamer pipeline takes time
+        # to reach PLAYING; clients account for that latency the
+        # same way play_uploaded_move does (constant per robot, gets
+        # absorbed into the user's audio_lead_ms calibration).
+        self.broadcast_to_all_clients(json.dumps({
+            "type": "play_uploaded_audio",
+            "upload_id": upload_id,
+            "started": True,
+        }))
+
+    def _handle_cancel_audio(self) -> None:
+        """Stop a running play_uploaded_audio. Idempotent."""
+        try:
+            self.stop_sound()
+        except Exception as e:
+            self.logger.warning(f"cancel_audio: stop_sound failed: {e}")
 
     def _handle_upload_finish(self, cmd: UploadMoveFinishCmd) -> None:
         slot = self._upload_chunks.pop(cmd.upload_id, None)

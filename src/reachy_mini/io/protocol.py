@@ -11,7 +11,8 @@ Client->Server command types:
     subscribe_logs, unsubscribe_logs, restart_daemon,
     upload_move_start, upload_move_chunk, upload_move_finish,
     upload_audio_start, upload_audio_chunk, upload_audio_finish,
-    play_uploaded_move, cancel_move
+    play_uploaded_move, cancel_move,
+    play_uploaded_audio, cancel_audio
 
 Server->Client message types:
     joint_positions, head_pose, imu_data, recorded_data,
@@ -542,6 +543,39 @@ class CancelMoveCmd(BaseModel):
     type: Literal["cancel_move"] = "cancel_move"
 
 
+class PlayUploadedAudioCmd(BaseModel):
+    """Play a previously-uploaded audio standalone (no motion).
+
+    Used by clients during recording to keep the audio pipeline
+    identical between record time and play time.  Same upload_id as
+    the audio attached.  Daemon plays the WAV via the same
+    GStreamer playbin path used by play_uploaded_move, and emits a
+    broadcast ``{"type":"play_uploaded_audio","upload_id":...,
+    "started":true}`` event the moment ``set_state(PLAYING)`` is
+    called.  Clients use this event as the t=0 reference for
+    motion capture, so the eventual play_uploaded_move that uses
+    the same audio reproduces the recording-time alignment
+    (pipeline latency cancels).
+
+    Stop via CancelAudioCmd.  No finished event is emitted; the
+    daemon doesn't track playback duration -- callers know it from
+    the WAV header and stop on their own.
+    """
+
+    type: Literal["play_uploaded_audio"] = "play_uploaded_audio"
+    upload_id: str
+
+
+class CancelAudioCmd(BaseModel):
+    """Stop a running play_uploaded_audio. Fire-and-forget.
+
+    Calls stop_sound() on the media server.  Idempotent; no-op if
+    nothing is playing.
+    """
+
+    type: Literal["cancel_audio"] = "cancel_audio"
+
+
 AnyCommand = Annotated[
     SetTargetCmd
     | SetHeadJointsCmd
@@ -577,7 +611,9 @@ AnyCommand = Annotated[
     | UploadAudioChunkCmd
     | UploadAudioFinishCmd
     | PlayUploadedMoveCmd
-    | CancelMoveCmd,
+    | CancelMoveCmd
+    | PlayUploadedAudioCmd
+    | CancelAudioCmd,
     Field(discriminator="type"),
 ]
 
