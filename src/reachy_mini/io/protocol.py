@@ -428,8 +428,10 @@ class UploadMoveFinishCmd(BaseModel):
 
 
 class PlayUploadedMoveCmd(BaseModel):
-    """Play a previously-uploaded move on the daemon. Fire-and-forget
-    at the transport level; progress comes back as broadcast events.
+    """Play a previously-uploaded move on the daemon.
+
+    Fire-and-forget at the transport level; progress comes back as
+    broadcast events.
 
     The daemon spawns Backend.play_move as a background task and emits
     two unsolicited messages tagged ``type="play_uploaded_move"`` and
@@ -459,12 +461,11 @@ class PlayUploadedMoveCmd(BaseModel):
 
 class CancelMoveCmd(BaseModel):
     """Cancel any currently-running play_move / goto on the backend.
-    Fire-and-forget.
 
-    Flips ``backend._move_cancelled`` so the playback loop exits at
-    its next tick. play_move resets the flag on entry so a stale
-    cancel from a previous run cannot leak across plays. No-op if
-    nothing is running.
+    Fire-and-forget. Flips ``backend._move_cancelled`` so the playback
+    loop exits at its next tick. play_move resets the flag on entry
+    so a stale cancel from a previous run cannot leak across plays.
+    No-op if nothing is running.
     """
 
     type: Literal["cancel_move"] = "cancel_move"
