@@ -1443,11 +1443,13 @@ class Backend:
 
         Used during recording so the audio pipeline is identical to
         the eventual play_uploaded_move that will replay this audio.
-        Broadcasts a started event the moment the playbin transition
-        is requested; consumers anchor their motion-capture t=0 to
-        this event so the recording-time and playback-time pipelines
-        share the same latency profile (and thus cancel out on
-        playback).
+
+        Broadcast ordering is deliberately symmetric to
+        play_uploaded_move: broadcast STARTED first, then call
+        play_sound.  Same order means the broadcast-vs-audio-at-speaker
+        delta is identical in record and play, so the user's slider
+        becomes a single per-robot constant (system latency, network
+        RTT) rather than something that drifts between code paths.
         """
         upload_id = cmd.upload_id
         audio_path = self._uploaded_audios.get(upload_id)
@@ -1458,25 +1460,23 @@ class Backend:
                 "error": "no such uploaded audio",
             }))
             return
-        try:
-            self.play_sound(audio_path)
-        except Exception as e:
-            self.logger.warning(f"play_uploaded_audio: play_sound failed: {e}")
-            self.broadcast_to_all_clients(json.dumps({
-                "type": "play_uploaded_audio",
-                "upload_id": upload_id,
-                "error": str(e),
-            }))
-            return
-        # Broadcast immediately. The GStreamer pipeline takes time
-        # to reach PLAYING; clients account for that latency the
-        # same way play_uploaded_move does (constant per robot, gets
-        # absorbed into the user's audio_lead_ms calibration).
+        # Broadcast BEFORE play_sound, matching play_uploaded_move.
         self.broadcast_to_all_clients(json.dumps({
             "type": "play_uploaded_audio",
             "upload_id": upload_id,
             "started": True,
         }))
+        try:
+            self.play_sound(audio_path)
+        except Exception as e:
+            self.logger.warning(f"play_uploaded_audio: play_sound failed: {e}")
+            # Broadcast a follow-up error so the client knows the
+            # started event isn't actionable.
+            self.broadcast_to_all_clients(json.dumps({
+                "type": "play_uploaded_audio",
+                "upload_id": upload_id,
+                "error": str(e),
+            }))
 
     def _handle_cancel_audio(self) -> None:
         """Stop a running play_uploaded_audio. Idempotent."""
