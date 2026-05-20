@@ -144,6 +144,7 @@ class GstWebRTCClient(CameraBase, AudioBase):
         self._webrtcbin = None
         self._audio_send_ready = False
         self._appsrc = None
+        self._first_push_done = False
         self.daemon_url: str = ""  # set by MediaManager for remote sound ops
         self._webrtcsrc.connect("deep-element-added", self._on_deep_element_added)
         self.logger.info("GstWebRTCClient initialized (bidirectional audio support)")
@@ -468,15 +469,10 @@ class GstWebRTCClient(CameraBase, AudioBase):
         """No-op (WebRTC send chain does not buffer significantly)."""
         pass
 
-    def push_audio_sample(self, data: npt.NDArray[np.float32]) -> None:
-        """Push audio data to the remote peer via WebRTC.
-
-        Args:
-            data: Float32 audio samples.
-
-        """
+    def _push_buffer(self, data: npt.NDArray[np.float32]) -> None:
+        """Single push of one F32LE chunk with gap-aware PTS."""
         if self._appsrc is None:
-            return  # send chain not ready yet, silently drop
+            return
 
         pts_ns, duration_ns, self._appsrc_pts = self._compute_pts(
             int(data.shape[0]),
@@ -487,9 +483,31 @@ class GstWebRTCClient(CameraBase, AudioBase):
         buf.pts = pts_ns
         buf.dts = pts_ns
         buf.duration = duration_ns
+
         ret = self._appsrc.push_buffer(buf)
         if ret != Gst.FlowReturn.OK:
-            self.logger.warning(f"push_buffer dropped: {ret}")
+            self.logger.warning("push_buffer dropped: %s", ret)
+
+    def push_audio_sample(self, data: npt.NDArray[np.float32]) -> None:
+        """Push audio data to the remote peer via WebRTC.
+
+        The very first call also primes the send chain with 0.5 s of
+        silence so the Opus encoder and webrtcbin can warm up before
+        the caller's real audio arrives; without this the first word
+        of an utterance gets swallowed.
+
+        Args:
+            data: Float32 audio samples.
+
+        """
+        if self._appsrc is None:
+            return
+
+        if not self._first_push_done:
+            self._first_push_done = True
+            warmup = np.zeros(self.SAMPLE_RATE // 2, dtype=np.float32)
+            self._push_buffer(warmup)
+        self._push_buffer(data)
 
     def play_sound(self, sound_file: str) -> None:
         """Play a sound file on the robot's speaker via the daemon REST API.
