@@ -163,9 +163,10 @@ robot.addEventListener("micSupported", (e) => {
     console.log("Mic supported:", e.detail.supported);
 });
 
-// XVF3800 audio-board tuning (Wireless only — the USB board must be
-// physically attached to the robot). The daemon owns the USB handle, so
-// these calls cross the same DataChannel as the volume helpers above.
+// XVF3800 audio-board tuning. Available on both Lite and Wireless — the
+// daemon owns the USB handle (on Lite that's your laptop, on Wireless
+// it's the CM4), and these calls cross the same DataChannel as the
+// volume helpers above.
 const values = await robot.readAudioParameter("AUDIO_MGR_MIC_GAIN"); // number[] | null
 const ok = await robot.applyAudioConfig([
     { name: "AUDIO_MGR_MIC_GAIN", values: [1.0] },

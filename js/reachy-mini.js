@@ -54,8 +54,8 @@
  *   // 7. Audio controls
  *   robot.setAudioMuted(false);   // unmute robot speaker (muted by default)
  *   robot.setMicMuted(false);     // unmute your mic → robot speaker (if supported)
- *   // XVF3800 audio-board tuning (Wireless only — requires the USB board
- *   // to be physically attached to the robot, not your laptop):
+ *   // XVF3800 audio-board tuning (works on both Lite and Wireless — the
+ *   // daemon talks to the audio board over USB on whichever host it runs):
  *   await robot.applyAudioConfig([{ name: "AUDIO_MGR_MIC_GAIN", values: [1.0] }]);
  *   const v = await robot.readAudioParameter("AUDIO_MGR_MIC_GAIN"); // [1.0]
  *
