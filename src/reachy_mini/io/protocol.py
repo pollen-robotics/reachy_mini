@@ -337,52 +337,61 @@ class RestartDaemonCmd(BaseModel):
 #
 # Streaming control over the data channel (one set_target per tick)
 # is jittery on wireless links because every frame has to make a
-# WebRTC round trip. The fix is to upload the whole move to the
-# daemon up front and let Backend.play_move run the inner loop
-# locally on the robot.
+# round trip. The fix is to upload the whole move to the daemon up
+# front and let Backend.play_move run the inner loop locally on the
+# robot.
 #
-# Flow:
-#   1. UploadMoveStartCmd  → opens a slot, daemon acks with the slot id
-#   2. UploadMoveChunkCmd  → sends a fragment of the move JSON
-#                            (chunked because WebRTC data-channel
-#                             messages are ~16 KB safe / 64 KB risky)
-#   3. UploadMoveFinishCmd → daemon assembles + parses the move,
-#                            evicts the slot if anything fails
-#   4. PlayUploadedMoveCmd → spawns Backend.play_move on the slot's
-#                            move, ack on start, finished/error on
-#                            completion
-#   5. CancelMoveCmd       → flips backend._move_cancelled so the
-#                            playback loop exits at the next tick
+# Wire flow (all five commands are fire-and-forget at the transport
+# level; the daemon never sends a per-command ack):
+#
+#   1. UploadMoveStartCmd  opens a slot
+#   2. UploadMoveChunkCmd  sends a fragment of the move JSON. Chunks
+#                          must arrive in order; WebRTC SCTP is
+#                          ordered+reliable so the client can pipeline
+#                          freely without per-chunk acks
+#   3. UploadMoveFinishCmd assembles + parses; bad slots are silently
+#                          dropped
+#   4. PlayUploadedMoveCmd spawns Backend.play_move. Surfaces two
+#                          UNSOLICITED broadcast messages tagged with
+#                          the slot id (see "play_uploaded_move"
+#                          server-to-client shape below): one at the
+#                          moment the playback loop starts, one when
+#                          it ends (finished / cancelled / error)
+#   5. CancelMoveCmd       flips backend._move_cancelled so the
+#                          running playback loop exits at the next
+#                          tick. Idempotent
 #
 # Slots are in-memory only; evicted on play-finish, cancel, or TTL.
-# Audio is NOT included — Marionette keeps audio in the browser
-# (WebRTC audio track) so the synchronization handshake is the
-# data-channel "play" ack and the client's own audio start.
+# Audio is NOT included; clients that want audio keep it on their
+# own side (e.g. a browser playing audio over an existing WebRTC
+# audio track) and use the play_uploaded_move "started" broadcast as
+# the sync point.
 # ------------------------------------------------------------------
 
 
 class UploadMoveStartCmd(BaseModel):
-    """Open an upload slot for a new move.
+    """Open an upload slot for a new move. Fire-and-forget.
 
-    ``upload_id`` is chosen by the client (use a UUID).  ``total_chunks``
-    lets the daemon allocate / validate the chunk count.  The body
-    field is optional metadata for diagnostics; the actual move
-    payload arrives in :class:`UploadMoveChunkCmd` messages.
+    ``upload_id`` is chosen by the client (use a UUID). ``total_chunks``
+    lets the daemon validate completeness at finish time. ``description``
+    and ``estimated_duration_s`` are diagnostics surfaced in daemon
+    logs only.
     """
 
     type: Literal["upload_move_start"] = "upload_move_start"
     upload_id: str
-    total_chunks: int = Field(..., ge=1, le=4096)
+    total_chunks: int = Field(..., ge=1, le=65536)
     description: str = ""
     estimated_duration_s: float = Field(default=0.0, ge=0.0)
 
 
 class UploadMoveChunkCmd(BaseModel):
-    """One fragment of a move payload.
+    """One fragment of a move payload. Fire-and-forget.
 
     ``chunk`` is a slice of the JSON-serialized move (UTF-8). Chunks
-    must arrive in order; out-of-order delivery is a protocol error
-    and discards the slot.
+    must arrive in order: SCTP guarantees that on a healthy data
+    channel, and a single misordered chunk discards the slot
+    server-side. Pipelining at line rate is fine.
     """
 
     type: Literal["upload_move_chunk"] = "upload_move_chunk"
@@ -392,12 +401,14 @@ class UploadMoveChunkCmd(BaseModel):
 
 
 class UploadMoveFinishCmd(BaseModel):
-    """Close an upload slot. Daemon assembles+parses the move JSON.
+    """Close an upload slot. Fire-and-forget.
 
-    The ack carries ``{"status": "ok", "command": "upload_move_finish",
-    "upload_id": ..., "frames": N, "duration_s": D}`` on success.  If
-    parsing fails the slot is evicted and the ack carries an ``error``
-    field instead.
+    Daemon assembles the fragments, parses them as a recorded move,
+    and stores the result keyed by ``upload_id``. If anything fails
+    (chunk count mismatch, JSON parse error, malformed move shape)
+    the slot is silently dropped: the next :class:`PlayUploadedMoveCmd`
+    will broadcast a ``"no such uploaded move"`` error so the client
+    learns about the failure at play time.
     """
 
     type: Literal["upload_move_finish"] = "upload_move_finish"
@@ -405,20 +416,27 @@ class UploadMoveFinishCmd(BaseModel):
 
 
 class PlayUploadedMoveCmd(BaseModel):
-    """Play a previously-uploaded move on the daemon.
+    """Play a previously-uploaded move on the daemon. Fire-and-forget
+    at the transport level; progress comes back as broadcast events.
 
-    Mirrors the parameters of :meth:`Backend.play_move`.  The daemon
-    spawns the playback as a background task and sends two acks:
-    ``{"status": "ok", "command": "play_uploaded_move", "started": True}``
-    immediately, and a ``{"command": "play_uploaded_move", "finished":
-    true | "cancelled": true | "error": "..."}`` message once the
-    task completes.
+    The daemon spawns Backend.play_move as a background task and emits
+    two unsolicited messages tagged ``type="play_uploaded_move"`` and
+    ``upload_id=<this id>``:
 
-    ``initial_goto_duration`` works the same as in ``Backend.play_move``:
+    - ``{"started": true, "duration_s": D}`` when the inner loop is
+      about to tick for the first time. Use this as the moment to
+      kick off client-side audio so it lines up with the motion.
+    - ``{"finished": true}`` / ``{"cancelled": true}`` / ``{"error":
+      "..."}`` exactly once when the task ends.
+
+    Both messages go out on every transport the daemon serves (WS
+    broadcast + WebRTC data channel broadcast). Clients filter by
+    ``upload_id``.
+
+    ``initial_goto_duration`` works the same as in Backend.play_move:
     if non-zero, the robot smoothly interpolates to the move's first
-    frame before the streamed playback starts.  Marionette typically
-    handles this client-side via ``Motor.prepForPlayback`` and leaves
-    this 0.
+    frame before the playback loop starts. Callers that want to
+    handle that approach themselves leave this at 0.
     """
 
     type: Literal["play_uploaded_move"] = "play_uploaded_move"
@@ -429,10 +447,12 @@ class PlayUploadedMoveCmd(BaseModel):
 
 class CancelMoveCmd(BaseModel):
     """Cancel any currently-running play_move / goto on the backend.
+    Fire-and-forget.
 
     Flips ``backend._move_cancelled`` so the playback loop exits at
-    its next tick.  No-op if nothing is running; idempotent on
-    repeated sends.
+    its next tick. play_move resets the flag on entry so a stale
+    cancel from a previous run cannot leak across plays. No-op if
+    nothing is running.
     """
 
     type: Literal["cancel_move"] = "cancel_move"

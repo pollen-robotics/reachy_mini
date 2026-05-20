@@ -238,6 +238,12 @@ class Backend:
         self._send_message_to_webrtc: Optional[Callable[[Optional[str], str], None]] = (
             None
         )
+        # WS broadcast callback. Set by WSServer.start() so the
+        # backend can fan unsolicited events out to every WS client
+        # using the same drop-oldest queues the state publishers use.
+        # The WebRTC broadcast path goes through
+        # ``_send_message_to_webrtc(None, ...)`` instead.
+        self._ws_broadcast_callback: Optional[Callable[[str], None]] = None
 
         # Per-peer journalctl streaming tasks. Populated when a peer
         # sends `subscribe_logs`, cancelled on `unsubscribe_logs` or
@@ -1166,21 +1172,18 @@ class Backend:
                 self.logger.error(f"restart_daemon callback failed: {e}")
 
         elif isinstance(cmd, UploadMoveStartCmd):
-            self._handle_upload_start(cmd, send_response)
+            self._handle_upload_start(cmd)
         elif isinstance(cmd, UploadMoveChunkCmd):
-            self._handle_upload_chunk(cmd, send_response)
+            self._handle_upload_chunk(cmd)
         elif isinstance(cmd, UploadMoveFinishCmd):
-            self._handle_upload_finish(cmd, send_response)
+            self._handle_upload_finish(cmd)
         elif isinstance(cmd, PlayUploadedMoveCmd):
-            asyncio.create_task(
-                self._async_play_uploaded_move(cmd, send_response)
-            )
+            asyncio.create_task(self._async_play_uploaded_move(cmd))
         elif isinstance(cmd, CancelMoveCmd):
             # Idempotent: sets the flag regardless of whether anything
             # is actually running. play_move resets it on entry, so no
             # stale-flag risk.
             self._move_cancelled = True
-            send_response({"status": "ok", "command": "cancel_move"})
 
     # ------------------------------------------------------------------
     # Inline-move upload + daemon-side playback
@@ -1206,22 +1209,22 @@ class Backend:
                 f"upload_move: evicted stale slot {uid} (TTL exceeded)"
             )
 
-    def _handle_upload_start(
-        self,
-        cmd: UploadMoveStartCmd,
-        send_response: Callable[[dict[str, Any]], None],
-    ) -> None:
+    # All upload_* handlers are fire-and-forget. The client pipelines
+    # chunks at line rate (relying on SCTP's ordered, reliable delivery)
+    # and the daemon silently drops failed slots. The eventual
+    # play_uploaded_move broadcast will surface a "no such upload"
+    # error if anything went wrong during upload.
+
+    def _handle_upload_start(self, cmd: UploadMoveStartCmd) -> None:
         self._evict_stale_uploads()
         if len(self._upload_chunks) >= self._upload_max_active_slots:
-            send_response({
-                "error": "too many active uploads",
-                "command": "upload_move_start",
-                "upload_id": cmd.upload_id,
-            })
+            self.logger.warning(
+                f"upload_move_start: refusing {cmd.upload_id}, too many active slots"
+            )
             return
-        # Sending start twice for the same id resets the slot — keeps
-        # the protocol forgiving for a client that retries after a
-        # transient send failure mid-upload.
+        # Sending start twice for the same id resets the slot, which
+        # lets a client retry after a transient send failure without
+        # needing to allocate a new id.
         self._upload_chunks[cmd.upload_id] = []
         self._upload_meta[cmd.upload_id] = {
             "total_chunks": cmd.total_chunks,
@@ -1229,104 +1232,67 @@ class Backend:
             "estimated_duration_s": cmd.estimated_duration_s,
         }
         self._upload_ts[cmd.upload_id] = time.time()
-        send_response({
-            "status": "ok",
-            "command": "upload_move_start",
-            "upload_id": cmd.upload_id,
-        })
 
-    def _handle_upload_chunk(
-        self,
-        cmd: UploadMoveChunkCmd,
-        send_response: Callable[[dict[str, Any]], None],
-    ) -> None:
+    def _handle_upload_chunk(self, cmd: UploadMoveChunkCmd) -> None:
         slot = self._upload_chunks.get(cmd.upload_id)
         meta = self._upload_meta.get(cmd.upload_id)
         if slot is None or meta is None:
-            send_response({
-                "error": "no such upload slot (start first)",
-                "command": "upload_move_chunk",
-                "upload_id": cmd.upload_id,
-            })
+            self.logger.warning(
+                f"upload_move_chunk: no slot {cmd.upload_id}, dropping chunk {cmd.chunk_index}"
+            )
             return
         expected_index = len(slot)
         if cmd.chunk_index != expected_index:
-            # Out-of-order delivery; data-channel SCTP is ordered by
-            # default so this means the client logic is broken.
-            # Drop the slot so the next start can recover cleanly.
+            # Out-of-order on an ordered SCTP transport means a client
+            # bug. Drop the slot so the next start can recover cleanly.
+            self.logger.warning(
+                f"upload_move_chunk: out-of-order on {cmd.upload_id} "
+                f"(expected {expected_index}, got {cmd.chunk_index}); dropping slot"
+            )
             self._upload_chunks.pop(cmd.upload_id, None)
             self._upload_meta.pop(cmd.upload_id, None)
             self._upload_ts.pop(cmd.upload_id, None)
-            send_response({
-                "error": f"chunk out of order (expected {expected_index}, got {cmd.chunk_index})",
-                "command": "upload_move_chunk",
-                "upload_id": cmd.upload_id,
-            })
             return
         if cmd.chunk_index >= meta["total_chunks"]:
-            send_response({
-                "error": f"chunk index {cmd.chunk_index} exceeds declared total {meta['total_chunks']}",
-                "command": "upload_move_chunk",
-                "upload_id": cmd.upload_id,
-            })
+            self.logger.warning(
+                f"upload_move_chunk: index {cmd.chunk_index} exceeds declared "
+                f"total {meta['total_chunks']} for slot {cmd.upload_id}; dropping slot"
+            )
+            self._upload_chunks.pop(cmd.upload_id, None)
+            self._upload_meta.pop(cmd.upload_id, None)
+            self._upload_ts.pop(cmd.upload_id, None)
             return
         slot.append(cmd.chunk)
         self._upload_ts[cmd.upload_id] = time.time()
-        send_response({
-            "status": "ok",
-            "command": "upload_move_chunk",
-            "upload_id": cmd.upload_id,
-            "received_chunks": len(slot),
-            "total_chunks": meta["total_chunks"],
-        })
 
-    def _handle_upload_finish(
-        self,
-        cmd: UploadMoveFinishCmd,
-        send_response: Callable[[dict[str, Any]], None],
-    ) -> None:
+    def _handle_upload_finish(self, cmd: UploadMoveFinishCmd) -> None:
         slot = self._upload_chunks.pop(cmd.upload_id, None)
         meta = self._upload_meta.pop(cmd.upload_id, None)
         self._upload_ts.pop(cmd.upload_id, None)
         if slot is None or meta is None:
-            send_response({
-                "error": "no such upload slot",
-                "command": "upload_move_finish",
-                "upload_id": cmd.upload_id,
-            })
+            self.logger.warning(
+                f"upload_move_finish: no such slot {cmd.upload_id}"
+            )
             return
         if len(slot) != meta["total_chunks"]:
-            send_response({
-                "error": f"chunk count mismatch (declared {meta['total_chunks']}, received {len(slot)})",
-                "command": "upload_move_finish",
-                "upload_id": cmd.upload_id,
-            })
+            self.logger.warning(
+                f"upload_move_finish: chunk count mismatch on {cmd.upload_id} "
+                f"(declared {meta['total_chunks']}, received {len(slot)})"
+            )
             return
         payload = "".join(slot)
         try:
             move_dict = json.loads(payload)
-            # Reuse the RecordedMove parser — same shape as the JSON
-            # files in the HF dance/emotion datasets, no sound path.
+            # Reuse the RecordedMove parser; same JSON shape as the
+            # HF dance/emotion datasets, no on-disk sound path.
             from reachy_mini.motion.recorded_move import RecordedMove
             parsed = RecordedMove(move_dict, sound_path=None)
         except Exception as e:
             self.logger.warning(
                 f"upload_move_finish: parse failed for slot {cmd.upload_id}: {e}"
             )
-            send_response({
-                "error": f"move parse failed: {e}",
-                "command": "upload_move_finish",
-                "upload_id": cmd.upload_id,
-            })
             return
         self._uploaded_moves[cmd.upload_id] = parsed
-        send_response({
-            "status": "ok",
-            "command": "upload_move_finish",
-            "upload_id": cmd.upload_id,
-            "frames": len(parsed.timestamps),
-            "duration_s": parsed.duration,
-        })
 
     # ------------------------------------------------------------------
     # journalctl log streaming over the typed transport (subscribe_logs)
@@ -1477,36 +1443,42 @@ class Backend:
         except Exception as e:
             send_response({"error": str(e), "command": "goto_sleep"})
 
-    async def _async_play_uploaded_move(
-        self,
-        cmd: PlayUploadedMoveCmd,
-        send_response: Callable[[dict[str, Any]], None],
-    ) -> None:
+    async def _async_play_uploaded_move(self, cmd: PlayUploadedMoveCmd) -> None:
         """Run Backend.play_move on a previously-uploaded move slot.
 
-        Sends two messages back: an immediate ack at ``started`` time
-        and a single completion message when the play_move coroutine
-        returns (``finished``, ``cancelled``, or ``error``).  The
-        upload slot is evicted on exit regardless of outcome.
+        Emits two unsolicited broadcast messages of type
+        ``"play_uploaded_move"``: one when the playback loop actually
+        starts and one when it ends (``finished`` / ``cancelled`` /
+        ``error``). Clients filter by ``upload_id`` to find their own
+        events.
+
+        Going through broadcast (not per-call send_response) keeps the
+        existing fire-and-forget semantics of process_command; the
+        broadcast reaches both WS and WebRTC peers through the same
+        path the daemon already uses for state messages.
         """
-        move = self._uploaded_moves.get(cmd.upload_id)
+        upload_id = cmd.upload_id
+        move = self._uploaded_moves.pop(upload_id, None)
         if move is None:
-            send_response({
-                "error": "no such uploaded move (start + finish first)",
-                "command": "play_uploaded_move",
-                "upload_id": cmd.upload_id,
-            })
+            self.broadcast_to_all_clients(json.dumps({
+                "type": "play_uploaded_move",
+                "upload_id": upload_id,
+                "error": "no such uploaded move (upload first)",
+            }))
             return
-        send_response({
-            "status": "ok",
-            "command": "play_uploaded_move",
-            "upload_id": cmd.upload_id,
+
+        # Broadcast start with the declared duration so the caller
+        # can line up audio playback against the daemon-side loop.
+        self.broadcast_to_all_clients(json.dumps({
+            "type": "play_uploaded_move",
+            "upload_id": upload_id,
             "started": True,
             "duration_s": move.duration,
-        })
+        }))
+
         result: dict[str, Any] = {
-            "command": "play_uploaded_move",
-            "upload_id": cmd.upload_id,
+            "type": "play_uploaded_move",
+            "upload_id": upload_id,
         }
         try:
             await self.play_move(
@@ -1515,7 +1487,7 @@ class Backend:
                 initial_goto_duration=cmd.initial_goto_duration,
             )
             # play_move exits its loop in two cases: natural end or
-            # cancel.  Inspect the flag to distinguish them.
+            # cancel. Inspect the flag to distinguish them.
             if self._move_cancelled:
                 result["cancelled"] = True
             else:
@@ -1523,17 +1495,39 @@ class Backend:
         except Exception as e:
             self.logger.exception(f"play_uploaded_move failed: {e}")
             result["error"] = str(e)
-        finally:
-            # Evict the slot — the spec says one play per upload.
-            # Lets the client overwrite the slot by re-uploading
-            # with the same id without leaking memory.
-            self._uploaded_moves.pop(cmd.upload_id, None)
+        try:
+            self.broadcast_to_all_clients(json.dumps(result))
+        except Exception as e:
+            self.logger.warning(f"broadcast of play_uploaded_move end failed: {e}")
+
+    # ------------------------------------------------------------------
+    # Unsolicited broadcast (fan out to every connected client across
+    # all transports). Used by the async play_uploaded_move handler to
+    # report start / end events without going through the per-call
+    # send_response (which is fire-and-forget on WS).
+    # ------------------------------------------------------------------
+
+    def set_ws_broadcast_callback(self, cb: Callable[[str], None]) -> None:
+        """Register the WS broadcast hook. Called by WSServer.start()."""
+        self._ws_broadcast_callback = cb
+
+    def broadcast_to_all_clients(self, payload: str) -> None:
+        """Send a JSON string to every connected client.
+
+        Goes out on the WebRTC data channel (peer_id=None broadcasts)
+        and on every WS client queue. Older clients that don't
+        recognize the payload's type field just ignore it.
+        """
+        if self._send_message_to_webrtc is not None:
             try:
-                send_response(result)
-            except Exception:
-                # Peer may have disconnected during a long playback;
-                # nothing we can do, just don't crash the task.
-                pass
+                self._send_message_to_webrtc(None, payload)
+            except Exception as e:
+                self.logger.warning(f"broadcast: WebRTC send failed: {e}")
+        if self._ws_broadcast_callback is not None:
+            try:
+                self._ws_broadcast_callback(payload)
+            except Exception as e:
+                self.logger.warning(f"broadcast: WS broadcast failed: {e}")
 
     # ------------------------------------------------------------------
     # WebRTC data channel interface (delegates to process_command)
