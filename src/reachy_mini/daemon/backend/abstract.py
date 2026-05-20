@@ -1230,6 +1230,7 @@ class Backend:
             "total_chunks": cmd.total_chunks,
             "description": cmd.description,
             "estimated_duration_s": cmd.estimated_duration_s,
+            "encoding": cmd.encoding,
         }
         self._upload_ts[cmd.upload_id] = time.time()
 
@@ -1281,8 +1282,24 @@ class Backend:
             )
             return
         payload = "".join(slot)
+        encoding = meta.get("encoding", "json")
         try:
-            move_dict = json.loads(payload)
+            if encoding == "gzip+base64":
+                # Decompressing the assembled base64+gzip payload back
+                # to UTF-8 JSON. Compute is small even for multi-MB
+                # moves (gzip is fast on the CM4).
+                import base64
+                import gzip
+                raw = base64.b64decode(payload, validate=False)
+                payload_text = gzip.decompress(raw).decode("utf-8")
+            elif encoding == "json":
+                payload_text = payload
+            else:
+                self.logger.warning(
+                    f"upload_move_finish: unknown encoding {encoding!r} on {cmd.upload_id}"
+                )
+                return
+            move_dict = json.loads(payload_text)
             # Reuse the RecordedMove parser; same JSON shape as the
             # HF dance/emotion datasets, no on-disk sound path.
             from reachy_mini.motion.recorded_move import RecordedMove

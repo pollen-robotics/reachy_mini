@@ -376,6 +376,17 @@ class UploadMoveStartCmd(BaseModel):
     lets the daemon validate completeness at finish time. ``description``
     and ``estimated_duration_s`` are diagnostics surfaced in daemon
     logs only.
+
+    ``encoding`` controls how the daemon decodes the assembled payload
+    at finish time:
+      - "json"        (default): chunks are UTF-8 JSON text, concatenated
+                       and parsed directly. Simplest, works without any
+                       extra deps on the client.
+      - "gzip+base64": chunks are base64-encoded fragments of a
+                       gzipped UTF-8 JSON payload. Roughly 3x smaller
+                       on the wire for typical recorded moves (floats
+                       compress extremely well). Recommended for moves
+                       longer than a few seconds.
     """
 
     type: Literal["upload_move_start"] = "upload_move_start"
@@ -383,6 +394,7 @@ class UploadMoveStartCmd(BaseModel):
     total_chunks: int = Field(..., ge=1, le=65536)
     description: str = ""
     estimated_duration_s: float = Field(default=0.0, ge=0.0)
+    encoding: Literal["json", "gzip+base64"] = "json"
 
 
 class UploadMoveChunkCmd(BaseModel):
