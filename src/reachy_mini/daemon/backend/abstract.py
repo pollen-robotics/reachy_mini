@@ -25,6 +25,7 @@ from scipy.spatial.transform import Rotation as R
 from reachy_mini.io.protocol import (
     AnyCommand,
     AppendRecordCmd,
+    ApplyAudioConfigCmd,
     GetHardwareIdCmd,
     GetMicrophoneVolumeCmd,
     GetMotorModeCmd,
@@ -39,6 +40,7 @@ from reachy_mini.io.protocol import (
     MotorControlMode,
     MujocoBackendStatus,
     PlaySoundCmd,
+    ReadAudioParameterCmd,
     RecordedDataMsg,
     RestartDaemonCmd,
     RobotBackendStatus,
@@ -1090,6 +1092,60 @@ class Backend:
                             "volume": vc.get_input_volume(),
                         }
                     )
+
+        elif isinstance(cmd, (ApplyAudioConfigCmd, ReadAudioParameterCmd)):
+            from reachy_mini.media.audio_control_utils import init_respeaker_usb
+
+            try:
+                respeaker = init_respeaker_usb()
+            except Exception as e:
+                self.logger.warning("ReSpeaker init failed: %s", e)
+                send_response(
+                    {"error": f"ReSpeaker init failed: {e}", "command": cmd.type}
+                )
+                return
+
+            if respeaker is None:
+                send_response(
+                    {
+                        "error": "ReSpeaker audio board not available",
+                        "command": cmd.type,
+                    }
+                )
+                return
+
+            try:
+                if isinstance(cmd, ApplyAudioConfigCmd):
+                    config = [(p.name, p.values) for p in cmd.config]
+                    applied = respeaker.apply_audio_config(config, verify=cmd.verify)
+                    send_response(
+                        {
+                            "status": "ok" if applied else "error",
+                            "command": "apply_audio_config",
+                            "applied": applied,
+                        }
+                    )
+                else:  # ReadAudioParameterCmd
+                    values = respeaker.read_values(cmd.name)
+                    send_response(
+                        {
+                            "command": "read_audio_parameter",
+                            "name": cmd.name,
+                            "values": list(values) if values is not None else None,
+                        }
+                    )
+            except Exception as e:
+                self.logger.warning(
+                    "Audio config command %s failed: %s", cmd.type, e
+                )
+                send_response(
+                    {
+                        "error": f"Audio config command failed: {e}",
+                        "command": cmd.type,
+                    }
+                )
+            finally:
+                respeaker.close()
 
         elif isinstance(cmd, StartRecordingCmd):
             self.start_recording()

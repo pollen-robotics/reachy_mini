@@ -162,6 +162,14 @@ robot.setMicMuted(false);
 robot.addEventListener("micSupported", (e) => {
     console.log("Mic supported:", e.detail.supported);
 });
+
+// XVF3800 audio-board tuning (Wireless only — the USB board must be
+// physically attached to the robot). The daemon owns the USB handle, so
+// these calls cross the same DataChannel as the volume helpers above.
+const values = await robot.readAudioParameter("AUDIO_MGR_MIC_GAIN"); // number[] | null
+const ok = await robot.applyAudioConfig([
+    { name: "AUDIO_MGR_MIC_GAIN", values: [1.0] },
+]); // boolean
 ```
 
 ### 7. Cleanup
