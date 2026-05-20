@@ -10,6 +10,7 @@ Client->Server command types:
     get_state, get_version, start_recording, stop_recording, append_record,
     subscribe_logs, unsubscribe_logs, restart_daemon,
     upload_move_start, upload_move_chunk, upload_move_finish,
+    upload_audio_start, upload_audio_chunk, upload_audio_finish,
     play_uploaded_move, cancel_move
 
 Server->Client message types:
@@ -362,10 +363,15 @@ class RestartDaemonCmd(BaseModel):
 #                          tick. Idempotent
 #
 # Slots are in-memory only; evicted on play-finish, cancel, or TTL.
-# Audio is NOT included; clients that want audio keep it on their
-# own side (e.g. a browser playing audio over an existing WebRTC
-# audio track) and use the play_uploaded_move "started" broadcast as
-# the sync point.
+#
+# AUDIO: optional. A second parallel upload (UploadAudioStartCmd /
+# ChunkCmd / FinishCmd) uses the SAME upload_id to attach a WAV file
+# to the move slot.  When present, play_uploaded_move passes the
+# audio path to Backend.play_move's sound_path, which triggers
+# GStreamer playbin on the robot.  Both motion and audio then run
+# on the same clock (the daemon's), eliminating cross-machine drift
+# entirely.  Clients that prefer to keep audio in the browser (e.g.
+# user picked "Device" output) simply skip the audio upload.
 # ------------------------------------------------------------------
 
 
@@ -427,6 +433,62 @@ class UploadMoveFinishCmd(BaseModel):
     upload_id: str
 
 
+class UploadAudioStartCmd(BaseModel):
+    """Open an audio slot keyed by the same upload_id as a move.
+
+    Fire-and-forget.  ``upload_id`` must match the move's id; at
+    play time the daemon pairs the two.  Audio uploaded without a
+    matching move is held until either a matching move arrives or
+    the TTL expires.
+
+    ``encoding`` is currently always ``"wav-base64"``: raw PCM WAV
+    bytes (any container the GStreamer playbin can decode) sliced
+    into chunks and base64-encoded.  Defined as an enum so a future
+    encoding (raw binary frames, opus, ...) can be added without
+    breaking older clients.
+    """
+
+    type: Literal["upload_audio_start"] = "upload_audio_start"
+    upload_id: str
+    total_chunks: int = Field(..., ge=1, le=262144)
+    encoding: Literal["wav-base64"] = "wav-base64"
+    description: str = ""
+
+
+class UploadAudioChunkCmd(BaseModel):
+    """One fragment of an audio payload. Fire-and-forget.
+
+    ``chunk`` is a slice of the base64-encoded audio bytes.  Chunks
+    must arrive in order on a healthy SCTP data channel; a single
+    misordered chunk discards the slot server-side.
+    """
+
+    type: Literal["upload_audio_chunk"] = "upload_audio_chunk"
+    upload_id: str
+    chunk_index: int = Field(..., ge=0)
+    chunk: str
+
+
+class UploadAudioFinishCmd(BaseModel):
+    """Close an audio slot. Fire-and-forget.
+
+    Daemon decodes the base64-assembled payload and writes the
+    resulting WAV bytes to a temp file (under
+    ``/tmp/marionette-audio/{upload_id}.wav``).  At
+    play_uploaded_move time the path is attached as ``sound_path`` on
+    the move object so Backend.play_move starts GStreamer playbin in
+    lockstep with the motion loop.  The temp file is deleted after
+    playback ends.
+
+    If the audio failed to assemble (chunk mismatch, bad base64), the
+    slot is silently dropped: the move plays without audio rather
+    than blocking.
+    """
+
+    type: Literal["upload_audio_finish"] = "upload_audio_finish"
+    upload_id: str
+
+
 class PlayUploadedMoveCmd(BaseModel):
     """Play a previously-uploaded move on the daemon.
 
@@ -438,25 +500,34 @@ class PlayUploadedMoveCmd(BaseModel):
     ``upload_id=<this id>``:
 
     - ``{"started": true, "duration_s": D}`` when the inner loop is
-      about to tick for the first time. Use this as the moment to
-      kick off client-side audio so it lines up with the motion.
+      about to tick for the first time.  When the same upload_id
+      also has an uploaded audio attached, the daemon-side GStreamer
+      playbin has already started by this point too: clients should
+      NOT trigger a second audio source from their own side.
     - ``{"finished": true}`` / ``{"cancelled": true}`` / ``{"error":
       "..."}`` exactly once when the task ends.
 
     Both messages go out on every transport the daemon serves (WS
-    broadcast + WebRTC data channel broadcast). Clients filter by
+    broadcast + WebRTC data channel broadcast).  Clients filter by
     ``upload_id``.
 
     ``initial_goto_duration`` works the same as in Backend.play_move:
     if non-zero, the robot smoothly interpolates to the move's first
-    frame before the playback loop starts. Callers that want to
+    frame before the playback loop starts.  Callers that want to
     handle that approach themselves leave this at 0.
+
+    ``audio_lead_ms`` shifts the daemon-side audio start relative to
+    the motion start.  Positive means audio plays N ms BEFORE motion
+    (compensates for the constant GStreamer playbin latency on the
+    robot; typical values: 0-100 ms).  Negative is supported but
+    rarely useful.  Only applied when an audio is attached.
     """
 
     type: Literal["play_uploaded_move"] = "play_uploaded_move"
     upload_id: str
     play_frequency: float = Field(default=100.0, gt=0.0, le=200.0)
     initial_goto_duration: float = Field(default=0.0, ge=0.0)
+    audio_lead_ms: float = Field(default=0.0, ge=-2000.0, le=2000.0)
 
 
 class CancelMoveCmd(BaseModel):
@@ -502,6 +573,9 @@ AnyCommand = Annotated[
     | UploadMoveStartCmd
     | UploadMoveChunkCmd
     | UploadMoveFinishCmd
+    | UploadAudioStartCmd
+    | UploadAudioChunkCmd
+    | UploadAudioFinishCmd
     | PlayUploadedMoveCmd
     | CancelMoveCmd,
     Field(discriminator="type"),
