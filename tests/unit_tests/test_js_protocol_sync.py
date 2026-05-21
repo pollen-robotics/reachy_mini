@@ -18,7 +18,7 @@ from reachy_mini.io.protocol import AnyCommand
 # ---------------------------------------------------------------------------
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-JS_SDK_PATH = REPO_ROOT / "js" / "sdk" / "reachy-mini-sdk.js"
+JS_SDK_PATH = REPO_ROOT / "js" / "reachy-mini-sdk.js"
 
 
 def _get_protocol_commands() -> dict[str, dict[str, bool]]:
