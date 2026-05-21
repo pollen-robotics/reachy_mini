@@ -331,17 +331,14 @@ class RobotBackend(Backend):
         present_head_joints = np.array([motor_pos.body_yaw] + motor_pos.stewart)
         present_antennas = np.array(motor_pos.antennas)
 
-        # Setters clear ik_required so the next IK tick can't overwrite the pin.
+        # Setter clears ik_required so the next IK tick can't overwrite the pin.
         self.set_target_head_joint_positions(present_head_joints)
         self.set_target_antenna_joint_positions(present_antennas)
+        # Keep Cartesian target consistent (current_head_pose is FK'd each tick)
+        # so a later body_yaw-only setTarget can't re-arm IK against a stale pose.
+        if self.current_head_pose is not None:
+            self.target_head_pose = self.current_head_pose
         self.target_body_yaw = float(motor_pos.body_yaw)
-        try:
-            present_pose = self.head_kinematics.fk(present_head_joints, no_iterations=20)
-            if present_pose is not None:
-                self.target_head_pose = present_pose
-                self.current_head_pose = present_pose
-        except Exception as e:
-            self.logger.warning(f"enable_motors: FK sync failed: {e}")
 
         if self._current_head_operation_mode != 0:
             self.c.set_stewart_platform_position(present_head_joints[1:].tolist())
