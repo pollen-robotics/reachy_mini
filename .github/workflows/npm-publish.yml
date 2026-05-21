@@ -9,6 +9,11 @@ on:
       - main
     paths:
       - "js/**"
+      - ".github/workflows/npm-publish.yml"
+  pull_request:
+    paths:
+      - "js/**"
+      - ".github/workflows/npm-publish.yml"
 
 jobs:
   publish:
@@ -37,20 +42,30 @@ jobs:
         run: npm run build:host
 
       # pyproject.toml is the single source of truth for the version.
-      # Release  → publish <py_ver>            on the `latest` dist-tag.
-      # Push     → publish <py_ver>-main.<sha> on the `main`   dist-tag.
+      # Release       → publish <py_ver>            on the `latest` dist-tag.
+      # Push to main  → publish <py_ver>-main.<sha> on the `main`   dist-tag.
+      # Pull request  → dry-run only (no publish).
       - name: Compute and apply version from pyproject.toml
         run: |
           py_ver=$(grep -E '^version' ../pyproject.toml | head -1 | sed -E 's/version *= *"([^"]+)"/\1/')
-          if [ "${{ github.event_name }}" = "push" ]; then
+          if [ "${{ github.event_name }}" = "push" ] || [ "${{ github.event_name }}" = "pull_request" ]; then
             sha=$(echo "${{ github.sha }}" | cut -c1-7)
             ver="${py_ver}-main.${sha}"
           else
             ver="${py_ver}"
           fi
-          echo "Publishing version: $ver"
+          echo "Computed version: $ver (event=${{ github.event_name }})"
           npm version "$ver" --no-git-tag-version --workspace=sdk
           npm version "$ver" --no-git-tag-version --workspace=host
+
+      # PR: pack both workspaces to confirm the publish would succeed
+      # (tarball layout, manifest validity, no missing files) without
+      # actually publishing.
+      - name: Verify tarballs (PR dry-run)
+        if: github.event_name == 'pull_request'
+        run: |
+          npm pack --workspace=sdk --dry-run
+          npm pack --workspace=host --dry-run
 
       - name: Publish SDK (latest)
         if: github.event_name == 'release'
