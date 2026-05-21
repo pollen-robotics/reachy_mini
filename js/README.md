@@ -122,6 +122,8 @@ You can drop `@pollen-robotics/reachy-mini-host` from your `package.json`. The h
 
 The host bundles now import the SDK directly and assign it on `window.ReachyMini` at load time, so apps no longer need a second `<script type="module">` for the SDK alone.
 
+See the [CHANGELOG](./CHANGELOG.md) for the full release history.
+
 ## License
 
 Apache-2.0 — see [LICENSE](./LICENSE).

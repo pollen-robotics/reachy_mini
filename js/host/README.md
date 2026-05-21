@@ -34,7 +34,7 @@ The same app code works in both modes; only the entry point differs.
 |----------|----------|----------------|
 | **[SPEC.md](./SPEC.md)** | host maintainers + app authors | You want the canonical behaviour, state machines, invariants, and wire protocol. |
 | **[APP_AUTHOR_GUIDE.md](./APP_AUTHOR_GUIDE.md)** | app authors | You're building a new Reachy Mini app and need the step-by-step recipe. |
-| **[CHANGELOG.md](./CHANGELOG.md)** | everyone | You're upgrading from a previous version. |
+| **[CHANGELOG.md](../CHANGELOG.md)** | everyone | You're upgrading from a previous version. |
 
 App authors should start with the **[APP_AUTHOR_GUIDE](./APP_AUTHOR_GUIDE.md)**.
 Library maintainers and reviewers should start with the **[SPEC](./SPEC.md)**.
@@ -148,7 +148,7 @@ protocol** is tracked separately in `PROTOCOL_VERSION` and bumped only on
 incompatible postMessage changes (cf. [SPEC §11](./SPEC.md#11-backlog)).
 
 App authors should pin to a major (`@1`) in their CDN URL and audit the
-[CHANGELOG](./CHANGELOG.md) on each minor bump.
+[CHANGELOG](../CHANGELOG.md) on each minor bump.
 
 ## License
 

@@ -37,8 +37,8 @@
     "host/README.md",
     "host/SPEC.md",
     "host/APP_AUTHOR_GUIDE.md",
-    "host/CHANGELOG.md",
     "README.md",
+    "CHANGELOG.md",
     "LICENSE"
   ],
   "sideEffects": false,
