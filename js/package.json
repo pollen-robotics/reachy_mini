@@ -1,7 +1,7 @@
 {
   "name": "@pollen-robotics/reachy-mini-sdk",
   "version": "1.7.3",
-  "description": "Browser SDK for controlling a Reachy Mini robot over WebRTC.",
+  "description": "Browser SDK + host shell for controlling a Reachy Mini robot over WebRTC.",
   "type": "module",
   "main": "./reachy-mini-sdk.js",
   "module": "./reachy-mini-sdk.js",
@@ -9,16 +9,55 @@
     ".": {
       "import": "./reachy-mini-sdk.js",
       "default": "./reachy-mini-sdk.js"
-    }
+    },
+    "./host": {
+      "types": "./host/dist/index.d.ts",
+      "import": "./host/dist/index.js"
+    },
+    "./host/auto": {
+      "types": "./host/dist/entry/auto.d.ts",
+      "import": "./host/dist/entry/auto.js"
+    },
+    "./host/embed": {
+      "types": "./host/dist/entry/embed.d.ts",
+      "import": "./host/dist/entry/embed.js"
+    },
+    "./host/protocol": {
+      "types": "./host/dist/lib/protocol.d.ts",
+      "import": "./host/dist/lib/protocol.js"
+    },
+    "./package.json": "./package.json"
   },
   "files": [
     "reachy-mini-sdk.js",
+    "host/dist",
+    "host/README.md",
+    "host/SPEC.md",
+    "host/APP_AUTHOR_GUIDE.md",
+    "host/CHANGELOG.md",
     "README.md",
     "LICENSE"
   ],
   "sideEffects": false,
+  "workspaces": [
+    "host"
+  ],
+  "scripts": {
+    "build": "npm run build:host",
+    "build:host": "npm run build --workspace=host",
+    "typecheck:host": "npm run typecheck --workspace=host",
+    "clean": "rm -rf host/dist"
+  },
   "dependencies": {
     "@huggingface/hub": "^0.15.2"
+  },
+  "peerDependencies": {
+    "react": "^18.0.0 || ^19.0.0",
+    "react-dom": "^18.0.0 || ^19.0.0"
+  },
+  "peerDependenciesMeta": {
+    "react": { "optional": true },
+    "react-dom": { "optional": true }
   },
   "keywords": [
     "reachy",
@@ -28,7 +67,9 @@
     "robotics",
     "webrtc",
     "sdk",
-    "browser"
+    "browser",
+    "host",
+    "iframe"
   ],
   "author": "Pollen Robotics",
   "license": "Apache-2.0",
