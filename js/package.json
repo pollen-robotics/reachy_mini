@@ -1,0 +1,16 @@
+{
+  "name": "reachy-mini-workspace",
+  "private": true,
+  "type": "module",
+  "description": "npm workspace coordinator for the Reachy Mini JS packages. Not published.",
+  "workspaces": [
+    "sdk",
+    "host"
+  ],
+  "scripts": {
+    "build": "npm run build --workspace=host",
+    "build:host": "npm run build --workspace=host",
+    "typecheck:host": "npm run typecheck --workspace=host",
+    "clean": "npm run clean --workspaces --if-present"
+  }
+}

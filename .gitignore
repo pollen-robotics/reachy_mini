@@ -261,3 +261,14 @@ src/reachy_mini/tools/camera_calibration/images/*
 src/reachy_mini/tools/camera_calibration/images_for_crop_analysis/*
 src/reachy_mini/tools/camera_calibration/images_for_crop_analysis_lite/*
 src/reachy_mini/tools/camera_calibration/*.yaml
+
+# JavaScript (js/ workspace: SDK + host)
+js/node_modules/
+js/host/node_modules/
+js/host/dist/
+js/.vite/
+# The unanchored `lib/` rule above (Python template, intended for
+# root-level build artefacts) also matches `js/host/src/lib/`,
+# which holds TypeScript source. Re-include it explicitly.
+!js/host/src/lib/
+!js/host/src/lib/**
