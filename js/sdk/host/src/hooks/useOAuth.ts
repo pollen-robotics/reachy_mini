@@ -90,7 +90,7 @@ export function useOAuth(sdk: ReachyMiniInstance | null): OAuthState {
         setAuth(ok);
         setUserName(sdk.username);
       } catch (err) {
-        console.warn('[reachy-mini-host] authenticate() threw', err);
+        console.warn('[reachy-mini-sdk/host] authenticate() threw', err);
       }
     })();
     return () => {
@@ -147,7 +147,7 @@ export function useOAuth(sdk: ReachyMiniInstance | null): OAuthState {
         setUserName(sdk.username);
         if (ok) setPostOauth(true);
       } catch (err) {
-        console.error('[reachy-mini-host] dev-token authenticate() threw', err);
+        console.error('[reachy-mini-sdk/host] dev-token authenticate() threw', err);
         throw err;
       }
       return;
@@ -162,7 +162,7 @@ export function useOAuth(sdk: ReachyMiniInstance | null): OAuthState {
       // login() typically redirects, so a throw here means the
       // redirect was blocked. Clear the pending flag so the
       // next boot doesn't show a confused "welcome back".
-      console.error('[reachy-mini-host] sdk.login() threw', err);
+      console.error('[reachy-mini-sdk/host] sdk.login() threw', err);
       consumeOAuthPending();
       throw err;
     }
@@ -173,7 +173,7 @@ export function useOAuth(sdk: ReachyMiniInstance | null): OAuthState {
     try {
       sdk.logout();
     } catch (err) {
-      console.warn('[reachy-mini-host] sdk.logout() threw', err);
+      console.warn('[reachy-mini-sdk/host] sdk.logout() threw', err);
     }
     markUserSignedOut();
     setAuth(false);

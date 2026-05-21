@@ -1,15 +1,45 @@
 # Changelog
 
-All notable changes to `@pollen-robotics/reachy-mini-host` are documented here.
-The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
-and this project adheres to a permissive pre-1.0 semver (see
+All notable changes to the host shell — now shipped under
+`@pollen-robotics/reachy-mini-sdk/host*` subpath exports — are
+documented here. The format follows
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
+project adheres to a permissive pre-1.0 semver (see
 [SPEC.md §11](./SPEC.md#11-backlog) for the policy).
 
 ## 1.8.0 - unreleased
 
-Unified-package release: the host now ships as subpath exports
-inside `@pollen-robotics/reachy-mini-sdk@1.8.0`. The SDK and host
-move forward in lock-step from this version onward.
+**Single-package release: `@pollen-robotics/reachy-mini-host` is
+gone.** The host source moved into `@pollen-robotics/reachy-mini-sdk`
+under the `./host`, `./host/auto`, `./host/embed`, and `./host/protocol`
+subpath exports. App authors should drop the second dep and update
+their imports — see the [migration note](../../README.md#migration-from-pollen-roboticsreachy-mini-host)
+in the JS workspace README.
+
+The host bundles now import the SDK runtime directly (the SDK
+ships in the same npm tarball as `reachy-mini-sdk.js`) and
+auto-install it on `window.ReachyMini` at load time. Apps no
+longer need a separate `<script type="module">` for the SDK, and
+the `useSdk` hook + `connectToHost` no longer race against a
+late-arriving global.
+
+### Internal cleanup tied to the merge
+
+- `src/lib/sdk-types.ts` is now a thin re-export from the
+  canonical type declarations next to the SDK runtime
+  (`js/sdk/reachy-mini-sdk.d.ts`). External consumers who
+  `import` only the SDK get the same types automatically; host
+  code keeps its non-optional `window.ReachyMini` augmentation
+  for the use sites that rely on it.
+- `entry/auto.ts` and `entry/embed.ts` synchronously assign
+  `window.ReachyMini` when unset and dispatch `reachymini:ready`
+  before exposing `window.ReachyMiniHost` / `window.ReachyMiniHostEmbed`.
+- `index.ts` (the `./host` npm entry) does the same on import, so
+  bundler users of `mountHost` / `connectToHost` get the SDK
+  initialised eagerly.
+
+The SDK and host versions stay in lock-step on a single
+`pyproject.toml`-driven release.
 
 ### SDK changes that ripple through to the host
 

@@ -65,7 +65,7 @@ export default defineConfig({
         'entry/auto': resolve(__dirname, 'src/entry/auto.ts'),
         'entry/embed': resolve(__dirname, 'src/entry/embed.ts'),
         // Exposed separately so app authors can `import { PROTOCOL_VERSION,
-        // isProtocolMessage, ... } from '@pollen-robotics/reachy-mini-host/protocol'`
+        // isProtocolMessage, ... } from '@pollen-robotics/reachy-mini-sdk/host/protocol'`
         // without paying the cost of the full host shell bundle. Stays
         // vanilla (no React, no MUI) - tree-shaken to ~1 KB.
         'lib/protocol': resolve(__dirname, 'src/lib/protocol.ts'),

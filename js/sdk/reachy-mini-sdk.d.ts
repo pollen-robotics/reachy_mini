@@ -1,19 +1,18 @@
 /**
- * Type declarations for the ReachyMini SDK loaded from a CDN
- * script tag in the app's `index.html`. We type only the surface
- * we actually consume; the SDK is more powerful than what's
- * declared here.
+ * Type declarations for the ReachyMini browser SDK. These are the
+ * canonical types shipped with the npm package — the host shell
+ * (`./host` subpath) re-exports them via `host/src/lib/sdk-types.ts`
+ * so React components, hooks, and the embed client all see exactly
+ * the same surface.
  *
- * The SDK is exposed on `window.ReachyMini` (constructor) and
- * fires a `reachymini:ready` event on `window` once the module
- * has finished loading.
+ * The runtime lives in `reachy-mini-sdk.js`; this `.d.ts` only
+ * declares the public types. We hand-maintain it (rather than
+ * generating from the JSDoc) so consumers get rich types without an
+ * extra build step on our side.
  *
- * TODO(reachy-mini): now that the SDK lives in the same package
- * (`../../../sdk/reachy-mini-sdk.js`), these types should be derived from
- * the SDK's JSDoc instead of being hand-maintained here. Either
- * generate a `.d.ts` from the JSDoc via `tsc --declaration
- * --allowJs` and re-export it, or move the type surface into a
- * dedicated `reachy-mini-sdk.d.ts` shipped next to the SDK file.
+ * Legacy CDN consumers can still expose the constructor on
+ * `window.ReachyMini` themselves; the global declaration at the
+ * bottom keeps that shape typed.
  */
 
 /** Robot summary returned by the central via `robots`/`robotsChanged`. */
@@ -135,7 +134,7 @@ export interface SubscribeLogsOptions {
   onError?: (error: string) => void;
 }
 
-/** Public surface of a ReachyMini SDK instance used by the host. */
+/** Public surface of a ReachyMini SDK instance. */
 export interface ReachyMiniInstance extends EventTarget {
   readonly state: 'disconnected' | 'connected' | 'streaming';
   readonly robots: RobotInfo[];
@@ -263,20 +262,24 @@ export type ReachyMiniConstructor = new (
   options?: ReachyMiniOptions,
 ) => ReachyMiniInstance;
 
-declare global {
-  interface Window {
-    ReachyMini: ReachyMiniConstructor;
-    /** Injected by HF Spaces at container start when
-     *  `hf_oauth: true` is set in the Space frontmatter. */
-    huggingface?: {
-      variables?: {
-        OAUTH_CLIENT_ID?: string;
-        OAUTH_SCOPES?: string;
-        SPACE_HOST?: string;
-        SPACE_ID?: string;
-      };
-    };
-  }
-}
+/** SDK constructor. */
+export const ReachyMini: ReachyMiniConstructor;
 
-export {};
+/** Degrees → radians. */
+export function degToRad(deg: number): number;
+/** Radians → degrees. */
+export function radToDeg(rad: number): number;
+/** Roll/pitch/yaw (degrees) → 4×4 rotation matrix (ZYX convention). */
+export function rpyToMatrix(
+  rollDeg: number,
+  pitchDeg: number,
+  yawDeg: number,
+): number[][];
+/** Rotation matrix (3×3 or 4×4) → `{ roll, pitch, yaw }` in degrees. */
+export function matrixToRpy(m: number[][]): {
+  roll: number;
+  pitch: number;
+  yaw: number;
+};
+
+export default ReachyMini;

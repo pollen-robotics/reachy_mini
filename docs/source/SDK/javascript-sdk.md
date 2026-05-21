@@ -82,6 +82,13 @@ You can grab `reachy-mini-sdk.js` from the [reference example](https://huggingfa
 import { ReachyMini } from "https://cdn.jsdelivr.net/npm/@pollen-robotics/reachy-mini-sdk/+esm";
 ```
 
+> The same npm package also ships the optional **host shell** (OAuth + robot picker + iframe lifecycle) for apps deployed as Hugging Face Spaces, under the `./host*` subpath exports:
+> ```js
+> import { mountHost } from "@pollen-robotics/reachy-mini-sdk/host/auto";
+> import { connectToHost } from "@pollen-robotics/reachy-mini-sdk/host/embed";
+> ```
+> See the [host README](https://github.com/pollen-robotics/reachy_mini/tree/main/js/sdk/host) for the full integration recipe.
+
 ### 3. Connect to your robot
 
 ```js
