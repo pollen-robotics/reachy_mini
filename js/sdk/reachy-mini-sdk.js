@@ -4,7 +4,7 @@
  *
  * QUICK START
  * ───────────
- *   import { ReachyMini } from "./reachy-mini.js";
+ *   import { ReachyMini } from "./reachy-mini-sdk.js";
  *   const robot = new ReachyMini();
  *
  *   // 1. Auth (HuggingFace OAuth — required for the signaling server)
