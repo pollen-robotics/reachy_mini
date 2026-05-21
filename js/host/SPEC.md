@@ -5,7 +5,7 @@
 | 1.0          | Active     | 2026-05-16   |
 
 Source-of-truth for what a Reachy Mini app must do at boot, what
-`@pollen-robotics/reachy-mini-sdk/host` does for it, and the contract between the
+`@pollen-robotics/reachy-mini-host` does for it, and the contract between the
 shell, the embed and the app code.
 
 This file describes **observable behaviour and invariants**. The
@@ -49,14 +49,14 @@ Three actors, one app repository:
 | Actor      | Lives in                          | Owns                                                                       |
 |------------|-----------------------------------|----------------------------------------------------------------------------|
 | **App**    | `index.html` + `src/dispatch.ts`  | UI, app-specific UX, **and full freedom over framework / tooling choices** |
-| **Host**   | `@pollen-robotics/reachy-mini-sdk/host/auto` (CDN)    | OAuth, robot discovery, robot picker, connecting overlay, end-session flow |
-| **Embed**  | `@pollen-robotics/reachy-mini-sdk/host/embed` (CDN)   | SDK lifecycle inside the iframe (`startSession`, `ensureAwake`, teardown)  |
+| **Host**   | `@pollen-robotics/reachy-mini-host/auto` (CDN)    | OAuth, robot discovery, robot picker, connecting overlay, end-session flow |
+| **Embed**  | `@pollen-robotics/reachy-mini-host/embed` (CDN)   | SDK lifecycle inside the iframe (`startSession`, `ensureAwake`, teardown)  |
 
 The **App** consumes:
 
 - the Reachy Mini SDK (loaded as a CDN module by `index.html`,
   exposed as `window.ReachyMini`),
-- the `@pollen-robotics/reachy-mini-sdk/host` package (npm dep for types, CDN entries
+- the `@pollen-robotics/reachy-mini-host` package (npm dep for types, CDN entries
   at runtime).
 
 The App contains zero auth code, zero picker code, zero
@@ -111,7 +111,7 @@ files in §5.
 
 ### Why React + MUI for the host (and only the host)
 
-The host shell (`@pollen-robotics/reachy-mini-sdk/host/auto`) is built with **React +
+The host shell (`@pollen-robotics/reachy-mini-host/auto`) is built with **React +
 MUI + Emotion**. This is an explicit, assumed choice:
 
 - The shell needs a real component library: forms (sign-in),
@@ -146,7 +146,7 @@ The same `index.html` is served for both modes. The dispatcher
 if (URL.searchParams.has("embedded") && URL.hash.startsWith("#creds=")):
     boot embed  -> import("./embed")
 else:
-    boot host   -> import("@pollen-robotics/reachy-mini-sdk/host/auto").mountHost({...})
+    boot host   -> import("@pollen-robotics/reachy-mini-host/auto").mountHost({...})
 ```
 
 `?embedded=1` without creds is an invalid mode - render `ErrorView`.
@@ -474,8 +474,8 @@ can be rolled out by the SDK team, not the app teams.
   on deploy.
 - Reachy Mini SDK in `index.html`: pinned to a **git tag or commit
   SHA**, never to a branch. jsdelivr caches branches for ~12 h.
-- `@pollen-robotics/reachy-mini-sdk/host` from CDN: pinned to a **major version**
-  (`@pollen-robotics/reachy-mini-sdk/host@1`) on jsdelivr/unpkg.
+- `@pollen-robotics/reachy-mini-host` from CDN: pinned to a **major version**
+  (`@pollen-robotics/reachy-mini-host@1`) on jsdelivr/unpkg.
 
 On detected mismatch (e.g. unknown protocol version, structurally
 invalid `host:init`), the host's ErrorView's primary button calls
@@ -590,7 +590,7 @@ when implemented and the cost of regressing them is justified.
 
 - **CDN-only host**: today every app vendors `dist/` into
   `vendor/reachy-mini-host/` to work around HF Spaces' Docker
-  build refusing `file:../` deps. Once `@pollen-robotics/reachy-mini-sdk/host` is
+  build refusing `file:../` deps. Once `@pollen-robotics/reachy-mini-host` is
   published to npm, the dispatcher should import from the jsdelivr
   bundle so a host fix reaches every Space without per-app
   redeploys.
@@ -608,7 +608,7 @@ when implemented and the cost of regressing them is justified.
   `resumeSession()` so we re-run the WebRTC handshake without
   going through the picker again.
 - **Mobile parity for ConnectingView**: export a tiny
-  `<EmbedConnectingOverlay>` from `@pollen-robotics/reachy-mini-sdk/host/embed` so
+  `<EmbedConnectingOverlay>` from `@pollen-robotics/reachy-mini-host/embed` so
   Mode B apps reuse the 3-step visual without pulling React.
 - **Observability hook**: opt-in callback for app authors / HF ops
   to collect a redacted trace of every session.

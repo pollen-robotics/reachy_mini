@@ -1,7 +1,7 @@
 /**
  * npm entry point. Re-exports the public surface so:
  *
- *   import { mountHost, connectToHost } from '@pollen-robotics/reachy-mini-sdk/host';
+ *   import { mountHost, connectToHost } from '@pollen-robotics/reachy-mini-host';
  *
  * works for IDE autocomplete and for app authors who prefer the
  * package directly over the CDN auto bundle.
@@ -36,7 +36,7 @@ export {
 } from './lib/protocol';
 
 // SDK types (re-export so app authors can write
-// `import type { ReachyMiniInstance } from '@pollen-robotics/reachy-mini-sdk/host'`.
+// `import type { ReachyMiniInstance } from '@pollen-robotics/reachy-mini-host'`.
 export type {
   ReachyMiniInstance,
   ReachyMiniOptions,

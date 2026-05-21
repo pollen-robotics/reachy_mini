@@ -7,7 +7,7 @@
  * the two is what makes the product feel like two apps stitched
  * together; keep them in sync.
  *
- * These themes are bundled with `@reachy-mini/host/auto` and are
+ * These themes are bundled with `@pollen-robotics/reachy-mini-host/auto` and are
  * not user-overridable. The host owns its chrome; apps own theirs
  * inside the iframe.
  */

@@ -96,7 +96,7 @@ if (isEmbed) {
 **`src/host.ts`** — mounts the shell:
 
 ```ts
-import { mountHost } from '@pollen-robotics/reachy-mini-sdk/host/auto';
+import { mountHost } from '@pollen-robotics/reachy-mini-host/auto';
 
 mountHost({
   appName: 'My App',
@@ -108,7 +108,7 @@ mountHost({
 **`src/embed.ts`** — connects and runs the app:
 
 ```ts
-import { connectToHost } from '@pollen-robotics/reachy-mini-sdk/host/embed';
+import { connectToHost } from '@pollen-robotics/reachy-mini-host/embed';
 
 const handle = await connectToHost();
 handle.reachy.setHeadRpyDeg(0, 10, 0);

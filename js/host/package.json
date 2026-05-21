@@ -1,9 +1,38 @@
 {
-  "name": "@pollen-robotics/reachy-mini-host-build",
-  "version": "1.8.0",
-  "private": true,
-  "description": "Internal build target for the host bundles shipped inside @pollen-robotics/reachy-mini-sdk. Not published to npm; only used by the SDK package's `npm run build:host` script.",
+  "name": "@pollen-robotics/reachy-mini-host",
+  "version": "0.0.0-managed-by-ci",
+  "description": "Host shell rendered around Reachy Mini apps deployed as Hugging Face Spaces: OAuth, robot picker, session lifecycle, and parent/iframe postMessage bridge.",
   "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./auto": {
+      "types": "./dist/entry/auto.d.ts",
+      "import": "./dist/entry/auto.js"
+    },
+    "./embed": {
+      "types": "./dist/entry/embed.d.ts",
+      "import": "./dist/entry/embed.js"
+    },
+    "./protocol": {
+      "types": "./dist/lib/protocol.d.ts",
+      "import": "./dist/lib/protocol.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "SPEC.md",
+    "APP_AUTHOR_GUIDE.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "sideEffects": false,
   "scripts": {
     "dev": "vite",
     "build": "vite build && tsc -p tsconfig.build.json",
@@ -34,5 +63,29 @@
     "react-dom": "^19.2.5",
     "typescript": "^5.7.3",
     "vite": "^7.2.1"
+  },
+  "keywords": [
+    "reachy",
+    "reachy-mini",
+    "pollen-robotics",
+    "huggingface-spaces",
+    "host",
+    "iframe",
+    "shell",
+    "react"
+  ],
+  "author": "Pollen Robotics",
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/pollen-robotics/reachy_mini#readme",
+  "bugs": {
+    "url": "https://github.com/pollen-robotics/reachy_mini/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pollen-robotics/reachy_mini.git",
+    "directory": "js/host"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

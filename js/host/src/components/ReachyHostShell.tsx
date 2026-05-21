@@ -324,7 +324,7 @@ function ReachyHostShellNormal({
         setHostPhase('error');
       } else {
         console.warn(
-          '[reachy-mini-sdk/host] embed reported non-fatal error:',
+          '[reachy-mini-host] embed reported non-fatal error:',
           message,
           detail,
         );

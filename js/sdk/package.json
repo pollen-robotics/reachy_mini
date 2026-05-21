@@ -1,0 +1,48 @@
+{
+  "name": "@pollen-robotics/reachy-mini-sdk",
+  "version": "0.0.0-managed-by-ci",
+  "description": "Browser SDK for controlling a Reachy Mini robot over WebRTC.",
+  "type": "module",
+  "main": "./reachy-mini-sdk.js",
+  "module": "./reachy-mini-sdk.js",
+  "exports": {
+    ".": {
+      "import": "./reachy-mini-sdk.js",
+      "default": "./reachy-mini-sdk.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "reachy-mini-sdk.js",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": false,
+  "dependencies": {
+    "@huggingface/hub": "^0.15.2"
+  },
+  "keywords": [
+    "reachy",
+    "reachy-mini",
+    "pollen-robotics",
+    "robot",
+    "robotics",
+    "webrtc",
+    "sdk",
+    "browser"
+  ],
+  "author": "Pollen Robotics",
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/pollen-robotics/reachy_mini#readme",
+  "bugs": {
+    "url": "https://github.com/pollen-robotics/reachy_mini/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pollen-robotics/reachy_mini.git",
+    "directory": "js/sdk"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

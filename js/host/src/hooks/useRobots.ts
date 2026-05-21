@@ -184,7 +184,7 @@ export function useRobots(opts: {
       },
       onError: (err) => {
         console.warn(
-          '[reachy-mini-sdk/host] central listener error:',
+          '[reachy-mini-host] central listener error:',
           err.message,
         );
       },

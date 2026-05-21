@@ -9,7 +9,7 @@
  * has finished loading.
  *
  * TODO(reachy-mini): now that the SDK lives in the same package
- * (`../../reachy-mini-sdk.js`), these types should be derived from
+ * (`../../../sdk/reachy-mini-sdk.js`), these types should be derived from
  * the SDK's JSDoc instead of being hand-maintained here. Either
  * generate a `.d.ts` from the JSDoc via `tsc --declaration
  * --allowJs` and re-export it, or move the type surface into a

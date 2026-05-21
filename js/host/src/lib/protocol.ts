@@ -1,5 +1,5 @@
 /**
- * postMessage protocol v1 between `@reachy-mini/host` (parent
+ * postMessage protocol v1 between `@pollen-robotics/reachy-mini-host` (parent
  * window) and an embedded Reachy Mini app (iframe).
  *
  * Canonical reference: SPEC.md §6.
@@ -286,7 +286,7 @@ export function decodeCredsFromHash(hash: string | null): CredsBundle | null {
       const json = decodeBase64Utf8(b64);
       return JSON.parse(json) as CredsBundle;
     } catch (err) {
-      console.warn('[@reachy-mini/host] failed to decode creds hash', err);
+      console.warn('[@pollen-robotics/reachy-mini-host] failed to decode creds hash', err);
       return null;
     }
   }

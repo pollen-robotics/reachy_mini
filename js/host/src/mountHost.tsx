@@ -1,7 +1,7 @@
 /**
  * Imperative mount helper for app authors.
  *
- *   import { mountHost } from '@pollen-robotics/reachy-mini-sdk/host/auto';
+ *   import { mountHost } from '@pollen-robotics/reachy-mini-host/auto';
  *
  *   mountHost({
  *     appName: 'Emotions',
@@ -62,7 +62,7 @@ export interface MountedHost {
 
 export function mountHost(options: MountHostOptions): MountedHost {
   if (!options.appName) {
-    throw new Error('[reachy-mini-sdk/host] mountHost: `appName` is required.');
+    throw new Error('[reachy-mini-host] mountHost: `appName` is required.');
   }
 
   if (options.devToken) {
@@ -128,7 +128,7 @@ function resolveTarget(target: MountHostOptions['target']): HTMLElement {
     return created;
   }
   throw new Error(
-    `[reachy-mini-sdk/host] mountHost: target '${selector}' not found in DOM.`,
+    `[reachy-mini-host] mountHost: target '${selector}' not found in DOM.`,
   );
 }
 

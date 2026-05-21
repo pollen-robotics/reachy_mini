@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to `@pollen-robotics/reachy-mini-sdk/host` are documented here.
+All notable changes to `@pollen-robotics/reachy-mini-host` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to a permissive pre-1.0 semver (see
 [SPEC.md §11](./SPEC.md#11-backlog) for the policy).

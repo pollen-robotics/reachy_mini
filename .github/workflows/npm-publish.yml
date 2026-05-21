@@ -28,39 +28,42 @@ jobs:
       - name: Upgrade npm (>=11.5.1 required for trusted publishing)
         run: npm install -g npm@latest
 
-      # Install workspace deps (root + `host` workspace, hoisted into
-      # js/node_modules/) so the host bundles can be built before publish.
+      # Install workspace deps (root + sdk + host workspaces, hoisted
+      # into js/node_modules/) so the host bundles can be built.
       - name: Install JS workspace dependencies
         run: npm ci
 
-      # Build host bundles into js/host/dist/. This step is required for
-      # the `./host`, `./host/auto`, `./host/embed`, `./host/protocol`
-      # subpath exports declared in js/package.json to resolve in the
-      # published tarball.
+      # Build host bundles into js/host/dist/. Required for the host
+      # package's main/exports to resolve in its published tarball.
       - name: Build host bundles
         run: npm run build:host
 
-      # Release → publish current version on the `latest` dist-tag.
-      - name: Verify js/package.json version matches pyproject.toml
-        if: github.event_name == 'release'
+      # pyproject.toml is the single source of truth for the version.
+      # Release  → publish <py_ver>            on the `latest` dist-tag.
+      # Push     → publish <py_ver>-main.<sha> on the `main`   dist-tag.
+      - name: Compute and apply version from pyproject.toml
         run: |
           py_ver=$(grep -E '^version' ../pyproject.toml | head -1 | sed -E 's/version *= *"([^"]+)"/\1/')
-          npm_ver=$(node -p "require('./package.json').version")
-          if [ "$py_ver" != "$npm_ver" ]; then
-            echo "::error::js/package.json version ($npm_ver) does not match pyproject.toml version ($py_ver) — bump both before tagging a release"
-            exit 1
+          if [ "${{ github.event_name }}" = "push" ]; then
+            sha=$(echo "${{ github.sha }}" | cut -c1-7)
+            ver="${py_ver}-main.${sha}"
+          else
+            ver="${py_ver}"
           fi
-      - name: Publish (latest)
-        if: github.event_name == 'release'
-        run: npm publish
+          echo "Publishing version: $ver"
+          npm version "$ver" --no-git-tag-version --workspace=sdk
+          npm version "$ver" --no-git-tag-version --workspace=host
 
-      # Push to main → publish <base>-main.<short-sha> on the `main` dist-tag.
-      - name: Rewrite version as <base>-main.<short-sha>
+      - name: Publish SDK (latest)
+        if: github.event_name == 'release'
+        run: npm publish --workspace=sdk
+      - name: Publish Host (latest)
+        if: github.event_name == 'release'
+        run: npm publish --workspace=host
+
+      - name: Publish SDK (main)
         if: github.event_name == 'push'
-        run: |
-          base=$(node -p "require('./package.json').version")
-          sha=$(echo "${{ github.sha }}" | cut -c1-7)
-          npm version "${base}-main.${sha}" --no-git-tag-version
-      - name: Publish (main)
+        run: npm publish --workspace=sdk --tag main
+      - name: Publish Host (main)
         if: github.event_name == 'push'
-        run: npm publish --tag main
+        run: npm publish --workspace=host --tag main
