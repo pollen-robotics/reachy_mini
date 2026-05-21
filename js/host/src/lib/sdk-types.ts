@@ -1,0 +1,282 @@
+/**
+ * Type declarations for the ReachyMini SDK loaded from a CDN
+ * script tag in the app's `index.html`. We type only the surface
+ * we actually consume; the SDK is more powerful than what's
+ * declared here.
+ *
+ * The SDK is exposed on `window.ReachyMini` (constructor) and
+ * fires a `reachymini:ready` event on `window` once the module
+ * has finished loading.
+ *
+ * TODO(reachy-mini): now that the SDK lives in the same package
+ * (`../../../sdk/reachy-mini-sdk.js`), these types should be derived from
+ * the SDK's JSDoc instead of being hand-maintained here. Either
+ * generate a `.d.ts` from the JSDoc via `tsc --declaration
+ * --allowJs` and re-export it, or move the type surface into a
+ * dedicated `reachy-mini-sdk.d.ts` shipped next to the SDK file.
+ */
+
+/** Robot summary returned by the central via `robots`/`robotsChanged`. */
+export interface RobotInfo {
+  id: string;
+  meta?: { name?: string };
+  /**
+   * `true` when the central reports an active session held by
+   * another consumer. Older centrals omit it; default `false`.
+   */
+  busy?: boolean;
+  /**
+   * Friendly name of the app currently holding the session, when
+   * the busy consumer advertised one. Pure UX hint, never trust
+   * for security decisions. `null` / undefined when the robot is
+   * free.
+   */
+  activeApp?: string | null;
+  /**
+   * Network transport reported by the daemon (`wifi` / `usb` /
+   * arbitrary string). Surfaced as a chip on the discovery card.
+   * Older centrals or non-conformant daemons may omit it.
+   */
+  transport?: string | null;
+  /**
+   * Hardware id reported by the daemon (e.g. serial number).
+   * When present, the picker shows it in place of the (longer,
+   * less human-friendly) peer id. Optional.
+   */
+  hardwareId?: string | null;
+}
+
+/** Latest robot telemetry mirrored on `robot.robotState` (wire shape). */
+export interface RobotState {
+  /** Flat row-major 4×4 head pose (16 numbers). */
+  head?: number[];
+  /** [rightRad, leftRad]. */
+  antennas?: number[];
+  /** Radians. */
+  body_yaw?: number;
+  motor_mode?: 'enabled' | 'disabled' | 'gravity_compensation';
+  is_move_running?: boolean;
+}
+
+/** SDK constructor options. */
+export interface ReachyMiniOptions {
+  signalingUrl?: string;
+  enableMicrophone?: boolean;
+  clientId?: string;
+  appName?: string;
+  /**
+   * Hint to the receiver's WebRTC jitter buffer (ms). 0 = "render
+   * ASAP", appropriate for teleop. Spec range [0, 4000]. Browsers
+   * that don't implement `RTCRtpReceiver.jitterBufferTarget` fall
+   * back to default buffering (~150-200 ms).
+   */
+  videoJitterBufferTargetMs?: number;
+  /**
+   * When true AND the URL carries a `robot_peer_id` hint, the SDK
+   * auto-calls `startSession(preselectedRobotId)` once that robot
+   * appears in the central's list after `connect()` resolves. One-shot
+   * per page load; the host iframe relies on this to skip the picker.
+   */
+  autoStartFromUrl?: boolean;
+}
+
+/** Options accepted by `autoConnect()`. */
+export interface AutoConnectOptions {
+  /** Skip `authenticate()`; use this raw HF token. */
+  token?: string;
+  /**
+   * Called in the standalone, multi-robot case to let the consumer
+   * pick a robot from the live list. Return the robot id, or `null`
+   * to cancel.
+   */
+  pickRobot?: (robots: AutoConnectRobotChoice[]) => Promise<string | null>;
+  /** Skip `pickRobot` when exactly one robot is free. Default `true`. */
+  autoPickIfSingle?: boolean;
+  /** Hide busy robots from the picker. Default `true`. */
+  filterBusy?: boolean;
+  /** Call `ensureAwake()` after `startSession()`. Default `true`. */
+  wakeOnConnect?: boolean;
+}
+
+/** Robot row passed to `pickRobot` callback (richer than `RobotInfo`). */
+export interface AutoConnectRobotChoice {
+  id: string;
+  name: string | null;
+  busy: boolean;
+  activeApp: string | null;
+  meta: Record<string, unknown>;
+  lastSeenAgeSeconds: number | null;
+}
+
+/** Resolution payload of `autoConnect()`. */
+export interface AutoConnectResult {
+  robotId: string;
+  robotName: string | null;
+  isEmbedded: boolean;
+  /** Set when `autoConnect()` short-circuited on an already-streaming session. */
+  alreadyStreaming?: boolean;
+}
+
+/** Options for the awaitable motion helpers (`wakeUp`, `gotoSleep`). */
+export interface MotionAwaitOptions {
+  /**
+   * Hard upper bound for the trajectory completion response from the
+   * daemon. Defaults to 8000 ms (typical wake_up is ~1-3 s, but
+   * deeply offset poses can take longer). The returned promise
+   * rejects with a `${command} timed out after ${timeoutMs}ms` error
+   * if the daemon goes silent.
+   */
+  timeoutMs?: number;
+}
+
+/** `subscribeLogs()` argument. */
+export interface SubscribeLogsOptions {
+  onLine: (entry: { timestamp: string; line: string }) => void;
+  onError?: (error: string) => void;
+}
+
+/** Public surface of a ReachyMini SDK instance used by the host. */
+export interface ReachyMiniInstance extends EventTarget {
+  readonly state: 'disconnected' | 'connected' | 'streaming';
+  readonly robots: RobotInfo[];
+  /**
+   * Mirror of the latest "state" event detail. Fields appear only once
+   * the daemon has sent the corresponding source field.
+   */
+  readonly robotState: RobotState;
+  readonly username: string | null;
+  readonly isAuthenticated: boolean;
+  readonly micSupported: boolean;
+  readonly micMuted: boolean;
+  readonly audioMuted: boolean;
+  /** Set by the SDK from `?robot_peer_id=` / `#robot_peer_id=`. */
+  readonly preselectedRobotId: string | null;
+  /** `true` iff `preselectedRobotId !== null`. UX branching helper. */
+  readonly isEmbedded: boolean;
+
+  /** Underlying RTCPeerConnection. Apps can read it to inspect
+   *  audio / video transceivers. */
+  _pc: RTCPeerConnection | null;
+  /** Local microphone MediaStream acquired by the SDK on
+   *  `startSession()` when `enableMicrophone` is `true`. */
+  _micStream: MediaStream | null;
+
+  authenticate(): Promise<boolean>;
+  login(): Promise<void>;
+  logout(): void;
+
+  connect(token?: string): Promise<void>;
+  /**
+   * One-shot bring-up: auth → SSE connect → robot selection → session →
+   * wake up. The all-in-one entry point that captures the common
+   * "embed *or* standalone, just get me streaming" flow.
+   */
+  autoConnect(options?: AutoConnectOptions): Promise<AutoConnectResult>;
+  disconnect(): void;
+
+  startSession(robotId: string): Promise<void>;
+  stopSession(): Promise<void>;
+
+  attachVideo(el: HTMLVideoElement): () => void;
+
+  setHeadRpyDeg(roll: number, pitch: number, yaw: number): boolean;
+  setAntennasDeg(right: number, left: number): boolean;
+  setBodyYawDeg(yawDeg: number): boolean;
+  /**
+   * Streaming variant for the trajectory player: sets the full
+   * target frame at 50-100 Hz. Unspecified joints keep their
+   * previous target. Returns `false` if the data channel is not
+   * open.
+   */
+  setTarget(args: {
+    head?: number[];
+    antennas?: number[];
+    body_yaw?: number;
+  }): boolean;
+  /**
+   * Smooth daemon-side interpolation to a target pose over `duration`
+   * seconds. Mirrors `setTarget`'s wire shape and adds a required
+   * `duration` field. Throws `TypeError` on invalid input.
+   */
+  gotoTarget(args: {
+    head?: number[];
+    antennas?: number[];
+    body_yaw?: number;
+    duration: number;
+  }): boolean;
+  /** Send an arbitrary JSON message on the data channel. */
+  sendRaw(data: unknown): boolean;
+  /** Play a sound file on the robot's speakers (basename). */
+  playSound(file: string): boolean;
+
+  setAudioMuted(muted: boolean): void;
+  setMicMuted(muted: boolean): void;
+
+  getVolume(): Promise<number | null>;
+  setVolume(volume: number): Promise<number | null>;
+  getMicrophoneVolume(): Promise<number | null>;
+  setMicrophoneVolume(volume: number): Promise<number | null>;
+
+  /** Daemon version string, or `null` when unavailable. */
+  getVersion(): Promise<string | null>;
+  /** Hardware ID (USB serial), or `null` on developer machines. */
+  getHardwareId(): Promise<string | null>;
+  /** Force a `state` event right now (background poll runs at 500 ms). */
+  requestState(): boolean;
+  /** Subscribe to daemon `journalctl` logs over the data channel. */
+  subscribeLogs(options: SubscribeLogsOptions): () => void;
+
+  /**
+   * Motor torque mode: `enabled` (position control), `disabled`
+   * (limp), `gravity_compensation` (float-by-hand). Returns
+   * `false` if the data channel is not open.
+   */
+  setMotorMode(
+    mode: 'enabled' | 'disabled' | 'gravity_compensation',
+  ): boolean;
+  /**
+   * Per-motor torque toggle. When `ids` is omitted, applies globally
+   * (equivalent to `setMotorMode("enabled" | "disabled")`).
+   */
+  setMotorTorque(on: boolean, ids?: string[] | null): boolean;
+  /**
+   * Play the wake-up trajectory (enables motors first). Resolves on
+   * the daemon's `{command: "wake_up", completed: true}` response,
+   * rejects on `timeoutMs` elapsed or on session teardown.
+   */
+  wakeUp(options?: MotionAwaitOptions): Promise<void>;
+  /**
+   * Play the goto-sleep trajectory. Resolves when the daemon reports
+   * completion. Does NOT touch motor mode; caller manages it.
+   */
+  gotoSleep(options?: MotionAwaitOptions): Promise<void>;
+  /** Read the awake state from the cached `motor_mode`. */
+  isAwake(): boolean;
+  /**
+   * Idempotent wakeUp: noop when already awake. Resolves with
+   * the post-call awake state. Does NOT await the trajectory.
+   */
+  ensureAwake(timeoutMs?: number): Promise<boolean>;
+}
+
+export type ReachyMiniConstructor = new (
+  options?: ReachyMiniOptions,
+) => ReachyMiniInstance;
+
+declare global {
+  interface Window {
+    ReachyMini: ReachyMiniConstructor;
+    /** Injected by HF Spaces at container start when
+     *  `hf_oauth: true` is set in the Space frontmatter. */
+    huggingface?: {
+      variables?: {
+        OAUTH_CLIENT_ID?: string;
+        OAUTH_SCOPES?: string;
+        SPACE_HOST?: string;
+        SPACE_ID?: string;
+      };
+    };
+  }
+}
+
+export {};

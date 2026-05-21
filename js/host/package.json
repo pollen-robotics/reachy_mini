@@ -1,0 +1,91 @@
+{
+  "name": "@pollen-robotics/reachy-mini-host",
+  "version": "0.0.0-managed-by-ci",
+  "description": "Host shell rendered around Reachy Mini apps deployed as Hugging Face Spaces: OAuth, robot picker, session lifecycle, and parent/iframe postMessage bridge.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./auto": {
+      "types": "./dist/entry/auto.d.ts",
+      "import": "./dist/entry/auto.js"
+    },
+    "./embed": {
+      "types": "./dist/entry/embed.d.ts",
+      "import": "./dist/entry/embed.js"
+    },
+    "./protocol": {
+      "types": "./dist/lib/protocol.d.ts",
+      "import": "./dist/lib/protocol.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "SPEC.md",
+    "APP_AUTHOR_GUIDE.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build && tsc -p tsconfig.build.json",
+    "build:watch": "vite build --watch",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
+    "@mui/icons-material": "^7.3.5",
+    "@mui/material": "^7.3.5"
+  },
+  "peerDependencies": {
+    "react": "^18.0.0 || ^19.0.0",
+    "react-dom": "^18.0.0 || ^19.0.0"
+  },
+  "peerDependenciesMeta": {
+    "react": { "optional": true },
+    "react-dom": { "optional": true }
+  },
+  "devDependencies": {
+    "@types/node": "^25.7.0",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react-swc": "^4.0.0",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5",
+    "typescript": "^5.7.3",
+    "vite": "^7.2.1"
+  },
+  "keywords": [
+    "reachy",
+    "reachy-mini",
+    "pollen-robotics",
+    "huggingface-spaces",
+    "host",
+    "iframe",
+    "shell",
+    "react"
+  ],
+  "author": "Pollen Robotics",
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/pollen-robotics/reachy_mini#readme",
+  "bugs": {
+    "url": "https://github.com/pollen-robotics/reachy_mini/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pollen-robotics/reachy_mini.git",
+    "directory": "js/host"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

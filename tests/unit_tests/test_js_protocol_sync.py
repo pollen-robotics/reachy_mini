@@ -1,6 +1,6 @@
 """Verify that the JS browser SDK sends commands matching protocol.py.
 
-Parses _sendCommand({...}) calls from js/reachy-mini.js and checks each one
+Parses _sendCommand({...}) calls from js/sdk/reachy-mini-sdk.js and checks each one
 against the Pydantic command models defined in protocol.py.  This catches
 field renames, missing required fields, and unknown type values at CI time.
 """
@@ -18,7 +18,7 @@ from reachy_mini.io.protocol import AnyCommand
 # ---------------------------------------------------------------------------
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-JS_SDK_PATH = REPO_ROOT / "js" / "reachy-mini.js"
+JS_SDK_PATH = REPO_ROOT / "js" / "sdk" / "reachy-mini-sdk.js"
 
 
 def _get_protocol_commands() -> dict[str, dict[str, bool]]:
