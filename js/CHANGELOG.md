@@ -11,20 +11,31 @@ The host shell shares this package's version (single source of
 truth); the wire protocol is versioned separately in
 `PROTOCOL_VERSION` (see [host/SPEC.md §11](./host/SPEC.md#11-backlog)).
 
-## 1.8.1 - unreleased
+## Unreleased — succeeds 1.7.3
+
+> **Breaking change.** Every app currently using
+> `@pollen-robotics/reachy-mini-host` has to update its imports
+> when it upgrades. Existing `1.7.x` installs keep working against
+> the legacy `reachy-mini-host@1.7.x` tarball that stays on npm;
+> only consumers who upgrade past `1.7.3` need to migrate. The
+> target version is intentionally left unset in this PR — it will
+> be picked at release time when `pyproject.toml` is bumped from
+> `1.7.3` to the next number (the npm publish CI mirrors that bump
+> into the package manifest).
 
 **Single-package release: `@pollen-robotics/reachy-mini-host` is folded
 into `@pollen-robotics/reachy-mini-sdk`.** App authors install,
-version, and import from one entry point. The old package will stay
-available on npm at `1.7.x` for one minor cycle and then be
-deprecated with a pointer to the new subpaths.
+version, and import from one entry point. The old package stays
+available on npm at `1.7.x` for one minor cycle for graceful
+migration and will then be `npm deprecate`d with a pointer to the
+new subpaths.
 
 ### Migration
 
 ```diff
 - "@pollen-robotics/reachy-mini-host": "^1.7.x",
 - "@pollen-robotics/reachy-mini-sdk":  "^1.7.x"
-+ "@pollen-robotics/reachy-mini-sdk":  "^1.8.0"
++ "@pollen-robotics/reachy-mini-sdk":  "^<next-release>"
 ```
 
 ```diff
@@ -84,10 +95,10 @@ The host CDN bundles also moved:
   legacy npm package stays on `1.7.x` for one minor cycle for
   graceful migration, then will be `npm deprecate`d.
 
-### SDK changes shipped earlier in the 1.8 cycle but not yet released
+### SDK changes drafted between 1.7.3 and the package merge
 
-The following changes landed on `main` while the package merge was
-in flight; they go out with `1.8.1` as the first published bundle:
+The following landed on `main` after `1.7.3` was published but
+were never released on their own; they ship with this release:
 
 - **Breaking (SDK)**: `wakeUp()` and `gotoSleep()` now return
   `Promise<void>` (previously `boolean`). The promise resolves on
@@ -106,7 +117,7 @@ in flight; they go out with `1.8.1` as the first published bundle:
   and the response body, making racy `setPeerStatus` /
   `endSession` failures easier to diagnose.
 - **Host types**: `src/lib/sdk-types.ts` refreshed to cover the
-  full SDK 1.8 public surface (`autoConnect`, `gotoTarget`,
+  full SDK public surface (`autoConnect`, `gotoTarget`,
   `setMotorTorque`, `subscribeLogs`, `requestState`, version /
   hardware-id helpers, `robotState`, `isEmbedded`, jitter buffer
   option, `autoStartFromUrl`). The motion helpers now type as
