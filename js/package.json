@@ -1,6 +1,6 @@
 {
   "name": "@pollen-robotics/reachy-mini-sdk",
-  "version": "1.7.3",
+  "version": "1.8.0",
   "description": "Browser SDK + host shell for controlling a Reachy Mini robot over WebRTC.",
   "type": "module",
   "main": "./reachy-mini-sdk.js",

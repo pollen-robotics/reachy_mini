@@ -1,6 +1,6 @@
 {
   "name": "@pollen-robotics/reachy-mini-host-build",
-  "version": "1.7.3",
+  "version": "1.8.0",
   "private": true,
   "description": "Internal build target for the host bundles shipped inside @pollen-robotics/reachy-mini-sdk. Not published to npm; only used by the SDK package's `npm run build:host` script.",
   "type": "module",
