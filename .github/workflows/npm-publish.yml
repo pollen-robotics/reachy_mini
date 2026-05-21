@@ -23,10 +23,8 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6.4.0
         with:
-          node-version: "22"
+          node-version: "24"   # ships npm >= 11.5.1 — required for trusted publishing
           registry-url: "https://registry.npmjs.org"
-      - name: Upgrade npm (>=11.5.1 required for trusted publishing)
-        run: npm install -g npm@latest
 
       # Install workspace deps (root + sdk + host workspaces, hoisted
       # into js/node_modules/) so the host bundles can be built.
