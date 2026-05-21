@@ -1,18 +1,18 @@
 {
-  "name": "@pollen-robotics/reachy-mini",
+  "name": "@pollen-robotics/reachy-mini-sdk",
   "version": "1.7.3",
   "description": "Browser SDK for controlling a Reachy Mini robot over WebRTC.",
   "type": "module",
-  "main": "./reachy-mini.js",
-  "module": "./reachy-mini.js",
+  "main": "./reachy-mini-sdk.js",
+  "module": "./reachy-mini-sdk.js",
   "exports": {
     ".": {
-      "import": "./reachy-mini.js",
-      "default": "./reachy-mini.js"
+      "import": "./reachy-mini-sdk.js",
+      "default": "./reachy-mini-sdk.js"
     }
   },
   "files": [
-    "reachy-mini.js",
+    "reachy-mini-sdk.js",
     "README.md",
     "LICENSE"
   ],

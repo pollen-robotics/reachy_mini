@@ -1,19 +1,19 @@
-# @pollen-robotics/reachy-mini
+# @pollen-robotics/reachy-mini-sdk
 
 Browser SDK for controlling a [Reachy Mini](https://github.com/pollen-robotics/reachy_mini) robot over WebRTC.
 
-The full API reference lives in the JSDoc header of [`reachy-mini.js`](./reachy-mini.js): constructor options, read-only properties, the `disconnected → connected → streaming` state machine, the event list, and every command helper.
+The full API reference lives in the JSDoc header of [`reachy-mini-sdk.js`](./reachy-mini-sdk.js): constructor options, read-only properties, the `disconnected → connected → streaming` state machine, the event list, and every command helper.
 
 ## Install
 
 ### With a bundler / Node
 
 ```bash
-npm install @pollen-robotics/reachy-mini
+npm install @pollen-robotics/reachy-mini-sdk
 ```
 
 ```js
-import { ReachyMini } from "@pollen-robotics/reachy-mini";
+import { ReachyMini } from "@pollen-robotics/reachy-mini-sdk";
 ```
 
 ### From a browser, no build step (Hugging Face Spaces, static hosting…)
@@ -21,19 +21,19 @@ import { ReachyMini } from "@pollen-robotics/reachy-mini";
 Use an ESM CDN. The `+esm` suffix tells jsdelivr to resolve bare specifiers (the `@huggingface/hub` dependency) recursively, so the import just works:
 
 ```js
-import { ReachyMini } from "https://cdn.jsdelivr.net/npm/@pollen-robotics/reachy-mini@1.7.3/+esm";
+import { ReachyMini } from "https://cdn.jsdelivr.net/npm/@pollen-robotics/reachy-mini-sdk@1.7.3/+esm";
 ```
 
 Or via esm.sh:
 
 ```js
-import { ReachyMini } from "https://esm.sh/@pollen-robotics/reachy-mini@1.7.3";
+import { ReachyMini } from "https://esm.sh/@pollen-robotics/reachy-mini-sdk@1.7.3";
 ```
 
 ## Quick start
 
 ```js
-import { ReachyMini } from "@pollen-robotics/reachy-mini";
+import { ReachyMini } from "@pollen-robotics/reachy-mini-sdk";
 
 const robot = new ReachyMini();
 
@@ -59,7 +59,7 @@ robot.setBodyYawDeg(15);
 robot.playSound("wake_up.wav");
 ```
 
-See the JSDoc header in [`reachy-mini.js`](./reachy-mini.js) for the full surface (events, raw `setTarget`, audio controls, embedded-mode auto-start, etc.).
+See the JSDoc header in [`reachy-mini-sdk.js`](./reachy-mini-sdk.js) for the full surface (events, raw `setTarget`, audio controls, embedded-mode auto-start, etc.).
 
 ## License
 
