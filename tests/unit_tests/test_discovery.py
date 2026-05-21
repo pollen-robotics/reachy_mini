@@ -40,54 +40,66 @@ def test_discovered_robot_defaults():
     assert robot.properties == {}
 
 
-def test_register_unregister_lifecycle():
-    """MdnsServiceRegistration can register and unregister without error."""
-    reg = MdnsServiceRegistration("test_robot", 9999)
-    reg.register()
-    # Wait for background registration thread to complete
-    assert reg._register_thread is not None
-    reg._register_thread.join(timeout=10.0)
-    try:
-        assert reg._zeroconf is not None
-        assert reg._info is not None
-    finally:
-        reg.unregister()
-    assert reg._zeroconf is None
-    assert reg._info is None
+@pytest.fixture
+def registered_mdns(request):
+    """Yield a live MdnsServiceRegistration after register() has completed.
 
-
-def test_registered_txt_records_carry_home_assistant_keys():
-    """Phase 0 of the HA integration: TXT must carry model/manufacturer/caps.
-
-    A future HACS companion integration and Home Assistant's zeroconf
-    manifest matcher both key off these properties.
+    Parametrize the test with `wireless_version` (True/False) via
+    indirect parametrization, or omit and the fixture defaults to Lite.
     """
-    reg = MdnsServiceRegistration("test_robot", 9999)
+    wireless_version = getattr(request, "param", False)
+    reg = MdnsServiceRegistration("test_robot", 9999, wireless_version=wireless_version)
     reg.register()
     assert reg._register_thread is not None
     reg._register_thread.join(timeout=10.0)
     try:
-        assert reg._info is not None
-        props = {
-            (k.decode() if isinstance(k, bytes) else k): (
-                v.decode() if isinstance(v, bytes) else v
-            )
-            for k, v in reg._info.properties.items()
-        }
-        assert props.get("model") == "ReachyMini"
-        assert props.get("manufacturer") == "Pollen Robotics"
-        assert props.get("api") == "rest+ws"
-        caps = set((props.get("caps") or "").split(","))
-        assert {"camera", "mic", "speaker", "motion", "apps"} <= caps
-        # unit_id is only present when a robot is attached. In CI it
-        # won't be set; just make sure the key is either absent or a
-        # 16-char hex string.
-        if "unit_id" in props:
-            uid = props["unit_id"]
-            assert isinstance(uid, str) and len(uid) == 16
-            assert all(c in "0123456789abcdef" for c in uid)
+        yield reg
     finally:
         reg.unregister()
+
+
+def test_register_unregister_lifecycle(registered_mdns):
+    """MdnsServiceRegistration can register and unregister without error."""
+    assert registered_mdns._zeroconf is not None
+    assert registered_mdns._info is not None
+    # Trigger the teardown half of the lifecycle here so we can assert
+    # the cleared state — the fixture's finalizer would otherwise run
+    # after the assertions.
+    registered_mdns.unregister()
+    assert registered_mdns._zeroconf is None
+    assert registered_mdns._info is None
+
+
+@pytest.mark.parametrize(
+    "registered_mdns,expected_model",
+    [
+        (True, "Reachy Mini Wireless"),
+        (False, "Reachy Mini Lite"),
+    ],
+    indirect=["registered_mdns"],
+    ids=["wireless", "lite"],
+)
+def test_registered_txt_records_carry_metadata_keys(registered_mdns, expected_model):
+    """TXT records carry model (per SKU), manufacturer, api, and caps."""
+    assert registered_mdns._info is not None
+    props = {
+        (k.decode() if isinstance(k, bytes) else k): (
+            v.decode() if isinstance(v, bytes) else v
+        )
+        for k, v in registered_mdns._info.properties.items()
+    }
+    assert props.get("model") == expected_model
+    assert props.get("manufacturer") == "Pollen Robotics"
+    assert props.get("api") == "rest+ws"
+    caps = set((props.get("caps") or "").split(","))
+    assert {"camera", "mic", "speaker", "motion", "apps"} <= caps
+    # unit_id is only present when a robot is attached. In CI it
+    # won't be set; just make sure the key is either absent or a
+    # 16-char hex string.
+    if "unit_id" in props:
+        uid = props["unit_id"]
+        assert isinstance(uid, str) and len(uid) == 16
+        assert all(c in "0123456789abcdef" for c in uid)
 
 
 def test_unregister_is_noop_when_not_registered():

@@ -109,7 +109,11 @@ def create_app(args: Args, health_check_event: asyncio.Event | None = None) -> F
         args = app.state.args  # type: Args
         dataset_updater_task: asyncio.Task[None] | None = None
 
-        mdns = MdnsServiceRegistration(args.robot_name, args.fastapi_port)
+        mdns = MdnsServiceRegistration(
+            args.robot_name,
+            args.fastapi_port,
+            wireless_version=args.wireless_version,
+        )
 
         def preload_with_logging() -> None:
             """Download datasets with logging."""
