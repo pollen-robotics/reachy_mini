@@ -21,7 +21,7 @@ Web apps are deployed as **static Hugging Face Spaces** (`sdk: static`). There i
 ```
 ┌─────────────────────────────────┐
 │  Browser                        │
-│  (your app + reachy-mini.js)    │
+│  (your app + reachy-mini-sdk.js)│
 └───────┬────────────┬────────────┘
         │ SSE/HTTP   │ WebRTC (peer-to-peer)
         │ signaling  │ video + audio + data
@@ -39,7 +39,7 @@ Web apps are deployed as **static Hugging Face Spaces** (`sdk: static`). There i
 ```
 
 1. **Your app** is a static HTML/JS page hosted on Hugging Face Spaces.
-2. **reachy-mini.js** handles authentication, signaling, and WebRTC negotiation.
+2. **reachy-mini-sdk.js** handles authentication, signaling, and WebRTC negotiation.
 3. The **signaling server** relays SDP offers/answers and ICE candidates. It also validates Hugging Face OAuth tokens.
 4. Once the WebRTC connection is established, **video, audio, and commands flow peer-to-peer** — the signaling server is no longer in the path.
 
@@ -70,17 +70,24 @@ In your `index.html`, import the SDK as an ES module:
 
 ```html
 <script type="module">
-import { ReachyMini } from "./reachy-mini.js";
+import { ReachyMini } from "./reachy-mini-sdk.js";
 
 const robot = new ReachyMini();
 </script>
 ```
 
-You can grab `reachy-mini.js` from the [reference example](https://huggingface.co/spaces/cduss/webrtc_example) or from the npm CDN:
+You can grab `reachy-mini-sdk.js` from the [reference example](https://huggingface.co/spaces/cduss/webrtc_example) or from the npm CDN:
 
 ```js
-import { ReachyMini } from "https://cdn.jsdelivr.net/npm/@anthropic-robotics/reachy-mini/+esm";
+import { ReachyMini } from "https://cdn.jsdelivr.net/npm/@pollen-robotics/reachy-mini-sdk/+esm";
 ```
+
+> The same npm package also ships the optional **host shell** (OAuth + robot picker + iframe lifecycle) for apps deployed as Hugging Face Spaces, under the `./host*` subpath exports:
+> ```js
+> import { mountHost } from "@pollen-robotics/reachy-mini-sdk/host/auto";
+> import { connectToHost } from "@pollen-robotics/reachy-mini-sdk/host/embed";
+> ```
+> See the [host README](https://github.com/pollen-robotics/reachy_mini/tree/main/js/host) for the full integration recipe.
 
 ### 3. Connect to your robot
 
@@ -255,7 +262,7 @@ Use `robot.addEventListener(name, handler)` — the SDK extends `EventTarget`.
 ### Math Utilities
 
 ```js
-import { rpyToMatrix, matrixToRpy, degToRad, radToDeg } from "./reachy-mini.js";
+import { rpyToMatrix, matrixToRpy, degToRad, radToDeg } from "./reachy-mini-sdk.js";
 
 rpyToMatrix(roll, pitch, yaw)  // degrees → 4×4 rotation matrix (ZYX)
 matrixToRpy(matrix)            // 4×4 matrix → { roll, pitch, yaw } in degrees
