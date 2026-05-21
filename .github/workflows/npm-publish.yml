@@ -1,0 +1,54 @@
+name: Publish npm
+
+on:
+  release:
+    types:
+      - created
+  push:
+    branches:
+      - main
+    paths:
+      - "js/**"
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write   # required for npm trusted publishing (OIDC)
+    defaults:
+      run:
+        working-directory: js
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6.4.0
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+      - name: Upgrade npm (>=11.5.1 required for trusted publishing)
+        run: npm install -g npm@latest
+
+      # Release → publish current version on the `latest` dist-tag.
+      - name: Verify js/package.json version matches pyproject.toml
+        if: github.event_name == 'release'
+        run: |
+          py_ver=$(grep -E '^version' ../pyproject.toml | head -1 | sed -E 's/version *= *"([^"]+)"/\1/')
+          npm_ver=$(node -p "require('./package.json').version")
+          if [ "$py_ver" != "$npm_ver" ]; then
+            echo "::error::js/package.json version ($npm_ver) does not match pyproject.toml version ($py_ver) — bump both before tagging a release"
+            exit 1
+          fi
+      - name: Publish (latest)
+        if: github.event_name == 'release'
+        run: npm publish
+
+      # Push to main → publish <base>-main.<short-sha> on the `main` dist-tag.
+      - name: Rewrite version as <base>-main.<short-sha>
+        if: github.event_name == 'push'
+        run: |
+          base=$(node -p "require('./package.json').version")
+          sha=$(echo "${{ github.sha }}" | cut -c1-7)
+          npm version "${base}-main.${sha}" --no-git-tag-version
+      - name: Publish (main)
+        if: github.event_name == 'push'
+        run: npm publish --tag main
