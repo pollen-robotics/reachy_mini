@@ -1,6 +1,6 @@
 """Verify that the JS browser SDK sends commands matching protocol.py.
 
-Parses _sendCommand({...}) calls from js/sdk/reachy-mini-sdk.js and checks each one
+Parses _sendCommand({...}) calls from js/reachy-mini-sdk.js and checks each one
 against the Pydantic command models defined in protocol.py.  This catches
 field renames, missing required fields, and unknown type values at CI time.
 """

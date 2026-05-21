@@ -13,8 +13,8 @@ project adheres to a permissive pre-1.0 semver (see
 gone.** The host source moved into `@pollen-robotics/reachy-mini-sdk`
 under the `./host`, `./host/auto`, `./host/embed`, and `./host/protocol`
 subpath exports. App authors should drop the second dep and update
-their imports — see the [migration note](../../README.md#migration-from-pollen-roboticsreachy-mini-host)
-in the JS workspace README.
+their imports — see the [migration note](../README.md#migration-from-pollen-roboticsreachy-mini-host)
+in the package README.
 
 The host bundles now import the SDK runtime directly (the SDK
 ships in the same npm tarball as `reachy-mini-sdk.js`) and
@@ -27,7 +27,7 @@ late-arriving global.
 
 - `src/lib/sdk-types.ts` is now a thin re-export from the
   canonical type declarations next to the SDK runtime
-  (`js/sdk/reachy-mini-sdk.d.ts`). External consumers who
+  (`js/reachy-mini-sdk.d.ts`). External consumers who
   `import` only the SDK get the same types automatically; host
   code keeps its non-optional `window.ReachyMini` augmentation
   for the use sites that rely on it.

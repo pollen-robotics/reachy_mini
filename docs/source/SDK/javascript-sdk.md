@@ -87,7 +87,7 @@ import { ReachyMini } from "https://cdn.jsdelivr.net/npm/@pollen-robotics/reachy
 > import { mountHost } from "@pollen-robotics/reachy-mini-sdk/host/auto";
 > import { connectToHost } from "@pollen-robotics/reachy-mini-sdk/host/embed";
 > ```
-> See the [host README](https://github.com/pollen-robotics/reachy_mini/tree/main/js/sdk/host) for the full integration recipe.
+> See the [host README](https://github.com/pollen-robotics/reachy_mini/tree/main/js/host) for the full integration recipe.
 
 ### 3. Connect to your robot
 

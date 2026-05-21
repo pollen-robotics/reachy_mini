@@ -262,12 +262,12 @@ src/reachy_mini/tools/camera_calibration/images_for_crop_analysis/*
 src/reachy_mini/tools/camera_calibration/images_for_crop_analysis_lite/*
 src/reachy_mini/tools/camera_calibration/*.yaml
 
-# JavaScript (single npm package at js/sdk/)
-js/sdk/node_modules/
-js/sdk/host/dist/
-js/sdk/.vite/
+# JavaScript (single npm package at js/)
+js/node_modules/
+js/host/dist/
+js/.vite/
 # The unanchored `lib/` rule above (Python template, intended for
-# root-level build artefacts) also matches `js/sdk/host/src/lib/`,
+# root-level build artefacts) also matches `js/host/src/lib/`,
 # which holds TypeScript source. Re-include it explicitly.
-!js/sdk/host/src/lib/
-!js/sdk/host/src/lib/**
+!js/host/src/lib/
+!js/host/src/lib/**

@@ -7,7 +7,7 @@
  * don't need to reach across the package layout themselves.
  *
  * If you're touching the type surface, edit the canonical file at
- * `js/sdk/reachy-mini-sdk.d.ts` — it ships in the npm tarball as
+ * `js/reachy-mini-sdk.d.ts` — it ships in the npm tarball as
  * the companion `.d.ts` next to `reachy-mini-sdk.js`.
  */
 
