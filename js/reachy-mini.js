@@ -138,7 +138,7 @@
 import {
     oauthHandleRedirectIfPresent,
     oauthLoginUrl,
-} from "https://cdn.jsdelivr.net/npm/@huggingface/hub@0.15.2/+esm";
+} from "@huggingface/hub";
 
 // ─── Math utilities ──────────────────────────────────────────────────────────
 
